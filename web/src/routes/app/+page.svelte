@@ -1,7 +1,12 @@
 <script lang="ts">
   import type { PageProps } from "./$types";
   import TabLayout from "$lib/components/ui/TabLayout.svelte";
-  import LegacyLayout from "$lib/components/ui/LegacyLayout.svelte";
+  import LegacyLayout from "$lib/components/ui/Layout.svelte";
+  import {
+    PageContainer,
+    PageHeader,
+    StateDisplay,
+  } from "$lib/components/shared";
   import {
     inputsToDataTrees,
     solveGrasshopperDefinition,
@@ -87,24 +92,25 @@
       solving = false;
     }
   }
+
+  let badgeConfig = $derived(
+    solving
+      ? { label: "⚙️ Solving...", variant: "solving" as const }
+      : { label: "☁️ Rhino Compute", variant: "compute" as const }
+  );
 </script>
 
-<div class="container">
-  <header>
-    <h1>Rhino Compute App</h1>
-    <p class="session-info">
-      <span class="connection-badge" class:solving>
-        {solving ? "⚙️ Solving..." : "☁️ Rhino Compute"}
-      </span>
-    </p>
-  </header>
+<PageContainer>
+  <PageHeader title="Rhino Compute App" badge={badgeConfig} />
 
   {#if error}
-    <div class="error">{error}</div>
+    <div class="p-8">
+      <StateDisplay type="error" size="medium" message={error} />
+    </div>
   {/if}
 
   {#if schema}
-    <div class="preview">
+    <div class="p-8 max-w-7xl mx-auto">
       {#if schema.layout.type === "tabbed" && schema.layout.tabs && schema.layout.tabs.length > 0}
         <TabLayout
           {schema}
@@ -122,73 +128,8 @@
       {/if}
     </div>
   {:else}
-    <div class="loading">Loading schema...</div>
+    <div class="p-8">
+      <StateDisplay type="loading" size="large" message="Loading schema..." />
+    </div>
   {/if}
-</div>
-
-<style>
-  .container {
-    min-height: 100vh;
-    background: #f5f7fa;
-    font-family:
-      system-ui,
-      -apple-system,
-      sans-serif;
-  }
-
-  header {
-    background: white;
-    border-bottom: 1px solid #e1e4e8;
-    padding: 1.5rem 2rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  }
-
-  h1 {
-    font-size: 1.75rem;
-    margin: 0 0 0.5rem 0;
-    color: #24292e;
-  }
-
-  .session-info {
-    color: #586069;
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin: 0;
-  }
-
-  .connection-badge {
-    display: inline-block;
-    padding: 0.25rem 0.75rem;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    background: #2196f3;
-    color: white;
-  }
-
-  .connection-badge.solving {
-    background: #ff9800;
-  }
-
-  .loading,
-  .error {
-    padding: 4rem 2rem;
-    text-align: center;
-    background: white;
-    border-radius: 8px;
-    margin: 2rem;
-  }
-
-  .error {
-    background: #fee;
-    color: #c00;
-  }
-
-  .preview {
-    padding: 2rem;
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-</style>
+</PageContainer>

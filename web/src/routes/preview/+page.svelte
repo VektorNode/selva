@@ -5,7 +5,13 @@
   import { getWebSocketClient } from "$lib/api/websocket";
   import type { UISchema } from "$lib/types/schema";
   import TabLayout from "$lib/components/ui/TabLayout.svelte";
-  import LegacyLayout from "$lib/components/ui/LegacyLayout.svelte";
+  import LegacyLayout from "$lib/components/ui/Layout.svelte";
+  import {
+    PageContainer,
+    PageHeader,
+    StateDisplay,
+    Badge,
+  } from "$lib/components/shared";
 
   // Runtime mode: 'local' uses WebSocket, 'compute' uses Rhino Compute
   type RuntimeMode = "local" | "compute";
@@ -85,14 +91,15 @@
         wsConnected = true;
 
         // Listen for output updates from Grasshopper (C# sends GUID keys, convert to names)
-        wsClient.on('outputs', (message) => {
+        wsClient.on("outputs", (message) => {
           if (message.sessionId === sessionId) {
             console.log("[Preview] Received outputs:", message.outputs);
             // Convert from GUID keys to name keys for UI
             const outputsByName: Record<string, any> = {};
-            schema.outputs.forEach((output) => {
+            schema!.outputs.forEach((output) => {
               if (message.outputs[output.grasshopperId] !== undefined) {
-                outputsByName[output.name] = message.outputs[output.grasshopperId];
+                outputsByName[output.name] =
+                  message.outputs[output.grasshopperId];
               }
             });
             values = { ...values, ...outputsByName };
@@ -100,21 +107,23 @@
         });
 
         // Also support 'outputUpdate' message type
-        wsClient.on('outputUpdate', (message) => {
+        wsClient.on("outputUpdate", (message) => {
           if (message.sessionId === sessionId) {
             console.log("[Preview] Received output update:", message.outputs);
             // Convert from GUID keys to name keys for UI
             const outputsByName: Record<string, any> = {};
-            schema.outputs.forEach((output) => {
+            schema!.outputs.forEach((output) => {
               if (message.outputs[output.grasshopperId] !== undefined) {
-                outputsByName[output.name] = message.outputs[output.grasshopperId];
+                outputsByName[output.name] =
+                  message.outputs[output.grasshopperId];
               }
             });
             values = { ...values, ...outputsByName };
           }
         });
       } else {
-        error = "Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled and port 8765 is available.";
+        error =
+          "Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled and port 8765 is available.";
         loading = false;
         return;
       }
@@ -164,7 +173,10 @@
         }
       });
 
-      console.log("[Preview] Sending value update to Grasshopper (GUID keys):", inputValuesByGuid);
+      console.log(
+        "[Preview] Sending value update to Grasshopper (GUID keys):",
+        inputValuesByGuid
+      );
 
       // Send via WebSocket with GUID keys (what C# expects)
       wsClient.sendValueUpdate(sessionId, inputValuesByGuid);
@@ -172,39 +184,38 @@
       console.warn("[Preview] Cannot send values - WebSocket not connected");
     }
   }
+
+  // Compute badge configuration
+  $: badgeConfig =
+    runtimeMode === "local"
+      ? wsConnected
+        ? { label: "⚡ WebSocket Connected", variant: "connected" as const }
+        : {
+            label: "❌ WebSocket Disconnected",
+            variant: "disconnected" as const,
+          }
+      : solving
+        ? { label: "⚙️ Solving...", variant: "solving" as const }
+        : { label: "☁️ Rhino Compute", variant: "compute" as const };
 </script>
 
-<div class="container">
-  <header>
-    <h1>Interactive Preview</h1>
-    {#if sessionId || runtimeMode === "compute"}
-      <p class="session-info">
-        {#if runtimeMode === "local"}
-          Session: {sessionId}
-          {#if !loading}
-            <span
-              class="connection-badge"
-              class:connected={wsConnected}
-              class:disconnected={!wsConnected}
-            >
-              {wsConnected ? "⚡ WebSocket Connected" : "❌ WebSocket Disconnected"}
-            </span>
-          {/if}
-        {:else}
-          <span class="connection-badge compute">
-            {solving ? "⚙️ Solving..." : "☁️ Rhino Compute"}
-          </span>
-        {/if}
-      </p>
-    {/if}
-  </header>
+<PageContainer>
+  <PageHeader
+    title="Interactive Preview"
+    sessionId={sessionId || undefined}
+    badge={!loading ? badgeConfig : undefined}
+  />
 
   {#if loading}
-    <div class="loading">Loading preview...</div>
+    <div class="p-8">
+      <StateDisplay type="loading" size="large" message="Loading preview..." />
+    </div>
   {:else if error}
-    <div class="error">{error}</div>
+    <div class="p-8">
+      <StateDisplay type="error" size="large" message={error} />
+    </div>
   {:else if schema}
-    <div class="preview">
+    <div class="p-8 max-w-7xl mx-auto">
       {#if schema.layout.type === "tabbed" && schema.layout.tabs && schema.layout.tabs.length > 0}
         <TabLayout
           {schema}
@@ -222,80 +233,4 @@
       {/if}
     </div>
   {/if}
-</div>
-
-<style>
-  .container {
-    min-height: 100vh;
-    background: #f5f7fa;
-    font-family:
-      system-ui,
-      -apple-system,
-      sans-serif;
-  }
-
-  header {
-    background: white;
-    border-bottom: 1px solid #e1e4e8;
-    padding: 1.5rem 2rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  }
-
-  h1 {
-    font-size: 1.75rem;
-    margin: 0 0 0.5rem 0;
-    color: #24292e;
-  }
-
-  .session-info {
-    color: #586069;
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin: 0;
-  }
-
-  .connection-badge {
-    display: inline-block;
-    padding: 0.25rem 0.75rem;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-  }
-
-  .connection-badge.connected {
-    background: #4caf50;
-    color: white;
-  }
-
-  .connection-badge.disconnected {
-    background: #f44336;
-    color: white;
-  }
-
-  .connection-badge.compute {
-    background: #2196f3;
-    color: white;
-  }
-
-  .loading,
-  .error {
-    padding: 4rem 2rem;
-    text-align: center;
-    background: white;
-    border-radius: 8px;
-    margin: 2rem;
-  }
-
-  .error {
-    background: #fee;
-    color: #c00;
-  }
-
-  .preview {
-    padding: 2rem;
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-</style>
+</PageContainer>

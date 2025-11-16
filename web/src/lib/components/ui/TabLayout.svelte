@@ -1,7 +1,12 @@
 <script lang="ts">
-  import type { UISchema, InputParameter, OutputParameter } from "$lib/types/schema";
+  import type {
+    UISchema,
+    InputParameter,
+    OutputParameter,
+  } from "$lib/types/schema";
   import InputControl from "./InputControl.svelte";
   import OutputDisplay from "./OutputDisplay.svelte";
+  import { StateDisplay } from "$lib/components/shared";
 
   interface Props {
     schema: UISchema;
@@ -10,7 +15,12 @@
     debounceSliders?: boolean;
   }
 
-  let { schema, values = $bindable(), onValueChange, debounceSliders = false }: Props = $props();
+  let {
+    schema,
+    values = $bindable(),
+    onValueChange,
+    debounceSliders = false,
+  }: Props = $props();
 
   let activeTabId: string | null = $state(null);
 
@@ -21,7 +31,9 @@
     }
   });
 
-  const activeTab = $derived(schema.layout.tabs?.find((t) => t.id === activeTabId));
+  const activeTab = $derived(
+    schema.layout.tabs?.find((t) => t.id === activeTabId)
+  );
 
   // Lookup by parameterId (which could be grasshopperId or name)
   // We'll match against both grasshopperId and name for backward compatibility
@@ -34,39 +46,46 @@
   }
 </script>
 
-<div class="tabs-container">
-  <div class="tabs-nav">
+<div class="bg-white rounded-lg shadow-sm overflow-hidden">
+  <!-- Tab Navigation -->
+  <div class="flex border-b-2 border-gray-200 bg-gray-50 overflow-x-auto">
     {#each schema.layout.tabs || [] as tab}
       <button
-        class="tab-button"
-        class:active={activeTabId === tab.id}
+        class={` flex items-center gap-2 px-6 py-4 border-b-3 transition-all whitespace-nowrap font-medium ${activeTabId === tab.id ? "text-blue-600 border-blue-600 bg-white" : "text-gray-600 border-transparent hover:text-gray-900 hover:bg-gray-100"}`}
         onclick={() => (activeTabId = tab.id)}
       >
-        {#if tab.icon}<span class="tab-icon">{tab.icon}</span>{/if}
+        {#if tab.icon}<span class="text-lg">{tab.icon}</span>{/if}
         {tab.label}
       </button>
     {/each}
   </div>
 
+  <!-- Tab Content -->
   {#if activeTab}
-    <div class="tab-content">
+    <div class="p-8 animate-[fadeIn_0.3s]">
       {#if activeTab.groups.length === 0}
-        <div class="empty-state">
-          <p>This tab has no groups configured.</p>
-        </div>
+        <StateDisplay
+          type="empty"
+          size="medium"
+          message="This tab has no groups configured."
+        />
       {:else}
-        <div class="groups-container">
+        <div class="flex flex-col gap-8">
           {#each activeTab.groups as group}
-            <div class="group">
-              <div class="group-header">
-                <h3>{group.label}</h3>
+            <div class="border border-gray-200 rounded-lg overflow-hidden">
+              <!-- Group Header -->
+              <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                <h3 class="m-0 mb-1 text-lg text-gray-900 font-semibold">
+                  {group.label}
+                </h3>
                 {#if group.description}
-                  <p class="group-description">{group.description}</p>
+                  <p class="m-0 text-sm text-gray-600">{group.description}</p>
                 {/if}
               </div>
 
+              <!-- Group Content -->
               <div
-                class="group-content"
+                class="grid gap-6 p-6 bg-white"
                 style="grid-template-columns: repeat({group.columns}, 1fr);"
               >
                 {#each group.items as item}
@@ -78,7 +97,9 @@
                         bind:value={values[input.name]}
                         displayName={item.displayName}
                         onChange={onValueChange}
-                        debounceMs={debounceSliders && input.type === "slider" ? 100 : 0}
+                        debounceMs={debounceSliders && input.type === "slider"
+                          ? 100
+                          : 0}
                       />
                     {/if}
                   {:else if item.type === "output"}
@@ -102,56 +123,7 @@
 </div>
 
 <style>
-  .tabs-container {
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    overflow: hidden;
-  }
-
-  .tabs-nav {
-    display: flex;
-    border-bottom: 2px solid #e1e4e8;
-    background: #fafbfc;
-    overflow-x: auto;
-  }
-
-  .tab-button {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 1rem 1.5rem;
-    background: none;
-    border: none;
-    border-bottom: 3px solid transparent;
-    cursor: pointer;
-    color: #586069;
-    font-weight: 500;
-    font-size: 0.95rem;
-    transition: all 0.2s;
-    white-space: nowrap;
-  }
-
-  .tab-button:hover {
-    color: #24292e;
-    background: #f6f8fa;
-  }
-
-  .tab-button.active {
-    color: #0366d6;
-    border-bottom-color: #0366d6;
-    background: white;
-  }
-
-  .tab-icon {
-    font-size: 1.2rem;
-  }
-
-  .tab-content {
-    padding: 2rem;
-    animation: fadeIn 0.3s;
-  }
-
+  /* Fade-in animation for tab transitions */
   @keyframes fadeIn {
     from {
       opacity: 0;
@@ -161,48 +133,5 @@
       opacity: 1;
       transform: translateY(0);
     }
-  }
-
-  .groups-container {
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-  }
-
-  .group {
-    border: 1px solid #e1e4e8;
-    border-radius: 8px;
-    overflow: hidden;
-  }
-
-  .group-header {
-    background: #fafbfc;
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid #e1e4e8;
-  }
-
-  .group-header h3 {
-    margin: 0 0 0.25rem 0;
-    font-size: 1.1rem;
-    color: #24292e;
-  }
-
-  .group-description {
-    margin: 0;
-    font-size: 0.85rem;
-    color: #586069;
-  }
-
-  .group-content {
-    display: grid;
-    gap: 1.5rem;
-    padding: 1.5rem;
-    background: white;
-  }
-
-  .empty-state {
-    text-align: center;
-    padding: 3rem 2rem;
-    color: #959da5;
   }
 </style>

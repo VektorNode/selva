@@ -3,8 +3,18 @@
   import { page } from "$app/stores";
   import { api } from "$lib/api/client";
   import DragDropContext from "$lib/components/DragDropContext.svelte";
-  import DraggableParameter from "$lib/components/DraggableParameter.svelte";
-  import DropZone from "$lib/components/DropZone.svelte";
+  import {
+    PageContainer,
+    PageHeader,
+    StateDisplay,
+    Button,
+    Panel,
+    ParameterList,
+    SchemaInfoPanel,
+    EditableTabNav,
+    EditableGroup,
+    BuilderGroupItem,
+  } from "$lib/components/shared";
   import type {
     UISchema,
     AvailableParameter,
@@ -351,760 +361,133 @@
 </script>
 
 <DragDropContext>
-  <div class="container">
-    <header>
-      <h1>🎨 UI Builder</h1>
-      {#if sessionId}
-        <p class="session-info">Session: {sessionId}</p>
-      {/if}
-    </header>
+  <PageContainer>
+    <PageHeader title="🎨 UI Builder" {sessionId} />
 
     {#if loading}
-      <div class="loading">Loading schema...</div>
+      <div class="p-8">
+        <StateDisplay type="loading" size="large" message="Loading schema..." />
+      </div>
     {:else if schema}
-      <div class="builder-layout">
+      <div class="grid grid-cols-[320px_1fr] gap-6 p-6 max-w-[1800px] mx-auto">
         {#if error}
-          <div class="warning">{error}</div>
+          <div class="col-span-2">
+            <StateDisplay type="warning" size="medium" message={error} />
+          </div>
         {/if}
 
         <!-- Left Sidebar: Schema Info & Available Parameters -->
-        <aside class="sidebar">
-          <div class="panel">
-            <h2>Schema Information</h2>
-            <div class="form-group">
-              <label>Name</label>
-              <input type="text" bind:value={schema.name} />
-            </div>
-            <div class="form-group">
-              <label>Description</label>
-              <textarea bind:value={schema.description}></textarea>
-            </div>
-            <div class="form-group">
-              <label>
-                <input type="checkbox" bind:checked={schema.enable3dViewer} />
-                Enable 3D Viewer Output
-              </label>
-            </div>
+        <aside class="flex flex-col gap-6">
+          <SchemaInfoPanel {schema} />
 
-            <div class="panel">
-              <h2>Available Parameters</h2>
-              <p class="info-text">Drag parameters into groups below</p>
+          <Panel title="Available Parameters">
+            <p class="text-gray-600 text-sm mb-4">
+              Drag parameters into groups below
+            </p>
 
-              <div class="section">
-                <h3>📥 Inputs ({availableInputs.length})</h3>
-                {#if availableInputs.length === 0}
-                  <p class="empty">No contextual parameters found.</p>
-                {:else}
-                  <div class="parameter-list">
-                    {#each availableInputs as param}
-                      <DraggableParameter parameter={param} category="input" />
-                    {/each}
-                  </div>
-                {/if}
-              </div>
+            <ParameterList
+              title="Inputs"
+              icon="📥"
+              parameters={availableInputs}
+              category="input"
+              emptyMessage="No contextual parameters found."
+            />
 
-              <div class="section">
-                <h3>📤 Outputs ({availableOutputs.length})</h3>
-                {#if availableOutputs.length === 0}
-                  <p class="empty">No context output components found.</p>
-                {:else}
-                  <div class="parameter-list">
-                    {#each availableOutputs as param}
-                      <DraggableParameter parameter={param} category="output" />
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-            </div>
-          </div>
+            <ParameterList
+              title="Outputs"
+              icon="📤"
+              parameters={availableOutputs}
+              category="output"
+              emptyMessage="No context output components found."
+            />
+          </Panel>
         </aside>
 
         <!-- Main Area: Tab & Group Builder -->
-        <main class="main-area">
-          <div class="panel">
-            <div class="panel-header">
-              <h2>Layout Builder</h2>
-              <button class="btn-primary" on:click={addTab}> + Add Tab </button>
-            </div>
+        <main class="flex flex-col gap-6">
+          <Panel>
+            {#snippet headerActions()}
+              <Button variant="primary" onclick={addTab}>+ Add Tab</Button>
+            {/snippet}
 
-            {#if schema.layout.tabs.length === 0}
-              <div class="empty-state-large">
-                <span class="icon">📑</span>
-                <h3>No tabs yet</h3>
-                <p>Click "Add Tab" to create your first tab</p>
-              </div>
-            {:else}
-              <!-- Tab Navigation -->
-              <div class="tabs-nav">
-                {#each schema.layout.tabs as tab}
-                  <div class="tab-wrapper">
-                    <button
-                      class="tab-button"
-                      class:active={activeTabId === tab.id}
-                      on:click={() => (activeTabId = tab.id)}
-                    >
-                      {#if tab.icon}{tab.icon}{/if}
-                      <input
-                        type="text"
-                        bind:value={tab.label}
-                        on:click={(e) => e.stopPropagation()}
-                        class="tab-label-input"
+            <div class="min-h-[200px]">
+              {#if schema.layout.tabs.length === 0}
+                <StateDisplay
+                  type="empty"
+                  size="large"
+                  icon="📑"
+                  title="No tabs yet"
+                  message="Click 'Add Tab' to create your first tab"
+                />
+              {:else}
+                <!-- Tab Navigation -->
+                <EditableTabNav
+                  tabs={schema.layout.tabs}
+                  {activeTabId}
+                  onTabChange={(tabId) => (activeTabId = tabId)}
+                  onRemoveTab={removeTab}
+                />
+
+                <!-- Active Tab Content -->
+                {#if activeTab}
+                  <div class="animate-[fadeIn_0.2s]">
+                    <div class="mb-6 flex justify-end">
+                      <Button
+                        variant="secondary"
+                        onclick={() => addGroup(activeTab.id)}
+                      >
+                        + Add Group
+                      </Button>
+                    </div>
+
+                    {#if activeTab.groups.length === 0}
+                      <StateDisplay
+                        type="empty"
+                        size="medium"
+                        icon="📦"
+                        message="No groups yet. Click 'Add Group' to organize your parameters."
                       />
-                    </button>
-                    <button
-                      class="btn-tab-remove"
-                      on:click={() => removeTab(tab.id)}
-                      title="Remove tab"
-                    >
-                      ×
-                    </button>
-                  </div>
-                {/each}
-              </div>
-
-              <!-- Active Tab Content -->
-              {#if activeTab}
-                <div class="tab-content">
-                  <div class="tab-controls">
-                    <button
-                      class="btn-secondary"
-                      on:click={() => addGroup(activeTab.id)}
-                    >
-                      + Add Group
-                    </button>
-                  </div>
-
-                  {#if activeTab.groups.length === 0}
-                    <div class="empty-state-medium">
-                      <span class="icon">📦</span>
-                      <p>
-                        No groups yet. Click "Add Group" to organize your
-                        parameters.
-                      </p>
-                    </div>
-                  {:else}
-                    <div class="groups-container">
-                      {#each activeTab.groups as group}
-                        <div class="group-card">
-                          <div class="group-header">
-                            <div class="group-title-section">
-                              <input
-                                type="text"
-                                bind:value={group.label}
-                                class="group-label-input"
-                                placeholder="Group name"
+                    {:else}
+                      <div class="flex flex-col gap-6">
+                        {#each activeTab.groups as group}
+                          <EditableGroup
+                            {group}
+                            onDrop={(e) =>
+                              handleParameterDrop(activeTab.id, group.id, e)}
+                            onRemove={() => removeGroup(activeTab.id, group.id)}
+                          >
+                            {#each group.items as item}
+                              {@const paramInfo = getParameterInfo(
+                                item.parameterId
+                              )}
+                              <BuilderGroupItem
+                                {item}
+                                {paramInfo}
+                                onMoveUp={() =>
+                                  moveItemUp(activeTab.id, group.id, item.id)}
+                                onMoveDown={() =>
+                                  moveItemDown(activeTab.id, group.id, item.id)}
+                                onRemove={() =>
+                                  removeItem(activeTab.id, group.id, item.id)}
                               />
-                              <input
-                                type="text"
-                                bind:value={group.description}
-                                class="group-description-input"
-                                placeholder="Description (optional)"
-                              />
-                            </div>
-                            <div class="group-controls">
-                              <label class="columns-control">
-                                Columns:
-                                <input
-                                  type="number"
-                                  bind:value={group.columns}
-                                  min="1"
-                                  max="4"
-                                />
-                              </label>
-                              <button
-                                class="btn-icon"
-                                on:click={() =>
-                                  removeGroup(activeTab.id, group.id)}
-                                title="Remove group"
-                              >
-                                🗑️
-                              </button>
-                            </div>
-                          </div>
-
-                          <div class="group-body">
-                            <DropZone
-                              isEmpty={group.items.length === 0}
-                              label="Drag parameters here"
-                              on:drop={(e) =>
-                                handleParameterDrop(activeTab.id, group.id, e)}
-                            >
-                              <div
-                                class="items-grid"
-                                style="grid-template-columns: repeat({group.columns}, 1fr);"
-                              >
-                                {#each group.items as item}
-                                  {@const paramInfo = getParameterInfo(
-                                    item.parameterId
-                                  )}
-                                  <div class="group-item">
-                                    <div class="item-header">
-                                      <span
-                                        class="item-type-badge"
-                                        class:input={item.type === "input"}
-                                        class:output={item.type === "output"}
-                                      >
-                                        {item.type === "input" ? "📥" : "📤"}
-                                      </span>
-                                      <input
-                                        type="text"
-                                        bind:value={item.displayName}
-                                        class="item-name-input"
-                                        placeholder={paramInfo?.name || ""}
-                                      />
-                                    </div>
-                                    {#if paramInfo}
-                                      <div class="item-info">
-                                        <span class="param-type"
-                                          >{paramInfo.paramType}</span
-                                        >
-                                        <span class="param-original"
-                                          >{paramInfo.nickname}</span
-                                        >
-                                      </div>
-                                    {/if}
-                                    <div class="item-actions">
-                                      <button
-                                        class="btn-mini"
-                                        on:click={() =>
-                                          moveItemUp(
-                                            activeTab.id,
-                                            group.id,
-                                            item.id
-                                          )}
-                                        title="Move up"
-                                      >
-                                        ↑
-                                      </button>
-                                      <button
-                                        class="btn-mini"
-                                        on:click={() =>
-                                          moveItemDown(
-                                            activeTab.id,
-                                            group.id,
-                                            item.id
-                                          )}
-                                        title="Move down"
-                                      >
-                                        ↓
-                                      </button>
-                                      <button
-                                        class="btn-mini danger"
-                                        on:click={() =>
-                                          removeItem(
-                                            activeTab.id,
-                                            group.id,
-                                            item.id
-                                          )}
-                                        title="Remove"
-                                      >
-                                        ×
-                                      </button>
-                                    </div>
-                                  </div>
-                                {/each}
-                              </div>
-                            </DropZone>
-                          </div>
-                        </div>
-                      {/each}
-                    </div>
-                  {/if}
-                </div>
+                            {/each}
+                          </EditableGroup>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                {/if}
               {/if}
-            {/if}
-          </div>
+            </div>
+          </Panel>
 
-          <div class="actions">
-            <button class="btn-success" on:click={saveSchema}>
-              💾 Save Schema
-            </button>
+          <div class="flex justify-end gap-4">
+            <Button variant="success" icon="💾" onclick={saveSchema}
+              >Save Schema</Button
+            >
           </div>
         </main>
       </div>
     {/if}
-  </div>
+  </PageContainer>
 </DragDropContext>
-
-<style>
-  .container {
-    min-height: 100vh;
-    background: #f5f7fa;
-    font-family:
-      system-ui,
-      -apple-system,
-      sans-serif;
-  }
-
-  header {
-    background: white;
-    border-bottom: 1px solid #e1e4e8;
-    padding: 1.5rem 2rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  }
-
-  h1 {
-    font-size: 1.75rem;
-    margin: 0 0 0.5rem 0;
-    color: #24292e;
-  }
-
-  .session-info {
-    color: #586069;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-
-  .loading {
-    padding: 4rem 2rem;
-    text-align: center;
-    color: #586069;
-  }
-
-  .warning {
-    padding: 1rem;
-    background: #fff3cd;
-    color: #856404;
-    border: 1px solid #ffeaa7;
-    border-radius: 6px;
-    margin-bottom: 1rem;
-  }
-
-  .builder-layout {
-    display: grid;
-    grid-template-columns: 320px 1fr;
-    gap: 1.5rem;
-    padding: 1.5rem;
-    max-width: 1800px;
-    margin: 0 auto;
-  }
-
-  .sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-
-  .panel {
-    background: white;
-    border: 1px solid #e1e4e8;
-    border-radius: 8px;
-    padding: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  }
-
-  .panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-  }
-
-  h2 {
-    font-size: 1.25rem;
-    margin: 0 0 1rem 0;
-    color: #24292e;
-  }
-
-  h3 {
-    font-size: 1rem;
-    margin: 0 0 0.75rem 0;
-    color: #586069;
-    font-weight: 600;
-  }
-
-  .info-text {
-    color: #586069;
-    font-size: 0.85rem;
-    margin-bottom: 1rem;
-  }
-
-  .form-group {
-    margin-bottom: 1rem;
-  }
-
-  label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 500;
-    font-size: 0.9rem;
-    color: #24292e;
-  }
-
-  input[type="text"],
-  input[type="number"],
-  textarea {
-    width: 100%;
-    padding: 0.5rem;
-    border: 1px solid #d1d5da;
-    border-radius: 4px;
-    font-family: inherit;
-    font-size: 0.9rem;
-  }
-
-  input:focus,
-  textarea:focus {
-    outline: none;
-    border-color: #0366d6;
-    box-shadow: 0 0 0 3px rgba(3, 102, 214, 0.1);
-  }
-
-  textarea {
-    min-height: 60px;
-    resize: vertical;
-  }
-
-  .section {
-    margin-bottom: 1.5rem;
-  }
-
-  .section:last-child {
-    margin-bottom: 0;
-  }
-
-  .parameter-list {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .empty {
-    color: #959da5;
-    font-style: italic;
-    font-size: 0.85rem;
-  }
-
-  .empty-state-large,
-  .empty-state-medium {
-    text-align: center;
-    padding: 3rem 2rem;
-    color: #959da5;
-  }
-
-  .empty-state-large .icon,
-  .empty-state-medium .icon {
-    font-size: 3rem;
-    display: block;
-    margin-bottom: 1rem;
-    opacity: 0.3;
-  }
-
-  .tabs-nav {
-    display: flex;
-    gap: 0.25rem;
-    margin-bottom: 1.5rem;
-    border-bottom: 2px solid #e1e4e8;
-    overflow-x: auto;
-  }
-
-  .tab-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    position: relative;
-  }
-
-  .tab-button {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    background: none;
-    border: none;
-    border-bottom: 3px solid transparent;
-    cursor: pointer;
-    color: #586069;
-    font-weight: 500;
-    transition: all 0.2s;
-    white-space: nowrap;
-  }
-
-  .tab-button:hover {
-    color: #24292e;
-    background: #f6f8fa;
-  }
-
-  .tab-button.active {
-    color: #0366d6;
-    border-bottom-color: #0366d6;
-  }
-
-  .btn-tab-remove {
-    background: none;
-    border: none;
-    font-size: 1.25rem;
-    cursor: pointer;
-    padding: 0.25rem 0.5rem;
-    color: #586069;
-    transition: color 0.2s;
-    margin-left: -0.25rem;
-  }
-
-  .btn-tab-remove:hover {
-    color: #d73a49;
-  }
-
-  .tab-label-input {
-    border: none;
-    background: transparent;
-    padding: 0;
-    font-weight: 500;
-    font-size: 0.9rem;
-    width: auto;
-    min-width: 60px;
-  }
-
-  .tab-label-input:focus {
-    box-shadow: none;
-    border-bottom: 1px solid #0366d6;
-  }
-
-  .tab-content {
-    animation: fadeIn 0.2s;
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  .tab-controls {
-    margin-bottom: 1.5rem;
-    display: flex;
-    justify-content: flex-end;
-  }
-
-  .groups-container {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-
-  .group-card {
-    border: 2px solid #e1e4e8;
-    border-radius: 8px;
-    background: #fafbfc;
-    overflow: hidden;
-  }
-
-  .group-header {
-    padding: 1rem;
-    background: white;
-    border-bottom: 1px solid #e1e4e8;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-
-  .group-title-section {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .group-label-input {
-    font-weight: 600;
-    font-size: 1rem;
-    border: 1px solid transparent;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-  }
-
-  .group-label-input:hover {
-    border-color: #d1d5da;
-  }
-
-  .group-description-input {
-    font-size: 0.85rem;
-    color: #586069;
-    border: 1px solid transparent;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-  }
-
-  .group-description-input:hover {
-    border-color: #d1d5da;
-  }
-
-  .group-controls {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-
-  .columns-control {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.85rem;
-  }
-
-  .columns-control input {
-    width: 50px;
-  }
-
-  .group-body {
-    padding: 1rem;
-  }
-
-  .items-grid {
-    display: grid;
-    gap: 0.75rem;
-  }
-
-  .group-item {
-    background: white;
-    border: 1px solid #d1d5da;
-    border-radius: 6px;
-    padding: 0.75rem;
-    transition: all 0.2s;
-  }
-
-  .group-item:hover {
-    border-color: #0366d6;
-    box-shadow: 0 2px 6px rgba(3, 102, 214, 0.1);
-  }
-
-  .item-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .item-type-badge {
-    font-size: 1rem;
-  }
-
-  .item-name-input {
-    flex: 1;
-    font-weight: 500;
-    border: 1px solid transparent;
-    padding: 0.25rem 0.5rem;
-    border-radius: 3px;
-    font-size: 0.9rem;
-  }
-
-  .item-name-input:hover {
-    border-color: #d1d5da;
-  }
-
-  .item-info {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-    font-size: 0.8rem;
-  }
-
-  .param-type {
-    background: #e3f2fd;
-    color: #0366d6;
-    padding: 0.15rem 0.4rem;
-    border-radius: 3px;
-  }
-
-  .param-original {
-    color: #959da5;
-    font-family: monospace;
-  }
-
-  .item-actions {
-    display: flex;
-    gap: 0.25rem;
-    justify-content: flex-end;
-  }
-
-  .actions {
-    margin-top: 1.5rem;
-    display: flex;
-    justify-content: flex-end;
-    gap: 1rem;
-  }
-
-  /* Button Styles */
-  .btn-primary,
-  .btn-secondary,
-  .btn-success {
-    padding: 0.6rem 1.2rem;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .btn-primary {
-    background: #0366d6;
-    color: white;
-  }
-
-  .btn-primary:hover {
-    background: #0256c4;
-  }
-
-  .btn-secondary {
-    background: #f6f8fa;
-    color: #24292e;
-    border: 1px solid #d1d5da;
-  }
-
-  .btn-secondary:hover {
-    background: #e1e4e8;
-  }
-
-  .btn-success {
-    background: #28a745;
-    color: white;
-  }
-
-  .btn-success:hover {
-    background: #22863a;
-  }
-
-  .btn-icon {
-    background: none;
-    border: none;
-    font-size: 1.25rem;
-    cursor: pointer;
-    padding: 0.25rem 0.5rem;
-    color: #586069;
-    transition: color 0.2s;
-  }
-
-  .btn-icon:hover {
-    color: #d73a49;
-  }
-
-  .btn-mini {
-    background: #f6f8fa;
-    border: 1px solid #d1d5da;
-    border-radius: 3px;
-    padding: 0.2rem 0.4rem;
-    font-size: 0.8rem;
-    cursor: pointer;
-    color: #24292e;
-    transition: all 0.2s;
-  }
-
-  .btn-mini:hover {
-    background: #e1e4e8;
-  }
-
-  .btn-mini.danger:hover {
-    background: #d73a49;
-    color: white;
-    border-color: #d73a49;
-  }
-
-  .main-area {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-</style>

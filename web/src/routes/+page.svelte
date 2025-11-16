@@ -1,204 +1,104 @@
 <script lang="ts">
-  import { page } from "$app/state";
-  import { onMount } from "svelte";
+	import { page } from '$app/state';
+	import {
+		PageContainer,
+		PageHeader,
+		StateDisplay,
+		Button,
+		Panel
+	} from '$lib/components/shared';
 
-  var sessionId = page.url.searchParams.get("session");
-  let mode: "home" | "builder" | "preview" = "home";
+	var sessionId = page.url.searchParams.get('session');
+	let mode: 'home' | 'builder' | 'preview' = 'home';
 
-  // Allow switching modes without navigation
-  function switchMode(newMode: "builder" | "preview") {
-    mode = newMode;
-  }
+	// Allow switching modes without navigation
+	function switchMode(newMode: 'builder' | 'preview') {
+		mode = newMode;
+	}
 </script>
 
-<div class="container">
-  {#if !sessionId}
-    <div class="error">
-      <h2>No Session ID</h2>
-      <p>
-        No session ID provided in URL. Please start from the Grasshopper
-        component.
-      </p>
-    </div>
-  {:else}
-    <header>
-      <h1>ComputeBuilder</h1>
-      <p class="session-info">Session: {sessionId}</p>
+<PageContainer background="white">
+	{#if !sessionId}
+		<div class="flex items-center justify-center min-h-screen">
+			<StateDisplay
+				type="error"
+				size="large"
+				title="No Session ID"
+				message="No session ID provided in URL. Please start from the Grasshopper component."
+			/>
+		</div>
+	{:else}
+		<div class="flex flex-col min-h-screen">
+			<PageHeader title="ComputeBuilder" {sessionId}>
+				<nav class="flex gap-2">
+					<Button
+						variant={mode === 'home' ? 'primary' : 'secondary'}
+						size="small"
+						onclick={() => (mode = 'home')}
+					>
+						Home
+					</Button>
+					<Button
+						variant={mode === 'builder' ? 'primary' : 'secondary'}
+						size="small"
+						onclick={() => switchMode('builder')}
+					>
+						Schema Builder
+					</Button>
+					<Button
+						variant={mode === 'preview' ? 'primary' : 'secondary'}
+						size="small"
+						onclick={() => switchMode('preview')}
+					>
+						Interactive Preview
+					</Button>
+				</nav>
+			</PageHeader>
 
-      <nav class="mode-switcher">
-        <button class:active={mode === "home"} onclick={() => (mode = "home")}>
-          Home
-        </button>
-        <button
-          class:active={mode === "builder"}
-          onclick={() => switchMode("builder")}
-        >
-          Schema Builder
-        </button>
-        <button
-          class:active={mode === "preview"}
-          onclick={() => switchMode("preview")}
-        >
-          Interactive Preview
-        </button>
-      </nav>
-    </header>
+			<main class="flex-1 flex flex-col">
+				{#if mode === 'home'}
+					<div class="p-12 max-w-4xl mx-auto w-full">
+						<h2 class="text-4xl font-bold mb-4">Welcome to ComputeBuilder</h2>
+						<p class="text-gray-600 mb-8 text-lg">Choose a mode to get started:</p>
 
-    <main>
-      {#if mode === "home"}
-        <div class="welcome">
-          <h2>Welcome to ComputeBuilder</h2>
-          <p>Choose a mode to get started:</p>
-          <div class="mode-cards">
-            <button class="mode-card" onclick={() => switchMode("builder")}>
-              <h3>🔧 Schema Builder</h3>
-              <p>
-                Configure your UI schema by selecting inputs and outputs from
-                your Grasshopper definition
-              </p>
-            </button>
-            <button class="mode-card" onclick={() => switchMode("preview")}>
-              <h3>⚡ Interactive Preview</h3>
-              <p>
-                Interact with your Grasshopper definition in real-time with live
-                parameter updates
-              </p>
-            </button>
-          </div>
-        </div>
-      {:else if mode === "builder"}
-        <iframe src="/builder?session={sessionId}" title="Schema Builder"
-        ></iframe>
-      {:else if mode === "preview"}
-        <iframe src="/preview?session={sessionId}" title="Interactive Preview"
-        ></iframe>
-      {/if}
-    </main>
-  {/if}
-</div>
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+							<button
+								class="bg-white border-2 border-gray-200 rounded-lg p-8 text-left hover:border-blue-600 hover:shadow-lg transition-all transform hover:-translate-y-1"
+								onclick={() => switchMode('builder')}
+							>
+								<h3 class="text-2xl font-semibold mb-3">🔧 Schema Builder</h3>
+								<p class="text-gray-600 leading-relaxed">
+									Configure your UI schema by selecting inputs and outputs from your Grasshopper
+									definition
+								</p>
+							</button>
 
-<style>
-  .container {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .error {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem;
-    text-align: center;
-  }
-
-  .error h2 {
-    color: #d32f2f;
-    margin-bottom: 1rem;
-  }
-
-  header {
-    background: white;
-    border-bottom: 1px solid #e0e0e0;
-    padding: 1rem 2rem;
-  }
-
-  h1 {
-    font-size: 1.5rem;
-    margin: 0 0 0.5rem 0;
-  }
-
-  .session-info {
-    font-size: 0.85rem;
-    color: #666;
-    margin: 0 0 1rem 0;
-  }
-
-  .mode-switcher {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .mode-switcher button {
-    padding: 0.5rem 1rem;
-    background: transparent;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    transition: all 0.2s;
-  }
-
-  .mode-switcher button:hover {
-    background: #f5f5f5;
-  }
-
-  .mode-switcher button.active {
-    background: #1976d2;
-    color: white;
-    border-color: #1976d2;
-  }
-
-  main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .welcome {
-    padding: 3rem 2rem;
-    max-width: 900px;
-    margin: 0 auto;
-  }
-
-  .welcome h2 {
-    font-size: 2rem;
-    margin-bottom: 1rem;
-  }
-
-  .welcome > p {
-    color: #666;
-    margin-bottom: 2rem;
-  }
-
-  .mode-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 2rem;
-  }
-
-  .mode-card {
-    background: white;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 2rem;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-align: left;
-  }
-
-  .mode-card:hover {
-    border-color: #1976d2;
-    box-shadow: 0 4px 12px rgba(25, 118, 210, 0.15);
-    transform: translateY(-2px);
-  }
-
-  .mode-card h3 {
-    font-size: 1.25rem;
-    margin: 0 0 0.75rem 0;
-  }
-
-  .mode-card p {
-    color: #666;
-    margin: 0;
-    line-height: 1.5;
-  }
-
-  iframe {
-    flex: 1;
-    width: 100%;
-    border: none;
-  }
-</style>
+							<button
+								class="bg-white border-2 border-gray-200 rounded-lg p-8 text-left hover:border-blue-600 hover:shadow-lg transition-all transform hover:-translate-y-1"
+								onclick={() => switchMode('preview')}
+							>
+								<h3 class="text-2xl font-semibold mb-3">⚡ Interactive Preview</h3>
+								<p class="text-gray-600 leading-relaxed">
+									Interact with your Grasshopper definition in real-time with live parameter
+									updates
+								</p>
+							</button>
+						</div>
+					</div>
+				{:else if mode === 'builder'}
+					<iframe
+						src="/builder?session={sessionId}"
+						title="Schema Builder"
+						class="flex-1 w-full border-none"
+					></iframe>
+				{:else if mode === 'preview'}
+					<iframe
+						src="/preview?session={sessionId}"
+						title="Interactive Preview"
+						class="flex-1 w-full border-none"
+					></iframe>
+				{/if}
+			</main>
+		</div>
+	{/if}
+</PageContainer>
