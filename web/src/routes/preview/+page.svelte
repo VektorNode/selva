@@ -2,12 +2,12 @@
   import { onMount, onDestroy } from "svelte";
   import { page } from "$app/stores";
   import { api } from "$lib/api/client";
-  import { getWebSocketClient, connectWithFallback } from "$lib/api/websocket";
+  import { getWebSocketClient } from "$lib/api/websocket";
   import type { UISchema } from "$lib/types/schema";
   import TabLayout from "$lib/components/ui/TabLayout.svelte";
   import LegacyLayout from "$lib/components/ui/LegacyLayout.svelte";
 
-  // Runtime mode: 'local' uses WebSocket/polling, 'compute' uses Rhino Compute
+  // Runtime mode: 'local' uses WebSocket, 'compute' uses Rhino Compute
   type RuntimeMode = "local" | "compute";
 
   let sessionId = "";
@@ -15,11 +15,10 @@
   let values: Record<string, any> = {};
   let loading = true;
   let error = "";
-  let stopPolling: (() => void) | null = null;
-  let connectionMode: "websocket" | "polling" = "polling";
   let wsClient = getWebSocketClient();
+  let wsConnected = false;
 
-  // Determine runtime mode from URL parameter or environment variable
+  // Determine runtime mode from URL parameter
   let runtimeMode: RuntimeMode = "local";
   let solving = false;
 
@@ -38,19 +37,18 @@
       return;
     }
 
-    // Load schema (from session for local mode, from API for compute mode)
+    // Load schema from session
     if (runtimeMode === "local") {
       schema = await api.getSchema(sessionId);
 
       if (!schema) {
         error =
-          "Schema not found. Please ensure the Interactive component is active in Grasshopper.";
+          "Schema not found. Please ensure the UI Builder component is enabled in Grasshopper.";
         loading = false;
         return;
       }
     } else {
-      // For compute mode, schema should be provided via URL or loaded from server
-      // For now, try loading from session if provided, otherwise show error
+      // For compute mode, try loading from session if provided
       if (sessionId) {
         schema = await api.getSchema(sessionId);
       }
@@ -68,7 +66,7 @@
       schema.layout.tabs = [];
     }
 
-    // Initialize values with defaults for inputs only
+    // Initialize values with defaults using NAME as key (for UI compatibility)
     schema.inputs.forEach((input) => {
       values[input.name] = input.default ?? getDefaultValue(input.type);
     });
@@ -78,30 +76,55 @@
       values[output.name] = null;
     });
 
-    // Setup connection for local mode
+    // Setup WebSocket connection for local mode
     if (runtimeMode === "local") {
-      connectionMode = await connectWithFallback(sessionId, (outputs) => {
-        console.log("Received outputs from Grasshopper:", outputs);
-        // Update output values with reactivity trigger
-        values = { ...values, ...outputs };
-      });
+      const connected = await wsClient.connect();
 
-      if (connectionMode === "websocket") {
-        console.log("Using WebSocket for real-time communication");
-      } else {
-        console.log("Using file-based polling");
-        stopPolling = await api.pollValues(sessionId, (runtimeValues) => {
-          console.log("Polled values:", runtimeValues.values);
-          values = { ...values, ...runtimeValues.values };
+      if (connected) {
+        console.log("[Preview] WebSocket connected");
+        wsConnected = true;
+
+        // Listen for output updates from Grasshopper (C# sends GUID keys, convert to names)
+        wsClient.on('outputs', (message) => {
+          if (message.sessionId === sessionId) {
+            console.log("[Preview] Received outputs:", message.outputs);
+            // Convert from GUID keys to name keys for UI
+            const outputsByName: Record<string, any> = {};
+            schema.outputs.forEach((output) => {
+              if (message.outputs[output.grasshopperId] !== undefined) {
+                outputsByName[output.name] = message.outputs[output.grasshopperId];
+              }
+            });
+            values = { ...values, ...outputsByName };
+          }
         });
+
+        // Also support 'outputUpdate' message type
+        wsClient.on('outputUpdate', (message) => {
+          if (message.sessionId === sessionId) {
+            console.log("[Preview] Received output update:", message.outputs);
+            // Convert from GUID keys to name keys for UI
+            const outputsByName: Record<string, any> = {};
+            schema.outputs.forEach((output) => {
+              if (message.outputs[output.grasshopperId] !== undefined) {
+                outputsByName[output.name] = message.outputs[output.grasshopperId];
+              }
+            });
+            values = { ...values, ...outputsByName };
+          }
+        });
+      } else {
+        error = "Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled and port 8765 is available.";
+        loading = false;
+        return;
       }
     }
+
     loading = false;
   });
 
   onDestroy(() => {
-    if (stopPolling) stopPolling();
-    if (connectionMode === "websocket") {
+    if (wsConnected) {
       wsClient.disconnect();
     }
   });
@@ -122,24 +145,31 @@
     }
   }
 
+  /**
+   * Handle value changes from UI
+   * Receives parameter NAME from UI, converts to GUID for WebSocket
+   */
   async function handleValueChange(parameterName: string, value: any) {
+    // Update local values (using name as key for UI)
     values[parameterName] = value;
 
-    if (runtimeMode === "local") {
-      // Filter to only send input values (exclude outputs)
-      const inputValues: Record<string, any> = {};
+    if (runtimeMode === "local" && wsConnected && wsClient.isConnected) {
+      // Convert from name-based keys to GUID-based keys for C#
+      const inputValuesByGuid: Record<string, any> = {};
+
       schema?.inputs.forEach((input) => {
         if (values[input.name] !== undefined) {
-          inputValues[input.name] = values[input.name];
+          // Map name → GUID
+          inputValuesByGuid[input.grasshopperId] = values[input.name];
         }
       });
 
-      // Local mode: send to Grasshopper via WebSocket or polling
-      if (connectionMode === "websocket" && wsClient.isConnected) {
-        wsClient.sendValueUpdate(sessionId, inputValues);
-      } else {
-        await api.updateValues(sessionId, inputValues);
-      }
+      console.log("[Preview] Sending value update to Grasshopper (GUID keys):", inputValuesByGuid);
+
+      // Send via WebSocket with GUID keys (what C# expects)
+      wsClient.sendValueUpdate(sessionId, inputValuesByGuid);
+    } else if (!wsClient.isConnected) {
+      console.warn("[Preview] Cannot send values - WebSocket not connected");
     }
   }
 </script>
@@ -154,10 +184,10 @@
           {#if !loading}
             <span
               class="connection-badge"
-              class:websocket={connectionMode === "websocket"}
-              class:polling={connectionMode === "polling"}
+              class:connected={wsConnected}
+              class:disconnected={!wsConnected}
             >
-              {connectionMode === "websocket" ? "⚡ WebSocket" : "📡 Polling"}
+              {wsConnected ? "⚡ WebSocket Connected" : "❌ WebSocket Disconnected"}
             </span>
           {/if}
         {:else}
@@ -234,13 +264,13 @@
     font-weight: 600;
   }
 
-  .connection-badge.websocket {
+  .connection-badge.connected {
     background: #4caf50;
     color: white;
   }
 
-  .connection-badge.polling {
-    background: #ff9800;
+  .connection-badge.disconnected {
+    background: #f44336;
     color: white;
   }
 

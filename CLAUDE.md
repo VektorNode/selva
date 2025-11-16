@@ -8,7 +8,7 @@ ComputeBuilder is a cross-platform Rhino Grasshopper plugin that enables web-bas
 
 - **Backend**: C# Grasshopper components (.NET multi-target: net48/net7.0)
 - **Frontend**: SvelteKit web application (TypeScript, Tailwind CSS)
-- **Communication**: File-based session storage + WebSocket (port 8765)
+- **Communication**: WebSocket (port 8765) for real-time updates + session files for persistence
 
 ## Essential Commands
 
@@ -88,32 +88,40 @@ These scripts build the plugin, install it, and start the dev server.
 
 ## Architecture Overview
 
-### Three-Layer Communication Model
+### WebSocket-First Communication Architecture
 
 ```
-┌────────────────────────────────────────┐
-│  Grasshopper Plugin (C#)               │
-│  - UIBuilderComponent                  │
-│  - ClearContextDataComponent           │
-└──────────┬─────────────────────────────┘
-           │ Reads/writes JSON files
+┌─────────────────────────────────────────────────┐
+│  Grasshopper Plugin (C#)                        │
+│  - UIBuilderComponent (orchestration)           │
+│  - SchemaManager (parameter scanning)           │
+│  - ValueApplicator (reflection-based updates)   │
+│  - CommunicationHandler (WebSocket)             │
+│  - PersistenceManager (session files)           │
+│  - ClearContextDataComponent                    │
+└──────────┬──────────────────────────────────────┘
+           │
+           │ WebSocket (real-time, port 8765)
+           │ ─────────────────────────────►
+           │ Session files (persistence only)
            ↓
-┌────────────────────────────────────────┐
-│  Session Storage (Temp Directory)      │
-│  - {sessionId}_schema.json             │
-│  - {sessionId}_values.json             │
-│  - {sessionId}_state.json              │
-│  - {sessionId}_available.json          │
-└──────────┬─────────────────────────────┘
-           │ REST API + WebSocket
+┌─────────────────────────────────────────────────┐
+│  Session Storage (Temp Directory)               │
+│  - {sessionId}_schema.json (embedded in .gh)    │
+│  - {sessionId}_values.json                      │
+│  - {sessionId}_state.json                       │
+│  - {sessionId}_available.json                   │
+└──────────┬──────────────────────────────────────┘
+           │ REST API (initial load only)
+           │ WebSocket (real-time updates)
            ↓
-┌────────────────────────────────────────┐
-│  SvelteKit Web App                     │
-│  - /builder - Schema design            │
-│  - /preview - Interactive UI           │
-│  - /app - Rhino Compute demo           │
-│  - /api/* - Server routes              │
-└────────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│  SvelteKit Web App                              │
+│  - /builder - Schema design                     │
+│  - /preview - Interactive UI (WebSocket)        │
+│  - /app - Rhino Compute demo                    │
+│  - /api/* - Server routes (GET only)            │
+└─────────────────────────────────────────────────┘
 ```
 
 ### Data Flow Sequence
@@ -125,16 +133,16 @@ These scripts build the plugin, install it, and start the dev server.
 4. User configures UI schema in web app
 5. Schema saved to `{sessionId}_schema.json`
 
-**Interactive Mode:**
-1. UIBuilderComponent loads schema
+**Interactive Mode (WebSocket-only):**
+1. UIBuilderComponent loads schema and starts WebSocket server
 2. Opens browser to `/preview?session={sessionId}`
-3. User modifies values in web UI
-4. Values written to `{sessionId}_values.json`
-5. Component reads values file (polling or WebSocket)
-6. Applies values to Grasshopper parameters via reflection: `AssignContextualDataTree()`
+3. Web UI connects via WebSocket
+4. User modifies values in web UI
+5. Values sent via WebSocket to CommunicationHandler
+6. ValueApplicator applies values to Grasshopper parameters via reflection: `AssignContextualDataTree()`
 7. Grasshopper recomputes automatically
-8. Outputs written back to values file
-9. Web UI updates display
+8. CollectAndSendOutputs gathers results and broadcasts via WebSocket
+9. Web UI updates display in real-time
 
 ### Session File Locations
 
@@ -181,24 +189,46 @@ This approach allows supporting multiple parameter types without strong coupling
 
 ### C# Components
 
-**Components/UIBuilderComponent.cs** (1053 lines)
-- Unified component for both builder and interactive modes
-- Manages session lifecycle with embedded schema persistence
-- Scans available parameters on enable/refresh
-- Starts WebSocket server (port 8765)
-- Applies values from web UI to Grasshopper parameters
-- Handles file polling fallback
+**Components/UIBuilderComponent.cs** (~587 lines - REFACTORED)
+- **Orchestration only** - delegates to specialized utilities
+- Manages component lifecycle and .gh file persistence
+- Coordinates between SchemaManager, ValueApplicator, CommunicationHandler, and PersistenceManager
 - Event-driven document synchronization
+- **WebSocket-only** - no file polling
 
 **Components/ClearContextDataComponent.cs** (152 lines)
 - Utility to clear contextual parameter data
 - Resets parameters to initial state
 
-### Core Utilities
+### Core Utilities (NEW - Extracted from UIBuilderComponent)
+
+**Utils/SchemaManager.cs** (~180 lines)
+- Parameter scanning from Grasshopper documents
+- Discovers `IGH_ContextualParameter` instances and output components
+- Validates for duplicate parameter names
+- Type mapping (dictionary-based for performance)
+
+**Utils/ValueApplicator.cs** (~150 lines)
+- Applies values from web UI to Grasshopper parameters
+- Generic type-based value conversion (no duplicate methods)
+- Reflection-based parameter assignment
+- Tracks last applied values to prevent redundant updates
+
+**Utils/CommunicationHandler.cs** (~140 lines)
+- WebSocket server lifecycle management
+- Real-time bidirectional communication
+- Event-based message handling
+- Output broadcasting to web clients
+
+**Utils/PersistenceManager.cs** (~90 lines)
+- Session file read/write operations
+- Schema, values, state, and available parameters persistence
+- Simplified interface for UIBuilderComponent
 
 **Utils/SessionManager.cs** (92 lines)
 - Session ID generation (8-character GUIDs)
-- JSON file read/write operations
+- File path helpers
+- JSON serialization wrappers
 - Session cleanup for old files
 - Path resolution for cross-platform compatibility
 
@@ -265,19 +295,33 @@ Additional metadata for enhanced UI building:
 
 ## Communication Protocols
 
-### WebSocket (Primary)
+### WebSocket (Real-time Communication)
 
-- Port: 8765
-- Message types:
-  - `ValueUpdateMessage` - Input value changes from web UI
-  - `OutputUpdateMessage` - Output data from Grasshopper
-- Fallback: File-based polling if WebSocket unavailable
+**ONLY communication method** - file polling has been removed for simplicity.
 
-### File Polling (Fallback)
+- **Port:** 8765
+- **Protocol:** ws://localhost:8765
+- **Connection:** CommunicationHandler manages lifecycle
+- **Message Types:**
+  - `ValueUpdateMessage` - Input value changes from web UI → Grasshopper
+  - `OutputUpdateMessage` - Output data from Grasshopper → web UI
+- **Reconnection:** Web client auto-reconnects with exponential backoff
+- **Benefits:**
+  - Real-time updates (no 500ms delay)
+  - Bidirectional communication
+  - Lower I/O overhead
+  - Better user experience
 
-- Interval: 500ms
-- Checks file modification timestamps
-- Prevents duplicate reads with timestamp tracking
+### Session Files (Persistence Only)
+
+Session files are used for:
+- Initial page load (GET requests via REST API)
+- Schema persistence (embedded in .gh files)
+- Cross-session data sharing
+
+**NOT used for:**
+- ~~Real-time value updates~~ (WebSocket only)
+- ~~Polling~~ (removed)
 
 ## Supported Input/Output Types
 

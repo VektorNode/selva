@@ -247,39 +247,4 @@ namespace ComputeBuilder.Utils
         }
     }
 
-    /// <summary>
-    /// WebSocket message types
-    /// </summary>
-    public class WebSocketMessage
-    {
-        [JsonProperty("type")]
-        public string Type { get; set; }
-
-        [JsonProperty("data")]
-        public object Data { get; set; }
-    }
-
-    public class ValueUpdateMessage
-    {
-        [JsonProperty("type")]
-        public string Type { get; set; } = "valueUpdate";
-
-        [JsonProperty("sessionId")]
-        public string SessionId { get; set; }
-
-        [JsonProperty("values")]
-        public Dictionary<string, object> Values { get; set; }
-    }
-
-    public class OutputUpdateMessage
-    {
-        [JsonProperty("type")]
-        public string Type { get; set; } = "outputUpdate";
-
-        [JsonProperty("sessionId")]
-        public string SessionId { get; set; }
-
-        [JsonProperty("outputs")]
-        public Dictionary<string, object> Outputs { get; set; }
-    }
 }

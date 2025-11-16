@@ -1,7 +1,8 @@
 import type { UISchema, RuntimeValues, SessionState, AvailableParameters } from '$lib/types/schema';
 
 /**
- * API client for communicating with the backend (file-based or HTTP)
+ * API client for initial data fetching (WebSocket-only version)
+ * All real-time updates happen via WebSocket - this is only for initial page loads
  */
 export class ApiClient {
 	private baseUrl: string;
@@ -11,7 +12,7 @@ export class ApiClient {
 	}
 
 	/**
-	 * Get schema for a session
+	 * Get schema for a session (initial load only)
 	 */
 	async getSchema(sessionId: string): Promise<UISchema | null> {
 		const response = await fetch(`${this.baseUrl}/schema/${sessionId}`);
@@ -23,7 +24,6 @@ export class ApiClient {
 	 * Save schema for a session
 	 */
 	async saveSchema(sessionId: string, schema: UISchema): Promise<boolean> {
-
 		console.log('Saving schema', schema);
 		const response = await fetch(`${this.baseUrl}/schema/${sessionId}`, {
 			method: 'POST',
@@ -34,7 +34,7 @@ export class ApiClient {
 	}
 
 	/**
-	 * Get runtime values for a session
+	 * Get runtime values for a session (initial load only)
 	 */
 	async getValues(sessionId: string): Promise<RuntimeValues | null> {
 		const response = await fetch(`${this.baseUrl}/values/${sessionId}`);
@@ -43,19 +43,7 @@ export class ApiClient {
 	}
 
 	/**
-	 * Update runtime values for a session
-	 */
-	async updateValues(sessionId: string, values: Record<string, any>): Promise<boolean> {
-		const response = await fetch(`${this.baseUrl}/values/${sessionId}`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ timestamp: new Date().toISOString(), values })
-		});
-		return response.ok;
-	}
-
-	/**
-	 * Get session state
+	 * Get session state (initial load only)
 	 */
 	async getState(sessionId: string): Promise<SessionState | null> {
 		const response = await fetch(`${this.baseUrl}/state/${sessionId}`);
@@ -64,30 +52,12 @@ export class ApiClient {
 	}
 
 	/**
-	 * Get available parameters for a session
+	 * Get available parameters for a session (initial load only)
 	 */
 	async getAvailableParameters(sessionId: string): Promise<AvailableParameters | null> {
 		const response = await fetch(`${this.baseUrl}/available/${sessionId}`);
 		if (!response.ok) return null;
 		return response.json();
-	}
-
-	/**
-	 * Poll for value updates (used in preview mode)
-	 */
-	async pollValues(sessionId: string, callback: (values: RuntimeValues) => void, interval = 500) {
-		let lastTimestamp = '';
-
-		const poll = async () => {
-			const values = await this.getValues(sessionId);
-			if (values && values.timestamp !== lastTimestamp) {
-				lastTimestamp = values.timestamp;
-				callback(values);
-			}
-		};
-
-		const intervalId = setInterval(poll, interval);
-		return () => clearInterval(intervalId);
 	}
 }
 
