@@ -111,6 +111,7 @@ These scripts build the plugin, install it, and start the dev server.
 │  SvelteKit Web App                     │
 │  - /builder - Schema design            │
 │  - /preview - Interactive UI           │
+│  - /app - Rhino Compute demo           │
 │  - /api/* - Server routes              │
 └────────────────────────────────────────┘
 ```
@@ -155,7 +156,7 @@ Sessions auto-cleanup after 24 hours of inactivity.
 - Standard Grasshopper parameters (Param_Number, Param_String, etc.)
 - Custom components without `IGH_ContextualParameter` interface
 
-This is enforced by `ParameterValidator.cs` and must be maintained in all validation logic.
+**Note:** Parameter validation is currently handled inline within the UIBuilderComponent and ClearContextDataComponent. There is no separate `ParameterValidator.cs` utility file at this time.
 
 ### Type Safety Between C# and TypeScript
 
@@ -180,13 +181,14 @@ This approach allows supporting multiple parameter types without strong coupling
 
 ### C# Components
 
-**Components/UIBuilderComponent.cs** (546 lines)
+**Components/UIBuilderComponent.cs** (1053 lines)
 - Unified component for both builder and interactive modes
-- Manages session lifecycle
+- Manages session lifecycle with embedded schema persistence
 - Scans available parameters on enable/refresh
 - Starts WebSocket server (port 8765)
 - Applies values from web UI to Grasshopper parameters
 - Handles file polling fallback
+- Event-driven document synchronization
 
 **Components/ClearContextDataComponent.cs** (152 lines)
 - Utility to clear contextual parameter data
@@ -194,18 +196,13 @@ This approach allows supporting multiple parameter types without strong coupling
 
 ### Core Utilities
 
-**Utils/SessionManager.cs** (142 lines)
+**Utils/SessionManager.cs** (92 lines)
 - Session ID generation (8-character GUIDs)
 - JSON file read/write operations
 - Session cleanup for old files
 - Path resolution for cross-platform compatibility
 
-**Utils/ParameterValidator.cs** (56 lines)
-- Validates parameters before use
-- Enforces IGH_ContextualParameter requirement
-- Returns descriptive error messages
-
-**Utils/WebSocketServer.cs** (294 lines)
+**Utils/WebSocketServer.cs** (285 lines)
 - Async HttpListener-based WebSocket server
 - Thread-safe client management
 - Broadcast messaging
@@ -213,7 +210,7 @@ This approach allows supporting multiple parameter types without strong coupling
 
 ### Data Models
 
-**Models/UISchema.cs** (~300 lines)
+**Models/UISchema.cs** (386 lines)
 All data structures shared between C# and web UI:
 - `UISchema` - Complete UI definition
 - `InputParameter` / `OutputParameter` - Parameter definitions with Compute-compatible metadata
@@ -245,13 +242,26 @@ Additional metadata for enhanced UI building:
 - `state/[sessionId]/+server.ts` - GET state
 - `available/[sessionId]/+server.ts` - GET available parameters
 
-**web/src/routes/builder/+page.svelte** - Schema builder UI
+**web/src/routes/builder/+page.svelte** - Schema builder UI with drag-and-drop layout editor
 
-**web/src/routes/preview/+page.svelte** - Interactive preview UI
+**web/src/routes/preview/+page.svelte** - Interactive preview UI for session-based workflows
+
+**web/src/routes/app/+page.svelte** - Rhino Compute integration demo (standalone mode)
 
 **web/src/lib/api/client.ts** - REST API client
 
 **web/src/lib/api/websocket.ts** - WebSocket client
+
+**web/src/lib/components/ui/** - Reusable UI components:
+- `InputControl.svelte` - Input parameter controls
+- `OutputDisplay.svelte` - Output parameter displays
+- `TabLayout.svelte` - Tabbed layout system
+- `LegacyLayout.svelte` - Grid-based layout (fallback)
+
+**web/src/lib/components/** - Drag-and-drop components:
+- `DragDropContext.svelte` - Drag-and-drop state management
+- `DraggableParameter.svelte` - Draggable parameter items
+- `DropZone.svelte` - Drop target zones
 
 ## Communication Protocols
 
@@ -282,7 +292,7 @@ Additional metadata for enhanced UI building:
 ### UI Output Types (for web interface)
 - `text` - Text display
 - `number` - Numeric display
-- `3d-viewer` - Three.js geometry viewer (planned)
+- `3d-viewer` - Three.js geometry viewer (implemented)
 - `chart` - Data visualization (planned)
 
 ### Grasshopper Parameter Types (Compute-compatible)
@@ -413,13 +423,19 @@ This dual approach allows:
 1. **Direct Compute integration** - Use the same parameter definitions for remote solving
 2. **Enhanced UI building** - Add UI-specific metadata without breaking Compute compatibility
 
+## Implemented Features
+
+- ✅ Three.js 3D viewer for geometry visualization
+- ✅ Drag-and-drop layout editor with group management
+- ✅ Tabbed layout system with collapsible groups
+- ✅ Rhino Compute integration support (`rhino-compute-core` package)
+- ✅ Embedded schema persistence (schemas saved with .gh files)
+
 ## Future Extension Points
 
-- 3D viewer integration (Three.js for geometry visualization)
 - Chart components (Chart.js for data visualization)
-- Drag-and-drop layout editor with group management
 - Schema versioning and import/export
-- Direct Rhino Compute integration for remote solving
+- Full Rhino Compute deployment workflows
 - Authentication and multi-user support
 - Real-time collaboration via WebSocket broadcasting
 - Auto-generation of Compute API endpoints from schemas
