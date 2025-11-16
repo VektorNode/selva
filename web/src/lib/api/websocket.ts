@@ -1,0 +1,204 @@
+/**
+ * WebSocket client for real-time communication with Grasshopper (local mode only)
+ */
+
+export type MessageHandler = (data: any) => void;
+
+export class WebSocketClient {
+	private socket: WebSocket | null = null;
+	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	private messageHandlers: Map<string, Set<MessageHandler>> = new Map();
+	private reconnectAttempts = 0;
+	private maxReconnectAttempts = 5;
+	private reconnectDelay = 1000;
+	private isConnecting = false;
+
+	constructor(private url: string = 'ws://localhost:8765') { }
+
+	/**
+	 * Connect to the WebSocket server
+	 */
+	connect(): Promise<boolean> {
+		if (this.socket?.readyState === WebSocket.OPEN || this.isConnecting) {
+			return Promise.resolve(true);
+		}
+
+		this.isConnecting = true;
+
+		return new Promise((resolve) => {
+			try {
+				this.socket = new WebSocket(this.url);
+
+				this.socket.onopen = () => {
+					console.log('[WebSocket] Connected to Grasshopper');
+					this.reconnectAttempts = 0;
+					this.isConnecting = false;
+					resolve(true);
+				};
+
+				this.socket.onmessage = (event) => {
+					try {
+						const message = JSON.parse(event.data);
+						this.handleMessage(message);
+					} catch (error) {
+						console.error('[WebSocket] Failed to parse message:', error);
+					}
+				};
+
+				this.socket.onerror = (error) => {
+					console.error('[WebSocket] Error:', error);
+					this.isConnecting = false;
+					resolve(false);
+				};
+
+				this.socket.onclose = () => {
+					console.log('[WebSocket] Disconnected');
+					this.isConnecting = false;
+					this.socket = null;
+					this.attemptReconnect();
+				};
+			} catch (error) {
+				console.error('[WebSocket] Connection failed:', error);
+				this.isConnecting = false;
+				resolve(false);
+			}
+		});
+	}
+
+	/**
+	 * Disconnect from the WebSocket server
+	 */
+	disconnect() {
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer);
+			this.reconnectTimer = null;
+		}
+
+		if (this.socket) {
+			this.socket.close();
+			this.socket = null;
+		}
+
+		this.reconnectAttempts = 0;
+	}
+
+	/**
+	 * Send a message to the server
+	 */
+	send(type: string, data: any) {
+		if (this.socket?.readyState === WebSocket.OPEN) {
+			const message = { type, ...data };
+			this.socket.send(JSON.stringify(message));
+		} else {
+			console.warn('[WebSocket] Cannot send message - not connected');
+		}
+	}
+
+	/**
+	 * Send value updates to Grasshopper
+	 */
+	sendValueUpdate(sessionId: string, values: Record<string, any>) {
+		console.log('[WebSocket] Sending value update:', values);
+		this.send('valueUpdate', { sessionId, values });
+	}
+
+	/**
+	 * Register a handler for a specific message type
+	 */
+	on(messageType: string, handler: MessageHandler) {
+		if (!this.messageHandlers.has(messageType)) {
+			this.messageHandlers.set(messageType, new Set());
+		}
+		this.messageHandlers.get(messageType)!.add(handler);
+	}
+
+	/**
+	 * Unregister a handler
+	 */
+	off(messageType: string, handler: MessageHandler) {
+		this.messageHandlers.get(messageType)?.delete(handler);
+	}
+
+	/**
+	 * Check if connected
+	 */
+	get isConnected(): boolean {
+		return this.socket?.readyState === WebSocket.OPEN;
+	}
+
+	/**
+	 * Handle incoming messages
+	 */
+	private handleMessage(message: any) {
+		const handlers = this.messageHandlers.get(message.type);
+		if (handlers) {
+			handlers.forEach((handler) => handler(message));
+		}
+	}
+
+	/**
+	 * Attempt to reconnect with exponential backoff
+	 */
+	private attemptReconnect() {
+		if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+			console.log('[WebSocket] Max reconnection attempts reached');
+			return;
+		}
+
+		this.reconnectAttempts++;
+		const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+
+		console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+
+		this.reconnectTimer = setTimeout(() => {
+			this.connect();
+		}, delay);
+	}
+}
+
+// Singleton instance
+let wsClient: WebSocketClient | null = null;
+
+/**
+ * Get or create the WebSocket client instance
+ */
+export function getWebSocketClient(): WebSocketClient {
+	if (!wsClient) {
+		wsClient = new WebSocketClient();
+	}
+	return wsClient;
+}
+
+/**
+ * Try to connect via WebSocket, fall back to polling if it fails
+ */
+export async function connectWithFallback(
+	sessionId: string,
+	onValueUpdate: (values: any) => void
+): Promise<'websocket' | 'polling'> {
+	const ws = getWebSocketClient();
+
+	// Try WebSocket first
+	const connected = await ws.connect();
+
+	if (connected) {
+		// Register handler for output updates (supports both 'outputs' and 'outputUpdate')
+		ws.on('outputs', (message) => {
+			if (message.sessionId === sessionId) {
+				onValueUpdate(message.outputs);
+			}
+		});
+
+		ws.on('outputUpdate', (message) => {
+			if (message.sessionId === sessionId) {
+				onValueUpdate(message.outputs);
+			}
+		});
+
+		return 'websocket';
+	}
+
+	// Fall back to polling
+	console.log('[Connection] Falling back to file-based polling');
+	return 'polling';
+}
