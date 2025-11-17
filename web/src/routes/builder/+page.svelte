@@ -160,7 +160,7 @@
     // For each group in the tab, check if parameters are used elsewhere
     tab.groups.forEach((group) => {
       group.items.forEach((item) => {
-        const isUsedElsewhere = schema.layout.tabs.some(
+        const isUsedElsewhere = schema!.layout.tabs.some(
           (t) =>
             t.id !== tabId &&
             t.groups.some((g) =>
@@ -171,11 +171,11 @@
         // If not used anywhere else, remove from inputs/outputs
         if (!isUsedElsewhere) {
           if (item.type === "input") {
-            schema.inputs = schema.inputs.filter(
+            schema!.inputs = schema!.inputs.filter(
               (i) => i.grasshopperId !== item.parameterId
             );
           } else if (item.type === "output") {
-            schema.outputs = schema.outputs.filter(
+            schema!.outputs = schema!.outputs.filter(
               (o) => o.grasshopperId !== item.parameterId
             );
           }
@@ -224,7 +224,7 @@
 
     // For each item in the group, check if it's used elsewhere
     group.items.forEach((item) => {
-      const isUsedElsewhere = schema.layout.tabs.some((t) =>
+      const isUsedElsewhere = schema!.layout.tabs.some((t) =>
         t.groups.some(
           (g) =>
             g.id !== groupId &&
@@ -235,11 +235,11 @@
       // If not used anywhere else, remove from inputs/outputs
       if (!isUsedElsewhere) {
         if (item.type === "input") {
-          schema.inputs = schema.inputs.filter(
+          schema!.inputs = schema!.inputs.filter(
             (i) => i.grasshopperId !== item.parameterId
           );
         } else if (item.type === "output") {
-          schema.outputs = schema.outputs.filter(
+          schema!.outputs = schema!.outputs.filter(
             (o) => o.grasshopperId !== item.parameterId
           );
         }
@@ -274,7 +274,7 @@
   ) {
     if (!schema) return;
 
-    const { type, data, sourceType } = event.detail;
+    const { type, data, sourceType, targetItem, dropPosition } = event.detail;
     if (type !== "parameter") return;
 
     const param = data as AvailableParameter;
@@ -339,7 +339,7 @@
       }
     }
 
-    // Add to group layout
+    // Create new item
     const newItem: GroupItem = {
       id: crypto.randomUUID().substring(0, 8),
       parameterId: param.id,
@@ -349,7 +349,25 @@
       span: 1,
     };
 
-    group.items = [...group.items, newItem];
+    // Insert at specific position if dropping on an item
+    if (targetItem && dropPosition) {
+      const targetIndex = group.items.findIndex((i) => i.id === targetItem.id);
+      if (targetIndex >= 0) {
+        if (dropPosition === "before") {
+          group.items.splice(targetIndex, 0, newItem);
+        } else {
+          group.items.splice(targetIndex + 1, 0, newItem);
+        }
+        group.items = [...group.items];
+      } else {
+        // Target not found, add to end
+        group.items = [...group.items, newItem];
+      }
+    } else {
+      // No target, add to end
+      group.items = [...group.items, newItem];
+    }
+
     schema.layout.tabs = [...schema.layout.tabs];
   }
 
@@ -392,43 +410,61 @@
     }
   }
 
-  function moveItemUp(tabId: string, groupId: string, itemId: string) {
+  function handleReorder(event: CustomEvent) {
     if (!schema) return;
 
-    const tab = schema.layout.tabs.find((t) => t.id === tabId);
-    if (!tab) return;
+    const {
+      sourceItem,
+      sourceTabId,
+      sourceGroupId,
+      targetItem,
+      targetTabId,
+      targetGroupId,
+      dropPosition,
+    } = event.detail;
 
-    const group = tab.groups.find((g) => g.id === groupId);
-    if (!group) return;
+    // Don't reorder if dropping on itself
+    if (sourceItem.id === targetItem.id) return;
 
-    const index = group.items.findIndex((i) => i.id === itemId);
-    if (index <= 0) return;
+    const sourceTab = schema.layout.tabs.find((t) => t.id === sourceTabId);
+    const targetTab = schema.layout.tabs.find((t) => t.id === targetTabId);
+    if (!sourceTab || !targetTab) return;
 
-    [group.items[index], group.items[index - 1]] = [
-      group.items[index - 1],
-      group.items[index],
-    ];
-    group.items = [...group.items];
-    schema.layout.tabs = [...schema.layout.tabs];
-  }
+    const sourceGroup = sourceTab.groups.find((g) => g.id === sourceGroupId);
+    const targetGroup = targetTab.groups.find((g) => g.id === targetGroupId);
+    if (!sourceGroup || !targetGroup) return;
 
-  function moveItemDown(tabId: string, groupId: string, itemId: string) {
-    if (!schema) return;
+    // Remove from source group
+    const sourceIndex = sourceGroup.items.findIndex(
+      (i) => i.id === sourceItem.id
+    );
+    if (sourceIndex < 0) return;
 
-    const tab = schema.layout.tabs.find((t) => t.id === tabId);
-    if (!tab) return;
+    const [movedItem] = sourceGroup.items.splice(sourceIndex, 1);
 
-    const group = tab.groups.find((g) => g.id === groupId);
-    if (!group) return;
+    // Add to target group based on drop position
+    let targetIndex = targetGroup.items.findIndex(
+      (i) => i.id === targetItem.id
+    );
 
-    const index = group.items.findIndex((i) => i.id === itemId);
-    if (index < 0 || index >= group.items.length - 1) return;
+    if (targetIndex < 0) {
+      // Target not found, add to end
+      targetGroup.items.push(movedItem);
+    } else {
+      // Adjust index if we removed an item from the same group before the target
+      if (sourceGroup === targetGroup && sourceIndex < targetIndex) {
+        targetIndex--;
+      }
 
-    [group.items[index], group.items[index + 1]] = [
-      group.items[index + 1],
-      group.items[index],
-    ];
-    group.items = [...group.items];
+      // Insert before or after based on dropPosition
+      if (dropPosition === "before") {
+        targetGroup.items.splice(targetIndex, 0, movedItem);
+      } else {
+        targetGroup.items.splice(targetIndex + 1, 0, movedItem);
+      }
+    }
+
+    // Trigger reactivity
     schema.layout.tabs = [...schema.layout.tabs];
   }
 
@@ -531,6 +567,7 @@
                             {group}
                             onDrop={(e) =>
                               handleParameterDrop(activeTab.id, group.id, e)}
+                            onReorder={handleReorder}
                             onRemove={() => removeGroup(activeTab.id, group.id)}
                           >
                             {#each group.items as item (item.id)}
@@ -540,10 +577,8 @@
                               <BuilderGroupItem
                                 {item}
                                 {paramInfo}
-                                onMoveUp={() =>
-                                  moveItemUp(activeTab.id, group.id, item.id)}
-                                onMoveDown={() =>
-                                  moveItemDown(activeTab.id, group.id, item.id)}
+                                tabId={activeTab.id}
+                                groupId={group.id}
                                 onRemove={() =>
                                   removeItem(activeTab.id, group.id, item.id)}
                               />
