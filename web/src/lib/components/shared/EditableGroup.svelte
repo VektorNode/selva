@@ -46,7 +46,7 @@
 	</div>
 
 	<div class="p-4">
-		<DropZone isEmpty={group.items.length === 0} label="Drag parameters here" on:drop={onDrop}>
+		<DropZone isEmpty={group.items.length === 0} label="Drag parameters here" ondrop={onDrop}>
 			<div class="grid gap-3" style="grid-template-columns: repeat({group.columns}, 1fr);">
 				{@render children()}
 			</div>

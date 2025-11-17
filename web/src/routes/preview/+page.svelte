@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
   import { page } from "$app/stores";
   import { api } from "$lib/api/client";
   import { getWebSocketClient } from "$lib/api/websocket";
@@ -16,127 +15,17 @@
   // Runtime mode: 'local' uses WebSocket, 'compute' uses Rhino Compute
   type RuntimeMode = "local" | "compute";
 
-  let sessionId = "";
-  let schema: UISchema | null = null;
-  let values: Record<string, any> = {};
-  let loading = true;
-  let error = "";
+  let sessionId = $state("");
+  let schema = $state<UISchema | null>(null);
+  let values = $state<Record<string, any>>({});
+  let loading = $state(true);
+  let error = $state("");
   let wsClient = getWebSocketClient();
-  let wsConnected = false;
+  let wsConnected = $state(false);
 
   // Determine runtime mode from URL parameter
-  let runtimeMode: RuntimeMode = "local";
-  let solving = false;
-
-  onMount(async () => {
-    sessionId = $page.url.searchParams.get("session") || "";
-
-    // Check URL parameter for mode (e.g., ?mode=compute)
-    const modeParam = $page.url.searchParams.get("mode");
-    if (modeParam === "compute") {
-      runtimeMode = "compute";
-    }
-
-    if (!sessionId && runtimeMode === "local") {
-      error = "No session ID provided";
-      loading = false;
-      return;
-    }
-
-    // Load schema from session
-    if (runtimeMode === "local") {
-      schema = await api.getSchema(sessionId);
-
-      if (!schema) {
-        error =
-          "Schema not found. Please ensure the UI Builder component is enabled in Grasshopper.";
-        loading = false;
-        return;
-      }
-    } else {
-      // For compute mode, try loading from session if provided
-      if (sessionId) {
-        schema = await api.getSchema(sessionId);
-      }
-
-      if (!schema) {
-        error =
-          "Schema not found. Please provide a valid schema or session ID.";
-        loading = false;
-        return;
-      }
-    }
-
-    // Ensure layout has tabs array for backward compatibility
-    if (!schema.layout.tabs) {
-      schema.layout.tabs = [];
-    }
-
-    // Initialize values with defaults using NAME as key (for UI compatibility)
-    schema.inputs.forEach((input) => {
-      values[input.name] = input.default ?? getDefaultValue(input.type);
-    });
-
-    // Outputs start with null - they'll be populated by live data from Grasshopper
-    schema.outputs.forEach((output) => {
-      values[output.name] = null;
-    });
-
-    // Setup WebSocket connection for local mode
-    if (runtimeMode === "local") {
-      const connected = await wsClient.connect();
-
-      if (connected) {
-        console.log("[Preview] WebSocket connected");
-        wsConnected = true;
-
-        // Listen for output updates from Grasshopper (C# sends GUID keys, convert to names)
-        wsClient.on("outputs", (message) => {
-          if (message.sessionId === sessionId) {
-            console.log("[Preview] Received outputs:", message.outputs);
-            // Convert from GUID keys to name keys for UI
-            const outputsByName: Record<string, any> = {};
-            schema!.outputs.forEach((output) => {
-              if (message.outputs[output.grasshopperId] !== undefined) {
-                outputsByName[output.name] =
-                  message.outputs[output.grasshopperId];
-              }
-            });
-            values = { ...values, ...outputsByName };
-          }
-        });
-
-        // Also support 'outputUpdate' message type
-        wsClient.on("outputUpdate", (message) => {
-          if (message.sessionId === sessionId) {
-            console.log("[Preview] Received output update:", message.outputs);
-            // Convert from GUID keys to name keys for UI
-            const outputsByName: Record<string, any> = {};
-            schema!.outputs.forEach((output) => {
-              if (message.outputs[output.grasshopperId] !== undefined) {
-                outputsByName[output.name] =
-                  message.outputs[output.grasshopperId];
-              }
-            });
-            values = { ...values, ...outputsByName };
-          }
-        });
-      } else {
-        error =
-          "Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled and port 8765 is available.";
-        loading = false;
-        return;
-      }
-    }
-
-    loading = false;
-  });
-
-  onDestroy(() => {
-    if (wsConnected) {
-      wsClient.disconnect();
-    }
-  });
+  let runtimeMode = $state<RuntimeMode>("local");
+  let solving = $state(false);
 
   function getDefaultValue(type: string) {
     switch (type) {
@@ -186,7 +75,7 @@
   }
 
   // Compute badge configuration
-  $: badgeConfig =
+  const badgeConfig = $derived(
     runtimeMode === "local"
       ? wsConnected
         ? { label: "⚡ WebSocket Connected", variant: "connected" as const }
@@ -196,13 +85,132 @@
           }
       : solving
         ? { label: "⚙️ Solving...", variant: "solving" as const }
-        : { label: "☁️ Rhino Compute", variant: "compute" as const };
+        : { label: "☁️ Rhino Compute", variant: "compute" as const }
+  );
+
+  // Initialize on mount
+  $effect.pre(() => {
+    const initializeSchema = async () => {
+      sessionId = $page.url.searchParams.get("session") || "";
+
+      // Check URL parameter for mode (e.g., ?mode=compute)
+      const modeParam = $page.url.searchParams.get("mode");
+      if (modeParam === "compute") {
+        runtimeMode = "compute";
+      }
+
+      if (!sessionId && runtimeMode === "local") {
+        error = "No session ID provided";
+        loading = false;
+        return;
+      }
+
+      // Load schema from session
+      if (runtimeMode === "local") {
+        schema = await api.getSchema(sessionId);
+
+        if (!schema) {
+          error =
+            "Schema not found. Please ensure the UI Builder component is enabled in Grasshopper.";
+          loading = false;
+          return;
+        }
+      } else {
+        // For compute mode, try loading from session if provided
+        if (sessionId) {
+          schema = await api.getSchema(sessionId);
+        }
+
+        if (!schema) {
+          error =
+            "Schema not found. Please provide a valid schema or session ID.";
+          loading = false;
+          return;
+        }
+      }
+
+      // Ensure layout has tabs array for backward compatibility
+      if (!schema.layout.tabs) {
+        schema.layout.tabs = [];
+      }
+
+      // Initialize values with defaults using NAME as key (for UI compatibility)
+      schema.inputs.forEach((input) => {
+        values[input.name] = input.default ?? getDefaultValue(input.type);
+      });
+
+      // Outputs start with null - they'll be populated by live data from Grasshopper
+      schema.outputs.forEach((output) => {
+        values[output.name] = null;
+      });
+
+      // Setup WebSocket connection for local mode
+      if (runtimeMode === "local") {
+        const connected = await wsClient.connect();
+
+        if (connected) {
+          console.log("[Preview] WebSocket connected");
+          wsConnected = true;
+
+          // Listen for output updates from Grasshopper (C# sends GUID keys, convert to names)
+          wsClient.on("outputs", (message) => {
+            if (message.sessionId === sessionId) {
+              console.log("[Preview] Received outputs:", message.outputs);
+              // Convert from GUID keys to name keys for UI
+              const outputsByName: Record<string, any> = {};
+              schema!.outputs.forEach((output) => {
+                if (message.outputs[output.grasshopperId] !== undefined) {
+                  outputsByName[output.name] =
+                    message.outputs[output.grasshopperId];
+                }
+              });
+              values = { ...values, ...outputsByName };
+            }
+          });
+
+          // Also support 'outputUpdate' message type
+          wsClient.on("outputUpdate", (message) => {
+            if (message.sessionId === sessionId) {
+              console.log("[Preview] Received output update:", message.outputs);
+              // Convert from GUID keys to name keys for UI
+              const outputsByName: Record<string, any> = {};
+              schema!.outputs.forEach((output) => {
+                if (message.outputs[output.grasshopperId] !== undefined) {
+                  outputsByName[output.name] =
+                    message.outputs[output.grasshopperId];
+                }
+              });
+              values = { ...values, ...outputsByName };
+            }
+          });
+        } else {
+          error =
+            "Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled and port 8765 is available.";
+          loading = false;
+          return;
+        }
+      }
+
+      loading = false;
+    };
+
+    initializeSchema();
+  });
+
+  // Cleanup on destroy
+  $effect(() => {
+    return () => {
+      if (wsConnected) {
+        wsClient.disconnect();
+      }
+    };
+  });
 </script>
 
 <PageContainer>
   <PageHeader
     title="Interactive Preview"
-    sessionId={sessionId || undefined}
+    {sessionId}
     badge={!loading ? badgeConfig : undefined}
   />
 

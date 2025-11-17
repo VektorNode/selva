@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { page } from "$app/stores";
   import { api } from "$lib/api/client";
   import DragDropContext from "$lib/components/DragDropContext.svelte";
@@ -25,76 +24,103 @@
     GroupItem,
   } from "$lib/types/schema";
 
-  let sessionId = "";
-  let schema: UISchema | null = null;
-  let availableParams: AvailableParameter[] = [];
-  let loading = true;
-  let error = "";
-  let activeTabId: string | null = null;
+  // Reactive state using Svelte 5 runes
+  let sessionId = $state("");
+  let schema = $state<UISchema | null>(null);
+  let availableParams = $state<AvailableParameter[]>([]);
+  let loading = $state(true);
+  let error = $state("");
+  let activeTabId = $state<string | null>(null);
 
-  onMount(async () => {
-    sessionId = $page.url.searchParams.get("session") || "";
+  // Derived state - computed values that update automatically
+  const usedInputIds = $derived(
+    new Set(schema?.inputs.map((i) => i.grasshopperId) || [])
+  );
+  const usedOutputIds = $derived(
+    new Set(schema?.outputs.map((o) => o.grasshopperId) || [])
+  );
 
-    if (!sessionId) {
-      error = "No session ID provided";
-      loading = false;
-      return;
-    }
+  const availableInputs = $derived(
+    availableParams.filter(
+      (p) => p.category === "input" && !usedInputIds.has(p.id)
+    )
+  );
+  const availableOutputs = $derived(
+    availableParams.filter(
+      (p) => p.category === "output" && !usedOutputIds.has(p.id)
+    )
+  );
+  const activeTab = $derived(
+    schema?.layout?.tabs?.find((t) => t.id === activeTabId)
+  );
 
-    const [schemaData, availableData] = await Promise.all([
-      api.getSchema(sessionId),
-      api.getAvailableParameters(sessionId),
-    ]);
+  // Load initial data - using untrack to avoid reactivity issues
+  $effect(() => {
+    (async () => {
+      const urlSessionId = $page.url.searchParams.get("session") || "";
+      sessionId = urlSessionId;
 
-    availableParams = availableData?.parameters || [];
+      if (!urlSessionId) {
+        error = "No session ID provided";
+        loading = false;
+        return;
+      }
 
-    if (!schemaData) {
-      schema = {
-        id: crypto.randomUUID(),
-        name: "New Schema",
-        description: "Configure your Grasshopper UI",
-        version: "1.0.0",
-        created: new Date().toISOString(),
-        inputs: [],
-        outputs: [],
-        layout: {
-          type: "tabbed",
-          columns: 2,
-          gap: 16,
-          tabs: [],
-          items: [],
-        },
-        enable3dViewer: false,
-      };
-    } else {
-      schema = schemaData;
-      // Ensure layout exists
-      if (!schema.layout) {
-        schema.layout = {
-          type: "tabbed",
-          columns: 2,
-          gap: 16,
-          tabs: [],
-          items: [],
+      const [schemaData, availableData] = await Promise.all([
+        api.getSchema(urlSessionId),
+        api.getAvailableParameters(urlSessionId),
+      ]);
+
+      availableParams = availableData?.parameters || [];
+
+      if (!schemaData) {
+        schema = {
+          id: crypto.randomUUID(),
+          name: "New Schema",
+          description: "Configure your Grasshopper UI",
+          version: "1.0.0",
+          created: new Date().toISOString(),
+          inputs: [],
+          outputs: [],
+          layout: {
+            type: "tabbed",
+            columns: 2,
+            gap: 16,
+            tabs: [],
+            items: [],
+          },
+          enable3dViewer: false,
         };
+      } else {
+        schema = schemaData;
+        // Ensure layout exists
+        if (!schema.layout) {
+          schema.layout = {
+            type: "tabbed",
+            columns: 2,
+            gap: 16,
+            tabs: [],
+            items: [],
+          };
+        }
+        // Ensure layout has tabs array
+        if (!schema.layout.tabs) {
+          schema.layout.tabs = [];
+        }
       }
-      // Ensure layout has tabs array
-      if (!schema.layout.tabs) {
-        schema.layout.tabs = [];
+
+      if (availableParams.length === 0) {
+        error =
+          "No parameters found. Please ensure the UI Builder component is active in Grasshopper and click Refresh.";
       }
-    }
 
-    if (availableParams.length === 0) {
-      error =
-        "No parameters found. Please ensure the UI Builder component is active in Grasshopper and click Refresh.";
-    }
+      // Select first tab by default
+      if (schema?.layout?.tabs && schema.layout.tabs.length > 0) {
+        activeTabId = schema.layout.tabs[0].id;
+      }
 
-    // Select first tab by default
-    if (schema?.layout?.tabs && schema.layout.tabs.length > 0) {
-      activeTabId = schema.layout.tabs[0].id;
-    }
-
-    loading = false;
+      loading = false;
+    })();
   });
 
   async function saveSchema() {
@@ -126,7 +152,41 @@
 
   function removeTab(tabId: string) {
     if (!schema) return;
+
+    // Find the tab being removed
+    const tab = schema.layout.tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+
+    // For each group in the tab, check if parameters are used elsewhere
+    tab.groups.forEach((group) => {
+      group.items.forEach((item) => {
+        const isUsedElsewhere = schema.layout.tabs.some(
+          (t) =>
+            t.id !== tabId &&
+            t.groups.some((g) =>
+              g.items.some((i) => i.parameterId === item.parameterId)
+            )
+        );
+
+        // If not used anywhere else, remove from inputs/outputs
+        if (!isUsedElsewhere) {
+          if (item.type === "input") {
+            schema.inputs = schema.inputs.filter(
+              (i) => i.grasshopperId !== item.parameterId
+            );
+          } else if (item.type === "output") {
+            schema.outputs = schema.outputs.filter(
+              (o) => o.grasshopperId !== item.parameterId
+            );
+          }
+        }
+      });
+    });
+
+    // Remove the tab
     schema.layout.tabs = schema.layout.tabs.filter((t) => t.id !== tabId);
+
+    // Update active tab if needed
     if (activeTabId === tabId && schema.layout.tabs.length > 0) {
       activeTabId = schema.layout.tabs[0].id;
     }
@@ -158,6 +218,35 @@
     const tab = schema.layout.tabs.find((t) => t.id === tabId);
     if (!tab) return;
 
+    // Find the group being removed
+    const group = tab.groups.find((g) => g.id === groupId);
+    if (!group) return;
+
+    // For each item in the group, check if it's used elsewhere
+    group.items.forEach((item) => {
+      const isUsedElsewhere = schema.layout.tabs.some((t) =>
+        t.groups.some(
+          (g) =>
+            g.id !== groupId &&
+            g.items.some((i) => i.parameterId === item.parameterId)
+        )
+      );
+
+      // If not used anywhere else, remove from inputs/outputs
+      if (!isUsedElsewhere) {
+        if (item.type === "input") {
+          schema.inputs = schema.inputs.filter(
+            (i) => i.grasshopperId !== item.parameterId
+          );
+        } else if (item.type === "output") {
+          schema.outputs = schema.outputs.filter(
+            (o) => o.grasshopperId !== item.parameterId
+          );
+        }
+      }
+    });
+
+    // Remove the group from the tab
     tab.groups = tab.groups.filter((g) => g.id !== groupId);
     schema.layout.tabs = [...schema.layout.tabs];
   }
@@ -346,18 +435,6 @@
   function getParameterInfo(parameterId: string) {
     return availableParams.find((p) => p.id === parameterId);
   }
-
-  // Filter out parameters that are already in the schema
-  $: usedInputIds = new Set(schema?.inputs.map((i) => i.grasshopperId) || []);
-  $: usedOutputIds = new Set(schema?.outputs.map((o) => o.grasshopperId) || []);
-
-  $: availableInputs = availableParams.filter(
-    (p) => p.category === "input" && !usedInputIds.has(p.id)
-  );
-  $: availableOutputs = availableParams.filter(
-    (p) => p.category === "output" && !usedOutputIds.has(p.id)
-  );
-  $: activeTab = schema?.layout?.tabs?.find((t) => t.id === activeTabId);
 </script>
 
 <DragDropContext>
@@ -449,14 +526,14 @@
                       />
                     {:else}
                       <div class="flex flex-col gap-6">
-                        {#each activeTab.groups as group}
+                        {#each activeTab.groups as group (group.id)}
                           <EditableGroup
                             {group}
                             onDrop={(e) =>
                               handleParameterDrop(activeTab.id, group.id, e)}
                             onRemove={() => removeGroup(activeTab.id, group.id)}
                           >
-                            {#each group.items as item}
+                            {#each group.items as item (item.id)}
                               {@const paramInfo = getParameterInfo(
                                 item.parameterId
                               )}

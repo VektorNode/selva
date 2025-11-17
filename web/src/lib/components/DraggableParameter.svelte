@@ -1,96 +1,55 @@
 <script lang="ts">
-  import { dragStore } from './DragDropContext.svelte';
-  import type { AvailableParameter } from '$lib/types/schema';
+  import { dragStore } from "$lib/stores/dragStore.svelte";
+  import type { AvailableParameter } from "$lib/types/schema";
 
-  export let parameter: AvailableParameter;
-  export let category: 'input' | 'output';
+  interface Props {
+    parameter: AvailableParameter;
+    category: "input" | "output";
+  }
 
-  let isDragging = false;
+  let { parameter, category }: Props = $props();
+
+  let isDragging = $state(false);
 
   function handleDragStart(e: DragEvent) {
     isDragging = true;
     dragStore.set({
-      type: 'parameter',
+      type: "parameter",
       data: parameter,
-      sourceType: category
+      sourceType: category,
     });
 
     if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = 'copy';
-      e.dataTransfer.setData('text/plain', parameter.id);
+      e.dataTransfer.effectAllowed = "copy";
+      e.dataTransfer.setData("text/plain", parameter.id);
     }
   }
 
   function handleDragEnd() {
     isDragging = false;
-    dragStore.set(null);
+    dragStore.clear();
   }
 </script>
 
 <div
-  class="draggable-parameter"
-  class:dragging={isDragging}
+  class={`
+    p-3 bg-gray-50 rounded border-2 border-transparent mb-2
+    flex justify-between items-center gap-4
+    cursor-grab hover:bg-gray-100 hover:border-blue-500
+    transition-all
+    ${isDragging ? "opacity-50 cursor-grabbing" : ""}
+  `}
   draggable="true"
   role="button"
   tabindex="0"
-  on:dragstart={handleDragStart}
-  on:dragend={handleDragEnd}
+  ondragstart={handleDragStart}
+  ondragend={handleDragEnd}
 >
-  <div class="param-info">
+  <div class="flex gap-3 items-center flex-1">
     <strong>{parameter.nickname || parameter.name}</strong>
-    <span class="type">{parameter.paramType}</span>
+    <span class="bg-blue-50 text-blue-500 px-2 py-1 rounded text-sm">
+      {parameter.paramType}
+    </span>
   </div>
-  <span class="drag-handle">⋮⋮</span>
+  <span class="text-gray-400 font-bold cursor-grab select-none">⋮⋮</span>
 </div>
-
-<style>
-  .draggable-parameter {
-    padding: 0.75rem;
-    background: #f9f9f9;
-    border-radius: 4px;
-    margin-bottom: 0.5rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    cursor: grab;
-    transition: all 0.2s;
-    border: 2px solid transparent;
-  }
-
-  .draggable-parameter:hover {
-    background: #f0f0f0;
-    border-color: #1976d2;
-  }
-
-  .draggable-parameter.dragging {
-    opacity: 0.5;
-    cursor: grabbing;
-  }
-
-  .param-info {
-    display: flex;
-    gap: 0.75rem;
-    align-items: center;
-    flex: 1;
-  }
-
-  .type {
-    background: #e3f2fd;
-    color: #1976d2;
-    padding: 0.25rem 0.5rem;
-    border-radius: 3px;
-    font-size: 0.85rem;
-  }
-
-  .drag-handle {
-    color: #999;
-    font-weight: bold;
-    cursor: grab;
-    user-select: none;
-  }
-
-  .draggable-parameter:active .drag-handle {
-    cursor: grabbing;
-  }
-</style>

@@ -11,7 +11,13 @@
     inputsToDataTrees,
     solveGrasshopperDefinition,
     GrasshopperResponseProcessor,
+    type NumericInputType,
+    type TextInputType,
+    type BooleanInputType,
+    type ValueListInputType,
+    type InputParam,
   } from "rhino-compute-core";
+  import type { InputParameter } from "$lib/types/schema";
 
   let { data }: PageProps = $props();
 
@@ -54,6 +60,59 @@
     }
   }
 
+  function transformInputParameter(
+    input: InputParameter,
+    value: any
+  ): InputParam {
+    const base = {
+      description: input.description || "",
+      name: input.name,
+      nickname: input.nickname || null,
+      treeAccess: input.treeAccess || false,
+      groupName: input.groupName || "",
+    };
+
+    // Determine paramType and create the appropriate InputParam type
+    if (input.paramType === "Number" || input.paramType === "Integer") {
+      return {
+        ...base,
+        paramType: input.paramType as "Number" | "Integer",
+        minimum: input.minimum,
+        maximum: input.maximum,
+        atLeast: input.atLeast,
+        atMost: input.atMost,
+        stepSize: input.config?.step,
+        default: value ?? input.default,
+      } as NumericInputType;
+    } else if (input.paramType === "Text") {
+      return {
+        ...base,
+        paramType: "Text",
+        default: value ?? input.default ?? "",
+      } as TextInputType;
+    } else if (input.paramType === "Boolean") {
+      return {
+        ...base,
+        paramType: "Boolean",
+        default: value ?? input.default ?? false,
+      } as BooleanInputType;
+    } else if (input.paramType === "ValueList") {
+      return {
+        ...base,
+        paramType: "ValueList",
+        values:
+          input.config?.options?.reduce(
+            (acc: any, opt: any) => ({ ...acc, [opt]: opt }),
+            {}
+          ) || {},
+        default: value ?? input.default,
+      } as ValueListInputType;
+    }
+
+    // Default fallback
+    throw new Error(`Unsupported paramType: ${input.paramType}`);
+  }
+
   async function handleValueChange(parameterName: string, value: any) {
     values[parameterName] = value;
 
@@ -64,10 +123,9 @@
 
       // Convert current values to data trees
       const inputTree = inputsToDataTrees(
-        schema.inputs.map((input) => ({
-          ...input,
-          default: values[input.name],
-        }))
+        schema.inputs
+          .filter((input) => input.paramType)
+          .map((input) => transformInputParameter(input, values[input.name]))
       );
 
       // Solve the definition
@@ -80,8 +138,6 @@
       // Process outputs
       const processor = new GrasshopperResponseProcessor(solvedDefinition);
       const outputValues = processor.getValues();
-
-      console.log("Solved outputs:", outputValues);
 
       // Update output values
       values = { ...values, ...outputValues.values };
