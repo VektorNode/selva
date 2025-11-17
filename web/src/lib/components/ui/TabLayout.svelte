@@ -98,7 +98,7 @@
                         displayName={item.displayName}
                         onChange={onValueChange}
                         debounceMs={debounceSliders && input.type === "slider"
-                          ? 100
+                          ? 20
                           : 0}
                       />
                     {/if}

@@ -6,13 +6,14 @@
 
   interface EditableGroupProps {
     group: GroupConfig;
-    onDrop: (event: CustomEvent) => void;
+    onDrop?: (event: CustomEvent) => void;
     onReorder?: (event: CustomEvent) => void;
     onRemove: () => void;
     children: Snippet;
   }
 
-  let { group, onDrop, onReorder, onRemove, children }: EditableGroupProps = $props();
+  let { group, onDrop, onReorder, onRemove, children }: EditableGroupProps =
+    $props();
 
   function handleReorderEvent(e: Event) {
     if (onReorder && e instanceof CustomEvent) {
@@ -29,23 +30,23 @@
   function setupGridRef(node: HTMLDivElement) {
     // Set up reorder listener for drag-to-reorder
     if (onReorder) {
-      node.addEventListener('reorder', handleReorderEvent);
+      node.addEventListener("reorder", handleReorderEvent);
     }
 
     // Set up parameterdrop listener for new parameter drops on items
     if (onDrop) {
-      node.addEventListener('parameterdrop', handleDropEvent);
+      node.addEventListener("parameterdrop", handleDropEvent);
     }
 
     return {
       destroy() {
         if (onReorder) {
-          node.removeEventListener('reorder', handleReorderEvent);
+          node.removeEventListener("reorder", handleReorderEvent);
         }
         if (onDrop) {
-          node.removeEventListener('parameterdrop', handleDropEvent);
+          node.removeEventListener("parameterdrop", handleDropEvent);
         }
-      }
+      },
     };
   }
 </script>

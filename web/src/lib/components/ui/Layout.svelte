@@ -32,7 +32,7 @@
               {input}
               bind:value={values[input.name]}
               onChange={onValueChange}
-              debounceMs={debounceSliders && input.type === "slider" ? 100 : 0}
+              debounceMs={debounceSliders && input.type === "slider" ? 20 : 0}
             />
             <span class="text-sm text-gray-600 font-mono"
               >{values[input.name]}</span

@@ -25,9 +25,9 @@
     {/if}
   </div>
 
-  {#if output.description}
+  <!-- {#if output.description}
     <p class="text-xs text-gray-600 m-0 italic">
       {output.description}
     </p>
-  {/if}
+  {/if} -->
 </div>
