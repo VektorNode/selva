@@ -36,6 +36,7 @@ export interface InputParameter {
 	tooltip?: string; // Additional help text
 
 	config: InputConfig;
+	isExpired?: boolean;
 }
 
 export interface InputConfig {
@@ -64,6 +65,8 @@ export interface OutputParameter {
 	description?: string;
 
 	config: OutputConfig;
+	isExpired?: boolean;
+
 	// Note: Outputs don't have default values - they show live data from Grasshopper
 }
 

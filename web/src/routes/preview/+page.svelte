@@ -209,36 +209,41 @@
 
 <PageContainer>
   <PageHeader
-    title="Interactive Preview"
-    {sessionId}
-    badge={!loading ? badgeConfig : undefined}
+    title={schema?.name || "Interactive Preview"}
+    badge={badgeConfig}
   />
 
-  {#if loading}
-    <div class="p-8">
-      <StateDisplay type="loading" size="large" message="Loading preview..." />
-    </div>
-  {:else if error}
-    <div class="p-8">
-      <StateDisplay type="error" size="large" message={error} />
-    </div>
-  {:else if schema}
-    <div class="p-8 max-w-7xl mx-auto">
-      {#if schema.layout.type === "tabbed" && schema.layout.tabs && schema.layout.tabs.length > 0}
-        <TabLayout
-          {schema}
-          bind:values
-          onValueChange={handleValueChange}
-          debounceSliders={true}
+  <div class="flex-1 overflow-auto bg-gray-50">
+    {#if loading}
+      <div class="flex items-center justify-center min-h-[400px]">
+        <StateDisplay
+          type="loading"
+          size="large"
+          message="Loading preview..."
         />
-      {:else}
-        <LegacyLayout
-          {schema}
-          bind:values
-          onValueChange={handleValueChange}
-          debounceSliders={true}
-        />
-      {/if}
-    </div>
-  {/if}
+      </div>
+    {:else if error}
+      <div class="flex items-center justify-center min-h-[400px]">
+        <StateDisplay type="error" size="large" message={error} />
+      </div>
+    {:else if schema}
+      <div class="p-8 max-w-6xl mx-auto">
+        {#if schema.layout.type === "tabbed" && schema.layout.tabs && schema.layout.tabs.length > 0}
+          <TabLayout
+            {schema}
+            bind:values
+            onValueChange={handleValueChange}
+            debounceSliders={true}
+          />
+        {:else}
+          <LegacyLayout
+            {schema}
+            bind:values
+            onValueChange={handleValueChange}
+            debounceSliders={true}
+          />
+        {/if}
+      </div>
+    {/if}
+  </div>
 </PageContainer>

@@ -107,6 +107,8 @@
         if (!schema.layout.tabs) {
           schema.layout.tabs = [];
         }
+
+        var expiredParams = getExpiredParams();
       }
 
       if (availableParams.length === 0) {
@@ -123,10 +125,33 @@
     })();
   });
 
+  function getExpiredParams() {
+    if (!schema) return [];
+
+    const expiredParams: string[] = [];
+
+    schema.inputs.forEach((input) => {
+      const exists = availableParams.find((p) => p.id === input.grasshopperId);
+      if (!exists) {
+        input.isExpired = true;
+        expiredParams.push(input.grasshopperId);
+      }
+    });
+
+    schema.outputs.forEach((output) => {
+      const exists = availableParams.find((p) => p.id === output.grasshopperId);
+      if (!exists) {
+        output.isExpired = true;
+        expiredParams.push(output.grasshopperId);
+      }
+    });
+
+    return expiredParams;
+  }
+
   async function saveSchema() {
     if (!schema || !sessionId) return;
 
-    console.log("Saving schema:", schema);
     const success = await api.saveSchema(sessionId, schema);
     if (success) {
       alert("Schema saved successfully!");
@@ -475,131 +500,140 @@
 
 <DragDropContext>
   <PageContainer>
-    <PageHeader title="🎨 UI Builder" {sessionId} />
+    <PageHeader title="Schema Builder" />
 
-    {#if loading}
-      <div class="p-8">
-        <StateDisplay type="loading" size="large" message="Loading schema..." />
-      </div>
-    {:else if schema}
-      <div class="grid grid-cols-[320px_1fr] gap-6 p-6 max-w-[1800px] mx-auto">
-        {#if error}
-          <div class="col-span-2">
-            <StateDisplay type="warning" size="medium" message={error} />
-          </div>
-        {/if}
-
-        <!-- Left Sidebar: Schema Info & Available Parameters -->
-        <aside class="flex flex-col gap-6">
-          <SchemaInfoPanel {schema} />
-
-          <Panel title="Available Parameters">
-            <p class="text-gray-600 text-sm mb-4">
-              Drag parameters into groups below
-            </p>
-
-            <ParameterList
-              title="Inputs"
-              icon="📥"
-              parameters={availableInputs}
-              category="input"
-              emptyMessage="No contextual parameters found."
-            />
-
-            <ParameterList
-              title="Outputs"
-              icon="📤"
-              parameters={availableOutputs}
-              category="output"
-              emptyMessage="No context output components found."
-            />
-          </Panel>
-        </aside>
-
-        <!-- Main Area: Tab & Group Builder -->
-        <main class="flex flex-col gap-6">
-          <Panel>
-            {#snippet headerActions()}
-              <Button variant="primary" onclick={addTab}>+ Add Tab</Button>
-            {/snippet}
-
-            <div class="min-h-[200px]">
-              {#if schema.layout.tabs.length === 0}
-                <StateDisplay
-                  type="empty"
-                  size="large"
-                  icon="📑"
-                  title="No tabs yet"
-                  message="Click 'Add Tab' to create your first tab"
-                />
-              {:else}
-                <!-- Tab Navigation -->
-                <EditableTabNav
-                  tabs={schema.layout.tabs}
-                  {activeTabId}
-                  onTabChange={(tabId) => (activeTabId = tabId)}
-                  onRemoveTab={removeTab}
-                />
-
-                <!-- Active Tab Content -->
-                {#if activeTab}
-                  <div class="animate-[fadeIn_0.2s]">
-                    <div class="mb-6 flex justify-end">
-                      <Button
-                        variant="secondary"
-                        onclick={() => addGroup(activeTab.id)}
-                      >
-                        + Add Group
-                      </Button>
-                    </div>
-
-                    {#if activeTab.groups.length === 0}
-                      <StateDisplay
-                        type="empty"
-                        size="medium"
-                        icon="📦"
-                        message="No groups yet. Click 'Add Group' to organize your parameters."
-                      />
-                    {:else}
-                      <div class="flex flex-col gap-6">
-                        {#each activeTab.groups as group (group.id)}
-                          <EditableGroup
-                            {group}
-                            onDrop={(e) =>
-                              handleParameterDrop(activeTab.id, group.id, e)}
-                            onReorder={handleReorder}
-                            onRemove={() => removeGroup(activeTab.id, group.id)}
-                          >
-                            {#each group.items as item (item.id)}
-                              {@const paramInfo = getParameterInfo(
-                                item.parameterId
-                              )}
-                              <BuilderGroupItem
-                                {item}
-                                {paramInfo}
-                                tabId={activeTab.id}
-                                groupId={group.id}
-                                onRemove={() =>
-                                  removeItem(activeTab.id, group.id, item.id)}
-                              />
-                            {/each}
-                          </EditableGroup>
-                        {/each}
-                      </div>
-                    {/if}
-                  </div>
-                {/if}
-              {/if}
+    <div class="flex-1 overflow-auto bg-gray-50">
+      {#if loading}
+        <div class="flex items-center justify-center min-h-[400px]">
+          <StateDisplay
+            type="loading"
+            size="large"
+            message="Loading schema..."
+          />
+        </div>
+      {:else if schema}
+        <div
+          class="grid grid-cols-1 xl:grid-cols-[400px_1fr] gap-6 p-6 max-w-[2000px] mx-auto h-full"
+        >
+          {#if error}
+            <div class="col-span-2">
+              <StateDisplay type="warning" size="medium" message={error} />
             </div>
-          </Panel>
+          {/if}
 
-          <div class="flex justify-end gap-4">
-            <Button variant="success" icon="💾" onclick={saveSchema}
-              >Save Schema</Button
-            >
-          </div>
-        </main>
-      </div>
-    {/if}
+          <!-- Left Sidebar: Schema Info & Available Parameters -->
+          <aside class="flex flex-col gap-6">
+            <SchemaInfoPanel {schema} />
+
+              <Panel title="Available Parameters">
+                <p class="text-gray-600 text-sm mb-4">
+                  Drag parameters into groups below
+                </p>
+
+                <ParameterList
+                  title="Inputs"
+                  icon="📥"
+                  parameters={availableInputs}
+                  category="input"
+                  emptyMessage="No contextual parameters found."
+                />
+
+                <ParameterList
+                  title="Outputs"
+                  icon="📤"
+                  parameters={availableOutputs}
+                  category="output"
+                  emptyMessage="No context output components found."
+                />
+              </Panel>
+            </aside>
+
+          <!-- Main Area: Tab & Group Builder -->
+          <main class="flex flex-col gap-6">
+              <Panel>
+                {#snippet headerActions()}
+                  <Button variant="primary" onclick={addTab}>+ Add Tab</Button>
+                {/snippet}
+
+                <div class="min-h-[200px]">
+                  {#if schema.layout.tabs.length === 0}
+                    <StateDisplay
+                      type="empty"
+                      size="large"
+                      icon="📑"
+                      title="No tabs yet"
+                      message="Click 'Add Tab' to create your first tab"
+                    />
+                  {:else}
+                    <!-- Tab Navigation -->
+                    <EditableTabNav
+                      tabs={schema.layout.tabs}
+                      {activeTabId}
+                      onTabChange={(tabId) => (activeTabId = tabId)}
+                      onRemoveTab={removeTab}
+                    />
+
+                  <!-- Active Tab Content -->
+                  {#if activeTab}
+                    <div class="animate-[fadeIn_0.2s]">
+                      <div class="mb-6 flex justify-end">
+                        <Button
+                          variant="secondary"
+                          onclick={() => addGroup(activeTab.id)}
+                        >
+                          + Add Group
+                        </Button>
+                      </div>
+
+                      {#if activeTab.groups.length === 0}
+                        <StateDisplay
+                          type="empty"
+                          size="medium"
+                          icon="📦"
+                          message="No groups yet. Click 'Add Group' to organize your parameters."
+                        />
+                      {:else}
+                        <div class="flex flex-col gap-6">
+                          {#each activeTab.groups as group (group.id)}
+                            <EditableGroup
+                              {group}
+                              onDrop={(e) =>
+                                handleParameterDrop(activeTab.id, group.id, e)}
+                              onReorder={handleReorder}
+                              onRemove={() =>
+                                removeGroup(activeTab.id, group.id)}
+                            >
+                              {#each group.items as item (item.id)}
+                                {@const paramInfo = getParameterInfo(
+                                  item.parameterId
+                                )}
+                                <BuilderGroupItem
+                                  {item}
+                                  {paramInfo}
+                                  tabId={activeTab.id}
+                                  groupId={group.id}
+                                  onRemove={() =>
+                                    removeItem(activeTab.id, group.id, item.id)}
+                                />
+                              {/each}
+                            </EditableGroup>
+                          {/each}
+                        </div>
+                      {/if}
+                    </div>
+                  {/if}
+                {/if}
+              </div>
+            </Panel>
+
+            <div class="flex justify-end gap-4">
+              <Button variant="success" icon="💾" onclick={saveSchema}
+                >Save Schema</Button
+              >
+            </div>
+          </main>
+        </div>
+      {/if}
+    </div>
   </PageContainer>
 </DragDropContext>

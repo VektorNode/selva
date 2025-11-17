@@ -236,6 +236,7 @@ namespace ComputeBuilder.Components
             CollectAndSendOutputs(_currentDocument, _embeddedSchema);
         }
 
+
         /// <summary>
         /// Handle value updates received via WebSocket
         /// </summary>

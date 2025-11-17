@@ -46,7 +46,7 @@
   }
 </script>
 
-<div class="bg-white rounded-lg shadow-sm overflow-hidden">
+<div class="rounded-lg shadow-sm overflow-hidden bg-white w-full">
   <!-- Tab Navigation -->
   <div class="flex border-b-2 border-gray-200 bg-gray-50 overflow-x-auto">
     {#each schema.layout.tabs || [] as tab}

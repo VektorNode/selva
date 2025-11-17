@@ -155,6 +155,8 @@
         viewerInitialized = true;
       }
 
+      //TODO: Outputs dont get mapped properly (neeeds fixing also at the c# side ) eg. in compute numberOutput: 155 in c#  fgdf (nickname/displayname/name collisione )
+
       // Update output values
       values = { ...values, ...outputValues.values };
     } catch (err) {
@@ -182,47 +184,46 @@
 </script>
 
 <PageContainer>
-  <PageHeader title="Rhino Compute App" badge={badgeConfig} />
+  <PageHeader title={schema.name} badge={badgeConfig} />
 
-  {#if error}
-    <div class="p-8">
-      <StateDisplay type="error" size="medium" message={error} />
-    </div>
-  {:else if !schema}
-    <div class="p-8">
-      <StateDisplay type="loading" size="large" message="Loading schema..." />
-    </div>
-  {:else}
-    <!-- Split Layout: 3D Viewer + Controls -->
-    <div
-      class="flex flex-col lg:flex-row gap-6 p-6 h-[calc(100vh-120px)] bg-neutral-200"
-    >
-      <div class=" overflow-y-auto w-96">
-        {#if schema.layout.type === "tabbed" && schema.layout.tabs && schema.layout.tabs.length > 0}
-          <TabLayout
-            {schema}
-            bind:values
-            onValueChange={handleValueChange}
-            debounceSliders={false}
-          />
-        {:else}
-          <Layout
-            {schema}
-            bind:values
-            onValueChange={handleValueChange}
-            debounceSliders={false}
-          />
+  <div class="flex-1 overflow-hidden bg-gray-50">
+    {#if error}
+      <div class="flex items-center justify-center min-h-[400px] p-8">
+        <StateDisplay type="error" size="medium" message={error} />
+      </div>
+    {:else if !schema}
+      <div class="flex items-center justify-center min-h-[400px]">
+        <StateDisplay type="loading" size="large" message="Loading schema..." />
+      </div>
+    {:else}
+      <!-- Split Layout: Controls + 3D Viewer -->
+      <div class="flex flex-col lg:flex-row gap-6 p-6 h-full overflow-hidden">
+        <!-- Left Side: Controls -->
+        <div class="w-full lg:w-[480px] xl:w-[520px] overflow-y-auto shrink-0">
+          {#if schema.layout.type === "tabbed" && schema.layout.tabs && schema.layout.tabs.length > 0}
+            <TabLayout
+              {schema}
+              bind:values
+              onValueChange={handleValueChange}
+              debounceSliders={false}
+            />
+          {:else}
+            <Layout
+              {schema}
+              bind:values
+              onValueChange={handleValueChange}
+              debounceSliders={false}
+            />
+          {/if}
+        </div>
+
+        <!-- Right Side: 3D Viewer -->
+        {#if schema.enable3dViewer}
+          <div class="flex-1 rounded-lg overflow-hidden shadow-lg bg-white min-h-[500px]">
+            <canvas class="block w-full h-full" bind:this={canvas}></canvas>
+          </div>
         {/if}
       </div>
-
-      <!-- Left Side: 3D Viewer -->
-      {#if schema.enable3dViewer}
-        <div
-          class=" min-h-[400px] lg:min-h-0 rounded-lg overflow-hidden shadow-lg"
-        >
-          <canvas class="block w-full h-full" bind:this={canvas}></canvas>
-        </div>
-      {/if}
-    </div>
-  {/if}
+    {/if}
+  </div>
 </PageContainer>
