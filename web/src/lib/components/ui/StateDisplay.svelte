@@ -41,10 +41,10 @@
   };
 
   const typeClasses = {
-    loading: "bg-white text-gray-600",
-    error: "bg-red-50 text-red-600",
-    warning: "bg-yellow-50 text-yellow-600",
-    empty: "bg-gray-50 text-gray-500",
+    loading: "bg-card text-muted-foreground",
+    error: "bg-destructive/10 text-destructive",
+    warning: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-500",
+    empty: "bg-muted text-muted-foreground",
   };
 
   const combinedClasses = $derived(

@@ -21,7 +21,7 @@
 
 <div class="mb-6">
   <h3
-    class="text-base font-semibold text-gray-700 mb-3 flex items-center gap-2"
+    class="text-base font-semibold text-foreground mb-3 flex items-center gap-2"
   >
     {title} ({parameters.length})
   </h3>

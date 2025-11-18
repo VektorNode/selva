@@ -51,33 +51,33 @@
   }
 </script>
 
-<div class="border-2 border-gray-200 rounded-lg bg-gray-50 overflow-hidden">
+<div class="border-2 border-border rounded-lg bg-muted overflow-hidden">
   <div
-    class="p-4 bg-white border-b border-gray-200 flex justify-between items-start gap-4"
+    class="p-4 bg-card border-b border-border flex justify-between items-start gap-4"
   >
     <div class="flex-1 flex flex-col gap-2">
       <input
         type="text"
         bind:value={group.label}
-        class="font-semibold text-base border border-transparent px-2 py-1 rounded hover:border-gray-300 focus:border-blue-600 focus:outline-none"
+        class="font-semibold text-base border border-transparent px-2 py-1 rounded hover:border-border focus:border-primary focus:outline-none bg-transparent text-foreground"
         placeholder="Group name"
       />
       <input
         type="text"
         bind:value={group.description}
-        class="text-sm text-gray-600 border border-transparent px-2 py-1 rounded hover:border-gray-300 focus:border-blue-600 focus:outline-none"
+        class="text-sm text-muted-foreground border border-transparent px-2 py-1 rounded hover:border-border focus:border-primary focus:outline-none bg-transparent"
         placeholder="Description (optional)"
       />
     </div>
     <div class="flex items-center gap-4">
-      <label class="flex items-center gap-2 text-sm">
+      <label class="flex items-center gap-2 text-sm text-foreground">
         Columns:
         <input
           type="number"
           bind:value={group.columns}
           min="1"
           max="4"
-          class="w-[50px] px-2 py-1 border border-gray-300 rounded"
+          class="w-[50px] px-2 py-1 border border-border rounded bg-background text-foreground"
         />
       </label>
       <Button variant="ghost" size="icon" class="hover:bg-destructive hover:text-destructive-foreground" onclick={onRemove}

@@ -51,7 +51,7 @@
 <div
   class={`
     min-h-[60px] border-2 border-dashed rounded-md p-3 transition-all
-    ${isOver ? "border-blue-500 bg-blue-50" : "border-gray-300"}
+    ${isOver ? "border-primary bg-primary/10" : "border-border"}
     ${isEmpty ? "flex items-center justify-center" : ""}
   `}
   role="region"
@@ -63,7 +63,7 @@
   {#if isEmpty}
     <div class="flex flex-col items-center gap-2">
       <span class="text-4xl opacity-50"><Drop /></span>
-      <span class="text-sm text-gray-600">{label}</span>
+      <span class="text-sm text-muted-foreground">{label}</span>
     </div>
   {:else}
     {@render children?.()}

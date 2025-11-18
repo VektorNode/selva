@@ -46,7 +46,7 @@
   }
 </script>
 
-<div class="flex gap-2 mb-4 border-b border-gray-200 overflow-x-auto items-end">
+<div class="flex gap-2 mb-4 border-b border-border overflow-x-auto items-end">
   {#each tabs as tab (tab.id)}
     <div class="group relative flex items-center bg-transparent rounded-t-lg">
       <!-- Main clickable area: switches tabs -->
@@ -54,8 +54,8 @@
         type="button"
         class={` flex items-center gap-2 px-4 py-2 text-sm rounded-t-lg border-b-2 transition-all whitespace-nowrap font-medium min-w-[110px] max-w-60 ${
           activeTabId === tab.id
-            ? "border-blue-600 text-blue-700 bg-white shadow-sm"
-            : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50"
+            ? "border-primary text-primary bg-card shadow-sm"
+            : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted"
         }`}
         onclick={() => onTabChange(tab.id)}
         aria-pressed={activeTabId === tab.id}
@@ -71,7 +71,7 @@
         {#if editingTabId === tab.id}
           <input
             bind:this={editInputEl}
-            class="bg-white border border-gray-800 rounded px-2 py-1 text-sm w-[140px] truncate focus:outline-none"
+            class="bg-background border border-border rounded px-2 py-1 text-sm w-[140px] truncate focus:outline-none text-foreground"
             bind:value={editValue}
             onkeydown={(e) => onEditKeydown(e, tab)}
             onblur={() => saveEdit(tab)}
@@ -85,7 +85,7 @@
       <!-- Edit button (separate from the main button) -->
       <button
         type="button"
-        class="ml-2 flex h-7 w-7 items-center justify-center rounded-full text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+        class="ml-2 flex h-7 w-7 items-center justify-center rounded-full text-xs bg-muted text-muted-foreground hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
         onclick={() => startEdit(tab)}
         title="Edit tab label"
         aria-label="Edit tab label"
@@ -96,7 +96,7 @@
       <!-- Remove button -->
       <button
         type="button"
-        class="ml-1 flex h-7 w-7 items-center justify-center rounded-full text-xs bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+        class="ml-1 flex h-7 w-7 items-center justify-center rounded-full text-xs bg-muted text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
         onclick={() => onRemoveTab(tab.id)}
         title="Remove tab"
         aria-label="Remove tab"

@@ -45,15 +45,15 @@
   }
 </script>
 
-<div class="rounded-lg shadow-sm overflow-hidden bg-white w-full">
+<div class="rounded-lg shadow-sm overflow-hidden bg-card w-full">
   <!-- Tab Navigation -->
-  <div class="flex border-b-2 border-gray-200 bg-gray-50 overflow-x-auto">
+  <div class="flex border-b-2 border-border bg-muted overflow-x-auto">
     {#each schema.layout.tabs || [] as tab}
       <button
         class={`flex items-center gap-2 px-6 py-4 border-b-4 transition-all whitespace-nowrap font-medium ${
           activeTabId === tab.id
-            ? "text-blue-600 border-blue-600 bg-white"
-            : "text-gray-600 border-transparent hover:text-gray-900 hover:bg-gray-100"
+            ? "text-primary border-primary bg-card"
+            : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/80"
         }`}
         onclick={() => (activeTabId = tab.id)}
       >
@@ -75,20 +75,20 @@
       {:else}
         <div class="flex flex-col gap-8">
           {#each activeTab.groups as group}
-            <div class="border border-gray-200 rounded-lg overflow-hidden">
+            <div class="border border-border rounded-lg overflow-hidden">
               <!-- Group Header -->
-              <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
-                <h3 class="m-0 mb-1 text-lg text-gray-900 font-semibold">
+              <div class="bg-muted px-6 py-4 border-b border-border">
+                <h3 class="m-0 mb-1 text-lg text-foreground font-semibold">
                   {group.label}
                 </h3>
                 {#if group.description}
-                  <p class="m-0 text-sm text-gray-600">{group.description}</p>
+                  <p class="m-0 text-sm text-muted-foreground">{group.description}</p>
                 {/if}
               </div>
 
               <!-- Group Content -->
               <div
-                class="grid gap-6 p-6 bg-white"
+                class="grid gap-6 p-6 bg-card"
                 style="grid-template-columns: repeat({group.columns}, 1fr);"
               >
                 {#each group.items as layoutItem}

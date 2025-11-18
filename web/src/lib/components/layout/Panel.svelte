@@ -28,8 +28,8 @@
 		large: 'p-8'
 	};
 
-	const baseClasses = 'bg-white rounded-lg';
-	const borderClass = border ? 'border border-gray-200' : '';
+	const baseClasses = 'bg-card text-card-foreground rounded-lg';
+	const borderClass = border ? 'border border-border' : '';
 	const shadowClass = shadow ? 'shadow-sm' : '';
 
 	const combinedClasses = $derived(
@@ -41,7 +41,7 @@
 	{#if title || headerActions}
 		<div class="flex justify-between items-center mb-6 {padding !== 'none' ? '-mt-2' : ''}">
 			{#if title}
-				<h2 class="text-xl font-semibold text-gray-900">{title}</h2>
+				<h2 class="text-xl font-semibold text-foreground">{title}</h2>
 			{/if}
 
 			{#if headerActions}

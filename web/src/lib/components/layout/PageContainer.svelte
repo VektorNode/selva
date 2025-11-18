@@ -14,9 +14,9 @@
   }: PageContainerProps = $props();
 
   const backgroundClasses = {
-    default: "bg-gray-50",
-    white: "bg-white",
-    gray: "bg-gray-100",
+    default: "bg-muted/50",
+    white: "bg-background",
+    gray: "bg-muted",
   };
 
   const combinedClasses = $derived(

@@ -144,10 +144,10 @@
 
   <div
     class={`
-			 border border-gray-300 rounded-md p-3 transition-all
-			cursor-grab hover:border-blue-600 hover:shadow-md
+			 border border-border rounded-md p-3 transition-all
+			cursor-grab hover:border-primary hover:shadow-md
 			${isDragging ? "opacity-50 cursor-grabbing" : ""}
-			${isDragOver ? "border-blue-600" : ""}
+			${isDragOver ? "border-primary" : ""}
       ${item.type === "input" ? inputColor : outputColor}
 		`}
     draggable="true"
@@ -170,7 +170,7 @@
       <input
         type="text"
         bind:value={item.displayName}
-        class="flex-1 font-medium border border-transparent px-2 py-1 rounded-sm text-sm hover:border-gray-300 focus:border-blue-600 focus:outline-none"
+        class="flex-1 font-medium border border-transparent px-2 py-1 rounded-sm text-sm hover:border-border focus:border-primary focus:outline-none bg-transparent text-foreground"
         placeholder={paramInfo?.name || ""}
       />
     </div>
@@ -179,14 +179,14 @@
         <Badge variant="secondary">
           {paramInfo.paramType}
         </Badge>
-        <span class="text-gray-500 font-mono">
+        <span class="text-muted-foreground font-mono">
           {paramInfo.nickname}
         </span>
       </div>
     {/if}
     <div class="flex gap-2 justify-between items-center">
       <span
-        class="text-gray-400 text-xs cursor-grab select-none hover:text-gray-600"
+        class="text-muted-foreground text-xs cursor-grab select-none hover:text-foreground"
       >
         ⋮⋮ Drag to reorder
       </span>

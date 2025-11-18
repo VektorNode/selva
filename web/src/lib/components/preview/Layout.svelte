@@ -133,7 +133,7 @@
                 ? 20
                 : 0}
             />
-            <span class="text-sm text-gray-600 font-mono">
+            <span class="text-sm text-muted-foreground font-mono">
               {values[input.id] ?? "—"}
             </span>
           </div>

@@ -36,7 +36,7 @@
   class={`
     p-3 rounded-xl border-2 border-transparent mb-2
     flex justify-between items-center gap-4
-    cursor-grab hover:bg-gray-100 hover:border-blue-500
+    cursor-grab hover:bg-muted hover:border-primary
     transition-all ${category === "input" ? inputColor : outputColor}
     ${isDragging ? "opacity-50 cursor-grabbing" : ""}
   `}
@@ -47,10 +47,10 @@
   ondragend={handleDragEnd}
 >
   <div class="flex gap-3 items-center flex-1">
-    <strong>{parameter.nickname || parameter.name}</strong>
-    <span class="bg-blue-50 text-blue-500 px-2 py-1 rounded text-sm">
+    <strong class="text-foreground">{parameter.nickname || parameter.name}</strong>
+    <span class="bg-primary/10 text-primary px-2 py-1 rounded text-sm">
       {parameter.paramType}
     </span>
   </div>
-  <span class="text-gray-400 font-bold cursor-grab select-none">⋮⋮</span>
+  <span class="text-muted-foreground font-bold cursor-grab select-none">⋮⋮</span>
 </div>
