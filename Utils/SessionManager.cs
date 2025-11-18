@@ -13,7 +13,6 @@ namespace ComputeBuilder.Utils
 
         static SessionManager()
         {
-            // Ensure temp directory exists
             if (!Directory.Exists(TempDirectory))
             {
                 Directory.CreateDirectory(TempDirectory);
@@ -87,6 +86,6 @@ namespace ComputeBuilder.Utils
 
             return File.GetLastWriteTimeUtc(filePath) > since;
         }
-       
+
     }
 }

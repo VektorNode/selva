@@ -34,7 +34,6 @@ namespace ComputeBuilder.Utils
                 .Where(ParameterTypeHelper.IsContextOutputComponent)
                 .ToList();
 
-            // Build available parameters list
             var availableParameters = new AvailableParameters
             {
                 SessionId = _sessionId,
@@ -42,7 +41,6 @@ namespace ComputeBuilder.Utils
                 Parameters = new List<AvailableParameter>()
             };
 
-            // Add input parameters
             foreach (var param in allParams)
             {
                 var docObj = param as IGH_DocumentObject;
@@ -73,7 +71,6 @@ namespace ComputeBuilder.Utils
                 }
                 catch
                 {
-                    // Ignore reflection errors
                 }
 
                 //If source is a slider extract its properties
@@ -88,7 +85,6 @@ namespace ComputeBuilder.Utils
                 availableParameters.Parameters.Add(availableParam);
             }
 
-            // Add output components
             foreach (var output in contextOutputs)
             {
                 if (output == null) continue;
@@ -144,7 +140,6 @@ namespace ComputeBuilder.Utils
 
             var removedIds = trackChanges ? new List<Guid>() : null;
 
-            // Remove missing inputs
             var inputsToRemove = schema.Inputs.Where(input =>
             {
                 var paramObject = document.FindObject(input.Id, false);
@@ -157,7 +152,6 @@ namespace ComputeBuilder.Utils
             }
             schema.Inputs.RemoveAll(input => inputsToRemove.Contains(input));
 
-            // Remove missing outputs
             var outputsToRemove = schema.Outputs.Where(output =>
             {
                 var paramObject = document.FindObject(output.Id, false);
@@ -170,7 +164,6 @@ namespace ComputeBuilder.Utils
             }
             schema.Outputs.RemoveAll(output => outputsToRemove.Contains(output));
 
-            // Remove layout items referencing missing parameters
             if (schema.Layout.Tabs != null)
             {
                 foreach (var tab in schema.Layout.Tabs)
@@ -184,15 +177,12 @@ namespace ComputeBuilder.Utils
                         });
                     }
 
-                    // Remove empty groups
                     tab.Groups.RemoveAll(g => g.Items.Count == 0);
                 }
 
-                // Remove empty tabs
                 schema.Layout.Tabs.RemoveAll(t => t.Groups.Count == 0);
             }
 
-            // Also clean flat layout items
             if (schema.Layout.Items != null)
             {
                 schema.Layout.Items.RemoveAll(item =>
@@ -226,7 +216,6 @@ namespace ComputeBuilder.Utils
 
             var typeName = param.GetType().Name;
 
-            // Dictionary-based type mapping for performance
             var typeKeywords = new Dictionary<string, string>
             {
                 { "Number", "Number" },

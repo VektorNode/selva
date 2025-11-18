@@ -15,7 +15,6 @@ namespace ComputeBuilder.Utils
     {
         private Dictionary<string, object> _lastAppliedValues = new Dictionary<string, object>();
 
-        // Type mapping dictionary for value conversion
         private static readonly Dictionary<string, (Type GhType, Func<object, IGH_Goo> Converter)> TypeHandlers =
             new Dictionary<string, (Type, Func<object, IGH_Goo>)>
             {
@@ -50,7 +49,6 @@ namespace ComputeBuilder.Utils
                     if (!values.TryGetValue(inputKey, out var value))
                         continue;
 
-                    // Check if the value has changed
                     if (!HasValueChanged(inputKey, value))
                         continue;
 
@@ -62,7 +60,6 @@ namespace ComputeBuilder.Utils
                             updateCount++;
                             _lastAppliedValues[inputKey] = value;
 
-                            // Expire this parameter to trigger recomputation
                             if (paramObject is IGH_ActiveObject activeObj)
                             {
                                 expiredObjects.Add(activeObj);
@@ -77,7 +74,6 @@ namespace ComputeBuilder.Utils
                 }
             }
 
-            // Expire all updated parameters at once
             if (expiredObjects.Count > 0)
             {
                 foreach (var obj in expiredObjects)
@@ -139,7 +135,6 @@ namespace ComputeBuilder.Utils
                     return false;
                 }
 
-                // Convert value using the handler
                 var ghValue = handler.Converter(value);
 
                 // Create DataTree using reflection (since we don't know the type at compile time)

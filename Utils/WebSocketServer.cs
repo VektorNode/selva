@@ -148,12 +148,10 @@ namespace ComputeBuilder.Utils
                 }
                 catch (HttpListenerException)
                 {
-                    // Listener was stopped
                     break;
                 }
                 catch (Exception)
                 {
-                    // Continue accepting connections
                 }
             }
         }
@@ -176,7 +174,6 @@ namespace ComputeBuilder.Utils
             }
             catch (Exception)
             {
-                // Connection failed
             }
             finally
             {

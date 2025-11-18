@@ -58,6 +58,8 @@ namespace ComputeBuilder.Components
                 GH_ParamAccess.item, false);
             pManager.AddBooleanParameter("Refresh", "Refresh", "Refresh available parameters from document",
                 GH_ParamAccess.item, false);
+            pManager.AddBooleanParameter("Open Preview", "OpenPreview", "Open the interactive preview in a web browser",
+                GH_ParamAccess.item, false);
         }
 
         protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -71,9 +73,11 @@ namespace ComputeBuilder.Components
         {
             bool enable = false;
             bool refresh = false;
+            bool openPreview = false;
 
             DA.GetData(0, ref enable);
             DA.GetData(1, ref refresh);
+            DA.GetData(2, ref openPreview);
 
             // Initialize components on first run
             if (_schemaManager == null)
@@ -179,7 +183,7 @@ namespace ComputeBuilder.Components
                 _persistenceManager.SaveSessionState(true);
 
                 // Open UI (only once)
-                if (!_previewOpen)
+                if (openPreview && !_previewOpen)
                 {
                     OpenUI();
                     _previewOpen = true;

@@ -4,6 +4,10 @@ using Newtonsoft.Json;
 
 namespace ComputeBuilder.Models
 {
+    // ============================================================================
+    // MAIN UI SCHEMA
+    // ============================================================================
+
     /// <summary>
     /// Represents the complete UI schema that defines inputs, outputs, and layout
     /// </summary>
@@ -62,7 +66,7 @@ namespace ComputeBuilder.Models
         public string Nickname { get; set; }
 
         [JsonProperty("paramType")]
-        public string ParamType { get; set; } // "Number", "Point", "Geometry", etc.
+        public string ParamType { get; set; }
     }
 
     /// <summary>
@@ -84,7 +88,6 @@ namespace ComputeBuilder.Models
 
         /// <summary>
         /// Default value - NOT persisted in schema files (loaded from AvailableParameters)
-        /// This field exists for backwards compatibility but should remain null in saved schemas
         /// </summary>
         [JsonProperty("default", NullValueHandling = NullValueHandling.Ignore)]
         public object Default { get; set; } = null;
@@ -109,55 +112,11 @@ namespace ComputeBuilder.Models
     }
 
     // ============================================================================
-    // UI LAYOUT SCHEMA (ComputeBuilder-specific)
+    // WIDGET CONFIGURATIONS
     // ============================================================================
 
     /// <summary>
-    /// Layout item referencing a parameter with UI-specific configuration
-    /// </summary>
-    public class LayoutItem
-    {
-        /// <summary>
-        /// Unique layout item ID (generated for each layout placement)
-        /// </summary>
-        [JsonProperty("id")]
-        public string Id { get; set; }
-
-        /// <summary>
-        /// References the Grasshopper component InstanceGuid (from InputParamSchema.Id or OutputParamSchema.Id)
-        /// </summary>
-        [JsonProperty("paramId")]
-        public Guid ParamId { get; set; }
-
-        [JsonProperty("type")]
-        public string Type { get; set; } // "input" or "output"
-
-        /// <summary>
-        /// Override display name (optional - if null, uses parameter's nickname or name)
-        /// </summary>
-        [JsonProperty("displayName")]
-        public string DisplayName { get; set; }
-
-        /// <summary>
-        /// Widget type for rendering this parameter
-        /// Inputs: "slider", "number", "text", "dropdown", "checkbox", "color"
-        /// Outputs: "text", "number", "3d-viewer", "chart"
-        /// </summary>
-        [JsonProperty("widgetType")]
-        public string WidgetType { get; set; }
-
-        [JsonProperty("order")]
-        public int Order { get; set; } = 0;
-
-        [JsonProperty("span")]
-        public int Span { get; set; } = 1;
-
-        [JsonProperty("config")]
-        public WidgetConfig Config { get; set; } = new WidgetConfig();
-    }
-
-    /// <summary>
-    /// Widget-specific configuration (consolidated from InputConfig/OutputConfig)
+    /// Widget-specific configuration
     /// </summary>
     public class WidgetConfig
     {
@@ -181,13 +140,54 @@ namespace ComputeBuilder.Models
 
         [JsonProperty("required")]
         public bool Required { get; set; }
+    }
 
-        // Output display widgets
-        [JsonProperty("format")]
-        public string Format { get; set; }
+    // ============================================================================
+    // LAYOUT CONFIGURATION
+    // ============================================================================
 
-        [JsonProperty("unit")]
-        public string Unit { get; set; }
+    /// <summary>
+    /// Layout item referencing a parameter with UI-specific configuration
+    /// </summary>
+    public class LayoutItem
+    {
+        /// <summary>
+        /// Unique layout item ID (generated for each layout placement)
+        /// </summary>
+        [JsonProperty("id")]
+        public string Id { get; set; }
+
+        /// <summary>
+        /// References the Grasshopper component InstanceGuid (from InputParamSchema.Id or OutputParamSchema.Id)
+        /// </summary>
+        [JsonProperty("paramId")]
+        public Guid ParamId { get; set; }
+
+        [JsonProperty("type")]
+        public string Type { get; set; }
+
+        /// <summary>
+        /// Override display name (optional - if null, uses parameter's nickname or name)
+        /// </summary>
+        [JsonProperty("displayName")]
+        public string DisplayName { get; set; }
+
+        /// <summary>
+        /// Widget type for rendering this parameter
+        /// Inputs: "slider", "number", "text", "dropdown", "checkbox"
+        /// Outputs: "text"
+        /// </summary>
+        [JsonProperty("widgetType")]
+        public string WidgetType { get; set; }
+
+        [JsonProperty("order")]
+        public int Order { get; set; } = 0;
+
+        [JsonProperty("span")]
+        public int Span { get; set; } = 1;
+
+        [JsonProperty("config")]
+        public WidgetConfig Config { get; set; } = new WidgetConfig();
     }
 
     /// <summary>
@@ -257,11 +257,15 @@ namespace ComputeBuilder.Models
         public bool Collapsed { get; set; } = false;
 
         [JsonProperty("columns")]
-        public int Columns { get; set; } = 1; // Layout columns within group
+        public int Columns { get; set; } = 1;
 
         [JsonProperty("items")]
         public List<LayoutItem> Items { get; set; } = new List<LayoutItem>();
     }
+
+    // ============================================================================
+    // RUNTIME DATA
+    // ============================================================================
 
     /// <summary>
     /// Runtime values for inputs
@@ -292,6 +296,10 @@ namespace ComputeBuilder.Models
         [JsonProperty("mode")]
         public string Mode { get; set; }
     }
+
+    // ============================================================================
+    // AVAILABLE PARAMETERS
+    // ============================================================================
 
     /// <summary>
     /// Represents an available parameter that can be added to the schema
@@ -333,7 +341,7 @@ namespace ComputeBuilder.Models
 
         [JsonProperty("treeAccess")]
         public bool TreeAccess { get; set; } = false;
-        
+
         [JsonProperty("stepSize")]
         public decimal? StepSize { get; set; } = null;
     }
@@ -353,5 +361,3 @@ namespace ComputeBuilder.Models
         public List<AvailableParameter> Parameters { get; set; } = new List<AvailableParameter>();
     }
 }
-
-
