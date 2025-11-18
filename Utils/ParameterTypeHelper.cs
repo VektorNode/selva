@@ -18,8 +18,8 @@ namespace ComputeBuilder.Utils
                 return false;
 
             var typeName = obj.GetType()?.Name;
-            return string.Equals(typeName, "ContextPrintComponent", StringComparison.Ordinal) ||
-                   string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal);
+            return string.Equals(typeName, "ContextPrintComponent", StringComparison.Ordinal);
+            //string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal); //Maybe add later again
         }
 
         /// <summary>
