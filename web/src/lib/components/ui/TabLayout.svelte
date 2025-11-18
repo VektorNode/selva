@@ -50,7 +50,11 @@
   <div class="flex border-b-2 border-gray-200 bg-gray-50 overflow-x-auto">
     {#each schema.layout.tabs || [] as tab}
       <button
-        class={` flex items-center gap-2 px-6 py-4 border-b-3 transition-all whitespace-nowrap font-medium ${activeTabId === tab.id ? "text-blue-600 border-blue-600 bg-white" : "text-gray-600 border-transparent hover:text-gray-900 hover:bg-gray-100"}`}
+        class={`flex items-center gap-2 px-6 py-4 border-b-4 transition-all whitespace-nowrap font-medium ${
+          activeTabId === tab.id
+            ? "text-blue-600 border-blue-600 bg-white"
+            : "text-gray-600 border-transparent hover:text-gray-900 hover:bg-gray-100"
+        }`}
         onclick={() => (activeTabId = tab.id)}
       >
         {#if tab.icon}<span class="text-lg">{tab.icon}</span>{/if}
@@ -87,31 +91,28 @@
                 class="grid gap-6 p-6 bg-white"
                 style="grid-template-columns: repeat({group.columns}, 1fr);"
               >
-                {#each group.items as item}
-                  {#if item.type === "input"}
-                    {@const input = getInputById(item.paramId)}
+                {#each group.items as layoutItem}
+                  {#if layoutItem.type === "input"}
+                    {@const input = getInputById(layoutItem.paramId)}
                     {#if input}
                       <InputControl
-                        {input}
-                        widgetType={item.widgetType}
-                        widgetConfig={item.config}
+                        item={layoutItem}
                         bind:value={values[input.id]}
-                        displayName={item.displayName}
+                        displayName={layoutItem.displayName}
                         onChange={onValueChange}
-                        debounceMs={debounceSliders && item.widgetType === "slider"
+                        debounceMs={debounceSliders &&
+                        layoutItem.widgetType === "slider"
                           ? 20
                           : 0}
                       />
                     {/if}
-                  {:else if item.type === "output"}
-                    {@const output = getOutputById(item.paramId)}
+                  {:else if layoutItem.type === "output"}
+                    {@const output = getOutputById(layoutItem.paramId)}
                     {#if output}
                       <OutputDisplay
-                        {output}
-                        widgetType={item.widgetType}
-                        widgetConfig={item.config}
+                        item={layoutItem}
                         value={values[output.id]}
-                        displayName={item.displayName}
+                        displayName={layoutItem.displayName}
                       />
                     {/if}
                   {/if}
@@ -126,7 +127,6 @@
 </div>
 
 <style>
-  /* Fade-in animation for tab transitions */
   @keyframes fadeIn {
     from {
       opacity: 0;

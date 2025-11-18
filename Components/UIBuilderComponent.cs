@@ -301,7 +301,7 @@ namespace ComputeBuilder.Components
                         var paramObject = document.FindObject(input.Id, false);
                         if (paramObject == null)
                             continue;
-                        
+
                         if (paramObject is IGH_Param ghParam)
                         {
                             if (ghParam.SourceCount == 1)

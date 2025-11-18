@@ -25,7 +25,7 @@
 </script>
 
 <header
-  class={`bg-gradient-to-b from-white to-gray-50 border-b border-gray-100 px-8 py-3 backdrop-blur-sm transition-all duration-200 ${className}`}
+  class={`bg-linear-to-b from-white to-gray-50 border-b border-gray-100 px-8 py-3 backdrop-blur-sm transition-all duration-200 ${className}`}
 >
   <div class="flex items-center justify-between gap-4">
     <div class="flex-1">

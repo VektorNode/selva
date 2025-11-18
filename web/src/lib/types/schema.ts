@@ -1,5 +1,3 @@
-// TypeScript types matching the C# schema models
-
 export interface UISchema {
 	id: string;
 	name: string;
@@ -16,12 +14,6 @@ export interface UISchema {
 // CORE PARAMETER SCHEMAS (Compute-compatible)
 // ============================================================================
 
-/**
- * Grasshopper parameter type - matches Rhino Compute types
- * Primitive types: Number, Integer, Boolean, Text
- * Geometry types: Point, Vector, Plane, Line, Circle, Rectangle, Box, Curve, Surface, Brep, Mesh, SubD, Geometry
- * Generic: Fallback for unrecognized types
- */
 export type GrasshopperParamType =
 	// Primitive types
 	| "Number"
@@ -45,21 +37,13 @@ export type GrasshopperParamType =
 	// Fallback
 	| "Generic";
 
-/**
- * Base parameter schema - tracked by Grasshopper instance GUID
- */
 export interface IoParamSchema {
-	/** Grasshopper component instance GUID - stable reference across document saves */
 	id: string;
 	name: string;
 	nickname: string;
-	/** Grasshopper parameter type */
 	paramType: GrasshopperParamType;
 }
 
-/**
- * Input parameter schema - matches Rhino Compute input format
- */
 export interface InputParamSchema extends IoParamSchema {
 	description?: string;
 	atLeast?: number;
@@ -71,70 +55,142 @@ export interface InputParamSchema extends IoParamSchema {
 	stepSize?: number;
 }
 
-/**
- * Output parameter schema
- */
 export interface OutputParamSchema extends IoParamSchema {
 	description?: string;
 }
 
 // ============================================================================
-// UI LAYOUT SCHEMA (ComputeBuilder-specific)
+// DISCRIMINATED WIDGET CONFIGS
 // ============================================================================
 
 /**
- * Layout item referencing a parameter with UI-specific configuration
+ * Slider widget configuration
  */
-export interface LayoutItem {
-	/** Unique layout item ID (generated for each layout placement) */
-	id: string;
-	/** References the Grasshopper component InstanceGuid (from InputParamSchema.id or OutputParamSchema.id) */
-	paramId: string;
-	type: 'input' | 'output';
-	/** Override display name (optional - if null, uses parameter's nickname or name) */
-	displayName?: string;
-	/** Widget type for rendering this parameter
-	 * Inputs: "slider", "number", "text", "dropdown", "checkbox", "color"
-	 * Outputs: "text", "number", "3d-viewer", "chart"
-	 */
-	widgetType: string;
-	order?: number;
-	span?: number;
-	config: WidgetConfig;
+export interface SliderWidgetConfig {
+	min: number;
+	max: number;
+	step?: number;
 }
 
 /**
- * Widget-specific configuration (consolidated from InputConfig/OutputConfig)
+ * Number input widget configuration
  */
-export interface WidgetConfig {
-	// Number/slider widgets
+export interface NumberWidgetConfig {
 	min?: number;
 	max?: number;
 	step?: number;
-	// Dropdown widgets
-	options?: string[];
-	// Text input widgets
 	placeholder?: string;
-	required?: boolean;
-	// Output display widgets
-	format?: string;
-	unit?: string;
-	chartType?: 'line' | 'bar' | 'pie';
 }
 
 /**
- * Layout configuration for the UI
+ * Text input widget configuration
  */
+export interface TextWidgetConfig {
+	placeholder?: string;
+	required?: boolean;
+}
+
+/**
+ * Dropdown widget configuration
+ */
+export interface DropdownWidgetConfig {
+	options: string[];
+	required?: boolean;
+}
+
+/**
+ * Checkbox widget configuration
+ */
+export interface CheckboxWidgetConfig {
+	// Minimal config - mostly just state
+}
+
+/**
+ * Text display widget configuration
+ */
+export interface TextDisplayConfig {
+}
+
+/**
+ * Number display widget configuration
+ */
+export interface NumberDisplayConfig {
+}
+
+
+// ============================================================================
+// DISCRIMINATED LAYOUT ITEMS
+// ============================================================================
+
+/**
+ * Base layout item properties
+ */
+interface BaseLayoutItem {
+	id: string;
+	paramId: string;
+	displayName?: string;
+	order?: number;
+	span?: number;
+}
+
+/**
+ * Input layout items with discriminated widget types
+ */
+export type InputLayoutItem =
+	| {
+		type: 'input';
+		widgetType: 'slider';
+		config: SliderWidgetConfig;
+	} & BaseLayoutItem
+	| {
+		type: 'input';
+		widgetType: 'number';
+		config: NumberWidgetConfig;
+	} & BaseLayoutItem
+	| {
+		type: 'input';
+		widgetType: 'text';
+		config: TextWidgetConfig;
+	} & BaseLayoutItem
+	| {
+		type: 'input';
+		widgetType: 'dropdown';
+		config: DropdownWidgetConfig;
+	} & BaseLayoutItem
+	| {
+		type: 'input';
+		widgetType: 'checkbox';
+		config: CheckboxWidgetConfig;
+	} & BaseLayoutItem;
+
+/**
+ * Output layout items with discriminated widget types
+ */
+export type OutputLayoutItem =
+	| {
+		type: 'output';
+		widgetType: 'text';
+		config: TextDisplayConfig;
+	} & BaseLayoutItem
+	| {
+		type: 'output';
+		widgetType: 'number';
+		config: NumberDisplayConfig;
+	} & BaseLayoutItem;
+
+/**
+ * Union of all layout item types
+ */
+export type LayoutItem = InputLayoutItem | OutputLayoutItem;
+
+// ============================================================================
+// LAYOUT CONFIGURATION
+// ============================================================================
+
 export interface LayoutConfig {
-	/** Layout type:
-	 * - "tabbed": Multi-tab interface with groups
-	 * - "flat": Simple single-column list of all parameters
-	 */
 	type: 'tabbed' | 'flat';
 	gap: number;
-	// For "tabbed" layout
 	tabs?: TabConfig[];
-	// For "flat" layout
 	items?: LayoutItem[];
 }
 
@@ -155,6 +211,10 @@ export interface GroupConfig {
 	columns: number;
 	items: LayoutItem[];
 }
+
+// ============================================================================
+// RUNTIME DATA
+// ============================================================================
 
 export interface RuntimeValues {
 	timestamp: string;
@@ -190,4 +250,35 @@ export interface AvailableParameters {
 	parameters: AvailableParameter[];
 }
 
+// ============================================================================
+// TYPE GUARDS
+// ============================================================================
 
+export function isInputLayoutItem(item: LayoutItem): item is InputLayoutItem {
+	return item.type === 'input';
+}
+
+export function isOutputLayoutItem(item: LayoutItem): item is OutputLayoutItem {
+	return item.type === 'output';
+}
+
+// Widget-specific type guards
+export function isSliderWidget(item: LayoutItem): item is Extract<InputLayoutItem, { widgetType: 'slider' }> {
+	return item.type === 'input' && item.widgetType === 'slider';
+}
+
+export function isNumberWidget(item: LayoutItem): item is Extract<InputLayoutItem, { widgetType: 'number' }> {
+	return item.type === 'input' && item.widgetType === 'number';
+}
+
+export function isTextWidget(item: LayoutItem): item is Extract<InputLayoutItem, { widgetType: 'text' }> {
+	return item.type === 'input' && item.widgetType === 'text';
+}
+
+export function isDropdownWidget(item: LayoutItem): item is Extract<InputLayoutItem, { widgetType: 'dropdown' }> {
+	return item.type === 'input' && item.widgetType === 'dropdown';
+}
+
+export function isCheckboxWidget(item: LayoutItem): item is Extract<InputLayoutItem, { widgetType: 'checkbox' }> {
+	return item.type === 'input' && item.widgetType === 'checkbox';
+}

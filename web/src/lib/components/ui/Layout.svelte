@@ -1,5 +1,11 @@
 <script lang="ts">
-  import type { UISchema } from "$lib/types/schema";
+  import type {
+    UISchema,
+    InputLayoutItem,
+    OutputLayoutItem,
+    InputParamSchema,
+    OutputParamSchema,
+  } from "$lib/types/schema";
   import InputControl from "./InputControl.svelte";
   import OutputDisplay from "./OutputDisplay.svelte";
   import { Panel, StateDisplay } from "$lib/components/shared";
@@ -18,47 +24,117 @@
     debounceSliders = false,
   }: Props = $props();
 
-  // Helper to infer widget type from parameter type
-  function inferWidgetType(paramType: string, category: 'input' | 'output'): string {
-    if (category === 'input') {
-      if (paramType === 'Number' || paramType === 'Integer') return 'slider';
-      if (paramType === 'Boolean') return 'checkbox';
-      if (paramType === 'Text') return 'text';
-      return 'text';
+  function createInputLayoutItem(input: InputParamSchema): InputLayoutItem {
+    const baseItem = {
+      id: `layout-${input.id}`,
+      paramId: input.id,
+      type: "input" as const,
+      displayName: input.nickname || input.name,
+      order: 0,
+      span: 1,
+    };
+
+    if (input.paramType === "Number" || input.paramType === "Integer") {
+      return {
+        ...baseItem,
+        widgetType: "slider" as const,
+        config: {
+          min: (input.minimum as number) ?? 0,
+          max: (input.maximum as number) ?? 100,
+          step: input.stepSize ? Number(input.stepSize) : 1,
+        },
+      } as Extract<InputLayoutItem, { widgetType: "slider" }>;
+    } else if (input.paramType === "Boolean") {
+      return {
+        ...baseItem,
+        widgetType: "checkbox" as const,
+        config: {},
+      } as Extract<InputLayoutItem, { widgetType: "checkbox" }>;
     } else {
-      if (paramType === 'Number' || paramType === 'Integer') return 'number';
-      if (paramType === 'Text') return 'text';
-      return 'text';
+      return {
+        ...baseItem,
+        widgetType: "text" as const,
+        config: {
+          placeholder: "",
+          required: false,
+        },
+      } as Extract<InputLayoutItem, { widgetType: "text" }>;
+    }
+  }
+
+  function createOutputLayoutItem(output: OutputParamSchema): OutputLayoutItem {
+    const baseItem = {
+      id: `layout-${output.id}`,
+      paramId: output.id,
+      type: "output" as const,
+      displayName: output.nickname || output.name,
+      order: 0,
+      span: 1,
+    };
+
+    if (output.paramType === "Number" || output.paramType === "Integer") {
+      return {
+        ...baseItem,
+        widgetType: "number" as const,
+        config: {
+          format: undefined,
+          unit: undefined,
+        },
+      } as Extract<OutputLayoutItem, { widgetType: "number" }>;
+    } else if (
+      [
+        "Point",
+        "Vector",
+        "Plane",
+        "Line",
+        "Circle",
+        "Rectangle",
+        "Box",
+        "Curve",
+        "Surface",
+        "Brep",
+        "Mesh",
+        "SubD",
+        "Geometry",
+      ].includes(output.paramType)
+    ) {
+      return {
+        ...baseItem,
+        widgetType: "3d-viewer" as const,
+        config: {},
+      } as Extract<OutputLayoutItem, { widgetType: "3d-viewer" }>;
+    } else {
+      return {
+        ...baseItem,
+        widgetType: "text" as const,
+        config: {
+          format: undefined,
+        },
+      } as Extract<OutputLayoutItem, { widgetType: "text" }>;
     }
   }
 </script>
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-  <!-- Inputs Panel -->
   <Panel title="Inputs">
     {#if schema.inputs.length === 0}
       <StateDisplay type="empty" size="small" message="No inputs available" />
     {:else}
       <div class="grid gap-6">
         {#each schema.inputs as input}
-          {@const widgetType = inferWidgetType(input.paramType, 'input')}
-          {@const widgetConfig = {
-            min: input.minimum as number,
-            max: input.maximum as number,
-            step: input.stepSize || 1,
-          }}
+          {@const layoutItem = createInputLayoutItem(input)}
           <div class="grid gap-2">
             <InputControl
-              {input}
-              {widgetType}
-              {widgetConfig}
+              item={layoutItem}
               bind:value={values[input.id]}
               onChange={onValueChange}
-              debounceMs={debounceSliders && widgetType === "slider" ? 20 : 0}
+              debounceMs={layoutItem.widgetType === "slider" && debounceSliders
+                ? 20
+                : 0}
             />
-            <span class="text-sm text-gray-600 font-mono"
-              >{values[input.id]}</span
-            >
+            <span class="text-sm text-gray-600 font-mono">
+              {values[input.id] ?? "—"}
+            </span>
           </div>
         {/each}
       </div>
@@ -72,9 +148,8 @@
     {:else}
       <div class="grid gap-6">
         {#each schema.outputs as output}
-          {@const widgetType = inferWidgetType(output.paramType, 'output')}
-          {@const widgetConfig = {}}
-          <OutputDisplay {output} {widgetType} {widgetConfig} value={values[output.id]} />
+          {@const layoutItem = createOutputLayoutItem(output)}
+          <OutputDisplay item={layoutItem} value={values[output.id]} />
         {/each}
       </div>
     {/if}

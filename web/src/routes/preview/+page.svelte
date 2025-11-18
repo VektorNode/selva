@@ -10,6 +10,7 @@
     PageHeader,
     StateDisplay,
   } from "$lib/components/shared";
+  import { onMount } from "svelte";
 
   // Runtime mode: 'local' uses WebSocket, 'compute' uses Rhino Compute
   type RuntimeMode = "local" | "compute";
@@ -28,6 +29,9 @@
   // Determine runtime mode from URL parameter
   let runtimeMode = $state<RuntimeMode>("local");
   let solving = $state(false);
+
+  // Track if we're updating values from remote (to avoid feedback loop)
+  let isRemoteUpdate = $state(false);
 
   function getDefaultValue(paramType: string) {
     switch (paramType) {
@@ -56,9 +60,18 @@
 
   /**
    * Handle value changes from UI
-   * Now receives parameter GUID directly (no conversion needed)
+   * Only send to Grasshopper if change came from user (not from remote)
    */
   async function handleValueChange(paramId: string, value: any) {
+    // Skip sending if this is a remote update
+    if (isRemoteUpdate) {
+      console.log(
+        "[Preview] Skipping send for remote update on paramId:",
+        paramId
+      );
+      return;
+    }
+
     // Update local values (using GUID as key)
     values[paramId] = value;
 
@@ -90,7 +103,7 @@
   );
 
   // Initialize on mount
-  $effect.pre(() => {
+  onMount(() => {
     const initializeSchema = async () => {
       sessionId = page.url.searchParams.get("session") || "";
 
@@ -170,8 +183,10 @@
           wsClient.on("currentValues", (message) => {
             if (message.sessionId === sessionId) {
               console.log("[Preview] Received current values:", message.values);
-              // C# sends GUID keys - use them directly
+              // Mark as remote update to prevent feedback loop
+              isRemoteUpdate = true;
               values = { ...values, ...message.values };
+              isRemoteUpdate = false;
             }
           });
 
@@ -179,8 +194,18 @@
           wsClient.on("outputs", (message) => {
             if (message.sessionId === sessionId) {
               console.log("[Preview] Received outputs:", message.outputs);
-              // C# sends GUID keys - use them directly
-              values = { ...values, ...message.outputs };
+              // Only update outputs (not inputs) to avoid feedback
+              const outputUpdates = Object.fromEntries(
+                Object.entries(message.outputs).filter(([paramId]) =>
+                  schema?.outputs.some((o) => o.id === paramId)
+                )
+              );
+
+              if (Object.keys(outputUpdates).length > 0) {
+                isRemoteUpdate = true;
+                values = { ...values, ...outputUpdates };
+                isRemoteUpdate = false;
+              }
             }
           });
 
@@ -188,8 +213,18 @@
           wsClient.on("outputUpdate", (message) => {
             if (message.sessionId === sessionId) {
               console.log("[Preview] Received output update:", message.outputs);
-              // C# sends GUID keys - use them directly
-              values = { ...values, ...message.outputs };
+              // Only update outputs (not inputs) to avoid feedback
+              const outputUpdates = Object.fromEntries(
+                Object.entries(message.outputs).filter(([paramId]) =>
+                  schema?.outputs.some((o) => o.id === paramId)
+                )
+              );
+
+              if (Object.keys(outputUpdates).length > 0) {
+                isRemoteUpdate = true;
+                values = { ...values, ...outputUpdates };
+                isRemoteUpdate = false;
+              }
             }
           });
 

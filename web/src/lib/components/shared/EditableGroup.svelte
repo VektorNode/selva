@@ -28,12 +28,10 @@
   }
 
   function setupGridRef(node: HTMLDivElement) {
-    // Set up reorder listener for drag-to-reorder
     if (onReorder) {
       node.addEventListener("reorder", handleReorderEvent);
     }
 
-    // Set up parameterdrop listener for new parameter drops on items
     if (onDrop) {
       node.addEventListener("parameterdrop", handleDropEvent);
     }

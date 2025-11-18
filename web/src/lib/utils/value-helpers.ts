@@ -16,17 +16,14 @@ export function updateValue<T>(
   index?: number,
   branch?: string,
 ): T | T[] | DataTreeDefault<T> {
-  // Single value
   if (typeof currentValue !== 'object' || currentValue === null) {
     return newValue;
   }
 
-  // Array
   if (Array.isArray(currentValue) && index !== undefined) {
     return currentValue.map((v, i) => (i === index ? newValue : v)) as T[];
   }
 
-  // DataTree
   if (isDataTree<T>(currentValue) && branch && index !== undefined) {
     const branchArray = (currentValue as Record<string, T[]>)[branch] ?? [];
     return {
@@ -72,17 +69,14 @@ export type ValueEntry<T> = {
 };
 
 export function getValueEntries<T>(value: T | T[] | DataTreeDefault<T>): ValueEntry<T>[] {
-  // Single value
   if (typeof value !== 'object' || value === null) {
     return [{ value: value as T, index: 0 }];
   }
 
-  // Array
   if (Array.isArray(value)) {
     return value.map((v, index) => ({ value: v, index }));
   }
 
-  // DataTree
   if (isDataTree<T>(value)) {
     const entries: ValueEntry<T>[] = [];
     for (const [branch, arr] of Object.entries(value)) {

@@ -22,10 +22,17 @@
     TabConfig,
     GroupConfig,
     LayoutItem,
-    WidgetConfig,
+    InputLayoutItem,
+    OutputLayoutItem,
+    SliderWidgetConfig,
+    NumberWidgetConfig,
+    TextWidgetConfig,
+    DropdownWidgetConfig,
+    CheckboxWidgetConfig,
+    TextDisplayConfig,
+    NumberDisplayConfig,
   } from "$lib/types/schema";
 
-  // Reactive state using Svelte 5 runes
   let sessionId = $state("");
   let schema = $state<UISchema | null>(null);
   let availableParams = $state<AvailableParameter[]>([]);
@@ -33,7 +40,6 @@
   let error = $state("");
   let activeTabId = $state<string | null>(null);
 
-  // Derived state - computed values that update automatically
   const usedInputIds = $derived(new Set(schema?.inputs.map((i) => i.id) || []));
   const usedOutputIds = $derived(
     new Set(schema?.outputs.map((o) => o.id) || [])
@@ -53,7 +59,6 @@
     schema?.layout?.tabs?.find((t) => t.id === activeTabId)
   );
 
-  // Load initial data - using untrack to avoid reactivity issues
   $effect(() => {
     (async () => {
       const urlSessionId = page.url.searchParams.get("session") || "";
@@ -71,8 +76,6 @@
       ]);
 
       availableParams = availableData?.parameters || [];
-
-      console.log("Available Parameters:", $state.snapshot(availableParams));
 
       if (!schemaData) {
         schema = {
@@ -93,7 +96,6 @@
         };
       } else {
         schema = schemaData;
-        // Ensure layout exists
         if (!schema.layout) {
           schema.layout = {
             type: "tabbed",
@@ -102,7 +104,6 @@
             items: [],
           };
         }
-        // Ensure layout has tabs array
         if (!schema.layout.tabs) {
           schema.layout.tabs = [];
         }
@@ -113,7 +114,6 @@
           "No parameters found. Please ensure the UI Builder component is active in Grasshopper and click Refresh.";
       }
 
-      // Select first tab by default
       if (schema?.layout?.tabs && schema.layout.tabs.length > 0) {
         activeTabId = schema.layout.tabs[0].id;
       }
@@ -151,11 +151,9 @@
   function removeTab(tabId: string) {
     if (!schema || !schema.layout.tabs) return;
 
-    // Find the tab being removed
     const tab = schema.layout.tabs.find((t) => t.id === tabId);
     if (!tab) return;
 
-    // For each group in the tab, check if parameters are used elsewhere
     tab.groups.forEach((group) => {
       group.items.forEach((item) => {
         const isUsedElsewhere = schema!.layout.tabs?.some(
@@ -166,7 +164,6 @@
             )
         );
 
-        // If not used anywhere else, remove from inputs/outputs
         if (!isUsedElsewhere) {
           if (item.type === "input") {
             schema!.inputs = schema!.inputs.filter(
@@ -181,10 +178,8 @@
       });
     });
 
-    // Remove the tab
     schema.layout.tabs = schema.layout.tabs.filter((t) => t.id !== tabId);
 
-    // Update active tab if needed
     if (activeTabId === tabId && schema.layout.tabs.length > 0) {
       activeTabId = schema.layout.tabs[0].id;
     }
@@ -207,7 +202,6 @@
     };
 
     tab.groups = [...tab.groups, newGroup];
-    schema.layout.tabs = [...schema.layout.tabs]; // Trigger reactivity
   }
 
   function removeGroup(tabId: string, groupId: string) {
@@ -251,19 +245,15 @@
     category: "input" | "output"
   ): string {
     if (category === "input") {
-      // Number and Integer both default to number input
-      // Users can manually switch to slider in the UI if desired
       if (param.paramType === "Number" || param.paramType === "Integer")
         return "number";
       if (param.paramType === "Boolean") return "checkbox";
       if (param.paramType === "Text") return "text";
-      // Geometry types default to text (for future geometry input widgets)
       return "text";
     } else {
       if (param.paramType === "Number" || param.paramType === "Integer")
         return "number";
       if (param.paramType === "Text") return "text";
-      // Geometry types could use 3d-viewer in future
       if (
         [
           "Point",
@@ -281,9 +271,73 @@
           "Geometry",
         ].includes(param.paramType)
       ) {
-        return "text"; // For now, until 3d-viewer supports inputs
+        return "text";
       }
       return "text";
+    }
+  }
+
+  function createWidgetConfig(
+    widgetType: string,
+    param: AvailableParameter,
+    category: "input" | "output"
+  ): any {
+    if (category === "input") {
+      switch (widgetType) {
+        case "slider": {
+          const config: SliderWidgetConfig = {
+            min: (param.minimum as number) ?? 0,
+            max: (param.maximum as number) ?? 100,
+            step: param.stepSize ? Number(param.stepSize) : 1,
+          };
+          return config;
+        }
+        case "number": {
+          const config: NumberWidgetConfig = {
+            min: param.minimum as number | undefined,
+            max: param.maximum as number | undefined,
+            step: param.stepSize ? Number(param.stepSize) : undefined,
+          };
+          return config;
+        }
+        case "text": {
+          const config: TextWidgetConfig = {
+            placeholder: "",
+            required: false,
+          };
+          return config;
+        }
+        case "dropdown": {
+          const config: DropdownWidgetConfig = {
+            options: [],
+            required: false,
+          };
+          return config;
+        }
+        case "checkbox": {
+          const config: CheckboxWidgetConfig = {};
+          return config;
+        }
+        default:
+          return {};
+      }
+    } else {
+      switch (widgetType) {
+        case "text": {
+          const config: TextDisplayConfig = {
+            format: undefined,
+          };
+          return config;
+        }
+        case "number": {
+          const config: NumberDisplayConfig = {
+            format: undefined,
+          };
+          return config;
+        }
+        default:
+          return {};
+      }
     }
   }
 
@@ -327,7 +381,6 @@
           minimum: param.minimum,
           maximum: param.maximum,
           stepSize: param.stepSize,
-          // default: removed - loaded on demand from AvailableParameters to reduce schema size
         };
         schema.inputs = [...schema.inputs, newInput];
       }
@@ -345,31 +398,35 @@
       }
     }
 
-    // Determine widget type and config based on parameter type
     const widgetType = mapParamTypeToUIType(param, sourceType);
-    const widgetConfig: WidgetConfig = {};
+    const config = createWidgetConfig(widgetType, param, sourceType);
+
+    let newItem: LayoutItem;
 
     if (sourceType === "input") {
-      if (widgetType === "slider" || widgetType === "number") {
-        widgetConfig.min = param.minimum as number;
-        widgetConfig.max = param.maximum as number;
-        widgetConfig.step = param.stepSize || 1;
-      }
+      newItem = {
+        id: crypto.randomUUID().substring(0, 8),
+        paramId: param.id,
+        type: "input",
+        displayName: param.nickname || param.name,
+        widgetType: widgetType as any,
+        order: group.items.length,
+        span: 1,
+        config: config,
+      } as InputLayoutItem;
+    } else {
+      newItem = {
+        id: crypto.randomUUID().substring(0, 8),
+        paramId: param.id,
+        type: "output",
+        displayName: param.nickname || param.name,
+        widgetType: widgetType as any,
+        order: group.items.length,
+        span: 1,
+        config: config,
+      } as OutputLayoutItem;
     }
 
-    // Create new layout item
-    const newItem: LayoutItem = {
-      id: crypto.randomUUID().substring(0, 8),
-      paramId: param.id,
-      type: sourceType as "input" | "output",
-      displayName: param.nickname || param.name,
-      widgetType: widgetType,
-      order: group.items.length,
-      span: 1,
-      config: widgetConfig,
-    };
-
-    // Insert at specific position if dropping on an item
     if (targetItem && dropPosition) {
       const targetIndex = group.items.findIndex((i) => i.id === targetItem.id);
       if (targetIndex >= 0) {
@@ -380,11 +437,9 @@
         }
         group.items = [...group.items];
       } else {
-        // Target not found, add to end
         group.items = [...group.items, newItem];
       }
     } else {
-      // No target, add to end
       group.items = [...group.items, newItem];
     }
 
@@ -400,14 +455,10 @@
     const group = tab.groups.find((g) => g.id === groupId);
     if (!group) return;
 
-    // Find the item being removed
     const item = group.items.find((i) => i.id === itemId);
 
-    // Remove from group
     group.items = group.items.filter((i) => i.id !== itemId);
-    schema.layout.tabs = [...schema.layout.tabs];
 
-    // Check if this parameter is used anywhere else in the layout
     if (item) {
       const isUsedElsewhere = schema.layout.tabs.some((t) =>
         t.groups.some((g) => g.items.some((i) => i.paramId === item.paramId))
@@ -437,7 +488,6 @@
       dropPosition,
     } = event.detail;
 
-    // Don't reorder if dropping on itself
     if (sourceItem.id === targetItem.id) return;
 
     const sourceTab = schema.layout.tabs.find((t) => t.id === sourceTabId);
@@ -448,7 +498,6 @@
     const targetGroup = targetTab.groups.find((g) => g.id === targetGroupId);
     if (!sourceGroup || !targetGroup) return;
 
-    // Remove from source group
     const sourceIndex = sourceGroup.items.findIndex(
       (i) => i.id === sourceItem.id
     );
@@ -457,29 +506,24 @@
     const [movedItem] = sourceGroup.items.splice(sourceIndex, 1);
 
     // Add to target group based on drop position
+    //TODO: When the group is empty, its not possible to move items into it from another group
     let targetIndex = targetGroup.items.findIndex(
       (i) => i.id === targetItem.id
     );
 
     if (targetIndex < 0) {
-      // Target not found, add to end
       targetGroup.items.push(movedItem);
     } else {
-      // Adjust index if we removed an item from the same group before the target
       if (sourceGroup === targetGroup && sourceIndex < targetIndex) {
         targetIndex--;
       }
 
-      // Insert before or after based on dropPosition
       if (dropPosition === "before") {
         targetGroup.items.splice(targetIndex, 0, movedItem);
       } else {
         targetGroup.items.splice(targetIndex + 1, 0, movedItem);
       }
     }
-
-    // Trigger reactivity
-    schema.layout.tabs = [...schema.layout.tabs];
   }
 
   function getParameterInfo(paramId: string) {

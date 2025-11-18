@@ -35,7 +35,6 @@
   let controls: OrbitControls;
   let viewerInitialized = $state(false);
 
-  // Initialize values with defaults
   $effect(() => {
     if (schema) {
       const initialValues: Record<string, any> = {};
@@ -80,7 +79,6 @@
       treeAccess: input.treeAccess || false,
     };
 
-    // Determine paramType and create the appropriate InputParam type
     if (input.paramType === "Number" || input.paramType === "Integer") {
       return {
         ...base,
@@ -106,50 +104,31 @@
       } as BooleanInputType;
     }
 
-    // Fallback for unsupported types - treat as text
     return {
       ...base,
       paramType: "Text",
       default: value ?? "",
     } as TextInputType;
   }
-  // else if (input.paramType === "ValueList") {
-  //     return {
-  //       ...base,
-  //       paramType: "ValueList",
-  //       values:
-  //         input.config?.options?.reduce(
-  //           (acc: any, opt: any) => ({ ...acc, [opt]: opt }),
-  //           {}
-  //         ) || {},
-  //       default: value ?? input.default,
-  //     } as ValueListInputType;
-  //   }
-  // }
 
   async function handleValueChange(parameterName: string, value: any) {
     values[parameterName] = value;
 
-    // Solve with Rhino Compute
     try {
       solving = true;
       error = "";
-
-      // Convert current values to data trees
       const inputTree = inputsToDataTrees(
         schema.inputs
           .filter((input) => input.paramType)
           .map((input) => transformInputParameter(input, values[input.name]))
       );
 
-      // Solve the definition
       const solvedDefinition = await solveGrasshopperDefinition(
         inputTree,
         "http://localhost:5173/builder_test.gh",
         { serverUrl: "http://localhost:5000/" }
       );
 
-      // Process outputs
       const processor = new GrasshopperResponseProcessor(solvedDefinition);
       const outputValues = processor.getValues();
 
@@ -161,7 +140,6 @@
 
       //TODO: Outputs dont get mapped properly (neeeds fixing also at the c# side ) eg. in compute numberOutput: 155 in c#  fgdf (nickname/displayname/name collisione )
 
-      // Update output values
       values = { ...values, ...outputValues.values };
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to solve definition";
@@ -200,9 +178,7 @@
         <StateDisplay type="loading" size="large" message="Loading schema..." />
       </div>
     {:else}
-      <!-- Split Layout: Controls + 3D Viewer -->
       <div class="flex flex-col lg:flex-row gap-6 p-6 h-full overflow-hidden">
-        <!-- Left Side: Controls -->
         <div class="w-full lg:w-[480px] xl:w-[520px] overflow-y-auto shrink-0">
           {#if schema.layout.type === "tabbed" && schema.layout.tabs && schema.layout.tabs.length > 0}
             <TabLayout
@@ -221,7 +197,6 @@
           {/if}
         </div>
 
-        <!-- Right Side: 3D Viewer -->
         {#if schema.enable3dViewer}
           <div
             class="flex-1 rounded-lg overflow-hidden shadow-lg bg-white min-h-[500px]"
