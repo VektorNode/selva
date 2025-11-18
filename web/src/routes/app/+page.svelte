@@ -22,6 +22,8 @@
   let { data }: PageProps = $props();
 
   let schema = $state(data.schema);
+
+  console.log($state.snapshot(schema));
   let values: Record<string, any> = $state({});
   let solving = $state(false);
   let error = $state("");
@@ -36,12 +38,20 @@
       const initialValues: Record<string, any> = {};
 
       schema.inputs.forEach((input) => {
-        initialValues[input.name] =
+        console.log(
+          "Setting initial value for input:",
+          input.name,
+          input.default,
+          input.id
+        );
+        // Key by id (GUID) to match TabLayout's expectation
+        initialValues[input.id] =
           input.default ?? getDefaultValue(input.paramType);
       });
 
       schema.outputs.forEach((output) => {
-        initialValues[output.name] = null;
+        // Key by id (GUID) to match TabLayout's expectation
+        initialValues[output.id] = null;
       });
 
       values = initialValues;
@@ -70,9 +80,10 @@
   ): InputParam {
     const base = {
       description: input.description || "",
-      name: input.name,
+      name: input.nickname || input.name, // Use nickname for Rhino Compute mapping
       nickname: input.nickname || null,
       treeAccess: input.treeAccess || false,
+      paramId: input.id, // Use id field which is the Grasshopper GUID
     };
 
     if (input.paramType === "Number" || input.paramType === "Integer") {
@@ -107,8 +118,9 @@
     } as TextInputType;
   }
 
-  async function handleValueChange(parameterName: string, value: any) {
-    values[parameterName] = value;
+  async function handleValueChange(parameterId: string, value: any) {
+    // parameterId is the GUID (input.id)
+    values[parameterId] = value;
 
     try {
       solving = true;
@@ -116,8 +128,10 @@
       const inputTree = inputsToDataTrees(
         schema.inputs
           .filter((input) => input.paramType)
-          .map((input) => transformInputParameter(input, values[input.name]))
+          .map((input) => transformInputParameter(input, values[input.id]))
       );
+
+      console.log("Solving with inputs:", inputTree);
 
       const solvedDefinition = await solveGrasshopperDefinition(
         inputTree,
@@ -134,9 +148,35 @@
         viewerInitialized = true;
       }
 
-      //TODO: Outputs dont get mapped properly (neeeds fixing also at the c# side ) eg. in compute numberOutput: 155 in c#  fgdf (nickname/displayname/name collisione )
+      // Map outputs by id (Grasshopper GUID) instead of name
+      // This handles name/nickname collisions properly
+      const mappedOutputs: Record<string, any> = {};
 
-      values = { ...values, ...outputValues.values };
+      // Map the compute response to our schema using the Grasshopper GUID (id field)
+      Object.entries(outputValues.values).forEach(
+        ([computeKey, computeValue]) => {
+          // Try to find matching output by checking all possible mappings
+          const matchingOutput = schema.outputs.find((output) => {
+            // Match by id (Grasshopper GUID) first - most reliable
+            if (output.id && computeKey === output.id) return true;
+            // Fallback to name matching
+            if (computeKey === output.name) return true;
+            // Fallback to nickname matching
+            if (computeKey === output.nickname) return true;
+            return false;
+          });
+
+          if (matchingOutput) {
+            // Use the output's id (GUID) as the key in our values object
+            mappedOutputs[matchingOutput.id] = computeValue;
+          } else {
+            // If no match found, keep the original key (backward compatibility)
+            mappedOutputs[computeKey] = computeValue;
+          }
+        }
+      );
+
+      values = { ...values, ...mappedOutputs };
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to solve definition";
       console.error("Solve error:", err);

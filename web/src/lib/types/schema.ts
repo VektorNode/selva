@@ -24,7 +24,7 @@ export type GrasshopperParamType =
 	| "Generic";
 
 export interface IoParamSchema {
-	id: string;
+	id: string; // Grasshopper parameter instance GUID - stable reference for mapping
 	name: string;
 	nickname: string;
 	paramType: GrasshopperParamType;
