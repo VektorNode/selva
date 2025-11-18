@@ -247,17 +247,46 @@
   }
 
   function mapParamTypeToUIType(
-    paramType: string,
+    param: AvailableParameter,
     category: "input" | "output"
   ): string {
     if (category === "input") {
-      if (paramType === "Number" || paramType === "Integer") return "slider";
-      if (paramType === "Boolean") return "checkbox";
-      if (paramType === "Text") return "text";
+      if (param.paramType === "Number") {
+        // Use stepSize to determine if slider is appropriate
+        // Fine precision (< 0.1) or no constraints = number input
+        if (param.stepSize && param.stepSize < 0.1) return "number";
+        if (!param.minimum || !param.maximum) return "number";
+        return "slider";
+      }
+      if (param.paramType === "Integer") return "slider";
+      if (param.paramType === "Boolean") return "checkbox";
+      if (param.paramType === "Text") return "text";
+      // Geometry types default to text (for future geometry input widgets)
       return "text";
     } else {
-      if (paramType === "Number" || paramType === "Integer") return "number";
-      if (paramType === "Text") return "text";
+      if (param.paramType === "Number" || param.paramType === "Integer")
+        return "number";
+      if (param.paramType === "Text") return "text";
+      // Geometry types could use 3d-viewer in future
+      if (
+        [
+          "Point",
+          "Vector",
+          "Plane",
+          "Line",
+          "Circle",
+          "Rectangle",
+          "Box",
+          "Curve",
+          "Surface",
+          "Brep",
+          "Mesh",
+          "SubD",
+          "Geometry",
+        ].includes(param.paramType)
+      ) {
+        return "text"; // For now, until 3d-viewer supports inputs
+      }
       return "text";
     }
   }
@@ -297,12 +326,12 @@
           paramType: param.paramType,
           description: param.description,
           atLeast: param.atLeast ?? 1,
-          atMost: param.atMost ?? 2147483647,
+          atMost: param.atMost ?? 1,
           treeAccess: param.treeAccess ?? false,
           minimum: param.minimum,
           maximum: param.maximum,
           stepSize: param.stepSize,
-          default: param.default,
+          // default: removed - loaded on demand from AvailableParameters to reduce schema size
         };
         schema.inputs = [...schema.inputs, newInput];
       }
@@ -321,7 +350,7 @@
     }
 
     // Determine widget type and config based on parameter type
-    const widgetType = mapParamTypeToUIType(param.paramType, sourceType);
+    const widgetType = mapParamTypeToUIType(param, sourceType);
     const widgetConfig: WidgetConfig = {};
 
     if (sourceType === "input") {

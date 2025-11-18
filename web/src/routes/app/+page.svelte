@@ -105,6 +105,13 @@
         default: value ?? input.default ?? false,
       } as BooleanInputType;
     }
+
+    // Fallback for unsupported types - treat as text
+    return {
+      ...base,
+      paramType: "Text",
+      default: value ?? "",
+    } as TextInputType;
   }
   // else if (input.paramType === "ValueList") {
   //     return {

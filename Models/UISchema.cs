@@ -82,7 +82,11 @@ namespace ComputeBuilder.Models
         [JsonProperty("treeAccess")]
         public bool TreeAccess { get; set; } = false;
 
-        [JsonProperty("default")]
+        /// <summary>
+        /// Default value - NOT persisted in schema files (loaded from AvailableParameters)
+        /// This field exists for backwards compatibility but should remain null in saved schemas
+        /// </summary>
+        [JsonProperty("default", NullValueHandling = NullValueHandling.Ignore)]
         public object Default { get; set; } = null;
 
         [JsonProperty("minimum")]

@@ -129,6 +129,62 @@ namespace ComputeBuilder.Utils
         }
 
         /// <summary>
+        /// Validate schema against current document - removes references to missing parameters
+        /// </summary>
+        public UISchema ValidateSchema(UISchema schema, GH_Document document)
+        {
+            if (schema == null) return null;
+
+            // Remove missing inputs
+            schema.Inputs.RemoveAll(input =>
+            {
+                var paramObject = document.FindObject(input.Id, false);
+                return paramObject == null;
+            });
+
+            // Remove missing outputs
+            schema.Outputs.RemoveAll(output =>
+            {
+                var paramObject = document.FindObject(output.Id, false);
+                return paramObject == null;
+            });
+
+            // Remove layout items referencing missing parameters
+            if (schema.Layout.Tabs != null)
+            {
+                foreach (var tab in schema.Layout.Tabs)
+                {
+                    foreach (var group in tab.Groups)
+                    {
+                        group.Items.RemoveAll(item =>
+                        {
+                            var paramObject = document.FindObject(item.ParamId, false);
+                            return paramObject == null;
+                        });
+                    }
+
+                    // Remove empty groups
+                    tab.Groups.RemoveAll(g => g.Items.Count == 0);
+                }
+
+                // Remove empty tabs
+                schema.Layout.Tabs.RemoveAll(t => t.Groups.Count == 0);
+            }
+
+            // Also clean flat layout items
+            if (schema.Layout.Items != null)
+            {
+                schema.Layout.Items.RemoveAll(item =>
+                {
+                    var paramObject = document.FindObject(item.ParamId, false);
+                    return paramObject == null;
+                });
+            }
+
+            return schema;
+        }
+
+        /// <summary>
         /// Get parameter type name from contextual parameter
         /// </summary>
         private string GetParameterTypeName(IGH_ContextualParameter contextParam)

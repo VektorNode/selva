@@ -9,7 +9,7 @@
     widgetConfig: WidgetConfig;
     value: any;
     displayName?: string;
-    onChange: (parameterName: string, value: any) => void;
+    onChange: (paramId: string, value: any) => void;
     debounceMs?: number;
   }
 
@@ -30,7 +30,7 @@
 
   // Debounced handler for sliders
   const debouncedOnChange = debounce(
-    (val: any) => onChange(input.name, val),
+    (val: any) => onChange(input.id, val),
     debounceMs
   );
 
@@ -39,7 +39,7 @@
     if (debounceMs > 0) {
       debouncedOnChange(newValue);
     } else {
-      onChange(input.name, newValue);
+      onChange(input.id, newValue);
     }
   }
 </script>

@@ -16,6 +16,7 @@
 
   let sessionId = $state("");
   let schema = $state<UISchema | null>(null);
+  // Values stored by GUID (stable across parameter name changes)
   let values = $state<Record<string, any>>({});
   let loading = $state(true);
   let error = $state("");
@@ -42,30 +43,20 @@
 
   /**
    * Handle value changes from UI
-   * Receives parameter NAME from UI, converts to GUID for WebSocket
+   * Now receives parameter GUID directly (no conversion needed)
    */
-  async function handleValueChange(parameterName: string, value: any) {
-    // Update local values (using name as key for UI)
-    values[parameterName] = value;
+  async function handleValueChange(paramId: string, value: any) {
+    // Update local values (using GUID as key)
+    values[paramId] = value;
 
     if (runtimeMode === "local" && wsConnected && wsClient.isConnected) {
-      // Convert from name-based keys to GUID-based keys for C#
-      const inputValuesByGuid: Record<string, any> = {};
-
-      schema?.inputs.forEach((input) => {
-        if (values[input.name] !== undefined) {
-          // Map name → GUID
-          inputValuesByGuid[input.id] = values[input.name];
-        }
-      });
-
       console.log(
         "[Preview] Sending value update to Grasshopper (GUID keys):",
-        inputValuesByGuid
+        { [paramId]: value }
       );
 
       // Send via WebSocket with GUID keys (what C# expects)
-      wsClient.sendValueUpdate(sessionId, inputValuesByGuid);
+      wsClient.sendValueUpdate(sessionId, values);
     } else if (!wsClient.isConnected) {
       console.warn("[Preview] Cannot send values - WebSocket not connected");
     }
@@ -131,14 +122,27 @@
         schema.layout.tabs = [];
       }
 
-      // Initialize values with defaults using NAME as key (for UI compatibility)
+      // Load available parameters to get default values (not stored in schema)
+      const availableParams = await api.getAvailableParameters(sessionId);
+
+      // Initialize values with defaults using GUID as key (stable across name changes)
       schema.inputs.forEach((input) => {
-        values[input.name] = input.default ?? getDefaultValue(input.paramType);
+        // Get default from available parameters (live from Grasshopper)
+        const availableParam = availableParams?.parameters.find(
+          (p) => p.id === input.id
+        );
+        const defaultValue =
+          availableParam?.default !== null &&
+          availableParam?.default !== undefined
+            ? availableParam.default
+            : getDefaultValue(input.paramType);
+
+        values[input.id] = defaultValue;
       });
 
       // Outputs start with null - they'll be populated by live data from Grasshopper
       schema.outputs.forEach((output) => {
-        values[output.name] = null;
+        values[output.id] = null;
       });
 
       // Setup WebSocket connection for local mode
@@ -153,29 +157,17 @@
           wsClient.on("currentValues", (message) => {
             if (message.sessionId === sessionId) {
               console.log("[Preview] Received current values:", message.values);
-              // Convert from GUID keys to name keys for UI
-              const valuesByName: Record<string, any> = {};
-              schema!.inputs.forEach((input) => {
-                if (message.values[input.id] !== undefined) {
-                  valuesByName[input.name] = message.values[input.id];
-                }
-              });
-              values = { ...values, ...valuesByName };
+              // C# sends GUID keys - use them directly
+              values = { ...values, ...message.values };
             }
           });
 
-          // Listen for output updates from Grasshopper (C# sends GUID keys, convert to names)
+          // Listen for output updates from Grasshopper (C# sends GUID keys)
           wsClient.on("outputs", (message) => {
             if (message.sessionId === sessionId) {
               console.log("[Preview] Received outputs:", message.outputs);
-              // Convert from GUID keys to name keys for UI
-              const outputsByName: Record<string, any> = {};
-              schema!.outputs.forEach((output) => {
-                if (message.outputs[output.id] !== undefined) {
-                  outputsByName[output.name] = message.outputs[output.id];
-                }
-              });
-              values = { ...values, ...outputsByName };
+              // C# sends GUID keys - use them directly
+              values = { ...values, ...message.outputs };
             }
           });
 
@@ -183,14 +175,8 @@
           wsClient.on("outputUpdate", (message) => {
             if (message.sessionId === sessionId) {
               console.log("[Preview] Received output update:", message.outputs);
-              // Convert from GUID keys to name keys for UI
-              const outputsByName: Record<string, any> = {};
-              schema!.outputs.forEach((output) => {
-                if (message.outputs[output.id] !== undefined) {
-                  outputsByName[output.name] = message.outputs[output.id];
-                }
-              });
-              values = { ...values, ...outputsByName };
+              // C# sends GUID keys - use them directly
+              values = { ...values, ...message.outputs };
             }
           });
 

@@ -146,6 +146,9 @@ namespace ComputeBuilder.Components
                 // Load embedded schema to temp files on first enable
                 if (_embeddedSchema != null && !_previewOpen)
                 {
+                    // Validate schema against current document (remove missing parameters)
+                    _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
+
                     _persistenceManager.SaveSchema(_embeddedSchema);
                     _lastSchemaSync = DateTime.UtcNow;
                 }
@@ -189,7 +192,8 @@ namespace ComputeBuilder.Components
                     var updatedSchema = _persistenceManager.LoadSchema();
                     if (updatedSchema != null)
                     {
-                        _embeddedSchema = updatedSchema;
+                        // Validate loaded schema against current document
+                        _embeddedSchema = _schemaManager.ValidateSchema(updatedSchema, document);
                         _lastSchemaSync = DateTime.UtcNow;
                     }
                 }

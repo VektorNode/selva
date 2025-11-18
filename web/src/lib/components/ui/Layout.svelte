@@ -7,7 +7,7 @@
   interface Props {
     schema: UISchema;
     values: Record<string, any>;
-    onValueChange: (parameterName: string, value: any) => void;
+    onValueChange: (paramId: string, value: any) => void;
     debounceSliders?: boolean;
   }
 
@@ -52,12 +52,12 @@
               {input}
               {widgetType}
               {widgetConfig}
-              bind:value={values[input.name]}
+              bind:value={values[input.id]}
               onChange={onValueChange}
               debounceMs={debounceSliders && widgetType === "slider" ? 20 : 0}
             />
             <span class="text-sm text-gray-600 font-mono"
-              >{values[input.name]}</span
+              >{values[input.id]}</span
             >
           </div>
         {/each}
@@ -74,7 +74,7 @@
         {#each schema.outputs as output}
           {@const widgetType = inferWidgetType(output.paramType, 'output')}
           {@const widgetConfig = {}}
-          <OutputDisplay {output} {widgetType} {widgetConfig} value={values[output.name]} />
+          <OutputDisplay {output} {widgetType} {widgetConfig} value={values[output.id]} />
         {/each}
       </div>
     {/if}

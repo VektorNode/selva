@@ -174,7 +174,7 @@ export interface AvailableParameter {
 	nickname: string;
 	description: string;
 	category: 'input' | 'output';
-	paramType: "Number" | "Integer" | "Text" | "Boolean"; // Grasshopper parameter type (Number, Text, Boolean, Point, Geometry, etc.)
+	paramType: GrasshopperParamType;
 	default?: any;
 	minimum?: any;
 	maximum?: any;
