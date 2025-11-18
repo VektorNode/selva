@@ -2,10 +2,10 @@
 	import Button from './Button.svelte';
 	import Badge from './Badge.svelte';
 	import { dragStore } from '$lib/stores/dragStore.svelte';
-	import type { GroupItem, AvailableParameter } from '$lib/types/schema';
+	import type { LayoutItem, AvailableParameter } from '$lib/types/schema';
 
 	interface BuilderGroupItemProps {
-		item: GroupItem;
+		item: LayoutItem;
 		paramInfo?: AvailableParameter;
 		tabId: string;
 		groupId: string;

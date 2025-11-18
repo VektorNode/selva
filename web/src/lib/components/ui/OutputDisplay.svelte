@@ -1,22 +1,25 @@
 <script lang="ts">
-  import type { OutputParameter } from "$lib/types/schema";
+  import type { OutputParamSchema, WidgetConfig } from "$lib/types/schema";
 
   interface Props {
-    output: OutputParameter;
+    output: OutputParamSchema;
+    widgetType: string;
+    widgetConfig: WidgetConfig;
     value: any;
     displayName?: string;
   }
 
-  let { output, value, displayName }: Props = $props();
+  let { output, widgetType, widgetConfig, value, displayName }: Props =
+    $props();
 </script>
 
 <div class="flex flex-col gap-2">
-  <label class="flex items-center gap-2 font-medium text-gray-900 text-sm">
-    {displayName || output.name}
-  </label>
+  <h3 class="flex items-center gap-2 font-medium text-gray-900 text-sm">
+    {displayName || output.nickname || output.name}
+  </h3>
 
   <div
-    class="px-3 py-3 bg-gray-50 border border-gray-200 rounded font-mono min-h-[50px] text-sm whitespace-pre-wrap break-words"
+    class="px-3 py-3 bg-gray-50 border border-gray-200 rounded font-mono min-h-[50px] text-sm whitespace-pre-wrap wrap-break-word"
   >
     {#if value !== null && value !== undefined}
       {typeof value === "object" ? JSON.stringify(value, null, 2) : value}

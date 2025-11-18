@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Grasshopper.Kernel;
 using ComputeBuilder.Models;
+using Grasshopper.GUI;
+using Grasshopper.Kernel.Special;
 
 namespace ComputeBuilder.Utils
 {
@@ -60,7 +62,7 @@ namespace ComputeBuilder.Utils
                     Description = docObj.Description ?? "",
                     Category = "input",
                     ParamType = GetParameterTypeName(param),
-                    Default = ghParam?.VolatileData.AllData(true).FirstOrDefault()?.ScriptVariable(),
+                    Default = ghParam?.VolatileData.AllData(true).FirstOrDefault()?.ScriptVariable(), //TODO: properly handle tree inputs (not a priority for now)
                     AtLeast = param.AtLeast,
                     AtMost = param.AtMost
                 };
@@ -79,15 +81,13 @@ namespace ComputeBuilder.Utils
                     // Ignore reflection errors
                 }
 
-                // Extract min/max for sliders
-                if (ghParam != null)
+                //If source is a slider extract its properties
+                if (ghParam.SourceCount == 1 && ghParam.Sources[0] is GH_NumberSlider slider)
                 {
-                    var slider = ghParam as Grasshopper.Kernel.Special.GH_NumberSlider;
-                    if (slider != null)
-                    {
-                        availableParam.Minimum = (double)slider.Slider.Minimum;
-                        availableParam.Maximum = (double)slider.Slider.Maximum;
-                    }
+                    availableParam.Maximum = slider.Slider.Maximum;
+                    availableParam.Minimum = slider.Slider.Minimum;
+                    availableParam.StepSize = slider.Slider.DecimalPlaces;
+
                 }
 
                 availableParameters.Parameters.Add(availableParam);

@@ -38,7 +38,7 @@ namespace ComputeBuilder.Utils
             {
                 try
                 {
-                    var paramObject = document.FindObject(input.GrasshopperId, false);
+                    var paramObject = document.FindObject(input.Id, false);
                     if (paramObject == null)
                     {
                         addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
@@ -46,7 +46,7 @@ namespace ComputeBuilder.Utils
                         continue;
                     }
 
-                    var inputKey = input.GrasshopperId.ToString();
+                    var inputKey = input.Id.ToString();
                     if (!values.TryGetValue(inputKey, out var value))
                         continue;
 

@@ -27,17 +27,15 @@
   let runtimeMode = $state<RuntimeMode>("local");
   let solving = $state(false);
 
-  function getDefaultValue(type: string) {
-    switch (type) {
-      case "number":
-      case "slider":
+  function getDefaultValue(paramType: string) {
+    switch (paramType) {
+      case "Number":
+      case "Integer":
         return 0;
-      case "checkbox":
+      case "Boolean":
         return false;
-      case "text":
+      case "Text":
         return "";
-      case "color":
-        return "#000000";
       default:
         return null;
     }
@@ -58,7 +56,7 @@
       schema?.inputs.forEach((input) => {
         if (values[input.name] !== undefined) {
           // Map name → GUID
-          inputValuesByGuid[input.grasshopperId] = values[input.name];
+          inputValuesByGuid[input.id] = values[input.name];
         }
       });
 
@@ -136,7 +134,7 @@
 
       // Initialize values with defaults using NAME as key (for UI compatibility)
       schema.inputs.forEach((input) => {
-        values[input.name] = input.default ?? getDefaultValue(input.type);
+        values[input.name] = input.default ?? getDefaultValue(input.paramType);
       });
 
       // Outputs start with null - they'll be populated by live data from Grasshopper
@@ -152,6 +150,21 @@
           console.log("[Preview] WebSocket connected");
           wsConnected = true;
 
+          // Listen for current input values from Grasshopper
+          wsClient.on("currentValues", (message) => {
+            if (message.sessionId === sessionId) {
+              console.log("[Preview] Received current values:", message.values);
+              // Convert from GUID keys to name keys for UI
+              const valuesByName: Record<string, any> = {};
+              schema!.inputs.forEach((input) => {
+                if (message.values[input.id] !== undefined) {
+                  valuesByName[input.name] = message.values[input.id];
+                }
+              });
+              values = { ...values, ...valuesByName };
+            }
+          });
+
           // Listen for output updates from Grasshopper (C# sends GUID keys, convert to names)
           wsClient.on("outputs", (message) => {
             if (message.sessionId === sessionId) {
@@ -159,9 +172,8 @@
               // Convert from GUID keys to name keys for UI
               const outputsByName: Record<string, any> = {};
               schema!.outputs.forEach((output) => {
-                if (message.outputs[output.grasshopperId] !== undefined) {
-                  outputsByName[output.name] =
-                    message.outputs[output.grasshopperId];
+                if (message.outputs[output.id] !== undefined) {
+                  outputsByName[output.name] = message.outputs[output.id];
                 }
               });
               values = { ...values, ...outputsByName };
@@ -175,14 +187,17 @@
               // Convert from GUID keys to name keys for UI
               const outputsByName: Record<string, any> = {};
               schema!.outputs.forEach((output) => {
-                if (message.outputs[output.grasshopperId] !== undefined) {
-                  outputsByName[output.name] =
-                    message.outputs[output.grasshopperId];
+                if (message.outputs[output.id] !== undefined) {
+                  outputsByName[output.name] = message.outputs[output.id];
                 }
               });
               values = { ...values, ...outputsByName };
             }
           });
+
+          // Request current values from Grasshopper on initial connection
+          console.log("[Preview] Requesting current values from Grasshopper");
+          wsClient.requestCurrentValues(sessionId);
         } else {
           error =
             "Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled and port 8765 is available.";

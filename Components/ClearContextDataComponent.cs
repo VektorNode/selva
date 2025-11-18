@@ -72,7 +72,7 @@ namespace ComputeBuilder.Components
 
             foreach (var input in schema.Inputs)
             {
-                var paramObject = document.FindObject(input.GrasshopperId, false);
+                var paramObject = document.FindObject(input.Id, false);
                 if (paramObject == null)
                 {
                     AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,

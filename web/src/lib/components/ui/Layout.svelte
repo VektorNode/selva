@@ -17,6 +17,20 @@
     onValueChange,
     debounceSliders = false,
   }: Props = $props();
+
+  // Helper to infer widget type from parameter type
+  function inferWidgetType(paramType: string, category: 'input' | 'output'): string {
+    if (category === 'input') {
+      if (paramType === 'Number' || paramType === 'Integer') return 'slider';
+      if (paramType === 'Boolean') return 'checkbox';
+      if (paramType === 'Text') return 'text';
+      return 'text';
+    } else {
+      if (paramType === 'Number' || paramType === 'Integer') return 'number';
+      if (paramType === 'Text') return 'text';
+      return 'text';
+    }
+  }
 </script>
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -27,12 +41,20 @@
     {:else}
       <div class="grid gap-6">
         {#each schema.inputs as input}
+          {@const widgetType = inferWidgetType(input.paramType, 'input')}
+          {@const widgetConfig = {
+            min: input.minimum as number,
+            max: input.maximum as number,
+            step: input.stepSize || 1,
+          }}
           <div class="grid gap-2">
             <InputControl
               {input}
+              {widgetType}
+              {widgetConfig}
               bind:value={values[input.name]}
               onChange={onValueChange}
-              debounceMs={debounceSliders && input.type === "slider" ? 20 : 0}
+              debounceMs={debounceSliders && widgetType === "slider" ? 20 : 0}
             />
             <span class="text-sm text-gray-600 font-mono"
               >{values[input.name]}</span
@@ -50,7 +72,9 @@
     {:else}
       <div class="grid gap-6">
         {#each schema.outputs as output}
-          <OutputDisplay {output} value={values[output.name]} />
+          {@const widgetType = inferWidgetType(output.paramType, 'output')}
+          {@const widgetConfig = {}}
+          <OutputDisplay {output} {widgetType} {widgetConfig} value={values[output.name]} />
         {/each}
       </div>
     {/if}

@@ -103,6 +103,14 @@ export class WebSocketClient {
 	}
 
 	/**
+	 * Request current values from Grasshopper
+	 */
+	requestCurrentValues(sessionId: string) {
+		console.log('[WebSocket] Requesting current values from Grasshopper');
+		this.send('requestCurrentValues', { sessionId });
+	}
+
+	/**
 	 * Register a handler for a specific message type
 	 */
 	on(messageType: string, handler: MessageHandler) {

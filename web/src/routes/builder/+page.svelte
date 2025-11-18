@@ -17,11 +17,12 @@
   import type {
     UISchema,
     AvailableParameter,
-    InputParameter,
-    OutputParameter,
+    InputParamSchema,
+    OutputParamSchema,
     TabConfig,
     GroupConfig,
-    GroupItem,
+    LayoutItem,
+    WidgetConfig,
   } from "$lib/types/schema";
 
   // Reactive state using Svelte 5 runes
@@ -33,11 +34,9 @@
   let activeTabId = $state<string | null>(null);
 
   // Derived state - computed values that update automatically
-  const usedInputIds = $derived(
-    new Set(schema?.inputs.map((i) => i.grasshopperId) || [])
-  );
+  const usedInputIds = $derived(new Set(schema?.inputs.map((i) => i.id) || []));
   const usedOutputIds = $derived(
-    new Set(schema?.outputs.map((o) => o.grasshopperId) || [])
+    new Set(schema?.outputs.map((o) => o.id) || [])
   );
 
   const availableInputs = $derived(
@@ -73,6 +72,8 @@
 
       availableParams = availableData?.parameters || [];
 
+      console.log("Available Parameters:", $state.snapshot(availableParams));
+
       if (!schemaData) {
         schema = {
           id: crypto.randomUUID(),
@@ -84,7 +85,6 @@
           outputs: [],
           layout: {
             type: "tabbed",
-            columns: 2,
             gap: 16,
             tabs: [],
             items: [],
@@ -97,7 +97,6 @@
         if (!schema.layout) {
           schema.layout = {
             type: "tabbed",
-            columns: 2,
             gap: 16,
             tabs: [],
             items: [],
@@ -107,8 +106,6 @@
         if (!schema.layout.tabs) {
           schema.layout.tabs = [];
         }
-
-        var expiredParams = getExpiredParams();
       }
 
       if (availableParams.length === 0) {
@@ -125,30 +122,6 @@
     })();
   });
 
-  function getExpiredParams() {
-    if (!schema) return [];
-
-    const expiredParams: string[] = [];
-
-    schema.inputs.forEach((input) => {
-      const exists = availableParams.find((p) => p.id === input.grasshopperId);
-      if (!exists) {
-        input.isExpired = true;
-        expiredParams.push(input.grasshopperId);
-      }
-    });
-
-    schema.outputs.forEach((output) => {
-      const exists = availableParams.find((p) => p.id === output.grasshopperId);
-      if (!exists) {
-        output.isExpired = true;
-        expiredParams.push(output.grasshopperId);
-      }
-    });
-
-    return expiredParams;
-  }
-
   async function saveSchema() {
     if (!schema || !sessionId) return;
 
@@ -161,7 +134,7 @@
   }
 
   function addTab() {
-    if (!schema) return;
+    if (!schema || !schema.layout.tabs) return;
 
     const newTab: TabConfig = {
       id: crypto.randomUUID().substring(0, 8),
@@ -176,7 +149,7 @@
   }
 
   function removeTab(tabId: string) {
-    if (!schema) return;
+    if (!schema || !schema.layout.tabs) return;
 
     // Find the tab being removed
     const tab = schema.layout.tabs.find((t) => t.id === tabId);
@@ -185,11 +158,11 @@
     // For each group in the tab, check if parameters are used elsewhere
     tab.groups.forEach((group) => {
       group.items.forEach((item) => {
-        const isUsedElsewhere = schema!.layout.tabs.some(
+        const isUsedElsewhere = schema!.layout.tabs?.some(
           (t) =>
             t.id !== tabId &&
             t.groups.some((g) =>
-              g.items.some((i) => i.parameterId === item.parameterId)
+              g.items.some((i) => i.paramId === item.paramId)
             )
         );
 
@@ -197,11 +170,11 @@
         if (!isUsedElsewhere) {
           if (item.type === "input") {
             schema!.inputs = schema!.inputs.filter(
-              (i) => i.grasshopperId !== item.parameterId
+              (i) => i.id !== item.paramId
             );
           } else if (item.type === "output") {
             schema!.outputs = schema!.outputs.filter(
-              (o) => o.grasshopperId !== item.parameterId
+              (o) => o.id !== item.paramId
             );
           }
         }
@@ -218,7 +191,7 @@
   }
 
   function addGroup(tabId: string) {
-    if (!schema) return;
+    if (!schema || !schema.layout.tabs) return;
 
     const tab = schema.layout.tabs.find((t) => t.id === tabId);
     if (!tab) return;
@@ -238,7 +211,7 @@
   }
 
   function removeGroup(tabId: string, groupId: string) {
-    if (!schema) return;
+    if (!schema || !schema.layout.tabs) return;
 
     const tab = schema.layout.tabs.find((t) => t.id === tabId);
     if (!tab) return;
@@ -249,23 +222,20 @@
 
     // For each item in the group, check if it's used elsewhere
     group.items.forEach((item) => {
-      const isUsedElsewhere = schema!.layout.tabs.some((t) =>
+      const isUsedElsewhere = schema!.layout.tabs?.some((t) =>
         t.groups.some(
           (g) =>
-            g.id !== groupId &&
-            g.items.some((i) => i.parameterId === item.parameterId)
+            g.id !== groupId && g.items.some((i) => i.paramId === item.paramId)
         )
       );
 
       // If not used anywhere else, remove from inputs/outputs
       if (!isUsedElsewhere) {
         if (item.type === "input") {
-          schema!.inputs = schema!.inputs.filter(
-            (i) => i.grasshopperId !== item.parameterId
-          );
+          schema!.inputs = schema!.inputs.filter((i) => i.id !== item.paramId);
         } else if (item.type === "output") {
           schema!.outputs = schema!.outputs.filter(
-            (o) => o.grasshopperId !== item.parameterId
+            (o) => o.id !== item.paramId
           );
         }
       }
@@ -297,7 +267,7 @@
     groupId: string,
     event: CustomEvent
   ) {
-    if (!schema) return;
+    if (!schema || !schema.layout.tabs) return;
 
     const { type, data, sourceType, targetItem, dropPosition } = event.detail;
     if (type !== "parameter") return;
@@ -310,7 +280,7 @@
     if (!group) return;
 
     // Check if parameter already exists in this group
-    const exists = group.items.some((i) => i.parameterId === param.id);
+    const exists = group.items.some((i) => i.paramId === param.id);
     if (exists) {
       alert("This parameter is already in this group");
       return;
@@ -318,60 +288,60 @@
 
     // Add to schema.inputs or schema.outputs if not already there
     if (sourceType === "input") {
-      const inputExists = schema.inputs.some(
-        (i) => i.grasshopperId === param.id
-      );
+      const inputExists = schema.inputs.some((i) => i.id === param.id);
       if (!inputExists) {
-        const newInput: InputParameter = {
-          grasshopperId: param.id,
-          name: param.nickname || param.name,
+        const newInput: InputParamSchema = {
+          id: param.id,
+          name: param.name,
           nickname: param.nickname,
-          type: mapParamTypeToUIType(param.paramType, "input") as any,
-          grasshopperParamName: param.nickname,
           paramType: param.paramType,
           description: param.description,
-          atLeast: param.atLeast,
-          atMost: param.atMost,
-          treeAccess: param.treeAccess,
+          atLeast: param.atLeast ?? 1,
+          atMost: param.atMost ?? 2147483647,
+          treeAccess: param.treeAccess ?? false,
           minimum: param.minimum,
           maximum: param.maximum,
-          config: {
-            min: param.minimum as number,
-            max: param.maximum as number,
-            step: 1,
-          },
+          stepSize: param.stepSize,
           default: param.default,
         };
         schema.inputs = [...schema.inputs, newInput];
       }
     } else if (sourceType === "output") {
-      const outputExists = schema.outputs.some(
-        (o) => o.grasshopperId === param.id
-      );
+      const outputExists = schema.outputs.some((o) => o.id === param.id);
       if (!outputExists) {
-        const newOutput: OutputParameter = {
-          grasshopperId: param.id,
-          name: param.nickname || param.name,
+        const newOutput: OutputParamSchema = {
+          id: param.id,
+          name: param.name,
           nickname: param.nickname,
-          type: mapParamTypeToUIType(param.paramType, "output") as any,
-          grasshopperParamName: param.nickname,
           paramType: param.paramType,
           description: param.description,
-          config: {},
-          // Outputs don't store default values - they show live data
         };
         schema.outputs = [...schema.outputs, newOutput];
       }
     }
 
-    // Create new item
-    const newItem: GroupItem = {
+    // Determine widget type and config based on parameter type
+    const widgetType = mapParamTypeToUIType(param.paramType, sourceType);
+    const widgetConfig: WidgetConfig = {};
+
+    if (sourceType === "input") {
+      if (widgetType === "slider" || widgetType === "number") {
+        widgetConfig.min = param.minimum as number;
+        widgetConfig.max = param.maximum as number;
+        widgetConfig.step = param.stepSize || 1;
+      }
+    }
+
+    // Create new layout item
+    const newItem: LayoutItem = {
       id: crypto.randomUUID().substring(0, 8),
-      parameterId: param.id,
+      paramId: param.id,
       type: sourceType as "input" | "output",
       displayName: param.nickname || param.name,
+      widgetType: widgetType,
       order: group.items.length,
       span: 1,
+      config: widgetConfig,
     };
 
     // Insert at specific position if dropping on an item
@@ -397,7 +367,7 @@
   }
 
   function removeItem(tabId: string, groupId: string, itemId: string) {
-    if (!schema) return;
+    if (!schema || !schema.layout.tabs) return;
 
     const tab = schema.layout.tabs.find((t) => t.id === tabId);
     if (!tab) return;
@@ -415,28 +385,22 @@
     // Check if this parameter is used anywhere else in the layout
     if (item) {
       const isUsedElsewhere = schema.layout.tabs.some((t) =>
-        t.groups.some((g) =>
-          g.items.some((i) => i.parameterId === item.parameterId)
-        )
+        t.groups.some((g) => g.items.some((i) => i.paramId === item.paramId))
       );
 
       // If not used anywhere, remove from inputs/outputs
       if (!isUsedElsewhere) {
         if (item.type === "input") {
-          schema.inputs = schema.inputs.filter(
-            (i) => i.grasshopperId !== item.parameterId
-          );
+          schema.inputs = schema.inputs.filter((i) => i.id !== item.paramId);
         } else if (item.type === "output") {
-          schema.outputs = schema.outputs.filter(
-            (o) => o.grasshopperId !== item.parameterId
-          );
+          schema.outputs = schema.outputs.filter((o) => o.id !== item.paramId);
         }
       }
     }
   }
 
   function handleReorder(event: CustomEvent) {
-    if (!schema) return;
+    if (!schema || !schema.layout.tabs) return;
 
     const {
       sourceItem,
@@ -493,8 +457,8 @@
     schema.layout.tabs = [...schema.layout.tabs];
   }
 
-  function getParameterInfo(parameterId: string) {
-    return availableParams.find((p) => p.id === parameterId);
+  function getParameterInfo(paramId: string) {
+    return availableParams.find((p) => p.id === paramId);
   }
 </script>
 
@@ -525,53 +489,53 @@
           <aside class="flex flex-col gap-6">
             <SchemaInfoPanel {schema} />
 
-              <Panel title="Available Parameters">
-                <p class="text-gray-600 text-sm mb-4">
-                  Drag parameters into groups below
-                </p>
+            <Panel title="Available Parameters">
+              <p class="text-gray-600 text-sm mb-4">
+                Drag parameters into groups below
+              </p>
 
-                <ParameterList
-                  title="Inputs"
-                  icon="📥"
-                  parameters={availableInputs}
-                  category="input"
-                  emptyMessage="No contextual parameters found."
-                />
+              <ParameterList
+                title="Inputs"
+                icon="📥"
+                parameters={availableInputs}
+                category="input"
+                emptyMessage="No contextual parameters found."
+              />
 
-                <ParameterList
-                  title="Outputs"
-                  icon="📤"
-                  parameters={availableOutputs}
-                  category="output"
-                  emptyMessage="No context output components found."
-                />
-              </Panel>
-            </aside>
+              <ParameterList
+                title="Outputs"
+                icon="📤"
+                parameters={availableOutputs}
+                category="output"
+                emptyMessage="No context output components found."
+              />
+            </Panel>
+          </aside>
 
           <!-- Main Area: Tab & Group Builder -->
           <main class="flex flex-col gap-6">
-              <Panel>
-                {#snippet headerActions()}
-                  <Button variant="primary" onclick={addTab}>+ Add Tab</Button>
-                {/snippet}
+            <Panel>
+              {#snippet headerActions()}
+                <Button variant="primary" onclick={addTab}>+ Add Tab</Button>
+              {/snippet}
 
-                <div class="min-h-[200px]">
-                  {#if schema.layout.tabs.length === 0}
-                    <StateDisplay
-                      type="empty"
-                      size="large"
-                      icon="📑"
-                      title="No tabs yet"
-                      message="Click 'Add Tab' to create your first tab"
-                    />
-                  {:else}
-                    <!-- Tab Navigation -->
-                    <EditableTabNav
-                      tabs={schema.layout.tabs}
-                      {activeTabId}
-                      onTabChange={(tabId) => (activeTabId = tabId)}
-                      onRemoveTab={removeTab}
-                    />
+              <div class="min-h-[200px]">
+                {#if !schema.layout.tabs || schema.layout.tabs.length === 0}
+                  <StateDisplay
+                    type="empty"
+                    size="large"
+                    icon="📑"
+                    title="No tabs yet"
+                    message="Click 'Add Tab' to create your first tab"
+                  />
+                {:else}
+                  <!-- Tab Navigation -->
+                  <EditableTabNav
+                    tabs={schema.layout.tabs}
+                    {activeTabId}
+                    onTabChange={(tabId) => (activeTabId = tabId)}
+                    onRemoveTab={removeTab}
+                  />
 
                   <!-- Active Tab Content -->
                   {#if activeTab}
@@ -605,7 +569,7 @@
                             >
                               {#each group.items as item (item.id)}
                                 {@const paramInfo = getParameterInfo(
-                                  item.parameterId
+                                  item.paramId
                                 )}
                                 <BuilderGroupItem
                                   {item}

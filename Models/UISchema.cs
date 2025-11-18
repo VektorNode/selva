@@ -25,25 +25,35 @@ namespace ComputeBuilder.Models
         public DateTime Created { get; set; } = DateTime.UtcNow;
 
         [JsonProperty("inputs")]
-        public List<InputParameter> Inputs { get; set; } = new List<InputParameter>();
+        public List<InputParamSchema> Inputs { get; set; } = new List<InputParamSchema>();
 
         [JsonProperty("outputs")]
-        public List<OutputParameter> Outputs { get; set; } = new List<OutputParameter>();
+        public List<OutputParamSchema> Outputs { get; set; } = new List<OutputParamSchema>();
 
         [JsonProperty("layout")]
         public LayoutConfig Layout { get; set; } = new LayoutConfig();
-        
+
+        /// <summary>
+        /// Indicates whether the 3D viewer sould be generated for the compute UI
+        /// </summary>
         [JsonProperty("enable3dViewer")]
         public bool Enable3dViewer { get; set; } = false;
     }
 
+    // ============================================================================
+    // CORE PARAMETER SCHEMAS (Compute-compatible)
+    // ============================================================================
+
     /// <summary>
-    /// Represents an input parameter in the UI
+    /// Base parameter schema - tracked by Grasshopper instance GUID
     /// </summary>
-    public class InputParameter
+    public class IoParamSchema
     {
-        [JsonProperty("grasshopperId")]
-        public Guid GrasshopperId { get; set; } // The component instance GUID in Grasshopper
+        /// <summary>
+        /// Grasshopper component instance GUID - stable reference across document saves
+        /// </summary>
+        [JsonProperty("id")]
+        public Guid Id { get; set; }
 
         [JsonProperty("name")]
         public string Name { get; set; }
@@ -51,21 +61,17 @@ namespace ComputeBuilder.Models
         [JsonProperty("nickname")]
         public string Nickname { get; set; }
 
-        [JsonProperty("type")]
-        public string Type { get; set; } // "number", "slider", "dropdown", "text", "checkbox", "color"
+        [JsonProperty("paramType")]
+        public string ParamType { get; set; } // "Number", "Point", "Geometry", etc.
+    }
 
-        [JsonProperty("default")]
-        public object Default { get; set; }
-
-        [JsonProperty("grasshopperParamName")]
-        public string GrasshopperParamName { get; set; }
-
-        // Compute-style metadata
+    /// <summary>
+    /// Input parameter schema - matches Rhino Compute input format
+    /// </summary>
+    public class InputParamSchema : IoParamSchema
+    {
         [JsonProperty("description")]
         public string Description { get; set; }
-
-        [JsonProperty("paramType")]
-        public string ParamType { get; set; } // The Grasshopper parameter type (Number, Text, Boolean, Point, Geometry, etc.)
 
         [JsonProperty("atLeast")]
         public int AtLeast { get; set; } = 1;
@@ -76,34 +82,82 @@ namespace ComputeBuilder.Models
         [JsonProperty("treeAccess")]
         public bool TreeAccess { get; set; } = false;
 
+        [JsonProperty("default")]
+        public object Default { get; set; } = null;
+
         [JsonProperty("minimum")]
-        public object Minimum { get; set; }
+        public object Minimum { get; set; } = null;
 
         [JsonProperty("maximum")]
-        public object Maximum { get; set; }
+        public object Maximum { get; set; } = null;
 
-        // UI Builder metadata
-        [JsonProperty("groupName")]
-        public string GroupName { get; set; } // Group this parameter belongs to (e.g., "Geometry", "Settings")
-
-        [JsonProperty("displayName")]
-        public string DisplayName { get; set; } // Alternative display name for the UI
-
-        [JsonProperty("order")]
-        public int Order { get; set; } // Display order within the group
-
-        [JsonProperty("tooltip")]
-        public string Tooltip { get; set; } // Additional help text
-
-        [JsonProperty("config")]
-        public InputConfig Config { get; set; } = new InputConfig();
+        [JsonProperty("stepSize")]
+        public double? StepSize { get; set; } = null;
     }
 
     /// <summary>
-    /// Configuration for input parameters
+    /// Output parameter schema
     /// </summary>
-    public class InputConfig
+    public class OutputParamSchema : IoParamSchema
     {
+        [JsonProperty("description")]
+        public string Description { get; set; }
+    }
+
+    // ============================================================================
+    // UI LAYOUT SCHEMA (ComputeBuilder-specific)
+    // ============================================================================
+
+    /// <summary>
+    /// Layout item referencing a parameter with UI-specific configuration
+    /// </summary>
+    public class LayoutItem
+    {
+        /// <summary>
+        /// Unique layout item ID (generated for each layout placement)
+        /// </summary>
+        [JsonProperty("id")]
+        public string Id { get; set; }
+
+        /// <summary>
+        /// References the Grasshopper component InstanceGuid (from InputParamSchema.Id or OutputParamSchema.Id)
+        /// </summary>
+        [JsonProperty("paramId")]
+        public Guid ParamId { get; set; }
+
+        [JsonProperty("type")]
+        public string Type { get; set; } // "input" or "output"
+
+        /// <summary>
+        /// Override display name (optional - if null, uses parameter's nickname or name)
+        /// </summary>
+        [JsonProperty("displayName")]
+        public string DisplayName { get; set; }
+
+        /// <summary>
+        /// Widget type for rendering this parameter
+        /// Inputs: "slider", "number", "text", "dropdown", "checkbox", "color"
+        /// Outputs: "text", "number", "3d-viewer", "chart"
+        /// </summary>
+        [JsonProperty("widgetType")]
+        public string WidgetType { get; set; }
+
+        [JsonProperty("order")]
+        public int Order { get; set; } = 0;
+
+        [JsonProperty("span")]
+        public int Span { get; set; } = 1;
+
+        [JsonProperty("config")]
+        public WidgetConfig Config { get; set; } = new WidgetConfig();
+    }
+
+    /// <summary>
+    /// Widget-specific configuration (consolidated from InputConfig/OutputConfig)
+    /// </summary>
+    public class WidgetConfig
+    {
+        // Number/slider widgets
         [JsonProperty("min")]
         public double? Min { get; set; }
 
@@ -113,91 +167,48 @@ namespace ComputeBuilder.Models
         [JsonProperty("step")]
         public double? Step { get; set; }
 
+        // Dropdown widgets
         [JsonProperty("options")]
-        public List<string> Options { get; set; } // For dropdowns
+        public List<string> Options { get; set; }
 
+        // Text input widgets
         [JsonProperty("placeholder")]
         public string Placeholder { get; set; }
 
         [JsonProperty("required")]
         public bool Required { get; set; }
-    }
 
-    /// <summary>
-    /// Represents an output parameter in the UI
-    /// </summary>
-    public class OutputParameter
-    {
-        [JsonProperty("grasshopperId")]
-        public Guid GrasshopperId { get; set; }
-
-        [JsonProperty("name")]
-        public string Name { get; set; }
-
-        [JsonProperty("nickname")]
-        public string Nickname { get; set; }
-
-        [JsonProperty("type")]
-        public string Type { get; set; } // "text", "number", "3d-viewer", "chart"
-
-        [JsonProperty("grasshopperParamName")]
-        public string GrasshopperParamName { get; set; }
-
-        // Compute-style metadata
-        [JsonProperty("paramType")]
-        public string ParamType { get; set; } // The Grasshopper parameter type
-
-        // UI Builder metadata
-        [JsonProperty("groupName")]
-        public string GroupName { get; set; } // Group this output belongs to
-
-        [JsonProperty("displayName")]
-        public string DisplayName { get; set; } // Alternative display name for the UI
-
-        [JsonProperty("order")]
-        public int Order { get; set; } // Display order within the group
-
-        [JsonProperty("description")]
-        public string Description { get; set; }
-
-        [JsonProperty("config")]
-        public OutputConfig Config { get; set; } = new OutputConfig();
-    }
-
-    /// <summary>
-    /// Configuration for output parameters
-    /// </summary>
-    public class OutputConfig
-    {
+        // Output display widgets
         [JsonProperty("format")]
-        public string Format { get; set; } // For number formatting
+        public string Format { get; set; }
 
         [JsonProperty("unit")]
         public string Unit { get; set; }
-
-        [JsonProperty("chartType")]
-        public string ChartType { get; set; } // "line", "bar", "pie"
     }
 
     /// <summary>
-    /// Layout configuration for the UI with tabs and groups
+    /// Layout configuration for the UI
     /// </summary>
     public class LayoutConfig
     {
+        /// <summary>
+        /// Layout type:
+        /// - "tabbed": Multi-tab interface with groups
+        /// - "flat": Simple single-column list of all parameters
+        /// </summary>
         [JsonProperty("type")]
-        public string Type { get; set; } = "tabbed"; // "grid", "flex", "tabbed"
-
-        [JsonProperty("columns")]
-        public int Columns { get; set; } = 12;
+        public string Type { get; set; } = "tabbed";
 
         [JsonProperty("gap")]
         public int Gap { get; set; } = 16;
 
+        // For "tabbed" layout
         [JsonProperty("tabs")]
         public List<TabConfig> Tabs { get; set; } = new List<TabConfig>();
 
+        // For "flat" layout
         [JsonProperty("items")]
-        public List<LayoutItem> Items { get; set; } = new List<LayoutItem>(); // Legacy grid layout
+        public List<LayoutItem> Items { get; set; } = new List<LayoutItem>();
     }
 
     /// <summary>
@@ -212,7 +223,7 @@ namespace ComputeBuilder.Models
         public string Label { get; set; }
 
         [JsonProperty("icon")]
-        public string Icon { get; set; } // Optional icon/emoji
+        public string Icon { get; set; }
 
         [JsonProperty("order")]
         public int Order { get; set; } = 0;
@@ -245,52 +256,7 @@ namespace ComputeBuilder.Models
         public int Columns { get; set; } = 1; // Layout columns within group
 
         [JsonProperty("items")]
-        public List<GroupItem> Items { get; set; } = new List<GroupItem>();
-    }
-
-    /// <summary>
-    /// Item within a group (input or output parameter)
-    /// </summary>
-    public class GroupItem
-    {
-        [JsonProperty("id")]
-        public string Id { get; set; } // Unique item ID
-
-        [JsonProperty("parameterId")]
-        public string ParameterId { get; set; } // References input/output ID
-
-        [JsonProperty("type")]
-        public string Type { get; set; } // "input" or "output"
-
-        [JsonProperty("displayName")]
-        public string DisplayName { get; set; } // Override display name
-
-        [JsonProperty("order")]
-        public int Order { get; set; } = 0;
-
-        [JsonProperty("span")]
-        public int Span { get; set; } = 1; // Column span within group
-    }
-
-    /// <summary>
-    /// Individual layout item positioning (legacy grid layout)
-    /// </summary>
-    public class LayoutItem
-    {
-        [JsonProperty("id")]
-        public string Id { get; set; } // References input/output ID
-
-        [JsonProperty("row")]
-        public int Row { get; set; }
-
-        [JsonProperty("column")]
-        public int Column { get; set; }
-
-        [JsonProperty("width")]
-        public int Width { get; set; } = 1;
-
-        [JsonProperty("height")]
-        public int Height { get; set; } = 1;
+        public List<LayoutItem> Items { get; set; } = new List<LayoutItem>();
     }
 
     /// <summary>
@@ -320,7 +286,7 @@ namespace ComputeBuilder.Models
         public DateTime LastUpdate { get; set; } = DateTime.UtcNow;
 
         [JsonProperty("mode")]
-        public string Mode { get; set; } // "builder" or "preview"
+        public string Mode { get; set; }
     }
 
     /// <summary>
@@ -341,10 +307,10 @@ namespace ComputeBuilder.Models
         public string Description { get; set; }
 
         [JsonProperty("category")]
-        public string Category { get; set; } // "input" or "output"
+        public string Category { get; set; }
 
         [JsonProperty("paramType")]
-        public string ParamType { get; set; } // Grasshopper parameter type (Number, Text, Boolean, Point, Geometry, etc.)
+        public string ParamType { get; set; }
 
         [JsonProperty("default")]
         public object Default { get; set; }
@@ -363,6 +329,9 @@ namespace ComputeBuilder.Models
 
         [JsonProperty("treeAccess")]
         public bool TreeAccess { get; set; } = false;
+        
+        [JsonProperty("stepSize")]
+        public double? StepSize { get; set; } = null;
     }
 
     /// <summary>
@@ -379,8 +348,6 @@ namespace ComputeBuilder.Models
         [JsonProperty("parameters")]
         public List<AvailableParameter> Parameters { get; set; } = new List<AvailableParameter>();
     }
-
-    
 }
 
 

@@ -1,8 +1,8 @@
 <script lang="ts">
   import type {
     UISchema,
-    InputParameter,
-    OutputParameter,
+    InputParamSchema,
+    OutputParamSchema,
   } from "$lib/types/schema";
   import InputControl from "./InputControl.svelte";
   import OutputDisplay from "./OutputDisplay.svelte";
@@ -35,14 +35,13 @@
     schema.layout.tabs?.find((t) => t.id === activeTabId)
   );
 
-  // Lookup by parameterId (which could be grasshopperId or name)
-  // We'll match against both grasshopperId and name for backward compatibility
-  function getInputById(id: string): InputParameter | undefined {
-    return schema.inputs.find((i) => i.grasshopperId === id || i.name === id);
+  // Lookup by paramId (GUID from LayoutItem)
+  function getInputById(paramId: string): InputParamSchema | undefined {
+    return schema.inputs.find((i) => i.id === paramId);
   }
 
-  function getOutputById(id: string): OutputParameter | undefined {
-    return schema.outputs.find((o) => o.grasshopperId === id || o.name === id);
+  function getOutputById(paramId: string): OutputParamSchema | undefined {
+    return schema.outputs.find((o) => o.id === paramId);
   }
 </script>
 
@@ -90,23 +89,27 @@
               >
                 {#each group.items as item}
                   {#if item.type === "input"}
-                    {@const input = getInputById(item.parameterId)}
+                    {@const input = getInputById(item.paramId)}
                     {#if input}
                       <InputControl
                         {input}
+                        widgetType={item.widgetType}
+                        widgetConfig={item.config}
                         bind:value={values[input.name]}
                         displayName={item.displayName}
                         onChange={onValueChange}
-                        debounceMs={debounceSliders && input.type === "slider"
+                        debounceMs={debounceSliders && item.widgetType === "slider"
                           ? 20
                           : 0}
                       />
                     {/if}
                   {:else if item.type === "output"}
-                    {@const output = getOutputById(item.parameterId)}
+                    {@const output = getOutputById(item.paramId)}
                     {#if output}
                       <OutputDisplay
                         {output}
+                        widgetType={item.widgetType}
+                        widgetConfig={item.config}
                         value={values[output.name]}
                         displayName={item.displayName}
                       />

@@ -18,6 +18,7 @@ namespace ComputeBuilder.Utils
 
         public event EventHandler<Dictionary<string, object>> OnValuesReceived;
         public event EventHandler<string> OnClientConnected;
+        public event EventHandler OnCurrentValuesRequested;
 
         public bool IsRunning => _webSocketServer?.IsRunning ?? false;
 
@@ -52,6 +53,14 @@ namespace ComputeBuilder.Utils
                             if (valueMsg != null && valueMsg.SessionId == _sessionId)
                             {
                                 OnValuesReceived?.Invoke(this, valueMsg.Values);
+                            }
+                        }
+                        else if (msg.Type == "requestCurrentValues")
+                        {
+                            if (msg.SessionId == _sessionId)
+                            {
+                                logMessage?.Invoke("Web UI requested current values");
+                                OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty);
                             }
                         }
                     }
@@ -113,6 +122,23 @@ namespace ComputeBuilder.Utils
                     type = "outputs",
                     sessionId = _sessionId,
                     outputs = outputs
+                };
+                await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+            }
+        }
+
+        /// <summary>
+        /// Broadcast current input values to all connected clients
+        /// </summary>
+        public async Task BroadcastCurrentValues(Dictionary<string, object> values)
+        {
+            if (_webSocketServer != null && _webSocketServer.IsRunning)
+            {
+                var message = new
+                {
+                    type = "currentValues",
+                    sessionId = _sessionId,
+                    values = values
                 };
                 await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
             }

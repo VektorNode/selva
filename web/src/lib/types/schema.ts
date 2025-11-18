@@ -6,82 +6,107 @@ export interface UISchema {
 	description: string;
 	version: string;
 	created: string;
-	inputs: InputParameter[];
-	outputs: OutputParameter[];
+	inputs: InputParamSchema[];
+	outputs: OutputParamSchema[];
 	layout: LayoutConfig;
 	enable3dViewer: boolean;
 }
 
-export interface InputParameter {
-	grasshopperId: string;
-	name: string;
-	nickname?: string;
-	type: 'number' | 'slider' | 'dropdown' | 'text' | 'checkbox' | 'color';
-	default?: any;
-	grasshopperParamName: string;
+// ============================================================================
+// CORE PARAMETER SCHEMAS (Compute-compatible)
+// ============================================================================
 
-	// Compute-style metadata
+/**
+ * Base parameter schema - tracked by Grasshopper instance GUID
+ */
+export interface IoParamSchema {
+	/** Grasshopper component instance GUID - stable reference across document saves */
+	id: string;
+	name: string;
+	nickname: string;
+	/** Grasshopper parameter type (Number, Text, Boolean, Point, Geometry, etc.) */
+	paramType: "Number" | "Integer" | "Text" | "Boolean"
+}
+
+/**
+ * Input parameter schema - matches Rhino Compute input format
+ */
+export interface InputParamSchema extends IoParamSchema {
 	description?: string;
-	paramType?: string; // Grasshopper parameter type (Number, Text, Boolean, Point, Geometry, etc.)
 	atLeast?: number;
 	atMost?: number;
 	treeAccess?: boolean;
+	default?: any;
 	minimum?: any;
 	maximum?: any;
-
-	// UI Builder metadata
-	groupName?: string; // Group this parameter belongs to
-	displayName?: string; // Alternative display name for the UI
-	order?: number; // Display order within the group
-	tooltip?: string; // Additional help text
-
-	config: InputConfig;
-	isExpired?: boolean;
+	stepSize?: number;
 }
 
-export interface InputConfig {
+/**
+ * Output parameter schema
+ */
+export interface OutputParamSchema extends IoParamSchema {
+	description?: string;
+}
+
+// ============================================================================
+// UI LAYOUT SCHEMA (ComputeBuilder-specific)
+// ============================================================================
+
+/**
+ * Layout item referencing a parameter with UI-specific configuration
+ */
+export interface LayoutItem {
+	/** Unique layout item ID (generated for each layout placement) */
+	id: string;
+	/** References the Grasshopper component InstanceGuid (from InputParamSchema.id or OutputParamSchema.id) */
+	paramId: string;
+	type: 'input' | 'output';
+	/** Override display name (optional - if null, uses parameter's nickname or name) */
+	displayName?: string;
+	/** Widget type for rendering this parameter
+	 * Inputs: "slider", "number", "text", "dropdown", "checkbox", "color"
+	 * Outputs: "text", "number", "3d-viewer", "chart"
+	 */
+	widgetType: string;
+	order?: number;
+	span?: number;
+	config: WidgetConfig;
+}
+
+/**
+ * Widget-specific configuration (consolidated from InputConfig/OutputConfig)
+ */
+export interface WidgetConfig {
+	// Number/slider widgets
 	min?: number;
 	max?: number;
 	step?: number;
+	// Dropdown widgets
 	options?: string[];
+	// Text input widgets
 	placeholder?: string;
 	required?: boolean;
-}
-
-export interface OutputParameter {
-	grasshopperId: string;
-	name: string;
-	nickname?: string;
-	type: 'text' | 'number' | '3d-viewer' | 'chart';
-	grasshopperParamName: string;
-
-	// Compute-style metadata
-	paramType?: string; // Grasshopper parameter type
-
-	// UI Builder metadata
-	groupName?: string; // Group this output belongs to
-	displayName?: string; // Alternative display name for the UI
-	order?: number; // Display order within the group
-	description?: string;
-
-	config: OutputConfig;
-	isExpired?: boolean;
-
-	// Note: Outputs don't have default values - they show live data from Grasshopper
-}
-
-export interface OutputConfig {
+	// Output display widgets
 	format?: string;
 	unit?: string;
 	chartType?: 'line' | 'bar' | 'pie';
 }
 
+/**
+ * Layout configuration for the UI
+ */
 export interface LayoutConfig {
-	type: 'grid' | 'flex' | 'tabbed';
-	columns: number;
+	/** Layout type:
+	 * - "tabbed": Multi-tab interface with groups
+	 * - "flat": Simple single-column list of all parameters
+	 */
+	type: 'tabbed' | 'flat';
 	gap: number;
-	tabs: TabConfig[];
-	items: LayoutItem[]; // Legacy grid layout
+	// For "tabbed" layout
+	tabs?: TabConfig[];
+	// For "flat" layout
+	items?: LayoutItem[];
 }
 
 export interface TabConfig {
@@ -99,24 +124,7 @@ export interface GroupConfig {
 	order: number;
 	collapsed: boolean;
 	columns: number;
-	items: GroupItem[];
-}
-
-export interface GroupItem {
-	id: string;
-	parameterId: string;
-	type: 'input' | 'output';
-	displayName?: string;
-	order: number;
-	span: number;
-}
-
-export interface LayoutItem {
-	id: string;
-	row: number;
-	column: number;
-	width: number;
-	height: number;
+	items: LayoutItem[];
 }
 
 export interface RuntimeValues {
@@ -137,10 +145,11 @@ export interface AvailableParameter {
 	nickname: string;
 	description: string;
 	category: 'input' | 'output';
-	paramType: string; // Grasshopper parameter type (Number, Text, Boolean, Point, Geometry, etc.)
+	paramType: "Number" | "Integer" | "Text" | "Boolean"; // Grasshopper parameter type (Number, Text, Boolean, Point, Geometry, etc.)
 	default?: any;
 	minimum?: any;
 	maximum?: any;
+	stepSize?: number;
 	atLeast?: number;
 	atMost?: number;
 	treeAccess?: boolean;

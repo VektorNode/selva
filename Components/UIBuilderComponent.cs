@@ -86,6 +86,7 @@ namespace ComputeBuilder.Components
 
                 // Hook up WebSocket value updates
                 _communicationHandler.OnValuesReceived += HandleWebSocketValueUpdate;
+                _communicationHandler.OnCurrentValuesRequested += HandleCurrentValuesRequest;
             }
 
             DA.SetData(0, _sessionId);
@@ -276,6 +277,66 @@ namespace ComputeBuilder.Components
         }
 
         /// <summary>
+        /// Handle request for current input values from web UI
+        /// </summary>
+        private void HandleCurrentValuesRequest(object sender, EventArgs e)
+        {
+            try
+            {
+                var document = this.OnPingDocument();
+                if (document == null || _embeddedSchema == null)
+                    return;
+
+                var currentValues = new Dictionary<string, object>();
+
+                // Collect current values from all input parameters
+                foreach (var input in _embeddedSchema.Inputs)
+                {
+                    try
+                    {
+                        var paramObject = document.FindObject(input.Id, false);
+                        if (paramObject == null)
+                            continue;
+
+                        if (paramObject is IGH_Param ghParam)
+                        {
+                            var paramData = ghParam.VolatileData;
+                            if (paramData != null && !paramData.IsEmpty)
+                            {
+                                var allData = paramData.AllData(true).ToList();
+                                if (allData.Count == 1)
+                                {
+                                    currentValues[input.Id.ToString()] = ExtractValue(allData[0]);
+                                }
+                                else if (allData.Count > 1)
+                                {
+                                    var values = allData.Select(d => ExtractValue(d)).ToList();
+                                    currentValues[input.Id.ToString()] = values;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                            $"Error collecting current value for '{input.Name}': {ex.Message}");
+                    }
+                }
+
+                // Broadcast current values to web UI
+                if (currentValues.Count > 0)
+                {
+                    var _ = _communicationHandler.BroadcastCurrentValues(currentValues);
+                }
+            }
+            catch (Exception ex)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                    $"Error handling current values request: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Collect output values and send via WebSocket
         /// </summary>
         private void CollectAndSendOutputs(GH_Document document, UISchema schema)
@@ -292,7 +353,7 @@ namespace ComputeBuilder.Components
             {
                 try
                 {
-                    var paramObject = document.FindObject(output.GrasshopperId, false);
+                    var paramObject = document.FindObject(output.Id, false);
                     if (paramObject == null)
                         continue;
 
@@ -304,12 +365,12 @@ namespace ComputeBuilder.Components
                             var allData = paramData.AllData(true).ToList();
                             if (allData.Count == 1)
                             {
-                                outputValues[output.GrasshopperId.ToString()] = ExtractValue(allData[0]);
+                                outputValues[output.Id.ToString()] = ExtractValue(allData[0]);
                             }
                             else if (allData.Count > 1)
                             {
                                 var values = allData.Select(d => ExtractValue(d)).ToList();
-                                outputValues[output.GrasshopperId.ToString()] = values;
+                                outputValues[output.Id.ToString()] = values;
                             }
                         }
                     }

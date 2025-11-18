@@ -19,7 +19,7 @@
     initThree,
     updateScene,
   } from "rhino-compute-core";
-  import type { InputParameter } from "$lib/types/schema";
+  import type { InputParamSchema } from "$lib/types/schema";
   import * as THREE from "three";
   import type { OrbitControls } from "three/examples/jsm/Addons.js";
   import { onMount } from "svelte";
@@ -43,7 +43,7 @@
 
       schema.inputs.forEach((input) => {
         initialValues[input.name] =
-          input.default ?? getDefaultValue(input.type);
+          input.default ?? getDefaultValue(input.paramType);
       });
 
       schema.outputs.forEach((output) => {
@@ -71,7 +71,7 @@
   }
 
   function transformInputParameter(
-    input: InputParameter,
+    input: InputParamSchema,
     value: any
   ): InputParam {
     const base = {
@@ -79,7 +79,6 @@
       name: input.name,
       nickname: input.nickname || null,
       treeAccess: input.treeAccess || false,
-      groupName: input.groupName || "",
     };
 
     // Determine paramType and create the appropriate InputParam type
@@ -91,7 +90,7 @@
         maximum: input.maximum,
         atLeast: input.atLeast,
         atMost: input.atMost,
-        stepSize: input.config?.step,
+        stepSize: input.paramType === "Integer" ? 1 : input.stepSize,
         default: value ?? input.default,
       } as NumericInputType;
     } else if (input.paramType === "Text") {
@@ -106,22 +105,21 @@
         paramType: "Boolean",
         default: value ?? input.default ?? false,
       } as BooleanInputType;
-    } else if (input.paramType === "ValueList") {
-      return {
-        ...base,
-        paramType: "ValueList",
-        values:
-          input.config?.options?.reduce(
-            (acc: any, opt: any) => ({ ...acc, [opt]: opt }),
-            {}
-          ) || {},
-        default: value ?? input.default,
-      } as ValueListInputType;
     }
-
-    // Default fallback
-    // throw new Error(`Unsupported paramType: ${input.paramType}`);
   }
+  // else if (input.paramType === "ValueList") {
+  //     return {
+  //       ...base,
+  //       paramType: "ValueList",
+  //       values:
+  //         input.config?.options?.reduce(
+  //           (acc: any, opt: any) => ({ ...acc, [opt]: opt }),
+  //           {}
+  //         ) || {},
+  //       default: value ?? input.default,
+  //     } as ValueListInputType;
+  //   }
+  // }
 
   async function handleValueChange(parameterName: string, value: any) {
     values[parameterName] = value;
@@ -219,7 +217,9 @@
 
         <!-- Right Side: 3D Viewer -->
         {#if schema.enable3dViewer}
-          <div class="flex-1 rounded-lg overflow-hidden shadow-lg bg-white min-h-[500px]">
+          <div
+            class="flex-1 rounded-lg overflow-hidden shadow-lg bg-white min-h-[500px]"
+          >
             <canvas class="block w-full h-full" bind:this={canvas}></canvas>
           </div>
         {/if}
