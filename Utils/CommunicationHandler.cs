@@ -144,6 +144,24 @@ namespace ComputeBuilder.Utils
             }
         }
 
+        /// <summary>
+        /// Broadcast schema update to all connected clients
+        /// </summary>
+        public async Task BroadcastSchemaUpdate(UISchema schema, List<Guid> removedIds = null)
+        {
+            if (_webSocketServer != null && _webSocketServer.IsRunning)
+            {
+                var message = new
+                {
+                    type = "schemaUpdated",
+                    sessionId = _sessionId,
+                    schema = schema,
+                    removedIds = removedIds ?? new List<Guid>()
+                };
+                await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+            }
+        }
+
         public void Dispose()
         {
             Dispose(true);

@@ -251,14 +251,10 @@
     category: "input" | "output"
   ): string {
     if (category === "input") {
-      if (param.paramType === "Number") {
-        // Use stepSize to determine if slider is appropriate
-        // Fine precision (< 0.1) or no constraints = number input
-        if (param.stepSize && param.stepSize < 0.1) return "number";
-        if (!param.minimum || !param.maximum) return "number";
-        return "slider";
-      }
-      if (param.paramType === "Integer") return "slider";
+      // Number and Integer both default to number input
+      // Users can manually switch to slider in the UI if desired
+      if (param.paramType === "Number" || param.paramType === "Integer")
+        return "number";
       if (param.paramType === "Boolean") return "checkbox";
       if (param.paramType === "Text") return "text";
       // Geometry types default to text (for future geometry input widgets)

@@ -468,6 +468,8 @@ namespace ComputeBuilder.Components
             {
                 _currentDocument.SolutionStart += OnSolutionStart;
                 _currentDocument.SolutionEnd += OnSolutionEnd;
+                _currentDocument.ObjectsAdded += OnObjectsChanged;
+                _currentDocument.ObjectsDeleted += OnObjectsChanged;
             }
             catch { /* ignore */ }
 
@@ -491,6 +493,8 @@ namespace ComputeBuilder.Components
                 {
                     _currentDocument.SolutionStart -= OnSolutionStart;
                     _currentDocument.SolutionEnd -= OnSolutionEnd;
+                    _currentDocument.ObjectsAdded -= OnObjectsChanged;
+                    _currentDocument.ObjectsDeleted -= OnObjectsChanged;
                 }
                 catch { /* ignore */ }
             }
@@ -528,6 +532,97 @@ namespace ComputeBuilder.Components
             {
                 _pendingExpire = false;
                 Rhino.RhinoApp.InvokeOnUiThread((Action)(() => { ExpireSolution(true); }));
+            }
+        }
+
+        private void OnObjectsChanged(object sender, GH_DocObjectEventArgs e)
+        {
+            // Only react if we have an active schema and are enabled
+            if (_embeddedSchema == null || _currentDocument == null || !_communicationHandler.IsRunning)
+                return;
+
+            // Check if any changed objects are contextual parameters or output components
+            bool relevantChange = false;
+            foreach (var obj in e.Objects)
+            {
+                if (obj is IGH_ContextualParameter)
+                {
+                    relevantChange = true;
+                    break;
+                }
+
+                var typeName = obj?.GetType()?.Name;
+                if (string.Equals(typeName, "ContextPrintComponent", StringComparison.Ordinal) ||
+                    string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal))
+                {
+                    relevantChange = true;
+                    break;
+                }
+            }
+
+            if (!relevantChange)
+                return;
+
+            // Re-validate schema against current document
+            try
+            {
+                var (updatedSchema, removedIds) = _schemaManager.ValidateSchemaAndTrackChanges(_embeddedSchema, _currentDocument);
+
+                if (removedIds.Count > 0)
+                {
+                    // Update embedded schema
+                    _embeddedSchema = updatedSchema;
+
+                    // Save updated schema to file
+                    _persistenceManager.SaveSchema(_embeddedSchema);
+
+                    // Remove values for deleted parameters
+                    if (_embeddedValues != null)
+                    {
+                        foreach (var removedId in removedIds)
+                        {
+                            _embeddedValues.Remove(removedId.ToString());
+                        }
+                    }
+
+                    // Clear values for deleted parameters from value applicator
+                    var lastValues = _valueApplicator?.GetLastAppliedValues();
+                    if (lastValues != null)
+                    {
+                        foreach (var removedId in removedIds)
+                        {
+                            lastValues.Remove(removedId.ToString());
+                        }
+                        _valueApplicator?.SetLastAppliedValues(lastValues);
+                    }
+
+                    // Broadcast schema update to web clients BEFORE expiring solution
+                    var broadcastTask = _communicationHandler.BroadcastSchemaUpdate(_embeddedSchema, removedIds);
+
+                    // Wait for broadcast to complete (with timeout)
+                    try
+                    {
+                        broadcastTask.Wait(1000); // 1 second timeout
+                    }
+                    catch
+                    {
+                        // Ignore timeout/errors - continue anyway
+                    }
+
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                        $"Schema updated: {removedIds.Count} parameter(s) removed from UI");
+
+                    // Trigger this component to recalculate (which will update the UI)
+                    Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
+                    {
+                        ExpireSolution(true);
+                    }));
+                }
+            }
+            catch (Exception ex)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                    $"Error updating schema: {ex.Message}");
             }
         }
 

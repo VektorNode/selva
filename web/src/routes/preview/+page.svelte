@@ -22,6 +22,8 @@
   let error = $state("");
   let wsClient = getWebSocketClient();
   let wsConnected = $state(false);
+  let schemaUpdateNotification = $state("");
+  let notificationTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Determine runtime mode from URL parameter
   let runtimeMode = $state<RuntimeMode>("local");
@@ -39,6 +41,17 @@
       default:
         return null;
     }
+  }
+
+  function showNotification(message: string, duration: number = 3000) {
+    schemaUpdateNotification = message;
+    if (notificationTimer) {
+      clearTimeout(notificationTimer);
+    }
+    notificationTimer = setTimeout(() => {
+      schemaUpdateNotification = "";
+      notificationTimer = null;
+    }, duration);
   }
 
   /**
@@ -180,6 +193,54 @@
             }
           });
 
+          // Listen for schema updates (parameter removal/modification)
+          wsClient.on("schemaUpdated", (message) => {
+            if (message.sessionId === sessionId) {
+              console.log("[Preview] Schema updated:", {
+                schema: message.schema,
+                removedIds: message.removedIds,
+              });
+
+              const removedCount = message.removedIds?.length || 0;
+
+              // Create a completely new schema object to trigger Svelte reactivity
+              const newSchema = JSON.parse(JSON.stringify(message.schema));
+
+              // Ensure layout has tabs array for backward compatibility
+              if (!newSchema.layout.tabs) {
+                newSchema.layout.tabs = [];
+              }
+
+              // Remove values for deleted parameters FIRST
+              if (message.removedIds && message.removedIds.length > 0) {
+                const newValues = { ...values };
+                message.removedIds.forEach((id: string) => {
+                  delete newValues[id];
+                });
+                values = newValues;
+
+                console.log(
+                  `[Preview] Removed ${message.removedIds.length} parameter(s) from UI`
+                );
+              }
+
+              // Force complete re-render by temporarily clearing schema
+              schema = null;
+
+              // Use setTimeout to ensure DOM updates before setting new schema
+              setTimeout(() => {
+                schema = newSchema;
+
+                // Show notification
+                if (removedCount > 0) {
+                  showNotification(
+                    `Schema updated: ${removedCount} parameter${removedCount > 1 ? "s" : ""} removed`
+                  );
+                }
+              }, 10);
+            }
+          });
+
           // Request current values from Grasshopper on initial connection
           console.log("[Preview] Requesting current values from Grasshopper");
           wsClient.requestCurrentValues(sessionId);
@@ -246,4 +307,39 @@
       </div>
     {/if}
   </div>
+
+  <!-- Schema Update Notification Toast -->
+  {#if schemaUpdateNotification}
+    <div
+      class="fixed bottom-8 right-8 bg-blue-600 text-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 animate-[slideInRight_0.3s_ease-out] z-50"
+    >
+      <svg
+        class="w-5 h-5"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+      <span class="font-medium">{schemaUpdateNotification}</span>
+    </div>
+  {/if}
 </PageContainer>
+
+<style>
+  @keyframes slideInRight {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+</style>

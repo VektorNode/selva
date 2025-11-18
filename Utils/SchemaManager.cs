@@ -185,6 +185,76 @@ namespace ComputeBuilder.Utils
         }
 
         /// <summary>
+        /// Validate schema and track what changed (removed/added parameters)
+        /// </summary>
+        public (UISchema Schema, List<Guid> RemovedIds) ValidateSchemaAndTrackChanges(UISchema schema, GH_Document document)
+        {
+            if (schema == null) return (null, new List<Guid>());
+
+            var removedIds = new List<Guid>();
+
+            // Track and remove missing inputs
+            var inputsToRemove = schema.Inputs.Where(input =>
+            {
+                var paramObject = document.FindObject(input.Id, false);
+                return paramObject == null;
+            }).ToList();
+
+            foreach (var input in inputsToRemove)
+            {
+                removedIds.Add(input.Id);
+            }
+            schema.Inputs.RemoveAll(input => inputsToRemove.Contains(input));
+
+            // Track and remove missing outputs
+            var outputsToRemove = schema.Outputs.Where(output =>
+            {
+                var paramObject = document.FindObject(output.Id, false);
+                return paramObject == null;
+            }).ToList();
+
+            foreach (var output in outputsToRemove)
+            {
+                removedIds.Add(output.Id);
+            }
+            schema.Outputs.RemoveAll(output => outputsToRemove.Contains(output));
+
+            // Remove layout items referencing missing parameters
+            if (schema.Layout.Tabs != null)
+            {
+                foreach (var tab in schema.Layout.Tabs)
+                {
+                    foreach (var group in tab.Groups)
+                    {
+                        group.Items.RemoveAll(item =>
+                        {
+                            var paramObject = document.FindObject(item.ParamId, false);
+                            return paramObject == null;
+                        });
+                    }
+
+                    // Remove empty groups
+                    tab.Groups.RemoveAll(g => g.Items.Count == 0);
+                }
+
+                // Remove empty tabs
+                schema.Layout.Tabs.RemoveAll(t => t.Groups.Count == 0);
+            }
+
+            // Also clean flat layout items
+            if (schema.Layout.Items != null)
+            {
+                schema.Layout.Items.RemoveAll(item =>
+                {
+                    var paramObject = document.FindObject(item.ParamId, false);
+                    return paramObject == null;
+                });
+            }
+
+            return (schema, removedIds);
+        }
+
+        /// <summary>
         /// Get parameter type name from contextual parameter
         /// </summary>
         private string GetParameterTypeName(IGH_ContextualParameter contextParam)
