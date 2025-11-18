@@ -14,7 +14,6 @@
     type NumericInputType,
     type TextInputType,
     type BooleanInputType,
-    type ValueListInputType,
     type InputParam,
     initThree,
     updateScene,

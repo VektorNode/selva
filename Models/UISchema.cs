@@ -331,7 +331,7 @@ namespace ComputeBuilder.Models
         public bool TreeAccess { get; set; } = false;
         
         [JsonProperty("stepSize")]
-        public double? StepSize { get; set; } = null;
+        public decimal? StepSize { get; set; } = null;
     }
 
     /// <summary>

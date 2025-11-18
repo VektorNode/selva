@@ -297,21 +297,24 @@ namespace ComputeBuilder.Components
                         var paramObject = document.FindObject(input.Id, false);
                         if (paramObject == null)
                             continue;
-
+                        
                         if (paramObject is IGH_Param ghParam)
                         {
-                            var paramData = ghParam.VolatileData;
-                            if (paramData != null && !paramData.IsEmpty)
+                            if (ghParam.SourceCount == 1)
                             {
-                                var allData = paramData.AllData(true).ToList();
-                                if (allData.Count == 1)
+                                var valueData = ghParam.Sources[0].VolatileData;
+                                if (valueData != null && !valueData.IsEmpty)
                                 {
-                                    currentValues[input.Id.ToString()] = ExtractValue(allData[0]);
-                                }
-                                else if (allData.Count > 1)
-                                {
-                                    var values = allData.Select(d => ExtractValue(d)).ToList();
-                                    currentValues[input.Id.ToString()] = values;
+                                    var allData = valueData.AllData(true).ToList();
+                                    if (allData.Count == 1)
+                                    {
+                                        currentValues[input.Id.ToString()] = ExtractValue(allData[0]);
+                                    }
+                                    else if (allData.Count > 1)
+                                    {
+                                        var values = allData.Select(d => ExtractValue(d)).ToList();
+                                        currentValues[input.Id.ToString()] = values;
+                                    }
                                 }
                             }
                         }

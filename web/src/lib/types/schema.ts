@@ -17,6 +17,35 @@ export interface UISchema {
 // ============================================================================
 
 /**
+ * Grasshopper parameter type - matches Rhino Compute types
+ * Primitive types: Number, Integer, Boolean, Text
+ * Geometry types: Point, Vector, Plane, Line, Circle, Rectangle, Box, Curve, Surface, Brep, Mesh, SubD, Geometry
+ * Generic: Fallback for unrecognized types
+ */
+export type GrasshopperParamType =
+	// Primitive types
+	| "Number"
+	| "Integer"
+	| "Boolean"
+	| "Text"
+	// Geometry types
+	| "Point"
+	| "Vector"
+	| "Plane"
+	| "Line"
+	| "Circle"
+	| "Rectangle"
+	| "Box"
+	| "Curve"
+	| "Surface"
+	| "Brep"
+	| "Mesh"
+	| "SubD"
+	| "Geometry"
+	// Fallback
+	| "Generic";
+
+/**
  * Base parameter schema - tracked by Grasshopper instance GUID
  */
 export interface IoParamSchema {
@@ -24,8 +53,8 @@ export interface IoParamSchema {
 	id: string;
 	name: string;
 	nickname: string;
-	/** Grasshopper parameter type (Number, Text, Boolean, Point, Geometry, etc.) */
-	paramType: "Number" | "Integer" | "Text" | "Boolean"
+	/** Grasshopper parameter type */
+	paramType: GrasshopperParamType;
 }
 
 /**

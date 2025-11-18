@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { api } from "$lib/api/client";
   import DragDropContext from "$lib/components/DragDropContext.svelte";
   import {
@@ -56,7 +56,7 @@
   // Load initial data - using untrack to avoid reactivity issues
   $effect(() => {
     (async () => {
-      const urlSessionId = $page.url.searchParams.get("session") || "";
+      const urlSessionId = page.url.searchParams.get("session") || "";
       sessionId = urlSessionId;
 
       if (!urlSessionId) {

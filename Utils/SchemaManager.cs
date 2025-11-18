@@ -86,7 +86,7 @@ namespace ComputeBuilder.Utils
                 {
                     availableParam.Maximum = slider.Slider.Maximum;
                     availableParam.Minimum = slider.Slider.Minimum;
-                    availableParam.StepSize = slider.Slider.DecimalPlaces;
+                    availableParam.StepSize = slider.Slider.Epsilon;
 
                 }
 

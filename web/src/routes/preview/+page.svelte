@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { api } from "$lib/api/client";
   import { getWebSocketClient } from "$lib/api/websocket";
   import type { UISchema } from "$lib/types/schema";
@@ -9,7 +9,6 @@
     PageContainer,
     PageHeader,
     StateDisplay,
-    Badge,
   } from "$lib/components/shared";
 
   // Runtime mode: 'local' uses WebSocket, 'compute' uses Rhino Compute
@@ -89,10 +88,10 @@
   // Initialize on mount
   $effect.pre(() => {
     const initializeSchema = async () => {
-      sessionId = $page.url.searchParams.get("session") || "";
+      sessionId = page.url.searchParams.get("session") || "";
 
       // Check URL parameter for mode (e.g., ?mode=compute)
-      const modeParam = $page.url.searchParams.get("mode");
+      const modeParam = page.url.searchParams.get("mode");
       if (modeParam === "compute") {
         runtimeMode = "compute";
       }
