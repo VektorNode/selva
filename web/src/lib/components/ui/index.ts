@@ -14,3 +14,4 @@ export * as Tabs from './tabs';
 
 // Custom components (not replaced by shadcn)
 export { default as StateDisplay } from './StateDisplay.svelte';
+export { ModeToggle } from './mode-toggle';

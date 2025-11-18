@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { Badge } from "$lib/components/ui/badge";
+  import { ModeToggle } from "$lib/components/ui/mode-toggle";
   import { cn } from "$lib/utils";
 
   interface BadgeConfig {
@@ -34,21 +35,21 @@
 </script>
 
 <header
-  class={`bg-linear-to-b from-white to-gray-50 border-b border-gray-100 px-8 py-3 backdrop-blur-sm transition-all duration-200 ${className}`}
+  class={`bg-linear-to-b from-background to-muted/50 border-b border-border px-8 py-3 backdrop-blur-sm transition-all duration-200 ${className}`}
 >
   <div class="flex items-center justify-between gap-4">
     <div class="flex-1">
-      <h1 class="text-2xl font-bold text-gray-900 mb-1">
+      <h1 class="text-2xl font-bold text-foreground mb-1">
         {title}
       </h1>
 
       {#if sessionId || badge || children}
-        <div class="flex items-center gap-2 text-gray-500 text-xs">
+        <div class="flex items-center gap-2 text-muted-foreground text-xs">
           {#if sessionId}
             <span class="flex items-center gap-1.5">
-              <span class="text-gray-400">Session:</span>
+              <span class="text-muted-foreground">Session:</span>
               <code
-                class="bg-gray-100 rounded px-2 py-0.5 font-mono text-xs font-medium text-gray-700"
+                class="bg-muted rounded px-2 py-0.5 font-mono text-xs font-medium text-foreground"
               >
                 {sessionId}
               </code>
@@ -56,7 +57,7 @@
           {/if}
 
           {#if sessionId && (badge || children)}
-            <div class="w-px h-3 bg-gray-200"></div>
+            <div class="w-px h-3 bg-border"></div>
           {/if}
 
           {#if badge}
@@ -71,6 +72,7 @@
         </div>
       {/if}
     </div>
+    <ModeToggle />
   </div>
 </header>
 

@@ -33,6 +33,7 @@
     "vite": "^7.1.10"
   },
   "dependencies": {
+    "mode-watcher": "^1.1.0",
     "rhino-compute-core": "file:src\\lib\\rhino-compute-core-1.0.3.tgz",
     "three": "^0.179.1"
   }
