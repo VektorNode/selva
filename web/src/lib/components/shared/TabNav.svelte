@@ -1,4 +1,4 @@
-<script lang="ts">
+<!-- <script lang="ts">
   interface Tab {
     id: string;
     label: string;
@@ -55,4 +55,4 @@
       {/if}
     </div>
   {/each}
-</div>
+</div> -->

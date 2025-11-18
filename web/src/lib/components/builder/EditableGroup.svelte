@@ -1,8 +1,9 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import Button from "./Button.svelte";
-  import DropZone from "../DropZone.svelte";
+
   import type { GroupConfig } from "$lib/types/schema";
+  import Button from "../ui/Button.svelte";
+  import DropZone from "./DropZone.svelte";
 
   interface EditableGroupProps {
     group: GroupConfig;

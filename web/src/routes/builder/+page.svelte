@@ -1,19 +1,16 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { api } from "$lib/api/client";
-  import DragDropContext from "$lib/components/DragDropContext.svelte";
+  import { PageContainer, PageHeader, Panel } from "$lib/components/layout";
+  import { StateDisplay, Button } from "$lib/components/ui";
   import {
-    PageContainer,
-    PageHeader,
-    StateDisplay,
-    Button,
-    Panel,
+    DragDropContext,
     ParameterList,
     SchemaInfoPanel,
     EditableTabNav,
     EditableGroup,
     BuilderGroupItem,
-  } from "$lib/components/shared";
+  } from "$lib/components/builder";
   import type {
     UISchema,
     AvailableParameter,
@@ -24,14 +21,11 @@
     LayoutItem,
     InputLayoutItem,
     OutputLayoutItem,
-    SliderWidgetConfig,
-    NumberWidgetConfig,
-    TextWidgetConfig,
-    DropdownWidgetConfig,
-    CheckboxWidgetConfig,
-    TextDisplayConfig,
-    NumberDisplayConfig,
   } from "$lib/types/schema";
+  import {
+    mapParamTypeToWidgetType,
+    createDefaultWidgetConfig,
+  } from "$lib/utils/widget-config";
 
   let sessionId = $state("");
   let schema = $state<UISchema | null>(null);
@@ -40,19 +34,27 @@
   let error = $state("");
   let activeTabId = $state<string | null>(null);
 
-  const usedInputIds = $derived(new Set(schema?.inputs.map((i) => i.id) || []));
-  const usedOutputIds = $derived(
-    new Set(schema?.outputs.map((o) => o.id) || [])
-  );
+  // Track which parameters are actually placed in the layout (not just in schema)
+  const placedInLayoutIds = $derived(() => {
+    const ids = new Set<string>();
+    schema?.layout?.tabs?.forEach((tab) => {
+      tab.groups.forEach((group) => {
+        group.items.forEach((item) => {
+          ids.add(item.paramId);
+        });
+      });
+    });
+    return ids;
+  });
 
   const availableInputs = $derived(
     availableParams.filter(
-      (p) => p.category === "input" && !usedInputIds.has(p.id)
+      (p) => p.category === "input" && !placedInLayoutIds().has(p.id)
     )
   );
   const availableOutputs = $derived(
     availableParams.filter(
-      (p) => p.category === "output" && !usedOutputIds.has(p.id)
+      (p) => p.category === "output" && !placedInLayoutIds().has(p.id)
     )
   );
   const activeTab = $derived(
@@ -135,6 +137,29 @@
 
   //TODO: Add possibility to reorder tabs
 
+  /**
+   * Helper function to remove a parameter from inputs/outputs if it's not used in the layout
+   */
+  function removeParameterIfOrphaned(
+    paramId: string,
+    itemType: "input" | "output"
+  ) {
+    if (!schema) return;
+
+    const isUsedInLayout =
+      schema.layout.tabs?.some((t) =>
+        t.groups.some((g) => g.items.some((i) => i.paramId === paramId))
+      ) ?? false;
+
+    if (!isUsedInLayout) {
+      if (itemType === "input") {
+        schema.inputs = schema.inputs.filter((i) => i.id !== paramId);
+      } else if (itemType === "output") {
+        schema.outputs = schema.outputs.filter((o) => o.id !== paramId);
+      }
+    }
+  }
+
   function addTab() {
     if (!schema || !schema.layout.tabs) return;
 
@@ -158,25 +183,7 @@
 
     tab.groups.forEach((group) => {
       group.items.forEach((item) => {
-        const isUsedElsewhere = schema!.layout.tabs?.some(
-          (t) =>
-            t.id !== tabId &&
-            t.groups.some((g) =>
-              g.items.some((i) => i.paramId === item.paramId)
-            )
-        );
-
-        if (!isUsedElsewhere) {
-          if (item.type === "input") {
-            schema!.inputs = schema!.inputs.filter(
-              (i) => i.id !== item.paramId
-            );
-          } else if (item.type === "output") {
-            schema!.outputs = schema!.outputs.filter(
-              (o) => o.id !== item.paramId
-            );
-          }
-        }
+        removeParameterIfOrphaned(item.paramId, item.type);
       });
     });
 
@@ -215,128 +222,11 @@
     const group = tab.groups.find((g) => g.id === groupId);
     if (!group) return;
 
-    group.items.forEach((item) => {
-      const isUsedElsewhere = schema!.layout.tabs?.some((t) =>
-        t.groups.some(
-          (g) =>
-            g.id !== groupId && g.items.some((i) => i.paramId === item.paramId)
-        )
-      );
-
-      if (!isUsedElsewhere) {
-        if (item.type === "input") {
-          schema!.inputs = schema!.inputs.filter((i) => i.id !== item.paramId);
-        } else if (item.type === "output") {
-          schema!.outputs = schema!.outputs.filter(
-            (o) => o.id !== item.paramId
-          );
-        }
-      }
-    });
+    // Don't remove parameters when deleting a group - they should just become available again
+    // The parameters remain in schema.inputs/outputs so users can re-add them without losing config
 
     tab.groups = tab.groups.filter((g) => g.id !== groupId);
     schema.layout.tabs = [...schema.layout.tabs];
-  }
-
-  function mapParamTypeToUIType(
-    param: AvailableParameter,
-    category: "input" | "output"
-  ): string {
-    if (category === "input") {
-      if (param.paramType === "Number" || param.paramType === "Integer")
-        return "number";
-      if (param.paramType === "Boolean") return "checkbox";
-      if (param.paramType === "Text") return "text";
-      return "text";
-    } else {
-      if (param.paramType === "Number" || param.paramType === "Integer")
-        return "number";
-      if (param.paramType === "Text") return "text";
-      if (
-        [
-          "Point",
-          "Vector",
-          "Plane",
-          "Line",
-          "Circle",
-          "Rectangle",
-          "Box",
-          "Curve",
-          "Surface",
-          "Brep",
-          "Mesh",
-          "SubD",
-          "Geometry",
-        ].includes(param.paramType)
-      ) {
-        return "text";
-      }
-      return "text";
-    }
-  }
-
-  function createWidgetConfig(
-    widgetType: string,
-    param: AvailableParameter,
-    category: "input" | "output"
-  ): any {
-    if (category === "input") {
-      switch (widgetType) {
-        case "slider": {
-          const config: SliderWidgetConfig = {
-            min: (param.minimum as number) ?? 0,
-            max: (param.maximum as number) ?? 100,
-            step: param.stepSize ? Number(param.stepSize) : 1,
-          };
-          return config;
-        }
-        case "number": {
-          const config: NumberWidgetConfig = {
-            min: param.minimum as number | undefined,
-            max: param.maximum as number | undefined,
-            step: param.stepSize ? Number(param.stepSize) : undefined,
-          };
-          return config;
-        }
-        case "text": {
-          const config: TextWidgetConfig = {
-            placeholder: "",
-            required: false,
-          };
-          return config;
-        }
-        case "dropdown": {
-          const config: DropdownWidgetConfig = {
-            options: [],
-            required: false,
-          };
-          return config;
-        }
-        case "checkbox": {
-          const config: CheckboxWidgetConfig = {};
-          return config;
-        }
-        default:
-          return {};
-      }
-    } else {
-      switch (widgetType) {
-        case "text": {
-          const config: TextDisplayConfig = {
-            format: undefined,
-          };
-          return config;
-        }
-        case "number": {
-          const config: NumberDisplayConfig = {
-            format: undefined,
-          };
-          return config;
-        }
-        default:
-          return {};
-      }
-    }
   }
 
   function handleParameterDrop(
@@ -394,8 +284,8 @@
       }
     }
 
-    const widgetType = mapParamTypeToUIType(param, sourceType);
-    const config = createWidgetConfig(widgetType, param, sourceType);
+    const widgetType = mapParamTypeToWidgetType(param.paramType, sourceType);
+    const config = createDefaultWidgetConfig(widgetType, param, sourceType);
 
     let newItem: LayoutItem;
 
@@ -454,18 +344,7 @@
     group.items = group.items.filter((i) => i.id !== itemId);
 
     if (item) {
-      const isUsedElsewhere = schema.layout.tabs.some((t) =>
-        t.groups.some((g) => g.items.some((i) => i.paramId === item.paramId))
-      );
-
-      // If not used anywhere, remove from inputs/outputs
-      if (!isUsedElsewhere) {
-        if (item.type === "input") {
-          schema.inputs = schema.inputs.filter((i) => i.id !== item.paramId);
-        } else if (item.type === "output") {
-          schema.outputs = schema.outputs.filter((o) => o.id !== item.paramId);
-        }
-      }
+      removeParameterIfOrphaned(item.paramId, item.type);
     }
   }
 

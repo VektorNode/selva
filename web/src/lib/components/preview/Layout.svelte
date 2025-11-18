@@ -6,9 +6,10 @@
     InputParamSchema,
     OutputParamSchema,
   } from "$lib/types/schema";
+  import Panel from "../layout/Panel.svelte";
+  import StateDisplay from "../ui/StateDisplay.svelte";
   import InputControl from "./InputControl.svelte";
   import OutputDisplay from "./OutputDisplay.svelte";
-  import { Panel, StateDisplay } from "$lib/components/shared";
 
   interface Props {
     schema: UISchema;

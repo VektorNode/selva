@@ -20,20 +20,6 @@ export type GrasshopperParamType =
 	| "Integer"
 	| "Boolean"
 	| "Text"
-	// Geometry types
-	| "Point"
-	| "Vector"
-	| "Plane"
-	| "Line"
-	| "Circle"
-	| "Rectangle"
-	| "Box"
-	| "Curve"
-	| "Surface"
-	| "Brep"
-	| "Mesh"
-	| "SubD"
-	| "Geometry"
 	// Fallback
 	| "Generic";
 

@@ -15,7 +15,8 @@
     isCheckboxWidget,
   } from "$lib/types/schema";
   import { debounce } from "$lib/utils/debounce";
-  import { Input, Select } from "$lib/components/shared";
+  import Input from "../ui/Input.svelte";
+  import Select from "../ui/Select.svelte";
 
   interface Props {
     item: InputLayoutItem;

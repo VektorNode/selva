@@ -31,12 +31,7 @@ namespace ComputeBuilder.Utils
                 .ToList();
 
             var contextOutputs = document.Objects
-                .Where(o =>
-                {
-                    var name = o?.GetType()?.Name;
-                    return string.Equals(name, "ContextPrintComponent", StringComparison.Ordinal)
-                           || string.Equals(name, "ContextBakeComponent", StringComparison.Ordinal);
-                })
+                .Where(ParameterTypeHelper.IsContextOutputComponent)
                 .ToList();
 
             // Build available parameters list
@@ -130,92 +125,48 @@ namespace ComputeBuilder.Utils
 
         /// <summary>
         /// Validate schema against current document - removes references to missing parameters
+        /// Wrapper for ValidateSchemaAndTrackChanges without tracking
         /// </summary>
         public UISchema ValidateSchema(UISchema schema, GH_Document document)
         {
-            if (schema == null) return null;
-
-            // Remove missing inputs
-            schema.Inputs.RemoveAll(input =>
-            {
-                var paramObject = document.FindObject(input.Id, false);
-                return paramObject == null;
-            });
-
-            // Remove missing outputs
-            schema.Outputs.RemoveAll(output =>
-            {
-                var paramObject = document.FindObject(output.Id, false);
-                return paramObject == null;
-            });
-
-            // Remove layout items referencing missing parameters
-            if (schema.Layout.Tabs != null)
-            {
-                foreach (var tab in schema.Layout.Tabs)
-                {
-                    foreach (var group in tab.Groups)
-                    {
-                        group.Items.RemoveAll(item =>
-                        {
-                            var paramObject = document.FindObject(item.ParamId, false);
-                            return paramObject == null;
-                        });
-                    }
-
-                    // Remove empty groups
-                    tab.Groups.RemoveAll(g => g.Items.Count == 0);
-                }
-
-                // Remove empty tabs
-                schema.Layout.Tabs.RemoveAll(t => t.Groups.Count == 0);
-            }
-
-            // Also clean flat layout items
-            if (schema.Layout.Items != null)
-            {
-                schema.Layout.Items.RemoveAll(item =>
-                {
-                    var paramObject = document.FindObject(item.ParamId, false);
-                    return paramObject == null;
-                });
-            }
-
-            return schema;
+            return ValidateSchemaAndTrackChanges(schema, document, trackChanges: false).Schema;
         }
 
         /// <summary>
-        /// Validate schema and track what changed (removed/added parameters)
+        /// Validate schema and optionally track what changed (removed parameters)
         /// </summary>
-        public (UISchema Schema, List<Guid> RemovedIds) ValidateSchemaAndTrackChanges(UISchema schema, GH_Document document)
+        public (UISchema Schema, List<Guid> RemovedIds) ValidateSchemaAndTrackChanges(
+            UISchema schema,
+            GH_Document document,
+            bool trackChanges = true)
         {
             if (schema == null) return (null, new List<Guid>());
 
-            var removedIds = new List<Guid>();
+            var removedIds = trackChanges ? new List<Guid>() : null;
 
-            // Track and remove missing inputs
+            // Remove missing inputs
             var inputsToRemove = schema.Inputs.Where(input =>
             {
                 var paramObject = document.FindObject(input.Id, false);
                 return paramObject == null;
             }).ToList();
 
-            foreach (var input in inputsToRemove)
+            if (trackChanges)
             {
-                removedIds.Add(input.Id);
+                removedIds.AddRange(inputsToRemove.Select(i => i.Id));
             }
             schema.Inputs.RemoveAll(input => inputsToRemove.Contains(input));
 
-            // Track and remove missing outputs
+            // Remove missing outputs
             var outputsToRemove = schema.Outputs.Where(output =>
             {
                 var paramObject = document.FindObject(output.Id, false);
                 return paramObject == null;
             }).ToList();
 
-            foreach (var output in outputsToRemove)
+            if (trackChanges)
             {
-                removedIds.Add(output.Id);
+                removedIds.AddRange(outputsToRemove.Select(o => o.Id));
             }
             schema.Outputs.RemoveAll(output => outputsToRemove.Contains(output));
 
@@ -251,7 +202,7 @@ namespace ComputeBuilder.Utils
                 });
             }
 
-            return (schema, removedIds);
+            return (schema, removedIds ?? new List<Guid>());
         }
 
         /// <summary>

@@ -1,12 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Net;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 
 namespace ComputeBuilder.Utils
 {
@@ -24,8 +22,6 @@ namespace ComputeBuilder.Utils
         private readonly object _clientsLock = new object();
 
         public event EventHandler<string> OnMessageReceived;
-        public event EventHandler<string> OnClientConnected;
-        public event EventHandler<string> OnClientDisconnected;
 
         public bool IsRunning => _isRunning;
         public int Port => _port;
@@ -176,8 +172,6 @@ namespace ComputeBuilder.Utils
                     _connectedClients.Add(webSocket);
                 }
 
-                OnClientConnected?.Invoke(this, context.Request.RemoteEndPoint?.ToString() ?? "unknown");
-
                 await ReceiveMessagesAsync(webSocket, cancellationToken);
             }
             catch (Exception)
@@ -192,8 +186,6 @@ namespace ComputeBuilder.Utils
                     {
                         _connectedClients.Remove(webSocket);
                     }
-
-                    OnClientDisconnected?.Invoke(this, "client");
 
                     try
                     {

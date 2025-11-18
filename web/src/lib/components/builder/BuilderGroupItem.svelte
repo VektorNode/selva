@@ -1,8 +1,8 @@
 <script lang="ts">
-  import Button from "./Button.svelte";
-  import Badge from "./Badge.svelte";
   import { dragStore } from "$lib/stores/dragStore.svelte";
   import type { LayoutItem, AvailableParameter } from "$lib/types/schema";
+  import Badge from "../ui/Badge.svelte";
+  import Button from "../ui/Button.svelte";
 
   interface BuilderGroupItemProps {
     item: LayoutItem;

@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using Grasshopper.Kernel;
-using Grasshopper.Kernel.Parameters;
 using ComputeBuilder.Utils;
 using ComputeBuilder.Models;
 
@@ -101,10 +100,6 @@ namespace ComputeBuilder.Components
                         if (CollectVolatileData_FromSources != null)
                         {
                             CollectVolatileData_FromSources.Invoke(contextParam, null);
-                            // clearedCount++;
-                            //
-                            // AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                            //     $"Cleared: {paramObject.NickName}");
                         }
                         // Collect all components that receive data from this parameter
                         // We'll expire them AFTER clearing all parameters
@@ -134,7 +129,6 @@ namespace ComputeBuilder.Components
             {
                 try
                 {
-                    // recipient.ExpireSolution(false);
                     recipient.ExpirePreview(false);
                 }
                 catch (Exception ex)

@@ -551,9 +551,7 @@ namespace ComputeBuilder.Components
                     break;
                 }
 
-                var typeName = obj?.GetType()?.Name;
-                if (string.Equals(typeName, "ContextPrintComponent", StringComparison.Ordinal) ||
-                    string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal))
+                if (ParameterTypeHelper.IsContextOutputComponent(obj))
                 {
                     relevantChange = true;
                     break;

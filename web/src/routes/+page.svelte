@@ -1,11 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import {
-    PageContainer,
-    PageHeader,
-    StateDisplay,
-    Button,
-  } from "$lib/components/shared";
+  import { PageContainer, PageHeader } from "$lib/components/layout";
+  import { StateDisplay, Button } from "$lib/components/ui";
 
   var sessionId = page.url.searchParams.get("session");
   let mode: "home" | "builder" | "preview" = "home";

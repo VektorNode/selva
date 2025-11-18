@@ -1,12 +1,8 @@
 <script lang="ts">
   import type { PageProps } from "./$types";
-  import TabLayout from "$lib/components/ui/TabLayout.svelte";
-  import Layout from "$lib/components/ui/Layout.svelte";
-  import {
-    PageContainer,
-    PageHeader,
-    StateDisplay,
-  } from "$lib/components/shared";
+  import { TabLayout, Layout } from "$lib/components/preview";
+  import { PageContainer, PageHeader } from "$lib/components/layout";
+  import { StateDisplay } from "$lib/components/ui";
   import {
     inputsToDataTrees,
     solveGrasshopperDefinition,

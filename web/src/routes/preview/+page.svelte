@@ -3,13 +3,9 @@
   import { api } from "$lib/api/client";
   import { getWebSocketClient } from "$lib/api/websocket";
   import type { UISchema } from "$lib/types/schema";
-  import TabLayout from "$lib/components/ui/TabLayout.svelte";
-  import LegacyLayout from "$lib/components/ui/Layout.svelte";
-  import {
-    PageContainer,
-    PageHeader,
-    StateDisplay,
-  } from "$lib/components/shared";
+  import { TabLayout, Layout as LegacyLayout } from "$lib/components/preview";
+  import { PageContainer, PageHeader } from "$lib/components/layout";
+  import { StateDisplay } from "$lib/components/ui";
   import { onMount } from "svelte";
 
   // Runtime mode: 'local' uses WebSocket, 'compute' uses Rhino Compute

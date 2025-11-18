@@ -1,0 +1,108 @@
+import type { AvailableParameter, GrasshopperParamType } from '$lib/types/schema';
+
+/**
+ * Map Grasshopper parameter types to default UI widget types
+ */
+export function mapParamTypeToWidgetType(
+	paramType: GrasshopperParamType,
+	category: 'input' | 'output'
+): string {
+	if (category === 'output') {
+		// Output widgets
+		switch (paramType) {
+			case 'Number':
+			case 'Integer':
+				return 'number';
+			default:
+				return 'text';
+		}
+	} else {
+		// Input widgets
+		switch (paramType) {
+			case 'Number':
+			case 'Integer':
+				return 'slider';
+			case 'Boolean':
+				return 'checkbox';
+			case 'Text':
+				return 'text';
+			default:
+				return 'text';
+		}
+	}
+}
+
+/**
+ * Create default widget configuration based on parameter type
+ */
+export function createDefaultWidgetConfig(
+	widgetType: string,
+	param: AvailableParameter,
+	category: 'input' | 'output'
+): any {
+	const config: any = {};
+
+	if (category === 'input') {
+		switch (widgetType) {
+			case 'slider':
+				config.min = param.minimum ?? 0;
+				config.max = param.maximum ?? 100;
+				config.step = param.paramType === 'Integer' ? 1 : 0.1;
+				break;
+
+			case 'number':
+				config.min = param.minimum;
+				config.max = param.maximum;
+				config.step = param.paramType === 'Integer' ? 1 : 0.01;
+				break;
+
+			case 'dropdown':
+				config.options = [];
+				break;
+
+			case 'text':
+				config.placeholder = `Enter ${param.name}`;
+				break;
+
+			case 'checkbox':
+				// No additional config needed
+				break;
+
+			case 'color':
+				config.format = 'hex';
+				break;
+		}
+	} else {
+		// Output config
+		switch (widgetType) {
+			case '3d-viewer':
+				config.showGrid = true;
+				config.showAxes = true;
+				break;
+
+			case 'text':
+			case 'number':
+				// No additional config needed
+				break;
+		}
+	}
+
+	return config;
+}
+
+/**
+ * Get default value for a parameter type
+ */
+export function getDefaultValueForParam(paramType: GrasshopperParamType): any {
+	switch (paramType) {
+		case 'Number':
+		case 'Integer':
+			return 0;
+		case 'Boolean':
+			return false;
+		case 'Text':
+			return '';
+		default:
+			return null;
+	}
+}

@@ -17,7 +17,6 @@ namespace ComputeBuilder.Utils
         private bool _disposed = false;
 
         public event EventHandler<Dictionary<string, object>> OnValuesReceived;
-        public event EventHandler<string> OnClientConnected;
         public event EventHandler OnCurrentValuesRequested;
 
         public bool IsRunning => _webSocketServer?.IsRunning ?? false;
@@ -68,13 +67,6 @@ namespace ComputeBuilder.Utils
                     {
                         logMessage?.Invoke($"WebSocket message error: {ex.Message}");
                     }
-                };
-
-                // Handle client connections
-                _webSocketServer.OnClientConnected += (sender, client) =>
-                {
-                    OnClientConnected?.Invoke(this, client);
-                    logMessage?.Invoke("Web UI connected via WebSocket");
                 };
 
                 _webSocketServer.StartAsync().Wait();

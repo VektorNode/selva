@@ -1,6 +1,6 @@
-<script lang="ts">
+<!-- <script lang="ts">
   import type { Snippet } from "svelte";
-  import Button from "./Button.svelte";
+  import Button from "../ui/Button.svelte";
 
   interface GroupProps {
     label: string;
@@ -69,4 +69,4 @@
       </div>
     </div>
   {/if}
-</div>
+</div> -->
