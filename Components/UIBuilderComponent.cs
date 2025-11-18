@@ -25,6 +25,7 @@ namespace ComputeBuilder.Components
         private bool _solutionInProgress = false;
         private bool _pendingSolutionRequest = false;
         private readonly object _solutionLock = new object();
+        private bool _needsInitialExpire = false;
 
         // Embedded schema - persists with the .gh file
         private UISchema _embeddedSchema = null;
@@ -183,6 +184,8 @@ namespace ComputeBuilder.Components
                         if (updatedCount > 0)
                         {
                             _valueApplicator.SetLastAppliedValues(_embeddedValues);
+                            // Mark that we need to expire after this solution completes
+                            _needsInitialExpire = true;
                         }
                     }
                 }
@@ -562,20 +565,49 @@ namespace ComputeBuilder.Components
             }
 
             bool shouldTriggerPending = false;
+            bool shouldExpireInitial = false;
             lock (_solutionLock)
             {
                 _solutionInProgress = false;
 
+                // Check if we need to expire parameters after initial load
+                if (_needsInitialExpire)
+                {
+                    _needsInitialExpire = false;
+                    shouldExpireInitial = true;
+                }
                 // Check if we have a pending request
-                if (_pendingSolutionRequest)
+                else if (_pendingSolutionRequest)
                 {
                     _pendingSolutionRequest = false;
                     shouldTriggerPending = true;
                 }
             }
 
+            // Handle initial expire (when loading file with Enable=true)
+            if (shouldExpireInitial && _embeddedSchema != null && _currentDocument != null)
+            {
+                // Now it's safe to expire the parameters
+                Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
+                {
+                    if (_currentDocument != null && _embeddedSchema != null && !_disposed)
+                    {
+                        // Expire all input parameters
+                        foreach (var input in _embeddedSchema.Inputs)
+                        {
+                            var paramObject = _currentDocument.FindObject(input.Id, false);
+                            if (paramObject is IGH_ActiveObject activeObj)
+                            {
+                                activeObj.ExpireSolution(false);
+                            }
+                        }
+                        // Trigger solution
+                        _currentDocument.NewSolution(false);
+                    }
+                }));
+            }
             // Trigger pending solution immediately
-            if (shouldTriggerPending && _currentDocument != null)
+            else if (shouldTriggerPending && _currentDocument != null)
             {
                 Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
                 {
@@ -685,6 +717,7 @@ namespace ComputeBuilder.Components
             _previewOpen = false;
             _solutionInProgress = false;
             _pendingSolutionRequest = false;
+            _needsInitialExpire = false;
         }
 
         // IDisposable implementation
