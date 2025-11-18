@@ -133,6 +133,8 @@
     }
   }
 
+  //TODO: Add possibility to reorder tabs
+
   function addTab() {
     if (!schema || !schema.layout.tabs) return;
 
@@ -210,11 +212,9 @@
     const tab = schema.layout.tabs.find((t) => t.id === tabId);
     if (!tab) return;
 
-    // Find the group being removed
     const group = tab.groups.find((g) => g.id === groupId);
     if (!group) return;
 
-    // For each item in the group, check if it's used elsewhere
     group.items.forEach((item) => {
       const isUsedElsewhere = schema!.layout.tabs?.some((t) =>
         t.groups.some(
@@ -223,7 +223,6 @@
         )
       );
 
-      // If not used anywhere else, remove from inputs/outputs
       if (!isUsedElsewhere) {
         if (item.type === "input") {
           schema!.inputs = schema!.inputs.filter((i) => i.id !== item.paramId);
@@ -235,7 +234,6 @@
       }
     });
 
-    // Remove the group from the tab
     tab.groups = tab.groups.filter((g) => g.id !== groupId);
     schema.layout.tabs = [...schema.layout.tabs];
   }
@@ -358,14 +356,12 @@
     const group = tab.groups.find((g) => g.id === groupId);
     if (!group) return;
 
-    // Check if parameter already exists in this group
     const exists = group.items.some((i) => i.paramId === param.id);
     if (exists) {
       alert("This parameter is already in this group");
       return;
     }
 
-    // Add to schema.inputs or schema.outputs if not already there
     if (sourceType === "input") {
       const inputExists = schema.inputs.some((i) => i.id === param.id);
       if (!inputExists) {
@@ -442,8 +438,6 @@
     } else {
       group.items = [...group.items, newItem];
     }
-
-    schema.layout.tabs = [...schema.layout.tabs];
   }
 
   function removeItem(tabId: string, groupId: string, itemId: string) {
@@ -505,7 +499,6 @@
 
     const [movedItem] = sourceGroup.items.splice(sourceIndex, 1);
 
-    // Add to target group based on drop position
     //TODO: When the group is empty, its not possible to move items into it from another group
     let targetIndex = targetGroup.items.findIndex(
       (i) => i.id === targetItem.id

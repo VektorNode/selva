@@ -102,16 +102,9 @@
         : { label: "☁️ Rhino Compute", variant: "compute" as const }
   );
 
-  // Initialize on mount
   onMount(() => {
     const initializeSchema = async () => {
       sessionId = page.url.searchParams.get("session") || "";
-
-      // Check URL parameter for mode (e.g., ?mode=compute)
-      const modeParam = page.url.searchParams.get("mode");
-      if (modeParam === "compute") {
-        runtimeMode = "compute";
-      }
 
       if (!sessionId && runtimeMode === "local") {
         error = "No session ID provided";
@@ -119,7 +112,6 @@
         return;
       }
 
-      // Load schema from session
       if (runtimeMode === "local") {
         schema = await api.getSchema(sessionId);
 
@@ -129,31 +121,22 @@
           loading = false;
           return;
         }
-      } else {
-        // For compute mode, try loading from session if provided
-        if (sessionId) {
-          schema = await api.getSchema(sessionId);
-        }
-
-        if (!schema) {
-          error =
-            "Schema not found. Please provide a valid schema or session ID.";
-          loading = false;
-          return;
-        }
       }
 
-      // Ensure layout has tabs array for backward compatibility
+      if (!schema) {
+        error =
+          "Schema not found. Please provide a valid schema or session ID.";
+        loading = false;
+        return;
+      }
+
       if (!schema.layout.tabs) {
         schema.layout.tabs = [];
       }
 
-      // Load available parameters to get default values (not stored in schema)
       const availableParams = await api.getAvailableParameters(sessionId);
 
-      // Initialize values with defaults using GUID as key (stable across name changes)
       schema.inputs.forEach((input) => {
-        // Get default from available parameters (live from Grasshopper)
         const availableParam = availableParams?.parameters.find(
           (p) => p.id === input.id
         );
@@ -166,12 +149,10 @@
         values[input.id] = defaultValue;
       });
 
-      // Outputs start with null - they'll be populated by live data from Grasshopper
       schema.outputs.forEach((output) => {
         values[output.id] = null;
       });
 
-      // Setup WebSocket connection for local mode
       if (runtimeMode === "local") {
         const connected = await wsClient.connect();
 
@@ -179,11 +160,9 @@
           console.log("[Preview] WebSocket connected");
           wsConnected = true;
 
-          // Listen for current input values from Grasshopper
           wsClient.on("currentValues", (message) => {
             if (message.sessionId === sessionId) {
               console.log("[Preview] Received current values:", message.values);
-              // Mark as remote update to prevent feedback loop
               isRemoteUpdate = true;
               values = { ...values, ...message.values };
               isRemoteUpdate = false;
@@ -194,7 +173,6 @@
           wsClient.on("outputs", (message) => {
             if (message.sessionId === sessionId) {
               console.log("[Preview] Received outputs:", message.outputs);
-              // Only update outputs (not inputs) to avoid feedback
               const outputUpdates = Object.fromEntries(
                 Object.entries(message.outputs).filter(([paramId]) =>
                   schema?.outputs.some((o) => o.id === paramId)
@@ -209,11 +187,9 @@
             }
           });
 
-          // Also support 'outputUpdate' message type
           wsClient.on("outputUpdate", (message) => {
             if (message.sessionId === sessionId) {
               console.log("[Preview] Received output update:", message.outputs);
-              // Only update outputs (not inputs) to avoid feedback
               const outputUpdates = Object.fromEntries(
                 Object.entries(message.outputs).filter(([paramId]) =>
                   schema?.outputs.some((o) => o.id === paramId)
@@ -228,7 +204,6 @@
             }
           });
 
-          // Listen for schema updates (parameter removal/modification)
           wsClient.on("schemaUpdated", (message) => {
             if (message.sessionId === sessionId) {
               console.log("[Preview] Schema updated:", {
@@ -238,7 +213,6 @@
 
               const removedCount = message.removedIds?.length || 0;
 
-              // Create a completely new schema object to trigger Svelte reactivity
               const newSchema = JSON.parse(JSON.stringify(message.schema));
 
               // Ensure layout has tabs array for backward compatibility
@@ -246,7 +220,6 @@
                 newSchema.layout.tabs = [];
               }
 
-              // Remove values for deleted parameters FIRST
               if (message.removedIds && message.removedIds.length > 0) {
                 const newValues = { ...values };
                 message.removedIds.forEach((id: string) => {
@@ -259,14 +232,11 @@
                 );
               }
 
-              // Force complete re-render by temporarily clearing schema
               schema = null;
 
-              // Use setTimeout to ensure DOM updates before setting new schema
               setTimeout(() => {
                 schema = newSchema;
 
-                // Show notification
                 if (removedCount > 0) {
                   showNotification(
                     `Schema updated: ${removedCount} parameter${removedCount > 1 ? "s" : ""} removed`
@@ -276,7 +246,6 @@
             }
           });
 
-          // Request current values from Grasshopper on initial connection
           console.log("[Preview] Requesting current values from Grasshopper");
           wsClient.requestCurrentValues(sessionId);
         } else {
@@ -293,7 +262,6 @@
     initializeSchema();
   });
 
-  // Cleanup on destroy
   $effect(() => {
     return () => {
       if (wsConnected) {
@@ -343,7 +311,6 @@
     {/if}
   </div>
 
-  <!-- Schema Update Notification Toast -->
   {#if schemaUpdateNotification}
     <div
       class="fixed bottom-8 right-8 bg-blue-600 text-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 animate-[slideInRight_0.3s_ease-out] z-50"
