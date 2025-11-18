@@ -39,7 +39,7 @@
       "bg-red-600 text-white border-transparent hover:bg-red-700 focus:ring-red-500",
     ghost:
       "bg-transparent text-gray-700 border-transparent hover:bg-gray-100 focus:ring-gray-500",
-    icon: "bg-transparent text-gray-600 border-transparent hover:bg-gray-100 focus:ring-gray-500 p-1",
+    icon: " text-gray-600 border-transparent hover:bg-gray-100 hover:text-gray-900 focus:ring-gray-500 size-6 transition-all duration-200 shadow-sm hover:shadow-md flex item-center justify-center",
   };
 
   const sizeClasses = {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { dragStore } from "$lib/stores/dragStore.svelte";
   import type { AvailableParameter } from "$lib/types/schema";
+  import { inputColor, outputColor } from "../styles";
 
   interface Props {
     parameter: AvailableParameter;
@@ -33,10 +34,10 @@
 
 <div
   class={`
-    p-3 bg-gray-50 rounded border-2 border-transparent mb-2
+    p-3 rounded-xl border-2 border-transparent mb-2
     flex justify-between items-center gap-4
     cursor-grab hover:bg-gray-100 hover:border-blue-500
-    transition-all
+    transition-all ${category === "input" ? inputColor : outputColor}
     ${isDragging ? "opacity-50 cursor-grabbing" : ""}
   `}
   draggable="true"

@@ -26,6 +26,7 @@
     mapParamTypeToWidgetType,
     createDefaultWidgetConfig,
   } from "$lib/utils/widget-config";
+  import Save from "$lib/components/ui/icons/Save.svelte";
 
   let sessionId = $state("");
   let schema = $state<UISchema | null>(null);
@@ -34,7 +35,6 @@
   let error = $state("");
   let activeTabId = $state<string | null>(null);
 
-  // Track which parameters are actually placed in the layout (not just in schema)
   const placedInLayoutIds = $derived(() => {
     const ids = new Set<string>();
     schema?.layout?.tabs?.forEach((tab) => {
@@ -437,7 +437,7 @@
 
               <ParameterList
                 title="Inputs"
-                icon="📥"
+                icon="mdi:input"
                 parameters={availableInputs}
                 category="input"
                 emptyMessage="No contextual parameters found."
@@ -445,7 +445,7 @@
 
               <ParameterList
                 title="Outputs"
-                icon="📤"
+                icon="mdi:output"
                 parameters={availableOutputs}
                 category="output"
                 emptyMessage="No context output components found."
@@ -532,8 +532,8 @@
             </Panel>
 
             <div class="flex justify-end gap-4">
-              <Button variant="success" icon="💾" onclick={saveSchema}
-                >Save Schema</Button
+              <Button variant="success" onclick={saveSchema}
+                ><Save></Save>Save Schema</Button
               >
             </div>
           </main>

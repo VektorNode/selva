@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { dragStore } from "$lib/stores/dragStore.svelte";
+  import Drop from "../ui/icons/Drop.svelte";
 
   interface Props {
     acceptTypes?: string[];
@@ -61,7 +62,7 @@
 >
   {#if isEmpty}
     <div class="flex flex-col items-center gap-2">
-      <span class="text-4xl opacity-50">📥</span>
+      <span class="text-4xl opacity-50"><Drop /></span>
       <span class="text-sm text-gray-600">{label}</span>
     </div>
   {:else}

@@ -5,7 +5,7 @@
 
   interface ParameterListProps {
     title: string;
-    icon: string;
+    icon: string; //Icon name for Iconify
     parameters: AvailableParameter[];
     category: "input" | "output";
     emptyMessage?: string;
@@ -13,7 +13,6 @@
 
   let {
     title,
-    icon,
     parameters,
     category,
     emptyMessage = "No parameters found.",
@@ -21,8 +20,9 @@
 </script>
 
 <div class="mb-6">
-  <h3 class="text-base font-semibold text-gray-700 mb-3">
-    {icon}
+  <h3
+    class="text-base font-semibold text-gray-700 mb-3 flex items-center gap-2"
+  >
     {title} ({parameters.length})
   </h3>
   {#if parameters.length === 0}

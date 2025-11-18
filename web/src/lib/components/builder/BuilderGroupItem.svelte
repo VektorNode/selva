@@ -3,6 +3,9 @@
   import type { LayoutItem, AvailableParameter } from "$lib/types/schema";
   import Badge from "../ui/Badge.svelte";
   import Button from "../ui/Button.svelte";
+  import IconOutput from "../ui/icons/IconOutput.svelte";
+  import IconInput from "../ui/icons/IconInput.svelte";
+  import { inputColor, outputColor } from "../styles";
 
   interface BuilderGroupItemProps {
     item: LayoutItem;
@@ -141,10 +144,11 @@
 
   <div
     class={`
-			bg-white border border-gray-300 rounded-md p-3 transition-all
+			 border border-gray-300 rounded-md p-3 transition-all
 			cursor-grab hover:border-blue-600 hover:shadow-md
 			${isDragging ? "opacity-50 cursor-grabbing" : ""}
 			${isDragOver ? "border-blue-600" : ""}
+      ${item.type === "input" ? inputColor : outputColor}
 		`}
     draggable="true"
     role="button"
@@ -157,7 +161,11 @@
   >
     <div class="flex items-center gap-2 mb-2">
       <span class="text-base">
-        {item.type === "input" ? "📥" : "📤"}
+        {#if item.type === "input"}
+          <IconInput />
+        {:else}
+          <IconOutput />
+        {/if}
       </span>
       <input
         type="text"
@@ -183,7 +191,7 @@
         ⋮⋮ Drag to reorder
       </span>
       <Button
-        variant="ghost"
+        variant="icon"
         size="mini"
         class="hover:bg-red-600 hover:text-white"
         onclick={onRemove}

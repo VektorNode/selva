@@ -4,6 +4,7 @@
   import type { GroupConfig } from "$lib/types/schema";
   import Button from "../ui/Button.svelte";
   import DropZone from "./DropZone.svelte";
+  import Trash from "../ui/icons/Trash.svelte";
 
   interface EditableGroupProps {
     group: GroupConfig;
@@ -79,7 +80,9 @@
           class="w-[50px] px-2 py-1 border border-gray-300 rounded"
         />
       </label>
-      <Button variant="icon" onclick={onRemove}>🗑️</Button>
+      <Button variant="icon" class="hover:bg-red-500" onclick={onRemove}
+        ><Trash /></Button
+      >
     </div>
   </div>
 

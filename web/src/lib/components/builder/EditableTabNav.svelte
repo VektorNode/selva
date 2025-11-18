@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import type { TabConfig } from "$lib/types/schema";
+  import Edit from "../ui/icons/Edit.svelte";
 
   interface EditableTabNavProps {
     tabs: TabConfig[];
@@ -89,7 +90,7 @@
         title="Edit tab label"
         aria-label="Edit tab label"
       >
-        ✎
+        <Edit />
       </button>
 
       <!-- Remove button -->
