@@ -14,6 +14,7 @@ namespace ComputeBuilder.Utils
     public class ValueApplicator
     {
         private Dictionary<string, object> _lastAppliedValues = new Dictionary<string, object>();
+        private List<IGH_ActiveObject> _pendingExpirations = new List<IGH_ActiveObject>();
 
         private static readonly Dictionary<string, (Type GhType, Func<object, IGH_Goo> Converter)> TypeHandlers =
             new Dictionary<string, (Type, Func<object, IGH_Goo>)>
@@ -25,14 +26,14 @@ namespace ComputeBuilder.Utils
             };
 
         /// <summary>
-        /// Apply values from web UI to Grasshopper parameters
+        /// Apply values from web UI to Grasshopper parameters and schedule a solution
+        /// Uses the ScheduleSolution pattern for clean, predictable behavior
         /// </summary>
-        /// <param name="expireObjects">If true, expire the parameters after updating. Set to false if solution is in progress.</param>
         /// <returns>Number of parameters updated</returns>
-        public int ApplyValues(GH_Document document, UISchema schema, Dictionary<string, object> values, Action<GH_RuntimeMessageLevel, string> addMessage, bool expireObjects = true)
+        public int ApplyValuesAndSchedule(GH_Document document, UISchema schema, Dictionary<string, object> values, Action<GH_RuntimeMessageLevel, string> addMessage)
         {
             int updateCount = 0;
-            List<IGH_ActiveObject> expiredObjects = new List<IGH_ActiveObject>();
+            _pendingExpirations.Clear();
 
             foreach (var input in schema.Inputs)
             {
@@ -63,7 +64,7 @@ namespace ComputeBuilder.Utils
 
                             if (paramObject is IGH_ActiveObject activeObj)
                             {
-                                expiredObjects.Add(activeObj);
+                                _pendingExpirations.Add(activeObj);
                             }
                         }
                     }
@@ -75,16 +76,25 @@ namespace ComputeBuilder.Utils
                 }
             }
 
-            // Only expire if requested and safe to do so
-            if (expireObjects && expiredObjects.Count > 0)
+            // Schedule solution using recommended pattern
+            if (_pendingExpirations.Count > 0)
             {
-                foreach (var obj in expiredObjects)
-                {
-                    obj.ExpireSolution(false); // false = don't recompute immediately, batch them
-                }
+                document.ScheduleSolution(10, ExpireCallback);
             }
 
             return updateCount;
+        }
+
+        /// <summary>
+        /// Callback for ScheduleSolution - expires parameters and nothing else
+        /// </summary>
+        private void ExpireCallback(GH_Document doc)
+        {
+            foreach (var obj in _pendingExpirations)
+            {
+                obj.ExpireSolution(false);
+            }
+            _pendingExpirations.Clear();
         }
 
         /// <summary>

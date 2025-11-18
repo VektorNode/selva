@@ -21,11 +21,6 @@ namespace ComputeBuilder.Components
         private bool _disposed = false;
         private GH_Document _currentDocument;
         private bool _eventsRegistered = false;
-        private int _solutionEndCount = 0;
-        private bool _solutionInProgress = false;
-        private bool _pendingSolutionRequest = false;
-        private readonly object _solutionLock = new object();
-        private bool _needsInitialExpire = false;
 
         // Embedded schema - persists with the .gh file
         private UISchema _embeddedSchema = null;
@@ -171,21 +166,17 @@ namespace ComputeBuilder.Components
                     _persistenceManager.SaveValues(_embeddedValues);
 
                     // Apply values immediately to Grasshopper parameters
-                    // DON'T expire since we're already inside SolveInstance (during a solution)
                     if (_embeddedSchema != null)
                     {
-                        int updatedCount = _valueApplicator.ApplyValues(
+                        int updatedCount = _valueApplicator.ApplyValuesAndSchedule(
                             document,
                             _embeddedSchema,
                             _embeddedValues,
-                            AddRuntimeMessage,
-                            expireObjects: false);
+                            AddRuntimeMessage);
 
                         if (updatedCount > 0)
                         {
                             _valueApplicator.SetLastAppliedValues(_embeddedValues);
-                            // Mark that we need to expire after this solution completes
-                            _needsInitialExpire = true;
                         }
                     }
                 }
@@ -256,7 +247,6 @@ namespace ComputeBuilder.Components
             // to ensure all components have finished computing
         }
 
-
         /// <summary>
         /// Handle value updates received via WebSocket
         /// </summary>
@@ -268,8 +258,8 @@ namespace ComputeBuilder.Components
                 if (document == null || _embeddedSchema == null)
                     return;
 
-                // Apply values, but DON'T expire if solution is in progress (avoid "expired during solution" error)
-                int updated = _valueApplicator.ApplyValues(document, _embeddedSchema, values, AddRuntimeMessage, expireObjects: !_solutionInProgress);
+                // Apply values and schedule solution
+                int updated = _valueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, values, AddRuntimeMessage);
 
                 if (updated > 0)
                 {
@@ -278,40 +268,11 @@ namespace ComputeBuilder.Components
 
                     // Update embedded values
                     _embeddedValues = new Dictionary<string, object>(values);
-
-                    // Trigger solution (or defer if one is already running)
-                    RequestSolution(document);
                 }
             }
             catch (Exception ex)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Request a solution, deferring if one is already in progress
-        /// </summary>
-        private void RequestSolution(GH_Document document)
-        {
-            lock (_solutionLock)
-            {
-                if (_solutionInProgress)
-                {
-                    // Solution is running, defer until it completes
-                    _pendingSolutionRequest = true;
-                }
-                else
-                {
-                    // Safe to trigger solution now
-                    Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
-                    {
-                        if (document != null && !_disposed)
-                        {
-                            document.NewSolution(false);
-                        }
-                    }));
-                }
             }
         }
 
@@ -501,7 +462,6 @@ namespace ComputeBuilder.Components
 
             try
             {
-                _currentDocument.SolutionStart += OnSolutionStart;
                 _currentDocument.SolutionEnd += OnSolutionEnd;
                 _currentDocument.ObjectsAdded += OnObjectsChanged;
                 _currentDocument.ObjectsDeleted += OnObjectsChanged;
@@ -526,7 +486,6 @@ namespace ComputeBuilder.Components
             {
                 try
                 {
-                    _currentDocument.SolutionStart -= OnSolutionStart;
                     _currentDocument.SolutionEnd -= OnSolutionEnd;
                     _currentDocument.ObjectsAdded -= OnObjectsChanged;
                     _currentDocument.ObjectsDeleted -= OnObjectsChanged;
@@ -545,77 +504,12 @@ namespace ComputeBuilder.Components
             }
         }
 
-        private void OnSolutionStart(object sender, GH_SolutionEventArgs e)
-        {
-            lock (_solutionLock)
-            {
-                _solutionInProgress = true;
-            }
-        }
-
         private void OnSolutionEnd(object sender, GH_SolutionEventArgs e)
         {
-            _solutionEndCount++;
-            Debug.WriteLine($"OnSolutionEnd invoked {_solutionEndCount} time(s) for document {(_currentDocument?.DocumentID.ToString() ?? "null")}");
-
             // Collect outputs after solution completes
             if (_embeddedSchema != null && _currentDocument != null)
             {
                 CollectAndSendOutputs(_currentDocument, _embeddedSchema);
-            }
-
-            bool shouldTriggerPending = false;
-            bool shouldExpireInitial = false;
-            lock (_solutionLock)
-            {
-                _solutionInProgress = false;
-
-                // Check if we need to expire parameters after initial load
-                if (_needsInitialExpire)
-                {
-                    _needsInitialExpire = false;
-                    shouldExpireInitial = true;
-                }
-                // Check if we have a pending request
-                else if (_pendingSolutionRequest)
-                {
-                    _pendingSolutionRequest = false;
-                    shouldTriggerPending = true;
-                }
-            }
-
-            // Handle initial expire (when loading file with Enable=true)
-            if (shouldExpireInitial && _embeddedSchema != null && _currentDocument != null)
-            {
-                // Now it's safe to expire the parameters
-                Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
-                {
-                    if (_currentDocument != null && _embeddedSchema != null && !_disposed)
-                    {
-                        // Expire all input parameters
-                        foreach (var input in _embeddedSchema.Inputs)
-                        {
-                            var paramObject = _currentDocument.FindObject(input.Id, false);
-                            if (paramObject is IGH_ActiveObject activeObj)
-                            {
-                                activeObj.ExpireSolution(false);
-                            }
-                        }
-                        // Trigger solution
-                        _currentDocument.NewSolution(false);
-                    }
-                }));
-            }
-            // Trigger pending solution immediately
-            else if (shouldTriggerPending && _currentDocument != null)
-            {
-                Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
-                {
-                    if (_currentDocument != null && !_disposed)
-                    {
-                        _currentDocument.NewSolution(false);
-                    }
-                }));
             }
         }
 
@@ -715,9 +609,6 @@ namespace ComputeBuilder.Components
             _valueApplicator?.Clear();
             _currentDocument = null;
             _previewOpen = false;
-            _solutionInProgress = false;
-            _pendingSolutionRequest = false;
-            _needsInitialExpire = false;
         }
 
         // IDisposable implementation
