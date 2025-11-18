@@ -465,7 +465,7 @@
                   <StateDisplay
                     type="empty"
                     size="large"
-                    icon="📑"
+                    icon="material-symbols:ballot"
                     title="No tabs yet"
                     message="Click 'Add Tab' to create your first tab"
                   />

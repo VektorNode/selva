@@ -83,22 +83,19 @@
     />
   {:else if isSliderWidget(item)}
     {@const config = item.config as SliderWidgetConfig}
-    <div class="flex items-center gap-4">
-      <input
-        id={inputId}
-        type="range"
-        {value}
-        min={config.min}
-        max={config.max}
-        step={config.step ?? 1}
-        class="w-full accent-blue-600"
-        oninput={(e) => {
-          value = parseFloat(e.currentTarget.value);
-          handleChange(parseFloat(e.currentTarget.value));
-        }}
-      />
-      <span class="min-w-[60px] font-mono text-sm text-gray-600">{value}</span>
-    </div>
+    <Input
+      type="number"
+      bind:value
+      min={config.min}
+      max={config.max}
+      step={config.step ?? 1}
+      oninput={(e) => {
+        const newValue = parseFloat(e.currentTarget.value);
+        if (!isNaN(newValue)) {
+          handleChange(newValue);
+        }
+      }}
+    />
   {:else if isCheckboxWidget(item)}
     {@const config = item.config as CheckboxWidgetConfig}
     <label class="flex items-center gap-3 cursor-pointer">

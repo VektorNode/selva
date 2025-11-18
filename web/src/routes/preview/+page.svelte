@@ -78,7 +78,7 @@
       );
 
       // Send via WebSocket with GUID keys (what C# expects)
-      wsClient.sendValueUpdate(sessionId, values);
+      wsClient.sendValueUpdate(sessionId, $state.snapshot(values));
     } else if (!wsClient.isConnected) {
       console.warn("[Preview] Cannot send values - WebSocket not connected");
     }

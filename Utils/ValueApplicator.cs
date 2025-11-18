@@ -27,8 +27,9 @@ namespace ComputeBuilder.Utils
         /// <summary>
         /// Apply values from web UI to Grasshopper parameters
         /// </summary>
+        /// <param name="expireObjects">If true, expire the parameters after updating. Set to false if solution is in progress.</param>
         /// <returns>Number of parameters updated</returns>
-        public int ApplyValues(GH_Document document, UISchema schema, Dictionary<string, object> values, Action<GH_RuntimeMessageLevel, string> addMessage)
+        public int ApplyValues(GH_Document document, UISchema schema, Dictionary<string, object> values, Action<GH_RuntimeMessageLevel, string> addMessage, bool expireObjects = true)
         {
             int updateCount = 0;
             List<IGH_ActiveObject> expiredObjects = new List<IGH_ActiveObject>();
@@ -74,7 +75,8 @@ namespace ComputeBuilder.Utils
                 }
             }
 
-            if (expiredObjects.Count > 0)
+            // Only expire if requested and safe to do so
+            if (expireObjects && expiredObjects.Count > 0)
             {
                 foreach (var obj in expiredObjects)
                 {

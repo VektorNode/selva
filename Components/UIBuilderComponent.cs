@@ -23,7 +23,8 @@ namespace ComputeBuilder.Components
         private bool _eventsRegistered = false;
         private int _solutionEndCount = 0;
         private bool _solutionInProgress = false;
-        private bool _pendingExpire = false;
+        private bool _pendingSolutionRequest = false;
+        private readonly object _solutionLock = new object();
 
         // Embedded schema - persists with the .gh file
         private UISchema _embeddedSchema = null;
@@ -82,7 +83,12 @@ namespace ComputeBuilder.Components
             // Initialize components on first run
             if (_schemaManager == null)
             {
-                _sessionId = Guid.NewGuid().ToString().Substring(0, 8);
+                // Only generate new session ID if not already loaded from file
+                if (string.IsNullOrEmpty(_sessionId))
+                {
+                    _sessionId = Guid.NewGuid().ToString().Substring(0, 8);
+                }
+
                 _schemaManager = new SchemaManager(_sessionId);
                 _valueApplicator = new ValueApplicator();
                 _communicationHandler = new CommunicationHandler(_sessionId);
@@ -164,13 +170,15 @@ namespace ComputeBuilder.Components
                     _persistenceManager.SaveValues(_embeddedValues);
 
                     // Apply values immediately to Grasshopper parameters
+                    // DON'T expire since we're already inside SolveInstance (during a solution)
                     if (_embeddedSchema != null)
                     {
                         int updatedCount = _valueApplicator.ApplyValues(
                             document,
                             _embeddedSchema,
                             _embeddedValues,
-                            AddRuntimeMessage);
+                            AddRuntimeMessage,
+                            expireObjects: false);
 
                         if (updatedCount > 0)
                         {
@@ -241,8 +249,8 @@ namespace ComputeBuilder.Components
         {
             base.AfterSolveInstance();
 
-            // Collect and send outputs via WebSocket
-            CollectAndSendOutputs(_currentDocument, _embeddedSchema);
+            // Note: Output collection happens in OnSolutionEnd event handler
+            // to ensure all components have finished computing
         }
 
 
@@ -257,7 +265,8 @@ namespace ComputeBuilder.Components
                 if (document == null || _embeddedSchema == null)
                     return;
 
-                int updated = _valueApplicator.ApplyValues(document, _embeddedSchema, values, AddRuntimeMessage);
+                // Apply values, but DON'T expire if solution is in progress (avoid "expired during solution" error)
+                int updated = _valueApplicator.ApplyValues(document, _embeddedSchema, values, AddRuntimeMessage, expireObjects: !_solutionInProgress);
 
                 if (updated > 0)
                 {
@@ -267,20 +276,39 @@ namespace ComputeBuilder.Components
                     // Update embedded values
                     _embeddedValues = new Dictionary<string, object>(values);
 
-                    // Trigger solution
-                    if (_solutionInProgress)
-                    {
-                        _pendingExpire = true;
-                    }
-                    else
-                    {
-                        Rhino.RhinoApp.InvokeOnUiThread((Action)(() => { ExpireSolution(true); }));
-                    }
+                    // Trigger solution (or defer if one is already running)
+                    RequestSolution(document);
                 }
             }
             catch (Exception ex)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Request a solution, deferring if one is already in progress
+        /// </summary>
+        private void RequestSolution(GH_Document document)
+        {
+            lock (_solutionLock)
+            {
+                if (_solutionInProgress)
+                {
+                    // Solution is running, defer until it completes
+                    _pendingSolutionRequest = true;
+                }
+                else
+                {
+                    // Safe to trigger solution now
+                    Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
+                    {
+                        if (document != null && !_disposed)
+                        {
+                            document.NewSolution(false);
+                        }
+                    }));
+                }
             }
         }
 
@@ -516,13 +544,15 @@ namespace ComputeBuilder.Components
 
         private void OnSolutionStart(object sender, GH_SolutionEventArgs e)
         {
-            _solutionInProgress = true;
+            lock (_solutionLock)
+            {
+                _solutionInProgress = true;
+            }
         }
 
         private void OnSolutionEnd(object sender, GH_SolutionEventArgs e)
         {
             _solutionEndCount++;
-            _solutionInProgress = false;
             Debug.WriteLine($"OnSolutionEnd invoked {_solutionEndCount} time(s) for document {(_currentDocument?.DocumentID.ToString() ?? "null")}");
 
             // Collect outputs after solution completes
@@ -531,11 +561,29 @@ namespace ComputeBuilder.Components
                 CollectAndSendOutputs(_currentDocument, _embeddedSchema);
             }
 
-            // If there's a pending expire, trigger it now
-            if (_pendingExpire)
+            bool shouldTriggerPending = false;
+            lock (_solutionLock)
             {
-                _pendingExpire = false;
-                Rhino.RhinoApp.InvokeOnUiThread((Action)(() => { ExpireSolution(true); }));
+                _solutionInProgress = false;
+
+                // Check if we have a pending request
+                if (_pendingSolutionRequest)
+                {
+                    _pendingSolutionRequest = false;
+                    shouldTriggerPending = true;
+                }
+            }
+
+            // Trigger pending solution immediately
+            if (shouldTriggerPending && _currentDocument != null)
+            {
+                Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
+                {
+                    if (_currentDocument != null && !_disposed)
+                    {
+                        _currentDocument.NewSolution(false);
+                    }
+                }));
             }
         }
 
@@ -636,7 +684,7 @@ namespace ComputeBuilder.Components
             _currentDocument = null;
             _previewOpen = false;
             _solutionInProgress = false;
-            _pendingExpire = false;
+            _pendingSolutionRequest = false;
         }
 
         // IDisposable implementation
