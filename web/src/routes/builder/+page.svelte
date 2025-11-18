@@ -457,7 +457,7 @@
           <main class="flex flex-col gap-6">
             <Panel>
               {#snippet headerActions()}
-                <Button variant="primary" onclick={addTab}>+ Add Tab</Button>
+                <Button onclick={addTab}>+ Add Tab</Button>
               {/snippet}
 
               <div class="min-h-[200px]">
@@ -483,7 +483,7 @@
                     <div class="animate-[fadeIn_0.2s]">
                       <div class="mb-6 flex justify-end">
                         <Button
-                          variant="secondary"
+                          variant="outline"
                           onclick={() => addGroup(activeTab.id)}
                         >
                           + Add Group
@@ -532,7 +532,7 @@
             </Panel>
 
             <div class="flex justify-end gap-4">
-              <Button variant="success" onclick={saveSchema}
+              <Button onclick={saveSchema}
                 ><Save></Save>Save Schema</Button
               >
             </div>

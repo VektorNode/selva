@@ -40,7 +40,6 @@ namespace ComputeBuilder.Components
             if (!DA.GetData(0, ref sessionId)) return;
             DA.GetData(1, ref clear);
 
-            // Load schema
             var schema = SessionManager.ReadJson<UISchema>(SessionManager.GetSchemaPath(sessionId));
             if (schema == null)
             {
@@ -49,7 +48,6 @@ namespace ComputeBuilder.Components
                 return;
             }
 
-            // Get document
             var document = this.OnPingDocument();
             if (document == null)
             {
@@ -64,7 +62,6 @@ namespace ComputeBuilder.Components
                 return;
             }
 
-            // Clear contextual data
             int clearedCount = 0;
             int errorCount = 0;
             var recipientsToExpire = new System.Collections.Generic.HashSet<IGH_ActiveObject>();

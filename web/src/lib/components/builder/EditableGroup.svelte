@@ -2,7 +2,7 @@
   import type { Snippet } from "svelte";
 
   import type { GroupConfig } from "$lib/types/schema";
-  import Button from "../ui/Button.svelte";
+  import { Button } from "$lib/components/ui/button";
   import DropZone from "./DropZone.svelte";
   import Trash from "../ui/icons/Trash.svelte";
 
@@ -80,7 +80,7 @@
           class="w-[50px] px-2 py-1 border border-gray-300 rounded"
         />
       </label>
-      <Button variant="icon" class="hover:bg-red-500" onclick={onRemove}
+      <Button variant="ghost" size="icon" class="hover:bg-destructive hover:text-destructive-foreground" onclick={onRemove}
         ><Trash /></Button
       >
     </div>

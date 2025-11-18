@@ -1,8 +1,8 @@
 <script lang="ts">
   import { dragStore } from "$lib/stores/dragStore.svelte";
   import type { LayoutItem, AvailableParameter } from "$lib/types/schema";
-  import Badge from "../ui/Badge.svelte";
-  import Button from "../ui/Button.svelte";
+  import { Badge } from "$lib/components/ui/badge";
+  import { Button } from "$lib/components/ui/button";
   import IconOutput from "../ui/icons/IconOutput.svelte";
   import IconInput from "../ui/icons/IconInput.svelte";
   import { inputColor, outputColor } from "../styles";
@@ -176,7 +176,7 @@
     </div>
     {#if paramInfo}
       <div class="flex gap-2 mb-2 text-xs">
-        <Badge variant="info" size="small">
+        <Badge variant="secondary">
           {paramInfo.paramType}
         </Badge>
         <span class="text-gray-500 font-mono">
@@ -191,9 +191,9 @@
         ⋮⋮ Drag to reorder
       </span>
       <Button
-        variant="icon"
-        size="mini"
-        class="hover:bg-red-600 hover:text-white"
+        variant="ghost"
+        size="icon-sm"
+        class="hover:bg-destructive hover:text-destructive-foreground"
         onclick={onRemove}
       >
         ×

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import Badge from "../ui/Badge.svelte";
+  import { Badge } from "$lib/components/ui/badge";
+  import { cn } from "$lib/utils";
 
   interface BadgeConfig {
     label: string;
@@ -22,6 +23,14 @@
     children,
     class: className = "",
   }: PageHeaderProps = $props();
+
+  // Map custom variants to colors
+  const badgeStyles: Record<string, string> = {
+    connected: "bg-green-500 text-white border-transparent",
+    disconnected: "bg-red-500 text-white border-transparent",
+    solving: "bg-orange-500 text-white border-transparent",
+    compute: "bg-blue-500 text-white border-transparent",
+  };
 </script>
 
 <header
@@ -51,7 +60,7 @@
           {/if}
 
           {#if badge}
-            <Badge variant={badge.variant} size="small">
+            <Badge class={badgeStyles[badge.variant]}>
               {badge.label}
             </Badge>
           {/if}

@@ -1,9 +1,10 @@
 <script lang="ts">
   import type { UISchema } from "$lib/types/schema";
   import Panel from "../layout/Panel.svelte";
-  import FormField from "../ui/FormField.svelte";
-  import Input from "../ui/Input.svelte";
-  import Textarea from "../ui/Textarea.svelte";
+  import { Input } from "$lib/components/ui/input";
+  import { Textarea } from "$lib/components/ui/textarea";
+  import { Label } from "$lib/components/ui/label";
+  import { Checkbox } from "$lib/components/ui/checkbox";
 
   interface SchemaInfoPanelProps {
     schema: UISchema;
@@ -13,20 +14,24 @@
 </script>
 
 <Panel title="Schema Information">
-  <FormField label="Name">
-    <Input bind:value={schema.name} />
-  </FormField>
-  <FormField label="Description">
-    <Textarea bind:value={schema.description} />
-  </FormField>
-  <FormField label="">
-    <label class="flex items-center gap-2 cursor-pointer">
-      <input
-        type="checkbox"
-        bind:checked={schema.enable3dViewer}
-        class="w-4 h-4"
+  <div class="flex flex-col gap-4">
+    <div class="flex flex-col gap-2">
+      <Label for="schema-name">Name</Label>
+      <Input id="schema-name" bind:value={schema.name} />
+    </div>
+    <div class="flex flex-col gap-2">
+      <Label for="schema-description">Description</Label>
+      <Textarea id="schema-description" bind:value={schema.description} />
+    </div>
+    <div class="flex items-center gap-2">
+      <Checkbox
+        id="enable-3d-viewer"
+        checked={schema.enable3dViewer}
+        onCheckedChange={(checked) => schema.enable3dViewer = !!checked}
       />
-      <span>Enable 3D Viewer Output</span>
-    </label>
-  </FormField>
+      <Label for="enable-3d-viewer" class="cursor-pointer">
+        Enable 3D Viewer Output
+      </Label>
+    </div>
+  </div>
 </Panel>

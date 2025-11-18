@@ -27,22 +27,22 @@
       <PageHeader title="ComputeBuilder" {sessionId}>
         <nav class="flex gap-2">
           <Button
-            variant={mode === "home" ? "primary" : "secondary"}
-            size="small"
+            variant={mode === "home" ? "default" : "outline"}
+            size="sm"
             onclick={() => (mode = "home")}
           >
             Home
           </Button>
           <Button
-            variant={mode === "builder" ? "primary" : "secondary"}
-            size="small"
+            variant={mode === "builder" ? "default" : "outline"}
+            size="sm"
             onclick={() => switchMode("builder")}
           >
             Schema Builder
           </Button>
           <Button
-            variant={mode === "preview" ? "primary" : "secondary"}
-            size="small"
+            variant={mode === "preview" ? "default" : "outline"}
+            size="sm"
             onclick={() => switchMode("preview")}
           >
             Interactive Preview
