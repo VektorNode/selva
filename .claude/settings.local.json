@@ -4,7 +4,9 @@
       "Bash(dir:*)",
       "Bash(npm install)",
       "Bash(pnpm add:*)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(mkdir:*)",
+      "Bash(npm run generate:ts:*)"
     ],
     "deny": [],
     "ask": []

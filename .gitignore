@@ -51,7 +51,7 @@ Thumbs.db
 ehthumbs.db
 
 # Web
-web/node_modules/
+**/node_modules/
 web/.svelte-kit/
 web/build/
 web/package/

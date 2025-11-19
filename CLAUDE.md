@@ -93,6 +93,32 @@ npm run check:watch
 
 These scripts build the plugin, install it, and start the dev server.
 
+### Schema Generation (Single Source of Truth)
+
+The project uses JSON Schema as the single source of truth for type definitions shared between C# and TypeScript.
+
+```bash
+# Generate both TypeScript and C# types from JSON Schema
+./generate-schemas.sh
+
+# Or manually:
+cd schemas
+npm run generate:all
+```
+
+**Source:** `schemas/ui-schema.json`
+**Generated files:**
+- TypeScript: `web/src/lib/types/generated/schema.ts`
+- C#: `Plugin/Models/Generated/UISchema.Generated.cs`
+
+**Workflow:**
+1. Edit `schemas/ui-schema.json` to modify type definitions
+2. Run `./generate-schemas.sh` to regenerate both languages
+3. Run `npm run check` in web/ to verify TypeScript
+4. Run `dotnet build` to verify C#
+
+**Important:** Never edit the generated files directly - they will be overwritten.
+
 ## Architecture Overview
 
 ### WebSocket-First Communication Architecture
@@ -180,12 +206,18 @@ There is no separate `ParameterValidator.cs` utility file at this time.
 
 ### Type Safety Between C# and TypeScript
 
-The codebase maintains strict type alignment between:
+The codebase uses **JSON Schema as the single source of truth** for type definitions:
 
-- C# models in `Models/UISchema.cs`
-- TypeScript types in `web/src/lib/types/schema.ts`
+- **Source:** `schemas/ui-schema.json`
+- **Generated C#:** `Plugin/Models/Generated/UISchema.Generated.cs`
+- **Generated TypeScript:** `web/src/lib/types/generated/schema.ts`
 
-When adding new data structures, update BOTH files to maintain synchronization.
+**Workflow for adding new types:**
+1. Define the type in `schemas/ui-schema.json`
+2. Run `./generate-schemas.sh` to generate both C# and TypeScript
+3. Import from the generated files in your code
+
+The generator produces **discriminated unions** for layout items, enabling type-safe pattern matching in both languages.
 
 ### Reflection for Parameter Assignment
 
