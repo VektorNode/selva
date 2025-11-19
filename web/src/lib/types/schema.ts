@@ -16,12 +16,12 @@ export interface UISchema {
 
 export type GrasshopperParamType =
 	// Primitive types
-	| "Number"
-	| "Integer"
-	| "Boolean"
-	| "Text"
+	| 'Number'
+	| 'Integer'
+	| 'Boolean'
+	| 'Text'
 	// Fallback
-	| "Generic";
+	| 'Generic';
 
 export interface IoParamSchema {
 	id: string; // Grasshopper parameter instance GUID - stable reference for mapping
@@ -87,15 +87,12 @@ export interface CheckboxWidgetConfig {
 /**
  * Text display widget configuration
  */
-export interface TextDisplayConfig {
-}
+export interface TextDisplayConfig {}
 
 /**
  * Number display widget configuration
  */
-export interface NumberDisplayConfig {
-}
-
+export interface NumberDisplayConfig {}
 
 // ============================================================================
 // DISCRIMINATED LAYOUT ITEMS
@@ -117,41 +114,41 @@ interface BaseLayoutItem {
  * Input layout items with discriminated widget types
  */
 export type InputLayoutItem =
-	| {
-		type: 'input';
-		widgetType: 'number';
-		config: NumberWidgetConfig;
-	} & BaseLayoutItem
-	| {
-		type: 'input';
-		widgetType: 'text';
-		config: TextWidgetConfig;
-	} & BaseLayoutItem
-	| {
-		type: 'input';
-		widgetType: 'dropdown';
-		config: DropdownWidgetConfig;
-	} & BaseLayoutItem
-	| {
-		type: 'input';
-		widgetType: 'checkbox';
-		config: CheckboxWidgetConfig;
-	} & BaseLayoutItem;
+	| ({
+			type: 'input';
+			widgetType: 'number';
+			config: NumberWidgetConfig;
+	  } & BaseLayoutItem)
+	| ({
+			type: 'input';
+			widgetType: 'text';
+			config: TextWidgetConfig;
+	  } & BaseLayoutItem)
+	| ({
+			type: 'input';
+			widgetType: 'dropdown';
+			config: DropdownWidgetConfig;
+	  } & BaseLayoutItem)
+	| ({
+			type: 'input';
+			widgetType: 'checkbox';
+			config: CheckboxWidgetConfig;
+	  } & BaseLayoutItem);
 
 /**
  * Output layout items with discriminated widget types
  */
 export type OutputLayoutItem =
-	| {
-		type: 'output';
-		widgetType: 'text';
-		config: TextDisplayConfig;
-	} & BaseLayoutItem
-	| {
-		type: 'output';
-		widgetType: 'number';
-		config: NumberDisplayConfig;
-	} & BaseLayoutItem;
+	| ({
+			type: 'output';
+			widgetType: 'text';
+			config: TextDisplayConfig;
+	  } & BaseLayoutItem)
+	| ({
+			type: 'output';
+			widgetType: 'number';
+			config: NumberDisplayConfig;
+	  } & BaseLayoutItem);
 
 /**
  * Union of all layout item types
@@ -238,18 +235,26 @@ export function isOutputLayoutItem(item: LayoutItem): item is OutputLayoutItem {
 }
 
 // Widget-specific type guards
-export function isNumberWidget(item: LayoutItem): item is Extract<InputLayoutItem, { widgetType: 'number' }> {
+export function isNumberWidget(
+	item: LayoutItem
+): item is Extract<InputLayoutItem, { widgetType: 'number' }> {
 	return item.type === 'input' && item.widgetType === 'number';
 }
 
-export function isTextWidget(item: LayoutItem): item is Extract<InputLayoutItem, { widgetType: 'text' }> {
+export function isTextWidget(
+	item: LayoutItem
+): item is Extract<InputLayoutItem, { widgetType: 'text' }> {
 	return item.type === 'input' && item.widgetType === 'text';
 }
 
-export function isDropdownWidget(item: LayoutItem): item is Extract<InputLayoutItem, { widgetType: 'dropdown' }> {
+export function isDropdownWidget(
+	item: LayoutItem
+): item is Extract<InputLayoutItem, { widgetType: 'dropdown' }> {
 	return item.type === 'input' && item.widgetType === 'dropdown';
 }
 
-export function isCheckboxWidget(item: LayoutItem): item is Extract<InputLayoutItem, { widgetType: 'checkbox' }> {
+export function isCheckboxWidget(
+	item: LayoutItem
+): item is Extract<InputLayoutItem, { widgetType: 'checkbox' }> {
 	return item.type === 'input' && item.widgetType === 'checkbox';
 }

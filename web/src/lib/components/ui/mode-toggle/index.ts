@@ -1,1 +1,1 @@
-export { default as ModeToggle } from "./mode-toggle.svelte";
+export { default as ModeToggle } from './mode-toggle.svelte';

@@ -1,7 +1,13 @@
 // UI Primitives - Reusable design system components
 
 // shadcn-svelte components
-export { Button, buttonVariants, type ButtonProps, type ButtonVariant, type ButtonSize } from './button';
+export {
+	Button,
+	buttonVariants,
+	type ButtonProps,
+	type ButtonVariant,
+	type ButtonSize
+} from './button';
 export { Badge, badgeVariants, type BadgeVariant } from './badge';
 export { Input } from './input';
 export { Textarea } from './textarea';
