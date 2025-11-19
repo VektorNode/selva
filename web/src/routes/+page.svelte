@@ -6,6 +6,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import IconBuild from '$lib/components/ui/icons/IconBuild.svelte';
 	import IconBold from '$lib/components/ui/icons/IconBold.svelte';
+	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 
 	var sessionId = page.url.searchParams.get('session');
 
@@ -15,6 +16,7 @@
 </script>
 
 <PageContainer background="white">
+	<PageHeader title="ComputeBuilder" showModeToggle={true} />
 	{#if !sessionId}
 		<div class="flex min-h-screen items-center justify-center">
 			<StateDisplay

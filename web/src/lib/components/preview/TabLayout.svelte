@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { UISchema, InputParamSchema, OutputParamSchema } from '$lib/types/schema';
+	import type { UISchema, InputParamSchema, OutputParamSchema, SupportedTypes } from '$lib/types/schema';
 	import * as Card from '$lib/components/ui/card';
 	import StateDisplay from '../ui/StateDisplay.svelte';
 	import InputControl from './InputControl.svelte';
@@ -7,8 +7,8 @@
 
 	interface Props {
 		schema: UISchema;
-		values: Record<string, any>;
-		onValueChange: (paramId: string, value: any) => void;
+		values: Record<string, unknown>;
+		onValueChange: (paramId: string, value: SupportedTypes) => void;
 		debounceSliders?: boolean;
 	}
 

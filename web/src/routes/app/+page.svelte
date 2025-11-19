@@ -3,28 +3,18 @@
 	import { TabLayout, Layout } from '$lib/components/preview';
 	import { PageContainer, PageHeader } from '$lib/components/layout';
 	import { StateDisplay } from '$lib/components/ui';
-	import {
-		inputsToDataTrees,
-		solveGrasshopperDefinition,
-		GrasshopperResponseProcessor,
-		type NumericInputType,
-		type TextInputType,
-		type BooleanInputType,
-		type InputParam,
-		initThree,
-		updateScene
-	} from 'rhino-compute-core';
-	import type { InputParamSchema } from '$lib/types/schema';
+	import { initThree, updateScene, GrasshopperResponseProcessor } from 'rhino-compute-core';
 	import * as THREE from 'three';
-	import { ThreeMFLoader, type OrbitControls } from 'three/examples/jsm/Addons.js';
+	import { type OrbitControls } from 'three/examples/jsm/Addons.js';
 	import { onMount } from 'svelte';
 	import type { ThreeInitializerOptions } from 'rhino-compute-core/visualization';
+	import { getDefaultValue } from '$lib/utils/session';
 
 	let { data }: PageProps = $props();
 
 	let schema = $state(data.schema);
 
-	let values: Record<string, any> = $state({});
+	let values: Record<string, unknown> = $state({});
 	let solving = $state(false);
 	let error = $state('');
 	let canvas: HTMLCanvasElement | null = $state(null);
@@ -35,16 +25,14 @@
 
 	$effect(() => {
 		if (schema) {
-			const initialValues: Record<string, any> = {};
+			const initialValues: Record<string, unknown> = {};
 
 			schema.inputs.forEach((input) => {
 				console.log('Setting initial value for input:', input.name, input.default, input.id);
-				// Key by id (GUID) to match TabLayout's expectation
 				initialValues[input.id] = input.default ?? getDefaultValue(input.paramType);
 			});
 
 			schema.outputs.forEach((output) => {
-				// Key by id (GUID) to match TabLayout's expectation
 				initialValues[output.id] = null;
 			});
 
@@ -52,114 +40,58 @@
 		}
 	});
 
-	function getDefaultValue(type: string) {
-		switch (type) {
-			case 'number':
-				return 0;
-			case 'checkbox':
-				return false;
-			case 'text':
-				return '';
-			case 'color':
-				return '#000000';
-			default:
-				return null;
-		}
-	}
-
-	function transformInputParameter(input: InputParamSchema, value: any): InputParam {
-		const base = {
-			description: input.description || '',
-			name: input.nickname || input.name, // Use nickname for Rhino Compute mapping
-			nickname: input.nickname || null,
-			treeAccess: input.treeAccess || false,
-			paramId: input.id // Use id field which is the Grasshopper GUID
-		};
-
-		if (input.paramType === 'Number' || input.paramType === 'Integer') {
-			return {
-				...base,
-				paramType: input.paramType as 'Number' | 'Integer',
-				minimum: input.minimum,
-				maximum: input.maximum,
-				atLeast: input.atLeast,
-				atMost: input.atMost,
-				stepSize: input.paramType === 'Integer' ? 1 : input.stepSize,
-				default: value ?? input.default
-			} as NumericInputType;
-		} else if (input.paramType === 'Text') {
-			return {
-				...base,
-				paramType: 'Text',
-				default: value ?? input.default ?? ''
-			} as TextInputType;
-		} else if (input.paramType === 'Boolean') {
-			return {
-				...base,
-				paramType: 'Boolean',
-				default: value ?? input.default ?? false
-			} as BooleanInputType;
-		}
-
-		return {
-			...base,
-			paramType: 'Text',
-			default: value ?? ''
-		} as TextInputType;
-	}
-
-	async function handleValueChange(parameterId: string, value: any) {
-		// parameterId is the GUID (input.id)
+	async function handleValueChange(parameterId: string, value: unknown) {
 		values[parameterId] = value;
 
 		try {
 			solving = true;
 			error = '';
-			const inputTree = inputsToDataTrees(
-				schema.inputs
-					.filter((input) => input.paramType)
-					.map((input) => transformInputParameter(input, values[input.id]))
-			);
 
-			console.log('Solving with inputs:', inputTree);
+			const response = await fetch('/api/compute', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					inputs: schema.inputs,
+					values: $state.snapshot(values),
+					definitionUrl: 'http://localhost:5173/builder_test.gh',
+					serverUrl: 'http://localhost:5000/'
+				})
+			});
 
-			const solvedDefinition = await solveGrasshopperDefinition(
-				inputTree,
-				'http://localhost:5173/builder_test.gh',
-				{ serverUrl: 'http://localhost:5000/' }
-			);
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.message || 'Failed to solve definition');
+			}
 
+			const solvedDefinition = await response.json();
+
+			// Process the response on client side (mesh extraction requires Three.js)
 			const processor = new GrasshopperResponseProcessor(solvedDefinition);
 			const outputValues = processor.getValues();
 
+			// Update 3D viewer if enabled
 			if (schema.enable3dViewer && scene) {
 				const meshes = processor.extractMeshesFromResponse();
 				updateScene(scene, meshes, camera, controls, viewerInitialized);
 				viewerInitialized = true;
 			}
 
-			// Map outputs by id (Grasshopper GUID) instead of name
-			// This handles name/nickname collisions properly
-			const mappedOutputs: Record<string, any> = {};
+			// Map outputs by id (Grasshopper GUID)
+			const mappedOutputs: Record<string, unknown> = {};
 
-			// Map the compute response to our schema using the Grasshopper GUID (id field)
 			Object.entries(outputValues.values).forEach(([computeKey, computeValue]) => {
-				// Try to find matching output by checking all possible mappings
 				const matchingOutput = schema.outputs.find((output) => {
-					// Match by id (Grasshopper GUID) first - most reliable
 					if (output.id && computeKey === output.id) return true;
-					// Fallback to name matching
 					if (computeKey === output.name) return true;
-					// Fallback to nickname matching
 					if (computeKey === output.nickname) return true;
 					return false;
 				});
 
 				if (matchingOutput) {
-					// Use the output's id (GUID) as the key in our values object
 					mappedOutputs[matchingOutput.id] = computeValue;
 				} else {
-					// If no match found, keep the original key (backward compatibility)
 					mappedOutputs[computeKey] = computeValue;
 				}
 			});
@@ -173,10 +105,10 @@
 		}
 	}
 
-	let badgeConfig = $derived(
+	const badgeConfig = $derived(
 		solving
-			? { label: '⚙️ Solving...', variant: 'solving' as const }
-			: { label: '☁️ Rhino Compute', variant: 'compute' as const }
+			? { label: 'Solving...', variant: 'solving' as const }
+			: { label: 'Rhino Compute', variant: 'compute' as const }
 	);
 
 	onMount(() => {

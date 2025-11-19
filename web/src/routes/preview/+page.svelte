@@ -1,11 +1,16 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
 	import { getWebSocketClient } from '$lib/api/websocket';
-	import type { UISchema, AvailableParameters } from '$lib/types/schema';
+	import type { UISchema, AvailableParameters, SupportedTypes } from '$lib/types/schema';
 	import { TabLayout, Layout as LegacyLayout } from '$lib/components/preview';
 	import { PageContainer, PageHeader } from '$lib/components/layout';
 	import { StateDisplay, Button } from '$lib/components/ui';
+	import {
+		createNavigateTo,
+		initializeWebSocketSession,
+		ensureSchemaLayoutDefaults,
+		getDefaultValue
+	} from '$lib/utils/session';
 	import { onMount } from 'svelte';
 
 	// Runtime mode: 'local' uses WebSocket, 'compute' uses Rhino Compute
@@ -14,7 +19,7 @@
 	let sessionId = $state('');
 	let schema = $state<UISchema | null>(null);
 	// Values stored by GUID (stable across parameter name changes)
-	let values = $state<Record<string, any>>({});
+	let values = $state<Record<string, unknown>>({});
 	let loading = $state(true);
 	let error = $state('');
 	let wsClient = getWebSocketClient();
@@ -26,26 +31,10 @@
 	let runtimeMode = $state<RuntimeMode>('local');
 	let solving = $state(false);
 
-	function navigateTo(path: string) {
-		goto(`/${path}?session=${sessionId}`);
-	}
+	const navigateTo = $derived(createNavigateTo(sessionId));
 
 	// Track if we're updating values from remote (to avoid feedback loop)
 	let isRemoteUpdate = $state(false);
-
-	function getDefaultValue(paramType: string) {
-		switch (paramType) {
-			case 'Number':
-			case 'Integer':
-				return 0;
-			case 'Boolean':
-				return false;
-			case 'Text':
-				return '';
-			default:
-				return null;
-		}
-	}
 
 	function showNotification(message: string, duration: number = 3000) {
 		schemaUpdateNotification = message;
@@ -62,7 +51,7 @@
 	 * Handle value changes from UI
 	 * Only send to Grasshopper if change came from user (not from remote)
 	 */
-	async function handleValueChange(paramId: string, value: any) {
+	async function handleValueChange(paramId: string, value: SupportedTypes) {
 		// Skip sending if this is a remote update
 		if (isRemoteUpdate) {
 			console.log('[Preview] Skipping send for remote update on paramId:', paramId);
@@ -116,12 +105,15 @@
 					return;
 				}
 
-				if (!receivedSchema.layout.tabs) {
-					receivedSchema.layout.tabs = [];
+				const processedSchema = ensureSchemaLayoutDefaults(receivedSchema);
+				if (!processedSchema) {
+					error = 'Failed to process schema.';
+					loading = false;
+					return;
 				}
 
 				// Initialize values from available params defaults
-				receivedSchema.inputs.forEach((input: any) => {
+				processedSchema.inputs.forEach((input: any) => {
 					const availableParam = availableParams?.parameters?.find((p) => p.id === input.id);
 					const defaultValue =
 						availableParam?.default !== null && availableParam?.default !== undefined
@@ -131,7 +123,7 @@
 					values[input.id] = defaultValue;
 				});
 
-				receivedSchema.outputs.forEach((output: any) => {
+				processedSchema.outputs.forEach((output: any) => {
 					values[output.id] = null;
 				});
 
@@ -142,7 +134,7 @@
 					isRemoteUpdate = false;
 				}
 
-				schema = receivedSchema;
+				schema = processedSchema;
 				loading = false;
 			}
 		};
@@ -199,12 +191,9 @@
 
 				const removedCount = message.removedIds?.length || 0;
 
-				const newSchema = JSON.parse(JSON.stringify(message.schema));
-
-				// Ensure layout has tabs array for backward compatibility
-				if (!newSchema.layout.tabs) {
-					newSchema.layout.tabs = [];
-				}
+				const newSchema = ensureSchemaLayoutDefaults(
+					JSON.parse(JSON.stringify(message.schema))
+				);
 
 				if (message.removedIds && message.removedIds.length > 0) {
 					const newValues = { ...values };
@@ -233,24 +222,17 @@
 		const initializeSchema = async () => {
 			sessionId = page.url.searchParams.get('session') || '';
 
-			if (!sessionId && runtimeMode === 'local') {
-				error = 'No session ID provided';
-				loading = false;
-				return;
-			}
-
 			if (runtimeMode === 'local') {
-				const connected = await wsClient.connect();
+				const result = await initializeWebSocketSession(sessionId);
 
-				if (!connected) {
-					error =
-						'Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled and port 8765 is available.';
+				if (result.error) {
+					error = result.error;
 					loading = false;
 					return;
 				}
 
 				console.log('[Preview] WebSocket connected');
-				wsConnected = true;
+				wsConnected = result.connected;
 
 				// Register handlers
 				wsClient.on('initialData', handleInitialData);

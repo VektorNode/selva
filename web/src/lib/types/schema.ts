@@ -35,9 +35,9 @@ export interface InputParamSchema extends IoParamSchema {
 	atLeast?: number;
 	atMost?: number;
 	treeAccess?: boolean;
-	default?: any;
-	minimum?: any;
-	maximum?: any;
+	default?: unknown;
+	minimum?: number;
+	maximum?: number;
 	stepSize?: number;
 }
 
@@ -77,22 +77,8 @@ export interface DropdownWidgetConfig {
 	required?: boolean;
 }
 
-/**
- * Checkbox widget configuration
- */
-export interface CheckboxWidgetConfig {
-	// Minimal config - mostly just state
-}
+export type SupportedTypes = string | number | boolean;
 
-/**
- * Text display widget configuration
- */
-export interface TextDisplayConfig {}
-
-/**
- * Number display widget configuration
- */
-export interface NumberDisplayConfig {}
 
 // ============================================================================
 // DISCRIMINATED LAYOUT ITEMS
@@ -115,40 +101,37 @@ interface BaseLayoutItem {
  */
 export type InputLayoutItem =
 	| ({
-			type: 'input';
-			widgetType: 'number';
-			config: NumberWidgetConfig;
-	  } & BaseLayoutItem)
+		type: 'input';
+		widgetType: 'number';
+		config: NumberWidgetConfig;
+	} & BaseLayoutItem)
 	| ({
-			type: 'input';
-			widgetType: 'text';
-			config: TextWidgetConfig;
-	  } & BaseLayoutItem)
+		type: 'input';
+		widgetType: 'text';
+		config: TextWidgetConfig;
+	} & BaseLayoutItem)
 	| ({
-			type: 'input';
-			widgetType: 'dropdown';
-			config: DropdownWidgetConfig;
-	  } & BaseLayoutItem)
+		type: 'input';
+		widgetType: 'dropdown';
+		config: DropdownWidgetConfig;
+	} & BaseLayoutItem)
 	| ({
-			type: 'input';
-			widgetType: 'checkbox';
-			config: CheckboxWidgetConfig;
-	  } & BaseLayoutItem);
+		type: 'input';
+		widgetType: 'checkbox';
+	} & BaseLayoutItem);
 
 /**
  * Output layout items with discriminated widget types
  */
 export type OutputLayoutItem =
 	| ({
-			type: 'output';
-			widgetType: 'text';
-			config: TextDisplayConfig;
-	  } & BaseLayoutItem)
+		type: 'output';
+		widgetType: 'text';
+	} & BaseLayoutItem)
 	| ({
-			type: 'output';
-			widgetType: 'number';
-			config: NumberDisplayConfig;
-	  } & BaseLayoutItem);
+		type: 'output';
+		widgetType: 'number';
+	} & BaseLayoutItem);
 
 /**
  * Union of all layout item types
@@ -190,7 +173,7 @@ export interface GroupConfig {
 
 export interface RuntimeValues {
 	timestamp: string;
-	values: Record<string, any>;
+	values: Record<string, unknown>;
 }
 
 export interface SessionState {
@@ -207,9 +190,9 @@ export interface AvailableParameter {
 	description: string;
 	category: 'input' | 'output';
 	paramType: GrasshopperParamType;
-	default?: any;
-	minimum?: any;
-	maximum?: any;
+	default?: unknown;
+	minimum?: number;
+	maximum?: number;
 	stepSize?: number;
 	atLeast?: number;
 	atMost?: number;

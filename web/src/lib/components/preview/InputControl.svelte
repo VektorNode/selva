@@ -4,7 +4,8 @@
 		NumberWidgetConfig,
 		TextWidgetConfig,
 		DropdownWidgetConfig,
-		CheckboxWidgetConfig
+		SupportedTypes
+
 	} from '$lib/types/schema';
 	import {
 		isNumberWidget,
@@ -23,9 +24,9 @@
 
 	interface Props {
 		item: InputLayoutItem;
-		value?: any;
+		value?: unknown;
 		displayName?: string;
-		onChange: (paramId: string, value: any) => void;
+		onChange: (paramId: string, value: SupportedTypes) => void;
 		debounceMs?: number;
 	}
 
@@ -36,7 +37,7 @@
 
 	const debouncedOnChange = debounce((val: any) => onChange(item.paramId, val), debounceMs);
 
-	function handleChange(newValue: any) {
+	function handleChange(newValue: SupportedTypes) {
 		value = newValue;
 		if (debounceMs > 0) {
 			debouncedOnChange(newValue);
@@ -111,9 +112,8 @@
 			/>
 		{/if}
 	{:else if isCheckboxWidget(item)}
-		{@const _config = item.config as CheckboxWidgetConfig}
 		<div class="flex items-center gap-3">
-			<Checkbox id={inputId} checked={value} onCheckedChange={(checked) => handleChange(checked)} />
+			<Checkbox id={inputId} checked={typeof value === 'boolean' ? value : false} onCheckedChange={(checked) => handleChange(checked)} />
 			<Label for={inputId} class="cursor-pointer text-sm text-muted-foreground">Enabled</Label>
 		</div>
 	{:else if isTextWidget(item)}
@@ -132,7 +132,7 @@
 		{@const config = item.config as DropdownWidgetConfig}
 		<Select.Root
 			type="single"
-			value={value || undefined}
+			value={typeof value === 'string' ? value : undefined}
 			onValueChange={(selected: string) => {
 				if (selected) {
 					handleChange(selected);

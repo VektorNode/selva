@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
 	import { getWebSocketClient } from '$lib/api/websocket';
 	import { PageContainer, PageHeader, Panel } from '$lib/components/layout';
 	import { StateDisplay, Button } from '$lib/components/ui';
@@ -15,7 +14,6 @@
 	import type {
 		UISchema,
 		AvailableParameter,
-		AvailableParameters,
 		InputParamSchema,
 		OutputParamSchema,
 		TabConfig,
@@ -25,6 +23,11 @@
 		OutputLayoutItem
 	} from '$lib/types/schema';
 	import { mapParamTypeToWidgetType, createDefaultWidgetConfig } from '$lib/utils/widget-config';
+	import {
+		createNavigateTo,
+		initializeWebSocketSession,
+		processInitialDataSchema
+	} from '$lib/utils/session';
 	import Save from '$lib/components/ui/icons/Save.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { onMount } from 'svelte';
@@ -39,9 +42,7 @@
 	let error = $state('');
 	let activeTabId = $state<string | null>(null);
 
-	function navigateTo(path: string) {
-		goto(`/${path}?session=${sessionId}`);
-	}
+	const navigateTo = $derived(createNavigateTo(sessionId));
 
 	const placedInLayoutIds = $derived(() => {
 		const ids = new Set<string>();
@@ -69,43 +70,9 @@
 			if (message.sessionId === sessionId) {
 				console.log('[Builder] Received initial data:', message);
 
-				const schemaData = message.schema;
-				const availableData = message.availableParams as AvailableParameters;
-
-				availableParams = availableData?.parameters || [];
-
-				if (!schemaData) {
-					schema = {
-						id: crypto.randomUUID(),
-						name: 'New Schema',
-						description: 'Configure your Grasshopper UI',
-						version: '1.0.0',
-						created: new Date().toISOString(),
-						inputs: [],
-						outputs: [],
-						layout: {
-							type: 'tabbed',
-							gap: 16,
-							tabs: [],
-							items: []
-						},
-						enable3dViewer: false
-					};
-				} else {
-					// Ensure layout exists with proper defaults
-					if (!schemaData.layout) {
-						schemaData.layout = {
-							type: 'tabbed',
-							gap: 16,
-							tabs: [],
-							items: []
-						};
-					}
-					if (!schemaData.layout.tabs) {
-						schemaData.layout.tabs = [];
-					}
-					schema = schemaData;
-				}
+				const result = processInitialDataSchema(message, true);
+				availableParams = result.availableParams;
+				schema = result.schema;
 
 				if (availableParams.length === 0) {
 					error =
@@ -141,23 +108,15 @@
 			const urlSessionId = page.url.searchParams.get('session') || '';
 			sessionId = urlSessionId;
 
-			if (!urlSessionId) {
-				error = 'No session ID provided';
+			const result = await initializeWebSocketSession(urlSessionId);
+
+			if (result.error) {
+				error = result.error;
 				loading = false;
 				return;
 			}
 
-			// Connect to WebSocket
-			const connected = await wsClient.connect();
-
-			if (!connected) {
-				error =
-					'Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled.';
-				loading = false;
-				return;
-			}
-
-			wsConnected = true;
+			wsConnected = result.connected;
 
 			wsClient.on('initialData', handleInitialData);
 			wsClient.on('schemaSaved', handleSchemaSaved);
