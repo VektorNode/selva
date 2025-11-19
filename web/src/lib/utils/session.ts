@@ -1,7 +1,7 @@
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import { getWebSocketClient, type WebSocketClient } from '$lib/api/websocket';
-import type { UISchema, AvailableParameters } from '$lib/types/schema';
+import type { UISchema, AvailableParameters } from '$lib/types/generated';
 
 /**
  * Session initialization result

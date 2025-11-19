@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { getWebSocketClient } from '$lib/api/websocket';
-	import type { UISchema, AvailableParameters, SupportedTypes } from '$lib/types/schema';
+	import type { UISchema, AvailableParameters, SupportedTypes } from '$lib/types/generated';
 	import { TabLayout, Layout as LegacyLayout } from '$lib/components/preview';
 	import { PageContainer, PageHeader } from '$lib/components/layout';
 	import { StateDisplay, Button } from '$lib/components/ui';

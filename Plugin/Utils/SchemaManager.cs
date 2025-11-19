@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using ComputeBuilder.Plugin.Models;
+using ComputeBuilder.Plugin.Models.Generated;
 using Grasshopper.Kernel;
 
 namespace ComputeBuilder.Plugin.Utils

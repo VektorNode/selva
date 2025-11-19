@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { dragStore } from '$lib/stores/dragStore.svelte';
-	import type { LayoutItem, AvailableParameter, NumberWidgetConfig } from '$lib/types/schema';
+	import type { LayoutItem, AvailableParameter, NumberWidgetConfig } from '$lib/types/generated';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';

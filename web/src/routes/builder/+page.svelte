@@ -21,7 +21,7 @@
 		LayoutItem,
 		InputLayoutItem,
 		OutputLayoutItem
-	} from '$lib/types/schema';
+	} from '$lib/types/generated';
 	import { mapParamTypeToWidgetType, createDefaultWidgetConfig } from '$lib/utils/widget-config';
 	import {
 		createNavigateTo,

@@ -6,13 +6,13 @@
 		DropdownWidgetConfig,
 		SupportedTypes
 
-	} from '$lib/types/schema';
+	} from '$lib/types/generated';
 	import {
 		isNumberWidget,
 		isTextWidget,
 		isDropdownWidget,
 		isCheckboxWidget
-	} from '$lib/types/schema';
+	} from '$lib/types/generated';
 	import { debounce } from '$lib/utils/debounce';
 	import { Input } from '$lib/components/ui/input';
 	import { Slider } from '$lib/components/ui/slider';

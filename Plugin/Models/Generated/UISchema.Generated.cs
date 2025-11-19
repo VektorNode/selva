@@ -12,17 +12,11 @@ using Newtonsoft.Json.Linq;
 namespace ComputeBuilder.Plugin.Models.Generated
 {
     // ============================================================================
-    // ENUMS
+    // TYPE ALIASES
     // ============================================================================
 
-    public enum GrasshopperParamType
-    {
-        Number,
-        Integer,
-        Boolean,
-        Text,
-        Generic
-    }
+    // GrasshopperParamType is a string for compatibility
+    // Valid values: "Number", "Integer", "Boolean", "Text", "Generic"
 
     // ============================================================================
     // MAIN UI SCHEMA
@@ -77,7 +71,7 @@ namespace ComputeBuilder.Plugin.Models.Generated
         public string Nickname { get; set; }
 
         [JsonProperty("paramType")]
-        public GrasshopperParamType ParamType { get; set; }
+        public string ParamType { get; set; }
 
         [JsonProperty("description", NullValueHandling = NullValueHandling.Ignore)]
         public string Description { get; set; }
@@ -119,7 +113,7 @@ namespace ComputeBuilder.Plugin.Models.Generated
         public string Nickname { get; set; }
 
         [JsonProperty("paramType")]
-        public GrasshopperParamType ParamType { get; set; }
+        public string ParamType { get; set; }
 
         [JsonProperty("description", NullValueHandling = NullValueHandling.Ignore)]
         public string Description { get; set; }
@@ -368,7 +362,7 @@ namespace ComputeBuilder.Plugin.Models.Generated
         public string Category { get; set; }
 
         [JsonProperty("paramType")]
-        public GrasshopperParamType ParamType { get; set; }
+        public string ParamType { get; set; }
 
         [JsonProperty("default", NullValueHandling = NullValueHandling.Ignore)]
         public object Default { get; set; }
@@ -419,16 +413,21 @@ namespace ComputeBuilder.Plugin.Models.Generated
             var type = jsonObject["type"]?.Value<string>();
             var widgetType = jsonObject["widgetType"]?.Value<string>();
 
-            LayoutItemBase item = (type, widgetType) switch
-            {
-                ("input", "number") => new InputNumberLayoutItem(),
-                ("input", "text") => new InputTextLayoutItem(),
-                ("input", "dropdown") => new InputDropdownLayoutItem(),
-                ("input", "checkbox") => new InputCheckboxLayoutItem(),
-                ("output", "text") => new OutputTextLayoutItem(),
-                ("output", "number") => new OutputNumberLayoutItem(),
-                _ => throw new JsonSerializationException($"Unknown layout item type: {type}/{widgetType}")
-            };
+            LayoutItemBase item;
+            if (type == "input" && widgetType == "number")
+                item = new InputNumberLayoutItem();
+            else if (type == "input" && widgetType == "text")
+                item = new InputTextLayoutItem();
+            else if (type == "input" && widgetType == "dropdown")
+                item = new InputDropdownLayoutItem();
+            else if (type == "input" && widgetType == "checkbox")
+                item = new InputCheckboxLayoutItem();
+            else if (type == "output" && widgetType == "text")
+                item = new OutputTextLayoutItem();
+            else if (type == "output" && widgetType == "number")
+                item = new OutputNumberLayoutItem();
+            else
+                throw new JsonSerializationException($"Unknown layout item type: {type}/{widgetType}");
 
             serializer.Populate(jsonObject.CreateReader(), item);
             return item;

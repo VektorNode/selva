@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 
-	import type { GroupConfig } from '$lib/types/schema';
+	import type { GroupConfig } from '$lib/types/generated';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import DropZone from './DropZone.svelte';

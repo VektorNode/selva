@@ -5,7 +5,7 @@
 		OutputLayoutItem,
 		InputParamSchema,
 		OutputParamSchema
-	} from '$lib/types/schema';
+	} from '$lib/types/generated';
 	import Panel from '../layout/Panel.svelte';
 	import StateDisplay from '../ui/StateDisplay.svelte';
 	import InputControl from './InputControl.svelte';

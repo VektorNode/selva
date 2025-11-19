@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import type { TabConfig } from '$lib/types/schema';
+	import type { TabConfig } from '$lib/types/generated';
 	import Edit from '../ui/icons/Edit.svelte';
 
 	interface EditableTabNavProps {

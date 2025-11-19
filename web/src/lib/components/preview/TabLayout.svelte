@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { UISchema, InputParamSchema, OutputParamSchema, SupportedTypes } from '$lib/types/schema';
+	import type { UISchema, InputParamSchema, OutputParamSchema, SupportedTypes } from '$lib/types/generated';
 	import * as Card from '$lib/components/ui/card';
 	import StateDisplay from '../ui/StateDisplay.svelte';
 	import InputControl from './InputControl.svelte';

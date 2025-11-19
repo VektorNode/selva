@@ -5,7 +5,7 @@ import {
 	inputsToDataTrees,
 	GrasshopperResponseProcessor
 } from 'rhino-compute-core';
-import type { UISchema } from '$lib/types/schema';
+import type { UISchema } from '$lib/types/generated';
 
 export const load = (async () => {
 	// Fetch the Grasshopper definition IO (includes paramId and default values)

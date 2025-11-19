@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { UISchema } from '$lib/types/schema';
+	import type { UISchema } from '$lib/types/generated';
 	import Panel from '../layout/Panel.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';

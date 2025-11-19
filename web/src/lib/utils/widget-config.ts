@@ -1,4 +1,4 @@
-import type { AvailableParameter, GrasshopperParamType } from '$lib/types/schema';
+import type { AvailableParameter, GrasshopperParamType } from '$lib/types/generated';
 
 /**
  * Map Grasshopper parameter types to default UI widget types

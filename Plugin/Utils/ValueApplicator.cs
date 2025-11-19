@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using ComputeBuilder.Plugin.Models;
+using ComputeBuilder.Plugin.Models.Generated;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;

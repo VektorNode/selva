@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { dragStore } from '$lib/stores/dragStore.svelte';
-	import type { AvailableParameter } from '$lib/types/schema';
+	import type { AvailableParameter } from '$lib/types/generated';
 	import * as Card from '$lib/components/ui/card';
 	import { inputColor, outputColor } from '../styles';
 

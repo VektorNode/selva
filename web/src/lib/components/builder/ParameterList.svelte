@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { AvailableParameter } from '$lib/types/schema';
+	import type { AvailableParameter } from '$lib/types/generated';
 	import StateDisplay from '../ui/StateDisplay.svelte';
 	import DraggableParameter from './DraggableParameter.svelte';
 

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
-using ComputeBuilder.Plugin.Models;
+using ComputeBuilder.Plugin.Models.Generated;
 using ComputeBuilder.Plugin.Utils;
 using GH_IO.Serialization;
 using Grasshopper;

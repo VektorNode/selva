@@ -8,7 +8,7 @@ import {
 	type BooleanInputType,
 	type InputParam
 } from 'rhino-compute-core';
-import type { InputParamSchema } from '$lib/types/schema';
+import type { InputParamSchema } from '$lib/types/generated';
 
 interface ComputeRequest {
 	inputs: InputParamSchema[];

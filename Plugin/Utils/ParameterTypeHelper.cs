@@ -1,5 +1,5 @@
 using System;
-using ComputeBuilder.Plugin.Models;
+using ComputeBuilder.Plugin.Models.Generated;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
 
@@ -75,7 +75,7 @@ namespace ComputeBuilder.Plugin.Utils
                 availableParam.Maximum = maximum.Value;
                 if (stepSize.HasValue)
                 {
-                    availableParam.StepSize = stepSize.Value;
+                    availableParam.StepSize = (double)stepSize.Value;
                 }
             }
             else

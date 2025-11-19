@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
-using ComputeBuilder.Plugin.Models;
+using ComputeBuilder.Plugin.Models.Generated;
 using Newtonsoft.Json;
 
 namespace ComputeBuilder.Plugin.Utils

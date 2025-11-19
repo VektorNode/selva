@@ -2,7 +2,7 @@
  * WebSocket client for real-time communication with Grasshopper (local mode only)
  */
 
-import type { UISchema } from '$lib/types/schema';
+import type { UISchema } from '$lib/types/generated';
 
 export type MessageHandler = (data: any) => void;
 
