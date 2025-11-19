@@ -23,7 +23,7 @@
         "paramType": { "$ref": "#/definitions/GrasshopperParamType" },
         "description": { "type": "string" },
         "atLeast": { "type": "integer", "default": 1 },
-        "atMost": { "type": "integer", "default": 2147483647 },
+        "atMost": { "type": "integer", "default": 1 },
         "treeAccess": { "type": "boolean", "default": false },
         "default": {},
         "minimum": { "type": "number" },
@@ -92,7 +92,10 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "paramId": { "type": "string", "description": "References the Grasshopper component InstanceGuid" },
+        "paramId": {
+          "type": "string",
+          "description": "References the Grasshopper component InstanceGuid"
+        },
         "displayName": { "type": "string" },
         "description": { "type": "string" },
         "order": { "type": "integer", "default": 0 },
@@ -108,7 +111,10 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "paramId": { "type": "string", "description": "References the Grasshopper component InstanceGuid" },
+        "paramId": {
+          "type": "string",
+          "description": "References the Grasshopper component InstanceGuid"
+        },
         "displayName": { "type": "string" },
         "description": { "type": "string" },
         "order": { "type": "integer", "default": 0 },
@@ -124,7 +130,10 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "paramId": { "type": "string", "description": "References the Grasshopper component InstanceGuid" },
+        "paramId": {
+          "type": "string",
+          "description": "References the Grasshopper component InstanceGuid"
+        },
         "displayName": { "type": "string" },
         "description": { "type": "string" },
         "order": { "type": "integer", "default": 0 },
@@ -140,7 +149,10 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "paramId": { "type": "string", "description": "References the Grasshopper component InstanceGuid" },
+        "paramId": {
+          "type": "string",
+          "description": "References the Grasshopper component InstanceGuid"
+        },
         "displayName": { "type": "string" },
         "description": { "type": "string" },
         "order": { "type": "integer", "default": 0 },
@@ -156,7 +168,10 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "paramId": { "type": "string", "description": "References the Grasshopper component InstanceGuid" },
+        "paramId": {
+          "type": "string",
+          "description": "References the Grasshopper component InstanceGuid"
+        },
         "displayName": { "type": "string" },
         "description": { "type": "string" },
         "order": { "type": "integer", "default": 0 },
@@ -171,7 +186,10 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "paramId": { "type": "string", "description": "References the Grasshopper component InstanceGuid" },
+        "paramId": {
+          "type": "string",
+          "description": "References the Grasshopper component InstanceGuid"
+        },
         "displayName": { "type": "string" },
         "description": { "type": "string" },
         "order": { "type": "integer", "default": 0 },
@@ -265,7 +283,17 @@
         "layout": { "$ref": "#/definitions/LayoutConfig" },
         "enable3dViewer": { "type": "boolean", "default": false }
       },
-      "required": ["id", "name", "description", "version", "created", "inputs", "outputs", "layout", "enable3dViewer"]
+      "required": [
+        "id",
+        "name",
+        "description",
+        "version",
+        "created",
+        "inputs",
+        "outputs",
+        "layout",
+        "enable3dViewer"
+      ]
     },
 
     "RuntimeValues": {
@@ -314,7 +342,14 @@
         "atMost": { "type": "integer", "default": 2147483647 },
         "treeAccess": { "type": "boolean", "default": false }
       },
-      "required": ["id", "name", "nickname", "description", "category", "paramType"]
+      "required": [
+        "id",
+        "name",
+        "nickname",
+        "description",
+        "category",
+        "paramType"
+      ]
     },
 
     "AvailableParameters": {
