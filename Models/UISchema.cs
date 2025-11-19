@@ -120,7 +120,7 @@ namespace ComputeBuilder.Models
     /// </summary>
     public class WidgetConfig
     {
-        // Number/slider widgets
+        // Number widgets
         [JsonProperty("min")]
         public double? Min { get; set; }
 
@@ -129,6 +129,9 @@ namespace ComputeBuilder.Models
 
         [JsonProperty("step")]
         public double? Step { get; set; }
+
+        [JsonProperty("renderAsSlider")]
+        public bool? RenderAsSlider { get; set; }
 
         // Dropdown widgets
         [JsonProperty("options")]

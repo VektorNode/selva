@@ -61,7 +61,6 @@
   function getDefaultValue(type: string) {
     switch (type) {
       case "number":
-      case "slider":
         return 0;
       case "checkbox":
         return false;

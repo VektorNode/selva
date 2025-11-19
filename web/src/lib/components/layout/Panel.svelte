@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import * as Card from '$lib/components/ui/card';
 
 	interface PanelProps {
 		title?: string;
@@ -22,26 +23,25 @@
 	}: PanelProps = $props();
 
 	const paddingClasses = {
-		none: '',
+		none: 'p-0',
 		small: 'p-4',
 		medium: 'p-6',
 		large: 'p-8'
 	};
 
-	const baseClasses = 'bg-card text-card-foreground rounded-lg';
-	const borderClass = border ? 'border border-border' : '';
-	const shadowClass = shadow ? 'shadow-sm' : '';
+	const borderClass = border ? '' : 'border-0';
+	const shadowClass = shadow ? 'shadow-sm' : 'shadow-none';
 
 	const combinedClasses = $derived(
-		`${baseClasses} ${borderClass} ${shadowClass} ${paddingClasses[padding]} ${className}`
+		`${borderClass} ${shadowClass} ${paddingClasses[padding]} ${className}`
 	);
 </script>
 
-<div class={combinedClasses}>
+<Card.Root class={combinedClasses}>
 	{#if title || headerActions}
-		<div class="flex justify-between items-center mb-6 {padding !== 'none' ? '-mt-2' : ''}">
+		<Card.Header class="p-0 pb-6 flex flex-row justify-between items-center space-y-0">
 			{#if title}
-				<h2 class="text-xl font-semibold text-foreground">{title}</h2>
+				<Card.Title class="text-xl">{title}</Card.Title>
 			{/if}
 
 			{#if headerActions}
@@ -49,8 +49,10 @@
 					{@render headerActions()}
 				</div>
 			{/if}
-		</div>
+		</Card.Header>
 	{/if}
 
-	{@render children()}
-</div>
+	<Card.Content class="p-0">
+		{@render children()}
+	</Card.Content>
+</Card.Root>

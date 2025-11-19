@@ -3,6 +3,7 @@
   import { goto } from "$app/navigation";
   import { PageContainer } from "$lib/components/layout";
   import { StateDisplay } from "$lib/components/ui";
+  import * as Card from "$lib/components/ui/card";
   import IconBuild from "$lib/components/ui/icons/IconBuild.svelte";
   import IconBold from "$lib/components/ui/icons/IconBold.svelte";
 
@@ -33,34 +34,36 @@
       </p>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <button
-          class="bg-card border-2 border-border rounded-lg p-8 text-left hover:border-primary hover:shadow-lg transition-all transform hover:-translate-y-1"
-          onclick={() => navigateTo("builder")}
-        >
-          <h3
-            class="text-2xl font-semibold mb-3 text-foreground flex items-center gap-2"
-          >
-            <IconBuild></IconBuild>Schema Builder
-          </h3>
-          <p class="text-muted-foreground leading-relaxed">
-            Configure your UI schema by selecting inputs and outputs from your
-            Grasshopper definition
-          </p>
+        <button onclick={() => navigateTo("builder")} class="text-left">
+          <Card.Root class="h-full p-8 border-2 hover:border-primary hover:shadow-lg transition-all transform hover:-translate-y-1">
+            <Card.Header class="p-0 mb-3">
+              <Card.Title class="text-2xl flex items-center gap-2">
+                <IconBuild></IconBuild>Schema Builder
+              </Card.Title>
+            </Card.Header>
+            <Card.Content class="p-0">
+              <p class="text-muted-foreground leading-relaxed">
+                Configure your UI schema by selecting inputs and outputs from your
+                Grasshopper definition
+              </p>
+            </Card.Content>
+          </Card.Root>
         </button>
 
-        <button
-          class="bg-card border-2 border-border rounded-lg p-8 text-left hover:border-primary hover:shadow-lg transition-all transform hover:-translate-y-1"
-          onclick={() => navigateTo("preview")}
-        >
-          <h3
-            class="text-2xl font-semibold mb-3 text-foreground flex items-center gap-2"
-          >
-            <IconBold></IconBold> Interactive Preview
-          </h3>
-          <p class="text-muted-foreground leading-relaxed">
-            Interact with your Grasshopper definition in real-time with live
-            parameter updates
-          </p>
+        <button onclick={() => navigateTo("preview")} class="text-left">
+          <Card.Root class="h-full p-8 border-2 hover:border-primary hover:shadow-lg transition-all transform hover:-translate-y-1">
+            <Card.Header class="p-0 mb-3">
+              <Card.Title class="text-2xl flex items-center gap-2">
+                <IconBold></IconBold> Interactive Preview
+              </Card.Title>
+            </Card.Header>
+            <Card.Content class="p-0">
+              <p class="text-muted-foreground leading-relaxed">
+                Interact with your Grasshopper definition in real-time with live
+                parameter updates
+              </p>
+            </Card.Content>
+          </Card.Root>
         </button>
       </div>
     </div>

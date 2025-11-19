@@ -1,8 +1,14 @@
 <script lang="ts">
   import { dragStore } from "$lib/stores/dragStore.svelte";
-  import type { LayoutItem, AvailableParameter } from "$lib/types/schema";
+  import type {
+    LayoutItem,
+    AvailableParameter,
+    NumberWidgetConfig,
+  } from "$lib/types/schema";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
+  import * as Card from "$lib/components/ui/card";
+  import { Switch } from "$lib/components/ui/switch/index.js";
   import IconOutput from "../ui/icons/IconOutput.svelte";
   import IconInput from "../ui/icons/IconInput.svelte";
   import { inputColor, outputColor } from "../styles";
@@ -17,6 +23,18 @@
 
   let { item, paramInfo, tabId, groupId, onRemove }: BuilderGroupItemProps =
     $props();
+
+  // Check if this is a number widget
+  let isNumberInput = $derived(
+    item.type === "input" && item.widgetType === "number"
+  );
+
+  function toggleSliderMode() {
+    if (item.type === "input" && item.widgetType === "number") {
+      const config = item.config as NumberWidgetConfig;
+      config.renderAsSlider = !config.renderAsSlider;
+    }
+  }
 
   let isDragging = $state(false);
   let isDragOver = $state(false);
@@ -136,74 +154,90 @@
     ></div>
   {/if}
 
-  <div
+  <Card.Root
     class={`
-			 border border-border rounded-md p-3 transition-all
-			cursor-grab hover:border-primary hover:shadow-md
-			${isDragging ? "opacity-50 cursor-grabbing" : ""}
-			${isDragOver ? "border-primary" : ""}
+      p-2 transition-all cursor-grab hover:border-primary hover:shadow-sm
+      ${isDragging ? "opacity-50 cursor-grabbing" : ""}
+      ${isDragOver ? "border-primary" : ""}
       ${item.type === "input" ? inputColor : outputColor}
-		`}
+      gap-1.5 mb-2
+    `}
     draggable="true"
     role="button"
-    tabindex="0"
     ondragstart={handleDragStart}
     ondragend={handleDragEnd}
     ondragover={handleDragOver}
     ondragleave={handleDragLeave}
     ondrop={handleDrop}
   >
-    <div class="flex items-center gap-2 mb-2">
-      <span class="text-base">
-        {#if item.type === "input"}
-          <IconInput />
-        {:else}
-          <IconOutput />
-        {/if}
-      </span>
-      <input
-        type="text"
-        bind:value={item.displayName}
-        class="flex-1 font-medium border border-transparent px-2 py-1 rounded-sm text-sm hover:border-border focus:border-primary focus:outline-none bg-transparent text-foreground"
-        placeholder={"Display Name"}
-        onmousedown={() => (canDrag = false)}
-        onmouseup={() => (canDrag = true)}
-        onmouseleave={() => (canDrag = true)}
-      />
-    </div>
-    <textarea
-      bind:value={item.description}
-      class="w-full text-xs border border-transparent px-2 py-1 rounded-sm mb-2 hover:border-border focus:border-primary focus:outline-none bg-transparent text-muted-foreground resize-none"
-      placeholder="Add description (optional)"
-      rows="2"
-      onmousedown={() => (canDrag = false)}
-      onmouseup={() => (canDrag = true)}
-      onmouseleave={() => (canDrag = true)}
-    ></textarea>
-    {#if paramInfo}
-      <div class="flex gap-2 mb-2 text-xs items-center">
-        <Badge variant="default">
-          {paramInfo.paramType}
-        </Badge>
-        <span class="text-muted-foreground font-mono">
-          Gh Name: {paramInfo.nickname}
-        </span>
-      </div>
-    {/if}
-    <div class="flex gap-2 justify-between items-center">
+    <div class="flex flex-row w-full justify-between gap-2">
       <span
-        class="text-muted-foreground text-xs cursor-grab select-none hover:text-foreground"
+        class="text-muted-foreground text-[10px] cursor-grab select-none hover:text-foreground flex items-center"
       >
-        ⋮⋮ Drag to reorder
+        <span class="text-sm">
+          {#if item.type === "input"}
+            <IconInput />
+          {:else}
+            <IconOutput />
+          {/if}
+        </span>
       </span>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        class="hover:bg-destructive hover:text-destructive-foreground"
-        onclick={onRemove}
-      >
-        ×
-      </Button>
-    </div>
-  </div>
+      <div class="flex flex-1 flex-col ml-1">
+        <div class="flex items-center gap-1.5 mb-1">
+          <input
+            type="text"
+            bind:value={item.displayName}
+            class="flex-1 font-medium border border-transparent px-1.5 rounded-sm text-xs hover:border-border focus:border-primary focus:outline-none bg-transparent text-foreground"
+            placeholder={"Display Name"}
+            onmousedown={() => (canDrag = false)}
+            onmouseup={() => (canDrag = true)}
+            onmouseleave={() => (canDrag = true)}
+          />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            class="h-5 w-5 hover:bg-destructive hover:text-destructive-foreground"
+            onclick={onRemove}
+          >
+            ×
+          </Button>
+        </div>
+        <div class="flex gap-1.5 text-xs items-center justify-between mb-1">
+          <input
+            type="text"
+            bind:value={item.description}
+            class="flex-1 text-[10px] h-6 border border-transparent px-1 py-0 rounded-sm hover:border-border focus:border-primary focus:outline-none bg-transparent text-muted-foreground"
+            placeholder="Description"
+            onmousedown={() => (canDrag = false)}
+            onmouseup={() => (canDrag = true)}
+            onmouseleave={() => (canDrag = true)}
+          />
+          {#if paramInfo}
+            <div class="flex gap-1.5 items-center">
+              <Badge variant="default" class="text-[10px] px-1.5 py-0">
+                {paramInfo.paramType}
+              </Badge>
+              <span class="text-muted-foreground font-mono text-[10px]">
+                {paramInfo.nickname}
+              </span>
+            </div>
+          {/if}
+        </div>
+        {#if isNumberInput}
+          {@const config = (item as any).config as NumberWidgetConfig}
+          <div
+            class="flex items-center gap-2 px-1.5 py-1 border-t border-border/50"
+          >
+            <span class="text-[10px] text-muted-foreground">Input</span>
+            <Switch
+              checked={config.renderAsSlider ?? true}
+              onCheckedChange={toggleSliderMode}
+              class="scale-75"
+            />
+            <span class="text-[10px] text-muted-foreground">Slider</span>
+          </div>
+        {/if}
+      </div>
+    </div></Card.Root
+  >
 </div>

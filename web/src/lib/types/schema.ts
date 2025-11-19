@@ -50,22 +50,15 @@ export interface OutputParamSchema extends IoParamSchema {
 // ============================================================================
 
 /**
- * Slider widget configuration
- */
-export interface SliderWidgetConfig {
-	min: number;
-	max: number;
-	step?: number;
-}
-
-/**
  * Number input widget configuration
+ * Can optionally render as a slider
  */
 export interface NumberWidgetConfig {
 	min?: number;
 	max?: number;
 	step?: number;
 	placeholder?: string;
+	renderAsSlider?: boolean;
 }
 
 /**
@@ -124,11 +117,6 @@ interface BaseLayoutItem {
  * Input layout items with discriminated widget types
  */
 export type InputLayoutItem =
-	| {
-		type: 'input';
-		widgetType: 'slider';
-		config: SliderWidgetConfig;
-	} & BaseLayoutItem
 	| {
 		type: 'input';
 		widgetType: 'number';
@@ -250,10 +238,6 @@ export function isOutputLayoutItem(item: LayoutItem): item is OutputLayoutItem {
 }
 
 // Widget-specific type guards
-export function isSliderWidget(item: LayoutItem): item is Extract<InputLayoutItem, { widgetType: 'slider' }> {
-	return item.type === 'input' && item.widgetType === 'slider';
-}
-
 export function isNumberWidget(item: LayoutItem): item is Extract<InputLayoutItem, { widgetType: 'number' }> {
 	return item.type === 'input' && item.widgetType === 'number';
 }

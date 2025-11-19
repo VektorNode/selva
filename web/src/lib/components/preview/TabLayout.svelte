@@ -4,6 +4,7 @@
     InputParamSchema,
     OutputParamSchema,
   } from "$lib/types/schema";
+  import * as Card from "$lib/components/ui/card";
   import StateDisplay from "../ui/StateDisplay.svelte";
   import InputControl from "./InputControl.svelte";
   import OutputDisplay from "./OutputDisplay.svelte";
@@ -70,7 +71,7 @@
   }
 </script>
 
-<div class="rounded-lg shadow-sm overflow-hidden bg-card w-full">
+<Card.Root class="shadow-sm overflow-hidden w-full py-0 gap-0">
   <!-- Tab Navigation -->
   <div class="flex border-b-2 border-border bg-muted overflow-x-auto">
     {#each schema.layout.tabs || [] as tab}
@@ -90,7 +91,7 @@
 
   <!-- Tab Content -->
   {#if activeTab}
-    <div class="p-8 animate-[fadeIn_0.3s]">
+    <Card.Content class="p-8 animate-[fadeIn_0.3s]">
       {#if activeTab.groups.length === 0}
         <StateDisplay
           type="empty"
@@ -100,7 +101,7 @@
       {:else}
         <div class="flex flex-col gap-8">
           {#each activeTab.groups as group}
-            <div class="border border-border rounded-lg overflow-hidden">
+            <Card.Root class="overflow-hidden py-0 gap-0">
               <!-- Group Header -->
               <button
                 class="w-full bg-muted px-6 py-4 border-b border-border flex items-center justify-between cursor-pointer hover:bg-muted/80 transition-colors"
@@ -121,8 +122,8 @@
 
               <!-- Group Content -->
               {#if !collapsedGroups[group.id]}
-                <div
-                  class="grid gap-6 p-6 bg-card animate-[fadeIn_0.2s]"
+                <Card.Content
+                  class="grid gap-6 p-6 animate-[fadeIn_0.2s]"
                   style="grid-template-columns: repeat({group.columns}, 1fr);"
                 >
                   {#each group.items as layoutItem}
@@ -135,7 +136,8 @@
                           displayName={layoutItem.displayName}
                           onChange={onValueChange}
                           debounceMs={debounceSliders &&
-                          layoutItem.widgetType === "slider"
+                          layoutItem.widgetType === "number" &&
+                          (layoutItem.config as any).renderAsSlider
                             ? 20
                             : 0}
                         />
@@ -151,15 +153,15 @@
                       {/if}
                     {/if}
                   {/each}
-                </div>
+                </Card.Content>
               {/if}
-            </div>
+            </Card.Root>
           {/each}
         </div>
       {/if}
-    </div>
+    </Card.Content>
   {/if}
-</div>
+</Card.Root>
 
 <style>
   @keyframes fadeIn {

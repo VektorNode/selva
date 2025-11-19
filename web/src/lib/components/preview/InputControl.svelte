@@ -1,14 +1,12 @@
 <script lang="ts">
   import type {
     InputLayoutItem,
-    SliderWidgetConfig,
     NumberWidgetConfig,
     TextWidgetConfig,
     DropdownWidgetConfig,
     CheckboxWidgetConfig,
   } from "$lib/types/schema";
   import {
-    isSliderWidget,
     isNumberWidget,
     isTextWidget,
     isDropdownWidget,
@@ -58,9 +56,11 @@
     }
   }
 
-  // For slider, get numeric value
+  // For slider rendering, get numeric value
   let sliderValue = $derived(
-    isSliderWidget(item) ? (typeof value === "number" ? value : 0) : 0
+    isNumberWidget(item) && item.config.renderAsSlider
+      ? (typeof value === "number" ? value : 0)
+      : 0
   );
 </script>
 
@@ -92,40 +92,41 @@
 
   {#if isNumberWidget(item)}
     {@const config = item.config as NumberWidgetConfig}
-    <Input
-      id={inputId}
-      type="number"
-      bind:value
-      min={config.min}
-      max={config.max}
-      step={config.step ?? 1}
-      placeholder={config.placeholder}
-      oninput={(e) => {
-        const target = e.currentTarget as HTMLInputElement;
-        const newValue = parseFloat(target.value);
-        if (!isNaN(newValue)) {
-          handleChange(newValue);
-        }
-      }}
-    />
-  {:else if isSliderWidget(item)}
-    {@const config = item.config as SliderWidgetConfig}
-    <div class="flex items-center gap-4">
-      <Slider
-        type="single"
-        value={sliderValue}
+    {#if config.renderAsSlider}
+      <div class="flex items-center gap-4">
+        <Slider
+          type="single"
+          value={sliderValue}
+          min={config.min ?? 0}
+          max={config.max ?? 100}
+          step={config.step ?? 1}
+          class="flex-1"
+          onValueChange={(val: number) => {
+            handleChange(val);
+          }}
+        />
+        <span class="text-sm text-muted-foreground min-w-12 text-right">
+          {value ?? config.min ?? 0}
+        </span>
+      </div>
+    {:else}
+      <Input
+        id={inputId}
+        type="number"
+        bind:value
         min={config.min}
         max={config.max}
         step={config.step ?? 1}
-        class="flex-1"
-        onValueChange={(val: number) => {
-          handleChange(val);
+        placeholder={config.placeholder}
+        oninput={(e) => {
+          const target = e.currentTarget as HTMLInputElement;
+          const newValue = parseFloat(target.value);
+          if (!isNaN(newValue)) {
+            handleChange(newValue);
+          }
         }}
       />
-      <span class="text-sm text-muted-foreground min-w-12 text-right">
-        {value ?? config.min}
-      </span>
-    </div>
+    {/if}
   {:else if isCheckboxWidget(item)}
     {@const _config = item.config as CheckboxWidgetConfig}
     <div class="flex items-center gap-3">

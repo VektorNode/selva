@@ -3,6 +3,7 @@
 
   import type { GroupConfig } from "$lib/types/schema";
   import { Button } from "$lib/components/ui/button";
+  import * as Card from "$lib/components/ui/card";
   import DropZone from "./DropZone.svelte";
   import Trash from "../ui/icons/Trash.svelte";
 
@@ -81,75 +82,73 @@
   }
 </script>
 
-<div
-  class="border-2 border-border rounded-lg bg-muted overflow-hidden {isDragOver
+<Card.Root
+  class="border-2 bg-muted overflow-hidden py-0 gap-0 {isDragOver
     ? 'border-primary'
     : ''}"
 >
-  <div
-    class="p-4 bg-card border-b border-border flex justify-between items-start gap-4"
+  <Card.Header
+    class="px-3 py-2 bg-card border-b border-border flex flex-row justify-between items-center gap-2 space-y-0"
     ondragover={handleHeaderDragOver}
     ondragenter={handleHeaderDragEnter}
     ondragleave={handleHeaderDragLeave}
     role="button"
-    tabindex="0"
+    tabindex={0}
   >
-    <div class="flex items-start gap-2">
-      <button
-        type="button"
-        class="text-muted-foreground hover:text-foreground transition-transform duration-200 h-[34px] flex items-center {group.collapsed
-          ? ''
-          : 'rotate-180'}"
-        onclick={toggleCollapsed}
-        aria-label={group.collapsed ? "Expand group" : "Collapse group"}
-      >
-        ▼
-      </button>
-      <div class="flex-1 flex flex-col gap-2">
-        <input
-          type="text"
-          bind:value={group.label}
-          class="font-semibold text-base border border-transparent px-2 py-1 rounded hover:border-border focus:border-primary focus:outline-none bg-transparent text-foreground"
-          placeholder="Group name"
-        />
-        {#if !group.collapsed}
+    <div class="flex items-center gap-1.5 flex-1">
+      <div class="flex flex-col flex-1">
+        <div class="">
+          <button
+            type="button"
+            class="text-muted-foreground hover:text-foreground items-end transition-transform duration-200 text-xs {group.collapsed
+              ? ''
+              : 'rotate-180'}"
+            onclick={toggleCollapsed}
+            aria-label={group.collapsed ? "Expand group" : "Collapse group"}
+          >
+            ▼
+          </button>
           <input
             type="text"
-            bind:value={group.description}
-            class="text-sm text-muted-foreground border border-transparent px-2 py-1 rounded hover:border-border focus:border-primary focus:outline-none bg-transparent"
-            placeholder="Description (optional)"
+            bind:value={group.label}
+            class="font-medium text-sm border border-transparent px-1.5 py-0.5 rounded hover:border-border focus:border-primary focus:outline-none bg-transparent text-foreground flex-1"
+            placeholder="Group name"
           />
-        {/if}
+        </div>
+
+        <input
+          type="text"
+          bind:value={group.description}
+          class="text-xs text-muted-foreground border border-transparent px-1.5 py-0.5 rounded hover:border-border focus:border-primary focus:outline-none bg-transparent flex-1"
+          placeholder="Description"
+        />
       </div>
     </div>
-    <div class="flex items-center gap-4">
+    <div class="flex items-center gap-2">
       {#if !group.collapsed}
-        <label class="flex items-center gap-2 text-sm text-foreground">
-          Columns:
+        <label class="flex items-center gap-1 text-xs text-muted-foreground">
+          Col:
           <input
             type="number"
             bind:value={group.columns}
             min="1"
             max="4"
-            class="w-[50px] px-2 py-1 border border-border rounded bg-background text-foreground"
+            class="w-10 px-1 py-0.5 text-xs border border-border rounded bg-background text-foreground"
           />
         </label>
       {:else}
-        <span class="text-xs text-muted-foreground">
-          {group.items.length} item{group.items.length !== 1 ? "s" : ""}
+        <span class="text-[10px] text-muted-foreground">
+          {group.items.length}
         </span>
       {/if}
-      <Button
-        variant="ghost"
-        size="icon"
-        class="hover:bg-destructive hover:text-destructive-foreground"
-        onclick={onRemove}><Trash /></Button
-      >
+      <Button variant="ghost" size="icon-lg" onclick={onRemove}>
+        <Trash />
+      </Button>
     </div>
-  </div>
+  </Card.Header>
 
   {#if !group.collapsed}
-    <div class="p-4 animate-[fadeIn_0.2s]">
+    <Card.Content class="p-4 animate-[fadeIn_0.2s]">
       <DropZone
         isEmpty={group.items.length === 0}
         label="Drag parameters here"
@@ -163,6 +162,6 @@
           {@render children()}
         </div>
       </DropZone>
-    </div>
+    </Card.Content>
   {/if}
-</div>
+</Card.Root>

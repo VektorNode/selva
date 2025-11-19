@@ -38,13 +38,14 @@
     if (input.paramType === "Number" || input.paramType === "Integer") {
       return {
         ...baseItem,
-        widgetType: "slider" as const,
+        widgetType: "number" as const,
         config: {
           min: (input.minimum as number) ?? 0,
           max: (input.maximum as number) ?? 100,
           step: input.stepSize ? Number(input.stepSize) : 1,
+          renderAsSlider: true,
         },
-      } as Extract<InputLayoutItem, { widgetType: "slider" }>;
+      } as Extract<InputLayoutItem, { widgetType: "number" }>;
     } else if (input.paramType === "Boolean") {
       return {
         ...baseItem,
@@ -129,7 +130,9 @@
               item={layoutItem}
               bind:value={values[input.id]}
               onChange={onValueChange}
-              debounceMs={layoutItem.widgetType === "slider" && debounceSliders
+              debounceMs={layoutItem.widgetType === "number" &&
+                (layoutItem.config as any).renderAsSlider &&
+                debounceSliders
                 ? 20
                 : 0}
             />

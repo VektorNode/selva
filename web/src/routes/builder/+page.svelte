@@ -29,6 +29,8 @@
   } from "$lib/utils/widget-config";
   import Save from "$lib/components/ui/icons/Save.svelte";
   import { mode } from "mode-watcher";
+  import { toast } from "$lib/components/ui/sonner";
+  import { onMount } from "svelte";
 
   let sessionId = $state("");
   let schema = $state<UISchema | null>(null);
@@ -135,11 +137,23 @@
 
     const success = await api.saveSchema(sessionId, schema);
     if (success) {
-      alert("Schema saved successfully!");
+      toast.success("Schema saved successfully!");
     } else {
-      alert("Failed to save schema");
+      toast.error("Failed to save schema");
     }
   }
+
+  onMount(() => {
+    function handleKeydown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        saveSchema();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeydown);
+    return () => window.removeEventListener("keydown", handleKeydown);
+  });
 
   //TODO: Add possibility to reorder tabs
 
@@ -273,7 +287,7 @@
 
     const exists = group.items.some((i) => i.paramId === param.id);
     if (exists) {
-      alert("This parameter is already in this group");
+      toast.warning("This parameter is already in this group");
       return;
     }
 
