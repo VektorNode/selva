@@ -1,23 +1,20 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using Grasshopper.Kernel;
-using Grasshopper.Kernel.Types;
-using Grasshopper.Kernel.Data;
 using ComputeBuilder.Models;
+using Grasshopper;
+using Grasshopper.Kernel;
+using Grasshopper.Kernel.Data;
+using Grasshopper.Kernel.Types;
 
 namespace ComputeBuilder.Utils
 {
     /// <summary>
-    /// Handles applying values from web UI to Grasshopper parameters
+    ///     Handles applying values from web UI to Grasshopper parameters
     /// </summary>
     public class ValueApplicator
     {
-        private Dictionary<string, object> _lastAppliedValues = new Dictionary<string, object>();
-        private List<IGH_ActiveObject> _pendingExpirations = new List<IGH_ActiveObject>();
-
         private static readonly Dictionary<string, (Type GhType, Func<object, IGH_Goo> Converter)> TypeHandlers =
-            new Dictionary<string, (Type, Func<object, IGH_Goo>)>
+            new Dictionary<string, (Type GhType, Func<object, IGH_Goo> Converter)>()
             {
                 { "Number", (typeof(GH_Number), val => new GH_Number(Convert.ToDouble(val))) },
                 { "Integer", (typeof(GH_Integer), val => new GH_Integer(Convert.ToInt32(val))) },
@@ -25,14 +22,19 @@ namespace ComputeBuilder.Utils
                 { "Boolean", (typeof(GH_Boolean), val => new GH_Boolean(Convert.ToBoolean(val))) }
             };
 
+        private readonly List<IGH_ActiveObject> _pendingExpirations = new List<IGH_ActiveObject>();
+
+        private Dictionary<string, object> _lastAppliedValues = new Dictionary<string, object>();
+
         /// <summary>
-        /// Apply values from web UI to Grasshopper parameters and schedule a solution
-        /// Uses the ScheduleSolution pattern for clean, predictable behavior
+        ///     Apply values from web UI to Grasshopper parameters and schedule a solution
+        ///     Uses the ScheduleSolution pattern for clean, predictable behavior
         /// </summary>
         /// <returns>Number of parameters updated</returns>
-        public int ApplyValuesAndSchedule(GH_Document document, UISchema schema, Dictionary<string, object> values, Action<GH_RuntimeMessageLevel, string> addMessage)
+        public int ApplyValuesAndSchedule(GH_Document document, UISchema schema, Dictionary<string, object> values,
+            Action<GH_RuntimeMessageLevel, string> addMessage)
         {
-            int updateCount = 0;
+            var updateCount = 0;
             _pendingExpirations.Clear();
 
             foreach (var input in schema.Inputs)
@@ -49,14 +51,18 @@ namespace ComputeBuilder.Utils
 
                     var inputKey = input.Id.ToString();
                     if (!values.TryGetValue(inputKey, out var value))
+                    {
                         continue;
+                    }
 
                     if (!HasValueChanged(inputKey, value))
+                    {
                         continue;
+                    }
 
                     if (paramObject is IGH_ContextualParameter contextParam)
                     {
-                        bool success = ApplyToContextualParameter(contextParam, input.ParamType, value, addMessage);
+                        var success = ApplyToContextualParameter(contextParam, input.ParamType, value, addMessage);
                         if (success)
                         {
                             updateCount++;
@@ -86,7 +92,7 @@ namespace ComputeBuilder.Utils
         }
 
         /// <summary>
-        /// Callback for ScheduleSolution - expires parameters and nothing else
+        ///     Callback for ScheduleSolution - expires parameters and nothing else
         /// </summary>
         private void ExpireCallback(GH_Document doc)
         {
@@ -94,11 +100,12 @@ namespace ComputeBuilder.Utils
             {
                 obj.ExpireSolution(false);
             }
+
             _pendingExpirations.Clear();
         }
 
         /// <summary>
-        /// Check if value has changed since last application
+        ///     Check if value has changed since last application
         /// </summary>
         public bool HasValueChanged(string key, object newValue)
         {
@@ -106,11 +113,12 @@ namespace ComputeBuilder.Utils
             {
                 return newValue?.ToString() != lastValue?.ToString();
             }
+
             return true;
         }
 
         /// <summary>
-        /// Get the last applied values dictionary
+        ///     Get the last applied values dictionary
         /// </summary>
         public Dictionary<string, object> GetLastAppliedValues()
         {
@@ -118,7 +126,7 @@ namespace ComputeBuilder.Utils
         }
 
         /// <summary>
-        /// Set the last applied values (used when loading from embedded data)
+        ///     Set the last applied values (used when loading from embedded data)
         /// </summary>
         public void SetLastAppliedValues(Dictionary<string, object> values)
         {
@@ -126,7 +134,7 @@ namespace ComputeBuilder.Utils
         }
 
         /// <summary>
-        /// Clear all tracked values
+        ///     Clear all tracked values
         /// </summary>
         public void Clear()
         {
@@ -134,9 +142,10 @@ namespace ComputeBuilder.Utils
         }
 
         /// <summary>
-        /// Apply a value to a contextual parameter using reflection and type handlers
+        ///     Apply a value to a contextual parameter using reflection and type handlers
         /// </summary>
-        private bool ApplyToContextualParameter(IGH_ContextualParameter contextParam, string paramTypeName, object value, Action<GH_RuntimeMessageLevel, string> addMessage)
+        private bool ApplyToContextualParameter(IGH_ContextualParameter contextParam, string paramTypeName,
+            object value, Action<GH_RuntimeMessageLevel, string> addMessage)
         {
             try
             {
@@ -150,32 +159,31 @@ namespace ComputeBuilder.Utils
                 var ghValue = handler.Converter(value);
 
                 // Create DataTree using reflection (since we don't know the type at compile time)
-                var dataTreeType = typeof(Grasshopper.DataTree<>).MakeGenericType(handler.GhType);
+                var dataTreeType = typeof(DataTree<>).MakeGenericType(handler.GhType);
                 var dataTree = Activator.CreateInstance(dataTreeType);
 
                 // Add value to tree - specify parameter types to avoid ambiguity
-                var addMethod = dataTreeType.GetMethod("Add", new Type[] { handler.GhType, typeof(GH_Path) });
+                var addMethod = dataTreeType.GetMethod("Add", new[] { handler.GhType, typeof(GH_Path) });
                 if (addMethod == null)
                 {
                     addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
                         $"Could not find Add method for type {handler.GhType.Name}");
                     return false;
                 }
+
                 addMethod.Invoke(dataTree, new object[] { ghValue, new GH_Path(0) });
 
                 // Assign to parameter using reflection
                 var method = contextParam.GetType().GetMethod("AssignContextualDataTree");
                 if (method != null)
                 {
-                    method.Invoke(contextParam, new object[] { dataTree });
+                    method.Invoke(contextParam, new[] { dataTree });
                     return true;
                 }
-                else
-                {
-                    addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-                        $"Could not find AssignContextualDataTree method");
-                    return false;
-                }
+
+                addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+                    "Could not find AssignContextualDataTree method");
+                return false;
             }
             catch (Exception ex)
             {

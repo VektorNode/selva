@@ -1,40 +1,54 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.Linq;
+using ComputeBuilder.Models;
+using ComputeBuilder.Utils;
+using GH_IO.Serialization;
+using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
-using ComputeBuilder.Utils;
-using ComputeBuilder.Models;
 using Newtonsoft.Json;
+using Rhino;
 
 namespace ComputeBuilder.Components
 {
     /// <summary>
-    /// Unified UI Builder component - WebSocket-only version
-    /// Switch between Schema Builder mode and Interactive Preview mode
+    ///     Unified UI Builder component - WebSocket-only version
+    ///     Switch between Schema Builder mode and Interactive Preview mode
     /// </summary>
     public class UIBuilderComponent : GH_Component, IDisposable
     {
-        private string _sessionId;
-        private bool _previewOpen = false;
-        private bool _disposed = false;
+        // Cache for available parameters (to send on client connect)
+        private AvailableParameters _availableParams;
+        private CommunicationHandler _communicationHandler;
         private GH_Document _currentDocument;
-        private bool _eventsRegistered = false;
+        private bool _disposed;
 
         // Embedded schema - persists with the .gh file
-        private UISchema _embeddedSchema = null;
+        private UISchema _embeddedSchema;
 
         // Embedded values - persists parameter values with the .gh file
-        private Dictionary<string, object> _embeddedValues = null;
+        private Dictionary<string, object> _embeddedValues;
 
-        // Cache for available parameters (to send on client connect)
-        private AvailableParameters _availableParams = null;
+        // Track if enable input is from a toggle (stays true across multiple solves)
+        private int _enableTrueCount;
+        private bool _eventsRegistered;
+
+        // Latched states (persist until explicitly turned off)
+        private bool _isEnabled;
+        private bool _isSolving;
+
+        // Previous input states for edge detection (button support)
+        private bool _lastEnable;
+        private bool _lastOpenPreview;
+        private bool _lastRefresh;
 
         // Extracted responsibilities
         private SchemaManager _schemaManager;
+        private string _sessionId;
         private ValueApplicator _valueApplicator;
-        private CommunicationHandler _communicationHandler;
 
         public UIBuilderComponent()
             : base("UI Builder", "UIBuilder",
@@ -43,12 +57,20 @@ namespace ComputeBuilder.Components
         {
         }
 
+        public override Guid ComponentGuid => new Guid("D4E5F6A7-B8C9-4D5E-0F1A-2B3C4D5E6F7A");
+
+        protected override Bitmap Icon => null;
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
         ~UIBuilderComponent()
         {
             Dispose(false);
         }
-
-        public override Guid ComponentGuid => new Guid("D4E5F6A7-B8C9-4D5E-0F1A-2B3C4D5E6F7A");
 
         protected override void RegisterInputParams(GH_InputParamManager pManager)
         {
@@ -69,14 +91,51 @@ namespace ComputeBuilder.Components
 
         protected override void SolveInstance(IGH_DataAccess DA)
         {
-            bool enable = false;
-            bool refresh = false;
-            bool openPreview = false;
+            var enable = false;
+            var refresh = false;
+            var openPreview = false;
+            var loadInitalValues = false; // Maybe using it later
 
             DA.GetData(0, ref enable);
             DA.GetData(1, ref refresh);
             DA.GetData(2, ref openPreview);
-            
+
+            // Edge detection for button support
+            var enableRising = enable && !_lastEnable;
+            var enableFalling = !enable && _lastEnable;
+            var refreshRising = refresh && !_lastRefresh;
+            var openPreviewRising = openPreview && !_lastOpenPreview;
+
+            // Update last states
+            _lastEnable = enable;
+            _lastRefresh = refresh;
+            _lastOpenPreview = openPreview;
+
+            // Toggle enabled state (supports both buttons and toggles)
+            if (enableRising)
+            {
+                _isEnabled = true;
+                _enableTrueCount = 1;
+            }
+            else if (enable)
+            {
+                // Still true - increment counter
+                _enableTrueCount++;
+            }
+            else if (enableFalling)
+            {
+                // Only disable on falling edge if it was a toggle (true for multiple solves)
+                // A button will only be true for 1 solve before going false
+                if (_enableTrueCount > 1)
+                {
+                    // This was a toggle being turned off - disable
+                    _isEnabled = false;
+                }
+
+                // else: This was a button press (single solve cycle) - keep enabled
+                _enableTrueCount = 0;
+            }
+
             // Initialize components on first run
             if (_schemaManager == null)
             {
@@ -97,7 +156,7 @@ namespace ComputeBuilder.Components
 
             DA.SetData(0, _sessionId);
 
-            var document = this.OnPingDocument();
+            var document = OnPingDocument();
             if (document == null)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Could not access Grasshopper document");
@@ -105,11 +164,12 @@ namespace ComputeBuilder.Components
                 return;
             }
 
-            var isRunningInHeadless = Rhino.RhinoDoc.ActiveDoc == null || Rhino.RhinoApp.IsRunningHeadless || Rhino.RhinoDoc.ActiveDoc.IsHeadless;
+            var isRunningInHeadless = RhinoDoc.ActiveDoc == null || RhinoApp.IsRunningHeadless ||
+                                      RhinoDoc.ActiveDoc.IsHeadless;
 
             if (isRunningInHeadless)
             {
-                if (enable || refresh)
+                if (enableRising || refreshRising)
                 {
                     _availableParams = _schemaManager.ScanParameters(document);
                     var duplicates = _schemaManager.ValidateDuplicates(_availableParams);
@@ -130,7 +190,8 @@ namespace ComputeBuilder.Components
 
                 if (_embeddedValues != null && _embeddedSchema != null)
                 {
-                    _valueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, _embeddedValues, AddRuntimeMessage);
+                    _valueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, _embeddedValues,
+                        AddRuntimeMessage);
                 }
 
                 DA.SetData(1, $"Session: {_sessionId}\nStatus: Headless Mode\nSchema loaded (no WebSocket)");
@@ -146,8 +207,8 @@ namespace ComputeBuilder.Components
                 RegisterDocumentEvents();
             }
 
-            // Scan parameters on enable or refresh
-            if (enable || refresh)
+            // Scan parameters on enable or refresh (on rising edge)
+            if (enableRising || refreshRising)
             {
                 _availableParams = _schemaManager.ScanParameters(document);
                 var duplicates = _schemaManager.ValidateDuplicates(_availableParams);
@@ -161,15 +222,14 @@ namespace ComputeBuilder.Components
             }
 
             // === ENABLED ===
-            if (enable)
+            if (_isEnabled)
             {
                 // Start WebSocket server
                 if (!_communicationHandler.IsRunning)
                 {
                     try
                     {
-                        _communicationHandler.Start((msg) => Message = msg);
-                        
+                        _communicationHandler.Start(msg => Message = msg);
                     }
                     catch (Exception ex)
                     {
@@ -181,30 +241,15 @@ namespace ComputeBuilder.Components
                 }
 
                 // Validate and apply embedded schema/values on first enable
-                if (_embeddedSchema != null && !_previewOpen)
+                if (_embeddedSchema != null && enableRising)
                 {
                     _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
                 }
 
-                // Apply embedded values to Grasshopper parameters on first enable
-                if (_embeddedValues != null && !_previewOpen && _embeddedSchema != null)
-                {
-                    int updatedCount = _valueApplicator.ApplyValuesAndSchedule(
-                        document,
-                        _embeddedSchema,
-                        _embeddedValues,
-                        AddRuntimeMessage);
-
-                    if (updatedCount > 0)
-                    {
-                        _valueApplicator.SetLastAppliedValues(_embeddedValues);
-                    }
-                }
-
-                if (openPreview && !_previewOpen)
+                // Open preview on rising edge (button press)
+                if (openPreviewRising)
                 {
                     OpenUI();
-                    _previewOpen = true;
                 }
 
                 if (_embeddedSchema != null)
@@ -225,7 +270,6 @@ namespace ComputeBuilder.Components
             // === DISABLED ===
             _communicationHandler?.Stop();
             _valueApplicator?.Clear();
-            _previewOpen = false;
             Message = "WebSocket Inactive";
 
             if (_embeddedSchema != null)
@@ -249,18 +293,27 @@ namespace ComputeBuilder.Components
         }
 
         /// <summary>
-        /// Handle value updates received via WebSocket
+        ///     Handle value updates received via WebSocket
         /// </summary>
         private void HandleWebSocketValueUpdate(object sender, Dictionary<string, object> values)
         {
             try
             {
-                var document = this.OnPingDocument();
-                if (document == null || _embeddedSchema == null)
+                // Ignore value updates while Grasshopper is solving
+                if (_isSolving)
+                {
                     return;
+                }
+
+                var document = OnPingDocument();
+                if (document == null || _embeddedSchema == null)
+                {
+                    return;
+                }
 
                 // Apply values and schedule solution
-                int updated = _valueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, values, AddRuntimeMessage);
+                var updated =
+                    _valueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, values, AddRuntimeMessage);
 
                 if (updated > 0)
                 {
@@ -275,15 +328,17 @@ namespace ComputeBuilder.Components
         }
 
         /// <summary>
-        /// Handle client connection - send initial data
+        ///     Handle client connection - send initial data
         /// </summary>
         private void HandleClientConnected(object sender, EventArgs e)
         {
             try
             {
-                var document = this.OnPingDocument();
+                var document = OnPingDocument();
                 if (document == null)
+                {
                     return;
+                }
 
                 // Get current values from parameters
                 var currentValues = CollectCurrentValues(document);
@@ -298,13 +353,13 @@ namespace ComputeBuilder.Components
         }
 
         /// <summary>
-        /// Handle schema save request from web UI
+        ///     Handle schema save request from web UI
         /// </summary>
         private void HandleSchemaSave(object sender, UISchema schema)
         {
             try
             {
-                var document = this.OnPingDocument();
+                var document = OnPingDocument();
                 if (document == null)
                 {
                     var _ = _communicationHandler.BroadcastSchemaSaved(false, "No document available");
@@ -317,6 +372,9 @@ namespace ComputeBuilder.Components
                 // Broadcast success
                 var task = _communicationHandler.BroadcastSchemaSaved(true);
 
+                //Expire to update component to reflect new schema (When user saves it will now properly internalize the new schema)
+                document.ScheduleSolution(10, doc => { ExpireSolution(false); });
+
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Schema saved successfully");
             }
             catch (Exception ex)
@@ -327,14 +385,16 @@ namespace ComputeBuilder.Components
         }
 
         /// <summary>
-        /// Collect current values from all input parameters
+        ///     Collect current values from all input parameters
         /// </summary>
         private Dictionary<string, object> CollectCurrentValues(GH_Document document)
         {
             var currentValues = new Dictionary<string, object>();
 
             if (_embeddedSchema == null)
+            {
                 return currentValues;
+            }
 
             foreach (var input in _embeddedSchema.Inputs)
             {
@@ -342,7 +402,9 @@ namespace ComputeBuilder.Components
                 {
                     var paramObject = document.FindObject(input.Id, false);
                     if (paramObject == null)
+                    {
                         continue;
+                    }
 
                     if (paramObject is IGH_Param ghParam)
                     {
@@ -376,15 +438,17 @@ namespace ComputeBuilder.Components
         }
 
         /// <summary>
-        /// Handle request for current input values from web UI
+        ///     Handle request for current input values from web UI
         /// </summary>
         private void HandleCurrentValuesRequest(object sender, EventArgs e)
         {
             try
             {
-                var document = this.OnPingDocument();
+                var document = OnPingDocument();
                 if (document == null || _embeddedSchema == null)
+                {
                     return;
+                }
 
                 var currentValues = CollectCurrentValues(document);
 
@@ -402,15 +466,19 @@ namespace ComputeBuilder.Components
         }
 
         /// <summary>
-        /// Collect output values and send via WebSocket
+        ///     Collect output values and send via WebSocket
         /// </summary>
         private void CollectAndSendOutputs(GH_Document document, UISchema schema)
         {
             if (document == null || schema?.Outputs == null || schema.Outputs.Count == 0)
+            {
                 return;
+            }
 
             if (!_communicationHandler.IsRunning)
+            {
                 return;
+            }
 
             var outputValues = new Dictionary<string, object>();
 
@@ -420,7 +488,9 @@ namespace ComputeBuilder.Components
                 {
                     var paramObject = document.FindObject(output.Id, false);
                     if (paramObject == null)
+                    {
                         continue;
+                    }
 
                     if (paramObject is IGH_Component ghParam)
                     {
@@ -462,21 +532,27 @@ namespace ComputeBuilder.Components
         }
 
         /// <summary>
-        /// Extract the actual value from a Grasshopper data type
+        ///     Extract the actual value from a Grasshopper data type
         /// </summary>
         private object ExtractValue(IGH_Goo goo)
         {
             if (goo == null)
+            {
                 return null;
+            }
 
             if (!goo.IsValid)
+            {
                 return null;
+            }
 
             try
             {
                 var scriptVar = goo.ScriptVariable();
                 if (scriptVar != null)
+                {
                     return scriptVar;
+                }
 
                 return goo.ToString();
             }
@@ -513,21 +589,30 @@ namespace ComputeBuilder.Components
         private void RegisterDocumentEvents()
         {
             if (_currentDocument == null || _eventsRegistered)
+            {
                 return;
-
-            try
-            {
-                Grasshopper.Instances.DocumentServer.DocumentRemoved += OnDocumentRemoved;
             }
-            catch { /* ignore */ }
 
             try
             {
+                Instances.DocumentServer.DocumentRemoved += OnDocumentRemoved;
+            }
+            catch
+            {
+                /* ignore */
+            }
+
+            try
+            {
+                _currentDocument.SolutionStart += OnSolutionStart;
                 _currentDocument.SolutionEnd += OnSolutionEnd;
                 _currentDocument.ObjectsAdded += OnObjectsChanged;
                 _currentDocument.ObjectsDeleted += OnObjectsChanged;
             }
-            catch { /* ignore */ }
+            catch
+            {
+                /* ignore */
+            }
 
             _eventsRegistered = true;
         }
@@ -535,23 +620,32 @@ namespace ComputeBuilder.Components
         private void UnregisterDocumentEvents()
         {
             if (!_eventsRegistered)
+            {
                 return;
+            }
 
             try
             {
-                Grasshopper.Instances.DocumentServer.DocumentRemoved -= OnDocumentRemoved;
+                Instances.DocumentServer.DocumentRemoved -= OnDocumentRemoved;
             }
-            catch { /* ignore */ }
+            catch
+            {
+                /* ignore */
+            }
 
             if (_currentDocument != null)
             {
                 try
                 {
+                    _currentDocument.SolutionStart -= OnSolutionStart;
                     _currentDocument.SolutionEnd -= OnSolutionEnd;
                     _currentDocument.ObjectsAdded -= OnObjectsChanged;
                     _currentDocument.ObjectsDeleted -= OnObjectsChanged;
                 }
-                catch { /* ignore */ }
+                catch
+                {
+                    /* ignore */
+                }
             }
 
             _eventsRegistered = false;
@@ -565,11 +659,30 @@ namespace ComputeBuilder.Components
             }
         }
 
+        private void OnSolutionStart(object sender, GH_SolutionEventArgs e)
+        {
+            _isSolving = true;
+
+            // Notify web UI that Grasshopper is solving
+            if (_communicationHandler?.IsRunning == true)
+            {
+                var _ = _communicationHandler.BroadcastSolvingState(true);
+            }
+        }
+
         private void OnSolutionEnd(object sender, GH_SolutionEventArgs e)
         {
+            _isSolving = false;
+
             if (_embeddedSchema != null && _currentDocument != null)
             {
                 CollectAndSendOutputs(_currentDocument, _embeddedSchema);
+            }
+
+            // Notify web UI that Grasshopper is done solving
+            if (_communicationHandler?.IsRunning == true)
+            {
+                var _ = _communicationHandler.BroadcastSolvingState(false);
             }
         }
 
@@ -577,10 +690,12 @@ namespace ComputeBuilder.Components
         {
             // Only react if we have an active schema and are enabled
             if (_embeddedSchema == null || _currentDocument == null || !_communicationHandler.IsRunning)
+            {
                 return;
+            }
 
             // Check if any changed objects are contextual parameters or output components
-            bool relevantChange = false;
+            var relevantChange = false;
             foreach (var obj in e.Objects)
             {
                 if (obj is IGH_ContextualParameter)
@@ -597,11 +712,14 @@ namespace ComputeBuilder.Components
             }
 
             if (!relevantChange)
+            {
                 return;
+            }
 
             try
             {
-                var (updatedSchema, removedIds) = _schemaManager.ValidateSchemaAndTrackChanges(_embeddedSchema, _currentDocument);
+                var (updatedSchema, removedIds) =
+                    _schemaManager.ValidateSchemaAndTrackChanges(_embeddedSchema, _currentDocument);
 
                 if (removedIds.Count > 0)
                 {
@@ -622,6 +740,7 @@ namespace ComputeBuilder.Components
                         {
                             lastValues.Remove(removedId.ToString());
                         }
+
                         _valueApplicator?.SetLastAppliedValues(lastValues);
                     }
 
@@ -638,10 +757,7 @@ namespace ComputeBuilder.Components
                     AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
                         $"Schema updated: {removedIds.Count} parameter(s) removed from UI");
 
-                    _currentDocument.ScheduleSolution(10, doc =>
-                    {
-                        ExpireSolution(false);
-                    });
+                    _currentDocument.ScheduleSolution(10, doc => { ExpireSolution(false); });
                 }
             }
             catch (Exception ex)
@@ -657,19 +773,15 @@ namespace ComputeBuilder.Components
             UnregisterDocumentEvents();
             _valueApplicator?.Clear();
             _currentDocument = null;
-            _previewOpen = false;
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
+            _isEnabled = false;
         }
 
         protected virtual void Dispose(bool disposing)
         {
             if (_disposed)
+            {
                 return;
+            }
 
             if (disposing)
             {
@@ -681,7 +793,7 @@ namespace ComputeBuilder.Components
         }
 
         // Schema persistence - save/load with .gh file
-        public override bool Write(GH_IO.Serialization.GH_IWriter writer)
+        public override bool Write(GH_IWriter writer)
         {
             if (!string.IsNullOrEmpty(_sessionId))
             {
@@ -692,7 +804,7 @@ namespace ComputeBuilder.Components
             {
                 try
                 {
-                    string schemaJson = JsonConvert.SerializeObject(_embeddedSchema);
+                    var schemaJson = JsonConvert.SerializeObject(_embeddedSchema);
                     writer.SetString("Schema", schemaJson);
                 }
                 catch (Exception ex)
@@ -707,7 +819,7 @@ namespace ComputeBuilder.Components
             {
                 try
                 {
-                    string valuesJson = JsonConvert.SerializeObject(lastValues);
+                    var valuesJson = JsonConvert.SerializeObject(lastValues);
                     writer.SetString("Values", valuesJson);
                 }
                 catch (Exception ex)
@@ -720,7 +832,7 @@ namespace ComputeBuilder.Components
             return base.Write(writer);
         }
 
-        public override bool Read(GH_IO.Serialization.GH_IReader reader)
+        public override bool Read(GH_IReader reader)
         {
             if (reader.ItemExists("SessionId"))
             {
@@ -731,7 +843,7 @@ namespace ComputeBuilder.Components
             {
                 try
                 {
-                    string schemaJson = reader.GetString("Schema");
+                    var schemaJson = reader.GetString("Schema");
                     if (!string.IsNullOrEmpty(schemaJson))
                     {
                         _embeddedSchema = JsonConvert.DeserializeObject<UISchema>(schemaJson);
@@ -748,7 +860,7 @@ namespace ComputeBuilder.Components
             {
                 try
                 {
-                    string valuesJson = reader.GetString("Values");
+                    var valuesJson = reader.GetString("Values");
                     if (!string.IsNullOrEmpty(valuesJson))
                     {
                         _embeddedValues = JsonConvert.DeserializeObject<Dictionary<string, object>>(valuesJson);
@@ -763,7 +875,5 @@ namespace ComputeBuilder.Components
 
             return base.Read(reader);
         }
-
-        protected override System.Drawing.Bitmap Icon => null;
     }
 }

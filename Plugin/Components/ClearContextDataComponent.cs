@@ -1,13 +1,14 @@
 using System;
+using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using Grasshopper.Kernel;
-using ComputeBuilder.Models;
 
 namespace ComputeBuilder.Components
 {
     /// <summary>
-    /// Component to clear contextual data from parameters
-    /// Releases internal data to free up memory
+    ///     Component to clear contextual data from parameters
+    ///     Releases internal data to free up memory
     /// </summary>
     public class ClearContextDataComponent : GH_Component
     {
@@ -20,9 +21,12 @@ namespace ComputeBuilder.Components
 
         public override Guid ComponentGuid => new Guid("C3D4E5F6-A7B8-4C5D-9E0F-1A2B3C4D5E6F");
 
+        protected override Bitmap Icon => null;
+
         protected override void RegisterInputParams(GH_InputParamManager pManager)
         {
-            pManager.AddBooleanParameter("Clear", "Clear", "Clear contextual data from all contextual parameters in the document", GH_ParamAccess.item, false);
+            pManager.AddBooleanParameter("Clear", "Clear",
+                "Clear contextual data from all contextual parameters in the document", GH_ParamAccess.item, false);
         }
 
         protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -32,11 +36,11 @@ namespace ComputeBuilder.Components
 
         protected override void SolveInstance(IGH_DataAccess DA)
         {
-            bool clear = false;
+            var clear = false;
 
             DA.GetData(0, ref clear);
 
-            var document = this.OnPingDocument();
+            var document = OnPingDocument();
             if (document == null)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Could not access Grasshopper document");
@@ -55,9 +59,9 @@ namespace ComputeBuilder.Components
                 return;
             }
 
-            int clearedCount = 0;
-            int errorCount = 0;
-            var recipientsToExpire = new System.Collections.Generic.HashSet<IGH_ActiveObject>();
+            var clearedCount = 0;
+            var errorCount = 0;
+            var recipientsToExpire = new HashSet<IGH_ActiveObject>();
 
             foreach (var contextParam in contextualParams)
             {
@@ -76,7 +80,8 @@ namespace ComputeBuilder.Components
                             $"Cleared: {paramObject?.NickName ?? "Unknown"}");
                     }
 
-                    var CollectVolatileData_FromSources = contextParam.GetType().GetMethod("CollectVolatileData_FromSources");
+                    var CollectVolatileData_FromSources =
+                        contextParam.GetType().GetMethod("CollectVolatileData_FromSources");
                     if (CollectVolatileData_FromSources != null)
                     {
                         CollectVolatileData_FromSources.Invoke(contextParam, null);
@@ -116,9 +121,8 @@ namespace ComputeBuilder.Components
                 }
             }
 
-            DA.SetData(0, $"Cleared: {clearedCount} parameters\nExpired: {recipientsToExpire.Count} components\nErrors: {errorCount}");
+            DA.SetData(0,
+                $"Cleared: {clearedCount} parameters\nExpired: {recipientsToExpire.Count} components\nErrors: {errorCount}");
         }
-
-        protected override System.Drawing.Bitmap Icon => null;
     }
 }

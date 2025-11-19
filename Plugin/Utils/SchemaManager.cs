@@ -1,15 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Grasshopper.Kernel;
 using ComputeBuilder.Models;
-using Grasshopper.GUI;
+using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
 
 namespace ComputeBuilder.Utils
 {
     /// <summary>
-    /// Manages parameter scanning and schema validation
+    ///     Manages parameter scanning and schema validation
     /// </summary>
     public class SchemaManager
     {
@@ -21,7 +20,7 @@ namespace ComputeBuilder.Utils
         }
 
         /// <summary>
-        /// Scan document and return available parameters
+        ///     Scan document and return available parameters
         /// </summary>
         public AvailableParameters ScanParameters(GH_Document document)
         {
@@ -44,7 +43,10 @@ namespace ComputeBuilder.Utils
             foreach (var param in allParams)
             {
                 var docObj = param as IGH_DocumentObject;
-                if (docObj == null) continue;
+                if (docObj == null)
+                {
+                    continue;
+                }
 
                 var ghParam = param as IGH_Param;
                 var availableParam = new AvailableParameter
@@ -55,7 +57,8 @@ namespace ComputeBuilder.Utils
                     Description = docObj.Description ?? "",
                     Category = "input",
                     ParamType = GetParameterTypeName(param),
-                    Default = ghParam?.VolatileData.AllData(true).FirstOrDefault()?.ScriptVariable(), //TODO: properly handle tree inputs (not a priority for now)
+                    Default = ghParam?.VolatileData.AllData(true).FirstOrDefault()
+                        ?.ScriptVariable(), //TODO: properly handle tree inputs (not a priority for now)
                     AtLeast = param.AtLeast,
                     AtMost = param.AtMost
                 };
@@ -71,26 +74,22 @@ namespace ComputeBuilder.Utils
                 }
                 catch
                 {
+                    // ignored
                 }
 
-                //If source is a slider extract its properties
-                if (ghParam.SourceCount == 1 && ghParam.Sources[0] is GH_NumberSlider slider)
-                {
-                    availableParam.Maximum = slider.Slider.Maximum;
-                    availableParam.Minimum = slider.Slider.Minimum;
-                    availableParam.StepSize = slider.Slider.Epsilon;
-
-                }
-
+                ParameterTypeHelper.ExtractNumberParameterConstraints(param, ghParam, availableParam);
                 availableParameters.Parameters.Add(availableParam);
             }
 
             foreach (var output in contextOutputs)
             {
-                if (output == null) continue;
+                if (output == null)
+                {
+                    continue;
+                }
 
                 var component = output as GH_Component;
-                IGH_Param outputParam = component?.Params.Input.FirstOrDefault();
+                var outputParam = component?.Params.Input.FirstOrDefault();
 
                 availableParameters.Parameters.Add(new AvailableParameter
                 {
@@ -108,7 +107,7 @@ namespace ComputeBuilder.Utils
         }
 
         /// <summary>
-        /// Validate no duplicate parameter names
+        ///     Validate no duplicate parameter names
         /// </summary>
         public List<string> ValidateDuplicates(AvailableParameters parameters)
         {
@@ -120,23 +119,26 @@ namespace ComputeBuilder.Utils
         }
 
         /// <summary>
-        /// Validate schema against current document - removes references to missing parameters
-        /// Wrapper for ValidateSchemaAndTrackChanges without tracking
+        ///     Validate schema against current document - removes references to missing parameters
+        ///     Wrapper for ValidateSchemaAndTrackChanges without tracking
         /// </summary>
         public UISchema ValidateSchema(UISchema schema, GH_Document document)
         {
-            return ValidateSchemaAndTrackChanges(schema, document, trackChanges: false).Schema;
+            return ValidateSchemaAndTrackChanges(schema, document, false).Schema;
         }
 
         /// <summary>
-        /// Validate schema and optionally track what changed (removed parameters)
+        ///     Validate schema and optionally track what changed (removed parameters)
         /// </summary>
         public (UISchema Schema, List<Guid> RemovedIds) ValidateSchemaAndTrackChanges(
             UISchema schema,
             GH_Document document,
             bool trackChanges = true)
         {
-            if (schema == null) return (null, new List<Guid>());
+            if (schema == null)
+            {
+                return (null, new List<Guid>());
+            }
 
             var removedIds = trackChanges ? new List<Guid>() : null;
 
@@ -150,6 +152,7 @@ namespace ComputeBuilder.Utils
             {
                 removedIds.AddRange(inputsToRemove.Select(i => i.Id));
             }
+
             schema.Inputs.RemoveAll(input => inputsToRemove.Contains(input));
 
             var outputsToRemove = schema.Outputs.Where(output =>
@@ -162,6 +165,7 @@ namespace ComputeBuilder.Utils
             {
                 removedIds.AddRange(outputsToRemove.Select(o => o.Id));
             }
+
             schema.Outputs.RemoveAll(output => outputsToRemove.Contains(output));
 
             if (schema.Layout.Tabs != null)
@@ -196,7 +200,7 @@ namespace ComputeBuilder.Utils
         }
 
         /// <summary>
-        /// Get parameter type name from contextual parameter
+        ///     Get parameter type name from contextual parameter
         /// </summary>
         private string GetParameterTypeName(IGH_ContextualParameter contextParam)
         {
@@ -204,15 +208,19 @@ namespace ComputeBuilder.Utils
             {
                 return GetParameterTypeNameFromParam(param);
             }
+
             return "Unknown";
         }
 
         /// <summary>
-        /// Map Grasshopper parameter type to Compute-compatible type name using dictionary
+        ///     Map Grasshopper parameter type to Compute-compatible type name using dictionary
         /// </summary>
         private string GetParameterTypeNameFromParam(IGH_Param param)
         {
-            if (param == null) return "Unknown";
+            if (param == null)
+            {
+                return "Unknown";
+            }
 
             var typeName = param.GetType().Name;
 
@@ -245,7 +253,9 @@ namespace ComputeBuilder.Utils
             foreach (var kvp in typeKeywords)
             {
                 if (typeName.Contains(kvp.Key))
+                {
                     return kvp.Value;
+                }
             }
 
             return "Generic";

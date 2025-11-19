@@ -9,45 +9,52 @@ using System.Threading.Tasks;
 namespace ComputeBuilder.Utils
 {
     /// <summary>
-    /// Simple WebSocket server for real-time communication with the web UI
-    /// Only used for local interactive mode
+    ///     Simple WebSocket server for real-time communication with the web UI
+    ///     Only used for local interactive mode
     /// </summary>
     public class WebSocketServer : IDisposable
     {
-        private HttpListener _httpListener;
+        private readonly object _clientsLock = new object();
         private readonly List<WebSocket> _connectedClients = new List<WebSocket>();
         private CancellationTokenSource _cancellationTokenSource;
-        private readonly int _port;
-        private bool _isRunning;
-        private readonly object _clientsLock = new object();
+        private HttpListener _httpListener;
+
+        public WebSocketServer(int port = 8765)
+        {
+            Port = port;
+        }
+
+        public bool IsRunning { get; private set; }
+
+        public int Port { get; }
+
+        public void Dispose()
+        {
+            Stop();
+            _cancellationTokenSource?.Dispose();
+        }
 
         public event EventHandler<string> OnMessageReceived;
         public event EventHandler<WebSocket> OnClientConnected;
 
-        public bool IsRunning => _isRunning;
-        public int Port => _port;
-
-        public WebSocketServer(int port = 8765)
-        {
-            _port = port;
-        }
-
         /// <summary>
-        /// Start the WebSocket server
+        ///     Start the WebSocket server
         /// </summary>
         public async Task StartAsync()
         {
-            if (_isRunning)
+            if (IsRunning)
+            {
                 return;
+            }
 
             _cancellationTokenSource = new CancellationTokenSource();
             _httpListener = new HttpListener();
-            _httpListener.Prefixes.Add($"http://localhost:{_port}/");
+            _httpListener.Prefixes.Add($"http://localhost:{Port}/");
 
             try
             {
                 _httpListener.Start();
-                _isRunning = true;
+                IsRunning = true;
 
                 // Start accepting connections
                 _ = Task.Run(async () => await AcceptConnectionsAsync(_cancellationTokenSource.Token));
@@ -59,12 +66,14 @@ namespace ComputeBuilder.Utils
         }
 
         /// <summary>
-        /// Stop the WebSocket server
+        ///     Stop the WebSocket server
         /// </summary>
         public void Stop()
         {
-            if (!_isRunning)
+            if (!IsRunning)
+            {
                 return;
+            }
 
             _cancellationTokenSource?.Cancel();
 
@@ -74,31 +83,37 @@ namespace ComputeBuilder.Utils
                 {
                     try
                     {
-                        client?.CloseAsync(WebSocketCloseStatus.NormalClosure, "Server shutting down", CancellationToken.None).Wait(1000);
+                        client?.CloseAsync(WebSocketCloseStatus.NormalClosure, "Server shutting down",
+                            CancellationToken.None).Wait(1000);
                         client?.Dispose();
                     }
-                    catch { }
+                    catch
+                    {
+                    }
                 }
+
                 _connectedClients.Clear();
             }
 
             _httpListener?.Stop();
             _httpListener?.Close();
-            _isRunning = false;
+            IsRunning = false;
         }
 
         /// <summary>
-        /// Send a message to all connected clients
+        ///     Send a message to all connected clients
         /// </summary>
         public async Task BroadcastAsync(string message)
         {
-            if (!_isRunning)
+            if (!IsRunning)
+            {
                 return;
+            }
 
             var buffer = Encoding.UTF8.GetBytes(message);
             var segment = new ArraySegment<byte>(buffer);
 
-            List<WebSocket> clientsToRemove = new List<WebSocket>();
+            var clientsToRemove = new List<WebSocket>();
 
             lock (_clientsLock)
             {
@@ -124,14 +139,20 @@ namespace ComputeBuilder.Utils
                 foreach (var client in clientsToRemove)
                 {
                     _connectedClients.Remove(client);
-                    try { client.Dispose(); } catch { }
+                    try
+                    {
+                        client.Dispose();
+                    }
+                    catch
+                    {
+                    }
                 }
             }
         }
 
         private async Task AcceptConnectionsAsync(CancellationToken cancellationToken)
         {
-            while (!cancellationToken.IsCancellationRequested && _isRunning)
+            while (!cancellationToken.IsCancellationRequested && IsRunning)
             {
                 try
                 {
@@ -192,11 +213,15 @@ namespace ComputeBuilder.Utils
                     {
                         if (webSocket.State == WebSocketState.Open)
                         {
-                            await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Connection closed", CancellationToken.None);
+                            await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Connection closed",
+                                CancellationToken.None);
                         }
+
                         webSocket.Dispose();
                     }
-                    catch { }
+                    catch
+                    {
+                    }
                 }
             }
         }
@@ -213,10 +238,12 @@ namespace ComputeBuilder.Utils
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+                        await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing",
+                            CancellationToken.None);
                         break;
                     }
-                    else if (result.MessageType == WebSocketMessageType.Text)
+
+                    if (result.MessageType == WebSocketMessageType.Text)
                     {
                         var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
                         OnMessageReceived?.Invoke(this, message);
@@ -232,12 +259,5 @@ namespace ComputeBuilder.Utils
                 }
             }
         }
-
-        public void Dispose()
-        {
-            Stop();
-            _cancellationTokenSource?.Dispose();
-        }
     }
-
 }
