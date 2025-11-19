@@ -59,7 +59,9 @@
   // For slider rendering, get numeric value
   let sliderValue = $derived(
     isNumberWidget(item) && item.config.renderAsSlider
-      ? (typeof value === "number" ? value : 0)
+      ? typeof value === "number"
+        ? value
+        : 0
       : 0
   );
 </script>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
-  import { api } from "$lib/api/client";
+  import { getWebSocketClient } from "$lib/api/websocket";
   import { PageContainer, PageHeader, Panel } from "$lib/components/layout";
   import { StateDisplay, Button } from "$lib/components/ui";
   import {
@@ -15,6 +15,7 @@
   import type {
     UISchema,
     AvailableParameter,
+    AvailableParameters,
     InputParamSchema,
     OutputParamSchema,
     TabConfig,
@@ -28,9 +29,11 @@
     createDefaultWidgetConfig,
   } from "$lib/utils/widget-config";
   import Save from "$lib/components/ui/icons/Save.svelte";
-  import { mode } from "mode-watcher";
   import { toast } from "$lib/components/ui/sonner";
   import { onMount } from "svelte";
+
+  let wsClient = getWebSocketClient();
+  let wsConnected = $state(false);
 
   let sessionId = $state("");
   let schema = $state<UISchema | null>(null);
@@ -69,8 +72,83 @@
     schema?.layout?.tabs?.find((t) => t.id === activeTabId)
   );
 
-  $effect(() => {
-    (async () => {
+  onMount(() => {
+    // Define handlers at the top level so they can be cleaned up
+    const handleInitialData = (message: any) => {
+      if (message.sessionId === sessionId) {
+        console.log("[Builder] Received initial data:", message);
+
+        const schemaData = message.schema;
+        const availableData = message.availableParams as AvailableParameters;
+
+        availableParams = availableData?.parameters || [];
+
+        if (!schemaData) {
+          schema = {
+            id: crypto.randomUUID(),
+            name: "New Schema",
+            description: "Configure your Grasshopper UI",
+            version: "1.0.0",
+            created: new Date().toISOString(),
+            inputs: [],
+            outputs: [],
+            layout: {
+              type: "tabbed",
+              gap: 16,
+              tabs: [],
+              items: [],
+            },
+            enable3dViewer: false,
+          };
+        } else {
+          // Ensure layout exists with proper defaults
+          if (!schemaData.layout) {
+            schemaData.layout = {
+              type: "tabbed",
+              gap: 16,
+              tabs: [],
+              items: [],
+            };
+          }
+          if (!schemaData.layout.tabs) {
+            schemaData.layout.tabs = [];
+          }
+          schema = schemaData;
+        }
+
+        if (availableParams.length === 0) {
+          error =
+            "No parameters found. Please ensure the UI Builder component is active in Grasshopper and click Refresh.";
+        }
+
+        if (schema?.layout?.tabs && schema.layout.tabs.length > 0) {
+          activeTabId = schema.layout.tabs[0].id;
+        }
+
+        loading = false;
+      }
+    };
+
+    const handleSchemaSaved = (message: any) => {
+      if (message.sessionId === sessionId) {
+        if (message.success) {
+          toast.success("Schema saved successfully!");
+        } else {
+          toast.error(
+            `Failed to save schema: ${message.message || "Unknown error"}`
+          );
+        }
+      }
+    };
+
+    const handleKeydown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        saveSchema();
+      }
+    };
+
+    const initializeBuilder = async () => {
       const urlSessionId = page.url.searchParams.get("session") || "";
       sessionId = urlSessionId;
 
@@ -80,80 +158,52 @@
         return;
       }
 
-      const [schemaData, availableData] = await Promise.all([
-        api.getSchema(urlSessionId),
-        api.getAvailableParameters(urlSessionId),
-      ]);
+      // Connect to WebSocket
+      const connected = await wsClient.connect();
 
-      availableParams = availableData?.parameters || [];
-
-      if (!schemaData) {
-        schema = {
-          id: crypto.randomUUID(),
-          name: "New Schema",
-          description: "Configure your Grasshopper UI",
-          version: "1.0.0",
-          created: new Date().toISOString(),
-          inputs: [],
-          outputs: [],
-          layout: {
-            type: "tabbed",
-            gap: 16,
-            tabs: [],
-            items: [],
-          },
-          enable3dViewer: false,
-        };
-      } else {
-        schema = schemaData;
-        if (!schema.layout) {
-          schema.layout = {
-            type: "tabbed",
-            gap: 16,
-            tabs: [],
-            items: [],
-          };
-        }
-        if (!schema.layout.tabs) {
-          schema.layout.tabs = [];
-        }
-      }
-
-      if (availableParams.length === 0) {
+      if (!connected) {
         error =
-          "No parameters found. Please ensure the UI Builder component is active in Grasshopper and click Refresh.";
+          "Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled.";
+        loading = false;
+        return;
       }
 
-      if (schema?.layout?.tabs && schema.layout.tabs.length > 0) {
-        activeTabId = schema.layout.tabs[0].id;
-      }
+      console.log("[Builder] WebSocket connected");
+      wsConnected = true;
 
-      loading = false;
-    })();
+      // Register handlers
+      wsClient.on("initialData", handleInitialData);
+      wsClient.on("schemaSaved", handleSchemaSaved);
+
+      // Request initial data
+      wsClient.requestInitialData(sessionId);
+    };
+
+    initializeBuilder();
+    window.addEventListener("keydown", handleKeydown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeydown);
+      // Clean up WebSocket handlers to prevent duplicate responses
+      wsClient.off("initialData", handleInitialData);
+      wsClient.off("schemaSaved", handleSchemaSaved);
+      // Don't disconnect - keep connection alive for page switching
+    };
   });
 
-  async function saveSchema() {
+  function saveSchema() {
     if (!schema || !sessionId) return;
 
-    const success = await api.saveSchema(sessionId, schema);
-    if (success) {
-      toast.success("Schema saved successfully!");
-    } else {
-      toast.error("Failed to save schema");
+    if (!wsConnected || !wsClient.isConnected) {
+      toast.error("Not connected to Grasshopper");
+      return;
     }
+
+    $state.snapshot(schema);
+
+    // Send schema via WebSocket - confirmation will come via schemaSaved message
+    wsClient.saveSchema(sessionId, schema);
   }
-
-  onMount(() => {
-    function handleKeydown(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault();
-        saveSchema();
-      }
-    }
-
-    window.addEventListener("keydown", handleKeydown);
-    return () => window.removeEventListener("keydown", handleKeydown);
-  });
 
   //TODO: Add possibility to reorder tabs
 
@@ -253,7 +303,16 @@
   ) {
     if (!schema || !schema.layout.tabs) return;
 
-    const { type, data, sourceType, targetItem, dropPosition, sourceTabId, sourceGroupId, sourceItem } = event.detail;
+    const {
+      type,
+      data,
+      sourceType,
+      targetItem,
+      dropPosition,
+      sourceTabId,
+      sourceGroupId,
+      sourceItem,
+    } = event.detail;
 
     // Handle moving items from another group
     if (type === "group-item") {
@@ -265,7 +324,9 @@
       const targetGroup = targetTab.groups.find((g) => g.id === groupId);
       if (!sourceGroup || !targetGroup) return;
 
-      const sourceIndex = sourceGroup.items.findIndex((i) => i.id === sourceItem.id);
+      const sourceIndex = sourceGroup.items.findIndex(
+        (i) => i.id === sourceItem.id
+      );
       if (sourceIndex < 0) return;
 
       // Remove from source group
@@ -443,7 +504,14 @@
 
 <DragDropContext>
   <PageContainer background="white">
-    <PageHeader title="Schema Builder" {sessionId} showModeToggle={true}>
+    <PageHeader
+      title="Schema Builder"
+      {sessionId}
+      showModeToggle={true}
+      badge={wsClient.isConnected
+        ? { label: "Connected", variant: "connected" as const }
+        : { label: "Disconnected", variant: "disconnected" as const }}
+    >
       <nav class="flex gap-2">
         <Button variant="outline" size="sm" onclick={() => navigateTo("")}>
           Home
@@ -483,7 +551,7 @@
             <SchemaInfoPanel {schema} />
 
             <Panel title="Available Parameters">
-              <p class="text-gray-600 text-sm mb-4">
+              <p class="text-accent-foreground/40 text-sm mb-4">
                 Drag parameters into groups below
               </p>
 
@@ -551,9 +619,9 @@
                         />
                       {:else}
                         <div class="flex flex-col gap-6">
-                          {#each activeTab.groups as group (group.id)}
+                          {#each activeTab.groups as group, groupIndex (group.id)}
                             <EditableGroup
-                              {group}
+                              bind:group={activeTab.groups[groupIndex]}
                               onDrop={(e) =>
                                 handleParameterDrop(activeTab.id, group.id, e)}
                               onReorder={handleReorder}

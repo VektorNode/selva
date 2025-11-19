@@ -24,16 +24,17 @@ namespace ComputeBuilder.Components
 
         // Embedded schema - persists with the .gh file
         private UISchema _embeddedSchema = null;
-        private DateTime _lastSchemaSync = DateTime.MinValue;
 
         // Embedded values - persists parameter values with the .gh file
         private Dictionary<string, object> _embeddedValues = null;
+
+        // Cache for available parameters (to send on client connect)
+        private AvailableParameters _availableParams = null;
 
         // Extracted responsibilities
         private SchemaManager _schemaManager;
         private ValueApplicator _valueApplicator;
         private CommunicationHandler _communicationHandler;
-        private PersistenceManager _persistenceManager;
 
         public UIBuilderComponent()
             : base("UI Builder", "UIBuilder",
@@ -87,10 +88,11 @@ namespace ComputeBuilder.Components
                 _schemaManager = new SchemaManager(_sessionId);
                 _valueApplicator = new ValueApplicator();
                 _communicationHandler = new CommunicationHandler(_sessionId);
-                _persistenceManager = new PersistenceManager(_sessionId);
 
                 _communicationHandler.OnValuesReceived += HandleWebSocketValueUpdate;
                 _communicationHandler.OnCurrentValuesRequested += HandleCurrentValuesRequest;
+                _communicationHandler.OnClientConnected += HandleClientConnected;
+                _communicationHandler.OnSchemaSaveRequested += HandleSchemaSave;
             }
 
             DA.SetData(0, _sessionId);
@@ -109,8 +111,8 @@ namespace ComputeBuilder.Components
             {
                 if (enable || refresh)
                 {
-                    var availableParams = _schemaManager.ScanParameters(document);
-                    var duplicates = _schemaManager.ValidateDuplicates(availableParams);
+                    _availableParams = _schemaManager.ScanParameters(document);
+                    var duplicates = _schemaManager.ValidateDuplicates(_availableParams);
 
                     if (duplicates.Any())
                     {
@@ -118,22 +120,18 @@ namespace ComputeBuilder.Components
                         AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
                             $"Duplicate parameter names found: {duplicateList}. Each parameter must have a unique name.");
                     }
-
-                    _persistenceManager.SaveAvailableParameters(availableParams);
                 }
 
                 // Load and validate embedded schema/values only
                 if (_embeddedSchema != null)
                 {
                     _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
-                    _persistenceManager.SaveSchema(_embeddedSchema);
                 }
 
                 if (_embeddedValues != null && _embeddedSchema != null)
                 {
                     _valueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, _embeddedValues, AddRuntimeMessage);
                 }
-
 
                 DA.SetData(1, $"Session: {_sessionId}\nStatus: Headless Mode\nSchema loaded (no WebSocket)");
                 DA.SetData(2, _embeddedSchema != null ? JsonConvert.SerializeObject(_embeddedSchema) : "");
@@ -151,8 +149,8 @@ namespace ComputeBuilder.Components
             // Scan parameters on enable or refresh
             if (enable || refresh)
             {
-                var availableParams = _schemaManager.ScanParameters(document);
-                var duplicates = _schemaManager.ValidateDuplicates(availableParams);
+                _availableParams = _schemaManager.ScanParameters(document);
+                var duplicates = _schemaManager.ValidateDuplicates(_availableParams);
 
                 if (duplicates.Any())
                 {
@@ -160,8 +158,6 @@ namespace ComputeBuilder.Components
                     AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
                         $"Duplicate parameter names found: {duplicateList}. Each parameter must have a unique name.");
                 }
-
-                _persistenceManager.SaveAvailableParameters(availableParams);
             }
 
             // === ENABLED ===
@@ -184,60 +180,38 @@ namespace ComputeBuilder.Components
                     }
                 }
 
-                // Load embedded schema to temp files on first enable
+                // Validate and apply embedded schema/values on first enable
                 if (_embeddedSchema != null && !_previewOpen)
                 {
                     _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
-                    _persistenceManager.SaveSchema(_embeddedSchema);
-                    _lastSchemaSync = DateTime.UtcNow;
                 }
 
-                // Load embedded values and apply to parameters on first enable
-                if (_embeddedValues != null && !_previewOpen)
+                // Apply embedded values to Grasshopper parameters on first enable
+                if (_embeddedValues != null && !_previewOpen && _embeddedSchema != null)
                 {
-                    // Write values to temp file for web UI
-                    _persistenceManager.SaveValues(_embeddedValues);
+                    int updatedCount = _valueApplicator.ApplyValuesAndSchedule(
+                        document,
+                        _embeddedSchema,
+                        _embeddedValues,
+                        AddRuntimeMessage);
 
-                    // Apply values immediately to Grasshopper parameters
-                    if (_embeddedSchema != null)
+                    if (updatedCount > 0)
                     {
-                        int updatedCount = _valueApplicator.ApplyValuesAndSchedule(
-                            document,
-                            _embeddedSchema,
-                            _embeddedValues,
-                            AddRuntimeMessage);
-
-                        if (updatedCount > 0)
-                        {
-                            _valueApplicator.SetLastAppliedValues(_embeddedValues);
-                        }
+                        _valueApplicator.SetLastAppliedValues(_embeddedValues);
                     }
                 }
 
-                _persistenceManager.SaveSessionState(true);
                 if (openPreview && !_previewOpen)
                 {
                     OpenUI();
                     _previewOpen = true;
                 }
 
-                var schemaPath = SessionManager.GetSchemaPath(_sessionId);
-                if (SessionManager.HasBeenModified(schemaPath, _lastSchemaSync))
-                {
-                    var updatedSchema = _persistenceManager.LoadSchema();
-                    if (updatedSchema != null)
-                    {
-                        _embeddedSchema = _schemaManager.ValidateSchema(updatedSchema, document);
-                        _lastSchemaSync = DateTime.UtcNow;
-                    }
-                }
-
-                var schemaInfo = _embeddedSchema ?? _persistenceManager.LoadSchema();
-                if (schemaInfo != null)
+                if (_embeddedSchema != null)
                 {
                     DA.SetData(1,
-                        $"Session: {_sessionId}\nStatus: Active (WebSocket)\nSchema: {schemaInfo.Inputs.Count} inputs, {schemaInfo.Outputs.Count} outputs\nSwitch modes in web UI");
-                    DA.SetData(2, JsonConvert.SerializeObject(schemaInfo));
+                        $"Session: {_sessionId}\nStatus: Active (WebSocket)\nSchema: {_embeddedSchema.Inputs.Count} inputs, {_embeddedSchema.Outputs.Count} outputs\nSwitch modes in web UI");
+                    DA.SetData(2, JsonConvert.SerializeObject(_embeddedSchema));
                 }
                 else
                 {
@@ -290,10 +264,7 @@ namespace ComputeBuilder.Components
 
                 if (updated > 0)
                 {
-                    // Save values to file for persistence
-                    _persistenceManager.SaveValues(values);
-
-                    // Update embedded values
+                    // Update embedded values (will be saved with .gh file)
                     _embeddedValues = new Dictionary<string, object>(values);
                 }
             }
@@ -301,6 +272,107 @@ namespace ComputeBuilder.Components
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Handle client connection - send initial data
+        /// </summary>
+        private void HandleClientConnected(object sender, EventArgs e)
+        {
+            try
+            {
+                var document = this.OnPingDocument();
+                if (document == null)
+                    return;
+
+                // Get current values from parameters
+                var currentValues = CollectCurrentValues(document);
+
+                // Broadcast initial data to the newly connected client
+                var _ = _communicationHandler.BroadcastInitialData(_embeddedSchema, _availableParams, currentValues);
+            }
+            catch (Exception ex)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error sending initial data: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handle schema save request from web UI
+        /// </summary>
+        private void HandleSchemaSave(object sender, UISchema schema)
+        {
+            try
+            {
+                var document = this.OnPingDocument();
+                if (document == null)
+                {
+                    var _ = _communicationHandler.BroadcastSchemaSaved(false, "No document available");
+                    return;
+                }
+
+                // Validate and store the schema
+                _embeddedSchema = _schemaManager.ValidateSchema(schema, document);
+
+                // Broadcast success
+                var task = _communicationHandler.BroadcastSchemaSaved(true);
+
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Schema saved successfully");
+            }
+            catch (Exception ex)
+            {
+                var _ = _communicationHandler.BroadcastSchemaSaved(false, ex.Message);
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error saving schema: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Collect current values from all input parameters
+        /// </summary>
+        private Dictionary<string, object> CollectCurrentValues(GH_Document document)
+        {
+            var currentValues = new Dictionary<string, object>();
+
+            if (_embeddedSchema == null)
+                return currentValues;
+
+            foreach (var input in _embeddedSchema.Inputs)
+            {
+                try
+                {
+                    var paramObject = document.FindObject(input.Id, false);
+                    if (paramObject == null)
+                        continue;
+
+                    if (paramObject is IGH_Param ghParam)
+                    {
+                        if (ghParam.SourceCount == 1)
+                        {
+                            var valueData = ghParam.Sources[0].VolatileData;
+                            if (valueData != null && !valueData.IsEmpty)
+                            {
+                                var allData = valueData.AllData(true).ToList();
+                                if (allData.Count == 1)
+                                {
+                                    currentValues[input.Id.ToString()] = ExtractValue(allData[0]);
+                                }
+                                else if (allData.Count > 1)
+                                {
+                                    var values = allData.Select(d => ExtractValue(d)).ToList();
+                                    currentValues[input.Id.ToString()] = values;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                        $"Error collecting current value for '{input.Name}': {ex.Message}");
+                }
+            }
+
+            return currentValues;
         }
 
         /// <summary>
@@ -314,44 +386,7 @@ namespace ComputeBuilder.Components
                 if (document == null || _embeddedSchema == null)
                     return;
 
-                var currentValues = new Dictionary<string, object>();
-
-                // Collect current values from all input parameters
-                foreach (var input in _embeddedSchema.Inputs)
-                {
-                    try
-                    {
-                        var paramObject = document.FindObject(input.Id, false);
-                        if (paramObject == null)
-                            continue;
-
-                        if (paramObject is IGH_Param ghParam)
-                        {
-                            if (ghParam.SourceCount == 1)
-                            {
-                                var valueData = ghParam.Sources[0].VolatileData;
-                                if (valueData != null && !valueData.IsEmpty)
-                                {
-                                    var allData = valueData.AllData(true).ToList();
-                                    if (allData.Count == 1)
-                                    {
-                                        currentValues[input.Id.ToString()] = ExtractValue(allData[0]);
-                                    }
-                                    else if (allData.Count > 1)
-                                    {
-                                        var values = allData.Select(d => ExtractValue(d)).ToList();
-                                        currentValues[input.Id.ToString()] = values;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                            $"Error collecting current value for '{input.Name}': {ex.Message}");
-                    }
-                }
+                var currentValues = CollectCurrentValues(document);
 
                 // Broadcast current values to web UI
                 if (currentValues.Count > 0)
@@ -416,17 +451,6 @@ namespace ComputeBuilder.Components
             {
                 try
                 {
-                    // Update values file (merge with inputs)
-                    var existingValues = _persistenceManager.LoadValues();
-                    var allValues = existingValues?.Values ?? new Dictionary<string, object>();
-
-                    foreach (var kvp in outputValues)
-                    {
-                        allValues[kvp.Key] = kvp.Value;
-                    }
-
-                    _persistenceManager.SaveValues(allValues);
-
                     // Broadcast via WebSocket
                     var _ = _communicationHandler.BroadcastOutputs(outputValues);
                 }
@@ -582,7 +606,6 @@ namespace ComputeBuilder.Components
                 if (removedIds.Count > 0)
                 {
                     _embeddedSchema = updatedSchema;
-                    _persistenceManager.SaveSchema(_embeddedSchema);
 
                     if (_embeddedValues != null)
                     {
@@ -606,7 +629,7 @@ namespace ComputeBuilder.Components
 
                     try
                     {
-                        broadcastTask.Wait(10); // 1 second timeout
+                        broadcastTask.Wait(10);
                     }
                     catch
                     {

@@ -3,7 +3,8 @@
     "allow": [
       "Bash(dir:*)",
       "Bash(npm install)",
-      "Bash(pnpm add:*)"
+      "Bash(pnpm add:*)",
+      "Bash(dotnet build:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using Grasshopper.Kernel;
-using ComputeBuilder.Utils;
 using ComputeBuilder.Models;
 
 namespace ComputeBuilder.Components
@@ -23,8 +22,7 @@ namespace ComputeBuilder.Components
 
         protected override void RegisterInputParams(GH_InputParamManager pManager)
         {
-            pManager.AddTextParameter("Session ID", "ID", "Session ID from Schema Builder", GH_ParamAccess.item);
-            pManager.AddBooleanParameter("Clear", "Clear", "Clear contextual data from all inputs in the schema", GH_ParamAccess.item, false);
+            pManager.AddBooleanParameter("Clear", "Clear", "Clear contextual data from all contextual parameters in the document", GH_ParamAccess.item, false);
         }
 
         protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -34,19 +32,9 @@ namespace ComputeBuilder.Components
 
         protected override void SolveInstance(IGH_DataAccess DA)
         {
-            string sessionId = "";
             bool clear = false;
 
-            if (!DA.GetData(0, ref sessionId)) return;
-            DA.GetData(1, ref clear);
-
-            var schema = SessionManager.ReadJson<UISchema>(SessionManager.GetSchemaPath(sessionId));
-            if (schema == null)
-            {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"No schema found for session {sessionId}");
-                DA.SetData(0, "ERROR: Schema not found");
-                return;
-            }
+            DA.GetData(0, ref clear);
 
             var document = this.OnPingDocument();
             if (document == null)
@@ -56,9 +44,14 @@ namespace ComputeBuilder.Components
                 return;
             }
 
+            // Find all contextual parameters in the document
+            var contextualParams = document.Objects
+                .OfType<IGH_ContextualParameter>()
+                .ToList();
+
             if (!clear)
             {
-                DA.SetData(0, $"Session: {sessionId}\nReady to clear {schema.Inputs.Count} parameters\nSet 'Clear' to true to execute");
+                DA.SetData(0, $"Found {contextualParams.Count} contextual parameters\nSet 'Clear' to true to execute");
                 return;
             }
 
@@ -66,62 +59,50 @@ namespace ComputeBuilder.Components
             int errorCount = 0;
             var recipientsToExpire = new System.Collections.Generic.HashSet<IGH_ActiveObject>();
 
-            foreach (var input in schema.Inputs)
+            foreach (var contextParam in contextualParams)
             {
-                var paramObject = document.FindObject(input.Id, false);
-                if (paramObject == null)
-                {
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                        $"Parameter '{input.Name}' not found in document");
-                    errorCount++;
-                    continue;
-                }
+                var paramObject = contextParam as IGH_DocumentObject;
 
-                if (paramObject is IGH_ContextualParameter contextParam)
+                try
                 {
-                    try
+                    // Call ClearContextualData to release the internal data
+                    var clearMethod = contextParam.GetType().GetMethod("ClearContextualData");
+                    if (clearMethod != null)
                     {
-                        // Call ClearContextualData to release the internal data
-                        var clearMethod = contextParam.GetType().GetMethod("ClearContextualData");
-                        if (clearMethod != null)
-                        {
-                            clearMethod.Invoke(contextParam, null);
-                            clearedCount++;
+                        clearMethod.Invoke(contextParam, null);
+                        clearedCount++;
 
-                            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                                $"Cleared: {paramObject.NickName}");
-                        }
-                        
-                        
-                        var CollectVolatileData_FromSources = contextParam.GetType().GetMethod("CollectVolatileData_FromSources");
-                        if (CollectVolatileData_FromSources != null)
+                        AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                            $"Cleared: {paramObject?.NickName ?? "Unknown"}");
+                    }
+
+                    var CollectVolatileData_FromSources = contextParam.GetType().GetMethod("CollectVolatileData_FromSources");
+                    if (CollectVolatileData_FromSources != null)
+                    {
+                        CollectVolatileData_FromSources.Invoke(contextParam, null);
+                    }
+
+                    // Collect all components that receive data from this parameter
+                    if (contextParam is IGH_Param param)
+                    {
+                        foreach (var recipient in param.Recipients)
                         {
-                            CollectVolatileData_FromSources.Invoke(contextParam, null);
-                        }
-                        // Collect all components that receive data from this parameter
-                        // We'll expire them AFTER clearing all parameters
-                        if (paramObject is IGH_Param param)
-                        {
-                            foreach (var recipient in param.Recipients)
+                            if (recipient is IGH_ActiveObject activeRecipient)
                             {
-                                if (recipient is IGH_ActiveObject activeRecipient)
-                                {
-                                    recipientsToExpire.Add(activeRecipient);
-                                }
+                                recipientsToExpire.Add(activeRecipient);
                             }
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                            $"Error clearing {paramObject.NickName}: {ex.Message}");
-                        errorCount++;
-                    }
+                }
+                catch (Exception ex)
+                {
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                        $"Error clearing {paramObject?.NickName ?? "Unknown"}: {ex.Message}");
+                    errorCount++;
                 }
             }
 
-            // Now expire all recipient components (not the parameters themselves)
-            // This prevents the parameters from recalculating during the clear operation
+            // Now expire all recipient components
             foreach (var recipient in recipientsToExpire)
             {
                 try
@@ -135,7 +116,7 @@ namespace ComputeBuilder.Components
                 }
             }
 
-            DA.SetData(0, $"Session: {sessionId}\nCleared: {clearedCount} parameters\nExpired: {recipientsToExpire.Count} components\nErrors: {errorCount}");
+            DA.SetData(0, $"Cleared: {clearedCount} parameters\nExpired: {recipientsToExpire.Count} components\nErrors: {errorCount}");
         }
 
         protected override System.Drawing.Bitmap Icon => null;

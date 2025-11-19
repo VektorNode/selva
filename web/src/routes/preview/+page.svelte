@@ -1,9 +1,8 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
-  import { api } from "$lib/api/client";
   import { getWebSocketClient } from "$lib/api/websocket";
-  import type { UISchema } from "$lib/types/schema";
+  import type { UISchema, AvailableParameters } from "$lib/types/schema";
   import { TabLayout, Layout as LegacyLayout } from "$lib/components/preview";
   import { PageContainer, PageHeader } from "$lib/components/layout";
   import { StateDisplay, Button } from "$lib/components/ui";
@@ -93,9 +92,9 @@
   const badgeConfig = $derived(
     runtimeMode === "local"
       ? wsConnected
-        ? { label: "⚡ WebSocket Connected", variant: "connected" as const }
+        ? { label: "Connected", variant: "connected" as const }
         : {
-            label: "❌ WebSocket Disconnected",
+            label: "Disconnected",
             variant: "disconnected" as const,
           }
       : solving
@@ -104,6 +103,142 @@
   );
 
   onMount(() => {
+    // Define handlers at the top level so they can be cleaned up
+    const handleInitialData = (message: any) => {
+      if (message.sessionId === sessionId) {
+        console.log("[Preview] Received initial data:", message);
+
+        const receivedSchema = message.schema;
+        const availableParams = message.availableParams as AvailableParameters;
+        const currentValues = message.currentValues || {};
+
+        if (!receivedSchema) {
+          error =
+            "No schema configured. Please use the Schema Builder to create a UI.";
+          loading = false;
+          return;
+        }
+
+        // Ensure layout has tabs array
+        if (!receivedSchema.layout.tabs) {
+          receivedSchema.layout.tabs = [];
+        }
+
+        // Initialize values from available params defaults
+        receivedSchema.inputs.forEach((input: any) => {
+          const availableParam = availableParams?.parameters?.find(
+            (p) => p.id === input.id
+          );
+          const defaultValue =
+            availableParam?.default !== null &&
+            availableParam?.default !== undefined
+              ? availableParam.default
+              : getDefaultValue(input.paramType);
+
+          values[input.id] = defaultValue;
+        });
+
+        receivedSchema.outputs.forEach((output: any) => {
+          values[output.id] = null;
+        });
+
+        // Apply current values from Grasshopper
+        if (currentValues && Object.keys(currentValues).length > 0) {
+          isRemoteUpdate = true;
+          values = { ...values, ...currentValues };
+          isRemoteUpdate = false;
+        }
+
+        schema = receivedSchema;
+        loading = false;
+      }
+    };
+
+    const handleCurrentValues = (message: any) => {
+      if (message.sessionId === sessionId) {
+        console.log("[Preview] Received current values:", message.values);
+        isRemoteUpdate = true;
+        values = { ...values, ...message.values };
+        isRemoteUpdate = false;
+      }
+    };
+
+    const handleOutputs = (message: any) => {
+      if (message.sessionId === sessionId) {
+        console.log("[Preview] Received outputs:", message.outputs);
+        const outputUpdates = Object.fromEntries(
+          Object.entries(message.outputs).filter(([paramId]) =>
+            schema?.outputs.some((o) => o.id === paramId)
+          )
+        );
+
+        if (Object.keys(outputUpdates).length > 0) {
+          isRemoteUpdate = true;
+          values = { ...values, ...outputUpdates };
+          isRemoteUpdate = false;
+        }
+      }
+    };
+
+    const handleOutputUpdate = (message: any) => {
+      if (message.sessionId === sessionId) {
+        console.log("[Preview] Received output update:", message.outputs);
+        const outputUpdates = Object.fromEntries(
+          Object.entries(message.outputs).filter(([paramId]) =>
+            schema?.outputs.some((o) => o.id === paramId)
+          )
+        );
+
+        if (Object.keys(outputUpdates).length > 0) {
+          isRemoteUpdate = true;
+          values = { ...values, ...outputUpdates };
+          isRemoteUpdate = false;
+        }
+      }
+    };
+
+    const handleSchemaUpdated = (message: any) => {
+      if (message.sessionId === sessionId) {
+        console.log("[Preview] Schema updated:", {
+          schema: message.schema,
+          removedIds: message.removedIds,
+        });
+
+        const removedCount = message.removedIds?.length || 0;
+
+        const newSchema = JSON.parse(JSON.stringify(message.schema));
+
+        // Ensure layout has tabs array for backward compatibility
+        if (!newSchema.layout.tabs) {
+          newSchema.layout.tabs = [];
+        }
+
+        if (message.removedIds && message.removedIds.length > 0) {
+          const newValues = { ...values };
+          message.removedIds.forEach((id: string) => {
+            delete newValues[id];
+          });
+          values = newValues;
+
+          console.log(
+            `[Preview] Removed ${message.removedIds.length} parameter(s) from UI`
+          );
+        }
+
+        schema = null;
+
+        setTimeout(() => {
+          schema = newSchema;
+
+          if (removedCount > 0) {
+            showNotification(
+              `Schema updated: ${removedCount} parameter${removedCount > 1 ? "s" : ""} removed`
+            );
+          }
+        }, 10);
+      }
+    };
+
     const initializeSchema = async () => {
       sessionId = page.url.searchParams.get("session") || "";
 
@@ -114,160 +249,41 @@
       }
 
       if (runtimeMode === "local") {
-        schema = await api.getSchema(sessionId);
-
-        if (!schema) {
-          error =
-            "Schema not found. Please ensure the UI Builder component is enabled in Grasshopper.";
-          loading = false;
-          return;
-        }
-      }
-
-      if (!schema) {
-        error =
-          "Schema not found. Please provide a valid schema or session ID.";
-        loading = false;
-        return;
-      }
-
-      if (!schema.layout.tabs) {
-        schema.layout.tabs = [];
-      }
-
-      const availableParams = await api.getAvailableParameters(sessionId);
-
-      schema.inputs.forEach((input) => {
-        const availableParam = availableParams?.parameters.find(
-          (p) => p.id === input.id
-        );
-        const defaultValue =
-          availableParam?.default !== null &&
-          availableParam?.default !== undefined
-            ? availableParam.default
-            : getDefaultValue(input.paramType);
-
-        values[input.id] = defaultValue;
-      });
-
-      schema.outputs.forEach((output) => {
-        values[output.id] = null;
-      });
-
-      if (runtimeMode === "local") {
         const connected = await wsClient.connect();
 
-        if (connected) {
-          console.log("[Preview] WebSocket connected");
-          wsConnected = true;
-
-          wsClient.on("currentValues", (message) => {
-            if (message.sessionId === sessionId) {
-              console.log("[Preview] Received current values:", message.values);
-              isRemoteUpdate = true;
-              values = { ...values, ...message.values };
-              isRemoteUpdate = false;
-            }
-          });
-
-          // Listen for output updates from Grasshopper (C# sends GUID keys)
-          wsClient.on("outputs", (message) => {
-            if (message.sessionId === sessionId) {
-              console.log("[Preview] Received outputs:", message.outputs);
-              const outputUpdates = Object.fromEntries(
-                Object.entries(message.outputs).filter(([paramId]) =>
-                  schema?.outputs.some((o) => o.id === paramId)
-                )
-              );
-
-              if (Object.keys(outputUpdates).length > 0) {
-                isRemoteUpdate = true;
-                values = { ...values, ...outputUpdates };
-                isRemoteUpdate = false;
-              }
-            }
-          });
-
-          wsClient.on("outputUpdate", (message) => {
-            if (message.sessionId === sessionId) {
-              console.log("[Preview] Received output update:", message.outputs);
-              const outputUpdates = Object.fromEntries(
-                Object.entries(message.outputs).filter(([paramId]) =>
-                  schema?.outputs.some((o) => o.id === paramId)
-                )
-              );
-
-              if (Object.keys(outputUpdates).length > 0) {
-                isRemoteUpdate = true;
-                values = { ...values, ...outputUpdates };
-                isRemoteUpdate = false;
-              }
-            }
-          });
-
-          wsClient.on("schemaUpdated", (message) => {
-            if (message.sessionId === sessionId) {
-              console.log("[Preview] Schema updated:", {
-                schema: message.schema,
-                removedIds: message.removedIds,
-              });
-
-              const removedCount = message.removedIds?.length || 0;
-
-              const newSchema = JSON.parse(JSON.stringify(message.schema));
-
-              // Ensure layout has tabs array for backward compatibility
-              if (!newSchema.layout.tabs) {
-                newSchema.layout.tabs = [];
-              }
-
-              if (message.removedIds && message.removedIds.length > 0) {
-                const newValues = { ...values };
-                message.removedIds.forEach((id: string) => {
-                  delete newValues[id];
-                });
-                values = newValues;
-
-                console.log(
-                  `[Preview] Removed ${message.removedIds.length} parameter(s) from UI`
-                );
-              }
-
-              schema = null;
-
-              setTimeout(() => {
-                schema = newSchema;
-
-                if (removedCount > 0) {
-                  showNotification(
-                    `Schema updated: ${removedCount} parameter${removedCount > 1 ? "s" : ""} removed`
-                  );
-                }
-              }, 10);
-            }
-          });
-
-          console.log("[Preview] Requesting current values from Grasshopper");
-          wsClient.requestCurrentValues(sessionId);
-        } else {
+        if (!connected) {
           error =
             "Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled and port 8765 is available.";
           loading = false;
           return;
         }
-      }
 
-      loading = false;
+        console.log("[Preview] WebSocket connected");
+        wsConnected = true;
+
+        // Register handlers
+        wsClient.on("initialData", handleInitialData);
+        wsClient.on("currentValues", handleCurrentValues);
+        wsClient.on("outputs", handleOutputs);
+        wsClient.on("outputUpdate", handleOutputUpdate);
+        wsClient.on("schemaUpdated", handleSchemaUpdated);
+
+        // Request initial data from Grasshopper
+        console.log("[Preview] Requesting initial data from Grasshopper");
+        wsClient.requestInitialData(sessionId);
+      }
     };
 
     initializeSchema();
-  });
 
-  $effect(() => {
     return () => {
-      if (wsConnected) {
-        wsClient.disconnect();
-      }
+      // Clean up WebSocket handlers to prevent duplicate responses
+      wsClient.off("initialData", handleInitialData);
+      wsClient.off("currentValues", handleCurrentValues);
+      wsClient.off("outputs", handleOutputs);
+      wsClient.off("outputUpdate", handleOutputUpdate);
+      wsClient.off("schemaUpdated", handleSchemaUpdated);
+      // Don't disconnect - keep connection alive for page switching
     };
   });
 </script>

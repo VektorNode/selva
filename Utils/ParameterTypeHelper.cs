@@ -21,21 +21,5 @@ namespace ComputeBuilder.Utils
             return string.Equals(typeName, "ContextPrintComponent", StringComparison.Ordinal);
             //string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal); //Maybe add later again
         }
-
-        /// <summary>
-        /// Check if an object is a contextual parameter (IGH_ContextualParameter)
-        /// </summary>
-        public static bool IsContextualParameter(IGH_DocumentObject obj)
-        {
-            return obj is IGH_ContextualParameter;
-        }
-
-        /// <summary>
-        /// Check if an object is either a contextual parameter or a context output component
-        /// </summary>
-        public static bool IsValidContextObject(IGH_DocumentObject obj)
-        {
-            return IsContextualParameter(obj) || IsContextOutputComponent(obj);
-        }
     }
 }

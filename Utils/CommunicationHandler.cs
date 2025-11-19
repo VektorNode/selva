@@ -18,6 +18,8 @@ namespace ComputeBuilder.Utils
 
         public event EventHandler<Dictionary<string, object>> OnValuesReceived;
         public event EventHandler OnCurrentValuesRequested;
+        public event EventHandler OnClientConnected;
+        public event EventHandler<UISchema> OnSchemaSaveRequested;
 
         public bool IsRunning => _webSocketServer?.IsRunning ?? false;
 
@@ -38,6 +40,14 @@ namespace ComputeBuilder.Utils
             try
             {
                 _webSocketServer = new WebSocketServer(_port);
+
+                // Handle client connections
+                _webSocketServer.OnClientConnected += (sender, webSocket) =>
+                {
+                    logMessage?.Invoke("Web UI client connected");
+                    // Don't invoke OnClientConnected here - wait for explicit requestInitialData message
+                    // This prevents duplicate initial data being sent
+                };
 
                 // Handle incoming messages
                 _webSocketServer.OnMessageReceived += (sender, message) =>
@@ -60,6 +70,23 @@ namespace ComputeBuilder.Utils
                             {
                                 logMessage?.Invoke("Web UI requested current values");
                                 OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty);
+                            }
+                        }
+                        else if (msg.Type == "requestInitialData")
+                        {
+                            if (msg.SessionId == _sessionId)
+                            {
+                                logMessage?.Invoke("Web UI requested initial data");
+                                OnClientConnected?.Invoke(this, EventArgs.Empty);
+                            }
+                        }
+                        else if (msg.Type == "saveSchema")
+                        {
+                            var schemaMsg = JsonConvert.DeserializeObject<SchemaSaveMessage>(message);
+                            if (schemaMsg != null && schemaMsg.SessionId == _sessionId)
+                            {
+                                logMessage?.Invoke("Web UI saving schema");
+                                OnSchemaSaveRequested?.Invoke(this, schemaMsg.Schema);
                             }
                         }
                     }
@@ -154,6 +181,43 @@ namespace ComputeBuilder.Utils
             }
         }
 
+        /// <summary>
+        /// Broadcast initial data to all connected clients (schema, available params, current values)
+        /// </summary>
+        public async Task BroadcastInitialData(UISchema schema, AvailableParameters availableParams, Dictionary<string, object> currentValues)
+        {
+            if (_webSocketServer != null && _webSocketServer.IsRunning)
+            {
+                var message = new
+                {
+                    type = "initialData",
+                    sessionId = _sessionId,
+                    schema = schema,
+                    availableParams = availableParams,
+                    currentValues = currentValues
+                };
+                await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+            }
+        }
+
+        /// <summary>
+        /// Broadcast schema save confirmation to all connected clients
+        /// </summary>
+        public async Task BroadcastSchemaSaved(bool success, string message = null)
+        {
+            if (_webSocketServer != null && _webSocketServer.IsRunning)
+            {
+                var msg = new
+                {
+                    type = "schemaSaved",
+                    sessionId = _sessionId,
+                    success = success,
+                    message = message
+                };
+                await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(msg));
+            }
+        }
+
         public void Dispose()
         {
             Dispose(true);
@@ -188,5 +252,11 @@ namespace ComputeBuilder.Utils
     {
         [JsonProperty("values")]
         public Dictionary<string, object> Values { get; set; }
+    }
+
+    public class SchemaSaveMessage : WebSocketMessage
+    {
+        [JsonProperty("schema")]
+        public UISchema Schema { get; set; }
     }
 }

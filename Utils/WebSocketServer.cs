@@ -22,6 +22,7 @@ namespace ComputeBuilder.Utils
         private readonly object _clientsLock = new object();
 
         public event EventHandler<string> OnMessageReceived;
+        public event EventHandler<WebSocket> OnClientConnected;
 
         public bool IsRunning => _isRunning;
         public int Port => _port;
@@ -169,6 +170,9 @@ namespace ComputeBuilder.Utils
                 {
                     _connectedClients.Add(webSocket);
                 }
+
+                // Notify that a new client connected
+                OnClientConnected?.Invoke(this, webSocket);
 
                 await ReceiveMessagesAsync(webSocket, cancellationToken);
             }

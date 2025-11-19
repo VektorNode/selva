@@ -2,6 +2,8 @@
  * WebSocket client for real-time communication with Grasshopper (local mode only)
  */
 
+import type { UISchema } from "$lib/types/schema";
+
 export type MessageHandler = (data: any) => void;
 
 export class WebSocketClient {
@@ -111,6 +113,22 @@ export class WebSocketClient {
 	}
 
 	/**
+	 * Request initial data (schema, available params, current values) from Grasshopper
+	 */
+	requestInitialData(sessionId: string) {
+		console.log('[WebSocket] Requesting initial data from Grasshopper');
+		this.send('requestInitialData', { sessionId });
+	}
+
+	/**
+	 * Save schema to Grasshopper
+	 */
+	saveSchema(sessionId: string, schema: UISchema) {
+		console.log('[WebSocket] Saving schema to Grasshopper');
+		this.send('saveSchema', { sessionId, schema });
+	}
+
+	/**
 	 * Register a handler for a specific message type
 	 */
 	on(messageType: string, handler: MessageHandler) {
@@ -175,38 +193,4 @@ export function getWebSocketClient(): WebSocketClient {
 		wsClient = new WebSocketClient();
 	}
 	return wsClient;
-}
-
-/**
- * Try to connect via WebSocket, fall back to polling if it fails
- */
-export async function connectWithFallback(
-	sessionId: string,
-	onValueUpdate: (values: any) => void
-): Promise<'websocket' | 'polling'> {
-	const ws = getWebSocketClient();
-
-	// Try WebSocket first
-	const connected = await ws.connect();
-
-	if (connected) {
-		// Register handler for output updates (supports both 'outputs' and 'outputUpdate')
-		ws.on('outputs', (message) => {
-			if (message.sessionId === sessionId) {
-				onValueUpdate(message.outputs);
-			}
-		});
-
-		ws.on('outputUpdate', (message) => {
-			if (message.sessionId === sessionId) {
-				onValueUpdate(message.outputs);
-			}
-		});
-
-		return 'websocket';
-	}
-
-	// Fall back to polling
-	console.log('[Connection] Falling back to file-based polling');
-	return 'polling';
 }

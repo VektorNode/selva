@@ -15,7 +15,7 @@
     children: Snippet;
   }
 
-  let { group, onDrop, onReorder, onRemove, children }: EditableGroupProps =
+  let { group = $bindable(), onDrop, onReorder, onRemove, children }: EditableGroupProps =
     $props();
 
   let isDragOver = $state(false);
@@ -32,7 +32,7 @@
     }
   }
 
-  function handleHeaderDragEnter(e: DragEvent) {
+  function handleHeaderDragEnter(_e: DragEvent) {
     if (group.collapsed) {
       isDragOver = true;
       // Auto-expand after a short delay

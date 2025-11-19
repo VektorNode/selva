@@ -4,6 +4,7 @@
     TextDisplayConfig,
     NumberDisplayConfig,
   } from "$lib/types/schema";
+  import { Button } from "../ui";
 
   interface Props {
     item: OutputLayoutItem;
@@ -12,6 +13,7 @@
   }
 
   let { item, value, displayName }: Props = $props();
+  let copied = $state(false);
 
   function isTextDisplay(
     item: OutputLayoutItem
@@ -39,6 +41,18 @@
 
     return String(val);
   }
+
+  async function copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+      setTimeout(() => {
+        copied = false;
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  }
 </script>
 
 <div class="flex flex-col gap-2">
@@ -48,13 +62,26 @@
 
   {#if isTextDisplay(item)}
     {@const config = item.config as TextDisplayConfig}
-    <div
-      class="px-3 py-3 bg-muted border border-border rounded font-mono min-h-[50px] text-sm whitespace-pre-wrap wrap-break-word text-foreground"
-    >
+    <div class="relative">
+      <div
+        class="px-3 py-3 bg-muted border border-border rounded font-mono min-h-[50px] text-sm whitespace-pre-wrap wrap-break-word text-foreground"
+      >
+        {#if value !== null && value !== undefined}
+          {formatValue(value, config)}
+        {:else}
+          <span class="text-muted-foreground not-italic"
+            >Waiting for data...</span
+          >
+        {/if}
+      </div>
       {#if value !== null && value !== undefined}
-        {formatValue(value, config)}
-      {:else}
-        <span class="text-muted-foreground not-italic">Waiting for data...</span>
+        <Button
+          onclick={() => copyToClipboard(formatValue(value, config))}
+          class="absolute top-2 right-2 "
+          size="sm"
+        >
+          {copied ? "Copied!" : "Copy"}
+        </Button>
       {/if}
     </div>
   {:else if isNumberDisplay(item)}
@@ -63,10 +90,10 @@
       class="px-3 py-3 bg-muted border border-border rounded font-mono min-h-[50px] text-sm"
     >
       {#if value !== null && value !== undefined}
-        <span class="font-bold text-primary">{formatValue(value, config)}</span
-        >
+        <span class="font-bold text-primary">{formatValue(value, config)}</span>
       {:else}
-        <span class="text-muted-foreground not-italic">Waiting for data...</span>
+        <span class="text-muted-foreground not-italic">Waiting for data...</span
+        >
       {/if}
     </div>
   {/if}
