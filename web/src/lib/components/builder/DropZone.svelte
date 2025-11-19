@@ -43,7 +43,19 @@
 
     const dragData = dragStore.current;
     if (dragData && acceptTypes.includes(dragData.type)) {
-      ondrop?.(new CustomEvent("drop", { detail: dragData }));
+      // Include all relevant data for the drop handler
+      const detail = {
+        type: dragData.type,
+        data: dragData.data,
+        sourceType: dragData.sourceType,
+        // For group-item drops, include source location
+        ...(dragData.type === "group-item" && {
+          sourceItem: dragData.data.item,
+          sourceTabId: dragData.data.tabId,
+          sourceGroupId: dragData.data.groupId,
+        }),
+      };
+      ondrop?.(new CustomEvent("parameterdrop", { detail }));
     }
   }
 </script>

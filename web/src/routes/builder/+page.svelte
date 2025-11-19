@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
+  import { goto } from "$app/navigation";
   import { api } from "$lib/api/client";
   import { PageContainer, PageHeader, Panel } from "$lib/components/layout";
   import { StateDisplay, Button } from "$lib/components/ui";
@@ -27,6 +28,7 @@
     createDefaultWidgetConfig,
   } from "$lib/utils/widget-config";
   import Save from "$lib/components/ui/icons/Save.svelte";
+  import { mode } from "mode-watcher";
 
   let sessionId = $state("");
   let schema = $state<UISchema | null>(null);
@@ -34,6 +36,10 @@
   let loading = $state(true);
   let error = $state("");
   let activeTabId = $state<string | null>(null);
+
+  function navigateTo(path: string) {
+    goto(`/${path}?session=${sessionId}`);
+  }
 
   const placedInLayoutIds = $derived(() => {
     const ids = new Set<string>();
@@ -222,9 +228,6 @@
     const group = tab.groups.find((g) => g.id === groupId);
     if (!group) return;
 
-    // Don't remove parameters when deleting a group - they should just become available again
-    // The parameters remain in schema.inputs/outputs so users can re-add them without losing config
-
     tab.groups = tab.groups.filter((g) => g.id !== groupId);
     schema.layout.tabs = [...schema.layout.tabs];
   }
@@ -236,7 +239,29 @@
   ) {
     if (!schema || !schema.layout.tabs) return;
 
-    const { type, data, sourceType, targetItem, dropPosition } = event.detail;
+    const { type, data, sourceType, targetItem, dropPosition, sourceTabId, sourceGroupId, sourceItem } = event.detail;
+
+    // Handle moving items from another group
+    if (type === "group-item") {
+      const sourceTab = schema.layout.tabs.find((t) => t.id === sourceTabId);
+      const targetTab = schema.layout.tabs.find((t) => t.id === tabId);
+      if (!sourceTab || !targetTab) return;
+
+      const sourceGroup = sourceTab.groups.find((g) => g.id === sourceGroupId);
+      const targetGroup = targetTab.groups.find((g) => g.id === groupId);
+      if (!sourceGroup || !targetGroup) return;
+
+      const sourceIndex = sourceGroup.items.findIndex((i) => i.id === sourceItem.id);
+      if (sourceIndex < 0) return;
+
+      // Remove from source group
+      const [movedItem] = sourceGroup.items.splice(sourceIndex, 1);
+
+      // Add to target group (at the end since it's empty or no specific target)
+      targetGroup.items = [...targetGroup.items, movedItem];
+      return;
+    }
+
     if (type !== "parameter") return;
 
     const param = data as AvailableParameter;
@@ -378,7 +403,6 @@
 
     const [movedItem] = sourceGroup.items.splice(sourceIndex, 1);
 
-    //TODO: When the group is empty, its not possible to move items into it from another group
     let targetIndex = targetGroup.items.findIndex(
       (i) => i.id === targetItem.id
     );
@@ -404,10 +428,24 @@
 </script>
 
 <DragDropContext>
-  <PageContainer>
-    <PageHeader title="Schema Builder" />
+  <PageContainer background="white">
+    <PageHeader title="Schema Builder" {sessionId} showModeToggle={true}>
+      <nav class="flex gap-2">
+        <Button variant="outline" size="sm" onclick={() => navigateTo("")}>
+          Home
+        </Button>
+        <Button variant="default" size="sm">Schema Builder</Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onclick={() => navigateTo("preview")}
+        >
+          Interactive Preview
+        </Button>
+      </nav>
+    </PageHeader>
 
-    <div class="flex-1 overflow-auto bg-gray-50">
+    <div class="flex-1 overflow-auto">
       {#if loading}
         <div class="flex items-center justify-center min-h-[400px]">
           <StateDisplay
@@ -531,10 +569,8 @@
               </div>
             </Panel>
 
-            <div class="flex justify-end gap-4">
-              <Button onclick={saveSchema}
-                ><Save></Save>Save Schema</Button
-              >
+            <div class="flex justify-end gap-4 mb-20">
+              <Button onclick={saveSchema}><Save></Save>Save Schema</Button>
             </div>
           </main>
         </div>

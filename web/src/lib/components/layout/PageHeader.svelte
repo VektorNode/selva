@@ -2,7 +2,6 @@
   import type { Snippet } from "svelte";
   import { Badge } from "$lib/components/ui/badge";
   import { ModeToggle } from "$lib/components/ui/mode-toggle";
-  import { cn } from "$lib/utils";
 
   interface BadgeConfig {
     label: string;
@@ -13,6 +12,7 @@
     title: string;
     sessionId?: string;
     badge?: BadgeConfig;
+    showModeToggle?: boolean;
     children?: Snippet;
     class?: string;
   }
@@ -23,6 +23,7 @@
     badge,
     children,
     class: className = "",
+    showModeToggle = false,
   }: PageHeaderProps = $props();
 
   // Map custom variants to colors
@@ -45,6 +46,10 @@
 
       {#if sessionId || badge || children}
         <div class="flex items-center gap-2 text-muted-foreground text-xs">
+          {#if children}
+            {@render children()}
+          {/if}
+
           {#if sessionId}
             <span class="flex items-center gap-1.5">
               <span class="text-muted-foreground">Session:</span>
@@ -65,14 +70,13 @@
               {badge.label}
             </Badge>
           {/if}
-
-          {#if children}
-            {@render children()}
-          {/if}
         </div>
       {/if}
     </div>
-    <ModeToggle />
+
+    {#if showModeToggle}
+      <ModeToggle />
+    {/if}
   </div>
 </header>
 

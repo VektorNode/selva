@@ -1,2 +1,2 @@
-export const outputColor = "bg-slate-200/60 hover:bg-slate-200";
-export const inputColor = "bg-neutral-200/60 hover:bg-neutral-200";
+export const outputColor = "bg-slate-200/90 hover:bg-slate-200 dark:bg-slate-700/60 dark:hover:bg-slate-700";
+export const inputColor = "bg-neutral-200/90 hover:bg-neutral-200 dark:bg-neutral-700/60 dark:hover:bg-neutral-700";

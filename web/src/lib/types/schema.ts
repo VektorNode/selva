@@ -115,6 +115,7 @@ interface BaseLayoutItem {
 	id: string;
 	paramId: string;
 	displayName?: string;
+	description?: string;
 	order?: number;
 	span?: number;
 }

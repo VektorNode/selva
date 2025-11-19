@@ -21,16 +21,10 @@
   let isDragging = $state(false);
   let isDragOver = $state(false);
   let dropPosition: "before" | "after" | null = $state(null);
+  let canDrag = $state(true);
 
   function handleDragStart(e: DragEvent) {
-    const target = e.target as HTMLElement;
-
-    // Prevent drag from input fields or buttons
-    if (
-      target.tagName === "INPUT" ||
-      target.tagName === "BUTTON" ||
-      target.closest("button")
-    ) {
+    if (!canDrag) {
       e.preventDefault();
       return;
     }
@@ -171,16 +165,28 @@
         type="text"
         bind:value={item.displayName}
         class="flex-1 font-medium border border-transparent px-2 py-1 rounded-sm text-sm hover:border-border focus:border-primary focus:outline-none bg-transparent text-foreground"
-        placeholder={paramInfo?.name || ""}
+        placeholder={"Display Name"}
+        onmousedown={() => (canDrag = false)}
+        onmouseup={() => (canDrag = true)}
+        onmouseleave={() => (canDrag = true)}
       />
     </div>
+    <textarea
+      bind:value={item.description}
+      class="w-full text-xs border border-transparent px-2 py-1 rounded-sm mb-2 hover:border-border focus:border-primary focus:outline-none bg-transparent text-muted-foreground resize-none"
+      placeholder="Add description (optional)"
+      rows="2"
+      onmousedown={() => (canDrag = false)}
+      onmouseup={() => (canDrag = true)}
+      onmouseleave={() => (canDrag = true)}
+    ></textarea>
     {#if paramInfo}
-      <div class="flex gap-2 mb-2 text-xs">
-        <Badge variant="secondary">
+      <div class="flex gap-2 mb-2 text-xs items-center">
+        <Badge variant="default">
           {paramInfo.paramType}
         </Badge>
         <span class="text-muted-foreground font-mono">
-          {paramInfo.nickname}
+          Gh Name: {paramInfo.nickname}
         </span>
       </div>
     {/if}

@@ -20,6 +20,8 @@
   import { Checkbox } from "$lib/components/ui/checkbox";
   import { Label } from "$lib/components/ui/label";
   import * as Select from "$lib/components/ui/select";
+  import * as Dialog from "$lib/components/ui/dialog";
+  import Icon from "@iconify/svelte";
 
   interface Props {
     item: InputLayoutItem;
@@ -63,12 +65,30 @@
 </script>
 
 <div class="flex flex-col gap-2">
-  <Label for={inputId} class="flex items-center gap-2">
-    {displayName || item.displayName || item.paramId}
-    {#if item.config}
-      <span class="cursor-help text-xs opacity-60">ℹ️</span>
+  <div class="flex items-center gap-2">
+    <Label for={inputId}>
+      {displayName || item.displayName || item.paramId}
+    </Label>
+    {#if item.description}
+      <Dialog.Root>
+        <Dialog.Trigger
+          class="cursor-help text-xs opacity-60 hover:opacity-100 transition-opacity"
+        >
+          <Icon icon="mdi:information-outline" />
+        </Dialog.Trigger>
+        <Dialog.Content class="sm:max-w-md">
+          <Dialog.Header>
+            <Dialog.Title
+              >{displayName || item.displayName || item.paramId}</Dialog.Title
+            >
+            <Dialog.Description>
+              {item.description}
+            </Dialog.Description>
+          </Dialog.Header>
+        </Dialog.Content>
+      </Dialog.Root>
     {/if}
-  </Label>
+  </div>
 
   {#if isNumberWidget(item)}
     {@const config = item.config as NumberWidgetConfig}

@@ -1,11 +1,12 @@
 <script lang="ts">
   import { page } from "$app/state";
+  import { goto } from "$app/navigation";
   import { api } from "$lib/api/client";
   import { getWebSocketClient } from "$lib/api/websocket";
   import type { UISchema } from "$lib/types/schema";
   import { TabLayout, Layout as LegacyLayout } from "$lib/components/preview";
   import { PageContainer, PageHeader } from "$lib/components/layout";
-  import { StateDisplay } from "$lib/components/ui";
+  import { StateDisplay, Button } from "$lib/components/ui";
   import { onMount } from "svelte";
 
   // Runtime mode: 'local' uses WebSocket, 'compute' uses Rhino Compute
@@ -25,6 +26,10 @@
   // Determine runtime mode from URL parameter
   let runtimeMode = $state<RuntimeMode>("local");
   let solving = $state(false);
+
+  function navigateTo(path: string) {
+    goto(`/${path}?session=${sessionId}`);
+  }
 
   // Track if we're updating values from remote (to avoid feedback loop)
   let isRemoteUpdate = $state(false);
@@ -267,13 +272,25 @@
   });
 </script>
 
-<PageContainer>
+<PageContainer background="white">
   <PageHeader
     title={schema?.name || "Interactive Preview"}
     badge={badgeConfig}
-  />
+    showModeToggle={true}
+    {sessionId}
+  >
+    <nav class="flex gap-2">
+      <Button variant="outline" size="sm" onclick={() => navigateTo("")}>
+        Home
+      </Button>
+      <Button variant="outline" size="sm" onclick={() => navigateTo("builder")}>
+        Schema Builder
+      </Button>
+      <Button variant="default" size="sm">Interactive Preview</Button>
+    </nav>
+  </PageHeader>
 
-  <div class="flex-1 overflow-auto bg-gray-50">
+  <div class="flex-1 overflow-auto">
     {#if loading}
       <div class="flex items-center justify-center min-h-[400px]">
         <StateDisplay

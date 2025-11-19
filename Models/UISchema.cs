@@ -173,6 +173,12 @@ namespace ComputeBuilder.Models
         public string DisplayName { get; set; }
 
         /// <summary>
+        /// Description/help text for this parameter (shown in info modal)
+        /// </summary>
+        [JsonProperty("description")]
+        public string Description { get; set; }
+
+        /// <summary>
         /// Widget type for rendering this parameter
         /// Inputs: "slider", "number", "text", "dropdown", "checkbox"
         /// Outputs: "text"

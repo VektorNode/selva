@@ -14,7 +14,7 @@
   }: PageContainerProps = $props();
 
   const backgroundClasses = {
-    default: "bg-muted/50",
+    default: "bg-muted",
     white: "bg-background",
     gray: "bg-muted",
   };
