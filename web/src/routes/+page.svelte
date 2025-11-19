@@ -3,6 +3,8 @@
   import { goto } from "$app/navigation";
   import { PageContainer } from "$lib/components/layout";
   import { StateDisplay } from "$lib/components/ui";
+  import IconBuild from "$lib/components/ui/icons/IconBuild.svelte";
+  import IconBold from "$lib/components/ui/icons/IconBold.svelte";
 
   var sessionId = page.url.searchParams.get("session");
 
@@ -35,8 +37,10 @@
           class="bg-card border-2 border-border rounded-lg p-8 text-left hover:border-primary hover:shadow-lg transition-all transform hover:-translate-y-1"
           onclick={() => navigateTo("builder")}
         >
-          <h3 class="text-2xl font-semibold mb-3 text-foreground">
-            🔧 Schema Builder
+          <h3
+            class="text-2xl font-semibold mb-3 text-foreground flex items-center gap-2"
+          >
+            <IconBuild></IconBuild>Schema Builder
           </h3>
           <p class="text-muted-foreground leading-relaxed">
             Configure your UI schema by selecting inputs and outputs from your
@@ -48,8 +52,10 @@
           class="bg-card border-2 border-border rounded-lg p-8 text-left hover:border-primary hover:shadow-lg transition-all transform hover:-translate-y-1"
           onclick={() => navigateTo("preview")}
         >
-          <h3 class="text-2xl font-semibold mb-3 text-foreground">
-            ⚡ Interactive Preview
+          <h3
+            class="text-2xl font-semibold mb-3 text-foreground flex items-center gap-2"
+          >
+            <IconBold></IconBold> Interactive Preview
           </h3>
           <p class="text-muted-foreground leading-relaxed">
             Interact with your Grasshopper definition in real-time with live

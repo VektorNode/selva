@@ -81,17 +81,25 @@
   }
 </script>
 
-<div class="border-2 border-border rounded-lg bg-muted overflow-hidden {isDragOver ? 'border-primary' : ''}">
+<div
+  class="border-2 border-border rounded-lg bg-muted overflow-hidden {isDragOver
+    ? 'border-primary'
+    : ''}"
+>
   <div
     class="p-4 bg-card border-b border-border flex justify-between items-start gap-4"
     ondragover={handleHeaderDragOver}
     ondragenter={handleHeaderDragEnter}
     ondragleave={handleHeaderDragLeave}
+    role="button"
+    tabindex="0"
   >
-    <div class="flex items-center gap-2">
+    <div class="flex items-start gap-2">
       <button
         type="button"
-        class="text-muted-foreground hover:text-foreground transition-transform duration-200 {group.collapsed ? '' : 'rotate-180'}"
+        class="text-muted-foreground hover:text-foreground transition-transform duration-200 h-[34px] flex items-center {group.collapsed
+          ? ''
+          : 'rotate-180'}"
         onclick={toggleCollapsed}
         aria-label={group.collapsed ? "Expand group" : "Collapse group"}
       >
@@ -128,11 +136,14 @@
         </label>
       {:else}
         <span class="text-xs text-muted-foreground">
-          {group.items.length} item{group.items.length !== 1 ? 's' : ''}
+          {group.items.length} item{group.items.length !== 1 ? "s" : ""}
         </span>
       {/if}
-      <Button variant="ghost" size="icon" class="hover:bg-destructive hover:text-destructive-foreground" onclick={onRemove}
-        ><Trash /></Button
+      <Button
+        variant="ghost"
+        size="icon"
+        class="hover:bg-destructive hover:text-destructive-foreground"
+        onclick={onRemove}><Trash /></Button
       >
     </div>
   </div>
