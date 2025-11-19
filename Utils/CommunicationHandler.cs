@@ -70,7 +70,7 @@ namespace ComputeBuilder.Utils
                 };
 
                 _webSocketServer.StartAsync().Wait();
-                logMessage?.Invoke($"WebSocket server started on port {_port}");
+                logMessage?.Invoke($"WebSocket Port: {_port}");
             }
             catch (Exception ex)
             {

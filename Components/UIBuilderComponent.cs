@@ -76,8 +76,6 @@ namespace ComputeBuilder.Components
             DA.GetData(1, ref refresh);
             DA.GetData(2, ref openPreview);
             
-            var isRunningInHeadless = Rhino.RhinoApp.IsRunningHeadless;
-
             // Initialize components on first run
             if (_schemaManager == null)
             {
@@ -97,7 +95,6 @@ namespace ComputeBuilder.Components
 
             DA.SetData(0, _sessionId);
 
-            // Get document
             var document = this.OnPingDocument();
             if (document == null)
             {
@@ -105,7 +102,9 @@ namespace ComputeBuilder.Components
                 DA.SetData(1, "ERROR: No document");
                 return;
             }
-            
+
+            var isRunningInHeadless = Rhino.RhinoDoc.ActiveDoc == null || Rhino.RhinoApp.IsRunningHeadless || Rhino.RhinoDoc.ActiveDoc.IsHeadless;
+
             if (isRunningInHeadless)
             {
                 if (enable || refresh)
@@ -134,6 +133,7 @@ namespace ComputeBuilder.Components
                 {
                     _valueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, _embeddedValues, AddRuntimeMessage);
                 }
+
 
                 DA.SetData(1, $"Session: {_sessionId}\nStatus: Headless Mode\nSchema loaded (no WebSocket)");
                 DA.SetData(2, _embeddedSchema != null ? JsonConvert.SerializeObject(_embeddedSchema) : "");
@@ -172,7 +172,8 @@ namespace ComputeBuilder.Components
                 {
                     try
                     {
-                        _communicationHandler.Start((msg) => AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, msg));
+                        _communicationHandler.Start((msg) => Message = msg);
+                        
                     }
                     catch (Exception ex)
                     {
@@ -186,9 +187,7 @@ namespace ComputeBuilder.Components
                 // Load embedded schema to temp files on first enable
                 if (_embeddedSchema != null && !_previewOpen)
                 {
-                    // Validate schema against current document (remove missing parameters)
                     _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
-
                     _persistenceManager.SaveSchema(_embeddedSchema);
                     _lastSchemaSync = DateTime.UtcNow;
                 }
@@ -215,30 +214,24 @@ namespace ComputeBuilder.Components
                     }
                 }
 
-                // Update session state as active
                 _persistenceManager.SaveSessionState(true);
-
-                // Open UI (only once)
                 if (openPreview && !_previewOpen)
                 {
                     OpenUI();
                     _previewOpen = true;
                 }
 
-                // Check if schema has been modified in the web UI (initial load only)
                 var schemaPath = SessionManager.GetSchemaPath(_sessionId);
                 if (SessionManager.HasBeenModified(schemaPath, _lastSchemaSync))
                 {
                     var updatedSchema = _persistenceManager.LoadSchema();
                     if (updatedSchema != null)
                     {
-                        // Validate loaded schema against current document
                         _embeddedSchema = _schemaManager.ValidateSchema(updatedSchema, document);
                         _lastSchemaSync = DateTime.UtcNow;
                     }
                 }
 
-                // Display status
                 var schemaInfo = _embeddedSchema ?? _persistenceManager.LoadSchema();
                 if (schemaInfo != null)
                 {
@@ -259,8 +252,8 @@ namespace ComputeBuilder.Components
             _communicationHandler?.Stop();
             _valueApplicator?.Clear();
             _previewOpen = false;
+            Message = "WebSocket Inactive";
 
-            // Show embedded schema info when disabled
             if (_embeddedSchema != null)
             {
                 DA.SetData(1,
@@ -452,7 +445,6 @@ namespace ComputeBuilder.Components
             if (goo == null)
                 return null;
 
-            // Check if the goo is valid before accessing its data
             if (!goo.IsValid)
                 return null;
 
@@ -466,7 +458,6 @@ namespace ComputeBuilder.Components
             }
             catch (Exception)
             {
-                // Object may be expired or invalid - return null silently
                 return null;
             }
         }
@@ -552,7 +543,6 @@ namespace ComputeBuilder.Components
 
         private void OnSolutionEnd(object sender, GH_SolutionEventArgs e)
         {
-            // Collect outputs after solution completes
             if (_embeddedSchema != null && _currentDocument != null)
             {
                 CollectAndSendOutputs(_currentDocument, _embeddedSchema);
@@ -585,20 +575,15 @@ namespace ComputeBuilder.Components
             if (!relevantChange)
                 return;
 
-            // Re-validate schema against current document
             try
             {
                 var (updatedSchema, removedIds) = _schemaManager.ValidateSchemaAndTrackChanges(_embeddedSchema, _currentDocument);
 
                 if (removedIds.Count > 0)
                 {
-                    // Update embedded schema
                     _embeddedSchema = updatedSchema;
-
-                    // Save updated schema to file
                     _persistenceManager.SaveSchema(_embeddedSchema);
 
-                    // Remove values for deleted parameters
                     if (_embeddedValues != null)
                     {
                         foreach (var removedId in removedIds)
@@ -607,7 +592,6 @@ namespace ComputeBuilder.Components
                         }
                     }
 
-                    // Clear values for deleted parameters from value applicator
                     var lastValues = _valueApplicator?.GetLastAppliedValues();
                     if (lastValues != null)
                     {
@@ -618,27 +602,23 @@ namespace ComputeBuilder.Components
                         _valueApplicator?.SetLastAppliedValues(lastValues);
                     }
 
-                    // Broadcast schema update to web clients BEFORE expiring solution
                     var broadcastTask = _communicationHandler.BroadcastSchemaUpdate(_embeddedSchema, removedIds);
 
-                    // Wait for broadcast to complete (with timeout)
                     try
                     {
-                        broadcastTask.Wait(1000); // 1 second timeout
+                        broadcastTask.Wait(10); // 1 second timeout
                     }
                     catch
                     {
-                        // Ignore timeout/errors - continue anyway
                     }
 
                     AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
                         $"Schema updated: {removedIds.Count} parameter(s) removed from UI");
 
-                    // Trigger this component to recalculate (which will update the UI)
-                    Rhino.RhinoApp.InvokeOnUiThread((Action)(() =>
+                    _currentDocument.ScheduleSolution(10, doc =>
                     {
-                        ExpireSolution(true);
-                    }));
+                        ExpireSolution(false);
+                    });
                 }
             }
             catch (Exception ex)
@@ -657,7 +637,6 @@ namespace ComputeBuilder.Components
             _previewOpen = false;
         }
 
-        // IDisposable implementation
         public void Dispose()
         {
             Dispose(true);
@@ -681,13 +660,11 @@ namespace ComputeBuilder.Components
         // Schema persistence - save/load with .gh file
         public override bool Write(GH_IO.Serialization.GH_IWriter writer)
         {
-            // Save session ID
             if (!string.IsNullOrEmpty(_sessionId))
             {
                 writer.SetString("SessionId", _sessionId);
             }
 
-            // Save embedded schema
             if (_embeddedSchema != null)
             {
                 try
@@ -702,7 +679,6 @@ namespace ComputeBuilder.Components
                 }
             }
 
-            // Save embedded values (last applied parameter values)
             var lastValues = _valueApplicator?.GetLastAppliedValues();
             if (lastValues != null && lastValues.Count > 0)
             {
@@ -723,13 +699,11 @@ namespace ComputeBuilder.Components
 
         public override bool Read(GH_IO.Serialization.GH_IReader reader)
         {
-            // Restore session ID
             if (reader.ItemExists("SessionId"))
             {
                 _sessionId = reader.GetString("SessionId");
             }
 
-            // Restore embedded schema
             if (reader.ItemExists("Schema"))
             {
                 try
@@ -747,7 +721,6 @@ namespace ComputeBuilder.Components
                 }
             }
 
-            // Restore embedded values
             if (reader.ItemExists("Values"))
             {
                 try
