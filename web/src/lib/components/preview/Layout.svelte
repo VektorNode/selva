@@ -131,8 +131,8 @@
               bind:value={values[input.id]}
               onChange={onValueChange}
               debounceMs={layoutItem.widgetType === "number" &&
-                (layoutItem.config as any).renderAsSlider &&
-                debounceSliders
+              (layoutItem.config as any).renderAsSlider &&
+              debounceSliders
                 ? 20
                 : 0}
             />

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace ComputeBuilder.Models
+namespace ComputeBuilder.Plugin.Models
 {
     // ============================================================================
     // MAIN UI SCHEMA

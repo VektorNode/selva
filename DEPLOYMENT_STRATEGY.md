@@ -1,6 +1,7 @@
 # ComputeBuilder Deployment Strategy
 
-This document outlines deployment strategies for ComputeBuilder, from current single-app architecture to future monorepo scaling.
+This document outlines deployment strategies for ComputeBuilder, from current single-app architecture to future monorepo
+scaling.
 
 ---
 
@@ -27,27 +28,33 @@ ComputeBuilder/
 ### Current Deployment Methods
 
 #### Local Use (Grasshopper Plugin)
+
 **User experience:** Install `.gha` file → Component runs local dev server automatically
 
 **Requirements:**
+
 - User has Node.js installed
 - User runs `pnpm install` in `web/` directory (one-time)
 - Grasshopper component starts `pnpm run dev` automatically when enabled
 
 **Pros:**
+
 - Hot module reloading during development
 - Easy debugging
 - Full SvelteKit features
 
 **Cons:**
+
 - Requires Node.js installation
 - Users must run `pnpm install`
 - Not a "single file" distribution
 
 #### Rhino Compute Deployment (`/app` route only)
+
 **User experience:** Deploy static site to Vercel/Firebase/custom host
 
 **Steps:**
+
 1. Build the SvelteKit app:
    ```bash
    cd web
@@ -55,19 +62,21 @@ ComputeBuilder/
    ```
 
 2. Deploy the `build/` directory to hosting provider:
-   - **Vercel**: `vercel deploy`
-   - **Firebase**: `firebase deploy`
-   - **Netlify**: `netlify deploy`
-   - **Custom**: Serve static files from any web server
+    - **Vercel**: `vercel deploy`
+    - **Firebase**: `firebase deploy`
+    - **Netlify**: `netlify deploy`
+    - **Custom**: Serve static files from any web server
 
 3. Configure Compute server URL in environment variables or UI
 
 **Pros:**
+
 - No Grasshopper dependency
 - Works from any device/browser
 - Scalable for multiple users
 
 **Cons:**
+
 - Requires separate hosting
 - Users need to manage deployment
 
@@ -78,6 +87,7 @@ ComputeBuilder/
 ### When to Consider This Upgrade
 
 Upgrade to monorepo when you need:
+
 - ✅ Multiple deployment targets (desktop app, mobile, etc.)
 - ✅ Shared component library across apps
 - ✅ Ability to publish reusable packages to npm
@@ -131,6 +141,7 @@ ComputeBuilder/
 **1. Create workspace configuration:**
 
 `pnpm-workspace.yaml`:
+
 ```yaml
 packages:
   - 'packages/*'
@@ -139,6 +150,7 @@ packages:
 **2. Shared package structure:**
 
 `packages/shared/package.json`:
+
 ```json
 {
   "name": "@computebuilder/shared",
@@ -158,6 +170,7 @@ packages:
 **3. App dependencies:**
 
 `packages/grasshopper-ui/package.json`:
+
 ```json
 {
   "dependencies": {
@@ -169,11 +182,13 @@ packages:
 ```
 
 **4. Install all packages:**
+
 ```bash
 pnpm install
 ```
 
 **5. Import shared code:**
+
 ```typescript
 // In grasshopper-ui or compute-ui
 import { UISchema, InputParameter } from '@computebuilder/shared/types';
@@ -189,6 +204,7 @@ import { InputControl } from '@computebuilder/shared/components';
 #### Option A: Bundled Static Files (Recommended for Distribution)
 
 **Build process:**
+
 ```bash
 # Build shared package
 cd packages/shared
@@ -200,12 +216,14 @@ pnpm run build
 ```
 
 **C# Integration:**
+
 1. Copy `packages/grasshopper-ui/build/` to `wwwroot/` in C# project
 2. Create `HttpApiServer.cs` to serve static files + API endpoints
 3. Embed `wwwroot/` as embedded resources in `.gha` file
 4. Component extracts and serves files on startup
 
 **Distribution:**
+
 - Users download single `.gha` file
 - No Node.js required
 - Component serves UI on `http://localhost:5173`
@@ -213,6 +231,7 @@ pnpm run build
 **MSBuild task to automate:**
 
 `ComputeBuilder.csproj`:
+
 ```xml
 <Target Name="BuildWeb" BeforeTargets="BeforeBuild">
   <!-- Build the web UI -->
@@ -232,6 +251,7 @@ pnpm run build
 ```
 
 **C# code to extract embedded files:**
+
 ```csharp
 private void ExtractEmbeddedFiles()
 {
@@ -262,6 +282,7 @@ private void ExtractEmbeddedFiles()
 #### Option B: Dev Server (For Development Only)
 
 **Build process:**
+
 ```bash
 # Terminal 1: Build plugin
 dotnet build
@@ -272,11 +293,13 @@ pnpm run dev
 ```
 
 **Pros:**
+
 - Hot module reloading
 - Fast development
 - Easy debugging
 
 **Cons:**
+
 - Requires Node.js
 - Not suitable for distribution
 
@@ -287,6 +310,7 @@ pnpm run dev
 #### Option A: Vercel (Recommended for Quick Deployment)
 
 **Setup:**
+
 ```bash
 cd packages/compute-ui
 vercel deploy
@@ -295,6 +319,7 @@ vercel deploy
 **Configuration:**
 
 `packages/compute-ui/vercel.json`:
+
 ```json
 {
   "buildCommand": "pnpm run build",
@@ -305,12 +330,14 @@ vercel deploy
 ```
 
 **Environment variables:**
+
 ```
 VITE_COMPUTE_URL=https://your-compute-server.com
 VITE_COMPUTE_AUTH_KEY=your-api-key (optional)
 ```
 
 **Deploy:**
+
 ```bash
 # Production
 vercel --prod
@@ -320,6 +347,7 @@ vercel
 ```
 
 **Custom domain:**
+
 ```bash
 vercel domains add your-domain.com
 ```
@@ -327,6 +355,7 @@ vercel domains add your-domain.com
 #### Option B: Firebase Hosting
 
 **Setup:**
+
 ```bash
 cd packages/compute-ui
 firebase init hosting
@@ -335,6 +364,7 @@ firebase init hosting
 **Configuration:**
 
 `firebase.json`:
+
 ```json
 {
   "hosting": {
@@ -351,6 +381,7 @@ firebase init hosting
 ```
 
 **Deploy:**
+
 ```bash
 pnpm run build
 firebase deploy --only hosting
@@ -361,6 +392,7 @@ firebase deploy --only hosting
 For deploying both Compute server + UI together:
 
 `Dockerfile`:
+
 ```dockerfile
 # Build web UI
 FROM node:20 AS web-builder
@@ -381,6 +413,7 @@ CMD ["nginx", "-g", "daemon off;"]
 ```
 
 **Deploy:**
+
 ```bash
 docker build -t computebuilder-ui .
 docker run -p 80:80 computebuilder-ui
@@ -389,12 +422,14 @@ docker run -p 80:80 computebuilder-ui
 #### Option D: Static Hosting (AWS S3, Cloudflare Pages, etc.)
 
 **Build:**
+
 ```bash
 cd packages/compute-ui
 pnpm run build
 ```
 
 **Upload `build/` directory to:**
+
 - AWS S3 + CloudFront
 - Cloudflare Pages
 - GitHub Pages
@@ -405,6 +440,7 @@ pnpm run build
 Instead of build-time env vars, load config from `config.json`:
 
 `static/config.json`:
+
 ```json
 {
   "computeUrl": "https://your-compute-server.com",
@@ -413,6 +449,7 @@ Instead of build-time env vars, load config from `config.json`:
 ```
 
 Load in app:
+
 ```typescript
 // src/lib/config.ts
 export async function loadConfig() {
@@ -427,31 +464,34 @@ This allows changing server URL without rebuilding.
 
 ## Comparison Matrix
 
-| Feature | Current (Single App) | Monorepo (Bundled) | Monorepo (Dev Server) |
-|---------|---------------------|--------------------|-----------------------|
-| **Distribution** | Requires Node.js | Single `.gha` file | Requires Node.js |
-| **User Setup** | `pnpm install` | None | `pnpm install` |
-| **Bundle Size** | Large (includes all routes) | Small (only needed code) | N/A |
-| **Development Speed** | Fast (HMR) | Slow (rebuild required) | Fast (HMR) |
-| **Production Ready** | No | Yes | No |
-| **Compute Deployment** | Manual separation | Separate package | Separate package |
-| **Code Sharing** | Copy/paste | npm workspace | npm workspace |
+| Feature                | Current (Single App)        | Monorepo (Bundled)       | Monorepo (Dev Server) |
+|------------------------|-----------------------------|--------------------------|-----------------------|
+| **Distribution**       | Requires Node.js            | Single `.gha` file       | Requires Node.js      |
+| **User Setup**         | `pnpm install`              | None                     | `pnpm install`        |
+| **Bundle Size**        | Large (includes all routes) | Small (only needed code) | N/A                   |
+| **Development Speed**  | Fast (HMR)                  | Slow (rebuild required)  | Fast (HMR)            |
+| **Production Ready**   | No                          | Yes                      | No                    |
+| **Compute Deployment** | Manual separation           | Separate package         | Separate package      |
+| **Code Sharing**       | Copy/paste                  | npm workspace            | npm workspace         |
 
 ---
 
 ## Recommended Timeline
 
 ### Phase 1: Current (Now)
+
 - Keep single app structure
 - Users install Node.js + run `pnpm install`
 - Manual deployment of `/app` route for Compute
 
 ### Phase 2: Bundled Distribution (Next)
+
 - Add MSBuild task to bundle static files
 - Create `HttpApiServer.cs` for serving files
 - Single `.gha` distribution (no Node.js required)
 
 ### Phase 3: Monorepo (Future)
+
 - Separate `grasshopper-ui` and `compute-ui`
 - Extract `@computebuilder/shared` package
 - Publish to npm (optional)
@@ -462,6 +502,7 @@ This allows changing server URL without rebuilding.
 ## Quick Reference: Deployment Commands
 
 ### Development (Current)
+
 ```bash
 # Terminal 1: Build C# plugin
 dotnet build
@@ -471,6 +512,7 @@ cd web && pnpm run dev
 ```
 
 ### Production Build (Future - Bundled)
+
 ```bash
 # Single command builds everything
 dotnet build --configuration Release
@@ -479,6 +521,7 @@ dotnet build --configuration Release
 ```
 
 ### Compute Deployment (Current)
+
 ```bash
 cd web
 pnpm run build
@@ -486,6 +529,7 @@ vercel deploy --prod
 ```
 
 ### Compute Deployment (Future - Monorepo)
+
 ```bash
 cd packages/compute-ui
 pnpm run build
@@ -497,12 +541,14 @@ vercel deploy --prod
 ## Security Considerations
 
 ### Local Use
+
 - Bind HTTP server to `localhost` only (no external access)
 - Validate all file paths to prevent directory traversal
 - Sanitize session IDs
 - Auto-cleanup old session files
 
 ### Compute Deployment
+
 - Implement authentication (API keys, OAuth, etc.)
 - Rate limiting on Compute endpoints
 - CORS configuration for allowed origins
@@ -514,12 +560,14 @@ vercel deploy --prod
 ## Performance Optimization
 
 ### Bundle Size Reduction
+
 - Tree-shake unused components
 - Lazy load heavy components (3D viewer, charts)
 - Split code by route
 - Compress static assets
 
 ### Caching Strategy
+
 - Cache static assets with long expiry
 - Version assets with content hashes
 - Use CDN for Compute deployments
@@ -530,12 +578,14 @@ vercel deploy --prod
 ## Future Enhancements
 
 ### Multi-Platform Distribution
+
 - Electron app (desktop)
 - Mobile app (React Native with shared components)
 - VS Code extension
 - Rhino plugin for other platforms
 
 ### CI/CD Pipeline
+
 ```yaml
 # .github/workflows/deploy.yml
 name: Deploy Compute UI
@@ -562,22 +612,26 @@ jobs:
 ## Troubleshooting
 
 ### "Cannot find module '@computebuilder/shared'"
+
 - Run `pnpm install` in root directory
 - Ensure `pnpm-workspace.yaml` is configured
 - Check `package.json` has correct workspace dependency
 
 ### Static files not loading
+
 - Verify `wwwroot/` directory exists
 - Check embedded resources in `.csproj`
 - Ensure MSBuild task ran successfully
 - Check file permissions in temp directory
 
 ### WebSocket connection failed
+
 - Verify port 8765 is not in use
 - Check firewall settings
 - Ensure localhost binding is correct
 
 ### Compute deployment CORS errors
+
 - Add CORS headers in Compute server
 - Configure allowed origins
 - Use environment variables for URLs

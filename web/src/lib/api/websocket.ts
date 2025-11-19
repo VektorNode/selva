@@ -14,8 +14,30 @@ export class WebSocketClient {
 	private maxReconnectAttempts = 5;
 	private reconnectDelay = 1000;
 	private isConnecting = false;
+	private _isSolving = false;
+	private _pendingValueUpdate: { sessionId: string; values: Record<string, any> } | null = null;
 
-	constructor(private url: string = 'ws://localhost:8765') { }
+	constructor(private url: string = 'ws://localhost:8765') {
+		// Register internal handler for solving state
+		this.on('solvingState', (data) => {
+			this._isSolving = data.isSolving;
+			console.log(`[WebSocket] Grasshopper solving state: ${this._isSolving}`);
+
+			// If solving just finished and we have a pending update, send it
+			if (!this._isSolving && this._pendingValueUpdate) {
+				console.log('[WebSocket] Sending queued value update');
+				this.send('valueUpdate', this._pendingValueUpdate);
+				this._pendingValueUpdate = null;
+			}
+		});
+	}
+
+	/**
+	 * Check if Grasshopper is currently solving
+	 */
+	get isSolving(): boolean {
+		return this._isSolving;
+	}
 
 	/**
 	 * Connect to the WebSocket server
@@ -98,8 +120,16 @@ export class WebSocketClient {
 
 	/**
 	 * Send value updates to Grasshopper
+	 * If Grasshopper is currently solving, the update will be queued and sent when solving completes
 	 */
 	sendValueUpdate(sessionId: string, values: Record<string, any>) {
+		if (this._isSolving) {
+			// Queue the update - only keep the latest one
+			console.log('[WebSocket] Grasshopper is solving, queuing value update');
+			this._pendingValueUpdate = { sessionId, values };
+			return;
+		}
+
 		console.log('[WebSocket] Sending value update:', values);
 		this.send('valueUpdate', { sessionId, values });
 	}
@@ -124,7 +154,6 @@ export class WebSocketClient {
 	 * Save schema to Grasshopper
 	 */
 	saveSchema(sessionId: string, schema: UISchema) {
-		console.log('[WebSocket] Saving schema to Grasshopper');
 		this.send('saveSchema', { sessionId, schema });
 	}
 

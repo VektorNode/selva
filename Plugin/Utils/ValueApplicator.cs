@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
-using ComputeBuilder.Models;
+using ComputeBuilder.Plugin.Models;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 
-namespace ComputeBuilder.Utils
+namespace ComputeBuilder.Plugin.Utils
 {
     /// <summary>
     ///     Handles applying values from web UI to Grasshopper parameters

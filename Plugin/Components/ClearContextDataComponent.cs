@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Linq;
 using Grasshopper.Kernel;
 
-namespace ComputeBuilder.Components
+namespace ComputeBuilder.Plugin.Components
 {
     /// <summary>
     ///     Component to clear contextual data from parameters

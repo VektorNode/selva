@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
-using ComputeBuilder.Models;
+using ComputeBuilder.Plugin.Models;
 using Newtonsoft.Json;
 
-namespace ComputeBuilder.Utils
+namespace ComputeBuilder.Plugin.Utils
 {
     /// <summary>
     ///     Handles WebSocket communication with the web UI

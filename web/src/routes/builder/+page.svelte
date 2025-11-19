@@ -168,14 +168,11 @@
         return;
       }
 
-      console.log("[Builder] WebSocket connected");
       wsConnected = true;
 
-      // Register handlers
       wsClient.on("initialData", handleInitialData);
       wsClient.on("schemaSaved", handleSchemaSaved);
 
-      // Request initial data
       wsClient.requestInitialData(sessionId);
     };
 
@@ -184,7 +181,6 @@
 
     return () => {
       window.removeEventListener("keydown", handleKeydown);
-      // Clean up WebSocket handlers to prevent duplicate responses
       wsClient.off("initialData", handleInitialData);
       wsClient.off("schemaSaved", handleSchemaSaved);
       // Don't disconnect - keep connection alive for page switching
@@ -199,10 +195,7 @@
       return;
     }
 
-    $state.snapshot(schema);
-
-    // Send schema via WebSocket - confirmation will come via schemaSaved message
-    wsClient.saveSchema(sessionId, schema);
+    wsClient.saveSchema(sessionId, $state.snapshot(schema));
   }
 
   //TODO: Add possibility to reorder tabs
@@ -504,14 +497,7 @@
 
 <DragDropContext>
   <PageContainer background="white">
-    <PageHeader
-      title="Schema Builder"
-      {sessionId}
-      showModeToggle={true}
-      badge={wsClient.isConnected
-        ? { label: "Connected", variant: "connected" as const }
-        : { label: "Disconnected", variant: "disconnected" as const }}
-    >
+    <PageHeader title="Schema Builder" {sessionId} showModeToggle={true}>
       <nav class="flex gap-2">
         <Button variant="outline" size="sm" onclick={() => navigateTo("")}>
           Home

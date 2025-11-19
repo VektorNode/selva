@@ -112,6 +112,8 @@
         const availableParams = message.availableParams as AvailableParameters;
         const currentValues = message.currentValues || {};
 
+        console.log("[Preview] Available Parameters:", availableParams);
+
         if (!receivedSchema) {
           error =
             "No schema configured. Please use the Schema Builder to create a UI.";
@@ -119,7 +121,6 @@
           return;
         }
 
-        // Ensure layout has tabs array
         if (!receivedSchema.layout.tabs) {
           receivedSchema.layout.tabs = [];
         }

@@ -42,12 +42,14 @@ export function createDefaultWidgetConfig(
 ): any {
 	const config: any = {};
 
+
+
 	if (category === 'input') {
 		switch (widgetType) {
 			case 'number':
 				config.min = param.minimum ?? 0;
 				config.max = param.maximum ?? 100;
-				config.step = param.paramType === 'Integer' ? 1 : 0.1;
+				config.step = param.paramType === 'Integer' ? 1 : param.stepSize ?? 0.1;
 				config.renderAsSlider = true; // Default to slider rendering for numeric inputs
 				break;
 

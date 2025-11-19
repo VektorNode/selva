@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using ComputeBuilder.Models;
+using ComputeBuilder.Plugin.Models;
 using Grasshopper.Kernel;
-using Grasshopper.Kernel.Special;
 
-namespace ComputeBuilder.Utils
+namespace ComputeBuilder.Plugin.Utils
 {
     /// <summary>
     ///     Manages parameter scanning and schema validation

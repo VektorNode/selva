@@ -4,7 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ComputeBuilder is a cross-platform Rhino Grasshopper plugin that enables web-based UIs for parametric models using a dual-stack architecture:
+ComputeBuilder is a cross-platform Rhino Grasshopper plugin that enables web-based UIs for parametric models using a
+dual-stack architecture:
 
 - **Backend**: C# Grasshopper components (.NET multi-target: net48/net7.0)
 - **Frontend**: SvelteKit web application (TypeScript, Tailwind CSS)
@@ -26,22 +27,26 @@ dotnet clean
 ```
 
 **Output locations:**
+
 - Rhino 7: `bin/Release/net48/ComputeBuilder.gha`
 - Rhino 8: `bin/Release/net7.0/ComputeBuilder.gha`
 
 ### Installation to Grasshopper
 
 **Windows (Rhino 7):**
+
 ```bash
 copy "bin\Release\net48\ComputeBuilder.gha" "%APPDATA%\Grasshopper\Libraries\"
 ```
 
 **Windows (Rhino 8):**
+
 ```bash
 copy "bin\Release\net7.0\ComputeBuilder.gha" "%APPDATA%\Grasshopper\Libraries-8\"
 ```
 
 **macOS (Rhino 8):**
+
 ```bash
 cp bin/Release/net7.0/ComputeBuilder.gha ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/
 ```
@@ -75,11 +80,13 @@ npm run check:watch
 ### Quick Development Setup
 
 **Windows PowerShell:**
+
 ```powershell
 .\start-dev.ps1
 ```
 
 **macOS/Linux:**
+
 ```bash
 ./start-dev.sh
 ```
@@ -127,6 +134,7 @@ These scripts build the plugin, install it, and start the dev server.
 ### Data Flow Sequence
 
 **Schema Building:**
+
 1. UIBuilderComponent scans Grasshopper document for `IGH_ContextualParameter` instances
 2. Writes available parameters to `{sessionId}_available.json`
 3. Opens browser to `/builder?session={sessionId}`
@@ -134,6 +142,7 @@ These scripts build the plugin, install it, and start the dev server.
 5. Schema saved to `{sessionId}_schema.json`
 
 **Interactive Mode (WebSocket-only):**
+
 1. UIBuilderComponent loads schema and starts WebSocket server
 2. Opens browser to `/preview?session={sessionId}`
 3. Web UI connects via WebSocket
@@ -156,19 +165,23 @@ Sessions auto-cleanup after 24 hours of inactivity.
 ### Parameter Validation
 
 **ONLY these parameter types are allowed:**
+
 - Parameters implementing `IGH_ContextualParameter`
 - `ContextPrintComponent` (for outputs)
 - `ContextBakeComponent` (for outputs)
 
 **NOT allowed:**
+
 - Standard Grasshopper parameters (Param_Number, Param_String, etc.)
 - Custom components without `IGH_ContextualParameter` interface
 
-**Note:** Parameter validation is currently handled inline within the UIBuilderComponent and ClearContextDataComponent. There is no separate `ParameterValidator.cs` utility file at this time.
+**Note:** Parameter validation is currently handled inline within the UIBuilderComponent and ClearContextDataComponent.
+There is no separate `ParameterValidator.cs` utility file at this time.
 
 ### Type Safety Between C# and TypeScript
 
 The codebase maintains strict type alignment between:
+
 - C# models in `Models/UISchema.cs`
 - TypeScript types in `web/src/lib/types/schema.ts`
 
@@ -190,6 +203,7 @@ This approach allows supporting multiple parameter types without strong coupling
 ### C# Components
 
 **Components/UIBuilderComponent.cs** (~587 lines - REFACTORED)
+
 - **Orchestration only** - delegates to specialized utilities
 - Manages component lifecycle and .gh file persistence
 - Coordinates between SchemaManager, ValueApplicator, CommunicationHandler, and PersistenceManager
@@ -197,35 +211,41 @@ This approach allows supporting multiple parameter types without strong coupling
 - **WebSocket-only** - no file polling
 
 **Components/ClearContextDataComponent.cs** (152 lines)
+
 - Utility to clear contextual parameter data
 - Resets parameters to initial state
 
 ### Core Utilities (NEW - Extracted from UIBuilderComponent)
 
 **Utils/SchemaManager.cs** (~180 lines)
+
 - Parameter scanning from Grasshopper documents
 - Discovers `IGH_ContextualParameter` instances and output components
 - Validates for duplicate parameter names
 - Type mapping (dictionary-based for performance)
 
 **Utils/ValueApplicator.cs** (~150 lines)
+
 - Applies values from web UI to Grasshopper parameters
 - Generic type-based value conversion (no duplicate methods)
 - Reflection-based parameter assignment
 - Tracks last applied values to prevent redundant updates
 
 **Utils/CommunicationHandler.cs** (~140 lines)
+
 - WebSocket server lifecycle management
 - Real-time bidirectional communication
 - Event-based message handling
 - Output broadcasting to web clients
 
 **Utils/PersistenceManager.cs** (~90 lines)
+
 - Session file read/write operations
 - Schema, values, state, and available parameters persistence
 - Simplified interface for UIBuilderComponent
 
 **Utils/SessionManager.cs** (92 lines)
+
 - Session ID generation (8-character GUIDs)
 - File path helpers
 - JSON serialization wrappers
@@ -233,6 +253,7 @@ This approach allows supporting multiple parameter types without strong coupling
 - Path resolution for cross-platform compatibility
 
 **Utils/WebSocketServer.cs** (285 lines)
+
 - Async HttpListener-based WebSocket server
 - Thread-safe client management
 - Broadcast messaging
@@ -242,6 +263,7 @@ This approach allows supporting multiple parameter types without strong coupling
 
 **Models/UISchema.cs** (386 lines)
 All data structures shared between C# and web UI:
+
 - `UISchema` - Complete UI definition
 - `InputParameter` / `OutputParameter` - Parameter definitions with Compute-compatible metadata
 - `InputConfig` / `OutputConfig` - Type-specific configurations
@@ -251,6 +273,7 @@ All data structures shared between C# and web UI:
 
 **Compute-Style Metadata:**
 Each parameter now includes Rhino Compute-compatible metadata:
+
 - `paramType` - Grasshopper parameter type (Number, Point, Geometry, etc.)
 - `atLeast` / `atMost` - Data access constraints
 - `treeAccess` - Whether parameter accepts tree structures
@@ -258,6 +281,7 @@ Each parameter now includes Rhino Compute-compatible metadata:
 
 **UI Builder Metadata:**
 Additional metadata for enhanced UI building:
+
 - `groupName` - Logical grouping (set manually in UI builder)
 - `displayName` - Alternative display name
 - `order` - Display order within groups
@@ -267,6 +291,7 @@ Additional metadata for enhanced UI building:
 ### SvelteKit Application
 
 **web/src/routes/api/** - Server-side API routes
+
 - `schema/[sessionId]/+server.ts` - GET/POST schema
 - `values/[sessionId]/+server.ts` - GET/POST values
 - `state/[sessionId]/+server.ts` - GET state
@@ -283,12 +308,14 @@ Additional metadata for enhanced UI building:
 **web/src/lib/api/websocket.ts** - WebSocket client
 
 **web/src/lib/components/ui/** - Reusable UI components:
+
 - `InputControl.svelte` - Input parameter controls
 - `OutputDisplay.svelte` - Output parameter displays
 - `TabLayout.svelte` - Tabbed layout system
 - `LegacyLayout.svelte` - Grid-based layout (fallback)
 
 **web/src/lib/components/** - Drag-and-drop components:
+
 - `DragDropContext.svelte` - Drag-and-drop state management
 - `DraggableParameter.svelte` - Draggable parameter items
 - `DropZone.svelte` - Drop target zones
@@ -303,29 +330,32 @@ Additional metadata for enhanced UI building:
 - **Protocol:** ws://localhost:8765
 - **Connection:** CommunicationHandler manages lifecycle
 - **Message Types:**
-  - `ValueUpdateMessage` - Input value changes from web UI → Grasshopper
-  - `OutputUpdateMessage` - Output data from Grasshopper → web UI
+    - `ValueUpdateMessage` - Input value changes from web UI → Grasshopper
+    - `OutputUpdateMessage` - Output data from Grasshopper → web UI
 - **Reconnection:** Web client auto-reconnects with exponential backoff
 - **Benefits:**
-  - Real-time updates (no 500ms delay)
-  - Bidirectional communication
-  - Lower I/O overhead
-  - Better user experience
+    - Real-time updates (no 500ms delay)
+    - Bidirectional communication
+    - Lower I/O overhead
+    - Better user experience
 
 ### Session Files (Persistence Only)
 
 Session files are used for:
+
 - Initial page load (GET requests via REST API)
 - Schema persistence (embedded in .gh files)
 - Cross-session data sharing
 
 **NOT used for:**
+
 - ~~Real-time value updates~~ (WebSocket only)
 - ~~Polling~~ (removed)
 
 ## Supported Input/Output Types
 
 ### UI Input Types (for web interface)
+
 - `number` - Numeric input
 - `slider` - Range slider
 - `dropdown` - Select dropdown
@@ -334,21 +364,25 @@ Session files are used for:
 - `color` - Color picker
 
 ### UI Output Types (for web interface)
+
 - `text` - Text display
 - `number` - Numeric display
 - `3d-viewer` - Three.js geometry viewer (implemented)
 - `chart` - Data visualization (planned)
 
 ### Grasshopper Parameter Types (Compute-compatible)
+
 The system now supports full Compute-style parameter types for better compatibility:
 
 **Primitive Types:**
+
 - `Number` - Double precision numbers
 - `Integer` - Whole numbers
 - `Boolean` - True/false values
 - `Text` - String values
 
 **Geometry Types:**
+
 - `Point` - 3D points
 - `Vector` - 3D vectors
 - `Plane` - Construction planes
@@ -364,6 +398,7 @@ The system now supports full Compute-style parameter types for better compatibil
 - `Geometry` - Generic geometry type
 
 **Other:**
+
 - `Generic` - Fallback for unrecognized types
 
 ## Testing Workflow
@@ -383,15 +418,15 @@ The system now supports full Compute-style parameter types for better compatibil
    ```
 
 5. **In Grasshopper:**
-   - Add contextual parameter (e.g., Number Slider from IGH_ContextualParameter)
-   - Add UIBuilderComponent
-   - Set Enable = true
-   - Browser opens automatically
+    - Add contextual parameter (e.g., Number Slider from IGH_ContextualParameter)
+    - Add UIBuilderComponent
+    - Set Enable = true
+    - Browser opens automatically
 
 6. **Verify communication:**
-   - Check browser console (F12)
-   - Check Grasshopper component messages
-   - Inspect session files in temp directory
+    - Check browser console (F12)
+    - Check Grasshopper component messages
+    - Inspect session files in temp directory
 
 ## Common Development Scenarios
 
@@ -414,8 +449,8 @@ The system now supports full Compute-style parameter types for better compatibil
 ### Debugging Session Issues
 
 1. Check session files in temp directory:
-   - Windows: `%TEMP%\ComputeBuilder\`
-   - macOS: `/tmp/ComputeBuilder/`
+    - Windows: `%TEMP%\ComputeBuilder\`
+    - macOS: `/tmp/ComputeBuilder/`
 
 2. Verify file timestamps match component activity
 
@@ -426,16 +461,19 @@ The system now supports full Compute-style parameter types for better compatibil
 ## Platform-Specific Considerations
 
 ### Windows
+
 - Uses `%TEMP%` for session storage
 - Rhino 7 requires net48 build
 - Rhino 8 supports both net48 and net7.0
 
 ### macOS
+
 - Uses `/tmp/` for session storage
 - Rhino 8 only (net7.0)
 - File paths require escaping spaces in shell commands
 
 ### Cross-Platform
+
 - All file paths use `Path.Combine()` for compatibility
 - WebSocket server uses `HttpListener` (no platform-specific dependencies)
 - JSON serialization handles path separators automatically
@@ -452,18 +490,21 @@ The system now supports full Compute-style parameter types for better compatibil
 The schema system is designed to be compatible with Rhino Compute workflows:
 
 **Compute-Compatible Features:**
+
 - Parameter metadata matches Rhino Compute's structure (`paramType`, `atLeast`, `atMost`, `treeAccess`)
 - Supports all standard Grasshopper geometry types (Point, Curve, Brep, Mesh, etc.)
 - Maintains parameter constraints and access patterns
 - Can be easily adapted to generate Compute-compatible API calls
 
 **UI Builder Extensions:**
+
 - `groupName` - Manual grouping for better UI organization (set in Svelte builder, not auto-detected)
 - `displayName` - User-friendly labels
 - `order` - Custom ordering within groups
 - Additional help text via `tooltip` and `description`
 
 This dual approach allows:
+
 1. **Direct Compute integration** - Use the same parameter definitions for remote solving
 2. **Enhanced UI building** - Add UI-specific metadata without breaking Compute compatibility
 

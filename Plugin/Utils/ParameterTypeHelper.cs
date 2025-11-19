@@ -1,9 +1,9 @@
 using System;
-using ComputeBuilder.Models;
+using ComputeBuilder.Plugin.Models;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
 
-namespace ComputeBuilder.Utils
+namespace ComputeBuilder.Plugin.Utils
 {
     /// <summary>
     ///     Helper class for parameter type checking
