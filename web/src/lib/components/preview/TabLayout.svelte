@@ -37,8 +37,8 @@
     // Initialize collapsed states from schema
     if (schema.layout.tabs) {
       const initialCollapsed: Record<string, boolean> = {};
-      schema.layout.tabs.forEach(tab => {
-        tab.groups.forEach(group => {
+      schema.layout.tabs.forEach((tab) => {
+        tab.groups.forEach((group) => {
           if (!(group.id in collapsedGroups)) {
             initialCollapsed[group.id] = group.collapsed;
           }
@@ -53,7 +53,7 @@
   function toggleGroup(groupId: string) {
     collapsedGroups = {
       ...collapsedGroups,
-      [groupId]: !collapsedGroups[groupId]
+      [groupId]: !collapsedGroups[groupId],
     };
   }
 
@@ -104,7 +104,7 @@
             <Card.Root class="overflow-hidden py-0 gap-0">
               <!-- Group Header -->
               <button
-                class="w-full bg-muted px-6 py-4 border-b border-border flex items-center justify-between cursor-pointer hover:bg-muted/80 transition-colors"
+                class="w-full bg-muted px-6 py-2 border-b border-border flex items-center justify-between cursor-pointer hover:bg-muted/80 transition-colors"
                 onclick={() => toggleGroup(group.id)}
               >
                 <div class="text-left">
@@ -112,10 +112,18 @@
                     {group.label}
                   </h3>
                   {#if group.description}
-                    <p class="m-0 text-sm text-muted-foreground">{group.description}</p>
+                    <p class="m-0 text-sm text-muted-foreground">
+                      {group.description}
+                    </p>
                   {/if}
                 </div>
-                <span class="text-muted-foreground text-xl transition-transform duration-200 {collapsedGroups[group.id] ? '' : 'rotate-180'}">
+                <span
+                  class="text-muted-foreground text-sm transition-transform duration-200 {collapsedGroups[
+                    group.id
+                  ]
+                    ? ''
+                    : 'rotate-180'}"
+                >
                   ▼
                 </span>
               </button>

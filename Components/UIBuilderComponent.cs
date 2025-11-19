@@ -75,11 +75,12 @@ namespace ComputeBuilder.Components
             DA.GetData(0, ref enable);
             DA.GetData(1, ref refresh);
             DA.GetData(2, ref openPreview);
+            
+            var isRunningInHeadless = Rhino.RhinoApp.IsRunningHeadless;
 
             // Initialize components on first run
             if (_schemaManager == null)
             {
-                // Only generate new session ID if not already loaded from file
                 if (string.IsNullOrEmpty(_sessionId))
                 {
                     _sessionId = Guid.NewGuid().ToString().Substring(0, 8);
@@ -90,7 +91,6 @@ namespace ComputeBuilder.Components
                 _communicationHandler = new CommunicationHandler(_sessionId);
                 _persistenceManager = new PersistenceManager(_sessionId);
 
-                // Hook up WebSocket value updates
                 _communicationHandler.OnValuesReceived += HandleWebSocketValueUpdate;
                 _communicationHandler.OnCurrentValuesRequested += HandleCurrentValuesRequest;
             }
@@ -103,6 +103,40 @@ namespace ComputeBuilder.Components
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Could not access Grasshopper document");
                 DA.SetData(1, "ERROR: No document");
+                return;
+            }
+            
+            if (isRunningInHeadless)
+            {
+                if (enable || refresh)
+                {
+                    var availableParams = _schemaManager.ScanParameters(document);
+                    var duplicates = _schemaManager.ValidateDuplicates(availableParams);
+
+                    if (duplicates.Any())
+                    {
+                        var duplicateList = string.Join(", ", duplicates.Select(n => $"'{n}'"));
+                        AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                            $"Duplicate parameter names found: {duplicateList}. Each parameter must have a unique name.");
+                    }
+
+                    _persistenceManager.SaveAvailableParameters(availableParams);
+                }
+
+                // Load and validate embedded schema/values only
+                if (_embeddedSchema != null)
+                {
+                    _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
+                    _persistenceManager.SaveSchema(_embeddedSchema);
+                }
+
+                if (_embeddedValues != null && _embeddedSchema != null)
+                {
+                    _valueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, _embeddedValues, AddRuntimeMessage);
+                }
+
+                DA.SetData(1, $"Session: {_sessionId}\nStatus: Headless Mode\nSchema loaded (no WebSocket)");
+                DA.SetData(2, _embeddedSchema != null ? JsonConvert.SerializeObject(_embeddedSchema) : "");
                 return;
             }
 
@@ -418,11 +452,23 @@ namespace ComputeBuilder.Components
             if (goo == null)
                 return null;
 
-            var scriptVar = goo.ScriptVariable();
-            if (scriptVar != null)
-                return scriptVar;
+            // Check if the goo is valid before accessing its data
+            if (!goo.IsValid)
+                return null;
 
-            return goo.ToString();
+            try
+            {
+                var scriptVar = goo.ScriptVariable();
+                if (scriptVar != null)
+                    return scriptVar;
+
+                return goo.ToString();
+            }
+            catch (Exception)
+            {
+                // Object may be expired or invalid - return null silently
+                return null;
+            }
         }
 
         private void OpenUI()

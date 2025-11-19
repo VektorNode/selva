@@ -54,7 +54,7 @@
     }
   }
 
-  function handleDropEvent(e: Event) {
+  function handleDropEvent(e: Event | CustomEvent) {
     if (onDrop && e instanceof CustomEvent) {
       onDrop(e);
     }
@@ -152,7 +152,7 @@
       <DropZone
         isEmpty={group.items.length === 0}
         label="Drag parameters here"
-        ondrop={onDrop}
+        ondrop={handleDropEvent}
       >
         <div
           use:setupGridRef

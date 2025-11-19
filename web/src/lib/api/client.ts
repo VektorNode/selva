@@ -24,7 +24,6 @@ export class ApiClient {
 	 * Save schema for a session
 	 */
 	async saveSchema(sessionId: string, schema: UISchema): Promise<boolean> {
-		console.log('Saving schema', schema);
 		const response = await fetch(`${this.baseUrl}/schema/${sessionId}`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },

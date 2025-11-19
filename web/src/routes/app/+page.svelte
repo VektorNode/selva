@@ -16,14 +16,17 @@
   } from "rhino-compute-core";
   import type { InputParamSchema } from "$lib/types/schema";
   import * as THREE from "three";
-  import type { OrbitControls } from "three/examples/jsm/Addons.js";
+  import {
+    ThreeMFLoader,
+    type OrbitControls,
+  } from "three/examples/jsm/Addons.js";
   import { onMount } from "svelte";
+  import type { ThreeInitializerOptions } from "rhino-compute-core/visualization";
 
   let { data }: PageProps = $props();
 
   let schema = $state(data.schema);
 
-  console.log($state.snapshot(schema));
   let values: Record<string, any> = $state({});
   let solving = $state(false);
   let error = $state("");
@@ -192,7 +195,10 @@
 
   onMount(() => {
     if (schema.enable3dViewer && canvas && !viewerInitialized) {
-      const threeSetup = initThree(canvas);
+      const option: ThreeInitializerOptions = {
+        environment: { backgroundColor: "#4b5357" },
+      };
+      const threeSetup = initThree(canvas, option);
       scene = threeSetup.scene;
       camera = threeSetup.camera;
       controls = threeSetup.controls;
@@ -203,7 +209,7 @@
 <PageContainer>
   <PageHeader title={schema.name} badge={badgeConfig} />
 
-  <div class="flex-1 overflow-hidden bg-gray-50">
+  <div class="flex-1 overflow-hidden bg-background">
     {#if error}
       <div class="flex items-center justify-center min-h-[400px] p-8">
         <StateDisplay type="error" size="medium" message={error} />

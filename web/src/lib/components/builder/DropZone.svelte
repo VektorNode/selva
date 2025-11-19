@@ -23,22 +23,36 @@
 
   function handleDragOver(e: DragEvent) {
     e.preventDefault();
+    e.stopPropagation();
     const dragData = dragStore.current;
 
     if (dragData && acceptTypes.includes(dragData.type)) {
       isOver = true;
       if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = "copy";
+        // Use "move" for group-item (reordering), "copy" for new parameters
+        e.dataTransfer.dropEffect = dragData.type === "group-item" ? "move" : "copy";
+      }
+    } else {
+      // Still allow drop even if dragStore is empty
+      isOver = true;
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = "move";
       }
     }
   }
 
-  function handleDragLeave() {
-    isOver = false;
+  function handleDragLeave(e: DragEvent) {
+    // Only handle if leaving the actual drop zone, not child elements
+    const relatedTarget = e.relatedTarget as Node | null;
+    const currentTarget = e.currentTarget as Node;
+    if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
+      isOver = false;
+    }
   }
 
   function handleDrop(e: DragEvent) {
     e.preventDefault();
+    e.stopPropagation();
     isOver = false;
 
     const dragData = dragStore.current;
@@ -73,7 +87,7 @@
   ondrop={handleDrop}
 >
   {#if isEmpty}
-    <div class="flex flex-col items-center gap-2">
+    <div class="flex flex-col items-center gap-2 pointer-events-none">
       <span class="text-4xl opacity-50"><Drop /></span>
       <span class="text-sm text-muted-foreground">{label}</span>
     </div>
