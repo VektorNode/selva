@@ -5,7 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import DropZone from './DropZone.svelte';
-	import Trash from '../ui/icons/Trash.svelte';
+	import { Trash2 } from '@lucide/svelte';
 
 	interface EditableGroupProps {
 		group: GroupConfig;
@@ -139,7 +139,7 @@
 				</span>
 			{/if}
 			<Button variant="ghost" size="icon-lg" onclick={onRemove}>
-				<Trash />
+				<Trash2 size={16} />
 			</Button>
 		</div>
 	</Card.Header>

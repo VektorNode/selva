@@ -19,6 +19,12 @@ export const JSON_INDENT_SPACES = 2;
 // API endpoints
 export const API_BASE_URL = '/api';
 
+// UI styling constants
+export const OUTPUT_COLOR =
+	'bg-violet-200 hover:bg-violet-200 dark:bg-violet-700 dark:hover:bg-violet-700 dark:saturate-20';
+export const INPUT_COLOR =
+	'bg-stone-200/60 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700';
+
 /**
  * Generate a session ID (8-character UUID)
  */

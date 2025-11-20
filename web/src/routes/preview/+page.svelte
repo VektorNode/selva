@@ -13,7 +13,6 @@
 	} from '$lib/utils/session';
 	import { onMount } from 'svelte';
 
-	// Runtime mode: 'local' uses WebSocket, 'compute' uses Rhino Compute
 	type RuntimeMode = 'local' | 'compute';
 
 	let sessionId = $state('');
@@ -23,13 +22,11 @@
 	let loading = $state(true);
 	let error = $state('');
 
-	// Get WebSocket state singleton - reactive properties update automatically
 	const wsState = getWebSocketState();
 
 	let schemaUpdateNotification = $state('');
 	let notificationTimer: ReturnType<typeof setTimeout> | null = null;
 
-	// Determine runtime mode from URL parameter
 	let runtimeMode = $state<RuntimeMode>('local');
 	let solving = $state(false);
 
@@ -58,7 +55,6 @@
 	 * Only send to Grasshopper if change came from user (not from remote)
 	 */
 	async function handleValueChange(paramId: string, value: SupportedTypes) {
-		// Skip sending if this is a remote update
 		if (isRemoteUpdate) {
 			console.log('[Preview] Skipping send for remote update on paramId:', paramId);
 			return;
@@ -104,7 +100,6 @@
 		}
 	}
 
-	// Compute badge configuration
 	const badgeConfig = $derived(
 		runtimeMode === 'local'
 			? wsState.connected
@@ -119,7 +114,6 @@
 	);
 
 	onMount(() => {
-		// Define handlers at the top level so they can be cleaned up
 		const handleInitialData = (message: any) => {
 			if (message.sessionId === sessionId) {
 				console.log('[Preview] Received initial data:', message);
@@ -348,13 +342,9 @@
 			</div>
 
 			{#if wsState.isSolving}
-				<div
-					class="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-50"
-				>
-					<div class="flex flex-col items-center gap-4">
-						<div class="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-						<div class="text-lg font-medium text-foreground">Solving in Grasshopper...</div>
-					</div>
+				<div class="fixed bottom-8 left-8 z-50 flex items-center gap-3 rounded-lg bg-primary px-4 py-3 text-primary-foreground shadow-lg animate-[slideInLeft_0.3s_ease-out]">
+					<div class="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent"></div>
+					<span class="text-sm font-medium">Solving...</span>
 				</div>
 			{/if}
 		{/if}
@@ -381,6 +371,17 @@
 	@keyframes slideInRight {
 		from {
 			transform: translateX(100%);
+			opacity: 0;
+		}
+		to {
+			transform: translateX(0);
+			opacity: 1;
+		}
+	}
+
+	@keyframes slideInLeft {
+		from {
+			transform: translateX(-100%);
 			opacity: 0;
 		}
 		to {

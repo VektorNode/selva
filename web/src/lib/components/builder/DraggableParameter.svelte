@@ -2,7 +2,7 @@
 	import { dragStore } from '$lib/stores/dragStore.svelte';
 	import type { AvailableParameter } from '$lib/types/generated';
 	import * as Card from '$lib/components/ui/card';
-	import { inputColor, outputColor } from '../styles';
+	import { INPUT_COLOR, OUTPUT_COLOR } from '$lib/utils/constants';
 
 	interface Props {
 		parameter: AvailableParameter;
@@ -38,7 +38,7 @@
     mb-2 flex cursor-grab flex-row items-center
     justify-between gap-4 rounded-xl border-2 border-transparent
     p-3 transition-all hover:border-primary
-    hover:bg-muted ${category === 'input' ? inputColor : outputColor}
+    hover:bg-muted ${category === 'input' ? INPUT_COLOR : OUTPUT_COLOR}
     ${isDragging ? 'cursor-grabbing opacity-50' : ''}
   `}
 	draggable="true"

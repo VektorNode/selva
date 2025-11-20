@@ -245,13 +245,3 @@ export function getWebSocketState(): WebSocketState {
 	}
 	return wsState;
 }
-
-/**
- * Legacy exports for backwards compatibility
- * @deprecated Use getWebSocketState() instead
- */
-export function getWebSocketClient(): WebSocketState {
-	return getWebSocketState();
-}
-
-export type WebSocketClient = WebSocketState;

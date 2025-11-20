@@ -1,21 +1,26 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import type { TabConfig } from '$lib/types/generated';
-	import Edit from '../ui/icons/Edit.svelte';
+	import { Pencil } from '@lucide/svelte';
 
 	interface EditableTabNavProps {
 		tabs: TabConfig[];
 		activeTabId: string | null;
 		onTabChange: (tabId: string) => void;
 		onRemoveTab: (tabId: string) => void;
+		onReorderTabs?: (fromIndex: number, toIndex: number) => void;
 	}
 
-	let { tabs, activeTabId, onTabChange, onRemoveTab }: EditableTabNavProps = $props();
+	let { tabs, activeTabId, onTabChange, onRemoveTab, onReorderTabs }: EditableTabNavProps = $props();
 
 	// track which tab is currently being edited and the temporary edit text
 	let editingTabId: string | null = $state(null);
 	let editValue = $state('');
 	let editInputEl: HTMLInputElement | null = $state(null);
+
+	// drag state
+	let draggedTabId: string | null = $state(null);
+	let dragOverTabId: string | null = $state(null);
 
 	function startEdit(tab: TabConfig) {
 		editingTabId = tab.id;
@@ -43,11 +48,64 @@
 			cancelEdit();
 		}
 	}
+
+	function handleDragStart(e: DragEvent, tabId: string) {
+		draggedTabId = tabId;
+		if (e.dataTransfer) {
+			e.dataTransfer.effectAllowed = 'move';
+			e.dataTransfer.setData('text/plain', tabId);
+		}
+	}
+
+	function handleDragOver(e: DragEvent, tabId: string) {
+		e.preventDefault();
+		if (draggedTabId && draggedTabId !== tabId) {
+			dragOverTabId = tabId;
+			if (e.dataTransfer) {
+				e.dataTransfer.dropEffect = 'move';
+			}
+		}
+	}
+
+	function handleDragLeave() {
+		dragOverTabId = null;
+	}
+
+	function handleDrop(e: DragEvent, targetTabId: string) {
+		e.preventDefault();
+
+		if (!draggedTabId || !onReorderTabs) return;
+
+		const fromIndex = tabs.findIndex((t) => t.id === draggedTabId);
+		const toIndex = tabs.findIndex((t) => t.id === targetTabId);
+
+		if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
+			onReorderTabs(fromIndex, toIndex);
+		}
+
+		draggedTabId = null;
+		dragOverTabId = null;
+	}
+
+	function handleDragEnd() {
+		draggedTabId = null;
+		dragOverTabId = null;
+	}
 </script>
 
 <div class="mb-4 flex items-end gap-2 overflow-x-auto border-b border-border">
 	{#each tabs as tab (tab.id)}
-		<div class="group relative flex items-center rounded-t-lg bg-transparent">
+		<div
+			class="group relative flex items-center rounded-t-lg bg-transparent"
+			draggable={onReorderTabs ? 'true' : 'false'}
+			ondragstart={(e) => handleDragStart(e, tab.id)}
+			ondragover={(e) => handleDragOver(e, tab.id)}
+			ondragleave={handleDragLeave}
+			ondrop={(e) => handleDrop(e, tab.id)}
+			ondragend={handleDragEnd}
+			role="group"
+			tabindex="-1"
+		>
 			<!-- Main clickable area: switches tabs -->
 			<button
 				type="button"
@@ -55,10 +113,10 @@
 					activeTabId === tab.id
 						? 'border-primary bg-card text-primary shadow-sm'
 						: 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
-				}`}
+				} ${draggedTabId === tab.id ? 'opacity-50' : ''} ${dragOverTabId === tab.id ? 'border-l-4 border-l-primary' : ''}`}
 				onclick={() => onTabChange(tab.id)}
 				aria-pressed={activeTabId === tab.id}
-				title="Switch to tab"
+				title={onReorderTabs ? 'Click to switch, drag to reorder' : 'Switch to tab'}
 			>
 				{#if tab.icon}
 					<span class="shrink-0 text-base">
@@ -89,7 +147,7 @@
 				title="Edit tab label"
 				aria-label="Edit tab label"
 			>
-				<Edit />
+				<Pencil size={14} />
 			</button>
 
 			<!-- Remove button -->

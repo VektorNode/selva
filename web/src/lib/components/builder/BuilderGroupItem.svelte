@@ -5,9 +5,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import { Switch } from '$lib/components/ui/switch/index.js';
-	import IconOutput from '../ui/icons/IconOutput.svelte';
-	import IconInput from '../ui/icons/IconInput.svelte';
-	import { inputColor, outputColor } from '../styles';
+	import { ArrowDownToLine, ArrowUpFromLine } from '@lucide/svelte';
+	import { INPUT_COLOR, OUTPUT_COLOR } from '$lib/utils/constants';
 
 	interface BuilderGroupItemProps {
 		item: LayoutItem;
@@ -147,7 +146,7 @@
       cursor-grab p-2 transition-all hover:border-primary hover:shadow-sm
       ${isDragging ? 'cursor-grabbing opacity-50' : ''}
       ${isDragOver ? 'border-primary' : ''}
-      ${item.type === 'input' ? inputColor : outputColor}
+      ${item.type === 'input' ? INPUT_COLOR : OUTPUT_COLOR}
       mb-2 gap-1.5
     `}
 		draggable="true"
@@ -164,9 +163,9 @@
 			>
 				<span class="text-sm">
 					{#if item.type === 'input'}
-						<IconInput />
+						<ArrowDownToLine size={14} />
 					{:else}
-						<IconOutput />
+						<ArrowUpFromLine size={14} />
 					{/if}
 				</span>
 			</span>
@@ -213,7 +212,7 @@
 				</div>
 				{#if isNumberInput}
 					{@const config = (item as any).config as NumberWidgetConfig}
-					<div class="flex items-center gap-2 border-t border-border/50 px-1.5 py-1">
+					<div class="flex items-center gap-2 border-t border-border px-1.5 py-1">
 						<span class="text-[10px] text-muted-foreground">Input</span>
 						<Switch
 							checked={config.renderAsSlider ?? true}

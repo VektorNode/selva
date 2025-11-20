@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { PageContainer } from '$lib/components/layout';
-	import { StateDisplay } from '$lib/components/ui';
+	import { Slider, StateDisplay } from '$lib/components/ui';
 	import * as Card from '$lib/components/ui/card';
 	import IconBuild from '$lib/components/ui/icons/IconBuild.svelte';
 	import IconBold from '$lib/components/ui/icons/IconBold.svelte';

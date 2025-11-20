@@ -36,23 +36,34 @@
 
 	function handleChange(newValue: SupportedTypes) {
 		value = newValue;
-			onChange(item.paramId, newValue);
+		onChange(item.paramId, newValue);
 	}
 
-	// For slider: separate local state for smooth dragging (immediate visual feedback)
-	let localSliderValue = $state<number>(0);
+	// Simple debounce for slider to reduce backend spam while keeping UI smooth
+	const debouncedOnChange = debounce((paramId: string, newValue: SupportedTypes) => {
+		onChange(paramId, newValue);
+	}, 150);
 
-	// Sync local slider value when external value changes (e.g., from WebSocket)
-	$effect(() => {
-		if (isNumberWidget(item) && item.config.renderAsSlider && typeof value === 'number') {
-			localSliderValue = value;
+	function handleSliderChange(newValue: number) {
+		// Update local value immediately for smooth UI
+		value = newValue;
+		// Debounce the backend update
+		debouncedOnChange(item.paramId, newValue);
+	}
+
+	// Calculate optimal step size for slider performance
+	// If step size would create >1000 steps, adjust it automatically
+	function getOptimalStepSize(min: number, max: number, requestedStep: number): number {
+		const range = max - min;
+		const totalSteps = range / requestedStep;
+
+		// If more than 1000 steps, adjust step size to keep it under 1000
+		if (totalSteps > 1000) {
+			return range / 1000;
 		}
-	});
 
-	// For slider rendering, get numeric value
-	let sliderValue = $derived(
-		isNumberWidget(item) && item.config.renderAsSlider ? localSliderValue : 0
-	);
+		return requestedStep;
+	}
 </script>
 
 <div class="flex flex-col gap-2">
@@ -80,20 +91,22 @@
 	{#if isNumberWidget(item)}
 		{@const config = item.config as NumberWidgetConfig}
 		{#if config.renderAsSlider}
+			{@const minVal = config.minimum ?? 0}
+			{@const maxVal = config.maximum ?? 100}
+			{@const requestedStep = config.step ?? 1}
+			{@const optimalStep = getOptimalStepSize(minVal, maxVal, requestedStep)}
 			<div class="flex items-center gap-4">
 				<Slider
 					type="single"
-					value={sliderValue}
-					min={config.minimum ?? 0}
-					max={config.maximum ?? 100}
-					step={config.step ?? 1}
+					value={typeof value === 'number' ? value : minVal}
+					min={minVal}
+					max={maxVal}
+					step={optimalStep}
 					class="flex-1"
-					onValueChange={(val: number) => {
-						handleChange(val);
-					}}
+					onValueChange={handleSliderChange}
 				/>
 				<span class="min-w-12 text-right text-sm text-muted-foreground">
-					{value ?? config.minimum ?? 0}
+					{typeof value === 'number' ? value.toFixed(Math.max(0, -Math.floor(Math.log10(requestedStep)))) : minVal}
 				</span>
 			</div>
 		{:else}

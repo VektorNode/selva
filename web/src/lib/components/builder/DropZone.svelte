@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { dragStore } from '$lib/stores/dragStore.svelte';
-	import Drop from '../ui/icons/Drop.svelte';
+	import { MousePointerClick } from '@lucide/svelte';
 
 	interface Props {
 		acceptTypes?: string[];
@@ -88,7 +88,7 @@
 >
 	{#if isEmpty}
 		<div class="pointer-events-none flex flex-col items-center gap-2">
-			<span class="text-4xl opacity-50"><Drop /></span>
+			<MousePointerClick size={48} class="opacity-50" />
 			<span class="text-sm text-muted-foreground">{label}</span>
 		</div>
 	{:else}

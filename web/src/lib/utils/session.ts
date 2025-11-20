@@ -1,6 +1,6 @@
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
-import { getWebSocketState, type WebSocketClient } from '$lib/websocket/websocket.svelte';
+import { getWebSocketState, type WebSocketState } from '$lib/websocket/websocket.svelte';
 import type { UISchema, AvailableParameters } from '$lib/types/generated';
 
 /**
@@ -8,7 +8,7 @@ import type { UISchema, AvailableParameters } from '$lib/types/generated';
  */
 export interface SessionInitResult {
 	sessionId: string;
-	wsClient: WebSocketClient;
+	wsClient: WebSocketState;
 	connected: boolean;
 	error: string | null;
 }

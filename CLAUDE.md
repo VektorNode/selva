@@ -512,10 +512,38 @@ The system now supports full Compute-style parameter types for better compatibil
 
 ## Performance Considerations
 
+### Backend (C# Plugin)
+
 - **Polling interval:** 500ms balances responsiveness and CPU usage
 - **Session cleanup:** Runs on component initialization (24-hour threshold)
 - **Parameter expiration:** Batch expiration to minimize Grasshopper recomputes
 - **Value change detection:** Compares with `_lastAppliedValues` to prevent redundant updates
+
+### Frontend (Web Application)
+
+**Code Splitting & Lazy Loading:**
+- Three.js (~580KB) is lazy-loaded only when 3D viewer is enabled
+- `rhino-compute-core` is dynamically imported when needed
+- SvelteKit automatically code-splits routes for optimal loading
+
+**Bundle Optimization:**
+- Standardized on `@lucide/svelte` for all icons (removed duplicate `@iconify/svelte`)
+- Consolidated utility constants into single `constants.ts` file
+- Removed unused icon components and deprecated code
+
+**Icon Library:**
+- **Primary**: `@lucide/svelte` - Used for all UI icons (lightweight, tree-shakeable)
+- Component mapping:
+  - Input parameters: `ArrowDownToLine`
+  - Output parameters: `ArrowUpFromLine`
+  - Drop zones: `MousePointerClick`
+  - Delete actions: `Trash2`
+  - Edit actions: `Pencil`
+
+**Best Practices:**
+- Prefer direct Lucide imports over custom icon wrapper components
+- Use lazy loading for heavy dependencies (3D libraries, compute packages)
+- Keep utility files consolidated to reduce import overhead
 
 ## Rhino Compute Compatibility
 

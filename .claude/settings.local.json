@@ -6,7 +6,8 @@
       "Bash(pnpm add:*)",
       "Bash(dotnet build:*)",
       "Bash(mkdir:*)",
-      "Bash(npm run generate:ts:*)"
+      "Bash(npm run generate:ts:*)",
+      "Bash(npm run check:*)"
     ],
     "deny": [],
     "ask": []

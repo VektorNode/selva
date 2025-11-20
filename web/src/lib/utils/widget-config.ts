@@ -84,20 +84,3 @@ export function createDefaultWidgetConfig(
 
 	return config;
 }
-
-/**
- * Get default value for a parameter type
- */
-export function getDefaultValueForParam(paramType: GrasshopperParamType): any {
-	switch (paramType) {
-		case 'Number':
-		case 'Integer':
-			return 0;
-		case 'Boolean':
-			return false;
-		case 'Text':
-			return '';
-		default:
-			return null;
-	}
-}

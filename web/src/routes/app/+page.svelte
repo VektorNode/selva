@@ -3,11 +3,7 @@
 	import { TabLayout } from '$lib/components/preview';
 	import { PageContainer, PageHeader } from '$lib/components/layout';
 	import { StateDisplay, Button } from '$lib/components/ui';
-	import { initThree, updateScene, GrasshopperResponseProcessor } from 'rhino-compute-core';
-	import * as THREE from 'three';
-	import { type OrbitControls } from 'three/examples/jsm/Addons.js';
 	import { onMount } from 'svelte';
-	import type { ThreeInitializerOptions } from 'rhino-compute-core/visualization';
 	import { getDefaultValue } from '$lib/utils/session';
 
 	let { data }: PageProps = $props();
@@ -18,10 +14,14 @@
 	let solving = $state(false);
 	let error = $state('');
 	let canvas: HTMLCanvasElement | null = $state(null);
-	let scene: THREE.Scene | null = $state(null);
-	let camera: THREE.PerspectiveCamera;
-	let controls: OrbitControls;
+	let scene: any | null = $state(null);
+	let camera: any;
+	let controls: any;
 	let viewerInitialized = $state(false);
+
+	// Lazy-loaded modules
+	let rhinoCompute: typeof import('rhino-compute-core') | null = null;
+	let THREE: typeof import('three') | null = null;
 
 	// Manual solve mode: track pending changes
 	let pendingValues = $state<Record<string, unknown>>({});
@@ -64,6 +64,11 @@
 			solving = true;
 			error = '';
 
+			// Lazy load rhino-compute-core only when needed
+			if (!rhinoCompute) {
+				rhinoCompute = await import('rhino-compute-core');
+			}
+
 			const response = await fetch('/api/compute', {
 				method: 'POST',
 				headers: {
@@ -85,13 +90,13 @@
 			const solvedDefinition = await response.json();
 
 			// Process the response on client side (mesh extraction requires Three.js)
-			const processor = new GrasshopperResponseProcessor(solvedDefinition);
+			const processor = new rhinoCompute.GrasshopperResponseProcessor(solvedDefinition);
 			const outputValues = processor.getValues();
 
 			// Update 3D viewer if enabled
 			if (schema.enable3dViewer && scene) {
 				const meshes = processor.extractMeshesFromResponse();
-				updateScene(scene, meshes, camera, controls, viewerInitialized);
+				rhinoCompute.updateScene(scene, meshes, camera, controls, viewerInitialized);
 				viewerInitialized = true;
 			}
 
@@ -140,12 +145,20 @@
 			: { label: 'Rhino Compute', variant: 'compute' as const }
 	);
 
-	onMount(() => {
+	onMount(async () => {
 		if (schema.enable3dViewer && canvas && !viewerInitialized) {
-			const option: ThreeInitializerOptions = {
+			// Lazy load rhino-compute-core and Three.js only when 3D viewer is enabled
+			if (!rhinoCompute) {
+				rhinoCompute = await import('rhino-compute-core');
+			}
+			if (!THREE) {
+				THREE = await import('three');
+			}
+
+			const option = {
 				environment: { backgroundColor: '#4b5357' }
 			};
-			const threeSetup = initThree(canvas, option);
+			const threeSetup = rhinoCompute.initThree(canvas, option);
 			scene = threeSetup.scene;
 			camera = threeSetup.camera;
 			controls = threeSetup.controls;

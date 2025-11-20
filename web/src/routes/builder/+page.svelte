@@ -142,7 +142,20 @@
 		wsState.saveSchema(sessionId, $state.snapshot(schema));
 	}
 
-	//TODO: Add possibility to reorder tabs
+	function reorderTabs(fromIndex: number, toIndex: number) {
+		if (!schema || !schema.layout.tabs) return;
+
+		const tabs = [...schema.layout.tabs];
+		const [movedTab] = tabs.splice(fromIndex, 1);
+		tabs.splice(toIndex, 0, movedTab);
+
+		// Update order property for each tab
+		tabs.forEach((tab, index) => {
+			tab.order = index;
+		});
+
+		schema.layout.tabs = tabs;
+	}
 
 	/**
 	 * Helper function to remove a parameter from inputs/outputs if it's not used in the layout
@@ -501,6 +514,7 @@
 										{activeTabId}
 										onTabChange={(tabId) => (activeTabId = tabId)}
 										onRemoveTab={removeTab}
+										onReorderTabs={reorderTabs}
 									/>
 
 									<!-- Active Tab Content -->
