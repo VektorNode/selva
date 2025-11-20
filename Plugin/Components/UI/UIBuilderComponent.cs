@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using Compuceraptor.Components;
+using Compuceraptor.Components.Params;
 using ComputeBuilder.Plugin.Models.Generated;
 using ComputeBuilder.Plugin.Utils;
 using GH_IO.Serialization;
@@ -119,7 +121,6 @@ namespace ComputeBuilder.Plugin.Components
             }
             else if (enableFalling)
             {
-
                 if (_enableTrueCount > 1)
                 {
                     _isEnabled = false;
@@ -261,7 +262,8 @@ namespace ComputeBuilder.Plugin.Components
                 try
                 {
                     // Notify clients before stopping
-                    var _ = _communicationHandler.BroadcastMessage("disconnecting", new { reason = "Component disabled" });
+                    var _ = _communicationHandler.BroadcastMessage("disconnecting",
+                        new { reason = "Component disabled" });
                     System.Threading.Thread.Sleep(100);
                 }
                 catch
@@ -407,8 +409,28 @@ namespace ComputeBuilder.Plugin.Components
 
                     if (paramObject is IGH_Param ghParam)
                     {
-                        if (ghParam.SourceCount == 1)
+                        if (ghParam is GetValueListParameter valueListParam)
                         {
+                            // Read directly from the GetValueListParameter's VolatileData
+                            var valueData = valueListParam.VolatileData;
+                            if (valueData != null && !valueData.IsEmpty)
+                            {
+                                var allData = valueData.AllData(true).ToList();
+                                if (allData.Count == 1)
+                                {
+                                    // Extract key from GH_ValueListData
+                                    currentValues[input.Id.ToString()] = ExtractKeyFromValueListData(allData[0]);
+                                }
+                                else if (allData.Count > 1)
+                                {
+                                    var values = allData.Select(d => ExtractKeyFromValueListData(d)).ToList();
+                                    currentValues[input.Id.ToString()] = values;
+                                }
+                            }
+                        }
+                        else if (ghParam.SourceCount == 1)
+                        {
+                            // For regular parameters, read from their source
                             var valueData = ghParam.Sources[0].VolatileData;
                             if (valueData != null && !valueData.IsEmpty)
                             {
@@ -435,6 +457,59 @@ namespace ComputeBuilder.Plugin.Components
 
             return currentValues;
         }
+        
+        private object ExtractKeyFromValueListData(IGH_Goo data)
+        {
+            if (data is GH_ValueListData valueListData)
+            {
+                // Return the KEY (name)
+                return valueListData.SelectedName;  // "Red"
+            }
+
+            // Fallback for other types
+            return ExtractValue(data);
+        }
+
+        // Extract key and value for ValueList, or just value for other types
+        private object ExtractKeyValue(IGH_Goo data)
+        {
+            // Check if it's from a ValueList parameter
+            if (data is GH_ValueListData valueListData)
+            {
+                // Return structured object with both key and value
+                return new
+                {
+                    key = valueListData.SelectedName,
+                    value = valueListData.Value,
+                    index = valueListData.SelectedIndex
+                };
+            }
+
+            // For all other types, extract just the value
+            return ExtractValue(data);
+        }
+
+// Your existing ExtractValue method
+        private object ExtractValue(IGH_Goo data)
+        {
+            if (data is GH_String ghString)
+                return ghString.Value;
+
+            if (data is GH_Number ghNumber)
+                return ghNumber.Value;
+
+            if (data is GH_Integer ghInteger)
+                return ghInteger.Value;
+
+            if (data is GH_Boolean ghBoolean)
+                return ghBoolean.Value;
+
+            if (data.CastTo(out string strValue))
+                return strValue;
+
+            return data?.ToString() ?? "";
+        }
+
 
         /// <summary>
         ///     Handle request for current input values from web UI
@@ -528,36 +603,7 @@ namespace ComputeBuilder.Plugin.Components
             }
         }
 
-        /// <summary>
-        ///     Extract the actual value from a Grasshopper data type
-        /// </summary>
-        private object ExtractValue(IGH_Goo goo)
-        {
-            if (goo == null)
-            {
-                return null;
-            }
 
-            if (!goo.IsValid)
-            {
-                return null;
-            }
-
-            try
-            {
-                var scriptVar = goo.ScriptVariable();
-                if (scriptVar != null)
-                {
-                    return scriptVar;
-                }
-
-                return goo.ToString();
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-        }
 
         private void OpenUI()
         {
