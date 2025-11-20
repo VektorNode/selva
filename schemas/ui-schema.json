@@ -73,8 +73,9 @@
       "type": "object",
       "properties": {
         "options": {
-          "type": "array",
-          "items": { "type": "string" }
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Key-value pairs for dropdown options"
         },
         "required": { "type": "boolean" }
       },
@@ -348,7 +349,12 @@
         "stepSize": { "type": "number" },
         "atLeast": { "type": "integer", "default": 1 },
         "atMost": { "type": "integer", "default": 1 },
-        "treeAccess": { "type": "boolean", "default": false }
+        "treeAccess": { "type": "boolean", "default": false },
+        "options": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Key-value pairs for dropdown options"
+        }
       },
       "required": [
         "id",

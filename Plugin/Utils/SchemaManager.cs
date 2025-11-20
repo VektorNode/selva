@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using ComputeBuilder.Plugin.Models.Generated;
 using Grasshopper.Kernel;
 
@@ -59,8 +60,47 @@ namespace ComputeBuilder.Plugin.Utils
                     Default = ghParam?.VolatileData.AllData(true).FirstOrDefault()
                         ?.ScriptVariable(), //TODO: properly handle tree inputs (not a priority for now)
                     AtLeast = param.AtLeast,
-                    AtMost = param.AtMost
+                    AtMost = param.AtMost,
                 };
+
+
+                var typeName = ghParam.GetType().Name;
+                if (typeName.IndexOf("ValueList", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    try
+                    {
+                        // Try common property names and fields for value lists
+                        object rawValues = null;
+                        var candidateMembers = new[] { "Values", "ListItems", "Items" };
+
+                        var prop = ghParam.GetType().GetProperty("Values",
+                            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                        if (prop != null)
+                        {
+                            rawValues = prop.GetValue(ghParam);
+                        }
+
+                        if (rawValues != null)
+                        {
+                            // If it's an IDictionary, copy entries directly
+                            if (rawValues is System.Collections.IDictionary idict)
+                            {
+                                var dict = new Dictionary<string, object>();
+                                foreach (System.Collections.DictionaryEntry de in idict)
+                                {
+                                    var key = de.Key?.ToString() ?? string.Empty;
+                                    dict[key] = de.Value;
+                                }
+
+                                availableParam.Options = dict;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // ignored
+                    }
+                }
 
                 // Extract TreeAccess property via reflection
                 try
@@ -226,8 +266,9 @@ namespace ComputeBuilder.Plugin.Utils
             //Will make proper use of this in the future
             var typeKeywords = new Dictionary<string, string>
             {
-                { "Number", "Number" },
+                { "GetNumberParameter", "Number" },
                 { "Slider", "Number" },
+                { "ValueList", "ValueList" },
                 { "Integer", "Integer" },
                 { "Boolean", "Boolean" },
                 { "Toggle", "Boolean" },

@@ -165,8 +165,11 @@ namespace ComputeBuilder.Plugin.Models.Generated
     public class DropdownWidgetConfig
     {
 
+        /// <summary>
+        /// Key-value pairs for dropdown options
+        /// </summary>
         [JsonProperty("options")]
-        public List<string> Options { get; set; } = new List<string>();
+        public Dictionary<string, object> Options { get; set; }
 
         [JsonProperty("required")]
         public bool? Required { get; set; }
@@ -318,6 +321,12 @@ namespace ComputeBuilder.Plugin.Models.Generated
 
         [JsonProperty("treeAccess")]
         public bool? TreeAccess { get; set; } = false;
+
+        /// <summary>
+        /// Key-value pairs for dropdown options
+        /// </summary>
+        [JsonProperty("options")]
+        public Dictionary<string, object> Options { get; set; }
     }
 
     public class AvailableParameters

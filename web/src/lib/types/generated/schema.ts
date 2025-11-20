@@ -91,7 +91,12 @@ export interface TextWidgetConfig {
  * via the `definition` "DropdownWidgetConfig".
  */
 export interface DropdownWidgetConfig {
-  options: string[];
+  /**
+   * Key-value pairs for dropdown options
+   */
+  options: {
+    [k: string]: string | undefined;
+  };
   required?: boolean;
 }
 /**
@@ -311,6 +316,12 @@ export interface AvailableParameter {
   atLeast?: number;
   atMost?: number;
   treeAccess?: boolean;
+  /**
+   * Key-value pairs for dropdown options
+   */
+  options?: {
+    [k: string]: string | undefined;
+  };
   [k: string]: unknown | undefined;
 }
 /**

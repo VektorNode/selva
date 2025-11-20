@@ -2,7 +2,6 @@
 	import { dragStore } from '$lib/stores/dragStore.svelte';
 	import type { AvailableParameter } from '$lib/types/generated';
 	import * as Card from '$lib/components/ui/card';
-	import { INPUT_COLOR, OUTPUT_COLOR } from '$lib/utils/constants';
 
 	interface Props {
 		parameter: AvailableParameter;

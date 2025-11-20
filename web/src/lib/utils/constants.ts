@@ -19,8 +19,6 @@ export const JSON_INDENT_SPACES = 2;
 // API endpoints
 export const API_BASE_URL = '/api';
 
-export const OUTPUT_COLOR = 'output-color';
-export const INPUT_COLOR = 'input-color';
 
 /**
  * Generate a session ID (8-character UUID)

@@ -6,7 +6,6 @@
 	import * as Card from '$lib/components/ui/card';
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import { ArrowDownToLine, ArrowUpFromLine } from '@lucide/svelte';
-	import { INPUT_COLOR, OUTPUT_COLOR } from '$lib/utils/constants';
 
 	interface BuilderGroupItemProps {
 		item: LayoutItem;
