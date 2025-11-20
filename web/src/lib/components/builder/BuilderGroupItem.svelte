@@ -57,6 +57,8 @@
 		dragStore.clear();
 	}
 
+	
+
 	function handleDragOver(e: DragEvent) {
 		const dragData = dragStore.current;
 

@@ -2,6 +2,7 @@ import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import { getWebSocketState, type WebSocketState } from '$lib/websocket/websocket.svelte';
 import type { UISchema, AvailableParameters } from '$lib/types/generated';
+import { resolve } from '$app/paths';
 
 /**
  * Session initialization result
@@ -28,9 +29,12 @@ export interface SessionState {
  */
 export function createNavigateTo(sessionId: string) {
 	return (path: string) => {
-		goto(`/${path}?session=${sessionId}`);
+		const url = resolve(`/${path}?session=${sessionId}`);
+		goto(url as any);
 	};
 }
+
+
 
 /**
  * Get session ID from URL parameters

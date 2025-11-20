@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using ComputeBuilder.Plugin.Models.Generated;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
@@ -49,24 +50,56 @@ namespace ComputeBuilder.Plugin.Utils
                 ExtractParameterMinMax(param, availableParam, ref minimum, ref maximum);
             }
 
-            // If source is a slider, override with slider values
-            if (ghParam?.SourceCount == 1 && ghParam.Sources[0] is GH_NumberSlider slider)
+            // Helper to detect extreme sentinel values
+            const double extremeThreshold = 7.9e307;
+            bool IsExtreme(double v) => double.IsInfinity(v) || double.IsNaN(v) || Math.Abs(v) >= extremeThreshold;
+
+            // Check if we need to look for alternative sources
+            bool needsAlternativeSource = !minimum.HasValue || !maximum.HasValue ||
+                                          IsExtreme(minimum.GetValueOrDefault()) ||
+                                          IsExtreme(maximum.GetValueOrDefault());
+
+            if (needsAlternativeSource)
             {
+                // Try to get values from a connected slider
+                if (ghParam?.SourceCount == 1 && ghParam.Sources[0] is GH_NumberSlider slider)
+                {
+                    try
+                    {
+                        minimum = Convert.ToDouble(slider.Slider.Minimum);
+                        maximum = Convert.ToDouble(slider.Slider.Maximum);
+                        stepSize = slider.Slider.Epsilon;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(
+                            $"Warning: Failed to extract slider constraints for '{availableParam.Nickname}': {ex.Message}");
+                        // Fall back to defaults
+                        minimum = 0.0;
+                        maximum = 100.0;
+                        stepSize = 1m;
+                    }
+                }
+                else
+                {
+                    // No slider available, use defaults
+                    minimum = 0.0;
+                    maximum = 100.0;
+                    stepSize = 1m;
+                }
+            }
+            else if (ghParam?.SourceCount == 1 && ghParam.Sources[0] is GH_NumberSlider slider)
+            {
+                // Valid parameter values exist, but if there's a slider, just get the step size
                 try
                 {
-                    minimum = (double)slider.Slider.Minimum;
-                    maximum = (double)slider.Slider.Maximum;
                     stepSize = slider.Slider.Epsilon;
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine(
-                        $"Warning: Failed to extract slider constraints for '{availableParam.Nickname}': {ex.Message}");
+                        $"Warning: Failed to extract slider step size for '{availableParam.Nickname}': {ex.Message}");
                 }
-            }
-            else if (getNumberType.Name == "GetNumberParameter")
-            {
-                ExtractDecimalPlacesStepSize(param, ref stepSize);
             }
 
             // Apply extracted values
@@ -86,37 +119,79 @@ namespace ComputeBuilder.Plugin.Utils
             }
         }
 
+        private static bool TryGetPropertyValue<T>(object obj, string propName, out T value)
+        {
+            value = default;
+            if (obj == null) return false;
+
+            var type = obj.GetType();
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic |
+                                       BindingFlags.FlattenHierarchy;
+
+            // Try direct lookup first
+            var prop = type.GetProperty(propName, flags);
+
+            // If not found, search through all properties to catch explicit interface implementations (e.g. "InterfaceName.Property")
+            if (prop == null)
+            {
+                foreach (var p in type.GetProperties(flags))
+                {
+                    if (string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase) ||
+                        p.Name.EndsWith("." + propName, StringComparison.Ordinal))
+                    {
+                        prop = p;
+                        break;
+                    }
+                }
+            }
+
+            if (prop == null) return false;
+
+            var raw = prop.GetValue(obj);
+            if (raw == null) return false;
+
+            try
+            {
+                // direct cast if already correct type
+                if (raw is T t)
+                {
+                    value = t;
+                    return true;
+                }
+
+                // handle common numeric mismatch (decimal -> double)
+                if (typeof(T) == typeof(double) && raw is decimal dec)
+                {
+                    value = (T)(object)Convert.ToDouble(dec);
+                    return true;
+                }
+
+                value = (T)Convert.ChangeType(raw, typeof(T));
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private static void ExtractParameterMinMax(
             IGH_ContextualParameter param,
             AvailableParameter availableParam,
             ref double? minimum,
             ref double? maximum)
         {
-            var minProp = param.GetType().GetProperty("Minimum");
-            var maxProp = param.GetType().GetProperty("Maximum");
-
-            if (minProp == null || maxProp == null)
-                return;
-
-            try
+            // Try reading as double (handles public/nonpublic/explicit)
+            if (TryGetPropertyValue<double>(param, "Minimum", out var minValue))
             {
-                var minValue = Convert.ToDouble(minProp.GetValue(param));
-                var maxValue = Convert.ToDouble(maxProp.GetValue(param));
-
                 if (!double.IsNegativeInfinity(minValue) && !double.IsNaN(minValue) && minValue != 0)
-                {
                     minimum = minValue;
-                }
-
-                if (!double.IsPositiveInfinity(maxValue) && !double.IsNaN(maxValue) && maxValue != 0)
-                {
-                    maximum = maxValue;
-                }
             }
-            catch (InvalidCastException ex)
+
+            if (TryGetPropertyValue<double>(param, "Maximum", out var maxValue))
             {
-                Console.WriteLine(
-                    $"Warning: Failed to cast Minimum/Maximum properties for '{availableParam.Nickname}': {ex.Message}");
+                if (!double.IsPositiveInfinity(maxValue) && !double.IsNaN(maxValue) && maxValue != 0)
+                    maximum = maxValue;
             }
         }
 
@@ -142,7 +217,8 @@ namespace ComputeBuilder.Plugin.Utils
             }
         }
 
-        public static ClearResult ClearContextualParameters(List<IGH_ContextualParameter> contextualParams, GH_Component component)
+        public static ClearResult ClearContextualParameters(List<IGH_ContextualParameter> contextualParams,
+            GH_Component component)
         {
             var clearedCount = 0;
             var errorCount = 0;
@@ -163,7 +239,8 @@ namespace ComputeBuilder.Plugin.Utils
                 catch (Exception ex)
                 {
                     var paramName = (contextParam as IGH_DocumentObject)?.NickName ?? "Unknown";
-                    component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Error clearing {paramName}: {ex.Message}");
+                    component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                        $"Error clearing {paramName}: {ex.Message}");
                     errorCount++;
                 }
             }
@@ -175,7 +252,8 @@ namespace ComputeBuilder.Plugin.Utils
                 ClearedCount = clearedCount,
                 ExpiredCount = recipientsToExpire.Count,
                 ErrorCount = errorCount,
-                Message = $"Cleared: {clearedCount} parameters\nExpired: {recipientsToExpire.Count} components\nErrors: {errorCount}"
+                Message =
+                    $"Cleared: {clearedCount} parameters\nExpired: {recipientsToExpire.Count} components\nErrors: {errorCount}"
             };
         }
 
@@ -194,7 +272,8 @@ namespace ComputeBuilder.Plugin.Utils
             }
         }
 
-        private static void CollectRecipients(IGH_ContextualParameter contextParam, HashSet<IGH_ActiveObject> recipients)
+        private static void CollectRecipients(IGH_ContextualParameter contextParam,
+            HashSet<IGH_ActiveObject> recipients)
         {
             if (contextParam is IGH_Param param)
             {
@@ -218,7 +297,8 @@ namespace ComputeBuilder.Plugin.Utils
                 }
                 catch (Exception ex)
                 {
-                    component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Error expiring component: {ex.Message}");
+                    component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                        $"Error expiring component: {ex.Message}");
                 }
             }
         }

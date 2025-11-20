@@ -69,7 +69,9 @@
 		const handleInitialData = (message: any) => {
 			if (message.sessionId === sessionId) {
 				const result = processInitialDataSchema(message, true);
+
 				availableParams = result.availableParams;
+
 				schema = result.schema;
 
 				if (availableParams.length === 0) {
@@ -270,10 +272,8 @@
 			const sourceIndex = sourceGroup.items.findIndex((i) => i.id === sourceItem.id);
 			if (sourceIndex < 0) return;
 
-			// Remove from source group
 			const [movedItem] = sourceGroup.items.splice(sourceIndex, 1);
 
-			// Add to target group (at the end since it's empty or no specific target)
 			targetGroup.items = [...targetGroup.items, movedItem];
 			return;
 		}

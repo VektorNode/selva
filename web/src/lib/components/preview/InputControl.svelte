@@ -30,16 +30,13 @@
 
 	let { item, value = $bindable(), displayName, onChange}: Props = $props();
 
-	// Generate unique ID for accessibility
 	const inputId = $derived(`input-${item.paramId}-${Math.random().toString(36).substring(2, 11)}`);
-
 
 	function handleChange(newValue: SupportedTypes) {
 		value = newValue;
 		onChange(item.paramId, newValue);
 	}
 
-	// Simple debounce for slider to reduce backend spam while keeping UI smooth
 	const debouncedOnChange = debounce((paramId: string, newValue: SupportedTypes) => {
 		onChange(paramId, newValue);
 	}, 150);
@@ -47,7 +44,6 @@
 	function handleSliderChange(newValue: number) {
 		// Update local value immediately for smooth UI
 		value = newValue;
-		// Debounce the backend update
 		debouncedOnChange(item.paramId, newValue);
 	}
 
@@ -59,6 +55,9 @@
 
 		// If more than 1000 steps, adjust step size to keep it under 1000
 		if (totalSteps > 1000) {
+			console.warn(
+				`Adjusting step size from ${requestedStep} to ${range / 1000} for parameter ${item.paramId} to limit total steps to 1000.`
+			);
 			return range / 1000;
 		}
 

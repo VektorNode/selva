@@ -67,7 +67,6 @@
 		if (schema?.instanceSolve === false) {
 			pendingValues[paramId] = value;
 			hasPendingChanges = true;
-			console.log('[Preview] Manual solve mode: value queued for next calculation');
 			return;
 		}
 

@@ -1,4 +1,41 @@
-import type { AvailableParameter, GrasshopperParamType } from '$lib/types/generated';
+import type {
+	AvailableParameter,
+	GrasshopperParamType,
+	NumberWidgetConfig,
+	TextWidgetConfig,
+	DropdownWidgetConfig,
+	CheckboxWidgetConfig,
+	InputNumberLayoutItem,
+	InputTextLayoutItem,
+	InputDropdownLayoutItem,
+	InputCheckboxLayoutItem,
+	OutputTextLayoutItem,
+	OutputNumberLayoutItem
+} from '$lib/types/generated';
+
+// Widget type literals extracted from schema layout items
+export type InputWidgetType =
+	| InputNumberLayoutItem['widgetType']
+	| InputTextLayoutItem['widgetType']
+	| InputDropdownLayoutItem['widgetType']
+	| InputCheckboxLayoutItem['widgetType'];
+
+export type OutputWidgetType =
+	| OutputTextLayoutItem['widgetType']
+	| OutputNumberLayoutItem['widgetType'];
+
+export type WidgetType = InputWidgetType | OutputWidgetType;
+
+// Union type for all widget configs (from generated schema)
+export type InputWidgetConfig =
+	| NumberWidgetConfig
+	| TextWidgetConfig
+	| DropdownWidgetConfig
+	| CheckboxWidgetConfig;
+
+export type OutputWidgetConfig = Record<string, never>;
+
+export type WidgetConfig = InputWidgetConfig | OutputWidgetConfig;
 
 /**
  * Map Grasshopper parameter types to default UI widget types
@@ -6,7 +43,7 @@ import type { AvailableParameter, GrasshopperParamType } from '$lib/types/genera
 export function mapParamTypeToWidgetType(
 	paramType: GrasshopperParamType,
 	category: 'input' | 'output'
-): string {
+): WidgetType {
 	if (category === 'output') {
 		// Output widgets
 		switch (paramType) {
@@ -36,51 +73,68 @@ export function mapParamTypeToWidgetType(
  * Create default widget configuration based on parameter type
  */
 export function createDefaultWidgetConfig(
-	widgetType: string,
+	widgetType: WidgetType,
 	param: AvailableParameter,
 	category: 'input' | 'output'
-): any {
-	const config: any = {};
+): WidgetConfig {
+	console.log(
+		`Creating default widget config for ${category} parameter ${param.name} of type ${param.paramType} with widget ${widgetType}`
+	);
 
 	if (category === 'input') {
 		switch (widgetType) {
-			case 'number':
-				config.min = param.minimum ?? 0;
-				config.max = param.maximum ?? 100;
-				config.step = param.paramType === 'Integer' ? 1 : (param.stepSize ?? 0.1);
-				config.renderAsSlider = true; // Default to slider rendering for numeric inputs
-				break;
+			case 'number': {
+				const config: NumberWidgetConfig = {
+					minimum: param.minimum ?? 0,
+					maximum: param.maximum ?? 100,
+					step: param.paramType === 'Integer' ? 1 : param.stepSize ?? 0.1,
+					renderAsSlider: true
+				};
+				return config;
+			}
 
-			case 'dropdown':
-				config.options = [];
-				break;
+			case 'dropdown': {
+				const config: DropdownWidgetConfig = {
+					options: []
+				};
+				return config;
+			}
 
-			case 'text':
-				config.placeholder = `Enter ${param.name}`;
-				break;
+			case 'text': {
+				const config: TextWidgetConfig = {
+					placeholder: `Enter ${param.name}`
+				};
+				return config;
+			}
 
-			case 'checkbox':
-				// No additional config needed
-				break;
+			case 'checkbox': {
+				const config: CheckboxWidgetConfig = {};
+				return config;
+			}
 
-			case 'color':
-				config.format = 'hex';
-				break;
+			default: {
+				// Exhaustiveness check - TypeScript will error if we miss a case
+				const _exhaustive: never = widgetType;
+				throw new Error(`Unsupported widget type: ${_exhaustive}`);
+			}
 		}
 	} else {
 		// Output config
 		switch (widgetType) {
-			case '3d-viewer':
-				config.showGrid = true;
-				config.showAxes = true;
-				break;
-
 			case 'text':
 			case 'number':
-				// No additional config needed
-				break;
+				return {};
+
+			case 'dropdown':
+			case 'checkbox':
+				// Input widget types used in output context
+				throw new Error(`Widget type '${widgetType}' is not valid for output parameters`);
+
+			default: {
+				// Exhaustiveness check
+				const _exhaustive: never = widgetType;
+				throw new Error(`Unsupported widget type: ${_exhaustive}`);
+			}
 		}
 	}
-
-	return config;
 }
