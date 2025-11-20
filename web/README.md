@@ -1,40 +1,34 @@
-# sv
+# ComputeBuilder Web App
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit web application for ComputeBuilder - provides visual UI builder and interactive preview for Grasshopper parametric models.
 
-## Creating a project
+## What It Does
 
-If you're seeing this, you've probably already done this step. Congrats!
+- **Schema Builder** (`/builder`) - Drag-and-drop interface for designing UIs
+- **Interactive Preview** (`/preview`) - Real-time parameter control via WebSocket
+- **Rhino Compute Demo** (`/app`) - Standalone mode for cloud deployment
 
-```sh
-# create a new project in the current directory
-npx sv create
+## Development
 
-# create a new project in my-app
-npx sv create my-app
-```
+```bash
+# Install dependencies
+npm install
 
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a
-development server:
-
-```sh
+# Start dev server (http://localhost:5173)
 npm run dev
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
+# Type checking
+npm run check
 
-## Building
-
-To create a production version of your app:
-
-```sh
+# Build for production
 npm run build
 ```
 
-You can preview the production build with `npm run preview`.
+## Key Features
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target
-> environment.
+- Real-time WebSocket communication with Grasshopper
+- Three.js 3D geometry viewer
+- Tabbed layouts with drag-and-drop configuration
+- Rhino Compute compatibility
+
+See the [main README](../README.md) for complete documentation.

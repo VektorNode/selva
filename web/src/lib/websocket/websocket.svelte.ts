@@ -26,7 +26,6 @@ export class WebSocketState {
 	isSolving = $state(false);
 
 	constructor(private url: string = 'ws://localhost:8765') {
-		// Register internal handler for solving state
 		this.on('solvingState', (data) => {
 			if (data && typeof data === 'object' && 'isSolving' in data) {
 				this.isSolving = Boolean(data.isSolving);
