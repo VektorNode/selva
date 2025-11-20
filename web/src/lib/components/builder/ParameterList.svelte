@@ -5,7 +5,6 @@
 
 	interface ParameterListProps {
 		title: string;
-		icon: string; //Icon name for Iconify
 		parameters: AvailableParameter[];
 		category: 'input' | 'output';
 		emptyMessage?: string;

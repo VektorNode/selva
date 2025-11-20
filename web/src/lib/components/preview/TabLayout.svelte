@@ -133,11 +133,7 @@
 													bind:value={values[input.id]}
 													displayName={layoutItem.displayName}
 													onChange={onValueChange}
-													debounceMs={debounceSliders &&
-													layoutItem.widgetType === 'number' &&
-													(layoutItem.config as any).renderAsSlider
-														? 5
-														: 0}
+													
 												/>
 											{/if}
 										{:else if layoutItem.type === 'output'}

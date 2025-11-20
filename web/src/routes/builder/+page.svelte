@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { getWebSocketState } from '$lib/api/websocket.svelte';
+	import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 	import { PageContainer, PageHeader, Panel } from '$lib/components/layout';
 	import { StateDisplay, Button } from '$lib/components/ui';
 	import {
@@ -464,7 +464,6 @@
 
 							<ParameterList
 								title="Inputs"
-								icon="mdi:input"
 								parameters={availableInputs}
 								category="input"
 								emptyMessage="No contextual parameters found."
@@ -472,7 +471,6 @@
 
 							<ParameterList
 								title="Outputs"
-								icon="mdi:output"
 								parameters={availableOutputs}
 								category="output"
 								emptyMessage="No context output components found."

@@ -82,7 +82,6 @@ namespace ComputeBuilder.Plugin.Utils
                 }
             }
 
-            // Schedule solution using recommended pattern
             if (_pendingExpirations.Count > 0)
             {
                 document.ScheduleSolution(10, ExpireCallback);

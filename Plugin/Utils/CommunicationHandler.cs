@@ -58,54 +58,59 @@ namespace ComputeBuilder.Plugin.Utils
                     // This prevents duplicate initial data being sent
                 };
 
-                // Handle incoming messages
+                // Handle incoming messages asynchronously to avoid blocking UI thread
                 _webSocketServer.OnMessageReceived += (sender, message) =>
                 {
-                    try
+                    // Process message on background thread to avoid blocking WebSocket thread
+                    Task.Run(() =>
                     {
-                        var msg = JsonConvert.DeserializeObject<WebSocketMessage>(message);
+                        try
+                        {
+                            var msg = JsonConvert.DeserializeObject<WebSocketMessage>(message);
 
-                        if (msg.Type == "valueUpdate")
-                        {
-                            var valueMsg = JsonConvert.DeserializeObject<ValueUpdateMessage>(message);
-                            if (valueMsg != null && valueMsg.SessionId == _sessionId)
+                            if (msg.Type == "valueUpdate")
                             {
-                                OnValuesReceived?.Invoke(this, valueMsg.Values);
+                                var valueMsg = JsonConvert.DeserializeObject<ValueUpdateMessage>(message);
+                                if (valueMsg != null && valueMsg.SessionId == _sessionId)
+                                {
+                                    OnValuesReceived?.Invoke(this, valueMsg.Values);
+                                }
+                            }
+                            else if (msg.Type == "requestCurrentValues")
+                            {
+                                if (msg.SessionId == _sessionId)
+                                {
+                                    logMessage?.Invoke("Web UI requested current values");
+                                    OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty);
+                                }
+                            }
+                            else if (msg.Type == "requestInitialData")
+                            {
+                                if (msg.SessionId == _sessionId)
+                                {
+                                    logMessage?.Invoke("Web UI requested initial data");
+                                    OnClientConnected?.Invoke(this, EventArgs.Empty);
+                                }
+                            }
+                            else if (msg.Type == "saveSchema")
+                            {
+                                var schemaMsg = JsonConvert.DeserializeObject<SchemaSaveMessage>(message);
+                                if (schemaMsg != null && schemaMsg.SessionId == _sessionId)
+                                {
+                                    logMessage?.Invoke("Web UI saving schema");
+                                    OnSchemaSaveRequested?.Invoke(this, schemaMsg.Schema);
+                                }
                             }
                         }
-                        else if (msg.Type == "requestCurrentValues")
+                        catch (Exception ex)
                         {
-                            if (msg.SessionId == _sessionId)
-                            {
-                                logMessage?.Invoke("Web UI requested current values");
-                                OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty);
-                            }
+                            logMessage?.Invoke($"WebSocket message error: {ex.Message}");
                         }
-                        else if (msg.Type == "requestInitialData")
-                        {
-                            if (msg.SessionId == _sessionId)
-                            {
-                                logMessage?.Invoke("Web UI requested initial data");
-                                OnClientConnected?.Invoke(this, EventArgs.Empty);
-                            }
-                        }
-                        else if (msg.Type == "saveSchema")
-                        {
-                            var schemaMsg = JsonConvert.DeserializeObject<SchemaSaveMessage>(message);
-                            if (schemaMsg != null && schemaMsg.SessionId == _sessionId)
-                            {
-                                logMessage?.Invoke("Web UI saving schema");
-                                OnSchemaSaveRequested?.Invoke(this, schemaMsg.Schema);
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        logMessage?.Invoke($"WebSocket message error: {ex.Message}");
-                    }
+                    });
                 };
 
-                _webSocketServer.StartAsync().Wait();
+                // Start asynchronously without blocking
+                Task.Run(async () => await _webSocketServer.StartAsync()).Wait(5000);
                 logMessage?.Invoke($"WebSocket Port: {_port}");
             }
             catch (Exception ex)

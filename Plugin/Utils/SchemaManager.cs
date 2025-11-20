@@ -223,6 +223,7 @@ namespace ComputeBuilder.Plugin.Utils
 
             var typeName = param.GetType().Name;
 
+            //Will make proper use of this in the future
             var typeKeywords = new Dictionary<string, string>
             {
                 { "Number", "Number" },
@@ -248,7 +249,6 @@ namespace ComputeBuilder.Plugin.Utils
                 { "Geometry", "Geometry" }
             };
 
-            // Try to find matching keyword in type name
             foreach (var kvp in typeKeywords)
             {
                 if (typeName.Contains(kvp.Key))

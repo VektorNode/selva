@@ -52,6 +52,12 @@ namespace ComputeBuilder.Plugin.Models.Generated
 
         [JsonProperty("enable3dViewer")]
         public bool Enable3dViewer { get; set; } = false;
+
+        /// <summary>
+        /// If true, changes trigger immediate solving. If false, user must press Calculate button.
+        /// </summary>
+        [JsonProperty("instanceSolve")]
+        public bool? InstanceSolve { get; set; } = true;
     }
 
     // ============================================================================

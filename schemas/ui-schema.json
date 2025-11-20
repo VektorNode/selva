@@ -281,7 +281,12 @@
           "items": { "$ref": "#/definitions/OutputParamSchema" }
         },
         "layout": { "$ref": "#/definitions/LayoutConfig" },
-        "enable3dViewer": { "type": "boolean", "default": false }
+        "enable3dViewer": { "type": "boolean", "default": false },
+        "instanceSolve": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, changes trigger immediate solving. If false, user must press Calculate button."
+        }
       },
       "required": [
         "id",

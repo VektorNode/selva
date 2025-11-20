@@ -26,29 +26,32 @@
 		value?: unknown;
 		displayName?: string;
 		onChange: (paramId: string, value: SupportedTypes) => void;
-		debounceMs?: number;
 	}
 
-	let { item, value = $bindable(), displayName, onChange, debounceMs = 0 }: Props = $props();
+	let { item, value = $bindable(), displayName, onChange}: Props = $props();
 
 	// Generate unique ID for accessibility
 	const inputId = $derived(`input-${item.paramId}-${Math.random().toString(36).substring(2, 11)}`);
 
-	const debouncedOnChange = debounce((val: any) => onChange(item.paramId, val), debounceMs);
 
 	function handleChange(newValue: SupportedTypes) {
 		value = newValue;
-		console.log('InputControl: value changed to', debounceMs);
-		if (debounceMs > 0) {
-			debouncedOnChange(newValue);
-		} else {
 			onChange(item.paramId, newValue);
-		}
 	}
+
+	// For slider: separate local state for smooth dragging (immediate visual feedback)
+	let localSliderValue = $state<number>(0);
+
+	// Sync local slider value when external value changes (e.g., from WebSocket)
+	$effect(() => {
+		if (isNumberWidget(item) && item.config.renderAsSlider && typeof value === 'number') {
+			localSliderValue = value;
+		}
+	});
 
 	// For slider rendering, get numeric value
 	let sliderValue = $derived(
-		isNumberWidget(item) && item.config.renderAsSlider ? (typeof value === 'number' ? value : 0) : 0
+		isNumberWidget(item) && item.config.renderAsSlider ? localSliderValue : 0
 	);
 </script>
 

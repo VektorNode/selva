@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ComputeBuilder.Plugin.Models.Generated;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
@@ -139,6 +140,95 @@ namespace ComputeBuilder.Plugin.Utils
             {
                 Console.WriteLine($"Warning: Failed to extract DecimalPlaces: {ex.Message}");
             }
+        }
+
+        public static ClearResult ClearContextualParameters(List<IGH_ContextualParameter> contextualParams, GH_Component component)
+        {
+            var clearedCount = 0;
+            var errorCount = 0;
+            var recipientsToExpire = new HashSet<IGH_ActiveObject>();
+
+            foreach (var contextParam in contextualParams)
+            {
+                try
+                {
+                    ClearSingleParameter(contextParam);
+                    clearedCount++;
+
+                    var paramName = (contextParam as IGH_DocumentObject)?.NickName ?? "Unknown";
+                    component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, $"Cleared: {paramName}");
+
+                    CollectRecipients(contextParam, recipientsToExpire);
+                }
+                catch (Exception ex)
+                {
+                    var paramName = (contextParam as IGH_DocumentObject)?.NickName ?? "Unknown";
+                    component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Error clearing {paramName}: {ex.Message}");
+                    errorCount++;
+                }
+            }
+
+            ExpireRecipients(recipientsToExpire, component);
+
+            return new ClearResult
+            {
+                ClearedCount = clearedCount,
+                ExpiredCount = recipientsToExpire.Count,
+                ErrorCount = errorCount,
+                Message = $"Cleared: {clearedCount} parameters\nExpired: {recipientsToExpire.Count} components\nErrors: {errorCount}"
+            };
+        }
+
+        private static void ClearSingleParameter(IGH_ContextualParameter contextParam)
+        {
+            var clearMethod = contextParam.GetType().GetMethod("ClearContextualData");
+            if (clearMethod != null)
+            {
+                clearMethod.Invoke(contextParam, null);
+            }
+
+            var collectVolatileData = contextParam.GetType().GetMethod("CollectVolatileData_FromSources");
+            if (collectVolatileData != null)
+            {
+                collectVolatileData.Invoke(contextParam, null);
+            }
+        }
+
+        private static void CollectRecipients(IGH_ContextualParameter contextParam, HashSet<IGH_ActiveObject> recipients)
+        {
+            if (contextParam is IGH_Param param)
+            {
+                foreach (var recipient in param.Recipients)
+                {
+                    if (recipient is IGH_ActiveObject activeRecipient)
+                    {
+                        recipients.Add(activeRecipient);
+                    }
+                }
+            }
+        }
+
+        private static void ExpireRecipients(HashSet<IGH_ActiveObject> recipients, GH_Component component)
+        {
+            foreach (var recipient in recipients)
+            {
+                try
+                {
+                    recipient.ExpirePreview(false);
+                }
+                catch (Exception ex)
+                {
+                    component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Error expiring component: {ex.Message}");
+                }
+            }
+        }
+
+        public class ClearResult
+        {
+            public int ClearedCount { get; set; }
+            public int ExpiredCount { get; set; }
+            public int ErrorCount { get; set; }
+            public string Message { get; set; }
         }
     }
 }

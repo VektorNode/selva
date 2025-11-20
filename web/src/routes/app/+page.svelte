@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
-	import { TabLayout, Layout } from '$lib/components/preview';
+	import { TabLayout } from '$lib/components/preview';
 	import { PageContainer, PageHeader } from '$lib/components/layout';
-	import { StateDisplay } from '$lib/components/ui';
+	import { StateDisplay, Button } from '$lib/components/ui';
 	import { initThree, updateScene, GrasshopperResponseProcessor } from 'rhino-compute-core';
 	import * as THREE from 'three';
 	import { type OrbitControls } from 'three/examples/jsm/Addons.js';
@@ -22,6 +22,10 @@
 	let camera: THREE.PerspectiveCamera;
 	let controls: OrbitControls;
 	let viewerInitialized = $state(false);
+
+	// Manual solve mode: track pending changes
+	let pendingValues = $state<Record<string, unknown>>({});
+	let hasPendingChanges = $state(false);
 
 	$effect(() => {
 		if (schema) {
@@ -43,6 +47,19 @@
 	async function handleValueChange(parameterId: string, value: unknown) {
 		values[parameterId] = value;
 
+		// If instanceSolve is false, track pending changes instead of solving immediately
+		if (schema?.instanceSolve === false) {
+			pendingValues[parameterId] = value;
+			hasPendingChanges = true;
+			console.log('[App] Manual solve mode: value queued for next calculation');
+			return;
+		}
+
+		// Instance solve mode: solve immediately
+		await performSolve();
+	}
+
+	async function performSolve() {
 		try {
 			solving = true;
 			error = '';
@@ -97,12 +114,24 @@
 			});
 
 			values = { ...values, ...mappedOutputs };
+
+			// Clear pending changes after successful solve
+			pendingValues = {};
+			hasPendingChanges = false;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to solve definition';
 			console.error('Solve error:', err);
 		} finally {
 			solving = false;
 		}
+	}
+
+	/**
+	 * Manual solve: send all pending changes to Rhino Compute
+	 */
+	function handleCalculate() {
+		if (!hasPendingChanges) return;
+		performSolve();
 	}
 
 	const badgeConfig = $derived(
@@ -146,13 +175,28 @@
 							onValueChange={handleValueChange}
 							debounceSliders={false}
 						/>
-					{:else}
-						<Layout
-							{schema}
-							bind:values
-							onValueChange={handleValueChange}
-							debounceSliders={false}
-						/>
+				
+					{/if}
+
+					{#if schema.instanceSolve === false}
+						<div class="sticky bottom-0 mt-6 flex justify-center">
+							<Button
+								variant={hasPendingChanges ? 'default' : 'outline'}
+								size="lg"
+								onclick={handleCalculate}
+								disabled={!hasPendingChanges || solving}
+								class="shadow-lg"
+							>
+								{#if solving}
+									<div class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
+									Solving...
+								{:else if hasPendingChanges}
+									Calculate
+								{:else}
+									No Changes
+								{/if}
+							</Button>
+						</div>
 					{/if}
 				</div>
 

@@ -1,6 +1,6 @@
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
-import { getWebSocketClient, type WebSocketClient } from '$lib/api/websocket.svelte';
+import { getWebSocketState, type WebSocketClient } from '$lib/websocket/websocket.svelte';
 import type { UISchema, AvailableParameters } from '$lib/types/generated';
 
 /**
@@ -43,7 +43,7 @@ export function getSessionIdFromUrl(): string {
  * Initialize WebSocket connection for a session
  */
 export async function initializeWebSocketSession(sessionId: string): Promise<SessionInitResult> {
-	const wsClient = getWebSocketClient();
+	const wsClient = getWebSocketState();
 
 	if (!sessionId) {
 		return {
@@ -91,6 +91,10 @@ export function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | 
 	if (!schema.layout.tabs) {
 		schema.layout.tabs = [];
 	}
+	// Ensure instanceSolve has a default value
+	if (schema.instanceSolve === undefined) {
+		schema.instanceSolve = true;
+	}
 
 	return schema;
 }
@@ -113,7 +117,8 @@ export function createDefaultSchema(): UISchema {
 			tabs: [],
 			items: []
 		},
-		enable3dViewer: false
+		enable3dViewer: false,
+		instanceSolve: true
 	};
 }
 

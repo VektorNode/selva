@@ -94,24 +94,20 @@ namespace ComputeBuilder.Plugin.Components
             var enable = false;
             var refresh = false;
             var openPreview = false;
-            var loadInitalValues = false; // Maybe using it later
 
             DA.GetData(0, ref enable);
             DA.GetData(1, ref refresh);
             DA.GetData(2, ref openPreview);
 
-            // Edge detection for button support
             var enableRising = enable && !_lastEnable;
             var enableFalling = !enable && _lastEnable;
             var refreshRising = refresh && !_lastRefresh;
             var openPreviewRising = openPreview && !_lastOpenPreview;
 
-            // Update last states
             _lastEnable = enable;
             _lastRefresh = refresh;
             _lastOpenPreview = openPreview;
 
-            // Toggle enabled state (supports both buttons and toggles)
             if (enableRising)
             {
                 _isEnabled = true;
@@ -119,24 +115,19 @@ namespace ComputeBuilder.Plugin.Components
             }
             else if (enable)
             {
-                // Still true - increment counter
                 _enableTrueCount++;
             }
             else if (enableFalling)
             {
-                // Only disable on falling edge if it was a toggle (true for multiple solves)
-                // A button will only be true for 1 solve before going false
+
                 if (_enableTrueCount > 1)
                 {
-                    // This was a toggle being turned off - disable
                     _isEnabled = false;
                 }
 
-                // else: This was a button press (single solve cycle) - keep enabled
                 _enableTrueCount = 0;
             }
 
-            // Initialize components on first run
             if (_schemaManager == null)
             {
                 if (string.IsNullOrEmpty(_sessionId))
@@ -182,7 +173,6 @@ namespace ComputeBuilder.Plugin.Components
                     }
                 }
 
-                // Load and validate embedded schema/values only
                 if (_embeddedSchema != null)
                 {
                     _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
@@ -199,7 +189,6 @@ namespace ComputeBuilder.Plugin.Components
                 return;
             }
 
-            // Register document events for cleanup
             if (_currentDocument != document)
             {
                 UnregisterDocumentEvents();
@@ -207,7 +196,6 @@ namespace ComputeBuilder.Plugin.Components
                 RegisterDocumentEvents();
             }
 
-            // Scan parameters on enable or refresh (on rising edge)
             if (enableRising || refreshRising)
             {
                 _availableParams = _schemaManager.ScanParameters(document);
@@ -246,7 +234,6 @@ namespace ComputeBuilder.Plugin.Components
                     _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
                 }
 
-                // Open preview on rising edge (button press)
                 if (openPreviewRising)
                 {
                     OpenUI();
@@ -275,7 +262,7 @@ namespace ComputeBuilder.Plugin.Components
                 {
                     // Notify clients before stopping
                     var _ = _communicationHandler.BroadcastMessage("disconnecting", new { reason = "Component disabled" });
-                    System.Threading.Thread.Sleep(100); // Give clients time to receive message
+                    System.Threading.Thread.Sleep(100);
                 }
                 catch
                 {
@@ -284,6 +271,11 @@ namespace ComputeBuilder.Plugin.Components
 
                 _communicationHandler.Stop();
             }
+
+
+            // Make the contextual parameters responsive again by clearing their data
+            var contextualParams = document.Objects.OfType<IGH_ContextualParameter>().ToList();
+            var result = ParameterTypeHelper.ClearContextualParameters(contextualParams, this);
 
             _valueApplicator?.Clear();
             Message = "WebSocket Inactive";
@@ -303,9 +295,6 @@ namespace ComputeBuilder.Plugin.Components
         protected override void AfterSolveInstance()
         {
             base.AfterSolveInstance();
-
-            // Note: Output collection happens in OnSolutionEnd event handler
-            // to ensure all components have finished computing
         }
 
         /// <summary>
@@ -315,7 +304,6 @@ namespace ComputeBuilder.Plugin.Components
         {
             try
             {
-                // Ignore value updates while Grasshopper is solving
                 if (_isSolving)
                 {
                     return;
@@ -333,7 +321,6 @@ namespace ComputeBuilder.Plugin.Components
 
                 if (updated > 0)
                 {
-                    // Update embedded values (will be saved with .gh file)
                     _embeddedValues = new Dictionary<string, object>(values);
                 }
             }
@@ -356,7 +343,6 @@ namespace ComputeBuilder.Plugin.Components
                     return;
                 }
 
-                // Get current values from parameters
                 var currentValues = CollectCurrentValues(document);
 
                 // Broadcast initial data to the newly connected client
@@ -382,10 +368,7 @@ namespace ComputeBuilder.Plugin.Components
                     return;
                 }
 
-                // Validate and store the schema
                 _embeddedSchema = _schemaManager.ValidateSchema(schema, document);
-
-                // Broadcast success
                 var task = _communicationHandler.BroadcastSchemaSaved(true);
 
                 //Expire to update component to reflect new schema (When user saves it will now properly internalize the new schema)
@@ -468,7 +451,6 @@ namespace ComputeBuilder.Plugin.Components
 
                 var currentValues = CollectCurrentValues(document);
 
-                // Broadcast current values to web UI
                 if (currentValues.Count > 0)
                 {
                     var _ = _communicationHandler.BroadcastCurrentValues(currentValues);
@@ -537,7 +519,6 @@ namespace ComputeBuilder.Plugin.Components
             {
                 try
                 {
-                    // Broadcast via WebSocket
                     var _ = _communicationHandler.BroadcastOutputs(outputValues);
                 }
                 catch (Exception ex)

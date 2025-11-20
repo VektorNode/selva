@@ -30,6 +30,22 @@
 				onCheckedChange={(checked) => (schema.enable3dViewer = !!checked)}
 			/>
 			<Label for="enable-3d-viewer" class="cursor-pointer">Enable 3D Viewer Output</Label>
+			
 		</div>
+				<p class="text-xs text-muted-foreground">
+			When enabled, a 3D viewer will be added to the UI to visualize geometry outputs.
+		</p>
+		<div class="flex items-center gap-2">
+			<Checkbox
+				id="instance-solve"
+				checked={schema.instanceSolve ?? true}
+				onCheckedChange={(checked) => (schema.instanceSolve = !!checked)}
+			/>
+			<Label for="instance-solve" class="cursor-pointer">Instant Solve</Label>
+		</div>
+		<p class="text-xs text-muted-foreground">
+			When disabled, users must press a "Calculate" button to trigger solving instead of automatic
+			updates.
+		</p>
 	</div>
 </Panel>

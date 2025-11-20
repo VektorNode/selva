@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { getWebSocketState } from '$lib/api/websocket.svelte';
+	import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 	import type { UISchema, AvailableParameters, SupportedTypes } from '$lib/types/generated';
-	import { TabLayout, Layout as LegacyLayout } from '$lib/components/preview';
+	import { TabLayout } from '$lib/components/preview';
 	import { PageContainer, PageHeader } from '$lib/components/layout';
 	import { StateDisplay, Button } from '$lib/components/ui';
 	import {
@@ -38,6 +38,10 @@
 	// Track if we're updating values from remote (to avoid feedback loop)
 	let isRemoteUpdate = $state(false);
 
+	// Manual solve mode: track pending changes
+	let pendingValues = $state<Record<string, unknown>>({});
+	let hasPendingChanges = $state(false);
+
 	function showNotification(message: string, duration: number = 3000) {
 		schemaUpdateNotification = message;
 		if (notificationTimer) {
@@ -63,6 +67,15 @@
 		// Update local values (using GUID as key)
 		values[paramId] = value;
 
+		// If instanceSolve is false, track pending changes instead of sending immediately
+		if (schema?.instanceSolve === false) {
+			pendingValues[paramId] = value;
+			hasPendingChanges = true;
+			console.log('[Preview] Manual solve mode: value queued for next calculation');
+			return;
+		}
+
+		// Instance solve mode: send immediately
 		if (runtimeMode === 'local' && wsState.connected) {
 			console.log('[Preview] Sending value update to Grasshopper (GUID keys):', {
 				[paramId]: value
@@ -72,6 +85,22 @@
 			wsState.sendValueUpdate(sessionId, $state.snapshot(values));
 		} else if (!wsState.connected) {
 			console.warn('[Preview] Cannot send values - WebSocket not connected');
+		}
+	}
+
+	/**
+	 * Manual solve: send all pending changes to Grasshopper
+	 */
+	function handleCalculate() {
+		if (!hasPendingChanges) return;
+
+		if (runtimeMode === 'local' && wsState.connected) {
+			console.log('[Preview] Sending pending values to Grasshopper:', pendingValues);
+			wsState.sendValueUpdate(sessionId, $state.snapshot(values));
+			pendingValues = {};
+			hasPendingChanges = false;
+		} else if (!wsState.connected) {
+			console.warn('[Preview] Cannot calculate - WebSocket not connected');
 		}
 	}
 
@@ -276,7 +305,7 @@
 		</nav>
 	</PageHeader>
 
-	<div class="flex-1 overflow-auto">
+	<div class="flex-1 overflow-auto relative">
 		{#if loading}
 			<div class="flex min-h-[400px] items-center justify-center">
 				<StateDisplay type="loading" size="large" message="Loading preview..." />
@@ -294,15 +323,40 @@
 						onValueChange={handleValueChange}
 						debounceSliders={true}
 					/>
-				{:else}
-					<LegacyLayout
-						{schema}
-						bind:values
-						onValueChange={handleValueChange}
-						debounceSliders={true}
-					/>
+				{/if}
+
+				{#if schema.instanceSolve === false}
+					<div class="sticky bottom-8 mt-8 flex justify-center">
+						<Button
+							variant={hasPendingChanges ? 'default' : 'outline'}
+							size="lg"
+							onclick={handleCalculate}
+							disabled={!hasPendingChanges || wsState.isSolving}
+							class="shadow-lg"
+						>
+							{#if wsState.isSolving}
+								<div class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
+								Solving...
+							{:else if hasPendingChanges}
+								Calculate
+							{:else}
+								No Changes
+							{/if}
+						</Button>
+					</div>
 				{/if}
 			</div>
+
+			{#if wsState.isSolving}
+				<div
+					class="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-50"
+				>
+					<div class="flex flex-col items-center gap-4">
+						<div class="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+						<div class="text-lg font-medium text-foreground">Solving in Grasshopper...</div>
+					</div>
+				</div>
+			{/if}
 		{/if}
 	</div>
 

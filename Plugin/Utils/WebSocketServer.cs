@@ -40,11 +40,11 @@ namespace ComputeBuilder.Plugin.Utils
         /// <summary>
         ///     Start the WebSocket server
         /// </summary>
-        public async Task StartAsync()
+        public Task StartAsync()
         {
             if (IsRunning)
             {
-                return;
+                return Task.CompletedTask;
             }
 
             _cancellationTokenSource = new CancellationTokenSource();
@@ -56,8 +56,10 @@ namespace ComputeBuilder.Plugin.Utils
                 _httpListener.Start();
                 IsRunning = true;
 
-                // Start accepting connections
+                // Start accepting connections in background
                 _ = Task.Run(async () => await AcceptConnectionsAsync(_cancellationTokenSource.Token));
+
+                return Task.CompletedTask;
             }
             catch (Exception ex)
             {
@@ -113,38 +115,50 @@ namespace ComputeBuilder.Plugin.Utils
             var buffer = Encoding.UTF8.GetBytes(message);
             var segment = new ArraySegment<byte>(buffer);
 
-            var clientsToRemove = new List<WebSocket>();
-
+            List<WebSocket> clientsCopy;
             lock (_clientsLock)
             {
-                foreach (var client in _connectedClients)
+                clientsCopy = new List<WebSocket>(_connectedClients);
+            }
+
+            var clientsToRemove = new List<WebSocket>();
+
+            // Send to all clients without holding lock
+            foreach (var client in clientsCopy)
+            {
+                if (client.State == WebSocketState.Open)
                 {
-                    if (client.State == WebSocketState.Open)
+                    try
                     {
-                        try
-                        {
-                            client.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None).Wait();
-                        }
-                        catch
-                        {
-                            clientsToRemove.Add(client);
-                        }
+                        // Use await instead of Wait() to avoid blocking
+                        await client.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
                     }
-                    else
+                    catch
                     {
                         clientsToRemove.Add(client);
                     }
                 }
-
-                foreach (var client in clientsToRemove)
+                else
                 {
-                    _connectedClients.Remove(client);
-                    try
+                    clientsToRemove.Add(client);
+                }
+            }
+
+            // Remove dead clients
+            if (clientsToRemove.Count > 0)
+            {
+                lock (_clientsLock)
+                {
+                    foreach (var client in clientsToRemove)
                     {
-                        client.Dispose();
-                    }
-                    catch
-                    {
+                        _connectedClients.Remove(client);
+                        try
+                        {
+                            client.Dispose();
+                        }
+                        catch
+                        {
+                        }
                     }
                 }
             }
