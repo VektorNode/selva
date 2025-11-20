@@ -148,7 +148,7 @@
       cursor-grab p-2 transition-all hover:border-primary hover:shadow-sm
       ${isDragging ? 'cursor-grabbing opacity-50' : ''}
       ${isDragOver ? 'border-primary' : ''}
-      ${item.type === 'input' ? INPUT_COLOR : OUTPUT_COLOR}
+      ${item.type === 'input' ? "bg-inputparam" : "bg-outputparam"}
       mb-2 gap-1.5
     `}
 		draggable="true"

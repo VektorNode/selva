@@ -136,7 +136,6 @@ export class WebSocketState {
 			return;
 		}
 
-		console.log('[WebSocket] Sending value update:', values);
 		this.send('valueUpdate', { sessionId, values });
 	}
 

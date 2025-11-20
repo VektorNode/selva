@@ -1,5 +1,4 @@
 @import 'tailwindcss';
-
 @import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
@@ -37,6 +36,8 @@
 	--sidebar-accent-foreground: oklch(0.205 0 0);
 	--sidebar-border: oklch(0.922 0 0);
 	--sidebar-ring: oklch(0.708 0 0);
+	--inputparam: oklch(92.494% 0.00011 271.152 / 0.774);
+	--outputparam: oklch(87.455% 0.05075 323.842 / 0.863);
 }
 
 .dark {
@@ -71,6 +72,8 @@
 	--sidebar-accent-foreground: oklch(0.985 0 0);
 	--sidebar-border: oklch(1 0 0 / 10%);
 	--sidebar-ring: oklch(0.556 0 0);
+	--inputparam: oklch(0% 0 0 / 0.61);
+	--outputparam: oklch(27.82% 0.05672 324.177 / 0.863);
 }
 
 @theme inline {
@@ -109,6 +112,8 @@
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-ring: var(--sidebar-ring);
+	--color-inputparam: var(--inputparam);
+	--color-outputparam: var(--outputparam);
 }
 
 @layer base {
