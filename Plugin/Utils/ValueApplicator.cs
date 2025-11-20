@@ -13,6 +13,10 @@ namespace ComputeBuilder.Plugin.Utils
     /// </summary>
     public class ValueApplicator
     {
+        // Security constraints
+        private const int MAX_STRING_LENGTH = 100000; // 100KB max string length
+        private const int MAX_ARRAY_SIZE = 10000; // Max items in array
+
         private static readonly Dictionary<string, (Type GhType, Func<object, IGH_Goo> Converter)> TypeHandlers =
             new Dictionary<string, (Type GhType, Func<object, IGH_Goo> Converter)>()
             {
@@ -59,6 +63,12 @@ namespace ComputeBuilder.Plugin.Utils
                     if (!HasValueChanged(inputKey, value))
                     {
                         continue;
+                    }
+
+                    // Validate value before applying (security check)
+                    if (!ValidateValue(input, value, addMessage))
+                    {
+                        continue; // Skip invalid values
                     }
 
                     if (paramObject is IGH_ContextualParameter contextParam)
@@ -139,6 +149,101 @@ namespace ComputeBuilder.Plugin.Utils
         public void Clear()
         {
             _lastAppliedValues.Clear();
+        }
+
+        /// <summary>
+        ///     Validate input value against security constraints and parameter metadata
+        /// </summary>
+        private bool ValidateValue(InputParamSchema input, object value,
+            Action<GH_RuntimeMessageLevel, string> addMessage)
+        {
+            if (value == null)
+            {
+                return true; // null is acceptable
+            }
+
+            try
+            {
+                // Validate string length
+                if (value is string strValue)
+                {
+                    if (strValue.Length > MAX_STRING_LENGTH)
+                    {
+                        addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
+                            $"String value too long for '{input.Name}' (max {MAX_STRING_LENGTH} characters)");
+                        return false;
+                    }
+                }
+
+                // Validate numeric ranges
+                if (input.ParamType == "Number" || input.ParamType == "Integer")
+                {
+                    double numValue;
+                    try
+                    {
+                        numValue = Convert.ToDouble(value);
+                    }
+                    catch (Exception)
+                    {
+                        addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
+                            $"Invalid numeric value for '{input.Name}'");
+                        return false;
+                    }
+
+                    // Check parameter-defined constraints
+                    if (input.Minimum.HasValue && numValue < input.Minimum.Value)
+                    {
+                        addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+                            $"Value {numValue} for '{input.Name}' is below minimum {input.Minimum.Value}. Clamping to minimum.");
+                        return false; // Don't apply, let parameter handle default
+                    }
+
+                    if (input.Maximum.HasValue && numValue > input.Maximum.Value)
+                    {
+                        addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+                            $"Value {numValue} for '{input.Name}' is above maximum {input.Maximum.Value}. Clamping to maximum.");
+                        return false; // Don't apply, let parameter handle default
+                    }
+
+                    // Sanity check for extremely large numbers (potential DoS)
+                    if (double.IsInfinity(numValue) || double.IsNaN(numValue))
+                    {
+                        addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
+                            $"Invalid numeric value for '{input.Name}' (Infinity or NaN)");
+                        return false;
+                    }
+                }
+
+                // Validate integer conversion
+                if (input.ParamType == "Integer")
+                {
+                    try
+                    {
+                        var intValue = Convert.ToInt32(value);
+                        // Check if value is within int32 range
+                        if (intValue < int.MinValue || intValue > int.MaxValue)
+                        {
+                            addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
+                                $"Integer value out of range for '{input.Name}'");
+                            return false;
+                        }
+                    }
+                    catch (OverflowException)
+                    {
+                        addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
+                            $"Integer value overflow for '{input.Name}'");
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
+                    $"Validation error for '{input.Name}': {ex.Message}");
+                return false;
+            }
         }
 
         /// <summary>

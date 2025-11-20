@@ -17,6 +17,16 @@ namespace ComputeBuilder.Plugin.Utils
         private bool _disposed;
         private WebSocketServer _webSocketServer;
 
+        /// <summary>
+        ///     Secure JSON serializer settings - prevents type confusion attacks
+        /// </summary>
+        private static readonly JsonSerializerSettings SecureJsonSettings = new JsonSerializerSettings
+        {
+            TypeNameHandling = TypeNameHandling.None, // Prevent $type injection attacks
+            MaxDepth = 32, // Prevent deep nesting DoS attacks
+            MetadataPropertyHandling = MetadataPropertyHandling.Ignore // Ignore $id, $ref, etc.
+        };
+
         public CommunicationHandler(string sessionId, int port = 8765)
         {
             _sessionId = sessionId;
@@ -66,11 +76,11 @@ namespace ComputeBuilder.Plugin.Utils
                     {
                         try
                         {
-                            var msg = JsonConvert.DeserializeObject<WebSocketMessage>(message);
+                            var msg = JsonConvert.DeserializeObject<WebSocketMessage>(message, SecureJsonSettings);
 
                             if (msg.Type == "valueUpdate")
                             {
-                                var valueMsg = JsonConvert.DeserializeObject<ValueUpdateMessage>(message);
+                                var valueMsg = JsonConvert.DeserializeObject<ValueUpdateMessage>(message, SecureJsonSettings);
                                 if (valueMsg != null && valueMsg.SessionId == _sessionId)
                                 {
                                     OnValuesReceived?.Invoke(this, valueMsg.Values);
@@ -94,7 +104,7 @@ namespace ComputeBuilder.Plugin.Utils
                             }
                             else if (msg.Type == "saveSchema")
                             {
-                                var schemaMsg = JsonConvert.DeserializeObject<SchemaSaveMessage>(message);
+                                var schemaMsg = JsonConvert.DeserializeObject<SchemaSaveMessage>(message, SecureJsonSettings);
                                 if (schemaMsg != null && schemaMsg.SessionId == _sessionId)
                                 {
                                     logMessage?.Invoke("Web UI saving schema");

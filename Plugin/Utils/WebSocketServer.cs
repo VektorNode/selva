@@ -14,6 +14,10 @@ namespace ComputeBuilder.Plugin.Utils
     /// </summary>
     public class WebSocketServer : IDisposable
     {
+        // Security: Maximum message size (10MB) to prevent memory exhaustion attacks
+        private const int MAX_MESSAGE_SIZE = 10 * 1024 * 1024;
+        private const int BUFFER_SIZE = 4096;
+
         private readonly object _clientsLock = new object();
         private readonly List<WebSocket> _connectedClients = new List<WebSocket>();
         private CancellationTokenSource _cancellationTokenSource;
@@ -242,24 +246,48 @@ namespace ComputeBuilder.Plugin.Utils
 
         private async Task ReceiveMessagesAsync(WebSocket webSocket, CancellationToken cancellationToken)
         {
-            var buffer = new byte[4096];
+            var buffer = new byte[BUFFER_SIZE];
+            var messageBuffer = new List<byte>();
 
             while (webSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
             {
                 try
                 {
-                    var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+                    messageBuffer.Clear();
+                    WebSocketReceiveResult result;
 
-                    if (result.MessageType == WebSocketMessageType.Close)
+                    // Receive message in chunks, enforcing size limit
+                    do
                     {
-                        await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing",
-                            CancellationToken.None);
-                        break;
+                        result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+
+                        if (result.MessageType == WebSocketMessageType.Close)
+                        {
+                            await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing",
+                                CancellationToken.None);
+                            return;
+                        }
+
+                        // Add received bytes to message buffer
+                        for (int i = 0; i < result.Count; i++)
+                        {
+                            messageBuffer.Add(buffer[i]);
+                        }
+
+                        // Security check: Enforce maximum message size
+                        if (messageBuffer.Count > MAX_MESSAGE_SIZE)
+                        {
+                            await webSocket.CloseAsync(WebSocketCloseStatus.MessageTooBig,
+                                $"Message exceeds maximum size of {MAX_MESSAGE_SIZE} bytes",
+                                CancellationToken.None);
+                            return;
+                        }
                     }
+                    while (!result.EndOfMessage);
 
                     if (result.MessageType == WebSocketMessageType.Text)
                     {
-                        var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                        var message = Encoding.UTF8.GetString(messageBuffer.ToArray());
                         OnMessageReceived?.Invoke(this, message);
                     }
                 }
