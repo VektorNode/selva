@@ -139,6 +139,23 @@ namespace ComputeBuilder.Plugin.Utils
         }
 
         /// <summary>
+        ///     Broadcast a generic message to all connected clients
+        /// </summary>
+        public async Task BroadcastMessage(string messageType, object data)
+        {
+            if (_webSocketServer != null && _webSocketServer.IsRunning)
+            {
+                var message = new
+                {
+                    type = messageType,
+                    sessionId = _sessionId,
+                    data
+                };
+                await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+            }
+        }
+
+        /// <summary>
         ///     Broadcast output values to all connected clients
         /// </summary>
         public async Task BroadcastOutputs(Dictionary<string, object> outputs)

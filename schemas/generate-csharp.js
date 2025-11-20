@@ -1,53 +1,68 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
-const schemaPath = path.join(__dirname, 'ui-schema.json');
-const outputPath = path.join(__dirname, '../Plugin/Models/Generated/UISchema.Generated.cs');
+const schemaPath = path.join(__dirname, "ui-schema.json");
+const outputPath = path.join(
+  __dirname,
+  "../Plugin/Models/Generated/UISchema.Generated.cs"
+);
 
-const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
+const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
 const definitions = schema.definitions;
 
 // Type mappings from JSON Schema to C#
 function jsonTypeToCSharp(prop, propName, required) {
-  if (!prop) return 'object';
+  if (!prop) return "object";
 
   if (prop.$ref) {
-    const refName = prop.$ref.replace('#/definitions/', '');
+    const refName = prop.$ref.replace("#/definitions/", "");
+    // GrasshopperParamType is defined as a string enum in the schema
+    // but we use 'string' in C# for compatibility
+    if (refName === "GrasshopperParamType") {
+      return "string";
+    }
+    // LayoutItem is a discriminated union - use the base class
+    if (refName === "LayoutItem") {
+      return "LayoutItemBase";
+    }
     return refName;
   }
 
   if (prop.const) {
-    return 'string';
+    return "string";
   }
 
   if (prop.enum) {
     // Use string for all enums for compatibility
-    return 'string';
+    return "string";
   }
 
   switch (prop.type) {
-    case 'string':
-      if (prop.format === 'date-time') return 'DateTime';
-      if (prop.format === 'uuid') return 'Guid';
-      return 'string';
-    case 'number':
-      return required ? 'double' : 'double?';
-    case 'integer':
-      return required ? 'int' : 'int?';
-    case 'boolean':
-      return required ? 'bool' : 'bool?';
-    case 'array':
+    case "string":
+      if (prop.format === "date-time") return "DateTime";
+      // Check for GUID descriptions (Grasshopper uses GUIDs extensively)
+      if (prop.description && prop.description.toLowerCase().includes("guid")) {
+        return "Guid";
+      }
+      return "string";
+    case "number":
+      return required ? "double" : "double?";
+    case "integer":
+      return required ? "int" : "int?";
+    case "boolean":
+      return required ? "bool" : "bool?";
+    case "array":
       const itemType = jsonTypeToCSharp(prop.items, propName, true);
       return `List<${itemType}>`;
-    case 'object':
+    case "object":
       if (prop.additionalProperties) {
-        return 'Dictionary<string, object>';
+        return "Dictionary<string, object>";
       }
-      return 'object';
+      return "object";
     default:
-      return 'object';
+      return "object";
   }
 }
 
@@ -62,26 +77,33 @@ function camelCase(str) {
 function generateProperty(name, prop, required) {
   const csharpType = jsonTypeToCSharp(prop, name, required);
   const pascalName = pascalCase(name);
-  const nullHandling = !required && csharpType !== 'string' && !csharpType.endsWith('?') && !csharpType.startsWith('List') && !csharpType.startsWith('Dictionary')
-    ? ', NullValueHandling = NullValueHandling.Ignore'
-    : '';
+  const nullHandling =
+    !required &&
+    csharpType !== "string" &&
+    !csharpType.endsWith("?") &&
+    !csharpType.startsWith("List") &&
+    !csharpType.startsWith("Dictionary")
+      ? ", NullValueHandling = NullValueHandling.Ignore"
+      : "";
 
-  let defaultValue = '';
+  let defaultValue = "";
   if (prop.default !== undefined) {
-    if (typeof prop.default === 'string') {
+    if (typeof prop.default === "string") {
       defaultValue = ` = "${prop.default}";`;
-    } else if (typeof prop.default === 'boolean') {
+    } else if (typeof prop.default === "boolean") {
       defaultValue = ` = ${prop.default};`;
-    } else if (typeof prop.default === 'number') {
+    } else if (typeof prop.default === "number") {
       defaultValue = ` = ${prop.default};`;
     }
-  } else if (csharpType.startsWith('List<')) {
+  } else if (csharpType.startsWith("List<")) {
     defaultValue = ` = new ${csharpType}();`;
-  } else if (csharpType === 'DateTime') {
-    defaultValue = ' = DateTime.UtcNow;';
+  } else if (csharpType === "DateTime") {
+    defaultValue = " = DateTime.UtcNow;";
   }
 
-  const description = prop.description ? `\n        /// <summary>\n        /// ${prop.description}\n        /// </summary>` : '';
+  const description = prop.description
+    ? `\n        /// <summary>\n        /// ${prop.description}\n        /// </summary>`
+    : "";
 
   return `${description}
         [JsonProperty("${name}"${nullHandling})]
@@ -89,35 +111,100 @@ function generateProperty(name, prop, required) {
 }
 
 function generateClass(name, def) {
-  if (!def.properties) return '';
+  // Skip if not an object type
+  if (def.type !== 'object' && !def.properties) return "";
 
   const required = def.required || [];
-  const props = Object.entries(def.properties)
-    .filter(([propName]) => propName !== 'type' && propName !== 'widgetType') // Skip discriminator props for layout items
-    .map(([propName, prop]) => generateProperty(propName, prop, required.includes(propName)))
-    .join('\n');
+  const props = def.properties
+    ? Object.entries(def.properties)
+        .map(([propName, prop]) =>
+          generateProperty(propName, prop, required.includes(propName))
+        )
+        .join("\n")
+    : "";
+
+  const propsSection = props ? `\n${props}\n` : "\n";
 
   return `    public class ${name}
-    {
-${props}
-    }`;
+    {${propsSection}    }`;
 }
 
-function generateLayoutItemClass(name, def) {
-  const required = def.required || [];
-  const typeValue = def.properties.type?.const || 'input';
-  const widgetTypeValue = def.properties.widgetType?.const || 'text';
+// ============================================================================
+// AUTO-DETECT DISCRIMINATED UNIONS
+// ============================================================================
 
-  const props = Object.entries(def.properties)
-    .filter(([propName]) => propName !== 'type' && propName !== 'widgetType')
-    .map(([propName, prop]) => generateProperty(propName, prop, required.includes(propName)))
-    .join('\n');
+/**
+ * Detects discriminated unions in the schema by looking for oneOf patterns
+ * Returns a map of union names to their configuration
+ */
+function detectDiscriminatedUnions() {
+  const unions = {};
 
-  return `    public class ${name} : LayoutItemBase
+  for (const [name, def] of Object.entries(definitions)) {
+    if (def.oneOf && Array.isArray(def.oneOf)) {
+      const variants = def.oneOf
+        .filter((item) => item.$ref)
+        .map((item) => item.$ref.replace("#/definitions/", ""));
+
+      if (variants.length > 0) {
+        // Detect discriminator fields by finding const properties in variants
+        const firstVariant = definitions[variants[0]];
+        const discriminators = [];
+
+        if (firstVariant?.properties) {
+          for (const [propName, propDef] of Object.entries(
+            firstVariant.properties
+          )) {
+            if (propDef.const) {
+              discriminators.push(propName);
+            }
+          }
+        }
+
+        // Find common properties across all variants (for base class)
+        const commonProps = new Set();
+        if (variants.length > 0) {
+          const firstProps = Object.keys(
+            definitions[variants[0]]?.properties || {}
+          );
+          firstProps.forEach((prop) => {
+            const isCommon = variants.every(
+              (v) => definitions[v]?.properties?.[prop] !== undefined
+            );
+            if (isCommon) {
+              commonProps.add(prop);
+            }
+          });
+        }
+
+        unions[name] = {
+          variants,
+          discriminators,
+          commonProps: Array.from(commonProps),
+          baseClassName: `${name}Base`,
+        };
+      }
+    }
+  }
+
+  return unions;
+}
+
+const discriminatedUnions = detectDiscriminatedUnions();
+
+// Generate enum from string enum definition
+function generateEnum(name, def) {
+  if (!def.enum) return "";
+
+  const values = def.enum.map((val) => `        ${val}`).join(",\n");
+  const description = def.description
+    ? `\n    /// <summary>\n    /// ${def.description}\n    /// </summary>`
+    : "";
+
+  return `${description}
+    public enum ${name}
     {
-        public override string Type => "${typeValue}";
-        public override string WidgetType => "${widgetTypeValue}";
-${props}
+${values}
     }`;
 }
 
@@ -130,444 +217,331 @@ let output = `// <auto-generated>
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace ComputeBuilder.Plugin.Models.Generated
 {
-    // ============================================================================
+`;
+
+// Generate type aliases section
+output += `    // ============================================================================
     // TYPE ALIASES
     // ============================================================================
 
     // GrasshopperParamType is a string for compatibility
-    // Valid values: "Number", "Integer", "Boolean", "Text", "Generic"
+    // Valid values: ${definitions.GrasshopperParamType?.enum?.map((v) => `"${v}"`).join(", ") || "N/A"}
 
-    // ============================================================================
-    // MAIN UI SCHEMA
-    // ============================================================================
+`;
 
-    public class UISchema
-    {
-        [JsonProperty("id")]
-        public string Id { get; set; }
+// ============================================================================
+// CLASSIFY TYPES FOR ORGANIZATION
+// ============================================================================
 
-        [JsonProperty("name")]
-        public string Name { get; set; }
+/**
+ * Get all variant class names from all discriminated unions
+ */
+function getAllUnionVariants() {
+  const variants = new Set();
+  Object.values(discriminatedUnions).forEach((union) => {
+    union.variants.forEach((v) => variants.add(v));
+  });
+  return variants;
+}
 
-        [JsonProperty("description")]
-        public string Description { get; set; }
+/**
+ * Dynamically group classes by patterns and naming conventions
+ */
+function classifySections() {
+  const allUnionVariants = getAllUnionVariants();
+  const unionNames = Object.keys(discriminatedUnions);
 
-        [JsonProperty("version")]
-        public string Version { get; set; } = "1.0";
+  const sections = {
+    UISchema: [],
+    "PARAMETER SCHEMAS": [],
+    "WIDGET CONFIGURATIONS": [],
+    "LAYOUT CONFIGURATION": [],
+    "RUNTIME DATA": [],
+    "AVAILABLE PARAMETERS": [],
+  };
 
-        [JsonProperty("created")]
-        public DateTime Created { get; set; } = DateTime.UtcNow;
-
-        [JsonProperty("inputs")]
-        public List<InputParamSchema> Inputs { get; set; } = new List<InputParamSchema>();
-
-        [JsonProperty("outputs")]
-        public List<OutputParamSchema> Outputs { get; set; } = new List<OutputParamSchema>();
-
-        [JsonProperty("layout")]
-        public LayoutConfig Layout { get; set; } = new LayoutConfig();
-
-        [JsonProperty("enable3dViewer")]
-        public bool Enable3dViewer { get; set; }
+  for (const [name, def] of Object.entries(definitions)) {
+    // Skip unions themselves, their variants, enums, and special types
+    if (
+      unionNames.includes(name) ||
+      allUnionVariants.has(name) ||
+      def.enum ||
+      name === "GrasshopperParamType"
+    ) {
+      continue;
     }
 
-    // ============================================================================
-    // PARAMETER SCHEMAS
-    // ============================================================================
-
-    public class InputParamSchema
-    {
-        /// <summary>
-        /// Grasshopper parameter instance GUID
-        /// </summary>
-        [JsonProperty("id")]
-        public Guid Id { get; set; }
-
-        [JsonProperty("name")]
-        public string Name { get; set; }
-
-        [JsonProperty("nickname")]
-        public string Nickname { get; set; }
-
-        [JsonProperty("paramType")]
-        public string ParamType { get; set; }
-
-        [JsonProperty("description", NullValueHandling = NullValueHandling.Ignore)]
-        public string Description { get; set; }
-
-        [JsonProperty("atLeast")]
-        public int AtLeast { get; set; } = 1;
-
-        [JsonProperty("atMost")]
-        public int AtMost { get; set; } = int.MaxValue;
-
-        [JsonProperty("treeAccess")]
-        public bool TreeAccess { get; set; }
-
-        [JsonProperty("default", NullValueHandling = NullValueHandling.Ignore)]
-        public object Default { get; set; }
-
-        [JsonProperty("minimum", NullValueHandling = NullValueHandling.Ignore)]
-        public double? Minimum { get; set; }
-
-        [JsonProperty("maximum", NullValueHandling = NullValueHandling.Ignore)]
-        public double? Maximum { get; set; }
-
-        [JsonProperty("stepSize", NullValueHandling = NullValueHandling.Ignore)]
-        public double? StepSize { get; set; }
+    // Classify by naming patterns
+    if (name === "UISchema") {
+      sections["UISchema"].push(name);
+    } else if (
+      name.includes("ParamSchema") ||
+      (name.includes("Param") && name.includes("Schema"))
+    ) {
+      sections["PARAMETER SCHEMAS"].push(name);
+    } else if (name.endsWith("WidgetConfig")) {
+      sections["WIDGET CONFIGURATIONS"].push(name);
+    } else if (
+      name.includes("Group") ||
+      name.includes("Tab") ||
+      name.includes("Layout")
+    ) {
+      sections["LAYOUT CONFIGURATION"].push(name);
+    } else if (
+      name.includes("Runtime") ||
+      name.includes("Session") ||
+      name.includes("State")
+    ) {
+      sections["RUNTIME DATA"].push(name);
+    } else if (name.includes("Available") || name.includes("Parameters")) {
+      sections["AVAILABLE PARAMETERS"].push(name);
+    } else {
+      // Default to RUNTIME DATA for uncategorized types
+      sections["RUNTIME DATA"].push(name);
     }
+  }
 
-    public class OutputParamSchema
-    {
-        /// <summary>
-        /// Grasshopper parameter instance GUID
-        /// </summary>
-        [JsonProperty("id")]
-        public Guid Id { get; set; }
+  return sections;
+}
 
-        [JsonProperty("name")]
-        public string Name { get; set; }
-
-        [JsonProperty("nickname")]
-        public string Nickname { get; set; }
-
-        [JsonProperty("paramType")]
-        public string ParamType { get; set; }
-
-        [JsonProperty("description", NullValueHandling = NullValueHandling.Ignore)]
-        public string Description { get; set; }
+// Generate regular classes (non-union items)
+const allUnionVariants = getAllUnionVariants();
+const regularClasses = Object.entries(definitions)
+  .filter(
+    ([name]) =>
+      !Object.keys(discriminatedUnions).includes(name) &&
+      name !== "GrasshopperParamType" &&
+      !allUnionVariants.has(name)
+  )
+  .map(([name, def]) => {
+    if (def.enum) {
+      return generateEnum(name, def);
     }
+    return generateClass(name, def);
+  })
+  .filter((cls) => cls);
 
-    // ============================================================================
-    // WIDGET CONFIGURATIONS (Discriminated by widget type)
+// Group classes by section
+const sections = classifySections();
+
+for (const [sectionName, classNames] of Object.entries(sections)) {
+  const sectionClasses = regularClasses.filter((cls) =>
+    classNames.some((name) => cls.includes(`public class ${name}`))
+  );
+
+  if (sectionClasses.length > 0) {
+    output += `    // ============================================================================
+    // ${sectionName}
     // ============================================================================
 
-    public class NumberWidgetConfig
-    {
-        [JsonProperty("min", NullValueHandling = NullValueHandling.Ignore)]
-        public double? Min { get; set; }
+${sectionClasses.join("\n\n")}
 
-        [JsonProperty("max", NullValueHandling = NullValueHandling.Ignore)]
-        public double? Max { get; set; }
+`;
+  }
+}
 
-        [JsonProperty("step", NullValueHandling = NullValueHandling.Ignore)]
-        public double? Step { get; set; }
+// ============================================================================
+// GENERATE DISCRIMINATED UNIONS (BASE CLASSES + VARIANTS + CONVERTERS)
+// ============================================================================
 
-        [JsonProperty("placeholder", NullValueHandling = NullValueHandling.Ignore)]
-        public string Placeholder { get; set; }
+/**
+ * Generate base class for a discriminated union
+ */
+function generateUnionBaseClass(unionName, config) {
+  const { commonProps, discriminators, baseClassName } = config;
 
-        [JsonProperty("renderAsSlider", NullValueHandling = NullValueHandling.Ignore)]
-        public bool? RenderAsSlider { get; set; }
+  let baseProps = "";
+
+  // Generate common properties
+  for (const propName of commonProps) {
+    if (discriminators.includes(propName)) {
+      // Discriminators are abstract properties
+      baseProps += `\n        [JsonProperty("${propName}")]
+        public abstract string ${pascalCase(propName)} { get; }
+`;
+    } else {
+      // Regular common properties
+      const firstVariant = definitions[config.variants[0]];
+      const prop = firstVariant.properties[propName];
+      const required = firstVariant.required?.includes(propName) || false;
+
+      baseProps += `${generateProperty(propName, prop, required)}
+`;
     }
+  }
 
-    public class TextWidgetConfig
-    {
-        [JsonProperty("placeholder", NullValueHandling = NullValueHandling.Ignore)]
-        public string Placeholder { get; set; }
-
-        [JsonProperty("required", NullValueHandling = NullValueHandling.Ignore)]
-        public bool? Required { get; set; }
-    }
-
-    public class DropdownWidgetConfig
-    {
-        [JsonProperty("options")]
-        public List<string> Options { get; set; } = new List<string>();
-
-        [JsonProperty("required", NullValueHandling = NullValueHandling.Ignore)]
-        public bool? Required { get; set; }
-    }
-
-    public class CheckboxWidgetConfig
-    {
-    }
-
-    // ============================================================================
-    // LAYOUT ITEMS (Discriminated Union)
-    // ============================================================================
-
-    /// <summary>
-    /// Base class for all layout items
+  return `    /// <summary>
+    /// Base class for ${unionName} discriminated union
     /// </summary>
-    [JsonConverter(typeof(LayoutItemConverter))]
-    public abstract class LayoutItemBase
+    [JsonConverter(typeof(${baseClassName}Converter))]
+    public abstract class ${baseClassName}
+    {${baseProps}
+    }`;
+}
+
+/**
+ * Generate variant class for a discriminated union
+ */
+function generateUnionVariantClass(variantName, unionConfig) {
+  const def = definitions[variantName];
+  const required = def.required || [];
+  const { commonProps, discriminators, baseClassName } = unionConfig;
+
+  // Get discriminator values
+  const discriminatorOverrides = discriminators
+    .map((disc) => {
+      const value = def.properties[disc]?.const || "unknown";
+      return `        public override string ${pascalCase(disc)} => "${value}";`;
+    })
+    .join("\n");
+
+  // Get variant-specific properties (not in base class)
+  const variantProps = Object.entries(def.properties)
+    .filter(([propName]) => !commonProps.includes(propName))
+    .map(([propName, prop]) =>
+      generateProperty(propName, prop, required.includes(propName))
+    )
+    .join("\n");
+
+  const propsSection = variantProps ? `\n${variantProps}` : "";
+
+  return `    public class ${variantName} : ${baseClassName}
     {
-        [JsonProperty("id")]
-        public string Id { get; set; }
+${discriminatorOverrides}${propsSection}
+    }`;
+}
 
-        /// <summary>
-        /// References the Grasshopper component InstanceGuid
-        /// </summary>
-        [JsonProperty("paramId")]
-        public Guid ParamId { get; set; }
+/**
+ * Generate JSON converter for a discriminated union
+ */
+function generateUnionConverter(unionName, config) {
+  const { variants, discriminators, baseClassName } = config;
 
-        [JsonProperty("displayName", NullValueHandling = NullValueHandling.Ignore)]
-        public string DisplayName { get; set; }
+  // Build the condition checking code
+  const conditions = variants
+    .map((variantName, index) => {
+      const def = definitions[variantName];
+      const checks = discriminators
+        .map((disc) => {
+          const value = def.properties[disc]?.const || "unknown";
+          return `${disc} == "${value}"`;
+        })
+        .join(" && ");
 
-        [JsonProperty("description", NullValueHandling = NullValueHandling.Ignore)]
-        public string Description { get; set; }
+      const prefix = index === 0 ? "if" : "else if";
+      return `            ${prefix} (${checks})
+                item = new ${variantName}();`;
+    })
+    .join("\n");
 
-        [JsonProperty("order")]
-        public int Order { get; set; }
+  // Build the variable declarations
+  const varDeclarations = discriminators
+    .map(
+      (disc) =>
+        `            var ${disc} = jsonObject["${disc}"]?.Value<string>();`
+    )
+    .join("\n");
 
-        [JsonProperty("span")]
-        public int Span { get; set; } = 1;
-
-        [JsonProperty("type")]
-        public abstract string Type { get; }
-
-        [JsonProperty("widgetType")]
-        public abstract string WidgetType { get; }
-    }
-
-    // Input layout items
-    public class InputNumberLayoutItem : LayoutItemBase
-    {
-        public override string Type => "input";
-        public override string WidgetType => "number";
-
-        [JsonProperty("config")]
-        public NumberWidgetConfig Config { get; set; } = new NumberWidgetConfig();
-    }
-
-    public class InputTextLayoutItem : LayoutItemBase
-    {
-        public override string Type => "input";
-        public override string WidgetType => "text";
-
-        [JsonProperty("config")]
-        public TextWidgetConfig Config { get; set; } = new TextWidgetConfig();
-    }
-
-    public class InputDropdownLayoutItem : LayoutItemBase
-    {
-        public override string Type => "input";
-        public override string WidgetType => "dropdown";
-
-        [JsonProperty("config")]
-        public DropdownWidgetConfig Config { get; set; } = new DropdownWidgetConfig();
-    }
-
-    public class InputCheckboxLayoutItem : LayoutItemBase
-    {
-        public override string Type => "input";
-        public override string WidgetType => "checkbox";
-
-        [JsonProperty("config", NullValueHandling = NullValueHandling.Ignore)]
-        public CheckboxWidgetConfig Config { get; set; }
-    }
-
-    // Output layout items
-    public class OutputTextLayoutItem : LayoutItemBase
-    {
-        public override string Type => "output";
-        public override string WidgetType => "text";
-    }
-
-    public class OutputNumberLayoutItem : LayoutItemBase
-    {
-        public override string Type => "output";
-        public override string WidgetType => "number";
-    }
-
-    // ============================================================================
-    // LAYOUT CONFIGURATION
-    // ============================================================================
-
-    public class GroupConfig
-    {
-        [JsonProperty("id")]
-        public string Id { get; set; }
-
-        [JsonProperty("label")]
-        public string Label { get; set; }
-
-        [JsonProperty("description", NullValueHandling = NullValueHandling.Ignore)]
-        public string Description { get; set; }
-
-        [JsonProperty("order")]
-        public int Order { get; set; }
-
-        [JsonProperty("collapsed")]
-        public bool Collapsed { get; set; }
-
-        [JsonProperty("columns")]
-        public int Columns { get; set; } = 1;
-
-        [JsonProperty("items")]
-        public List<LayoutItemBase> Items { get; set; } = new List<LayoutItemBase>();
-    }
-
-    public class TabConfig
-    {
-        [JsonProperty("id")]
-        public string Id { get; set; }
-
-        [JsonProperty("label")]
-        public string Label { get; set; }
-
-        [JsonProperty("icon", NullValueHandling = NullValueHandling.Ignore)]
-        public string Icon { get; set; }
-
-        [JsonProperty("order")]
-        public int Order { get; set; }
-
-        [JsonProperty("groups")]
-        public List<GroupConfig> Groups { get; set; } = new List<GroupConfig>();
-    }
-
-    public class LayoutConfig
-    {
-        [JsonProperty("type")]
-        public string Type { get; set; } = "tabbed";
-
-        [JsonProperty("gap")]
-        public int Gap { get; set; } = 16;
-
-        [JsonProperty("tabs", NullValueHandling = NullValueHandling.Ignore)]
-        public List<TabConfig> Tabs { get; set; } = new List<TabConfig>();
-
-        [JsonProperty("items", NullValueHandling = NullValueHandling.Ignore)]
-        public List<LayoutItemBase> Items { get; set; } = new List<LayoutItemBase>();
-    }
-
-    // ============================================================================
-    // RUNTIME DATA
-    // ============================================================================
-
-    public class RuntimeValues
-    {
-        [JsonProperty("timestamp")]
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-
-        [JsonProperty("values")]
-        public Dictionary<string, object> Values { get; set; } = new Dictionary<string, object>();
-    }
-
-    public class SessionState
-    {
-        [JsonProperty("sessionId")]
-        public string SessionId { get; set; }
-
-        [JsonProperty("active")]
-        public bool Active { get; set; }
-
-        [JsonProperty("lastUpdate")]
-        public DateTime LastUpdate { get; set; } = DateTime.UtcNow;
-
-        [JsonProperty("mode")]
-        public string Mode { get; set; }
-    }
-
-    // ============================================================================
-    // AVAILABLE PARAMETERS
-    // ============================================================================
-
-    public class AvailableParameter
-    {
-        [JsonProperty("id")]
-        public Guid Id { get; set; }
-
-        [JsonProperty("name")]
-        public string Name { get; set; }
-
-        [JsonProperty("nickname")]
-        public string Nickname { get; set; }
-
-        [JsonProperty("description")]
-        public string Description { get; set; }
-
-        [JsonProperty("category")]
-        public string Category { get; set; }
-
-        [JsonProperty("paramType")]
-        public string ParamType { get; set; }
-
-        [JsonProperty("default", NullValueHandling = NullValueHandling.Ignore)]
-        public object Default { get; set; }
-
-        [JsonProperty("minimum", NullValueHandling = NullValueHandling.Ignore)]
-        public double? Minimum { get; set; }
-
-        [JsonProperty("maximum", NullValueHandling = NullValueHandling.Ignore)]
-        public double? Maximum { get; set; }
-
-        [JsonProperty("stepSize", NullValueHandling = NullValueHandling.Ignore)]
-        public double? StepSize { get; set; }
-
-        [JsonProperty("atLeast")]
-        public int AtLeast { get; set; } = 1;
-
-        [JsonProperty("atMost")]
-        public int AtMost { get; set; } = int.MaxValue;
-
-        [JsonProperty("treeAccess")]
-        public bool TreeAccess { get; set; }
-    }
-
-    public class AvailableParameters
-    {
-        [JsonProperty("sessionId")]
-        public string SessionId { get; set; }
-
-        [JsonProperty("timestamp")]
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-
-        [JsonProperty("parameters")]
-        public List<AvailableParameter> Parameters { get; set; } = new List<AvailableParameter>();
-    }
-
-    // ============================================================================
-    // JSON CONVERTER FOR DISCRIMINATED UNION
-    // ============================================================================
-
-    /// <summary>
-    /// Custom JSON converter for LayoutItemBase discriminated union
+  return `    /// <summary>
+    /// JSON converter for ${baseClassName} discriminated union
     /// </summary>
-    public class LayoutItemConverter : JsonConverter<LayoutItemBase>
+    public class ${baseClassName}Converter : JsonConverter<${baseClassName}>
     {
-        public override LayoutItemBase ReadJson(JsonReader reader, Type objectType, LayoutItemBase existingValue, bool hasExistingValue, JsonSerializer serializer)
+        public override ${baseClassName} ReadJson(JsonReader reader, Type objectType, ${baseClassName} existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
             var jsonObject = JObject.Load(reader);
-            var type = jsonObject["type"]?.Value<string>();
-            var widgetType = jsonObject["widgetType"]?.Value<string>();
+${varDeclarations}
 
-            LayoutItemBase item;
-            if (type == "input" && widgetType == "number")
-                item = new InputNumberLayoutItem();
-            else if (type == "input" && widgetType == "text")
-                item = new InputTextLayoutItem();
-            else if (type == "input" && widgetType == "dropdown")
-                item = new InputDropdownLayoutItem();
-            else if (type == "input" && widgetType == "checkbox")
-                item = new InputCheckboxLayoutItem();
-            else if (type == "output" && widgetType == "text")
-                item = new OutputTextLayoutItem();
-            else if (type == "output" && widgetType == "number")
-                item = new OutputNumberLayoutItem();
+            // Check if all discriminators are null or empty
+            var allEmpty = ${discriminators.map((d) => `string.IsNullOrEmpty(${d})`).join(" && ")};
+            if (allEmpty)
+            {
+                throw new JsonSerializationException($"${unionName} discriminator fields are missing or empty. JSON: {jsonObject.ToString()}");
+            }
+
+            ${baseClassName} item;
+${conditions}
             else
-                throw new JsonSerializationException($"Unknown layout item type: {type}/{widgetType}");
+                throw new JsonSerializationException($"Unknown ${unionName} variant: ${discriminators.map((d) => `{${d}}`).join("/")}. JSON: {jsonObject.ToString()}");
 
             serializer.Populate(jsonObject.CreateReader(), item);
             return item;
         }
 
-        public override void WriteJson(JsonWriter writer, LayoutItemBase value, JsonSerializer serializer)
+        public override void WriteJson(JsonWriter writer, ${baseClassName} value, JsonSerializer serializer)
         {
-            var jsonObject = JObject.FromObject(value, new JsonSerializer
+            // Serialize by writing properties directly to avoid converter recursion
+            writer.WriteStartObject();
+
+            // Use reflection to get all properties from the concrete type
+            var properties = value.GetType().GetProperties();
+            foreach (var property in properties)
             {
-                NullValueHandling = NullValueHandling.Ignore,
-                ContractResolver = serializer.ContractResolver
-            });
-            jsonObject.WriteTo(writer);
+                var propValue = property.GetValue(value);
+
+                // Skip null values if configured
+                if (propValue == null && serializer.NullValueHandling == NullValueHandling.Ignore)
+                    continue;
+
+                // Get JsonProperty attribute - check property and base declaration
+                var jsonAttr = property.GetCustomAttributes(typeof(JsonPropertyAttribute), true)
+                    .FirstOrDefault() as JsonPropertyAttribute;
+
+                // If not found and property is an override, check base class
+                if (jsonAttr == null && property.GetGetMethod()?.GetBaseDefinition() != property.GetGetMethod())
+                {
+                    var baseProperty = property.DeclaringType?.BaseType?.GetProperty(property.Name);
+                    if (baseProperty != null)
+                    {
+                        jsonAttr = baseProperty.GetCustomAttributes(typeof(JsonPropertyAttribute), true)
+                            .FirstOrDefault() as JsonPropertyAttribute;
+                    }
+                }
+
+                var jsonName = jsonAttr?.PropertyName ?? property.Name;
+
+                writer.WritePropertyName(jsonName);
+                serializer.Serialize(writer, propValue);
+            }
+
+            writer.WriteEndObject();
         }
-    }
+    }`;
 }
+
+// Generate all discriminated unions
+for (const [unionName, config] of Object.entries(discriminatedUnions)) {
+  output += `    // ============================================================================
+    // ${unionName.toUpperCase()} (Discriminated Union)
+    // ============================================================================
+
+${generateUnionBaseClass(unionName, config)}
+
+${config.variants.map((v) => generateUnionVariantClass(v, config)).join("\n\n")}
+
+`;
+}
+
+// Generate JSON converters for all discriminated unions
+output += `    // ============================================================================
+    // JSON CONVERTERS FOR DISCRIMINATED UNIONS
+    // ============================================================================
+
+`;
+
+for (const [unionName, config] of Object.entries(discriminatedUnions)) {
+  output += `${generateUnionConverter(unionName, config)}
+
+`;
+}
+
+output += `}
 `;
 
 // Ensure output directory exists

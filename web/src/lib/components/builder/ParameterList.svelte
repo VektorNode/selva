@@ -28,7 +28,6 @@
 	{:else}
 		<div class="flex flex-col gap-0">
 			{#each parameters as param}
-				{console.log('Rendering parameter:', $state.snapshot(param))}
 				<DraggableParameter parameter={param} {category} />
 			{/each}
 		</div>

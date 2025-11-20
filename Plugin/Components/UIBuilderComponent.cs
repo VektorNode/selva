@@ -268,7 +268,23 @@ namespace ComputeBuilder.Plugin.Components
             }
 
             // === DISABLED ===
-            _communicationHandler?.Stop();
+            // Stop WebSocket only on falling edge (when actually disabling)
+            if (enableFalling && _communicationHandler?.IsRunning == true)
+            {
+                try
+                {
+                    // Notify clients before stopping
+                    var _ = _communicationHandler.BroadcastMessage("disconnecting", new { reason = "Component disabled" });
+                    System.Threading.Thread.Sleep(100); // Give clients time to receive message
+                }
+                catch
+                {
+                    /* ignore */
+                }
+
+                _communicationHandler.Stop();
+            }
+
             _valueApplicator?.Clear();
             Message = "WebSocket Inactive";
 

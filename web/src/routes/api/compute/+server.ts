@@ -80,11 +80,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Solve the Grasshopper definition and return raw response
 		// Mesh extraction happens on client side (requires Three.js)
-		const solvedDefinition = await solveGrasshopperDefinition(
-			inputTree,
-			definitionUrl,
-			{ serverUrl }
-		);
+		const solvedDefinition = await solveGrasshopperDefinition(inputTree, definitionUrl, {
+			serverUrl
+		});
 
 		return json(solvedDefinition);
 	} catch (err) {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { getWebSocketClient } from '$lib/api/websocket';
+	import { getWebSocketState } from '$lib/api/websocket.svelte';
 	import type { UISchema, AvailableParameters, SupportedTypes } from '$lib/types/generated';
 	import { TabLayout, Layout as LegacyLayout } from '$lib/components/preview';
 	import { PageContainer, PageHeader } from '$lib/components/layout';
@@ -22,8 +22,10 @@
 	let values = $state<Record<string, unknown>>({});
 	let loading = $state(true);
 	let error = $state('');
-	let wsClient = getWebSocketClient();
-	let wsConnected = $state(false);
+
+	// Get WebSocket state singleton - reactive properties update automatically
+	const wsState = getWebSocketState();
+
 	let schemaUpdateNotification = $state('');
 	let notificationTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -61,14 +63,14 @@
 		// Update local values (using GUID as key)
 		values[paramId] = value;
 
-		if (runtimeMode === 'local' && wsConnected && wsClient.isConnected) {
+		if (runtimeMode === 'local' && wsState.connected) {
 			console.log('[Preview] Sending value update to Grasshopper (GUID keys):', {
 				[paramId]: value
 			});
 
 			// Send via WebSocket with GUID keys (what C# expects)
-			wsClient.sendValueUpdate(sessionId, $state.snapshot(values));
-		} else if (!wsClient.isConnected) {
+			wsState.sendValueUpdate(sessionId, $state.snapshot(values));
+		} else if (!wsState.connected) {
 			console.warn('[Preview] Cannot send values - WebSocket not connected');
 		}
 	}
@@ -76,7 +78,7 @@
 	// Compute badge configuration
 	const badgeConfig = $derived(
 		runtimeMode === 'local'
-			? wsConnected
+			? wsState.connected
 				? { label: 'Connected', variant: 'connected' as const }
 				: {
 						label: 'Disconnected',
@@ -191,9 +193,7 @@
 
 				const removedCount = message.removedIds?.length || 0;
 
-				const newSchema = ensureSchemaLayoutDefaults(
-					JSON.parse(JSON.stringify(message.schema))
-				);
+				const newSchema = ensureSchemaLayoutDefaults(JSON.parse(JSON.stringify(message.schema)));
 
 				if (message.removedIds && message.removedIds.length > 0) {
 					const newValues = { ...values };
@@ -232,18 +232,17 @@
 				}
 
 				console.log('[Preview] WebSocket connected');
-				wsConnected = result.connected;
 
 				// Register handlers
-				wsClient.on('initialData', handleInitialData);
-				wsClient.on('currentValues', handleCurrentValues);
-				wsClient.on('outputs', handleOutputs);
-				wsClient.on('outputUpdate', handleOutputUpdate);
-				wsClient.on('schemaUpdated', handleSchemaUpdated);
+				wsState.on('initialData', handleInitialData);
+				wsState.on('currentValues', handleCurrentValues);
+				wsState.on('outputs', handleOutputs);
+				wsState.on('outputUpdate', handleOutputUpdate);
+				wsState.on('schemaUpdated', handleSchemaUpdated);
 
 				// Request initial data from Grasshopper
 				console.log('[Preview] Requesting initial data from Grasshopper');
-				wsClient.requestInitialData(sessionId);
+				wsState.requestInitialData(sessionId);
 			}
 		};
 
@@ -251,11 +250,11 @@
 
 		return () => {
 			// Clean up WebSocket handlers to prevent duplicate responses
-			wsClient.off('initialData', handleInitialData);
-			wsClient.off('currentValues', handleCurrentValues);
-			wsClient.off('outputs', handleOutputs);
-			wsClient.off('outputUpdate', handleOutputUpdate);
-			wsClient.off('schemaUpdated', handleSchemaUpdated);
+			wsState.off('initialData', handleInitialData);
+			wsState.off('currentValues', handleCurrentValues);
+			wsState.off('outputs', handleOutputs);
+			wsState.off('outputUpdate', handleOutputUpdate);
+			wsState.off('schemaUpdated', handleSchemaUpdated);
 			// Don't disconnect - keep connection alive for page switching
 		};
 	});

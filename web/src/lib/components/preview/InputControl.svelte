@@ -5,7 +5,6 @@
 		TextWidgetConfig,
 		DropdownWidgetConfig,
 		SupportedTypes
-
 	} from '$lib/types/generated';
 	import {
 		isNumberWidget,
@@ -39,6 +38,7 @@
 
 	function handleChange(newValue: SupportedTypes) {
 		value = newValue;
+		console.log('InputControl: value changed to', debounceMs);
 		if (debounceMs > 0) {
 			debouncedOnChange(newValue);
 		} else {
@@ -81,8 +81,8 @@
 				<Slider
 					type="single"
 					value={sliderValue}
-					min={config.min ?? 0}
-					max={config.max ?? 100}
+					min={config.minimum ?? 0}
+					max={config.maximum ?? 100}
 					step={config.step ?? 1}
 					class="flex-1"
 					onValueChange={(val: number) => {
@@ -90,7 +90,7 @@
 					}}
 				/>
 				<span class="min-w-12 text-right text-sm text-muted-foreground">
-					{value ?? config.min ?? 0}
+					{value ?? config.minimum ?? 0}
 				</span>
 			</div>
 		{:else}
@@ -98,8 +98,8 @@
 				id={inputId}
 				type="number"
 				bind:value
-				min={config.min}
-				max={config.max}
+				min={config.minimum}
+				max={config.maximum}
 				step={config.step ?? 1}
 				placeholder={config.placeholder}
 				oninput={(e) => {
@@ -113,7 +113,11 @@
 		{/if}
 	{:else if isCheckboxWidget(item)}
 		<div class="flex items-center gap-3">
-			<Checkbox id={inputId} checked={typeof value === 'boolean' ? value : false} onCheckedChange={(checked) => handleChange(checked)} />
+			<Checkbox
+				id={inputId}
+				checked={typeof value === 'boolean' ? value : false}
+				onCheckedChange={(checked) => handleChange(checked)}
+			/>
 			<Label for={inputId} class="cursor-pointer text-sm text-muted-foreground">Enabled</Label>
 		</div>
 	{:else if isTextWidget(item)}

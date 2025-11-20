@@ -1,42 +1,45 @@
 /**
  * WebSocket client for real-time communication with Grasshopper (local mode only)
+ * Uses Svelte 5 runes for reactive state management
  */
 
 import type { UISchema } from '$lib/types/generated';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
-export type MessageHandler = (data: any) => void;
+export type MessageHandler = (data: unknown) => void;
 
-export class WebSocketClient {
+/**
+ * WebSocket state class with reactive properties
+ */
+export class WebSocketState {
 	private socket: WebSocket | null = null;
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-	private messageHandlers: Map<string, Set<MessageHandler>> = new Map();
+	private messageHandlers: Map<string, Set<MessageHandler>> = new SvelteMap();
 	private reconnectAttempts = 0;
 	private maxReconnectAttempts = 5;
 	private reconnectDelay = 1000;
 	private isConnecting = false;
-	private _isSolving = false;
-	private _pendingValueUpdate: { sessionId: string; values: Record<string, any> } | null = null;
+	private _pendingValueUpdate: { sessionId: string; values: Record<string, unknown> } | null = null;
+
+	// Reactive state using Svelte 5 runes
+	connected = $state(false);
+	isSolving = $state(false);
 
 	constructor(private url: string = 'ws://localhost:8765') {
 		// Register internal handler for solving state
 		this.on('solvingState', (data) => {
-			this._isSolving = data.isSolving;
-			console.log(`[WebSocket] Grasshopper solving state: ${this._isSolving}`);
+			if (data && typeof data === 'object' && 'isSolving' in data) {
+				this.isSolving = Boolean(data.isSolving);
+				console.log(`[WebSocket] Grasshopper solving state: ${this.isSolving}`);
 
-			// If solving just finished and we have a pending update, send it
-			if (!this._isSolving && this._pendingValueUpdate) {
-				console.log('[WebSocket] Sending queued value update');
-				this.send('valueUpdate', this._pendingValueUpdate);
-				this._pendingValueUpdate = null;
+				// If solving just finished and we have a pending update, send it
+				if (!this.isSolving && this._pendingValueUpdate) {
+					console.log('[WebSocket] Sending queued value update');
+					this.send('valueUpdate', this._pendingValueUpdate);
+					this._pendingValueUpdate = null;
+				}
 			}
 		});
-	}
-
-	/**
-	 * Check if Grasshopper is currently solving
-	 */
-	get isSolving(): boolean {
-		return this._isSolving;
 	}
 
 	/**
@@ -57,6 +60,7 @@ export class WebSocketClient {
 					console.log('[WebSocket] Connected to Grasshopper');
 					this.reconnectAttempts = 0;
 					this.isConnecting = false;
+					this.connected = true;
 					resolve(true);
 				};
 
@@ -79,6 +83,7 @@ export class WebSocketClient {
 					console.log('[WebSocket] Disconnected');
 					this.isConnecting = false;
 					this.socket = null;
+					this.connected = false;
 					this.attemptReconnect();
 				};
 			} catch (error) {
@@ -104,12 +109,13 @@ export class WebSocketClient {
 		}
 
 		this.reconnectAttempts = 0;
+		this.connected = false;
 	}
 
 	/**
 	 * Send a message to the server
 	 */
-	send(type: string, data: any) {
+	send(type: string, data: Record<string, unknown>) {
 		if (this.socket?.readyState === WebSocket.OPEN) {
 			const message = { type, ...data };
 			this.socket.send(JSON.stringify(message));
@@ -122,8 +128,8 @@ export class WebSocketClient {
 	 * Send value updates to Grasshopper
 	 * If Grasshopper is currently solving, the update will be queued and sent when solving completes
 	 */
-	sendValueUpdate(sessionId: string, values: Record<string, any>) {
-		if (this._isSolving) {
+	sendValueUpdate(sessionId: string, values: Record<string, unknown>) {
+		if (this.isSolving) {
 			// Queue the update - only keep the latest one
 			console.log('[WebSocket] Grasshopper is solving, queuing value update');
 			this._pendingValueUpdate = { sessionId, values };
@@ -162,7 +168,7 @@ export class WebSocketClient {
 	 */
 	on(messageType: string, handler: MessageHandler) {
 		if (!this.messageHandlers.has(messageType)) {
-			this.messageHandlers.set(messageType, new Set());
+			this.messageHandlers.set(messageType, new SvelteSet());
 		}
 		this.messageHandlers.get(messageType)!.add(handler);
 	}
@@ -184,10 +190,26 @@ export class WebSocketClient {
 	/**
 	 * Handle incoming messages
 	 */
-	private handleMessage(message: any) {
-		const handlers = this.messageHandlers.get(message.type);
-		if (handlers) {
-			handlers.forEach((handler) => handler(message));
+	private handleMessage(message: unknown) {
+		if (message && typeof message === 'object' && 'type' in message) {
+			const msg = message as { type: string; data?: unknown };
+			if (msg.type === 'disconnecting') {
+				console.log(
+					'[WebSocket] Server is disconnecting:',
+					(msg.data as { reason?: string } | undefined)?.reason || 'No reason provided'
+				);
+				if (this.reconnectTimer) {
+					clearTimeout(this.reconnectTimer);
+					this.reconnectTimer = null;
+				}
+				this.reconnectAttempts = this.maxReconnectAttempts;
+				return;
+			}
+
+			const handlers = this.messageHandlers.get(msg.type);
+			if (handlers) {
+				handlers.forEach((handler) => handler(msg));
+			}
 		}
 	}
 
@@ -212,14 +234,24 @@ export class WebSocketClient {
 }
 
 // Singleton instance
-let wsClient: WebSocketClient | null = null;
+let wsState: WebSocketState | null = null;
 
 /**
- * Get or create the WebSocket client instance
+ * Get or create the WebSocket state instance (singleton)
  */
-export function getWebSocketClient(): WebSocketClient {
-	if (!wsClient) {
-		wsClient = new WebSocketClient();
+export function getWebSocketState(): WebSocketState {
+	if (!wsState) {
+		wsState = new WebSocketState();
 	}
-	return wsClient;
+	return wsState;
 }
+
+/**
+ * Legacy exports for backwards compatibility
+ * @deprecated Use getWebSocketState() instead
+ */
+export function getWebSocketClient(): WebSocketState {
+	return getWebSocketState();
+}
+
+export type WebSocketClient = WebSocketState;

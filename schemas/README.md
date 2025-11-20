@@ -1,6 +1,8 @@
 # Schema Generation Guide
 
-This directory contains the JSON Schema source of truth for all shared types between C# and TypeScript.
+This directory contains the **single source of truth** (JSON Schema) for all shared types between C# and TypeScript.
+
+**All type generation is now fully automated** - the generators dynamically read from `ui-schema.json` and produce complete, type-safe code for both languages.
 
 ## Quick Start
 
@@ -87,6 +89,47 @@ Add the property name to the `required` array:
 
 Don't include in `required` array - they become nullable in C# and optional in TypeScript.
 
+## Key Features
+
+### Fully Automated Generation
+
+The C# generator is **100% schema-driven**, meaning:
+- ✅ All classes are generated dynamically from the JSON Schema definitions
+- ✅ Discriminated unions are **auto-detected** by finding `oneOf` patterns
+- ✅ Base classes are **auto-generated** from common properties across variants
+- ✅ Discriminators are **auto-detected** by finding `const` properties
+- ✅ Type mappings happen automatically (Guid, DateTime, etc.)
+- ✅ JSON converters are **fully generated** from discriminator metadata
+- ✅ Sections are **dynamically organized** by naming patterns
+- ✅ **No hardcoded types** - everything comes from the schema
+
+**What this means:** To add a new type, widget, discriminated union, or even a completely new union pattern - just edit the schema and regenerate. **Zero manual C# code required!**
+
+### Intelligent Auto-Detection
+
+The generator automatically detects and generates:
+
+**Discriminated Unions:**
+- Finds any `oneOf` pattern in the schema
+- Identifies all variant types from `$ref` references
+- Detects discriminator fields (properties with `const` values)
+- Finds common properties across all variants (for base class)
+- Generates abstract base class with converter attribute
+- Generates variant classes that inherit from base
+- Generates JSON converter with proper if-else chain
+
+**Type Mappings:**
+- Descriptions containing "GUID" → `Guid` type in C#
+- Special refs like `GrasshopperParamType` → `string` (for compatibility)
+- Union refs like `LayoutItem` → `LayoutItemBase` (for inheritance)
+- Optional vs required → nullable types
+- Date-time strings → `DateTime`
+
+**Organization:**
+- Classifies types by naming patterns (Config, Schema, Runtime, etc.)
+- Groups related classes into logical sections
+- Separates regular classes from union variants
+
 ## Type Mappings
 
 | JSON Schema | TypeScript | C# |
@@ -100,7 +143,14 @@ Don't include in `required` array - they become nullable in C# and optional in T
 | `"format": "uuid"` | `string` | `Guid` |
 | `"enum": [...]` | union type | `string` |
 
-## Creating Discriminated Unions
+## Creating Discriminated Unions (Fully Automated!)
+
+The generator **automatically detects and generates** discriminated unions. You just define the schema pattern:
+
+**How it works:**
+1. Define variants with discriminator fields (`const` values)
+2. Create a union type using `oneOf`
+3. Regenerate - the generator does everything else!
 
 For polymorphic types (like LayoutItem), define each variant separately:
 
@@ -157,12 +207,41 @@ For polymorphic types (like LayoutItem), define each variant separately:
 }
 ```
 
-### 4. Update C# Generator (if needed)
+### 4. C# Generator Handles Everything Automatically
 
-For new discriminated unions, update `generate-csharp.js` to add:
-- Abstract base class
-- Concrete implementations
-- JSON converter with if-else chain
+The C# generator (`generate-csharp.js`) **automatically**:
+- ✅ Detects the `oneOf` pattern
+- ✅ Identifies all variants from `$ref` references
+- ✅ Detects discriminator fields (`type` has `const: "myType"`)
+- ✅ Finds common properties (for base class)
+- ✅ Generates abstract base class (`MyWidgetBase`)
+- ✅ Generates concrete implementations for each variant
+- ✅ Generates JSON converter with proper condition checking
+- ✅ Adds converter attribute to base class
+
+**Result:** You get a complete, type-safe discriminated union with zero manual C# code!
+
+**Example output:**
+```csharp
+[JsonConverter(typeof(WidgetBaseConverter))]
+public abstract class WidgetBase {
+    public abstract string Type { get; }
+}
+
+public class TextWidget : WidgetBase {
+    public override string Type => "text";
+    public string Placeholder { get; set; }
+}
+
+public class NumberWidget : WidgetBase {
+    public override string Type => "number";
+    public double? Min { get; set; }
+}
+
+public class WidgetBaseConverter : JsonConverter<WidgetBase> {
+    // Automatically generated if-else chain!
+}
+```
 
 ## Adding New Widget Types
 
@@ -219,18 +298,18 @@ To add a new input widget (e.g., "color picker"):
 }
 ```
 
-### 4. Update C# Generator
+### 4. Regenerate Types
 
-In `generate-csharp.js`, add to the if-else chain in the converter:
-
-```javascript
-else if (type == "input" && widgetType == "color")
-    item = new InputColorLayoutItem();
+```bash
+npm run generate:all
 ```
 
-And add the C# class definition in the template string.
+The C# generator **automatically**:
+- Detects the new layout item in the `LayoutItem.oneOf` union
+- Generates the `InputColorLayoutItem` class inheriting from `LayoutItemBase`
+- Adds the discriminator case to the `LayoutItemConverter`
 
-### 5. Add Type Guard (TypeScript)
+### 5. Add Type Guard (TypeScript - Optional)
 
 In `generate-typescript.js`, add to the type guards section:
 

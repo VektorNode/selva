@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { getWebSocketClient } from '$lib/api/websocket';
+	import { getWebSocketState } from '$lib/api/websocket.svelte';
 	import { PageContainer, PageHeader, Panel } from '$lib/components/layout';
 	import { StateDisplay, Button } from '$lib/components/ui';
 	import {
@@ -32,8 +32,8 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { onMount } from 'svelte';
 
-	let wsClient = getWebSocketClient();
-	let wsConnected = $state(false);
+	// Get WebSocket state singleton - reactive properties update automatically
+	const wsState = getWebSocketState();
 
 	let sessionId = $state('');
 	let schema = $state<UISchema | null>(null);
@@ -68,8 +68,6 @@
 		// Define handlers at the top level so they can be cleaned up
 		const handleInitialData = (message: any) => {
 			if (message.sessionId === sessionId) {
-				console.log('[Builder] Received initial data:', message);
-
 				const result = processInitialDataSchema(message, true);
 				availableParams = result.availableParams;
 				schema = result.schema;
@@ -116,12 +114,10 @@
 				return;
 			}
 
-			wsConnected = result.connected;
+			wsState.on('initialData', handleInitialData);
+			wsState.on('schemaSaved', handleSchemaSaved);
 
-			wsClient.on('initialData', handleInitialData);
-			wsClient.on('schemaSaved', handleSchemaSaved);
-
-			wsClient.requestInitialData(sessionId);
+			wsState.requestInitialData(sessionId);
 		};
 
 		initializeBuilder();
@@ -129,8 +125,8 @@
 
 		return () => {
 			window.removeEventListener('keydown', handleKeydown);
-			wsClient.off('initialData', handleInitialData);
-			wsClient.off('schemaSaved', handleSchemaSaved);
+			wsState.off('initialData', handleInitialData);
+			wsState.off('schemaSaved', handleSchemaSaved);
 			// Don't disconnect - keep connection alive for page switching
 		};
 	});
@@ -138,12 +134,12 @@
 	function saveSchema() {
 		if (!schema || !sessionId) return;
 
-		if (!wsConnected || !wsClient.isConnected) {
+		if (!wsState.connected) {
 			toast.error('Not connected to Grasshopper');
 			return;
 		}
 
-		wsClient.saveSchema(sessionId, $state.snapshot(schema));
+		wsState.saveSchema(sessionId, $state.snapshot(schema));
 	}
 
 	//TODO: Add possibility to reorder tabs

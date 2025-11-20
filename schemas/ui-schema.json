@@ -51,8 +51,8 @@
     "NumberWidgetConfig": {
       "type": "object",
       "properties": {
-        "min": { "type": "number" },
-        "max": { "type": "number" },
+        "minimum": { "type": "number" },
+        "maximum": { "type": "number" },
         "step": { "type": "number" },
         "placeholder": { "type": "string" },
         "renderAsSlider": { "type": "boolean" }
@@ -325,7 +325,10 @@
     "AvailableParameter": {
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
+        "id": {
+          "type": "string",
+          "description": "Grasshopper parameter instance GUID"
+        },
         "name": { "type": "string" },
         "nickname": { "type": "string" },
         "description": { "type": "string" },
@@ -339,7 +342,7 @@
         "maximum": { "type": "number" },
         "stepSize": { "type": "number" },
         "atLeast": { "type": "integer", "default": 1 },
-        "atMost": { "type": "integer", "default": 2147483647 },
+        "atMost": { "type": "integer", "default": 1 },
         "treeAccess": { "type": "boolean", "default": false }
       },
       "required": [

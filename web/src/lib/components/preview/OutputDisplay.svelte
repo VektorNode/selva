@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { OutputLayoutItem} from '$lib/types/generated';
+	import type { OutputLayoutItem } from '$lib/types/generated';
 	import { Button } from '../ui';
 
 	interface Props {

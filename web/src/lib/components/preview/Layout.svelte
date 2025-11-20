@@ -128,7 +128,7 @@
 							debounceMs={layoutItem.widgetType === 'number' &&
 							(layoutItem.config as any).renderAsSlider &&
 							debounceSliders
-								? 20
+								? 5
 								: 0}
 						/>
 						<span class="font-mono text-sm text-muted-foreground">

@@ -1,6 +1,6 @@
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
-import { getWebSocketClient, type WebSocketClient } from '$lib/api/websocket';
+import { getWebSocketClient, type WebSocketClient } from '$lib/api/websocket.svelte';
 import type { UISchema, AvailableParameters } from '$lib/types/generated';
 
 /**
@@ -22,7 +22,6 @@ export interface SessionState {
 	error: string;
 	wsConnected: boolean;
 }
-
 
 /**
  * Navigate to a route while preserving the session ID
@@ -62,7 +61,8 @@ export async function initializeWebSocketSession(sessionId: string): Promise<Ses
 			sessionId,
 			wsClient,
 			connected: false,
-			error: 'Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled and port 8765 is available.'
+			error:
+				'Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled and port 8765 is available.'
 		};
 	}
 
