@@ -11,7 +11,7 @@
  * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
  * via the `definition` "GrasshopperParamType".
  */
-export type GrasshopperParamType = 'Number' | 'Integer' | 'Boolean' | 'Text' | 'Generic';
+export type GrasshopperParamType = 'Number' | 'Integer' | 'Boolean' | 'Text' | 'ValueList' | 'Generic';
 /**
  * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
  * via the `definition` "LayoutItem".

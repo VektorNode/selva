@@ -65,7 +65,6 @@
 	const activeTab = $derived(schema?.layout?.tabs?.find((t) => t.id === activeTabId));
 
 	onMount(() => {
-		// Define handlers at the top level so they can be cleaned up
 		const handleInitialData = (message: any) => {
 			if (message.sessionId === sessionId) {
 				const result = processInitialDataSchema(message, true);

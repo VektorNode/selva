@@ -11,6 +11,7 @@
         <EnableDynamicLoading>true</EnableDynamicLoading>
         <TargetExt>.gha</TargetExt>
         <NoWarn>NU1701</NoWarn>
+        <LangVersion>latest</LangVersion>
     </PropertyGroup>
 
     <PropertyGroup>
@@ -25,10 +26,15 @@
         <PackageReference Include="Grasshopper" Version="8.0.23304.9001" ExcludeAssets="runtime"/>
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3"/>
         <PackageReference Include="System.Drawing.Common" Version="8.0.0" Condition="'$(TargetFramework)' == 'net7.0'"/>
+        <PackageReference Include="Microsoft.Extensions.Logging" Version="7.0.0" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="Plugin\" />
-    </ItemGroup>
+<!--    <ItemGroup>-->
+<!--      <Reference Include="Compuceraptor">-->
+<!--        <HintPath>..\Compuceraptor\bin\Debug\net7.0\Compuceraptor.gha</HintPath>-->
+<!--          <ExcludeAssets>runtime</ExcludeAssets>-->
+<!--          <Private>False</Private>-->
+<!--      </Reference>-->
+<!--    </ItemGroup>-->
 
 </Project>

@@ -17,7 +17,7 @@ namespace ComputeBuilder.Plugin.Models.Generated
     // ============================================================================
 
     // GrasshopperParamType is a string for compatibility
-    // Valid values: "Number", "Integer", "Boolean", "Text", "Generic"
+    // Valid values: "Number", "Integer", "Boolean", "Text", "ValueList", "Generic"
 
     // ============================================================================
     // UISchema

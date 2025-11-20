@@ -63,6 +63,8 @@ export function mapParamTypeToWidgetType(
 				return 'checkbox';
 			case 'Text':
 				return 'text';
+			case 'ValueList':
+				return 'dropdown';
 			default:
 				return 'text';
 		}
@@ -95,7 +97,7 @@ export function createDefaultWidgetConfig(
 
 			case 'dropdown': {
 				const config: DropdownWidgetConfig = {
-					options: []
+					options: param.options || {}
 				};
 				return config;
 			}

@@ -7,7 +7,7 @@
   "definitions": {
     "GrasshopperParamType": {
       "type": "string",
-      "enum": ["Number", "Integer", "Boolean", "Text", "Generic"],
+      "enum": ["Number", "Integer", "Boolean", "Text", "ValueList", "Generic"],
       "description": "Grasshopper parameter types"
     },
 

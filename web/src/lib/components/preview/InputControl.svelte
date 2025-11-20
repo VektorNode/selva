@@ -149,6 +149,7 @@
 		/>
 	{:else if isDropdownWidget(item)}
 		{@const config = item.config as DropdownWidgetConfig}
+		{@const optionsArray = Object.entries(config.options || {})}
 		<Select.Root
 			type="single"
 			value={typeof value === 'string' ? value : undefined}
@@ -159,11 +160,15 @@
 			}}
 		>
 			<Select.Trigger class="w-full">
-				{value || 'Select an option...'}
+				{#if typeof value === 'string'}
+					{optionsArray.find(([key]) => key === value)?.[0] || value}
+				{:else}
+					Select an option...
+				{/if}
 			</Select.Trigger>
 			<Select.Content>
-				{#each config.options || [] as opt}
-					<Select.Item value={opt} label={opt} />
+				{#each optionsArray as [key, label]}
+					<Select.Item value={key} label={ key} />
 				{/each}
 			</Select.Content>
 		</Select.Root>

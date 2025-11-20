@@ -49,6 +49,10 @@ namespace ComputeBuilder.Plugin.Utils
                 }
 
                 var ghParam = param as IGH_Param;
+                var paramType = GetParameterTypeName(param);
+                var typeName = ghParam?.GetType().Name ?? "";
+                var isValueList = typeName.IndexOf("ValueList", StringComparison.OrdinalIgnoreCase) >= 0;
+
                 var availableParam = new AvailableParameter
                 {
                     Id = docObj.InstanceGuid,
@@ -56,33 +60,23 @@ namespace ComputeBuilder.Plugin.Utils
                     Nickname = docObj.NickName,
                     Description = docObj.Description ?? "",
                     Category = "input",
-                    ParamType = GetParameterTypeName(param),
-                    Default = ghParam?.VolatileData.AllData(true).FirstOrDefault()
-                        ?.ScriptVariable(), //TODO: properly handle tree inputs (not a priority for now)
+                    ParamType = paramType,
+                    Default = null, // Will be set below based on parameter type
                     AtLeast = param.AtLeast,
                     AtMost = param.AtMost,
                 };
 
-
-                var typeName = ghParam.GetType().Name;
-                if (typeName.IndexOf("ValueList", StringComparison.OrdinalIgnoreCase) >= 0)
+                // Handle ValueList parameters specially
+                if (isValueList)
                 {
                     try
                     {
-                        // Try common property names and fields for value lists
-                        object rawValues = null;
-                        var candidateMembers = new[] { "Values", "ListItems", "Items" };
-
+                        // Extract the options dictionary from the ValueList
                         var prop = ghParam.GetType().GetProperty("Values",
                             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                         if (prop != null)
                         {
-                            rawValues = prop.GetValue(ghParam);
-                        }
-
-                        if (rawValues != null)
-                        {
-                            // If it's an IDictionary, copy entries directly
+                            var rawValues = prop.GetValue(ghParam);
                             if (rawValues is System.Collections.IDictionary idict)
                             {
                                 var dict = new Dictionary<string, object>();
@@ -91,8 +85,30 @@ namespace ComputeBuilder.Plugin.Utils
                                     var key = de.Key?.ToString() ?? string.Empty;
                                     dict[key] = de.Value;
                                 }
-
                                 availableParam.Options = dict;
+                            }
+                        }
+
+                        // Get the selected key from the ValueList (the currently selected item)
+                        // ValueLists store their selection as the first item in VolatileData
+                        var selectedValue = ghParam?.VolatileData.AllData(true).FirstOrDefault()?.ScriptVariable();
+                        if (selectedValue != null && availableParam.Options != null)
+                        {
+                            // Try to find the matching key for this value
+                            foreach (var kvp in availableParam.Options)
+                            {
+                                // Compare the value (expression) with the selected value
+                                if (kvp.Value?.ToString() == selectedValue?.ToString())
+                                {
+                                    availableParam.Default = kvp.Key; // Store the key, not the value
+                                    break;
+                                }
+                            }
+
+                            // If we couldn't find a match, use the first key as default
+                            if (availableParam.Default == null && availableParam.Options.Count > 0)
+                            {
+                                availableParam.Default = availableParam.Options.Keys.First();
                             }
                         }
                     }
@@ -100,6 +116,12 @@ namespace ComputeBuilder.Plugin.Utils
                     {
                         // ignored
                     }
+                }
+                else
+                {
+                    // For non-ValueList parameters, get the default value normally
+                    availableParam.Default = ghParam?.VolatileData.AllData(true).FirstOrDefault()
+                        ?.ScriptVariable(); //TODO: properly handle tree inputs (not a priority for now)
                 }
 
                 // Extract TreeAccess property via reflection
