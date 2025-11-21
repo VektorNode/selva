@@ -13,7 +13,7 @@
     type DataTree,
     type InputParam,
     type NestedGroupNode,
-  } from 'rhino-compute-core/grasshopper';
+  } from '@computebuilder/core/grasshopper';
   import { type Snippet } from 'svelte';
 
   let isInitialMount = $state(true);

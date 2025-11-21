@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { slide } from 'svelte/transition';
-  import type { NestedGroupNode } from 'rhino-compute-core/grasshopper';
+  import type { NestedGroupNode } from '@computebuilder/core/grasshopper';
   import NestedAccordion from './NestedAccordion.svelte';
 
   interface Props {

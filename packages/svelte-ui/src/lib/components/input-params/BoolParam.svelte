@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { BooleanInputType, DataTreeDefault } from 'rhino-compute-core/grasshopper';
+  import type { BooleanInputType, DataTreeDefault } from '@computebuilder/core/grasshopper';
   import type { Snippet } from 'svelte';
   import BaseParam from './BaseParam.svelte';
-  import * as Checkbox from '$lib/components/ui/checkbox';
+  import * as Checkbox from '$lib/components/ui/checkbox/index.js';
   import Label from '$lib/components/ui/label/label.svelte';
 
   type Props = {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import InputHandler from '$lib/InputHandler.svelte';
 	import { example2 } from '$lib/utils/data.js';
-	import type { DataTree } from 'rhino-compute-core';
+	import type { DataTree } from '@computebuilder/core';
 
 	console.log('Example Inputs:', example2);
 

@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { DataTreeDefault, ValueListInputType } from 'rhino-compute-core/grasshopper';
+  import type { DataTreeDefault, ValueListInputType } from '@computebuilder/core/grasshopper';
   import type { Snippet } from 'svelte';
   import BaseParam from './BaseParam.svelte';
-  import * as Select from '$lib/components/ui/select';
+  import * as Select from '$lib/components/ui/select/index.js';
 
   type Props = {
     input: ValueListInputType;
@@ -28,15 +28,21 @@
     {#if customInput}
       {@render customInput({ value: entry.value, onUpdate, input })}
     {:else}
+      {#snippet selectValue(props: any)}
+        {options.find((o) => o.value === props.value)?.label ?? 'Select an option'}
+      {/snippet}
+
       <Select.Root
-        selected={{
-          value: entry.value,
-          label: options.find((o) => o.value === entry.value)?.label ?? entry.value,
+        type="single"
+        value={entry.value}
+        onValueChange={(val: string | undefined) => {
+          if (val) {
+            onUpdate(val);
+          }
         }}
-        onSelectedChange={(selected: any) => selected && onUpdate(selected.value)}
       >
         <Select.Trigger class="w-full">
-          <Select.Value placeholder="Select an option" />
+          {@render selectValue({ value: entry.value })}
         </Select.Trigger>
         <Select.Content>
           {#each options as option (option.value)}

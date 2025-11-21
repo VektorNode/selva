@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { DataTreeDefault, NumericInputType } from 'rhino-compute-core/grasshopper';
+  import type { DataTreeDefault, NumericInputType } from '@computebuilder/core/grasshopper';
   import type { Snippet } from 'svelte';
   import BaseParam from './BaseParam.svelte';
   import Input from '$lib/components/ui/input/input.svelte';
-  import * as Slider from '$lib/components/ui/slider';
+  import * as Slider from '$lib/components/ui/slider/index.js';
   import { validateNumber, getSliderConfig } from '../../utils/validation.js';
   import { cn } from '$lib/utils.js';
 
@@ -92,11 +92,12 @@
         {#if showSlider && hasMinMax}
           <div class="space-y-1">
             <Slider.Root
-              value={[entry.value]}
+              type="single"
+              value={entry.value}
               min={sliderConfig.min}
               max={sliderConfig.max}
               step={sliderConfig.step}
-              onValueChange={(values: number[]) => onUpdate(values[0])}
+              onValueChange={(value: number) => onUpdate(value)}
               class="w-full"
             />
             <div class="flex justify-between text-xs text-muted-foreground">

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { DataTreeDefault, PointInputType } from 'rhino-compute-core/grasshopper';
-  import type { Point } from 'rhino-compute-core/geometry';
+  import type { DataTreeDefault, PointInputType } from '@computebuilder/core/grasshopper';
+  import type { Point } from '@computebuilder/core/geometry';
   import BaseParam from './BaseParam.svelte';
   import Input from '$lib/components/ui/input/input.svelte';
   import Label from '$lib/components/ui/label/label.svelte';

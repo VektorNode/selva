@@ -1,4 +1,4 @@
-import type { InputParam } from 'rhino-compute-core/grasshopper';
+import type { InputParam } from '@computebuilder/core/grasshopper';
 
 export const exampleInputTypes: InputParam[] = [
   {

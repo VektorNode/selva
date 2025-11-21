@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import * as AccordionPrimitive from '$lib/components/ui/accordion';
+  import * as AccordionPrimitive from '$lib/components/ui/accordion/index.js';
   import { cn } from '$lib/utils.js';
 
   interface AccordionItem {
@@ -27,7 +27,7 @@
     ontoggle,
   }: Props = $props();
 
-  // Bind to accordion value to track open items
+  // Initialize value based on type - string for single, array for multiple
   let value = $state<string | string[]>(allowMultiple ? defaultOpen : (defaultOpen[0] ?? ''));
 
   // Watch value changes to emit toggle events
@@ -43,19 +43,38 @@
   });
 </script>
 
-<AccordionPrimitive.Root
-  type={allowMultiple ? 'multiple' : 'single'}
-  bind:value
-  class={cn('w-full', className)}
->
-  {#each items as item (item.id)}
-    <AccordionPrimitive.Item value={item.id} disabled={item.disabled}>
-      <AccordionPrimitive.Trigger>
-        {item.title}
-      </AccordionPrimitive.Trigger>
-      <AccordionPrimitive.Content>
-        {@render children(item)}
-      </AccordionPrimitive.Content>
-    </AccordionPrimitive.Item>
-  {/each}
-</AccordionPrimitive.Root>
+{#if allowMultiple}
+  <AccordionPrimitive.Root
+    type="multiple"
+    bind:value={value as string[]}
+    class={cn('w-full', className)}
+  >
+    {#each items as item (item.id)}
+      <AccordionPrimitive.Item value={item.id} disabled={item.disabled}>
+        <AccordionPrimitive.Trigger>
+          {item.title}
+        </AccordionPrimitive.Trigger>
+        <AccordionPrimitive.Content>
+          {@render children(item)}
+        </AccordionPrimitive.Content>
+      </AccordionPrimitive.Item>
+    {/each}
+  </AccordionPrimitive.Root>
+{:else}
+  <AccordionPrimitive.Root
+    type="single"
+    bind:value={value as string}
+    class={cn('w-full', className)}
+  >
+    {#each items as item (item.id)}
+      <AccordionPrimitive.Item value={item.id} disabled={item.disabled}>
+        <AccordionPrimitive.Trigger>
+          {item.title}
+        </AccordionPrimitive.Trigger>
+        <AccordionPrimitive.Content>
+          {@render children(item)}
+        </AccordionPrimitive.Content>
+      </AccordionPrimitive.Item>
+    {/each}
+  </AccordionPrimitive.Root>
+{/if}

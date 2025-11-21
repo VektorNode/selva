@@ -1,4 +1,4 @@
-import type { NumericInputType } from 'rhino-compute-core/grasshopper';
+import type { NumericInputType } from '@computebuilder/core/grasshopper';
 
 /**
  * Validation result for numeric inputs

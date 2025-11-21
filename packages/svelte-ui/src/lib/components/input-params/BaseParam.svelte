@@ -1,6 +1,6 @@
 <script lang="ts" generics="T">
 	import type { Snippet } from 'svelte';
-	import type { DataTreeDefault } from 'rhino-compute-core/grasshopper';
+	import type { DataTreeDefault } from '@computebuilder/core/grasshopper';
 	import {
 		isDataTree,
 		getValueEntries,

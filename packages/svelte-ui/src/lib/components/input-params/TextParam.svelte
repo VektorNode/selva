@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { DataTreeDefault, TextInputType } from 'rhino-compute-core/grasshopper';
+  import type { DataTreeDefault, TextInputType } from '@computebuilder/core/grasshopper';
   import type { Snippet } from 'svelte';
   import BaseParam from './BaseParam.svelte';
   import Input from '$lib/components/ui/input/input.svelte';
