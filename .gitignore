@@ -28,8 +28,7 @@ bld/
 
 # NuGet Packages
 *.nupkg
-**/packages/*
-!**/packages/build/
+
 
 # ReSharper
 _ReSharper*/
@@ -53,5 +52,4 @@ ehthumbs.db
 # Web
 **/node_modules/
 **/.svelte-kit/
-web/build/
-web/package/
+

@@ -1,0 +1,179 @@
+import { ErrorCodes } from '@/core/errors';
+import { RhinoComputeError } from '@/core/errors/base';
+import ComputeServerStats from '@/core/server/compute-server-stats';
+import { ComputeConfig } from '@/core/types';
+
+import { fetchDefinitionIO, fetchParsedDefinitionIO, solveGrasshopperDefinition } from '..';
+import { DataTree, GrasshopperComputeConfig, GrasshopperComputeResponse } from '../types';
+
+/**
+ * GrasshopperClient provides a simple API for interacting with a Rhino Compute server and grasshopper.
+ *
+ * @public This is the recommended high-level API for Rhino Compute operations.
+ *
+ * **Security Warning:**
+ * Using this client in a browser environment exposes your server URL and API key to users.
+ * For production, use this library server-side or proxy requests through your own backend.
+ *
+ * @example
+ * ```typescript
+ * const client = new GrasshopperClient({
+ *   serverUrl: 'http://localhost:6500',
+ *   apiKey: 'your-api-key'
+ * });
+ *
+ * try {
+ *   const result = await client.solve(definitionUrl, { x: 1, y: 2 });
+ * } finally {
+ *   await client.dispose(); // Clean up resources
+ * }
+ * ```
+ */
+export default class GrasshopperClient {
+  private readonly config: GrasshopperComputeConfig;
+  public readonly serverStats: ComputeServerStats;
+  private disposed = false;
+
+  constructor(config: GrasshopperComputeConfig) {
+    this.config = this.normalizeComputeConfig(config);
+    this.serverStats = new ComputeServerStats(this.config.serverUrl, this.config.apiKey);
+  }
+
+  /**
+   * Gets the client's configuration.
+   * Useful for passing to lower-level functions.
+   */
+  public getConfig(): GrasshopperComputeConfig {
+    this.ensureNotDisposed();
+    return { ...this.config };
+  }
+
+  /**
+   * Get input/output parameters of a Grasshopper definition.
+   */
+  public async getIO(definitionUrl: string) {
+    this.ensureNotDisposed();
+    return fetchParsedDefinitionIO(definitionUrl, this.config);
+  }
+
+  public async getRawIO(definitionUrl: string) {
+    this.ensureNotDisposed();
+    return fetchDefinitionIO(definitionUrl, this.config);
+  }
+
+  /**
+   * Run a compute job with a Grasshopper definition.
+   */
+  public async solve(
+    definitionUrl: string,
+    dataTree: DataTree[],
+  ): Promise<GrasshopperComputeResponse> {
+    this.ensureNotDisposed();
+
+    try {
+      // Validate inputs
+      if (!definitionUrl?.trim()) {
+        throw new Error('Definition URL is required');
+      }
+
+      // Check server
+      if (!(await this.serverStats.isServerOnline())) {
+        throw new Error('Rhino Compute server is not online');
+      }
+
+      // Run computation
+      const result = await solveGrasshopperDefinition(dataTree, definitionUrl, this.config);
+
+      // Check for errors
+      if (result && typeof result === 'object' && 'message' in result && !('fileData' in result)) {
+        throw new RhinoComputeError(
+          (result as { message: string }).message || 'Computation failed',
+          ErrorCodes.COMPUTATION_ERROR,
+          {
+            context: {
+              definitionUrl,
+              inputs: dataTree,
+            },
+          },
+        );
+      }
+
+      return result;
+    } catch (error) {
+      if (this.config.debug) {
+        console.error('Compute failed:', error);
+      }
+
+      if (error instanceof RhinoComputeError) {
+        throw error;
+      }
+
+      throw new RhinoComputeError(
+        error instanceof Error ? error.message : String(error),
+        undefined,
+        { context: { definitionUrl, inputs: dataTree } },
+      );
+    }
+  }
+
+  /**
+   * Disposes of client resources.
+   * Call this when you're done using the client.
+   */
+  public async dispose(): Promise<void> {
+    if (this.disposed) return;
+
+    this.disposed = true;
+
+    // If serverStats has a dispose method, call it
+    if ('dispose' in this.serverStats && typeof this.serverStats.dispose === 'function') {
+      await this.serverStats.dispose();
+    }
+
+    // Clear any cached data or connections if needed
+  }
+
+  /**
+   * Ensures the client hasn't been disposed.
+   */
+  private ensureNotDisposed(): void {
+    if (this.disposed) {
+      throw new RhinoComputeError(
+        'GrasshopperClient has been disposed and cannot be used',
+        ErrorCodes.INVALID_STATE,
+      );
+    }
+  }
+
+  /**
+   * Validates and normalizes a compute configuration.
+   */
+  private normalizeComputeConfig<T extends ComputeConfig | GrasshopperComputeConfig>(config: T): T {
+    if (!config.serverUrl?.trim()) {
+      throw new Error('serverUrl is required');
+    }
+
+    // Validate URL format
+    try {
+      new URL(config.serverUrl);
+    } catch {
+      throw new Error('serverUrl must be a valid URL');
+    }
+
+    // Validate that it's not the default public endpoint
+    if (config.serverUrl === '' || config.serverUrl === 'https://compute.rhino3d.com/') {
+      throw new Error(
+        'serverUrl must be set to your Compute server URL. The default public endpoint is not allowed.',
+      );
+    }
+
+    return {
+      ...config,
+      serverUrl: config.serverUrl.replace(/\/+$/, ''), // Remove trailing slashes
+      apiKey: config.apiKey,
+      authToken: config.authToken,
+      debug: config.debug ?? false,
+      suppressClientSideWarning: config.suppressClientSideWarning,
+    } as T;
+  }
+}

@@ -1,0 +1,48 @@
+/**
+ * Visualization utilities for rhino-compute-core
+ *
+ * Provides Three.js integration and web display mesh parsing.
+ *
+ * @module visualization
+ */
+
+// ============================================================================
+// THREE.JS VISUALIZATION
+// ============================================================================
+
+export {
+  initThree,
+  updateScene,
+  Materials,
+  VerticesToThreeMesh,
+  parseColor,
+  applyOffset,
+  computeCombinedBoundingBox,
+  ROTATION_COS,
+  ROTATION_SIN,
+} from './threejs';
+
+export type { ThreeDisplay } from './threejs/three-helpers';
+
+// ============================================================================
+// WEB DISPLAY PARSING
+// ============================================================================
+
+export { getThreeMeshesFromComputeResponse } from './webdisplay';
+
+export { decompressMeshData } from './webdisplay/mesh-compression';
+
+// ============================================================================
+// TYPE EXPORTS
+// ============================================================================
+
+export type {
+  ThreeInitializerOptions,
+  CameraConfig,
+  LightingConfig,
+  EnvironmentConfig,
+  FloorConfig,
+  RenderConfig,
+  ControlsConfig,
+  EventConfig,
+} from './types';
