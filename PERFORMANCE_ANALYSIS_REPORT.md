@@ -11,6 +11,7 @@
 This comprehensive analysis identifies remaining performance bottlenecks, robustness issues, dead code, and architectural improvements for the ComputeBuilder system.
 
 ### Completed Improvements ✅
+
 - ✅ **Reflection Caching** - 85-90% performance improvement (10-15ms → 1-2ms per parameter update)
 - ✅ **ValueList Optimization** - 70% overhead reduction (30ms → 9ms)
 - ✅ **Schema Versioning** - Semantic versioning with automatic migration
@@ -20,12 +21,14 @@ This comprehensive analysis identifies remaining performance bottlenecks, robust
 - ✅ **Broadcast Timeout** - 5-second timeout prevents slow clients from blocking others
 
 ### Remaining Issues
+
 - ⚠️ **1 Medium-Severity Performance Bottleneck**
 - ⚠️ **5 Robustness/Error Handling Gaps**
 - ⚠️ **3 Resource Leak Risks**
 - ⚠️ **2 Dead Code Sections**
 
 ### Performance Impact Achieved
+
 - **Before**: ~15-30ms per value update (reflection overhead)
 - **After**: ~2-5ms per value update
 - **Improvement**: 5-10x faster parameter updates
@@ -39,12 +42,14 @@ This comprehensive analysis identifies remaining performance bottlenecks, robust
 **Location:** `Plugin/Utils/WebSocketServer.cs:119-169`
 
 **Issue:** No compression on WebSocket messages
+
 ```csharp
 var buffer = Encoding.UTF8.GetBytes(message); // No compression
 await client.SendAsync(segment, WebSocketMessageType.Text, true, cts.Token);
 ```
 
 **Impact:**
+
 - Large geometry outputs: 100KB → 1MB+ uncompressed JSON
 - Network bottleneck on complex models
 - Increased latency for remote connections
@@ -57,6 +62,7 @@ await client.SendAsync(segment, WebSocketMessageType.Text, true, cts.Token);
 | Simple Update | 2KB | 1.5KB | 25% |
 
 **Solution:**
+
 ```csharp
 private async Task BroadcastAsync(string message)
 {
@@ -97,16 +103,19 @@ private async Task BroadcastAsync(string message)
 **Location:** `Plugin/Utils/CommunicationHandler.cs:123`
 
 **Issue:** Blocking wait on async operation
+
 ```csharp
 Task.Run(async () => await _webSocketServer.StartAsync()).Wait(5000); // BLOCKS for up to 5s
 ```
 
 **Impact:**
+
 - Blocks Grasshopper UI thread for up to 5 seconds
 - User perceives sluggish component behavior
 - Timeout doesn't cancel the underlying operation
 
 **Solution:**
+
 ```csharp
 // Fire-and-forget with completion callback
 Task.Run(async () =>
@@ -134,6 +143,7 @@ Task.Run(async () =>
 **Location:** Multiple files
 
 **Issue:** Silent failures hide performance problems
+
 ```csharp
 // WebSocketServer.cs:96-98, 163-165, 240-242, 375-378, 400-402
 catch
@@ -143,11 +153,13 @@ catch
 ```
 
 **Impact:**
+
 - Hidden socket errors → degraded performance
 - Difficult to diagnose production issues
 - May mask resource leaks
 
 **Solution:**
+
 ```csharp
 catch (Exception ex)
 {
@@ -165,46 +177,50 @@ catch (Exception ex)
 **Location:** `web/src/lib/websocket/websocket.svelte.ts:66-72`
 
 **Issue:** No size check before parsing
+
 ```typescript
 this.socket.onmessage = (event) => {
-    try {
-        const message = JSON.parse(event.data); // Could be 100MB+
-        this.handleMessage(message);
-    } catch (error) {
-        console.error('[WebSocket] Failed to parse message:', error);
-    }
+  try {
+    const message = JSON.parse(event.data); // Could be 100MB+
+    this.handleMessage(message);
+  } catch (error) {
+    console.error('[WebSocket] Failed to parse message:', error);
+  }
 };
 ```
 
 **Impact:**
+
 - Large message can freeze browser
 - JSON.parse blocks UI thread
 - No protection against malformed data
 
 **Solution:**
+
 ```typescript
 const MAX_MESSAGE_SIZE = 10 * 1024 * 1024; // 10MB
 
 this.socket.onmessage = (event) => {
-    const data = event.data;
+  const data = event.data;
 
-    if (data.length > MAX_MESSAGE_SIZE) {
-        console.error('[WebSocket] Message too large:', data.length);
-        return;
-    }
+  if (data.length > MAX_MESSAGE_SIZE) {
+    console.error('[WebSocket] Message too large:', data.length);
+    return;
+  }
 
-    // Use Worker for large messages
-    if (data.length > 100000) { // 100KB
-        // Offload to Web Worker
-        parseInWorker(data).then(message => this.handleMessage(message));
-    } else {
-        try {
-            const message = JSON.parse(data);
-            this.handleMessage(message);
-        } catch (error) {
-            console.error('[WebSocket] Failed to parse message:', error);
-        }
+  // Use Worker for large messages
+  if (data.length > 100000) {
+    // 100KB
+    // Offload to Web Worker
+    parseInWorker(data).then((message) => this.handleMessage(message));
+  } else {
+    try {
+      const message = JSON.parse(data);
+      this.handleMessage(message);
+    } catch (error) {
+      console.error('[WebSocket] Failed to parse message:', error);
     }
+  }
 };
 ```
 
@@ -215,17 +231,20 @@ this.socket.onmessage = (event) => {
 **Location:** `Plugin/Components/UI/UIBuilderComponent.cs:632-661`
 
 **Issue:** Events registered but not always unregistered
+
 ```csharp
 _currentDocument.SolutionStart += OnSolutionStart;
 // What if component is deleted while document stays open?
 ```
 
 **Impact:**
+
 - Event handlers keep component alive (GC can't collect)
 - Memory leak over multiple component add/delete cycles
 - Accumulating event handlers fire multiple times
 
 **Solution:**
+
 ```csharp
 // Add WeakReference pattern or ensure UnregisterDocumentEvents in all cleanup paths
 public override void RemovedFromDocument(GH_Document document)
@@ -260,17 +279,18 @@ protected virtual void Dispose(bool disposing)
 **Issue:** Single attempt, no retry on network failure
 
 **Solution:**
+
 ```typescript
 async function saveSchemaWithRetry(maxRetries = 3) {
-    for (let i = 0; i < maxRetries; i++) {
-        try {
-            await wsState.saveSchema(sessionId, schema);
-            return; // Success
-        } catch (error) {
-            if (i === maxRetries - 1) throw error;
-            await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-        }
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await wsState.saveSchema(sessionId, schema);
+      return; // Success
+    } catch (error) {
+      if (i === maxRetries - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)));
     }
+  }
 }
 ```
 
@@ -281,11 +301,13 @@ async function saveSchemaWithRetry(maxRetries = 3) {
 **Location:** `Plugin/Utils/WebSocketServer.cs:60`
 
 **Issue:** Fixed port 8765, no fallback
+
 ```csharp
 _httpListener.Start(); // Throws if port in use
 ```
 
 **Solution:**
+
 ```csharp
 private int TryStart(int startPort, int maxAttempts = 5)
 {
@@ -315,6 +337,7 @@ private int TryStart(int startPort, int maxAttempts = 5)
 **Location:** `Plugin/Components/UI/UIBuilderComponent.cs:143-146`
 
 **Issue:** Event handlers not unsubscribed in all paths
+
 ```csharp
 _communicationHandler.OnValuesReceived += HandleWebSocketValueUpdate;
 // ... other subscriptions
@@ -332,6 +355,7 @@ _communicationHandler.OnValuesReceived += HandleWebSocketValueUpdate;
 **Location:** `Plugin/Components/UI/UIBuilderComponent.cs:474-491`
 
 **Dead Code:**
+
 ```csharp
 // Line 474-491: ExtractKeyValue() method
 private object ExtractKeyValue(IGH_Goo data)
@@ -350,6 +374,7 @@ private object ExtractKeyValue(IGH_Goo data)
 **Location:** `Plugin/Components/UI/UIBuilderComponent.cs:297-300`
 
 **Dead Code:**
+
 ```csharp
 protected override void AfterSolveInstance()
 {
@@ -368,10 +393,11 @@ protected override void AfterSolveInstance()
 **Location:** `web/src/lib/websocket/websocket.svelte.ts:101-103`
 
 **Issue:** Timer cleared but not explicitly disposed
+
 ```typescript
 if (this.reconnectTimer) {
-    clearTimeout(this.reconnectTimer); // OK for browser
-    this.reconnectTimer = null;
+  clearTimeout(this.reconnectTimer); // OK for browser
+  this.reconnectTimer = null;
 }
 ```
 
@@ -384,6 +410,7 @@ if (this.reconnectTimer) {
 **Location:** `Plugin/Utils/WebSocketServer.cs:35-43`
 
 **Issue:** HttpListener uses Close() but not Dispose()
+
 ```csharp
 public void Dispose()
 {
@@ -395,6 +422,7 @@ public void Dispose()
 ```
 
 **Solution:**
+
 ```csharp
 public void Dispose()
 {
@@ -412,6 +440,7 @@ public void Dispose()
 **Location:** `Plugin/Utils/ValueApplicator.cs:30`
 
 **Issue:** `_pendingExpirations` cleared only after callback
+
 ```csharp
 private readonly List<IGH_ActiveObject> _pendingExpirations = new List<IGH_ActiveObject>();
 // If callback never fires (exception in ScheduleSolution), list grows unbounded
@@ -478,24 +507,24 @@ public static class ErrorMetrics
 
 ### 6.1 Backend (C#)
 
-| Priority | Item | Impact | Effort | Status |
-|----------|------|--------|--------|--------|
-| ✅ Critical | Cache reflection results | High (85% faster) | Medium | **DONE** |
-| ✅ Critical | Add WebSocket heartbeat | High (prevents leaks) | Low | **DONE** |
-| 🟡 High | Implement message compression | High (75% bandwidth) | Medium | TODO |
-| ✅ High | Add connection limits | Medium (security) | Low | **DONE** |
-| 🟡 High | Fix event handler leaks | Medium (memory) | Low | TODO |
-| ✅ Medium | Cache ValueList reflection | Medium (70% faster) | Medium | **DONE** |
-| ✅ Medium | Add broadcast timeout | Low (robustness) | Low | **DONE** |
-| 🔵 Low | Remove dead code | Low (clarity) | Low | TODO |
+| Priority    | Item                          | Impact                | Effort | Status   |
+| ----------- | ----------------------------- | --------------------- | ------ | -------- |
+| ✅ Critical | Cache reflection results      | High (85% faster)     | Medium | **DONE** |
+| ✅ Critical | Add WebSocket heartbeat       | High (prevents leaks) | Low    | **DONE** |
+| 🟡 High     | Implement message compression | High (75% bandwidth)  | Medium | TODO     |
+| ✅ High     | Add connection limits         | Medium (security)     | Low    | **DONE** |
+| 🟡 High     | Fix event handler leaks       | Medium (memory)       | Low    | TODO     |
+| ✅ Medium   | Cache ValueList reflection    | Medium (70% faster)   | Medium | **DONE** |
+| ✅ Medium   | Add broadcast timeout         | Low (robustness)      | Low    | **DONE** |
+| 🔵 Low      | Remove dead code              | Low (clarity)         | Low    | TODO     |
 
 ### 6.2 Frontend (TypeScript)
 
-| Priority | Item | Impact | Effort | Status |
-|----------|------|--------|--------|--------|
-| 🟡 High | Add message size validation | Medium (security) | Low | TODO |
-| 🟡 High | Implement Web Worker parsing | Medium (UI smoothness) | Medium | TODO |
-| 🔵 Medium | Add retry logic | Low (UX) | Low | TODO |
+| Priority  | Item                         | Impact                 | Effort | Status |
+| --------- | ---------------------------- | ---------------------- | ------ | ------ |
+| 🟡 High   | Add message size validation  | Medium (security)      | Low    | TODO   |
+| 🟡 High   | Implement Web Worker parsing | Medium (UI smoothness) | Medium | TODO   |
+| 🔵 Medium | Add retry logic              | Low (UX)               | Low    | TODO   |
 
 ---
 
@@ -504,6 +533,7 @@ public static class ErrorMetrics
 ### 7.1 Found TODOs
 
 **Location:** `Plugin/Utils/SchemaManager.cs:114`
+
 ```csharp
 ?.ScriptVariable(); //TODO: properly handle tree inputs (not a priority for now)
 ```
@@ -551,18 +581,19 @@ public class PerformanceTests
 
 ### 8.2 Real-World Scenarios
 
-| Scenario | Before | Current | Target | Status |
-|----------|--------|---------|--------|--------|
-| Single slider update | 15-20ms | **2-3ms** | <5ms | ✅ ACHIEVED |
-| 5 param updates | 75-100ms | **10-15ms** | <25ms | ✅ ACHIEVED |
-| Large mesh output | 200-400ms | 200-400ms | <100ms | ⚠️ Needs compression |
-| 10 concurrent clients | Memory leak | **Stable** | Stable | ✅ ACHIEVED |
+| Scenario              | Before      | Current     | Target | Status               |
+| --------------------- | ----------- | ----------- | ------ | -------------------- |
+| Single slider update  | 15-20ms     | **2-3ms**   | <5ms   | ✅ ACHIEVED          |
+| 5 param updates       | 75-100ms    | **10-15ms** | <25ms  | ✅ ACHIEVED          |
+| Large mesh output     | 200-400ms   | 200-400ms   | <100ms | ⚠️ Needs compression |
+| 10 concurrent clients | Memory leak | **Stable**  | Stable | ✅ ACHIEVED          |
 
 ---
 
 ## 9. Implementation Priority
 
 ### Phase 1: Critical Fixes ✅ COMPLETED
+
 1. ✅ **Implement schema versioning** - DONE
 2. ✅ **Cache reflection in ValueApplicator** - DONE (85-90% overhead reduction)
 3. ✅ **Add WebSocket heartbeat** - DONE (30s interval, auto-cleanup)
@@ -572,6 +603,7 @@ public class PerformanceTests
 **Impact:** 85% performance improvement achieved for reflection, memory leaks prevented
 
 ### Phase 2: High-Value Improvements (Recommended Next)
+
 1. 🟡 Implement message compression (75% bandwidth reduction)
 2. 🟡 Add message size validation (frontend security)
 3. 🟡 Fix event handler leaks (memory stability)
@@ -579,6 +611,7 @@ public class PerformanceTests
 **Expected Impact:** 70% bandwidth reduction, better security
 
 ### Phase 3: Polish
+
 1. 🔵 Add structured logging
 2. 🔵 Remove dead code
 3. 🔵 Implement retry logic
@@ -593,6 +626,7 @@ public class PerformanceTests
 ### 10.1 Key Performance Indicators
 
 Track these metrics:
+
 - **Reflection time**: ✅ Target <2ms per parameter - ACHIEVED
 - **WebSocket latency**: Target <10ms round-trip
 - **Message size**: Target <50KB average (needs compression)
@@ -602,6 +636,7 @@ Track these metrics:
 ### 10.2 Instrumentation Points
 
 Add telemetry:
+
 ```csharp
 public class PerformanceMetrics
 {
@@ -623,15 +658,15 @@ public class PerformanceMetrics
 
 ## Appendix A: Code Health Summary
 
-| Category | Grade | Issues | Notes |
-|----------|-------|--------|-------|
-| **Performance** | A- | 1 bottleneck | Reflection fixed, compression pending |
-| **Robustness** | B+ | 3 gaps | Heartbeat added, event cleanup pending |
-| **Error Handling** | B | Good patterns | Could use structured logging |
-| **Memory Safety** | B+ | 2 leak risks | Heartbeat prevents major leaks |
-| **Security** | A- | Minor issues | Connection limits added |
-| **Code Quality** | A- | Minimal dead code | Well-structured post-refactor |
-| **Documentation** | A | Excellent | CLAUDE.md comprehensive |
+| Category           | Grade | Issues            | Notes                                  |
+| ------------------ | ----- | ----------------- | -------------------------------------- |
+| **Performance**    | A-    | 1 bottleneck      | Reflection fixed, compression pending  |
+| **Robustness**     | B+    | 3 gaps            | Heartbeat added, event cleanup pending |
+| **Error Handling** | B     | Good patterns     | Could use structured logging           |
+| **Memory Safety**  | B+    | 2 leak risks      | Heartbeat prevents major leaks         |
+| **Security**       | A-    | Minor issues      | Connection limits added                |
+| **Code Quality**   | A-    | Minimal dead code | Well-structured post-refactor          |
+| **Documentation**  | A     | Excellent         | CLAUDE.md comprehensive                |
 
 **Overall Grade: A-** (Significant improvements made, minor optimizations remaining)
 
@@ -640,6 +675,7 @@ public class PerformanceMetrics
 ## Appendix B: Architecture Strengths
 
 ✅ **What's Working Well:**
+
 1. **Clean separation of concerns** (SchemaManager, ValueApplicator, CommunicationHandler)
 2. **WebSocket-first design** (no polling overhead)
 3. **JSON Schema as single source of truth** (type safety)
@@ -657,6 +693,7 @@ public class PerformanceMetrics
 The ComputeBuilder codebase has undergone significant performance and robustness improvements:
 
 ### Completed Improvements ✅
+
 - ✅ **5-10x faster parameter updates** - Reflection caching with ConcurrentDictionary
 - ✅ **ValueList optimization** - 70% overhead reduction with property caching
 - ✅ **Future-proof schemas** - Semantic versioning with migration system
@@ -665,6 +702,7 @@ The ComputeBuilder codebase has undergone significant performance and robustness
 - ✅ **DoS protection** - Connection limits and broadcast timeouts
 
 ### Remaining Recommended Work
+
 - 🟡 **50-75% smaller messages** - Implement gzip compression for large payloads
 - 🟡 **Event handler cleanup** - Ensure proper disposal in all code paths
 - 🔵 **Better debugging** - Add structured logging framework

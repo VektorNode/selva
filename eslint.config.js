@@ -1,53 +1,55 @@
-import js from '@eslint/js';
-import tsPlugin from '@typescript-eslint/eslint-plugin';
-import tsParser from '@typescript-eslint/parser';
-import prettierConfig from 'eslint-config-prettier';
-import sveltePlugin from 'eslint-plugin-svelte';
-import globals from 'globals';
+import js from "@eslint/js";
+import prettier from "eslint-config-prettier";
+import ts from "typescript-eslint";
 
 export default [
+  {
+    ignores: [
+      "node_modules",
+      "dist",
+      "build",
+      ".svelte-kit",
+      "coverage",
+      "packages/*/dist",
+      "packages/*/.svelte-kit",
+      "examples/*/dist",
+      "examples/*/.svelte-kit",
+      "bin",
+      "obj",
+      "**/*.svelte",
+      "**/eslint.config.*",
+      "**/Generated/**",
+      "packages/schemas/generate-*.js",
+    ],
+  },
   js.configs.recommended,
+  ...ts.configs.recommended,
+  prettier,
   {
-    files: ['**/*.{js,ts,mjs,cjs}'],
+    files: ["**/*.{js,mjs,cjs,ts,tsx}"],
     languageOptions: {
-      parser: tsParser,
-      parserOptions: {
-        ecmaVersion: 2022,
-        sourceType: 'module'
-      },
+      ecmaVersion: 2022,
+      sourceType: "module",
       globals: {
-        ...globals.browser,
-        ...globals.node
-      }
-    },
-    plugins: {
-      '@typescript-eslint': tsPlugin
-    },
-    rules: {
-      ...tsPlugin.configs.recommended.rules,
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/consistent-type-imports': 'error'
-    }
-  },
-  {
-    files: ['**/*.svelte'],
-    languageOptions: {
-      parser: tsParser,
-      parserOptions: {
-        parser: tsParser,
-        extraFileExtensions: ['.svelte']
-      }
-    },
-    plugins: {
-      svelte: sveltePlugin
+        URL: "readonly",
+        console: "readonly",
+        process: "readonly",
+        __dirname: "readonly",
+        require: "readonly",
+      },
     },
     rules: {
-      ...sveltePlugin.configs.recommended.rules
-    }
+      "no-console": ["warn", { allow: ["warn", "error"] }],
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+        },
+      ],
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-require-imports": "off",
+    },
   },
-  prettierConfig,
-  {
-    ignores: ['**/dist/**', '**/build/**', '**/node_modules/**', '**/.svelte-kit/**', '**/bin/**', '**/obj/**']
-  }
 ];

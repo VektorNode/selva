@@ -44,7 +44,6 @@ Compuceraptor is a Grasshopper plugin that bridges the gap between Rhino 3D and 
 **Display Components**
 
 - **WebDisplay**: Converts geometry to Three.js-compatible mesh data
-
   - Asynchronous processing to prevent UI blocking
   - Parallel mesh conversion for optimal performance
   - Automatic mesh optimization and compression (GZip + Base64)

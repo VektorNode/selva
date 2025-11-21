@@ -108,10 +108,12 @@ npm run generate:all
 
 **Source:** `schemas/ui-schema.json`
 **Generated files:**
+
 - TypeScript: `web/src/lib/types/generated/schema.ts`
 - C#: `Plugin/Models/Generated/UISchema.Generated.cs`
 
 **Workflow:**
+
 1. Edit `schemas/ui-schema.json` to modify type definitions
 2. Run `./generate-schemas.sh` to regenerate both languages
 3. Run `npm run check` in web/ to verify TypeScript
@@ -213,6 +215,7 @@ The codebase uses **JSON Schema as the single source of truth** for type definit
 - **Generated TypeScript:** `web/src/lib/types/generated/schema.ts`
 
 **Workflow for adding new types:**
+
 1. Define the type in `schemas/ui-schema.json`
 2. Run `./generate-schemas.sh` to generate both C# and TypeScript
 3. Import from the generated files in your code
@@ -362,14 +365,14 @@ Additional metadata for enhanced UI building:
 - **Protocol:** ws://localhost:8765
 - **Connection:** CommunicationHandler manages lifecycle
 - **Message Types:**
-    - `ValueUpdateMessage` - Input value changes from web UI → Grasshopper
-    - `OutputUpdateMessage` - Output data from Grasshopper → web UI
+  - `ValueUpdateMessage` - Input value changes from web UI → Grasshopper
+  - `OutputUpdateMessage` - Output data from Grasshopper → web UI
 - **Reconnection:** Web client auto-reconnects with exponential backoff
 - **Benefits:**
-    - Real-time updates (no 500ms delay)
-    - Bidirectional communication
-    - Lower I/O overhead
-    - Better user experience
+  - Real-time updates (no 500ms delay)
+  - Bidirectional communication
+  - Lower I/O overhead
+  - Better user experience
 
 ### Session Files (Persistence Only)
 
@@ -436,6 +439,7 @@ The system now supports full Compute-style parameter types for better compatibil
 ## Testing Workflow
 
 1. **Build C# plugin:**
+
    ```bash
    dotnet build --configuration Release
    ```
@@ -445,20 +449,21 @@ The system now supports full Compute-style parameter types for better compatibil
 3. **Restart Rhino completely**
 
 4. **Start web server:**
+
    ```bash
    cd web && npm run dev
    ```
 
 5. **In Grasshopper:**
-    - Add contextual parameter (e.g., Number Slider from IGH_ContextualParameter)
-    - Add UIBuilderComponent
-    - Set Enable = true
-    - Browser opens automatically
+   - Add contextual parameter (e.g., Number Slider from IGH_ContextualParameter)
+   - Add UIBuilderComponent
+   - Set Enable = true
+   - Browser opens automatically
 
 6. **Verify communication:**
-    - Check browser console (F12)
-    - Check Grasshopper component messages
-    - Inspect session files in temp directory
+   - Check browser console (F12)
+   - Check Grasshopper component messages
+   - Inspect session files in temp directory
 
 ## Common Development Scenarios
 
@@ -481,8 +486,8 @@ The system now supports full Compute-style parameter types for better compatibil
 ### Debugging Session Issues
 
 1. Check session files in temp directory:
-    - Windows: `%TEMP%\ComputeBuilder\`
-    - macOS: `/tmp/ComputeBuilder/`
+   - Windows: `%TEMP%\ComputeBuilder\`
+   - macOS: `/tmp/ComputeBuilder/`
 
 2. Verify file timestamps match component activity
 
@@ -522,16 +527,19 @@ The system now supports full Compute-style parameter types for better compatibil
 ### Frontend (Web Application)
 
 **Code Splitting & Lazy Loading:**
+
 - Three.js (~580KB) is lazy-loaded only when 3D viewer is enabled
 - `rhino-compute-core` is dynamically imported when needed
 - SvelteKit automatically code-splits routes for optimal loading
 
 **Bundle Optimization:**
+
 - Standardized on `@lucide/svelte` for all icons (removed duplicate `@iconify/svelte`)
 - Consolidated utility constants into single `constants.ts` file
 - Removed unused icon components and deprecated code
 
 **Icon Library:**
+
 - **Primary**: `@lucide/svelte` - Used for all UI icons (lightweight, tree-shakeable)
 - Component mapping:
   - Input parameters: `ArrowDownToLine`
@@ -541,6 +549,7 @@ The system now supports full Compute-style parameter types for better compatibil
   - Edit actions: `Pencil`
 
 **Best Practices:**
+
 - Prefer direct Lucide imports over custom icon wrapper components
 - Use lazy loading for heavy dependencies (3D libraries, compute packages)
 - Keep utility files consolidated to reduce import overhead

@@ -5,6 +5,7 @@ A cross-platform Rhino Grasshopper plugin that enables web-based UIs for paramet
 ## What It Does
 
 ComputeBuilder lets you:
+
 - **Design custom web UIs** for your Grasshopper definitions using a visual builder
 - **Interact in real-time** with parameters through a browser interface
 - **Deploy parametric models** to the web with Rhino Compute compatibility
@@ -59,6 +60,7 @@ npm run dev
 ## Documentation
 
 For detailed documentation, see [CLAUDE.md](CLAUDE.md) which includes:
+
 - Complete architecture overview
 - Development workflows
 - API documentation

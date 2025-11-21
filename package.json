@@ -1,5 +1,34 @@
 {
+  "name": "computebuilder-monorepo",
+  "version": "1.0.0",
+  "description": "ComputeBuilder - TypeScript/Rhino integration monorepo",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @computebuilder/web dev",
+    "build": "pnpm --filter @computebuilder/core build && pnpm --filter @computebuilder/web build",
+    "build:web": "pnpm --filter @computebuilder/web build",
+    "preview": "pnpm --filter @computebuilder/web preview",
+    "check": "pnpm --filter ./packages --recursive run check",
+    "type-check": "pnpm --filter ./packages --recursive run type-check",
+    "test": "pnpm --filter ./packages --recursive run test",
+    "test:watch": "pnpm --filter ./packages --recursive run test:watch",
+    "lint": "eslint . --max-warnings 3000",
+    "format": "prettier --write \"**/*.{ts,tsx,svelte,json,yaml,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,svelte,json,yaml,md}\""
+  },
   "devDependencies": {
-    "@iconify/svelte": "^5.1.0"
+    "@eslint/js": "^9.39.0",
+    "@typescript-eslint/eslint-plugin": "^8.47.0",
+    "@typescript-eslint/parser": "^8.47.0",
+    "eslint": "^9.39.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.47.0"
   }
 }

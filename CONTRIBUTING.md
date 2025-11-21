@@ -14,24 +14,28 @@ Thank you for your interest in contributing! This guide will help you get starte
 ### Initial Setup
 
 1. **Clone the repository:**
+
 ```bash
 git clone <repository-url>
 cd ComputeBuilder
 ```
 
 2. **Build the C# plugin:**
+
 ```bash
 dotnet restore
 dotnet build
 ```
 
 3. **Install web dependencies:**
+
 ```bash
 cd web
 npm install
 ```
 
 4. **Use the development scripts:**
+
 ```bash
 # Windows
 .\start-dev.ps1
@@ -45,6 +49,7 @@ npm install
 ### Making Changes
 
 1. **Create a feature branch:**
+
 ```bash
 git checkout -b feature/your-feature-name
 ```
@@ -55,6 +60,7 @@ git checkout -b feature/your-feature-name
    - Types: Update JSON Schema in `schemas/ui-schema.json`
 
 3. **Run schema generation if you modified types:**
+
 ```bash
 ./generate-schemas.sh
 ```
@@ -68,18 +74,21 @@ git checkout -b feature/your-feature-name
 ### Code Style
 
 **C#:**
+
 - Follow Microsoft C# coding conventions
 - Use meaningful variable names
 - Add XML documentation for public APIs
 - Keep methods focused and single-purpose
 
 **TypeScript/Svelte:**
+
 - Use TypeScript strict mode
 - Follow Svelte component conventions
 - Use Tailwind CSS for styling
 - Prefer composition over large components
 
 **General:**
+
 - Write clear commit messages
 - Keep PRs focused on single features/fixes
 - Update documentation when adding features
@@ -97,6 +106,7 @@ git checkout -b feature/your-feature-name
 ### Parameter Validation
 
 Only these parameter types are allowed:
+
 - Parameters implementing `IGH_ContextualParameter`
 - `ContextPrintComponent` (outputs)
 - `ContextBakeComponent` (outputs)
@@ -127,18 +137,21 @@ Currently, the project uses manual testing. Automated tests are welcome contribu
 ## Submitting Changes
 
 1. **Ensure your code builds:**
+
 ```bash
 dotnet build --configuration Release
 cd web && npm run check
 ```
 
 2. **Commit your changes:**
+
 ```bash
 git add .
 git commit -m "feat: Add descriptive commit message"
 ```
 
 3. **Push to your fork:**
+
 ```bash
 git push origin feature/your-feature-name
 ```
