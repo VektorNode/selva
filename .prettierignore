@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+.svelte-kit
+bin
+obj
+*.csproj
+*.sln
+*.DotSettings

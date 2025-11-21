@@ -1,0 +1,7 @@
+packages:
+  - 'packages/*'
+
+# Only build dependencies that need native compilation
+onlyBuiltDependencies:
+  - esbuild
+  - '@tailwindcss/oxide'
