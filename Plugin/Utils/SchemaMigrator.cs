@@ -1,7 +1,7 @@
 using System;
 using ComputeBuilder.Plugin.Models.Generated;
 
-namespace ComputeBuilder.Plugin.Utils
+namespace ComputeBuilder.Utils
 {
     /// <summary>
     ///     Handles schema migration across versions

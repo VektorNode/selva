@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ComputeBuilder.Plugin.Utils
+namespace ComputeBuilder.Utils
 {
     /// <summary>
     ///     Simple WebSocket server for real-time communication with the web UI

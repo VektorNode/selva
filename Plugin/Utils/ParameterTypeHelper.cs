@@ -5,7 +5,7 @@ using ComputeBuilder.Plugin.Models.Generated;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
 
-namespace ComputeBuilder.Plugin.Utils
+namespace ComputeBuilder.Utils
 {
     /// <summary>
     ///     Helper class for parameter type checking

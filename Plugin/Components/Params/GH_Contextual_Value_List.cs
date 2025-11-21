@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using Compuceraptor.Components.Params;
 using GH_IO.Serialization;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
@@ -10,7 +9,7 @@ using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Compuceraptor.Components;
+namespace ComputeBuilder.Components.Params;
 
 /// <summary>
 /// A contextual parameter that captures value list data including all options and the selected default.

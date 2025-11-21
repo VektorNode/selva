@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using ComputeBuilder.Plugin.Models.Generated;
 using Newtonsoft.Json;
 
-namespace ComputeBuilder.Plugin.Utils
+namespace ComputeBuilder.Utils
 {
     /// <summary>
     ///     Handles WebSocket communication with the web UI

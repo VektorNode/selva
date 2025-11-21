@@ -89,6 +89,8 @@
 
       const solvedDefinition = await response.json();
 
+      console.log('[App] Solve response:', solvedDefinition);
+
       // Process the response on client side (mesh extraction requires Three.js)
       const processor = new rhinoCompute.GrasshopperResponseProcessor(solvedDefinition);
       const outputValues = processor.getValues();
@@ -96,6 +98,8 @@
       // Update 3D viewer if enabled
       if (schema.enable3dViewer && scene) {
         const meshes = await processor.extractMeshesFromResponse();
+        console.log('[App] Updating 3D viewer with meshes:', meshes);
+
         rhinoCompute.updateScene(scene, meshes, camera, controls, viewerInitialized);
         viewerInitialized = true;
       }

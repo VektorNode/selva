@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Rhino;
 
-namespace Compuceraptor.Components.IO;
+namespace ComputeBuilder.IO;
 
 public class RhinoDocumentConverter : IDisposable
 {

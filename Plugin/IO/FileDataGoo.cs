@@ -2,7 +2,7 @@
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 
-namespace Compuceraptor.Components.IO;
+namespace ComputeBuilder.IO;
 
 public class FileDataGoo : IGH_Goo
 {

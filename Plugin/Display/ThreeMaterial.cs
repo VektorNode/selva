@@ -1,8 +1,8 @@
 ﻿using System.Drawing;
 using System.Reflection;
-using Compuceraptor.Lib.Helpers;
+using ComputeBuilder.Helpers;
 
-namespace Compuceraptor.Components.Display;
+namespace ComputeBuilder.Display;
 
 /// <summary>
 /// Represents material properties for a Three.js-like display object.

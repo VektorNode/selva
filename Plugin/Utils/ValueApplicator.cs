@@ -9,7 +9,7 @@ using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 
-namespace ComputeBuilder.Plugin.Utils
+namespace ComputeBuilder.Utils
 {
     /// <summary>
     ///     Handles applying values from web UI to Grasshopper parameters

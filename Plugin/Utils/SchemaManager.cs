@@ -1,13 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using Compuceraptor.Components;
+using ComputeBuilder.Components.Params;
 using ComputeBuilder.Plugin.Models.Generated;
 using Grasshopper.Kernel;
-using Rhino.Input.Custom;
 
-namespace ComputeBuilder.Plugin.Utils
+namespace ComputeBuilder.Utils
 {
     /// <summary>
     ///     Manages parameter scanning and schema validation

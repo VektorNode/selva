@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Compuceraptor.Components.IO;
+namespace ComputeBuilder.IO;
 
 /// <summary>
 /// Configuration options for RhinoDocumentConverter

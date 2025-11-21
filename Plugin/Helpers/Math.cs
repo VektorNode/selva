@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Compuceraptor.Lib.Helpers
+namespace ComputeBuilder.Helpers
 {
     public static class MathExtensions
     {

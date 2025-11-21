@@ -584,7 +584,6 @@ function setupEventHandlers(
     controls.target.copy(center);
     controls.update();
 
-    console.info('Fitted to view - Center:', center, 'Distance:', distance);
   };
 
   // Clear selection

@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using Compuceraptor.Components.IO;
+using ComputeBuilder.IO;
+using ComputeBuilder.Logging;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using Grasshopper.Rhinoceros.Model;
@@ -10,7 +11,7 @@ using Rhino;
 using Rhino.DocObjects;
 using Rhino.Geometry;
 
-namespace Compuceraptor.Components;
+namespace ComputeBuilder.Components.IO;
 
 /// <summary>
 /// Exports Rhino block instances to base64-encoded .3dm files.
@@ -18,238 +19,238 @@ namespace Compuceraptor.Components;
 /// </summary>
 public class GH_Block_To_File : GH_Component
 {
-    private static RhinoDocumentConverter _converter;
-    private static readonly object _converterLock = new object();
+  private static RhinoDocumentConverter _converter;
+  private static readonly object _converterLock = new object();
 
-    private Dictionary<string, int> _copiedBlockIndices;
+  private Dictionary<string, int> _copiedBlockIndices;
 
-    public override Guid ComponentGuid =>
-        new Guid("06308887-AADB-40EE-A6A8-9CC8E05900EB");
+  public override Guid ComponentGuid =>
+      new Guid("06308887-AADB-40EE-A6A8-9CC8E05900EB");
 
-    protected override Bitmap Icon => null;
+  protected override Bitmap Icon => null;
 
-    public GH_Block_To_File()
-        : base(
-            "Block to File",
-            "Block2File",
-            "Export Rhino block instances to base64-encoded 3dm files",
-            "Compuceraptor",
-            "IO")
+  public GH_Block_To_File()
+      : base(
+          "Block to File",
+          "Block2File",
+          "Export Rhino block instances to base64-encoded 3dm files",
+          "ComputeBuilder",
+          "IO")
+  {
+    _copiedBlockIndices = new Dictionary<string, int>();
+    EnsureConverterInitialized();
+  }
+
+  protected override void RegisterInputParams(GH_InputParamManager pManager)
+  {
+    pManager.AddParameter(
+        new Param_ModelObject(),
+        "Block",
+        "B",
+        "Block instance to export",
+        GH_ParamAccess.item);
+  }
+
+  protected override void RegisterOutputParams(GH_OutputParamManager pManager)
+  {
+    pManager.AddGenericParameter(
+        "File Data",
+        "F",
+        "Exported block as base64-encoded file data",
+        GH_ParamAccess.item);
+  }
+
+  protected override void SolveInstance(IGH_DataAccess DA)
+  {
+    try
     {
-        _copiedBlockIndices = new Dictionary<string, int>();
-        EnsureConverterInitialized();
+      if (!TryGetBlockInput(DA, out var blockObj))
+        return;
+
+      var exportedFile = ExportBlockToFile(blockObj);
+
+      if (exportedFile != null)
+      {
+        DA.SetData(0, new FileDataGoo(exportedFile));
+      }
+      else
+      {
+        AddRuntimeMessage(
+            GH_RuntimeMessageLevel.Error,
+            "Failed to export block to file");
+      }
+    }
+    catch (Exception ex)
+    {
+      AddRuntimeMessage(
+          GH_RuntimeMessageLevel.Error,
+          $"Export failed: {ex.Message}");
+    }
+  }
+
+  private bool TryGetBlockInput(IGH_DataAccess DA, out ModelObject blockObj)
+  {
+    blockObj = null;
+
+    if (!DA.GetData(0, ref blockObj))
+    {
+      AddRuntimeMessage(
+          GH_RuntimeMessageLevel.Warning,
+          "No block provided");
+      return false;
     }
 
-    protected override void RegisterInputParams(GH_InputParamManager pManager)
+    return true;
+  }
+
+  private FileData ExportBlockToFile(ModelObject blockObj)
+  {
+    using var headlessDoc = RhinoDoc.CreateHeadless(null);
+    _copiedBlockIndices.Clear();
+
+    if (!TryProcessBlockObject(blockObj, headlessDoc, out var blockName))
+      return null;
+
+    var base64String = ConvertDocumentToBase64(headlessDoc);
+    if (string.IsNullOrEmpty(base64String))
+      return null;
+
+    return CreateFileData(blockName, base64String);
+  }
+
+  private bool TryProcessBlockObject(ModelObject blockObj, RhinoDoc targetDoc, out string blockName)
+  {
+    blockName = null;
+
+    if (!blockObj.CastTo<GH_InstanceReference>(out var instanceRef))
     {
-        pManager.AddParameter(
-            new Param_ModelObject(),
-            "Block",
-            "B",
-            "Block instance to export",
-            GH_ParamAccess.item);
+      return false;
     }
 
-    protected override void RegisterOutputParams(GH_OutputParamManager pManager)
+    var modelIdef = instanceRef.InstanceDefinition;
+    if (modelIdef == null)
     {
-        pManager.AddGenericParameter(
-            "File Data",
-            "F",
-            "Exported block as base64-encoded file data",
-            GH_ParamAccess.item);
+      return false;
     }
 
-    protected override void SolveInstance(IGH_DataAccess DA)
+    blockName = modelIdef.Name;
+    CopyBlockRecursive(modelIdef, targetDoc);
+
+    if (_copiedBlockIndices.TryGetValue(blockName, out int idefIndex) &&
+        instanceRef.Value != null)
     {
-        try
-        {
-            if (!TryGetBlockInput(DA, out var blockObj))
-                return;
-
-            var exportedFile = ExportBlockToFile(blockObj);
-
-            if (exportedFile != null)
-            {
-                DA.SetData(0, new FileDataGoo(exportedFile));
-            }
-            else
-            {
-                AddRuntimeMessage(
-                    GH_RuntimeMessageLevel.Error,
-                    "Failed to export block to file");
-            }
-        }
-        catch (Exception ex)
-        {
-            AddRuntimeMessage(
-                GH_RuntimeMessageLevel.Error,
-                $"Export failed: {ex.Message}");
-        }
+      var xform = instanceRef.Value.Xform;
+      targetDoc.Objects.AddInstanceObject(idefIndex, xform);
+      return true;
     }
 
-    private bool TryGetBlockInput(IGH_DataAccess DA, out ModelObject blockObj)
+    return false;
+  }
+
+  private void CopyBlockRecursive(ModelInstanceDefinition modelIdef, RhinoDoc targetDoc)
+  {
+    // Skip if already copied
+    if (_copiedBlockIndices.ContainsKey(modelIdef.Name))
+      return;
+
+    var geometries = CollectBlockGeometry(modelIdef, targetDoc);
+
+    if (geometries.Count == 0)
+      return;
+
+    int idefIndex = targetDoc.InstanceDefinitions.Add(
+        modelIdef.Name,
+        "",
+        Point3d.Origin,
+        geometries);
+
+    if (idefIndex >= 0)
     {
-        blockObj = null;
+      _copiedBlockIndices[modelIdef.Name] = idefIndex;
+    }
+  }
 
-        if (!DA.GetData(0, ref blockObj))
-        {
-            AddRuntimeMessage(
-                GH_RuntimeMessageLevel.Warning,
-                "No block provided");
-            return false;
-        }
+  private List<GeometryBase> CollectBlockGeometry(ModelInstanceDefinition modelIdef, RhinoDoc targetDoc)
+  {
+    var geometries = new List<GeometryBase>();
 
-        return true;
+    foreach (var modelObj in modelIdef.Objects)
+    {
+      if (modelObj == null)
+        continue;
+
+      if (modelObj.ObjectType == ObjectType.InstanceReference)
+      {
+        TryAddNestedBlockReference(modelObj, targetDoc, geometries);
+      }
+      else if (modelObj.CastTo<GeometryBase>(out var geom))
+      {
+        geometries.Add(geom);
+      }
     }
 
-    private FileData ExportBlockToFile(ModelObject blockObj)
+    return geometries;
+  }
+
+  private void TryAddNestedBlockReference(ModelObject modelObj, RhinoDoc targetDoc, List<GeometryBase> geometries)
+  {
+    if (!modelObj.CastTo<GH_InstanceReference>(out var nestedInstanceRef))
+      return;
+
+    var nestedModelIdef = nestedInstanceRef.InstanceDefinition;
+    if (nestedModelIdef == null)
+      return;
+
+    // Recursively copy nested block first
+    CopyBlockRecursive(nestedModelIdef, targetDoc);
+
+    if (_copiedBlockIndices.TryGetValue(nestedModelIdef.Name, out int nestedIdefIndex) &&
+        nestedInstanceRef.Value != null)
     {
-        using var headlessDoc = RhinoDoc.CreateHeadless(null);
-        _copiedBlockIndices.Clear();
+      var nestedIdef = targetDoc.InstanceDefinitions[nestedIdefIndex];
+      var xform = nestedInstanceRef.Value.Xform;
 
-        if (!TryProcessBlockObject(blockObj, headlessDoc, out var blockName))
-            return null;
-
-        var base64String = ConvertDocumentToBase64(headlessDoc);
-        if (string.IsNullOrEmpty(base64String))
-            return null;
-
-        return CreateFileData(blockName, base64String);
+      geometries.Add(new InstanceReferenceGeometry(nestedIdef.Id, xform));
     }
+  }
 
-    private bool TryProcessBlockObject(ModelObject blockObj, RhinoDoc targetDoc, out string blockName)
+  private string ConvertDocumentToBase64(RhinoDoc doc)
+  {
+    return _converter.DocToRhinoFile(doc, 7);
+  }
+
+  private FileData CreateFileData(string blockName, string base64String)
+  {
+    return new FileData
     {
-        blockName = null;
+      FileName = $"block_{blockName}_{Guid.NewGuid():N}",
+      Data = base64String,
+      FileType = ".3dm",
+      IsBase64Encoded = true
+    };
+  }
 
-        if (!blockObj.CastTo<GH_InstanceReference>(out var instanceRef))
-        {
-            return false;
-        }
+  private void EnsureConverterInitialized()
+  {
+    if (_converter != null)
+      return;
 
-        var modelIdef = instanceRef.InstanceDefinition;
-        if (modelIdef == null)
-        {
-            return false;
-        }
-
-        blockName = modelIdef.Name;
-        CopyBlockRecursive(modelIdef, targetDoc);
-
-        if (_copiedBlockIndices.TryGetValue(blockName, out int idefIndex) &&
-            instanceRef.Value != null)
-        {
-            var xform = instanceRef.Value.Xform;
-            targetDoc.Objects.AddInstanceObject(idefIndex, xform);
-            return true;
-        }
-
-        return false;
-    }
-
-    private void CopyBlockRecursive(ModelInstanceDefinition modelIdef, RhinoDoc targetDoc)
+    lock (_converterLock)
     {
-        // Skip if already copied
-        if (_copiedBlockIndices.ContainsKey(modelIdef.Name))
-            return;
+      if (_converter != null)
+        return;
 
-        var geometries = CollectBlockGeometry(modelIdef, targetDoc);
+      var logger = new GrasshopperLogger<RhinoDocumentConverter>(this);
+      var options = new RhinoConverterOptions
+      {
+        MaxFileSizeBytes = 200 * 1024 * 1024,
+        InMemoryThresholdBytes = 20 * 1024 * 1024,
+        MaxConcurrentConversions = 8,
+        ConversionTimeout = TimeSpan.FromMinutes(2),
+        SecureDelete = false
+      };
 
-        if (geometries.Count == 0)
-            return;
-
-        int idefIndex = targetDoc.InstanceDefinitions.Add(
-            modelIdef.Name,
-            "",
-            Point3d.Origin,
-            geometries);
-
-        if (idefIndex >= 0)
-        {
-            _copiedBlockIndices[modelIdef.Name] = idefIndex;
-        }
+      _converter = new RhinoDocumentConverter(logger, options);
     }
-
-    private List<GeometryBase> CollectBlockGeometry(ModelInstanceDefinition modelIdef, RhinoDoc targetDoc)
-    {
-        var geometries = new List<GeometryBase>();
-
-        foreach (var modelObj in modelIdef.Objects)
-        {
-            if (modelObj == null)
-                continue;
-
-            if (modelObj.ObjectType == ObjectType.InstanceReference)
-            {
-                TryAddNestedBlockReference(modelObj, targetDoc, geometries);
-            }
-            else if (modelObj.CastTo<GeometryBase>(out var geom))
-            {
-                geometries.Add(geom);
-            }
-        }
-
-        return geometries;
-    }
-
-    private void TryAddNestedBlockReference(ModelObject modelObj, RhinoDoc targetDoc, List<GeometryBase> geometries)
-    {
-        if (!modelObj.CastTo<GH_InstanceReference>(out var nestedInstanceRef))
-            return;
-
-        var nestedModelIdef = nestedInstanceRef.InstanceDefinition;
-        if (nestedModelIdef == null)
-            return;
-
-        // Recursively copy nested block first
-        CopyBlockRecursive(nestedModelIdef, targetDoc);
-
-        if (_copiedBlockIndices.TryGetValue(nestedModelIdef.Name, out int nestedIdefIndex) &&
-            nestedInstanceRef.Value != null)
-        {
-            var nestedIdef = targetDoc.InstanceDefinitions[nestedIdefIndex];
-            var xform = nestedInstanceRef.Value.Xform;
-
-            geometries.Add(new InstanceReferenceGeometry(nestedIdef.Id, xform));
-        }
-    }
-
-    private string ConvertDocumentToBase64(RhinoDoc doc)
-    {
-        return _converter.DocToRhinoFile(doc, 7);
-    }
-
-    private FileData CreateFileData(string blockName, string base64String)
-    {
-        return new FileData
-        {
-            FileName = $"block_{blockName}_{Guid.NewGuid():N}",
-            Data = base64String,
-            FileType = ".3dm",
-            IsBase64Encoded = true
-        };
-    }
-
-    private void EnsureConverterInitialized()
-    {
-        if (_converter != null)
-            return;
-
-        lock (_converterLock)
-        {
-            if (_converter != null)
-                return;
-
-            var logger = new GrasshopperLogger<RhinoDocumentConverter>(this);
-            var options = new RhinoConverterOptions
-            {
-                MaxFileSizeBytes = 200 * 1024 * 1024,
-                InMemoryThresholdBytes = 20 * 1024 * 1024,
-                MaxConcurrentConversions = 8,
-                ConversionTimeout = TimeSpan.FromMinutes(2),
-                SecureDelete = false
-            };
-
-            _converter = new RhinoDocumentConverter(logger, options);
-        }
-    }
+  }
 }

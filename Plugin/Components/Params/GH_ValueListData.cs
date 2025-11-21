@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json.Linq;
 
-namespace Compuceraptor.Components.Params;
+namespace ComputeBuilder.Components.Params;
 
 /// <summary>
 /// Custom IGH_Goo type for ValueList data

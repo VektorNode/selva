@@ -21,7 +21,7 @@ const SCALE_FACTORS: Record<string, number> = {
   Feet: 1 / 3.28084,
 };
 
-const DISPLAY_COMPONENT_TYPE = 'Compuceraptor.Components.Display.ThreeDisplay';
+const DISPLAY_COMPONENT_TYPE = 'ComputeBuilder.Display.ThreeDisplay';
 
 /**
  * Extracts and processes display meshes from a ComputePointerResponse using the Grasshopper WebDisplay component.

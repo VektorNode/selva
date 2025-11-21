@@ -3,10 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
-using Compuceraptor.Components;
-using Compuceraptor.Components.Params;
+using ComputeBuilder.Components.Params;
 using ComputeBuilder.Plugin.Models.Generated;
-using ComputeBuilder.Plugin.Utils;
+using ComputeBuilder.Utils;
 using GH_IO.Serialization;
 using Grasshopper;
 using Grasshopper.Kernel;
@@ -14,7 +13,7 @@ using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Rhino;
 
-namespace ComputeBuilder.Plugin.Components
+namespace ComputeBuilder.Components.UI
 {
     /// <summary>
     ///     Unified UI Builder component - WebSocket-only version
