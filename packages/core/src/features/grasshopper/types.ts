@@ -68,6 +68,8 @@ export interface DataItem {
   type: string;
   /** The actual returned data as a string that may need to be parsed */
   data: string;
+  /** The grasshopper refrence id of the output */
+  paramId: string;
 }
 
 /**
@@ -398,8 +400,8 @@ export interface GrasshopperDefinitionSource {
  */
 export interface GrasshopperComputeConfig
   extends ComputeConfig,
-    GrasshopperBaseSchema,
-    GrasshopperDefinitionSource {}
+  GrasshopperBaseSchema,
+  GrasshopperDefinitionSource { }
 
 // ============================================================================
 // COMPUTE ARGUMENTS (Request payload)
@@ -411,7 +413,7 @@ export interface GrasshopperComputeConfig
  */
 export interface GrasshopperRequestSchema
   extends GrasshopperBaseSchema,
-    GrasshopperDefinitionSource {
+  GrasshopperDefinitionSource {
   /** Input values organized by parameter */
   values?: InnerTree[];
 }
@@ -426,7 +428,7 @@ export interface GrasshopperRequestSchema
  */
 export interface GrasshopperComputeResponse
   extends GrasshopperBaseSchema,
-    GrasshopperDefinitionSource {
+  GrasshopperDefinitionSource {
   /** Whether cache was used (always present in response) */
   cachesolve: boolean;
   /** Model units (always present in response) */

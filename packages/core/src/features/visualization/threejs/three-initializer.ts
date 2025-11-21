@@ -610,7 +610,6 @@ function setupEventHandlers(
     const intersects = raycaster.intersectObjects(scene.children, true);
 
     if (intersects.length > 0) {
-      // Object clicked
       const clickedObject = intersects[0].object;
 
       // Handle object selection
@@ -618,7 +617,6 @@ function setupEventHandlers(
         clearSelection();
         selectedObjects.add(clickedObject);
 
-        // Highlight selected object
         if (
           clickedObject instanceof THREE.Mesh &&
           clickedObject.material instanceof THREE.Material
@@ -648,7 +646,7 @@ function setupEventHandlers(
         event.preventDefault();
         clearSelection();
         break;
-      case ' ': // Spacebar
+      case ' ':
         event.preventDefault();
         fitToView();
         break;
