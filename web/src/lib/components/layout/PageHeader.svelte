@@ -36,25 +36,26 @@
 </script>
 
 <header
-	class={`border-b border-border bg-linear-to-b from-background to-muted/50 px-8 py-3 backdrop-blur-sm transition-all duration-200 ${className}`}
+	class={`border-b border-border bg-linear-to-b from-background to-muted/50 px-6 py-3 backdrop-blur-sm transition-all duration-200 ${className}`}
 >
-	<div class="flex items-center justify-between gap-4">
-		<div class="flex-1">
-			<h1 class="mb-1 text-2xl font-bold text-foreground">
+	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+		<!-- Left section -->
+		<div class="min-w-0 flex-1">
+			<h1 class="text-xl font-bold text-foreground sm:text-2xl">
 				{title}
 			</h1>
 
 			{#if sessionId || badge || children}
-				<div class="flex items-center gap-2 text-xs text-muted-foreground">
+				<div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 					{#if children}
 						{@render children()}
 					{/if}
 
 					{#if sessionId}
-						<span class="flex items-center gap-1.5">
-							<span class="text-muted-foreground">Session:</span>
+						<span class="flex items-center gap-1.5 max-w-full">
+							<span>Session:</span>
 							<code
-								class="rounded bg-muted px-2 py-0.5 font-mono text-xs font-medium text-foreground"
+								class="max-w-[60vw] truncate rounded bg-muted px-2 py-0.5 font-mono text-xs font-medium text-foreground sm:max-w-none"
 							>
 								{sessionId}
 							</code>
@@ -74,8 +75,11 @@
 			{/if}
 		</div>
 
+		<!-- Right section (Mode Toggle) -->
 		{#if showModeToggle}
-			<ModeToggle />
+			<div class="self-start sm:self-center">
+				<ModeToggle />
+			</div>
 		{/if}
 	</div>
 </header>
