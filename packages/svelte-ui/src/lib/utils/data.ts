@@ -1,4 +1,4 @@
-import type { InputParam } from "rhino-compute-core";
+import type { InputParam } from 'rhino-compute-core';
 
 // export const exampleInputs: InputParam[] = [
 //   {
@@ -35,47 +35,47 @@ import type { InputParam } from "rhino-compute-core";
 //   }
 // ];
 
-
 export const example2: InputParam[] = [
   {
-    "description": "",
-    "name": "data_url",
-    "nickname": null,
-    "treeAccess": false,
-    "groupName": "hidden",
-    "paramType": "Text",
-    "default": "sdkfjsf"
+    description: '',
+    name: 'data_url',
+    nickname: null,
+    treeAccess: false,
+    groupName: 'hidden',
+    paramType: 'Text',
+    default: 'sdkfjsf',
   },
   {
-    "description": "1: Custom, 2: Normalstahl (St37-2), 3: Hardox, 4: Edelstahl, 5: Edelstahl (1.4541), 6: Edelstahl (1.4571) Aluminium (AlMg³)",
-    "name": "Material",
-    "nickname": null,
-    "treeAccess": false,
-    "groupName": "",
-    "paramType": "Integer",
-    "minimum": 1,
-    "maximum": 6,
-    "atLeast": 1,
-    "atMost": 1,
-    "stepSize": 1,
-    "default": 1
+    description:
+      '1: Custom, 2: Normalstahl (St37-2), 3: Hardox, 4: Edelstahl, 5: Edelstahl (1.4541), 6: Edelstahl (1.4571) Aluminium (AlMg³)',
+    name: 'Material',
+    nickname: null,
+    treeAccess: false,
+    groupName: '',
+    paramType: 'Integer',
+    minimum: 1,
+    maximum: 6,
+    atLeast: 1,
+    atMost: 1,
+    stepSize: 1,
+    default: 1,
   },
   {
-    "description": "",
-    "name": "Run OpenNest",
-    "nickname": null,
-    "treeAccess": false,
-    "groupName": "",
-    "paramType": "Boolean",
-    "default": true
+    description: '',
+    name: 'Run OpenNest',
+    nickname: null,
+    treeAccess: false,
+    groupName: '',
+    paramType: 'Boolean',
+    default: true,
   },
   {
-    "description": "",
-    "name": "Download Data",
-    "nickname": null,
-    "treeAccess": false,
-    "groupName": "",
-    "paramType": "Boolean",
-    "default": false
-  }
-]
+    description: '',
+    name: 'Download Data',
+    nickname: null,
+    treeAccess: false,
+    groupName: '',
+    paramType: 'Boolean',
+    default: false,
+  },
+];

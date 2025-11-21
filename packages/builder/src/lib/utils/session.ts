@@ -52,7 +52,7 @@ export async function initializeWebSocketSession(sessionId: string): Promise<Ses
       sessionId,
       wsClient,
       connected: false,
-      error: 'No session ID provided'
+      error: 'No session ID provided',
     };
   }
 
@@ -64,7 +64,7 @@ export async function initializeWebSocketSession(sessionId: string): Promise<Ses
       wsClient,
       connected: false,
       error:
-        'Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled and port 8765 is available.'
+        'Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled and port 8765 is available.',
     };
   }
 
@@ -72,7 +72,7 @@ export async function initializeWebSocketSession(sessionId: string): Promise<Ses
     sessionId,
     wsClient,
     connected: true,
-    error: null
+    error: null,
   };
 }
 
@@ -87,7 +87,7 @@ export function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | 
       type: 'tabbed',
       gap: 16,
       tabs: [],
-      items: []
+      items: [],
     };
   }
   if (!schema.layout.tabs) {
@@ -117,10 +117,10 @@ export function createDefaultSchema(): UISchema {
       type: 'tabbed',
       gap: 16,
       tabs: [],
-      items: []
+      items: [],
     },
     enable3dViewer: false,
-    instanceSolve: true
+    instanceSolve: true,
   };
 }
 

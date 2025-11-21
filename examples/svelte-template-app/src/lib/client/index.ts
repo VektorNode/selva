@@ -2,7 +2,7 @@ import { PUBLIC_API_KEY, PUBLIC_SERVER_URL } from "$env/static/public";
 import {
   GrasshopperClient,
   type GrasshopperComputeConfig,
-} from "rhino-compute-core";
+} from "@computebuilder/core";
 
 export const createGrasshopperClient = () => {
   const config: GrasshopperComputeConfig = {

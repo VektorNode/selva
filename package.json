@@ -10,7 +10,8 @@
   },
   "scripts": {
     "dev": "pnpm --filter @computebuilder/web dev",
-    "build": "pnpm --filter @computebuilder/core build && pnpm --filter @computebuilder/web build",
+    "build": "pnpm --filter @computebuilder/core build && pnpm --filter @computebuilder/svelte-ui build",
+    "build:all": "pnpm --filter @computebuilder/core build && pnpm --filter @computebuilder/svelte-ui build && pnpm --filter @computebuilder/web build",
     "build:web": "pnpm --filter @computebuilder/web build",
     "preview": "pnpm --filter @computebuilder/web preview",
     "check": "pnpm --filter ./packages --recursive run check",
@@ -28,6 +29,7 @@
     "eslint": "^9.39.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.6.2",
+    "prettier-plugin-svelte": "^3.4.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.47.0"
   }

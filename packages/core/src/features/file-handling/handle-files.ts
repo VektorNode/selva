@@ -24,7 +24,7 @@ export type FileBaseInfo = {
  */
 export const extractFilesFromComputeResponse = async (
   downloadableFiles: FileData[],
-  additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null,
+  additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null
 ): Promise<ProcessedFile[]> => {
   try {
     return await processFiles(downloadableFiles, additionalFiles);
@@ -50,7 +50,7 @@ export const extractFilesFromComputeResponse = async (
 export const downloadFileData = async (
   downloadableFiles: FileData[],
   fileFoldername: string,
-  additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null,
+  additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null
 ): Promise<void> => {
   try {
     const processedFiles = await processFiles(downloadableFiles, additionalFiles);
@@ -71,7 +71,7 @@ export const downloadFileData = async (
  */
 const processFiles = async (
   dataItems: FileData[],
-  additionalFiles: FileBaseInfo[] | FileBaseInfo | null,
+  additionalFiles: FileBaseInfo[] | FileBaseInfo | null
 ): Promise<ProcessedFile[]> => {
   const processedFiles: ProcessedFile[] = [];
 
@@ -121,7 +121,7 @@ const processFiles = async (
           console.error(`Error fetching additional file from URL: ${file.FilePath}`, error);
           return null;
         }
-      }),
+      })
     );
 
     // Filter out failed fetches and add successful ones

@@ -7,7 +7,7 @@ import type { GrasshopperComputeConfig, DataTree } from '../../types';
 describe('GrasshopperClient', () => {
   // Test config factory
   const createConfig = (
-    overrides?: Partial<GrasshopperComputeConfig>,
+    overrides?: Partial<GrasshopperComputeConfig>
   ): GrasshopperComputeConfig => ({
     serverUrl: 'http://localhost:6500',
     apiKey: 'test-api-key',
@@ -22,19 +22,19 @@ describe('GrasshopperClient', () => {
 
     it('should reject empty serverUrl', () => {
       expect(() => new GrasshopperClient({ serverUrl: '' } as any)).toThrow(
-        'serverUrl is required',
+        'serverUrl is required'
       );
     });
 
     it('should reject invalid URL format', () => {
       expect(() => new GrasshopperClient({ serverUrl: 'not-a-url' } as any)).toThrow(
-        'serverUrl must be a valid URL',
+        'serverUrl must be a valid URL'
       );
     });
 
     it('should reject default public endpoint', () => {
       expect(
-        () => new GrasshopperClient({ serverUrl: 'https://compute.rhino3d.com/' } as any),
+        () => new GrasshopperClient({ serverUrl: 'https://compute.rhino3d.com/' } as any)
       ).toThrow('serverUrl must be set to your Compute server URL');
     });
 
@@ -105,7 +105,7 @@ describe('GrasshopperClient', () => {
 
       const dataTree: DataTree[] = [];
       await expect(client.solve('http://test.com/def.gh', dataTree)).rejects.toThrow(
-        'has been disposed',
+        'has been disposed'
       );
     });
   });
@@ -134,7 +134,7 @@ describe('GrasshopperClient', () => {
       // Mock the solve function to throw a generic error
       const solveModule = await import('../../compute/solve');
       vi.spyOn(solveModule, 'solveGrasshopperDefinition').mockRejectedValue(
-        new Error('Network failure'),
+        new Error('Network failure')
       );
 
       const dataTree: DataTree[] = [];
@@ -173,7 +173,7 @@ describe('GrasshopperClient', () => {
       const dataTree: DataTree[] = [];
 
       await expect(client.solve('http://test.com/def.gh', dataTree)).rejects.toThrow(
-        'Rhino Compute server is not online',
+        'Rhino Compute server is not online'
       );
 
       expect(isOnlineSpy).toHaveBeenCalledOnce();
@@ -184,7 +184,7 @@ describe('GrasshopperClient', () => {
 
       const solveModule = await import('../../compute/solve');
       vi.spyOn(solveModule, 'solveGrasshopperDefinition').mockRejectedValue(
-        new Error('Compute failed'),
+        new Error('Compute failed')
       );
 
       const dataTree: DataTree[] = [{ data: 'test' } as any];

@@ -23,5 +23,5 @@ export const API_BASE_URL = '/api';
  * Generate a session ID (8-character UUID)
  */
 export function generateSessionId(): string {
-	return crypto.randomUUID().substring(0, SESSION_ID_LENGTH);
+  return crypto.randomUUID().substring(0, SESSION_ID_LENGTH);
 }

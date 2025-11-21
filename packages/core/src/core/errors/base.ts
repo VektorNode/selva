@@ -11,7 +11,7 @@ export class RhinoComputeError extends Error {
   constructor(
     message: string,
     code: string = 'UNKNOWN_ERROR',
-    options?: { statusCode?: number; context?: Record<string, unknown> },
+    options?: { statusCode?: number; context?: Record<string, unknown> }
   ) {
     super(message);
     this.name = 'RhinoComputeError';

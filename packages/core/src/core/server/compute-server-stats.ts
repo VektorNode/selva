@@ -39,7 +39,7 @@ export default class ComputeServerStats {
     if (!serverUrl.match(/^https?:\/\//)) {
       throw new Error(
         `Invalid serverUrl: "${serverUrl}". Must start with "http://" or "https://". ` +
-          `For example: "http://localhost:5000" or "https://example.com"`,
+          `For example: "http://localhost:5000" or "https://example.com"`
       );
     }
 
@@ -48,7 +48,7 @@ export default class ComputeServerStats {
     } catch (err) {
       throw new Error(
         `Invalid serverUrl: "${serverUrl}". Must be a valid URL. ` +
-          `Received error: ${err instanceof Error ? err.message : String(err)}`,
+          `Received error: ${err instanceof Error ? err.message : String(err)}`
       );
     }
 
@@ -212,7 +212,7 @@ export default class ComputeServerStats {
    */
   public monitor(
     callback: (stats: Awaited<ReturnType<typeof this.getServerStats>>) => void,
-    intervalMs: number = 5000,
+    intervalMs: number = 5000
   ): () => void {
     this.ensureNotDisposed();
 

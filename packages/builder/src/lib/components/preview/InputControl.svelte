@@ -71,8 +71,7 @@
     </Label>
     {#if item.description}
       <Dialog.Root>
-        <Dialog.Trigger
-          class="cursor-help text-xs opacity-60 transition-opacity hover:opacity-100"
+        <Dialog.Trigger class="cursor-help text-xs opacity-60 transition-opacity hover:opacity-100"
         ></Dialog.Trigger>
         <Dialog.Content class="sm:max-w-md">
           <Dialog.Header>

@@ -33,7 +33,7 @@ function throwHttpError(
   requestId: string,
   requestSize: number,
   serverUrl: string,
-  errorBody: string,
+  errorBody: string
 ): never {
   const { status, statusText } = response;
   const context = { url: fullUrl, requestId, method: 'POST', requestSize, serverUrl };
@@ -94,7 +94,7 @@ function buildHeaders(requestId: string, config: ComputeConfig): HeadersInit {
 
   if (!config.apiKey && !isLocalhost(config.serverUrl)) {
     console.warn(
-      `⚠️ [Rhino Compute] Request [${requestId}] targets remote server (${config.serverUrl}) but no API key is configured. Requests may fail or be rate-limited.`,
+      `⚠️ [Rhino Compute] Request [${requestId}] targets remote server (${config.serverUrl}) but no API key is configured. Requests may fail or be rate-limited.`
     );
   }
 
@@ -120,7 +120,7 @@ async function handleResponse(
   requestSize: number,
   serverUrl: string,
   startTime: number,
-  debug?: boolean,
+  debug?: boolean
 ): Promise<any> {
   const responseTime = Math.round(performance.now() - startTime);
 
@@ -132,14 +132,14 @@ async function handleResponse(
     if (debug) {
       log(
         `❌ Request [${requestId}] failed with HTTP ${response.status} in ${responseTime}ms`,
-        true,
+        true
       );
       log(`   URL: ${fullUrl}`, true);
       log(`   Status: ${response.status} ${response.statusText}`, true);
       if (errorBody) {
         log(
           `   Response body: ${errorBody.substring(0, 500)}${errorBody.length > 500 ? '...' : ''}`,
-          true,
+          true
         );
       }
     }
@@ -152,7 +152,7 @@ async function handleResponse(
           if (debug) {
             log(
               `⚠️ Request [${requestId}] completed with Grasshopper errors in ${responseTime}ms`,
-              true,
+              true
             );
             if (parsed.errors?.length > 0) {
               log(`   Errors: ${JSON.stringify(parsed.errors, null, 2)}`, true);
@@ -217,7 +217,7 @@ async function handleResponse(
 export async function fetchRhinoCompute<E extends Endpoint>(
   endpoint: E,
   args: Record<string, any>,
-  config: ComputeConfig | GrasshopperComputeConfig,
+  config: ComputeConfig | GrasshopperComputeConfig
 ): Promise<ComputeResponseFor<E>> {
   const requestId = generateRequestId();
   const body = JSON.stringify(args);
@@ -251,7 +251,7 @@ export async function fetchRhinoCompute<E extends Endpoint>(
       requestSize,
       config.serverUrl,
       startTime,
-      config.debug,
+      config.debug
     );
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError' && config.timeoutMs) {
@@ -266,7 +266,7 @@ export async function fetchRhinoCompute<E extends Endpoint>(
             requestId,
             args,
           },
-        },
+        }
       );
     }
     throw error;

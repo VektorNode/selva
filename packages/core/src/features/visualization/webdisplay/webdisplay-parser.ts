@@ -51,7 +51,7 @@ export function getThreeMeshesFromComputeResponse(
   options?: {
     allowScaling?: boolean;
     allowAutoPosition?: boolean;
-  },
+  }
 ): THREE.Mesh[] {
   const startTime = performance.now();
   const meshes: THREE.Mesh[] = [];
@@ -90,7 +90,7 @@ function getScaleFactor(modelUnits: string): number {
 function extractMeshesFromData(
   data: GrasshopperComputeResponse,
   meshes: THREE.Mesh[],
-  scaleFactor: number,
+  scaleFactor: number
 ): void {
   for (const value of data.values) {
     const innerTree = value.InnerTree as { [key: string]: DataItem[] };
@@ -107,7 +107,11 @@ function extractMeshesFromData(
 /**
  * Processes a single data branch to extract display meshes.
  */
-function processDataBranch(branch: DataItem[], meshes: THREE.Mesh[], scaleFactor: number): void {
+function processDataBranch(
+  branch: DataItem[],
+  meshes: THREE.Mesh[],
+  scaleFactor: number
+): void {
   for (const item of branch) {
     if (item.type === DISPLAY_COMPONENT_TYPE) {
       const rhinoMeshData = parseRhinoMeshData(item.data);

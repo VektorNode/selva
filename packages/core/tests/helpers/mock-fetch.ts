@@ -29,7 +29,7 @@ export function mockFetchSuccess(data: any) {
  */
 export function mockFetchError(
   statusCode: number = 500,
-  statusText: string = 'Internal Server Error',
+  statusText: string = 'Internal Server Error'
 ) {
   return vi.fn().mockResolvedValue(
     createMockResponse(
@@ -38,8 +38,8 @@ export function mockFetchError(
         ok: false,
         status: statusCode,
         statusText,
-      },
-    ),
+      }
+    )
   );
 }
 

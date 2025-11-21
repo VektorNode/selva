@@ -239,7 +239,7 @@ function processPathEntries(
   entries: DataItem[],
   typeFilter: OutputType | OutputType[] | undefined,
   parseValues: boolean,
-  rhino?: any,
+  rhino?: any
 ): any {
   const filteredEntries = entries.filter((item) => matchesTypeFilter(item.type, typeFilter));
 
@@ -261,7 +261,7 @@ function processParameter(
   param: GrasshopperComputeResponse['values'][0],
   options: Required<Omit<GetValuesOptions, 'types' | 'stringOnly' | 'generateTypes'>> & {
     typeFilter?: OutputType | OutputType[];
-  },
+  }
 ): { values: Record<string, any>; type?: string } | null {
   const { typeFilter, parseValues, rhino } = options;
   const pathValues: Record<string, any> = {};
@@ -392,7 +392,7 @@ function generateTypeInfo(result: ParsedContext, paramTypes: Map<string, string>
  */
 export function getValues<T = ParsedContext>(
   response: GrasshopperComputeResponse,
-  options: GetValuesOptions = {},
+  options: GetValuesOptions = {}
 ): GetValuesResult<T> {
   const {
     types: typeFilter,
@@ -476,7 +476,7 @@ export function extractFileData(response: GrasshopperComputeResponse): FileData[
 export function getParameter(
   response: GrasshopperComputeResponse,
   paramName: string,
-  parseJson: boolean = true,
+  parseJson: boolean = true
 ): DataItem[] | undefined {
   const param = response.values.find((p) => p.ParamName === paramName);
   if (!param) return undefined;

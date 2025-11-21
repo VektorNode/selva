@@ -372,14 +372,7 @@
           "description": "Key-value pairs for dropdown options"
         }
       },
-      "required": [
-        "id",
-        "name",
-        "nickname",
-        "description",
-        "category",
-        "paramType"
-      ]
+      "required": ["id", "name", "nickname", "description", "category", "paramType"]
     },
 
     "AvailableParameters": {

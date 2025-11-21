@@ -19,7 +19,7 @@ export default function processValueListInput(input: InputParamSchema): void {
       ErrorCodes.INVALID_INPUT,
       {
         context: { inputName: input.name },
-      },
+      }
     );
   }
 
@@ -28,7 +28,7 @@ export default function processValueListInput(input: InputParamSchema): void {
     const valueExists = Object.values(input.values).includes(input.default);
     if (!valueExists) {
       console.warn(
-        `ValueList input "${input.name}" default value "${input.default}" is not in available values`,
+        `ValueList input "${input.name}" default value "${input.default}" is not in available values`
       );
     }
   }

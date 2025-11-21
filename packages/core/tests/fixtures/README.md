@@ -106,7 +106,7 @@ Add a new builder function to `test-data-builders.ts`:
 
 ```typescript
 export function createPointInputSchema(
-  overrides: Partial<InputParamSchema> = {},
+  overrides: Partial<InputParamSchema> = {}
 ): InputParamSchema {
   return createInputSchema({
     paramType: 'Point',

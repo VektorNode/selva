@@ -37,7 +37,7 @@ import {
 export async function solveGrasshopperDefinition(
   dataTree: DataTree[],
   definition: string | Uint8Array,
-  config: GrasshopperComputeConfig,
+  config: GrasshopperComputeConfig
 ): Promise<GrasshopperComputeResponse> {
   if (config.debug) {
     warnIfClientSide('solveGrasshopperDefinition', config.suppressClientSideWarning);
@@ -73,7 +73,7 @@ export async function solveGrasshopperDefinition(
  */
 export function prepareGrasshopperArgs(
   definition: string | Uint8Array,
-  dataTree: DataTree[],
+  dataTree: DataTree[]
 ): GrasshopperRequestSchema {
   const args: GrasshopperRequestSchema = {
     algo: null,
@@ -115,7 +115,7 @@ export function isBase64(str: string): boolean {
  */
 export function applyOptionalComputeSettings(
   arglist: GrasshopperRequestSchema,
-  options: GrasshopperComputeConfig,
+  options: GrasshopperComputeConfig
 ): void {
   if (options.cachesolve !== null) arglist.cachesolve = options.cachesolve;
   if (options.modelunits !== null) arglist.modelunits = options.modelunits;

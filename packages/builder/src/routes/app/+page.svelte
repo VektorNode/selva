@@ -95,7 +95,7 @@
 
       // Update 3D viewer if enabled
       if (schema.enable3dViewer && scene) {
-        const meshes = processor.extractMeshesFromResponse();
+        const meshes = await processor.extractMeshesFromResponse();
         rhinoCompute.updateScene(scene, meshes, camera, controls, viewerInitialized);
         viewerInitialized = true;
       }

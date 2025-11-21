@@ -84,7 +84,7 @@
 
 			// Only update scene if result exists
 			if (result && scene) {
-				const meshes = getThreeMeshesFromComputeResponse(result);
+				const meshes = await getThreeMeshesFromComputeResponse(result);
 
 				if (!viewerInitialized) {
 					// Initial setup

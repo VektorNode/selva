@@ -16,7 +16,7 @@ describe('camelcaseKeys', () => {
           first_name: 'John',
           last_name: 'Doe',
           'email-address': 'john@example.com',
-        }),
+        })
       ).toEqual({
         firstName: 'John',
         lastName: 'Doe',

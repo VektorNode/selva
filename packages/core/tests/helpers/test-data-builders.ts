@@ -57,7 +57,7 @@ export function createInputSchema(overrides: Partial<InputParamSchema> = {}): In
  * ```
  */
 export function createNumericInputSchema(
-  overrides: Partial<InputParamSchema> = {},
+  overrides: Partial<InputParamSchema> = {}
 ): InputParamSchema {
   return createInputSchema({
     paramType: 'Number',
@@ -91,7 +91,7 @@ export function createTextInputSchema(overrides: Partial<InputParamSchema> = {})
  * ```
  */
 export function createBooleanInputSchema(
-  overrides: Partial<InputParamSchema> = {},
+  overrides: Partial<InputParamSchema> = {}
 ): InputParamSchema {
   return createInputSchema({
     paramType: 'Boolean',
@@ -109,7 +109,7 @@ export function createBooleanInputSchema(
  * ```
  */
 export function createIntegerInputSchema(
-  overrides: Partial<InputParamSchema> = {},
+  overrides: Partial<InputParamSchema> = {}
 ): InputParamSchema {
   return createInputSchema({
     paramType: 'Integer',

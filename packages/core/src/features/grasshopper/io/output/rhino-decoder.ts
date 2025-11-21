@@ -58,7 +58,7 @@ export interface DecodeRhinoOptions {
 export function decodeRhinoGeometry(
   parsedData: unknown,
   rhinoType: string,
-  rhino: RhinoModule,
+  rhino: RhinoModule
 ): unknown {
   const decoder = decoderRegistry.get(rhinoType);
   if (decoder) {
@@ -92,7 +92,7 @@ export function decodeRhinoGeometry(
 export function decodeRhinoObject<T extends Record<string, unknown>>(
   obj: T,
   rhino: RhinoModule,
-  options: DecodeRhinoOptions = {},
+  options: DecodeRhinoOptions = {}
 ): T {
   const { keys, skipKeys } = options;
   const out: Record<string, unknown> = { ...obj };

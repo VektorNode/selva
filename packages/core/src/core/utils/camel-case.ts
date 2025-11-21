@@ -33,7 +33,7 @@ export function toCamelCase(str: string, options: { preserveSpaces?: boolean } =
  */
 export function camelcaseKeys(
   obj: unknown,
-  options: { deep?: boolean; preserveSpaces?: boolean } = {},
+  options: { deep?: boolean; preserveSpaces?: boolean } = {}
 ): unknown {
   if (!obj || typeof obj !== 'object') {
     return obj;
@@ -50,6 +50,6 @@ export function camelcaseKeys(
       (result as any)[camelKey] = options.deep ? camelcaseKeys(value, options) : value;
       return result;
     },
-    {} as Record<string, unknown>,
+    {} as Record<string, unknown>
   );
 }

@@ -12,7 +12,7 @@ import type { InputParamSchema } from '../../../types';
  */
 export default function processNumericInput(
   input: InputParamSchema,
-  roundingTolerance: number = 1e-8,
+  roundingTolerance: number = 1e-8
 ): void {
   const isIntegerType = input.paramType === 'Integer';
 
@@ -93,7 +93,7 @@ export default function processNumericInput(
     // Apply precision to all values
     if (Array.isArray(input.default)) {
       input.default = input.default.map((val) =>
-        typeof val === 'number' ? applyRounding(val, decimalPlaces, roundingTolerance) : val,
+        typeof val === 'number' ? applyRounding(val, decimalPlaces, roundingTolerance) : val
       );
     } else if (typeof input.default === 'number') {
       input.default = applyRounding(input.default, decimalPlaces, roundingTolerance);

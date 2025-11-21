@@ -45,7 +45,7 @@ export interface ProcessValueOptions<T> {
  */
 export function processInputValue<T>(
   input: InputParamSchema,
-  options: ProcessValueOptions<T>,
+  options: ProcessValueOptions<T>
 ): void {
   const { transform, setUndefinedOnEmpty = true } = options;
 
@@ -95,7 +95,7 @@ export function createNumericTransformer(): ValueTransformer<number> {
  * @internal This is an internal transformer factory used by boolean parsers.
  */
 export function createBooleanTransformer(
-  throwOnInvalid: boolean = true,
+  throwOnInvalid: boolean = true
 ): ValueTransformer<boolean> {
   return (value: unknown): boolean | null => {
     if (typeof value === 'string') {

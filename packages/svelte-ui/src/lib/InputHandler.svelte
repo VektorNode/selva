@@ -16,8 +16,6 @@
   } from '@computebuilder/core/grasshopper';
   import { type Snippet } from 'svelte';
 
-  let isInitialMount = $state(true);
-
   interface Props {
     input: InputParam[];
     onChange: (tree: DataTree[]) => void;
@@ -27,7 +25,6 @@
     children?: Snippet;
     showSliders?: boolean;
     showRangeIndicator?: boolean;
-    /** Use nested groups (supports :: separator) */
     useNestedGroups?: boolean;
   }
 

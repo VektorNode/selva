@@ -46,7 +46,7 @@ export function groupInputs(
     showUngrouped?: boolean;
     ungroupedName?: string;
     capitalize?: boolean;
-  },
+  }
 ): GroupInputs {
   const groupedInputs: GroupInputs = {};
   const showUngrouped = options?.showUngrouped ?? true;
@@ -128,7 +128,7 @@ export function groupInputsNested(
     separator?: string;
     showUngrouped?: boolean;
     ungroupedName?: string;
-  },
+  }
 ): NestedGroupInputs {
   const separator = options?.separator ?? '::';
   const showUngrouped = options?.showUngrouped ?? true;

@@ -5,7 +5,6 @@
   import Input from '$lib/components/ui/input/input.svelte';
   import * as Slider from '$lib/components/ui/slider/index.js';
   import { validateNumber, getSliderConfig } from '../../utils/validation.js';
-  import { cn } from '$lib/utils.js';
 
   type Props = {
     input: NumericInputType;
@@ -117,7 +116,6 @@
           oninput={(e) => handleInput(onUpdate, key, e)}
           onblur={(e) => handleBlur(onUpdate, key, e)}
           placeholder={input.description}
-          class={cn('w-full', className)}
           aria-invalid={validation?.isValid === false}
         />
 

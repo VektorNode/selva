@@ -15,7 +15,7 @@ const defaultUp = new THREE.Vector3(0, 0, 1);
  */
 export const initThree = function (
   canvas: HTMLCanvasElement,
-  options?: ThreeInitializerOptions,
+  options?: ThreeInitializerOptions
 ): {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
@@ -53,7 +53,7 @@ export const initThree = function (
     renderer,
     scene,
     camera,
-    controls,
+    controls
   );
   animate();
 
@@ -173,7 +173,7 @@ function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitiali
         new THREE.Vector3(
           -defaults.cameraDistance,
           defaults.cameraDistance,
-          defaults.cameraDistance,
+          defaults.cameraDistance
         ),
       fov: options.camera?.fov || 20,
       near: options.camera?.near || defaults.near,
@@ -263,7 +263,7 @@ function createAnimationLoop(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
-  controls: OrbitControls,
+  controls: OrbitControls
 ): { animate: () => void; dispose: () => void } {
   let animationId: number | null = null;
 
@@ -294,7 +294,7 @@ function createAnimationLoop(
 function setupResponsiveResize(
   canvas: HTMLCanvasElement,
   renderer: THREE.WebGLRenderer,
-  camera: THREE.PerspectiveCamera,
+  camera: THREE.PerspectiveCamera
 ): { resize: () => void; dispose: () => void } {
   const parent = canvas.parentElement;
   let resizeTimeout: NodeJS.Timeout;
@@ -361,7 +361,7 @@ function setupResponsiveResize(
 function setupEnvironment(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
-  config: Required<ThreeInitializerOptions>,
+  config: Required<ThreeInitializerOptions>
 ) {
   if (config.environment.enableEnvironmentLighting) {
     new RGBELoader().load(
@@ -379,7 +379,7 @@ function setupEnvironment(
         // Add basic ambient light as fallback
         const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
         scene.add(ambientLight);
-      },
+      }
     );
   }
 }
@@ -388,7 +388,7 @@ function setupLighting(scene: THREE.Scene, config: Required<ThreeInitializerOpti
   // Add ambient light
   const ambientLight = new THREE.AmbientLight(
     config.lighting.ambientLightColor,
-    config.lighting.ambientLightIntensity,
+    config.lighting.ambientLightIntensity
   );
   scene.add(ambientLight);
 
@@ -396,7 +396,7 @@ function setupLighting(scene: THREE.Scene, config: Required<ThreeInitializerOpti
   if (config.lighting.enableSunlight) {
     const sunlight = new THREE.DirectionalLight(
       config.lighting.sunlightColor ?? 0xffffff,
-      config.lighting.sunlightIntensity,
+      config.lighting.sunlightIntensity
     );
     const pos = config.lighting.sunlightPosition;
     if (pos) {
@@ -478,7 +478,7 @@ function createCamera(config: Required<ThreeInitializerOptions>): THREE.Perspect
     config.camera.fov,
     width / height,
     config.camera.near,
-    config.camera.far,
+    config.camera.far
   );
 
   const pos = config.camera.position;
@@ -494,7 +494,7 @@ function createCamera(config: Required<ThreeInitializerOptions>): THREE.Perspect
  */
 function setupRenderer(
   canvas: HTMLCanvasElement,
-  config: Required<ThreeInitializerOptions>,
+  config: Required<ThreeInitializerOptions>
 ): THREE.WebGLRenderer {
   const renderer = new THREE.WebGLRenderer({
     antialias: config.render.antialias,
@@ -539,7 +539,7 @@ function setupEventHandlers(
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
   controls: OrbitControls,
-  config: Required<ThreeInitializerOptions>,
+  config: Required<ThreeInitializerOptions>
 ): {
   dispose: () => void;
   fitToView: () => void;
@@ -687,7 +687,7 @@ function setupEventHandlers(
 function setupControls(
   camera: THREE.PerspectiveCamera,
   canvas: HTMLCanvasElement,
-  config: Required<ThreeInitializerOptions>,
+  config: Required<ThreeInitializerOptions>
 ): OrbitControls {
   const controls = new OrbitControls(camera, canvas);
 

@@ -161,16 +161,16 @@ export default class GrasshopperResponseProcessor {
    * Processes the response to extract 3D geometry and returns it as
    * Three.js meshes ready for rendering in a 3D scene.
    *
-   * @returns Three.js mesh objects representing the geometry in the response
+   * @returns Promise resolving to Three.js mesh objects representing the geometry in the response
    *
    * @example
    * ```typescript
-   * const meshes = processor.getDisplayFromResponse();
+   * const meshes = await processor.extractMeshesFromResponse();
    * scene.add(...meshes);
    * ```
    */
-  public extractMeshesFromResponse() {
-    return getThreeMeshesFromComputeResponse(this.response);
+  public async extractMeshesFromResponse() {
+    return await getThreeMeshesFromComputeResponse(this.response);
   }
 
   /**
@@ -208,7 +208,7 @@ export default class GrasshopperResponseProcessor {
    */
   public getAndDownloadFiles(
     folderName: string,
-    additionalFiles?: FileBaseInfo[] | FileBaseInfo | null,
+    additionalFiles?: FileBaseInfo[] | FileBaseInfo | null
   ) {
     const files = this.getFileData();
     downloadFileData(files, folderName, additionalFiles);

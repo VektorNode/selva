@@ -1,5 +1,5 @@
 {
-  "name": "rhino-compute-ui",
+  "name": "@computebuilder/svelte-ui",
   "version": "1.0.3",
   "description": "A Svelte component library for rhino3dm and rhino.compute",
   "author": "VektorNode felix@vektornode.com",

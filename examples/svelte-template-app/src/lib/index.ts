@@ -1,4 +1,4 @@
-import type { GrasshopperComputeResponse } from "rhino-compute-core";
+import type { GrasshopperComputeResponse } from "@computebuilder/core";
 
 export interface ProcessedMessage {
   component: string;

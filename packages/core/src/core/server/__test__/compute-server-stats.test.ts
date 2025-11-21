@@ -49,16 +49,16 @@ describe('ComputeServerStats', () => {
       await instance.dispose();
 
       await expect(instance.isServerOnline()).rejects.toThrow(
-        'ComputeServerStats has been disposed and cannot be used',
+        'ComputeServerStats has been disposed and cannot be used'
       );
       await expect(instance.getActiveChildren()).rejects.toThrow(
-        'ComputeServerStats has been disposed and cannot be used',
+        'ComputeServerStats has been disposed and cannot be used'
       );
       await expect(instance.getVersion()).rejects.toThrow(
-        'ComputeServerStats has been disposed and cannot be used',
+        'ComputeServerStats has been disposed and cannot be used'
       );
       await expect(instance.getServerStats()).rejects.toThrow(
-        'ComputeServerStats has been disposed and cannot be used',
+        'ComputeServerStats has been disposed and cannot be used'
       );
     });
   });
@@ -102,7 +102,7 @@ describe('ComputeServerStats', () => {
         'fetch',
         vi.fn().mockResolvedValue({
           ok: true,
-        }),
+        })
       );
 
       const result = await instance.isServerOnline();
@@ -117,7 +117,7 @@ describe('ComputeServerStats', () => {
         vi.fn().mockResolvedValue({
           ok: false,
           status: 500,
-        }),
+        })
       );
 
       const result = await instance.isServerOnline();
@@ -145,7 +145,7 @@ describe('ComputeServerStats', () => {
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({ RhinoComputeKey: 'api-key-123' }),
-        }),
+        })
       );
     });
   });
@@ -166,7 +166,7 @@ describe('ComputeServerStats', () => {
         vi.fn().mockResolvedValue({
           ok: true,
           text: vi.fn().mockResolvedValue('5'),
-        }),
+        })
       );
 
       const result = await instance.getActiveChildren();
@@ -180,7 +180,7 @@ describe('ComputeServerStats', () => {
         vi.fn().mockResolvedValue({
           ok: false,
           status: 500,
-        }),
+        })
       );
 
       const result = await instance.getActiveChildren();
@@ -202,7 +202,7 @@ describe('ComputeServerStats', () => {
         vi.fn().mockResolvedValue({
           ok: true,
           text: vi.fn().mockResolvedValue('not-a-number'),
-        }),
+        })
       );
 
       const result = await instance.getActiveChildren();
@@ -230,7 +230,7 @@ describe('ComputeServerStats', () => {
             compute: '2.0',
             git_sha: 'abc123',
           }),
-        }),
+        })
       );
 
       const result = await instance.getVersion();
@@ -248,7 +248,7 @@ describe('ComputeServerStats', () => {
         vi.fn().mockResolvedValue({
           ok: false,
           status: 404,
-        }),
+        })
       );
 
       const result = await instance.getVersion();
@@ -270,7 +270,7 @@ describe('ComputeServerStats', () => {
         vi.fn().mockResolvedValue({
           ok: true,
           json: vi.fn().mockResolvedValue({}),
-        }),
+        })
       );
 
       const result = await instance.getVersion();
@@ -289,7 +289,7 @@ describe('ComputeServerStats', () => {
           ok: true,
           json: vi.fn().mockRejectedValue(new Error('Invalid JSON')),
           text: vi.fn().mockResolvedValue('7.0'),
-        }),
+        })
       );
 
       const result = await instance.getVersion();
@@ -316,7 +316,7 @@ describe('ComputeServerStats', () => {
         'fetch',
         vi.fn().mockResolvedValue({
           ok: false,
-        }),
+        })
       );
 
       const result = await instance.getServerStats();

@@ -24,7 +24,7 @@ import { processInputs } from './input/input-parsers/input-processors';
  */
 export async function fetchDefinitionIO(
   definitionUrl: string,
-  config: ComputeConfig,
+  config: ComputeConfig
 ): Promise<GrasshopperParsedIORaw> {
   const response = await fetchRhinoCompute<'io'>('io', { pointer: definitionUrl }, config);
 
@@ -78,7 +78,7 @@ export async function fetchDefinitionIO(
  */
 export async function fetchParsedDefinitionIO(
   definitionUrl: string,
-  config: ComputeConfig,
+  config: ComputeConfig
 ): Promise<GrasshopperParsedIO> {
   warnIfClientSide('fetchParsedDefinitionIO', config.suppressClientSideWarning);
 

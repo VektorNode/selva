@@ -44,7 +44,7 @@ describe('solveGrasshopperDefinition - Input Format Handling', () => {
 
       // This will throw due to base64ByteArray implementation bug
       expect(() => prepareGrasshopperArgs(binaryData, dataTree)).toThrow(
-        'inputBytes must be an array',
+        'inputBytes must be an array'
       );
 
       // TODO: Once base64ByteArray is fixed to handle Uint8Array properly, update to:
@@ -237,7 +237,7 @@ describe('solveGrasshopperDefinition - Input Format Handling', () => {
       const dataTree = createDataTree();
 
       expect(() => prepareGrasshopperArgs(largeBinary, dataTree)).toThrow(
-        'inputBytes must be an array',
+        'inputBytes must be an array'
       );
     });
   });

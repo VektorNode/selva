@@ -1,17 +1,17 @@
 <script lang="ts">
   import MessageOverlay from "$lib/components/MessageOverlay.svelte";
   import Button from "$lib/components/Button.svelte";
-  import { InputHandler, LoadingScreen } from "rhino-compute-ui";
+  import { InputHandler, LoadingScreen } from "@computebuilder/svelte-ui";
   import {
     GrasshopperResponseProcessor,
     type DataTree,
     type GrasshopperComputeResponse,
-  } from "rhino-compute-core/grasshopper";
+  } from "@computebuilder/core/grasshopper";
   import {
     getThreeMeshesFromComputeResponse,
     initThree,
     updateScene,
-  } from "rhino-compute-core/visualization";
+  } from "@computebuilder/core/visualization";
   import { onMount } from "svelte";
   import * as THREE from "three";
   import type { OrbitControls } from "three/examples/jsm/Addons.js";
@@ -143,14 +143,7 @@
         onChange={handleInputChange}
         headerText="Grasshopper Inputs"
         autoUpdate={true}
-        displayOptions={{
-          showSliders: true,
-          showRangeIndicator: false,
-          accordionSeparated: true,
-          darkMode: false,
-          variant: "outlined",
-          preset: "modern",
-        }}
+
       >
         <Button fullWidth onclick={handleCompute}>Compute</Button>
       </InputHandler>

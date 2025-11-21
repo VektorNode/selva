@@ -14,7 +14,7 @@ export function updateValue<T>(
   currentValue: T | T[] | DataTreeDefault<T>,
   newValue: T,
   index?: number,
-  branch?: string,
+  branch?: string
 ): T | T[] | DataTreeDefault<T> {
   // Single value
   if (typeof currentValue !== 'object' || currentValue === null) {
@@ -44,7 +44,7 @@ export function updateValue<T>(
 export function getValue<T>(
   value: T | T[] | DataTreeDefault<T>,
   index?: number,
-  branch?: string,
+  branch?: string
 ): T | undefined {
   if (Array.isArray(value) && index !== undefined) {
     return value[index];

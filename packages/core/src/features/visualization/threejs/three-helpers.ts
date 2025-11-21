@@ -34,7 +34,7 @@ export function updateScene(
   meshes: THREE.Mesh[],
   camera: THREE.PerspectiveCamera,
   controls: OrbitControls,
-  initialPositionSet: boolean,
+  initialPositionSet: boolean
 ) {
   clearScene(scene);
 
@@ -86,7 +86,7 @@ export function updateScene(
  */
 export function VerticesToThreeMesh(
   vertices: number[] | Float32Array,
-  indices: number[] | Uint32Array,
+  indices: number[] | Uint32Array
 ): THREE.Mesh {
   const floatVertices = vertices instanceof Float32Array ? vertices : new Float32Array(vertices);
   const floatFaceIndices = indices instanceof Uint32Array ? indices : new Uint32Array(indices);

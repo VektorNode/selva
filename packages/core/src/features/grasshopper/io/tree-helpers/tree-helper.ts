@@ -104,7 +104,7 @@ function clampNumericValue(
   value: number,
   min: number | null | undefined,
   max: number | null | undefined,
-  inputName: string,
+  inputName: string
 ): number {
   let result = value;
 
@@ -131,7 +131,7 @@ function clampNumericValue(
  */
 export function groupedInputsToDataTrees(
   groupedInputs: GroupInputs,
-  currentValues?: Record<string, any>,
+  currentValues?: Record<string, any>
 ): DataTree[] {
   // Flatten all GhInputType arrays from each group
   const allInputs: InputParam[] = Object.values(groupedInputs).flatMap((group) => group.inputs);
@@ -200,7 +200,7 @@ export function replaceTreeValue(trees: DataTree[], paramName: string, newValue:
 export function isDataTreeStructure(obj: unknown): obj is DataTreeDefault {
   if (typeof obj !== 'object' || obj === null) return false;
   return Object.entries(obj).every(
-    ([key, value]) => typeof key === 'string' && /^\{[\d;]+\}$/.test(key) && Array.isArray(value),
+    ([key, value]) => typeof key === 'string' && /^\{[\d;]+\}$/.test(key) && Array.isArray(value)
   );
 }
 

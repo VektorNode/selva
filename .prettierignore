@@ -5,6 +5,7 @@
 **/coverage
 
 # Dependencies
+node_modules/
 **/node_modules
 
 # Generated files
@@ -21,3 +22,7 @@
 # Examples (have their own config)
 examples/
 
+# Build outputs
+.next
+build
+dist

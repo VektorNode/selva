@@ -3,7 +3,7 @@ import {
   fetchParsedDefinitionIO,
   solveGrasshopperDefinition,
   inputsToDataTrees,
-  GrasshopperResponseProcessor
+  GrasshopperResponseProcessor,
 } from '@computebuilder/core';
 import type { UISchema } from '$lib/types/generated';
 
@@ -11,7 +11,6 @@ export const load = (async () => {
   // Fetch the Grasshopper definition IO (includes paramId and default values)
   const definition = await fetchParsedDefinitionIO('http://localhost:5173/builder_test.gh', {
     serverUrl: 'http://localhost:5000/',
-
   });
 
   // Solve with default values to get the schema
@@ -34,13 +33,13 @@ export const load = (async () => {
     if (computeInput && computeInput.default !== undefined) {
       return {
         ...schemaInput,
-        default: computeInput.default
+        default: computeInput.default,
       };
     }
     return schemaInput;
   });
 
   return {
-    schema
+    schema,
   };
 }) satisfies PageServerLoad;

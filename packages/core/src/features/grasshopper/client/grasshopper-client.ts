@@ -66,7 +66,7 @@ export default class GrasshopperClient {
    */
   public async solve(
     definitionUrl: string,
-    dataTree: DataTree[],
+    dataTree: DataTree[]
   ): Promise<GrasshopperComputeResponse> {
     this.ensureNotDisposed();
 
@@ -94,7 +94,7 @@ export default class GrasshopperClient {
               definitionUrl,
               inputs: dataTree,
             },
-          },
+          }
         );
       }
 
@@ -111,7 +111,7 @@ export default class GrasshopperClient {
       throw new RhinoComputeError(
         error instanceof Error ? error.message : String(error),
         undefined,
-        { context: { definitionUrl, inputs: dataTree } },
+        { context: { definitionUrl, inputs: dataTree } }
       );
     }
   }
@@ -140,7 +140,7 @@ export default class GrasshopperClient {
     if (this.disposed) {
       throw new RhinoComputeError(
         'GrasshopperClient has been disposed and cannot be used',
-        ErrorCodes.INVALID_STATE,
+        ErrorCodes.INVALID_STATE
       );
     }
   }
@@ -163,7 +163,7 @@ export default class GrasshopperClient {
     // Validate that it's not the default public endpoint
     if (config.serverUrl === '' || config.serverUrl === 'https://compute.rhino3d.com/') {
       throw new Error(
-        'serverUrl must be set to your Compute server URL. The default public endpoint is not allowed.',
+        'serverUrl must be set to your Compute server URL. The default public endpoint is not allowed.'
       );
     }
 

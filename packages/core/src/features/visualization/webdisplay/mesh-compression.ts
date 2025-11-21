@@ -34,7 +34,7 @@ function parseMeshBinaryData(binaryMeshData: Uint8Array): MeshData {
   const dataView = new DataView(
     binaryMeshData.buffer,
     binaryMeshData.byteOffset,
-    binaryMeshData.byteLength,
+    binaryMeshData.byteLength
   );
   let offset = 0;
 
@@ -58,7 +58,7 @@ function parseMeshBinaryData(binaryMeshData: Uint8Array): MeshData {
   const vertices = new Float32Array(
     binaryMeshData.buffer,
     binaryMeshData.byteOffset + offset,
-    numVertexFloats,
+    numVertexFloats
   );
   offset += verticesByteLength;
 
@@ -78,7 +78,7 @@ function parseMeshBinaryData(binaryMeshData: Uint8Array): MeshData {
   const faceIndices = new Uint32Array(
     binaryMeshData.buffer,
     binaryMeshData.byteOffset + offset,
-    numIndices,
+    numIndices
   );
 
   return {

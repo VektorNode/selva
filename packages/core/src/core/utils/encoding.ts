@@ -183,7 +183,7 @@ export function base64ToRhinoObject(
   item: {
     type: string;
     data: string;
-  },
+  }
 ) {
   //Make a type definition for this?
   let decodata: null | object = null;

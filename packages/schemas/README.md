@@ -47,11 +47,13 @@ npm run generate:all
 ### 3. Import in Your Code
 
 **TypeScript:**
+
 ```typescript
 import type { MyNewType } from '$lib/types/generated';
 ```
 
 **C#:**
+
 ```csharp
 using ComputeBuilder.Plugin.Models.Generated;
 // MyNewType is now available
@@ -94,6 +96,7 @@ Don't include in `required` array - they become nullable in C# and optional in T
 ### Fully Automated Generation
 
 The C# generator is **100% schema-driven**, meaning:
+
 - ✅ All classes are generated dynamically from the JSON Schema definitions
 - ✅ Discriminated unions are **auto-detected** by finding `oneOf` patterns
 - ✅ Base classes are **auto-generated** from common properties across variants
@@ -110,6 +113,7 @@ The C# generator is **100% schema-driven**, meaning:
 The generator automatically detects and generates:
 
 **Discriminated Unions:**
+
 - Finds any `oneOf` pattern in the schema
 - Identifies all variant types from `$ref` references
 - Detects discriminator fields (properties with `const` values)
@@ -119,6 +123,7 @@ The generator automatically detects and generates:
 - Generates JSON converter with proper if-else chain
 
 **Type Mappings:**
+
 - Descriptions containing "GUID" → `Guid` type in C#
 - Special refs like `GrasshopperParamType` → `string` (for compatibility)
 - Union refs like `LayoutItem` → `LayoutItemBase` (for inheritance)
@@ -126,28 +131,30 @@ The generator automatically detects and generates:
 - Date-time strings → `DateTime`
 
 **Organization:**
+
 - Classifies types by naming patterns (Config, Schema, Runtime, etc.)
 - Groups related classes into logical sections
 - Separates regular classes from union variants
 
 ## Type Mappings
 
-| JSON Schema | TypeScript | C# |
-|------------|------------|-----|
-| `"type": "string"` | `string` | `string` |
-| `"type": "number"` | `number` | `double` / `double?` |
-| `"type": "integer"` | `number` | `int` / `int?` |
-| `"type": "boolean"` | `boolean` | `bool` / `bool?` |
-| `"type": "array"` | `T[]` | `List<T>` |
-| `"format": "date-time"` | `string` | `DateTime` |
-| `"format": "uuid"` | `string` | `Guid` |
-| `"enum": [...]` | union type | `string` |
+| JSON Schema             | TypeScript | C#                   |
+| ----------------------- | ---------- | -------------------- |
+| `"type": "string"`      | `string`   | `string`             |
+| `"type": "number"`      | `number`   | `double` / `double?` |
+| `"type": "integer"`     | `number`   | `int` / `int?`       |
+| `"type": "boolean"`     | `boolean`  | `bool` / `bool?`     |
+| `"type": "array"`       | `T[]`      | `List<T>`            |
+| `"format": "date-time"` | `string`   | `DateTime`           |
+| `"format": "uuid"`      | `string`   | `Guid`               |
+| `"enum": [...]`         | union type | `string`             |
 
 ## Creating Discriminated Unions (Fully Automated!)
 
 The generator **automatically detects and generates** discriminated unions. You just define the schema pattern:
 
 **How it works:**
+
 1. Define variants with discriminator fields (`const` values)
 2. Create a union type using `oneOf`
 3. Regenerate - the generator does everything else!
@@ -199,10 +206,7 @@ For polymorphic types (like LayoutItem), define each variant separately:
 ```json
 {
   "Widget": {
-    "oneOf": [
-      { "$ref": "#/definitions/TextWidget" },
-      { "$ref": "#/definitions/NumberWidget" }
-    ]
+    "oneOf": [{ "$ref": "#/definitions/TextWidget" }, { "$ref": "#/definitions/NumberWidget" }]
   }
 }
 ```
@@ -210,6 +214,7 @@ For polymorphic types (like LayoutItem), define each variant separately:
 ### 4. C# Generator Handles Everything Automatically
 
 The C# generator (`generate-csharp.js`) **automatically**:
+
 - ✅ Detects the `oneOf` pattern
 - ✅ Identifies all variants from `$ref` references
 - ✅ Detects discriminator fields (`type` has `const: "myType"`)
@@ -222,6 +227,7 @@ The C# generator (`generate-csharp.js`) **automatically**:
 **Result:** You get a complete, type-safe discriminated union with zero manual C# code!
 
 **Example output:**
+
 ```csharp
 [JsonConverter(typeof(WidgetBaseConverter))]
 public abstract class WidgetBase {
@@ -291,7 +297,7 @@ To add a new input widget (e.g., "color picker"):
   "LayoutItem": {
     "oneOf": [
       { "$ref": "#/definitions/InputNumberLayoutItem" },
-      { "$ref": "#/definitions/InputColorLayoutItem" },
+      { "$ref": "#/definitions/InputColorLayoutItem" }
       // ... other variants
     ]
   }
@@ -305,6 +311,7 @@ npm run generate:all
 ```
 
 The C# generator **automatically**:
+
 - Detects the new layout item in the `LayoutItem.oneOf` union
 - Generates the `InputColorLayoutItem` class inheriting from `LayoutItemBase`
 - Adds the discriminator case to the `LayoutItemConverter`
@@ -334,16 +341,19 @@ cd .. && dotnet build
 ## Common Issues
 
 ### "Property X not found"
+
 - Check spelling in JSON Schema
 - Verify property is in the `properties` object
 - Run `npm run generate:all`
 
 ### "Type mismatch"
+
 - Check type mappings table above
 - Optional properties need `?` in required arrays
 - Regenerate after schema changes
 
 ### "C# 7.3 compatibility"
+
 - Don't use switch expressions in generator
 - Use if-else chains instead
 - Avoid pattern matching with tuples
