@@ -38,8 +38,26 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("version")]
         public string Version { get; set; } = "1.0";
 
+        /// <summary>
+        /// Semantic version of the schema format (MAJOR.MINOR.PATCH)
+        /// </summary>
+        [JsonProperty("schemaVersion")]
+        public string SchemaVersion { get; set; } = "1.0.0";
+
+        /// <summary>
+        /// Minimum plugin version required to load this schema
+        /// </summary>
+        [JsonProperty("minPluginVersion")]
+        public string MinPluginVersion { get; set; }
+
         [JsonProperty("created")]
         public DateTime Created { get; set; } = DateTime.UtcNow;
+
+        /// <summary>
+        /// Last modification timestamp
+        /// </summary>
+        [JsonProperty("lastModified", NullValueHandling = NullValueHandling.Ignore)]
+        public DateTime LastModified { get; set; } = DateTime.UtcNow;
 
         [JsonProperty("inputs")]
         public List<InputParamSchema> Inputs { get; set; } = new List<InputParamSchema>();

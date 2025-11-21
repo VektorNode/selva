@@ -262,7 +262,19 @@ export interface UISchema {
   name: string;
   description: string;
   version: string;
+  /**
+   * Semantic version of the schema format (MAJOR.MINOR.PATCH)
+   */
+  schemaVersion?: string;
+  /**
+   * Minimum plugin version required to load this schema
+   */
+  minPluginVersion?: string;
   created: string;
+  /**
+   * Last modification timestamp
+   */
+  lastModified?: string;
   inputs: InputParamSchema[];
   outputs: OutputParamSchema[];
   layout: LayoutConfig;

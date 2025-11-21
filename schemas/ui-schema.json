@@ -272,7 +272,23 @@
         "name": { "type": "string" },
         "description": { "type": "string" },
         "version": { "type": "string", "default": "1.0" },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "default": "1.0.0",
+          "description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
+        },
+        "minPluginVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Minimum plugin version required to load this schema"
+        },
         "created": { "type": "string", "format": "date-time" },
+        "lastModified": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last modification timestamp"
+        },
         "inputs": {
           "type": "array",
           "items": { "$ref": "#/definitions/InputParamSchema" }

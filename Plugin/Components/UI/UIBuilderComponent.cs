@@ -847,6 +847,13 @@ namespace ComputeBuilder.Plugin.Components
             {
                 try
                 {
+                    // Ensure version is set before saving
+                    if (string.IsNullOrEmpty(_embeddedSchema.SchemaVersion))
+                    {
+                        _embeddedSchema.SchemaVersion = SchemaMigrator.CURRENT_SCHEMA_VERSION.ToString();
+                    }
+                    _embeddedSchema.LastModified = DateTime.UtcNow;
+
                     var schemaJson = JsonConvert.SerializeObject(_embeddedSchema);
                     writer.SetString("Schema", schemaJson);
                 }
@@ -889,8 +896,24 @@ namespace ComputeBuilder.Plugin.Components
                     var schemaJson = reader.GetString("Schema");
                     if (!string.IsNullOrEmpty(schemaJson))
                     {
-                        _embeddedSchema = JsonConvert.DeserializeObject<UISchema>(schemaJson);
+                        var rawSchema = JsonConvert.DeserializeObject<UISchema>(schemaJson);
+
+                        // MIGRATE TO CURRENT VERSION
+                        var originalVersion = rawSchema.SchemaVersion;
+                        _embeddedSchema = SchemaMigrator.MigrateToCurrentVersion(rawSchema);
+
+                        // Log if migration occurred
+                        if (originalVersion != _embeddedSchema.SchemaVersion)
+                        {
+                            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                                $"Schema migrated from v{originalVersion ?? "legacy"} to v{_embeddedSchema.SchemaVersion}");
+                        }
                     }
+                }
+                catch (IncompatibleSchemaException ex)
+                {
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error, ex.Message);
+                    return false;
                 }
                 catch (Exception ex)
                 {

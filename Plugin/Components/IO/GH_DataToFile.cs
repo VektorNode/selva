@@ -402,7 +402,7 @@ public class GH_DataToFile : GH_Component
                 {
                     geometry = ghBox.Value.ToBrep();
                 }
-                else if (goo is GH_Point ghPoint && ghPoint.Value != null)
+                else if (goo is GH_Point ghPoint )
                 {
                     geometry = new Rhino.Geometry.Point(ghPoint.Value);
                 }

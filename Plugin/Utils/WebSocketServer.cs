@@ -17,11 +17,15 @@ namespace ComputeBuilder.Plugin.Utils
         // Security: Maximum message size (10MB) to prevent memory exhaustion attacks
         private const int MAX_MESSAGE_SIZE = 10 * 1024 * 1024;
         private const int BUFFER_SIZE = 4096;
+        private const int MAX_CLIENTS = 10; // Prevent DoS by limiting concurrent connections
+        private const int HEARTBEAT_INTERVAL = 30000; // 30 seconds
+        private const int BROADCAST_TIMEOUT = 5000; // 5 seconds timeout for slow clients
 
         private readonly object _clientsLock = new object();
         private readonly List<WebSocket> _connectedClients = new List<WebSocket>();
         private CancellationTokenSource _cancellationTokenSource;
         private HttpListener _httpListener;
+        private Timer _heartbeatTimer;
 
         public WebSocketServer(int port = 8765)
         {
@@ -35,6 +39,7 @@ namespace ComputeBuilder.Plugin.Utils
         public void Dispose()
         {
             Stop();
+            _heartbeatTimer?.Dispose();
             _cancellationTokenSource?.Dispose();
         }
 
@@ -63,6 +68,9 @@ namespace ComputeBuilder.Plugin.Utils
                 // Start accepting connections in background
                 _ = Task.Run(async () => await AcceptConnectionsAsync(_cancellationTokenSource.Token));
 
+                // Start heartbeat to detect and clean up dead connections
+                StartHeartbeat();
+
                 return Task.CompletedTask;
             }
             catch (Exception ex)
@@ -80,6 +88,10 @@ namespace ComputeBuilder.Plugin.Utils
             {
                 return;
             }
+
+            // Stop heartbeat
+            _heartbeatTimer?.Dispose();
+            _heartbeatTimer = null;
 
             _cancellationTokenSource?.Cancel();
 
@@ -134,8 +146,16 @@ namespace ComputeBuilder.Plugin.Utils
                 {
                     try
                     {
-                        // Use await instead of Wait() to avoid blocking
-                        await client.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
+                        // Add timeout to prevent slow clients from blocking broadcast
+                        using (var cts = new CancellationTokenSource(BROADCAST_TIMEOUT))
+                        {
+                            await client.SendAsync(segment, WebSocketMessageType.Text, true, cts.Token);
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Client was too slow - remove it
+                        clientsToRemove.Add(client);
                     }
                     catch
                     {
@@ -205,9 +225,28 @@ namespace ComputeBuilder.Plugin.Utils
                 var webSocketContext = await context.AcceptWebSocketAsync(null);
                 webSocket = webSocketContext.WebSocket;
 
+                // Check connection limit before accepting
+                bool shouldReject = false;
                 lock (_clientsLock)
                 {
-                    _connectedClients.Add(webSocket);
+                    if (_connectedClients.Count >= MAX_CLIENTS)
+                    {
+                        shouldReject = true;
+                    }
+                    else
+                    {
+                        _connectedClients.Add(webSocket);
+                    }
+                }
+
+                if (shouldReject)
+                {
+                    await webSocket.CloseAsync(
+                        WebSocketCloseStatus.PolicyViolation,
+                        "Maximum client connections reached",
+                        CancellationToken.None);
+                    webSocket.Dispose();
+                    return;
                 }
 
                 // Notify that a new client connected
@@ -300,6 +339,79 @@ namespace ComputeBuilder.Plugin.Utils
                     break;
                 }
             }
+        }
+
+        /// <summary>
+        ///     Start heartbeat timer to detect and clean up dead connections
+        /// </summary>
+        private void StartHeartbeat()
+        {
+            _heartbeatTimer = new Timer(async _ =>
+            {
+                if (!IsRunning)
+                {
+                    return;
+                }
+
+                List<WebSocket> clients;
+                lock (_clientsLock)
+                {
+                    clients = new List<WebSocket>(_connectedClients);
+                }
+
+                var clientsToRemove = new List<WebSocket>();
+
+                foreach (var client in clients)
+                {
+                    if (client.State == WebSocketState.Open)
+                    {
+                        try
+                        {
+                            // Send ping by sending empty text message
+                            // Note: Proper WebSocket ping frames would require lower-level control
+                            var pingBuffer = Encoding.UTF8.GetBytes("");
+                            using (var cts = new CancellationTokenSource(5000))
+                            {
+                                await client.SendAsync(
+                                    new ArraySegment<byte>(pingBuffer),
+                                    WebSocketMessageType.Text,
+                                    true,
+                                    cts.Token
+                                );
+                            }
+                        }
+                        catch
+                        {
+                            // Client is dead or unresponsive - mark for removal
+                            clientsToRemove.Add(client);
+                        }
+                    }
+                    else
+                    {
+                        // Client is not in open state - mark for removal
+                        clientsToRemove.Add(client);
+                    }
+                }
+
+                // Remove dead clients
+                if (clientsToRemove.Count > 0)
+                {
+                    lock (_clientsLock)
+                    {
+                        foreach (var client in clientsToRemove)
+                        {
+                            _connectedClients.Remove(client);
+                            try
+                            {
+                                client.Dispose();
+                            }
+                            catch
+                            {
+                            }
+                        }
+                    }
+                }
+            }, null, HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL);
         }
     }
 }

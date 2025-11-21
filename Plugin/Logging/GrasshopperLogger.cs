@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 
 /// <summary>
 /// Simple logger implementation that outputs to Grasshopper component
+/// This is mainly used to be able to log from classes that do not have direct access to the component
 /// </summary>
 public class GrasshopperLogger<T> : ILogger<T>
 {
