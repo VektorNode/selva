@@ -5,7 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import DropZone from './DropZone.svelte';
-	import { Trash2 } from '@lucide/svelte';
+	import { ChevronDown, Trash2 } from '@lucide/svelte';
 
 	interface EditableGroupProps {
 		group: GroupConfig;
@@ -97,13 +97,13 @@
 				<div class="">
 					<button
 						type="button"
-						class="items-end text-xs text-muted-foreground transition-transform duration-200 hover:text-foreground {group.collapsed
+						class="items-center  text-xs text-muted-foreground transition-transform duration-200 hover:text-foreground {group.collapsed
 							? ''
 							: 'rotate-180'}"
 						onclick={toggleCollapsed}
 						aria-label={group.collapsed ? 'Expand group' : 'Collapse group'}
 					>
-						▼
+						<ChevronDown size={14} />
 					</button>
 					<input
 						type="text"

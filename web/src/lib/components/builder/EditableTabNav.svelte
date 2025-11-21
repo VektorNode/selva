@@ -11,7 +11,8 @@
 		onReorderTabs?: (fromIndex: number, toIndex: number) => void;
 	}
 
-	let { tabs, activeTabId, onTabChange, onRemoveTab, onReorderTabs }: EditableTabNavProps = $props();
+	let { tabs, activeTabId, onTabChange, onRemoveTab, onReorderTabs }: EditableTabNavProps =
+		$props();
 
 	// track which tab is currently being edited and the temporary edit text
 	let editingTabId: string | null = $state(null);

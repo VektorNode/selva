@@ -37,7 +37,7 @@
     mb-2 flex cursor-grab flex-row items-center
     justify-between gap-4 rounded-xl border-2 border-transparent
     p-3 transition-all hover:border-primary
-    hover:bg-muted ${category === 'input' ? "bg-inputparam" : "bg-outputparam"}
+    hover:bg-muted ${category === 'input' ? 'bg-inputparam' : 'bg-outputparam'}
     ${isDragging ? 'cursor-grabbing opacity-50' : ''}
   `}
 	draggable="true"

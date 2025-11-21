@@ -34,8 +34,6 @@ export function createNavigateTo(sessionId: string) {
 	};
 }
 
-
-
 /**
  * Get session ID from URL parameters
  */

@@ -28,7 +28,7 @@
 		onChange: (paramId: string, value: SupportedTypes) => void;
 	}
 
-	let { item, value = $bindable(), displayName, onChange}: Props = $props();
+	let { item, value = $bindable(), displayName, onChange }: Props = $props();
 
 	const inputId = $derived(`input-${item.paramId}-${Math.random().toString(36).substring(2, 11)}`);
 
@@ -105,7 +105,9 @@
 					onValueChange={handleSliderChange}
 				/>
 				<span class="min-w-12 text-right text-sm text-muted-foreground">
-					{typeof value === 'number' ? value.toFixed(Math.max(0, -Math.floor(Math.log10(requestedStep)))) : minVal}
+					{typeof value === 'number'
+						? value.toFixed(Math.max(0, -Math.floor(Math.log10(requestedStep))))
+						: minVal}
 				</span>
 			</div>
 		{:else}
@@ -168,7 +170,7 @@
 			</Select.Trigger>
 			<Select.Content>
 				{#each optionsArray as [key, label]}
-					<Select.Item value={key} label={ key} />
+					<Select.Item value={key} label={key} />
 				{/each}
 			</Select.Content>
 		</Select.Root>

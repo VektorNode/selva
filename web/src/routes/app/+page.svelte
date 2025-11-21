@@ -188,7 +188,6 @@
 							onValueChange={handleValueChange}
 							debounceSliders={false}
 						/>
-				
 					{/if}
 
 					{#if schema.instanceSolve === false}
@@ -201,7 +200,9 @@
 								class="shadow-lg"
 							>
 								{#if solving}
-									<div class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
+									<div
+										class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"
+									></div>
 									Solving...
 								{:else if hasPendingChanges}
 									Calculate

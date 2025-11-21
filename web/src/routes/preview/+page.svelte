@@ -298,7 +298,7 @@
 		</nav>
 	</PageHeader>
 
-	<div class="flex-1 overflow-auto relative">
+	<div class="relative flex-1 overflow-auto">
 		{#if loading}
 			<div class="flex min-h-[400px] items-center justify-center">
 				<StateDisplay type="loading" size="large" message="Loading preview..." />
@@ -328,7 +328,9 @@
 							class="shadow-lg"
 						>
 							{#if wsState.isSolving}
-								<div class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
+								<div
+									class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"
+								></div>
 								Solving...
 							{:else if hasPendingChanges}
 								Calculate
@@ -341,8 +343,12 @@
 			</div>
 
 			{#if wsState.isSolving}
-				<div class="fixed bottom-8 left-8 z-50 flex items-center gap-3 rounded-lg bg-primary px-4 py-3 text-primary-foreground shadow-lg animate-[slideInLeft_0.3s_ease-out]">
-					<div class="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent"></div>
+				<div
+					class="fixed bottom-8 left-8 z-50 flex animate-[slideInLeft_0.3s_ease-out] items-center gap-3 rounded-lg bg-primary px-4 py-3 text-primary-foreground shadow-lg"
+				>
+					<div
+						class="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent"
+					></div>
 					<span class="text-sm font-medium">Solving...</span>
 				</div>
 			{/if}

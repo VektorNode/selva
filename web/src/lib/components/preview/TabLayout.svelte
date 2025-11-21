@@ -121,7 +121,7 @@
 							<!-- Group Content -->
 							{#if !collapsedGroups[group.id]}
 								<Card.Content
-									class="grid animate-[fadeIn_0.2s] gap-6 p-6 overflow-x-auto"
+									class="grid animate-[fadeIn_0.2s] gap-6 overflow-x-auto p-6"
 									style="grid-template-columns: repeat({group.columns}, minmax(0, 1fr));"
 								>
 									{#each group.items as layoutItem}
@@ -134,7 +134,6 @@
 														bind:value={values[input.id]}
 														displayName={layoutItem.displayName}
 														onChange={onValueChange}
-
 													/>
 												</div>
 											{/if}

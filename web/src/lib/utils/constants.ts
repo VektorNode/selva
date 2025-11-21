@@ -19,7 +19,6 @@ export const JSON_INDENT_SPACES = 2;
 // API endpoints
 export const API_BASE_URL = '/api';
 
-
 /**
  * Generate a session ID (8-character UUID)
  */

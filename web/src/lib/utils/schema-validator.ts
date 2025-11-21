@@ -60,7 +60,10 @@ export function validateSchemaVersion(schema: UISchema): ValidationResult {
 	}
 
 	// Schema is newer but compatible (same major version)
-	if (major === currentMajor && (minor > currentMinor || (minor === currentMinor && patch > currentPatch))) {
+	if (
+		major === currentMajor &&
+		(minor > currentMinor || (minor === currentMinor && patch > currentPatch))
+	) {
 		return {
 			compatible: true,
 			needsMigration: false,

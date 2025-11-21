@@ -44,9 +44,8 @@
 				onCheckedChange={(checked) => updateSchema({ enable3dViewer: !!checked })}
 			/>
 			<Label for="enable-3d-viewer" class="cursor-pointer">Enable 3D Viewer Output</Label>
-
 		</div>
-				<p class="text-xs text-muted-foreground">
+		<p class="text-xs text-muted-foreground">
 			When enabled, a 3D viewer will be added to the UI to visualize geometry outputs.
 		</p>
 		<div class="flex items-center gap-2">
