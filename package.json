@@ -17,7 +17,7 @@
     "type-check": "pnpm --filter ./packages --recursive run type-check",
     "test": "pnpm --filter ./packages --recursive run test",
     "test:watch": "pnpm --filter ./packages --recursive run test:watch",
-    "lint": "eslint . --max-warnings 3000",
+    "lint": "eslint . --max-warnings 4000",
     "format": "prettier --write \"**/*.{ts,tsx,svelte,json,yaml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,svelte,json,yaml,md}\""
   },

@@ -15,9 +15,10 @@
   import { onMount } from "svelte";
   import * as THREE from "three";
   import type { OrbitControls } from "three/examples/jsm/Addons.js";
+  import type { PageProps } from "./$types";
 
   // Props
-  let { data } = $props();
+  let { data }: PageProps = $props();
 
   // Three.js state
   let scene: THREE.Scene | null = $state(null);

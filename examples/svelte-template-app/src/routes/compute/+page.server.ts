@@ -1,16 +1,9 @@
-import { PUBLIC_API_KEY, PUBLIC_GH_SCRIPT_URL, PUBLIC_SERVER_URL } from "$env/static/public";
+import { PUBLIC_GH_SCRIPT_URL } from "$env/static/public";
 import { createGrasshopperClient } from "$lib/client";
 import { error as kitError } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
-import type { GrasshopperParsedIO } from "rhino-compute-core/grasshopper";
 
-export type ServerSolution = {
-  ghInOutputs: GrasshopperParsedIO;
-};
-
-export const load: PageServerLoad = async ({
-  params,
-}): Promise<ServerSolution> => {
+export const load = (async () => {
   let client;
 
   try {
@@ -54,4 +47,5 @@ export const load: PageServerLoad = async ({
       client.dispose();
     }
   }
-};
+}) satisfies PageServerLoad;
+

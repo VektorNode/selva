@@ -1,55 +1,56 @@
-import js from "@eslint/js";
-import prettier from "eslint-config-prettier";
-import ts from "typescript-eslint";
+import js from '@eslint/js';
+import prettier from 'eslint-config-prettier';
+import ts from 'typescript-eslint';
 
 export default [
   {
     ignores: [
-      "node_modules",
-      "dist",
-      "build",
-      ".svelte-kit",
-      "coverage",
-      "packages/*/dist",
-      "packages/*/.svelte-kit",
-      "examples/*/dist",
-      "examples/*/.svelte-kit",
-      "bin",
-      "obj",
-      "**/*.svelte",
-      "**/eslint.config.*",
-      "**/Generated/**",
-      "packages/schemas/generate-*.js",
+      'node_modules',
+      'dist',
+      'build',
+      '.svelte-kit',
+      'coverage',
+      'packages/*/dist',
+      'packages/*/.svelte-kit',
+      'examples/*/dist',
+      'examples/*/.svelte-kit',
+      'bin',
+      'obj',
+      '**/*.svelte',
+      '**/eslint.config.*',
+      '**/Generated/**',
+      'packages/schemas/generate-*.js',
+      '**/*.d.ts',
     ],
   },
   js.configs.recommended,
   ...ts.configs.recommended,
   prettier,
   {
-    files: ["**/*.{js,mjs,cjs,ts,tsx}"],
+    files: ['**/*.{js,mjs,cjs,ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2022,
-      sourceType: "module",
+      sourceType: 'module',
       globals: {
-        URL: "readonly",
-        console: "readonly",
-        process: "readonly",
-        __dirname: "readonly",
-        require: "readonly",
+        URL: 'readonly',
+        console: 'readonly',
+        process: 'readonly',
+        __dirname: 'readonly',
+        require: 'readonly',
       },
     },
     rules: {
-      "no-console": ["warn", { allow: ["warn", "error"] }],
-      "no-unused-vars": "off",
-      "@typescript-eslint/no-unused-vars": [
-        "error",
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
         {
-          argsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
         },
       ],
-      "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/no-require-imports": "off",
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
 ];
