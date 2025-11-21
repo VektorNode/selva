@@ -65,10 +65,20 @@ export class WebSocketState {
 
 				this.socket.onmessage = (event) => {
 					try {
+						// Skip empty or invalid messages
+						if (!event.data || typeof event.data !== 'string' || event.data.trim() === '') {
+							console.warn('[WebSocket] Received empty or invalid message, skipping');
+							return;
+						}
+
 						const message = JSON.parse(event.data);
 						this.handleMessage(message);
 					} catch (error) {
+						// Log the raw message for debugging, but truncate if too long
+						const rawData = event.data?.toString() || '';
+						const preview = rawData.length > 100 ? rawData.substring(0, 100) + '...' : rawData;
 						console.error('[WebSocket] Failed to parse message:', error);
+						console.debug('[WebSocket] Raw message data:', preview);
 					}
 				};
 

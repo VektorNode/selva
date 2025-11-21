@@ -54,7 +54,7 @@
 	{#if isTextDisplay(item)}
 		<div class="relative">
 			<div
-				class="min-h-[50px] rounded border border-border bg-muted px-3 py-3 font-mono text-sm wrap-break-word whitespace-pre-wrap text-foreground"
+				class="min-h-[50px] rounded border border-border bg-muted px-3 py-3 font-mono text-sm whitespace-pre-wrap wrap-break-word overflow-wrap-anywhere text-foreground"
 			>
 				{#if value !== null && value !== undefined}
 					{value}
@@ -73,7 +73,7 @@
 			{/if}
 		</div>
 	{:else if isNumberDisplay(item)}
-		<div class="min-h-[50px] rounded border border-border bg-muted px-3 py-3 font-mono text-sm">
+		<div class="min-h-[50px] rounded border border-border bg-muted px-3 py-3 font-mono text-sm wrap-break-word">
 			{#if value !== null && value !== undefined}
 				<span class="font-bold text-primary">{formatValue(value)}</span>
 			{:else}

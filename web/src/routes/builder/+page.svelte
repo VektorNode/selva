@@ -467,7 +467,7 @@
 
 					<!-- Left Sidebar: Schema Info & Available Parameters -->
 					<aside class="flex flex-col gap-6">
-						<SchemaInfoPanel {schema} />
+						<SchemaInfoPanel {schema} onSchemaChange={(updatedSchema) => (schema = updatedSchema)} />
 
 						<Panel title="Available Parameters">
 							<p class="mb-4 text-sm text-accent-foreground/40">

@@ -121,29 +121,33 @@
 							<!-- Group Content -->
 							{#if !collapsedGroups[group.id]}
 								<Card.Content
-									class="grid animate-[fadeIn_0.2s] gap-6 p-6"
-									style="grid-template-columns: repeat({group.columns}, 1fr);"
+									class="grid animate-[fadeIn_0.2s] gap-6 p-6 overflow-x-auto"
+									style="grid-template-columns: repeat({group.columns}, minmax(0, 1fr));"
 								>
 									{#each group.items as layoutItem}
 										{#if layoutItem.type === 'input'}
 											{@const input = getInputById(layoutItem.paramId)}
 											{#if input}
-												<InputControl
-													item={layoutItem}
-													bind:value={values[input.id]}
-													displayName={layoutItem.displayName}
-													onChange={onValueChange}
-													
-												/>
+												<div class="min-w-0 overflow-hidden">
+													<InputControl
+														item={layoutItem}
+														bind:value={values[input.id]}
+														displayName={layoutItem.displayName}
+														onChange={onValueChange}
+
+													/>
+												</div>
 											{/if}
 										{:else if layoutItem.type === 'output'}
 											{@const output = getOutputById(layoutItem.paramId)}
 											{#if output}
-												<OutputDisplay
-													item={layoutItem}
-													value={values[output.id]}
-													displayName={layoutItem.displayName}
-												/>
+												<div class="min-w-0 overflow-hidden">
+													<OutputDisplay
+														item={layoutItem}
+														value={values[output.id]}
+														displayName={layoutItem.displayName}
+													/>
+												</div>
 											{/if}
 										{/if}
 									{/each}

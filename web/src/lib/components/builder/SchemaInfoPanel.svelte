@@ -8,29 +8,43 @@
 
 	interface SchemaInfoPanelProps {
 		schema: UISchema;
+		onSchemaChange?: (schema: UISchema) => void;
 	}
 
-	let { schema }: SchemaInfoPanelProps = $props();
+	let { schema, onSchemaChange }: SchemaInfoPanelProps = $props();
+
+	function updateSchema(updates: Partial<UISchema>) {
+		const updatedSchema = { ...schema, ...updates };
+		onSchemaChange?.(updatedSchema);
+	}
 </script>
 
 <Panel title="Schema Information">
 	<div class="flex flex-col gap-4">
 		<div class="flex flex-col gap-2">
 			<Label for="schema-name">Name</Label>
-			<Input id="schema-name" bind:value={schema.name} />
+			<Input
+				id="schema-name"
+				value={schema.name}
+				oninput={(e) => updateSchema({ name: e.currentTarget.value })}
+			/>
 		</div>
 		<div class="flex flex-col gap-2">
 			<Label for="schema-description">Description</Label>
-			<Textarea id="schema-description" bind:value={schema.description} />
+			<Textarea
+				id="schema-description"
+				value={schema.description}
+				oninput={(e) => updateSchema({ description: e.currentTarget.value })}
+			/>
 		</div>
 		<div class="flex items-center gap-2">
 			<Checkbox
 				id="enable-3d-viewer"
 				checked={schema.enable3dViewer}
-				onCheckedChange={(checked) => (schema.enable3dViewer = !!checked)}
+				onCheckedChange={(checked) => updateSchema({ enable3dViewer: !!checked })}
 			/>
 			<Label for="enable-3d-viewer" class="cursor-pointer">Enable 3D Viewer Output</Label>
-			
+
 		</div>
 				<p class="text-xs text-muted-foreground">
 			When enabled, a 3D viewer will be added to the UI to visualize geometry outputs.
@@ -39,7 +53,7 @@
 			<Checkbox
 				id="instance-solve"
 				checked={schema.instanceSolve ?? true}
-				onCheckedChange={(checked) => (schema.instanceSolve = !!checked)}
+				onCheckedChange={(checked) => updateSchema({ instanceSolve: !!checked })}
 			/>
 			<Label for="instance-solve" class="cursor-pointer">Instant Solve</Label>
 		</div>
