@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using ComputeBuilder.Config;
 using ComputeBuilder.IO;
 using ComputeBuilder.Logging;
 using Grasshopper.Kernel;
@@ -10,32 +11,43 @@ using Grasshopper.Kernel.Types;
 using Rhino;
 using Rhino.DocObjects;
 using Rhino.Geometry;
+using Point = Rhino.Geometry.Point;
 
 namespace ComputeBuilder.Components.IO;
 
 public class GH_DataToFile : GH_Component
 {
   private const string DefaultLayerName = "Default";
-  private static readonly Color DefaultLayerColor = Color.Black;
   private const string DefaultFileEnding = ".3dm";
+  private static readonly Color DefaultLayerColor = Color.Black;
 
   // Singleton converter instance (reused across all solve instances)
   private static RhinoDocumentConverter _converter;
-  private static readonly object _converterLock = new object();
+  private static readonly object _converterLock = new();
 
   /// <summary>
-  ///     Initializes a new instance of the DataToFile class.
+  ///   Initializes a new instance of the DataToFile class.
   /// </summary>
   public GH_DataToFile()
-      : base("DataToFile", "DTF",
-          "Exports geometry to file format(s) with layer organization. Supports both single file (list input) and multiple files (tree input).",
-          "ComputeBuilder", "IO")
+    : base("DataToFile", "DTF",
+      "Exports geometry to file format(s) with layer organization. Supports both single file (list input) and multiple files (tree input).",
+      "ComputeBuilder", "IO")
   {
     EnsureConverterInitialized();
   }
 
   /// <summary>
-  ///     Ensures the converter is initialized (singleton pattern)
+  ///   Provides an Icon for the component.
+  /// </summary>
+  protected override Bitmap Icon => null;
+
+  /// <summary>
+  ///   Gets the unique ID for this component. Do not change this ID after release.
+  /// </summary>
+  public override Guid ComponentGuid => new("A51C8F6A-D422-4387-8170-F9F34D8E5351");
+
+  /// <summary>
+  ///   Ensures the converter is initialized (singleton pattern)
   /// </summary>
   private void EnsureConverterInitialized()
   {
@@ -49,14 +61,7 @@ public class GH_DataToFile : GH_Component
           var logger = new GrasshopperLogger<RhinoDocumentConverter>(this);
 
           // Configure options for Grasshopper usage
-          var options = new RhinoConverterOptions
-          {
-            MaxFileSizeBytes = 200 * 1024 * 1024, // 200MB
-            InMemoryThresholdBytes = 20 * 1024 * 1024, // 20MB
-            MaxConcurrentConversions = 8,
-            ConversionTimeout = TimeSpan.FromMinutes(2),
-            SecureDelete = false // Usually not needed for CAD exports
-          };
+          var options = new AppConfig.RhinoConverterOptions();
 
           _converter = new RhinoDocumentConverter(logger, options);
         }
@@ -65,35 +70,25 @@ public class GH_DataToFile : GH_Component
   }
 
   /// <summary>
-  ///     Provides an Icon for the component.
-  /// </summary>
-  protected override Bitmap Icon => null;
-
-  /// <summary>
-  ///     Gets the unique ID for this component. Do not change this ID after release.
-  /// </summary>
-  public override Guid ComponentGuid => new("A51C8F6A-D422-4387-8170-F9F34D8E5351");
-
-  /// <summary>
-  ///     Registers all the input parameters for this component.
+  ///   Registers all the input parameters for this component.
   /// </summary>
   protected override void RegisterInputParams(GH_InputParamManager pManager)
   {
     pManager.AddGeometryParameter("Geometry", "G",
-        "Geometry to be exported. Use list for single file, tree for multiple files (one per branch)",
-        GH_ParamAccess.tree);
+      "Geometry to be exported. Use list for single file, tree for multiple files (one per branch)",
+      GH_ParamAccess.tree);
     pManager.AddTextParameter("LayerNames", "L",
-        "Names of the layers. Use list for single file, tree for multiple files",
-        GH_ParamAccess.tree);
+      "Names of the layers. Use list for single file, tree for multiple files",
+      GH_ParamAccess.tree);
     pManager.AddColourParameter("LayerColors", "C",
-        "Colors of the layers. Use list for single file, tree for multiple files",
-        GH_ParamAccess.tree);
+      "Colors of the layers. Use list for single file, tree for multiple files",
+      GH_ParamAccess.tree);
     pManager.AddTextParameter("FileNames", "F",
-        "Name(s) of the file. Use single value for list input, or tree for multiple files",
-        GH_ParamAccess.tree);
+      "Name(s) of the file. Use single value for list input, or tree for multiple files",
+      GH_ParamAccess.tree);
     pManager.AddTextParameter("FileEnding", "E",
-        "File ending of the geometry",
-        GH_ParamAccess.item, DefaultFileEnding);
+      "File ending of the geometry",
+      GH_ParamAccess.item, DefaultFileEnding);
 
     pManager[1].Optional = true;
     pManager[2].Optional = true;
@@ -101,17 +96,17 @@ public class GH_DataToFile : GH_Component
   }
 
   /// <summary>
-  ///     Registers all the output parameters for this component.
+  ///   Registers all the output parameters for this component.
   /// </summary>
   protected override void RegisterOutputParams(GH_OutputParamManager pManager)
   {
     pManager.AddGenericParameter("Base64", "B64",
-        "Exported file data. Single item for list input, multiple items for tree input",
-        GH_ParamAccess.list);
+      "Exported file data. Single item for list input, multiple items for tree input",
+      GH_ParamAccess.list);
   }
 
   /// <summary>
-  ///     This is the method that actually does the work.
+  ///   This is the method that actually does the work.
   /// </summary>
   protected override void SolveInstance(IGH_DataAccess DA)
   {
@@ -138,7 +133,7 @@ public class GH_DataToFile : GH_Component
     if (string.IsNullOrWhiteSpace(fileEnding) || !fileEnding.StartsWith("."))
     {
       AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-          $"Invalid file ending '{fileEnding}'. Using default {DefaultFileEnding}");
+        $"Invalid file ending '{fileEnding}'. Using default {DefaultFileEnding}");
       fileEnding = DefaultFileEnding;
     }
 
@@ -156,7 +151,7 @@ public class GH_DataToFile : GH_Component
       {
         // Multiple files mode - one file per branch
         results = ProcessMultipleFiles(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree,
-            fileEnding);
+          fileEnding);
       }
 
       if (results.Count == 0)
@@ -174,7 +169,7 @@ public class GH_DataToFile : GH_Component
   }
 
   /// <summary>
-  ///     Determines if the component should operate in single file mode based on tree structure.
+  ///   Determines if the component should operate in single file mode based on tree structure.
   /// </summary>
   private bool IsSingleFileMode(GH_Structure<IGH_GeometricGoo> geometryTree)
   {
@@ -183,29 +178,29 @@ public class GH_DataToFile : GH_Component
   }
 
   /// <summary>
-  ///     Processes all geometry into a single file.
+  ///   Processes all geometry into a single file.
   /// </summary>
   private List<FileDataGoo> ProcessSingleFile(
-      GH_Structure<IGH_GeometricGoo> geometryTree,
-      GH_Structure<GH_String> layerNamesTree,
-      GH_Structure<GH_Colour> layerColorsTree,
-      GH_Structure<GH_String> fileNamesTree,
-      string fileEnding)
+    GH_Structure<IGH_GeometricGoo> geometryTree,
+    GH_Structure<GH_String> layerNamesTree,
+    GH_Structure<GH_Colour> layerColorsTree,
+    GH_Structure<GH_String> fileNamesTree,
+    string fileEnding)
   {
     var results = new List<FileDataGoo>();
 
     // Flatten all data
     var allGeometry = geometryTree.AllData(true).OfType<IGH_GeometricGoo>().ToList();
     var allLayerNames = layerNamesTree?.AllData(true)
-        .Select(s => (s as GH_String)?.Value)
-        .ToList() ?? new List<string>();
+      .Select(s => (s as GH_String)?.Value)
+      .ToList() ?? new List<string>();
     var allLayerColors = layerColorsTree?.AllData(true)
-        .Select(c => (c as GH_Colour)?.Value ?? DefaultLayerColor)
-        .ToList() ?? new List<Color>();
+      .Select(c => (c as GH_Colour)?.Value ?? DefaultLayerColor)
+      .ToList() ?? new List<Color>();
     var allFileNames = fileNamesTree?.AllData(true)
-        .Select(s => (s as GH_String)?.Value)
-        .Where(s => !string.IsNullOrWhiteSpace(s))
-        .ToList() ?? new List<string>();
+      .Select(s => (s as GH_String)?.Value)
+      .Where(s => !string.IsNullOrWhiteSpace(s))
+      .ToList() ?? new List<string>();
 
     if (allGeometry.Count == 0)
     {
@@ -244,7 +239,7 @@ public class GH_DataToFile : GH_Component
           FileName = fileName,
           Data = base64String,
           FileType = fileEnding,
-          IsBase64Encoded = true,
+          IsBase64Encoded = true
         };
         results.Add(new FileDataGoo(fileData));
       }
@@ -262,25 +257,27 @@ public class GH_DataToFile : GH_Component
   }
 
   /// <summary>
-  ///     Processes geometry into multiple files, one per branch.
+  ///   Processes geometry into multiple files, one per branch.
   /// </summary>
   private List<FileDataGoo> ProcessMultipleFiles(
-      GH_Structure<IGH_GeometricGoo> geometryTree,
-      GH_Structure<GH_String> layerNamesTree,
-      GH_Structure<GH_Colour> layerColorsTree,
-      GH_Structure<GH_String> fileNamesTree,
-      string fileEnding)
+    GH_Structure<IGH_GeometricGoo> geometryTree,
+    GH_Structure<GH_String> layerNamesTree,
+    GH_Structure<GH_Colour> layerColorsTree,
+    GH_Structure<GH_String> fileNamesTree,
+    string fileEnding)
   {
     var results = new List<FileDataGoo>();
     var paths = geometryTree.Paths.ToList();
 
-    for (int pathIndex = 0; pathIndex < paths.Count; pathIndex++)
+    for (var pathIndex = 0; pathIndex < paths.Count; pathIndex++)
     {
       var path = paths[pathIndex];
       var geometryBranch = geometryTree.get_Branch(path);
 
       if (geometryBranch == null || geometryBranch.Count == 0)
+      {
         continue;
+      }
 
       try
       {
@@ -293,15 +290,15 @@ public class GH_DataToFile : GH_Component
 
         var branchGeometry = geometryBranch.OfType<IGH_GeometricGoo>().ToList();
         var branchLayerNames = layerNamesBranch
-            .Select(s => s?.Value)
-            .ToList();
+          .Select(s => s?.Value)
+          .ToList();
         var branchLayerColors = layerColorsBranch
-            .Select(c => c?.Value ?? DefaultLayerColor)
-            .ToList();
+          .Select(c => c?.Value ?? DefaultLayerColor)
+          .ToList();
         var branchFileNames = fileNamesBranch
-            .Select(s => s?.Value)
-            .Where(s => !string.IsNullOrWhiteSpace(s))
-            .ToList();
+          .Select(s => s?.Value)
+          .Where(s => !string.IsNullOrWhiteSpace(s))
+          .ToList();
 
         var fileName = branchFileNames.FirstOrDefault() ?? $"export_{pathIndex}";
         var validGeometries = ExtractValidGeometries(branchGeometry);
@@ -309,7 +306,7 @@ public class GH_DataToFile : GH_Component
         if (validGeometries.Count == 0)
         {
           AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-              $"No valid geometry found in branch {path}");
+            $"No valid geometry found in branch {path}");
           continue;
         }
 
@@ -320,7 +317,7 @@ public class GH_DataToFile : GH_Component
           if (doc == null)
           {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                $"Failed to create document for branch {path}");
+              $"Failed to create document for branch {path}");
             continue;
           }
 
@@ -335,14 +332,14 @@ public class GH_DataToFile : GH_Component
               FileName = fileName,
               Data = base64String,
               FileType = fileEnding,
-              IsBase64Encoded = true,
+              IsBase64Encoded = true
             };
             results.Add(new FileDataGoo(fileData));
           }
           else
           {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                $"Failed to export file for branch {path}");
+              $"Failed to export file for branch {path}");
           }
         }
         finally
@@ -353,7 +350,7 @@ public class GH_DataToFile : GH_Component
       catch (Exception ex)
       {
         AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-            $"Error processing branch {path}: {ex.Message}");
+          $"Error processing branch {path}: {ex.Message}");
       }
     }
 
@@ -361,18 +358,20 @@ public class GH_DataToFile : GH_Component
   }
 
   /// <summary>
-  ///     Extracts valid GeometryBase objects from IGH_GeometricGoo list with detailed error handling.
+  ///   Extracts valid GeometryBase objects from IGH_GeometricGoo list with detailed error handling.
   /// </summary>
   private List<(GeometryBase Geometry, int OriginalIndex)> ExtractValidGeometries(List<IGH_GeometricGoo> gooList)
   {
     var validGeometries = new List<(GeometryBase, int)>();
 
-    for (int i = 0; i < gooList.Count; i++)
+    for (var i = 0; i < gooList.Count; i++)
     {
       var goo = gooList[i];
 
       if (goo == null)
+      {
         continue;
+      }
 
       GeometryBase geometry = null;
 
@@ -405,7 +404,7 @@ public class GH_DataToFile : GH_Component
         }
         else if (goo is GH_Point ghPoint)
         {
-          geometry = new Rhino.Geometry.Point(ghPoint.Value);
+          geometry = new Point(ghPoint.Value);
         }
         else if (goo is GH_Line ghLine && ghLine.Value.IsValid)
         {
@@ -428,7 +427,7 @@ public class GH_DataToFile : GH_Component
       catch (Exception ex)
       {
         AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-            $"Error extracting geometry at index {i}: {ex.Message}");
+          $"Error extracting geometry at index {i}: {ex.Message}");
       }
     }
 
@@ -436,12 +435,12 @@ public class GH_DataToFile : GH_Component
   }
 
   /// <summary>
-  ///     Adds geometries to the Rhino document with proper layer management.
+  ///   Adds geometries to the Rhino document with proper layer management.
   /// </summary>
   private void AddGeometriesToDocument(RhinoDoc doc,
-      List<(GeometryBase Geometry, int OriginalIndex)> geometries,
-      List<string> layerNames,
-      List<Color> layerColors)
+    List<(GeometryBase Geometry, int OriginalIndex)> geometries,
+    List<string> layerNames,
+    List<Color> layerColors)
   {
     // Create a dictionary to track layers and avoid duplicates
     var layerCache = new Dictionary<string, int>();
@@ -472,7 +471,7 @@ public class GH_DataToFile : GH_Component
             if (layerIndex < 0)
             {
               AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                  $"Failed to create layer '{layerName}' for geometry at index {originalIndex}");
+                $"Failed to create layer '{layerName}' for geometry at index {originalIndex}");
               continue;
             }
           }
@@ -491,48 +490,56 @@ public class GH_DataToFile : GH_Component
         if (objectId == Guid.Empty)
         {
           AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-              $"Failed to add geometry at index {originalIndex} to document");
+            $"Failed to add geometry at index {originalIndex} to document");
         }
       }
       catch (Exception ex)
       {
         AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-            $"Error processing geometry at index {originalIndex}: {ex.Message}");
+          $"Error processing geometry at index {originalIndex}: {ex.Message}");
       }
     }
   }
 
   /// <summary>
-  ///     Gets the layer name for a specific index with fallback to default.
+  ///   Gets the layer name for a specific index with fallback to default.
   /// </summary>
   private string GetLayerName(List<string> layerNames, int index)
   {
     if (layerNames == null || layerNames.Count == 0)
+    {
       return DefaultLayerName;
+    }
 
     if (index < layerNames.Count && !string.IsNullOrWhiteSpace(layerNames[index]))
+    {
       return layerNames[index];
+    }
 
     var lastName = layerNames.LastOrDefault(n => !string.IsNullOrWhiteSpace(n));
     return lastName ?? DefaultLayerName;
   }
 
   /// <summary>
-  ///     Gets the layer color for a specific index with fallback to default.
+  ///   Gets the layer color for a specific index with fallback to default.
   /// </summary>
   private Color GetLayerColor(List<Color> layerColors, int index)
   {
     if (layerColors == null || layerColors.Count == 0)
+    {
       return DefaultLayerColor;
+    }
 
     if (index < layerColors.Count)
+    {
       return layerColors[index];
+    }
 
     return layerColors.Count > 0 ? layerColors[layerColors.Count - 1] : DefaultLayerColor;
   }
 
   /// <summary>
-  ///     Exports the document to the specified file format using the new converter.
+  ///   Exports the document to the specified file format using the new converter.
   /// </summary>
   private string ExportDocument(RhinoDoc doc, string fileEnding)
   {
@@ -540,17 +547,15 @@ public class GH_DataToFile : GH_Component
     {
       if (fileEnding == ".3dm")
       {
-        return _converter.DocToRhinoFile(doc, 7); // Synchronous!
+        return _converter.DocToRhinoFile(doc); // Synchronous!
       }
-      else
-      {
-        return _converter.DocToBase64(doc, fileEnding); // Synchronous!
-      }
+
+      return _converter.DocToBase64(doc, fileEnding); // Synchronous!
     }
     catch (Exception ex)
     {
       AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
-          $"Error during file export: {ex.Message}");
+        $"Error during file export: {ex.Message}");
       return null;
     }
   }

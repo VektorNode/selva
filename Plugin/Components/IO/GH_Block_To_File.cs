@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using ComputeBuilder.Config;
 using ComputeBuilder.IO;
 using ComputeBuilder.Logging;
 using Grasshopper.Kernel;
@@ -14,50 +15,49 @@ using Rhino.Geometry;
 namespace ComputeBuilder.Components.IO;
 
 /// <summary>
-/// Exports Rhino block instances to base64-encoded .3dm files.
-/// Supports recursive block hierarchies by automatically including nested block definitions.
+///   Exports Rhino block instances to base64-encoded .3dm files.
+///   Supports recursive block hierarchies by automatically including nested block definitions.
 /// </summary>
 public class GH_Block_To_File : GH_Component
 {
   private static RhinoDocumentConverter _converter;
-  private static readonly object _converterLock = new object();
+  private static readonly object _converterLock = new();
 
-  private Dictionary<string, int> _copiedBlockIndices;
-
-  public override Guid ComponentGuid =>
-      new Guid("06308887-AADB-40EE-A6A8-9CC8E05900EB");
-
-  protected override Bitmap Icon => null;
+  private readonly Dictionary<string, int> _copiedBlockIndices;
 
   public GH_Block_To_File()
-      : base(
-          "Block to File",
-          "Block2File",
-          "Export Rhino block instances to base64-encoded 3dm files",
-          "ComputeBuilder",
-          "IO")
+    : base(
+      "Block to File",
+      "Block2File",
+      "Export Rhino block instances to base64-encoded 3dm files",
+      "ComputeBuilder",
+      "IO")
   {
     _copiedBlockIndices = new Dictionary<string, int>();
     EnsureConverterInitialized();
   }
 
+  public override Guid ComponentGuid => new("06308887-AADB-40EE-A6A8-9CC8E05900EB");
+
+  protected override Bitmap Icon => null;
+
   protected override void RegisterInputParams(GH_InputParamManager pManager)
   {
     pManager.AddParameter(
-        new Param_ModelObject(),
-        "Block",
-        "B",
-        "Block instance to export",
-        GH_ParamAccess.item);
+      new Param_ModelObject(),
+      "Block",
+      "B",
+      "Block instance to export",
+      GH_ParamAccess.item);
   }
 
   protected override void RegisterOutputParams(GH_OutputParamManager pManager)
   {
     pManager.AddGenericParameter(
-        "File Data",
-        "F",
-        "Exported block as base64-encoded file data",
-        GH_ParamAccess.item);
+      "File Data",
+      "F",
+      "Exported block as base64-encoded file data",
+      GH_ParamAccess.item);
   }
 
   protected override void SolveInstance(IGH_DataAccess DA)
@@ -65,7 +65,9 @@ public class GH_Block_To_File : GH_Component
     try
     {
       if (!TryGetBlockInput(DA, out var blockObj))
+      {
         return;
+      }
 
       var exportedFile = ExportBlockToFile(blockObj);
 
@@ -76,15 +78,15 @@ public class GH_Block_To_File : GH_Component
       else
       {
         AddRuntimeMessage(
-            GH_RuntimeMessageLevel.Error,
-            "Failed to export block to file");
+          GH_RuntimeMessageLevel.Error,
+          "Failed to export block to file");
       }
     }
     catch (Exception ex)
     {
       AddRuntimeMessage(
-          GH_RuntimeMessageLevel.Error,
-          $"Export failed: {ex.Message}");
+        GH_RuntimeMessageLevel.Error,
+        $"Export failed: {ex.Message}");
     }
   }
 
@@ -95,8 +97,8 @@ public class GH_Block_To_File : GH_Component
     if (!DA.GetData(0, ref blockObj))
     {
       AddRuntimeMessage(
-          GH_RuntimeMessageLevel.Warning,
-          "No block provided");
+        GH_RuntimeMessageLevel.Warning,
+        "No block provided");
       return false;
     }
 
@@ -109,11 +111,15 @@ public class GH_Block_To_File : GH_Component
     _copiedBlockIndices.Clear();
 
     if (!TryProcessBlockObject(blockObj, headlessDoc, out var blockName))
+    {
       return null;
+    }
 
     var base64String = ConvertDocumentToBase64(headlessDoc);
     if (string.IsNullOrEmpty(base64String))
+    {
       return null;
+    }
 
     return CreateFileData(blockName, base64String);
   }
@@ -136,7 +142,7 @@ public class GH_Block_To_File : GH_Component
     blockName = modelIdef.Name;
     CopyBlockRecursive(modelIdef, targetDoc);
 
-    if (_copiedBlockIndices.TryGetValue(blockName, out int idefIndex) &&
+    if (_copiedBlockIndices.TryGetValue(blockName, out var idefIndex) &&
         instanceRef.Value != null)
     {
       var xform = instanceRef.Value.Xform;
@@ -151,18 +157,22 @@ public class GH_Block_To_File : GH_Component
   {
     // Skip if already copied
     if (_copiedBlockIndices.ContainsKey(modelIdef.Name))
+    {
       return;
+    }
 
     var geometries = CollectBlockGeometry(modelIdef, targetDoc);
 
     if (geometries.Count == 0)
+    {
       return;
+    }
 
-    int idefIndex = targetDoc.InstanceDefinitions.Add(
-        modelIdef.Name,
-        "",
-        Point3d.Origin,
-        geometries);
+    var idefIndex = targetDoc.InstanceDefinitions.Add(
+      modelIdef.Name,
+      "",
+      Point3d.Origin,
+      geometries);
 
     if (idefIndex >= 0)
     {
@@ -177,7 +187,9 @@ public class GH_Block_To_File : GH_Component
     foreach (var modelObj in modelIdef.Objects)
     {
       if (modelObj == null)
+      {
         continue;
+      }
 
       if (modelObj.ObjectType == ObjectType.InstanceReference)
       {
@@ -195,16 +207,20 @@ public class GH_Block_To_File : GH_Component
   private void TryAddNestedBlockReference(ModelObject modelObj, RhinoDoc targetDoc, List<GeometryBase> geometries)
   {
     if (!modelObj.CastTo<GH_InstanceReference>(out var nestedInstanceRef))
+    {
       return;
+    }
 
     var nestedModelIdef = nestedInstanceRef.InstanceDefinition;
     if (nestedModelIdef == null)
+    {
       return;
+    }
 
     // Recursively copy nested block first
     CopyBlockRecursive(nestedModelIdef, targetDoc);
 
-    if (_copiedBlockIndices.TryGetValue(nestedModelIdef.Name, out int nestedIdefIndex) &&
+    if (_copiedBlockIndices.TryGetValue(nestedModelIdef.Name, out var nestedIdefIndex) &&
         nestedInstanceRef.Value != null)
     {
       var nestedIdef = targetDoc.InstanceDefinitions[nestedIdefIndex];
@@ -216,7 +232,7 @@ public class GH_Block_To_File : GH_Component
 
   private string ConvertDocumentToBase64(RhinoDoc doc)
   {
-    return _converter.DocToRhinoFile(doc, 7);
+    return _converter.DocToRhinoFile(doc);
   }
 
   private FileData CreateFileData(string blockName, string base64String)
@@ -233,22 +249,19 @@ public class GH_Block_To_File : GH_Component
   private void EnsureConverterInitialized()
   {
     if (_converter != null)
+    {
       return;
+    }
 
     lock (_converterLock)
     {
       if (_converter != null)
+      {
         return;
+      }
 
       var logger = new GrasshopperLogger<RhinoDocumentConverter>(this);
-      var options = new RhinoConverterOptions
-      {
-        MaxFileSizeBytes = 200 * 1024 * 1024,
-        InMemoryThresholdBytes = 20 * 1024 * 1024,
-        MaxConcurrentConversions = 8,
-        ConversionTimeout = TimeSpan.FromMinutes(2),
-        SecureDelete = false
-      };
+      var options = new AppConfig.RhinoConverterOptions();
 
       _converter = new RhinoDocumentConverter(logger, options);
     }

@@ -2,312 +2,309 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using ComputeBuilder.Config;
 using ComputeBuilder.Plugin.Models.Generated;
 using Newtonsoft.Json;
 
-namespace ComputeBuilder.Utils
+namespace ComputeBuilder.Utils;
+
+/// <summary>
+///   Handles WebSocket communication with the web UI
+/// </summary>
+public class CommunicationHandler : IDisposable
 {
-    /// <summary>
-    ///     Handles WebSocket communication with the web UI
-    /// </summary>
-    public class CommunicationHandler : IDisposable
+  /// <summary>
+  ///   Secure JSON serializer settings - prevents type confusion attacks
+  /// </summary>
+  private static readonly JsonSerializerSettings SecureJsonSettings = new()
+  {
+    TypeNameHandling = TypeNameHandling.None,
+    MaxDepth = AppConfig.JsonSerialization.MaxJsonDepth,
+    MetadataPropertyHandling = MetadataPropertyHandling.Ignore
+  };
+
+  private readonly int _port;
+  private readonly string _sessionId;
+  private bool _disposed;
+  private WebSocketServer _webSocketServer;
+
+  public CommunicationHandler(string sessionId, int port = 8765)
+  {
+    _sessionId = sessionId;
+    _port = port;
+  }
+
+  public bool IsRunning => _webSocketServer?.IsRunning ?? false;
+
+  public void Dispose()
+  {
+    Dispose(true);
+    GC.SuppressFinalize(this);
+  }
+
+  public event EventHandler<Dictionary<string, object>> OnValuesReceived;
+  public event EventHandler OnCurrentValuesRequested;
+  public event EventHandler OnClientConnected;
+  public event EventHandler<UISchema> OnSchemaSaveRequested;
+
+  /// <summary>
+  ///   Start WebSocket server
+  /// </summary>
+  public void Start(Action<string> logMessage)
+  {
+    if (_webSocketServer != null && _webSocketServer.IsRunning)
     {
-        private readonly int _port;
-        private readonly string _sessionId;
-        private bool _disposed;
-        private WebSocketServer _webSocketServer;
-
-        /// <summary>
-        ///     Secure JSON serializer settings - prevents type confusion attacks
-        /// </summary>
-        private static readonly JsonSerializerSettings SecureJsonSettings = new JsonSerializerSettings
-        {
-            TypeNameHandling = TypeNameHandling.None, // Prevent $type injection attacks
-            MaxDepth = 32, // Prevent deep nesting DoS attacks
-            MetadataPropertyHandling = MetadataPropertyHandling.Ignore // Ignore $id, $ref, etc.
-        };
-
-        public CommunicationHandler(string sessionId, int port = 8765)
-        {
-            _sessionId = sessionId;
-            _port = port;
-        }
-
-        public bool IsRunning => _webSocketServer?.IsRunning ?? false;
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        public event EventHandler<Dictionary<string, object>> OnValuesReceived;
-        public event EventHandler OnCurrentValuesRequested;
-        public event EventHandler OnClientConnected;
-        public event EventHandler<UISchema> OnSchemaSaveRequested;
-
-        /// <summary>
-        ///     Start WebSocket server
-        /// </summary>
-        public void Start(Action<string> logMessage)
-        {
-            if (_webSocketServer != null && _webSocketServer.IsRunning)
-            {
-                return;
-            }
-
-            try
-            {
-                _webSocketServer = new WebSocketServer(_port);
-
-                // Handle client connections
-                _webSocketServer.OnClientConnected += (sender, webSocket) =>
-                {
-                    logMessage?.Invoke("Web UI client connected");
-                    // Don't invoke OnClientConnected here - wait for explicit requestInitialData message
-                    // This prevents duplicate initial data being sent
-                };
-
-                // Handle incoming messages asynchronously to avoid blocking UI thread
-                _webSocketServer.OnMessageReceived += (sender, message) =>
-                {
-                    // Process message on background thread to avoid blocking WebSocket thread
-                    Task.Run(() =>
-                    {
-                        try
-                        {
-                            var msg = JsonConvert.DeserializeObject<WebSocketMessage>(message, SecureJsonSettings);
-
-                            if (msg.Type == "valueUpdate")
-                            {
-                                var valueMsg = JsonConvert.DeserializeObject<ValueUpdateMessage>(message, SecureJsonSettings);
-                                if (valueMsg != null && valueMsg.SessionId == _sessionId)
-                                {
-                                    OnValuesReceived?.Invoke(this, valueMsg.Values);
-                                }
-                            }
-                            else if (msg.Type == "requestCurrentValues")
-                            {
-                                if (msg.SessionId == _sessionId)
-                                {
-                                    logMessage?.Invoke("Web UI requested current values");
-                                    OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty);
-                                }
-                            }
-                            else if (msg.Type == "requestInitialData")
-                            {
-                                if (msg.SessionId == _sessionId)
-                                {
-                                    logMessage?.Invoke("Web UI requested initial data");
-                                    OnClientConnected?.Invoke(this, EventArgs.Empty);
-                                }
-                            }
-                            else if (msg.Type == "saveSchema")
-                            {
-                                var schemaMsg = JsonConvert.DeserializeObject<SchemaSaveMessage>(message, SecureJsonSettings);
-                                if (schemaMsg != null && schemaMsg.SessionId == _sessionId)
-                                {
-                                    logMessage?.Invoke("Web UI saving schema");
-                                    OnSchemaSaveRequested?.Invoke(this, schemaMsg.Schema);
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            logMessage?.Invoke($"WebSocket message error: {ex.Message}");
-                        }
-                    });
-                };
-
-                // Start asynchronously without blocking
-                Task.Run(async () => await _webSocketServer.StartAsync()).Wait(5000);
-                logMessage?.Invoke($"WebSocket Port: {_port}");
-            }
-            catch (Exception ex)
-            {
-                logMessage?.Invoke($"Could not start WebSocket server: {ex.Message}");
-                throw;
-            }
-        }
-
-        /// <summary>
-        ///     Stop WebSocket server
-        /// </summary>
-        public void Stop()
-        {
-            if (_webSocketServer != null)
-            {
-                try
-                {
-                    _webSocketServer.Stop();
-                    _webSocketServer.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Error stopping WebSocket: {ex.Message}");
-                }
-                finally
-                {
-                    _webSocketServer = null;
-                }
-            }
-        }
-
-        /// <summary>
-        ///     Broadcast a generic message to all connected clients
-        /// </summary>
-        public async Task BroadcastMessage(string messageType, object data)
-        {
-            if (_webSocketServer != null && _webSocketServer.IsRunning)
-            {
-                var message = new
-                {
-                    type = messageType,
-                    sessionId = _sessionId,
-                    data
-                };
-                await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
-            }
-        }
-
-        /// <summary>
-        ///     Broadcast output values to all connected clients
-        /// </summary>
-        public async Task BroadcastOutputs(Dictionary<string, object> outputs)
-        {
-            if (_webSocketServer != null && _webSocketServer.IsRunning)
-            {
-                var message = new
-                {
-                    type = "outputs",
-                    sessionId = _sessionId,
-                    outputs
-                };
-                await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
-            }
-        }
-
-        /// <summary>
-        ///     Broadcast current input values to all connected clients
-        /// </summary>
-        public async Task BroadcastCurrentValues(Dictionary<string, object> values)
-        {
-            if (_webSocketServer != null && _webSocketServer.IsRunning)
-            {
-                var message = new
-                {
-                    type = "currentValues",
-                    sessionId = _sessionId,
-                    values
-                };
-                await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
-            }
-        }
-
-        /// <summary>
-        ///     Broadcast schema update to all connected clients
-        /// </summary>
-        public async Task BroadcastSchemaUpdate(UISchema schema, List<Guid> removedIds = null)
-        {
-            if (_webSocketServer != null && _webSocketServer.IsRunning)
-            {
-                var message = new
-                {
-                    type = "schemaUpdated",
-                    sessionId = _sessionId,
-                    schema,
-                    removedIds = removedIds ?? new List<Guid>()
-                };
-                await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
-            }
-        }
-
-        /// <summary>
-        ///     Broadcast initial data to all connected clients (schema, available params, current values)
-        /// </summary>
-        public async Task BroadcastInitialData(UISchema schema, AvailableParameters availableParams,
-            Dictionary<string, object> currentValues)
-        {
-            if (_webSocketServer != null && _webSocketServer.IsRunning)
-            {
-                var message = new
-                {
-                    type = "initialData",
-                    sessionId = _sessionId,
-                    schema,
-                    availableParams,
-                    currentValues
-                };
-                await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
-            }
-        }
-
-        /// <summary>
-        ///     Broadcast schema save confirmation to all connected clients
-        /// </summary>
-        public async Task BroadcastSchemaSaved(bool success, string message = null)
-        {
-            if (_webSocketServer != null && _webSocketServer.IsRunning)
-            {
-                var msg = new
-                {
-                    type = "schemaSaved",
-                    sessionId = _sessionId,
-                    success,
-                    message
-                };
-                await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(msg));
-            }
-        }
-
-        /// <summary>
-        ///     Broadcast solving state to all connected clients
-        /// </summary>
-        public async Task BroadcastSolvingState(bool isSolving)
-        {
-            if (_webSocketServer != null && _webSocketServer.IsRunning)
-            {
-                var message = new
-                {
-                    type = "solvingState",
-                    sessionId = _sessionId,
-                    isSolving
-                };
-                await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
-            }
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (_disposed)
-            {
-                return;
-            }
-
-            if (disposing)
-            {
-                Stop();
-            }
-
-            _disposed = true;
-        }
+      return;
     }
 
-    // Message types for WebSocket communication
-    public class WebSocketMessage
+    try
     {
-        [JsonProperty("type")] public string Type { get; set; }
+      _webSocketServer = new WebSocketServer(_port);
+      _webSocketServer.OnClientConnected += (sender, webSocket) =>
+      {
+        logMessage?.Invoke("Web UI client connected");
+        // Don't invoke OnClientConnected here - wait for explicit requestInitialData message
+        // This prevents duplicate initial data being sent
+      };
 
-        [JsonProperty("sessionId")] public string SessionId { get; set; }
+      // Handle incoming messages asynchronously to avoid blocking UI thread
+      _webSocketServer.OnMessageReceived += (sender, message) =>
+      {
+        // Process message on background thread to avoid blocking WebSocket thread
+        Task.Run(() =>
+        {
+          try
+          {
+            var msg = JsonConvert.DeserializeObject<WebSocketMessage>(message, SecureJsonSettings);
+
+            if (msg.Type == "valueUpdate")
+            {
+              var valueMsg = JsonConvert.DeserializeObject<ValueUpdateMessage>(message, SecureJsonSettings);
+              if (valueMsg != null && valueMsg.SessionId == _sessionId)
+              {
+                OnValuesReceived?.Invoke(this, valueMsg.Values);
+              }
+            }
+            else if (msg.Type == "requestCurrentValues")
+            {
+              if (msg.SessionId == _sessionId)
+              {
+                logMessage?.Invoke("Web UI requested current values");
+                OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty);
+              }
+            }
+            else if (msg.Type == "requestInitialData")
+            {
+              if (msg.SessionId == _sessionId)
+              {
+                logMessage?.Invoke("Web UI requested initial data");
+                OnClientConnected?.Invoke(this, EventArgs.Empty);
+              }
+            }
+            else if (msg.Type == "saveSchema")
+            {
+              var schemaMsg = JsonConvert.DeserializeObject<SchemaSaveMessage>(message, SecureJsonSettings);
+              if (schemaMsg != null && schemaMsg.SessionId == _sessionId)
+              {
+                logMessage?.Invoke("Web UI saving schema");
+                OnSchemaSaveRequested?.Invoke(this, schemaMsg.Schema);
+              }
+            }
+          }
+          catch (Exception ex)
+          {
+            logMessage?.Invoke($"WebSocket message error: {ex.Message}");
+          }
+        });
+      };
+
+      Task.Run(async () => await _webSocketServer.StartAsync()).Wait(5000);
+      logMessage?.Invoke($"WebSocket Port: {_port}");
+    }
+    catch (Exception ex)
+    {
+      logMessage?.Invoke($"Could not start WebSocket server: {ex.Message}");
+      throw;
+    }
+  }
+
+  /// <summary>
+  ///   Stop WebSocket server
+  /// </summary>
+  public void Stop()
+  {
+    if (_webSocketServer != null)
+    {
+      try
+      {
+        _webSocketServer.Stop();
+        _webSocketServer.Dispose();
+      }
+      catch (Exception ex)
+      {
+        Debug.WriteLine($"Error stopping WebSocket: {ex.Message}");
+      }
+      finally
+      {
+        _webSocketServer = null;
+      }
+    }
+  }
+
+  /// <summary>
+  ///   Broadcast a generic message to all connected clients
+  /// </summary>
+  public async Task BroadcastMessage(string messageType, object data)
+  {
+    if (_webSocketServer != null && _webSocketServer.IsRunning)
+    {
+      var message = new
+      {
+        type = messageType,
+        sessionId = _sessionId,
+        data
+      };
+      await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+    }
+  }
+
+  /// <summary>
+  ///   Broadcast output values to all connected clients
+  /// </summary>
+  public async Task BroadcastOutputs(Dictionary<string, object> outputs)
+  {
+    if (_webSocketServer != null && _webSocketServer.IsRunning)
+    {
+      var message = new
+      {
+        type = "outputs",
+        sessionId = _sessionId,
+        outputs
+      };
+      await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+    }
+  }
+
+  /// <summary>
+  ///   Broadcast current input values to all connected clients
+  /// </summary>
+  public async Task BroadcastCurrentValues(Dictionary<string, object> values)
+  {
+    if (_webSocketServer != null && _webSocketServer.IsRunning)
+    {
+      var message = new
+      {
+        type = "currentValues",
+        sessionId = _sessionId,
+        values
+      };
+      await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+    }
+  }
+
+  /// <summary>
+  ///   Broadcast schema update to all connected clients
+  /// </summary>
+  public async Task BroadcastSchemaUpdate(UISchema schema, List<Guid> removedIds = null)
+  {
+    if (_webSocketServer != null && _webSocketServer.IsRunning)
+    {
+      var message = new
+      {
+        type = "schemaUpdated",
+        sessionId = _sessionId,
+        schema,
+        removedIds = removedIds ?? new List<Guid>()
+      };
+      await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+    }
+  }
+
+  /// <summary>
+  ///   Broadcast initial data to all connected clients (schema, available params, current values)
+  /// </summary>
+  public async Task BroadcastInitialData(UISchema schema, AvailableParameters availableParams,
+    Dictionary<string, object> currentValues)
+  {
+    if (_webSocketServer != null && _webSocketServer.IsRunning)
+    {
+      var message = new
+      {
+        type = "initialData",
+        sessionId = _sessionId,
+        schema,
+        availableParams,
+        currentValues
+      };
+      await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+    }
+  }
+
+  /// <summary>
+  ///   Broadcast schema save confirmation to all connected clients
+  /// </summary>
+  public async Task BroadcastSchemaSaved(bool success, string message = null)
+  {
+    if (_webSocketServer != null && _webSocketServer.IsRunning)
+    {
+      var msg = new
+      {
+        type = "schemaSaved",
+        sessionId = _sessionId,
+        success,
+        message
+      };
+      await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(msg));
+    }
+  }
+
+  /// <summary>
+  ///   Broadcast solving state to all connected clients
+  /// </summary>
+  public async Task BroadcastSolvingState(bool isSolving)
+  {
+    if (_webSocketServer != null && _webSocketServer.IsRunning)
+    {
+      var message = new
+      {
+        type = "solvingState",
+        sessionId = _sessionId,
+        isSolving
+      };
+      await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+    }
+  }
+
+  protected virtual void Dispose(bool disposing)
+  {
+    if (_disposed)
+    {
+      return;
     }
 
-    public class ValueUpdateMessage : WebSocketMessage
+    if (disposing)
     {
-        [JsonProperty("values")] public Dictionary<string, object> Values { get; set; }
+      Stop();
     }
 
-    public class SchemaSaveMessage : WebSocketMessage
-    {
-        [JsonProperty("schema")] public UISchema Schema { get; set; }
-    }
+    _disposed = true;
+  }
+}
+
+// Message types for WebSocket communication
+public class WebSocketMessage
+{
+  [JsonProperty("type")] public string Type { get; set; }
+
+  [JsonProperty("sessionId")] public string SessionId { get; set; }
+}
+
+public class ValueUpdateMessage : WebSocketMessage
+{
+  [JsonProperty("values")] public Dictionary<string, object> Values { get; set; }
+}
+
+public class SchemaSaveMessage : WebSocketMessage
+{
+  [JsonProperty("schema")] public UISchema Schema { get; set; }
 }

@@ -5,8 +5,8 @@ using Microsoft.Extensions.Logging;
 namespace ComputeBuilder.Logging;
 
 /// <summary>
-/// Simple logger implementation that outputs to Grasshopper component
-/// This is mainly used to be able to log from classes that do not have direct access to the component
+///   Simple logger implementation that outputs to Grasshopper component
+///   This is mainly used to be able to log from classes that do not have direct access to the component
 /// </summary>
 public class GrasshopperLogger<T> : ILogger<T>
 {
@@ -17,11 +17,18 @@ public class GrasshopperLogger<T> : ILogger<T>
     _component = component;
   }
 
-  public IDisposable BeginScope<TState>(TState state) => null;
+  public IDisposable BeginScope<TState>(TState state)
+  {
+    return null;
+  }
 
-  public bool IsEnabled(LogLevel logLevel) => true;
+  public bool IsEnabled(LogLevel logLevel)
+  {
+    return true;
+  }
 
-  public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
+  public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception,
+    Func<TState, Exception, string> formatter)
   {
     var message = formatter(state, exception);
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using ComputeBuilder.Display;
@@ -13,9 +14,9 @@ using Rhino.Geometry;
 namespace ComputeBuilder.Components.Display;
 
 /// <summary>
-/// Component that converts geometry to displayable format for web viewing.
+///   Component that converts geometry to displayable format for web viewing.
 /// </summary>
-public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
+public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
 {
   private const string DefaultMeshPrefix = "";
 
@@ -24,11 +25,11 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
   //Consider batching meshes together with metadata to reduce overhead and make better use of compression.
 
   public WebDisplay()
-      : base("Display", "D", "Converts geometry to display file", "ComputeBuilder", "Display")
+    : base("Display", "D", "Converts geometry to display file", "ComputeBuilder", "Display")
   {
   }
 
-  protected override System.Drawing.Bitmap Icon => null;
+  protected override Bitmap Icon => null;
   public override Guid ComponentGuid => new("3B108239-0103-4D4B-8407-534A78811090");
 
   protected override void RegisterInputParams(GH_InputParamManager pManager)
@@ -37,7 +38,7 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
     pManager.AddTextParameter("Mesh Name", "N", "Name of the mesh", GH_ParamAccess.tree, "");
     pManager.AddGenericParameter("Three Material", "TM", "ThreeMaterial for display", GH_ParamAccess.tree);
     pManager.AddParameter(new Param_MeshParameters(), "Meshing Settings", "MS",
-        "Meshing settings to use. Default is FastRenderMesh.", GH_ParamAccess.item);
+      "Meshing settings to use. Default is FastRenderMesh.", GH_ParamAccess.item);
 
     pManager[2].Optional = true;
     pManager[3].Optional = true;
@@ -110,10 +111,10 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
   }
 
   private DisplayResults Compute(
-      List<IGH_Goo> geoGoos,
-      List<GH_String> nameGoos,
-      List<IGH_Goo> materialGoos,
-      MeshingParameters meshSettings)
+    List<IGH_Goo> geoGoos,
+    List<GH_String> nameGoos,
+    List<IGH_Goo> materialGoos,
+    MeshingParameters meshSettings)
   {
     var result = new DisplayResults();
 
@@ -173,10 +174,15 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
 
   private GeometryBase TryExtractGeometry(IGH_Goo goo)
   {
-    if (goo == null) return null;
+    if (goo == null)
+    {
+      return null;
+    }
 
     if (goo.ScriptVariable() is GeometryBase geomBase)
+    {
       return geomBase;
+    }
 
     return goo switch
     {
@@ -194,7 +200,8 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
 
   #region Mesh Conversion
 
-  private List<Mesh> ConvertToMeshesParallel(List<GeometryBase> geometries, MeshingParameters meshSettings, List<string> warnings)
+  private List<Mesh> ConvertToMeshesParallel(List<GeometryBase> geometries, MeshingParameters meshSettings,
+    List<string> warnings)
   {
     var meshDict = new ConcurrentDictionary<int, Mesh>();
 
@@ -218,6 +225,7 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
       {
         warnings.Add($"Invalid geometry at index {index}");
       }
+
       return null;
     }
 
@@ -240,6 +248,7 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
       {
         warnings.Add($"Error converting geometry at index {index}: {ex.Message}");
       }
+
       return null;
     }
   }
@@ -247,11 +256,17 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
   private Mesh CreateMeshFromBrep(Brep brep, MeshingParameters mParams)
   {
     var meshArray = Mesh.CreateFromBrep(brep, mParams);
-    if (meshArray == null || meshArray.Length == 0) return null;
+    if (meshArray == null || meshArray.Length == 0)
+    {
+      return null;
+    }
 
     var mesh = new Mesh();
     foreach (var m in meshArray)
+    {
       mesh.Append(m);
+    }
+
     return mesh;
   }
 
@@ -261,6 +276,7 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
     {
       warnings.Add($"Curves cannot be directly converted to mesh at index {index}. Consider using a pipe or sweep.");
     }
+
     return null;
   }
 
@@ -272,6 +288,7 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
       {
         warnings.Add($"Failed to create valid mesh from geometry at index {index}");
       }
+
       return null;
     }
 
@@ -284,13 +301,17 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
 
   #region Mesh Processing
 
-  private List<ThreeDisplayGoo> ProcessMeshesParallel(List<Mesh> meshes, List<string> names, List<ThreeMaterial> materials, List<string> warnings)
+  private List<ThreeDisplayGoo> ProcessMeshesParallel(List<Mesh> meshes, List<string> names,
+    List<ThreeMaterial> materials, List<string> warnings)
   {
     var resultDict = new ConcurrentDictionary<int, ThreeDisplayGoo>();
 
     Parallel.For(0, meshes.Count, index =>
     {
-      if (meshes[index] == null || !meshes[index].IsValid) return;
+      if (meshes[index] == null || !meshes[index].IsValid)
+      {
+        return;
+      }
 
       try
       {
@@ -333,9 +354,9 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
   private List<string> PrepareNames(int count, List<GH_String> nameGoos)
   {
     var names = nameGoos?
-        .Select(n => n?.Value)
-        .Where(n => !string.IsNullOrWhiteSpace(n))
-        .ToList() ?? new List<string>();
+      .Select(n => n?.Value)
+      .Where(n => !string.IsNullOrWhiteSpace(n))
+      .ToList() ?? new List<string>();
 
     return NormalizeList(names, count, i => $"{DefaultMeshPrefix}{i}");
   }
@@ -348,7 +369,9 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
     {
       var material = ExtractMaterial(goo);
       if (material != null)
+      {
         materials.Add(material);
+      }
     }
 
     return NormalizeList(materials, count, _ => ThreeMaterial.Default());
@@ -356,13 +379,20 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
 
   private ThreeMaterial ExtractMaterial(IGH_Goo goo)
   {
-    if (goo == null) return null;
+    if (goo == null)
+    {
+      return null;
+    }
 
     if (goo.ScriptVariable() is ThreeMaterial mat)
+    {
       return mat;
+    }
 
     if (goo is GH_ObjectWrapper wrapper && wrapper.Value is ThreeMaterial wrapMat)
+    {
       return wrapMat;
+    }
 
     return null;
   }
@@ -370,12 +400,14 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
   private List<T> NormalizeList<T>(List<T> input, int targetCount, Func<int, T> defaultFactory)
   {
     if (input.Count == 0)
+    {
       return Enumerable.Range(0, targetCount).Select(defaultFactory).ToList();
+    }
 
     var result = new List<T>(targetCount);
     var lastItem = input.Last();
 
-    for (int i = 0; i < targetCount; i++)
+    for (var i = 0; i < targetCount; i++)
     {
       result.Add(i < input.Count ? input[i] : lastItem);
     }
@@ -384,11 +416,4 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
   }
 
   #endregion
-
-  public class DisplayResults
-  {
-    public List<ThreeDisplayGoo> Displays { get; set; } = new();
-    public List<string> Warnings { get; set; } = new();
-    public string Error { get; set; }
-  }
 }

@@ -2,7 +2,9 @@
 
 ## What is Compuceraptor?
 
-Compuceraptor is a Grasshopper plugin that bridges the gap between Rhino 3D and the web. It enables designers and engineers to export their 3D geometry to various file formats and prepare models for interactive web visualization—all directly from within Grasshopper.
+Compuceraptor is a Grasshopper plugin that bridges the gap between Rhino 3D and the web. It enables designers and
+engineers to export their 3D geometry to various file formats and prepare models for interactive web visualization—all
+directly from within Grasshopper.
 
 ### Key Capabilities
 

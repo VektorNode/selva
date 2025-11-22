@@ -7,93 +7,95 @@ namespace ComputeBuilder.Display;
 
 public class ThreeDisplayGoo : IGH_Goo
 {
-    public ThreeDisplayGoo()
+  public ThreeDisplayGoo()
+  {
+  }
+
+  public ThreeDisplayGoo(ThreeDisplay value)
+  {
+    Value = value;
+  }
+
+  public ThreeDisplay Value { get; set; }
+
+  public bool IsValid => !string.IsNullOrEmpty(Value.meshData);
+
+  public string IsValidWhyNot => string.IsNullOrEmpty(Value.meshData)
+    ? "ThreeDisplay has no mesh data"
+    : string.Empty;
+
+  public string TypeName => "ThreeDisplay";
+
+  public string TypeDescription => "Three.js display data";
+
+  public IGH_Goo Duplicate()
+  {
+    // Structs are value types, so this creates a copy automatically
+    return new ThreeDisplayGoo(Value);
+  }
+
+  public IGH_GooProxy EmitProxy()
+  {
+    return null;
+  }
+
+  public bool CastFrom(object source)
+  {
+    if (source is ThreeDisplay td)
     {
+      Value = td;
+      return true;
     }
 
-    public ThreeDisplayGoo(ThreeDisplay value)
+    return false;
+  }
+
+  public bool CastTo<T>(out T target)
+  {
+    if (typeof(T).IsAssignableFrom(typeof(ThreeDisplay)))
     {
-        Value = value;
+      target = (T)(object)Value;
+      return true;
     }
 
-    public ThreeDisplay Value { get; set; }
+    target = default;
+    return false;
+  }
 
-    public bool IsValid => !string.IsNullOrEmpty(Value.meshData);
-    
-    public string IsValidWhyNot => string.IsNullOrEmpty(Value.meshData) 
-        ? "ThreeDisplay has no mesh data" 
-        : string.Empty;
-    
-    public string TypeName => "ThreeDisplay";
-    
-    public string TypeDescription => "Three.js display data";
+  public object ScriptVariable()
+  {
+    return Value;
+  }
 
-    public IGH_Goo Duplicate()
+  public bool Write(GH_IWriter writer)
+  {
+    var settings = new JsonSerializerSettings
     {
-        // Structs are value types, so this creates a copy automatically
-        return new ThreeDisplayGoo(Value);
+      Converters = new List<JsonConverter> { new GeoMeshProcessor.ColorJsonConverter() }
+    };
+    var json = JsonConvert.SerializeObject(Value, settings);
+    writer.SetString("ThreeDisplayJson", json);
+    return true;
+  }
+
+  public bool Read(GH_IReader reader)
+  {
+    if (!reader.ItemExists("ThreeDisplayJson"))
+    {
+      return false;
     }
 
-    public IGH_GooProxy EmitProxy()
+    var json = reader.GetString("ThreeDisplayJson");
+    var settings = new JsonSerializerSettings
     {
-        return null;
-    }
+      Converters = new List<JsonConverter> { new GeoMeshProcessor.ColorJsonConverter() }
+    };
+    Value = JsonConvert.DeserializeObject<ThreeDisplay>(json, settings);
+    return true;
+  }
 
-    public bool CastFrom(object source)
-    {
-        if (source is ThreeDisplay td)
-        {
-            Value = td;
-            return true;
-        }
-
-        return false;
-    }
-
-    public bool CastTo<T>(out T target)
-    {
-        if (typeof(T).IsAssignableFrom(typeof(ThreeDisplay)))
-        {
-            target = (T)(object)Value;
-            return true;
-        }
-
-        target = default;
-        return false;
-    }
-
-    public object ScriptVariable()
-    {
-        return Value;
-    }
-
-    public bool Write(GH_IWriter writer)
-    {
-        var settings = new JsonSerializerSettings
-        {
-            Converters = new List<JsonConverter> { new GeoMeshProcessor.ColorJsonConverter() }
-        };
-        var json = JsonConvert.SerializeObject(Value, settings);
-        writer.SetString("ThreeDisplayJson", json);
-        return true;
-    }
-
-    public bool Read(GH_IReader reader)
-    {
-        if (!reader.ItemExists("ThreeDisplayJson"))
-            return false;
-        
-        var json = reader.GetString("ThreeDisplayJson");
-        var settings = new JsonSerializerSettings
-        {
-            Converters = new List<JsonConverter> { new GeoMeshProcessor.ColorJsonConverter() }
-        };
-        Value = JsonConvert.DeserializeObject<ThreeDisplay>(json, settings);
-        return true;
-    }
-
-    public override string ToString()
-    {
-        return $"ThreeDisplay: (V: {Value.vertexCount}, F:{Value.faceCount})";
-    }
+  public override string ToString()
+  {
+    return $"ThreeDisplay: (V: {Value.vertexCount}, F:{Value.faceCount})";
+  }
 }

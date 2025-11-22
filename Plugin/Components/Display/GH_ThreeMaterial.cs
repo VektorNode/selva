@@ -7,18 +7,14 @@ namespace ComputeBuilder.Components.Display;
 
 public class GH_ThreeMaterial : GH_Component
 {
-
   public GH_ThreeMaterial()
     : base("Three Material", "TM",
-        "Creates a ThreeMaterial object for use in ThreeDisplay",
-        "ComputeBuilder", "Display")
+      "Creates a ThreeMaterial object for use in ThreeDisplay",
+      "ComputeBuilder", "Display")
   {
   }
 
-  public override Guid ComponentGuid
-  {
-    get { return new Guid("D7A8738A-85AA-4707-A486-DCB84AA21C6B"); }
-  }
+  public override Guid ComponentGuid => new("D7A8738A-85AA-4707-A486-DCB84AA21C6B");
 
   protected override Bitmap Icon => null;
 
@@ -38,11 +34,11 @@ public class GH_ThreeMaterial : GH_Component
 
   protected override void SolveInstance(IGH_DataAccess DA)
   {
-    Color color = Color.White;
-    double metalness = 0.0;
-    double roughness = 0.5;
-    double opacity = 1.0;
-    bool transparent = false;
+    var color = Color.White;
+    var metalness = 0.0;
+    var roughness = 0.5;
+    var opacity = 1.0;
+    var transparent = false;
 
     DA.GetData(0, ref color);
     DA.GetData(1, ref metalness);

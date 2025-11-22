@@ -6,101 +6,111 @@ namespace ComputeBuilder.IO;
 
 public class FileDataGoo : IGH_Goo
 {
-    public FileDataGoo()
+  public FileDataGoo()
+  {
+  }
+
+  public FileDataGoo(FileData value)
+  {
+    Value = value;
+  }
+
+  public FileData Value { get; set; }
+
+  public bool IsValid => Value != null && !string.IsNullOrEmpty(Value.FileName);
+
+  public string IsValidWhyNot => Value == null
+    ? "FileData value is null"
+    : string.IsNullOrEmpty(Value.FileName)
+      ? "FileData has no file name"
+      : string.Empty;
+
+  public string TypeName => "FileData";
+
+  public string TypeDescription => "File data for export";
+
+  public IGH_Goo Duplicate()
+  {
+    if (Value == null)
     {
+      return new FileDataGoo();
     }
 
-    public FileDataGoo(FileData value)
+    // Deep copy via JSON serialization
+    var json = JsonConvert.SerializeObject(Value);
+    var copy = JsonConvert.DeserializeObject<FileData>(json);
+    return new FileDataGoo(copy);
+  }
+
+  public IGH_GooProxy EmitProxy()
+  {
+    return null;
+  }
+
+  public bool CastFrom(object source)
+  {
+    if (source is FileData td)
     {
-        Value = value;
+      Value = td;
+      return true;
     }
 
-    public FileData Value { get; set; }
+    return false;
+  }
 
-    public bool IsValid => Value != null && !string.IsNullOrEmpty(Value.FileName);
-
-    public string IsValidWhyNot => Value == null
-        ? "FileData value is null"
-        : string.IsNullOrEmpty(Value.FileName)
-            ? "FileData has no file name"
-            : string.Empty;
-
-    public string TypeName => "FileData";
-
-    public string TypeDescription => "File data for export";
-
-    public IGH_Goo Duplicate()
+  public bool CastTo<T>(out T target)
+  {
+    if (typeof(T).IsAssignableFrom(typeof(FileData)))
     {
-        if (Value == null)
-            return new FileDataGoo();
-
-        // Deep copy via JSON serialization
-        var json = JsonConvert.SerializeObject(Value);
-        var copy = JsonConvert.DeserializeObject<FileData>(json);
-        return new FileDataGoo(copy);
+      target = (T)(object)Value;
+      return true;
     }
 
-    public IGH_GooProxy EmitProxy()
+    target = default;
+    return false;
+  }
+
+  public object ScriptVariable()
+  {
+    return Value;
+  }
+
+  public bool Write(GH_IWriter writer)
+  {
+    if (Value == null)
     {
-        return null;
+      return false;
     }
 
-    public bool CastFrom(object source)
-    {
-        if (source is FileData td)
-        {
-            Value = td;
-            return true;
-        }
+    var json = JsonConvert.SerializeObject(Value);
+    writer.SetString("FileDataJson", json);
+    return true;
+  }
 
-        return false;
+  public bool Read(GH_IReader reader)
+  {
+    if (!reader.ItemExists("FileDataJson"))
+    {
+      return false;
     }
 
-    public bool CastTo<T>(out T target)
-    {
-        if (typeof(T).IsAssignableFrom(typeof(FileData)))
-        {
-            target = (T)(object)Value;
-            return true;
-        }
+    var json = reader.GetString("FileDataJson");
+    Value = JsonConvert.DeserializeObject<FileData>(json);
+    return true;
+  }
 
-        target = default;
-        return false;
+  public override string ToString()
+  {
+    if (Value == null)
+    {
+      return "Null FileData";
     }
 
-    public object ScriptVariable()
+    if (string.IsNullOrEmpty(Value.FileName))
     {
-        return Value;
+      return "FileData (no filename)";
     }
 
-    public bool Write(GH_IWriter writer)
-    {
-        if (Value == null)
-            return false;
-
-        var json = JsonConvert.SerializeObject(Value);
-        writer.SetString("FileDataJson", json);
-        return true;
-    }
-
-    public bool Read(GH_IReader reader)
-    {
-        if (!reader.ItemExists("FileDataJson"))
-            return false;
-
-        var json = reader.GetString("FileDataJson");
-        Value = JsonConvert.DeserializeObject<FileData>(json);
-        return true;
-    }
-
-    public override string ToString()
-    {
-        if (Value == null)
-            return "Null FileData";
-
-        if (string.IsNullOrEmpty(Value.FileName))
-            return "FileData (no filename)";
-
-        return $"FileData: {Value.FileName}";
-    }
+    return $"FileData: {Value.FileName}";
+  }
 }
