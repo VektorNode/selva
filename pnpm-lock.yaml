@@ -36,49 +36,6 @@ importers:
         specifier: ^8.47.0
         version: 8.47.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
 
-  examples/gh-schema-builder:
-    dependencies:
-      '@computebuilder/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      compute-rhino3d:
-        specifier: 0.13.0-beta
-        version: 0.13.0-beta
-      rhino3dm:
-        specifier: 8.9.0
-        version: 8.9.0
-    devDependencies:
-      '@sveltejs/adapter-auto':
-        specifier: ^7.0.0
-        version: 7.0.0(@sveltejs/kit@2.49.0(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.43.14)(vite@7.2.4(@types/node@22.19.1)(jiti@2.6.1)(lightningcss@1.30.2)))(svelte@5.43.14)(vite@7.2.4(@types/node@22.19.1)(jiti@2.6.1)(lightningcss@1.30.2)))
-      '@sveltejs/kit':
-        specifier: ^2.47.1
-        version: 2.49.0(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.43.14)(vite@7.2.4(@types/node@22.19.1)(jiti@2.6.1)(lightningcss@1.30.2)))(svelte@5.43.14)(vite@7.2.4(@types/node@22.19.1)(jiti@2.6.1)(lightningcss@1.30.2))
-      '@sveltejs/vite-plugin-svelte':
-        specifier: ^6.2.1
-        version: 6.2.1(svelte@5.43.14)(vite@7.2.4(@types/node@22.19.1)(jiti@2.6.1)(lightningcss@1.30.2))
-      '@tailwindcss/vite':
-        specifier: ^4.1.14
-        version: 4.1.17(vite@7.2.4(@types/node@22.19.1)(jiti@2.6.1)(lightningcss@1.30.2))
-      prettier-plugin-tailwindcss:
-        specifier: ^0.7.1
-        version: 0.7.1(prettier-plugin-svelte@3.4.0(prettier@3.6.2)(svelte@5.43.14))(prettier@3.6.2)
-      svelte:
-        specifier: ^5.41.0
-        version: 5.43.14
-      svelte-check:
-        specifier: ^4.3.3
-        version: 4.3.4(picomatch@4.0.3)(svelte@5.43.14)(typescript@5.9.3)
-      tailwindcss:
-        specifier: ^4.1.14
-        version: 4.1.17
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vite:
-        specifier: ^7.1.10
-        version: 7.2.4(@types/node@22.19.1)(jiti@2.6.1)(lightningcss@1.30.2)
-
   examples/svelte-app:
     dependencies:
       '@computebuilder/core':

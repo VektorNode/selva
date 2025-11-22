@@ -1,100 +1,97 @@
 import type { RhinoModule } from 'rhino3dm';
 
-/**
- * Decoder function signature for a single Rhino type.
- */
+// -----------------------------------------------------------------------------
+// Decoder Types
+// -----------------------------------------------------------------------------
+
 type RhinoDecoder = (rhino: RhinoModule, data: unknown) => unknown;
 
-/**
- * Registry of decoders keyed by Rhino type name.
- * Use `registerDecoder()` to add or override decoders.
- */
 const decoderRegistry = new Map<string, RhinoDecoder>();
 
-////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////
+// -----------------------------------------------------------------------------
+// Registration
+// -----------------------------------------------------------------------------
 
-/**
- * Register a decoder for a Rhino type name.
- */
 export function registerDecoder(typeName: string, decoder: RhinoDecoder): void {
   decoderRegistry.set(typeName, decoder);
 }
 
 registerDecoder('Rhino.Geometry.Point3d', (rhino, data) => {
   const d = data as any;
+  if (!d || typeof d.X !== 'number') return null;
   return new rhino.Point([d.X, d.Y, d.Z]);
 });
 
 registerDecoder('Rhino.Geometry.Line', (rhino, data) => {
   const d = data as any;
+  if (!d || !d.From || !d.To) return null;
   return new rhino.Line([d.From.X, d.From.Y, d.From.Z], [d.To.X, d.To.Y, d.To.Z]);
 });
 
-//TODO: Figure out a way to parse Boxes/Vector3d/Plane...
+// -----------------------------------------------------------------------------
+// Utility Functions
+// -----------------------------------------------------------------------------
 
-////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////
-
-/**
- * Options for decoding Rhino geometry
- */
-export interface DecodeRhinoOptions {
-  /** Only decode specific keys (if not provided, decodes all) */
-  keys?: string[];
-  /** Skip decoding for specific keys */
-  skipKeys?: string[];
+function findDecoder(rhinoType: string): RhinoDecoder | undefined {
+  if (decoderRegistry.has(rhinoType)) return decoderRegistry.get(rhinoType);
+  for (const [key, dec] of decoderRegistry) {
+    if (rhinoType.startsWith(key)) return dec;
+  }
+  return undefined;
 }
 
-/**
- * Decodes Rhino geometry objects using registered decoders or CommonObject fallback
- *
- * @param parsedData - The encoded geometry data
- * @param rhinoType - The Rhino type name (e.g., 'Rhino.Geometry.Point3d')
- * @param rhino - The rhino3dm module instance
- * @returns The decoded geometry object or original data on failure
- * @throws Logs warnings on decode failures but does not throw
- */
+function extractPayload(parsedData: any): any {
+  if (!parsedData || typeof parsedData !== 'object') return null;
+  return (parsedData as any).data ?? (parsedData as any).value ?? null;
+}
+
+// -----------------------------------------------------------------------------
+// Geometry Decoding
+// -----------------------------------------------------------------------------
+
 export function decodeRhinoGeometry(
   parsedData: unknown,
   rhinoType: string,
   rhino: RhinoModule
 ): unknown {
-  const decoder = decoderRegistry.get(rhinoType);
+  const decoder = findDecoder(rhinoType);
   if (decoder) {
     try {
       return decoder(rhino, parsedData);
     } catch (error) {
       console.warn(`Failed to decode Rhino type ${rhinoType}:`, error);
+      return { __decodeError: true, type: rhinoType, raw: parsedData };
     }
   }
 
-  // Fall back to CommonObject.decode for unmapped geometry types
+  // Fallback using CommonObject.decode
   try {
-    if (typeof parsedData === 'object' && parsedData !== null && 'data' in parsedData) {
-      return rhino.CommonObject.decode(parsedData);
-    }
+    const payload = extractPayload(parsedData);
+    if (payload) return rhino.CommonObject.decode(payload);
   } catch (error) {
     console.warn(`Failed to decode ${rhinoType} with CommonObject:`, error);
+    return { __decodeError: true, type: rhinoType, raw: parsedData };
   }
 
   return parsedData;
 }
 
-/**
- * Decode all enumerable properties of an object that have Rhino type metadata.
- *
- * @param obj - Object to decode
- * @param rhino - The rhino3dm module instance
- * @param options - Decoding options
- * @returns Shallow clone of the object with decoded properties
- */
+// -----------------------------------------------------------------------------
+// Object Decoder
+// -----------------------------------------------------------------------------
+
+export interface DecodeRhinoOptions {
+  keys?: string[];
+  skipKeys?: string[];
+  deep?: boolean;
+}
+
 export function decodeRhinoObject<T extends Record<string, unknown>>(
   obj: T,
   rhino: RhinoModule,
   options: DecodeRhinoOptions = {}
 ): T {
-  const { keys, skipKeys } = options;
+  const { keys, skipKeys, deep } = options;
   const out: Record<string, unknown> = { ...obj };
 
   const shouldProcessKey = (k: string) => {
@@ -105,14 +102,18 @@ export function decodeRhinoObject<T extends Record<string, unknown>>(
 
   for (const [key, value] of Object.entries(obj)) {
     if (!shouldProcessKey(key)) continue;
+    if (!value || typeof value !== 'object') continue;
 
-    const maybeType =
-      value && typeof value === 'object' && 'type' in (value as any)
-        ? (value as any).type
-        : undefined;
+    const v: any = value;
+    const maybeType = typeof v.type === 'string' ? v.type : undefined;
 
-    if (typeof maybeType === 'string') {
-      out[key] = decodeRhinoGeometry(value, maybeType, rhino);
+    if (maybeType) {
+      out[key] = decodeRhinoGeometry(v, maybeType, rhino);
+      continue;
+    }
+
+    if (deep && typeof v === 'object') {
+      out[key] = decodeRhinoObject(v as any, rhino, options);
     }
   }
 

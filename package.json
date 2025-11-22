@@ -10,8 +10,9 @@
   },
   "scripts": {
     "dev": "pnpm --filter @computebuilder/web dev",
-    "build": "pnpm --filter @computebuilder/core build && pnpm --filter @computebuilder/svelte-ui build",
+    "build": "pnpm --filter @computebuilder/core build && pnpm --filter @computebuilder/svelte-ui build && pnpm --filter @computebuilder/web build",
     "build:all": "pnpm --filter @computebuilder/core build && pnpm --filter @computebuilder/svelte-ui build && pnpm --filter @computebuilder/web build",
+    "build:watch": "pnpm --filter @computebuilder/core --parallel run dev",
     "build:web": "pnpm --filter @computebuilder/web build",
     "preview": "pnpm --filter @computebuilder/web preview",
     "check": "pnpm --filter ./packages --recursive run check",
@@ -19,8 +20,11 @@
     "test": "pnpm --filter ./packages --recursive run test",
     "test:watch": "pnpm --filter ./packages --recursive run test:watch",
     "lint": "eslint . --max-warnings 4000",
+    "lint:fix": "eslint . --fix --max-warnings 4000",
     "format": "prettier --write \"**/*.{ts,tsx,svelte,json,yaml,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,svelte,json,yaml,md}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,svelte,json,yaml,md}\"",
+    "clean:all": "pnpm clean && pnpm install && pnpm build",
+    "clean": "node -e \"const fs = require('fs'); const path = require('path'); ['pnpm-lock.yaml', 'node_modules'].forEach(f => { const p = path.join(process.cwd(), f); if (fs.existsSync(p)) { fs.rmSync(p, { recursive: true, force: true }); console.log('Deleted ' + f); } }); const packages = fs.readdirSync(path.join(process.cwd(), 'packages')); const examples = fs.readdirSync(path.join(process.cwd(), 'examples')); [...packages, ...examples].forEach(pkg => { const nm = path.join(process.cwd(), 'packages', pkg, 'node_modules'); const sk = path.join(process.cwd(), 'packages', pkg, '.svelte-kit'); const nm2 = path.join(process.cwd(), 'examples', pkg, 'node_modules'); const sk2 = path.join(process.cwd(), 'examples', pkg, '.svelte-kit'); [nm, sk, nm2, sk2].forEach(p => { if (fs.existsSync(p)) { fs.rmSync(p, { recursive: true, force: true }); console.log('Deleted ' + p); } }); }); \""
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

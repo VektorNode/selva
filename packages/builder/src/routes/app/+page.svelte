@@ -7,166 +7,151 @@
   import { getDefaultValue } from '$lib/utils/session';
 
   let { data }: PageProps = $props();
-
   let schema = $state(data.schema);
 
-  let values: Record<string, unknown> = $state({});
+  // Core state
+  let values = $state<Record<string, unknown>>({});
   let solving = $state(false);
   let error = $state('');
-  let canvas: HTMLCanvasElement | null = $state(null);
-  let scene: any | null = $state(null);
-  let camera: any;
-  let controls: any;
   let viewerInitialized = $state(false);
 
-  // Lazy-loaded modules
+  // Viewer refs
+  let canvas: HTMLCanvasElement | null = $state(null);
+  let scene: any = null;
+  let camera: any = null;
+  let controls: any = null;
+
+  // Deferred imports
   let rhinoCompute: typeof import('@computebuilder/core') | null = null;
   let THREE: typeof import('three') | null = null;
 
-  // Manual solve mode: track pending changes
+  // Manual solve mode
   let pendingValues = $state<Record<string, unknown>>({});
   let hasPendingChanges = $state(false);
 
-  $effect(() => {
-    if (schema) {
-      const initialValues: Record<string, unknown> = {};
+  // -----------------------------
+  // Initialization
+  // -----------------------------
+  function initializeValues() {
+    if (!schema) return;
 
-      schema.inputs.forEach((input) => {
-        console.log('Setting initial value for input:', input.name, input.default, input.id);
-        initialValues[input.id] = input.default ?? getDefaultValue(input.paramType);
-      });
+    const v: Record<string, unknown> = {};
 
-      schema.outputs.forEach((output) => {
-        initialValues[output.id] = null;
-      });
-
-      values = initialValues;
+    for (const input of schema.inputs) {
+      v[input.id] = input.default ?? getDefaultValue(input.paramType);
     }
-  });
-
-  async function handleValueChange(parameterId: string, value: unknown) {
-    values[parameterId] = value;
-
-    // If instanceSolve is false, track pending changes instead of solving immediately
-    if (schema?.instanceSolve === false) {
-      pendingValues[parameterId] = value;
-      hasPendingChanges = true;
-      console.log('[App] Manual solve mode: value queued for next calculation');
-      return;
+    for (const output of schema.outputs) {
+      v[output.id] = null;
     }
 
-    // Instance solve mode: solve immediately
-    await performSolve();
+    values = v;
   }
 
+  $effect(() => initializeValues());
+
+  // -----------------------------
+  // Rhino Compute utilities
+  // -----------------------------
+  async function ensureModulesLoaded() {
+    if (!rhinoCompute) rhinoCompute = await import('@computebuilder/core');
+    if (schema.enable3dViewer && !THREE) THREE = await import('three');
+  }
+
+  async function initializeViewer() {
+    if (!schema.enable3dViewer || !canvas || viewerInitialized) return;
+
+    await ensureModulesLoaded();
+
+    const opts = {
+      environment: { backgroundColor: '#4b5357' },
+    };
+
+    const { scene: s, camera: c, controls: ctl } = rhinoCompute!.initThree(canvas, opts);
+
+    scene = s;
+    camera = c;
+    controls = ctl;
+    viewerInitialized = true;
+  }
+
+  // -----------------------------
+  // Solve logic
+  // -----------------------------
   async function performSolve() {
     try {
       solving = true;
       error = '';
 
-      // Lazy load @computebuilder/core only when needed
-      if (!rhinoCompute) {
-        rhinoCompute = await import('@computebuilder/core');
-      }
+      await ensureModulesLoaded();
 
-      const response = await fetch('/api/compute', {
+      const payload = {
+        inputs: schema.inputs,
+        values: $state.snapshot(values),
+        definitionUrl: 'http://localhost:5173/builder_test.gh',
+        serverUrl: 'http://localhost:5000/',
+      };
+
+      const res = await fetch('/api/compute', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          inputs: schema.inputs,
-          values: $state.snapshot(values),
-          definitionUrl: 'http://localhost:5173/builder_test.gh',
-          serverUrl: 'http://localhost:5000/',
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to solve definition');
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.message || 'Compute error');
       }
 
-      const solvedDefinition = await response.json();
+      const solved = await res.json();
+      const processor = new rhinoCompute!.GrasshopperResponseProcessor(solved);
 
-      console.log('[App] Solve response:', solvedDefinition);
-
-      // Process the response on client side (mesh extraction requires Three.js)
-      const processor = new rhinoCompute.GrasshopperResponseProcessor(solvedDefinition);
-      const outputValues = processor.getValues();
-
-      // Update 3D viewer if enabled
       if (schema.enable3dViewer && scene) {
         const meshes = await processor.extractMeshesFromResponse();
-        console.log('[App] Updating 3D viewer with meshes:', meshes);
-
-        rhinoCompute.updateScene(scene, meshes, camera, controls, viewerInitialized);
-        viewerInitialized = true;
+        rhinoCompute!.updateScene(scene, meshes, camera, controls, viewerInitialized);
       }
 
-      // Map outputs by id (Grasshopper GUID)
-      const mappedOutputs: Record<string, unknown> = {};
+      const outputs: Record<string, unknown> = {};
+      for (const o of schema.outputs) {
+        outputs[o.id] = processor.getValueByParamId(o.id, { parseValues: false });
+      }
 
-      Object.entries(outputValues.values).forEach(([computeKey, computeValue]) => {
-        const matchingOutput = schema.outputs.find((output) => {
-          if (output.id && computeKey === output.id) return true;
-          if (computeKey === output.name) return true;
-          if (computeKey === output.nickname) return true;
-          return false;
-        });
-
-        if (matchingOutput) {
-          mappedOutputs[matchingOutput.id] = computeValue;
-        } else {
-          mappedOutputs[computeKey] = computeValue;
-        }
-      });
-
-      values = { ...values, ...mappedOutputs };
-
+      values = { ...values, ...outputs };
       pendingValues = {};
       hasPendingChanges = false;
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to solve definition';
-      console.error('Solve error:', err);
+      error = err instanceof Error ? err.message : String(err);
     } finally {
       solving = false;
     }
   }
 
-  /**
-   * Manual solve: send all pending changes to Rhino Compute
-   */
-  function handleCalculate() {
-    if (!hasPendingChanges) return;
-    performSolve();
+  // -----------------------------
+  // Handlers
+  // -----------------------------
+  async function handleValueChange(id: string, val: unknown) {
+    values[id] = val;
+
+    if (schema?.instanceSolve === false) {
+      pendingValues[id] = val;
+      hasPendingChanges = true;
+      return;
+    }
+
+    await performSolve();
   }
 
-  const badgeConfig = $derived(
-    solving
-      ? { label: 'Solving...', variant: 'solving' as const }
-      : { label: 'Rhino Compute', variant: 'compute' as const }
-  );
+  function handleCalculate() {
+    if (hasPendingChanges) performSolve();
+  }
 
-  onMount(async () => {
-    if (schema.enable3dViewer && canvas && !viewerInitialized) {
-      // Lazy load @computebuilder/core and Three.js only when 3D viewer is enabled
-      if (!rhinoCompute) {
-        rhinoCompute = await import('@computebuilder/core');
-      }
-      if (!THREE) {
-        THREE = await import('three');
-      }
+  // Badge binding
+  const BADGES = {
+    solving: { label: 'Solving...', variant: 'solving' } as const,
+    compute: { label: 'Rhino Compute', variant: 'compute' } as const,
+  };
 
-      const option = {
-        environment: { backgroundColor: '#4b5357' },
-      };
-      const threeSetup = rhinoCompute.initThree(canvas, option);
-      scene = threeSetup.scene;
-      camera = threeSetup.camera;
-      controls = threeSetup.controls;
-    }
-  });
+  const badgeConfig = $derived(solving ? BADGES.solving : BADGES.compute);
+  onMount(initializeViewer);
 </script>
 
 <PageContainer>
@@ -183,8 +168,9 @@
       </div>
     {:else}
       <div class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row">
+        <!-- Controls -->
         <div class="w-full shrink-0 overflow-y-auto lg:w-[480px] xl:w-[520px]">
-          {#if schema.layout.type === 'tabbed' && schema.layout.tabs && schema.layout.tabs.length > 0}
+          {#if schema.layout.type === 'tabbed'}
             <TabLayout
               {schema}
               bind:values
@@ -217,6 +203,7 @@
           {/if}
         </div>
 
+        <!-- Viewer -->
         {#if schema.enable3dViewer}
           <div class="min-h-[500px] flex-1 overflow-hidden rounded-lg bg-white shadow-lg">
             <canvas class="block h-full w-full" bind:this={canvas}></canvas>

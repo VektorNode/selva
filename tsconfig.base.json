@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    // Strict type checking
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+
+    // Module resolution
+    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "target": "ES2022",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+
+    // Output
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+
+    // Build optimization
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Quality
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+  }
+}

@@ -10,7 +10,7 @@ describe('solveGrasshopperDefinition - Input Format Handling', () => {
         ParamName: 'testParam',
         InnerTree: {},
       },
-      append: () => {},
+      append: () => { },
     },
   ];
 
@@ -80,15 +80,15 @@ describe('solveGrasshopperDefinition - Input Format Handling', () => {
       const dataTree: DataTree[] = [
         {
           data: { ParamName: 'p1', InnerTree: {} },
-          append: () => {},
+          append: () => { },
         },
         {
           data: { ParamName: 'p2', InnerTree: {} },
-          append: () => {},
+          append: () => { },
         },
         {
           data: { ParamName: 'p3', InnerTree: {} },
-          append: () => {},
+          append: () => { },
         },
       ];
 
@@ -195,13 +195,13 @@ describe('solveGrasshopperDefinition - Input Format Handling', () => {
     it('should handle DataTree with complex InnerTree data', () => {
       const definition = 'http://example.com/def.gh';
       const complexInnerTree = {
-        '{0}': [{ type: 'number', data: '123' }],
-        '{1}': [{ type: 'string', data: 'test' }],
+        '{0}': [{ type: 'number', data: '123', paramId: 'id1' }],
+        '{1}': [{ type: 'string', data: 'test', paramId: 'id2' }],
       };
       const dataTree: DataTree[] = [
         {
           data: { ParamName: 'complex', InnerTree: complexInnerTree },
-          append: () => {},
+          append: () => { },
         },
       ];
 

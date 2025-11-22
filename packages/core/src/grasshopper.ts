@@ -58,12 +58,6 @@ export {
 } from './features/grasshopper';
 
 // ============================================================================
-// OUTPUT PROCESSORS (Extract data from compute responses)
-// ============================================================================
-
-export { extractFileData, getParameter, getParameterNames } from './features/grasshopper/io/output';
-
-// ============================================================================
 // TYPE EXPORTS (Public types for this module)
 // ============================================================================
 

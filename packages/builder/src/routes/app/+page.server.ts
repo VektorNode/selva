@@ -13,6 +13,7 @@ export const load = (async () => {
     serverUrl: 'http://localhost:5000/',
   });
 
+
   // Solve with default values to get the schema
   const tree = inputsToDataTrees(definition.inputs);
   const solvedDefinition = await solveGrasshopperDefinition(
@@ -21,8 +22,7 @@ export const load = (async () => {
     { serverUrl: 'http://localhost:5000/' }
   );
 
-  const values = new GrasshopperResponseProcessor(solvedDefinition).getValues();
-  const schema = JSON.parse(values.values.schema) as UISchema;
+  const schema = new GrasshopperResponseProcessor(solvedDefinition).getValueByParamName('Schema', { parseValues: true }) as UISchema;
 
   // Merge default values from Compute definition into schema inputs
   // The Compute definition has paramId, and schema has id (both are the same GUID)
