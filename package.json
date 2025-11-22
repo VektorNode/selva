@@ -24,7 +24,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,svelte,json,yaml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,svelte,json,yaml,md}\"",
     "clean:all": "pnpm clean && pnpm install && pnpm build",
-    "clean": "node -e \"const fs = require('fs'); const path = require('path'); ['pnpm-lock.yaml', 'node_modules'].forEach(f => { const p = path.join(process.cwd(), f); if (fs.existsSync(p)) { fs.rmSync(p, { recursive: true, force: true }); console.log('Deleted ' + f); } }); const packages = fs.readdirSync(path.join(process.cwd(), 'packages')); const examples = fs.readdirSync(path.join(process.cwd(), 'examples')); [...packages, ...examples].forEach(pkg => { const nm = path.join(process.cwd(), 'packages', pkg, 'node_modules'); const sk = path.join(process.cwd(), 'packages', pkg, '.svelte-kit'); const nm2 = path.join(process.cwd(), 'examples', pkg, 'node_modules'); const sk2 = path.join(process.cwd(), 'examples', pkg, '.svelte-kit'); [nm, sk, nm2, sk2].forEach(p => { if (fs.existsSync(p)) { fs.rmSync(p, { recursive: true, force: true }); console.log('Deleted ' + p); } }); }); \""
+    "clean": "node scripts/clean.js"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

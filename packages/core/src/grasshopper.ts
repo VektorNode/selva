@@ -78,8 +78,6 @@ export type {
   TextInputType,
   BooleanInputType,
   GeometryInputType,
-  PointInputType,
-  LineInputType,
   GroupInputs,
   NestedGroupInputs,
   NestedGroupNode,

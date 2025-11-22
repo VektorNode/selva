@@ -1,5 +1,4 @@
 import { ComputeConfig, RhinoModelUnit } from '@/core/types';
-import { Line, Point } from '@/features/geometry/type';
 
 // ============================================================================
 // GRASSHOPPER OUTPUT TYPES
@@ -164,16 +163,6 @@ export interface GeometryInputType extends BaseInputType {
   default: DefaultValue<object | string>;
 }
 
-export interface PointInputType extends BaseInputType {
-  paramType: 'Point';
-  default: DefaultValue<Point>;
-}
-
-export interface LineInputType extends BaseInputType {
-  paramType: 'Line';
-  default: DefaultValue<Line>;
-}
-
 export interface ValueListInputType extends BaseInputType {
   paramType: 'ValueList';
   values: Record<string, string>;
@@ -189,8 +178,6 @@ export type InputParam =
   | TextInputType
   | ValueListInputType
   | GeometryInputType
-  | PointInputType
-  | LineInputType;
 
 /**
  * Raw input parameter schema from API (PascalCase format)

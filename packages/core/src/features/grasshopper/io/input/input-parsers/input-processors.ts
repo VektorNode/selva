@@ -11,9 +11,7 @@ import type {
   BooleanInputType,
   GeometryInputType,
   InputParam,
-  LineInputType,
   NumericInputType,
-  PointInputType,
   InputParamSchema,
   TextInputType,
   ValueListInputType,
@@ -235,22 +233,7 @@ export function processInput(rawInput: InputParamSchema): InputParam {
           default: rawInput.default as object | string | undefined,
         } as GeometryInputType;
       }
-      case 'Point': {
-        parseToObject(rawInput);
-        return {
-          ...baseInput,
-          paramType: rawInput.paramType as 'Point',
-          default: rawInput.default as object | string | undefined,
-        } as PointInputType;
-      }
-      case 'Line': {
-        parseToObject(rawInput);
-        return {
-          ...baseInput,
-          paramType: rawInput.paramType as 'Line',
-          default: rawInput.default as object | string | undefined,
-        } as LineInputType;
-      }
+
 
       default:
         throw new RhinoComputeError(`Unknown paramType: ${rawInput.paramType}`);

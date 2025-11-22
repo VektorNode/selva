@@ -6,7 +6,6 @@ const entries = {
   visualization: 'src/features/visualization/index.ts',
   files: 'src/features/file-handling/index.ts',
   core: 'src/core/index.ts',
-  geometry: 'src/features/geometry/index.ts',
 };
 
 export default defineConfig({
