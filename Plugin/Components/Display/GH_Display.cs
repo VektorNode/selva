@@ -19,6 +19,10 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplay.DisplayResults>
 {
   private const string DefaultMeshPrefix = "";
 
+  //TODO: At the moment each mesh is processed and compressed individually. As well as wehen same meterial is used multiple times.
+  //On the web part each mesh is decompressed individually as well.
+  //Consider batching meshes together with metadata to reduce overhead and make better use of compression.
+
   public WebDisplay()
       : base("Display", "D", "Converts geometry to display file", "ComputeBuilder", "Display")
   {
