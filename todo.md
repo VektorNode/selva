@@ -1,0 +1,1 @@
+- [ ] Remove "items": {"type": "array", "items": { "$ref": "#/definitions/LayoutItem" }} from LayoutConfig

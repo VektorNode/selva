@@ -27,7 +27,11 @@
     if (val === null || val === undefined) return '';
 
     if (typeof val === 'object') {
-      return JSON.stringify(val, null, 2);
+      try {
+        return JSON.stringify(val, null, 2);
+      } catch {
+        return String(val);
+      }
     }
 
     return String(val);
@@ -47,21 +51,24 @@
 </script>
 
 <div class="flex flex-col gap-2">
-  <h3 class="flex items-center gap-2 text-sm font-medium text-foreground">
-    {displayName || item.displayName || item.paramId}
-  </h3>
-
   {#if isTextDisplay(item)}
     <div class="relative">
-      <div
-        class="overflow-wrap-anywhere min-h-[50px] rounded border border-border bg-muted px-3 py-3 font-mono text-sm wrap-break-word whitespace-pre-wrap text-foreground"
-      >
-        {#if value !== null && value !== undefined}
-          {value}
-        {:else}
-          <span class="text-muted-foreground not-italic">Waiting for data...</span>
-        {/if}
-      </div>
+      {#if typeof value === 'object' && value !== null}
+        <pre
+          class="overflow-wrap-anywhere min-h-[50px] rounded border border-border bg-muted px-3 py-3 font-mono text-sm text-foreground overflow-auto max-h-96">{formatValue(
+            value
+          )}</pre>
+      {:else}
+        <div
+          class="overflow-wrap-anywhere min-h-[50px] rounded border border-border bg-muted px-3 py-3 font-mono text-sm wrap-break-word whitespace-pre-wrap text-foreground"
+        >
+          {#if value !== null && value !== undefined}
+            {value}
+          {:else}
+            <span class="text-muted-foreground not-italic">Waiting for data...</span>
+          {/if}
+        </div>
+      {/if}
       {#if value !== null && value !== undefined}
         <Button
           onclick={() => copyToClipboard(formatValue(value))}

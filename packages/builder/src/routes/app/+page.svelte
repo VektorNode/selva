@@ -112,7 +112,7 @@
 
       const outputs: Record<string, unknown> = {};
       for (const o of schema.outputs) {
-        outputs[o.id] = processor.getValueByParamId(o.id, { parseValues: false });
+        outputs[o.id] = processor.getValueByParamId(o.id, { parseValues: true });
       }
 
       values = { ...values, ...outputs };
