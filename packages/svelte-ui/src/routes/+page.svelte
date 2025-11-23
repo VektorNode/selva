@@ -1,11 +1,7 @@
 <script lang="ts">
   import InputHandler from '$lib/InputHandler.svelte';
-  import { example2 } from '$lib/utils/data.js';
+  import { exampleInputs } from '$lib/utils/data.js';
   import type { DataTree } from '@computebuilder/core';
-
-  console.log('Example Inputs:', example2);
-
-  // const trees = inputsToDataTrees(exampleInputTypes);
 </script>
 
 <main>
@@ -13,9 +9,9 @@
   <p>This is a test page for the InputHandler component with dummy data.</p>
 
   <InputHandler
-    input={example2}
+    input={exampleInputs}
     onChange={(tree: DataTree[]) => {
-      console.log(tree);
+      console.log('Input tree changed:', tree);
     }}
     autoUpdate={true}
   ></InputHandler>

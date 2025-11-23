@@ -20,13 +20,8 @@
     animationDuration = 300,
   }: Props = $props();
 
-  // State - make isOpen reactive to defaultOpen prop changes
+  // State - simple reactive state bound to defaultOpen
   let isOpen = $state(defaultOpen);
-
-  // Update isOpen when defaultOpen prop changes
-  $effect(() => {
-    isOpen = defaultOpen;
-  });
 
   // Calculate indentation based on level
   const indentPadding = $derived(`${0.75 + level * 1.5}rem`);

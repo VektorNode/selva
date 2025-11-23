@@ -1,81 +1,129 @@
-import type { InputParam } from 'rhino-compute-core';
+import type { InputParam } from '@computebuilder/core'
 
-// export const exampleInputs: InputParam[] = [
-//   {
-//     name: 'Width',
-//     paramType: 'Number',
-//     description: 'Width of the element',
-//     default: 10,
-//     minimum: 0,
-//     maximum: 100,
-//     groupName: 'Dimensions'
-//   },
-//   {
-//     name: 'Height',
-//     paramType: 'Number',
-//     description: 'Height of the element',
-//     default: 20,
-//     minimum: 0,
-//     maximum: 100,
-//     groupName: 'Dimensions'
-//   },
-//   {
-//     name: 'Name',
-//     paramType: 'Text',
-//     description: 'Element name',
-//     default: 'MyElement',
-//     groupName: 'Properties'
-//   },
-//   {
-//     name: 'Visible',
-//     paramType: 'Boolean',
-//     description: 'Show or hide element',
-//     default: true,
-//     groupName: 'Properties'
-//   }
-// ];
-
-export const example2: InputParam[] = [
+export const exampleInputs: InputParam[] = [
   {
-    description: '',
-    name: 'data_url',
-    nickname: null,
+    name: 'Width',
+    paramType: 'Number',
+    description: 'Overall width in millimeters',
+    default: 1200,
+    minimum: 0,
+    maximum: 5000,
+    groupName: 'Geometry::Dimensions',
+    paramId: 'geom-width',
     treeAccess: false,
-    groupName: 'hidden',
-    paramType: 'Text',
-    default: 'sdkfjsf',
+    nickname: 'w'
   },
   {
-    description:
-      '1: Custom, 2: Normalstahl (St37-2), 3: Hardox, 4: Edelstahl, 5: Edelstahl (1.4541), 6: Edelstahl (1.4571) Aluminium (AlMg³)',
+    name: 'Height',
+    paramType: 'Number',
+    description: 'Overall height in millimeters',
+    default: 800,
+    minimum: 0,
+    maximum: 4000,
+    groupName: 'Geometry::Dimensions',
+    paramId: 'geom-height',
+    treeAccess: false,
+    nickname: 'h'
+  },
+  {
+    name: 'Depth',
+    paramType: 'Number',
+    description: 'Overall depth in millimeters',
+    default: 300,
+    minimum: 0,
+    maximum: 2000,
+    groupName: 'Geometry::Dimensions',
+    paramId: 'geom-depth',
+    treeAccess: false,
+    nickname: 'd'
+  },
+  {
     name: 'Material',
-    nickname: null,
+    paramType: 'ValueList',
+    description: 'Primary material',
+    default: 'steel',
+    groupName: 'Geometry::Specification',
+    paramId: 'geom-material',
     treeAccess: false,
-    groupName: '',
-    paramType: 'Integer',
-    minimum: 1,
-    maximum: 6,
-    atLeast: 1,
-    atMost: 1,
-    stepSize: 1,
-    default: 1,
+    nickname: 'mat',
+    values: {
+      steel: 'Steel',
+      aluminum: 'Aluminum',
+      plywood: 'Plywood',
+      composite: 'Composite Panel'
+    }
   },
   {
-    description: '',
-    name: 'Run OpenNest',
-    nickname: null,
+    name: 'Finish',
+    paramType: 'ValueList',
+    description: 'Surface finish type',
+    default: 'matte-black',
+    groupName: 'Geometry::Specification',
+    paramId: 'geom-finish',
     treeAccess: false,
-    groupName: '',
+    nickname: 'finish',
+    values: {
+      'matte-black': 'Matte Black',
+      'brushed-steel': 'Brushed Steel',
+      'clear-coat': 'Clear Coat',
+      'powder-white': 'Powder-Coated White'
+    }
+  },
+  {
+    name: 'Label',
+    paramType: 'Text',
+    description: 'Display label for UI and reports',
+    default: 'Component A',
+    groupName: 'Metadata::General',
+    paramId: 'meta-label',
+    treeAccess: false,
+    nickname: 'lbl'
+  },
+  {
+    name: 'Tag',
+    paramType: 'Text',
+    description: 'Short identifier for integration',
+    default: 'CMP-A',
+    groupName: 'Metadata::General',
+    paramId: 'meta-tag',
+    treeAccess: false,
+    nickname: 'tag'
+  },
+  {
+    name: 'IsActive',
     paramType: 'Boolean',
+    description: 'Controls whether the component is processed',
     default: true,
+    groupName: 'Metadata::Flags',
+    paramId: 'meta-active',
+    treeAccess: false,
+    nickname: 'active'
   },
   {
-    description: '',
-    name: 'Download Data',
-    nickname: null,
+    name: 'Tolerance',
+    paramType: 'Number',
+    description: 'Manufacturing tolerance in millimeters',
+    default: 1,
+    minimum: 0,
+    maximum: 10,
+    groupName: 'Manufacturing::Precision',
+    paramId: 'mfg-tolerance',
     treeAccess: false,
-    groupName: '',
-    paramType: 'Boolean',
-    default: false,
+    nickname: 'tol'
   },
-];
+  {
+    name: 'ProductionMode',
+    paramType: 'ValueList',
+    description: 'Manufacturing workflow mode',
+    default: 'prototype',
+    groupName: 'Manufacturing::Workflow',
+    paramId: 'mfg-mode',
+    treeAccess: false,
+    nickname: 'mode',
+    values: {
+      prototype: 'Prototype',
+      batch: 'Batch Production',
+      automated: 'Automated Line'
+    }
+  }
+] as const
