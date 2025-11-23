@@ -1,1 +1,3 @@
 - [ ] Remove "items": {"type": "array", "items": { "$ref": "#/definitions/LayoutItem" }} from LayoutConfig
+- [ ] Unify InputSchema throuth the project
+- [ ] Add dependency inputs (Only show if option is activaded)

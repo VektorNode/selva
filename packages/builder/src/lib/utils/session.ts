@@ -3,6 +3,7 @@ import { page } from '$app/state';
 import { getWebSocketState, type WebSocketState } from '$lib/websocket/websocket.svelte';
 import type { UISchema, AvailableParameters } from '$lib/types/generated';
 import { resolve } from '$app/paths';
+import { CURRENT_SCHEMA_VERSION } from '$lib/app.config';
 
 /**
  * Session initialization result
@@ -109,7 +110,7 @@ export function createDefaultSchema(): UISchema {
     id: crypto.randomUUID(),
     name: 'New Schema',
     description: 'Configure your Grasshopper UI',
-    version: '1.0.0',
+    version: CURRENT_SCHEMA_VERSION,
     created: new Date().toISOString(),
     inputs: [],
     outputs: [],

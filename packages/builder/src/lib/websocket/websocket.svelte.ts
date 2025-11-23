@@ -3,6 +3,7 @@
  * Uses Svelte 5 runes for reactive state management
  */
 
+import { WEBSOCKET_MAX_RECONNECT_ATTEMPTS, WEBSOCKET_RECONNECT_INTERVAL, WEBSOCKET_URL } from '$lib/app.config';
 import type { UISchema } from '$lib/types/generated';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
@@ -16,8 +17,8 @@ export class WebSocketState {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private messageHandlers: Map<string, Set<MessageHandler>> = new SvelteMap();
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 1000;
+  private maxReconnectAttempts = WEBSOCKET_MAX_RECONNECT_ATTEMPTS;
+  private reconnectDelay = WEBSOCKET_RECONNECT_INTERVAL;
   private isConnecting = false;
   private _pendingValueUpdate: { sessionId: string; values: Record<string, unknown> } | null = null;
 
@@ -25,7 +26,7 @@ export class WebSocketState {
   connected = $state(false);
   isSolving = $state(false);
 
-  constructor(private url: string = 'ws://localhost:8765') {
+  constructor(private url: string = WEBSOCKET_URL) {
     this.on('solvingState', (data) => {
       if (data && typeof data === 'object' && 'isSolving' in data) {
         this.isSolving = Boolean(data.isSolving);

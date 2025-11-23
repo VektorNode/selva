@@ -1,6 +1,6 @@
+import { CURRENT_SCHEMA_VERSION } from '$lib/app.config';
 import type { UISchema } from '$lib/types/generated/schema';
 
-export const CURRENT_SCHEMA_VERSION = '1.0.0';
 
 export interface ValidationResult {
   compatible: boolean;
