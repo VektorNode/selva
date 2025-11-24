@@ -5,6 +5,7 @@
   import { StateDisplay, Button } from '$lib/components/ui';
   import { onMount } from 'svelte';
   import { getDefaultValue } from '$lib/utils/session';
+  import { PUBLIC_COMPUTE_SERVER_URL, PUBLIC_GH_DEFINITION } from '$env/static/public';
 
   let { data }: PageProps = $props();
   let schema = $state(data.schema);
@@ -71,7 +72,6 @@
     scene = s;
     camera = c;
     controls = ctl;
-    viewerInitialized = true;
   }
 
   // -----------------------------
@@ -87,8 +87,8 @@
       const payload = {
         inputs: schema.inputs,
         values: $state.snapshot(values),
-        definitionUrl: 'http://localhost:5173/builder_test.gh',
-        serverUrl: 'http://localhost:5000/',
+        definitionUrl: PUBLIC_GH_DEFINITION,
+        serverUrl: PUBLIC_COMPUTE_SERVER_URL,
       };
 
       const res = await fetch('/api/compute', {
@@ -103,17 +103,21 @@
       }
 
       const solved = await res.json();
+
       const processor = new rhinoCompute!.GrasshopperResponseProcessor(solved);
 
       if (schema.enable3dViewer && scene) {
         const meshes = await processor.extractMeshesFromResponse();
         rhinoCompute!.updateScene(scene, meshes, camera, controls, viewerInitialized);
+        viewerInitialized = true;
       }
 
       const outputs: Record<string, unknown> = {};
       for (const o of schema.outputs) {
         outputs[o.id] = processor.getValueByParamId(o.id, { parseValues: true });
       }
+
+      console.log('Outputs:', outputs);
 
       values = { ...values, ...outputs };
       pendingValues = {};

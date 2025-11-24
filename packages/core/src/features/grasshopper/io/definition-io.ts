@@ -6,7 +6,7 @@ import {
   InputParam,
   GrasshopperParsedIO,
   GrasshopperParsedIORaw,
-  CamelCasedIoResponseSchema,
+  IoResponseSchema,
 } from '../types';
 
 import { processInputs } from './input/input-parsers/input-processors';
@@ -42,7 +42,7 @@ export async function fetchDefinitionIO(
   }
 
   // Convert PascalCase to camelCase
-  const camelCased = camelcaseKeys(response, { deep: true }) as CamelCasedIoResponseSchema;
+  const camelCased = camelcaseKeys(response, { deep: true }) as IoResponseSchema;
 
   return {
     inputs: camelCased.inputs,

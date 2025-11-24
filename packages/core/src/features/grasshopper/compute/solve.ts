@@ -43,15 +43,11 @@ export async function solveGrasshopperDefinition(
     warnIfClientSide('solveGrasshopperDefinition', config.suppressClientSideWarning);
   }
 
-  // Prepare args FIRST
   const args = prepareGrasshopperArgs(definition, dataTree);
-
-  // Apply optional settings to args
   applyOptionalComputeSettings(args, config);
 
   const result = await fetchRhinoCompute('grasshopper', args, config);
 
-  // Remove pointer reference
   if ('pointer' in result) {
     delete (result as any).pointer;
   }

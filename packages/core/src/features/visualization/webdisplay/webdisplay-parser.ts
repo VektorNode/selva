@@ -3,8 +3,7 @@ import * as THREE from 'three';
 import { applyOffset, computeCombinedBoundingBox, ThreeDisplay } from '../threejs';
 import {
   parseColor,
-  ROTATION_COS,
-  ROTATION_SIN,
+
   VerticesToThreeMesh,
 } from '../threejs/three-helpers';
 
@@ -21,6 +20,12 @@ const SCALE_FACTORS: Record<string, number> = {
   Feet: 1 / 3.28084,
 };
 
+// Pre-compute rotation constants
+const ROTATION_COS = Math.cos(-Math.PI / 2); // 0
+const ROTATION_SIN = Math.sin(-Math.PI / 2); // -1
+/**
+ * The component type string used to identify display meshes from Grasshopper WebDisplay.
+ */
 const DISPLAY_COMPONENT_TYPE = 'ComputeBuilder.Display.ThreeDisplay';
 
 /**

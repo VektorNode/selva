@@ -3,8 +3,6 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 /**
  * Rhino display data containing the mesh data and material information.
- * //TODO: Change url to use the Compucerapor Plugin
- * See @https://github.com/TheVessen/VektorNodeGhLib/blob/04bca7388d86c1afce8cd4be7cc2d7f73bf74230/Headless/Lib/Utilities/DisplayConverter.cs#L22
  */
 export type ThreeDisplay = {
   id?: number;
@@ -15,10 +13,6 @@ export type ThreeDisplay = {
   meshData: string;
   name: string;
 };
-
-// Pre-compute rotation constants
-export const ROTATION_COS = Math.cos(-Math.PI / 2); // 0
-export const ROTATION_SIN = Math.sin(-Math.PI / 2); // -1
 
 /**
  * Updates the scene with the given meshes and camera settings.
@@ -44,35 +38,26 @@ export function updateScene(
 
   meshes.forEach((mesh) => {
     scene.add(mesh);
-    // Create a bounding box for the object
     const boundingBox = new THREE.Box3().setFromObject(mesh);
-    // Expand the union bounding box to include the current mesh's bounding box
     unionBoundingBox.union(boundingBox);
   });
 
   if (!initialPositionSet) {
     // Get the center of the union bounding box
     const center = unionBoundingBox.getCenter(new THREE.Vector3());
-
-    // Get the size of the union bounding box
     const size = unionBoundingBox.getSize(new THREE.Vector3());
 
     // Calculate a distance that is slightly larger than the largest dimension of the union bounding box
     const distance = Math.max(size.x, size.y, size.z) * 4;
 
-    // If the object is really big, extend the camera's far clipping plane
     if (distance > camera.far) {
       camera.far = distance * 4;
       camera.updateProjectionMatrix();
     }
 
-    // Position the camera a certain distance away from the center of the union bounding box
     camera.position.set(center.x + distance * 0.8, center.y + distance, center.z + distance * 1.2);
-
-    // Set the controls target to the center of the union bounding box
     controls.target = center;
 
-    // Update the controls
     controls.update();
   }
 }
@@ -153,13 +138,10 @@ function clearScene(scene: THREE.Scene): void {
   // Remove and dispose of each object
   objectsToRemove.forEach((object: THREE.Object3D) => {
     if (object instanceof THREE.Mesh) {
-      // Dispose of geometry
       object.geometry?.dispose();
 
-      // Dispose materials and their textures
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       materials.forEach((material) => {
-        // Dispose textures if they exist
         Object.values(material).forEach((value) => {
           if (value instanceof THREE.Texture) {
             value.dispose();
@@ -169,7 +151,6 @@ function clearScene(scene: THREE.Scene): void {
       });
     }
 
-    // Remove from parent (cleaner than checking parent existence)
     object.removeFromParent();
   });
 }

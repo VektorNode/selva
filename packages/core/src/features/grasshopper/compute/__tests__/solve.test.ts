@@ -195,8 +195,8 @@ describe('solveGrasshopperDefinition - Input Format Handling', () => {
     it('should handle DataTree with complex InnerTree data', () => {
       const definition = 'http://example.com/def.gh';
       const complexInnerTree = {
-        '{0}': [{ type: 'number', data: '123', paramId: 'id1' }],
-        '{1}': [{ type: 'string', data: 'test', paramId: 'id2' }],
+        '{0}': [{ type: 'number', data: '123', id: 'id1' }],
+        '{1}': [{ type: 'string', data: 'test', id: 'id2' }],
       };
       const dataTree: DataTree[] = [
         {

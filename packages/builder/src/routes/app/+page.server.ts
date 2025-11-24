@@ -16,6 +16,7 @@ export const load = (async () => {
 
   // Solve with default values to get the schema
   const tree = inputsToDataTrees(definition.inputs);
+  //TODO: For the ui uilder make it inherit from the ContextComponent and then we can use the default value
   const solvedDefinition = await solveGrasshopperDefinition(
     tree,
     'http://localhost:5173/builder_test.gh',
@@ -26,7 +27,7 @@ export const load = (async () => {
 
   // Merge default values from Compute definition into schema inputs
   // The Compute definition has paramId, and schema has id (both are the same GUID)
-  const computeInputsByParamId = new Map(definition.inputs.map((input) => [input.paramId, input]));
+  const computeInputsByParamId = new Map(definition.inputs.map((input) => [input.id, input]));
 
   schema.inputs = schema.inputs.map((schemaInput) => {
     const computeInput = computeInputsByParamId.get(schemaInput.id);

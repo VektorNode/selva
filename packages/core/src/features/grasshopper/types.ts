@@ -24,18 +24,6 @@ export type OutputType =
   | 'Rhino.Geometry.Box'
   | string;
 
-/**
- * Raw output parameter schema from API (PascalCase format)
- *
- * Represents an output parameter as it comes from the Rhino Compute API.
- * Property names are in PascalCase.
- */
-export interface RawOutputParamSchema {
-  Name: string;
-  Nickname: string | null;
-  ParamType: string;
-  Id: string;
-}
 
 /**
  * Output parameter schema after conversion to camelCase
@@ -47,7 +35,7 @@ export interface OutputParamSchema {
   name: string;
   nickname: string | null;
   paramType: string;
-  Id: string;
+  id: string;
 }
 
 // ============================================================================
@@ -180,27 +168,7 @@ export type InputParam =
   | ValueListInputType
   | GeometryInputType
 
-/**
- * Raw input parameter schema from API (PascalCase format)
- *
- * This represents the raw input parameter as it comes from the Rhino Compute API.
- * All property names are in PascalCase, which is typical for .NET API responses.
- * This is converted to camelCase by the camelcaseKeys() function.
- */
-export interface RawInputParamSchema {
-  Description: string;
-  Name: string;
-  Nickname: string | null;
-  TreeAccess: boolean;
-  GroupName: string | null;
-  ParamType: string;
-  Minimum: number | null;
-  Maximum: number | null;
-  AtLeast: number;
-  AtMost: number;
-  StepSize?: number;
-  Default: any;
-}
+
 
 /**
  * Input parameter schema after conversion to camelCase
@@ -274,53 +242,17 @@ export interface NestedGroupInputs {
  * in the fetchDefinitionIO() method.
  */
 export interface IoResponseSchema {
-  Description: string;
-  FileName: string;
-  CacheKey: string;
-  InputNames: string[];
-  OutputNames: string[];
-  Icon: string | null;
-  Inputs: RawInputParamSchema[];
-  Outputs: RawOutputParamSchema[];
-  Warnings: any[];
-  Errors: any[];
-}
-
-/**
- * Converted API response schema (camelCase format)
- *
- * This is the shape of the I/O response AFTER runtime conversion via the
- * camelcaseKeys() function in the fetchDefinitionIO() method.
- *
- * All property names are converted from PascalCase to camelCase to follow
- * JavaScript conventions and maintain consistency with the rest of the codebase.
- *
- * Example transformation:
- * - Description -> description
- * - FileName -> fileName
- * - CacheKey -> cacheKey
- * - InputNames -> inputNames
- * - OutputNames -> outputNames
- * - Inputs -> inputs
- * - Outputs -> outputs
- * - Warnings -> warnings
- * - Errors -> errors
- *
- * @see {@link IoResponseSchema} for the raw API response format
- * @internal Do not use directly. This type is used internally for type annotations during conversion.
- */
-export type CamelCasedIoResponseSchema = {
   description: string;
-  fileName: string;
-  cacheKey: string;
-  inputNames: string[];
-  outputNames: string[];
+  filename: string;
+  cachekey: string;
+  inputnames: string[];
+  outputnames: string[];
   icon: string | null;
   inputs: InputParamSchema[];
   outputs: OutputParamSchema[];
   warnings: any[];
   errors: any[];
-};
+}
 
 // ============================================================================
 // PARSED DATA STRUCTURES

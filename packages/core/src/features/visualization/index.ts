@@ -14,12 +14,6 @@ export {
   initThree,
   updateScene,
   Materials,
-  VerticesToThreeMesh,
-  parseColor,
-  applyOffset,
-  computeCombinedBoundingBox,
-  ROTATION_COS,
-  ROTATION_SIN,
 } from './threejs';
 
 export type { ThreeDisplay } from './threejs/three-helpers';
@@ -29,7 +23,6 @@ export type { ThreeDisplay } from './threejs/three-helpers';
 // ============================================================================
 
 export { getThreeMeshesFromComputeResponse } from './webdisplay';
-
 export { decompressMeshData } from './webdisplay/mesh-compression';
 
 // ============================================================================
