@@ -236,14 +236,14 @@ public class SchemaManager
       schema.Layout.Tabs.RemoveAll(t => t.Groups.Count == 0);
     }
 
-    if (schema.Layout.Items != null)
-    {
-      schema.Layout.Items.RemoveAll(item =>
-      {
-        var paramObject = document.FindObject(item.ParamId, false);
-        return paramObject == null;
-      });
-    }
+    // if (schema.Layout.Items != null)
+    // {
+    //   schema.Layout.Items.RemoveAll(item =>
+    //   {
+    //     var paramObject = document.FindObject(item.ParamId, false);
+    //     return paramObject == null;
+    //   });
+    // }
 
     return (schema, removedIds ?? new List<Guid>());
   }

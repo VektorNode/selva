@@ -17,7 +17,7 @@ import { GrasshopperComputeConfig, GrasshopperComputeResponse, InnerTree } from 
  *
  * @example
  * ```typescript
- * const client = new GrasshopperClient({
+ * const client = await GrasshopperClient.create({
  *   serverUrl: 'http://localhost:6500',
  *   apiKey: 'your-api-key'
  * });
@@ -34,9 +34,30 @@ export default class GrasshopperClient {
   public readonly serverStats: ComputeServerStats;
   private disposed = false;
 
-  constructor(config: GrasshopperComputeConfig) {
+  private constructor(config: GrasshopperComputeConfig) {
     this.config = this.normalizeComputeConfig(config);
     this.serverStats = new ComputeServerStats(this.config.serverUrl, this.config.apiKey);
+  }
+
+  /**
+ * Creates and initializes a GrasshopperClient with server validation.
+ *
+ * @throws {RhinoComputeError} with code NETWORK_ERROR if server is offline
+ * @throws {RhinoComputeError} with code INVALID_CONFIG if configuration is invalid
+ */
+  static async create(config: GrasshopperComputeConfig): Promise<GrasshopperClient> {
+    const client = new GrasshopperClient(config);
+
+    // Check server is online before returning
+    if (!(await client.serverStats.isServerOnline())) {
+      throw new RhinoComputeError(
+        'Rhino Compute server is not online',
+        ErrorCodes.NETWORK_ERROR,
+        { context: { serverUrl: client.config.serverUrl } }
+      );
+    }
+
+    return client;
   }
 
   /**

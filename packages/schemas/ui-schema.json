@@ -256,10 +256,6 @@
         "tabs": {
           "type": "array",
           "items": { "$ref": "#/definitions/TabConfig" }
-        },
-        "items": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/LayoutItem" }
         }
       },
       "required": ["type", "gap"]

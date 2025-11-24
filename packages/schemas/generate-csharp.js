@@ -1,68 +1,67 @@
-#!/usr/bin/env node
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const fs = require("fs");
-const path = require("path");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const schemaPath = path.join(__dirname, "ui-schema.json");
-const outputPath = path.join(
-  __dirname,
-  "../../Plugin/Models/Generated/UISchema.Generated.cs"
-);
+const schemaPath = path.join(__dirname, 'ui-schema.json');
+const outputPath = path.join(__dirname, '../../Plugin/Models/Generated/UISchema.Generated.cs');
 
-const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
+const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 const definitions = schema.definitions;
 
 // Type mappings from JSON Schema to C#
 function jsonTypeToCSharp(prop, propName, required) {
-  if (!prop) return "object";
+  if (!prop) return 'object';
 
   if (prop.$ref) {
-    const refName = prop.$ref.replace("#/definitions/", "");
+    const refName = prop.$ref.replace('#/definitions/', '');
     // GrasshopperParamType is defined as a string enum in the schema
     // but we use 'string' in C# for compatibility
-    if (refName === "GrasshopperParamType") {
-      return "string";
+    if (refName === 'GrasshopperParamType') {
+      return 'string';
     }
     // LayoutItem is a discriminated union - use the base class
-    if (refName === "LayoutItem") {
-      return "LayoutItemBase";
+    if (refName === 'LayoutItem') {
+      return 'LayoutItemBase';
     }
     return refName;
   }
 
   if (prop.const) {
-    return "string";
+    return 'string';
   }
 
   if (prop.enum) {
     // Use string for all enums for compatibility
-    return "string";
+    return 'string';
   }
 
   switch (prop.type) {
-    case "string":
-      if (prop.format === "date-time") return "DateTime";
+    case 'string':
+      if (prop.format === 'date-time') return 'DateTime';
       // Check for GUID descriptions (Grasshopper uses GUIDs extensively)
-      if (prop.description && prop.description.toLowerCase().includes("guid")) {
-        return "Guid";
+      if (prop.description && prop.description.toLowerCase().includes('guid')) {
+        return 'Guid';
       }
-      return "string";
-    case "number":
-      return required ? "double" : "double?";
-    case "integer":
-      return required ? "int" : "int?";
-    case "boolean":
-      return required ? "bool" : "bool?";
-    case "array":
+      return 'string';
+    case 'number':
+      return required ? 'double' : 'double?';
+    case 'integer':
+      return required ? 'int' : 'int?';
+    case 'boolean':
+      return required ? 'bool' : 'bool?';
+    case 'array':
       const itemType = jsonTypeToCSharp(prop.items, propName, true);
       return `List<${itemType}>`;
-    case "object":
+    case 'object':
       if (prop.additionalProperties) {
-        return "Dictionary<string, object>";
+        return 'Dictionary<string, object>';
       }
-      return "object";
+      return 'object';
     default:
-      return "object";
+      return 'object';
   }
 }
 
@@ -70,40 +69,36 @@ function pascalCase(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function camelCase(str) {
-  return str.charAt(0).toLowerCase() + str.slice(1);
-}
-
 function generateProperty(name, prop, required) {
   const csharpType = jsonTypeToCSharp(prop, name, required);
   const pascalName = pascalCase(name);
   const nullHandling =
     !required &&
-    csharpType !== "string" &&
-    !csharpType.endsWith("?") &&
-    !csharpType.startsWith("List") &&
-    !csharpType.startsWith("Dictionary")
-      ? ", NullValueHandling = NullValueHandling.Ignore"
-      : "";
+    csharpType !== 'string' &&
+    !csharpType.endsWith('?') &&
+    !csharpType.startsWith('List') &&
+    !csharpType.startsWith('Dictionary')
+      ? ', NullValueHandling = NullValueHandling.Ignore'
+      : '';
 
-  let defaultValue = "";
+  let defaultValue = '';
   if (prop.default !== undefined) {
-    if (typeof prop.default === "string") {
+    if (typeof prop.default === 'string') {
       defaultValue = ` = "${prop.default}";`;
-    } else if (typeof prop.default === "boolean") {
+    } else if (typeof prop.default === 'boolean') {
       defaultValue = ` = ${prop.default};`;
-    } else if (typeof prop.default === "number") {
+    } else if (typeof prop.default === 'number') {
       defaultValue = ` = ${prop.default};`;
     }
-  } else if (csharpType.startsWith("List<")) {
+  } else if (csharpType.startsWith('List<')) {
     defaultValue = ` = new ${csharpType}();`;
-  } else if (csharpType === "DateTime") {
-    defaultValue = " = DateTime.UtcNow;";
+  } else if (csharpType === 'DateTime') {
+    defaultValue = ' = DateTime.UtcNow;';
   }
 
   const description = prop.description
-    ? `\n        /// <summary>\n        /// ${prop.description}\n        /// </summary>`
-    : "";
+    ? `\n/// <summary>\n/// ${prop.description}\n/// </summary>`
+    : '';
 
   return `${description}
         [JsonProperty("${name}"${nullHandling})]
@@ -112,18 +107,16 @@ function generateProperty(name, prop, required) {
 
 function generateClass(name, def) {
   // Skip if not an object type
-  if (def.type !== 'object' && !def.properties) return "";
+  if (def.type !== 'object' && !def.properties) return '';
 
   const required = def.required || [];
   const props = def.properties
     ? Object.entries(def.properties)
-        .map(([propName, prop]) =>
-          generateProperty(propName, prop, required.includes(propName))
-        )
-        .join("\n")
-    : "";
+        .map(([propName, prop]) => generateProperty(propName, prop, required.includes(propName)))
+        .join('\n')
+    : '';
 
-  const propsSection = props ? `\n${props}\n` : "\n";
+  const propsSection = props ? `\n${props}\n` : '\n';
 
   return `    public class ${name}
     {${propsSection}    }`;
@@ -144,7 +137,7 @@ function detectDiscriminatedUnions() {
     if (def.oneOf && Array.isArray(def.oneOf)) {
       const variants = def.oneOf
         .filter((item) => item.$ref)
-        .map((item) => item.$ref.replace("#/definitions/", ""));
+        .map((item) => item.$ref.replace('#/definitions/', ''));
 
       if (variants.length > 0) {
         // Detect discriminator fields by finding const properties in variants
@@ -152,9 +145,7 @@ function detectDiscriminatedUnions() {
         const discriminators = [];
 
         if (firstVariant?.properties) {
-          for (const [propName, propDef] of Object.entries(
-            firstVariant.properties
-          )) {
+          for (const [propName, propDef] of Object.entries(firstVariant.properties)) {
             if (propDef.const) {
               discriminators.push(propName);
             }
@@ -164,9 +155,7 @@ function detectDiscriminatedUnions() {
         // Find common properties across all variants (for base class)
         const commonProps = new Set();
         if (variants.length > 0) {
-          const firstProps = Object.keys(
-            definitions[variants[0]]?.properties || {}
-          );
+          const firstProps = Object.keys(definitions[variants[0]]?.properties || {});
           firstProps.forEach((prop) => {
             const isCommon = variants.every(
               (v) => definitions[v]?.properties?.[prop] !== undefined
@@ -194,12 +183,12 @@ const discriminatedUnions = detectDiscriminatedUnions();
 
 // Generate enum from string enum definition
 function generateEnum(name, def) {
-  if (!def.enum) return "";
+  if (!def.enum) return '';
 
-  const values = def.enum.map((val) => `        ${val}`).join(",\n");
+  const values = def.enum.map((val) => `${val}`).join(',\n');
   const description = def.description
-    ? `\n    /// <summary>\n    /// ${def.description}\n    /// </summary>`
-    : "";
+    ? `\n/// <summary>\n/// ${def.description}\n/// </summary>`
+    : '';
 
   return `${description}
     public enum ${name}
@@ -226,12 +215,12 @@ namespace ComputeBuilder.Plugin.Models.Generated
 `;
 
 // Generate type aliases section
-output += `    // ============================================================================
+output += `// ============================================================================
     // TYPE ALIASES
     // ============================================================================
 
     // GrasshopperParamType is a string for compatibility
-    // Valid values: ${definitions.GrasshopperParamType?.enum?.map((v) => `"${v}"`).join(", ") || "N/A"}
+    // Valid values: ${definitions.GrasshopperParamType?.enum?.map((v) => `"${v}"`).join(', ') || 'N/A'}
 
 `;
 
@@ -259,11 +248,11 @@ function classifySections() {
 
   const sections = {
     UISchema: [],
-    "PARAMETER SCHEMAS": [],
-    "WIDGET CONFIGURATIONS": [],
-    "LAYOUT CONFIGURATION": [],
-    "RUNTIME DATA": [],
-    "AVAILABLE PARAMETERS": [],
+    'PARAMETER SCHEMAS': [],
+    'WIDGET CONFIGURATIONS': [],
+    'LAYOUT CONFIGURATION': [],
+    'RUNTIME DATA': [],
+    'AVAILABLE PARAMETERS': [],
   };
 
   for (const [name, def] of Object.entries(definitions)) {
@@ -272,38 +261,30 @@ function classifySections() {
       unionNames.includes(name) ||
       allUnionVariants.has(name) ||
       def.enum ||
-      name === "GrasshopperParamType"
+      name === 'GrasshopperParamType'
     ) {
       continue;
     }
 
     // Classify by naming patterns
-    if (name === "UISchema") {
-      sections["UISchema"].push(name);
+    if (name === 'UISchema') {
+      sections['UISchema'].push(name);
     } else if (
-      name.includes("ParamSchema") ||
-      (name.includes("Param") && name.includes("Schema"))
+      name.includes('ParamSchema') ||
+      (name.includes('Param') && name.includes('Schema'))
     ) {
-      sections["PARAMETER SCHEMAS"].push(name);
-    } else if (name.endsWith("WidgetConfig")) {
-      sections["WIDGET CONFIGURATIONS"].push(name);
-    } else if (
-      name.includes("Group") ||
-      name.includes("Tab") ||
-      name.includes("Layout")
-    ) {
-      sections["LAYOUT CONFIGURATION"].push(name);
-    } else if (
-      name.includes("Runtime") ||
-      name.includes("Session") ||
-      name.includes("State")
-    ) {
-      sections["RUNTIME DATA"].push(name);
-    } else if (name.includes("Available") || name.includes("Parameters")) {
-      sections["AVAILABLE PARAMETERS"].push(name);
+      sections['PARAMETER SCHEMAS'].push(name);
+    } else if (name.endsWith('WidgetConfig')) {
+      sections['WIDGET CONFIGURATIONS'].push(name);
+    } else if (name.includes('Group') || name.includes('Tab') || name.includes('Layout')) {
+      sections['LAYOUT CONFIGURATION'].push(name);
+    } else if (name.includes('Runtime') || name.includes('Session') || name.includes('State')) {
+      sections['RUNTIME DATA'].push(name);
+    } else if (name.includes('Available') || name.includes('Parameters')) {
+      sections['AVAILABLE PARAMETERS'].push(name);
     } else {
       // Default to RUNTIME DATA for uncategorized types
-      sections["RUNTIME DATA"].push(name);
+      sections['RUNTIME DATA'].push(name);
     }
   }
 
@@ -316,7 +297,7 @@ const regularClasses = Object.entries(definitions)
   .filter(
     ([name]) =>
       !Object.keys(discriminatedUnions).includes(name) &&
-      name !== "GrasshopperParamType" &&
+      name !== 'GrasshopperParamType' &&
       !allUnionVariants.has(name)
   )
   .map(([name, def]) => {
@@ -336,11 +317,11 @@ for (const [sectionName, classNames] of Object.entries(sections)) {
   );
 
   if (sectionClasses.length > 0) {
-    output += `    // ============================================================================
+    output += `// ============================================================================
     // ${sectionName}
     // ============================================================================
 
-${sectionClasses.join("\n\n")}
+${sectionClasses.join('\n\n')}
 
 `;
   }
@@ -356,13 +337,13 @@ ${sectionClasses.join("\n\n")}
 function generateUnionBaseClass(unionName, config) {
   const { commonProps, discriminators, baseClassName } = config;
 
-  let baseProps = "";
+  let baseProps = '';
 
   // Generate common properties
   for (const propName of commonProps) {
     if (discriminators.includes(propName)) {
       // Discriminators are abstract properties
-      baseProps += `\n        [JsonProperty("${propName}")]
+      baseProps += `\n[JsonProperty("${propName}")]
         public abstract string ${pascalCase(propName)} { get; }
 `;
     } else {
@@ -376,7 +357,7 @@ function generateUnionBaseClass(unionName, config) {
     }
   }
 
-  return `    /// <summary>
+  return `/// <summary>
     /// Base class for ${unionName} discriminated union
     /// </summary>
     [JsonConverter(typeof(${baseClassName}Converter))]
@@ -396,22 +377,20 @@ function generateUnionVariantClass(variantName, unionConfig) {
   // Get discriminator values
   const discriminatorOverrides = discriminators
     .map((disc) => {
-      const value = def.properties[disc]?.const || "unknown";
-      return `        public override string ${pascalCase(disc)} => "${value}";`;
+      const value = def.properties[disc]?.const || 'unknown';
+      return `public override string ${pascalCase(disc)} => "${value}";`;
     })
-    .join("\n");
+    .join('\n');
 
   // Get variant-specific properties (not in base class)
   const variantProps = Object.entries(def.properties)
     .filter(([propName]) => !commonProps.includes(propName))
-    .map(([propName, prop]) =>
-      generateProperty(propName, prop, required.includes(propName))
-    )
-    .join("\n");
+    .map(([propName, prop]) => generateProperty(propName, prop, required.includes(propName)))
+    .join('\n');
 
-  const propsSection = variantProps ? `\n${variantProps}` : "";
+  const propsSection = variantProps ? `\n${variantProps}` : '';
 
-  return `    public class ${variantName} : ${baseClassName}
+  return `public class ${variantName} : ${baseClassName}
     {
 ${discriminatorOverrides}${propsSection}
     }`;
@@ -429,26 +408,24 @@ function generateUnionConverter(unionName, config) {
       const def = definitions[variantName];
       const checks = discriminators
         .map((disc) => {
-          const value = def.properties[disc]?.const || "unknown";
+          const value = def.properties[disc]?.const || 'unknown';
           return `${disc} == "${value}"`;
         })
-        .join(" && ");
+        .join(' && ');
 
-      const prefix = index === 0 ? "if" : "else if";
+      const prefix = index === 0 ? 'if' : 'else if';
       return `            ${prefix} (${checks})
                 item = new ${variantName}();`;
     })
-    .join("\n");
+    .join('\n');
 
   // Build the variable declarations
   const varDeclarations = discriminators
-    .map(
-      (disc) =>
-        `            var ${disc} = jsonObject["${disc}"]?.Value<string>();`
-    )
-    .join("\n");
+    .map((disc) => `var ${disc} = jsonObject["${disc}"]?.Value<string>();`)
+    .join('\n');
 
-  return `    /// <summary>
+  return `
+    /// <summary>
     /// JSON converter for ${baseClassName} discriminated union
     /// </summary>
     public class ${baseClassName}Converter : JsonConverter<${baseClassName}>
@@ -459,7 +436,7 @@ function generateUnionConverter(unionName, config) {
 ${varDeclarations}
 
             // Check if all discriminators are null or empty
-            var allEmpty = ${discriminators.map((d) => `string.IsNullOrEmpty(${d})`).join(" && ")};
+            var allEmpty = ${discriminators.map((d) => `string.IsNullOrEmpty(${d})`).join(' && ')};
             if (allEmpty)
             {
                 throw new JsonSerializationException($"${unionName} discriminator fields are missing or empty. JSON: {jsonObject.ToString()}");
@@ -468,7 +445,7 @@ ${varDeclarations}
             ${baseClassName} item;
 ${conditions}
             else
-                throw new JsonSerializationException($"Unknown ${unionName} variant: ${discriminators.map((d) => `{${d}}`).join("/")}. JSON: {jsonObject.ToString()}");
+                throw new JsonSerializationException($"Unknown ${unionName} variant: ${discriminators.map((d) => `{${d}}`).join('/')}. JSON: {jsonObject.ToString()}");
 
             serializer.Populate(jsonObject.CreateReader(), item);
             return item;
@@ -517,19 +494,19 @@ ${conditions}
 
 // Generate all discriminated unions
 for (const [unionName, config] of Object.entries(discriminatedUnions)) {
-  output += `    // ============================================================================
+  output += `// ============================================================================
     // ${unionName.toUpperCase()} (Discriminated Union)
     // ============================================================================
 
 ${generateUnionBaseClass(unionName, config)}
 
-${config.variants.map((v) => generateUnionVariantClass(v, config)).join("\n\n")}
+${config.variants.map((v) => generateUnionVariantClass(v, config)).join('\n\n')}
 
 `;
 }
 
 // Generate JSON converters for all discriminated unions
-output += `    // ============================================================================
+output += `// ============================================================================
     // JSON CONVERTERS FOR DISCRIMINATED UNIONS
     // ============================================================================
 

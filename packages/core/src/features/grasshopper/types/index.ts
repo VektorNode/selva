@@ -27,9 +27,6 @@ export type {
   InputParam,
 } from './parameters';
 
-// Grouping types
-export type { GroupInputs, NestedGroupNode, NestedGroupInputs } from './grouping';
-
 // Schema types
 export type {
   GrasshopperBaseSchema,

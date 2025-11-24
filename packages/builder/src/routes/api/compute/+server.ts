@@ -1,15 +1,15 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import {
-  solveGrasshopperDefinition,
   type NumericInputType,
   type TextInputType,
   type BooleanInputType,
   type InputParam,
   DataTree,
+  GrasshopperClient,
 } from '@computebuilder/core';
 import type { InputParamSchema } from '$lib/types/generated';
-import { PUBLIC_COMPUTE_SERVER_URL } from '$env/static/public';
+import { PUBLIC_COMPUTE_SERVER_URL, PUBLIC_GH_DEFINITION } from '$env/static/public';
 
 interface ComputeRequest {
   inputs: InputParamSchema[];
@@ -66,9 +66,9 @@ export const POST: RequestHandler = async ({ request }) => {
   try {
     const body: ComputeRequest = await request.json();
 
-    const { inputs, values, definitionUrl, serverUrl = PUBLIC_COMPUTE_SERVER_URL } = body;
+    const { inputs, values } = body;
 
-    if (!inputs || !values || !definitionUrl) {
+    if (!inputs || !values) {
       throw error(400, 'Missing required fields: inputs, values, or definitionUrl');
     }
 
@@ -79,11 +79,8 @@ export const POST: RequestHandler = async ({ request }) => {
         .map((input) => transformInputParameter(input, values[input.id]))
     );
 
-    // Solve the Grasshopper definition and return raw response
-    // Mesh extraction happens on client side (requires Three.js)
-    const solvedDefinition = await solveGrasshopperDefinition(inputTree, definitionUrl, {
-      serverUrl,
-    });
+    const client = await GrasshopperClient.create({ serverUrl: PUBLIC_COMPUTE_SERVER_URL })
+    const solvedDefinition = await client.solve(PUBLIC_GH_DEFINITION, inputTree);
 
     return json(solvedDefinition);
   } catch (err) {

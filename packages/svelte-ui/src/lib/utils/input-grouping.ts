@@ -1,9 +1,61 @@
-import {
-  InputParam,
-  GroupInputs,
-  NestedGroupInputs,
-  NestedGroupNode,
-} from '../../../../core/src/features/grasshopper/types.js';
+import { DataTree, type InnerTree, type InputParam } from "@computebuilder/core";
+
+/**
+ * Grouped inputs by category
+ */
+export interface GroupInputs {
+  [key: string]: {
+    inputs: InputParam[];
+  };
+}
+
+/**
+ * Node in a nested group tree structure
+ */
+export interface NestedGroupNode {
+  /** Display name of this group level */
+  name: string;
+  /** Full path to this node (e.g., "Layer_1::Layer_2") */
+  path: string;
+  /** Inputs that belong directly to this group level */
+  inputs: InputParam[];
+  /** Child group nodes */
+  children: Map<string, NestedGroupNode>;
+}
+
+/**
+ * Nested grouped inputs organized in a tree structure
+ */
+export interface NestedGroupInputs {
+  [key: string]: NestedGroupNode;
+}
+
+/**
+ * Converts a GroupInputs object to DataTrees, with updated values.
+ *
+ * @public Use this to convert grouped inputs to DataTree format for compute operations.
+ *
+ * @param groupedInputs - The grouped inputs object.
+ * @param currentValues - Record of current input values by input name.
+ * @returns Array of DataTree instances, ready for compute.
+ */
+export function groupedInputsToDataTrees(
+  groupedInputs: GroupInputs,
+  currentValues?: Record<string, any>
+): InnerTree[] {
+  // Flatten all GhInputType arrays from each group
+  const allInputs: InputParam[] = Object.values(groupedInputs).flatMap((group) => group.inputs);
+
+  // If currentValues provided, update the defaults
+  const updatedInputs = currentValues
+    ? allInputs.map((input) => ({
+      ...input,
+      default: currentValues[input.name] ?? input.default,
+    }))
+    : allInputs;
+
+  return DataTree.fromInputParams(updatedInputs);
+}
 
 /**
  * Groups input parameters by their `groupName` property.

@@ -269,6 +269,24 @@ export async function fetchRhinoCompute<E extends Endpoint>(
         }
       );
     }
+
+    // Handle fetch errors (network issues, connection refused, etc.)
+    if (error instanceof TypeError) {
+      throw new RhinoComputeError(
+        `Network error: ${error.message}`,
+        ErrorCodes.NETWORK_ERROR,
+        {
+          context: {
+            serverUrl: config.serverUrl,
+            url: fullUrl,
+            requestId,
+            endpoint,
+          },
+          originalError: error,
+        }
+      );
+    }
+
     throw error;
   } finally {
     if (timeoutId !== null) clearTimeout(timeoutId);

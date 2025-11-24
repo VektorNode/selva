@@ -1,32 +1,39 @@
 import type { PageServerLoad } from './$types';
+import { error } from '@sveltejs/kit';
 import {
-  fetchParsedDefinitionIO,
-  solveGrasshopperDefinition,
   GrasshopperResponseProcessor,
   DataTree,
+  GrasshopperClient,
 } from '@computebuilder/core';
 import type { UISchema } from '$lib/types/generated';
 import { PUBLIC_COMPUTE_SERVER_URL, PUBLIC_GH_DEFINITION } from '$env/static/public';
+import { console } from 'inspector';
 
 export const load = (async () => {
-  // Fetch the Grasshopper definition IO (includes paramId and default values)
-  const definition = await fetchParsedDefinitionIO(PUBLIC_GH_DEFINITION, {
-    serverUrl: PUBLIC_COMPUTE_SERVER_URL,
-  });
+  let client;
+
+  try {
+    client = await GrasshopperClient.create({ serverUrl: PUBLIC_COMPUTE_SERVER_URL });
+  } catch (err) {
+    error(503, {
+      message: `Failed to connect to Rhino Compute server at ${PUBLIC_COMPUTE_SERVER_URL}`,
+      details: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  console.log('Checking compute server status...');
+
+  const definition = await client.getIO(PUBLIC_GH_DEFINITION);
 
   // Solve with default values to get the schema
   const tree = DataTree.fromInputParams(definition.inputs);
-  //TODO: For the ui uilder make it inherit from the ContextComponent and then we can use the default value
-  const solvedDefinition = await solveGrasshopperDefinition(tree, PUBLIC_GH_DEFINITION, {
-    serverUrl: PUBLIC_COMPUTE_SERVER_URL,
-  });
+  const solvedDefinition = await client.solve(PUBLIC_GH_DEFINITION, tree);
 
   const schema = new GrasshopperResponseProcessor(solvedDefinition).getValueByParamName('Schema', {
     parseValues: true,
   }) as UISchema;
 
   // Merge default values from Compute definition into schema inputs
-  // The Compute definition has paramId, and schema has id (both are the same GUID)
   const computeInputsByParamId = new Map(definition.inputs.map((input) => [input.id, input]));
 
   schema.inputs = schema.inputs.map((schemaInput) => {
