@@ -22,7 +22,7 @@ const ROTATION_SIN = Math.sin(-Math.PI / 2); // -1
 /**
  * The component type string used to identify display meshes from Grasshopper WebDisplay.
  */
-const DISPLAY_COMPONENT_TYPE = 'ComputeBuilder.Display.ThreeDisplay';
+const DISPLAY_COMPONENT_TYPE = 'ThreeDisplay';
 
 /**
  * Extracts and processes display meshes from a ComputePointerResponse using the Grasshopper WebDisplay component.
@@ -110,7 +110,7 @@ function extractMeshesFromData(
  */
 function processDataBranch(branch: DataItem[], meshes: THREE.Mesh[], scaleFactor: number): void {
   for (const item of branch) {
-    if (item.type === DISPLAY_COMPONENT_TYPE) {
+    if (item.type.includes(DISPLAY_COMPONENT_TYPE)) {
       const rhinoMeshData = parseRhinoMeshData(item.data);
       const branchMeshes = processBranch(rhinoMeshData, scaleFactor);
       meshes.push(...branchMeshes);
