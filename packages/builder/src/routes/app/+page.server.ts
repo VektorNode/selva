@@ -2,25 +2,25 @@ import type { PageServerLoad } from './$types';
 import {
   fetchParsedDefinitionIO,
   solveGrasshopperDefinition,
-  inputsToDataTrees,
   GrasshopperResponseProcessor,
+  DataTree,
 } from '@computebuilder/core';
 import type { UISchema } from '$lib/types/generated';
+import { PUBLIC_COMPUTE_SERVER_URL, PUBLIC_GH_DEFINITION } from '$env/static/public';
 
 export const load = (async () => {
   // Fetch the Grasshopper definition IO (includes paramId and default values)
-  const definition = await fetchParsedDefinitionIO('http://localhost:5173/builder_test.gh', {
-    serverUrl: 'http://localhost:5000/',
+  const definition = await fetchParsedDefinitionIO(PUBLIC_GH_DEFINITION, {
+    serverUrl: PUBLIC_COMPUTE_SERVER_URL,
   });
 
-
   // Solve with default values to get the schema
-  const tree = inputsToDataTrees(definition.inputs);
+  const tree = DataTree.fromInputParams(definition.inputs);
   //TODO: For the ui uilder make it inherit from the ContextComponent and then we can use the default value
   const solvedDefinition = await solveGrasshopperDefinition(
     tree,
-    'http://localhost:5173/builder_test.gh',
-    { serverUrl: 'http://localhost:5000/' }
+    PUBLIC_GH_DEFINITION,
+    { serverUrl: PUBLIC_COMPUTE_SERVER_URL }
   );
 
   const schema = new GrasshopperResponseProcessor(solvedDefinition).getValueByParamName('Schema', { parseValues: true }) as UISchema;

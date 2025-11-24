@@ -83,7 +83,7 @@ export type InnerTreeData = {
 };
 
 /**
- * Inner tree with parameter metadata
+ * Inner tree with parameter metadata (used in compute responses)
  */
 export interface InnerTree {
   InnerTree: InnerTreeData;
@@ -91,18 +91,7 @@ export interface InnerTree {
 }
 
 /**
- * Data tree structure with append functionality
- */
-export interface DataTree {
-  data: {
-    ParamName: string;
-    InnerTree: InnerTreeData;
-  };
-  append: (path: number[], items: any[]) => void;
-}
-
-/**
- * Array of inner tree values
+ * Array of inner tree values (used in compute requests/responses)
  */
 export type Values = InnerTree[];
 

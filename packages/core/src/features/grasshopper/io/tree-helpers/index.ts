@@ -1,1 +1,2 @@
-export * from './tree-helper';
+export { DataTree } from './data-tree';
+export type { DataTreeValue } from './data-tree';

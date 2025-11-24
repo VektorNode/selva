@@ -1,16 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { DataTree } from '../../types';
+// DataTree type removed - using any[] for compute format trees
 import { prepareGrasshopperArgs, isBase64, applyOptionalComputeSettings } from '../solve';
 
 describe('solveGrasshopperDefinition - Input Format Handling', () => {
-  // Helper to create a minimal valid DataTree
-  const createDataTree = (): DataTree[] => [
+  // Helper to create a minimal valid InnerTree
+  const createDataTree = (): any[] => [
     {
-      data: {
-        ParamName: 'testParam',
-        InnerTree: {},
-      },
-      append: () => { },
+      ParamName: 'testParam',
+      InnerTree: {},
     },
   ];
 
@@ -77,19 +74,10 @@ describe('solveGrasshopperDefinition - Input Format Handling', () => {
 
     it('should extract data from DataTree values array', () => {
       const definition = 'http://example.com/def.gh';
-      const dataTree: DataTree[] = [
-        {
-          data: { ParamName: 'p1', InnerTree: {} },
-          append: () => { },
-        },
-        {
-          data: { ParamName: 'p2', InnerTree: {} },
-          append: () => { },
-        },
-        {
-          data: { ParamName: 'p3', InnerTree: {} },
-          append: () => { },
-        },
+      const dataTree: any[] = [
+        { ParamName: 'p1', InnerTree: {} },
+        { ParamName: 'p2', InnerTree: {} },
+        { ParamName: 'p3', InnerTree: {} },
       ];
 
       const args = prepareGrasshopperArgs(definition, dataTree);
@@ -102,7 +90,7 @@ describe('solveGrasshopperDefinition - Input Format Handling', () => {
 
     it('should handle empty DataTree array', () => {
       const definition = 'http://example.com/def.gh';
-      const dataTree: DataTree[] = [];
+      const dataTree: any[] = [];
 
       const args = prepareGrasshopperArgs(definition, dataTree);
 
@@ -198,11 +186,8 @@ describe('solveGrasshopperDefinition - Input Format Handling', () => {
         '{0}': [{ type: 'number', data: '123', id: 'id1' }],
         '{1}': [{ type: 'string', data: 'test', id: 'id2' }],
       };
-      const dataTree: DataTree[] = [
-        {
-          data: { ParamName: 'complex', InnerTree: complexInnerTree },
-          append: () => { },
-        },
+      const dataTree: any[] = [
+        { ParamName: 'complex', InnerTree: complexInnerTree },
       ];
 
       const args = prepareGrasshopperArgs(definition, dataTree);

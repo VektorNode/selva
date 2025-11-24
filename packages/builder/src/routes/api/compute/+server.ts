@@ -1,12 +1,12 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import {
-  inputsToDataTrees,
   solveGrasshopperDefinition,
   type NumericInputType,
   type TextInputType,
   type BooleanInputType,
   type InputParam,
+  DataTree,
 } from '@computebuilder/core';
 import type { InputParamSchema } from '$lib/types/generated';
 
@@ -39,6 +39,7 @@ function transformInputParameter(input: InputParamSchema, value: unknown): Input
       atMost: input.atMost,
       stepSize: input.paramType === 'Integer' ? 1 : input.stepSize,
       default: value ?? input.default,
+
     } as NumericInputType;
   } else if (input.paramType === 'Text') {
     return {
@@ -72,7 +73,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     // Transform inputs to data trees
-    const inputTree = inputsToDataTrees(
+    const inputTree = DataTree.fromInputParams(
       inputs
         .filter((input) => input.paramType)
         .map((input) => transformInputParameter(input, values[input.id]))

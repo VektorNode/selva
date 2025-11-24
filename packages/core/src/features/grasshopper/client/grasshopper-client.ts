@@ -4,7 +4,7 @@ import ComputeServerStats from '@/core/server/compute-server-stats';
 import { ComputeConfig } from '@/core/types';
 
 import { fetchDefinitionIO, fetchParsedDefinitionIO, solveGrasshopperDefinition } from '..';
-import { DataTree, GrasshopperComputeConfig, GrasshopperComputeResponse } from '../types';
+import { GrasshopperComputeConfig, GrasshopperComputeResponse, InnerTree } from '../types';
 
 /**
  * GrasshopperClient provides a simple API for interacting with a Rhino Compute server and grasshopper.
@@ -70,7 +70,7 @@ export default class GrasshopperClient {
    */
   public async solve(
     definitionUrl: string,
-    dataTree: DataTree[]
+    dataTree: InnerTree[]
   ): Promise<GrasshopperComputeResponse> {
     this.ensureNotDisposed();
 

@@ -29,9 +29,9 @@ declare module 'compute-rhino3d' {
     DataTree: typeof DataTreeClass;
     evaluateDefinition(
       definition: string | Uint8Array,
-      trees: DataTree[],
+      trees: unknown[],
       returnJson?: boolean
-    ): Promise<any>;
+    ): Promise<unknown>;
   }
 
   export interface RhinoComputeModule extends RhinoComputeConfig {

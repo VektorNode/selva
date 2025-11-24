@@ -45,17 +45,8 @@ export { fetchDefinitionIO, fetchParsedDefinitionIO } from './features/grasshopp
 // INPUT HELPERS (Convert data to DataTree format)
 // ============================================================================
 
-export {
-  groupInputs,
-  groupInputsNested,
-  inputsToDataTrees,
-  groupedInputsToDataTrees,
-  isDataTreeStructure,
-  processInputs,
-  processInput,
-  buildDataTree,
-  replaceTreeValue,
-} from './features/grasshopper';
+export { groupInputs, groupInputsNested, processInputs, processInput, DataTree } from './features/grasshopper';
+export type { DataTreeValue } from './features/grasshopper/io/tree-helpers/data-tree';
 
 // ============================================================================
 // TYPE EXPORTS (Public types for this module)
@@ -63,8 +54,8 @@ export {
 
 // Core Grasshopper types
 export type {
-  DataTree,
   DataItem,
+  InnerTree,
   GrasshopperParsedIO,
   GrasshopperRequestSchema,
   GrasshopperComputeResponse,

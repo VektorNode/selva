@@ -5,7 +5,7 @@ import {
   GrasshopperRequestSchema,
   GrasshopperComputeConfig,
   GrasshopperComputeResponse,
-  DataTree,
+  InnerTree,
 } from '../types';
 
 /**
@@ -35,7 +35,7 @@ import {
  * await solveGrasshopperDefinition(trees, fileData, config);
  */
 export async function solveGrasshopperDefinition(
-  dataTree: DataTree[],
+  dataTree: InnerTree[],
   definition: string | Uint8Array,
   config: GrasshopperComputeConfig
 ): Promise<GrasshopperComputeResponse> {
@@ -69,12 +69,12 @@ export async function solveGrasshopperDefinition(
  */
 export function prepareGrasshopperArgs(
   definition: string | Uint8Array,
-  dataTree: DataTree[]
+  dataTree: InnerTree[]
 ): GrasshopperRequestSchema {
   const args: GrasshopperRequestSchema = {
     algo: null,
     pointer: null,
-    values: dataTree.map((tree) => tree.data),
+    values: dataTree,
   };
 
   if (definition instanceof Uint8Array) {

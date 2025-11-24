@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { RhinoComputeError } from '@/core/errors/base';
 import { ErrorCodes } from '@/core/errors';
 import GrasshopperClient from '../grasshopper-client';
-import type { GrasshopperComputeConfig, DataTree } from '../../types';
+import type { GrasshopperComputeConfig } from '../../types';
 
 describe('GrasshopperClient', () => {
   // Test config factory
@@ -103,7 +103,7 @@ describe('GrasshopperClient', () => {
       const client = new GrasshopperClient(createConfig());
       await client.dispose();
 
-      const dataTree: DataTree[] = [];
+      const dataTree: any[] = [];
       await expect(client.solve('http://test.com/def.gh', dataTree)).rejects.toThrow(
         'has been disposed'
       );
@@ -118,12 +118,12 @@ describe('GrasshopperClient', () => {
     });
 
     it('should reject empty definition URL', async () => {
-      const dataTree: DataTree[] = [];
+      const dataTree: any[] = [];
       await expect(client.solve('', dataTree)).rejects.toThrow('Definition URL is required');
     });
 
     it('should reject whitespace-only definition URL', async () => {
-      const dataTree: DataTree[] = [];
+      const dataTree: any[] = [];
       await expect(client.solve('   ', dataTree)).rejects.toThrow('Definition URL is required');
     });
 
@@ -137,7 +137,7 @@ describe('GrasshopperClient', () => {
         new Error('Network failure')
       );
 
-      const dataTree: DataTree[] = [];
+      const dataTree: any[] = [];
 
       try {
         await client.solve('http://test.com/def.gh', dataTree);
@@ -156,7 +156,7 @@ describe('GrasshopperClient', () => {
       const solveModule = await import('../../compute/solve');
       vi.spyOn(solveModule, 'solveGrasshopperDefinition').mockRejectedValue(originalError);
 
-      const dataTree: DataTree[] = [];
+      const dataTree: any[] = [];
 
       try {
         await client.solve('http://test.com/def.gh', dataTree);
@@ -170,7 +170,7 @@ describe('GrasshopperClient', () => {
     it('should check server status before solving', async () => {
       const isOnlineSpy = vi.spyOn(client.serverStats, 'isServerOnline').mockResolvedValue(false);
 
-      const dataTree: DataTree[] = [];
+      const dataTree: any[] = [];
 
       await expect(client.solve('http://test.com/def.gh', dataTree)).rejects.toThrow(
         'Rhino Compute server is not online'
@@ -187,7 +187,7 @@ describe('GrasshopperClient', () => {
         new Error('Compute failed')
       );
 
-      const dataTree: DataTree[] = [{ data: 'test' } as any];
+      const dataTree: any[] = [{ data: 'test' } as any];
       const definitionUrl = 'http://test.com/def.gh';
 
       try {
