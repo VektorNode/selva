@@ -1,4 +1,4 @@
-import { InputParam, GroupInputs, NestedGroupInputs, NestedGroupNode } from '../../../types';
+import { InputParam, GroupInputs, NestedGroupInputs, NestedGroupNode } from '../../../../core/src/features/grasshopper/types.js';
 
 /**
  * Groups input parameters by their `groupName` property.

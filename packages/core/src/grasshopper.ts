@@ -45,7 +45,7 @@ export { fetchDefinitionIO, fetchParsedDefinitionIO } from './features/grasshopp
 // INPUT HELPERS (Convert data to DataTree format)
 // ============================================================================
 
-export { groupInputs, groupInputsNested, processInputs, processInput, DataTree } from './features/grasshopper';
+export { processInputs, processInput, DataTree } from './features/grasshopper';
 export type { DataTreeValue } from './features/grasshopper/io/tree-helpers/data-tree';
 
 // ============================================================================

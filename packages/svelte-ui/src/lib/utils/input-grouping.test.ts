@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { groupInputs, groupInputsNested } from './input-grouping';
-import type { InputParam } from '../../../types';
+import type { InputParam } from '../../../../core/src/features/grasshopper/types.js';
 
 describe('groupInputsNested', () => {
   it('should group inputs with nested group names', () => {

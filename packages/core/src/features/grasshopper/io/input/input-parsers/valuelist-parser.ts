@@ -1,5 +1,4 @@
-import { RhinoComputeError } from '@/core';
-import { ErrorCodes } from '@/core/errors';
+import { ValidationErrors } from '@/core/errors';
 
 import type { InputParamSchema } from '../../../types';
 
@@ -14,13 +13,7 @@ import type { InputParamSchema } from '../../../types';
  */
 export default function processValueListInput(input: InputParamSchema): void {
   if (!input.values || typeof input.values !== 'object' || Object.keys(input.values).length === 0) {
-    throw new RhinoComputeError(
-      `ValueList input "${input.name}" has no values defined`,
-      ErrorCodes.INVALID_INPUT,
-      {
-        context: { inputName: input.name },
-      }
-    );
+    throw ValidationErrors.missingValues(input.name, 'ValueList');
   }
 
   // Validate that default is one of the available values (if default exists)

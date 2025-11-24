@@ -1,10 +1,13 @@
-import { ErrorCodes, RhinoComputeError } from '@/core/errors';
+import { ValidationErrors, RhinoComputeError } from '@/core/errors';
 
 import processBooleanInput from './boolean-parser';
 import processNumericInput from './numeric-parser';
 import parseToObject from './object-parser';
 import processTextInput from './text-parser';
-import processValueListInput from './valuelist_parser';
+import processValueListInput from './valuelist-parser';
+
+import { ParserRegistry } from './parser-registry';
+import { preProcessInputDefault } from '../input-validators';
 
 import type {
   BaseInputType,
@@ -17,71 +20,21 @@ import type {
   ValueListInputType,
 } from '../../../types';
 
-function preProcessRawInput(input: InputParamSchema): void {
-  if (typeof input.default === 'object' && input.default !== null) {
-    if (input.default.innerTree) {
-      const innerTree = input.default.innerTree;
+// Initialize parser registry on module load
+const initializeRegistry = () => {
+  ParserRegistry.register('Number', processNumericInput);
+  ParserRegistry.register('Integer', processNumericInput);
+  ParserRegistry.register('Boolean', processBooleanInput);
+  ParserRegistry.register('Text', processTextInput);
+  ParserRegistry.register('ValueList', processValueListInput);
+  ParserRegistry.register('Geometry', parseToObject);
+};
 
-      // If innerTree is empty, set default to undefined
-      if (Object.keys(innerTree).length === 0) {
-        input.default = undefined;
-        return;
-      }
+// Call initialization once
+initializeRegistry();
 
-      // If treeAccess is true or atMost > 1, preserve the tree structure
-      if (input.treeAccess || (input.atMost && input.atMost > 1)) {
-        // Convert each branch to an array of parsed data
-        const tree: Record<string, any[]> = {};
-        for (const [branch, items] of Object.entries(innerTree)) {
-          tree[branch] = (items as any[]).map((item) => {
-            // Try to parse numbers, booleans, or JSON if possible
-            if (typeof item.data === 'string') {
-              if (item.type === 'System.Double' || item.type === 'System.Int32') {
-                const num = Number(item.data);
-                return Number.isNaN(num) ? item.data : num;
-              }
-              if (item.type === 'System.Boolean') {
-                return item.data.toLowerCase() === 'true';
-              }
-              if (item.type.startsWith('Rhino.Geometry') || item.type === 'System.String') {
-                try {
-                  return JSON.parse(item.data);
-                } catch {
-                  return item.data;
-                }
-              }
-            }
-            return item.data;
-          });
-        }
-        input.default = tree;
-        return;
-      }
-
-      // Otherwise, flatten all values as before
-      const allValues: any[] = [];
-      for (const items of Object.values(innerTree)) {
-        if (Array.isArray(items)) {
-          items.forEach((item) => {
-            if (item && typeof item === 'object' && 'data' in item) {
-              allValues.push(item.data);
-            }
-          });
-        }
-      }
-      if (allValues.length === 0) {
-        input.default = undefined;
-      } else if (allValues.length === 1) {
-        input.default = allValues[0];
-      } else {
-        input.default = allValues;
-      }
-    } else {
-      console.warn('Unexpected structure in input.default:', input.default);
-      input.default = null;
-    }
-  }
-}
+// Use the consolidated preprocessing function from input-validators
+const preProcessRawInput = preProcessInputDefault;
 
 /**
  * Creates a safe default InputType when processing fails
@@ -184,11 +137,19 @@ export function processInput(rawInput: InputParamSchema): InputParam {
     // Handle default object processing
     preProcessRawInput(rawInput);
 
-    // Type-specific processing and return typed result
+    // Get parser from registry
+    const parser = ParserRegistry.get(rawInput.paramType);
+    if (!parser) {
+      throw ValidationErrors.unknownParamType(rawInput.paramType, rawInput.name);
+    }
+
+    // Apply type-specific parsing
+    parser(rawInput);
+
+    // Return typed result based on paramType
     switch (rawInput.paramType) {
       case 'Number':
-      case 'Integer': {
-        processNumericInput(rawInput);
+      case 'Integer':
         return {
           ...baseInput,
           paramType: rawInput.paramType,
@@ -199,46 +160,34 @@ export function processInput(rawInput: InputParamSchema): InputParam {
           stepSize: rawInput.stepSize,
           default: rawInput.default as number | undefined,
         } as NumericInputType;
-      }
-      case 'Boolean': {
-        processBooleanInput(rawInput);
+      case 'Boolean':
         return {
           ...baseInput,
           paramType: 'Boolean',
           default: rawInput.default as boolean | undefined,
         } as BooleanInputType;
-      }
-      case 'Text': {
-        processTextInput(rawInput);
+      case 'Text':
         return {
           ...baseInput,
           paramType: 'Text',
           default: rawInput.default as string | undefined,
         } as TextInputType;
-      }
-      case 'ValueList': {
-        processValueListInput(rawInput);
+      case 'ValueList':
         return {
           ...baseInput,
           paramType: 'ValueList',
           values: rawInput.values as Record<string, string>,
           default: rawInput.default as string | undefined,
         } as ValueListInputType;
-      }
-      case 'Geometry': {
-        parseToObject(rawInput);
+      case 'Geometry':
         return {
           ...baseInput,
           paramType: rawInput.paramType as 'Geometry',
           default: rawInput.default as object | string | undefined,
         } as GeometryInputType;
-      }
-
-
       default:
-        throw new RhinoComputeError(`Unknown paramType: ${rawInput.paramType}`, ErrorCodes.VALIDATION_ERROR, {
-          context: { receivedParamType: rawInput.paramType, paramName: rawInput.name },
-        });
+        // This should be unreachable due to parser registry check above
+        throw ValidationErrors.unknownParamType(rawInput.paramType, rawInput.name);
     }
   } catch (error) {
     if (error instanceof RhinoComputeError) {
@@ -249,7 +198,7 @@ export function processInput(rawInput: InputParamSchema): InputParam {
       // Transform unexpected errors
       throw new RhinoComputeError(
         error instanceof Error ? error.message : String(error),
-        ErrorCodes.VALIDATION_ERROR,
+        'VALIDATION_ERROR',
         {
           context: { paramName: rawInput.name, paramType: rawInput.paramType },
           originalError: error instanceof Error ? error : new Error(String(error)),
