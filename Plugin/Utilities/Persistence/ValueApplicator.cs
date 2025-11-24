@@ -181,7 +181,8 @@ public class ValueApplicator
   }
 
   /// <summary>
-  ///   Validate input value against security constraints and parameter metadata
+  ///   Validate input value against security constraints
+  ///   Note: Parameter range constraints (min/max) are enforced at UI level and not redundantly checked here
   /// </summary>
   private bool ValidateValue(InputParamSchema input, object value,
     Action<GH_RuntimeMessageLevel, string> addMessage)
@@ -204,7 +205,7 @@ public class ValueApplicator
         }
       }
 
-      // Validate numeric ranges
+      // Validate numeric type conversions
       if (input.ParamType == "Number" || input.ParamType == "Integer")
       {
         double numValue;
@@ -219,22 +220,7 @@ public class ValueApplicator
           return false;
         }
 
-        // Check parameter-defined constraints
-        if (input.Minimum.HasValue && numValue < input.Minimum.Value)
-        {
-          addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-            $"Value {numValue} for '{input.Name}' is below minimum {input.Minimum.Value}. Clamping to minimum.");
-          return false; // Don't apply, let parameter handle default
-        }
-
-        if (input.Maximum.HasValue && numValue > input.Maximum.Value)
-        {
-          addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-            $"Value {numValue} for '{input.Name}' is above maximum {input.Maximum.Value}. Clamping to maximum.");
-          return false; // Don't apply, let parameter handle default
-        }
-
-        // Sanity check for extremely large numbers (potential DoS)
+        // Sanity check for extremely large numbers (potential DoS/overflow)
         if (double.IsInfinity(numValue) || double.IsNaN(numValue))
         {
           addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
@@ -248,14 +234,7 @@ public class ValueApplicator
       {
         try
         {
-          var intValue = Convert.ToInt32(value);
-          // Check if value is within int32 range
-          if (intValue < int.MinValue || intValue > int.MaxValue)
-          {
-            addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
-              $"Integer value out of range for '{input.Name}'");
-            return false;
-          }
+          Convert.ToInt32(value);
         }
         catch (OverflowException)
         {

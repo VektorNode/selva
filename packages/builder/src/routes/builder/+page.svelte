@@ -304,9 +304,6 @@
           atLeast: param.atLeast ?? 1,
           atMost: param.atMost ?? 1,
           treeAccess: param.treeAccess ?? false,
-          minimum: param.minimum,
-          maximum: param.maximum,
-          stepSize: param.stepSize,
         };
         schema.inputs = [...schema.inputs, newInput];
       }

@@ -25,10 +25,7 @@
         "atLeast": { "type": "integer", "default": 1 },
         "atMost": { "type": "integer", "default": 1 },
         "treeAccess": { "type": "boolean", "default": false },
-        "default": {},
-        "minimum": { "type": "number" },
-        "maximum": { "type": "number" },
-        "stepSize": { "type": "number" }
+        "default": {}
       },
       "required": ["id", "name", "nickname", "paramType"]
     },

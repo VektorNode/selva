@@ -33,9 +33,6 @@ export interface InputParamSchema {
   atMost?: number;
   treeAccess?: boolean;
   default?: unknown;
-  minimum?: number;
-  maximum?: number;
-  stepSize?: number;
   [k: string]: unknown | undefined;
 }
 export interface OutputParamSchema {

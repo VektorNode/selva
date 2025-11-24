@@ -12,7 +12,7 @@ import type { InputParamSchema } from '$lib/types/generated';
 import { PUBLIC_COMPUTE_SERVER_URL, PUBLIC_GH_DEFINITION } from '$env/static/public';
 
 interface ComputeRequest {
-  inputs: InputParamSchema[];
+  inputs: (InputParamSchema & { minimum?: number; maximum?: number; stepSize?: number })[];
   values: Record<string, unknown>;
   definitionUrl: string;
   serverUrl?: string;
@@ -21,7 +21,10 @@ interface ComputeRequest {
 /**
  * Transform input parameter to Rhino Compute format
  */
-function transformInputParameter(input: InputParamSchema, value: unknown): InputParam {
+function transformInputParameter(
+  input: InputParamSchema & { minimum?: number; maximum?: number; stepSize?: number },
+  value: unknown
+): InputParam {
   const base = {
     description: input.description || '',
     name: input.nickname || input.name,

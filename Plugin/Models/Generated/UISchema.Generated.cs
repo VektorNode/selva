@@ -114,15 +114,6 @@ namespace ComputeBuilder.Plugin.Models.Generated
 
         [JsonProperty("default", NullValueHandling = NullValueHandling.Ignore)]
         public object Default { get; set; }
-
-        [JsonProperty("minimum")]
-        public double? Minimum { get; set; }
-
-        [JsonProperty("maximum")]
-        public double? Maximum { get; set; }
-
-        [JsonProperty("stepSize")]
-        public double? StepSize { get; set; }
     }
 
     public class OutputParamSchema
@@ -357,7 +348,7 @@ namespace ComputeBuilder.Plugin.Models.Generated
         public List<AvailableParameter> Parameters { get; set; } = new List<AvailableParameter>();
     }
 
-    // ============================================================================
+// ============================================================================
     // LAYOUTITEM (Discriminated Union)
     // ============================================================================
 
