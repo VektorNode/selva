@@ -72,14 +72,21 @@ function pascalCase(str) {
 function generateProperty(name, prop, required) {
   const csharpType = jsonTypeToCSharp(prop, name, required);
   const pascalName = pascalCase(name);
-  const nullHandling =
-    !required &&
-    csharpType !== 'string' &&
-    !csharpType.endsWith('?') &&
-    !csharpType.startsWith('List') &&
-    !csharpType.startsWith('Dictionary')
-      ? ', NullValueHandling = NullValueHandling.Ignore'
-      : '';
+
+  // Build JSON property attributes
+  const attributes = [];
+
+  // Add NullValueHandling.Ignore for optional properties
+  if (!required && csharpType !== 'string' && !csharpType.endsWith('?') && !csharpType.startsWith('List') && !csharpType.startsWith('Dictionary')) {
+    attributes.push('NullValueHandling = NullValueHandling.Ignore');
+  }
+
+  // Add DefaultValueHandling.Ignore for properties with defaults
+  if (prop.default !== undefined) {
+    attributes.push('DefaultValueHandling = DefaultValueHandling.Ignore');
+  }
+
+  const attributeString = attributes.length > 0 ? ', ' + attributes.join(', ') : '';
 
   let defaultValue = '';
   if (prop.default !== undefined) {
@@ -101,7 +108,7 @@ function generateProperty(name, prop, required) {
     : '';
 
   return `${description}
-        [JsonProperty("${name}"${nullHandling})]
+        [JsonProperty("${name}"${attributeString})]
         public ${csharpType} ${pascalName} { get; set; }${defaultValue}`;
 }
 

@@ -24,6 +24,13 @@ namespace ComputeBuilder.Components.UI;
 /// </summary>
 public class GH_UIBuilderComponent : GH_Component, IDisposable
 {
+  // JSON serialization settings that respect DefaultValueHandling and NullValueHandling attributes
+  private static readonly JsonSerializerSettings SchemaSerializationSettings = new()
+  {
+    NullValueHandling = NullValueHandling.Ignore,
+    DefaultValueHandling = DefaultValueHandling.Ignore
+  };
+
   // Cache for available parameters (to send on client connect)
   private AvailableParameters _availableParams;
   private CommunicationHandler _communicationHandler;
@@ -219,7 +226,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       }
 
       DA.SetData(1, $"Session: {_sessionId}\nStatus: Headless Mode\nSchema loaded (no WebSocket)");
-      DA.SetData(2, _embeddedSchema != null ? JsonConvert.SerializeObject(_embeddedSchema) : "");
+      DA.SetData(2, _embeddedSchema != null ? JsonConvert.SerializeObject(_embeddedSchema, SchemaSerializationSettings) : "");
       return;
     }
 
@@ -274,7 +281,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       {
         DA.SetData(1,
           $"Session: {_sessionId}\nStatus: Active (WebSocket)\nSchema: {_embeddedSchema.Inputs.Count} inputs, {_embeddedSchema.Outputs.Count} outputs\nSwitch modes in web UI");
-        DA.SetData(2, JsonConvert.SerializeObject(_embeddedSchema));
+        DA.SetData(2, JsonConvert.SerializeObject(_embeddedSchema, SchemaSerializationSettings));
       }
       else
       {
@@ -884,7 +891,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
         _embeddedSchema.LastModified = DateTime.UtcNow;
 
-        var schemaJson = JsonConvert.SerializeObject(_embeddedSchema);
+        var schemaJson = JsonConvert.SerializeObject(_embeddedSchema, SchemaSerializationSettings);
         writer.SetString("Schema", schemaJson);
       }
       catch (Exception ex)

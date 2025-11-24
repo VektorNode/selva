@@ -33,7 +33,6 @@ export interface InputParamSchema {
   atMost?: number;
   treeAccess?: boolean;
   default?: unknown;
-  [k: string]: unknown | undefined;
 }
 export interface OutputParamSchema {
   /**
@@ -44,7 +43,6 @@ export interface OutputParamSchema {
   nickname: string;
   paramType: GrasshopperParamType;
   description?: string;
-  [k: string]: unknown | undefined;
 }
 export interface NumberWidgetConfig {
   minimum?: number;
@@ -159,30 +157,27 @@ export interface GroupConfig {
   id: string;
   label: string;
   description?: string;
-  order: number;
-  collapsed: boolean;
-  columns: number;
+  order?: number;
+  collapsed?: boolean;
+  columns?: number;
   items: LayoutItem[];
-  [k: string]: unknown | undefined;
 }
 export interface TabConfig {
   id: string;
   label: string;
   icon?: string;
-  order: number;
+  order?: number;
   groups: GroupConfig[];
-  [k: string]: unknown | undefined;
 }
 export interface LayoutConfig {
-  type: 'tabbed' | 'flat';
-  gap: number;
+  type?: 'tabbed' | 'flat';
+  gap?: number;
   tabs?: TabConfig[];
-  [k: string]: unknown | undefined;
 }
 export interface UISchema {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   /**
    * Semantic version of the schema format (MAJOR.MINOR.PATCH)
    */
@@ -191,12 +186,12 @@ export interface UISchema {
    * Minimum plugin version required to load this schema
    */
   minPluginVersion?: string;
-  created: string;
+  created?: string;
   /**
    * Last modification timestamp
    */
   lastModified?: string;
-  enable3dViewer: boolean;
+  enable3dViewer?: boolean;
   /**
    * If true, changes trigger immediate solving. If false, user must press Calculate button.
    */
@@ -204,7 +199,6 @@ export interface UISchema {
   inputs: InputParamSchema[];
   outputs: OutputParamSchema[];
   layout: LayoutConfig;
-  [k: string]: unknown | undefined;
 }
 export interface RuntimeValues {
   timestamp: string;

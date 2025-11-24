@@ -3,7 +3,6 @@ import { page } from '$app/state';
 import { getWebSocketState, type WebSocketState } from '$lib/websocket/websocket.svelte';
 import type { UISchema, AvailableParameters } from '$lib/types/generated';
 import { resolve } from '$app/paths';
-import { CURRENT_SCHEMA_VERSION } from '$lib/app.config';
 
 /**
  * Session initialization result
@@ -88,7 +87,6 @@ export function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | 
       type: 'tabbed',
       gap: 16,
       tabs: [],
-      items: [],
     };
   }
   if (!schema.layout.tabs) {
@@ -110,7 +108,6 @@ export function createDefaultSchema(): UISchema {
     id: crypto.randomUUID(),
     name: 'New Schema',
     description: 'Configure your Grasshopper UI',
-    version: CURRENT_SCHEMA_VERSION,
     created: new Date().toISOString(),
     inputs: [],
     outputs: [],
@@ -118,7 +115,6 @@ export function createDefaultSchema(): UISchema {
       type: 'tabbed',
       gap: 16,
       tabs: [],
-      items: [],
     },
     enable3dViewer: false,
     instanceSolve: true,

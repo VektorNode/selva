@@ -36,7 +36,7 @@
       schema.layout.tabs.forEach((tab) => {
         tab.groups.forEach((group) => {
           if (!(group.id in collapsedGroups)) {
-            initialCollapsed[group.id] = group.collapsed;
+            initialCollapsed[group.id] = group.collapsed ?? false;
           }
         });
       });

@@ -27,7 +27,8 @@
         "treeAccess": { "type": "boolean", "default": false },
         "default": {}
       },
-      "required": ["id", "name", "nickname", "paramType"]
+      "required": ["id", "name", "nickname", "paramType"],
+      "additionalProperties": false
     },
 
     "OutputParamSchema": {
@@ -42,7 +43,8 @@
         "paramType": { "$ref": "#/definitions/GrasshopperParamType" },
         "description": { "type": "string" }
       },
-      "required": ["id", "name", "nickname", "paramType"]
+      "required": ["id", "name", "nickname", "paramType"],
+      "additionalProperties": false
     },
 
     "NumberWidgetConfig": {
@@ -223,7 +225,8 @@
           "items": { "$ref": "#/definitions/LayoutItem" }
         }
       },
-      "required": ["id", "label", "order", "collapsed", "columns", "items"]
+      "required": ["id", "label", "items"],
+      "additionalProperties": false
     },
 
     "TabConfig": {
@@ -238,7 +241,8 @@
           "items": { "$ref": "#/definitions/GroupConfig" }
         }
       },
-      "required": ["id", "label", "order", "groups"]
+      "required": ["id", "label", "groups"],
+      "additionalProperties": false
     },
 
     "LayoutConfig": {
@@ -255,7 +259,7 @@
           "items": { "$ref": "#/definitions/TabConfig" }
         }
       },
-      "required": ["type", "gap"]
+      "additionalProperties": false
     },
 
     "UISchema": {
@@ -300,14 +304,11 @@
       "required": [
         "id",
         "name",
-        "description",
-        "version",
-        "created",
         "inputs",
         "outputs",
-        "layout",
-        "enable3dViewer"
-      ]
+        "layout"
+      ],
+      "additionalProperties": false
     },
 
     "RuntimeValues": {

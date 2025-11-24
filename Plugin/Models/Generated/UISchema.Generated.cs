@@ -38,7 +38,7 @@ namespace ComputeBuilder.Plugin.Models.Generated
 /// <summary>
 /// Semantic version of the schema format (MAJOR.MINOR.PATCH)
 /// </summary>
-        [JsonProperty("schemaVersion")]
+        [JsonProperty("schemaVersion", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string SchemaVersion { get; set; } = "1.0.0";
 
 /// <summary>
@@ -47,7 +47,7 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("minPluginVersion")]
         public string MinPluginVersion { get; set; }
 
-        [JsonProperty("created")]
+        [JsonProperty("created", NullValueHandling = NullValueHandling.Ignore)]
         public DateTime Created { get; set; } = DateTime.UtcNow;
 
 /// <summary>
@@ -56,13 +56,13 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("lastModified", NullValueHandling = NullValueHandling.Ignore)]
         public DateTime LastModified { get; set; } = DateTime.UtcNow;
 
-        [JsonProperty("enable3dViewer")]
-        public bool Enable3dViewer { get; set; } = false;
+        [JsonProperty("enable3dViewer", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool? Enable3dViewer { get; set; } = false;
 
 /// <summary>
 /// If true, changes trigger immediate solving. If false, user must press Calculate button.
 /// </summary>
-        [JsonProperty("instanceSolve")]
+        [JsonProperty("instanceSolve", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public bool? InstanceSolve { get; set; } = true;
 
         [JsonProperty("inputs")]
@@ -100,13 +100,13 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("description")]
         public string Description { get; set; }
 
-        [JsonProperty("atLeast")]
+        [JsonProperty("atLeast", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public int? AtLeast { get; set; } = 1;
 
-        [JsonProperty("atMost")]
+        [JsonProperty("atMost", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public int? AtMost { get; set; } = 1;
 
-        [JsonProperty("treeAccess")]
+        [JsonProperty("treeAccess", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public bool? TreeAccess { get; set; } = false;
 
         [JsonProperty("default", NullValueHandling = NullValueHandling.Ignore)]
@@ -201,14 +201,14 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("description")]
         public string Description { get; set; }
 
-        [JsonProperty("order")]
-        public int Order { get; set; } = 0;
+        [JsonProperty("order", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int? Order { get; set; } = 0;
 
-        [JsonProperty("collapsed")]
-        public bool Collapsed { get; set; } = false;
+        [JsonProperty("collapsed", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool? Collapsed { get; set; } = false;
 
-        [JsonProperty("columns")]
-        public int Columns { get; set; } = 1;
+        [JsonProperty("columns", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int? Columns { get; set; } = 1;
 
         [JsonProperty("items")]
         public List<LayoutItemBase> Items { get; set; } = new List<LayoutItemBase>();
@@ -226,8 +226,8 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("icon")]
         public string Icon { get; set; }
 
-        [JsonProperty("order")]
-        public int Order { get; set; } = 0;
+        [JsonProperty("order", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int? Order { get; set; } = 0;
 
         [JsonProperty("groups")]
         public List<GroupConfig> Groups { get; set; } = new List<GroupConfig>();
@@ -236,11 +236,11 @@ namespace ComputeBuilder.Plugin.Models.Generated
     public class LayoutConfig
     {
 
-        [JsonProperty("type")]
+        [JsonProperty("type", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string Type { get; set; } = "tabbed";
 
-        [JsonProperty("gap")]
-        public int Gap { get; set; } = 16;
+        [JsonProperty("gap", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int? Gap { get; set; } = 16;
 
         [JsonProperty("tabs")]
         public List<TabConfig> Tabs { get; set; } = new List<TabConfig>();
@@ -316,13 +316,13 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("stepSize")]
         public double? StepSize { get; set; }
 
-        [JsonProperty("atLeast")]
+        [JsonProperty("atLeast", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public int? AtLeast { get; set; } = 1;
 
-        [JsonProperty("atMost")]
+        [JsonProperty("atMost", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public int? AtMost { get; set; } = 1;
 
-        [JsonProperty("treeAccess")]
+        [JsonProperty("treeAccess", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public bool? TreeAccess { get; set; } = false;
 
 /// <summary>
@@ -370,10 +370,10 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("description")]
         public string Description { get; set; }
 
-        [JsonProperty("order")]
+        [JsonProperty("order", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public int? Order { get; set; } = 0;
 
-        [JsonProperty("span")]
+        [JsonProperty("span", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public int? Span { get; set; } = 1;
 
 [JsonProperty("type")]
