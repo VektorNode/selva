@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using ComputeBuilder.Config;
 using ComputeBuilder.IO;
-using ComputeBuilder.Logging;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using Grasshopper.Rhinoceros.Model;
@@ -260,10 +259,9 @@ public class GH_Block_To_File : GH_Component
         return;
       }
 
-      var logger = new GrasshopperLogger<RhinoDocumentConverter>(this);
       var options = new AppConfig.RhinoConverterOptions();
 
-      _converter = new RhinoDocumentConverter(logger, options);
+      _converter = new RhinoDocumentConverter(options);
     }
   }
 }

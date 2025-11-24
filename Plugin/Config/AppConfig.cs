@@ -35,7 +35,6 @@ public static class AppConfig
   public static class FileIO
   {
     public const int FileCopyBufferSizeBytes = 1024 * 1024; // 1MB
-    public const string RhinoConversionsFolder = "RhinoConversions";
     private const string TempFolderName = "ComputeBuilder";
     public static string TempDirectory => Path.Combine(Path.GetTempPath(), TempFolderName);
   }

@@ -4,7 +4,6 @@ using System.Drawing;
 using System.Linq;
 using ComputeBuilder.Config;
 using ComputeBuilder.IO;
-using ComputeBuilder.Logging;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
@@ -58,12 +57,11 @@ public class GH_DataToFile : GH_Component
         if (_converter == null)
         {
           // Create a simple logger that outputs to Grasshopper
-          var logger = new GrasshopperLogger<RhinoDocumentConverter>(this);
 
           // Configure options for Grasshopper usage
           var options = new AppConfig.RhinoConverterOptions();
 
-          _converter = new RhinoDocumentConverter(logger, options);
+          _converter = new RhinoDocumentConverter(options);
         }
       }
     }

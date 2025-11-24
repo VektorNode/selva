@@ -357,7 +357,7 @@ namespace ComputeBuilder.Plugin.Models.Generated
         public List<AvailableParameter> Parameters { get; set; } = new List<AvailableParameter>();
     }
 
-// ============================================================================
+    // ============================================================================
     // LAYOUTITEM (Discriminated Union)
     // ============================================================================
 

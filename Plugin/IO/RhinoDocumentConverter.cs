@@ -17,20 +17,13 @@ public class RhinoDocumentConverter : IDisposable
   private bool _disposed;
 
   public RhinoDocumentConverter(
-    ILogger<RhinoDocumentConverter> logger,
     AppConfig.RhinoConverterOptions options = null)
   {
-    _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     _options = options ?? new AppConfig.RhinoConverterOptions();
     _rateLimiter = new SemaphoreSlim(_options.MaxConcurrentConversions, _options.MaxConcurrentConversions);
-
     _tempDirectory = Path.Combine(AppConfig.FileIO.TempDirectory, Guid.NewGuid().ToString());
     Directory.CreateDirectory(_tempDirectory);
-
-    _logger.LogInformation("RhinoDocumentConverter initialized with temp directory: {TempDirectory}",
-      _tempDirectory);
   }
-
 
   public void Dispose()
   {
