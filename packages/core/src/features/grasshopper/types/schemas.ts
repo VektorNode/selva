@@ -1,9 +1,14 @@
 /**
  * API request/response schemas for Grasshopper compute operations
+ *
+ * @important These types mirror the Rhino.Compute API schema (Resthopper.IO).
+ * When Rhino.Compute is updated or types change, these definitions must be
+ * adjusted to maintain compatibility with the Compute server API.
+ *
+ * Reference: https://github.com/mcneel/rhino-compute/tree/main/src/compute.sln/Resthopper.IO
  */
 
 import type { ComputeConfig, RhinoModelUnit } from '@/core/types';
-import type { InputParamSchema, OutputParamSchema } from './parameters';
 import type { InnerTree } from './trees';
 
 /**
@@ -40,8 +45,8 @@ export interface GrasshopperDefinitionSource {
  */
 export interface GrasshopperComputeConfig
   extends ComputeConfig,
-    GrasshopperBaseSchema,
-    GrasshopperDefinitionSource {}
+  GrasshopperBaseSchema,
+  GrasshopperDefinitionSource { }
 
 /**
  * Raw I/O response schema from API (PascalCase)
@@ -97,3 +102,44 @@ export interface GrasshopperComputeResponse extends GrasshopperBaseSchema, Grass
   /** Computation warnings */
   warnings?: string[];
 }
+
+
+/**
+ * Output parameter
+ */
+export interface OutputParamSchema {
+  name: string;
+  nickname: string | null;
+  paramType: string;
+  /**
+ * Grasshopper parameter instance GUID
+ */
+  id: string;
+}
+
+/**
+ * Input parameter
+ */
+export interface InputParamSchema {
+  /**
+   * Grasshopper parameter instance GUID
+   */
+  id: string;
+  name: string;
+  nickname: string | null;
+  description: string;
+  paramType: string;
+  treeAccess: boolean;
+  minimum: number | null;
+  maximum: number | null;
+  atLeast: number;
+  atMost: number;
+  stepSize?: number;
+  default: any;
+  /**
+   * Key-value pairs for dropdown options
+   */
+  values?: Record<string, string>;
+  groupName?: string | null;
+}
+

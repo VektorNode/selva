@@ -1,4 +1,4 @@
-import { DataTreeDefault, DataTreePath, InputParam, InnerTree } from '../../types';
+import { DataTreeDefault, DataTreePath, InputParam, InnerTree } from '../types';
 
 /**
  * Value types that can be stored in a DataTree

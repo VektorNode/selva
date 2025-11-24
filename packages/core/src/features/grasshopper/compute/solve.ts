@@ -97,6 +97,9 @@ export function prepareGrasshopperArgs(
 /**
  * Helper to detect base64
  * @internal
+ *
+ * @param str - String to check if valid base64
+ * @returns True if the string is valid base64-encoded
  */
 export function isBase64(str: string): boolean {
   try {

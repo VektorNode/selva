@@ -1,6 +1,6 @@
 // src/features/grasshopper/io/input/input-parsers/__tests__/text-parser.test.ts
 import { describe, expect, it } from 'vitest';
-import processTextInput from '../text-parser';
+import { processTextInput } from '@/features/grasshopper/io/input/input-parsers';
 import { createTextInputSchema } from '@tests/helpers/test-data-builders';
 
 describe('processTextInput', () => {

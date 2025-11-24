@@ -20,3 +20,9 @@ export type ProcessedFile = {
   content: Uint8Array | string;
   path: string;
 };
+
+export type FileBaseInfo = {
+  FileName: string;
+  FilePath: string;
+};
+

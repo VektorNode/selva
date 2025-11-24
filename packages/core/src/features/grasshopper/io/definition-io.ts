@@ -9,7 +9,7 @@ import {
   IoResponseSchema,
 } from '../types';
 
-import { processInputs } from './input/input-parsers/input-processors';
+import { processInputs } from './input/input-processors';
 
 /**
  * Fetches raw input/output schemas from a Grasshopper definition.
@@ -20,7 +20,7 @@ import { processInputs } from './input/input-parsers/input-processors';
  * @returns Raw inputs and outputs with no type processing
  * @throws {RhinoComputeError} If fetch fails or response is invalid
  *
- * @internal Use `fetchParsedDefinitionIO()` for processed, type-safe inputs
+ * @public Use `fetchParsedDefinitionIO()` for processed, type-safe inputs
  */
 export async function fetchDefinitionIO(
   definitionUrl: string,

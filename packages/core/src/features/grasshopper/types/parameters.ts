@@ -25,19 +25,6 @@ export type OutputType =
   | string;
 
 /**
- * Output parameter schema after conversion to camelCase
- *
- * Represents an output parameter after runtime conversion via camelcaseKeys().
- * Property names follow JavaScript conventions (camelCase).
- */
-export interface OutputParamSchema {
-  name: string;
-  nickname: string | null;
-  paramType: string;
-  id: string;
-}
-
-/**
  * Union type for all possible default value types
  */
 export type DefaultValue<T> = T | T[] | DataTreeDefault<T> | undefined | null;
@@ -110,31 +97,4 @@ export type InputParam =
   | ValueListInputType
   | GeometryInputType;
 
-/**
- * Input parameter schema after conversion to camelCase
- *
- * This represents an input parameter after runtime conversion via camelcaseKeys().
- * All property names follow JavaScript conventions (camelCase).
- */
-export interface InputParamSchema {
-  /**
-   * Grasshopper parameter instance GUID
-   */
-  id: string;
-  name: string;
-  nickname: string | null;
-  description: string;
-  paramType: string;
-  treeAccess: boolean;
-  minimum: number | null;
-  maximum: number | null;
-  atLeast: number;
-  atMost: number;
-  stepSize?: number;
-  default: any;
-  /**
-   * Key-value pairs for dropdown options
-   */
-  values?: Record<string, string>;
-  groupName?: string | null;
-}
+

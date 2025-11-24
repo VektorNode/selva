@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+// ThreeDisplay is now generated from compute-schema.json
+
 
 /**
  * Rhino display data containing the mesh data and material information.
@@ -13,7 +15,6 @@ export type ThreeDisplay = {
   meshData: string;
   name: string;
 };
-
 /**
  * Updates the scene with the given meshes and camera settings.
  * If initialPositionSet is false, it positions the camera and sets the controls target based on the bounding boxes of the meshes.

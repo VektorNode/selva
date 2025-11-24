@@ -1,6 +1,6 @@
 // src/features/grasshopper/io/input/input-parsers/__tests__/numeric-parser.test.ts
 import { describe, expect, it } from 'vitest';
-import processNumericInput from '../numeric-parser';
+import { processNumericInput } from '@/features/grasshopper/io/input/input-parsers';
 import { createNumericInputSchema } from '@tests/helpers/test-data-builders';
 
 describe('processNumericInput', () => {

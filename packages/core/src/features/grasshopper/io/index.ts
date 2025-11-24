@@ -12,4 +12,4 @@ export * from './input';
 
 // Output processing
 export * from './output';
-export * from './tree-helpers';
+export * from '../data-tree';

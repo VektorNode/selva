@@ -46,7 +46,7 @@ export { fetchDefinitionIO, fetchParsedDefinitionIO } from './features/grasshopp
 // ============================================================================
 
 export { processInputs, processInput, DataTree } from './features/grasshopper';
-export type { DataTreeValue } from './features/grasshopper/io/tree-helpers/data-tree';
+export type { DataTreeValue } from './features/grasshopper/data-tree/data-tree';
 
 // ============================================================================
 // TYPE EXPORTS (Public types for this module)
@@ -80,5 +80,6 @@ export type {
 // Output types
 export type { OutputParamSchema as ParamOutputSchema, OutputType } from './features/grasshopper/types';
 
-// Error types
+// Error and config types
 export { RhinoComputeError } from './core';
+export type { ComputeConfig, RhinoModelUnit } from './core';

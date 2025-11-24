@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 
-import { applyOffset, computeCombinedBoundingBox, ThreeDisplay } from '../threejs';
+import { applyOffset, computeCombinedBoundingBox } from '../threejs';
 import {
   parseColor,
+
+  ThreeDisplay,
 
   VerticesToThreeMesh,
 } from '../threejs/three-helpers';

@@ -2,6 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Code Style Guidelines
+
+- Add only essential comments to code
+- Avoid obvious or redundant comments
+- Comment only complex logic, non-obvious decisions, or important warnings
+- Prefer self-documenting code with clear variable/function names over comments
+
+## Testing Philosophy
+
+- Create tests that add value, not just tests for trivial functionality
+- Focus on integration and workflow testing rather than unit tests for obvious code
+- Use tests to document expected behavior and edge cases
+
 ## Project Overview
 
 ComputeBuilder is a cross-platform Rhino Grasshopper plugin that enables web-based UIs for parametric models using a
@@ -13,9 +26,43 @@ dual-stack architecture:
 
 ## Essential Commands
 
+### Root-Level Commands (Monorepo)
+
+```bash
+# Install dependencies across all packages
+pnpm install
+
+# Build all packages in correct order (core → svelte-ui → builder)
+pnpm build
+
+# Start web dev server (packages/builder)
+pnpm dev
+
+# Build specific package
+pnpm --filter @computebuilder/core build
+pnpm --filter @computebuilder/svelte-ui build
+pnpm --filter @computebuilder/web build
+
+# Run tests
+pnpm test
+
+# Run tests in watch mode
+pnpm test:watch
+
+# Run type checking
+pnpm type-check
+
+# Lint and format
+pnpm lint
+pnpm lint:fix
+pnpm format
+```
+
 ### C# Plugin Development
 
 ```bash
+cd Plugin
+
 # Build for both Rhino 7 (net48) and Rhino 8 (net7.0)
 dotnet build --configuration Release
 
@@ -36,62 +83,67 @@ dotnet clean
 **Windows (Rhino 7):**
 
 ```bash
-copy "bin\Release\net48\ComputeBuilder.gha" "%APPDATA%\Grasshopper\Libraries\"
+copy "Plugin\bin\Release\net48\ComputeBuilder.gha" "%APPDATA%\Grasshopper\Libraries\"
 ```
 
 **Windows (Rhino 8):**
 
 ```bash
-copy "bin\Release\net7.0\ComputeBuilder.gha" "%APPDATA%\Grasshopper\Libraries-8\"
+copy "Plugin\bin\Release\net7.0\ComputeBuilder.gha" "%APPDATA%\Grasshopper\Libraries-8\"
 ```
 
 **macOS (Rhino 8):**
 
 ```bash
-cp bin/Release/net7.0/ComputeBuilder.gha ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/
+cp Plugin/bin/Release/net7.0/ComputeBuilder.gha ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/
 ```
 
 After installation, restart Rhino completely.
 
-### Web Application Development
+### Individual Package Development
+
+#### @computebuilder/core
 
 ```bash
-cd web
+# Build library
+pnpm --filter @computebuilder/core build
 
-# Install dependencies
-npm install
+# Type check
+pnpm --filter @computebuilder/core run check
 
-# Start dev server (http://localhost:5173)
-npm run dev
+# Run tests
+pnpm --filter @computebuilder/core test
+pnpm --filter @computebuilder/core test:watch
+```
+
+#### @computebuilder/svelte-ui
+
+```bash
+# Build component library
+pnpm --filter @computebuilder/svelte-ui build
+
+# Type check
+pnpm --filter @computebuilder/svelte-ui run check
+
+# Run tests
+pnpm --filter @computebuilder/svelte-ui test
+```
+
+#### @computebuilder/web (builder application)
+
+```bash
+# Dev server (http://localhost:5173)
+pnpm --filter @computebuilder/web dev
 
 # Build for production
-npm run build
+pnpm --filter @computebuilder/web build
 
 # Preview production build
-npm run preview
+pnpm --filter @computebuilder/web preview
 
 # Type checking
-npm run check
-
-# Watch mode type checking
-npm run check:watch
+pnpm --filter @computebuilder/web run check
 ```
-
-### Quick Development Setup
-
-**Windows PowerShell:**
-
-```powershell
-.\start-dev.ps1
-```
-
-**macOS/Linux:**
-
-```bash
-./start-dev.sh
-```
-
-These scripts build the plugin, install it, and start the dev server.
 
 ### Schema Generation (Single Source of Truth)
 
@@ -235,125 +287,89 @@ This approach allows supporting multiple parameter types without strong coupling
 
 ## Key File Responsibilities
 
-### C# Components
+### C# Plugin (Plugin/)
 
-**Components/UIBuilderComponent.cs** (~587 lines - REFACTORED)
+**Components/UI/GH_UIBuilderComponent.cs** (~600 lines)
 
 - **Orchestration only** - delegates to specialized utilities
 - Manages component lifecycle and .gh file persistence
-- Coordinates between SchemaManager, ValueApplicator, CommunicationHandler, and PersistenceManager
+- Coordinates with WebSocket server and value applicator
 - Event-driven document synchronization
 - **WebSocket-only** - no file polling
 
-**Components/ClearContextDataComponent.cs** (152 lines)
+**Components/Params/GH_Contextual_Value_List.cs**
 
-- Utility to clear contextual parameter data
-- Resets parameters to initial state
+- Custom parameter type implementing `IGH_ContextualParameter`
+- Stores values from web UI
+- Supports data tree structures
 
-### Core Utilities (NEW - Extracted from UIBuilderComponent)
+**Display/ThreeDisplay.cs & ThreeDisplayGoo.cs**
 
-**Utils/SchemaManager.cs** (~180 lines)
+- Converts geometry to Three.js-compatible format
+- Handles compression and serialization for web transmission
+- Manages material properties for web rendering
 
-- Parameter scanning from Grasshopper documents
-- Discovers `IGH_ContextualParameter` instances and output components
-- Validates for duplicate parameter names
-- Type mapping (dictionary-based for performance)
+**IO/** - File and data handling
 
-**Utils/ValueApplicator.cs** (~150 lines)
+- `GH_DataToFile.cs` - Export geometry to various file formats
+- `GH_Base64Parser.cs` - Handle Base64 encoding
+- `RhinoDocumentConverter.cs` - Convert geometry between formats
 
-- Applies values from web UI to Grasshopper parameters
-- Generic type-based value conversion (no duplicate methods)
-- Reflection-based parameter assignment
-- Tracks last applied values to prevent redundant updates
+### TypeScript Packages
 
-**Utils/CommunicationHandler.cs** (~140 lines)
+#### packages/core
 
-- WebSocket server lifecycle management
-- Real-time bidirectional communication
-- Event-based message handling
-- Output broadcasting to web clients
+- **Purpose**: Type-safe Rhino Compute client library
+- **Key files**: `src/core/`, `src/features/grasshopper/`
+- **Responsibilities**: Grasshopper automation, Rhino Compute integration, data structures
+- **No UI dependencies** - pure logic and types
+- **Testing**: Test core integration workflows
 
-**Utils/PersistenceManager.cs** (~90 lines)
+#### packages/svelte-ui
 
-- Session file read/write operations
-- Schema, values, state, and available parameters persistence
-- Simplified interface for UIBuilderComponent
+- **Purpose**: Reusable Svelte UI components
+- **Key directories**:
+  - `src/lib/components/ui/` - Input/output controls
+  - `src/lib/components/` - Layout and editor components
+- **Responsibilities**: Rendering UI controls, parameter visualization
+- **Dependencies**: Core package only
+- **Testing**: Component behavior and rendering
 
-**Utils/SessionManager.cs** (92 lines)
+#### packages/web (Builder)
 
-- Session ID generation (8-character GUIDs)
-- File path helpers
-- JSON serialization wrappers
-- Session cleanup for old files
-- Path resolution for cross-platform compatibility
+**src/routes/** - SvelteKit page routes
 
-**Utils/WebSocketServer.cs** (285 lines)
+- `+page.svelte` - Main builder interface
+- `api/schema/[sessionId]/+server.ts` - Schema persistence
+- `api/values/[sessionId]/+server.ts` - Runtime values
+- `api/state/[sessionId]/+server.ts` - Session state
+- `api/available/[sessionId]/+server.ts` - Available parameters from Grasshopper
 
-- Async HttpListener-based WebSocket server
-- Thread-safe client management
-- Broadcast messaging
-- Graceful shutdown handling
+**src/lib/api/** - Client integration
+
+- `client.ts` - REST API client for schema, values, state
+- `websocket.ts` - WebSocket client for real-time updates with auto-reconnect
+
+**src/lib/components/** - UI building blocks
+
+- Drag-and-drop parameter management
+- Layout editors (Tab, Grid)
+- Parameter preview controls
 
 ### Data Models
 
-**Models/UISchema.cs** (386 lines)
-All data structures shared between C# and web UI:
+**Plugin/Models/UISchema.cs** (shared via JSON Schema)
+
+Type definitions available in both C# and TypeScript:
 
 - `UISchema` - Complete UI definition
-- `InputParameter` / `OutputParameter` - Parameter definitions with Compute-compatible metadata
+- `InputParameter` / `OutputParameter` - With Compute-compatible metadata
 - `InputConfig` / `OutputConfig` - Type-specific configurations
 - `RuntimeValues` - Current parameter values
 - `SessionState` - Session metadata
 - `AvailableParameter` - Discovered Grasshopper parameters
 
-**Compute-Style Metadata:**
-Each parameter now includes Rhino Compute-compatible metadata:
-
-- `paramType` - Grasshopper parameter type (Number, Point, Geometry, etc.)
-- `atLeast` / `atMost` - Data access constraints
-- `treeAccess` - Whether parameter accepts tree structures
-- `minimum` / `maximum` - Value constraints (for numeric types)
-
-**UI Builder Metadata:**
-Additional metadata for enhanced UI building:
-
-- `groupName` - Logical grouping (set manually in UI builder)
-- `displayName` - Alternative display name
-- `order` - Display order within groups
-- `tooltip` / `description` - Help text
-- `nickname` - Short identifier
-
-### SvelteKit Application
-
-**web/src/routes/api/** - Server-side API routes
-
-- `schema/[sessionId]/+server.ts` - GET/POST schema
-- `values/[sessionId]/+server.ts` - GET/POST values
-- `state/[sessionId]/+server.ts` - GET state
-- `available/[sessionId]/+server.ts` - GET available parameters
-
-**web/src/routes/builder/+page.svelte** - Schema builder UI with drag-and-drop layout editor
-
-**web/src/routes/preview/+page.svelte** - Interactive preview UI for session-based workflows
-
-**web/src/routes/app/+page.svelte** - Rhino Compute integration demo (standalone mode)
-
-**web/src/lib/api/client.ts** - REST API client
-
-**web/src/lib/api/websocket.ts** - WebSocket client
-
-**web/src/lib/components/ui/** - Reusable UI components:
-
-- `InputControl.svelte` - Input parameter controls
-- `OutputDisplay.svelte` - Output parameter displays
-- `TabLayout.svelte` - Tabbed layout system
-- `LegacyLayout.svelte` - Grid-based layout (fallback)
-
-**web/src/lib/components/** - Drag-and-drop components:
-
-- `DragDropContext.svelte` - Drag-and-drop state management
-- `DraggableParameter.svelte` - Draggable parameter items
-- `DropZone.svelte` - Drop target zones
+**Generated TypeScript**: `packages/core/src/schema.ts`
 
 ## Communication Protocols
 
@@ -438,32 +454,65 @@ The system now supports full Compute-style parameter types for better compatibil
 
 ## Testing Workflow
 
+### Automated Testing
+
+```bash
+# Run all tests across all packages
+pnpm test
+
+# Run tests in watch mode (useful during development)
+pnpm test:watch
+
+# Run tests for a specific package
+pnpm --filter @computebuilder/core test
+pnpm --filter @computebuilder/svelte-ui test
+pnpm --filter @computebuilder/web test
+```
+
+### Manual Integration Testing (Local Grasshopper)
+
 1. **Build C# plugin:**
 
    ```bash
-   dotnet build --configuration Release
+   cd Plugin && dotnet build --configuration Release
    ```
 
-2. **Install to Grasshopper** (copy `.gha` file)
+2. **Install to Grasshopper** (copy `.gha` file from appropriate bin directory)
 
 3. **Restart Rhino completely**
 
-4. **Start web server:**
+4. **Start web dev server:**
 
    ```bash
-   cd web && npm run dev
+   pnpm dev
    ```
+   (This starts the builder at http://localhost:5173)
 
 5. **In Grasshopper:**
    - Add contextual parameter (e.g., Number Slider from IGH_ContextualParameter)
    - Add UIBuilderComponent
    - Set Enable = true
-   - Browser opens automatically
+   - Browser opens automatically to `/builder?session={sessionId}`
 
 6. **Verify communication:**
    - Check browser console (F12)
    - Check Grasshopper component messages
    - Inspect session files in temp directory
+
+### Schema Generation Testing
+
+When making changes to parameter types:
+
+```bash
+# Generate TypeScript and C# from JSON Schema
+./generate-schemas.sh
+
+# Verify TypeScript compilation
+pnpm type-check
+
+# Verify C# compilation
+cd Plugin && dotnet build
+```
 
 ## Common Development Scenarios
 

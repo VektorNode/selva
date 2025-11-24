@@ -1,13 +1,7 @@
 import { ValidationErrors, RhinoComputeError } from '@/core/errors';
 
-import processBooleanInput from './boolean-parser';
-import processNumericInput from './numeric-parser';
-import parseToObject from './object-parser';
-import processTextInput from './text-parser';
-import processValueListInput from './valuelist-parser';
-
-import { ParserRegistry } from './parser-registry';
-import { preProcessInputDefault } from '../input-validators';
+import { preProcessInputDefault } from './input-validators';
+import { PARSERS } from './input-parsers';
 
 import type {
   BaseInputType,
@@ -18,23 +12,7 @@ import type {
   InputParamSchema,
   TextInputType,
   ValueListInputType,
-} from '../../../types';
-
-// Initialize parser registry on module load
-const initializeRegistry = () => {
-  ParserRegistry.register('Number', processNumericInput);
-  ParserRegistry.register('Integer', processNumericInput);
-  ParserRegistry.register('Boolean', processBooleanInput);
-  ParserRegistry.register('Text', processTextInput);
-  ParserRegistry.register('ValueList', processValueListInput);
-  ParserRegistry.register('Geometry', parseToObject);
-};
-
-// Call initialization once
-initializeRegistry();
-
-// Use the consolidated preprocessing function from input-validators
-const preProcessRawInput = preProcessInputDefault;
+} from '../../types';
 
 /**
  * Creates a safe default InputType when processing fails
@@ -135,10 +113,10 @@ export function processInput(rawInput: InputParamSchema): InputParam {
 
   try {
     // Handle default object processing
-    preProcessRawInput(rawInput);
+    preProcessInputDefault(rawInput);
 
-    // Get parser from registry
-    const parser = ParserRegistry.get(rawInput.paramType);
+    // Get parser for this type
+    const parser = PARSERS[rawInput.paramType];
     if (!parser) {
       throw ValidationErrors.unknownParamType(rawInput.paramType, rawInput.name);
     }

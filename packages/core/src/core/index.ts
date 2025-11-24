@@ -46,4 +46,6 @@ export { RhinoComputeError } from './errors/base';
 // Encoding utilities
 export { base64ByteArray, decodeBase64ToBinary, base64ToRhinoObject } from './utils/encoding';
 export { zipArgs } from './utils/args';
-export type { ComputeConfig } from './types';
+
+// Configuration
+export type { ComputeConfig, RhinoModelUnit } from './types';

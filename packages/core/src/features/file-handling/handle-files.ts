@@ -1,11 +1,6 @@
 import { decodeBase64ToBinary } from '@/core';
 
-import { FileData, ProcessedFile } from './types';
-
-export type FileBaseInfo = {
-  FileName: string;
-  FilePath: string;
-};
+import { FileBaseInfo, FileData, ProcessedFile } from './types';
 
 /**
  * Extracts and processes files from compute response data without downloading them.
@@ -99,7 +94,6 @@ const processFiles = async (
     }
   });
 
-  // Process additional files if provided
   if (additionalFiles) {
     const filesArray = Array.isArray(additionalFiles) ? additionalFiles : [additionalFiles];
     const additionalProcessed = await Promise.all(
@@ -124,7 +118,6 @@ const processFiles = async (
       })
     );
 
-    // Filter out failed fetches and add successful ones
     processedFiles.push(...additionalProcessed.filter((f): f is ProcessedFile => f !== null));
   }
 
@@ -147,10 +140,8 @@ async function createAndDownloadZip(files: ProcessedFile[], zipName: string): Pr
     zipData[file.path] = typeof file.content === 'string' ? strToU8(file.content) : file.content;
   });
 
-  // Generate ZIP synchronously (fflate is very fast)
   const zipped = zipSync(zipData, { level: 6 });
 
-  // Create blob and download
   const blob = new Blob([zipped as BlobPart], { type: 'application/zip' });
   saveFile(blob, `${zipName}.zip`);
 }

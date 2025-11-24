@@ -1,6 +1,6 @@
 // src/features/grasshopper/io/input/input-parsers/__tests__/boolean-parser.test.ts
 import { describe, expect, it } from 'vitest';
-import processBooleanInput from '../boolean-parser';
+import { processBooleanInput } from '@/features/grasshopper/io/input/input-parsers';
 import { createBooleanInputSchema } from '@tests/helpers/test-data-builders';
 import { RhinoComputeError } from '@/core';
 

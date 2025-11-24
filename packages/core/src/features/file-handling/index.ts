@@ -1,2 +1,3 @@
 export * from './handle-files';
-export type { FileData, ProcessedFile } from './types';
+// FileData is now generated from compute-schema.json
+export type { ProcessedFile } from './types';

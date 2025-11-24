@@ -2,7 +2,9 @@
  * Parsed data structures for processed Grasshopper input/output
  */
 
-import type { InputParam, InputParamSchema, OutputParamSchema } from './parameters';
+import type { InputParam } from './parameters';
+import type { InputParamSchema } from './schemas';
+import type { OutputParamSchema } from './schemas';
 
 /**
  * Parsed input/output structure with raw schemas

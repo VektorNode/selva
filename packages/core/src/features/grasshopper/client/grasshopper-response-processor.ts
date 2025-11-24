@@ -1,11 +1,8 @@
-// GrasshopperResponseProcessor with expanded JSDoc for end users
-// Assumes refactored response-processors module
-
-import { downloadFileData, FileBaseInfo } from '@/features/file-handling';
-import { FileData } from '@/features/file-handling/types';
+import { downloadFileData } from '@/features/file-handling';
+import { FileBaseInfo, FileData } from '@/features/file-handling/types';
 import { getThreeMeshesFromComputeResponse } from '@/features/visualization';
 
-import { GrasshopperComputeResponse } from '../../types';
+import { GrasshopperComputeResponse } from '../types';
 
 import {
   extractFileData,
@@ -14,7 +11,7 @@ import {
   GetValuesOptions,
   GetValuesResult,
   ParsedContext,
-} from './response-processors';
+} from '../io/output/response-processors';
 
 /**
  * High-level wrapper for interacting with Grasshopper Compute responses.

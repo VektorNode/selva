@@ -9,7 +9,6 @@ export type { DataTreePath, DataItem, DataTreeDefault, InnerTreeData, InnerTree,
 // Parameter types
 export type {
   OutputType,
-  OutputParamSchema,
   DefaultValue,
   BaseInputType,
   NumericInputType,
@@ -18,7 +17,6 @@ export type {
   GeometryInputType,
   ValueListInputType,
   InputParam,
-  InputParamSchema,
 } from './parameters';
 
 // Grouping types
@@ -32,6 +30,8 @@ export type {
   IoResponseSchema,
   GrasshopperRequestSchema,
   GrasshopperComputeResponse,
+  InputParamSchema,
+  OutputParamSchema
 } from './schemas';
 
 // Parsed types

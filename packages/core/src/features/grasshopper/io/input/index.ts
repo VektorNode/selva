@@ -6,4 +6,4 @@
 export * from './input-validators';
 
 // Input parsers
-export * from './input-parsers';
+export { processInput, processInputs } from './input-processors';
