@@ -9,6 +9,7 @@ import {
   DataTree,
 } from '@computebuilder/core';
 import type { InputParamSchema } from '$lib/types/generated';
+import { PUBLIC_COMPUTE_SERVER_URL } from '$env/static/public';
 
 interface ComputeRequest {
   inputs: InputParamSchema[];
@@ -26,7 +27,7 @@ function transformInputParameter(input: InputParamSchema, value: unknown): Input
     name: input.nickname || input.name,
     nickname: input.nickname || null,
     treeAccess: input.treeAccess || false,
-    paramId: input.id,
+    id: input.id,
   };
 
   if (input.paramType === 'Number' || input.paramType === 'Integer') {
@@ -65,7 +66,7 @@ export const POST: RequestHandler = async ({ request }) => {
   try {
     const body: ComputeRequest = await request.json();
 
-    const { inputs, values, definitionUrl, serverUrl = 'http://localhost:5000/' } = body;
+    const { inputs, values, definitionUrl, serverUrl = PUBLIC_COMPUTE_SERVER_URL } = body;
 
     if (!inputs || !values || !definitionUrl) {
       throw error(400, 'Missing required fields: inputs, values, or definitionUrl');

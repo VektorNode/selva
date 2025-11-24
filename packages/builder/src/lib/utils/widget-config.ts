@@ -79,9 +79,6 @@ export function createDefaultWidgetConfig(
   param: AvailableParameter,
   category: 'input' | 'output'
 ): WidgetConfig {
-  console.log(
-    `Creating default widget config for ${category} parameter ${param.name} of type ${param.paramType} with widget ${widgetType}`
-  );
 
   if (category === 'input') {
     switch (widgetType) {

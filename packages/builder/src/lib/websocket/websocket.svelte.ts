@@ -34,11 +34,11 @@ export class WebSocketState {
     this.on('solvingState', (data) => {
       if (data && typeof data === 'object' && 'isSolving' in data) {
         this.isSolving = Boolean(data.isSolving);
-        console.log(`[WebSocket] Grasshopper solving state: ${this.isSolving}`);
+        console.info(`[WebSocket] Grasshopper solving state: ${this.isSolving}`);
 
         // If solving just finished and we have a pending update, send it
         if (!this.isSolving && this._pendingValueUpdate) {
-          console.log('[WebSocket] Sending queued value update');
+          console.info('[WebSocket] Sending queued value update');
           this.send('valueUpdate', this._pendingValueUpdate);
           this._pendingValueUpdate = null;
         }
