@@ -35,9 +35,6 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("description")]
         public string Description { get; set; }
 
-        [JsonProperty("version")]
-        public string Version { get; set; } = "1.0";
-
 /// <summary>
 /// Semantic version of the schema format (MAJOR.MINOR.PATCH)
 /// </summary>
@@ -59,15 +56,6 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("lastModified", NullValueHandling = NullValueHandling.Ignore)]
         public DateTime LastModified { get; set; } = DateTime.UtcNow;
 
-        [JsonProperty("inputs")]
-        public List<InputParamSchema> Inputs { get; set; } = new List<InputParamSchema>();
-
-        [JsonProperty("outputs")]
-        public List<OutputParamSchema> Outputs { get; set; } = new List<OutputParamSchema>();
-
-        [JsonProperty("layout")]
-        public LayoutConfig Layout { get; set; }
-
         [JsonProperty("enable3dViewer")]
         public bool Enable3dViewer { get; set; } = false;
 
@@ -76,6 +64,15 @@ namespace ComputeBuilder.Plugin.Models.Generated
 /// </summary>
         [JsonProperty("instanceSolve")]
         public bool? InstanceSolve { get; set; } = true;
+
+        [JsonProperty("inputs")]
+        public List<InputParamSchema> Inputs { get; set; } = new List<InputParamSchema>();
+
+        [JsonProperty("outputs")]
+        public List<OutputParamSchema> Outputs { get; set; } = new List<OutputParamSchema>();
+
+        [JsonProperty("layout")]
+        public LayoutConfig Layout { get; set; }
     }
 
 // ============================================================================

@@ -264,7 +264,6 @@
         "id": { "type": "string" },
         "name": { "type": "string" },
         "description": { "type": "string" },
-        "version": { "type": "string", "default": "1.0" },
         "schemaVersion": {
           "type": "string",
           "pattern": "^\\d+\\.\\d+\\.\\d+$",
@@ -282,6 +281,12 @@
           "format": "date-time",
           "description": "Last modification timestamp"
         },
+        "enable3dViewer": { "type": "boolean", "default": false },
+        "instanceSolve": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, changes trigger immediate solving. If false, user must press Calculate button."
+        },
         "inputs": {
           "type": "array",
           "items": { "$ref": "#/definitions/InputParamSchema" }
@@ -290,13 +295,7 @@
           "type": "array",
           "items": { "$ref": "#/definitions/OutputParamSchema" }
         },
-        "layout": { "$ref": "#/definitions/LayoutConfig" },
-        "enable3dViewer": { "type": "boolean", "default": false },
-        "instanceSolve": {
-          "type": "boolean",
-          "default": true,
-          "description": "If true, changes trigger immediate solving. If false, user must press Calculate button."
-        }
+        "layout": { "$ref": "#/definitions/LayoutConfig" }
       },
       "required": [
         "id",

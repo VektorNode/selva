@@ -183,7 +183,6 @@ export interface UISchema {
   id: string;
   name: string;
   description: string;
-  version: string;
   /**
    * Semantic version of the schema format (MAJOR.MINOR.PATCH)
    */
@@ -197,14 +196,14 @@ export interface UISchema {
    * Last modification timestamp
    */
   lastModified?: string;
-  inputs: InputParamSchema[];
-  outputs: OutputParamSchema[];
-  layout: LayoutConfig;
   enable3dViewer: boolean;
   /**
    * If true, changes trigger immediate solving. If false, user must press Calculate button.
    */
   instanceSolve?: boolean;
+  inputs: InputParamSchema[];
+  outputs: OutputParamSchema[];
+  layout: LayoutConfig;
   [k: string]: unknown | undefined;
 }
 export interface RuntimeValues {
