@@ -16,9 +16,9 @@ public class FileData
   public string Data { get; set; }
 
   /// <summary>
-  ///   Gets or sets the file type/extension (e.g., ".xlsx"). The dot is important.
+  ///   Gets or sets the file type/extension (e.g., ".3dm"). The dot is important.
   /// </summary>
-  public string FileType { get; set; } //Example .xlsx -> Important with point
+  public string FileType { get; set; } //Example .3dm -> Important with point
 
   /// <summary>
   ///   Gets or sets a value indicating whether the file data is Base64 encoded.
