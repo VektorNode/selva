@@ -24,7 +24,7 @@ export default class GrasshopperResponseProcessor {
   /**
    * Store the compute response for reuse.
    */
-  constructor(private readonly response: GrasshopperComputeResponse) { }
+  constructor(private readonly response: GrasshopperComputeResponse) {}
 
   /**
    * Extract all values in the response.

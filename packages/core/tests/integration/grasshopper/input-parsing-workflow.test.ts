@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 // import { mockGrasshopperIoResponse, rawMockNumberInput } from '@tests/fixtures';
 import { camelcaseKeys } from '@/core/utils/camel-case';
-import { processNumericInput, processTextInput, processBooleanInput } from '@/features/grasshopper/io/input/input-parsers';
+import {
+  processNumericInput,
+  processTextInput,
+  processBooleanInput,
+} from '@/features/grasshopper/io/input/input-parsers';
 import type { InputParamSchema } from '@/features/grasshopper/types';
-
 
 describe('mixed parameter workflow', () => {
   it('should handle typical parametric design inputs', () => {

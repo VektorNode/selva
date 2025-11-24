@@ -3,7 +3,11 @@
  * Uses Svelte 5 runes for reactive state management
  */
 
-import { WEBSOCKET_MAX_RECONNECT_ATTEMPTS, WEBSOCKET_RECONNECT_INTERVAL, WEBSOCKET_URL } from '$lib/app.config';
+import {
+  WEBSOCKET_MAX_RECONNECT_ATTEMPTS,
+  WEBSOCKET_RECONNECT_INTERVAL,
+  WEBSOCKET_URL,
+} from '$lib/app.config';
 import type { UISchema } from '$lib/types/generated';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 

@@ -352,9 +352,7 @@ export class DataTree {
   /**
    * Check if input is numeric type.
    */
-  private static isNumericInput(
-    input: InputParam
-  ): input is InputParam & {
+  private static isNumericInput(input: InputParam): input is InputParam & {
     paramType: 'Number' | 'Integer';
     minimum?: number | null;
     maximum?: number | null;

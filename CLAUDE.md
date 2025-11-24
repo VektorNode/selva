@@ -486,6 +486,7 @@ pnpm --filter @computebuilder/web test
    ```bash
    pnpm dev
    ```
+
    (This starts the builder at http://localhost:5173)
 
 5. **In Grasshopper:**

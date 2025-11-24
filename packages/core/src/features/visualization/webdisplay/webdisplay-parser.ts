@@ -1,13 +1,7 @@
 import * as THREE from 'three';
 
 import { applyOffset, computeCombinedBoundingBox } from '../threejs';
-import {
-  parseColor,
-
-  ThreeDisplay,
-
-  VerticesToThreeMesh,
-} from '../threejs/three-helpers';
+import { parseColor, ThreeDisplay, VerticesToThreeMesh } from '../threejs/three-helpers';
 
 import { decompressMeshData } from './mesh-compression';
 
@@ -114,11 +108,7 @@ function extractMeshesFromData(
 /**
  * Processes a single data branch to extract display meshes.
  */
-function processDataBranch(
-  branch: DataItem[],
-  meshes: THREE.Mesh[],
-  scaleFactor: number
-): void {
+function processDataBranch(branch: DataItem[], meshes: THREE.Mesh[], scaleFactor: number): void {
   for (const item of branch) {
     if (item.type === DISPLAY_COMPONENT_TYPE) {
       const rhinoMeshData = parseRhinoMeshData(item.data);

@@ -77,11 +77,9 @@ export default class GrasshopperClient {
     try {
       // Validate inputs
       if (!definitionUrl?.trim()) {
-        throw new RhinoComputeError(
-          'Definition URL is required',
-          ErrorCodes.INVALID_INPUT,
-          { context: { receivedUrl: definitionUrl } }
-        );
+        throw new RhinoComputeError('Definition URL is required', ErrorCodes.INVALID_INPUT, {
+          context: { receivedUrl: definitionUrl },
+        });
       }
 
       // Check server
@@ -167,22 +165,18 @@ export default class GrasshopperClient {
    */
   private normalizeComputeConfig<T extends ComputeConfig | GrasshopperComputeConfig>(config: T): T {
     if (!config.serverUrl?.trim()) {
-      throw new RhinoComputeError(
-        'serverUrl is required',
-        ErrorCodes.INVALID_CONFIG,
-        { context: { receivedServerUrl: config.serverUrl } }
-      );
+      throw new RhinoComputeError('serverUrl is required', ErrorCodes.INVALID_CONFIG, {
+        context: { receivedServerUrl: config.serverUrl },
+      });
     }
 
     // Validate URL format
     try {
       new URL(config.serverUrl);
     } catch (err) {
-      throw new RhinoComputeError(
-        'serverUrl must be a valid URL',
-        ErrorCodes.INVALID_CONFIG,
-        { context: { receivedServerUrl: config.serverUrl } }
-      );
+      throw new RhinoComputeError('serverUrl must be a valid URL', ErrorCodes.INVALID_CONFIG, {
+        context: { receivedServerUrl: config.serverUrl },
+      });
     }
 
     // Validate that it's not the default public endpoint

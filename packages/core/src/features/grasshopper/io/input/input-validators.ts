@@ -109,7 +109,12 @@ export function normalizeGroupName(
  * @throws {RhinoComputeError} If constraints are invalid
  */
 export function validateNumericConstraints(input: InputParamSchema): void {
-  if (input.minimum !== undefined && input.minimum !== null && input.maximum !== undefined && input.maximum !== null) {
+  if (
+    input.minimum !== undefined &&
+    input.minimum !== null &&
+    input.maximum !== undefined &&
+    input.maximum !== null
+  ) {
     if (input.minimum > input.maximum) {
       throw ValidationErrors.invalid(
         input.name,
@@ -169,10 +174,7 @@ export function validateInputStructure(
   inputName?: string
 ): void {
   if (!input || typeof input !== 'object') {
-    throw ValidationErrors.invalidStructure(
-      inputName || 'unknown',
-      expectedStructure
-    );
+    throw ValidationErrors.invalidStructure(inputName || 'unknown', expectedStructure);
   }
 }
 

@@ -10,11 +10,7 @@
 // THREE.JS VISUALIZATION
 // ============================================================================
 
-export {
-  initThree,
-  updateScene,
-  Materials,
-} from './threejs';
+export { initThree, updateScene, Materials } from './threejs';
 
 export type { ThreeDisplay } from './threejs/three-helpers';
 

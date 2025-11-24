@@ -78,21 +78,17 @@ export function base64ByteArray(bytes: Uint8Array | null | undefined): string {
     if (!Array.isArray(inputBytes)) {
       // Import here to avoid circular dependencies at top level
       const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
-      throw new RhinoComputeError(
-        'inputBytes must be an array',
-        ErrorCodes.INVALID_INPUT,
-        { context: { receivedType: typeof inputBytes } }
-      );
+      throw new RhinoComputeError('inputBytes must be an array', ErrorCodes.INVALID_INPUT, {
+        context: { receivedType: typeof inputBytes },
+      });
     }
 
     if (typeof i !== 'number' || i < 0 || i >= inputBytes.length) {
       // Import here to avoid circular dependencies at top level
       const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
-      throw new RhinoComputeError(
-        'Invalid index i',
-        ErrorCodes.INVALID_INPUT,
-        { context: { index: i, arrayLength: inputBytes.length } }
-      );
+      throw new RhinoComputeError('Invalid index i', ErrorCodes.INVALID_INPUT, {
+        context: { index: i, arrayLength: inputBytes.length },
+      });
     }
 
     const byte1 = inputBytes[i] !== undefined ? inputBytes[i] : 0;

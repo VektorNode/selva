@@ -45,8 +45,8 @@ export interface GrasshopperDefinitionSource {
  */
 export interface GrasshopperComputeConfig
   extends ComputeConfig,
-  GrasshopperBaseSchema,
-  GrasshopperDefinitionSource { }
+    GrasshopperBaseSchema,
+    GrasshopperDefinitionSource {}
 
 /**
  * Raw I/O response schema from API (PascalCase)
@@ -73,7 +73,9 @@ export interface IoResponseSchema {
  * Arguments sent to Grasshopper compute endpoint
  * Includes config options + definition source + input values
  */
-export interface GrasshopperRequestSchema extends GrasshopperBaseSchema, GrasshopperDefinitionSource {
+export interface GrasshopperRequestSchema
+  extends GrasshopperBaseSchema,
+    GrasshopperDefinitionSource {
   /** Input values organized by parameter */
   values?: InnerTree[];
 }
@@ -82,7 +84,9 @@ export interface GrasshopperRequestSchema extends GrasshopperBaseSchema, Grassho
  * Response from Grasshopper compute server
  * Includes all schema fields + computed results
  */
-export interface GrasshopperComputeResponse extends GrasshopperBaseSchema, GrasshopperDefinitionSource {
+export interface GrasshopperComputeResponse
+  extends GrasshopperBaseSchema,
+    GrasshopperDefinitionSource {
   /** Whether cache was used (always present in response) */
   cachesolve: boolean;
   /** Model units (always present in response) */
@@ -103,7 +107,6 @@ export interface GrasshopperComputeResponse extends GrasshopperBaseSchema, Grass
   warnings?: string[];
 }
 
-
 /**
  * Output parameter
  */
@@ -112,8 +115,8 @@ export interface OutputParamSchema {
   nickname: string | null;
   paramType: string;
   /**
- * Grasshopper parameter instance GUID
- */
+   * Grasshopper parameter instance GUID
+   */
   id: string;
 }
 
@@ -142,4 +145,3 @@ export interface InputParamSchema {
   values?: Record<string, string>;
   groupName?: string | null;
 }
-

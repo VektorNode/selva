@@ -56,7 +56,12 @@ export const ValidationErrors = {
       `Invalid boolean value: ${value}${inputName ? ` in input "${inputName}"` : ''}`,
       ErrorCodes.VALIDATION_ERROR,
       {
-        context: { receivedValue: value, inputName, expectedValues: ['true', 'false'], ...options?.context },
+        context: {
+          receivedValue: value,
+          inputName,
+          expectedValues: ['true', 'false'],
+          ...options?.context,
+        },
         ...options,
       }
     ),
@@ -64,7 +69,12 @@ export const ValidationErrors = {
   /**
    * Create an error for invalid default value in value list
    */
-  invalidDefault: (inputName: string, defaultValue: unknown, availableValues: unknown[], options?: ErrorOptions) =>
+  invalidDefault: (
+    inputName: string,
+    defaultValue: unknown,
+    availableValues: unknown[],
+    options?: ErrorOptions
+  ) =>
     new RhinoComputeError(
       `ValueList input "${inputName}" default value "${defaultValue}" is not in available values`,
       ErrorCodes.VALIDATION_ERROR,
@@ -136,10 +146,14 @@ export const DataErrors = {
    * Create an error for failed data transformation
    */
   transformError: (dataType: string, reason: string, options?: ErrorOptions) =>
-    new RhinoComputeError(`Data transformation error for ${dataType}: ${reason}`, ErrorCodes.COMPUTATION_ERROR, {
-      context: { dataType, reason, ...options?.context },
-      ...options,
-    }),
+    new RhinoComputeError(
+      `Data transformation error for ${dataType}: ${reason}`,
+      ErrorCodes.COMPUTATION_ERROR,
+      {
+        context: { dataType, reason, ...options?.context },
+        ...options,
+      }
+    ),
 
   /**
    * Create an error for invalid data type
@@ -163,10 +177,14 @@ export const ConfigErrors = {
    * Create an error for invalid configuration
    */
   invalid: (configName: string, reason: string, options?: ErrorOptions) =>
-    new RhinoComputeError(`Invalid configuration "${configName}": ${reason}`, ErrorCodes.INVALID_CONFIG, {
-      context: { configName, reason, ...options?.context },
-      ...options,
-    }),
+    new RhinoComputeError(
+      `Invalid configuration "${configName}": ${reason}`,
+      ErrorCodes.INVALID_CONFIG,
+      {
+        context: { configName, reason, ...options?.context },
+        ...options,
+      }
+    ),
 
   /**
    * Create an error for missing required config property

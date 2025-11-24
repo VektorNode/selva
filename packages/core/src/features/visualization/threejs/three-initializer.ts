@@ -583,7 +583,6 @@ function setupEventHandlers(
     // Update controls target
     controls.target.copy(center);
     controls.update();
-
   };
 
   // Clear selection

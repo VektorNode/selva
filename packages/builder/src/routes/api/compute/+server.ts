@@ -39,7 +39,6 @@ function transformInputParameter(input: InputParamSchema, value: unknown): Input
       atMost: input.atMost,
       stepSize: input.paramType === 'Integer' ? 1 : input.stepSize,
       default: value ?? input.default,
-
     } as NumericInputType;
   } else if (input.paramType === 'Text') {
     return {

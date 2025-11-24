@@ -1,4 +1,4 @@
-import type { InputParam } from '@computebuilder/core'
+import type { InputParam } from '@computebuilder/core';
 
 export const exampleInputs: InputParam[] = [
   {
@@ -11,7 +11,7 @@ export const exampleInputs: InputParam[] = [
     groupName: 'Geometry::Dimensions',
     id: 'geom-width',
     treeAccess: false,
-    nickname: 'w'
+    nickname: 'w',
   },
   {
     name: 'Height',
@@ -23,7 +23,7 @@ export const exampleInputs: InputParam[] = [
     groupName: 'Geometry::Dimensions',
     id: 'geom-height',
     treeAccess: false,
-    nickname: 'h'
+    nickname: 'h',
   },
   {
     name: 'Depth',
@@ -35,7 +35,7 @@ export const exampleInputs: InputParam[] = [
     groupName: 'Geometry::Dimensions',
     id: 'geom-depth',
     treeAccess: false,
-    nickname: 'd'
+    nickname: 'd',
   },
   {
     name: 'Material',
@@ -50,8 +50,8 @@ export const exampleInputs: InputParam[] = [
       steel: 'Steel',
       aluminum: 'Aluminum',
       plywood: 'Plywood',
-      composite: 'Composite Panel'
-    }
+      composite: 'Composite Panel',
+    },
   },
   {
     name: 'Finish',
@@ -66,8 +66,8 @@ export const exampleInputs: InputParam[] = [
       'matte-black': 'Matte Black',
       'brushed-steel': 'Brushed Steel',
       'clear-coat': 'Clear Coat',
-      'powder-white': 'Powder-Coated White'
-    }
+      'powder-white': 'Powder-Coated White',
+    },
   },
   {
     name: 'Label',
@@ -77,7 +77,7 @@ export const exampleInputs: InputParam[] = [
     groupName: 'Metadata::General',
     id: 'meta-label',
     treeAccess: false,
-    nickname: 'lbl'
+    nickname: 'lbl',
   },
   {
     name: 'Tag',
@@ -87,7 +87,7 @@ export const exampleInputs: InputParam[] = [
     groupName: 'Metadata::General',
     id: 'meta-tag',
     treeAccess: false,
-    nickname: 'tag'
+    nickname: 'tag',
   },
   {
     name: 'IsActive',
@@ -97,7 +97,7 @@ export const exampleInputs: InputParam[] = [
     groupName: 'Metadata::Flags',
     id: 'meta-active',
     treeAccess: false,
-    nickname: 'active'
+    nickname: 'active',
   },
   {
     name: 'Tolerance',
@@ -109,7 +109,7 @@ export const exampleInputs: InputParam[] = [
     groupName: 'Manufacturing::Precision',
     id: 'mfg-tolerance',
     treeAccess: false,
-    nickname: 'tol'
+    nickname: 'tol',
   },
   {
     name: 'ProductionMode',
@@ -123,7 +123,7 @@ export const exampleInputs: InputParam[] = [
     values: {
       prototype: 'Prototype',
       batch: 'Batch Production',
-      automated: 'Automated Line'
-    }
-  }
-] as const
+      automated: 'Automated Line',
+    },
+  },
+] as const;

@@ -78,7 +78,10 @@ export type {
 } from './features/grasshopper/types';
 
 // Output types
-export type { OutputParamSchema as ParamOutputSchema, OutputType } from './features/grasshopper/types';
+export type {
+  OutputParamSchema as ParamOutputSchema,
+  OutputType,
+} from './features/grasshopper/types';
 
 // Error and config types
 export { RhinoComputeError } from './core';

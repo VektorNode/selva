@@ -26,10 +26,7 @@ export interface ProcessValueOptions<T> {
  *
  * @internal
  */
-function processInputValue<T>(
-  input: InputParamSchema,
-  options: ProcessValueOptions<T>
-): void {
+function processInputValue<T>(input: InputParamSchema, options: ProcessValueOptions<T>): void {
   const { transform, setUndefinedOnEmpty = true } = options;
 
   // Don't process undefined or null - preserve them as is
@@ -200,10 +197,7 @@ function getInputStepSize(value: number, roundingTolerance: number = 1e-8): numb
 /**
  * Processes numeric input parameters including step size and decimal places
  */
-function processNumericInput(
-  input: InputParamSchema,
-  roundingTolerance: number = 1e-8
-): void {
+function processNumericInput(input: InputParamSchema, roundingTolerance: number = 1e-8): void {
   const isIntegerType = input.paramType === 'Integer';
 
   // Convert string values to numbers

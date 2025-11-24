@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 // ThreeDisplay is now generated from compute-schema.json
 
-
 /**
  * Rhino display data containing the mesh data and material information.
  */

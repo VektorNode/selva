@@ -4,7 +4,15 @@
  */
 
 // Data tree types
-export type { DataTreePath, DataItem, DataTreeDefault, InnerTreeData, InnerTree, Values, ProcessedDataItem } from './trees';
+export type {
+  DataTreePath,
+  DataItem,
+  DataTreeDefault,
+  InnerTreeData,
+  InnerTree,
+  Values,
+  ProcessedDataItem,
+} from './trees';
 
 // Parameter types
 export type {
@@ -31,7 +39,7 @@ export type {
   GrasshopperRequestSchema,
   GrasshopperComputeResponse,
   InputParamSchema,
-  OutputParamSchema
+  OutputParamSchema,
 } from './schemas';
 
 // Parsed types

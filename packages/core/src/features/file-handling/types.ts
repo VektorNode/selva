@@ -25,4 +25,3 @@ export type FileBaseInfo = {
   FileName: string;
   FilePath: string;
 };
-

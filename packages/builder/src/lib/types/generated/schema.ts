@@ -5,7 +5,13 @@
  * and run `npm run generate:ts` in the schemas directory to regenerate this file.
  */
 
-export type GrasshopperParamType = 'Number' | 'Integer' | 'Boolean' | 'Text' | 'ValueList' | 'Generic';
+export type GrasshopperParamType =
+  | 'Number'
+  | 'Integer'
+  | 'Boolean'
+  | 'Text'
+  | 'ValueList'
+  | 'Generic';
 export type LayoutItem =
   | InputNumberLayoutItem
   | InputTextLayoutItem
@@ -257,16 +263,23 @@ export interface AvailableParameters {
   [k: string]: unknown | undefined;
 }
 
-
 // ============================================================================
 // TYPE GUARDS
 // ============================================================================
 
-export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem {
+export function isInputLayoutItem(
+  item: LayoutItem
+): item is
+  | InputNumberLayoutItem
+  | InputTextLayoutItem
+  | InputDropdownLayoutItem
+  | InputCheckboxLayoutItem {
   return item.type === 'input';
 }
 
-export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem {
+export function isOutputLayoutItem(
+  item: LayoutItem
+): item is OutputTextLayoutItem | OutputNumberLayoutItem {
   return item.type === 'output';
 }
 
@@ -287,6 +300,10 @@ export function isCheckboxWidget(item: LayoutItem): item is InputCheckboxLayoutI
 }
 
 // Helper type aliases
-export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem;
+export type InputLayoutItem =
+  | InputNumberLayoutItem
+  | InputTextLayoutItem
+  | InputDropdownLayoutItem
+  | InputCheckboxLayoutItem;
 export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem;
 export type SupportedTypes = string | number | boolean;

@@ -96,5 +96,3 @@ export type InputParam =
   | TextInputType
   | ValueListInputType
   | GeometryInputType;
-
-
