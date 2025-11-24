@@ -1,4 +1,5 @@
 import type { InputParamSchema } from '../../../types';
+import { RhinoComputeError, ErrorCodes } from '@/core/errors';
 
 /**
  * Type for a single value transformer function
@@ -103,7 +104,11 @@ export function createBooleanTransformer(
       if (lowerValue === 'true') return true;
       if (lowerValue === 'false') return false;
       if (throwOnInvalid) {
-        throw new Error(`Invalid boolean value: ${value}`);
+        throw new RhinoComputeError(
+          `Invalid boolean value: ${value}`,
+          ErrorCodes.VALIDATION_ERROR,
+          { context: { receivedValue: value, expectedValues: ['true', 'false'] } }
+        );
       }
       return null;
     }

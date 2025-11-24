@@ -179,10 +179,10 @@ async function handleResponse(
     throw new RhinoComputeError('Failed to parse JSON response', ErrorCodes.NETWORK_ERROR, {
       statusCode: response.status,
       context: {
-        originalError: (error as Error).message,
         url: fullUrl,
         requestId,
       },
+      originalError: error instanceof Error ? error : new Error(String(error)),
     });
   }
 }

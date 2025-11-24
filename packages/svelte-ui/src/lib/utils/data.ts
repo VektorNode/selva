@@ -9,7 +9,7 @@ export const exampleInputs: InputParam[] = [
     minimum: 0,
     maximum: 5000,
     groupName: 'Geometry::Dimensions',
-    paramId: 'geom-width',
+    id: 'geom-width',
     treeAccess: false,
     nickname: 'w'
   },
@@ -21,7 +21,7 @@ export const exampleInputs: InputParam[] = [
     minimum: 0,
     maximum: 4000,
     groupName: 'Geometry::Dimensions',
-    paramId: 'geom-height',
+    id: 'geom-height',
     treeAccess: false,
     nickname: 'h'
   },
@@ -33,7 +33,7 @@ export const exampleInputs: InputParam[] = [
     minimum: 0,
     maximum: 2000,
     groupName: 'Geometry::Dimensions',
-    paramId: 'geom-depth',
+    id: 'geom-depth',
     treeAccess: false,
     nickname: 'd'
   },
@@ -43,7 +43,7 @@ export const exampleInputs: InputParam[] = [
     description: 'Primary material',
     default: 'steel',
     groupName: 'Geometry::Specification',
-    paramId: 'geom-material',
+    id: 'geom-material',
     treeAccess: false,
     nickname: 'mat',
     values: {
@@ -59,7 +59,7 @@ export const exampleInputs: InputParam[] = [
     description: 'Surface finish type',
     default: 'matte-black',
     groupName: 'Geometry::Specification',
-    paramId: 'geom-finish',
+    id: 'geom-finish',
     treeAccess: false,
     nickname: 'finish',
     values: {
@@ -75,7 +75,7 @@ export const exampleInputs: InputParam[] = [
     description: 'Display label for UI and reports',
     default: 'Component A',
     groupName: 'Metadata::General',
-    paramId: 'meta-label',
+    id: 'meta-label',
     treeAccess: false,
     nickname: 'lbl'
   },
@@ -85,7 +85,7 @@ export const exampleInputs: InputParam[] = [
     description: 'Short identifier for integration',
     default: 'CMP-A',
     groupName: 'Metadata::General',
-    paramId: 'meta-tag',
+    id: 'meta-tag',
     treeAccess: false,
     nickname: 'tag'
   },
@@ -95,7 +95,7 @@ export const exampleInputs: InputParam[] = [
     description: 'Controls whether the component is processed',
     default: true,
     groupName: 'Metadata::Flags',
-    paramId: 'meta-active',
+    id: 'meta-active',
     treeAccess: false,
     nickname: 'active'
   },
@@ -107,7 +107,7 @@ export const exampleInputs: InputParam[] = [
     minimum: 0,
     maximum: 10,
     groupName: 'Manufacturing::Precision',
-    paramId: 'mfg-tolerance',
+    id: 'mfg-tolerance',
     treeAccess: false,
     nickname: 'tol'
   },
@@ -117,7 +117,7 @@ export const exampleInputs: InputParam[] = [
     description: 'Manufacturing workflow mode',
     default: 'prototype',
     groupName: 'Manufacturing::Workflow',
-    paramId: 'mfg-mode',
+    id: 'mfg-mode',
     treeAccess: false,
     nickname: 'mode',
     values: {

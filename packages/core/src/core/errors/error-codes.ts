@@ -8,6 +8,7 @@ export const ErrorCodes = {
   UNKNOWN_ERROR: 'UNKNOWN_ERROR',
   INVALID_STATE: 'INVALID_STATE',
   INVALID_INPUT: 'INVALID_INPUT',
+  INVALID_CONFIG: 'INVALID_CONFIG',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

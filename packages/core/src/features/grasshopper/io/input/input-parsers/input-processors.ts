@@ -1,4 +1,4 @@
-import { RhinoComputeError } from '@/core/errors';
+import { ErrorCodes, RhinoComputeError } from '@/core/errors';
 
 import processBooleanInput from './boolean-parser';
 import processNumericInput from './numeric-parser';
@@ -177,7 +177,7 @@ export function processInput(rawInput: InputParamSchema): InputParam {
     nickname: rawInput.nickname,
     treeAccess: rawInput.treeAccess,
     groupName: rawInput.groupName ?? '',
-    paramId: rawInput.paramId,
+    id: rawInput.id,
   };
 
   try {
@@ -236,7 +236,9 @@ export function processInput(rawInput: InputParamSchema): InputParam {
 
 
       default:
-        throw new RhinoComputeError(`Unknown paramType: ${rawInput.paramType}`);
+        throw new RhinoComputeError(`Unknown paramType: ${rawInput.paramType}`, ErrorCodes.VALIDATION_ERROR, {
+          context: { receivedParamType: rawInput.paramType, paramName: rawInput.name },
+        });
     }
   } catch (error) {
     if (error instanceof RhinoComputeError) {
@@ -244,7 +246,15 @@ export function processInput(rawInput: InputParamSchema): InputParam {
       // Return a safe default based on paramType
       return createSafeDefault(rawInput, baseInput);
     } else {
-      throw error;
+      // Transform unexpected errors
+      throw new RhinoComputeError(
+        error instanceof Error ? error.message : String(error),
+        ErrorCodes.VALIDATION_ERROR,
+        {
+          context: { paramName: rawInput.name, paramType: rawInput.paramType },
+          originalError: error instanceof Error ? error : new Error(String(error)),
+        }
+      );
     }
   }
 }

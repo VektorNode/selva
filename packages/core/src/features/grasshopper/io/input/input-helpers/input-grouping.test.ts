@@ -18,7 +18,7 @@ describe('groupInputsNested', () => {
         atMost: 1,
         stepSize: 1,
         default: 0,
-        paramId: 'param-3',
+        id: 'param-3',
       },
       {
         description: '',
@@ -33,7 +33,7 @@ describe('groupInputsNested', () => {
         atMost: 1,
         stepSize: 1,
         default: 0,
-        paramId: 'param-3',
+        id: 'param-3',
       },
       {
         description: '',
@@ -48,7 +48,7 @@ describe('groupInputsNested', () => {
         atMost: 1,
         stepSize: 1,
         default: 0,
-        paramId: 'param-3',
+        id: 'param-3',
       },
     ];
 
@@ -101,7 +101,7 @@ describe('groupInputsNested', () => {
         atMost: 1,
         stepSize: 1,
         default: 0,
-        paramId: 'param-3',
+        id: 'param-3',
       },
       {
         description: '',
@@ -116,7 +116,7 @@ describe('groupInputsNested', () => {
         atMost: 1,
         stepSize: 1,
         default: 0,
-        paramId: 'param-3',
+        id: 'param-3',
       },
     ];
 
@@ -144,7 +144,7 @@ describe('groupInputsNested', () => {
         atMost: 1,
         stepSize: 1,
         default: 0,
-        paramId: 'param-3',
+        id: 'param-3',
       },
       {
         description: '',
@@ -159,7 +159,7 @@ describe('groupInputsNested', () => {
         atMost: 1,
         stepSize: 1,
         default: 0,
-        paramId: 'param-3',
+        id: 'param-3',
       },
       {
         description: '',
@@ -174,7 +174,7 @@ describe('groupInputsNested', () => {
         atMost: 1,
         stepSize: 1,
         default: 0,
-        paramId: 'param-3',
+        id: 'param-3',
       },
     ];
 
@@ -201,7 +201,7 @@ describe('groupInputsNested', () => {
         atMost: 1,
         stepSize: 1,
         default: 0,
-        paramId: 'param-1',
+        id: 'param-1',
       },
     ];
 
@@ -225,7 +225,7 @@ describe('groupInputsNested', () => {
         atMost: 1,
         stepSize: 1,
         default: 0,
-        paramId: 'param-1',
+        id: 'param-1',
       },
     ];
 
@@ -250,7 +250,7 @@ describe('groupInputsNested', () => {
         atMost: 1,
         stepSize: 1,
         default: 0,
-        paramId: 'param-1',
+        id: 'param-1',
       },
     ];
 

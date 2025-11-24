@@ -121,7 +121,7 @@ export function getValues<T = ParsedContext>(
 
   for (const param of response.values) {
     forEachTreeItem(param.InnerTree, (item) => {
-      const key = byId ? item.paramId : param.ParamName;
+      const key = byId ? item.id : param.ParamName;
       if (!key) return;
 
       const value = extractItemValue(item.data, item.type, parseValues, rhino);
@@ -171,7 +171,7 @@ export function getValue(
     targetParam = response.values.find((p) => {
       let found = false;
       forEachTreeItem(p.InnerTree, (item) => {
-        if (item.paramId === options.byId) found = true;
+        if (item.id === options.byId) found = true;
       });
       return found;
     });
@@ -182,7 +182,7 @@ export function getValue(
   const collected: any[] = [];
 
   forEachTreeItem(targetParam.InnerTree, (item) => {
-    if ('byId' in options && item.paramId !== options.byId) return;
+    if ('byId' in options && item.id !== options.byId) return;
     const v = extractItemValue(item.data, item.type, parseValues, rhino);
     collected.push(v);
   });

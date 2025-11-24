@@ -47,15 +47,19 @@ export interface InputParamSchema {
   id: string;
   name: string;
   nickname: string;
-  paramType: GrasshopperParamType;
   description?: string;
-  atLeast?: number;
-  atMost?: number;
+  paramType: GrasshopperParamType;
   treeAccess?: boolean;
-  default?: unknown;
   minimum?: number;
   maximum?: number;
+  atLeast?: number;
+  atMost?: number;
   stepSize?: number;
+  default?: unknown;
+  /**
+   * Key-value pairs for dropdown options
+   */
+  values?: Record<string, string>;
   [k: string]: unknown | undefined;
 }
 /**
@@ -109,7 +113,7 @@ export interface DropdownWidgetConfig {
  * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
  * via the `definition` "CheckboxWidgetConfig".
  */
-export interface CheckboxWidgetConfig {}
+export interface CheckboxWidgetConfig { }
 /**
  * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
  * via the `definition` "InputNumberLayoutItem".

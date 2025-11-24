@@ -63,6 +63,10 @@ export default class GrasshopperClient {
 
   /**
    * Run a compute job with a Grasshopper definition.
+   *
+   * @throws {RhinoComputeError} with code INVALID_INPUT if definitionUrl is empty
+   * @throws {RhinoComputeError} with code NETWORK_ERROR if server is offline
+   * @throws {RhinoComputeError} with code COMPUTATION_ERROR if computation fails
    */
   public async solve(
     definitionUrl: string,
@@ -73,12 +77,20 @@ export default class GrasshopperClient {
     try {
       // Validate inputs
       if (!definitionUrl?.trim()) {
-        throw new Error('Definition URL is required');
+        throw new RhinoComputeError(
+          'Definition URL is required',
+          ErrorCodes.INVALID_INPUT,
+          { context: { receivedUrl: definitionUrl } }
+        );
       }
 
       // Check server
       if (!(await this.serverStats.isServerOnline())) {
-        throw new Error('Rhino Compute server is not online');
+        throw new RhinoComputeError(
+          'Rhino Compute server is not online',
+          ErrorCodes.NETWORK_ERROR,
+          { context: { serverUrl: this.config.serverUrl } }
+        );
       }
 
       // Run computation
@@ -110,8 +122,11 @@ export default class GrasshopperClient {
 
       throw new RhinoComputeError(
         error instanceof Error ? error.message : String(error),
-        undefined,
-        { context: { definitionUrl, inputs: dataTree } }
+        ErrorCodes.COMPUTATION_ERROR,
+        {
+          context: { definitionUrl, inputs: dataTree },
+          originalError: error instanceof Error ? error : new Error(String(error)),
+        }
       );
     }
   }
@@ -147,23 +162,35 @@ export default class GrasshopperClient {
 
   /**
    * Validates and normalizes a compute configuration.
+   *
+   * @throws {RhinoComputeError} with code INVALID_CONFIG if configuration is invalid
    */
   private normalizeComputeConfig<T extends ComputeConfig | GrasshopperComputeConfig>(config: T): T {
     if (!config.serverUrl?.trim()) {
-      throw new Error('serverUrl is required');
+      throw new RhinoComputeError(
+        'serverUrl is required',
+        ErrorCodes.INVALID_CONFIG,
+        { context: { receivedServerUrl: config.serverUrl } }
+      );
     }
 
     // Validate URL format
     try {
       new URL(config.serverUrl);
-    } catch {
-      throw new Error('serverUrl must be a valid URL');
+    } catch (err) {
+      throw new RhinoComputeError(
+        'serverUrl must be a valid URL',
+        ErrorCodes.INVALID_CONFIG,
+        { context: { receivedServerUrl: config.serverUrl } }
+      );
     }
 
     // Validate that it's not the default public endpoint
     if (config.serverUrl === '' || config.serverUrl === 'https://compute.rhino3d.com/') {
-      throw new Error(
-        'serverUrl must be set to your Compute server URL. The default public endpoint is not allowed.'
+      throw new RhinoComputeError(
+        'serverUrl must be set to your Compute server URL. The default public endpoint is not allowed.',
+        ErrorCodes.INVALID_CONFIG,
+        { context: { receivedServerUrl: config.serverUrl } }
       );
     }
 

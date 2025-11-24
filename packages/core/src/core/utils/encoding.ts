@@ -5,6 +5,7 @@
  *
  * @param base64File - Base64 encoded string
  * @returns Decoded binary data as Uint8Array
+ * @throws {RhinoComputeError} If base64 decoding is not supported in this environment.
  */
 export function decodeBase64ToBinary(base64File: string): Uint8Array {
   if (typeof globalThis.atob === 'function') {
@@ -14,7 +15,14 @@ export function decodeBase64ToBinary(base64File: string): Uint8Array {
     // Buffer.from returns a Uint8Array-compatible Buffer
     return (globalThis as any).Buffer.from(base64File, 'base64');
   }
-  throw new Error('Base64 decoding not supported in this environment.');
+
+  // Import here to avoid circular dependencies at top level
+  const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
+  throw new RhinoComputeError(
+    'Base64 decoding not supported in this environment.',
+    ErrorCodes.INVALID_STATE,
+    { context: { environmentInfo: 'atob or Buffer not available' } }
+  );
 }
 
 /**
@@ -33,7 +41,13 @@ export function decodeBase64ToBinary(base64File: string): Uint8Array {
  */
 export function base64ByteArray(bytes: Uint8Array | null | undefined): string {
   if (bytes === null || bytes === undefined) {
-    throw new Error('Input bytes must not be null or undefined');
+    // Import here to avoid circular dependencies at top level
+    const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
+    throw new RhinoComputeError(
+      'Input bytes must not be null or undefined',
+      ErrorCodes.INVALID_INPUT,
+      { context: { receivedValue: bytes } }
+    );
   }
 
   const encodings = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -62,11 +76,23 @@ export function base64ByteArray(bytes: Uint8Array | null | undefined): string {
   for (let i = 0; i < mainLength; i += 3) {
     // Combine the three bytes into a single integer
     if (!Array.isArray(inputBytes)) {
-      throw new Error('inputBytes must be an array');
+      // Import here to avoid circular dependencies at top level
+      const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
+      throw new RhinoComputeError(
+        'inputBytes must be an array',
+        ErrorCodes.INVALID_INPUT,
+        { context: { receivedType: typeof inputBytes } }
+      );
     }
 
     if (typeof i !== 'number' || i < 0 || i >= inputBytes.length) {
-      throw new Error('Invalid index i');
+      // Import here to avoid circular dependencies at top level
+      const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
+      throw new RhinoComputeError(
+        'Invalid index i',
+        ErrorCodes.INVALID_INPUT,
+        { context: { index: i, arrayLength: inputBytes.length } }
+      );
     }
 
     const byte1 = inputBytes[i] !== undefined ? inputBytes[i] : 0;

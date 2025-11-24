@@ -1,6 +1,7 @@
 import * as fflate from 'fflate';
 
 import { decodeBase64ToBinary } from '@/core/index';
+import { RhinoComputeError, ErrorCodes } from '@/core/errors';
 
 interface MeshData {
   verticesArray: Float32Array;
@@ -11,7 +12,7 @@ interface MeshData {
  * Decompresses a base64-encoded string and returns the decompressed MeshData.
  * @param base64String - The base64-encoded string to decompress.
  * @returns The decompressed MeshData.
- * @throws If decompression fails or data is invalid.
+ * @throws {RhinoComputeError} If decompression fails or data is invalid.
  */
 export function decompressMeshData(base64String: string): MeshData {
   try {
@@ -19,8 +20,16 @@ export function decompressMeshData(base64String: string): MeshData {
     const decompressedData = fflate.gunzipSync(bytes);
     return parseMeshBinaryData(decompressedData);
   } catch (error) {
-    console.error('Decompression failed:', error);
-    throw new Error('Failed to decompress data');
+    throw new RhinoComputeError(
+      error instanceof RhinoComputeError
+        ? error.message
+        : `Failed to decompress data: ${error instanceof Error ? error.message : String(error)}`,
+      error instanceof RhinoComputeError ? error.code : ErrorCodes.VALIDATION_ERROR,
+      {
+        context: { base64StringLength: base64String.length },
+        originalError: error instanceof Error ? error : new Error(String(error)),
+      }
+    );
   }
 }
 
@@ -28,7 +37,7 @@ export function decompressMeshData(base64String: string): MeshData {
  * Parses binary data and returns mesh data.
  * @param binaryMeshData - The binary mesh data to parse.
  * @returns The parsed mesh data.
- * @throws If data is invalid or insufficient.
+ * @throws {RhinoComputeError} If data is invalid or insufficient.
  */
 function parseMeshBinaryData(binaryMeshData: Uint8Array): MeshData {
   const dataView = new DataView(
@@ -40,18 +49,36 @@ function parseMeshBinaryData(binaryMeshData: Uint8Array): MeshData {
 
   // Read the total number of floats in vertices array
   if (offset + 4 > dataView.byteLength) {
-    throw new Error('Insufficient data to read the number of vertex floats.');
+    throw new RhinoComputeError(
+      'Insufficient data to read the number of vertex floats.',
+      ErrorCodes.VALIDATION_ERROR,
+      { context: { expectedBytes: 4, availableBytes: dataView.byteLength, offset } }
+    );
   }
   const numVertexFloats = dataView.getUint32(offset, true);
   offset += 4;
 
   if (numVertexFloats % 3 !== 0) {
-    throw new Error('Invalid number of vertex floats; should be divisible by 3.');
+    throw new RhinoComputeError(
+      'Invalid number of vertex floats; should be divisible by 3.',
+      ErrorCodes.VALIDATION_ERROR,
+      { context: { numVertexFloats, remainder: numVertexFloats % 3 } }
+    );
   }
 
   const verticesByteLength = numVertexFloats * Float32Array.BYTES_PER_ELEMENT;
   if (offset + verticesByteLength > dataView.byteLength) {
-    throw new Error('Insufficient data to read vertices.');
+    throw new RhinoComputeError(
+      'Insufficient data to read vertices.',
+      ErrorCodes.VALIDATION_ERROR,
+      {
+        context: {
+          expectedBytes: verticesByteLength,
+          availableBytes: dataView.byteLength - offset,
+          offset,
+        },
+      }
+    );
   }
 
   // Create Float32Array directly
@@ -64,14 +91,28 @@ function parseMeshBinaryData(binaryMeshData: Uint8Array): MeshData {
 
   // Read the total number of face indices
   if (offset + 4 > dataView.byteLength) {
-    throw new Error('Insufficient data to read the number of face indices.');
+    throw new RhinoComputeError(
+      'Insufficient data to read the number of face indices.',
+      ErrorCodes.VALIDATION_ERROR,
+      { context: { expectedBytes: 4, availableBytes: dataView.byteLength - offset, offset } }
+    );
   }
   const numIndices = dataView.getUint32(offset, true);
   offset += 4;
 
   const indicesByteLength = numIndices * Uint32Array.BYTES_PER_ELEMENT;
   if (offset + indicesByteLength > dataView.byteLength) {
-    throw new Error('Insufficient data to read face indices.');
+    throw new RhinoComputeError(
+      'Insufficient data to read face indices.',
+      ErrorCodes.VALIDATION_ERROR,
+      {
+        context: {
+          expectedBytes: indicesByteLength,
+          availableBytes: dataView.byteLength - offset,
+          offset,
+        },
+      }
+    );
   }
 
   // Create Uint32Array directly

@@ -30,10 +30,11 @@ export type OutputType =
  * Represents an output parameter as it comes from the Rhino Compute API.
  * Property names are in PascalCase.
  */
-export interface RawParamOutputSchema {
+export interface RawOutputParamSchema {
   Name: string;
   Nickname: string | null;
   ParamType: string;
+  Id: string;
 }
 
 /**
@@ -42,11 +43,11 @@ export interface RawParamOutputSchema {
  * Represents an output parameter after runtime conversion via camelcaseKeys().
  * Property names follow JavaScript conventions (camelCase).
  */
-export interface ParamOutputSchema {
+export interface OutputParamSchema {
   name: string;
   nickname: string | null;
   paramType: string;
-  paramId: string;
+  Id: string;
 }
 
 // ============================================================================
@@ -68,7 +69,7 @@ export interface DataItem {
   /** The actual returned data as a string that may need to be parsed */
   data: string;
   /** The grasshopper refrence id of the output */
-  paramId: string;
+  id: string;
 }
 
 /**
@@ -135,7 +136,7 @@ export interface BaseInputType {
   nickname: string | null;
   treeAccess: boolean;
   groupName: string;
-  paramId: string;
+  id: string;
 }
 
 export interface NumericInputType extends BaseInputType {
@@ -208,20 +209,26 @@ export interface RawInputParamSchema {
  * All property names follow JavaScript conventions (camelCase).
  */
 export interface InputParamSchema {
-  description: string;
+  /**
+ * Grasshopper parameter instance GUID
+ */
+  id: string;
   name: string;
   nickname: string | null;
-  treeAccess: boolean;
-  groupName: string | null;
+  description: string;
   paramType: string;
+  treeAccess: boolean;
   minimum: number | null;
   maximum: number | null;
   atLeast: number;
   atMost: number;
   stepSize?: number;
   default: any;
+  /**
+ * Key-value pairs for dropdown options
+ */
   values?: Record<string, string>;
-  paramId: string;
+  groupName?: string | null;
 }
 
 /**
@@ -274,7 +281,7 @@ export interface IoResponseSchema {
   OutputNames: string[];
   Icon: string | null;
   Inputs: RawInputParamSchema[];
-  Outputs: RawParamOutputSchema[];
+  Outputs: RawOutputParamSchema[];
   Warnings: any[];
   Errors: any[];
 }
@@ -310,7 +317,7 @@ export type CamelCasedIoResponseSchema = {
   outputNames: string[];
   icon: string | null;
   inputs: InputParamSchema[];
-  outputs: ParamOutputSchema[];
+  outputs: OutputParamSchema[];
   warnings: any[];
   errors: any[];
 };
@@ -324,7 +331,7 @@ export type CamelCasedIoResponseSchema = {
  */
 export interface GrasshopperParsedIORaw {
   inputs: InputParamSchema[];
-  outputs: ParamOutputSchema[];
+  outputs: OutputParamSchema[];
 }
 
 /**
@@ -332,7 +339,7 @@ export interface GrasshopperParsedIORaw {
  */
 export interface GrasshopperParsedIO {
   inputs: InputParam[];
-  outputs: ParamOutputSchema[];
+  outputs: OutputParamSchema[];
 }
 
 // /**
