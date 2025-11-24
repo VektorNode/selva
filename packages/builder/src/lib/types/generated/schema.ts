@@ -5,23 +5,7 @@
  * and run `npm run generate:ts` in the schemas directory to regenerate this file.
  */
 
-/**
- * Grasshopper parameter types
- *
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "GrasshopperParamType".
- */
-export type GrasshopperParamType =
-  | 'Number'
-  | 'Integer'
-  | 'Boolean'
-  | 'Text'
-  | 'ValueList'
-  | 'Generic';
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "LayoutItem".
- */
+export type GrasshopperParamType = 'Number' | 'Integer' | 'Boolean' | 'Text' | 'ValueList' | 'Generic';
 export type LayoutItem =
   | InputNumberLayoutItem
   | InputTextLayoutItem
@@ -36,10 +20,6 @@ export type LayoutItem =
 export interface ComputeBuilderUISchema {
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "InputParamSchema".
- */
 export interface InputParamSchema {
   /**
    * Grasshopper parameter instance GUID
@@ -47,25 +27,17 @@ export interface InputParamSchema {
   id: string;
   name: string;
   nickname: string;
-  description?: string;
   paramType: GrasshopperParamType;
-  treeAccess?: boolean;
-  minimum?: number;
-  maximum?: number;
+  description?: string;
   atLeast?: number;
   atMost?: number;
-  stepSize?: number;
+  treeAccess?: boolean;
   default?: unknown;
-  /**
-   * Key-value pairs for dropdown options
-   */
-  values?: Record<string, string>;
+  minimum?: number;
+  maximum?: number;
+  stepSize?: number;
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "OutputParamSchema".
- */
 export interface OutputParamSchema {
   /**
    * Grasshopper parameter instance GUID
@@ -77,10 +49,6 @@ export interface OutputParamSchema {
   description?: string;
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "NumberWidgetConfig".
- */
 export interface NumberWidgetConfig {
   minimum?: number;
   maximum?: number;
@@ -88,18 +56,10 @@ export interface NumberWidgetConfig {
   placeholder?: string;
   renderAsSlider?: boolean;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "TextWidgetConfig".
- */
 export interface TextWidgetConfig {
   placeholder?: string;
   required?: boolean;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "DropdownWidgetConfig".
- */
 export interface DropdownWidgetConfig {
   /**
    * Key-value pairs for dropdown options
@@ -109,15 +69,7 @@ export interface DropdownWidgetConfig {
   };
   required?: boolean;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "CheckboxWidgetConfig".
- */
-export interface CheckboxWidgetConfig { }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "InputNumberLayoutItem".
- */
+export interface CheckboxWidgetConfig {}
 export interface InputNumberLayoutItem {
   id: string;
   /**
@@ -133,10 +85,6 @@ export interface InputNumberLayoutItem {
   config: NumberWidgetConfig;
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "InputTextLayoutItem".
- */
 export interface InputTextLayoutItem {
   id: string;
   /**
@@ -152,10 +100,6 @@ export interface InputTextLayoutItem {
   config: TextWidgetConfig;
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "InputDropdownLayoutItem".
- */
 export interface InputDropdownLayoutItem {
   id: string;
   /**
@@ -171,10 +115,6 @@ export interface InputDropdownLayoutItem {
   config: DropdownWidgetConfig;
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "InputCheckboxLayoutItem".
- */
 export interface InputCheckboxLayoutItem {
   id: string;
   /**
@@ -190,10 +130,6 @@ export interface InputCheckboxLayoutItem {
   config?: CheckboxWidgetConfig;
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "OutputTextLayoutItem".
- */
 export interface OutputTextLayoutItem {
   id: string;
   /**
@@ -208,10 +144,6 @@ export interface OutputTextLayoutItem {
   widgetType: 'text';
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "OutputNumberLayoutItem".
- */
 export interface OutputNumberLayoutItem {
   id: string;
   /**
@@ -226,10 +158,6 @@ export interface OutputNumberLayoutItem {
   widgetType: 'number';
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "GroupConfig".
- */
 export interface GroupConfig {
   id: string;
   label: string;
@@ -240,10 +168,6 @@ export interface GroupConfig {
   items: LayoutItem[];
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "TabConfig".
- */
 export interface TabConfig {
   id: string;
   label: string;
@@ -252,10 +176,6 @@ export interface TabConfig {
   groups: GroupConfig[];
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "LayoutConfig".
- */
 export interface LayoutConfig {
   type: 'tabbed' | 'flat';
   gap: number;
@@ -263,10 +183,6 @@ export interface LayoutConfig {
   items?: LayoutItem[];
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "UISchema".
- */
 export interface UISchema {
   id: string;
   name: string;
@@ -295,10 +211,6 @@ export interface UISchema {
   instanceSolve?: boolean;
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "RuntimeValues".
- */
 export interface RuntimeValues {
   timestamp: string;
   values: {
@@ -306,10 +218,6 @@ export interface RuntimeValues {
   };
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "SessionState".
- */
 export interface SessionState {
   sessionId: string;
   active: boolean;
@@ -317,10 +225,6 @@ export interface SessionState {
   mode: 'builder' | 'preview';
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "AvailableParameter".
- */
 export interface AvailableParameter {
   /**
    * Grasshopper parameter instance GUID
@@ -346,10 +250,6 @@ export interface AvailableParameter {
   };
   [k: string]: unknown | undefined;
 }
-/**
- * This interface was referenced by `ComputeBuilderUISchema`'s JSON-Schema
- * via the `definition` "AvailableParameters".
- */
 export interface AvailableParameters {
   sessionId: string;
   timestamp: string;
@@ -357,23 +257,16 @@ export interface AvailableParameters {
   [k: string]: unknown | undefined;
 }
 
+
 // ============================================================================
 // TYPE GUARDS
 // ============================================================================
 
-export function isInputLayoutItem(
-  item: LayoutItem
-): item is
-  | InputNumberLayoutItem
-  | InputTextLayoutItem
-  | InputDropdownLayoutItem
-  | InputCheckboxLayoutItem {
+export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem {
   return item.type === 'input';
 }
 
-export function isOutputLayoutItem(
-  item: LayoutItem
-): item is OutputTextLayoutItem | OutputNumberLayoutItem {
+export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem {
   return item.type === 'output';
 }
 
@@ -394,10 +287,6 @@ export function isCheckboxWidget(item: LayoutItem): item is InputCheckboxLayoutI
 }
 
 // Helper type aliases
-export type InputLayoutItem =
-  | InputNumberLayoutItem
-  | InputTextLayoutItem
-  | InputDropdownLayoutItem
-  | InputCheckboxLayoutItem;
+export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem;
 export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem;
 export type SupportedTypes = string | number | boolean;

@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 
-const { compile } = require('json-schema-to-typescript');
-const fs = require('fs');
-const path = require('path');
+import { compile } from 'json-schema-to-typescript';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function main() {
   const schemaPath = path.join(__dirname, 'ui-schema.json');
@@ -15,7 +19,8 @@ async function main() {
 
   try {
     const ts = await compile(schema, 'UISchemaRoot', {
-      bannerComment: '/* eslint-disable */\n/**\n * This file was automatically generated from schemas/ui-schema.json.\n * DO NOT MODIFY IT BY HAND. Instead, modify the source JSON Schema file,\n * and run `npm run generate:ts` in the schemas directory to regenerate this file.\n */\n',
+      bannerComment:
+        '/* eslint-disable */\n/**\n * This file was automatically generated from schemas/ui-schema.json.\n * DO NOT MODIFY IT BY HAND. Instead, modify the source JSON Schema file,\n * and run `npm run generate:ts` in the schemas directory to regenerate this file.\n */\n',
       style: {
         singleQuote: true,
       },
@@ -23,10 +28,53 @@ async function main() {
       strictIndexSignatures: true,
     });
 
-    // Post-process to add type guards and helper types
+    // Post-process to remove "referenced by" comments and add type guards
     let output = ts;
 
-    // Add type guards at the end
+    // Remove all "This interface was referenced by..." comment blocks
+    const lines = output.split('\n');
+    const filtered = [];
+    let inReferenceComment = false;
+    let commentStartIndex = -1;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Check if this line contains the "referenced by" text
+      if (line.includes('This interface was referenced by')) {
+        inReferenceComment = true;
+        // Find where the comment block started
+        for (let j = filtered.length - 1; j >= 0; j--) {
+          if (filtered[j].trim() === '/**') {
+            commentStartIndex = j;
+            break;
+          }
+          if (filtered[j].trim() === '*/') {
+            // There's a previous comment block, this is a new one
+            commentStartIndex = filtered.length;
+            break;
+          }
+        }
+        continue;
+      }
+
+      // If we're in a reference comment, skip until we find the closing
+      if (inReferenceComment) {
+        if (line.trim() === '*/') {
+          // Remove the opening /** if we found it
+          if (commentStartIndex >= 0 && commentStartIndex < filtered.length) {
+            filtered.splice(commentStartIndex);
+          }
+          inReferenceComment = false;
+          commentStartIndex = -1;
+        }
+        continue;
+      }
+
+      filtered.push(line);
+    }
+
+    output = filtered.join('\n'); // Add type guards at the end
     const typeGuards = `
 
 // ============================================================================
