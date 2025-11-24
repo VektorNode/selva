@@ -72,6 +72,9 @@
     scene = s;
     camera = c;
     controls = ctl;
+
+    // Initial solve to populate viewer
+    await performSolve();
   }
 
   // -----------------------------
