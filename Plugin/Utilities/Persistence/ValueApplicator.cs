@@ -34,9 +34,6 @@ public class ValueApplicator
 
   private readonly List<IGH_ActiveObject> _pendingExpirations = new();
 
-  // ValueList reflection cache per parameter instance
-  private readonly Dictionary<Guid, ValueListCache> _valueListCaches = new();
-
   private ConcurrentDictionary<string, object> _lastAppliedValues = new();
 
   /// <summary>
@@ -311,167 +308,37 @@ public class ValueApplicator
   }
 
   /// <summary>
-  ///   Apply a value to a ValueList parameter using reflection to discover the correct data type
+  ///   Apply a value to a ValueList parameter by selecting the item by name
   /// </summary>
   private bool ApplyToValueList(IGH_ContextualParameter contextParam, object value,
     Action<GH_RuntimeMessageLevel, string> addMessage)
   {
     try
     {
-      var param = contextParam as IGH_Param;
-      if (param == null)
-      {
-        addMessage?.Invoke(GH_RuntimeMessageLevel.Warning, "ValueList parameter is not IGH_Param");
-        return false;
-      }
-
-      var docObj = contextParam as IGH_DocumentObject;
-      var paramId = docObj?.InstanceGuid ?? Guid.Empty;
-
-      // Try to get cached reflection info
-      if (!_valueListCaches.TryGetValue(paramId, out var cache))
-      {
-        // Build cache for this parameter
-        var paramType = param.GetType();
-        var typeHintProp = paramType.GetProperty("TypeHint");
-        var storedItemsProp = paramType.GetProperty("StoredListItems");
-        Type dataType = null;
-
-        if (typeHintProp != null)
-        {
-          var typeHint = typeHintProp.GetValue(param);
-          if (typeHint != null)
-          {
-            var typeProperty = typeHint.GetType().GetProperty("Type");
-            if (typeProperty != null)
-            {
-              dataType = typeProperty.GetValue(typeHint) as Type;
-            }
-          }
-        }
-
-        // Fallback: inspect the VolatileData to get the actual type
-        if (dataType == null && param.VolatileData != null && param.VolatileData.DataCount > 0)
-        {
-          foreach (var item in param.VolatileData.AllData(true))
-          {
-            if (item != null)
-            {
-              dataType = item.GetType();
-              break;
-            }
-          }
-        }
-
-        if (dataType == null)
-        {
-          addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-            "Could not determine ValueList data type");
-          return false;
-        }
-
-        if (storedItemsProp == null)
-        {
-          addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-            "Could not find StoredListItems property on ValueList parameter");
-          return false;
-        }
-
-        // Cache the reflection info
-        cache = new ValueListCache
-        {
-          TypeHintProp = typeHintProp,
-          StoredItemsProp = storedItemsProp,
-          DataType = dataType
-        };
-        _valueListCaches[paramId] = cache;
-      }
-
-      // Get the StoredListItems using cached property
-      var cachedStoredItemsProp = cache.StoredItemsProp;
-      var cachedDataType = cache.DataType;
-
-      var storedItems = cachedStoredItemsProp.GetValue(param) as IList;
-      if (storedItems == null || storedItems.Count == 0)
-      {
-        addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-          "ValueList has no stored items");
-        return false;
-      }
-
-      // Build the items tuple list
-      var itemsTuplesType = typeof(List<>).MakeGenericType(typeof(ValueTuple<string, string>));
-      var itemsTuples = Activator.CreateInstance(itemsTuplesType) as IList;
-
       var selectedKey = value?.ToString();
-      var selectedIndex = -1;
-
-      for (var i = 0; i < storedItems.Count; i++)
+      if (string.IsNullOrEmpty(selectedKey))
       {
-        var item = storedItems[i];
-        var nameProperty = item.GetType().GetProperty("Name");
-        var expressionProperty = item.GetType().GetProperty("Expression");
-
-        if (nameProperty != null && expressionProperty != null)
-        {
-          var name = nameProperty.GetValue(item)?.ToString();
-          var expression = expressionProperty.GetValue(item)?.ToString();
-
-          // Create ValueTuple<string, string>
-          var tuple = Activator.CreateInstance(typeof(ValueTuple<string, string>), name, expression);
-          itemsTuples.Add(tuple);
-
-          // Find the selected index by matching the key (name)
-          if (name == selectedKey)
-          {
-            selectedIndex = i;
-          }
-        }
-      }
-
-      // If we didn't find a match, default to first item
-      if (selectedIndex < 0 && itemsTuples.Count > 0)
-      {
-        selectedIndex = 0;
-      }
-
-      // Get the expression value for the selected item
-      var selectedExpression = "";
-      if (selectedIndex >= 0 && selectedIndex < storedItems.Count)
-      {
-        var selectedItem = storedItems[selectedIndex];
-        var expressionProperty = selectedItem.GetType().GetProperty("Expression");
-        selectedExpression = expressionProperty?.GetValue(selectedItem)?.ToString() ?? "";
-      }
-
-      // Create GH_ValueListData instance: GH_ValueListData(string value, List<(string, string)> items, int selectedIndex)
-      var ghValue = Activator.CreateInstance(cachedDataType, selectedExpression, itemsTuples, selectedIndex);
-
-      // Create DataTree of the correct type
-      var dataTreeType = typeof(DataTree<>).MakeGenericType(cachedDataType);
-      var dataTree = Activator.CreateInstance(dataTreeType);
-
-      // Add value to tree
-      var addMethod = dataTreeType.GetMethod("Add", new[] { cachedDataType, typeof(GH_Path) });
-      if (addMethod == null)
-      {
-        addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-          $"Could not find Add method for type {cachedDataType.Name}");
+        addMessage?.Invoke(GH_RuntimeMessageLevel.Warning, "ValueList value is null or empty");
         return false;
       }
 
-      addMethod.Invoke(dataTree, new[] { ghValue, new GH_Path(0) });
-
-      // Assign to parameter using reflection
-      var assignMethod = contextParam.GetType().GetMethod("AssignContextualDataTree");
-      if (assignMethod != null)
+      // Try to use the simple SelectItemByName method
+      var selectMethod = contextParam.GetType().GetMethod("SelectItemByName");
+      if (selectMethod != null)
       {
-        assignMethod.Invoke(contextParam, new[] { dataTree });
-        return true;
+        var result = selectMethod.Invoke(contextParam, new object[] { selectedKey });
+        if (result is bool success && success)
+        {
+          return true;
+        }
+
+        addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+          $"Could not find item '{selectedKey}' in ValueList");
+        return false;
       }
 
       addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-        "Could not find AssignContextualDataTree method");
+        "Could not find SelectItemByName method on ValueList parameter");
       return false;
     }
     catch (Exception ex)
@@ -490,15 +357,5 @@ public class ValueApplicator
     public MethodInfo AddMethod;
     public Func<object> CreateInstance;
     public Type DataTreeType;
-  }
-
-  /// <summary>
-  ///   Cache for ValueList PropertyInfo objects per parameter instance
-  /// </summary>
-  private class ValueListCache
-  {
-    public Type DataType;
-    public PropertyInfo StoredItemsProp;
-    public PropertyInfo TypeHintProp;
   }
 }

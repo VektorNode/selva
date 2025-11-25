@@ -29,11 +29,19 @@
 
   let runtimeMode = $state<RuntimeMode>('local');
   let solving = $state(false);
+  let syncNeeded = $state(false);
 
   // Navigate to specific routes with session preservation
   function navigateTo(route: '/' | '/builder') {
     const url = route === '/' ? `/?session=${sessionId}` : `/builder?session=${sessionId}`;
     goto(url);
+  }
+
+  function syncParameters() {
+    console.log('[Preview] Syncing parameters from Grasshopper');
+    syncNeeded = false;
+    wsState.requestInitialData(sessionId);
+    showNotification('Syncing parameters...');
   }
 
   // Track if we're updating values from remote (to avoid feedback loop)
@@ -245,6 +253,112 @@
       }
     };
 
+    const handleMetadataUpdated = (message: any) => {
+      if (message.sessionId === sessionId && schema) {
+        console.log('[Preview] Parameter metadata updated:', message.changedParams);
+
+        const changedParams = message.changedParams || [];
+        if (changedParams.length === 0) return;
+
+        let updatedCount = 0;
+        const updatedNames: string[] = [];
+
+        // Update input parameters with new metadata
+        changedParams.forEach((updated: any) => {
+          const inputIndex = schema!.inputs.findIndex((inp) => inp.id === updated.id);
+          if (inputIndex !== -1) {
+            const input = schema!.inputs[inputIndex];
+            let changed = false;
+
+            if (updated.nickname !== undefined && input.nickname !== updated.nickname) {
+              input.nickname = updated.nickname;
+              changed = true;
+            }
+            if (updated.description !== undefined && input.description !== updated.description) {
+              input.description = updated.description;
+              changed = true;
+            }
+
+            if (changed) {
+              updatedCount++;
+              updatedNames.push(input.nickname);
+              console.log(`[Preview] Updated input metadata: ${input.nickname}`);
+            }
+
+            // Update layout item configurations (min/max/stepSize for number widgets)
+            if (schema!.layout.tabs) {
+              schema!.layout.tabs.forEach((tab) => {
+                tab.groups?.forEach((group) => {
+                  group.items?.forEach((layoutItem: any) => {
+                    if (layoutItem.paramId === updated.id && layoutItem.type === 'input') {
+                      const config = layoutItem.config || {};
+
+                      if (updated.minimum !== undefined && config.minimum !== updated.minimum) {
+                        config.minimum = updated.minimum;
+                        changed = true;
+                      }
+                      if (updated.maximum !== undefined && config.maximum !== updated.maximum) {
+                        config.maximum = updated.maximum;
+                        changed = true;
+                      }
+                      if (updated.stepSize !== undefined && config.stepSize !== updated.stepSize) {
+                        config.stepSize = updated.stepSize;
+                        changed = true;
+                      }
+
+                      layoutItem.config = config;
+                    }
+                  });
+                });
+              });
+            }
+          }
+
+          // Update output parameters with new metadata
+          const outputIndex = schema!.outputs.findIndex((out) => out.id === updated.id);
+          if (outputIndex !== -1) {
+            const output = schema!.outputs[outputIndex];
+            let changed = false;
+
+            if (updated.nickname !== undefined && output.nickname !== updated.nickname) {
+              output.nickname = updated.nickname;
+              changed = true;
+            }
+            if (updated.description !== undefined && output.description !== updated.description) {
+              output.description = updated.description;
+              changed = true;
+            }
+
+            if (changed) {
+              updatedCount++;
+              updatedNames.push(output.nickname);
+              console.log(`[Preview] Updated output metadata: ${output.nickname}`);
+            }
+          }
+        });
+
+        // Trigger reactivity by reassigning schema
+        if (updatedCount > 0) {
+          schema = schema;
+
+          // Show notification with count
+          showNotification(
+            `Parameter${updatedCount > 1 ? 's' : ''} updated: ${updatedNames.join(', ')}`
+          );
+        }
+      }
+    };
+
+    const handleParametersAdded = (message: any) => {
+      if (message.sessionId === sessionId) {
+        console.log('[Preview] New parameters added to Grasshopper:', message.availableParams);
+
+        // Mark that sync is needed to pick up the new parameters
+        syncNeeded = true;
+        showNotification('New parameters detected - click Sync to add them to your UI');
+      }
+    };
+
     const initializeSchema = async () => {
       sessionId = page.url.searchParams.get('session') || '';
 
@@ -265,6 +379,8 @@
         wsState.on('outputs', handleOutputs);
         wsState.on('outputUpdate', handleOutputUpdate);
         wsState.on('schemaUpdated', handleSchemaUpdated);
+        wsState.on('metadataUpdated', handleMetadataUpdated);
+        wsState.on('parametersAdded', handleParametersAdded);
 
         // Request initial data from Grasshopper
         console.log('[Preview] Requesting initial data from Grasshopper');
@@ -281,6 +397,8 @@
       wsState.off('outputs', handleOutputs);
       wsState.off('outputUpdate', handleOutputUpdate);
       wsState.off('schemaUpdated', handleSchemaUpdated);
+      wsState.off('metadataUpdated', handleMetadataUpdated);
+      wsState.off('parametersAdded', handleParametersAdded);
       // Don't disconnect - keep connection alive for page switching
     };
   });
@@ -293,7 +411,17 @@
     showModeToggle={true}
     {sessionId}
   >
-    <nav class="flex gap-2">
+    <nav class="flex items-center gap-2">
+      {#if syncNeeded}
+        <Button
+          variant="default"
+          size="sm"
+          onclick={syncParameters}
+          class="animate-pulse bg-amber-500 hover:bg-amber-600"
+        >
+          ⚡ Sync Parameters
+        </Button>
+      {/if}
       <Button variant="outline" size="sm" onclick={() => navigateTo('/')}>Home</Button>
       <Button variant="outline" size="sm" onclick={() => navigateTo('/builder')}>
         Schema Builder

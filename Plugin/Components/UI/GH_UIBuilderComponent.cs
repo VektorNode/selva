@@ -12,6 +12,7 @@ using ComputeBuilder.Utils;
 using GH_IO.Serialization;
 using Grasshopper;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Special;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Rhino;
@@ -56,10 +57,15 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   private bool _lastOpenPreview;
   private bool _lastRefresh;
 
+  // Track solve iterations for periodic metadata checks
+  private int _solveCount;
+  private const int MetadataCheckInterval = 3; // Check every 3 solves
+
   // Extracted responsibilities
   private SchemaManager _schemaManager;
   private string _sessionId;
   private ValueApplicator _valueApplicator;
+
 
   public GH_UIBuilderComponent()
     : base("UI Builder", "UIBuilder",
@@ -248,6 +254,26 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
           $"Duplicate parameter names found: {duplicateList}. Each parameter must have a unique name.");
       }
+
+      // When refresh is pressed, also check for metadata changes and broadcast them
+      if (refreshRising && _embeddedSchema != null && _communicationHandler?.IsRunning == true)
+      {
+        try
+        {
+          var metadataChanges = _schemaManager.DetectMetadataChanges(document, _embeddedSchema);
+          if (metadataChanges.Count > 0)
+          {
+            var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+              $"Metadata updated: {metadataChanges.Count} parameter(s) refreshed");
+          }
+        }
+        catch (Exception ex)
+        {
+          AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+            $"Error refreshing metadata: {ex.Message}");
+        }
+      }
     }
 
     if (_isEnabled)
@@ -256,7 +282,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       {
         try
         {
-          _communicationHandler.Start(msg => Message = msg);
+          _communicationHandler.Start(msg => { /* Silent - don't spam Message */ });
+          Message = $"Ready • {_sessionId}";
         }
         catch (Exception ex)
         {
@@ -272,9 +299,49 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
       }
 
+      // When schema is first enabled, do initial metadata comparison
+      if (_embeddedSchema != null && enableRising)
+      {
+        try
+        {
+          var initialChanges = _schemaManager.DetectMetadataChanges(document, _embeddedSchema);
+          if (initialChanges.Count > 0)
+          {
+            var _ = _communicationHandler.BroadcastMetadataChanges(initialChanges);
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+              $"Initial sync: {initialChanges.Count} parameter(s) metadata broadcasted");
+          }
+        }
+        catch (Exception ex)
+        {
+          AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+            $"Error during initial metadata comparison: {ex.Message}");
+        }
+      }
+
       if (openPreviewRising)
       {
         OpenUI();
+      }
+
+      // Periodically check for metadata changes (nickname, min/max, etc.)
+      // This catches property edits that don't trigger document events
+      _solveCount++;
+      if (_solveCount % MetadataCheckInterval == 0 && _embeddedSchema != null && _communicationHandler?.IsRunning == true)
+      {
+        try
+        {
+          var metadataChanges = _schemaManager.DetectMetadataChanges(document, _embeddedSchema);
+          if (metadataChanges.Count > 0)
+          {
+            var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
+          }
+        }
+        catch (Exception ex)
+        {
+          AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+            $"Error checking metadata changes: {ex.Message}");
+        }
       }
 
       if (_embeddedSchema != null)
@@ -307,13 +374,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       }
 
       _communicationHandler.Stop();
+      _solveCount = 0; // Reset solve counter
     }
 
     var contextualParams = document.Objects.OfType<IGH_ContextualParameter>().ToList();
     var result = ParameterTypeHelper.ClearContextualParameters(contextualParams, this);
 
     _valueApplicator?.Clear();
-    Message = "WebSocket Inactive";
+    Message = "Disabled";
 
     if (_embeddedSchema != null)
     {
@@ -402,7 +470,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       var task = _communicationHandler.BroadcastSchemaSaved(true);
 
       //Expire to update component to reflect new schema (When user saves it will now properly internalize the new schema)
-      document.ScheduleSolution(10, doc => { ExpireSolution(false); });
+      document.ScheduleSolution(10, doc => { ExpireSolution(true); });
 
       AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Schema saved successfully");
     }
@@ -516,7 +584,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     return ExtractValue(data);
   }
 
-// Your existing ExtractValue method
+  // Your existing ExtractValue method
   private object ExtractValue(IGH_Goo data)
   {
     if (data is GH_String ghString)
@@ -687,6 +755,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       _currentDocument.SolutionEnd += OnSolutionEnd;
       _currentDocument.ObjectsAdded += OnObjectsChanged;
       _currentDocument.ObjectsDeleted += OnObjectsChanged;
+      _currentDocument.UndoStateChanged += OnUndoStateChanged;
     }
     catch
     {
@@ -720,6 +789,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         _currentDocument.SolutionEnd -= OnSolutionEnd;
         _currentDocument.ObjectsAdded -= OnObjectsChanged;
         _currentDocument.ObjectsDeleted -= OnObjectsChanged;
+        _currentDocument.UndoStateChanged -= OnUndoStateChanged;
       }
       catch
       {
@@ -728,6 +798,34 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
     _eventsRegistered = false;
+  }
+
+  /// <summary>
+  ///   Handle undo/redo state changes - detects property modifications
+  ///   Fires when user changes nicknames, descriptions, min/max values, etc.
+  /// </summary>
+  private void OnUndoStateChanged(object sender, GH_DocUndoEventArgs e)
+  {
+    if (_embeddedSchema == null || _currentDocument == null || !_communicationHandler?.IsRunning == true)
+    {
+      return;
+    }
+
+    // Detect metadata changes when undo/redo occurs
+    try
+    {
+      var metadataChanges = _schemaManager.DetectMetadataChanges(_currentDocument, _embeddedSchema);
+      if (metadataChanges.Count > 0)
+      {
+        var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
+        Console.WriteLine($"[UIBuilder] Undo/Redo detected - broadcast {metadataChanges.Count} metadata change(s)");
+      }
+    }
+    catch (Exception ex)
+    {
+      AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+        $"Error detecting metadata changes on undo/redo: {ex.Message}");
+    }
   }
 
   private void OnDocumentRemoved(GH_DocumentServer sender, GH_Document doc)
@@ -741,6 +839,25 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   private void OnSolutionStart(object sender, GH_SolutionEventArgs e)
   {
     _isSolving = true;
+
+    // Detect metadata changes before solving starts
+    // This catches property changes (nickname, description, min/max) that happened since last check
+    if (_embeddedSchema != null && _currentDocument != null && _communicationHandler?.IsRunning == true)
+    {
+      try
+      {
+        var metadataChanges = _schemaManager.DetectMetadataChanges(_currentDocument, _embeddedSchema);
+        if (metadataChanges.Count > 0)
+        {
+          var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
+        }
+      }
+      catch (Exception ex)
+      {
+        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+          $"Error detecting metadata changes at solution start: {ex.Message}");
+      }
+    }
 
     // Notify web UI that Grasshopper is solving
     if (_communicationHandler?.IsRunning == true)
@@ -756,6 +873,55 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     if (_embeddedSchema != null && _currentDocument != null)
     {
       CollectAndSendOutputs(_currentDocument, _embeddedSchema);
+
+      // Detect metadata changes (nickname, min/max, stepsize, options) and broadcast updates
+      if (_communicationHandler?.IsRunning == true)
+      {
+        try
+        {
+          var metadataChanges = _schemaManager.DetectMetadataChanges(_currentDocument, _embeddedSchema);
+          if (metadataChanges.Count > 0)
+          {
+            var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
+
+            // Mark document as modified so schema changes are persisted on save
+            _currentDocument.Modified();
+
+            // Check if any changes are for source parameters (ValueList options, number constraints)
+            // If so, trigger a new solution to recalculate downstream components
+            var hasSourceChanges = metadataChanges.Any(change =>
+            {
+              // Check if this is a ValueList or number input with changed options/constraints
+              var paramObj = _currentDocument.FindObject(change.Id, false);
+              if (paramObj is GetValueListParameter vl && change.Options != null)
+              {
+                return true; // ValueList options changed
+              }
+
+              if (paramObj is IGH_ContextualParameter param &&
+                  (change.Minimum != null || change.Maximum != null || change.StepSize != null))
+              {
+                return true; // Number constraints changed
+              }
+
+              return false;
+            });
+
+            // If source parameters changed, expire solution to trigger full recalculation
+            if (hasSourceChanges)
+            {
+              ExpireSolution(false);
+              AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                "Source parameter changed - recalculating");
+            }
+          }
+        }
+        catch (Exception ex)
+        {
+          AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+            $"Error detecting metadata changes: {ex.Message}");
+        }
+      }
     }
 
     // Notify web UI that Grasshopper is done solving
@@ -767,8 +933,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
   private void OnObjectsChanged(object sender, GH_DocObjectEventArgs e)
   {
-    // Only react if we have an active schema and are enabled
-    if (_embeddedSchema == null || _currentDocument == null || !_communicationHandler.IsRunning)
+    // Only react if we're enabled and can communicate
+    if (_currentDocument == null || !_communicationHandler?.IsRunning == true)
     {
       return;
     }
@@ -797,9 +963,37 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     try
     {
+      // Always rescan available parameters when objects change
+      var currentParams = _schemaManager.ScanParameters(_currentDocument);
+      _availableParams = currentParams;
+
+      // If we don't have a schema yet, just notify about new parameters
+      if (_embeddedSchema == null)
+      {
+        if (currentParams.Parameters.Count > 0)
+        {
+          var broadcastTask = _communicationHandler.BroadcastMessage("parametersAdded",
+            new { availableParams = currentParams.Parameters });
+
+          try
+          {
+            broadcastTask.Wait(10);
+          }
+          catch
+          {
+          }
+
+          AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+            $"Parameter(s) detected: {currentParams.Parameters.Count} available. Check web UI.");
+        }
+
+        return;
+      }
+
       var (updatedSchema, removedIds) =
         _schemaManager.ValidateSchemaAndTrackChanges(_embeddedSchema, _currentDocument);
 
+      // Broadcast schema update for removals
       if (removedIds.Count > 0)
       {
         _embeddedSchema = updatedSchema;
@@ -838,6 +1032,41 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
         _currentDocument.ScheduleSolution(10, doc => { ExpireSolution(false); });
       }
+      else
+      {
+        // No removals, but check if new parameters were added
+        var newParamIds = currentParams.Parameters
+          .Where(p => !_embeddedSchema.Inputs.Any(i => i.Id == p.Id) &&
+                      !_embeddedSchema.Outputs.Any(o => o.Id == p.Id))
+          .Select(p => p.Id)
+          .ToList();
+
+        if (newParamIds.Count > 0)
+        {
+          // New parameters added - send full parameter list to web UI
+          var broadcastTask = _communicationHandler.BroadcastMessage("parametersAdded",
+            new { availableParams = currentParams.Parameters });
+
+          try
+          {
+            broadcastTask.Wait(10);
+          }
+          catch
+          {
+          }
+
+          AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+            $"New parameter(s) added: {newParamIds.Count} available. Check web UI.");
+        }
+      }
+
+      // Also check for metadata changes (nickname, description, min/max, stepsize)
+      // This catches property changes that don't trigger structural updates
+      var metadataChanges = _schemaManager.DetectMetadataChanges(_currentDocument, _embeddedSchema);
+      if (metadataChanges.Count > 0)
+      {
+        var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
+      }
     }
     catch (Exception ex)
     {
@@ -851,6 +1080,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     _communicationHandler?.Stop();
     UnregisterDocumentEvents();
     _valueApplicator?.Clear();
+    _schemaManager?.ClearMetadataCache();
     _currentDocument = null;
     _isEnabled = false;
   }

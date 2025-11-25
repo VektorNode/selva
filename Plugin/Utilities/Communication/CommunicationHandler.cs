@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 using ComputeBuilder.Config;
 using ComputeBuilder.Plugin.Models.Generated;
 using Newtonsoft.Json;
+using Rhino;
 
 namespace ComputeBuilder.Utils;
 
@@ -27,6 +29,7 @@ public class CommunicationHandler : IDisposable
   private readonly string _sessionId;
   private bool _disposed;
   private WebSocketServer _webSocketServer;
+  private int _mainThreadId;
 
   public CommunicationHandler(string sessionId, int port = 8765)
   {
@@ -59,6 +62,9 @@ public class CommunicationHandler : IDisposable
 
     try
     {
+      // Capture the current thread ID (main/UI thread where Start is called)
+      _mainThreadId = Thread.CurrentThread.ManagedThreadId;
+
       _webSocketServer = new WebSocketServer(_port);
       _webSocketServer.OnClientConnected += (sender, webSocket) =>
       {
@@ -82,7 +88,8 @@ public class CommunicationHandler : IDisposable
               var valueMsg = JsonConvert.DeserializeObject<ValueUpdateMessage>(message, SecureJsonSettings);
               if (valueMsg != null && valueMsg.SessionId == _sessionId)
               {
-                OnValuesReceived?.Invoke(this, valueMsg.Values);
+                // Marshal back to main thread - critical for Grasshopper UI updates
+                MarshalToMainThread(() => OnValuesReceived?.Invoke(this, valueMsg.Values));
               }
             }
             else if (msg.Type == "requestCurrentValues")
@@ -90,7 +97,7 @@ public class CommunicationHandler : IDisposable
               if (msg.SessionId == _sessionId)
               {
                 logMessage?.Invoke("Web UI requested current values");
-                OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty);
+                MarshalToMainThread(() => OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty));
               }
             }
             else if (msg.Type == "requestInitialData")
@@ -98,7 +105,7 @@ public class CommunicationHandler : IDisposable
               if (msg.SessionId == _sessionId)
               {
                 logMessage?.Invoke("Web UI requested initial data");
-                OnClientConnected?.Invoke(this, EventArgs.Empty);
+                MarshalToMainThread(() => OnClientConnected?.Invoke(this, EventArgs.Empty));
               }
             }
             else if (msg.Type == "saveSchema")
@@ -107,7 +114,7 @@ public class CommunicationHandler : IDisposable
               if (schemaMsg != null && schemaMsg.SessionId == _sessionId)
               {
                 logMessage?.Invoke("Web UI saving schema");
-                OnSchemaSaveRequested?.Invoke(this, schemaMsg.Schema);
+                MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, schemaMsg.Schema));
               }
             }
           }
@@ -148,6 +155,31 @@ public class CommunicationHandler : IDisposable
       {
         _webSocketServer = null;
       }
+    }
+  }
+
+  /// <summary>
+  ///   Marshal a callback to execute on the main Rhino thread
+  ///   Critical for Grasshopper operations that trigger UI updates
+  /// </summary>
+  private void MarshalToMainThread(Action callback)
+  {
+    // If we're already on the main thread, execute directly
+    if (Thread.CurrentThread.ManagedThreadId == _mainThreadId)
+    {
+      callback?.Invoke();
+      return;
+    }
+
+    // Use RhinoApp.InvokeOnUiThread for thread-safe execution on main thread
+    try
+    {
+      RhinoApp.InvokeOnUiThread(callback);
+    }
+    catch
+    {
+      // If marshaling fails, execute directly (may cause issues but better than deadlock)
+      callback?.Invoke();
     }
   }
 
@@ -270,6 +302,23 @@ public class CommunicationHandler : IDisposable
         type = "solvingState",
         sessionId = _sessionId,
         isSolving
+      };
+      await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+    }
+  }
+
+  /// <summary>
+  ///   Broadcast parameter metadata changes (nickname, min/max, stepsize, etc.)
+  /// </summary>
+  public async Task BroadcastMetadataChanges(List<AvailableParameter> changedParams)
+  {
+    if (_webSocketServer != null && _webSocketServer.IsRunning && changedParams?.Count > 0)
+    {
+      var message = new
+      {
+        type = "metadataUpdated",
+        sessionId = _sessionId,
+        changedParams
       };
       await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
     }

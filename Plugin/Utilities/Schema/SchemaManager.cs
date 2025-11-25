@@ -14,6 +14,7 @@ namespace ComputeBuilder.Utils;
 public class SchemaManager
 {
   private readonly string _sessionId;
+  private Dictionary<Guid, ParameterMetadataSnapshot> _metadataCache = new();
 
   public SchemaManager(string sessionId)
   {
@@ -300,5 +301,267 @@ public class SchemaManager
     }
 
     return "Generic";
+  }
+
+  /// <summary>
+  ///   Detect metadata changes in parameters since last scan.
+  ///   Returns list of parameters with changed metadata and also applies changes to the schema.
+  /// </summary>
+  public List<AvailableParameter> DetectMetadataChanges(GH_Document document, UISchema schema)
+  {
+    var changes = new List<AvailableParameter>();
+
+    if (schema == null)
+    {
+      return changes;
+    }
+
+    // Check input parameters
+    foreach (var inputParam in schema.Inputs)
+    {
+      var docObj = document.FindObject(inputParam.Id, false);
+      if (docObj == null)
+      {
+        continue;
+      }
+
+      var currentSnapshot = CreateParameterSnapshot(docObj);
+      if (currentSnapshot == null)
+      {
+        continue;
+      }
+
+      if (_metadataCache.TryGetValue(inputParam.Id, out var previousSnapshot))
+      {
+        if (!currentSnapshot.Equals(previousSnapshot))
+        {
+          // Metadata changed - create updated AvailableParameter
+          var updatedParam = CreateAvailableParameterFromSnapshot(currentSnapshot, inputParam.Id, "input");
+          changes.Add(updatedParam);
+        }
+      }
+
+      // Always update cache with current state
+      _metadataCache[inputParam.Id] = currentSnapshot;
+    }
+
+    // Check output parameters
+    foreach (var outputParam in schema.Outputs)
+    {
+      var docObj = document.FindObject(outputParam.Id, false);
+      if (docObj == null)
+      {
+        continue;
+      }
+
+      var currentSnapshot = CreateParameterSnapshot(docObj);
+      if (currentSnapshot == null)
+      {
+        continue;
+      }
+
+      if (_metadataCache.TryGetValue(outputParam.Id, out var previousSnapshot))
+      {
+        if (!currentSnapshot.Equals(previousSnapshot))
+        {
+          var updatedParam = CreateAvailableParameterFromSnapshot(currentSnapshot, outputParam.Id, "output");
+          changes.Add(updatedParam);
+        }
+      }
+
+      // Always update cache with current state
+      _metadataCache[outputParam.Id] = currentSnapshot;
+    }
+
+    // Apply changes to the schema so it stays in sync
+    if (changes.Count > 0)
+    {
+      ApplyMetadataChangesToSchema(schema, changes);
+    }
+
+    return changes;
+  }
+
+  /// <summary>
+  ///   Apply detected metadata changes to the schema.
+  ///   Updates layout item configs (min/max/stepSize for numbers, options for dropdowns).
+  /// </summary>
+  public void ApplyMetadataChangesToSchema(UISchema schema, List<AvailableParameter> changes)
+  {
+    if (schema?.Layout?.Tabs == null || changes == null || changes.Count == 0)
+    {
+      return;
+    }
+
+    foreach (var change in changes)
+    {
+      // Find and update the layout item for this parameter
+      foreach (var tab in schema.Layout.Tabs)
+      {
+        foreach (var group in tab.Groups)
+        {
+          foreach (var item in group.Items)
+          {
+            if (item.ParamId != change.Id)
+            {
+              continue;
+            }
+
+            // Update based on widget type
+            switch (item)
+            {
+              case InputNumberLayoutItem numberItem:
+                numberItem.Config ??= new NumberWidgetConfig();
+                numberItem.Config.Minimum = change.Minimum;
+                numberItem.Config.Maximum = change.Maximum;
+                numberItem.Config.StepSize = change.StepSize;
+                break;
+
+              case InputDropdownLayoutItem dropdownItem:
+                dropdownItem.Config ??= new DropdownWidgetConfig();
+                dropdownItem.Config.Options = change.Options;
+                break;
+            }
+
+            // Also update displayName/description if changed
+            item.DisplayName = change.Nickname;
+            item.Description = change.Description;
+          }
+        }
+      }
+
+      // Also update the Inputs list
+      var inputParam = schema.Inputs.FirstOrDefault(i => i.Id == change.Id);
+      if (inputParam != null)
+      {
+        inputParam.Nickname = change.Nickname;
+        inputParam.Description = change.Description;
+      }
+    }
+  }
+
+  /// <summary>
+  ///   Create a snapshot of parameter metadata for comparison
+  /// </summary>
+  private ParameterMetadataSnapshot CreateParameterSnapshot(IGH_DocumentObject docObj)
+  {
+    if (docObj == null)
+    {
+      return null;
+    }
+
+    var param = docObj as IGH_ContextualParameter;
+    var ghParam = docObj as IGH_Param;
+
+    var snapshot = new ParameterMetadataSnapshot
+    {
+      Id = docObj.InstanceGuid,
+      Nickname = docObj.NickName,
+      Description = docObj.Description ?? ""
+    };
+
+    // Extract numeric constraints if applicable
+    if (param != null && ghParam != null)
+    {
+      var availableParam = new AvailableParameter { Id = docObj.InstanceGuid };
+      ParameterTypeHelper.ExtractNumberParameterConstraints(param, ghParam, availableParam);
+
+      snapshot.Minimum = availableParam.Minimum;
+      snapshot.Maximum = availableParam.Maximum;
+      snapshot.StepSize = availableParam.StepSize;
+    }
+
+    // Extract ValueList options if applicable
+    if (docObj is GetValueListParameter valueListParam)
+    {
+      snapshot.Options = valueListParam.Values;
+    }
+
+    return snapshot;
+  }
+
+  /// <summary>
+  ///   Create an AvailableParameter from a metadata snapshot
+  /// </summary>
+  private AvailableParameter CreateAvailableParameterFromSnapshot(
+    ParameterMetadataSnapshot snapshot,
+    Guid id,
+    string category)
+  {
+    var param = new AvailableParameter
+    {
+      Id = id,
+      Nickname = snapshot.Nickname,
+      Description = snapshot.Description,
+      Minimum = snapshot.Minimum,
+      Maximum = snapshot.Maximum,
+      StepSize = snapshot.StepSize,
+      Category = category
+    };
+
+    // Convert Options to the expected format
+    if (snapshot.Options != null)
+    {
+      param.Options = snapshot.Options.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value);
+    }
+
+    return param;
+  }
+
+  /// <summary>
+  ///   Clear metadata cache (e.g., when schema is disabled)
+  /// </summary>
+  public void ClearMetadataCache()
+  {
+    _metadataCache.Clear();
+  }
+}
+
+/// <summary>
+///   Snapshot of parameter metadata for change detection
+/// </summary>
+internal class ParameterMetadataSnapshot
+{
+  public Guid Id { get; set; }
+  public string Nickname { get; set; }
+  public string Description { get; set; }
+  public double? Minimum { get; set; }
+  public double? Maximum { get; set; }
+  public double? StepSize { get; set; }
+  public Dictionary<string, string> Options { get; set; }
+
+  public override bool Equals(object obj)
+  {
+    if (!(obj is ParameterMetadataSnapshot other))
+    {
+      return false;
+    }
+
+    return Id == other.Id &&
+           Nickname == other.Nickname &&
+           Description == other.Description &&
+           Minimum == other.Minimum &&
+           Maximum == other.Maximum &&
+           StepSize == other.StepSize &&
+           OptionsEqual(Options, other.Options);
+  }
+
+  private static bool OptionsEqual(Dictionary<string, string> a, Dictionary<string, string> b)
+  {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    if (a.Count != b.Count) return false;
+
+    foreach (var kvp in a)
+    {
+      if (!b.TryGetValue(kvp.Key, out var value) || value != kvp.Value)
+        return false;
+    }
+    return true;
+  }
+
+  public override int GetHashCode()
+  {
+    return Id.GetHashCode();
   }
 }

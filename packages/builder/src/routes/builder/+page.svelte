@@ -38,6 +38,7 @@
   let loading = $state(true);
   let error = $state('');
   let activeTabId = $state<string | null>(null);
+  let syncNeeded = $state(false);
 
   // Navigate to specific routes with session preservation
   function navigateTo(route: '/' | '/preview') {
@@ -64,6 +65,24 @@
     availableParams.filter((p) => p.category === 'output' && !placedInLayoutIds().has(p.id))
   );
   const activeTab = $derived(schema?.layout?.tabs?.find((t) => t.id === activeTabId));
+
+  function syncParameters() {
+    console.log('[Builder] Syncing parameters from Grasshopper');
+    syncNeeded = false;
+    wsState.requestInitialData(sessionId);
+    toast.info('Syncing parameters...');
+  }
+
+  function saveSchema() {
+    if (!schema || !sessionId) return;
+
+    if (!wsState.connected) {
+      toast.error('Not connected to Grasshopper');
+      return;
+    }
+
+    wsState.saveSchema(sessionId, $state.snapshot(schema));
+  }
 
   onMount(() => {
     const handleInitialData = (message: any) => {
@@ -97,6 +116,146 @@
       }
     };
 
+    const handleMetadataUpdated = (message: any) => {
+      if (message.sessionId === sessionId && schema) {
+        console.log('[Builder] Parameter metadata updated:', message.changedParams);
+
+        const changedParams = message.changedParams || [];
+        if (changedParams.length === 0) return;
+
+        let updateCount = 0;
+        const updatedNames: string[] = [];
+
+        // Update input parameters with new metadata
+        changedParams.forEach((updated: any) => {
+          const inputIndex = schema!.inputs.findIndex((inp) => inp.id === updated.id);
+          if (inputIndex !== -1) {
+            const input = schema!.inputs[inputIndex];
+            let changed = false;
+
+            if (updated.nickname !== undefined && input.nickname !== updated.nickname) {
+              input.nickname = updated.nickname;
+              updatedNames.push(input.nickname);
+              updateCount++;
+              changed = true;
+              console.log(`[Builder] Updated input: ${input.nickname}`);
+            }
+            if (updated.description !== undefined && input.description !== updated.description) {
+              input.description = updated.description;
+              changed = true;
+            }
+
+            // Update available params list to reflect changes
+            const availIndex = availableParams.findIndex((p) => p.id === updated.id);
+            if (availIndex !== -1) {
+              if (updated.nickname !== undefined) availableParams[availIndex].nickname = updated.nickname;
+              if (updated.description !== undefined) availableParams[availIndex].description = updated.description;
+              if (updated.minimum !== undefined) availableParams[availIndex].minimum = updated.minimum;
+              if (updated.maximum !== undefined) availableParams[availIndex].maximum = updated.maximum;
+              if (updated.stepSize !== undefined) availableParams[availIndex].stepSize = updated.stepSize;
+            }
+          }
+
+          // Update output parameters with new metadata
+          const outputIndex = schema!.outputs.findIndex((out) => out.id === updated.id);
+          if (outputIndex !== -1) {
+            const output = schema!.outputs[outputIndex];
+            let changed = false;
+
+            if (updated.nickname !== undefined && output.nickname !== updated.nickname) {
+              output.nickname = updated.nickname;
+              updatedNames.push(output.nickname);
+              updateCount++;
+              changed = true;
+              console.log(`[Builder] Updated output: ${output.nickname}`);
+            }
+            if (updated.description !== undefined && output.description !== updated.description) {
+              output.description = updated.description;
+              changed = true;
+            }
+
+            // Update available params list to reflect changes
+            const availIndex = availableParams.findIndex((p) => p.id === updated.id);
+            if (availIndex !== -1) {
+              if (updated.nickname !== undefined) availableParams[availIndex].nickname = updated.nickname;
+              if (updated.description !== undefined) availableParams[availIndex].description = updated.description;
+            }
+          }
+        });
+
+        // Trigger reactivity by reassigning schema and availableParams
+        if (updateCount > 0) {
+          schema = schema;
+          availableParams = availableParams;
+          toast.success(
+            `Parameter${updateCount > 1 ? 's' : ''} updated: ${updatedNames.join(', ')}`
+          );
+
+          // Auto-save schema to persist changes back to Grasshopper
+          if (wsState.connected) {
+            console.log('[Builder] Auto-saving schema after metadata update');
+            wsState.saveSchema(sessionId, $state.snapshot(schema));
+          }
+        }
+      }
+    };
+
+    const handleSchemaUpdated = (message: any) => {
+      if (message.sessionId === sessionId) {
+        console.log('[Builder] Schema structure changed:', {
+          schema: message.schema,
+          removedIds: message.removedIds,
+        });
+
+        const removedCount = message.removedIds?.length || 0;
+
+        if (removedCount > 0) {
+          // Parameters were removed - refresh available parameters and auto-save
+          const newAvailableParams = availableParams.filter(
+            (p) => !message.removedIds.includes(p.id)
+          );
+          availableParams = newAvailableParams;
+
+          // Remove from schema and auto-save
+          if (schema) {
+            schema.inputs = schema.inputs.filter((i) => !message.removedIds.includes(i.id));
+            schema.outputs = schema.outputs.filter((o) => !message.removedIds.includes(o.id));
+
+            if (wsState.connected) {
+              console.log('[Builder] Auto-saving schema after parameter removal');
+              wsState.saveSchema(sessionId, $state.snapshot(schema));
+            }
+          }
+
+          toast.info(
+            `Parameter${removedCount > 1 ? 's' : ''} removed from Grasshopper: ${removedCount} item(s)`
+          );
+        } else {
+          // New parameters may have been added - request fresh data
+          wsState.requestInitialData(sessionId);
+          toast.info('Schema structure updated - checking for new parameters...');
+        }
+      }
+    };
+
+    const handleParametersAdded = (message: any) => {
+      if (message.sessionId === sessionId) {
+        console.log('[Builder] New parameters added to Grasshopper:', message.availableParams);
+
+        if (message.availableParams && Array.isArray(message.availableParams)) {
+          // Update available parameters directly
+          availableParams = message.availableParams;
+          // Mark that sync is needed to pick up the new parameters in schema
+          syncNeeded = true;
+          toast.info('New parameters detected - click Sync to add them to your schema');
+        } else {
+          // Fallback: request fresh data
+          wsState.requestInitialData(sessionId);
+          toast.info('New parameters detected - refreshing...');
+        }
+      }
+    };
+
     const handleKeydown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
@@ -118,6 +277,9 @@
 
       wsState.on('initialData', handleInitialData);
       wsState.on('schemaSaved', handleSchemaSaved);
+      wsState.on('metadataUpdated', handleMetadataUpdated);
+      wsState.on('schemaUpdated', handleSchemaUpdated);
+      wsState.on('parametersAdded', handleParametersAdded);
 
       wsState.requestInitialData(sessionId);
     };
@@ -129,20 +291,12 @@
       window.removeEventListener('keydown', handleKeydown);
       wsState.off('initialData', handleInitialData);
       wsState.off('schemaSaved', handleSchemaSaved);
+      wsState.off('metadataUpdated', handleMetadataUpdated);
+      wsState.off('schemaUpdated', handleSchemaUpdated);
+      wsState.off('parametersAdded', handleParametersAdded);
       // Don't disconnect - keep connection alive for page switching
     };
   });
-
-  function saveSchema() {
-    if (!schema || !sessionId) return;
-
-    if (!wsState.connected) {
-      toast.error('Not connected to Grasshopper');
-      return;
-    }
-
-    wsState.saveSchema(sessionId, $state.snapshot(schema));
-  }
 
   function reorderTabs(fromIndex: number, toIndex: number) {
     if (!schema || !schema.layout.tabs) return;
@@ -434,7 +588,17 @@
 <DragDropContext>
   <PageContainer background="white">
     <PageHeader title="Schema Builder" {sessionId} showModeToggle={true}>
-      <nav class="flex gap-2">
+      <nav class="flex items-center gap-2">
+        {#if syncNeeded}
+          <Button
+            variant="default"
+            size="sm"
+            onclick={syncParameters}
+            class="animate-pulse bg-amber-500 hover:bg-amber-600"
+          >
+            ⚡ Sync Parameters
+          </Button>
+        {/if}
         <Button variant="outline" size="sm" onclick={() => navigateTo('/')}>Home</Button>
         <Button variant="default" size="sm">Schema Builder</Button>
         <Button variant="outline" size="sm" onclick={() => navigateTo('/preview')}>
@@ -466,6 +630,18 @@
             />
 
             <Panel title="Available Parameters">
+              {#snippet headerActions()}
+                {#if syncNeeded}
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onclick={syncParameters}
+                    class="bg-amber-500 hover:bg-amber-600"
+                  >
+                    Sync
+                  </Button>
+                {/if}
+              {/snippet}
               <p class="mb-4 text-sm text-accent-foreground/40">
                 Drag parameters into groups below
               </p>
