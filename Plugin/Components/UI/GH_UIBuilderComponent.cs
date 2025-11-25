@@ -5,6 +5,7 @@ using System.Drawing;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
+using System.Windows.Forms;
 using ComputeBuilder.Components.Params;
 using ComputeBuilder.Config;
 using ComputeBuilder.Plugin.Models.Generated;
@@ -53,12 +54,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
   // Previous input states for edge detection (button support)
   private bool _lastEnable;
-  private bool _lastOpenPreview;
-  private bool _lastRefresh;
 
-  // Track solve iterations for periodic metadata checks
-  private int _solveCount;
-  private const int MetadataCheckInterval = 3; // Check every 3 solves
+  /// <summary>
+  ///   Helper property to check if WebSocket communication is available
+  /// </summary>
+  private bool IsConnected => _communicationHandler?.IsRunning == true;
 
   // Extracted responsibilities
   private SchemaManager _schemaManager;
@@ -121,8 +121,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     pManager.AddBooleanParameter("Enable", "Enable", "Enable UI Builder (opens web interface)",
       GH_ParamAccess.item, false);
-    pManager.AddBooleanParameter("Open Preview", "OpenPreview", "Open the interactive preview in a web browser",
-      GH_ParamAccess.item, false);
   }
 
   protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -135,18 +133,17 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   protected override void SolveInstance(IGH_DataAccess DA)
   {
     var enable = false;
-    var openPreview = false;
 
     DA.GetData(0, ref enable);
-    DA.GetData(1, ref openPreview);
 
     var enableRising = enable && !_lastEnable;
     var enableFalling = !enable && _lastEnable;
-    var openPreviewRising = openPreview && !_lastOpenPreview;
 
     _lastEnable = enable;
-    _lastOpenPreview = openPreview;
 
+    // Enable state logic: Distinguishes between button press (single true) vs toggle (sustained true)
+    // - Button press: enableTrueCount=1, isEnabled stays true on falling edge
+    // - Toggle off: enableTrueCount>1, isEnabled becomes false on falling edge
     if (enableRising)
     {
       _isEnabled = true;
@@ -246,26 +243,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
           $"Duplicate parameter names found: {duplicateList}. Each parameter must have a unique name.");
       }
-
-      // When refresh is pressed, also check for metadata changes and broadcast them
-      if (_embeddedSchema != null && _communicationHandler?.IsRunning == true)
-      {
-        try
-        {
-          var metadataChanges = _schemaManager.DetectMetadataChanges(document, _embeddedSchema);
-          if (metadataChanges.Count > 0)
-          {
-            var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-              $"Metadata updated: {metadataChanges.Count} parameter(s) refreshed");
-          }
-        }
-        catch (Exception ex)
-        {
-          AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-            $"Error refreshing metadata: {ex.Message}");
-        }
-      }
     }
 
     if (_isEnabled)
@@ -291,51 +268,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
       }
 
-      // When schema is first enabled, do initial metadata comparison
-      if (_embeddedSchema != null && enableRising)
-      {
-        try
-        {
-          var initialChanges = _schemaManager.DetectMetadataChanges(document, _embeddedSchema);
-          if (initialChanges.Count > 0)
-          {
-            var _ = _communicationHandler.BroadcastMetadataChanges(initialChanges);
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-              $"Initial sync: {initialChanges.Count} parameter(s) metadata broadcasted");
-          }
-        }
-        catch (Exception ex)
-        {
-          AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-            $"Error during initial metadata comparison: {ex.Message}");
-        }
-      }
-
-      if (openPreviewRising)
-      {
-        OpenUI();
-      }
-
-      // Periodically check for metadata changes (nickname, min/max, etc.)
-      // This catches property edits that don't trigger document events
-      _solveCount++;
-      if (_solveCount % MetadataCheckInterval == 0 && _embeddedSchema != null && _communicationHandler?.IsRunning == true)
-      {
-        try
-        {
-          var metadataChanges = _schemaManager.DetectMetadataChanges(document, _embeddedSchema);
-          if (metadataChanges.Count > 0)
-          {
-            var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
-          }
-        }
-        catch (Exception ex)
-        {
-          AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-            $"Error checking metadata changes: {ex.Message}");
-        }
-      }
-
       if (_embeddedSchema != null)
       {
         DA.SetData(1,
@@ -351,7 +283,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       return;
     }
 
-    if (enableFalling && _communicationHandler?.IsRunning == true)
+    if (enableFalling && IsConnected)
     {
       try
       {
@@ -366,7 +298,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       }
 
       _communicationHandler.Stop();
-      _solveCount = 0; // Reset solve counter
     }
 
     var contextualParams = document.Objects.OfType<IGH_ContextualParameter>().ToList();
@@ -552,33 +483,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     if (data is GH_ValueListData valueListData)
     {
       // Return the KEY (name)
-      return valueListData.SelectedName; // "Red"
+      return valueListData.SelectedName;
     }
 
     // Fallback for other types
     return ExtractValue(data);
   }
 
-  // Extract key and value for ValueList, or just value for other types
-  private object ExtractKeyValue(IGH_Goo data)
-  {
-    // Check if it's from a ValueList parameter
-    if (data is GH_ValueListData valueListData)
-    {
-      // Return structured object with both key and value
-      return new
-      {
-        key = valueListData.SelectedName,
-        value = valueListData.Value,
-        index = valueListData.SelectedIndex
-      };
-    }
-
-    // For all other types, extract just the value
-    return ExtractValue(data);
-  }
-
-  // Your existing ExtractValue method
   private object ExtractValue(IGH_Goo data)
   {
     if (data is GH_String ghString)
@@ -721,6 +632,34 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
   }
 
+  /// <summary>
+  ///   Add custom context menu items to the component's right-click menu
+  /// </summary>
+  public override bool AppendMenuItems(ToolStripDropDown menu)
+  {
+    base.AppendMenuItems(menu);
+
+    // Add a separator
+    menu.Items.Add(new ToolStripSeparator());
+
+    // Add "Open UI in Browser" menu item
+    var openUIItem = new ToolStripMenuItem(
+      "Open UI in Browser",
+      null,
+      (s, e) => OpenUI()
+    )
+    {
+      ToolTipText = "Open the interactive UI preview in your default web browser"
+    };
+
+    // Only enable if the component is active and connected
+    openUIItem.Enabled = _isEnabled && IsConnected;
+
+    menu.Items.Add(openUIItem);
+
+    return true;
+  }
+
   public override void RemovedFromDocument(GH_Document document)
   {
     base.RemovedFromDocument(document);
@@ -800,7 +739,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   /// </summary>
   private void OnUndoStateChanged(object sender, GH_DocUndoEventArgs e)
   {
-    if (_embeddedSchema == null || _currentDocument == null || !_communicationHandler?.IsRunning == true)
+    if (_embeddedSchema == null || _currentDocument == null || !IsConnected)
     {
       return;
     }
@@ -834,27 +773,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     _isSolving = true;
 
-    // Detect metadata changes before solving starts
-    // This catches property changes (nickname, description, min/max) that happened since last check
-    if (_embeddedSchema != null && _currentDocument != null && _communicationHandler?.IsRunning == true)
-    {
-      try
-      {
-        var metadataChanges = _schemaManager.DetectMetadataChanges(_currentDocument, _embeddedSchema);
-        if (metadataChanges.Count > 0)
-        {
-          var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
-        }
-      }
-      catch (Exception ex)
-      {
-        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-          $"Error detecting metadata changes at solution start: {ex.Message}");
-      }
-    }
-
     // Notify web UI that Grasshopper is solving
-    if (_communicationHandler?.IsRunning == true)
+    if (IsConnected)
     {
       var _ = _communicationHandler.BroadcastSolvingState(true);
     }
@@ -869,7 +789,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       CollectAndSendOutputs(_currentDocument, _embeddedSchema);
 
       // Detect metadata changes (nickname, min/max, stepsize, options) and broadcast updates
-      if (_communicationHandler?.IsRunning == true)
+      if (IsConnected)
       {
         try
         {
@@ -919,7 +839,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
     // Notify web UI that Grasshopper is done solving
-    if (_communicationHandler?.IsRunning == true)
+    if (IsConnected)
     {
       var _ = _communicationHandler.BroadcastSolvingState(false);
     }
@@ -928,7 +848,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   private void OnObjectsChanged(object sender, GH_DocObjectEventArgs e)
   {
     // Only react if we're enabled and can communicate
-    if (_currentDocument == null || !_communicationHandler?.IsRunning == true)
+    if (_currentDocument == null || !IsConnected)
     {
       return;
     }

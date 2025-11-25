@@ -371,8 +371,6 @@
           return;
         }
 
-        console.log('[Preview] WebSocket connected');
-
         // Register handlers
         wsState.on('initialData', handleInitialData);
         wsState.on('currentValues', handleCurrentValues);
@@ -391,7 +389,6 @@
     initializeSchema();
 
     return () => {
-      // Clean up WebSocket handlers to prevent duplicate responses
       wsState.off('initialData', handleInitialData);
       wsState.off('currentValues', handleCurrentValues);
       wsState.off('outputs', handleOutputs);
