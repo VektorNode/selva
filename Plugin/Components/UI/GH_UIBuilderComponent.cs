@@ -12,7 +12,6 @@ using ComputeBuilder.Utils;
 using GH_IO.Serialization;
 using Grasshopper;
 using Grasshopper.Kernel;
-using Grasshopper.Kernel.Special;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Rhino;
@@ -96,7 +95,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       throw new ArgumentOutOfRangeException(nameof(length), "Length must be > 0");
     }
 
-    // Create an initial chunk from a GUID (16 bytes) encoded as URL-safe Base64 (length ~22)
     string EncodeUrlSafe(byte[] bytes)
     {
       return Convert.ToBase64String(bytes).Replace('+', '-').Replace('/', '_').TrimEnd('=');
@@ -104,10 +102,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     var id = EncodeUrlSafe(Guid.NewGuid().ToByteArray());
 
-    // If more characters are requested, append cryptographically-random chunks until we have enough
     while (id.Length < length)
     {
-      var extra = new byte[12]; // 12 bytes -> 16 base64 chars before padding
+      var extra = new byte[12];
       using (var rng = RandomNumberGenerator.Create())
       {
         rng.GetBytes(extra);
@@ -124,8 +121,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     pManager.AddBooleanParameter("Enable", "Enable", "Enable UI Builder (opens web interface)",
       GH_ParamAccess.item, false);
-    pManager.AddBooleanParameter("Refresh", "Refresh", "Refresh available parameters from document",
-      GH_ParamAccess.item, false);
     pManager.AddBooleanParameter("Open Preview", "OpenPreview", "Open the interactive preview in a web browser",
       GH_ParamAccess.item, false);
   }
@@ -140,20 +135,16 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   protected override void SolveInstance(IGH_DataAccess DA)
   {
     var enable = false;
-    var refresh = false;
     var openPreview = false;
 
     DA.GetData(0, ref enable);
-    DA.GetData(1, ref refresh);
-    DA.GetData(2, ref openPreview);
+    DA.GetData(1, ref openPreview);
 
     var enableRising = enable && !_lastEnable;
     var enableFalling = !enable && _lastEnable;
-    var refreshRising = refresh && !_lastRefresh;
     var openPreviewRising = openPreview && !_lastOpenPreview;
 
     _lastEnable = enable;
-    _lastRefresh = refresh;
     _lastOpenPreview = openPreview;
 
     if (enableRising)
@@ -207,7 +198,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     if (isRunningInHeadless)
     {
-      if (enableRising || refreshRising)
+      if (enableRising)
       {
         _availableParams = _schemaManager.ScanParameters(document);
         var duplicates = _schemaManager.ValidateDuplicates(_availableParams);
@@ -233,6 +224,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
       DA.SetData(1, $"Session: {_sessionId}\nStatus: Headless Mode\nSchema loaded (no WebSocket)");
       DA.SetData(2, _embeddedSchema != null ? JsonConvert.SerializeObject(_embeddedSchema, SchemaSerializationSettings) : "");
+      Message = "Headless • No WebSocket";
       return;
     }
 
@@ -243,7 +235,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       RegisterDocumentEvents();
     }
 
-    if (enableRising || refreshRising)
+    if (enableRising)
     {
       _availableParams = _schemaManager.ScanParameters(document);
       var duplicates = _schemaManager.ValidateDuplicates(_availableParams);
@@ -256,7 +248,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       }
 
       // When refresh is pressed, also check for metadata changes and broadcast them
-      if (refreshRising && _embeddedSchema != null && _communicationHandler?.IsRunning == true)
+      if (_embeddedSchema != null && _communicationHandler?.IsRunning == true)
       {
         try
         {
@@ -388,10 +380,12 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       DA.SetData(1,
         $"Session: {_sessionId}\nStatus: Disabled\nSchema: {_embeddedSchema.Inputs.Count} inputs, {_embeddedSchema.Outputs.Count} outputs (saved)\nSet Enable to true to start");
       DA.SetData(2, JsonConvert.SerializeObject(_embeddedSchema));
+      Message = "Offline";
     }
     else
     {
       DA.SetData(1, $"Session: {_sessionId}\nStatus: Disabled\nNo schema yet\nSet Enable to true to start");
+      Message = "Offline • No Schema";
     }
   }
 
