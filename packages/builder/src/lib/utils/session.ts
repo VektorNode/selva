@@ -1,8 +1,6 @@
-import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import { getWebSocketState, type WebSocketState } from '$lib/websocket/websocket.svelte';
 import type { UISchema, AvailableParameters } from '$lib/types/generated';
-import { resolve } from '$app/paths';
 
 /**
  * Session initialization result
@@ -22,16 +20,6 @@ export interface SessionState {
   loading: boolean;
   error: string;
   wsConnected: boolean;
-}
-
-/**
- * Navigate to a route while preserving the session ID
- */
-export function createNavigateTo(sessionId: string) {
-  return (path: string) => {
-    const url = resolve(`/${path}?session=${sessionId}`);
-    goto(url as never);
-  };
 }
 
 /**

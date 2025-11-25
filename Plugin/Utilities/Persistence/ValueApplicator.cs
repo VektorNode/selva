@@ -58,7 +58,7 @@ public class ValueApplicator
         if (paramObject == null)
         {
           addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-            $"Parameter '{input.Name}' not found in document");
+            $"Parameter '{input.Nickname}' not found in document");
           continue;
         }
 
@@ -97,7 +97,7 @@ public class ValueApplicator
       catch (Exception ex)
       {
         addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
-          $"Error applying value to '{input.Name}': {ex.Message}");
+          $"Error applying value to '{input.Nickname}': {ex.Message}");
       }
     }
 
@@ -200,7 +200,7 @@ public class ValueApplicator
         if (strValue.Length > MAX_STRING_LENGTH)
         {
           addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
-            $"String value too long for '{input.Name}' (max {MAX_STRING_LENGTH} characters)");
+            $"String value too long for '{input.Nickname}' (max {MAX_STRING_LENGTH} characters)");
           return false;
         }
       }
@@ -216,7 +216,7 @@ public class ValueApplicator
         catch (Exception)
         {
           addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
-            $"Invalid numeric value for '{input.Name}'");
+            $"Invalid numeric value for '{input.Nickname}'");
           return false;
         }
 
@@ -224,7 +224,7 @@ public class ValueApplicator
         if (double.IsInfinity(numValue) || double.IsNaN(numValue))
         {
           addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
-            $"Invalid numeric value for '{input.Name}' (Infinity or NaN)");
+            $"Invalid numeric value for '{input.Nickname}' (Infinity or NaN)");
           return false;
         }
       }
@@ -239,7 +239,7 @@ public class ValueApplicator
         catch (OverflowException)
         {
           addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
-            $"Integer value overflow for '{input.Name}'");
+            $"Integer value overflow for '{input.Nickname}'");
           return false;
         }
       }
@@ -249,7 +249,7 @@ public class ValueApplicator
     catch (Exception ex)
     {
       addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
-        $"Validation error for '{input.Name}': {ex.Message}");
+        $"Validation error for '{input.Nickname}': {ex.Message}");
       return false;
     }
   }

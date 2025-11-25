@@ -478,7 +478,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       catch (Exception ex)
       {
         AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-          $"Error collecting current value for '{input.Name}': {ex.Message}");
+          $"Error collecting current value for '{input.Nickname}': {ex.Message}");
       }
     }
 
@@ -623,7 +623,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       catch (Exception ex)
       {
         AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-          $"Error collecting output '{output.Name}': {ex.Message}");
+          $"Error collecting output '{output.Nickname}': {ex.Message}");
       }
     }
 

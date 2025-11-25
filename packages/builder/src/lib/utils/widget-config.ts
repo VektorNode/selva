@@ -86,7 +86,7 @@ export function createDefaultWidgetConfig(
         const config: NumberWidgetConfig = {
           minimum: param.minimum ?? 0,
           maximum: param.maximum ?? 100,
-          step: param.paramType === 'Integer' ? 1 : (param.stepSize ?? 0.1),
+          stepSize: param.paramType === 'Integer' ? 1 : (param.stepSize ?? 0.1),
           renderAsSlider: true,
         };
         return config;

@@ -18,13 +18,9 @@
           "type": "string",
           "description": "Grasshopper parameter instance GUID"
         },
-        "name": { "type": "string" },
         "nickname": { "type": "string" },
         "paramType": { "$ref": "#/definitions/GrasshopperParamType" },
         "description": { "type": "string" },
-        "atLeast": { "type": "integer", "default": 1 },
-        "atMost": { "type": "integer", "default": 1 },
-        "treeAccess": { "type": "boolean", "default": false },
         "default": {}
       },
       "required": ["id", "name", "nickname", "paramType"],
@@ -38,7 +34,6 @@
           "type": "string",
           "description": "Grasshopper parameter instance GUID"
         },
-        "name": { "type": "string" },
         "nickname": { "type": "string" },
         "paramType": { "$ref": "#/definitions/GrasshopperParamType" },
         "description": { "type": "string" }
@@ -47,12 +42,56 @@
       "additionalProperties": false
     },
 
+    "AvailableParameter": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Grasshopper parameter instance GUID"
+        },
+        "name": { "type": "string" },
+        "nickname": { "type": "string" },
+        "description": { "type": "string" },
+        "category": {
+          "type": "string",
+          "enum": ["input", "output"]
+        },
+        "paramType": { "$ref": "#/definitions/GrasshopperParamType" },
+        "default": {},
+        "minimum": { "type": "number" },
+        "maximum": { "type": "number" },
+        "stepSize": { "type": "number" },
+        "atLeast": { "type": "integer", "default": 1 },
+        "atMost": { "type": "integer", "default": 1 },
+        "treeAccess": { "type": "boolean", "default": false },
+        "options": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Key-value pairs for dropdown options"
+        }
+      },
+      "required": ["id", "name", "nickname", "description", "category", "paramType"]
+    },
+
+    "AvailableParameters": {
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "parameters": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/AvailableParameter" }
+        }
+      },
+      "required": ["sessionId", "timestamp", "parameters"]
+    },
+
     "NumberWidgetConfig": {
       "type": "object",
       "properties": {
         "minimum": { "type": "number" },
         "maximum": { "type": "number" },
-        "step": { "type": "number" },
+        "stepSize": { "type": "number" },
         "placeholder": { "type": "string" },
         "renderAsSlider": { "type": "boolean" }
       },
@@ -262,6 +301,32 @@
       "additionalProperties": false
     },
 
+    "SessionState": {
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "active": { "type": "boolean" },
+        "lastUpdate": { "type": "string", "format": "date-time" },
+        "mode": {
+          "type": "string",
+          "enum": ["builder", "preview"]
+        }
+      },
+      "required": ["sessionId", "active", "lastUpdate", "mode"]
+    },
+
+    "RuntimeValues": {
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "values": {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      },
+      "required": ["timestamp", "values"]
+    },
+
     "UISchema": {
       "type": "object",
       "properties": {
@@ -301,84 +366,8 @@
         },
         "layout": { "$ref": "#/definitions/LayoutConfig" }
       },
-      "required": [
-        "id",
-        "name",
-        "inputs",
-        "outputs",
-        "layout"
-      ],
+      "required": ["id", "name", "inputs", "outputs", "layout"],
       "additionalProperties": false
-    },
-
-    "RuntimeValues": {
-      "type": "object",
-      "properties": {
-        "timestamp": { "type": "string", "format": "date-time" },
-        "values": {
-          "type": "object",
-          "additionalProperties": {}
-        }
-      },
-      "required": ["timestamp", "values"]
-    },
-
-    "SessionState": {
-      "type": "object",
-      "properties": {
-        "sessionId": { "type": "string" },
-        "active": { "type": "boolean" },
-        "lastUpdate": { "type": "string", "format": "date-time" },
-        "mode": {
-          "type": "string",
-          "enum": ["builder", "preview"]
-        }
-      },
-      "required": ["sessionId", "active", "lastUpdate", "mode"]
-    },
-
-    "AvailableParameter": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Grasshopper parameter instance GUID"
-        },
-        "name": { "type": "string" },
-        "nickname": { "type": "string" },
-        "description": { "type": "string" },
-        "category": {
-          "type": "string",
-          "enum": ["input", "output"]
-        },
-        "paramType": { "$ref": "#/definitions/GrasshopperParamType" },
-        "default": {},
-        "minimum": { "type": "number" },
-        "maximum": { "type": "number" },
-        "stepSize": { "type": "number" },
-        "atLeast": { "type": "integer", "default": 1 },
-        "atMost": { "type": "integer", "default": 1 },
-        "treeAccess": { "type": "boolean", "default": false },
-        "options": {
-          "type": "object",
-          "additionalProperties": { "type": "string" },
-          "description": "Key-value pairs for dropdown options"
-        }
-      },
-      "required": ["id", "name", "nickname", "description", "category", "paramType"]
-    },
-
-    "AvailableParameters": {
-      "type": "object",
-      "properties": {
-        "sessionId": { "type": "string" },
-        "timestamp": { "type": "string", "format": "date-time" },
-        "parameters": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/AvailableParameter" }
-        }
-      },
-      "required": ["sessionId", "timestamp", "parameters"]
     }
   },
 

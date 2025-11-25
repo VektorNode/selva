@@ -88,9 +88,6 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("id")]
         public Guid Id { get; set; }
 
-        [JsonProperty("name")]
-        public string Name { get; set; }
-
         [JsonProperty("nickname")]
         public string Nickname { get; set; }
 
@@ -99,15 +96,6 @@ namespace ComputeBuilder.Plugin.Models.Generated
 
         [JsonProperty("description")]
         public string Description { get; set; }
-
-        [JsonProperty("atLeast", DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public int? AtLeast { get; set; } = 1;
-
-        [JsonProperty("atMost", DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public int? AtMost { get; set; } = 1;
-
-        [JsonProperty("treeAccess", DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public bool? TreeAccess { get; set; } = false;
 
         [JsonProperty("default", NullValueHandling = NullValueHandling.Ignore)]
         public object Default { get; set; }
@@ -121,9 +109,6 @@ namespace ComputeBuilder.Plugin.Models.Generated
 /// </summary>
         [JsonProperty("id")]
         public Guid Id { get; set; }
-
-        [JsonProperty("name")]
-        public string Name { get; set; }
 
         [JsonProperty("nickname")]
         public string Nickname { get; set; }
@@ -148,8 +133,8 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("maximum")]
         public double? Maximum { get; set; }
 
-        [JsonProperty("step")]
-        public double? Step { get; set; }
+        [JsonProperty("stepSize")]
+        public double? StepSize { get; set; }
 
         [JsonProperty("placeholder")]
         public string Placeholder { get; set; }
@@ -250,16 +235,6 @@ namespace ComputeBuilder.Plugin.Models.Generated
     // RUNTIME DATA
     // ============================================================================
 
-    public class RuntimeValues
-    {
-
-        [JsonProperty("timestamp")]
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-
-        [JsonProperty("values")]
-        public Dictionary<string, object> Values { get; set; }
-    }
-
     public class SessionState
     {
 
@@ -274,6 +249,16 @@ namespace ComputeBuilder.Plugin.Models.Generated
 
         [JsonProperty("mode")]
         public string Mode { get; set; }
+    }
+
+    public class RuntimeValues
+    {
+
+        [JsonProperty("timestamp")]
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+
+        [JsonProperty("values")]
+        public Dictionary<string, object> Values { get; set; }
     }
 
 // ============================================================================

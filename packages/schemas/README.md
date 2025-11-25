@@ -371,3 +371,7 @@ cd .. && dotnet build
 - `../Plugin/Models/Generated/UISchema.Generated.cs`
 
 Never edit these files directly - they will be overwritten!
+
+## Availble Parameter
+
+The available parameter class is mainly for inital datasending and setting default variables in local mode and does not directly influece the ui schema

@@ -1,12 +1,12 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { goto } from '$app/navigation';
   import { getWebSocketState } from '$lib/websocket/websocket.svelte';
   import type { UISchema, AvailableParameters, SupportedTypes } from '$lib/types/generated';
   import { TabLayout } from '$lib/components/preview';
   import { PageContainer, PageHeader } from '$lib/components/layout';
   import { StateDisplay, Button } from '$lib/components/ui';
   import {
-    createNavigateTo,
     initializeWebSocketSession,
     ensureSchemaLayoutDefaults,
     getDefaultValue,
@@ -30,7 +30,11 @@
   let runtimeMode = $state<RuntimeMode>('local');
   let solving = $state(false);
 
-  const navigateTo = $derived(createNavigateTo(sessionId));
+  // Navigate to specific routes with session preservation
+  function navigateTo(route: '/' | '/builder') {
+    const url = route === '/' ? `/?session=${sessionId}` : `/builder?session=${sessionId}`;
+    goto(url);
+  }
 
   // Track if we're updating values from remote (to avoid feedback loop)
   let isRemoteUpdate = $state(false);
@@ -290,8 +294,8 @@
     {sessionId}
   >
     <nav class="flex gap-2">
-      <Button variant="outline" size="sm" onclick={() => navigateTo('')}>Home</Button>
-      <Button variant="outline" size="sm" onclick={() => navigateTo('builder')}>
+      <Button variant="outline" size="sm" onclick={() => navigateTo('/')}>Home</Button>
+      <Button variant="outline" size="sm" onclick={() => navigateTo('/builder')}>
         Schema Builder
       </Button>
       <Button variant="default" size="sm">Interactive Preview</Button>

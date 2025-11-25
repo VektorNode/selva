@@ -15,11 +15,6 @@
       "@tests/*": ["./tests/*"]
     }
   },
-  "include": [
-    "src/**/*",
-    "tests/**/*",
-    "../svelte-ui/src/lib/utils/input-grouping.ts",
-    "../svelte-ui/src/lib/utils/input-grouping.test.ts"
-  ],
+  "include": ["src/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist"]
 }

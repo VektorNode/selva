@@ -27,9 +27,8 @@ function transformInputParameter(
 ): InputParam {
   const base = {
     description: input.description || '',
-    name: input.nickname || input.name,
+    name: input.nickname,
     nickname: input.nickname || null,
-    treeAccess: input.treeAccess || false,
     id: input.id,
   };
 
@@ -39,8 +38,6 @@ function transformInputParameter(
       paramType: input.paramType as 'Number' | 'Integer',
       minimum: input.minimum,
       maximum: input.maximum,
-      atLeast: input.atLeast,
-      atMost: input.atMost,
       stepSize: input.paramType === 'Integer' ? 1 : input.stepSize,
       default: value ?? input.default,
     } as NumericInputType;

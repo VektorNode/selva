@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { goto } from '$app/navigation';
   import { getWebSocketState } from '$lib/websocket/websocket.svelte';
   import { PageContainer, PageHeader, Panel } from '$lib/components/layout';
   import { StateDisplay, Button } from '$lib/components/ui';
@@ -23,11 +24,7 @@
     OutputLayoutItem,
   } from '$lib/types/generated';
   import { mapParamTypeToWidgetType, createDefaultWidgetConfig } from '$lib/utils/widget-config';
-  import {
-    createNavigateTo,
-    initializeWebSocketSession,
-    processInitialDataSchema,
-  } from '$lib/utils/session';
+  import { initializeWebSocketSession, processInitialDataSchema } from '$lib/utils/session';
   import Save from '$lib/components/ui/icons/Save.svelte';
   import { toast } from '$lib/components/ui/sonner';
   import { onMount } from 'svelte';
@@ -42,7 +39,11 @@
   let error = $state('');
   let activeTabId = $state<string | null>(null);
 
-  const navigateTo = $derived(createNavigateTo(sessionId));
+  // Navigate to specific routes with session preservation
+  function navigateTo(route: '/' | '/preview') {
+    const url = route === '/' ? `/?session=${sessionId}` : `/preview?session=${sessionId}`;
+    goto(url);
+  }
 
   const placedInLayoutIds = $derived(() => {
     const ids = new Set<string>();
@@ -297,13 +298,9 @@
       if (!inputExists) {
         const newInput: InputParamSchema = {
           id: param.id,
-          name: param.name,
           nickname: param.nickname,
           paramType: param.paramType,
           description: param.description,
-          atLeast: param.atLeast ?? 1,
-          atMost: param.atMost ?? 1,
-          treeAccess: param.treeAccess ?? false,
         };
         schema.inputs = [...schema.inputs, newInput];
       }
@@ -312,7 +309,6 @@
       if (!outputExists) {
         const newOutput: OutputParamSchema = {
           id: param.id,
-          name: param.name,
           nickname: param.nickname,
           paramType: param.paramType,
           description: param.description,
@@ -439,9 +435,9 @@
   <PageContainer background="white">
     <PageHeader title="Schema Builder" {sessionId} showModeToggle={true}>
       <nav class="flex gap-2">
-        <Button variant="outline" size="sm" onclick={() => navigateTo('')}>Home</Button>
+        <Button variant="outline" size="sm" onclick={() => navigateTo('/')}>Home</Button>
         <Button variant="default" size="sm">Schema Builder</Button>
-        <Button variant="outline" size="sm" onclick={() => navigateTo('preview')}>
+        <Button variant="outline" size="sm" onclick={() => navigateTo('/preview')}>
           Interactive Preview
         </Button>
       </nav>

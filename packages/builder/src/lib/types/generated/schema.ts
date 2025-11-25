@@ -25,13 +25,9 @@ export interface InputParamSchema {
    * Grasshopper parameter instance GUID
    */
   id: string;
-  name: string;
   nickname: string;
   paramType: GrasshopperParamType;
   description?: string;
-  atLeast?: number;
-  atMost?: number;
-  treeAccess?: boolean;
   default?: unknown;
 }
 export interface OutputParamSchema {
@@ -39,15 +35,45 @@ export interface OutputParamSchema {
    * Grasshopper parameter instance GUID
    */
   id: string;
-  name: string;
   nickname: string;
   paramType: GrasshopperParamType;
   description?: string;
 }
+export interface AvailableParameter {
+  /**
+   * Grasshopper parameter instance GUID
+   */
+  id: string;
+  name: string;
+  nickname: string;
+  description: string;
+  category: 'input' | 'output';
+  paramType: GrasshopperParamType;
+  default?: unknown;
+  minimum?: number;
+  maximum?: number;
+  stepSize?: number;
+  atLeast?: number;
+  atMost?: number;
+  treeAccess?: boolean;
+  /**
+   * Key-value pairs for dropdown options
+   */
+  options?: {
+    [k: string]: string | undefined;
+  };
+  [k: string]: unknown | undefined;
+}
+export interface AvailableParameters {
+  sessionId: string;
+  timestamp: string;
+  parameters: AvailableParameter[];
+  [k: string]: unknown | undefined;
+}
 export interface NumberWidgetConfig {
   minimum?: number;
   maximum?: number;
-  step?: number;
+  stepSize?: number;
   placeholder?: string;
   renderAsSlider?: boolean;
 }
@@ -174,6 +200,20 @@ export interface LayoutConfig {
   gap?: number;
   tabs?: TabConfig[];
 }
+export interface SessionState {
+  sessionId: string;
+  active: boolean;
+  lastUpdate: string;
+  mode: 'builder' | 'preview';
+  [k: string]: unknown | undefined;
+}
+export interface RuntimeValues {
+  timestamp: string;
+  values: {
+    [k: string]: unknown | undefined;
+  };
+  [k: string]: unknown | undefined;
+}
 export interface UISchema {
   id: string;
   name: string;
@@ -199,51 +239,6 @@ export interface UISchema {
   inputs: InputParamSchema[];
   outputs: OutputParamSchema[];
   layout: LayoutConfig;
-}
-export interface RuntimeValues {
-  timestamp: string;
-  values: {
-    [k: string]: unknown | undefined;
-  };
-  [k: string]: unknown | undefined;
-}
-export interface SessionState {
-  sessionId: string;
-  active: boolean;
-  lastUpdate: string;
-  mode: 'builder' | 'preview';
-  [k: string]: unknown | undefined;
-}
-export interface AvailableParameter {
-  /**
-   * Grasshopper parameter instance GUID
-   */
-  id: string;
-  name: string;
-  nickname: string;
-  description: string;
-  category: 'input' | 'output';
-  paramType: GrasshopperParamType;
-  default?: unknown;
-  minimum?: number;
-  maximum?: number;
-  stepSize?: number;
-  atLeast?: number;
-  atMost?: number;
-  treeAccess?: boolean;
-  /**
-   * Key-value pairs for dropdown options
-   */
-  options?: {
-    [k: string]: string | undefined;
-  };
-  [k: string]: unknown | undefined;
-}
-export interface AvailableParameters {
-  sessionId: string;
-  timestamp: string;
-  parameters: AvailableParameter[];
-  [k: string]: unknown | undefined;
 }
 
 

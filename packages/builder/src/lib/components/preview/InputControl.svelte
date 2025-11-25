@@ -90,7 +90,7 @@
     {#if config.renderAsSlider}
       {@const minVal = config.minimum ?? 0}
       {@const maxVal = config.maximum ?? 100}
-      {@const requestedStep = config.step ?? 1}
+      {@const requestedStep = config.stepSize ?? 1}
       {@const optimalStep = getOptimalStepSize(minVal, maxVal, requestedStep)}
       <div class="flex items-center gap-4">
         <Slider
@@ -115,7 +115,7 @@
         bind:value
         min={config.minimum}
         max={config.maximum}
-        step={config.step ?? 1}
+        step={config.stepSize ?? 1}
         placeholder={config.placeholder}
         oninput={(e) => {
           const target = e.currentTarget as HTMLInputElement;
