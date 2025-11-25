@@ -6,10 +6,10 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Windows.Forms;
-using ComputeBuilder.Components.Params;
-using ComputeBuilder.Config;
-using ComputeBuilder.Plugin.Models.Generated;
-using ComputeBuilder.Utils;
+using Selva.Components.Params;
+using Selva.Config;
+using Selva.Plugin.Models.Generated;
+using Selva.Utils;
 using GH_IO.Serialization;
 using Grasshopper;
 using Grasshopper.Kernel;
@@ -17,7 +17,7 @@ using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Rhino;
 
-namespace ComputeBuilder.Components.UI;
+namespace Selva.Components.UI;
 
 /// <summary>
 ///   Unified UI Builder component - WebSocket-only version
@@ -69,7 +69,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   public GH_UIBuilderComponent()
     : base("UI Builder", "UIBuilder",
       "Build and interact with your UI - WebSocket-only communication",
-      "ComputeBuilder", "Core")
+      "Selva", "Core")
   {
   }
 

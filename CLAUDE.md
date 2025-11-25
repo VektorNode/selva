@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ComputeBuilder is a cross-platform Rhino Grasshopper plugin that enables web-based UIs for parametric models using a
+Selva is a cross-platform Rhino Grasshopper plugin that enables web-based UIs for parametric models using a
 dual-stack architecture:
 
 - **Backend**: C# Grasshopper components (.NET multi-target: net48/net7.0)
@@ -39,9 +39,9 @@ pnpm build
 pnpm dev
 
 # Build specific package
-pnpm --filter @computebuilder/core build
-pnpm --filter @computebuilder/svelte-ui build
-pnpm --filter @computebuilder/web build
+pnpm --filter @selva/core build
+pnpm --filter @selva/svelte-ui build
+pnpm --filter @selva/web build
 
 # Run tests
 pnpm test
@@ -75,74 +75,74 @@ dotnet clean
 
 **Output locations:**
 
-- Rhino 7: `bin/Release/net48/ComputeBuilder.gha`
-- Rhino 8: `bin/Release/net7.0/ComputeBuilder.gha`
+- Rhino 7: `bin/Release/net48/Selva.gha`
+- Rhino 8: `bin/Release/net7.0/Selva.gha`
 
 ### Installation to Grasshopper
 
 **Windows (Rhino 7):**
 
 ```bash
-copy "Plugin\bin\Release\net48\ComputeBuilder.gha" "%APPDATA%\Grasshopper\Libraries\"
+copy "Plugin\bin\Release\net48\Selva.gha" "%APPDATA%\Grasshopper\Libraries\"
 ```
 
 **Windows (Rhino 8):**
 
 ```bash
-copy "Plugin\bin\Release\net7.0\ComputeBuilder.gha" "%APPDATA%\Grasshopper\Libraries-8\"
+copy "Plugin\bin\Release\net7.0\Selva.gha" "%APPDATA%\Grasshopper\Libraries-8\"
 ```
 
 **macOS (Rhino 8):**
 
 ```bash
-cp Plugin/bin/Release/net7.0/ComputeBuilder.gha ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/
+cp Plugin/bin/Release/net7.0/Selva.gha ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/
 ```
 
 After installation, restart Rhino completely.
 
 ### Individual Package Development
 
-#### @computebuilder/core
+#### @selva/core
 
 ```bash
 # Build library
-pnpm --filter @computebuilder/core build
+pnpm --filter @selva/core build
 
 # Type check
-pnpm --filter @computebuilder/core run check
+pnpm --filter @selva/core run check
 
 # Run tests
-pnpm --filter @computebuilder/core test
-pnpm --filter @computebuilder/core test:watch
+pnpm --filter @selva/core test
+pnpm --filter @selva/core test:watch
 ```
 
-#### @computebuilder/svelte-ui
+#### @selva/svelte-ui
 
 ```bash
 # Build component library
-pnpm --filter @computebuilder/svelte-ui build
+pnpm --filter @selva/svelte-ui build
 
 # Type check
-pnpm --filter @computebuilder/svelte-ui run check
+pnpm --filter @selva/svelte-ui run check
 
 # Run tests
-pnpm --filter @computebuilder/svelte-ui test
+pnpm --filter @selva/svelte-ui test
 ```
 
-#### @computebuilder/web (builder application)
+#### @selva/web (builder application)
 
 ```bash
 # Dev server (http://localhost:5173)
-pnpm --filter @computebuilder/web dev
+pnpm --filter @selva/web dev
 
 # Build for production
-pnpm --filter @computebuilder/web build
+pnpm --filter @selva/web build
 
 # Preview production build
-pnpm --filter @computebuilder/web preview
+pnpm --filter @selva/web preview
 
 # Type checking
-pnpm --filter @computebuilder/web run check
+pnpm --filter @selva/web run check
 ```
 
 ### Schema Generation (Single Source of Truth)
@@ -235,8 +235,8 @@ npm run generate:all
 
 ### Session File Locations
 
-**Windows:** `%TEMP%\ComputeBuilder\`
-**macOS/Linux:** `/tmp/ComputeBuilder/`
+**Windows:** `%TEMP%\Selva\`
+**macOS/Linux:** `/tmp/Selva/`
 
 Sessions auto-cleanup after 24 hours of inactivity.
 
@@ -464,9 +464,9 @@ pnpm test
 pnpm test:watch
 
 # Run tests for a specific package
-pnpm --filter @computebuilder/core test
-pnpm --filter @computebuilder/svelte-ui test
-pnpm --filter @computebuilder/web test
+pnpm --filter @selva/core test
+pnpm --filter @selva/svelte-ui test
+pnpm --filter @selva/web test
 ```
 
 ### Manual Integration Testing (Local Grasshopper)
@@ -536,8 +536,8 @@ cd Plugin && dotnet build
 ### Debugging Session Issues
 
 1. Check session files in temp directory:
-   - Windows: `%TEMP%\ComputeBuilder\`
-   - macOS: `/tmp/ComputeBuilder/`
+   - Windows: `%TEMP%\Selva\`
+   - macOS: `/tmp/Selva/`
 
 2. Verify file timestamps match component activity
 

@@ -16,7 +16,7 @@
 </script>
 
 <PageContainer background="white">
-  <PageHeader title="ComputeBuilder" showModeToggle={true} />
+  <PageHeader title="Selva" showModeToggle={true} />
   {#if !sessionId}
     <div class="flex min-h-screen items-center justify-center">
       <StateDisplay
@@ -28,7 +28,7 @@
     </div>
   {:else}
     <div class="mx-auto w-full max-w-4xl p-12">
-      <h2 class="mb-4 text-4xl font-bold text-foreground">Welcome to ComputeBuilder</h2>
+      <h2 class="mb-4 text-4xl font-bold text-foreground">Welcome to Selva</h2>
       <p class="mb-8 text-lg text-muted-foreground">Choose a mode to get started:</p>
 
       <div class="grid grid-cols-1 gap-6 md:grid-cols-2">

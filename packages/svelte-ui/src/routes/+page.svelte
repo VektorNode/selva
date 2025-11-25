@@ -1,7 +1,7 @@
 <script lang="ts">
   import InputHandler from '$lib/InputHandler.svelte';
   import { exampleInputs } from '$lib/utils/data.js';
-  import type { DataTree } from '@computebuilder/core';
+  import type { DataTree } from '@selva/core';
 </script>
 
 <main>

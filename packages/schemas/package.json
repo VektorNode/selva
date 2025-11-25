@@ -1,7 +1,7 @@
 {
-  "name": "@computebuilder/schemas",
+  "name": "@selva/schemas",
   "version": "1.0.0",
-  "description": "Schema definitions and code generators for ComputeBuilder",
+  "description": "Schema definitions and code generators for Selva",
   "type": "module",
   "scripts": {
     "generate:ts": "node generate-typescript.js",

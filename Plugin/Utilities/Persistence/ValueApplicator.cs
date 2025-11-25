@@ -4,14 +4,14 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
-using ComputeBuilder.Config;
-using ComputeBuilder.Plugin.Models.Generated;
+using Selva.Config;
+using Selva.Plugin.Models.Generated;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 
-namespace ComputeBuilder.Utils;
+namespace Selva.Utils;
 
 /// <summary>
 ///   Handles applying values from web UI to Grasshopper parameters

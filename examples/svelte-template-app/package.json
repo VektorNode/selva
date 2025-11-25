@@ -38,8 +38,8 @@
   },
   "dependencies": {
     "compute-rhino3d": "0.13.0-beta",
-    "@computebuilder/core": "workspace:*",
-    "@computebuilder/svelte-ui": "workspace:*",
+    "@selva/core": "workspace:*",
+    "@selva/svelte-ui": "workspace:*",
     "three": "0.179.1"
   }
 }

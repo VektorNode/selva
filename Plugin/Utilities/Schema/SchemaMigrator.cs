@@ -1,7 +1,7 @@
 using System;
-using ComputeBuilder.Plugin.Models.Generated;
+using Selva.Plugin.Models.Generated;
 
-namespace ComputeBuilder.Utils;
+namespace Selva.Utils;
 
 /// <summary>
 ///   Handles schema migration across versions
@@ -146,7 +146,7 @@ public static class SchemaMigrator
     if (schemaVersion.Major > CURRENT_SCHEMA_VERSION.Major)
     {
       return (false,
-        $"Schema version {schemaVersion} requires a newer version of ComputeBuilder");
+        $"Schema version {schemaVersion} requires a newer version of Selva");
     }
 
     return (true, "Schema is compatible");

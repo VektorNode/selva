@@ -36,7 +36,7 @@ export function validateSchemaVersion(schema: UISchema): ValidationResult {
   if (major > currentMajor) {
     return {
       compatible: false,
-      message: `Schema version ${schema.schemaVersion} requires a newer version of ComputeBuilder`,
+      message: `Schema version ${schema.schemaVersion} requires a newer version of Selva`,
     };
   }
 

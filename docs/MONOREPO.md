@@ -1,6 +1,6 @@
-# ComputeBuilder Monorepo Guide
+# Selva Monorepo Guide
 
-This guide explains the structure and workflow of the ComputeBuilder monorepo.
+This guide explains the structure and workflow of the Selva monorepo.
 
 ## 📁 Structure
 
@@ -69,27 +69,27 @@ If a package needs a unique dependency, add it to that package's `package.json` 
 ## 🏗️ Adding a New Package
 
 1. Create directory in `packages/` or `examples/`
-2. Create `package.json` with name like `@computebuilder/package-name`
+2. Create `package.json` with name like `@selva/package-name`
 3. Add to root `pnpm-workspace.yaml` (already set to `packages/*` and `examples/*`)
 4. Use shared dependency versions from catalogs when possible
 
 ## 📋 Package Responsibilities
 
-### `@computebuilder/core`
+### `@selva/core`
 
 - Main TypeScript library
 - Rhino Compute Server integration
 - Grasshopper automation
 - No UI dependencies
 
-### `@computebuilder/svelte-ui`
+### `@selva/svelte-ui`
 
 - Reusable Svelte components
 - Depends on `core` for data structures
 - Can be published to npm
 - UI library focused
 
-### `@computebuilder/web` (builder)
+### `@selva/web` (builder)
 
 - SvelteKit web application
 - Uses both `core` and `svelte-ui`
@@ -134,7 +134,7 @@ If a package needs a unique dependency, add it to that package's `package.json` 
 
 ```bash
 # Run script in one package
-pnpm --filter @computebuilder/core build
+pnpm --filter @selva/core build
 
 # Run script in all packages matching pattern
 pnpm --filter ./packages --recursive run test
@@ -143,7 +143,7 @@ pnpm --filter ./packages --recursive run test
 pnpm --filter ./packages --parallel run type-check
 
 # Run in specific order (enforced by --filter, not --parallel)
-pnpm --filter @computebuilder/core build && pnpm --filter @computebuilder/svelte-ui build
+pnpm --filter @selva/core build && pnpm --filter @selva/svelte-ui build
 ```
 
 ## 🤝 Contributing

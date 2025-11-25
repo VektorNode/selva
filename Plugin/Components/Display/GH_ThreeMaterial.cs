@@ -1,16 +1,16 @@
 ﻿using System;
 using System.Drawing;
-using ComputeBuilder.Display;
+using Selva.Display;
 using Grasshopper.Kernel;
 
-namespace ComputeBuilder.Components.Display;
+namespace Selva.Components.Display;
 
 public class GH_ThreeMaterial : GH_Component
 {
   public GH_ThreeMaterial()
     : base("Three Material", "TM",
       "Creates a ThreeMaterial object for use in ThreeDisplay",
-      "ComputeBuilder", "Display")
+      "Selva", "Display")
   {
   }
 

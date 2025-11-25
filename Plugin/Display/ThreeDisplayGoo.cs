@@ -3,7 +3,7 @@ using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 
-namespace ComputeBuilder.Display;
+namespace Selva.Display;
 
 public class ThreeDisplayGoo : IGH_Goo
 {

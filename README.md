@@ -1,16 +1,16 @@
-# ComputeBuilder
+# Selva
 
-[![npm version](https://img.shields.io/npm/v/@computebuilder/core)](https://www.npmjs.com/package/@computebuilder/core)
+[![npm version](https://img.shields.io/npm/v/@selva/core)](https://www.npmjs.com/package/@selva/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/)
 [![Svelte](https://img.shields.io/badge/Svelte-5.0-FF3E00)](https://svelte.dev)
 [![.NET](https://img.shields.io/badge/.NET-4.8%2F7.0-512BD4)](https://dotnet.microsoft.com/)
 
-A comprehensive, cross-platform toolkit for building web-based UIs for Rhino Grasshopper parametric models using **Rhino Compute**. ComputeBuilder combines a powerful C# plugin, type-safe TypeScript libraries, and an intuitive web builder to streamline parametric design workflows.
+A comprehensive, cross-platform toolkit for building web-based UIs for Rhino Grasshopper parametric models using **Rhino Compute**. Selva combines a powerful C# plugin, type-safe TypeScript libraries, and an intuitive web builder to streamline parametric design workflows.
 
-## 🎯 What is ComputeBuilder?
+## 🎯 What is Selva?
 
-ComputeBuilder enables you to:
+Selva enables you to:
 
 - **Build web UIs** for Grasshopper definitions without writing code
 - **Deploy parametric models** as interactive web applications
@@ -33,12 +33,12 @@ ComputeBuilder enables you to:
 
 ### Packages
 
-| Package                                           | Purpose                                       | Status        |
-| ------------------------------------------------- | --------------------------------------------- | ------------- |
-| [`@computebuilder/core`](packages/core)           | Type-safe Rhino Compute client library        | ✅ Production |
-| [`@computebuilder/svelte-ui`](packages/svelte-ui) | Reusable Svelte components for inputs/outputs | ✅ Production |
-| [`@computebuilder/builder`](packages/builder)     | Web UI builder application                    | ✅ Production |
-| [`@computebuilder/schemas`](packages/schemas)     | Shared TypeScript/C# type definitions         | ✅ Production |
+| Package                                  | Purpose                                       | Status        |
+| ---------------------------------------- | --------------------------------------------- | ------------- |
+| [`@selva/core`](packages/core)           | Type-safe Rhino Compute client library        | ✅ Production |
+| [`@selva/svelte-ui`](packages/svelte-ui) | Reusable Svelte components for inputs/outputs | ✅ Production |
+| [`@selva/builder`](packages/builder)     | Web UI builder application                    | ✅ Production |
+| [`@selva/schemas`](packages/schemas)     | Shared TypeScript/C# type definitions         | ✅ Production |
 
 ### Examples
 
@@ -49,9 +49,9 @@ ComputeBuilder enables you to:
 
 ### Plugin
 
-| Component                      | Purpose                      |
-| ------------------------------ | ---------------------------- |
-| [`ComputeBuilder.gha`](Plugin) | Grasshopper plugin (C# .NET) |
+| Component             | Purpose                      |
+| --------------------- | ---------------------------- |
+| [`Selva.gha`](Plugin) | Grasshopper plugin (C# .NET) |
 
 ## 🚀 Quick Start
 
@@ -59,10 +59,10 @@ ComputeBuilder enables you to:
 
 ```bash
 # Install the core library
-npm install @computebuilder/core
+npm install @selva/core
 
 # Use in your project
-import { GrasshopperClient } from '@computebuilder/core';
+import { GrasshopperClient } from '@selva/core';
 
 const client = new GrasshopperClient({
   serverUrl: 'https://compute.rhino3d.com',
@@ -79,7 +79,7 @@ See [`packages/core/README.md`](packages/core/README.md) for detailed documentat
 
    ```bash
    dotnet build --configuration Release
-   # Copy bin/Release/net7.0/ComputeBuilder.gha to Grasshopper Libraries
+   # Copy bin/Release/net7.0/Selva.gha to Grasshopper Libraries
    ```
 
 2. **Open the builder:**
@@ -96,7 +96,7 @@ See [`packages/core/README.md`](packages/core/README.md) for detailed documentat
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd ComputeBuilder
+cd Selva
 
 # Install dependencies
 pnpm install
@@ -128,7 +128,7 @@ pnpm dev
 ## 🏗️ Architecture
 
 ```
-ComputeBuilder
+Selva
 ├── Backend (C#)
 │   └── Plugin/                    # Grasshopper components
 │       ├── Components/            # UI builder, display, IO

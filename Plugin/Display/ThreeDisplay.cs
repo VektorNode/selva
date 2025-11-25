@@ -1,4 +1,4 @@
-﻿namespace ComputeBuilder.Display;
+﻿namespace Selva.Display;
 
 /// <summary>
 ///   Represents a display object with mesh data and material properties.

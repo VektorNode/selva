@@ -2,11 +2,11 @@
 using System.Drawing;
 using Grasshopper.Kernel;
 
-namespace ComputeBuilder;
+namespace Selva;
 
-public class ComputeBuilderInfo : GH_AssemblyInfo
+public class SelvaInfo : GH_AssemblyInfo
 {
-  public override string Name => "ComputeBuilder";
+  public override string Name => "Selva";
 
   //Return a 24x24 pixel bitmap to represent this GHA library.
   public override Bitmap Icon => null;

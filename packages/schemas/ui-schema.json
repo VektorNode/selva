@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://computebuilder.dev/schemas/ui-schema.json",
-  "title": "ComputeBuilder UI Schema",
-  "description": "Schema definitions for ComputeBuilder UI configuration",
+  "$id": "https://selva.dev/schemas/ui-schema.json",
+  "title": "Selva UI Schema",
+  "description": "Schema definitions for Selva UI configuration",
 
   "definitions": {
     "GrasshopperParamType": {

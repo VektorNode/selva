@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using ComputeBuilder.Plugin.Models.Generated;
+using Selva.Plugin.Models.Generated;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
 
-namespace ComputeBuilder.Utils;
+namespace Selva.Utils;
 
 /// <summary>
 ///   Helper class for parameter type checking

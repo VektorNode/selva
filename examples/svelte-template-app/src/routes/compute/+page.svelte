@@ -1,17 +1,17 @@
 <script lang="ts">
   import MessageOverlay from "$lib/components/MessageOverlay.svelte";
   import Button from "$lib/components/Button.svelte";
-  import { InputHandler, LoadingScreen } from "@computebuilder/svelte-ui";
+  import { InputHandler, LoadingScreen } from "@selva/svelte-ui";
   import {
     GrasshopperResponseProcessor,
     type DataTree,
     type GrasshopperComputeResponse,
-  } from "@computebuilder/core/grasshopper";
+  } from "@selva/core/grasshopper";
   import {
     getThreeMeshesFromComputeResponse,
     initThree,
     updateScene,
-  } from "@computebuilder/core/visualization";
+  } from "@selva/core/visualization";
   import { onMount } from "svelte";
   import * as THREE from "three";
   import type { OrbitControls } from "three/examples/jsm/Addons.js";

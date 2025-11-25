@@ -2,11 +2,11 @@
 using System.IO;
 using System.Security.Cryptography;
 using System.Threading;
-using ComputeBuilder.Config;
+using Selva.Config;
 using Microsoft.Extensions.Logging;
 using Rhino;
 
-namespace ComputeBuilder.IO;
+namespace Selva.IO;
 
 public class RhinoDocumentConverter : IDisposable
 {

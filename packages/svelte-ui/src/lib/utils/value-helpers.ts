@@ -1,4 +1,4 @@
-import type { DataTreeDefault } from '@computebuilder/core/grasshopper';
+import type { DataTreeDefault } from '@selva/core/grasshopper';
 
 /**
  * Type guard to check if a value is a DataTree structure

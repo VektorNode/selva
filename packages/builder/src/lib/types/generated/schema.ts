@@ -15,9 +15,9 @@ export type LayoutItem =
   | OutputNumberLayoutItem;
 
 /**
- * Schema definitions for ComputeBuilder UI configuration
+ * Schema definitions for Selva UI configuration
  */
-export interface ComputeBuilderUISchema {
+export interface SelvaUISchema {
   [k: string]: unknown | undefined;
 }
 export interface InputParamSchema {
@@ -90,7 +90,7 @@ export interface DropdownWidgetConfig {
   };
   required?: boolean;
 }
-export interface CheckboxWidgetConfig {}
+export interface CheckboxWidgetConfig { }
 export interface InputNumberLayoutItem {
   id: string;
   /**

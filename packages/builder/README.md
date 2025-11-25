@@ -1,6 +1,6 @@
-# ComputeBuilder Web App
+# Selva Web App
 
-SvelteKit web application for ComputeBuilder - provides visual UI builder and interactive preview for Grasshopper parametric models.
+SvelteKit web application for Selva - provides visual UI builder and interactive preview for Grasshopper parametric models.
 
 ## What It Does
 

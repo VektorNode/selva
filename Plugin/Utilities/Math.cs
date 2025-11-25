@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace ComputeBuilder.Helpers;
+namespace Selva.Helpers;
 
 public static class MathExtensions
 {

@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using ComputeBuilder.Config;
-using ComputeBuilder.IO;
+using Selva.Config;
+using Selva.IO;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
@@ -12,7 +12,7 @@ using Rhino.DocObjects;
 using Rhino.Geometry;
 using Point = Rhino.Geometry.Point;
 
-namespace ComputeBuilder.Components.IO;
+namespace Selva.Components.IO;
 
 public class GH_DataToFile : GH_Component
 {
@@ -30,7 +30,7 @@ public class GH_DataToFile : GH_Component
   public GH_DataToFile()
     : base("DataToFile", "DTF",
       "Exports geometry to file format(s) with layer organization. Supports both single file (list input) and multiple files (tree input).",
-      "ComputeBuilder", "IO")
+      "Selva", "IO")
   {
     EnsureConverterInitialized();
   }

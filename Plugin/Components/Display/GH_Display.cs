@@ -4,14 +4,14 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
-using ComputeBuilder.Display;
+using Selva.Display;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
 using Rhino.Geometry;
 
-namespace ComputeBuilder.Components.Display;
+namespace Selva.Components.Display;
 
 /// <summary>
 ///   Component that converts geometry to displayable format for web viewing.
@@ -25,7 +25,7 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
   //Consider batching meshes together with metadata to reduce overhead and make better use of compression.
 
   public WebDisplay()
-    : base("Display", "D", "Converts geometry to display file", "ComputeBuilder", "Display")
+    : base("Display", "D", "Converts geometry to display file", "Selva", "Display")
   {
   }
 

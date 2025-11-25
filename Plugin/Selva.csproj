@@ -17,9 +17,9 @@
   <PropertyGroup>
     <!-- Specifies information for Assembly and Yak -->
     <Version>1.0</Version>
-    <Title>ComputeBuilder</Title>
-    <Company>ComputeBuilder Authors</Company>
-    <Description>Description of ComputeBuilder</Description>
+    <Title>Selva</Title>
+    <Company>Selva Authors</Company>
+    <Description>Description of Selva</Description>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,4 +1,4 @@
-import type { GrasshopperComputeResponse } from "@computebuilder/core";
+import type { GrasshopperComputeResponse } from "@selva/core";
 
 export interface ProcessedMessage {
   component: string;

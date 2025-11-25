@@ -59,7 +59,7 @@ function rmFileWithRetry(filePath, maxRetries = 5) {
   return false;
 }
 
-console.log('🧹 Cleaning up ComputeBuilder monorepo...\n');
+console.log('🧹 Cleaning up Selva monorepo...\n');
 
 // Delete root node_modules and pnpm-lock.yaml
 console.log('Cleaning root directory...');

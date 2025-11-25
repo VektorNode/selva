@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using ComputeBuilder.Config;
-using ComputeBuilder.IO;
+using Selva.Config;
+using Selva.IO;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using Grasshopper.Rhinoceros.Model;
@@ -11,7 +11,7 @@ using Rhino;
 using Rhino.DocObjects;
 using Rhino.Geometry;
 
-namespace ComputeBuilder.Components.IO;
+namespace Selva.Components.IO;
 
 /// <summary>
 ///   Exports Rhino block instances to base64-encoded .3dm files.
@@ -29,7 +29,7 @@ public class GH_Block_To_File : GH_Component
       "Block to File",
       "Block2File",
       "Export Rhino block instances to base64-encoded 3dm files",
-      "ComputeBuilder",
+      "Selva",
       "IO")
   {
     _copiedBlockIndices = new Dictionary<string, int>();

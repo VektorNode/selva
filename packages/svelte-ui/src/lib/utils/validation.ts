@@ -1,4 +1,4 @@
-import type { NumericInputType } from '@computebuilder/core/grasshopper';
+import type { NumericInputType } from '@selva/core/grasshopper';
 
 /**
  * Validation result for numeric inputs

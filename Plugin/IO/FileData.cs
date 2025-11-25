@@ -1,4 +1,4 @@
-﻿namespace ComputeBuilder.IO;
+﻿namespace Selva.IO;
 
 /// <summary>
 ///   Represents the data and metadata for a file to be processed or stored.

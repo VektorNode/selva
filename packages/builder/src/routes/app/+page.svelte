@@ -23,7 +23,7 @@
   let controls: any = null;
 
   // Deferred imports
-  let rhinoCompute: typeof import('@computebuilder/core') | null = null;
+  let rhinoCompute: typeof import('@selva/core') | null = null;
   let THREE: typeof import('three') | null = null;
 
   // Manual solve mode
@@ -54,7 +54,7 @@
   // Rhino Compute utilities
   // -----------------------------
   async function ensureModulesLoaded() {
-    if (!rhinoCompute) rhinoCompute = await import('@computebuilder/core');
+    if (!rhinoCompute) rhinoCompute = await import('@selva/core');
     if (schema.enable3dViewer && !THREE) THREE = await import('three');
   }
 

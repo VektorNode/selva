@@ -1,7 +1,7 @@
 {
-  "name": "computebuilder-monorepo",
+  "name": "selva-monorepo",
   "version": "1.0.0",
-  "description": "ComputeBuilder - TypeScript/Rhino integration monorepo",
+  "description": "Selva - TypeScript/Rhino integration monorepo",
   "private": true,
   "type": "module",
   "engines": {
@@ -9,12 +9,12 @@
     "pnpm": ">=9.0.0"
   },
   "scripts": {
-    "dev": "pnpm --filter @computebuilder/web dev",
-    "build": "pnpm --filter @computebuilder/core build && pnpm --filter @computebuilder/svelte-ui build && pnpm --filter @computebuilder/web build",
-    "build:all": "pnpm --filter @computebuilder/core build && pnpm --filter @computebuilder/svelte-ui build && pnpm --filter @computebuilder/web build",
-    "build:watch": "pnpm --filter @computebuilder/core --parallel run dev",
-    "build:web": "pnpm --filter @computebuilder/web build",
-    "preview": "pnpm --filter @computebuilder/web preview",
+    "dev": "pnpm --filter @selva/web dev",
+    "build": "pnpm --filter @selva/core build && pnpm --filter @selva/svelte-ui build && pnpm --filter @selva/web build",
+    "build:all": "pnpm --filter @selva/core build && pnpm --filter @selva/svelte-ui build && pnpm --filter @selva/web build",
+    "build:watch": "pnpm --filter @selva/core --parallel run dev",
+    "build:web": "pnpm --filter @selva/web build",
+    "preview": "pnpm --filter @selva/web preview",
     "check": "pnpm --filter ./packages --recursive run check",
     "type-check": "pnpm --filter ./packages --recursive run type-check",
     "test": "pnpm --filter ./packages --recursive run test",

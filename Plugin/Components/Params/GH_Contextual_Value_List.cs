@@ -11,7 +11,7 @@ using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace ComputeBuilder.Components.Params;
+namespace Selva.Components.Params;
 
 /// <summary>
 ///   A contextual parameter that captures value list data including all options and the selected default.

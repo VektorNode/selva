@@ -2,11 +2,11 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using ComputeBuilder.Components.Params;
-using ComputeBuilder.Plugin.Models.Generated;
+using Selva.Components.Params;
+using Selva.Plugin.Models.Generated;
 using Grasshopper.Kernel;
 
-namespace ComputeBuilder.Utils;
+namespace Selva.Utils;
 
 /// <summary>
 ///   Manages parameter scanning and schema validation

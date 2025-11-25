@@ -55,7 +55,7 @@ import type { MyNewType } from '$lib/types/generated';
 **C#:**
 
 ```csharp
-using ComputeBuilder.Plugin.Models.Generated;
+using Selva.Plugin.Models.Generated;
 // MyNewType is now available
 ```
 

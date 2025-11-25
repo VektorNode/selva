@@ -1,6 +1,6 @@
 import { json, type RequestHandler } from "@sveltejs/kit";
-import { type DataTree } from "@computebuilder/core";
-import { RhinoComputeError } from "@computebuilder/core";
+import { type DataTree } from "@selva/core";
+import { RhinoComputeError } from "@selva/core";
 import { PUBLIC_GH_SCRIPT_URL } from "$env/static/public";
 import { createGrasshopperClient } from "$lib/client";
 

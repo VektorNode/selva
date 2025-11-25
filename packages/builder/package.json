@@ -1,6 +1,6 @@
 {
-  "name": "@computebuilder/web",
-  "description": "ComputeBuilder web interface built with SvelteKit",
+  "name": "@selva/web",
+  "description": "Selva web interface built with SvelteKit",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -36,7 +36,7 @@
     "vite": "^7.1.10"
   },
   "dependencies": {
-    "@computebuilder/core": "workspace:*",
+    "@selva/core": "workspace:*",
     "mode-watcher": "^1.1.0",
     "three": "^0.179.1"
   }

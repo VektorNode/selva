@@ -5,7 +5,7 @@ using System.IO.Compression;
 using Newtonsoft.Json;
 using Rhino.Geometry;
 
-namespace ComputeBuilder.Display;
+namespace Selva.Display;
 
 public static class GeoMeshProcessor
 {

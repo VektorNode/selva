@@ -2,7 +2,7 @@ import { PUBLIC_API_KEY, PUBLIC_SERVER_URL } from "$env/static/public";
 import {
   GrasshopperClient,
   type GrasshopperComputeConfig,
-} from "@computebuilder/core";
+} from "@selva/core";
 
 export const createGrasshopperClient = () => {
   const config: GrasshopperComputeConfig = {

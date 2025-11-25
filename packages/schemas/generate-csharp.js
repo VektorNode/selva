@@ -77,7 +77,13 @@ function generateProperty(name, prop, required) {
   const attributes = [];
 
   // Add NullValueHandling.Ignore for optional properties
-  if (!required && csharpType !== 'string' && !csharpType.endsWith('?') && !csharpType.startsWith('List') && !csharpType.startsWith('Dictionary')) {
+  if (
+    !required &&
+    csharpType !== 'string' &&
+    !csharpType.endsWith('?') &&
+    !csharpType.startsWith('List') &&
+    !csharpType.startsWith('Dictionary')
+  ) {
     attributes.push('NullValueHandling = NullValueHandling.Ignore');
   }
 
@@ -217,7 +223,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace ComputeBuilder.Plugin.Models.Generated
+namespace Selva.Plugin.Models.Generated
 {
 `;
 

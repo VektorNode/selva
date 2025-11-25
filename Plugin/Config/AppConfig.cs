@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 
-namespace ComputeBuilder.Config;
+namespace Selva.Config;
 
 public static class AppConfig
 {
@@ -35,7 +35,7 @@ public static class AppConfig
   public static class FileIO
   {
     public const int FileCopyBufferSizeBytes = 1024 * 1024; // 1MB
-    private const string TempFolderName = "ComputeBuilder";
+    private const string TempFolderName = "Selva";
     public static string TempDirectory => Path.Combine(Path.GetTempPath(), TempFolderName);
   }
 

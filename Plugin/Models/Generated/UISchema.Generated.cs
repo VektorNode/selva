@@ -10,16 +10,16 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace ComputeBuilder.Plugin.Models.Generated
+namespace Selva.Plugin.Models.Generated
 {
-// ============================================================================
+    // ============================================================================
     // TYPE ALIASES
     // ============================================================================
 
     // GrasshopperParamType is a string for compatibility
     // Valid values: "Number", "Integer", "Boolean", "Text", "ValueList", "Generic"
 
-// ============================================================================
+    // ============================================================================
     // UISchema
     // ============================================================================
 
@@ -35,33 +35,33 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("description")]
         public string Description { get; set; }
 
-/// <summary>
-/// Semantic version of the schema format (MAJOR.MINOR.PATCH)
-/// </summary>
+        /// <summary>
+        /// Semantic version of the schema format (MAJOR.MINOR.PATCH)
+        /// </summary>
         [JsonProperty("schemaVersion", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string SchemaVersion { get; set; } = "1.0.0";
 
-/// <summary>
-/// Minimum plugin version required to load this schema
-/// </summary>
+        /// <summary>
+        /// Minimum plugin version required to load this schema
+        /// </summary>
         [JsonProperty("minPluginVersion")]
         public string MinPluginVersion { get; set; }
 
         [JsonProperty("created", NullValueHandling = NullValueHandling.Ignore)]
         public DateTime Created { get; set; } = DateTime.UtcNow;
 
-/// <summary>
-/// Last modification timestamp
-/// </summary>
+        /// <summary>
+        /// Last modification timestamp
+        /// </summary>
         [JsonProperty("lastModified", NullValueHandling = NullValueHandling.Ignore)]
         public DateTime LastModified { get; set; } = DateTime.UtcNow;
 
         [JsonProperty("enable3dViewer", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public bool? Enable3dViewer { get; set; } = false;
 
-/// <summary>
-/// If true, changes trigger immediate solving. If false, user must press Calculate button.
-/// </summary>
+        /// <summary>
+        /// If true, changes trigger immediate solving. If false, user must press Calculate button.
+        /// </summary>
         [JsonProperty("instanceSolve", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public bool? InstanceSolve { get; set; } = true;
 
@@ -75,16 +75,16 @@ namespace ComputeBuilder.Plugin.Models.Generated
         public LayoutConfig Layout { get; set; }
     }
 
-// ============================================================================
+    // ============================================================================
     // PARAMETER SCHEMAS
     // ============================================================================
 
     public class InputParamSchema
     {
 
-/// <summary>
-/// Grasshopper parameter instance GUID
-/// </summary>
+        /// <summary>
+        /// Grasshopper parameter instance GUID
+        /// </summary>
         [JsonProperty("id")]
         public Guid Id { get; set; }
 
@@ -104,9 +104,9 @@ namespace ComputeBuilder.Plugin.Models.Generated
     public class OutputParamSchema
     {
 
-/// <summary>
-/// Grasshopper parameter instance GUID
-/// </summary>
+        /// <summary>
+        /// Grasshopper parameter instance GUID
+        /// </summary>
         [JsonProperty("id")]
         public Guid Id { get; set; }
 
@@ -120,7 +120,7 @@ namespace ComputeBuilder.Plugin.Models.Generated
         public string Description { get; set; }
     }
 
-// ============================================================================
+    // ============================================================================
     // WIDGET CONFIGURATIONS
     // ============================================================================
 
@@ -156,9 +156,9 @@ namespace ComputeBuilder.Plugin.Models.Generated
     public class DropdownWidgetConfig
     {
 
-/// <summary>
-/// Key-value pairs for dropdown options
-/// </summary>
+        /// <summary>
+        /// Key-value pairs for dropdown options
+        /// </summary>
         [JsonProperty("options")]
         public Dictionary<string, object> Options { get; set; }
 
@@ -170,7 +170,7 @@ namespace ComputeBuilder.Plugin.Models.Generated
     {
     }
 
-// ============================================================================
+    // ============================================================================
     // LAYOUT CONFIGURATION
     // ============================================================================
 
@@ -231,7 +231,7 @@ namespace ComputeBuilder.Plugin.Models.Generated
         public List<TabConfig> Tabs { get; set; } = new List<TabConfig>();
     }
 
-// ============================================================================
+    // ============================================================================
     // RUNTIME DATA
     // ============================================================================
 
@@ -261,16 +261,16 @@ namespace ComputeBuilder.Plugin.Models.Generated
         public Dictionary<string, object> Values { get; set; }
     }
 
-// ============================================================================
+    // ============================================================================
     // AVAILABLE PARAMETERS
     // ============================================================================
 
     public class AvailableParameter
     {
 
-/// <summary>
-/// Grasshopper parameter instance GUID
-/// </summary>
+        /// <summary>
+        /// Grasshopper parameter instance GUID
+        /// </summary>
         [JsonProperty("id")]
         public Guid Id { get; set; }
 
@@ -310,9 +310,9 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("treeAccess", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public bool? TreeAccess { get; set; } = false;
 
-/// <summary>
-/// Key-value pairs for dropdown options
-/// </summary>
+        /// <summary>
+        /// Key-value pairs for dropdown options
+        /// </summary>
         [JsonProperty("options")]
         public Dictionary<string, object> Options { get; set; }
     }
@@ -330,11 +330,11 @@ namespace ComputeBuilder.Plugin.Models.Generated
         public List<AvailableParameter> Parameters { get; set; } = new List<AvailableParameter>();
     }
 
-// ============================================================================
+    // ============================================================================
     // LAYOUTITEM (Discriminated Union)
     // ============================================================================
 
-/// <summary>
+    /// <summary>
     /// Base class for LayoutItem discriminated union
     /// </summary>
     [JsonConverter(typeof(LayoutItemBaseConverter))]
@@ -343,9 +343,9 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("id")]
         public string Id { get; set; }
 
-/// <summary>
-/// References the Grasshopper component InstanceGuid
-/// </summary>
+        /// <summary>
+        /// References the Grasshopper component InstanceGuid
+        /// </summary>
         [JsonProperty("paramId")]
         public Guid ParamId { get; set; }
 
@@ -361,63 +361,63 @@ namespace ComputeBuilder.Plugin.Models.Generated
         [JsonProperty("span", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public int? Span { get; set; } = 1;
 
-[JsonProperty("type")]
+        [JsonProperty("type")]
         public abstract string Type { get; }
 
-[JsonProperty("widgetType")]
+        [JsonProperty("widgetType")]
         public abstract string WidgetType { get; }
 
     }
 
-public class InputNumberLayoutItem : LayoutItemBase
+    public class InputNumberLayoutItem : LayoutItemBase
     {
-public override string Type => "input";
-public override string WidgetType => "number";
+        public override string Type => "input";
+        public override string WidgetType => "number";
 
         [JsonProperty("config")]
         public NumberWidgetConfig Config { get; set; }
     }
 
-public class InputTextLayoutItem : LayoutItemBase
+    public class InputTextLayoutItem : LayoutItemBase
     {
-public override string Type => "input";
-public override string WidgetType => "text";
+        public override string Type => "input";
+        public override string WidgetType => "text";
 
         [JsonProperty("config")]
         public TextWidgetConfig Config { get; set; }
     }
 
-public class InputDropdownLayoutItem : LayoutItemBase
+    public class InputDropdownLayoutItem : LayoutItemBase
     {
-public override string Type => "input";
-public override string WidgetType => "dropdown";
+        public override string Type => "input";
+        public override string WidgetType => "dropdown";
 
         [JsonProperty("config")]
         public DropdownWidgetConfig Config { get; set; }
     }
 
-public class InputCheckboxLayoutItem : LayoutItemBase
+    public class InputCheckboxLayoutItem : LayoutItemBase
     {
-public override string Type => "input";
-public override string WidgetType => "checkbox";
+        public override string Type => "input";
+        public override string WidgetType => "checkbox";
 
         [JsonProperty("config", NullValueHandling = NullValueHandling.Ignore)]
         public CheckboxWidgetConfig Config { get; set; }
     }
 
-public class OutputTextLayoutItem : LayoutItemBase
+    public class OutputTextLayoutItem : LayoutItemBase
     {
-public override string Type => "output";
-public override string WidgetType => "text";
+        public override string Type => "output";
+        public override string WidgetType => "text";
     }
 
-public class OutputNumberLayoutItem : LayoutItemBase
+    public class OutputNumberLayoutItem : LayoutItemBase
     {
-public override string Type => "output";
-public override string WidgetType => "number";
+        public override string Type => "output";
+        public override string WidgetType => "number";
     }
 
-// ============================================================================
+    // ============================================================================
     // JSON CONVERTERS FOR DISCRIMINATED UNIONS
     // ============================================================================
 
@@ -430,8 +430,8 @@ public override string WidgetType => "number";
         public override LayoutItemBase ReadJson(JsonReader reader, Type objectType, LayoutItemBase existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
             var jsonObject = JObject.Load(reader);
-var type = jsonObject["type"]?.Value<string>();
-var widgetType = jsonObject["widgetType"]?.Value<string>();
+            var type = jsonObject["type"]?.Value<string>();
+            var widgetType = jsonObject["widgetType"]?.Value<string>();
 
             // Check if all discriminators are null or empty
             var allEmpty = string.IsNullOrEmpty(type) && string.IsNullOrEmpty(widgetType);

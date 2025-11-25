@@ -1,5 +1,5 @@
 {
-  "name": "@computebuilder/svelte-ui",
+  "name": "@selva/svelte-ui",
   "version": "1.0.3",
   "description": "A Svelte component library for rhino3dm and rhino.compute",
   "author": "VektorNode felix@vektornode.com",
@@ -34,7 +34,7 @@
     }
   },
   "peerDependencies": {
-    "@computebuilder/core": "^1.0.3",
+    "@selva/core": "^1.0.3",
     "svelte": "^5.0.0"
   },
   "devDependencies": {
@@ -67,7 +67,7 @@
     "vite": "^7.1.10"
   },
   "dependencies": {
-    "@computebuilder/core": "workspace:*"
+    "@selva/core": "workspace:*"
   },
   "keywords": [
     "compute",

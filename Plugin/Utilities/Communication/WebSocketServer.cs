@@ -5,9 +5,9 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using ComputeBuilder.Config;
+using Selva.Config;
 
-namespace ComputeBuilder.Utils;
+namespace Selva.Utils;
 
 /// <summary>
 ///   Simple WebSocket server for real-time communication with the web UI

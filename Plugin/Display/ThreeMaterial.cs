@@ -1,8 +1,8 @@
 ﻿using System.Drawing;
 using System.Reflection;
-using ComputeBuilder.Helpers;
+using Selva.Helpers;
 
-namespace ComputeBuilder.Display;
+namespace Selva.Display;
 
 /// <summary>
 ///   Represents material properties for a Three.js-like display object.

@@ -11,7 +11,7 @@ using Rhino.FileIO;
 using Rhino.Geometry;
 using Point = Rhino.Geometry.Point;
 
-namespace ComputeBuilder.Components.IO;
+namespace Selva.Components.IO;
 
 public class GH_Base64Parser : GH_Component
 {
@@ -25,7 +25,7 @@ public class GH_Base64Parser : GH_Component
     : base("Base64 Parser",
       "BASE64PARSER",
       "Parses a Base64 string into geometric data from various file formats.",
-      "ComputeBuilder",
+      "Selva",
       "IO")
   {
   }

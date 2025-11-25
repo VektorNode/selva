@@ -1,4 +1,4 @@
-import { DataTree, type InnerTree, type InputParam } from "@computebuilder/core";
+import { DataTree, type InnerTree, type InputParam } from "@selva/core";
 
 /**
  * Grouped inputs by category

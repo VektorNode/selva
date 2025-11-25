@@ -7,7 +7,7 @@ import {
   type InputParam,
   DataTree,
   GrasshopperClient,
-} from '@computebuilder/core';
+} from '@selva/core';
 import type { InputParamSchema } from '$lib/types/generated';
 import { PUBLIC_COMPUTE_SERVER_URL, PUBLIC_GH_DEFINITION } from '$env/static/public';
 

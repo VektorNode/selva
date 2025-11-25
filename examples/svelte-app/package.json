@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "compute-rhino3d": "0.13.0-beta",
-    "@computebuilder/core": "workspace:*",
+    "@selva/core": "workspace:*",
     "three": "0.179.1"
   }
 }

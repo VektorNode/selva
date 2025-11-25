@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
-using ComputeBuilder.Display;
+using Selva.Display;
 
-namespace ComputeBuilder.Components.Display;
+namespace Selva.Components.Display;
 
 public class DisplayResults
 {

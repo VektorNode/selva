@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using ComputeBuilder.Config;
-using ComputeBuilder.Plugin.Models.Generated;
+using Selva.Config;
+using Selva.Plugin.Models.Generated;
 using Newtonsoft.Json;
 using Rhino;
 
-namespace ComputeBuilder.Utils;
+namespace Selva.Utils;
 
 /// <summary>
 ///   Handles WebSocket communication with the web UI
