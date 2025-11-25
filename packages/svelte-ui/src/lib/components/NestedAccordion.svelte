@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { slide } from 'svelte/transition';
-  import type { NestedGroupNode } from '@selva/core/grasshopper';
   import NestedAccordion from './NestedAccordion.svelte';
+  import type { NestedGroupNode } from '$lib/utils/input-grouping.js';
 
   interface Props {
     node: NestedGroupNode;

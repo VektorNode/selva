@@ -19,6 +19,7 @@
   import { Label } from '$lib/components/ui/label';
   import * as Select from '$lib/components/ui/select';
   import * as Dialog from '$lib/components/ui/dialog';
+  import { HelpCircle } from '@lucide/svelte';
 
   interface Props {
     item: InputLayoutItem;
@@ -71,8 +72,11 @@
     </Label>
     {#if item.description}
       <Dialog.Root>
-        <Dialog.Trigger class="cursor-help text-xs opacity-60 transition-opacity hover:opacity-100"
-        ></Dialog.Trigger>
+        <Dialog.Trigger class="cursor-help opacity-60 transition-opacity hover:opacity-100">
+          <button class="p-1">
+            <HelpCircle size={16} />
+          </button>
+        </Dialog.Trigger>
         <Dialog.Content class="sm:max-w-md">
           <Dialog.Header>
             <Dialog.Title>{displayName || item.displayName || item.paramId}</Dialog.Title>
