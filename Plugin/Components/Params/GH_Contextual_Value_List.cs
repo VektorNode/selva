@@ -170,7 +170,12 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
       var matchIndex = FindMatchingIndex(stringValue);
       var selectedIndex = matchIndex >= 0 ? matchIndex : currentSelectedIndex;
 
-      list.Add(new GH_ValueListData(stringValue, items, selectedIndex));
+      // Use the expression (not the input string) when a match is found
+      var expressionValue = matchIndex >= 0 && matchIndex < items.Count
+        ? items[matchIndex].Expression
+        : stringValue;
+
+      list.Add(new GH_ValueListData(expressionValue, items, selectedIndex));
     }
 
     _contextual = list.ToArray();
@@ -221,7 +226,11 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
   {
     var items = GetItemTuples();
     var matchIndex = FindMatchingIndex(value);
-    _contextual = new[] { new GH_ValueListData(value, items, matchIndex) };
+    // Use the expression (not the input string) when a match is found
+    var expressionValue = matchIndex >= 0 && matchIndex < items.Count
+      ? items[matchIndex].Expression
+      : value;
+    _contextual = new[] { new GH_ValueListData(expressionValue, items, matchIndex) };
     ExpireSolution(false);
   }
 
@@ -237,7 +246,11 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
     foreach (var value in values)
     {
       var matchIndex = FindMatchingIndex(value);
-      list.Add(new GH_ValueListData(value, items, matchIndex));
+      // Use the expression (not the input string) when a match is found
+      var expressionValue = matchIndex >= 0 && matchIndex < items.Count
+        ? items[matchIndex].Expression
+        : value;
+      list.Add(new GH_ValueListData(expressionValue, items, matchIndex));
     }
 
     _contextual = list.ToArray();
@@ -338,7 +351,11 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
         if (stringValue == null) continue;
 
         var matchIndex = FindMatchingIndex(stringValue);
-        converted.Add(new GH_ValueListData(stringValue, items, matchIndex));
+        // Use the expression (not the input string) when a match is found
+        var expressionValue = matchIndex >= 0 && matchIndex < items.Count
+          ? items[matchIndex].Expression
+          : stringValue;
+        converted.Add(new GH_ValueListData(expressionValue, items, matchIndex));
       }
 
       if (converted.Count > 0)
@@ -369,13 +386,15 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
     var items = ListItems;
     for (var i = 0; i < items.Count; i++)
     {
-      if (items[i].Expression == value) return i;
+      // Match by expression OR by name
+      if (items[i].Expression == value || items[i].Name == value) return i;
     }
 
     // Fall back to stored items
     for (var i = 0; i < _storedItems.Count; i++)
     {
-      if (_storedItems[i].Expression == value) return i;
+      // Match by expression OR by name
+      if (_storedItems[i].Expression == value || _storedItems[i].Name == value) return i;
     }
 
     return -1;
