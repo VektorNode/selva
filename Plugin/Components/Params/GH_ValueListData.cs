@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json.Linq;
-
 namespace Selva.Components.Params;
 
 /// <summary>
