@@ -12,7 +12,8 @@ export type LayoutItem =
   | InputDropdownLayoutItem
   | InputCheckboxLayoutItem
   | OutputTextLayoutItem
-  | OutputNumberLayoutItem;
+  | OutputNumberLayoutItem
+  | OutputFileLayoutItem;
 
 /**
  * Schema definitions for Selva UI configuration
@@ -90,7 +91,7 @@ export interface DropdownWidgetConfig {
   };
   required?: boolean;
 }
-export interface CheckboxWidgetConfig { }
+export interface CheckboxWidgetConfig {}
 export interface InputNumberLayoutItem {
   id: string;
   /**
@@ -179,6 +180,27 @@ export interface OutputNumberLayoutItem {
   widgetType: 'number';
   [k: string]: unknown | undefined;
 }
+export interface OutputFileLayoutItem {
+  id: string;
+  /**
+   * References the ContextBake component InstanceGuid for file download
+   */
+  paramId: string;
+  displayName?: string;
+  description?: string;
+  order?: number;
+  span?: number;
+  type: 'output';
+  widgetType: 'file';
+  config?: {
+    buttonLabel?: string;
+    /**
+     * File format hint (e.g., 'zip', '3dm')
+     */
+    fileFormat?: string;
+  };
+  [k: string]: unknown | undefined;
+}
 export interface GroupConfig {
   id: string;
   label: string;
@@ -214,6 +236,26 @@ export interface RuntimeValues {
   };
   [k: string]: unknown | undefined;
 }
+export interface DownloadableComponent {
+  /**
+   * Grasshopper component InstanceGuid
+   */
+  id: string;
+  /**
+   * Component nickname for display
+   */
+  nickname: string;
+}
+export interface DownloadingConfig {
+  /**
+   * Whether downloadable outputs are available
+   */
+  enabled: boolean;
+  /**
+   * Array of ContextBake components with downloadable FileData outputs
+   */
+  components?: DownloadableComponent[];
+}
 export interface UISchema {
   id: string;
   name: string;
@@ -232,6 +274,7 @@ export interface UISchema {
    */
   lastModified?: string;
   enable3dViewer?: boolean;
+  downloading?: DownloadingConfig;
   /**
    * If true, changes trigger immediate solving. If false, user must press Calculate button.
    */

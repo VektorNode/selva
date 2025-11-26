@@ -28,6 +28,18 @@ public static class ParameterTypeHelper
   }
 
 
+  public static bool IsContextBakeComponent(IGH_DocumentObject obj)
+  {
+    if (obj == null)
+    {
+      return false;
+    }
+
+    var typeName = obj.GetType()?.Name;
+    return string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal);
+  }
+
+
   /// <summary>
   ///   Extract minimum, maximum, and step size from a contextual parameter
   ///   Prioritizes slider values if connected, falls back to parameter properties
@@ -284,6 +296,106 @@ public static class ParameterTypeHelper
           $"Error expiring component: {ex.Message}");
       }
     }
+  }
+
+  /// <summary>
+  ///   Detect ContextBake components that have FileData in their input sources
+  ///   Returns a tuple containing:
+  ///   - bool: whether downloadable outputs exist
+  ///   - List<DownloadableComponent>: id and nickname pairs of ContextBake components with FileData
+  /// </summary>
+  public static (bool HasDownloadableOutputs, List<DownloadableComponent> DownloadableComponents) DetectDownloadableOutputs(
+    GH_Document document)
+  {
+    var downloadableComponents = new List<DownloadableComponent>();
+
+    if (document == null)
+    {
+      return (false, downloadableComponents);
+    }
+
+    try
+    {
+      // Find all ContextBake components in the document
+      foreach (var obj in document.Objects)
+      {
+        if (!IsContextBakeComponent(obj))
+        {
+          continue;
+        }
+
+        var contextBakeComponent = obj as IGH_Component;
+        if (contextBakeComponent?.Params.Input == null)
+        {
+          continue;
+        }
+
+        // Check if any of the input parameters have FileData
+        var hasFileData = false;
+        foreach (var inputParam in contextBakeComponent.Params.Input)
+        {
+          if (inputParam == null || inputParam.SourceCount == 0)
+          {
+            continue;
+          }
+
+          // Check the data from the input sources
+          try
+          {
+            var data = inputParam.VolatileData;
+            if (data == null || data.IsEmpty)
+            {
+              continue;
+            }
+
+            // Iterate through all data in the param
+            var allData = data.AllData(true);
+            foreach (var item in allData)
+            {
+              // Check if this item is FileDataGoo
+              if (item?.GetType().Name == "FileDataGoo")
+              {
+                hasFileData = true;
+                break;
+              }
+            }
+          }
+          catch
+          {
+            // Silently skip on error
+          }
+
+          if (hasFileData)
+          {
+            break;
+          }
+        }
+
+        // If this ContextBake has FileData, record its id and nickname
+        if (hasFileData)
+        {
+          var docObj = obj as IGH_DocumentObject;
+          if (docObj == null)
+          {
+            continue;
+          }
+          var nickname = docObj.NickName;
+          var instanceGuid = docObj.InstanceGuid;
+
+          downloadableComponents.Add(new DownloadableComponent
+          {
+            Id = instanceGuid,
+            Nickname = nickname
+          });
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      Console.WriteLine($"Warning: Error detecting downloadable outputs: {ex.Message}");
+    }
+
+    return (downloadableComponents.Count > 0, downloadableComponents);
   }
 
   public class ClearResult

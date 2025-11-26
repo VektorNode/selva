@@ -359,6 +359,23 @@
       }
     };
 
+    const handleFileOutputs = (message: any) => {
+      if (message.sessionId !== sessionId) return;
+
+      console.log('[Preview] Received file outputs:', message);
+
+      const fileOutputData = message.fileOutputs || {};
+
+      // Update values with file data from downloadable components
+      if (Object.keys(fileOutputData).length > 0) {
+        isRemoteUpdate = true;
+        values = { ...values, ...fileOutputData };
+        isRemoteUpdate = false;
+
+        showNotification('File downloads available');
+      }
+    };
+
     const initializeSchema = async () => {
       sessionId = page.url.searchParams.get('session') || '';
 
@@ -379,6 +396,7 @@
         wsState.on('schemaUpdated', handleSchemaUpdated);
         wsState.on('metadataUpdated', handleMetadataUpdated);
         wsState.on('parametersAdded', handleParametersAdded);
+        wsState.on('fileOutputs', handleFileOutputs);
 
         // Request initial data from Grasshopper
         console.log('[Preview] Requesting initial data from Grasshopper');
@@ -396,6 +414,7 @@
       wsState.off('schemaUpdated', handleSchemaUpdated);
       wsState.off('metadataUpdated', handleMetadataUpdated);
       wsState.off('parametersAdded', handleParametersAdded);
+      wsState.off('fileOutputs', handleFileOutputs);
       // Don't disconnect - keep connection alive for page switching
     };
   });

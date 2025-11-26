@@ -10,7 +10,6 @@ namespace Selva.IO;
 
 public class RhinoDocumentConverter : IDisposable
 {
-  private readonly ILogger<RhinoDocumentConverter> _logger;
   private readonly AppConfig.RhinoConverterOptions _options;
   private readonly SemaphoreSlim _rateLimiter;
   private readonly string _tempDirectory;
@@ -38,12 +37,10 @@ public class RhinoDocumentConverter : IDisposable
       if (Directory.Exists(_tempDirectory))
       {
         Directory.Delete(_tempDirectory, true);
-        _logger.LogInformation("Cleaned up temp directory: {TempDirectory}", _tempDirectory);
       }
     }
     catch (Exception ex)
     {
-      _logger.LogWarning(ex, "Failed to clean up temp directory: {TempDirectory}", _tempDirectory);
     }
 
     _disposed = true;
@@ -64,7 +61,6 @@ public class RhinoDocumentConverter : IDisposable
 
     try
     {
-      _logger.LogDebug("Starting export to {Extension} format at {Path}", fileExtension, tempPath);
       var exportSuccess = doc.Export(tempPath);
 
       if (!exportSuccess)
@@ -80,8 +76,6 @@ public class RhinoDocumentConverter : IDisposable
 
       if (fileInfo.Length > _options.MaxFileSizeBytes)
       {
-        _logger.LogWarning("File size {Size} exceeds limit {Limit}", fileInfo.Length,
-          _options.MaxFileSizeBytes);
         throw new InvalidOperationException(
           $"Exported file size ({fileInfo.Length:N0} bytes) exceeds maximum allowed ({_options.MaxFileSizeBytes:N0} bytes)");
       }
@@ -90,12 +84,10 @@ public class RhinoDocumentConverter : IDisposable
       var fileBytes = File.ReadAllBytes(tempPath);
       base64Result = Convert.ToBase64String(fileBytes);
 
-      _logger.LogInformation("Successfully converted document to Base64. Size: {Size} bytes", fileInfo.Length);
       return base64Result;
     }
     catch (Exception ex)
     {
-      _logger.LogError(ex, "Error converting document to Base64 with extension {Extension}", fileExtension);
       throw;
     }
     finally
@@ -129,8 +121,6 @@ public class RhinoDocumentConverter : IDisposable
 
     try
     {
-      _logger.LogDebug("Starting Rhino SaveAs version {Version} at {Path}", version, tempPath);
-
       var saveSuccess = doc.SaveAs(tempPath, version);
 
       if (!saveSuccess)
@@ -146,8 +136,6 @@ public class RhinoDocumentConverter : IDisposable
 
       if (fileInfo.Length > _options.MaxFileSizeBytes)
       {
-        _logger.LogWarning("File size {Size} exceeds limit {Limit}", fileInfo.Length,
-          _options.MaxFileSizeBytes);
         throw new InvalidOperationException(
           $"Saved file size ({fileInfo.Length:N0} bytes) exceeds maximum allowed ({_options.MaxFileSizeBytes:N0} bytes)");
       }
@@ -155,13 +143,10 @@ public class RhinoDocumentConverter : IDisposable
       var fileBytes = File.ReadAllBytes(tempPath);
       var base64Result = Convert.ToBase64String(fileBytes);
 
-      _logger.LogInformation("Successfully converted document to Rhino file. Size: {Size} bytes",
-        fileInfo.Length);
       return base64Result;
     }
     catch (Exception ex)
     {
-      _logger.LogError(ex, "Error converting document to Rhino file version {Version}", version);
       throw;
     }
     finally
@@ -225,12 +210,10 @@ public class RhinoDocumentConverter : IDisposable
         }
 
         File.Delete(path);
-        _logger.LogDebug("Cleaned up temporary file: {Path}", path);
       }
     }
     catch (Exception ex)
     {
-      _logger.LogWarning(ex, "Failed to clean up temporary file: {Path}", path);
     }
   }
 }

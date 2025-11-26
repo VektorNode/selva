@@ -239,6 +239,35 @@
       "required": ["id", "paramId", "type", "widgetType"]
     },
 
+    "OutputFileLayoutItem": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "paramId": {
+          "type": "string",
+          "description": "References the ContextBake component InstanceGuid for file download"
+        },
+        "displayName": { "type": "string" },
+        "description": { "type": "string" },
+        "order": { "type": "integer", "default": 0 },
+        "span": { "type": "integer", "default": 1 },
+        "type": { "type": "string", "const": "output" },
+        "widgetType": { "type": "string", "const": "file" },
+        "config": {
+          "type": "object",
+          "properties": {
+            "buttonLabel": { "type": "string", "default": "Download" },
+            "fileFormat": {
+              "type": "string",
+              "description": "File format hint (e.g., 'zip', '3dm')"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "paramId", "type", "widgetType"]
+    },
+
     "LayoutItem": {
       "oneOf": [
         { "$ref": "#/definitions/InputNumberLayoutItem" },
@@ -246,7 +275,8 @@
         { "$ref": "#/definitions/InputDropdownLayoutItem" },
         { "$ref": "#/definitions/InputCheckboxLayoutItem" },
         { "$ref": "#/definitions/OutputTextLayoutItem" },
-        { "$ref": "#/definitions/OutputNumberLayoutItem" }
+        { "$ref": "#/definitions/OutputNumberLayoutItem" },
+        { "$ref": "#/definitions/OutputFileLayoutItem" }
       ]
     },
 
@@ -327,6 +357,40 @@
       "required": ["timestamp", "values"]
     },
 
+    "DownloadableComponent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Grasshopper component InstanceGuid"
+        },
+        "nickname": {
+          "type": "string",
+          "description": "Component nickname for display"
+        }
+      },
+      "required": ["id", "nickname"],
+      "additionalProperties": false
+    },
+
+    "DownloadingConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether downloadable outputs are available"
+        },
+        "components": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/DownloadableComponent" },
+          "description": "Array of ContextBake components with downloadable FileData outputs"
+        }
+      },
+      "required": ["enabled"],
+      "additionalProperties": false
+    },
+
     "UISchema": {
       "type": "object",
       "properties": {
@@ -351,6 +415,7 @@
           "description": "Last modification timestamp"
         },
         "enable3dViewer": { "type": "boolean", "default": false },
+        "downloading": { "$ref": "#/definitions/DownloadingConfig" },
         "instanceSolve": {
           "type": "boolean",
           "default": true,

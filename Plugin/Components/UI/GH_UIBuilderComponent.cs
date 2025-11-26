@@ -16,6 +16,7 @@ using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Rhino;
+using Selva.IO;
 
 namespace Selva.Components.UI;
 
@@ -220,7 +221,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       }
 
       DA.SetData(1, $"Session: {_sessionId}\nStatus: Headless Mode\nSchema loaded (no WebSocket)");
-      DA.SetData(2, _embeddedSchema != null ? JsonConvert.SerializeObject(_embeddedSchema, SchemaSerializationSettings) : "");
+      DA.SetData(2,
+        _embeddedSchema != null ? JsonConvert.SerializeObject(_embeddedSchema, SchemaSerializationSettings) : "");
       Message = "Headless • No WebSocket";
       return;
     }
@@ -251,7 +253,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       {
         try
         {
-          _communicationHandler.Start(msg => { /* Silent - don't spam Message */ });
+          _communicationHandler.Start(msg =>
+          {
+            /* Silent - don't spam Message */
+          });
           Message = $"Ready • {_sessionId}";
         }
         catch (Exception ex)
@@ -553,7 +558,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   /// </summary>
   private void CollectAndSendOutputs(GH_Document document, UISchema schema)
   {
-    if (document == null || schema?.Outputs == null || schema.Outputs.Count == 0)
+    if (document == null)
     {
       return;
     }
@@ -564,47 +569,133 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
     var outputValues = new Dictionary<string, object>();
+    var fileOutputData = new Dictionary<string, object>();
 
-    foreach (var output in schema.Outputs)
+    // Collect standard outputs
+    if (schema?.Outputs != null && schema.Outputs.Count > 0)
     {
-      try
+      foreach (var output in schema.Outputs)
       {
-        var paramObject = document.FindObject(output.Id, false);
-        if (paramObject == null)
+        try
+        {
+          var paramObject = document.FindObject(output.Id, false);
+          if (paramObject == null)
+          {
+            continue;
+          }
+
+          if (paramObject is IGH_Component ghParam)
+          {
+            var paramData = ghParam.Params.Input.FirstOrDefault()?.VolatileData;
+            if (paramData != null && !paramData.IsEmpty)
+            {
+              var allData = paramData.AllData(true).ToList();
+              if (allData.Count == 1)
+              {
+                outputValues[output.Id.ToString()] = ExtractValue(allData[0]);
+              }
+              else if (allData.Count > 1)
+              {
+                var values = allData.Select(d => ExtractValue(d)).ToList();
+                outputValues[output.Id.ToString()] = values;
+              }
+            }
+          }
+        }
+        catch (Exception ex)
+        {
+          AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+            $"Error collecting output '{output.Nickname}': {ex.Message}");
+        }
+      }
+    }
+
+    // Collect file outputs
+    if (schema?.Layout != null)
+    {
+      foreach (var tab in schema.Layout.Tabs)
+      {
+        if (tab?.Groups == null)
         {
           continue;
         }
 
-        if (paramObject is IGH_Component ghParam)
+        foreach (var group in tab.Groups)
         {
-          var paramData = ghParam.Params.Input.FirstOrDefault()?.VolatileData;
-          if (paramData != null && !paramData.IsEmpty)
+          if (group?.Items == null)
           {
-            var allData = paramData.AllData(true).ToList();
-            if (allData.Count == 1)
+            continue;
+          }
+
+          foreach (var item in group.Items)
+          {
+            if (item is OutputFileLayoutItem fileItem)
             {
-              outputValues[output.Id.ToString()] = ExtractValue(allData[0]);
-            }
-            else if (allData.Count > 1)
-            {
-              var values = allData.Select(d => ExtractValue(d)).ToList();
-              outputValues[output.Id.ToString()] = values;
+              try
+              {
+                var componentObject = document.FindObject(fileItem.ParamId, false);
+                if (componentObject == null)
+                {
+                  continue;
+                }
+
+                if (componentObject is IGH_Component component)
+                {
+                  var fileDataList = new List<object>();
+
+                  foreach (var inputParam in component.Params.Input)
+                  {
+                    if (inputParam?.VolatileData == null || inputParam.VolatileData.IsEmpty)
+                    {
+                      continue;
+                    }
+
+                    var allData = inputParam.VolatileData.AllData(true);
+                    foreach (var gooObj in allData)
+                    {
+                      if (gooObj?.GetType().FullName != null &&
+                          gooObj.GetType().FullName.IndexOf("FileDataGoo", StringComparison.OrdinalIgnoreCase) >= 0)
+                      {
+                        try
+                        {
+                          var extractedFileData = ExtractFileDataFromGoo(gooObj);
+                          if (extractedFileData != null)
+                          {
+                            fileDataList.Add(extractedFileData);
+                          }
+                        }
+                        catch (Exception ex)
+                        {
+                          AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                            $"Error extracting FileData from Goo: {ex.Message}");
+                        }
+                      }
+                    }
+                  }
+
+                  if (fileDataList.Count > 0)
+                  {
+                    fileOutputData[fileItem.Id] = fileDataList.Count == 1 ? fileDataList[0] : fileDataList;
+                  }
+                }
+              }
+              catch (Exception ex)
+              {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                  $"Error collecting file output '{fileItem.DisplayName}': {ex.Message}");
+              }
             }
           }
         }
       }
-      catch (Exception ex)
-      {
-        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-          $"Error collecting output '{output.Nickname}': {ex.Message}");
-      }
     }
 
-    if (outputValues.Count > 0)
+    // Send combined outputs and file data in single message if either exists
+    if (outputValues.Count > 0 || fileOutputData.Count > 0)
     {
       try
       {
-        var _ = _communicationHandler.BroadcastOutputs(outputValues);
+        var _ = _communicationHandler.BroadcastOutputsWithFiles(outputValues, fileOutputData);
       }
       catch (Exception ex)
       {
@@ -613,6 +704,47 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
   }
 
+  /// <summary>
+  ///   Extract FileData object from FileDataGoo.
+  ///   Direct casting approach - no reflection needed since FileDataGoo is available in this project.
+  /// </summary>
+  private object ExtractFileDataFromGoo(IGH_Goo gooObj)
+  {
+    if (gooObj == null)
+    {
+      return null;
+    }
+
+    try
+    {
+      // Direct cast to FileDataGoo since it's available in this project
+      if (gooObj is FileDataGoo fileDataGoo)
+      {
+        var fileData = fileDataGoo.Value;
+        if (fileData == null)
+        {
+          return null;
+        }
+
+        // Return serialized FileData object
+        return new
+        {
+          fileName = fileData.FileName ?? "",
+          fileType = fileData.FileType ?? "",
+          data = fileData.Data ?? "",
+          isBase64Encoded = fileData.IsBase64Encoded,
+          subFolder = fileData.SubFolder ?? ""
+        };
+      }
+
+      return null;
+    }
+    catch (Exception ex)
+    {
+      Console.WriteLine($"Error extracting FileData from Goo: {ex.Message}");
+      return null;
+    }
+  }
 
   private void OpenUI()
   {
@@ -786,7 +918,35 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     if (_embeddedSchema != null && _currentDocument != null)
     {
+      // Collect and send both standard outputs and file data in a single message
       CollectAndSendOutputs(_currentDocument, _embeddedSchema);
+
+      // Check for ContextBake components with FileData (downloadable outputs)
+      var (hasDownloadable, downloadableComponents) = ParameterTypeHelper.DetectDownloadableOutputs(_currentDocument);
+
+      var schemaModified = false;
+
+      // Initialize downloading config if needed
+      if (_embeddedSchema.Downloading == null)
+      {
+        _embeddedSchema.Downloading = new DownloadingConfig();
+      }
+
+      // Update schema if downloadable status changed
+      if (hasDownloadable != _embeddedSchema.Downloading.Enabled)
+      {
+        _embeddedSchema.Downloading.Enabled = hasDownloadable;
+        schemaModified = true;
+      }
+
+      // Update downloadable components list if changed
+      var currentDownloadables = _embeddedSchema.Downloading.Components ?? new List<DownloadableComponent>();
+      if (!currentDownloadables.SequenceEqual(downloadableComponents,
+            new DownloadableComponentEqualityComparer()))
+      {
+        _embeddedSchema.Downloading.Components = downloadableComponents;
+        schemaModified = true;
+      }
 
       // Detect metadata changes (nickname, min/max, stepsize, options) and broadcast updates
       if (IsConnected)
@@ -800,6 +960,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
             // Mark document as modified so schema changes are persisted on save
             _currentDocument.Modified();
+
+            schemaModified = true;
 
             // Check if any changes are for source parameters (ValueList options, number constraints)
             // If so, trigger a new solution to recalculate downstream components
@@ -834,6 +996,20 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         {
           AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
             $"Error detecting metadata changes: {ex.Message}");
+        }
+      }
+
+      // If schema was modified, persist it and mark document as modified
+      if (schemaModified)
+      {
+        try
+        {
+          _currentDocument.Modified();
+        }
+        catch (Exception ex)
+        {
+          AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+            $"Error marking document as modified: {ex.Message}");
         }
       }
     }
@@ -1121,5 +1297,41 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
     return base.Read(reader);
+  }
+}
+
+/// <summary>
+///   Helper class to compare DownloadableComponent objects for equality
+/// </summary>
+public class DownloadableComponentEqualityComparer : IEqualityComparer<DownloadableComponent>
+{
+  public bool Equals(DownloadableComponent x, DownloadableComponent y)
+  {
+    if (x == null && y == null)
+    {
+      return true;
+    }
+
+    if (x == null || y == null)
+    {
+      return false;
+    }
+
+    return x.Id == y.Id && x.Nickname == y.Nickname;
+  }
+
+  public int GetHashCode(DownloadableComponent obj)
+  {
+    if (obj == null)
+    {
+      return 0;
+    }
+
+    unchecked
+    {
+      var hashCode = obj.Id.GetHashCode();
+      hashCode = (hashCode * 397) ^ (obj.Nickname?.GetHashCode() ?? 0);
+      return hashCode;
+    }
   }
 }

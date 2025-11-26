@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { OutputLayoutItem } from '$lib/types/generated';
   import { Button } from '../ui';
+  import FileDownloadWidget from './FileDownloadWidget.svelte';
 
   interface Props {
     item: OutputLayoutItem;
@@ -21,6 +22,12 @@
     item: OutputLayoutItem
   ): item is Extract<OutputLayoutItem, { widgetType: 'number' }> {
     return item.widgetType === 'number';
+  }
+
+  function isFileDisplay(
+    item: OutputLayoutItem
+  ): item is Extract<OutputLayoutItem, { widgetType: 'file' }> {
+    return item.widgetType === 'file';
   }
 
   function formatValue(val: any): string {
@@ -89,5 +96,7 @@
         <span class="text-muted-foreground not-italic">Waiting for data...</span>
       {/if}
     </div>
+  {:else if isFileDisplay(item)}
+    <FileDownloadWidget {displayName} fileData={value} />
   {/if}
 </div>

@@ -56,8 +56,6 @@ public class GH_DataToFile : GH_Component
       {
         if (_converter == null)
         {
-          // Create a simple logger that outputs to Grasshopper
-
           // Configure options for Grasshopper usage
           var options = new AppConfig.RhinoConverterOptions();
 
