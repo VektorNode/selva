@@ -42,7 +42,6 @@
   }, 150);
 
   function handleSliderChange(newValue: number) {
-    // Update local value immediately for smooth UI
     value = newValue;
     debouncedOnChange(item.paramId, newValue);
   }
