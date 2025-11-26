@@ -149,11 +149,16 @@
             // Update available params list to reflect changes
             const availIndex = availableParams.findIndex((p) => p.id === updated.id);
             if (availIndex !== -1) {
-              if (updated.nickname !== undefined) availableParams[availIndex].nickname = updated.nickname;
-              if (updated.description !== undefined) availableParams[availIndex].description = updated.description;
-              if (updated.minimum !== undefined) availableParams[availIndex].minimum = updated.minimum;
-              if (updated.maximum !== undefined) availableParams[availIndex].maximum = updated.maximum;
-              if (updated.stepSize !== undefined) availableParams[availIndex].stepSize = updated.stepSize;
+              if (updated.nickname !== undefined)
+                availableParams[availIndex].nickname = updated.nickname;
+              if (updated.description !== undefined)
+                availableParams[availIndex].description = updated.description;
+              if (updated.minimum !== undefined)
+                availableParams[availIndex].minimum = updated.minimum;
+              if (updated.maximum !== undefined)
+                availableParams[availIndex].maximum = updated.maximum;
+              if (updated.stepSize !== undefined)
+                availableParams[availIndex].stepSize = updated.stepSize;
             }
           }
 
@@ -178,8 +183,10 @@
             // Update available params list to reflect changes
             const availIndex = availableParams.findIndex((p) => p.id === updated.id);
             if (availIndex !== -1) {
-              if (updated.nickname !== undefined) availableParams[availIndex].nickname = updated.nickname;
-              if (updated.description !== undefined) availableParams[availIndex].description = updated.description;
+              if (updated.nickname !== undefined)
+                availableParams[availIndex].nickname = updated.nickname;
+              if (updated.description !== undefined)
+                availableParams[availIndex].description = updated.description;
             }
           }
         });
@@ -433,7 +440,7 @@
       return;
     }
 
-    if (type !== 'parameter' && type !== 'downloadable') return;
+    if (type !== 'parameter' && sourceType !== 'downloadable') return;
 
     const tab = schema.layout.tabs.find((t) => t.id === tabId);
     if (!tab) return;
@@ -442,7 +449,7 @@
     if (!group) return;
 
     // Handle downloadable components
-    if (type === 'downloadable') {
+    if (sourceType === 'downloadable') {
       const downloadableComp = data as any; // DownloadableComponent type
 
       const exists = group.items.some((i) => i.paramId === downloadableComp.id);
