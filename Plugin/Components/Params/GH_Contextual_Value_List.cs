@@ -20,6 +20,11 @@ namespace Selva.Components.Params;
 public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualParameter
 {
   private Guid _connectedValueListGuid = Guid.Empty;
+  private DataTree<GH_ValueListData> _contextualDataTree;
+  private GH_ValueListData[] _contextual;
+
+  // Stored items for use when ValueList isn't connected (e.g., in Compute)
+  private List<(string Name, string Expression)> _storedItems = new();
 
   public GetValueListParameter()
     : base("Get Value List", "Get VL", "Get from ValueList", "Params", "Util", GH_ParamAccess.item)
@@ -152,18 +157,32 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
 
   public void AssignContextualData(IEnumerable data)
   {
-    var vl = ConnectedValueList;
-    if (vl == null) return;
+    var list = new List<GH_ValueListData>();
+    var items = GetItemTuples();
+    var currentSelectedIndex = SelectedIndex;
 
     foreach (var item in data)
     {
       var stringValue = ExtractStringValue(item);
       if (stringValue == null) continue;
 
-      // Find and select the matching item by expression
+      // Find matching index
+      var matchIndex = FindMatchingIndex(stringValue);
+      var selectedIndex = matchIndex >= 0 ? matchIndex : currentSelectedIndex;
+
+      list.Add(new GH_ValueListData(stringValue, items, selectedIndex));
+    }
+
+    _contextual = list.ToArray();
+
+    // Also update the ValueList selection if connected
+    var vl = ConnectedValueList;
+    if (vl != null && _contextual.Length > 0)
+    {
+      var firstValue = _contextual[0].Value;
       for (var i = 0; i < vl.ListItems.Count; i++)
       {
-        if (vl.ListItems[i].Expression == stringValue)
+        if (vl.ListItems[i].Expression == firstValue)
         {
           vl.SelectItem(i);
           break;
@@ -181,7 +200,48 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
 
   public void ClearContextualData()
   {
-    // Nothing to clear - ValueList is the source of truth
+    _contextual = null;
+    _contextualDataTree = null;
+  }
+
+  /// <summary>
+  ///   Assigns contextual data as a tree structure for multi-branch data.
+  /// </summary>
+  public void AssignContextualDataTree(DataTree<GH_ValueListData> data)
+  {
+    _contextualDataTree = data;
+    ExpireSolution(false);
+  }
+
+  /// <summary>
+  ///   Sets a single string value directly - for use from Rhino Compute via reflection.
+  ///   Call this instead of AssignContextualData when you only have strings.
+  /// </summary>
+  public void SetValue(string value)
+  {
+    var items = GetItemTuples();
+    var matchIndex = FindMatchingIndex(value);
+    _contextual = new[] { new GH_ValueListData(value, items, matchIndex) };
+    ExpireSolution(false);
+  }
+
+  /// <summary>
+  ///   Sets multiple string values directly - for use from Rhino Compute via reflection.
+  ///   Call this instead of AssignContextualData when you only have strings.
+  /// </summary>
+  public void SetValues(IEnumerable<string> values)
+  {
+    var items = GetItemTuples();
+    var list = new List<GH_ValueListData>();
+
+    foreach (var value in values)
+    {
+      var matchIndex = FindMatchingIndex(value);
+      list.Add(new GH_ValueListData(value, items, matchIndex));
+    }
+
+    _contextual = list.ToArray();
+    ExpireSolution(false);
   }
 
   /// <summary>
@@ -203,6 +263,25 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
 
   protected override void CollectVolatileData_FromSources()
   {
+    // Handle contextual array if present (from AssignContextualData)
+    if (_contextual != null)
+    {
+      m_data.Clear();
+      m_data.AppendRange(_contextual, new GH_Path(0));
+      return;
+    }
+
+    // Handle contextual data tree if present
+    if (_contextualDataTree != null)
+    {
+      m_data.Clear();
+      for (var i = 0; i < _contextualDataTree.BranchCount; i++)
+      {
+        m_data.AppendRange(_contextualDataTree.Branches[i], _contextualDataTree.Paths[i]);
+      }
+      return;
+    }
+
     m_data.Clear();
 
     if (Sources == null || Sources.Count == 0) return;
@@ -271,16 +350,34 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
 
   private List<(string Name, string Expression)> GetItemTuples()
   {
-    return ListItems.Select(x => (x.Name, x.Expression)).ToList();
+    // Try connected ValueList first
+    var vl = ConnectedValueList;
+    if (vl != null && vl.ListItems.Count > 0)
+    {
+      // Update stored items while we have access
+      _storedItems = vl.ListItems.Select(x => (x.Name, x.Expression)).ToList();
+      return _storedItems;
+    }
+
+    // Fall back to stored items (for Compute scenarios)
+    return _storedItems;
   }
 
   private int FindMatchingIndex(string value)
   {
+    // Try connected ValueList first
     var items = ListItems;
     for (var i = 0; i < items.Count; i++)
     {
       if (items[i].Expression == value) return i;
     }
+
+    // Fall back to stored items
+    for (var i = 0; i < _storedItems.Count; i++)
+    {
+      if (_storedItems[i].Expression == value) return i;
+    }
+
     return -1;
   }
 
@@ -307,6 +404,19 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
     writer.SetBoolean("Immediate", Immediate);
     writer.SetString("ConnectedValueListGuid", _connectedValueListGuid.ToString());
 
+    // Store items for Compute scenarios - refresh from ValueList if connected
+    var items = GetItemTuples();
+    var itemsJson = new JArray();
+    foreach (var item in items)
+    {
+      itemsJson.Add(new JObject
+      {
+        { "name", item.Name },
+        { "expression", item.Expression }
+      });
+    }
+    writer.SetString("StoredItems", itemsJson.ToString());
+
     return base.Write(writer);
   }
 
@@ -331,6 +441,28 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
         Guid.TryParse(guidStr, out var guid))
     {
       _connectedValueListGuid = guid;
+    }
+
+    // Load stored items for Compute scenarios
+    string itemsJson = null;
+    if (reader.TryGetString("StoredItems", ref itemsJson) && !string.IsNullOrEmpty(itemsJson))
+    {
+      try
+      {
+        var array = JArray.Parse(itemsJson);
+        _storedItems.Clear();
+        foreach (var item in array)
+        {
+          _storedItems.Add((
+            item["name"]?.ToString() ?? "",
+            item["expression"]?.ToString() ?? ""
+          ));
+        }
+      }
+      catch
+      {
+        // Ignore parse errors
+      }
     }
 
     return base.Read(reader);

@@ -87,6 +87,8 @@
 
       await ensureModulesLoaded();
 
+      console.log($state.snapshot(values));
+
       const payload = {
         inputs: schema.inputs,
         values: $state.snapshot(values),
@@ -119,8 +121,6 @@
       for (const o of schema.outputs) {
         outputs[o.id] = processor.getValueByParamId(o.id, { parseValues: true });
       }
-
-      console.log('Outputs:', outputs);
 
       values = { ...values, ...outputs };
       pendingValues = {};
