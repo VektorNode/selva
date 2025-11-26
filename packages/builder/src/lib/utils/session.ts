@@ -84,6 +84,13 @@ export function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | 
   if (schema.instanceSolve === undefined) {
     schema.instanceSolve = true;
   }
+  // Ensure downloading config exists
+  if (!schema.downloading) {
+    schema.downloading = {
+      enabled: false,
+      components: [],
+    };
+  }
 
   return schema;
 }
@@ -103,6 +110,10 @@ export function createDefaultSchema(): UISchema {
       type: 'tabbed',
       gap: 16,
       tabs: [],
+    },
+    downloading: {
+      enabled: false,
+      components: [],
     },
     enable3dViewer: false,
     instanceSolve: true,

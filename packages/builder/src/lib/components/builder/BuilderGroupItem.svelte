@@ -5,7 +5,7 @@
   import { Button } from '$lib/components/ui/button';
   import * as Card from '$lib/components/ui/card';
   import { Switch } from '$lib/components/ui/switch/index.js';
-  import { ArrowDownToLine, ArrowUpFromLine, ChevronDown } from '@lucide/svelte';
+  import { ArrowDownToLine, ArrowUpFromLine, Download, ChevronDown } from '@lucide/svelte';
 
   interface BuilderGroupItemProps {
     item: LayoutItem;
@@ -126,7 +126,7 @@
 			hover:shadow-sm hover:border-primary
 			${isDragging ? 'cursor-grabbing opacity-50' : ''}
 			${isDragOver ? 'border-primary' : ''}
-			${item.type === 'input' ? 'bg-inputparam' : 'bg-outputparam'}
+			${item.type === 'input' ? 'bg-inputparam' : item.widgetType === 'file' ? 'bg-downloadparam' : 'bg-outputparam'}
 		`}
     draggable="true"
     ondragstart={handleDragStart}
@@ -139,6 +139,8 @@
       <div class="flex items-start pt-0.5">
         {#if item.type === 'input'}
           <ArrowDownToLine size={14} class="text-muted-foreground" />
+        {:else if item.widgetType === 'file'}
+          <Download size={14} class="text-muted-foreground" />
         {:else}
           <ArrowUpFromLine size={14} class="text-muted-foreground" />
         {/if}

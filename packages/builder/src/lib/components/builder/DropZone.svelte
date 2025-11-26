@@ -12,7 +12,7 @@
   }
 
   let {
-    acceptTypes = ['parameter', 'group-item'],
+    acceptTypes = ['parameter', 'group-item', 'downloadable'],
     label = 'Drop here',
     isEmpty = false,
     ondrop,

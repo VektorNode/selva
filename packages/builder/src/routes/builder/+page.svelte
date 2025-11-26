@@ -7,6 +7,7 @@
   import {
     DragDropContext,
     ParameterList,
+    DownloadableComponentsList,
     SchemaInfoPanel,
     EditableTabNav,
     EditableGroup,
@@ -432,14 +433,56 @@
       return;
     }
 
-    if (type !== 'parameter') return;
+    if (type !== 'parameter' && type !== 'downloadable') return;
 
-    const param = data as AvailableParameter;
     const tab = schema.layout.tabs.find((t) => t.id === tabId);
     if (!tab) return;
 
     const group = tab.groups.find((g) => g.id === groupId);
     if (!group) return;
+
+    // Handle downloadable components
+    if (type === 'downloadable') {
+      const downloadableComp = data as any; // DownloadableComponent type
+
+      const exists = group.items.some((i) => i.paramId === downloadableComp.id);
+      if (exists) {
+        toast.warning('This file component is already in this group');
+        return;
+      }
+
+      const newItem = {
+        id: crypto.randomUUID().substring(0, 8),
+        paramId: downloadableComp.id,
+        type: 'output',
+        displayName: downloadableComp.nickname,
+        widgetType: 'file',
+        order: group.items.length,
+        span: 1,
+        config: {},
+      } as OutputLayoutItem;
+
+      if (targetItem && dropPosition) {
+        const targetIndex = group.items.findIndex((i) => i.id === targetItem.id);
+        if (targetIndex >= 0) {
+          if (dropPosition === 'before') {
+            group.items.splice(targetIndex, 0, newItem);
+          } else {
+            group.items.splice(targetIndex + 1, 0, newItem);
+          }
+          group.items = [...group.items];
+        } else {
+          group.items = [...group.items, newItem];
+        }
+      } else {
+        group.items = [...group.items, newItem];
+      }
+
+      return;
+    }
+
+    // Regular parameter handling
+    const param = data as AvailableParameter;
 
     const exists = group.items.some((i) => i.paramId === param.id);
     if (exists) {
@@ -659,6 +702,14 @@
                 category="output"
                 emptyMessage="No context output components found."
               />
+
+              {#if schema.downloading?.components && schema.downloading.components.length > 0}
+                <DownloadableComponentsList
+                  components={schema.downloading.components}
+                  placedIds={placedInLayoutIds()}
+                  emptyMessage="All downloadable components are already placed in the layout."
+                />
+              {/if}
             </Panel>
           </aside>
 

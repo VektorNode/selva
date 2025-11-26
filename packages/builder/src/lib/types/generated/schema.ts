@@ -293,7 +293,7 @@ export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutIt
   return item.type === 'input';
 }
 
-export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem {
+export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem {
   return item.type === 'output';
 }
 
@@ -315,5 +315,5 @@ export function isCheckboxWidget(item: LayoutItem): item is InputCheckboxLayoutI
 
 // Helper type aliases
 export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem;
-export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem;
+export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem;
 export type SupportedTypes = string | number | boolean;

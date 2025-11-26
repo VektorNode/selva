@@ -610,82 +610,63 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       }
     }
 
-    // Collect file outputs
-    if (schema?.Layout != null)
+    // Collect file outputs from downloading.components
+    if (schema?.Downloading?.Enabled == true && schema.Downloading.Components?.Count > 0)
     {
-      foreach (var tab in schema.Layout.Tabs)
+      foreach (var downloadableComp in schema.Downloading.Components)
       {
-        if (tab?.Groups == null)
+        try
         {
-          continue;
-        }
-
-        foreach (var group in tab.Groups)
-        {
-          if (group?.Items == null)
+          var componentObject = document.FindObject(downloadableComp.Id, false);
+          if (componentObject == null)
           {
             continue;
           }
 
-          foreach (var item in group.Items)
+          if (componentObject is IGH_Component component)
           {
-            if (item is OutputFileLayoutItem fileItem)
+            var fileDataList = new List<object>();
+
+            foreach (var inputParam in component.Params.Input)
             {
-              try
+              if (inputParam?.VolatileData == null || inputParam.VolatileData.IsEmpty)
               {
-                var componentObject = document.FindObject(fileItem.ParamId, false);
-                if (componentObject == null)
-                {
-                  continue;
-                }
-
-                if (componentObject is IGH_Component component)
-                {
-                  var fileDataList = new List<object>();
-
-                  foreach (var inputParam in component.Params.Input)
-                  {
-                    if (inputParam?.VolatileData == null || inputParam.VolatileData.IsEmpty)
-                    {
-                      continue;
-                    }
-
-                    var allData = inputParam.VolatileData.AllData(true);
-                    foreach (var gooObj in allData)
-                    {
-                      if (gooObj?.GetType().FullName != null &&
-                          gooObj.GetType().FullName.IndexOf("FileDataGoo", StringComparison.OrdinalIgnoreCase) >= 0)
-                      {
-                        try
-                        {
-                          var extractedFileData = ExtractFileDataFromGoo(gooObj);
-                          if (extractedFileData != null)
-                          {
-                            fileDataList.Add(extractedFileData);
-                          }
-                        }
-                        catch (Exception ex)
-                        {
-                          AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                            $"Error extracting FileData from Goo: {ex.Message}");
-                        }
-                      }
-                    }
-                  }
-
-                  if (fileDataList.Count > 0)
-                  {
-                    fileOutputData[fileItem.Id] = fileDataList.Count == 1 ? fileDataList[0] : fileDataList;
-                  }
-                }
+                continue;
               }
-              catch (Exception ex)
+
+              var allData = inputParam.VolatileData.AllData(true);
+              foreach (var gooObj in allData)
               {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                  $"Error collecting file output '{fileItem.DisplayName}': {ex.Message}");
+                if (gooObj?.GetType().FullName != null &&
+                    gooObj.GetType().FullName.IndexOf("FileDataGoo", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                  try
+                  {
+                    var extractedFileData = ExtractFileDataFromGoo(gooObj);
+                    if (extractedFileData != null)
+                    {
+                      fileDataList.Add(extractedFileData);
+                    }
+                  }
+                  catch (Exception ex)
+                  {
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                      $"Error extracting FileData from Goo: {ex.Message}");
+                  }
+                }
               }
             }
+
+            if (fileDataList.Count > 0)
+            {
+              fileOutputData[downloadableComp.Id.ToString()] = fileDataList.Count == 1 ? fileDataList[0] : fileDataList;
+            }
           }
+        }
+        catch (Exception ex)
+        {
+          AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+            $"Error collecting file output '{downloadableComp.Nickname}': {ex.Message}");
         }
       }
     }

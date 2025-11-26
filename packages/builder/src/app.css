@@ -38,6 +38,7 @@
 	--sidebar-ring: oklch(0.708 0 0);
 	--inputparam: oklch(92.494% 0.00011 271.152 / 0.774);
 	--outputparam: oklch(87.455% 0.05075 323.842 / 0.863);
+	--downloadparam: oklch(89.8% 0.047 115.06 / 0.863);
 }
 
 .dark {
@@ -74,6 +75,7 @@
 	--sidebar-ring: oklch(0.556 0 0);
 	--inputparam: oklch(0% 0 0 / 0.61);
 	--outputparam: oklch(25.718% 0.06493 323.439 / 0.863);
+	--downloadparam: oklch(50% 0.11 115.06 / 0.863);
 }
 
 @theme inline {
@@ -114,6 +116,7 @@
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-inputparam: var(--inputparam);
 	--color-outputparam: var(--outputparam);
+	--color-downloadparam: var(--downloadparam);
 }
 
 @layer base {

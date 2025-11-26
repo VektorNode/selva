@@ -1,12 +1,6 @@
 <script lang="ts">
-  import type { FileData } from '$lib/utils/file-download';
-  import {
-    downloadFiles,
-    isFileData,
-    isFileDataArray,
-    formatFileSize,
-    getBase64FileSize,
-  } from '$lib/utils/file-download';
+  import { downloadFiles, formatFileSize, getBase64FileSize } from '$lib/utils/file-download';
+  import type { FileData } from '@selva/core';
   import { Button } from '../ui';
 
   interface Props {
@@ -18,7 +12,47 @@
   let downloading = $state(false);
   let error = $state<string | null>(null);
 
-  const filesArray = $derived(!fileData ? [] : Array.isArray(fileData) ? fileData : [fileData]);
+  // Normalize file data to ensure it has proper structure
+  function normalizeFileData(data: any): FileData | null {
+    if (!data) return null;
+
+    // If it already has the proper FileData structure
+    if (data.FileName && data.Data && 'IsBase64Encoded' in data) {
+      return data as FileData;
+    }
+
+    // If it has fileName and data (from old format or different structure)
+    if (data.fileName || data.data) {
+      return {
+        FileName: data.fileName || data.FileName || 'file',
+        FileType: data.fileType || data.FileType || data.fileExtension || '',
+        Data: data.data || data.Data || '',
+        IsBase64Encoded: data.isBase64Encoded ?? data.IsBase64Encoded ?? true,
+        SubFolder: data.subFolder || data.SubFolder || undefined,
+      };
+    }
+
+    // If it's just a string (base64 encoded data)
+    if (typeof data === 'string') {
+      return {
+        FileName: displayName || 'download',
+        FileType: '',
+        Data: data,
+        IsBase64Encoded: true,
+        SubFolder: '',
+      };
+    }
+
+    return null;
+  }
+
+  const filesArray = $derived(
+    !fileData
+      ? []
+      : Array.isArray(fileData)
+        ? fileData.map(normalizeFileData).filter((f) => f !== null)
+        : [normalizeFileData(fileData)].filter((f) => f !== null)
+  );
 
   const fileCount = $derived(filesArray.length);
   const totalSize = $derived(
@@ -34,11 +68,26 @@
     error = null;
 
     try {
-      const fileName = displayName
-        ? displayName.replace(/[^a-z0-9]/gi, '_').toLowerCase()
-        : 'download';
+      const normalizedData = Array.isArray(fileData)
+        ? fileData.map(normalizeFileData).filter((f) => f !== null)
+        : normalizeFileData(fileData);
 
-      await downloadFiles(fileData, fileName);
+      if (!normalizedData || (Array.isArray(normalizedData) && normalizedData.length === 0)) {
+        error = 'No valid file data to download';
+        return;
+      }
+
+      // For single file, use its actual filename with extension
+      // For multiple files, use the display name as a folder/prefix
+      const filesArray = Array.isArray(normalizedData) ? normalizedData : [normalizedData];
+      if (filesArray.length === 1) {
+        await downloadFiles(normalizedData, filesArray[0].FileName);
+      } else {
+        const fileName = displayName
+          ? displayName.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+          : 'download';
+        await downloadFiles(normalizedData, fileName);
+      }
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to download files';
       console.error('[FileDownloadWidget] Download error:', err);
@@ -59,9 +108,9 @@
         <div class="flex items-center justify-between">
           <div class="text-sm font-medium text-foreground">
             {#if fileCount === 1}
-              📄 {filesArray[0].FileName}{filesArray[0].FileType}
+              {filesArray[0].FileName}{filesArray[0].FileType}
             {:else}
-              📦 {fileCount} files
+              {fileCount} files
             {/if}
           </div>
           <div class="text-xs text-muted-foreground">
@@ -95,9 +144,9 @@
         variant="default"
       >
         {#if downloading}
-          ⏳ Downloading...
+          Downloading...
         {:else}
-          ⬇️ Download {fileCount === 1 ? 'File' : `${fileCount} Files`}
+          Download {fileCount === 1 ? 'File' : `${fileCount} Files`}
         {/if}
       </Button>
     </div>

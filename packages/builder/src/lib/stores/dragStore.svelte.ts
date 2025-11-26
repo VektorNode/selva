@@ -1,5 +1,5 @@
 export interface DragData {
-  type: 'parameter' | 'group-item' | 'group' | 'tab';
+  type: 'parameter' | 'group-item' | 'group' | 'tab' | 'downloadable';
   data: any;
   sourceType?: string;
 }

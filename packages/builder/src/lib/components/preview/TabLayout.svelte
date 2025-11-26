@@ -138,12 +138,14 @@
                         </div>
                       {/if}
                     {:else if layoutItem.type === 'output'}
-                      {@const output = getOutputById(layoutItem.paramId)}
-                      {#if output}
+                      {@const isFile = layoutItem.widgetType === 'file'}
+                      {@const output = isFile ? null : getOutputById(layoutItem.paramId)}
+                      {@const downloadableComp = isFile ? schema.downloading?.components?.find((c) => c.id === layoutItem.paramId) : null}
+                      {#if output || downloadableComp}
                         <div class="min-w-0 overflow-hidden">
                           <OutputDisplay
                             item={layoutItem}
-                            value={values[output.id]}
+                            value={values[layoutItem.paramId]}
                             displayName={layoutItem.displayName}
                           />
                         </div>
