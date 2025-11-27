@@ -33,9 +33,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     DefaultValueHandling = DefaultValueHandling.Ignore
   };
 
-  // Cache for available parameters and outputs (to send on client connect)
-  private AvailableParameters _availableParams;
-  private List<AvailableOutput> _availableOutputs;
+  // No more cached available parameters - query document on-demand for single source of truth
   private CommunicationHandler _communicationHandler;
   private GH_Document _currentDocument;
   private bool _disposed;
@@ -88,6 +86,49 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   ~GH_UIBuilderComponent()
   {
     Dispose(false);
+  }
+
+  /// <summary>
+  ///   Get current available parameters from document (single source of truth)
+  /// </summary>
+  private AvailableParameters GetCurrentAvailableParameters()
+  {
+    var document = OnPingDocument();
+    if (document == null || _schemaManager == null)
+    {
+      return new AvailableParameters { SessionId = _sessionId, Parameters = new List<AvailableParameter>() };
+    }
+
+    return _schemaManager.ScanParameters(document);
+  }
+
+  /// <summary>
+  ///   Get current available outputs from document (single source of truth)
+  /// </summary>
+  private List<AvailableOutput> GetCurrentAvailableOutputs()
+  {
+    var document = OnPingDocument();
+    if (document == null || _schemaManager == null)
+    {
+      return new List<AvailableOutput>();
+    }
+
+    return _schemaManager.ScanOutputs(document);
+  }
+
+  /// <summary>
+  ///   Get validated schema synchronized with current document state
+  ///   This is the ONLY way to get schema - ensures it's always in sync with document
+  /// </summary>
+  private (UISchema Schema, List<Guid> RemovedIds) GetValidatedSchema()
+  {
+    var document = OnPingDocument();
+    if (document == null || _embeddedSchema == null || _schemaManager == null)
+    {
+      return (null, new List<Guid>());
+    }
+
+    return _schemaManager.ValidateSchemaAndTrackChanges(_embeddedSchema, document, trackChanges: true);
   }
 
   private static string CreateSessionId(int length)
@@ -199,9 +240,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
       if (enableRising)
       {
-        _availableParams = _schemaManager.ScanParameters(document);
-        _availableOutputs = _schemaManager.ScanOutputs(document);
-        var duplicates = _schemaManager.ValidateDuplicates(_availableParams);
+        var currentParams = GetCurrentAvailableParameters();
+        var duplicates = _schemaManager.ValidateDuplicates(currentParams);
 
         if (duplicates.Any())
         {
@@ -238,9 +278,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     if (enableRising)
     {
-      _availableParams = _schemaManager.ScanParameters(document);
-      _availableOutputs = _schemaManager.ScanOutputs(document);
-      var duplicates = _schemaManager.ValidateDuplicates(_availableParams);
+      var currentParams = GetCurrentAvailableParameters();
+      var duplicates = _schemaManager.ValidateDuplicates(currentParams);
 
       if (duplicates.Any())
       {
@@ -362,6 +401,62 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   }
 
   /// <summary>
+  ///   Transactional deletion handler - ensures all state is cleaned up atomically
+  /// </summary>
+  private void HandleParameterDeletion(List<Guid> removedIds)
+  {
+    if (removedIds == null || removedIds.Count == 0)
+    {
+      return;
+    }
+
+    try
+    {
+      // 1. Remove from value applicator cache (thread-safe)
+      var valuesToRemove = removedIds.Select(id => id.ToString()).ToList();
+      _valueApplicator?.RemoveValues(valuesToRemove);
+
+      // 2. Remove from embedded values
+      if (_embeddedValues != null)
+      {
+        foreach (var key in valuesToRemove)
+        {
+          _embeddedValues.Remove(key);
+        }
+      }
+
+      // 3. Embedded schema is already updated by caller (ValidateSchemaAndTrackChanges)
+      // This is the commit point - schema changes are persisted
+
+      // 4. Broadcast to web UI
+      var broadcastTask = _communicationHandler.BroadcastSchemaUpdate(_embeddedSchema, removedIds);
+
+      // Wait briefly for broadcast to complete (fire-and-forget with timeout)
+      try
+      {
+        broadcastTask.Wait(100);
+      }
+      catch
+      {
+        // Broadcast failed - log but don't fail the deletion
+        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+          "Failed to notify web UI of deletion - please refresh");
+      }
+
+      // 5. Mark document as modified so changes persist on save
+      _currentDocument?.Modified();
+
+      AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+        $"Cleaned up {removedIds.Count} deleted parameter(s)");
+    }
+    catch (Exception ex)
+    {
+      AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
+        $"Error during parameter deletion cleanup: {ex.Message}");
+    }
+  }
+
+  /// <summary>
   ///   Handle client connection - send initial data
   /// </summary>
   private void HandleClientConnected(object sender, EventArgs e)
@@ -374,10 +469,26 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         return;
       }
 
+      // Get current state from document (single source of truth)
+      var currentParams = GetCurrentAvailableParameters();
+      var currentOutputs = GetCurrentAvailableOutputs();
       var currentValues = CollectCurrentValues(document);
 
+      // Validate and sync schema before sending
+      var (validatedSchema, removedIds) = GetValidatedSchema();
+      if (removedIds.Count > 0)
+      {
+        // Schema was out of sync - clean up and persist
+        HandleParameterDeletion(removedIds);
+      }
+
       // Broadcast initial data to the newly connected client
-      var _ = _communicationHandler.BroadcastInitialData(_embeddedSchema, _availableParams, _availableOutputs, currentValues);
+      var _ = _communicationHandler.BroadcastInitialData(
+        validatedSchema ?? _embeddedSchema,
+        currentParams,
+        currentOutputs,
+        currentValues
+      );
     }
     catch (Exception ex)
     {
@@ -997,11 +1108,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     try
     {
-      // Always rescan available parameters and outputs when objects change
-      var currentParams = _schemaManager.ScanParameters(_currentDocument);
-      var currentOutputs = _schemaManager.ScanOutputs(_currentDocument);
-      _availableParams = currentParams;
-      _availableOutputs = currentOutputs;
+      // Get current state from document (single source of truth)
+      var currentParams = GetCurrentAvailableParameters();
+      var currentOutputs = GetCurrentAvailableOutputs();
 
       // If we don't have a schema yet, just notify about new parameters and outputs
       if (_embeddedSchema == null)
@@ -1026,46 +1135,20 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         return;
       }
 
+      // Validate schema and detect removals
       var (updatedSchema, removedIds) =
         _schemaManager.ValidateSchemaAndTrackChanges(_embeddedSchema, _currentDocument);
 
-      // Broadcast schema update for removals
+      // Handle removals transactionally
       if (removedIds.Count > 0)
       {
+        // Update embedded schema first (commit point)
         _embeddedSchema = updatedSchema;
 
-        if (_embeddedValues != null)
-        {
-          foreach (var removedId in removedIds)
-          {
-            _embeddedValues.Remove(removedId.ToString());
-          }
-        }
+        // Clean up all related state atomically
+        HandleParameterDeletion(removedIds);
 
-        var lastValues = _valueApplicator?.GetLastAppliedValues();
-        if (lastValues != null)
-        {
-          foreach (var removedId in removedIds)
-          {
-            lastValues.Remove(removedId.ToString());
-          }
-
-          _valueApplicator?.SetLastAppliedValues(lastValues);
-        }
-
-        var broadcastTask = _communicationHandler.BroadcastSchemaUpdate(_embeddedSchema, removedIds);
-
-        try
-        {
-          broadcastTask.Wait(10);
-        }
-        catch
-        {
-        }
-
-        AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-          $"Schema updated: {removedIds.Count} parameter(s) removed from UI");
-
+        // Trigger re-solve to update UI
         _currentDocument.ScheduleSolution(10, doc => { ExpireSolution(false); });
       }
       else

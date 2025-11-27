@@ -212,44 +212,60 @@
     };
 
     const handleSchemaUpdated = (message: any) => {
-      if (message.sessionId === sessionId) {
-        console.log('[Builder] Schema structure changed:', {
-          schema: message.schema,
-          removedIds: message.removedIds,
-        });
+      if (message.sessionId !== sessionId) return;
 
-        const removedCount = message.removedIds?.length || 0;
+      console.log('[Builder] Schema structure changed:', {
+        schema: message.schema,
+        removedIds: message.removedIds,
+      });
 
-        if (removedCount > 0) {
-          // Parameters/outputs were removed - refresh available items and auto-save
-          const newAvailableParams = availableParams.filter(
-            (p) => !message.removedIds.includes(p.id)
-          );
-          const newAvailableOutputs = availableOutputs.filter(
-            (o) => !message.removedIds.includes(o.id)
-          );
-          availableParams = newAvailableParams;
-          availableOutputs = newAvailableOutputs;
+      const removedIds = message.removedIds || [];
+      const removedCount = removedIds.length;
 
-          // Remove from schema and auto-save
-          if (schema) {
-            schema.inputs = schema.inputs.filter((i) => !message.removedIds.includes(i.id));
-            schema.outputs = schema.outputs.filter((o) => !message.removedIds.includes(o.id));
+      if (removedCount > 0) {
+        // 1. Remove from available lists
+        availableParams = availableParams.filter((p) => !removedIds.includes(p.id));
+        availableOutputs = availableOutputs.filter((o) => !removedIds.includes(o.id));
 
-            if (wsState.connected) {
-              console.log('[Builder] Auto-saving schema after parameter removal');
-              wsState.saveSchema(sessionId, $state.snapshot(schema));
+        // 2. Remove from schema inputs/outputs
+        if (schema) {
+          schema.inputs = schema.inputs.filter((i) => !removedIds.includes(i.id));
+          schema.outputs = schema.outputs.filter((o) => !removedIds.includes(o.id));
+
+          // 3. CRITICAL: Remove from layout items (fixes ghost items bug)
+          if (schema.layout?.tabs) {
+            schema.layout.tabs.forEach((tab) => {
+              tab.groups.forEach((group) => {
+                // Filter out items referencing deleted parameters
+                group.items = group.items.filter((item) => !removedIds.includes(item.paramId));
+              });
+              // Clean up empty groups
+              tab.groups = tab.groups.filter((g) => g.items.length > 0);
+            });
+
+            // 4. Clean up empty tabs
+            schema.layout.tabs = schema.layout.tabs.filter((t) => t.groups.length > 0);
+
+            // If active tab was removed, switch to first available tab
+            if (activeTabId && !schema.layout.tabs.find(t => t.id === activeTabId)) {
+              activeTabId = schema.layout.tabs.length > 0 ? schema.layout.tabs[0].id : null;
             }
           }
 
+          // 5. Trigger reactivity
+          schema = schema;
+
+          // 6. Send confirmation back to Grasshopper (future enhancement)
+          // wsState.send('schemaUpdateConfirmed', { sessionId, removedIds, timestamp: Date.now() });
+
           toast.info(
-            `Item${removedCount > 1 ? 's' : ''} removed from Grasshopper: ${removedCount} item(s)`
+            `${removedCount} item${removedCount > 1 ? 's' : ''} removed from Grasshopper and cleaned from layout`
           );
-        } else {
-          // New parameters/outputs may have been added - request fresh data
-          wsState.requestInitialData(sessionId);
-          toast.info('Schema structure updated - checking for new items...');
         }
+      } else {
+        // New parameters/outputs may have been added - request fresh data
+        wsState.requestInitialData(sessionId);
+        toast.info('Schema structure updated - checking for new items...');
       }
     };
 

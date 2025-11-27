@@ -170,6 +170,23 @@ public class ValueApplicator
   }
 
   /// <summary>
+  ///   Remove specific values by keys (thread-safe)
+  ///   Used when parameters are deleted from the document
+  /// </summary>
+  public void RemoveValues(IEnumerable<string> keys)
+  {
+    if (keys == null)
+    {
+      return;
+    }
+
+    foreach (var key in keys)
+    {
+      _lastAppliedValues.TryRemove(key, out _);
+    }
+  }
+
+  /// <summary>
   ///   Clear all tracked values
   /// </summary>
   public void Clear()
