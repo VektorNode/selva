@@ -1094,7 +1094,15 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         break;
       }
 
+      // Check for ContextPrint components
       if (ParameterTypeHelper.IsContextOutputComponent(obj))
+      {
+        relevantChange = true;
+        break;
+      }
+
+      // Check for ContextBake components (file outputs)
+      if (ParameterTypeHelper.IsContextBakeComponent(obj))
       {
         relevantChange = true;
         break;
