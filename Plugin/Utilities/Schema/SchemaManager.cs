@@ -22,17 +22,13 @@ public class SchemaManager
   }
 
   /// <summary>
-  ///   Scan document and return available parameters
+  ///   Scan document and return available parameters (inputs only)
   /// </summary>
   public AvailableParameters ScanParameters(GH_Document document)
   {
-    // Scan for all contextual parameters and outputs
+    // Scan for all contextual parameters (inputs only)
     var allParams = document.Objects
       .OfType<IGH_ContextualParameter>()
-      .ToList();
-
-    var contextOutputs = document.Objects
-      .Where(ParameterTypeHelper.IsContextOutputComponent)
       .ToList();
 
     var availableParameters = new AvailableParameters
@@ -131,6 +127,21 @@ public class SchemaManager
       availableParameters.Parameters.Add(availableParam);
     }
 
+    return availableParameters;
+  }
+
+  /// <summary>
+  ///   Scan document and return available outputs (separate from parameters)
+  /// </summary>
+  public List<AvailableOutput> ScanOutputs(GH_Document document)
+  {
+    var outputs = new List<AvailableOutput>();
+
+    // Scan for context output components (print, bake)
+    var contextOutputs = document.Objects
+      .Where(ParameterTypeHelper.IsContextOutputComponent)
+      .ToList();
+
     foreach (var output in contextOutputs)
     {
       if (output == null)
@@ -138,18 +149,19 @@ public class SchemaManager
         continue;
       }
 
-      var component = output as GH_Component;
-      var outputParam = component?.Params.Input.FirstOrDefault();
+      // Determine output type based on component type
+      string outputType = "print"; // Default
+      if (output.Name.IndexOf("Bake", StringComparison.OrdinalIgnoreCase) >= 0)
+      {
+        outputType = "bake";
+      }
 
-      availableParameters.Parameters.Add(new AvailableParameter
+      outputs.Add(new AvailableOutput
       {
         Id = output.InstanceGuid,
-        Name = output.Name,
         Nickname = output.NickName,
         Description = output.Description ?? "",
-        Category = "output",
-        ParamType = outputParam != null ? GetParameterTypeNameFromParam(outputParam) : "Generic",
-        Default = outputParam?.VolatileData.AllData(false).FirstOrDefault()?.ScriptVariable()
+        OutputType = outputType
       });
     }
 
@@ -157,19 +169,16 @@ public class SchemaManager
     var (hasFileOutputs, fileOutputs) = ParameterTypeHelper.DetectDownloadableOutputs(document);
     foreach (var fileOutput in fileOutputs)
     {
-      availableParameters.Parameters.Add(new AvailableParameter
+      outputs.Add(new AvailableOutput
       {
         Id = fileOutput.Id,
-        Name = "Context Bake",
         Nickname = fileOutput.Nickname,
         Description = fileOutput.Description ?? "",
-        Category = "output",
-        ParamType = "File",
-        Default = null
+        OutputType = "file"
       });
     }
 
-    return availableParameters;
+    return outputs;
   }
 
   /// <summary>

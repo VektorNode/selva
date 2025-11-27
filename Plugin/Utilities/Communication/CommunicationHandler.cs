@@ -271,10 +271,10 @@ public class CommunicationHandler : IDisposable
   }
 
   /// <summary>
-  ///   Broadcast initial data to all connected clients (schema, available params, current values)
+  ///   Broadcast initial data to all connected clients (schema, available params, available outputs, current values)
   /// </summary>
   public async Task BroadcastInitialData(UISchema schema, AvailableParameters availableParams,
-    Dictionary<string, object> currentValues)
+    List<AvailableOutput> availableOutputs, Dictionary<string, object> currentValues)
   {
     if (_webSocketServer != null && _webSocketServer.IsRunning)
     {
@@ -284,6 +284,7 @@ public class CommunicationHandler : IDisposable
         sessionId = _sessionId,
         schema,
         availableParams,
+        availableOutputs,
         currentValues
       };
       await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));

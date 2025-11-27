@@ -36,6 +36,7 @@
   let sessionId = $state('');
   let schema = $state<UISchema | null>(null);
   let availableParams = $state<AvailableParameter[]>([]);
+  let availableOutputs = $state<AvailableOutput[]>([]);
   let loading = $state(true);
   let error = $state('');
   let activeTabId = $state<string | null>(null);
@@ -59,12 +60,10 @@
     return ids;
   });
 
-  const availableInputs = $derived(
-    availableParams.filter((p) => p.category === 'input' && !placedInLayoutIds().has(p.id))
-  );
+  const availableInputs = $derived(availableParams.filter((p) => !placedInLayoutIds().has(p.id)));
 
-  const availableOutputs = $derived(
-    availableParams.filter((p) => p.category === 'output' && !placedInLayoutIds().has(p.id))
+  const availableOutputsUnplaced = $derived(
+    availableOutputs.filter((o) => !placedInLayoutIds().has(o.id))
   );
   const activeTab = $derived(schema?.layout?.tabs?.find((t) => t.id === activeTabId));
 
@@ -93,12 +92,13 @@
         console.log('[Builder] Received initial data:', result);
 
         availableParams = result.availableParams;
+        availableOutputs = result.availableOutputs;
 
         schema = result.schema;
 
-        if (availableParams.length === 0) {
+        if (availableParams.length === 0 && availableOutputs.length === 0) {
           error =
-            'No parameters found. Please ensure the UI Builder component is active in Grasshopper and click Refresh.';
+            'No parameters or outputs found. Please ensure the UI Builder component is active in Grasshopper and click Refresh.';
         }
 
         if (schema?.layout?.tabs && schema.layout.tabs.length > 0) {
@@ -182,21 +182,22 @@
               changed = true;
             }
 
-            // Update available params list to reflect changes
-            const availIndex = availableParams.findIndex((p) => p.id === updated.id);
-            if (availIndex !== -1) {
+            // Update availableOutputs list to reflect changes
+            const availOutputIndex = availableOutputs.findIndex((o) => o.id === updated.id);
+            if (availOutputIndex !== -1) {
               if (updated.nickname !== undefined)
-                availableParams[availIndex].nickname = updated.nickname;
+                availableOutputs[availOutputIndex].nickname = updated.nickname;
               if (updated.description !== undefined)
-                availableParams[availIndex].description = updated.description;
+                availableOutputs[availOutputIndex].description = updated.description;
             }
           }
         });
 
-        // Trigger reactivity by reassigning schema and availableParams
+        // Trigger reactivity by reassigning schema, availableParams, and availableOutputs
         if (updateCount > 0) {
           schema = schema;
           availableParams = availableParams;
+          availableOutputs = availableOutputs;
           toast.success(
             `Parameter${updateCount > 1 ? 's' : ''} updated: ${updatedNames.join(', ')}`
           );
@@ -220,11 +221,15 @@
         const removedCount = message.removedIds?.length || 0;
 
         if (removedCount > 0) {
-          // Parameters were removed - refresh available parameters and auto-save
+          // Parameters/outputs were removed - refresh available items and auto-save
           const newAvailableParams = availableParams.filter(
             (p) => !message.removedIds.includes(p.id)
           );
+          const newAvailableOutputs = availableOutputs.filter(
+            (o) => !message.removedIds.includes(o.id)
+          );
           availableParams = newAvailableParams;
+          availableOutputs = newAvailableOutputs;
 
           // Remove from schema and auto-save
           if (schema) {
@@ -238,30 +243,43 @@
           }
 
           toast.info(
-            `Parameter${removedCount > 1 ? 's' : ''} removed from Grasshopper: ${removedCount} item(s)`
+            `Item${removedCount > 1 ? 's' : ''} removed from Grasshopper: ${removedCount} item(s)`
           );
         } else {
-          // New parameters may have been added - request fresh data
+          // New parameters/outputs may have been added - request fresh data
           wsState.requestInitialData(sessionId);
-          toast.info('Schema structure updated - checking for new parameters...');
+          toast.info('Schema structure updated - checking for new items...');
         }
       }
     };
 
     const handleParametersAdded = (message: any) => {
       if (message.sessionId === sessionId) {
-        console.log('[Builder] New parameters added to Grasshopper:', message.availableParams);
+        console.log('[Builder] New items added to Grasshopper:', {
+          params: message.availableParams,
+          outputs: message.availableOutputs,
+        });
+
+        let updated = false;
 
         if (message.availableParams && Array.isArray(message.availableParams)) {
-          // Update available parameters directly
           availableParams = message.availableParams;
-          // Mark that sync is needed to pick up the new parameters in schema
+          updated = true;
+        }
+
+        if (message.availableOutputs && Array.isArray(message.availableOutputs)) {
+          availableOutputs = message.availableOutputs;
+          updated = true;
+        }
+
+        if (updated) {
+          // Mark that sync is needed to pick up the new items in schema
           syncNeeded = true;
-          toast.info('New parameters detected - click Sync to add them to your schema');
+          toast.info('New items detected - click Sync to add them to your schema');
         } else {
           // Fallback: request fresh data
           wsState.requestInitialData(sessionId);
-          toast.info('New parameters detected - refreshing...');
+          toast.info('New items detected - refreshing...');
         }
       }
     };
@@ -788,7 +806,7 @@
               />
 
               <AvailableItemList
-                items={availableOutputs}
+                items={availableOutputsUnplaced}
                 title="📤 Outputs"
                 placedIds={placedInLayoutIds()}
               />

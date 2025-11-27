@@ -33,8 +33,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     DefaultValueHandling = DefaultValueHandling.Ignore
   };
 
-  // Cache for available parameters (to send on client connect)
+  // Cache for available parameters and outputs (to send on client connect)
   private AvailableParameters _availableParams;
+  private List<AvailableOutput> _availableOutputs;
   private CommunicationHandler _communicationHandler;
   private GH_Document _currentDocument;
   private bool _disposed;
@@ -199,6 +200,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       if (enableRising)
       {
         _availableParams = _schemaManager.ScanParameters(document);
+        _availableOutputs = _schemaManager.ScanOutputs(document);
         var duplicates = _schemaManager.ValidateDuplicates(_availableParams);
 
         if (duplicates.Any())
@@ -237,6 +239,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     if (enableRising)
     {
       _availableParams = _schemaManager.ScanParameters(document);
+      _availableOutputs = _schemaManager.ScanOutputs(document);
       var duplicates = _schemaManager.ValidateDuplicates(_availableParams);
 
       if (duplicates.Any())
@@ -374,7 +377,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       var currentValues = CollectCurrentValues(document);
 
       // Broadcast initial data to the newly connected client
-      var _ = _communicationHandler.BroadcastInitialData(_embeddedSchema, _availableParams, currentValues);
+      var _ = _communicationHandler.BroadcastInitialData(_embeddedSchema, _availableParams, _availableOutputs, currentValues);
     }
     catch (Exception ex)
     {
@@ -993,17 +996,19 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     try
     {
-      // Always rescan available parameters when objects change
+      // Always rescan available parameters and outputs when objects change
       var currentParams = _schemaManager.ScanParameters(_currentDocument);
+      var currentOutputs = _schemaManager.ScanOutputs(_currentDocument);
       _availableParams = currentParams;
+      _availableOutputs = currentOutputs;
 
-      // If we don't have a schema yet, just notify about new parameters
+      // If we don't have a schema yet, just notify about new parameters and outputs
       if (_embeddedSchema == null)
       {
-        if (currentParams.Parameters.Count > 0)
+        if (currentParams.Parameters.Count > 0 || currentOutputs.Count > 0)
         {
           var broadcastTask = _communicationHandler.BroadcastMessage("parametersAdded",
-            new { availableParams = currentParams.Parameters });
+            new { availableParams = currentParams.Parameters, availableOutputs = currentOutputs });
 
           try
           {
@@ -1014,7 +1019,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
           }
 
           AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-            $"Parameter(s) detected: {currentParams.Parameters.Count} available. Check web UI.");
+            $"Parameter(s)/Output(s) detected: {currentParams.Parameters.Count} params, {currentOutputs.Count} outputs. Check web UI.");
         }
 
         return;
@@ -1064,18 +1069,22 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       }
       else
       {
-        // No removals, but check if new parameters were added
+        // No removals, but check if new parameters or outputs were added
         var newParamIds = currentParams.Parameters
-          .Where(p => !_embeddedSchema.Inputs.Any(i => i.Id == p.Id) &&
-                      !_embeddedSchema.Outputs.Any(o => o.Id == p.Id))
+          .Where(p => !_embeddedSchema.Inputs.Any(i => i.Id == p.Id))
           .Select(p => p.Id)
           .ToList();
 
-        if (newParamIds.Count > 0)
+        var newOutputIds = currentOutputs
+          .Where(o => !_embeddedSchema.Outputs.Any(so => so.Id == o.Id))
+          .Select(o => o.Id)
+          .ToList();
+
+        if (newParamIds.Count > 0 || newOutputIds.Count > 0)
         {
-          // New parameters added - send full parameter list to web UI
+          // New parameters or outputs added - send full lists to web UI
           var broadcastTask = _communicationHandler.BroadcastMessage("parametersAdded",
-            new { availableParams = currentParams.Parameters });
+            new { availableParams = currentParams.Parameters, availableOutputs = currentOutputs });
 
           try
           {
@@ -1086,7 +1095,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
           }
 
           AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-            $"New parameter(s) added: {newParamIds.Count} available. Check web UI.");
+            $"New items added: {newParamIds.Count} param(s), {newOutputIds.Count} output(s). Check web UI.");
         }
       }
 

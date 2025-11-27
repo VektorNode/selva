@@ -1,6 +1,6 @@
 import { page } from '$app/state';
 import { getWebSocketState, type WebSocketState } from '$lib/websocket/websocket.svelte';
-import type { UISchema, AvailableParameters } from '$lib/types/generated';
+import type { UISchema, AvailableParameters, AvailableOutput } from '$lib/types/generated';
 
 /**
  * Session initialization result
@@ -130,10 +130,19 @@ export function getDefaultValue(paramType: string): unknown {
  * Process initial data message and extract schema with defaults
  */
 export function processInitialDataSchema(
-  message: { schema?: UISchema; availableParams?: AvailableParameters },
+  message: {
+    schema?: UISchema;
+    availableParams?: AvailableParameters;
+    availableOutputs?: AvailableOutput[];
+  },
   createNewIfMissing: boolean = false
-): { schema: UISchema | null; availableParams: AvailableParameters['parameters'] } {
+): {
+  schema: UISchema | null;
+  availableParams: AvailableParameters['parameters'];
+  availableOutputs: AvailableOutput[];
+} {
   const availableParams = message.availableParams?.parameters || [];
+  const availableOutputs = message.availableOutputs || [];
   let schema = message.schema || null;
 
   if (!schema && createNewIfMissing) {
@@ -142,5 +151,5 @@ export function processInitialDataSchema(
     schema = ensureSchemaLayoutDefaults(schema);
   }
 
-  return { schema, availableParams };
+  return { schema, availableParams, availableOutputs };
 }
