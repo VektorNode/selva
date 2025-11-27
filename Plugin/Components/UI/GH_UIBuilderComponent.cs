@@ -490,7 +490,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     if (data is GH_ValueListData valueListData)
     {
-      // Return the KEY (name)
+      // Return the key/name (e.g., "Cylinder") not the expression value
+      // The ValueList component internally handles converting key -> expression for output
       return valueListData.SelectedName;
     }
 

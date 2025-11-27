@@ -515,10 +515,15 @@
       }
     }
 
+    // Look up the full parameter to get all metadata (including options for ValueList)
+    const fullParam = itemType === 'input'
+      ? availableParams.find((p) => p.id === paramId)
+      : undefined;
+
     // Get config if needed
     const config =
       itemType === 'input' && paramType
-        ? createDefaultWidgetConfig(resolvedWidgetType as any, { paramType } as any, 'input')
+        ? createDefaultWidgetConfig(resolvedWidgetType as any, fullParam || { paramType } as any, 'input')
         : itemType === 'output' && paramType
           ? createDefaultWidgetConfig(resolvedWidgetType as any, { paramType } as any, 'output')
           : {};

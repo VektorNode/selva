@@ -160,13 +160,12 @@
       onValueChange={(v) => v && (input[index].default = v)}
     >
       <Select.Trigger class="w-full">
-        {Object.entries(param.values || {}).find(([, v]) => v === input[index].default)?.[0] ||
-          'Select'}
+        {input[index].default || 'Select'}
       </Select.Trigger>
 
       <Select.Content>
-        {#each Object.entries(param.values || {}) as [label, val] (val)}
-          <Select.Item value={val} {label}>{label}</Select.Item>
+        {#each Object.keys(param.values || {}) as key (key)}
+          <Select.Item value={key} label={key}>{key}</Select.Item>
         {/each}
       </Select.Content>
     </Select.Root>

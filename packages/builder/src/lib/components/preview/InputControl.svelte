@@ -152,31 +152,23 @@
     />
   {:else if isDropdownWidget(item)}
     {@const config = item.config as DropdownWidgetConfig}
-    {@const optionsArray = Object.entries(config.options || {})}
-    {@const currentKey =
-      typeof value === 'string'
-        ? optionsArray.find(([_, val]) => val === value)?.[0]
-        : (optionsArray[0]?.[0] ?? undefined)}
+    {@const optionKeys = Object.keys(config.options || {})}
+    {@const currentValue = typeof value === 'string' ? value : (optionKeys[0] ?? '')}
     <Select.Root
       type="single"
-      value={currentKey}
+      value={currentValue}
       onValueChange={(selected: string) => {
         if (selected) {
-          const selectedValue = optionsArray.find(([key]) => key === selected)?.[1];
-          if (selectedValue) {
-            handleChange(selectedValue);
-          }
+          handleChange(selected);
         }
       }}
     >
       <Select.Trigger class="w-full">
-        {currentKey || 'Select an option...'}
+        {currentValue || 'Select an option...'}
       </Select.Trigger>
       <Select.Content>
-        {#each optionsArray as [displayName, optValue]}
-          {#if optValue}
-            <Select.Item value={displayName} label={displayName} />
-          {/if}
+        {#each optionKeys as key (key)}
+          <Select.Item value={key} label={key} />
         {/each}
       </Select.Content>
     </Select.Root>

@@ -122,17 +122,19 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
   }
 
   /// <summary>
-  ///   Selects an item by its name. Returns true if found and selected.
-  ///   This is the simplest way to update the selection from external sources (WebSocket, etc.)
+  ///   Selects an item by its name (key). Returns true if found and selected.
+  ///   Primary format: name/key (e.g., "Cylinder")
+  ///   Also accepts expression values (e.g., "1") for Rhino.Compute compatibility
   /// </summary>
-  public bool SelectItemByName(string name)
+  public bool SelectItemByName(string value)
   {
     var vl = ConnectedValueList;
     if (vl == null) return false;
 
     for (var i = 0; i < vl.ListItems.Count; i++)
     {
-      if (vl.ListItems[i].Name == name)
+      // Match by name (primary) OR expression (Compute compatibility)
+      if (vl.ListItems[i].Name == value || vl.ListItems[i].Expression == value)
       {
         vl.SelectItem(i);
         ExpireSolution(false);
