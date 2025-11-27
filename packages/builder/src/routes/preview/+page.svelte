@@ -206,10 +206,6 @@
           isRemoteUpdate = true;
           values = { ...values, ...allUpdates };
           isRemoteUpdate = false;
-
-          if (Object.keys(fileOutputUpdates).length > 0) {
-            showNotification('File downloads available');
-          }
         }
       }
     };

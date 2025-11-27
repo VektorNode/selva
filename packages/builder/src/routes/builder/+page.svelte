@@ -6,9 +6,7 @@
   import { StateDisplay, Button } from '$lib/components/ui';
   import {
     DragDropContext,
-    InputItemList,
-    OutputItemList,
-    DownloadItemList,
+    ItemList,
     SchemaInfoPanel,
     EditableTabNav,
     EditableGroup,
@@ -791,21 +789,22 @@
                 Drag parameters into groups below
               </p>
 
-              <InputItemList
-                inputs={availableInputs}
+              <ItemList
+                items={availableInputs}
+                type="input"
                 placedIds={placedInLayoutIds()}
-                emptyMessage="No contextual parameters found."
               />
 
-              <OutputItemList
-                outputs={availableOutputs}
+              <ItemList
+                items={availableOutputs}
+                type="output"
                 placedIds={placedInLayoutIds()}
-                emptyMessage="No output components found."
               />
 
               {#if schema.downloading?.components && schema.downloading.components.length > 0}
-                <DownloadItemList
-                  components={schema.downloading.components}
+                <ItemList
+                  items={schema.downloading.components}
+                  type="downloadable"
                   placedIds={placedInLayoutIds()}
                   emptyMessage="All downloadable components are already placed in the layout."
                 />
