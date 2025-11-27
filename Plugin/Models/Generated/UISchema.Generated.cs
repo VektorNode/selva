@@ -17,7 +17,7 @@ namespace Selva.Plugin.Models.Generated
   // ============================================================================
 
   // GrasshopperParamType is a string for compatibility
-  // Valid values: "Number", "Integer", "Boolean", "Text", "ValueList", "Generic"
+  // Valid values: "Number", "Integer", "Boolean", "Text", "ValueList", "Generic", "File"
 
   // ============================================================================
   // UISchema
@@ -67,12 +67,22 @@ namespace Selva.Plugin.Models.Generated
     /// </summary>
     [JsonProperty("instanceSolve", DefaultValueHandling = DefaultValueHandling.Ignore)]
     public bool? InstanceSolve { get; set; } = true;
+    /// <summary>
+    /// If true, changes trigger immediate solving. If false, user must press Calculate button.
+    /// </summary>
+    [JsonProperty("instanceSolve", DefaultValueHandling = DefaultValueHandling.Ignore)]
+    public bool? InstanceSolve { get; set; } = true;
 
     [JsonProperty("inputs")]
     public List<InputParamSchema> Inputs { get; set; } = new List<InputParamSchema>();
 
     [JsonProperty("outputs")]
     public List<OutputParamSchema> Outputs { get; set; } = new List<OutputParamSchema>();
+    /// <summary>
+    /// All output components (print, bake, file download)
+    /// </summary>
+    [JsonProperty("outputs")]
+    public List<AvailableOutput> Outputs { get; set; } = new List<AvailableOutput>();
 
     [JsonProperty("layout")]
     public LayoutConfig Layout { get; set; }
@@ -264,6 +274,9 @@ namespace Selva.Plugin.Models.Generated
     public Dictionary<string, object> Values { get; set; }
   }
 
+  // ============================================================================
+  // AVAILABLE PARAMETERS
+  // ============================================================================
   public class DownloadableComponent
   {
 
@@ -365,6 +378,31 @@ namespace Selva.Plugin.Models.Generated
     public List<AvailableParameter> Parameters { get; set; } = new List<AvailableParameter>();
   }
 
+  public class AvailableOutput
+  {
+
+    /// <summary>
+    /// Grasshopper component instance GUID
+    /// </summary>
+    [JsonProperty("id")]
+    public Guid Id { get; set; }
+
+    [JsonProperty("nickname")]
+    public string Nickname { get; set; }
+
+    [JsonProperty("description")]
+    public string Description { get; set; }
+
+    /// <summary>
+    /// Type of output component
+    /// </summary>
+    [JsonProperty("outputType")]
+    public string OutputType { get; set; }
+  }
+
+  // ============================================================================
+  // LAYOUTITEM (Discriminated Union)
+  // ============================================================================
   // ============================================================================
   // LAYOUTITEM (Discriminated Union)
   // ============================================================================

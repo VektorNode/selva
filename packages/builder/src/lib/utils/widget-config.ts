@@ -11,6 +11,7 @@ import type {
   InputCheckboxLayoutItem,
   OutputTextLayoutItem,
   OutputNumberLayoutItem,
+  OutputFileLayoutItem,
 } from '$lib/types/generated';
 
 // Widget type literals extracted from schema layout items
@@ -22,7 +23,8 @@ export type InputWidgetType =
 
 export type OutputWidgetType =
   | OutputTextLayoutItem['widgetType']
-  | OutputNumberLayoutItem['widgetType'];
+  | OutputNumberLayoutItem['widgetType']
+  | OutputFileLayoutItem['widgetType'];
 
 export type WidgetType = InputWidgetType | OutputWidgetType;
 
@@ -113,8 +115,9 @@ export function createDefaultWidgetConfig(
 
       default: {
         // Exhaustiveness check - TypeScript will error if we miss a case
-        const _exhaustive: never = widgetType;
-        throw new Error(`Unsupported widget type: ${_exhaustive}`);
+        // Note: 'file' is an output-only type, so it shouldn't reach here
+        const _exhaustive: never = widgetType as never;
+        throw new Error(`Unsupported input widget type: ${_exhaustive}`);
       }
     }
   } else {
@@ -122,6 +125,7 @@ export function createDefaultWidgetConfig(
     switch (widgetType) {
       case 'text':
       case 'number':
+      case 'file':
         return {};
 
       case 'dropdown':

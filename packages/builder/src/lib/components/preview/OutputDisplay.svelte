@@ -58,7 +58,19 @@
 </script>
 
 <div class="flex flex-col gap-2">
-  {#if isTextDisplay(item)}
+  {#if isFileDisplay(item)}
+    <FileDownloadWidget {displayName} fileData={value} />
+  {:else if isNumberDisplay(item)}
+    <div
+      class="min-h-[50px] rounded border border-border bg-muted px-3 py-3 font-mono text-sm wrap-break-word"
+    >
+      {#if value !== null && value !== undefined}
+        <span class="font-bold text-primary">{formatValue(value)}</span>
+      {:else}
+        <span class="text-muted-foreground not-italic">Waiting for data...</span>
+      {/if}
+    </div>
+  {:else if isTextDisplay(item)}
     <div class="relative">
       {#if typeof value === 'object' && value !== null}
         <pre
@@ -86,17 +98,5 @@
         </Button>
       {/if}
     </div>
-  {:else if isNumberDisplay(item)}
-    <div
-      class="min-h-[50px] rounded border border-border bg-muted px-3 py-3 font-mono text-sm wrap-break-word"
-    >
-      {#if value !== null && value !== undefined}
-        <span class="font-bold text-primary">{formatValue(value)}</span>
-      {:else}
-        <span class="text-muted-foreground not-italic">Waiting for data...</span>
-      {/if}
-    </div>
-  {:else if isFileDisplay(item)}
-    <FileDownloadWidget {displayName} fileData={value} />
   {/if}
 </div>

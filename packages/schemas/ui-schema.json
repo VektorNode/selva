@@ -7,7 +7,7 @@
   "definitions": {
     "GrasshopperParamType": {
       "type": "string",
-      "enum": ["Number", "Integer", "Boolean", "Text", "ValueList", "Generic"],
+      "enum": ["Number", "Integer", "Boolean", "Text", "ValueList", "Generic", "File"],
       "description": "Grasshopper parameter types"
     },
 
@@ -84,6 +84,25 @@
         }
       },
       "required": ["sessionId", "timestamp", "parameters"]
+    },
+
+    "AvailableOutput": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Grasshopper component instance GUID"
+        },
+        "nickname": { "type": "string" },
+        "description": { "type": "string" },
+        "outputType": {
+          "type": "string",
+          "enum": ["print", "bake", "file"],
+          "description": "Type of output component"
+        }
+      },
+      "required": ["id", "nickname", "outputType"],
+      "additionalProperties": false
     },
 
     "NumberWidgetConfig": {
@@ -357,40 +376,6 @@
       "required": ["timestamp", "values"]
     },
 
-    "DownloadableComponent": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Grasshopper component InstanceGuid"
-        },
-        "nickname": {
-          "type": "string",
-          "description": "Component nickname for display"
-        }
-      },
-      "required": ["id", "nickname"],
-      "additionalProperties": false
-    },
-
-    "DownloadingConfig": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Whether downloadable outputs are available"
-        },
-        "components": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/DownloadableComponent" },
-          "description": "Array of ContextBake components with downloadable FileData outputs"
-        }
-      },
-      "required": ["enabled"],
-      "additionalProperties": false
-    },
-
     "UISchema": {
       "type": "object",
       "properties": {
@@ -415,7 +400,6 @@
           "description": "Last modification timestamp"
         },
         "enable3dViewer": { "type": "boolean", "default": false },
-        "downloading": { "$ref": "#/definitions/DownloadingConfig" },
         "instanceSolve": {
           "type": "boolean",
           "default": true,
@@ -427,7 +411,8 @@
         },
         "outputs": {
           "type": "array",
-          "items": { "$ref": "#/definitions/OutputParamSchema" }
+          "items": { "$ref": "#/definitions/AvailableOutput" },
+          "description": "All output components (print, bake, file download)"
         },
         "layout": { "$ref": "#/definitions/LayoutConfig" }
       },

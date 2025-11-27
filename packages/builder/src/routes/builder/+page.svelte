@@ -6,7 +6,7 @@
   import { StateDisplay, Button } from '$lib/components/ui';
   import {
     DragDropContext,
-    ItemList,
+    AvailableItemList,
     SchemaInfoPanel,
     EditableTabNav,
     EditableGroup,
@@ -15,6 +15,7 @@
   import type {
     UISchema,
     AvailableParameter,
+    AvailableOutput,
     InputParamSchema,
     OutputParamSchema,
     TabConfig,
@@ -61,6 +62,7 @@
   const availableInputs = $derived(
     availableParams.filter((p) => p.category === 'input' && !placedInLayoutIds().has(p.id))
   );
+
   const availableOutputs = $derived(
     availableParams.filter((p) => p.category === 'output' && !placedInLayoutIds().has(p.id))
   );
@@ -88,6 +90,7 @@
     const handleInitialData = (message: any) => {
       if (message.sessionId === sessionId) {
         const result = processInitialDataSchema(message, true);
+        console.log('[Builder] Received initial data:', result);
 
         availableParams = result.availableParams;
 
@@ -332,18 +335,11 @@
   }
 
   /**
-   * Remove an item from the schema if it's not used anywhere in the layout
-   * Handles inputs and outputs - downloadables are never removed
+   * Remove a parameter from schema if it's not used anywhere in the layout.
    */
   function removeItemIfOrphaned(paramId: string, itemType: 'input' | 'output') {
     if (!schema) return;
-
-    // Never remove downloadables - they should always be available
-    const isDownloadable = schema.downloading?.components?.some((c) => c.id === paramId);
-    if (isDownloadable) return;
-
     const isUsed = isItemUsedInLayout(paramId);
-
     if (!isUsed) {
       if (itemType === 'input') {
         schema.inputs = schema.inputs.filter((i) => i.id !== paramId);
@@ -543,7 +539,8 @@
     paramType?: string,
     widgetType?: string,
     targetItem?: LayoutItem,
-    dropPosition?: 'before' | 'after'
+    dropPosition?: 'before' | 'after',
+    outputType?: 'print' | 'bake' | 'file'
   ) {
     if (!schema) return;
 
@@ -555,34 +552,35 @@
       return;
     }
 
-    // Ensure it's in schema (skip for downloadables, they're managed separately)
-    if (widgetType !== 'file') {
-      if (itemType === 'input') {
-        const inputExists = schema.inputs.some((i) => i.id === paramId);
-        if (!inputExists) {
-          schema.inputs = [
-            ...schema.inputs,
-            {
-              id: paramId,
-              nickname: displayName,
-              paramType: (paramType as any) || 'Generic',
-              description: '',
-            } as InputParamSchema,
-          ];
-        }
-      } else {
-        const outputExists = schema.outputs.some((o) => o.id === paramId);
-        if (!outputExists) {
-          schema.outputs = [
-            ...schema.outputs,
-            {
-              id: paramId,
-              nickname: displayName,
-              paramType: (paramType as any) || 'Generic',
-              description: '',
-            } as OutputParamSchema,
-          ];
-        }
+    // Ensure it's in schema
+    if (itemType === 'input') {
+      const inputExists = schema.inputs.some((i) => i.id === paramId);
+      if (!inputExists) {
+        schema.inputs = [
+          ...schema.inputs,
+          {
+            id: paramId,
+            nickname: displayName,
+            paramType: (paramType as any) || 'Generic',
+            description: '',
+          } as InputParamSchema,
+        ];
+      }
+    } else {
+      const outputExists = schema.outputs.some((o) => o.id === paramId);
+      if (!outputExists) {
+        // Use passed outputType, or default to 'print' if not provided
+        const finalOutputType = outputType || 'print';
+
+        schema.outputs = [
+          ...schema.outputs,
+          {
+            id: paramId,
+            nickname: displayName,
+            outputType: finalOutputType,
+            description: '',
+          } as AvailableOutput,
+        ];
       }
     }
 
@@ -602,16 +600,8 @@
 
     console.log('[Builder] Handling parameter/downloadable drop:', event.detail);
 
-    const {
-      dropType,
-      data,
-      paramCategory,
-      targetItem,
-      dropPosition,
-      sourceTabId,
-      sourceGroupId,
-      sourceItem,
-    } = event.detail;
+    const { dropType, data, targetItem, dropPosition, sourceTabId, sourceGroupId, sourceItem } =
+      event.detail;
 
     const tab = schema.layout.tabs.find((t) => t.id === tabId);
     if (!tab) return;
@@ -633,30 +623,32 @@
       return;
     }
 
-    // Handle dropping parameters or downloadables
-    if (dropType === 'parameter') {
+    // Handle dropping inputs or outputs
+    if (dropType === 'input') {
       const param = data as AvailableParameter;
       handleItemDrop(
         group,
         param.id,
         param.nickname || param.name,
-        paramCategory as 'input' | 'output',
+        'input',
         param.paramType,
         undefined,
         targetItem,
         dropPosition
       );
-    } else if (dropType === 'downloadable') {
-      const component = data;
+    } else if (dropType === 'output') {
+      const output = data as AvailableOutput;
+      const widgetType = output.outputType === 'file' ? 'file' : 'text';
       handleItemDrop(
         group,
-        component.id,
-        component.nickname,
+        output.id,
+        output.nickname,
         'output',
         undefined,
-        'file',
+        widgetType,
         targetItem,
-        dropPosition
+        dropPosition,
+        output.outputType
       );
     }
   }
@@ -789,26 +781,17 @@
                 Drag parameters into groups below
               </p>
 
-              <ItemList
+              <AvailableItemList
                 items={availableInputs}
-                type="input"
+                title="📥 Inputs"
                 placedIds={placedInLayoutIds()}
               />
 
-              <ItemList
+              <AvailableItemList
                 items={availableOutputs}
-                type="output"
+                title="📤 Outputs"
                 placedIds={placedInLayoutIds()}
               />
-
-              {#if schema.downloading?.components && schema.downloading.components.length > 0}
-                <ItemList
-                  items={schema.downloading.components}
-                  type="downloadable"
-                  placedIds={placedInLayoutIds()}
-                  emptyMessage="All downloadable components are already placed in the layout."
-                />
-              {/if}
             </Panel>
           </aside>
 

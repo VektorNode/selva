@@ -610,14 +610,16 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       }
     }
 
-    // Collect file outputs from downloading.components
-    if (schema?.Downloading?.Enabled == true && schema.Downloading.Components?.Count > 0)
+    // Collect file outputs from schema.Outputs (those with outputType == "file")
+    if (schema?.Outputs != null && schema.Outputs.Count > 0)
     {
-      foreach (var downloadableComp in schema.Downloading.Components)
+      var fileOutputs = schema.Outputs.Where(o => o.OutputType == "file").ToList();
+
+      foreach (var fileOutput in fileOutputs)
       {
         try
         {
-          var componentObject = document.FindObject(downloadableComp.Id, false);
+          var componentObject = document.FindObject(fileOutput.Id, false);
           if (componentObject == null)
           {
             continue;
@@ -659,14 +661,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
             if (fileDataList.Count > 0)
             {
-              fileOutputData[downloadableComp.Id.ToString()] = fileDataList.Count == 1 ? fileDataList[0] : fileDataList;
+              fileOutputData[fileOutput.Id.ToString()] = fileDataList.Count == 1 ? fileDataList[0] : fileDataList;
             }
           }
         }
         catch (Exception ex)
         {
           AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-            $"Error collecting file output '{downloadableComp.Nickname}': {ex.Message}");
+            $"Error collecting file output '{fileOutput.Nickname}': {ex.Message}");
         }
       }
     }
@@ -902,33 +904,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       // Collect and send both standard outputs and file data in a single message
       CollectAndSendOutputs(_currentDocument, _embeddedSchema);
 
-      // Check for ContextBake components with FileData (downloadable outputs)
-      var (hasDownloadable, downloadableComponents) = ParameterTypeHelper.DetectDownloadableOutputs(_currentDocument);
-
-      var schemaModified = false;
-
-      // Initialize downloading config if needed
-      if (_embeddedSchema.Downloading == null)
-      {
-        _embeddedSchema.Downloading = new DownloadingConfig();
-      }
-
-      // Update schema if downloadable status changed
-      if (hasDownloadable != _embeddedSchema.Downloading.Enabled)
-      {
-        _embeddedSchema.Downloading.Enabled = hasDownloadable;
-        schemaModified = true;
-      }
-
-      // Update downloadable components list if changed
-      var currentDownloadables = _embeddedSchema.Downloading.Components ?? new List<DownloadableComponent>();
-      if (!currentDownloadables.SequenceEqual(downloadableComponents,
-            new DownloadableComponentEqualityComparer()))
-      {
-        _embeddedSchema.Downloading.Components = downloadableComponents;
-        schemaModified = true;
-      }
-
       // Detect metadata changes (nickname, min/max, stepsize, options) and broadcast updates
       if (IsConnected)
       {
@@ -941,8 +916,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
             // Mark document as modified so schema changes are persisted on save
             _currentDocument.Modified();
-
-            schemaModified = true;
 
             // Check if any changes are for source parameters (ValueList options, number constraints)
             // If so, trigger a new solution to recalculate downstream components
@@ -977,20 +950,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         {
           AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
             $"Error detecting metadata changes: {ex.Message}");
-        }
-      }
-
-      // If schema was modified, persist it and mark document as modified
-      if (schemaModified)
-      {
-        try
-        {
-          _currentDocument.Modified();
-        }
-        catch (Exception ex)
-        {
-          AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-            $"Error marking document as modified: {ex.Message}");
         }
       }
     }
@@ -1278,41 +1237,5 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
     return base.Read(reader);
-  }
-}
-
-/// <summary>
-///   Helper class to compare DownloadableComponent objects for equality
-/// </summary>
-public class DownloadableComponentEqualityComparer : IEqualityComparer<DownloadableComponent>
-{
-  public bool Equals(DownloadableComponent x, DownloadableComponent y)
-  {
-    if (x == null && y == null)
-    {
-      return true;
-    }
-
-    if (x == null || y == null)
-    {
-      return false;
-    }
-
-    return x.Id == y.Id && x.Nickname == y.Nickname;
-  }
-
-  public int GetHashCode(DownloadableComponent obj)
-  {
-    if (obj == null)
-    {
-      return 0;
-    }
-
-    unchecked
-    {
-      var hashCode = obj.Id.GetHashCode();
-      hashCode = (hashCode * 397) ^ (obj.Nickname?.GetHashCode() ?? 0);
-      return hashCode;
-    }
   }
 }

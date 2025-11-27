@@ -1,24 +1,25 @@
 <script lang="ts">
   import { dragStore } from '$lib/stores/dragStore.svelte';
-  import type { AvailableParameter, DownloadableComponent } from '$lib/types/generated';
+  import type { AvailableParameter, AvailableOutput } from '$lib/types/generated';
   import * as Card from '$lib/components/ui/card';
 
   interface Props {
-    item: AvailableParameter | DownloadableComponent;
-    type: 'parameter' | 'downloadable';
-    category?: 'input' | 'output';
+    item: AvailableParameter | AvailableOutput;
   }
 
-  let { item, type, category }: Props = $props();
+  let { item }: Props = $props();
+
+  // Infer variant from item type
+  const variant = 'paramType' in item ? 'input' : 'output';
 
   let isDragging = $state(false);
 
   function handleDragStart(e: DragEvent) {
     isDragging = true;
+
     dragStore.set({
-      dropType: type,
+      dropType: variant,
       data: item,
-      paramCategory: type === 'downloadable' ? 'downloadable' : category,
     });
 
     if (e.dataTransfer) {
@@ -32,11 +33,25 @@
     dragStore.clear();
   }
 
-  // Determine styling based on type/category
-  const bgColor = type === 'downloadable' ? 'bg-downloadparam' : category === 'input' ? 'bg-inputparam' : 'bg-outputparam';
-  const badgeBg = type === 'downloadable' ? 'bg-green-100/80' : 'bg-primary/10';
-  const badgeText = type === 'downloadable' ? 'text-green-700' : 'text-primary';
-  const badgeContent = type === 'downloadable' ? 'File' : ('paramType' in item ? item.paramType : 'Unknown');
+  // Variant-based styling
+  const styles = {
+    input: {
+      bg: 'bg-inputparam',
+      badgeBg: 'bg-primary/10',
+      badgeText: 'text-primary',
+    },
+    output: {
+      bg: 'bg-outputparam',
+      badgeBg: 'bg-primary/10',
+      badgeText: 'text-primary',
+    },
+  };
+
+  const style = styles[variant];
+  const badgeContent =
+    'paramType' in item
+      ? item.paramType
+      : (item as AvailableOutput).outputType || 'Unknown';
 </script>
 
 <Card.Root
@@ -44,7 +59,7 @@
     mb-2 flex cursor-grab flex-row items-center
     justify-between gap-4 rounded-xl border-2 border-transparent
     p-3 transition-all hover:border-primary
-    hover:bg-muted ${bgColor}
+    hover:bg-muted ${style.bg}
     ${isDragging ? 'cursor-grabbing opacity-50' : ''}
   `}
   draggable="true"
@@ -54,7 +69,7 @@
 >
   <div class="flex flex-1 items-center gap-3">
     <strong class="text-foreground">{item.nickname || ('name' in item ? item.name : 'Unknown')}</strong>
-    <span class={`rounded px-2 py-1 text-sm ${badgeBg} ${badgeText}`}>
+    <span class={`rounded px-2 py-1 text-sm ${style.badgeBg} ${style.badgeText}`}>
       {badgeContent}
     </span>
   </div>

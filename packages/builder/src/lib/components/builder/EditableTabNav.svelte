@@ -97,8 +97,10 @@
 <div class="mb-4 flex items-end gap-2 overflow-x-auto border-b border-border">
   {#each tabs as tab (tab.id)}
     <div
-      class="group relative flex items-center rounded-t-lg bg-transparent"
-      draggable={onReorderTabs ? 'true' : 'false'}
+      class={`group relative flex items-center rounded-t-lg bg-transparent ${
+        onReorderTabs && editingTabId !== tab.id ? 'cursor-grab' : ''
+      }`}
+      draggable={onReorderTabs && editingTabId !== tab.id ? 'true' : 'false'}
       ondragstart={(e) => handleDragStart(e, tab.id)}
       ondragover={(e) => handleDragOver(e, tab.id)}
       ondragleave={handleDragLeave}
@@ -110,7 +112,9 @@
       <!-- Main clickable area: switches tabs -->
       <button
         type="button"
-        class={` flex max-w-60 min-w-[110px] items-center gap-2 rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-all ${
+        class={`flex max-w-60 min-w-[110px] items-center gap-2 rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-all ${
+          editingTabId === tab.id ? 'select-text' : 'select-none'
+        } ${onReorderTabs && editingTabId !== tab.id ? 'cursor-grab' : ''} ${
           activeTabId === tab.id
             ? 'border-primary bg-card text-primary shadow-sm'
             : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
