@@ -14,9 +14,9 @@
   function handleDragStart(e: DragEvent) {
     isDragging = true;
     dragStore.set({
-      type: 'downloadable',
+      dropType: 'downloadable',
       data: component,
-      sourceType: 'downloadable',
+      paramCategory: 'downloadable',
     });
 
     if (e.dataTransfer) {

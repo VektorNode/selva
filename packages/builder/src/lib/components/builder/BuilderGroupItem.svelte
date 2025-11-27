@@ -37,9 +37,9 @@
     isDragging = true;
 
     dragStore.set({
-      type: 'group-item',
+      dropType: 'group-item',
       data: { item, tabId, groupId },
-      sourceType: 'reorder',
+      paramCategory: undefined,
     });
 
     e.dataTransfer?.setData('text/plain', item.id);
@@ -53,7 +53,7 @@
 
   function handleDragOver(e: DragEvent) {
     const dragData = dragStore.current;
-    if (!dragData || !['group-item', 'parameter'].includes(dragData.type)) return;
+    if (!dragData || !['group-item', 'parameter', 'downloadable'].includes(dragData.dropType)) return;
 
     e.preventDefault();
     e.stopPropagation();
@@ -63,12 +63,17 @@
     const midpoint = rect.top + rect.height / 2;
     dropPosition = e.clientY < midpoint ? 'before' : 'after';
 
-    e.dataTransfer!.dropEffect = dragData.type === 'group-item' ? 'move' : 'copy';
+    e.dataTransfer!.dropEffect = dragData.dropType === 'group-item' ? 'move' : 'copy';
   }
 
-  function handleDragLeave() {
-    isDragOver = false;
-    dropPosition = null;
+  function handleDragLeave(e: DragEvent) {
+    // Only clear if leaving the card itself, not child elements
+    const relatedTarget = e.relatedTarget as Node | null;
+    const currentTarget = e.currentTarget as Node;
+    if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
+      isDragOver = false;
+      dropPosition = null;
+    }
   }
 
   function handleDrop(e: DragEvent) {
@@ -80,7 +85,7 @@
     if (!dragData) return;
 
     const detail =
-      dragData.type === 'group-item'
+      dragData.dropType === 'group-item'
         ? {
             sourceItem: dragData.data.item,
             sourceTabId: dragData.data.tabId,
@@ -91,16 +96,16 @@
             dropPosition: dropPosition || 'after',
           }
         : {
-            type: 'parameter',
+            dropType: dragData.dropType,
             data: dragData.data,
-            sourceType: dragData.sourceType,
+            paramCategory: dragData.paramCategory,
             targetItem: item,
             targetTabId: tabId,
             targetGroupId: groupId,
             dropPosition: dropPosition || 'after',
           };
 
-    const event = new CustomEvent(dragData.type === 'group-item' ? 'reorder' : 'parameterdrop', {
+    const event = new CustomEvent(dragData.dropType === 'group-item' ? 'reorder' : 'parameterdrop', {
       detail,
       bubbles: true,
       composed: true,

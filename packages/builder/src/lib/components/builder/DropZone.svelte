@@ -26,11 +26,11 @@
     e.stopPropagation();
     const dragData = dragStore.current;
 
-    if (dragData && acceptTypes.includes(dragData.type)) {
+    if (dragData && acceptTypes.includes(dragData.dropType)) {
       isOver = true;
       if (e.dataTransfer) {
         // Use "move" for group-item (reordering), "copy" for new parameters
-        e.dataTransfer.dropEffect = dragData.type === 'group-item' ? 'move' : 'copy';
+        e.dataTransfer.dropEffect = dragData.dropType === 'group-item' ? 'move' : 'copy';
       }
     } else {
       // Still allow drop even if dragStore is empty
@@ -56,14 +56,14 @@
     isOver = false;
 
     const dragData = dragStore.current;
-    if (dragData && acceptTypes.includes(dragData.type)) {
+    if (dragData && acceptTypes.includes(dragData.dropType)) {
       // Include all relevant data for the drop handler
       const detail = {
-        type: dragData.type,
+        dropType: dragData.dropType,
         data: dragData.data,
-        sourceType: dragData.sourceType,
+        paramCategory: dragData.paramCategory,
         // For group-item drops, include source location
-        ...(dragData.type === 'group-item' && {
+        ...(dragData.dropType === 'group-item' && {
           sourceItem: dragData.data.item,
           sourceTabId: dragData.data.tabId,
           sourceGroupId: dragData.data.groupId,

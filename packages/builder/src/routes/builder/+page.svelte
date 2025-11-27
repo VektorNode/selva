@@ -6,7 +6,8 @@
   import { StateDisplay, Button } from '$lib/components/ui';
   import {
     DragDropContext,
-    ParameterList,
+    InputList,
+    OutputList,
     DownloadableComponentsList,
     SchemaInfoPanel,
     EditableTabNav,
@@ -322,17 +323,30 @@
   }
 
   /**
-   * Helper function to remove a parameter from inputs/outputs if it's not used in the layout
+   * Check if an item is used anywhere in the layout
    */
-  function removeParameterIfOrphaned(paramId: string, itemType: 'input' | 'output') {
+  function isItemUsedInLayout(paramId: string): boolean {
+    return (
+      schema?.layout?.tabs?.some((t) =>
+        t.groups.some((g) => g.items.some((i) => i.paramId === paramId))
+      ) ?? false
+    );
+  }
+
+  /**
+   * Remove an item from the schema if it's not used anywhere in the layout
+   * Handles inputs and outputs - downloadables are never removed
+   */
+  function removeItemIfOrphaned(paramId: string, itemType: 'input' | 'output') {
     if (!schema) return;
 
-    const isUsedInLayout =
-      schema.layout.tabs?.some((t) =>
-        t.groups.some((g) => g.items.some((i) => i.paramId === paramId))
-      ) ?? false;
+    // Never remove downloadables - they should always be available
+    const isDownloadable = schema.downloading?.components?.some((c) => c.id === paramId);
+    if (isDownloadable) return;
 
-    if (!isUsedInLayout) {
+    const isUsed = isItemUsedInLayout(paramId);
+
+    if (!isUsed) {
       if (itemType === 'input') {
         schema.inputs = schema.inputs.filter((i) => i.id !== paramId);
       } else if (itemType === 'output') {
@@ -364,7 +378,7 @@
 
     tab.groups.forEach((group) => {
       group.items.forEach((item) => {
-        removeParameterIfOrphaned(item.paramId, item.type);
+        removeItemIfOrphaned(item.paramId, item.type);
       });
     });
 
@@ -407,13 +421,193 @@
     schema.layout.tabs = [...schema.layout.tabs];
   }
 
+  /**
+   * Insert an item at the specified position in a group, or append if no position
+   */
+  function insertLayoutItem(
+    group: GroupConfig,
+    item: LayoutItem,
+    targetItem?: LayoutItem,
+    dropPosition?: 'before' | 'after'
+  ) {
+    if (!targetItem || !dropPosition) {
+      group.items = [...group.items, item];
+      return;
+    }
+
+    const targetIndex = group.items.findIndex((i) => i.id === targetItem.id);
+    if (targetIndex < 0) {
+      group.items = [...group.items, item];
+      return;
+    }
+
+    // Create new array to maintain reactivity
+    const newItems = [...group.items];
+    if (dropPosition === 'before') {
+      newItems.splice(targetIndex, 0, item);
+    } else {
+      newItems.splice(targetIndex + 1, 0, item);
+    }
+    group.items = newItems;
+  }
+
+  /**
+   * Handle reordering items between groups
+   */
+  function handleGroupItemDrop(
+    tabId: string,
+    groupId: string,
+    sourceTabId: string,
+    sourceGroupId: string,
+    sourceItem: LayoutItem,
+    targetItem?: LayoutItem,
+    dropPosition?: 'before' | 'after'
+  ) {
+    if (!schema?.layout.tabs) return;
+
+    const sourceTab = schema.layout.tabs.find((t) => t.id === sourceTabId);
+    const targetTab = schema.layout.tabs.find((t) => t.id === tabId);
+    if (!sourceTab || !targetTab) return;
+
+    const sourceGroup = sourceTab.groups.find((g) => g.id === sourceGroupId);
+    const targetGroup = targetTab.groups.find((g) => g.id === groupId);
+    if (!sourceGroup || !targetGroup) return;
+
+    const sourceIndex = sourceGroup.items.findIndex((i) => i.id === sourceItem.id);
+    if (sourceIndex < 0) return;
+
+    const [movedItem] = sourceGroup.items.splice(sourceIndex, 1);
+    insertLayoutItem(targetGroup, movedItem, targetItem, dropPosition);
+  }
+
+  /**
+   * Create a layout item for either a parameter or downloadable component
+   */
+  function createLayoutItem(
+    paramId: string,
+    displayName: string,
+    itemType: 'input' | 'output',
+    itemCount: number,
+    widgetType?: string,
+    paramType?: string
+  ): LayoutItem {
+    // Determine widget type
+    let resolvedWidgetType = widgetType;
+    if (!resolvedWidgetType) {
+      if (itemType === 'input' && paramType) {
+        resolvedWidgetType = mapParamTypeToWidgetType(paramType as any, 'input');
+      } else if (itemType === 'output' && paramType) {
+        resolvedWidgetType = mapParamTypeToWidgetType(paramType as any, 'output');
+      } else {
+        resolvedWidgetType = itemType === 'input' ? 'number' : 'text';
+      }
+    }
+
+    // Get config if needed
+    const config =
+      itemType === 'input' && paramType
+        ? createDefaultWidgetConfig(resolvedWidgetType as any, { paramType } as any, 'input')
+        : itemType === 'output' && paramType
+          ? createDefaultWidgetConfig(resolvedWidgetType as any, { paramType } as any, 'output')
+          : {};
+
+    return itemType === 'input'
+      ? ({
+          id: crypto.randomUUID().substring(0, 8),
+          paramId,
+          type: 'input',
+          displayName,
+          widgetType: resolvedWidgetType as any,
+          order: itemCount,
+          span: 1,
+          config,
+        } as InputLayoutItem)
+      : ({
+          id: crypto.randomUUID().substring(0, 8),
+          paramId,
+          type: 'output',
+          displayName,
+          widgetType: resolvedWidgetType as any,
+          order: itemCount,
+          span: 1,
+          config: itemType === 'output' && resolvedWidgetType === 'file' ? {} : config,
+        } as OutputLayoutItem);
+  }
+
+  /**
+   * Unified handler for dropping parameters and downloadables
+   */
+  function handleItemDrop(
+    group: GroupConfig,
+    paramId: string,
+    displayName: string,
+    itemType: 'input' | 'output',
+    paramType?: string,
+    widgetType?: string,
+    targetItem?: LayoutItem,
+    dropPosition?: 'before' | 'after'
+  ) {
+    if (!schema) return;
+
+    // Check if already in this group
+    if (group.items.some((i) => i.paramId === paramId)) {
+      const itemTypeLabel =
+        widgetType === 'file' ? 'file component' : itemType === 'input' ? 'parameter' : 'output';
+      toast.warning(`This ${itemTypeLabel} is already in this group`);
+      return;
+    }
+
+    // Ensure it's in schema (skip for downloadables, they're managed separately)
+    if (widgetType !== 'file') {
+      if (itemType === 'input') {
+        const inputExists = schema.inputs.some((i) => i.id === paramId);
+        if (!inputExists) {
+          schema.inputs = [
+            ...schema.inputs,
+            {
+              id: paramId,
+              nickname: displayName,
+              paramType: (paramType as any) || 'Generic',
+              description: '',
+            } as InputParamSchema,
+          ];
+        }
+      } else {
+        const outputExists = schema.outputs.some((o) => o.id === paramId);
+        if (!outputExists) {
+          schema.outputs = [
+            ...schema.outputs,
+            {
+              id: paramId,
+              nickname: displayName,
+              paramType: (paramType as any) || 'Generic',
+              description: '',
+            } as OutputParamSchema,
+          ];
+        }
+      }
+    }
+
+    const newItem = createLayoutItem(
+      paramId,
+      displayName,
+      itemType,
+      group.items.length,
+      widgetType,
+      paramType
+    );
+    insertLayoutItem(group, newItem, targetItem, dropPosition);
+  }
+
   function handleParameterDrop(tabId: string, groupId: string, event: CustomEvent) {
     if (!schema || !schema.layout.tabs) return;
 
+    console.log('[Builder] Handling parameter/downloadable drop:', event.detail);
+
     const {
-      type,
+      dropType,
       data,
-      sourceType,
+      paramCategory,
       targetItem,
       dropPosition,
       sourceTabId,
@@ -421,149 +615,51 @@
       sourceItem,
     } = event.detail;
 
-    // Handle moving items from another group
-    if (type === 'group-item') {
-      const sourceTab = schema.layout.tabs.find((t) => t.id === sourceTabId);
-      const targetTab = schema.layout.tabs.find((t) => t.id === tabId);
-      if (!sourceTab || !targetTab) return;
-
-      const sourceGroup = sourceTab.groups.find((g) => g.id === sourceGroupId);
-      const targetGroup = targetTab.groups.find((g) => g.id === groupId);
-      if (!sourceGroup || !targetGroup) return;
-
-      const sourceIndex = sourceGroup.items.findIndex((i) => i.id === sourceItem.id);
-      if (sourceIndex < 0) return;
-
-      const [movedItem] = sourceGroup.items.splice(sourceIndex, 1);
-
-      targetGroup.items = [...targetGroup.items, movedItem];
-      return;
-    }
-
-    if (type !== 'parameter' && sourceType !== 'downloadable') return;
-
     const tab = schema.layout.tabs.find((t) => t.id === tabId);
     if (!tab) return;
 
     const group = tab.groups.find((g) => g.id === groupId);
     if (!group) return;
 
-    // Handle downloadable components
-    if (sourceType === 'downloadable') {
-      const downloadableComp = data as any; // DownloadableComponent type
-
-      const exists = group.items.some((i) => i.paramId === downloadableComp.id);
-      if (exists) {
-        toast.warning('This file component is already in this group');
-        return;
-      }
-
-      const newItem = {
-        id: crypto.randomUUID().substring(0, 8),
-        paramId: downloadableComp.id,
-        type: 'output',
-        displayName: downloadableComp.nickname,
-        widgetType: 'file',
-        order: group.items.length,
-        span: 1,
-        config: {},
-      } as OutputLayoutItem;
-
-      if (targetItem && dropPosition) {
-        const targetIndex = group.items.findIndex((i) => i.id === targetItem.id);
-        if (targetIndex >= 0) {
-          if (dropPosition === 'before') {
-            group.items.splice(targetIndex, 0, newItem);
-          } else {
-            group.items.splice(targetIndex + 1, 0, newItem);
-          }
-          group.items = [...group.items];
-        } else {
-          group.items = [...group.items, newItem];
-        }
-      } else {
-        group.items = [...group.items, newItem];
-      }
-
+    // Handle moving items within layout
+    if (dropType === 'group-item') {
+      handleGroupItemDrop(
+        tabId,
+        groupId,
+        sourceTabId,
+        sourceGroupId,
+        sourceItem,
+        targetItem,
+        dropPosition
+      );
       return;
     }
 
-    // Regular parameter handling
-    const param = data as AvailableParameter;
-
-    const exists = group.items.some((i) => i.paramId === param.id);
-    if (exists) {
-      toast.warning('This parameter is already in this group');
-      return;
-    }
-
-    if (sourceType === 'input') {
-      const inputExists = schema.inputs.some((i) => i.id === param.id);
-      if (!inputExists) {
-        const newInput: InputParamSchema = {
-          id: param.id,
-          nickname: param.nickname,
-          paramType: param.paramType,
-          description: param.description,
-        };
-        schema.inputs = [...schema.inputs, newInput];
-      }
-    } else if (sourceType === 'output') {
-      const outputExists = schema.outputs.some((o) => o.id === param.id);
-      if (!outputExists) {
-        const newOutput: OutputParamSchema = {
-          id: param.id,
-          nickname: param.nickname,
-          paramType: param.paramType,
-          description: param.description,
-        };
-        schema.outputs = [...schema.outputs, newOutput];
-      }
-    }
-
-    const widgetType = mapParamTypeToWidgetType(param.paramType, sourceType);
-    const config = createDefaultWidgetConfig(widgetType, param, sourceType);
-
-    let newItem: LayoutItem;
-
-    if (sourceType === 'input') {
-      newItem = {
-        id: crypto.randomUUID().substring(0, 8),
-        paramId: param.id,
-        type: 'input',
-        displayName: param.nickname || param.name,
-        widgetType: widgetType as any,
-        order: group.items.length,
-        span: 1,
-        config: config,
-      } as InputLayoutItem;
-    } else {
-      newItem = {
-        id: crypto.randomUUID().substring(0, 8),
-        paramId: param.id,
-        type: 'output',
-        displayName: param.nickname || param.name,
-        widgetType: widgetType as any,
-        order: group.items.length,
-        span: 1,
-        config: config,
-      } as OutputLayoutItem;
-    }
-
-    if (targetItem && dropPosition) {
-      const targetIndex = group.items.findIndex((i) => i.id === targetItem.id);
-      if (targetIndex >= 0) {
-        if (dropPosition === 'before') {
-          group.items.splice(targetIndex, 0, newItem);
-        } else {
-          group.items.splice(targetIndex + 1, 0, newItem);
-        }
-        group.items = [...group.items];
-      } else {
-        group.items = [...group.items, newItem];
-      }
-    } else {
-      group.items = [...group.items, newItem];
+    // Handle dropping parameters or downloadables
+    if (dropType === 'parameter') {
+      const param = data as AvailableParameter;
+      handleItemDrop(
+        group,
+        param.id,
+        param.nickname || param.name,
+        paramCategory as 'input' | 'output',
+        param.paramType,
+        undefined,
+        targetItem,
+        dropPosition
+      );
+    } else if (dropType === 'downloadable') {
+      const component = data;
+      handleItemDrop(
+        group,
+        component.id,
+        component.nickname,
+        'output',
+        undefined,
+        'file',
+        targetItem,
+        dropPosition
+      );
     }
   }
 
@@ -577,11 +673,10 @@
     if (!group) return;
 
     const item = group.items.find((i) => i.id === itemId);
-
     group.items = group.items.filter((i) => i.id !== itemId);
 
     if (item) {
-      removeParameterIfOrphaned(item.paramId, item.type);
+      removeItemIfOrphaned(item.paramId, item.type);
     }
   }
 
@@ -696,18 +791,16 @@
                 Drag parameters into groups below
               </p>
 
-              <ParameterList
-                title="Inputs"
-                parameters={availableInputs}
-                category="input"
+              <InputList
+                inputs={availableInputs}
+                placedIds={placedInLayoutIds()}
                 emptyMessage="No contextual parameters found."
               />
 
-              <ParameterList
-                title="Outputs"
-                parameters={availableOutputs}
-                category="output"
-                emptyMessage="No context output components found."
+              <OutputList
+                outputs={availableOutputs}
+                placedIds={placedInLayoutIds()}
+                emptyMessage="No output components found."
               />
 
               {#if schema.downloading?.components && schema.downloading.components.length > 0}

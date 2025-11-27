@@ -15,9 +15,9 @@
   function handleDragStart(e: DragEvent) {
     isDragging = true;
     dragStore.set({
-      type: 'parameter',
+      dropType: 'parameter',
       data: parameter,
-      sourceType: category,
+      paramCategory: category,
     });
 
     if (e.dataTransfer) {
