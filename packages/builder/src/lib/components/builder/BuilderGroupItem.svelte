@@ -39,7 +39,6 @@
     dragStore.set({
       dropType: 'group-item',
       data: { item, tabId, groupId },
-      paramCategory: undefined,
     });
 
     e.dataTransfer?.setData('text/plain', item.id);
@@ -53,7 +52,7 @@
 
   function handleDragOver(e: DragEvent) {
     const dragData = dragStore.current;
-    if (!dragData || !['group-item', 'parameter', 'downloadable'].includes(dragData.dropType)) return;
+    if (!dragData || !['group-item', 'input', 'output'].includes(dragData.dropType)) return;
 
     e.preventDefault();
     e.stopPropagation();
@@ -98,7 +97,6 @@
         : {
             dropType: dragData.dropType,
             data: dragData.data,
-            paramCategory: dragData.paramCategory,
             targetItem: item,
             targetTabId: tabId,
             targetGroupId: groupId,

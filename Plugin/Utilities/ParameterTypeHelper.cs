@@ -302,12 +302,12 @@ public static class ParameterTypeHelper
   ///   Detect ContextBake components that have FileData in their input sources
   ///   Returns a tuple containing:
   ///   - bool: whether downloadable outputs exist
-  ///   - List<DownloadableComponent>: id and nickname pairs of ContextBake components with FileData
+  ///   - List<AvailableOutput>: ContextBake components with FileData, marked with outputType="file"
   /// </summary>
-  public static (bool HasDownloadableOutputs, List<DownloadableComponent> DownloadableComponents) DetectDownloadableOutputs(
+  public static (bool HasDownloadableOutputs, List<AvailableOutput> DownloadableComponents) DetectDownloadableOutputs(
     GH_Document document)
   {
-    var downloadableComponents = new List<DownloadableComponent>();
+    var downloadableComponents = new List<AvailableOutput>();
 
     if (document == null)
     {
@@ -371,7 +371,7 @@ public static class ParameterTypeHelper
           }
         }
 
-        // If this ContextBake has FileData, record its id and nickname
+        // If this ContextBake has FileData, record it as an AvailableOutput with outputType="file"
         if (hasFileData)
         {
           var docObj = obj as IGH_DocumentObject;
@@ -382,10 +382,11 @@ public static class ParameterTypeHelper
           var nickname = docObj.NickName;
           var instanceGuid = docObj.InstanceGuid;
 
-          downloadableComponents.Add(new DownloadableComponent
+          downloadableComponents.Add(new AvailableOutput
           {
             Id = instanceGuid,
-            Nickname = nickname
+            Nickname = nickname,
+            OutputType = "file"
           });
         }
       }

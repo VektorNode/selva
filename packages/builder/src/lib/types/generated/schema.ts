@@ -5,7 +5,7 @@
  * and run `npm run generate:ts` in the schemas directory to regenerate this file.
  */
 
-export type GrasshopperParamType = 'Number' | 'Integer' | 'Boolean' | 'Text' | 'ValueList' | 'Generic';
+export type GrasshopperParamType = 'Number' | 'Integer' | 'Boolean' | 'Text' | 'ValueList' | 'Generic' | 'File';
 export type LayoutItem =
   | InputNumberLayoutItem
   | InputTextLayoutItem
@@ -70,6 +70,18 @@ export interface AvailableParameters {
   timestamp: string;
   parameters: AvailableParameter[];
   [k: string]: unknown | undefined;
+}
+export interface AvailableOutput {
+  /**
+   * Grasshopper component instance GUID
+   */
+  id: string;
+  nickname: string;
+  description?: string;
+  /**
+   * Type of output component
+   */
+  outputType: 'print' | 'bake' | 'file';
 }
 export interface NumberWidgetConfig {
   minimum?: number;
@@ -236,26 +248,6 @@ export interface RuntimeValues {
   };
   [k: string]: unknown | undefined;
 }
-export interface DownloadableComponent {
-  /**
-   * Grasshopper component InstanceGuid
-   */
-  id: string;
-  /**
-   * Component nickname for display
-   */
-  nickname: string;
-}
-export interface DownloadingConfig {
-  /**
-   * Whether downloadable outputs are available
-   */
-  enabled: boolean;
-  /**
-   * Array of ContextBake components with downloadable FileData outputs
-   */
-  components?: DownloadableComponent[];
-}
 export interface UISchema {
   id: string;
   name: string;
@@ -274,13 +266,15 @@ export interface UISchema {
    */
   lastModified?: string;
   enable3dViewer?: boolean;
-  downloading?: DownloadingConfig;
   /**
    * If true, changes trigger immediate solving. If false, user must press Calculate button.
    */
   instanceSolve?: boolean;
   inputs: InputParamSchema[];
-  outputs: OutputParamSchema[];
+  /**
+   * All output components (print, bake, file download)
+   */
+  outputs: AvailableOutput[];
   layout: LayoutConfig;
 }
 

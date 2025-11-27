@@ -153,6 +153,22 @@ public class SchemaManager
       });
     }
 
+    // Scan for ContextBake components that have FileData (file downloads)
+    var (hasFileOutputs, fileOutputs) = ParameterTypeHelper.DetectDownloadableOutputs(document);
+    foreach (var fileOutput in fileOutputs)
+    {
+      availableParameters.Parameters.Add(new AvailableParameter
+      {
+        Id = fileOutput.Id,
+        Name = "Context Bake",
+        Nickname = fileOutput.Nickname,
+        Description = fileOutput.Description ?? "",
+        Category = "output",
+        ParamType = "File",
+        Default = null
+      });
+    }
+
     return availableParameters;
   }
 

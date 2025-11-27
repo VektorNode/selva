@@ -1,7 +1,6 @@
 export interface DragData {
-  dropType: 'parameter' | 'group-item' | 'group' | 'tab' | 'downloadable';
+  dropType: 'input' | 'output' | 'group-item' | 'group' | 'tab';
   data: any;
-  paramCategory?: 'input' | 'output' | 'downloadable';
 }
 
 class DragStore {

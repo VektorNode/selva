@@ -17,7 +17,7 @@ namespace Selva.Plugin.Models.Generated
     // ============================================================================
 
     // GrasshopperParamType is a string for compatibility
-    // Valid values: "Number", "Integer", "Boolean", "Text", "ValueList", "Generic"
+    // Valid values: "Number", "Integer", "Boolean", "Text", "ValueList", "Generic", "File"
 
 // ============================================================================
     // UISchema
@@ -59,9 +59,6 @@ namespace Selva.Plugin.Models.Generated
         [JsonProperty("enable3dViewer", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public bool? Enable3dViewer { get; set; } = false;
 
-        [JsonProperty("downloading", NullValueHandling = NullValueHandling.Ignore)]
-        public DownloadingConfig Downloading { get; set; }
-
 /// <summary>
 /// If true, changes trigger immediate solving. If false, user must press Calculate button.
 /// </summary>
@@ -71,8 +68,11 @@ namespace Selva.Plugin.Models.Generated
         [JsonProperty("inputs")]
         public List<InputParamSchema> Inputs { get; set; } = new List<InputParamSchema>();
 
+/// <summary>
+/// All output components (print, bake, file download)
+/// </summary>
         [JsonProperty("outputs")]
-        public List<OutputParamSchema> Outputs { get; set; } = new List<OutputParamSchema>();
+        public List<AvailableOutput> Outputs { get; set; } = new List<AvailableOutput>();
 
         [JsonProperty("layout")]
         public LayoutConfig Layout { get; set; }
@@ -264,38 +264,6 @@ namespace Selva.Plugin.Models.Generated
         public Dictionary<string, object> Values { get; set; }
     }
 
-    public class DownloadableComponent
-    {
-
-/// <summary>
-/// Grasshopper component InstanceGuid
-/// </summary>
-        [JsonProperty("id")]
-        public Guid Id { get; set; }
-
-/// <summary>
-/// Component nickname for display
-/// </summary>
-        [JsonProperty("nickname")]
-        public string Nickname { get; set; }
-    }
-
-    public class DownloadingConfig
-    {
-
-/// <summary>
-/// Whether downloadable outputs are available
-/// </summary>
-        [JsonProperty("enabled", DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public bool Enabled { get; set; } = false;
-
-/// <summary>
-/// Array of ContextBake components with downloadable FileData outputs
-/// </summary>
-        [JsonProperty("components")]
-        public List<DownloadableComponent> Components { get; set; } = new List<DownloadableComponent>();
-    }
-
 // ============================================================================
     // AVAILABLE PARAMETERS
     // ============================================================================
@@ -363,6 +331,28 @@ namespace Selva.Plugin.Models.Generated
 
         [JsonProperty("parameters")]
         public List<AvailableParameter> Parameters { get; set; } = new List<AvailableParameter>();
+    }
+
+    public class AvailableOutput
+    {
+
+/// <summary>
+/// Grasshopper component instance GUID
+/// </summary>
+        [JsonProperty("id")]
+        public Guid Id { get; set; }
+
+        [JsonProperty("nickname")]
+        public string Nickname { get; set; }
+
+        [JsonProperty("description")]
+        public string Description { get; set; }
+
+/// <summary>
+/// Type of output component
+/// </summary>
+        [JsonProperty("outputType")]
+        public string OutputType { get; set; }
     }
 
 // ============================================================================

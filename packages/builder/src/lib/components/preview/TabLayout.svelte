@@ -2,7 +2,7 @@
   import type {
     UISchema,
     InputParamSchema,
-    OutputParamSchema,
+    AvailableOutput,
     SupportedTypes,
   } from '$lib/types/generated';
   import * as Card from '$lib/components/ui/card';
@@ -60,7 +60,7 @@
     return schema.inputs.find((i) => i.id === paramId);
   }
 
-  function getOutputById(paramId: string): OutputParamSchema | undefined {
+  function getOutputById(paramId: string): AvailableOutput | undefined {
     return schema.outputs.find((o) => o.id === paramId);
   }
 </script>
@@ -138,10 +138,8 @@
                         </div>
                       {/if}
                     {:else if layoutItem.type === 'output'}
-                      {@const isFile = layoutItem.widgetType === 'file'}
-                      {@const output = isFile ? null : getOutputById(layoutItem.paramId)}
-                      {@const downloadableComp = isFile ? schema.downloading?.components?.find((c) => c.id === layoutItem.paramId) : null}
-                      {#if output || downloadableComp}
+                      {@const output = getOutputById(layoutItem.paramId)}
+                      {#if output}
                         <div class="min-w-0 overflow-hidden">
                           <OutputDisplay
                             item={layoutItem}

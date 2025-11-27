@@ -12,7 +12,7 @@
   }
 
   let {
-    acceptTypes = ['parameter', 'group-item', 'downloadable'],
+    acceptTypes = ['input', 'output', 'group-item'],
     label = 'Drop here',
     isEmpty = false,
     ondrop,
@@ -61,7 +61,6 @@
       const detail = {
         dropType: dragData.dropType,
         data: dragData.data,
-        paramCategory: dragData.paramCategory,
         // For group-item drops, include source location
         ...(dragData.dropType === 'group-item' && {
           sourceItem: dragData.data.item,
