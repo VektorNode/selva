@@ -41,6 +41,7 @@ public class RhinoDocumentConverter : IDisposable
     }
     catch (Exception ex)
     {
+      // ignore
     }
 
     _disposed = true;
