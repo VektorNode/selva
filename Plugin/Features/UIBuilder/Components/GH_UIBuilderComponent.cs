@@ -38,6 +38,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
   // Core dependencies
   private CommunicationHandler _communicationHandler;
+  private LocalWebServer _webServer;
   private SchemaManager _schemaManager;
   private ValueApplicator _valueApplicator;
   private ValueCollector _valueCollector;
@@ -153,6 +154,15 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     return id.Substring(0, length);
   }
 
+  /// <summary>
+  ///   Check if embedded web assets are available in the assembly
+  /// </summary>
+  private static bool HasEmbeddedWebAssets()
+  {
+    var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+    var resourceNames = assembly.GetManifestResourceNames();
+    return resourceNames.Any(name => name.Contains("Selva.EmbeddedAssets.web.index.html"));
+  }
 
   protected override void RegisterInputParams(GH_InputParamManager pManager)
   {
@@ -245,6 +255,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     _valueCollector = new ValueCollector();
     _stateManager = new ComponentStateManager();
     _communicationHandler = new CommunicationHandler(_sessionId);
+    _webServer = new LocalWebServer(port: 0); // Use random available port
     _eventManager = new DocumentEventManager(_schemaManager, _valueCollector, _communicationHandler);
     _cleanupService = new SchemaCleanupService();
 
@@ -318,13 +329,23 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
       try
       {
+        // Start WebSocket server for real-time communication
         _communicationHandler.Start(msg => { /* Silent */ });
+
+        // Start embedded web server (production mode only - check if resources exist)
+        if (!_webServer.IsRunning && HasEmbeddedWebAssets())
+        {
+          _webServer.Start();
+          AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+            $"Web UI available at: {_webServer.BaseUrl}/?session={_sessionId}");
+        }
+
         Message = ComponentMessageFormatter.CreateDisplayMessage(true, true, _embeddedSchema, _sessionId);
       }
       catch (Exception ex)
       {
-        AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Failed to start WebSocket server: {ex.Message}");
-        DA.SetData(1, ComponentMessageFormatter.CreateErrorInfoMessage("Could not start WebSocket"));
+        AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Failed to start servers: {ex.Message}");
+        DA.SetData(1, ComponentMessageFormatter.CreateErrorInfoMessage("Could not start servers"));
         return;
       }
     }
@@ -523,7 +544,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     try
     {
-      var url = $"http://localhost:5173/?session={_sessionId}";
+      // Use embedded web server if available, otherwise fall back to dev server
+      var url = _webServer?.IsRunning == true
+        ? $"{_webServer.BaseUrl}/?session={_sessionId}"
+        : $"http://localhost:5173/?session={_sessionId}";
+
       Process.Start(new ProcessStartInfo
       {
         FileName = url,
@@ -656,6 +681,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   private void Cleanup()
   {
     _communicationHandler?.Stop();
+    _webServer?.Stop();
     _eventManager?.UnregisterEvents();
     _valueApplicator?.Clear();
     _schemaManager?.ClearMetadataCache();
@@ -674,6 +700,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
       Cleanup();
       _communicationHandler?.Dispose();
+      _webServer?.Dispose();
       _eventManager?.Dispose();
     }
 

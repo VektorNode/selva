@@ -16,22 +16,40 @@
 
   <PropertyGroup>
     <!-- Specifies information for Assembly and Yak -->
-    <Version>1.0</Version>
+    <Version>1.0.0</Version>
     <Title>Selva</Title>
     <Company>Selva Authors</Company>
-    <Description>Description of Selva</Description>
+    <Description>Web-based UI builder for Grasshopper with real-time parameter interaction</Description>
+    <Authors>Selva Authors</Authors>
+    <Copyright>Copyright © 2025 Selva Authors</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Grasshopper" Version="8.0.23304.9001" ExcludeAssets="runtime"/>
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3"/>
-    <PackageReference Include="System.Drawing.Common" Version="8.0.0" Condition="'$(TargetFramework)' == 'net7.0'"/>
-    <PackageReference Include="System.Windows.Forms" Version="4.0.0"/>
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="7.0.0"/>
+    <PackageReference Include="Costura.Fody" Version="6.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Fody" Version="6.9.3">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Grasshopper" Version="8.0.23304.9001" ExcludeAssets="runtime" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" Condition="'$(TargetFramework)' == 'net7.0'" />
+    <PackageReference Include="System.Windows.Forms" Version="4.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="7.0.0" />
+  </ItemGroup>
+
+  <!-- Embed web assets from the build output -->
+  <ItemGroup>
+    <EmbeddedResource Include="EmbeddedAssets\web\**\*" Condition="Exists('EmbeddedAssets\web\index.html')">
+      <LogicalName>Selva.EmbeddedAssets.web.%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>
     <Folder Include="Features\" />
     <Folder Include="Features\IO\Componets\" />
+    <Folder Include="EmbeddedAssets\web\" />
   </ItemGroup>
 </Project>

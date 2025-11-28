@@ -1,0 +1,2 @@
+#Ignore embedded assets so that when running in dev mode we can still use the dev server
+/EmbeddedAssets/

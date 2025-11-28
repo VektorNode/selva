@@ -1,4 +1,4 @@
-import adapter from '@sveltejs/adapter-auto';
+import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 /** @type {import('@sveltejs/kit').Config} */
@@ -13,10 +13,29 @@ const config = {
   },
 
   kit: {
-    // adapter-auto only supports some environments, see https://svelte.dev/docs/kit/adapter-auto for a list.
-    // If your environment is not supported, or you settled on a specific environment, switch out the adapter.
-    // See https://svelte.dev/docs/kit/adapters for more information about adapters.
-    adapter: adapter(),
+    adapter: adapter({
+      // Output directory for static files (will be embedded in .gha)
+      pages: 'build',
+      assets: 'build',
+      // Use index.html fallback for SPA mode (handles client-side routing)
+      fallback: 'index.html',
+      precompress: false,
+      strict: false
+    }),
+
+    // Base path configuration for embedded server
+    // In development: uses default localhost:5173
+    // In production: will be served from C# HttpListener
+    paths: {
+      base: process.env.NODE_ENV === 'production' ? '' : ''
+    },
+
+    prerender: {
+      // Only prerender routes that don't need query params
+      // The /app route is excluded (separate application)
+      entries: [],
+      handleHttpError: 'warn'
+    }
   },
 };
 
