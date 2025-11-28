@@ -52,10 +52,7 @@ public class ThreeMaterial
   /// </summary>
   public void CopyPropertiesTo(object target)
   {
-    if (target == null)
-    {
-      return;
-    }
+    if (target == null) return;
 
     var sourceType = GetType();
     var targetType = target.GetType();
@@ -64,30 +61,18 @@ public class ThreeMaterial
 
     foreach (var sourceProp in sourceProperties)
     {
-      if (!sourceProp.CanRead)
-      {
-        continue;
-      }
+      if (!sourceProp.CanRead) continue;
 
       // Find matching property in target
       var targetProp = targetType.GetProperty(sourceProp.Name, BindingFlags.Public | BindingFlags.Instance);
 
-      if (targetProp == null || !targetProp.CanWrite)
-      {
-        continue;
-      }
+      if (targetProp == null || !targetProp.CanWrite) continue;
 
-      if (targetProp.PropertyType != sourceProp.PropertyType)
-      {
-        continue;
-      }
+      if (targetProp.PropertyType != sourceProp.PropertyType) continue;
 
       var value = sourceProp.GetValue(this);
 
-      if (IsClampedProperty(sourceProp.Name) && value is double doubleValue)
-      {
-        value = doubleValue.Clamp(0.0, 1.0);
-      }
+      if (IsClampedProperty(sourceProp.Name) && value is double doubleValue) value = doubleValue.Clamp(0.0, 1.0);
 
       targetProp.SetValue(target, value);
     }

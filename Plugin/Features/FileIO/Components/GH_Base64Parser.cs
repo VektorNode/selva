@@ -59,21 +59,12 @@ public class GH_Base64Parser : GH_Component
     var formatIndex = 0;
     var run = false;
 
-    if (!DA.GetData(0, ref base64String))
-    {
-      return;
-    }
+    if (!DA.GetData(0, ref base64String)) return;
 
     DA.GetData(1, ref formatIndex);
-    if (!DA.GetData(2, ref run))
-    {
-      return;
-    }
+    if (!DA.GetData(2, ref run)) return;
 
-    if (!run)
-    {
-      return;
-    }
+    if (!run) return;
 
     var format = (FileFormat)formatIndex;
     var headless = RhinoDoc.CreateHeadless(null);
@@ -126,25 +117,14 @@ public class GH_Base64Parser : GH_Component
     foreach (var geo in geometry)
     {
       if (geo is Curve curve)
-      {
         ghGeometry.Add(new GH_Curve(curve));
-      }
       else if (geo is Brep brep)
-      {
         ghGeometry.Add(new GH_Brep(brep));
-      }
       else if (geo is Mesh mesh)
-      {
         ghGeometry.Add(new GH_Mesh(mesh));
-      }
       else if (geo is Surface surface)
-      {
         ghGeometry.Add(new GH_Surface(surface));
-      }
-      else if (geo is Point point)
-      {
-        ghGeometry.Add(new GH_Point(point.Location));
-      }
+      else if (geo is Point point) ghGeometry.Add(new GH_Point(point.Location));
     }
 
     DA.SetDataList(0, ghGeometry);
@@ -184,19 +164,14 @@ public class GH_Base64Parser : GH_Component
     finally
     {
       if (!string.IsNullOrEmpty(tempPath))
-      {
         try
         {
-          if (File.Exists(tempPath))
-          {
-            File.Delete(tempPath);
-          }
+          if (File.Exists(tempPath)) File.Delete(tempPath);
         }
         catch
         {
           /* ignore */
         }
-      }
     }
   }
 
@@ -243,27 +218,19 @@ public class GH_Base64Parser : GH_Component
     var geometryList = new List<GeometryWithName>();
 
     var idef = doc.InstanceDefinitions.FindId(instanceRef.ParentIdefId);
-    if (idef == null)
-    {
-      return geometryList;
-    }
+    if (idef == null) return geometryList;
 
     var combinedTransform = parentTransform * instanceRef.Xform;
 
     var currentBlockName = idef.Name;
     if (!string.IsNullOrEmpty(parentBlockName) && parentBlockName != "No Block")
-    {
       currentBlockName = $"{parentBlockName}::{currentBlockName}";
-    }
 
     var defObjects = idef.GetObjects();
 
     foreach (var obj in defObjects)
     {
-      if (obj == null)
-      {
-        continue;
-      }
+      if (obj == null) continue;
 
       var layer = doc.Layers[obj.Attributes.LayerIndex];
 
@@ -285,32 +252,18 @@ public class GH_Base64Parser : GH_Component
           if (!combinedTransform.Equals(Transform.Identity))
           {
             if (combinedTransform.SimilarityType == TransformSimilarityType.NotSimilarity)
-            {
               if (!geo.MakeDeformable() && geo.ObjectType == ObjectType.Curve)
-              {
                 if (geo is Curve crv)
-                {
                   geo = crv.ToNurbsCurve();
-                }
-              }
-            }
 
             var transformSuccess = geo.Transform(combinedTransform);
-            if (!transformSuccess)
-            {
-              continue;
-            }
+            if (!transformSuccess) continue;
 
             if (combinedTransform.SimilarityType == TransformSimilarityType.OrientationReversing)
             {
               if (geo.ObjectType == ObjectType.Brep && geo is Brep brep)
-              {
                 brep.Flip();
-              }
-              else if (geo.ObjectType == ObjectType.Mesh && geo is Mesh mesh)
-              {
-                mesh.Flip(true, true, true);
-              }
+              else if (geo.ObjectType == ObjectType.Mesh && geo is Mesh mesh) mesh.Flip(true, true, true);
             }
           }
 

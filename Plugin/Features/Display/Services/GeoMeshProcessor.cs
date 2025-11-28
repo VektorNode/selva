@@ -26,17 +26,11 @@ public static class GeoMeshProcessor
     foreach (var face in mesh.Faces)
     {
       if (face.IsTriangle)
-      {
         triangleCount++;
-      }
       else if (face.IsQuad)
-      {
         quadCount++;
-      }
       else
-      {
         Console.WriteLine("NGON detected. This component only supports triangles and quads.");
-      }
     }
 
     return (triangleCount, quadCount);

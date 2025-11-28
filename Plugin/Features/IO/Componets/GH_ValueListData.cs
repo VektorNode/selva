@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json.Linq;
-namespace Selva.Features.UIBuilder.Components;
+
+namespace Selva.Features.IO.Componets;
 
 /// <summary>
 ///   Custom IGH_Goo type for ValueList data
@@ -37,10 +38,7 @@ public class GH_ValueListData : GH_Goo<string>
   {
     get
     {
-      if (SelectedIndex >= 0 && SelectedIndex < Items.Count)
-      {
-        return Items[SelectedIndex].Name;
-      }
+      if (SelectedIndex >= 0 && SelectedIndex < Items.Count) return Items[SelectedIndex].Name;
 
       return string.Empty;
     }
@@ -73,10 +71,7 @@ public class GH_ValueListData : GH_Goo<string>
   /// </summary>
   public (string Name, string Expression) GetSelectedItem()
   {
-    if (SelectedIndex >= 0 && SelectedIndex < Items.Count)
-    {
-      return Items[SelectedIndex];
-    }
+    if (SelectedIndex >= 0 && SelectedIndex < Items.Count) return Items[SelectedIndex];
 
     return (string.Empty, Value ?? string.Empty);
   }
@@ -124,20 +119,14 @@ public class GH_ValueListData : GH_Goo<string>
   /// </summary>
   public string GetDefaultValue()
   {
-    if (SelectedIndex >= 0 && SelectedIndex < Items.Count)
-    {
-      return Items[SelectedIndex].Expression;
-    }
+    if (SelectedIndex >= 0 && SelectedIndex < Items.Count) return Items[SelectedIndex].Expression;
 
     return Value; // Fallback to current value
   }
 
   public static GH_ValueListData FromJson(JObject json)
   {
-    if (json == null)
-    {
-      return null;
-    }
+    if (json == null) return null;
 
     var value = json["value"]?.ToString();
     var selectedIndex = json["selectedIndex"]?.Value<int>() ?? 0;
@@ -145,7 +134,6 @@ public class GH_ValueListData : GH_Goo<string>
 
     var items = new List<(string Name, string Expression)>();
     if (itemsArray != null)
-    {
       foreach (var item in itemsArray)
       {
         items.Add((
@@ -153,17 +141,13 @@ public class GH_ValueListData : GH_Goo<string>
           item["Expression"]?.ToString() ?? ""
         ));
       }
-    }
 
     return new GH_ValueListData(value, items, selectedIndex);
   }
 
   public override bool CastFrom(object source)
   {
-    if (source == null)
-    {
-      return false;
-    }
+    if (source == null) return false;
 
     if (source is GH_ValueListData vld)
     {
@@ -319,10 +303,7 @@ public class GH_ValueListData : GH_Goo<string>
 
     public override bool FromString(string input)
     {
-      if (input == null)
-      {
-        input = string.Empty;
-      }
+      if (input == null) input = string.Empty;
 
       Owner.Value = input;
       return true;

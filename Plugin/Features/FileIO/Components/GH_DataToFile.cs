@@ -2,14 +2,14 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using Selva.Config;
-using Selva.Features.FileIO.Services;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Rhino;
 using Rhino.DocObjects;
 using Rhino.Geometry;
+using Selva.Config;
+using Selva.Features.FileIO.Services;
 using Point = Rhino.Geometry.Point;
 
 namespace Selva.Features.FileIO.Components;
@@ -51,7 +51,6 @@ public class GH_DataToFile : GH_Component
   private void EnsureConverterInitialized()
   {
     if (_converter == null)
-    {
       lock (_converterLock)
       {
         if (_converter == null)
@@ -62,7 +61,6 @@ public class GH_DataToFile : GH_Component
           _converter = new RhinoDocumentConverter(options);
         }
       }
-    }
   }
 
   /// <summary>
@@ -139,16 +137,12 @@ public class GH_DataToFile : GH_Component
 
       // Determine if we're in single file mode (simple list) or multiple file mode (tree structure)
       if (IsSingleFileMode(geometryTree))
-      {
         // Single file mode - all geometry in one file
         results = ProcessSingleFile(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree, fileEnding);
-      }
       else
-      {
         // Multiple files mode - one file per branch
         results = ProcessMultipleFiles(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree,
           fileEnding);
-      }
 
       if (results.Count == 0)
       {
@@ -270,10 +264,7 @@ public class GH_DataToFile : GH_Component
       var path = paths[pathIndex];
       var geometryBranch = geometryTree.get_Branch(path);
 
-      if (geometryBranch == null || geometryBranch.Count == 0)
-      {
-        continue;
-      }
+      if (geometryBranch == null || geometryBranch.Count == 0) continue;
 
       try
       {
@@ -364,10 +355,7 @@ public class GH_DataToFile : GH_Component
     {
       var goo = gooList[i];
 
-      if (goo == null)
-      {
-        continue;
-      }
+      if (goo == null) continue;
 
       GeometryBase geometry = null;
 
@@ -375,50 +363,26 @@ public class GH_DataToFile : GH_Component
       {
         var scriptVar = goo.ScriptVariable();
         if (scriptVar is GeometryBase geomBase)
-        {
           geometry = geomBase;
-        }
         else if (goo is GH_Mesh ghMesh && ghMesh.Value != null)
-        {
           geometry = ghMesh.Value;
-        }
         else if (goo is GH_Brep ghBrep && ghBrep.Value != null)
-        {
           geometry = ghBrep.Value;
-        }
         else if (goo is GH_Surface ghSurface && ghSurface.Value != null)
-        {
           geometry = ghSurface.Value;
-        }
         else if (goo is GH_Curve ghCurve && ghCurve.Value != null)
-        {
           geometry = ghCurve.Value;
-        }
         else if (goo is GH_Box ghBox && ghBox.Value.IsValid)
-        {
           geometry = ghBox.Value.ToBrep();
-        }
         else if (goo is GH_Point ghPoint)
-        {
           geometry = new Point(ghPoint.Value);
-        }
         else if (goo is GH_Line ghLine && ghLine.Value.IsValid)
-        {
           geometry = new LineCurve(ghLine.Value);
-        }
         else if (goo is GH_Circle ghCircle && ghCircle.Value.IsValid)
-        {
           geometry = new ArcCurve(ghCircle.Value);
-        }
-        else if (goo is GH_Arc ghArc && ghArc.Value.IsValid)
-        {
-          geometry = new ArcCurve(ghArc.Value);
-        }
+        else if (goo is GH_Arc ghArc && ghArc.Value.IsValid) geometry = new ArcCurve(ghArc.Value);
 
-        if (geometry != null && geometry.IsValid)
-        {
-          validGeometries.Add((geometry, i));
-        }
+        if (geometry != null && geometry.IsValid) validGeometries.Add((geometry, i));
       }
       catch (Exception ex)
       {
@@ -484,10 +448,8 @@ public class GH_DataToFile : GH_Component
         var objectId = doc.Objects.Add(geometry, attributes);
 
         if (objectId == Guid.Empty)
-        {
           AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
             $"Failed to add geometry at index {originalIndex} to document");
-        }
       }
       catch (Exception ex)
       {
@@ -502,15 +464,9 @@ public class GH_DataToFile : GH_Component
   /// </summary>
   private string GetLayerName(List<string> layerNames, int index)
   {
-    if (layerNames == null || layerNames.Count == 0)
-    {
-      return DefaultLayerName;
-    }
+    if (layerNames == null || layerNames.Count == 0) return DefaultLayerName;
 
-    if (index < layerNames.Count && !string.IsNullOrWhiteSpace(layerNames[index]))
-    {
-      return layerNames[index];
-    }
+    if (index < layerNames.Count && !string.IsNullOrWhiteSpace(layerNames[index])) return layerNames[index];
 
     var lastName = layerNames.LastOrDefault(n => !string.IsNullOrWhiteSpace(n));
     return lastName ?? DefaultLayerName;
@@ -521,15 +477,9 @@ public class GH_DataToFile : GH_Component
   /// </summary>
   private Color GetLayerColor(List<Color> layerColors, int index)
   {
-    if (layerColors == null || layerColors.Count == 0)
-    {
-      return DefaultLayerColor;
-    }
+    if (layerColors == null || layerColors.Count == 0) return DefaultLayerColor;
 
-    if (index < layerColors.Count)
-    {
-      return layerColors[index];
-    }
+    if (index < layerColors.Count) return layerColors[index];
 
     return layerColors.Count > 0 ? layerColors[layerColors.Count - 1] : DefaultLayerColor;
   }
@@ -541,10 +491,7 @@ public class GH_DataToFile : GH_Component
   {
     try
     {
-      if (fileEnding == ".3dm")
-      {
-        return _converter.DocToRhinoFile(doc); // Synchronous!
-      }
+      if (fileEnding == ".3dm") return _converter.DocToRhinoFile(doc); // Synchronous!
 
       return _converter.DocToBase64(doc, fileEnding); // Synchronous!
     }

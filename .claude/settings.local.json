@@ -3,7 +3,8 @@
     "allow": [
       "Bash(tree:*)",
       "Bash(pnpm check:*)",
-      "Bash(npm run generate:all:*)"
+      "Bash(npm run generate:all:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

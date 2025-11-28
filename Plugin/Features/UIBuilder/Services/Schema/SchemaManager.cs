@@ -2,13 +2,11 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using Selva.Features.UIBuilder.Components;
-using Selva.Features.UIBuilder.Models;
-using Selva.Features.UIBuilder.Helpers;
 using Grasshopper.Kernel;
+using Selva.Features.IO.Componets;
+using Selva.Features.UIBuilder.Helpers;
+using Selva.Features.UIBuilder.Models;
 
-using Selva.Core.Guards;
-using Selva.Core.Helpers;
 namespace Selva.Features.UIBuilder.Services;
 
 /// <summary>
@@ -16,8 +14,8 @@ namespace Selva.Features.UIBuilder.Services;
 /// </summary>
 public class SchemaManager
 {
+  private readonly Dictionary<Guid, ParameterMetadataSnapshot> _metadataCache = new();
   private readonly string _sessionId;
-  private Dictionary<Guid, ParameterMetadataSnapshot> _metadataCache = new();
 
   public SchemaManager(string sessionId)
   {
@@ -44,10 +42,7 @@ public class SchemaManager
     foreach (var param in allParams)
     {
       var docObj = param as IGH_DocumentObject;
-      if (docObj == null)
-      {
-        continue;
-      }
+      if (docObj == null) continue;
 
       var ghParam = param as IGH_Param;
       var paramType = GetParameterTypeName(param);
@@ -67,7 +62,6 @@ public class SchemaManager
 
       // Handle ValueList parameters specially
       if (param is GetValueListParameter valueListParameter)
-      {
         try
         {
           // Extract the options dictionary from the ValueList
@@ -97,29 +91,21 @@ public class SchemaManager
             }
 
             if (availableParam.Default == null && availableParam.Options.Count > 0)
-            {
               availableParam.Default = availableParam.Options.Keys.First();
-            }
           }
         }
         catch
         {
           // ignored
         }
-      }
       else
-      {
         availableParam.Default = ghParam?.VolatileData.AllData(true).FirstOrDefault()
           ?.ScriptVariable(); //TODO: properly handle tree inputs (not a priority for now)
-      }
 
       try
       {
         var treeAccessProp = param.GetType().GetProperty("TreeAccess");
-        if (treeAccessProp != null)
-        {
-          availableParam.TreeAccess = Convert.ToBoolean(treeAccessProp.GetValue(param, null));
-        }
+        if (treeAccessProp != null) availableParam.TreeAccess = Convert.ToBoolean(treeAccessProp.GetValue(param, null));
       }
       catch
       {
@@ -147,17 +133,11 @@ public class SchemaManager
 
     foreach (var output in contextOutputs)
     {
-      if (output == null)
-      {
-        continue;
-      }
+      if (output == null) continue;
 
       // Determine output type based on component type
-      string outputType = "print"; // Default
-      if (output.Name.IndexOf("Bake", StringComparison.OrdinalIgnoreCase) >= 0)
-      {
-        outputType = "bake";
-      }
+      var outputType = "print"; // Default
+      if (output.Name.IndexOf("Bake", StringComparison.OrdinalIgnoreCase) >= 0) outputType = "bake";
 
       outputs.Add(new AvailableOutput
       {
@@ -213,10 +193,7 @@ public class SchemaManager
     GH_Document document,
     bool trackChanges = true)
   {
-    if (schema == null)
-    {
-      return (null, new List<Guid>());
-    }
+    if (schema == null) return (null, new List<Guid>());
 
     var removedIds = trackChanges ? new List<Guid>() : null;
 
@@ -226,10 +203,7 @@ public class SchemaManager
       return paramObject == null;
     }).ToList();
 
-    if (trackChanges)
-    {
-      removedIds.AddRange(inputsToRemove.Select(i => i.Id));
-    }
+    if (trackChanges) removedIds.AddRange(inputsToRemove.Select(i => i.Id));
 
     schema.Inputs.RemoveAll(input => inputsToRemove.Contains(input));
 
@@ -239,10 +213,7 @@ public class SchemaManager
       return paramObject == null;
     }).ToList();
 
-    if (trackChanges)
-    {
-      removedIds.AddRange(outputsToRemove.Select(o => o.Id));
-    }
+    if (trackChanges) removedIds.AddRange(outputsToRemove.Select(o => o.Id));
 
     schema.Outputs.RemoveAll(output => outputsToRemove.Contains(output));
 
@@ -273,10 +244,7 @@ public class SchemaManager
   /// </summary>
   private string GetParameterTypeName(IGH_ContextualParameter contextParam)
   {
-    if (contextParam is IGH_Param param)
-    {
-      return GetParameterTypeNameFromParam(param);
-    }
+    if (contextParam is IGH_Param param) return GetParameterTypeNameFromParam(param);
 
     return "Unknown";
   }
@@ -286,10 +254,7 @@ public class SchemaManager
   /// </summary>
   private string GetParameterTypeNameFromParam(IGH_Param param)
   {
-    if (param == null)
-    {
-      return "Unknown";
-    }
+    if (param == null) return "Unknown";
 
     var typeName = param.GetType().Name;
 
@@ -322,10 +287,7 @@ public class SchemaManager
 
     foreach (var kvp in typeKeywords)
     {
-      if (typeName.Contains(kvp.Key))
-      {
-        return kvp.Value;
-      }
+      if (typeName.Contains(kvp.Key)) return kvp.Value;
     }
 
     return "Generic";
@@ -339,35 +301,24 @@ public class SchemaManager
   {
     var changes = new List<AvailableParameter>();
 
-    if (schema == null)
-    {
-      return changes;
-    }
+    if (schema == null) return changes;
 
     // Check input parameters
     foreach (var inputParam in schema.Inputs)
     {
       var docObj = document.FindObject(inputParam.Id, false);
-      if (docObj == null)
-      {
-        continue;
-      }
+      if (docObj == null) continue;
 
       var currentSnapshot = CreateParameterSnapshot(docObj);
-      if (currentSnapshot == null)
-      {
-        continue;
-      }
+      if (currentSnapshot == null) continue;
 
       if (_metadataCache.TryGetValue(inputParam.Id, out var previousSnapshot))
-      {
         if (!currentSnapshot.Equals(previousSnapshot))
         {
           // Metadata changed - create updated AvailableParameter
           var updatedParam = CreateAvailableParameterFromSnapshot(currentSnapshot, inputParam.Id, "input");
           changes.Add(updatedParam);
         }
-      }
 
       // Always update cache with current state
       _metadataCache[inputParam.Id] = currentSnapshot;
@@ -377,35 +328,24 @@ public class SchemaManager
     foreach (var outputParam in schema.Outputs)
     {
       var docObj = document.FindObject(outputParam.Id, false);
-      if (docObj == null)
-      {
-        continue;
-      }
+      if (docObj == null) continue;
 
       var currentSnapshot = CreateParameterSnapshot(docObj);
-      if (currentSnapshot == null)
-      {
-        continue;
-      }
+      if (currentSnapshot == null) continue;
 
       if (_metadataCache.TryGetValue(outputParam.Id, out var previousSnapshot))
-      {
         if (!currentSnapshot.Equals(previousSnapshot))
         {
           var updatedParam = CreateAvailableParameterFromSnapshot(currentSnapshot, outputParam.Id, "output");
           changes.Add(updatedParam);
         }
-      }
 
       // Always update cache with current state
       _metadataCache[outputParam.Id] = currentSnapshot;
     }
 
     // Apply changes to the schema so it stays in sync
-    if (changes.Count > 0)
-    {
-      ApplyMetadataChangesToSchema(schema, changes);
-    }
+    if (changes.Count > 0) ApplyMetadataChangesToSchema(schema, changes);
 
     return changes;
   }
@@ -416,10 +356,7 @@ public class SchemaManager
   /// </summary>
   public void ApplyMetadataChangesToSchema(UISchema schema, List<AvailableParameter> changes)
   {
-    if (schema?.Layout?.Tabs == null || changes == null || changes.Count == 0)
-    {
-      return;
-    }
+    if (schema?.Layout?.Tabs == null || changes == null || changes.Count == 0) return;
 
     foreach (var change in changes)
     {
@@ -430,10 +367,7 @@ public class SchemaManager
         {
           foreach (var item in group.Items)
           {
-            if (item.ParamId != change.Id)
-            {
-              continue;
-            }
+            if (item.ParamId != change.Id) continue;
 
             // Update based on widget type
             switch (item)
@@ -473,10 +407,7 @@ public class SchemaManager
   /// </summary>
   private ParameterMetadataSnapshot CreateParameterSnapshot(IGH_DocumentObject docObj)
   {
-    if (docObj == null)
-    {
-      return null;
-    }
+    if (docObj == null) return null;
 
     var param = docObj as IGH_ContextualParameter;
     var ghParam = docObj as IGH_Param;
@@ -500,10 +431,7 @@ public class SchemaManager
     }
 
     // Extract ValueList options if applicable
-    if (docObj is GetValueListParameter valueListParam)
-    {
-      snapshot.Options = valueListParam.Values;
-    }
+    if (docObj is GetValueListParameter valueListParam) snapshot.Options = valueListParam.Values;
 
     return snapshot;
   }
@@ -529,9 +457,7 @@ public class SchemaManager
 
     // Convert Options to the expected format
     if (snapshot.Options != null)
-    {
       param.Options = snapshot.Options.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value);
-    }
 
     return param;
   }
@@ -560,10 +486,7 @@ internal class ParameterMetadataSnapshot
 
   public override bool Equals(object obj)
   {
-    if (!(obj is ParameterMetadataSnapshot other))
-    {
-      return false;
-    }
+    if (!(obj is ParameterMetadataSnapshot other)) return false;
 
     return Id == other.Id &&
            Nickname == other.Nickname &&
@@ -585,6 +508,7 @@ internal class ParameterMetadataSnapshot
       if (!b.TryGetValue(kvp.Key, out var value) || value != kvp.Value)
         return false;
     }
+
     return true;
   }
 

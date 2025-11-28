@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -18,8 +19,10 @@ public class LocalWebServer : IDisposable
 {
   private const int BUFFER_SIZE = 64 * 1024; // 64KB buffer for file transfers
   private const string EMBEDDED_RESOURCE_PREFIX = "Selva.EmbeddedAssets.web.";
+  private readonly Assembly _assembly;
 
   private readonly object _lock = new();
+
   private readonly Dictionary<string, string> _mimeTypes = new()
   {
     { ".html", "text/html; charset=utf-8" },
@@ -43,7 +46,6 @@ public class LocalWebServer : IDisposable
 
   private CancellationTokenSource _cancellationTokenSource;
   private HttpListener _httpListener;
-  private Assembly _assembly;
 
   public LocalWebServer(int port = 0)
   {
@@ -66,26 +68,17 @@ public class LocalWebServer : IDisposable
   /// </summary>
   public void Start()
   {
-    if (IsRunning)
-    {
-      return;
-    }
+    if (IsRunning) return;
 
     lock (_lock)
     {
-      if (IsRunning)
-      {
-        return;
-      }
+      if (IsRunning) return;
 
       _cancellationTokenSource = new CancellationTokenSource();
       _httpListener = new HttpListener();
 
       // If port is 0, find a random available port
-      if (Port == 0)
-      {
-        Port = FindAvailablePort();
-      }
+      if (Port == 0) Port = FindAvailablePort();
 
       _httpListener.Prefixes.Add($"http://localhost:{Port}/");
 
@@ -109,17 +102,11 @@ public class LocalWebServer : IDisposable
   /// </summary>
   public void Stop()
   {
-    if (!IsRunning)
-    {
-      return;
-    }
+    if (!IsRunning) return;
 
     lock (_lock)
     {
-      if (!IsRunning)
-      {
-        return;
-      }
+      if (!IsRunning) return;
 
       _cancellationTokenSource?.Cancel();
 
@@ -162,7 +149,7 @@ public class LocalWebServer : IDisposable
       catch (Exception ex)
       {
         // Log error but continue accepting requests
-        System.Diagnostics.Debug.WriteLine($"Error accepting request: {ex.Message}");
+        Debug.WriteLine($"Error accepting request: {ex.Message}");
       }
     }
   }
@@ -181,10 +168,7 @@ public class LocalWebServer : IDisposable
       var path = request.Url.AbsolutePath.TrimStart('/');
 
       // Default to index.html for root path
-      if (string.IsNullOrEmpty(path))
-      {
-        path = "index.html";
-      }
+      if (string.IsNullOrEmpty(path)) path = "index.html";
 
       // SPA fallback: serve index.html for all routes that don't match files
       // This enables client-side routing (e.g., /builder?session=xxx)
@@ -234,7 +218,7 @@ public class LocalWebServer : IDisposable
     }
     catch (Exception ex)
     {
-      System.Diagnostics.Debug.WriteLine($"Error processing request: {ex.Message}");
+      Debug.WriteLine($"Error processing request: {ex.Message}");
 
       try
       {
@@ -289,9 +273,9 @@ public class LocalWebServer : IDisposable
   {
     // Try to find an available port in the range 8000-9000
     var random = new Random();
-    for (int i = 0; i < 100; i++)
+    for (var i = 0; i < 100; i++)
     {
-      int port = random.Next(8000, 9000);
+      var port = random.Next(8000, 9000);
 
       try
       {
@@ -306,7 +290,6 @@ public class LocalWebServer : IDisposable
       catch
       {
         // Port not available, try next
-        continue;
       }
     }
 

@@ -2,9 +2,8 @@
 using System.IO;
 using System.Security.Cryptography;
 using System.Threading;
-using Selva.Config;
-using Microsoft.Extensions.Logging;
 using Rhino;
+using Selva.Config;
 
 namespace Selva.Features.FileIO.Services;
 
@@ -26,20 +25,14 @@ public class RhinoDocumentConverter : IDisposable
 
   public void Dispose()
   {
-    if (_disposed)
-    {
-      return;
-    }
+    if (_disposed) return;
 
     _rateLimiter?.Dispose();
     try
     {
-      if (Directory.Exists(_tempDirectory))
-      {
-        Directory.Delete(_tempDirectory, true);
-      }
+      if (Directory.Exists(_tempDirectory)) Directory.Delete(_tempDirectory, true);
     }
-    catch (Exception ex)
+    catch (Exception)
     {
       // ignore
     }
@@ -56,40 +49,26 @@ public class RhinoDocumentConverter : IDisposable
 
     var tempPath = GenerateTempPath(fileExtension);
     if (!_rateLimiter.Wait(_options.ConversionTimeout))
-    {
       throw new TimeoutException("Conversion queue timeout - too many concurrent operations");
-    }
 
     try
     {
       var exportSuccess = doc.Export(tempPath);
 
-      if (!exportSuccess)
-      {
-        throw new IOException($"Rhino Export failed for format {fileExtension}");
-      }
+      if (!exportSuccess) throw new IOException($"Rhino Export failed for format {fileExtension}");
 
       var fileInfo = new FileInfo(tempPath);
-      if (!fileInfo.Exists)
-      {
-        throw new FileNotFoundException("Export succeeded but file not found", tempPath);
-      }
+      if (!fileInfo.Exists) throw new FileNotFoundException("Export succeeded but file not found", tempPath);
 
       if (fileInfo.Length > _options.MaxFileSizeBytes)
-      {
         throw new InvalidOperationException(
           $"Exported file size ({fileInfo.Length:N0} bytes) exceeds maximum allowed ({_options.MaxFileSizeBytes:N0} bytes)");
-      }
 
       string base64Result;
       var fileBytes = File.ReadAllBytes(tempPath);
       base64Result = Convert.ToBase64String(fileBytes);
 
       return base64Result;
-    }
-    catch (Exception ex)
-    {
-      throw;
     }
     finally
     {
@@ -103,52 +82,33 @@ public class RhinoDocumentConverter : IDisposable
   /// </summary>
   public string DocToRhinoFile(RhinoDoc doc, int version = 7)
   {
-    if (doc == null)
-    {
-      throw new ArgumentNullException(nameof(doc));
-    }
+    if (doc == null) throw new ArgumentNullException(nameof(doc));
 
     if (version < 2 || version > 8)
-    {
       throw new ArgumentException("Rhino version must be between 2 and 8", nameof(version));
-    }
 
     var tempPath = GenerateTempPath(".3dm");
 
     if (!_rateLimiter.Wait(_options.ConversionTimeout))
-    {
       throw new TimeoutException("Conversion queue timeout - too many concurrent operations");
-    }
 
     try
     {
       var saveSuccess = doc.SaveAs(tempPath, version);
 
-      if (!saveSuccess)
-      {
-        throw new IOException($"Rhino SaveAs failed for version {version}");
-      }
+      if (!saveSuccess) throw new IOException($"Rhino SaveAs failed for version {version}");
 
       var fileInfo = new FileInfo(tempPath);
-      if (!fileInfo.Exists)
-      {
-        throw new FileNotFoundException("SaveAs succeeded but file not found", tempPath);
-      }
+      if (!fileInfo.Exists) throw new FileNotFoundException("SaveAs succeeded but file not found", tempPath);
 
       if (fileInfo.Length > _options.MaxFileSizeBytes)
-      {
         throw new InvalidOperationException(
           $"Saved file size ({fileInfo.Length:N0} bytes) exceeds maximum allowed ({_options.MaxFileSizeBytes:N0} bytes)");
-      }
 
       var fileBytes = File.ReadAllBytes(tempPath);
       var base64Result = Convert.ToBase64String(fileBytes);
 
       return base64Result;
-    }
-    catch (Exception ex)
-    {
-      throw;
     }
     finally
     {
@@ -159,23 +119,15 @@ public class RhinoDocumentConverter : IDisposable
 
   private void ValidateInputs(RhinoDoc doc, string fileExtension)
   {
-    if (doc == null)
-    {
-      throw new ArgumentNullException(nameof(doc));
-    }
+    if (doc == null) throw new ArgumentNullException(nameof(doc));
 
     if (string.IsNullOrWhiteSpace(fileExtension))
-    {
       throw new ArgumentException("File extension cannot be null or empty", nameof(fileExtension));
-    }
   }
 
   private string GenerateTempPath(string fileExtension)
   {
-    if (!fileExtension.StartsWith("."))
-    {
-      fileExtension = "." + fileExtension;
-    }
+    if (!fileExtension.StartsWith(".")) fileExtension = "." + fileExtension;
 
     var fileName = $"{Guid.NewGuid()}{fileExtension}";
     return Path.Combine(_tempDirectory, fileName);
@@ -183,10 +135,7 @@ public class RhinoDocumentConverter : IDisposable
 
   private void CleanupTempFile(string path)
   {
-    if (string.IsNullOrEmpty(path))
-    {
-      return;
-    }
+    if (string.IsNullOrEmpty(path)) return;
 
     try
     {
@@ -213,7 +162,7 @@ public class RhinoDocumentConverter : IDisposable
         File.Delete(path);
       }
     }
-    catch (Exception ex)
+    catch (Exception)
     {
     }
   }

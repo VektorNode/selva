@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Selva.Features.UIBuilder.Models;
 using Grasshopper.Kernel;
+using Selva.Features.UIBuilder.Models;
 
 namespace Selva.Features.UIBuilder.Services;
 
@@ -25,10 +25,7 @@ public class SchemaCleanupService
     GH_Document document,
     Action<GH_RuntimeMessageLevel, string> addMessage)
   {
-    if (removedIds == null || removedIds.Count == 0)
-    {
-      return;
-    }
+    if (removedIds == null || removedIds.Count == 0) return;
 
     try
     {
@@ -39,12 +36,10 @@ public class SchemaCleanupService
 
       // 2. Remove from embedded values
       if (embeddedValues != null)
-      {
         foreach (var key in valuesToRemove)
         {
           embeddedValues.Remove(key);
         }
-      }
 
       // 3. Schema is already updated by caller (ValidateSchemaAndTrackChanges)
       // This is the commit point - schema changes are persisted
@@ -54,7 +49,6 @@ public class SchemaCleanupService
 
       // Wait briefly for broadcast to complete (fire-and-forget with timeout)
       if (broadcastTask != null)
-      {
         try
         {
           broadcastTask.Wait(100);
@@ -65,7 +59,6 @@ public class SchemaCleanupService
           addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
             "Failed to notify web UI of deletion - please refresh");
         }
-      }
 
       // 5. Mark document as modified so changes persist on save
       document?.Modified();

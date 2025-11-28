@@ -24,16 +24,11 @@ public static class ComponentMessageFormatter
 
       if (isEnabled)
       {
-        if (isHeadless)
-        {
-          return $"Session: {sessionId}\nStatus: {status}\nSchema loaded (no WebSocket)";
-        }
+        if (isHeadless) return $"Session: {sessionId}\nStatus: {status}\nSchema loaded (no WebSocket)";
 
         if (inputCount == 0 && outputCount == 0)
-        {
           return
             $"Session: {sessionId}\nStatus: {status}\nWaiting for schema...\nSwitch to Build mode in web UI";
-        }
 
         return
           $"Session: {sessionId}\nStatus: {status}\nSchema: {inputCount} inputs, {outputCount} outputs\nSwitch modes in web UI";
@@ -53,15 +48,9 @@ public static class ComponentMessageFormatter
   /// </summary>
   public static string CreateDisplayMessage(bool isEnabled, bool isConnected, UISchema schema, string sessionId)
   {
-    if (!isEnabled)
-    {
-      return schema != null ? "Offline" : "Offline • No Schema";
-    }
+    if (!isEnabled) return schema != null ? "Offline" : "Offline • No Schema";
 
-    if (!isConnected)
-    {
-      return "Headless • No WebSocket";
-    }
+    if (!isConnected) return "Headless • No WebSocket";
 
     return $"Ready • {sessionId}";
   }

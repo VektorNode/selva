@@ -4,12 +4,12 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
-using Selva.Features.Display.Services;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
 using Rhino.Geometry;
+using Selva.Features.Display.Services;
 
 namespace Selva.Features.Display.Components;
 
@@ -100,12 +100,10 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
     }
 
     if (result.Warnings.Any())
-    {
       foreach (var warning in result.Warnings)
       {
         AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, warning);
       }
-    }
 
     DA.SetDataList(0, result.Displays);
   }
@@ -134,9 +132,7 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
       result.Displays = ProcessMeshesParallel(meshes, names, materials, result.Warnings);
 
       if (result.Displays.Count != geometries.Count)
-      {
         result.Warnings.Add($"Successfully processed {result.Displays.Count} out of {geometries.Count} geometries.");
-      }
     }
     catch (Exception ex)
     {
@@ -157,16 +153,12 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
       var goo = gooList[i];
       var geom = TryExtractGeometry(goo);
       if (geom != null && geom.IsValid)
-      {
         geometries.Add((i, geom));
-      }
       else if (goo != null)
-      {
         lock (warnings)
         {
           warnings.Add($"Could not extract valid geometry from: {goo.TypeName ?? "null"}");
         }
-      }
     });
 
     return geometries.OrderBy(x => x.Index).Select(x => x.Geometry).ToList();
@@ -174,15 +166,9 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
 
   private GeometryBase TryExtractGeometry(IGH_Goo goo)
   {
-    if (goo == null)
-    {
-      return null;
-    }
+    if (goo == null) return null;
 
-    if (goo.ScriptVariable() is GeometryBase geomBase)
-    {
-      return geomBase;
-    }
+    if (goo.ScriptVariable() is GeometryBase geomBase) return geomBase;
 
     return goo switch
     {
@@ -208,10 +194,7 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
     Parallel.For(0, geometries.Count, index =>
     {
       var mesh = ConvertSingleGeometry(geometries[index], index, meshSettings, warnings);
-      if (mesh != null)
-      {
-        meshDict.TryAdd(index, mesh);
-      }
+      if (mesh != null) meshDict.TryAdd(index, mesh);
     });
 
     return meshDict.OrderBy(kvp => kvp.Key).Select(kvp => kvp.Value).ToList();
@@ -256,10 +239,7 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
   private Mesh CreateMeshFromBrep(Brep brep, MeshingParameters mParams)
   {
     var meshArray = Mesh.CreateFromBrep(brep, mParams);
-    if (meshArray == null || meshArray.Length == 0)
-    {
-      return null;
-    }
+    if (meshArray == null || meshArray.Length == 0) return null;
 
     var mesh = new Mesh();
     foreach (var m in meshArray)
@@ -308,10 +288,7 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
 
     Parallel.For(0, meshes.Count, index =>
     {
-      if (meshes[index] == null || !meshes[index].IsValid)
-      {
-        return;
-      }
+      if (meshes[index] == null || !meshes[index].IsValid) return;
 
       try
       {
@@ -368,10 +345,7 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
     foreach (var goo in materialGoos ?? new List<IGH_Goo>())
     {
       var material = ExtractMaterial(goo);
-      if (material != null)
-      {
-        materials.Add(material);
-      }
+      if (material != null) materials.Add(material);
     }
 
     return NormalizeList(materials, count, _ => ThreeMaterial.Default());
@@ -379,30 +353,18 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
 
   private ThreeMaterial ExtractMaterial(IGH_Goo goo)
   {
-    if (goo == null)
-    {
-      return null;
-    }
+    if (goo == null) return null;
 
-    if (goo.ScriptVariable() is ThreeMaterial mat)
-    {
-      return mat;
-    }
+    if (goo.ScriptVariable() is ThreeMaterial mat) return mat;
 
-    if (goo is GH_ObjectWrapper wrapper && wrapper.Value is ThreeMaterial wrapMat)
-    {
-      return wrapMat;
-    }
+    if (goo is GH_ObjectWrapper wrapper && wrapper.Value is ThreeMaterial wrapMat) return wrapMat;
 
     return null;
   }
 
   private List<T> NormalizeList<T>(List<T> input, int targetCount, Func<int, T> defaultFactory)
   {
-    if (input.Count == 0)
-    {
-      return Enumerable.Range(0, targetCount).Select(defaultFactory).ToList();
-    }
+    if (input.Count == 0) return Enumerable.Range(0, targetCount).Select(defaultFactory).ToList();
 
     var result = new List<T>(targetCount);
     var lastItem = input.Last();

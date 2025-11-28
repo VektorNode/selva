@@ -1,15 +1,14 @@
 using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
-using Selva.Config;
-using Selva.Features.UIBuilder.Models;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
+using Selva.Config;
+using Selva.Features.UIBuilder.Models;
 
 namespace Selva.Features.UIBuilder.Services;
 
@@ -60,21 +59,12 @@ public class ValueApplicator
         }
 
         var inputKey = input.Id.ToString();
-        if (!values.TryGetValue(inputKey, out var value))
-        {
-          continue;
-        }
+        if (!values.TryGetValue(inputKey, out var value)) continue;
 
-        if (!HasValueChanged(inputKey, value))
-        {
-          continue;
-        }
+        if (!HasValueChanged(inputKey, value)) continue;
 
         // Validate value before applying (security check)
-        if (!ValidateValue(input, value, addMessage))
-        {
-          continue; // Skip invalid values
-        }
+        if (!ValidateValue(input, value, addMessage)) continue; // Skip invalid values
 
         if (paramObject is IGH_ContextualParameter contextParam)
         {
@@ -84,10 +74,7 @@ public class ValueApplicator
             updateCount++;
             _lastAppliedValues[inputKey] = value;
 
-            if (paramObject is IGH_ActiveObject activeObj)
-            {
-              _pendingExpirations.Add(activeObj);
-            }
+            if (paramObject is IGH_ActiveObject activeObj) _pendingExpirations.Add(activeObj);
           }
         }
       }
@@ -98,10 +85,7 @@ public class ValueApplicator
       }
     }
 
-    if (_pendingExpirations.Count > 0)
-    {
-      document.ScheduleSolution(10, ExpireCallback);
-    }
+    if (_pendingExpirations.Count > 0) document.ScheduleSolution(10, ExpireCallback);
 
     return updateCount;
   }
@@ -124,10 +108,7 @@ public class ValueApplicator
   /// </summary>
   public bool HasValueChanged(string key, object newValue)
   {
-    if (_lastAppliedValues.TryGetValue(key, out var lastValue))
-    {
-      return newValue?.ToString() != lastValue?.ToString();
-    }
+    if (_lastAppliedValues.TryGetValue(key, out var lastValue)) return newValue?.ToString() != lastValue?.ToString();
 
     return true;
   }
@@ -175,10 +156,7 @@ public class ValueApplicator
   /// </summary>
   public void RemoveValues(IEnumerable<string> keys)
   {
-    if (keys == null)
-    {
-      return;
-    }
+    if (keys == null) return;
 
     foreach (var key in keys)
     {
@@ -201,23 +179,18 @@ public class ValueApplicator
   private bool ValidateValue(InputParamSchema input, object value,
     Action<GH_RuntimeMessageLevel, string> addMessage)
   {
-    if (value == null)
-    {
-      return true; // null is acceptable
-    }
+    if (value == null) return true; // null is acceptable
 
     try
     {
       // Validate string length
       if (value is string strValue)
-      {
         if (strValue.Length > MAX_STRING_LENGTH)
         {
           addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
             $"String value too long for '{input.Nickname}' (max {MAX_STRING_LENGTH} characters)");
           return false;
         }
-      }
 
       // Validate numeric type conversions
       if (input.ParamType == "Number" || input.ParamType == "Integer")
@@ -245,7 +218,6 @@ public class ValueApplicator
 
       // Validate integer conversion
       if (input.ParamType == "Integer")
-      {
         try
         {
           Convert.ToInt32(value);
@@ -256,7 +228,6 @@ public class ValueApplicator
             $"Integer value overflow for '{input.Nickname}'");
           return false;
         }
-      }
 
       return true;
     }
@@ -278,10 +249,7 @@ public class ValueApplicator
     try
     {
       // Special handling for ValueList - use the parameter's native type
-      if (paramTypeName == "ValueList")
-      {
-        return ApplyToValueList(contextParam, value, addMessage);
-      }
+      if (paramTypeName == "ValueList") return ApplyToValueList(contextParam, value, addMessage);
 
       if (!TypeHandlers.TryGetValue(paramTypeName, out var handler))
       {
@@ -344,10 +312,7 @@ public class ValueApplicator
       if (selectMethod != null)
       {
         var result = selectMethod.Invoke(contextParam, new object[] { selectedKey });
-        if (result is bool success && success)
-        {
-          return true;
-        }
+        if (result is bool success && success) return true;
 
         addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
           $"Could not find item '{selectedKey}' in ValueList");

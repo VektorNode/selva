@@ -52,10 +52,7 @@ public class WebSocketServer : IDisposable
   /// </summary>
   public Task StartAsync()
   {
-    if (IsRunning)
-    {
-      return Task.CompletedTask;
-    }
+    if (IsRunning) return Task.CompletedTask;
 
     _cancellationTokenSource = new CancellationTokenSource();
     _httpListener = new HttpListener();
@@ -85,10 +82,7 @@ public class WebSocketServer : IDisposable
   /// </summary>
   public void Stop()
   {
-    if (!IsRunning)
-    {
-      return;
-    }
+    if (!IsRunning) return;
 
     // Stop heartbeat
     _heartbeatTimer?.Dispose();
@@ -124,10 +118,7 @@ public class WebSocketServer : IDisposable
   /// </summary>
   public async Task BroadcastAsync(string message)
   {
-    if (!IsRunning)
-    {
-      return;
-    }
+    if (!IsRunning) return;
 
     var buffer = Encoding.UTF8.GetBytes(message);
     var segment = new ArraySegment<byte>(buffer);
@@ -143,7 +134,6 @@ public class WebSocketServer : IDisposable
     foreach (var client in clientsCopy)
     {
       if (client.State == WebSocketState.Open)
-      {
         try
         {
           // Add timeout to prevent slow clients from blocking broadcast
@@ -160,16 +150,12 @@ public class WebSocketServer : IDisposable
         {
           clientsToRemove.Add(client);
         }
-      }
       else
-      {
         clientsToRemove.Add(client);
-      }
     }
 
     // Remove dead clients
     if (clientsToRemove.Count > 0)
-    {
       lock (_clientsLock)
       {
         foreach (var client in clientsToRemove)
@@ -184,7 +170,6 @@ public class WebSocketServer : IDisposable
           }
         }
       }
-    }
   }
 
   private async Task AcceptConnectionsAsync(CancellationToken cancellationToken)
@@ -228,13 +213,9 @@ public class WebSocketServer : IDisposable
       lock (_clientsLock)
       {
         if (_connectedClients.Count >= MAX_CLIENTS)
-        {
           shouldReject = true;
-        }
         else
-        {
           _connectedClients.Add(webSocket);
-        }
       }
 
       if (shouldReject)
@@ -266,10 +247,8 @@ public class WebSocketServer : IDisposable
         try
         {
           if (webSocket.State == WebSocketState.Open)
-          {
             await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Connection closed",
               CancellationToken.None);
-          }
 
           webSocket.Dispose();
         }
@@ -341,10 +320,7 @@ public class WebSocketServer : IDisposable
   {
     _heartbeatTimer = new Timer(async _ =>
     {
-      if (!IsRunning)
-      {
-        return;
-      }
+      if (!IsRunning) return;
 
       List<WebSocket> clients;
       lock (_clientsLock)
@@ -357,7 +333,6 @@ public class WebSocketServer : IDisposable
       foreach (var client in clients)
       {
         if (client.State == WebSocketState.Open)
-        {
           try
           {
             // Send ping by sending empty text message
@@ -377,15 +352,11 @@ public class WebSocketServer : IDisposable
           {
             clientsToRemove.Add(client);
           }
-        }
         else
-        {
           clientsToRemove.Add(client);
-        }
       }
 
       if (clientsToRemove.Count > 0)
-      {
         lock (_clientsLock)
         {
           foreach (var client in clientsToRemove)
@@ -400,7 +371,6 @@ public class WebSocketServer : IDisposable
             }
           }
         }
-      }
     }, null, HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL);
   }
 }

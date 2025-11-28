@@ -17,16 +17,10 @@ public static class SchemaMigrator
   /// </summary>
   public static UISchema MigrateToCurrentVersion(UISchema schema)
   {
-    if (schema == null)
-    {
-      throw new ArgumentNullException(nameof(schema));
-    }
+    if (schema == null) throw new ArgumentNullException(nameof(schema));
 
     // Handle legacy schemas without version
-    if (string.IsNullOrEmpty(schema.SchemaVersion))
-    {
-      schema.SchemaVersion = "1.0.0";
-    }
+    if (string.IsNullOrEmpty(schema.SchemaVersion)) schema.SchemaVersion = "1.0.0";
 
     Version schemaVersion;
     try
@@ -53,17 +47,12 @@ public static class SchemaMigrator
       }
 
       if (PLUGIN_VERSION < minVersion)
-      {
         throw new IncompatibleSchemaException(
           $"This schema requires plugin version {minVersion} or higher. " +
           $"Current version: {PLUGIN_VERSION}");
-      }
     }
 
-    if (schemaVersion >= CURRENT_SCHEMA_VERSION)
-    {
-      return schema;
-    }
+    if (schemaVersion >= CURRENT_SCHEMA_VERSION) return schema;
 
     var migratedSchema = schema;
 
@@ -83,10 +72,7 @@ public static class SchemaMigrator
   /// </summary>
   public static bool NeedsMigration(UISchema schema)
   {
-    if (schema == null || string.IsNullOrEmpty(schema.SchemaVersion))
-    {
-      return true; // Legacy schema
-    }
+    if (schema == null || string.IsNullOrEmpty(schema.SchemaVersion)) return true; // Legacy schema
 
     try
     {
@@ -104,15 +90,9 @@ public static class SchemaMigrator
   /// </summary>
   public static (bool IsCompatible, string Message) ValidateCompatibility(UISchema schema)
   {
-    if (schema == null)
-    {
-      return (false, "Schema is null");
-    }
+    if (schema == null) return (false, "Schema is null");
 
-    if (string.IsNullOrEmpty(schema.SchemaVersion))
-    {
-      return (true, "Legacy schema detected - will be migrated on load");
-    }
+    if (string.IsNullOrEmpty(schema.SchemaVersion)) return (true, "Legacy schema detected - will be migrated on load");
 
     Version schemaVersion;
     try
@@ -137,17 +117,13 @@ public static class SchemaMigrator
       }
 
       if (PLUGIN_VERSION < minVersion)
-      {
         return (false,
           $"Schema requires plugin version {minVersion} or higher. Current: {PLUGIN_VERSION}");
-      }
     }
 
     if (schemaVersion.Major > CURRENT_SCHEMA_VERSION.Major)
-    {
       return (false,
         $"Schema version {schemaVersion} requires a newer version of Selva");
-    }
 
     return (true, "Schema is compatible");
   }

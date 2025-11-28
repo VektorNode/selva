@@ -4,7 +4,8 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
   // Consult https://svelte.dev/docs/kit/integrations
-  // for more information about preprocessors
+  // For more information about preprocessors -> For App we will need the auto adapter
+  // Probably best to seperate App from this svelte app
   preprocess: vitePreprocess(),
 
   compilerOptions: {
@@ -32,7 +33,7 @@ const config = {
 
     prerender: {
       // Only prerender routes that don't need query params
-      // The /app route is excluded (separate application)
+      // Notice that the /app route is excluded (separate application) since it requires server-side data (api/compute & page.server.ts)
       entries: [],
       handleHttpError: 'warn'
     }

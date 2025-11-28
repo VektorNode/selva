@@ -3,23 +3,18 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Windows.Forms;
-using Selva.Features.UIBuilder.Components;
+using GH_IO.Serialization;
+using Grasshopper.Kernel;
+using Newtonsoft.Json;
 using Selva.Config;
+using Selva.Core.Guards;
+using Selva.Features.UIBuilder.Helpers;
 using Selva.Features.UIBuilder.Models;
 using Selva.Features.UIBuilder.Services;
-using Selva.Features.UIBuilder.Helpers;
-using Selva.Core.Guards;
-using Selva.Core.Helpers;
-using GH_IO.Serialization;
-using Grasshopper;
-using Grasshopper.Kernel;
-using Grasshopper.Kernel.Types;
-using Newtonsoft.Json;
-using Rhino;
-using Selva.Features.FileIO.Services;
 
 namespace Selva.Features.UIBuilder.Components;
 
@@ -36,29 +31,25 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     DefaultValueHandling = DefaultValueHandling.Ignore
   };
 
+  private SchemaCleanupService _cleanupService;
+
   // Core dependencies
   private CommunicationHandler _communicationHandler;
-  private LocalWebServer _webServer;
-  private SchemaManager _schemaManager;
-  private ValueApplicator _valueApplicator;
-  private ValueCollector _valueCollector;
-  private ComponentStateManager _stateManager;
-  private DocumentEventManager _eventManager;
-  private SchemaCleanupService _cleanupService;
 
   // Document tracking
   private GH_Document _currentDocument;
   private bool _disposed;
+  private UISchema _embeddedSchema;
+  private Dictionary<string, object> _embeddedValues;
+  private DocumentEventManager _eventManager;
+  private SchemaManager _schemaManager;
 
   // Session and schema
   private string _sessionId;
-  private UISchema _embeddedSchema;
-  private Dictionary<string, object> _embeddedValues;
-
-  /// <summary>
-  ///   Helper property to check if WebSocket communication is available
-  /// </summary>
-  private bool IsConnected => _communicationHandler?.IsRunning == true;
+  private ComponentStateManager _stateManager;
+  private ValueApplicator _valueApplicator;
+  private ValueCollector _valueCollector;
+  private LocalWebServer _webServer;
 
 
   public GH_UIBuilderComponent()
@@ -67,6 +58,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       "Selva", "Core")
   {
   }
+
+  /// <summary>
+  ///   Helper property to check if WebSocket communication is available
+  /// </summary>
+  private bool IsConnected => _communicationHandler?.IsRunning == true;
 
   public override Guid ComponentGuid => new("D4E5F6A7-B8C9-4D5E-0F1A-2B3C4D5E6F7A");
 
@@ -90,9 +86,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     var document = OnPingDocument();
     if (document == null || _schemaManager == null)
-    {
       return new AvailableParameters { SessionId = _sessionId, Parameters = new List<AvailableParameter>() };
-    }
 
     return _schemaManager.ScanParameters(document);
   }
@@ -103,10 +97,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   private List<AvailableOutput> GetCurrentAvailableOutputs()
   {
     var document = OnPingDocument();
-    if (document == null || _schemaManager == null)
-    {
-      return new List<AvailableOutput>();
-    }
+    if (document == null || _schemaManager == null) return new List<AvailableOutput>();
 
     return _schemaManager.ScanOutputs(document);
   }
@@ -118,20 +109,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   private (UISchema Schema, List<Guid> RemovedIds) GetValidatedSchema()
   {
     var document = OnPingDocument();
-    if (document == null || _embeddedSchema == null || _schemaManager == null)
-    {
-      return (null, new List<Guid>());
-    }
+    if (document == null || _embeddedSchema == null || _schemaManager == null) return (null, new List<Guid>());
 
-    return _schemaManager.ValidateSchemaAndTrackChanges(_embeddedSchema, document, trackChanges: true);
+    return _schemaManager.ValidateSchemaAndTrackChanges(_embeddedSchema, document, true);
   }
 
   private static string CreateSessionId(int length)
   {
-    if (length <= 0)
-    {
-      throw new ArgumentOutOfRangeException(nameof(length), "Length must be > 0");
-    }
+    if (length <= 0) throw new ArgumentOutOfRangeException(nameof(length), "Length must be > 0");
 
     string EncodeUrlSafe(byte[] bytes)
     {
@@ -159,7 +144,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   /// </summary>
   private static bool HasEmbeddedWebAssets()
   {
-    var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+    var assembly = Assembly.GetExecutingAssembly();
     var resourceNames = assembly.GetManifestResourceNames();
     return resourceNames.Any(name => name.Contains("Selva.EmbeddedAssets.web.index.html"));
   }
@@ -214,10 +199,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
     // Validate for duplicates on enable rising
-    if (transition.EnableRising)
-    {
-      ValidateForDuplicates(document);
-    }
+    if (transition.EnableRising) ValidateForDuplicates(document);
 
     // Handle enabled state
     if (transition.IsEnabled)
@@ -227,10 +209,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
     // Handle disabled state
-    if (transition.EnableFalling)
-    {
-      HandleDisablingState(document);
-    }
+    if (transition.EnableFalling) HandleDisablingState(document);
 
     HandleDisabledState(DA, document);
   }
@@ -240,22 +219,16 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   /// </summary>
   private void InitializeDependencies()
   {
-    if (_schemaManager != null)
-    {
-      return;
-    }
+    if (_schemaManager != null) return;
 
-    if (string.IsNullOrEmpty(_sessionId))
-    {
-      _sessionId = CreateSessionId(AppConfig.Sessions.SessionIdLength);
-    }
+    if (string.IsNullOrEmpty(_sessionId)) _sessionId = CreateSessionId(AppConfig.Sessions.SessionIdLength);
 
     _schemaManager = new SchemaManager(_sessionId);
     _valueApplicator = new ValueApplicator();
     _valueCollector = new ValueCollector();
     _stateManager = new ComponentStateManager();
     _communicationHandler = new CommunicationHandler(_sessionId);
-    _webServer = new LocalWebServer(port: 0); // Use random available port
+    _webServer = new LocalWebServer(0); // Use random available port
     _eventManager = new DocumentEventManager(_schemaManager, _valueCollector, _communicationHandler);
     _cleanupService = new SchemaCleanupService();
 
@@ -298,23 +271,15 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   /// </summary>
   private void HandleHeadlessMode(IGH_DataAccess DA, GH_Document document, StateTransition transition)
   {
-    if (transition.EnableRising)
-    {
-      ValidateForDuplicates(document);
-    }
+    if (transition.EnableRising) ValidateForDuplicates(document);
 
-    if (_embeddedSchema != null)
-    {
-      _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
-    }
+    if (_embeddedSchema != null) _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
 
     if (_embeddedValues != null && _embeddedSchema != null)
-    {
       _valueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, _embeddedValues, AddRuntimeMessage);
-    }
 
     DA.SetData(1, ComponentMessageFormatter.CreateInfoMessage(_sessionId, transition.IsEnabled, _embeddedSchema,
-      false, isHeadless: true));
+      false, true));
     DA.SetData(2,
       _embeddedSchema != null ? JsonConvert.SerializeObject(_embeddedSchema, SchemaSerializationSettings) : "");
     Message = ComponentMessageFormatter.CreateDisplayMessage(transition.IsEnabled, false, _embeddedSchema, _sessionId);
@@ -326,11 +291,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   private void HandleEnabledState(IGH_DataAccess DA, GH_Document document, StateTransition transition)
   {
     if (!_communicationHandler.IsRunning)
-    {
       try
       {
         // Start WebSocket server for real-time communication
-        _communicationHandler.Start(msg => { /* Silent */ });
+        _communicationHandler.Start(msg =>
+        {
+          /* Silent */
+        });
 
         // Start embedded web server (production mode only - check if resources exist)
         if (!_webServer.IsRunning && HasEmbeddedWebAssets())
@@ -348,12 +315,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         DA.SetData(1, ComponentMessageFormatter.CreateErrorInfoMessage("Could not start servers"));
         return;
       }
-    }
 
     if (_embeddedSchema != null && transition.EnableRising)
-    {
       _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
-    }
 
     DA.SetData(1, ComponentMessageFormatter.CreateInfoMessage(_sessionId, true, _embeddedSchema, IsConnected));
     DA.SetData(2, _embeddedSchema != null
@@ -405,23 +369,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     try
     {
-      if (_stateManager.IsSolving)
-      {
-        return;
-      }
+      if (_stateManager.IsSolving) return;
 
       var document = OnPingDocument();
-      if (!DocumentGuards.DocumentAndSchemaValid(document, _embeddedSchema, out _))
-      {
-        return;
-      }
+      if (!DocumentGuards.DocumentAndSchemaValid(document, _embeddedSchema, out _)) return;
 
       var updated = _valueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, values, AddRuntimeMessage);
 
-      if (updated > 0)
-      {
-        _embeddedValues = new Dictionary<string, object>(values);
-      }
+      if (updated > 0) _embeddedValues = new Dictionary<string, object>(values);
     }
     catch (Exception ex)
     {
@@ -453,20 +408,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     try
     {
       var document = OnPingDocument();
-      if (!DocumentGuards.IsValid(document, out var error))
-      {
-        return;
-      }
+      if (!DocumentGuards.IsValid(document, out var error)) return;
 
       var currentParams = GetCurrentAvailableParameters();
       var currentOutputs = GetCurrentAvailableOutputs();
       var currentValues = _valueCollector.CollectInputValues(document, _embeddedSchema, AddRuntimeMessage);
 
       var (validatedSchema, removedIds) = GetValidatedSchema();
-      if (removedIds.Count > 0)
-      {
-        HandleParameterDeletion(removedIds);
-      }
+      if (removedIds.Count > 0) HandleParameterDeletion(removedIds);
 
       var broadcastTask = _communicationHandler.BroadcastInitialData(
         validatedSchema ?? _embeddedSchema,
@@ -511,7 +460,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   }
 
 
-
   /// <summary>
   ///   Handle request for current input values from web UI
   /// </summary>
@@ -520,10 +468,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     try
     {
       var document = OnPingDocument();
-      if (!DocumentGuards.DocumentAndSchemaValid(document, _embeddedSchema, out _))
-      {
-        return;
-      }
+      if (!DocumentGuards.DocumentAndSchemaValid(document, _embeddedSchema, out _)) return;
 
       var currentValues = _valueCollector.CollectInputValues(document, _embeddedSchema, AddRuntimeMessage);
 
@@ -691,10 +636,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
   protected virtual void Dispose(bool disposing)
   {
-    if (_disposed)
-    {
-      return;
-    }
+    if (_disposed) return;
 
     if (disposing)
     {
@@ -710,20 +652,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   // Schema persistence - save/load with .gh file
   public override bool Write(GH_IWriter writer)
   {
-    if (!string.IsNullOrEmpty(_sessionId))
-    {
-      writer.SetString("SessionId", _sessionId);
-    }
+    if (!string.IsNullOrEmpty(_sessionId)) writer.SetString("SessionId", _sessionId);
 
     if (_embeddedSchema != null)
-    {
       try
       {
         // Ensure version is set before saving
         if (string.IsNullOrEmpty(_embeddedSchema.SchemaVersion))
-        {
           _embeddedSchema.SchemaVersion = SchemaMigrator.CURRENT_SCHEMA_VERSION.ToString();
-        }
 
         _embeddedSchema.LastModified = DateTime.UtcNow;
 
@@ -735,11 +671,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
           $"Could not save schema: {ex.Message}");
       }
-    }
 
     var lastValues = _valueApplicator?.GetLastAppliedValues();
     if (lastValues != null && lastValues.Count > 0)
-    {
       try
       {
         var valuesJson = JsonConvert.SerializeObject(lastValues);
@@ -750,20 +684,15 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
           $"Could not save values: {ex.Message}");
       }
-    }
 
     return base.Write(writer);
   }
 
   public override bool Read(GH_IReader reader)
   {
-    if (reader.ItemExists("SessionId"))
-    {
-      _sessionId = reader.GetString("SessionId");
-    }
+    if (reader.ItemExists("SessionId")) _sessionId = reader.GetString("SessionId");
 
     if (reader.ItemExists("Schema"))
-    {
       try
       {
         var schemaJson = reader.GetString("Schema");
@@ -777,10 +706,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
           // Log if migration occurred
           if (originalVersion != _embeddedSchema.SchemaVersion)
-          {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
               $"Schema migrated from v{originalVersion ?? "legacy"} to v{_embeddedSchema.SchemaVersion}");
-          }
         }
       }
       catch (IncompatibleSchemaException ex)
@@ -793,24 +720,19 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
           $"Could not load schema: {ex.Message}");
       }
-    }
 
     if (reader.ItemExists("Values"))
-    {
       try
       {
         var valuesJson = reader.GetString("Values");
         if (!string.IsNullOrEmpty(valuesJson))
-        {
           _embeddedValues = JsonConvert.DeserializeObject<Dictionary<string, object>>(valuesJson);
-        }
       }
       catch (Exception ex)
       {
         AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
           $"Could not load values: {ex.Message}");
       }
-    }
 
     return base.Read(reader);
   }

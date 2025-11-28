@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using Selva.Config;
-using Selva.Features.FileIO.Services;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using Grasshopper.Rhinoceros.Model;
@@ -10,6 +8,8 @@ using Grasshopper.Rhinoceros.Model.Params;
 using Rhino;
 using Rhino.DocObjects;
 using Rhino.Geometry;
+using Selva.Config;
+using Selva.Features.FileIO.Services;
 
 namespace Selva.Features.FileIO.Components;
 
@@ -63,23 +63,16 @@ public class GH_Block_To_File : GH_Component
   {
     try
     {
-      if (!TryGetBlockInput(DA, out var blockObj))
-      {
-        return;
-      }
+      if (!TryGetBlockInput(DA, out var blockObj)) return;
 
       var exportedFile = ExportBlockToFile(blockObj);
 
       if (exportedFile != null)
-      {
         DA.SetData(0, new FileDataGoo(exportedFile));
-      }
       else
-      {
         AddRuntimeMessage(
           GH_RuntimeMessageLevel.Error,
           "Failed to export block to file");
-      }
     }
     catch (Exception ex)
     {
@@ -109,16 +102,10 @@ public class GH_Block_To_File : GH_Component
     using var headlessDoc = RhinoDoc.CreateHeadless(null);
     _copiedBlockIndices.Clear();
 
-    if (!TryProcessBlockObject(blockObj, headlessDoc, out var blockName))
-    {
-      return null;
-    }
+    if (!TryProcessBlockObject(blockObj, headlessDoc, out var blockName)) return null;
 
     var base64String = ConvertDocumentToBase64(headlessDoc);
-    if (string.IsNullOrEmpty(base64String))
-    {
-      return null;
-    }
+    if (string.IsNullOrEmpty(base64String)) return null;
 
     return CreateFileData(blockName, base64String);
   }
@@ -127,16 +114,10 @@ public class GH_Block_To_File : GH_Component
   {
     blockName = null;
 
-    if (!blockObj.CastTo<GH_InstanceReference>(out var instanceRef))
-    {
-      return false;
-    }
+    if (!blockObj.CastTo<GH_InstanceReference>(out var instanceRef)) return false;
 
     var modelIdef = instanceRef.InstanceDefinition;
-    if (modelIdef == null)
-    {
-      return false;
-    }
+    if (modelIdef == null) return false;
 
     blockName = modelIdef.Name;
     CopyBlockRecursive(modelIdef, targetDoc);
@@ -155,17 +136,11 @@ public class GH_Block_To_File : GH_Component
   private void CopyBlockRecursive(ModelInstanceDefinition modelIdef, RhinoDoc targetDoc)
   {
     // Skip if already copied
-    if (_copiedBlockIndices.ContainsKey(modelIdef.Name))
-    {
-      return;
-    }
+    if (_copiedBlockIndices.ContainsKey(modelIdef.Name)) return;
 
     var geometries = CollectBlockGeometry(modelIdef, targetDoc);
 
-    if (geometries.Count == 0)
-    {
-      return;
-    }
+    if (geometries.Count == 0) return;
 
     var idefIndex = targetDoc.InstanceDefinitions.Add(
       modelIdef.Name,
@@ -173,10 +148,7 @@ public class GH_Block_To_File : GH_Component
       Point3d.Origin,
       geometries);
 
-    if (idefIndex >= 0)
-    {
-      _copiedBlockIndices[modelIdef.Name] = idefIndex;
-    }
+    if (idefIndex >= 0) _copiedBlockIndices[modelIdef.Name] = idefIndex;
   }
 
   private List<GeometryBase> CollectBlockGeometry(ModelInstanceDefinition modelIdef, RhinoDoc targetDoc)
@@ -185,19 +157,11 @@ public class GH_Block_To_File : GH_Component
 
     foreach (var modelObj in modelIdef.Objects)
     {
-      if (modelObj == null)
-      {
-        continue;
-      }
+      if (modelObj == null) continue;
 
       if (modelObj.ObjectType == ObjectType.InstanceReference)
-      {
         TryAddNestedBlockReference(modelObj, targetDoc, geometries);
-      }
-      else if (modelObj.CastTo<GeometryBase>(out var geom))
-      {
-        geometries.Add(geom);
-      }
+      else if (modelObj.CastTo<GeometryBase>(out var geom)) geometries.Add(geom);
     }
 
     return geometries;
@@ -205,16 +169,10 @@ public class GH_Block_To_File : GH_Component
 
   private void TryAddNestedBlockReference(ModelObject modelObj, RhinoDoc targetDoc, List<GeometryBase> geometries)
   {
-    if (!modelObj.CastTo<GH_InstanceReference>(out var nestedInstanceRef))
-    {
-      return;
-    }
+    if (!modelObj.CastTo<GH_InstanceReference>(out var nestedInstanceRef)) return;
 
     var nestedModelIdef = nestedInstanceRef.InstanceDefinition;
-    if (nestedModelIdef == null)
-    {
-      return;
-    }
+    if (nestedModelIdef == null) return;
 
     // Recursively copy nested block first
     CopyBlockRecursive(nestedModelIdef, targetDoc);
@@ -247,17 +205,11 @@ public class GH_Block_To_File : GH_Component
 
   private void EnsureConverterInitialized()
   {
-    if (_converter != null)
-    {
-      return;
-    }
+    if (_converter != null) return;
 
     lock (_converterLock)
     {
-      if (_converter != null)
-      {
-        return;
-      }
+      if (_converter != null) return;
 
       var options = new AppConfig.RhinoConverterOptions();
 

@@ -80,10 +80,7 @@ public class ThreeDisplayGoo : IGH_Goo
 
   public bool Read(GH_IReader reader)
   {
-    if (!reader.ItemExists("ThreeDisplayJson"))
-    {
-      return false;
-    }
+    if (!reader.ItemExists("ThreeDisplayJson")) return false;
 
     var json = reader.GetString("ThreeDisplayJson");
     var settings = new JsonSerializerSettings

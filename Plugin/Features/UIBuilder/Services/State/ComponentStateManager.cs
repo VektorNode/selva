@@ -7,10 +7,9 @@ namespace Selva.Features.UIBuilder.Services;
 /// </summary>
 public class ComponentStateManager
 {
-  private bool _isSolving;
   private bool _lastEnable;
 
-  public bool IsSolving => _isSolving;
+  public bool IsSolving { get; private set; }
 
   /// <summary>
   ///   Check if running in headless mode (no Rhino UI)
@@ -42,7 +41,7 @@ public class ComponentStateManager
   /// </summary>
   public void SetSolving(bool isSolving)
   {
-    _isSolving = isSolving;
+    IsSolving = isSolving;
   }
 
   /// <summary>
@@ -50,7 +49,7 @@ public class ComponentStateManager
   /// </summary>
   public void Reset()
   {
-    _isSolving = false;
+    IsSolving = false;
     _lastEnable = false;
   }
 }

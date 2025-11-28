@@ -1,1 +1,0 @@
-- [ ] When Min/Max is changed automatically save to schema instead of user needing to rerun a new solution manually

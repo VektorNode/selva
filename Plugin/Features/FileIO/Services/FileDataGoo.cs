@@ -31,10 +31,7 @@ public class FileDataGoo : IGH_Goo
 
   public IGH_Goo Duplicate()
   {
-    if (Value == null)
-    {
-      return new FileDataGoo();
-    }
+    if (Value == null) return new FileDataGoo();
 
     // Deep copy via JSON serialization
     var json = JsonConvert.SerializeObject(Value);
@@ -77,10 +74,7 @@ public class FileDataGoo : IGH_Goo
 
   public bool Write(GH_IWriter writer)
   {
-    if (Value == null)
-    {
-      return false;
-    }
+    if (Value == null) return false;
 
     var json = JsonConvert.SerializeObject(Value);
     writer.SetString("FileDataJson", json);
@@ -89,10 +83,7 @@ public class FileDataGoo : IGH_Goo
 
   public bool Read(GH_IReader reader)
   {
-    if (!reader.ItemExists("FileDataJson"))
-    {
-      return false;
-    }
+    if (!reader.ItemExists("FileDataJson")) return false;
 
     var json = reader.GetString("FileDataJson");
     Value = JsonConvert.DeserializeObject<FileData>(json);
@@ -101,15 +92,9 @@ public class FileDataGoo : IGH_Goo
 
   public override string ToString()
   {
-    if (Value == null)
-    {
-      return "Null FileData";
-    }
+    if (Value == null) return "Null FileData";
 
-    if (string.IsNullOrEmpty(Value.FileName))
-    {
-      return "FileData (no filename)";
-    }
+    if (string.IsNullOrEmpty(Value.FileName)) return "FileData (no filename)";
 
     return $"FileData: {Value.FileName}";
   }

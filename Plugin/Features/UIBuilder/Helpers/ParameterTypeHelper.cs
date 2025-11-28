@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using Selva.Features.UIBuilder.Models;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
+using Selva.Features.UIBuilder.Models;
 
 namespace Selva.Features.UIBuilder.Helpers;
 
@@ -18,10 +18,7 @@ public static class ParameterTypeHelper
   /// </summary>
   public static bool IsContextOutputComponent(IGH_DocumentObject obj)
   {
-    if (obj == null)
-    {
-      return false;
-    }
+    if (obj == null) return false;
 
     var typeName = obj.GetType()?.Name;
     return string.Equals(typeName, "ContextPrintComponent", StringComparison.Ordinal);
@@ -30,10 +27,7 @@ public static class ParameterTypeHelper
 
   public static bool IsContextBakeComponent(IGH_DocumentObject obj)
   {
-    if (obj == null)
-    {
-      return false;
-    }
+    if (obj == null) return false;
 
     var typeName = obj.GetType()?.Name;
     return string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal);
@@ -57,9 +51,7 @@ public static class ParameterTypeHelper
 
     // Try to get min/max from parameter properties
     if (getNumberType.Name == "GetNumberParameter")
-    {
       ExtractParameterMinMax(param, availableParam, ref minimum, ref maximum);
-    }
 
     // Helper to detect extreme sentinel values
     const double extremeThreshold = 7.9e307;
@@ -122,20 +114,14 @@ public static class ParameterTypeHelper
     {
       availableParam.Minimum = minimum.Value;
       availableParam.Maximum = maximum.Value;
-      if (stepSize.HasValue)
-      {
-        availableParam.StepSize = (double)stepSize.Value;
-      }
+      if (stepSize.HasValue) availableParam.StepSize = (double)stepSize.Value;
     }
   }
 
   private static bool TryGetPropertyValue<T>(object obj, string propName, out T value)
   {
     value = default;
-    if (obj == null)
-    {
-      return false;
-    }
+    if (obj == null) return false;
 
     var type = obj.GetType();
     const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic |
@@ -143,7 +129,6 @@ public static class ParameterTypeHelper
 
     var prop = type.GetProperty(propName, flags);
     if (prop == null)
-    {
       foreach (var p in type.GetProperties(flags))
       {
         if (string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase) ||
@@ -153,18 +138,11 @@ public static class ParameterTypeHelper
           break;
         }
       }
-    }
 
-    if (prop == null)
-    {
-      return false;
-    }
+    if (prop == null) return false;
 
     var raw = prop.GetValue(obj);
-    if (raw == null)
-    {
-      return false;
-    }
+    if (raw == null) return false;
 
     try
     {
@@ -196,20 +174,12 @@ public static class ParameterTypeHelper
     ref double? maximum)
   {
     if (TryGetPropertyValue<double>(param, "Minimum", out var minValue))
-    {
       if (!double.IsNegativeInfinity(minValue) && !double.IsNaN(minValue) && minValue != 0)
-      {
         minimum = minValue;
-      }
-    }
 
     if (TryGetPropertyValue<double>(param, "Maximum", out var maxValue))
-    {
       if (!double.IsPositiveInfinity(maxValue) && !double.IsNaN(maxValue) && maxValue != 0)
-      {
         maximum = maxValue;
-      }
-    }
   }
 
   public static ClearResult ClearContextualParameters(List<IGH_ContextualParameter> contextualParams,
@@ -255,31 +225,20 @@ public static class ParameterTypeHelper
   private static void ClearSingleParameter(IGH_ContextualParameter contextParam)
   {
     var clearMethod = contextParam.GetType().GetMethod("ClearContextualData");
-    if (clearMethod != null)
-    {
-      clearMethod.Invoke(contextParam, null);
-    }
+    if (clearMethod != null) clearMethod.Invoke(contextParam, null);
 
     var collectVolatileData = contextParam.GetType().GetMethod("CollectVolatileData_FromSources");
-    if (collectVolatileData != null)
-    {
-      collectVolatileData.Invoke(contextParam, null);
-    }
+    if (collectVolatileData != null) collectVolatileData.Invoke(contextParam, null);
   }
 
   private static void CollectRecipients(IGH_ContextualParameter contextParam,
     HashSet<IGH_ActiveObject> recipients)
   {
     if (contextParam is IGH_Param param)
-    {
       foreach (var recipient in param.Recipients)
       {
-        if (recipient is IGH_ActiveObject activeRecipient)
-        {
-          recipients.Add(activeRecipient);
-        }
+        if (recipient is IGH_ActiveObject activeRecipient) recipients.Add(activeRecipient);
       }
-    }
   }
 
   private static void ExpireRecipients(HashSet<IGH_ActiveObject> recipients, GH_Component component)
@@ -309,44 +268,29 @@ public static class ParameterTypeHelper
   {
     var downloadableComponents = new List<AvailableOutput>();
 
-    if (document == null)
-    {
-      return (false, downloadableComponents);
-    }
+    if (document == null) return (false, downloadableComponents);
 
     try
     {
       // Find all ContextBake components in the document
       foreach (var obj in document.Objects)
       {
-        if (!IsContextBakeComponent(obj))
-        {
-          continue;
-        }
+        if (!IsContextBakeComponent(obj)) continue;
 
         var contextBakeComponent = obj as IGH_Component;
-        if (contextBakeComponent?.Params.Input == null)
-        {
-          continue;
-        }
+        if (contextBakeComponent?.Params.Input == null) continue;
 
         // Check if any of the input parameters have FileData
         var hasFileData = false;
         foreach (var inputParam in contextBakeComponent.Params.Input)
         {
-          if (inputParam == null || inputParam.SourceCount == 0)
-          {
-            continue;
-          }
+          if (inputParam == null || inputParam.SourceCount == 0) continue;
 
           // Check the data from the input sources
           try
           {
             var data = inputParam.VolatileData;
-            if (data == null || data.IsEmpty)
-            {
-              continue;
-            }
+            if (data == null || data.IsEmpty) continue;
 
             // Iterate through all data in the param
             var allData = data.AllData(true);
@@ -365,20 +309,14 @@ public static class ParameterTypeHelper
             // Silently skip on error
           }
 
-          if (hasFileData)
-          {
-            break;
-          }
+          if (hasFileData) break;
         }
 
         // If this ContextBake has FileData, record it as an AvailableOutput with outputType="file"
         if (hasFileData)
         {
-          var docObj = obj as IGH_DocumentObject;
-          if (docObj == null)
-          {
-            continue;
-          }
+          var docObj = obj;
+          if (docObj == null) continue;
           var nickname = docObj.NickName;
           var instanceGuid = docObj.InstanceGuid;
 

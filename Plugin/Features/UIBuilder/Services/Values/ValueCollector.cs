@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Selva.Features.UIBuilder.Components;
-using Selva.Features.FileIO.Services;
-using Selva.Features.UIBuilder.Models;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
+using Selva.Features.FileIO.Services;
+using Selva.Features.IO.Componets;
+using Selva.Features.UIBuilder.Models;
 
 namespace Selva.Features.UIBuilder.Services;
 
@@ -23,28 +23,19 @@ public class ValueCollector
   {
     var currentValues = new Dictionary<string, object>();
 
-    if (schema?.Inputs == null || schema.Inputs.Count == 0)
-    {
-      return currentValues;
-    }
+    if (schema?.Inputs == null || schema.Inputs.Count == 0) return currentValues;
 
     foreach (var input in schema.Inputs)
     {
       try
       {
         var paramObject = document.FindObject(input.Id, false);
-        if (paramObject == null)
-        {
-          continue;
-        }
+        if (paramObject == null) continue;
 
         if (paramObject is IGH_Param ghParam)
         {
           var value = ExtractParameterValue(ghParam, input);
-          if (value != null)
-          {
-            currentValues[input.Id.ToString()] = value;
-          }
+          if (value != null) currentValues[input.Id.ToString()] = value;
         }
       }
       catch (Exception ex)
@@ -65,28 +56,19 @@ public class ValueCollector
   {
     var outputValues = new Dictionary<string, object>();
 
-    if (schema?.Outputs == null || schema.Outputs.Count == 0)
-    {
-      return outputValues;
-    }
+    if (schema?.Outputs == null || schema.Outputs.Count == 0) return outputValues;
 
     foreach (var output in schema.Outputs)
     {
       try
       {
         var paramObject = document.FindObject(output.Id, false);
-        if (paramObject == null)
-        {
-          continue;
-        }
+        if (paramObject == null) continue;
 
         if (paramObject is IGH_Component ghComponent)
         {
           var value = ExtractComponentOutput(ghComponent);
-          if (value != null)
-          {
-            outputValues[output.Id.ToString()] = value;
-          }
+          if (value != null) outputValues[output.Id.ToString()] = value;
         }
       }
       catch (Exception ex)
@@ -107,10 +89,7 @@ public class ValueCollector
   {
     var fileOutputData = new Dictionary<string, object>();
 
-    if (schema?.Outputs == null || schema.Outputs.Count == 0)
-    {
-      return fileOutputData;
-    }
+    if (schema?.Outputs == null || schema.Outputs.Count == 0) return fileOutputData;
 
     var fileOutputs = schema.Outputs.Where(o => o.OutputType == "file").ToList();
 
@@ -119,20 +98,15 @@ public class ValueCollector
       try
       {
         var componentObject = document.FindObject(fileOutput.Id, false);
-        if (componentObject == null)
-        {
-          continue;
-        }
+        if (componentObject == null) continue;
 
         if (componentObject is IGH_Component component)
         {
           var fileDataList = ExtractFileDataFromComponent(component, addMessage);
           if (fileDataList.Count > 0)
-          {
             fileOutputData[fileOutput.Id.ToString()] = fileDataList.Count == 1
               ? fileDataList[0]
               : fileDataList;
-          }
         }
       }
       catch (Exception ex)
@@ -150,15 +124,9 @@ public class ValueCollector
   /// </summary>
   private object ExtractParameterValue(IGH_Param ghParam, InputParamSchema input)
   {
-    if (ghParam is GetValueListParameter valueListParam)
-    {
-      return ExtractValueListValue(valueListParam);
-    }
+    if (ghParam is GetValueListParameter valueListParam) return ExtractValueListValue(valueListParam);
 
-    if (ghParam.SourceCount == 1)
-    {
-      return ExtractDataFromVolatileData(ghParam.Sources[0].VolatileData);
-    }
+    if (ghParam.SourceCount == 1) return ExtractDataFromVolatileData(ghParam.Sources[0].VolatileData);
 
     return null;
   }
@@ -172,14 +140,9 @@ public class ValueCollector
     if (valueData != null && !valueData.IsEmpty)
     {
       var allData = valueData.AllData(true).ToList();
-      if (allData.Count == 1)
-      {
-        return ExtractKeyFromValueListData(allData[0]);
-      }
-      else if (allData.Count > 1)
-      {
-        return allData.Select(d => ExtractKeyFromValueListData(d)).ToList();
-      }
+      if (allData.Count == 1) return ExtractKeyFromValueListData(allData[0]);
+
+      if (allData.Count > 1) return allData.Select(d => ExtractKeyFromValueListData(d)).ToList();
     }
 
     return null;
@@ -192,9 +155,7 @@ public class ValueCollector
   {
     var inputParam = component.Params.Input.FirstOrDefault();
     if (inputParam?.VolatileData != null && !inputParam.VolatileData.IsEmpty)
-    {
       return ExtractDataFromVolatileData(inputParam.VolatileData);
-    }
 
     return null;
   }
@@ -204,20 +165,12 @@ public class ValueCollector
   /// </summary>
   private object ExtractDataFromVolatileData(IGH_Structure volatileData)
   {
-    if (volatileData == null || volatileData.IsEmpty)
-    {
-      return null;
-    }
+    if (volatileData == null || volatileData.IsEmpty) return null;
 
     var allData = volatileData.AllData(true).ToList();
-    if (allData.Count == 1)
-    {
-      return ExtractValue(allData[0]);
-    }
-    else if (allData.Count > 1)
-    {
-      return allData.Select(d => ExtractValue(d)).ToList();
-    }
+    if (allData.Count == 1) return ExtractValue(allData[0]);
+
+    if (allData.Count > 1) return allData.Select(d => ExtractValue(d)).ToList();
 
     return null;
   }
@@ -232,31 +185,23 @@ public class ValueCollector
 
     foreach (var inputParam in component.Params.Input)
     {
-      if (inputParam?.VolatileData == null || inputParam.VolatileData.IsEmpty)
-      {
-        continue;
-      }
+      if (inputParam?.VolatileData == null || inputParam.VolatileData.IsEmpty) continue;
 
       var allData = inputParam.VolatileData.AllData(true);
       foreach (var gooObj in allData)
       {
         if (gooObj?.GetType().FullName != null &&
             gooObj.GetType().FullName.IndexOf("FileDataGoo", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
           try
           {
             var extractedFileData = ExtractFileDataFromGoo(gooObj);
-            if (extractedFileData != null)
-            {
-              fileDataList.Add(extractedFileData);
-            }
+            if (extractedFileData != null) fileDataList.Add(extractedFileData);
           }
           catch (Exception ex)
           {
             addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
               $"Error extracting FileData from Goo: {ex.Message}");
           }
-        }
       }
     }
 
@@ -268,10 +213,7 @@ public class ValueCollector
   /// </summary>
   private object ExtractKeyFromValueListData(IGH_Goo data)
   {
-    if (data is GH_ValueListData valueListData)
-    {
-      return valueListData.SelectedName;
-    }
+    if (data is GH_ValueListData valueListData) return valueListData.SelectedName;
 
     return ExtractValue(data);
   }
@@ -281,30 +223,15 @@ public class ValueCollector
   /// </summary>
   private object ExtractValue(IGH_Goo data)
   {
-    if (data is GH_String ghString)
-    {
-      return ghString.Value;
-    }
+    if (data is GH_String ghString) return ghString.Value;
 
-    if (data is GH_Number ghNumber)
-    {
-      return ghNumber.Value;
-    }
+    if (data is GH_Number ghNumber) return ghNumber.Value;
 
-    if (data is GH_Integer ghInteger)
-    {
-      return ghInteger.Value;
-    }
+    if (data is GH_Integer ghInteger) return ghInteger.Value;
 
-    if (data is GH_Boolean ghBoolean)
-    {
-      return ghBoolean.Value;
-    }
+    if (data is GH_Boolean ghBoolean) return ghBoolean.Value;
 
-    if (data.CastTo(out string strValue))
-    {
-      return strValue;
-    }
+    if (data.CastTo(out string strValue)) return strValue;
 
     return data?.ToString() ?? "";
   }
@@ -314,20 +241,14 @@ public class ValueCollector
   /// </summary>
   private object ExtractFileDataFromGoo(IGH_Goo gooObj)
   {
-    if (gooObj == null)
-    {
-      return null;
-    }
+    if (gooObj == null) return null;
 
     try
     {
       if (gooObj is FileDataGoo fileDataGoo)
       {
         var fileData = fileDataGoo.Value;
-        if (fileData == null)
-        {
-          return null;
-        }
+        if (fileData == null) return null;
 
         return new
         {

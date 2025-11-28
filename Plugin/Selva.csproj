@@ -25,11 +25,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Grasshopper" Version="8.0.23304.9001" ExcludeAssets="runtime" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="System.Drawing.Common" Version="8.0.0" Condition="'$(TargetFramework)' == 'net7.0'" />
-    <PackageReference Include="System.Windows.Forms" Version="4.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="7.0.0" />
+    <PackageReference Include="Grasshopper" Version="8.0.23304.9001" ExcludeAssets="runtime"/>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3"/>
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" Condition="'$(TargetFramework)' == 'net7.0'"/>
+    <PackageReference Include="System.Windows.Forms" Version="4.0.0"/>
   </ItemGroup>
 
   <!-- Embed web assets from the build output -->
@@ -40,8 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Features\" />
-    <Folder Include="Features\IO\Componets\" />
-    <Folder Include="EmbeddedAssets\web\" />
+    <Folder Include="Features\"/>
+    <Folder Include="EmbeddedAssets\web\"/>
   </ItemGroup>
 </Project>

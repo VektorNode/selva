@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using Selva.Config;
-using Selva.Features.UIBuilder.Models;
 using Newtonsoft.Json;
 using Rhino;
+using Selva.Config;
+using Selva.Features.UIBuilder.Models;
 
 namespace Selva.Features.UIBuilder.Services;
 
@@ -28,8 +28,8 @@ public class CommunicationHandler : IDisposable
   private readonly int _port;
   private readonly string _sessionId;
   private bool _disposed;
-  private WebSocketServer _webSocketServer;
   private int _mainThreadId;
+  private WebSocketServer _webSocketServer;
 
   public CommunicationHandler(string sessionId, int port = 8765)
   {
@@ -55,10 +55,7 @@ public class CommunicationHandler : IDisposable
   /// </summary>
   public void Start(Action<string> logMessage)
   {
-    if (_webSocketServer != null && _webSocketServer.IsRunning)
-    {
-      return;
-    }
+    if (_webSocketServer != null && _webSocketServer.IsRunning) return;
 
     try
     {
@@ -87,10 +84,8 @@ public class CommunicationHandler : IDisposable
             {
               var valueMsg = JsonConvert.DeserializeObject<ValueUpdateMessage>(message, SecureJsonSettings);
               if (valueMsg != null && valueMsg.SessionId == _sessionId)
-              {
                 // Marshal back to main thread - critical for Grasshopper UI updates
                 MarshalToMainThread(() => OnValuesReceived?.Invoke(this, valueMsg.Values));
-              }
             }
             else if (msg.Type == "requestCurrentValues")
             {
@@ -141,7 +136,6 @@ public class CommunicationHandler : IDisposable
   public void Stop()
   {
     if (_webSocketServer != null)
-    {
       try
       {
         _webSocketServer.Stop();
@@ -155,7 +149,6 @@ public class CommunicationHandler : IDisposable
       {
         _webSocketServer = null;
       }
-    }
   }
 
   /// <summary>
@@ -220,7 +213,8 @@ public class CommunicationHandler : IDisposable
   /// <summary>
   ///   Broadcast output values and file data to all connected clients in a single message
   /// </summary>
-  public async Task BroadcastOutputsWithFiles(Dictionary<string, object> outputs, Dictionary<string, object> fileOutputs)
+  public async Task BroadcastOutputsWithFiles(Dictionary<string, object> outputs,
+    Dictionary<string, object> fileOutputs)
   {
     if (_webSocketServer != null && _webSocketServer.IsRunning)
     {
@@ -345,15 +339,9 @@ public class CommunicationHandler : IDisposable
 
   protected virtual void Dispose(bool disposing)
   {
-    if (_disposed)
-    {
-      return;
-    }
+    if (_disposed) return;
 
-    if (disposing)
-    {
-      Stop();
-    }
+    if (disposing) Stop();
 
     _disposed = true;
   }

@@ -1,14 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Selva.Features.UIBuilder.Components;
-using Selva.Features.UIBuilder.Models;
-using Selva.Features.UIBuilder.Helpers;
 using Grasshopper;
 using Grasshopper.Kernel;
+using Selva.Features.IO.Componets;
+using Selva.Features.UIBuilder.Helpers;
+using Selva.Features.UIBuilder.Models;
 
-using Selva.Core.Guards;
-using Selva.Core.Helpers;
 namespace Selva.Features.UIBuilder.Services;
 
 /// <summary>
@@ -16,13 +14,13 @@ namespace Selva.Features.UIBuilder.Services;
 /// </summary>
 public class DocumentEventManager : IDisposable
 {
+  private readonly CommunicationHandler _communicationHandler;
   private readonly SchemaManager _schemaManager;
   private readonly ValueCollector _valueCollector;
-  private readonly CommunicationHandler _communicationHandler;
 
   private GH_Document _currentDocument;
-  private bool _eventsRegistered;
   private bool _disposed;
+  private bool _eventsRegistered;
 
   public DocumentEventManager(SchemaManager schemaManager, ValueCollector valueCollector,
     CommunicationHandler communicationHandler)
@@ -30,6 +28,15 @@ public class DocumentEventManager : IDisposable
     _schemaManager = schemaManager ?? throw new ArgumentNullException(nameof(schemaManager));
     _valueCollector = valueCollector ?? throw new ArgumentNullException(nameof(valueCollector));
     _communicationHandler = communicationHandler ?? throw new ArgumentNullException(nameof(communicationHandler));
+  }
+
+  public void Dispose()
+  {
+    if (_disposed) return;
+
+    UnregisterEvents();
+    _currentDocument = null;
+    _disposed = true;
   }
 
   // Events for component to subscribe to
@@ -43,16 +50,10 @@ public class DocumentEventManager : IDisposable
   /// </summary>
   public void RegisterEvents(GH_Document document)
   {
-    if (document == null || _eventsRegistered)
-    {
-      return;
-    }
+    if (document == null || _eventsRegistered) return;
 
     // Unregister from previous document if switching documents
-    if (_currentDocument != null && _currentDocument.DocumentID != document.DocumentID)
-    {
-      UnregisterEvents();
-    }
+    if (_currentDocument != null && _currentDocument.DocumentID != document.DocumentID) UnregisterEvents();
 
     _currentDocument = document;
 
@@ -86,10 +87,7 @@ public class DocumentEventManager : IDisposable
   /// </summary>
   public void UnregisterEvents()
   {
-    if (!_eventsRegistered)
-    {
-      return;
-    }
+    if (!_eventsRegistered) return;
 
     try
     {
@@ -101,7 +99,6 @@ public class DocumentEventManager : IDisposable
     }
 
     if (_currentDocument != null)
-    {
       try
       {
         _currentDocument.SolutionStart -= OnSolutionStart;
@@ -114,7 +111,6 @@ public class DocumentEventManager : IDisposable
       {
         /* ignore */
       }
-    }
 
     _eventsRegistered = false;
   }
@@ -153,10 +149,7 @@ public class DocumentEventManager : IDisposable
   /// </summary>
   private void OnUndoStateChanged(object sender, GH_DocUndoEventArgs e)
   {
-    if (_currentDocument == null || !_communicationHandler.IsRunning)
-    {
-      return;
-    }
+    if (_currentDocument == null || !_communicationHandler.IsRunning) return;
 
     try
     {
@@ -179,10 +172,7 @@ public class DocumentEventManager : IDisposable
   /// </summary>
   private void OnObjectsChanged(object sender, GH_DocObjectEventArgs e)
   {
-    if (_currentDocument == null || !_communicationHandler.IsRunning)
-    {
-      return;
-    }
+    if (_currentDocument == null || !_communicationHandler.IsRunning) return;
 
     // Check if any changed objects are contextual parameters or output components
     var relevantChange = false;
@@ -197,10 +187,7 @@ public class DocumentEventManager : IDisposable
       }
     }
 
-    if (!relevantChange)
-    {
-      return;
-    }
+    if (!relevantChange) return;
 
     // Notify component that parameters changed
     ParametersChanged?.Invoke(this, new ParametersChangedEventArgs
@@ -214,10 +201,7 @@ public class DocumentEventManager : IDisposable
   /// </summary>
   public void DetectAndBroadcastMetadataChanges(UISchema schema)
   {
-    if (_currentDocument == null || !_communicationHandler.IsRunning || schema == null)
-    {
-      return;
-    }
+    if (_currentDocument == null || !_communicationHandler.IsRunning || schema == null) return;
 
     try
     {
@@ -246,16 +230,11 @@ public class DocumentEventManager : IDisposable
     return changes.Any(change =>
     {
       var paramObj = _currentDocument.FindObject(change.Id, false);
-      if (paramObj is GetValueListParameter && change.Options != null)
-      {
-        return true; // ValueList options changed
-      }
+      if (paramObj is GetValueListParameter && change.Options != null) return true; // ValueList options changed
 
       if (paramObj is IGH_ContextualParameter &&
           (change.Minimum != null || change.Maximum != null || change.StepSize != null))
-      {
         return true; // Number constraints changed
-      }
 
       return false;
     });
@@ -266,10 +245,7 @@ public class DocumentEventManager : IDisposable
   /// </summary>
   public void CollectAndBroadcastOutputs(UISchema schema)
   {
-    if (_currentDocument == null || !_communicationHandler.IsRunning || schema == null)
-    {
-      return;
-    }
+    if (_currentDocument == null || !_communicationHandler.IsRunning || schema == null) return;
 
     var outputValues = _valueCollector.CollectOutputValues(_currentDocument, schema);
     var fileOutputs = _valueCollector.CollectFileOutputs(_currentDocument, schema);
@@ -278,18 +254,6 @@ public class DocumentEventManager : IDisposable
     {
       var _ = _communicationHandler.BroadcastOutputsWithFiles(outputValues, fileOutputs);
     }
-  }
-
-  public void Dispose()
-  {
-    if (_disposed)
-    {
-      return;
-    }
-
-    UnregisterEvents();
-    _currentDocument = null;
-    _disposed = true;
   }
 }
 

@@ -25,7 +25,6 @@ function rmDirWithRetry(dirPath, maxRetries = 5) {
         console.warn(`⚠ Warning: Could not fully delete ${dirPath} (${err.message})`);
         return false;
       }
-      // Wait a bit before retry
       const delay = Math.min(100 * Math.pow(2, i), 1000);
       const start = Date.now();
       while (Date.now() - start < delay) {

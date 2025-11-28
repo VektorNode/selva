@@ -7,7 +7,6 @@
   "scripts": {
     "dev": "vite dev",
     "build": "NODE_ENV=production vite build",
-    "build:plugin": "NODE_ENV=production vite build",
     "preview": "vite preview",
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
