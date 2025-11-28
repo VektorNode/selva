@@ -60,10 +60,16 @@ public class LocalWebServer : IDisposable
   public int Port { get; private set; }
   public string BaseUrl => $"http://localhost:{Port}";
 
+  ~LocalWebServer()
+  {
+    Dispose();
+  }
+
   public void Dispose()
   {
     Stop();
     _cancellationTokenSource?.Dispose();
+    GC.SuppressFinalize(this);
   }
 
   /// <summary>

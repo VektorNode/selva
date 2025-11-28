@@ -37,11 +37,17 @@ public class WebSocketServer : IDisposable
 
   public int Port { get; }
 
+  ~WebSocketServer()
+  {
+    Dispose();
+  }
+
   public void Dispose()
   {
     Stop();
     _heartbeatTimer?.Dispose();
     _cancellationTokenSource?.Dispose();
+    GC.SuppressFinalize(this);
   }
 
   public event EventHandler<string> OnMessageReceived;
