@@ -22,7 +22,8 @@ dual-stack architecture:
 
 - **Backend**: C# Grasshopper components (.NET multi-target: net48/net7.0)
 - **Frontend**: SvelteKit web application (TypeScript, Tailwind CSS)
-- **Communication**: WebSocket (port 8765) for real-time updates + session files for persistence
+- **Communication**: WebSocket (port 8765) for real-time updates + embedded HTTP server for UI delivery
+- **Deployment**: Self-contained .gha file with embedded web assets (no external dependencies)
 
 ## Essential Commands
 
@@ -32,10 +33,13 @@ dual-stack architecture:
 # Install dependencies across all packages
 pnpm install
 
-# Build all packages in correct order (core → svelte-ui → builder)
-pnpm build
+# Build all packages in correct order (core → svelte-ui → web)
+pnpm build:all
 
-# Start web dev server (packages/builder)
+# Build production plugin with embedded web assets (recommended for deployment)
+pnpm build:plugin
+
+# Start web dev server for development (packages/builder → @selva/web)
 pnpm dev
 
 # Build specific package
@@ -58,7 +62,28 @@ pnpm lint:fix
 pnpm format
 ```
 
-### C# Plugin Development
+### Production Build (Recommended)
+
+The `build:plugin` command orchestrates the complete production build process:
+
+```bash
+# From repository root - builds everything and creates production .gha files
+pnpm build:plugin
+```
+
+**This command:**
+1. Builds web application (`@selva/web`) as static assets
+2. Copies web assets to `Plugin/EmbeddedAssets/web/`
+3. Builds C# plugin with embedded resources for both Rhino 7 and Rhino 8
+4. Outputs self-contained `.gha` files
+
+**Output locations:**
+- Rhino 7: `Plugin/bin/Release/net48/Selva.gha`
+- Rhino 8: `Plugin/bin/Release/net7.0/Selva.gha`
+
+### C# Plugin Development (Direct)
+
+For plugin-only development without rebuilding web assets:
 
 ```bash
 cd Plugin
@@ -73,10 +98,7 @@ dotnet build
 dotnet clean
 ```
 
-**Output locations:**
-
-- Rhino 7: `bin/Release/net48/Selva.gha`
-- Rhino 8: `bin/Release/net7.0/Selva.gha`
+**Note:** Direct C# builds use existing embedded assets from `Plugin/EmbeddedAssets/web/`. Run `pnpm build:plugin` first if web assets need updating.
 
 ### Installation to Grasshopper
 
@@ -154,61 +176,73 @@ The project uses JSON Schema as the single source of truth for type definitions 
 ./generate-schemas.sh
 
 # Or manually:
-cd schemas
+cd packages/schemas
 npm run generate:all
 ```
 
-**Source:** `schemas/ui-schema.json`
-**Generated files:**
+**Source:** `packages/schemas/ui-schema.json`
 
-- TypeScript: `web/src/lib/types/generated/schema.ts`
+**Generated files:**
+- TypeScript: `packages/builder/src/lib/types/generated/schema.ts`
 - C#: `Plugin/Models/Generated/UISchema.Generated.cs`
 
 **Workflow:**
 
-1. Edit `schemas/ui-schema.json` to modify type definitions
+1. Edit `packages/schemas/ui-schema.json` to modify type definitions
 2. Run `./generate-schemas.sh` to regenerate both languages
-3. Run `npm run check` in web/ to verify TypeScript
-4. Run `dotnet build` to verify C#
+3. Run `pnpm type-check` to verify TypeScript compilation
+4. Run `dotnet build` in Plugin/ to verify C# compilation
 
 **Important:** Never edit the generated files directly - they will be overwritten.
 
 ## Architecture Overview
 
-### WebSocket-First Communication Architecture
+### Hybrid Communication Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│  Grasshopper Plugin (C#)                        │
-│  - UIBuilderComponent (orchestration)           │
-│  - SchemaManager (parameter scanning)           │
-│  - ValueApplicator (reflection-based updates)   │
-│  - CommunicationHandler (WebSocket)             │
-│  - PersistenceManager (session files)           │
-│  - ClearContextDataComponent                    │
-└──────────┬──────────────────────────────────────┘
-           │
-           │ WebSocket (real-time, port 8765)
-           │ ─────────────────────────────►
-           │ Session files (persistence only)
-           ↓
-┌─────────────────────────────────────────────────┐
-│  Session Storage (Temp Directory)               │
-│  - {sessionId}_schema.json (embedded in .gh)    │
-│  - {sessionId}_values.json                      │
-│  - {sessionId}_state.json                       │
-│  - {sessionId}_available.json                   │
-└──────────┬──────────────────────────────────────┘
-           │ REST API (initial load only)
-           │ WebSocket (real-time updates)
-           ↓
-┌─────────────────────────────────────────────────┐
-│  SvelteKit Web App                              │
-│  - /builder - Schema design                     │
-│  - /preview - Interactive UI (WebSocket)        │
-│  - /app - Rhino Compute demo                    │
-│  - /api/* - Server routes (GET only)            │
+┌──────────────────────────────────────────────────────────┐
+│  Grasshopper Plugin (.gha) - Self-Contained              │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  C# Components                                     │  │
+│  │  - UIBuilderComponent (orchestration)              │  │
+│  │  - SchemaManager (parameter scanning)              │  │
+│  │  - ValueApplicator (reflection-based updates)      │  │
+│  │  - CommunicationHandler (WebSocket coordination)   │  │
+│  │  - PersistenceManager (session files)              │  │
+│  │  - ClearContextDataComponent                       │  │
+│  └────────────────────────────────────────────────────┘  │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  Communication Layer                               │  │
+│  │  - LocalWebServer (HTTP, serves embedded UI)       │  │
+│  │  - WebSocketServer (real-time parameter updates)   │  │
+│  └────────────────────────────────────────────────────┘  │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  Embedded Web Assets (EmbeddedResource)            │  │
+│  │  - index.html, CSS, JS bundles                     │  │
+│  │  - Svelte components (precompiled)                 │  │
+│  └────────────────────────────────────────────────────┘  │
+└──────────┬───────────────────────────┬───────────────────┘
+           │                           │
+           │ HTTP (UI delivery)        │ WebSocket (real-time, port 8765)
+           │ Dynamic port              │ - Schema exchange
+           ↓                           │ - Parameter value updates
+┌─────────────────────────────────────────────────┐ - Output broadcasts
+│  Browser (User's Default)                       │ - Metadata changes
+│  - Loads UI via LocalWebServer HTTP endpoint    │
+│  - Connects to WebSocket for real-time updates  │
+│  - No external dependencies required            │
 └─────────────────────────────────────────────────┘
+
+Routes served by embedded web app:
+  - / - Session hub/landing page
+  - /builder - Schema design interface
+  - /preview - Interactive UI (WebSocket-enabled)
+  - /app - Rhino Compute demo
+
+Data Storage:
+  - Schema: Embedded in .gh file (GH_IWriter/GH_IReader)
+  - Values: Embedded in .gh file (persisted with document)
+  - No session files or temp storage for parameter data
 ```
 
 ### Data Flow Sequence
@@ -216,29 +250,46 @@ npm run generate:all
 **Schema Building:**
 
 1. UIBuilderComponent scans Grasshopper document for `IGH_ContextualParameter` instances
-2. Writes available parameters to `{sessionId}_available.json`
-3. Opens browser to `/builder?session={sessionId}`
-4. User configures UI schema in web app
-5. Schema saved to `{sessionId}_schema.json`
+2. SchemaManager creates `AvailableParameters` structure
+3. Starts LocalWebServer (HTTP) on dynamic port
+4. Starts WebSocketServer on port 8765
+5. Opens browser to `http://localhost:{port}/builder?session={sessionId}`
+6. Browser loads web UI from embedded assets served by LocalWebServer
+7. Web UI connects to WebSocket and receives available parameters
+8. User configures UI schema in web app (drag-and-drop)
+9. Schema sent via WebSocket to CommunicationHandler
+10. Component saves schema to .gh file via `Write(GH_IWriter)` method
 
-**Interactive Mode (WebSocket-only):**
+**Interactive Mode (Preview):**
 
-1. UIBuilderComponent loads schema and starts WebSocket server
-2. Opens browser to `/preview?session={sessionId}`
-3. Web UI connects via WebSocket
-4. User modifies values in web UI
-5. Values sent via WebSocket to CommunicationHandler
-6. ValueApplicator applies values to Grasshopper parameters via reflection: `AssignContextualDataTree()`
-7. Grasshopper recomputes automatically
-8. CollectAndSendOutputs gathers results and broadcasts via WebSocket
-9. Web UI updates display in real-time
+1. UIBuilderComponent loads schema from .gh file via `Read(GH_IReader)` method
+2. Starts LocalWebServer (HTTP) on dynamic port for UI delivery
+3. Starts WebSocketServer on port 8765 for real-time communication
+4. Opens browser to `http://localhost:{port}/preview?session={sessionId}`
+5. Browser loads web UI from embedded assets
+6. Web UI connects to WebSocket (ws://localhost:8765)
+7. Component sends schema via WebSocket to browser
+8. User modifies values in web UI
+9. Values sent via WebSocket to CommunicationHandler
+10. ValueApplicator applies values to Grasshopper parameters via reflection: `AssignContextualDataTree()`
+11. Grasshopper recomputes automatically
+12. CollectAndSendOutputs gathers results and broadcasts via WebSocket
+13. Web UI updates display in real-time
+14. Values persisted in .gh file on document save
 
-### Session File Locations
+**Development Mode:**
 
-**Windows:** `%TEMP%\Selva\`
-**macOS/Linux:** `/tmp/Selva/`
+- Use external dev server (`pnpm dev` on port 5173) instead of LocalWebServer
+- WebSocket still on port 8765 for all data exchange
+- Schema and values still embedded in .gh file
 
-Sessions auto-cleanup after 24 hours of inactivity.
+### Temporary File Usage
+
+**Temp Directory:** `%TEMP%\Selva\` (Windows) or `/tmp/Selva/` (macOS/Linux)
+
+**Used ONLY for:**
+- File format conversion (RhinoDocumentConverter) - creates temporary subdirectories for geometry processing
+- NOT used for session data, schema, or values (all stored in .gh files and transmitted via WebSocket)
 
 ## Critical Development Rules
 
@@ -262,13 +313,13 @@ There is no separate `ParameterValidator.cs` utility file at this time.
 
 The codebase uses **JSON Schema as the single source of truth** for type definitions:
 
-- **Source:** `schemas/ui-schema.json`
+- **Source:** `packages/schemas/ui-schema.json`
 - **Generated C#:** `Plugin/Models/Generated/UISchema.Generated.cs`
-- **Generated TypeScript:** `web/src/lib/types/generated/schema.ts`
+- **Generated TypeScript:** `packages/builder/src/lib/types/generated/schema.ts`
 
 **Workflow for adding new types:**
 
-1. Define the type in `schemas/ui-schema.json`
+1. Define the type in `packages/schemas/ui-schema.json`
 2. Run `./generate-schemas.sh` to generate both C# and TypeScript
 3. Import from the generated files in your code
 
@@ -289,13 +340,35 @@ This approach allows supporting multiple parameter types without strong coupling
 
 ### C# Plugin (Plugin/)
 
-**Components/UI/GH_UIBuilderComponent.cs** (~600 lines)
+**Features/UIBuilder/Components/GH_UIBuilderComponent.cs**
 
-- **Orchestration only** - delegates to specialized utilities
+- **Orchestration only** - delegates to specialized services
 - Manages component lifecycle and .gh file persistence
-- Coordinates with WebSocket server and value applicator
+- Coordinates LocalWebServer (HTTP) and WebSocketServer
 - Event-driven document synchronization
-- **WebSocket-only** - no file polling
+- Embeds schema data in .gh files for portability
+
+**Features/UIBuilder/Services/Communication/LocalWebServer.cs** (NEW)
+
+- Embedded HTTP server using `HttpListener`
+- Serves web UI from assembly's embedded resources
+- Dynamic port allocation (defaults to port 0 for auto-assignment)
+- MIME-type aware response handling (HTML, CSS, JS, JSON, fonts, geometry files)
+- Resource prefix: `Selva.EmbeddedAssets.web.`
+- Enables self-contained deployment (no external web server needed)
+
+**Features/UIBuilder/Services/Communication/WebSocketServer.cs**
+
+- Real-time parameter value updates
+- Fixed port 8765
+- Handles bidirectional communication with web UI
+- Broadcasts output updates to connected clients
+
+**Features/UIBuilder/Services/Communication/CommunicationHandler.cs**
+
+- Coordinates LocalWebServer and WebSocketServer lifecycles
+- Routes messages between web UI and Grasshopper components
+- Manages connection state and reconnection logic
 
 **Components/Params/GH_Contextual_Value_List.cs**
 
@@ -303,17 +376,24 @@ This approach allows supporting multiple parameter types without strong coupling
 - Stores values from web UI
 - Supports data tree structures
 
-**Display/ThreeDisplay.cs & ThreeDisplayGoo.cs**
+**Features/Display/ThreeDisplay.cs & ThreeDisplayGoo.cs**
 
 - Converts geometry to Three.js-compatible format
 - Handles compression and serialization for web transmission
 - Manages material properties for web rendering
 
-**IO/** - File and data handling
+**Features/FileIO/Services/** - File and data handling
 
 - `GH_DataToFile.cs` - Export geometry to various file formats
 - `GH_Base64Parser.cs` - Handle Base64 encoding
-- `RhinoDocumentConverter.cs` - Convert geometry between formats
+- `RhinoDocumentConverter.cs` - Convert geometry between formats (recent fix: exception handling in Dispose)
+
+**EmbeddedAssets/web/** - Web UI assets
+
+- Contains built web application (index.html, CSS, JS bundles)
+- Populated by `pnpm build:plugin` during production build
+- Embedded as `EmbeddedResource` in Selva.csproj
+- Served by LocalWebServer at runtime
 
 ### TypeScript Packages
 
@@ -335,11 +415,21 @@ This approach allows supporting multiple parameter types without strong coupling
 - **Dependencies**: Core package only
 - **Testing**: Component behavior and rendering
 
-#### packages/web (Builder)
+#### packages/builder (package name: @selva/web)
+
+**Build Configuration:**
+
+- `svelte.config.js` - Uses `@sveltejs/adapter-static` for static site generation
+- `vite.config.ts` - Vite build configuration
+- Output directory: `build/` (copied to `Plugin/EmbeddedAssets/web/` during production build)
+- SPA mode with fallback to `index.html` for client-side routing
 
 **src/routes/** - SvelteKit page routes
 
-- `+page.svelte` - Main builder interface
+- `/` (`+page.svelte`) - Session hub/landing page
+- `/builder` - Schema design interface (drag-and-drop UI builder)
+- `/preview` - Interactive UI preview (WebSocket-enabled)
+- `/app` - Rhino Compute demo (separate app with server-side rendering)
 - `api/schema/[sessionId]/+server.ts` - Schema persistence
 - `api/values/[sessionId]/+server.ts` - Runtime values
 - `api/state/[sessionId]/+server.ts` - Session state
@@ -369,39 +459,75 @@ Type definitions available in both C# and TypeScript:
 - `SessionState` - Session metadata
 - `AvailableParameter` - Discovered Grasshopper parameters
 
-**Generated TypeScript**: `packages/core/src/schema.ts`
+**Generated TypeScript**: `packages/builder/src/lib/types/generated/schema.ts`
 
 ## Communication Protocols
 
-### WebSocket (Real-time Communication)
+The system uses a **dual-layer communication model**:
 
-**ONLY communication method** - file polling has been removed for simplicity.
+### 1. HTTP (UI Delivery) - LocalWebServer
 
-- **Port:** 8765
-- **Protocol:** ws://localhost:8765
-- **Connection:** CommunicationHandler manages lifecycle
-- **Message Types:**
-  - `ValueUpdateMessage` - Input value changes from web UI → Grasshopper
-  - `OutputUpdateMessage` - Output data from Grasshopper → web UI
-- **Reconnection:** Web client auto-reconnects with exponential backoff
+**Purpose:** Serve web UI from embedded assets
+
+- **Implementation:** `LocalWebServer.cs` using `HttpListener`
+- **Port:** Dynamic (auto-assigned, typically 0 for OS selection)
+- **Resources:** Embedded in .gha as `Selva.EmbeddedAssets.web.*`
+- **MIME Types Supported:**
+  - `.html` → `text/html`
+  - `.css` → `text/css`
+  - `.js` → `application/javascript`
+  - `.json` → `application/json`
+  - `.woff2`, `.woff`, `.ttf` → font types
+  - `.obj`, `.gltf`, `.glb`, `.stl` → geometry formats
+- **Lifecycle:** Started by UIBuilderComponent, stopped on component disposal
 - **Benefits:**
-  - Real-time updates (no 500ms delay)
-  - Bidirectional communication
-  - Lower I/O overhead
-  - Better user experience
+  - Self-contained deployment (no external web server)
+  - Single .gha file contains everything
+  - No network dependencies
 
-### Session Files (Persistence Only)
+### 2. WebSocket (All Data Exchange)
 
-Session files are used for:
+**Purpose:** Real-time bidirectional communication for ALL application data
 
-- Initial page load (GET requests via REST API)
-- Schema persistence (embedded in .gh files)
-- Cross-session data sharing
+- **Port:** 8765 (fixed)
+- **Protocol:** ws://localhost:8765
+- **Implementation:** `WebSocketServer.cs` coordinated by `CommunicationHandler.cs`
+- **Connection:** Manages client connections with auto-reconnect (exponential backoff)
 
-**NOT used for:**
+**Message Types:**
+- **From Web UI → Grasshopper:**
+  - `valueUpdate` - User changes parameter values
+  - `saveSchema` - Save configured schema
+  - `getCurrentValues` - Request current parameter values
 
-- ~~Real-time value updates~~ (WebSocket only)
-- ~~Polling~~ (removed)
+- **From Grasshopper → Web UI:**
+  - `outputUpdate` - Computation results and geometry
+  - `metadataChange` - Parameter additions/removals
+  - `solvingState` - Grasshopper computation status
+  - `schemaUpdate` - Current schema definition
+  - `availableParameters` - Discovered contextual parameters
+
+**Benefits:**
+- Real-time updates (no polling delay)
+- Bidirectional communication
+- Single connection for all data
+- No file system I/O for data exchange
+- Better user experience
+
+### 3. Persistence (.gh File Storage)
+
+**Purpose:** Long-term storage embedded in Grasshopper document
+
+- **Schema:** Saved in .gh file via `Write(GH_IWriter)` method
+- **Values:** Persisted parameter values saved with document
+- **Migration:** Automatic schema version migration on `Read(GH_IReader)`
+- **Serialization:** JSON format with custom `SchemaSerializationSettings`
+
+**Benefits:**
+- Schema travels with .gh file (portable)
+- No external files to manage
+- Version control friendly (text-based JSON in .gh)
+- Automatic migration across schema versions
 
 ## Supported Input/Output Types
 
@@ -469,19 +595,50 @@ pnpm --filter @selva/svelte-ui test
 pnpm --filter @selva/web test
 ```
 
-### Manual Integration Testing (Local Grasshopper)
+### Manual Integration Testing
 
-1. **Build C# plugin:**
+#### Option 1: Production Build Testing (Recommended)
+
+1. **Build production plugin with embedded assets:**
+
+   ```bash
+   pnpm build:plugin
+   ```
+
+2. **Install to Grasshopper** (copy `.gha` file from appropriate bin directory)
+
+   - Rhino 7: `Plugin/bin/Release/net48/Selva.gha` → `%APPDATA%\Grasshopper\Libraries\` (Windows)
+   - Rhino 8: `Plugin/bin/Release/net7.0/Selva.gha` → `%APPDATA%\Grasshopper\Libraries-8\` (Windows)
+   - Rhino 8: `Plugin/bin/Release/net7.0/Selva.gha` → `~/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/` (macOS)
+
+3. **Restart Rhino completely**
+
+4. **In Grasshopper:**
+   - Add contextual parameter (e.g., Number Slider implementing `IGH_ContextualParameter`)
+   - Add UIBuilderComponent
+   - Set Enable = true
+   - Browser opens automatically to `http://localhost:{dynamic_port}/builder?session={sessionId}`
+   - Web UI is served from embedded assets (no external server needed)
+
+5. **Verify communication:**
+   - Check that LocalWebServer started (check component messages for port number)
+   - Verify WebSocket connection in browser console (F12)
+   - Check Grasshopper component messages
+   - Verify schema is saved in .gh file (save and reopen document)
+
+#### Option 2: Development Mode Testing
+
+1. **Build C# plugin only:**
 
    ```bash
    cd Plugin && dotnet build --configuration Release
    ```
 
-2. **Install to Grasshopper** (copy `.gha` file from appropriate bin directory)
+2. **Install to Grasshopper** (same as above)
 
 3. **Restart Rhino completely**
 
-4. **Start web dev server:**
+4. **Start web dev server separately:**
 
    ```bash
    pnpm dev
@@ -490,15 +647,16 @@ pnpm --filter @selva/web test
    (This starts the builder at http://localhost:5173)
 
 5. **In Grasshopper:**
-   - Add contextual parameter (e.g., Number Slider from IGH_ContextualParameter)
+   - Add contextual parameter
    - Add UIBuilderComponent
    - Set Enable = true
-   - Browser opens automatically to `/builder?session={sessionId}`
+   - Manually navigate to `http://localhost:5173/builder?session={sessionId}`
+   - Or configure component to use dev server URL
 
 6. **Verify communication:**
-   - Check browser console (F12)
-   - Check Grasshopper component messages
-   - Inspect session files in temp directory
+   - WebSocket connection on port 8765
+   - Browser console shows no errors
+   - Schema/values persist when document is saved and reopened
 
 ### Schema Generation Testing
 
@@ -519,31 +677,41 @@ cd Plugin && dotnet build
 
 ### Adding New Input Type
 
-1. Update `InputParameter.Type` enum in `Models/UISchema.cs`
-2. Add corresponding TypeScript type in `web/src/lib/types/schema.ts`
-3. Implement value serialization in `UIBuilderComponent.ApplyToContextualParameter()`
-4. Create UI component in Svelte (preview route)
-5. Update builder UI to allow configuration
+1. Update `InputParameter.Type` enum in `packages/schemas/ui-schema.json`
+2. Run `./generate-schemas.sh` to generate C# and TypeScript types
+3. Implement value serialization in `UIBuilderComponent` or relevant service
+4. Create UI component in Svelte (`packages/builder/src/routes/preview`)
+5. Update builder UI to allow configuration (`packages/builder/src/routes/builder`)
 
 ### Adding New Output Type
 
-1. Update `OutputParameter.Type` enum in `Models/UISchema.cs`
-2. Add TypeScript type in `web/src/lib/types/schema.ts`
-3. Implement output serialization in `GrasshopperDefinition.cs` (if needed)
-4. Create display component in Svelte (preview route)
+1. Update `OutputParameter.Type` enum in `packages/schemas/ui-schema.json`
+2. Run `./generate-schemas.sh` to generate C# and TypeScript types
+3. Implement output serialization in relevant service (if needed)
+4. Create display component in Svelte (`packages/builder/src/routes/preview`)
 5. Update builder UI configuration
 
 ### Debugging Session Issues
 
-1. Check session files in temp directory:
+1. **WebSocket Connection:**
+   - Open browser console (F12) and check for WebSocket errors
+   - Verify connection to `ws://localhost:8765`
+   - Check for reconnection attempts (exponential backoff)
+
+2. **Schema Persistence:**
+   - Save and reopen .gh file to verify schema/values are embedded
+   - Check component messages for serialization errors
+   - Look for schema migration warnings
+
+3. **Component Messages:**
+   - Enable verbose logging in Grasshopper component
+   - Check for parameter validation errors
+   - Verify LocalWebServer port assignment
+
+4. **Temp Directory (File Conversion Only):**
    - Windows: `%TEMP%\Selva\`
    - macOS: `/tmp/Selva/`
-
-2. Verify file timestamps match component activity
-
-3. Check browser network tab for API errors
-
-4. Enable verbose logging in Grasshopper component messages
+   - Only used for RhinoDocumentConverter, NOT for session data
 
 ## Platform-Specific Considerations
 
@@ -565,14 +733,92 @@ cd Plugin && dotnet build
 - WebSocket server uses `HttpListener` (no platform-specific dependencies)
 - JSON serialization handles path separators automatically
 
+## Deployment Model
+
+### Production Deployment (Self-Contained)
+
+The production build creates a **fully self-contained** .gha file:
+
+```
+Selva.gha (single file)
+├─ C# assemblies (.NET Framework 4.8 or .NET 7.0)
+├─ Embedded web assets (HTML, CSS, JS)
+└─ Required dependencies
+```
+
+**Key characteristics:**
+
+- **No external dependencies** - Web UI is embedded in the .gha file
+- **LocalWebServer** serves UI from embedded resources at runtime
+- **Single file distribution** - Just copy .gha to Grasshopper Libraries folder
+- **Dynamic port allocation** - HTTP server auto-selects available port
+- **WebSocket on fixed port** - Port 8765 for real-time updates
+
+**Build process:**
+
+```bash
+pnpm build:plugin
+```
+
+This command:
+1. Builds `@selva/web` package as static assets (SvelteKit adapter-static)
+2. Copies `packages/builder/build/` → `Plugin/EmbeddedAssets/web/`
+3. Builds C# plugin with assets embedded as `EmbeddedResource`
+4. Outputs `Selva.gha` for both Rhino 7 (net48) and Rhino 8 (net7.0)
+
+**Embedded resource configuration** (Selva.csproj):
+
+```xml
+<ItemGroup>
+  <EmbeddedResource Include="EmbeddedAssets\web\**\*.*">
+    <LogicalName>Selva.EmbeddedAssets.web.%(RecursiveDir)%(FileName)%(Extension)</LogicalName>
+  </EmbeddedResource>
+</ItemGroup>
+```
+
+**Distribution:**
+
+1. Build production .gha: `pnpm build:plugin`
+2. Distribute single .gha file (from `Plugin/bin/Release/net48/` or `Plugin/bin/Release/net7.0/`)
+3. Users copy to Grasshopper Libraries folder
+4. Restart Rhino - plugin is ready to use
+
+**No user setup required:**
+- ❌ No web server installation
+- ❌ No Node.js or npm required
+- ❌ No separate web app deployment
+- ✅ Just install .gha and restart Rhino
+
+### Development Workflow
+
+For active development, use external dev server for hot module replacement:
+
+```bash
+# Terminal 1: Start web dev server with HMR
+pnpm dev
+
+# Terminal 2: Build and install C# plugin
+cd Plugin && dotnet build --configuration Release
+# Copy .gha to Grasshopper Libraries
+# Restart Rhino
+```
+
+In development mode:
+- Web UI runs on http://localhost:5173 (Vite dev server)
+- WebSocket still on port 8765
+- Hot module replacement for fast iteration
+- Session files for data exchange
+
 ## Performance Considerations
 
 ### Backend (C# Plugin)
 
-- **Polling interval:** 500ms balances responsiveness and CPU usage
+- **LocalWebServer startup:** Dynamic port allocation minimizes port conflicts
+- **Embedded resource access:** Direct memory reads (no disk I/O after assembly load)
 - **Session cleanup:** Runs on component initialization (24-hour threshold)
 - **Parameter expiration:** Batch expiration to minimize Grasshopper recomputes
 - **Value change detection:** Compares with `_lastAppliedValues` to prevent redundant updates
+- **WebSocket lifecycle:** Started/stopped with component enable state
 
 ### Frontend (Web Application)
 
@@ -629,11 +875,16 @@ This dual approach allows:
 
 ## Implemented Features
 
-- ✅ Three.js 3D viewer for geometry visualization
-- ✅ Drag-and-drop layout editor with group management
-- ✅ Tabbed layout system with collapsible groups
-- ✅ Rhino Compute integration support (`rhino-compute-core` package)
-- ✅ Embedded schema persistence (schemas saved with .gh files)
+- ✅ **Self-contained deployment** - Embedded web server with static assets in .gha file
+- ✅ **LocalWebServer** - HTTP server for UI delivery from embedded resources
+- ✅ **WebSocket real-time updates** - Bidirectional parameter synchronization
+- ✅ **Three.js 3D viewer** - Geometry visualization with compression
+- ✅ **Drag-and-drop layout editor** - Visual UI builder with group management
+- ✅ **Tabbed layout system** - Collapsible groups for organized UIs
+- ✅ **Rhino Compute integration support** - `rhino-compute-core` package
+- ✅ **Embedded schema persistence** - Schemas saved with .gh files
+- ✅ **Production build automation** - `pnpm build:plugin` orchestrates full build
+- ✅ **Cross-platform support** - Windows (Rhino 7/8) and macOS (Rhino 8)
 
 ## Future Extension Points
 
