@@ -45,6 +45,8 @@
       v[output.id] = null;
     }
 
+    console.log('Initialized values:', v);
+
     values = v;
   }
 
@@ -87,8 +89,6 @@
 
       await ensureModulesLoaded();
 
-      console.log($state.snapshot(values));
-
       const payload = {
         inputs: schema.inputs,
         values: $state.snapshot(values),
@@ -109,6 +109,7 @@
 
       const solved = await res.json();
 
+      console.log('Processing output:', solved);
       const processor = new rhinoCompute!.GrasshopperResponseProcessor(solved);
 
       if (schema.enable3dViewer && scene) {
@@ -120,6 +121,7 @@
       const outputs: Record<string, unknown> = {};
       for (const o of schema.outputs) {
         outputs[o.id] = processor.getValueByParamId(o.id, { parseValues: true });
+        console.log(`Output [${o.id}]:`, outputs[o.id]);
       }
 
       values = { ...values, ...outputs };

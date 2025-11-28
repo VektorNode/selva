@@ -26,7 +26,7 @@ const SYSTEM_TYPES = {
   BOOL: 'System.Boolean',
 };
 
-const EXCLUDED_TYPES = ['FileData', 'ThreeDisplay'];
+const EXCLUDED_TYPES = ['ThreeDisplay'];
 const RHINO_GEOMETRY_PREFIX = 'Rhino.Geometry.';
 const FILE_DATA_TYPE = 'FileData';
 
