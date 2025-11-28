@@ -34,7 +34,8 @@
   <!-- Embed web assets from the build output -->
   <ItemGroup>
     <EmbeddedResource Include="EmbeddedAssets/web/**/*" Condition="Exists('EmbeddedAssets/web/index.html')">
-      <LogicalName>Selva.EmbeddedAssets.web.%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
+      <!-- Use forward slashes for cross-platform consistency -->
+      <LogicalName>Selva.EmbeddedAssets.web.$([System.String]::Copy('%(RecursiveDir)').Replace('\','/'))%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 

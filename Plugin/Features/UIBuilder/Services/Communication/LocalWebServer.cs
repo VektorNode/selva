@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Text;
@@ -20,6 +19,7 @@ public class LocalWebServer : IDisposable
   private const int BUFFER_SIZE = 64 * 1024; // 64KB buffer for file transfers
   private const string EMBEDDED_RESOURCE_PREFIX = "Selva.EmbeddedAssets.web.";
   private readonly Assembly _assembly;
+  private readonly HashSet<string> _resourceNames;
 
   private readonly object _lock = new();
 
@@ -40,8 +40,8 @@ public class LocalWebServer : IDisposable
     { ".ttf", "font/ttf" },
     { ".eot", "application/vnd.ms-fontobject" },
     { ".txt", "text/plain; charset=utf-8" },
-    { ".hdr", "application/octet-stream" }, // HDR files for 3D viewer
-    { ".gh", "application/octet-stream" } // Grasshopper files
+    // { ".hdr", "application/octet-stream" }, // HDR files for 3D viewer
+    // { ".gh", "application/octet-stream" } // Grasshopper files
   };
 
   private CancellationTokenSource _cancellationTokenSource;
@@ -51,6 +51,9 @@ public class LocalWebServer : IDisposable
   {
     Port = port;
     _assembly = Assembly.GetExecutingAssembly();
+
+    // Cache resource names for fast lookup
+    _resourceNames = new HashSet<string>(_assembly.GetManifestResourceNames());
   }
 
   public bool IsRunning { get; private set; }
@@ -252,9 +255,8 @@ public class LocalWebServer : IDisposable
   /// </summary>
   private string GetResourcePath(string urlPath)
   {
-    // MSBuild preserves forward slashes in directory structure
-    // e.g., "_app/immutable/chunks/index.js" -> "Selva.EmbeddedAssets.web._app/immutable/chunks/index.js"
-    return EMBEDDED_RESOURCE_PREFIX + urlPath.Replace('/', '.');
+    // MSBuild is configured to use forward slashes for all platforms (see Selva.csproj)
+    return EMBEDDED_RESOURCE_PREFIX + urlPath;
   }
 
   /// <summary>
@@ -262,8 +264,7 @@ public class LocalWebServer : IDisposable
   /// </summary>
   private bool ResourceExists(string resourcePath)
   {
-    var resourceNames = _assembly.GetManifestResourceNames();
-    return resourceNames.Contains(resourcePath);
+    return _resourceNames.Contains(resourcePath);
   }
 
   /// <summary>
