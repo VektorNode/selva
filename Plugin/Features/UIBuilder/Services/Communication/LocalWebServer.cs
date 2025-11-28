@@ -254,7 +254,7 @@ public class LocalWebServer : IDisposable
   {
     // MSBuild preserves forward slashes in directory structure
     // e.g., "_app/immutable/chunks/index.js" -> "Selva.EmbeddedAssets.web._app/immutable/chunks/index.js"
-    return EMBEDDED_RESOURCE_PREFIX + urlPath;
+    return EMBEDDED_RESOURCE_PREFIX + urlPath.Replace('/', '.');
   }
 
   /// <summary>

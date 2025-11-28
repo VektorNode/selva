@@ -33,13 +33,12 @@
 
   <!-- Embed web assets from the build output -->
   <ItemGroup>
-    <EmbeddedResource Include="EmbeddedAssets\web\**\*" Condition="Exists('EmbeddedAssets\web\index.html')">
+    <EmbeddedResource Include="EmbeddedAssets/web/**/*" Condition="Exists('EmbeddedAssets/web/index.html')">
       <LogicalName>Selva.EmbeddedAssets.web.%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Features\"/>
-    <Folder Include="EmbeddedAssets\web\"/>
+    <Folder Include="Features/"/>
   </ItemGroup>
 </Project>
