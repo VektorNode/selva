@@ -7,3 +7,5 @@ export { default as EditableTabNav } from './EditableTabNav.svelte';
 export { default as DragDropContext } from './DragDropContext.svelte';
 export { default as DropZone } from './DropZone.svelte';
 export { default as DraggableItem } from './DraggableItem.svelte';
+export { default as BuilderSidebar } from './BuilderSidebar.svelte';
+export { default as TabEditor } from './TabEditor.svelte';

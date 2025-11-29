@@ -3,6 +3,7 @@
     AvailableParameter,
     AvailableOutput,
     GrasshopperParamType,
+    TabConfig,
   } from '$lib/types/generated';
   import StateDisplay from '../ui/StateDisplay.svelte';
   import DraggableItem from './DraggableItem.svelte';
@@ -15,6 +16,9 @@
     title: string;
     placedIds?: Set<string>;
     emptyMessage?: string;
+    tabs?: TabConfig[];
+    onAddToGroup?: (tabId: string, groupId: string, item: AvailableParameter | AvailableOutput) => void;
+    onAddToNewGroup?: (path: string, item: AvailableParameter | AvailableOutput) => void;
   }
 
   let {
@@ -22,6 +26,9 @@
     title,
     placedIds = new Set(),
     emptyMessage = 'No items found.',
+    tabs = [],
+    onAddToGroup,
+    onAddToNewGroup,
   }: AvailableItemListProps = $props();
 
   let searchQuery = $state('');
@@ -135,7 +142,7 @@
   {:else}
     <div class="flex flex-col gap-0 max-h-[600px] overflow-y-auto">
       {#each filteredItems as item (item.id)}
-        <DraggableItem {item} />
+        <DraggableItem {item} {tabs} {onAddToGroup} {onAddToNewGroup} />
       {/each}
     </div>
   {/if}
