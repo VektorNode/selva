@@ -56,7 +56,7 @@
       badgeText: 'text-primary',
     },
     output: {
-      bg: badgeContent === 'print' ? 'bg-outputparam' : 'bg-downloadparam',
+      bg: badgeContent === 'Print' ? 'bg-outputparam' : 'bg-downloadparam',
       badgeBg: 'bg-primary/10',
       badgeText: 'text-primary',
     },

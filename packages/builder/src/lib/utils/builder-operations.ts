@@ -73,35 +73,35 @@ export function createLayoutItem(
   const config =
     itemType === 'input' && paramType
       ? createDefaultWidgetConfig(
-          resolvedWidgetType as any,
-          fullParam || ({ paramType } as any),
-          'input'
-        )
+        resolvedWidgetType as any,
+        fullParam || ({ paramType } as any),
+        'input'
+      )
       : itemType === 'output' && paramType
         ? createDefaultWidgetConfig(resolvedWidgetType as any, { paramType } as any, 'output')
         : {};
 
   return itemType === 'input'
     ? ({
-        id: crypto.randomUUID().substring(0, 8),
-        paramId,
-        type: 'input',
-        displayName,
-        widgetType: resolvedWidgetType as any,
-        order: itemCount,
-        span: 1,
-        config,
-      } as InputLayoutItem)
+      id: crypto.randomUUID().substring(0, 8),
+      paramId,
+      type: 'input',
+      displayName,
+      widgetType: resolvedWidgetType as any,
+      order: itemCount,
+      span: 1,
+      config,
+    } as InputLayoutItem)
     : ({
-        id: crypto.randomUUID().substring(0, 8),
-        paramId,
-        type: 'output',
-        displayName,
-        widgetType: resolvedWidgetType as any,
-        order: itemCount,
-        span: 1,
-        config: itemType === 'output' && resolvedWidgetType === 'file' ? {} : config,
-      } as OutputLayoutItem);
+      id: crypto.randomUUID().substring(0, 8),
+      paramId,
+      type: 'output',
+      displayName,
+      widgetType: resolvedWidgetType as any,
+      order: itemCount,
+      span: 1,
+      config: itemType === 'output' && resolvedWidgetType === 'file' ? {} : config,
+    } as OutputLayoutItem);
 }
 
 /**
@@ -148,7 +148,7 @@ export function handleItemDrop(
   widgetType?: string,
   targetItem?: LayoutItem,
   dropPosition?: 'before' | 'after',
-  outputType?: 'print' | 'bake' | 'file'
+  outputType?: 'Print' | 'File'
 ) {
   // Check if already in this group
   if (group.items.some((i) => i.paramId === paramId)) {

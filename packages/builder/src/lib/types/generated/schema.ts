@@ -81,7 +81,7 @@ export interface AvailableOutput {
   /**
    * Type of output component
    */
-  outputType: 'print' | 'bake' | 'file';
+  outputType: 'Print' | 'File';
 }
 export interface NumberWidgetConfig {
   minimum?: number;
@@ -103,7 +103,7 @@ export interface DropdownWidgetConfig {
   };
   required?: boolean;
 }
-export interface CheckboxWidgetConfig { }
+export interface CheckboxWidgetConfig {}
 export interface InputNumberLayoutItem {
   id: string;
   /**

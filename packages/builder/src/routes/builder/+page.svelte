@@ -152,7 +152,7 @@
       );
     } else if (dropType === 'output') {
       const output = data as AvailableOutput;
-      const widgetType = output.outputType === 'file' ? 'file' : 'text';
+      const widgetType = output.outputType === 'File' ? 'File' : 'text';
       handleItemDrop(
         builderState.state.schema,
         group,
@@ -237,7 +237,7 @@
     const itemType = 'paramType' in item ? 'input' : 'output';
     const paramType = 'paramType' in item ? item.paramType : undefined;
     const widgetType =
-      'paramType' in item ? undefined : item.outputType === 'file' ? 'file' : 'text';
+      'paramType' in item ? undefined : item.outputType === 'File' ? 'File' : 'text';
     const outputType = 'paramType' in item ? undefined : item.outputType;
 
     handleItemDrop(
@@ -317,7 +317,7 @@
     const itemType = 'paramType' in item ? 'input' : 'output';
     const paramType = 'paramType' in item ? item.paramType : undefined;
     const widgetType =
-      'paramType' in item ? undefined : item.outputType === 'file' ? 'file' : 'text';
+      'paramType' in item ? undefined : item.outputType === 'File' ? 'File' : 'Text';
     const outputType = 'paramType' in item ? undefined : item.outputType;
 
     handleItemDrop(
