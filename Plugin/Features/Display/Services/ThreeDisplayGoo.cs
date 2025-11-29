@@ -18,9 +18,9 @@ public class ThreeDisplayGoo : IGH_Goo
 
   public ThreeDisplay Value { get; set; }
 
-  public bool IsValid => !string.IsNullOrEmpty(Value.meshData);
+  public bool IsValid => !string.IsNullOrEmpty(Value.MeshData);
 
-  public string IsValidWhyNot => string.IsNullOrEmpty(Value.meshData)
+  public string IsValidWhyNot => string.IsNullOrEmpty(Value.MeshData)
     ? "ThreeDisplay has no mesh data"
     : string.Empty;
 
@@ -93,6 +93,6 @@ public class ThreeDisplayGoo : IGH_Goo
 
   public override string ToString()
   {
-    return $"ThreeDisplay: (V: {Value.vertexCount}, F:{Value.faceCount})";
+    return $"ThreeDisplay: (V: {Value.VertexCount}, F:{Value.FaceCount})";
   }
 }

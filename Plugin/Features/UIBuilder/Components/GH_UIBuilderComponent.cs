@@ -113,7 +113,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     var document = OnPingDocument();
     if (document == null || _embeddedSchema == null || _schemaManager == null) return (null, new List<Guid>());
 
-    return _schemaManager.ValidateSchemaAndTrackChanges(_embeddedSchema, document, true);
+    return _schemaManager.ValidateSchemaAndTrackChanges(_embeddedSchema, document);
   }
 
   private static string CreateSessionId(int length)
@@ -174,7 +174,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     DA.SetData(0, _sessionId);
 
-    // Get and validate document
     var document = OnPingDocument();
     if (!DocumentGuards.IsValid(document, out var error))
     {
@@ -230,7 +229,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     _valueCollector = new ValueCollector();
     _stateManager = new ComponentStateManager();
     _communicationHandler = new CommunicationHandler(_sessionId);
-    _webServer = new LocalWebServer(0); // Use random available port
+    _webServer = new LocalWebServer(); // Use random available port
     _eventManager = new DocumentEventManager(_schemaManager, _valueCollector, _communicationHandler);
     _cleanupService = new SchemaCleanupService();
 
@@ -585,7 +584,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       {
         _embeddedSchema = updatedSchema;
         HandleParameterDeletion(removedIds);
-        e.Document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc => { ExpireSolution(false); });
+        e.Document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs,
+          doc => { ExpireSolution(false); });
       }
       else
       {

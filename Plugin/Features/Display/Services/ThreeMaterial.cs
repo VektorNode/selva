@@ -1,5 +1,6 @@
 ﻿using System.Drawing;
 using System.Reflection;
+using Newtonsoft.Json;
 using Selva.Core.Helpers;
 
 namespace Selva.Features.Display.Services;
@@ -12,37 +13,42 @@ public class ThreeMaterial
   /// <summary>
   ///   The color of the material.
   /// </summary>
-  public Color color { get; set; }
+  [JsonProperty("color")]
+  public Color Color { get; set; }
 
   /// <summary>
   ///   The metalness of the material (0.0 to 1.0).
   /// </summary>
-  public double metalness { get; set; }
+  [JsonProperty("metalness")]
+  public double Metalness { get; set; }
 
   /// <summary>
   ///   The roughness of the material (0.0 to 1.0).
   /// </summary>
-  public double roughness { get; set; }
+  [JsonProperty("roughness")]
+  public double Roughness { get; set; }
 
   /// <summary>
   ///   The opacity of the material (0.0 to 1.0).
   /// </summary>
-  public double opacity { get; set; }
+  [JsonProperty("opacity")]
+  public double Opacity { get; set; }
 
   /// <summary>
   ///   Indicates if the material is transparent.
   /// </summary>
-  public bool transparent { get; set; }
+  [JsonProperty("transparent")]
+  public bool Transparent { get; set; }
 
   public static ThreeMaterial Default()
   {
     return new ThreeMaterial
     {
-      color = Color.White,
-      metalness = 0.0,
-      roughness = 0.5,
-      opacity = 1.0,
-      transparent = false
+      Color = Color.White,
+      Metalness = 0.0,
+      Roughness = 0.5,
+      Opacity = 1.0,
+      Transparent = false
     };
   }
 
@@ -83,8 +89,8 @@ public class ThreeMaterial
   /// </summary>
   private bool IsClampedProperty(string propertyName)
   {
-    return propertyName == nameof(metalness)
-           || propertyName == nameof(roughness)
-           || propertyName == nameof(opacity);
+    return propertyName == nameof(Metalness)
+           || propertyName == nameof(Roughness)
+           || propertyName == nameof(Opacity);
   }
 }

@@ -16,7 +16,6 @@ namespace Selva.Features.UIBuilder.Services;
 /// </summary>
 public class WebSocketServer : IDisposable
 {
-  // Security: Maximum message size (10MB) to prevent memory exhaustion attacks
   private const int MAX_MESSAGE_SIZE = AppConfig.WebSocket.MaxMessageSizeBytes;
   private const int BUFFER_SIZE = AppConfig.WebSocket.BufferSizeBytes;
   private const int MAX_CLIENTS = AppConfig.WebSocket.MaxConcurrentClients;
@@ -38,17 +37,17 @@ public class WebSocketServer : IDisposable
 
   public int Port { get; }
 
-  ~WebSocketServer()
-  {
-    Dispose();
-  }
-
   public void Dispose()
   {
     Stop();
     _heartbeatTimer?.Dispose();
     _cancellationTokenSource?.Dispose();
     GC.SuppressFinalize(this);
+  }
+
+  ~WebSocketServer()
+  {
+    Dispose();
   }
 
   public event EventHandler<string> OnMessageReceived;
@@ -103,13 +102,10 @@ public class WebSocketServer : IDisposable
       {
         try
         {
-          // Attempt graceful close with timeout - compatible with .NET Framework 4.8
+          // Attempt graceful close with timeout
           var closeTask = client?.CloseAsync(WebSocketCloseStatus.NormalClosure, "Server shutting down",
             CancellationToken.None);
-          if (closeTask != null)
-          {
-            closeTask.Wait(AppConfig.WebSocket.ClientCloseTimeoutMs);
-          }
+          if (closeTask != null) closeTask.Wait(AppConfig.WebSocket.ClientCloseTimeoutMs);
           client?.Dispose();
         }
         catch
@@ -157,7 +153,7 @@ public class WebSocketServer : IDisposable
         }
         catch (OperationCanceledException)
         {
-          Debug.WriteLine($"Broadcast timeout for client - removing from pool");
+          Debug.WriteLine("Broadcast timeout for client - removing from pool");
           clientsToRemove.Add(client);
         }
         catch (Exception ex)

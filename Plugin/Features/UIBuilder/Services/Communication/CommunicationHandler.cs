@@ -123,9 +123,8 @@ public class CommunicationHandler : IDisposable
       // Start server with timeout - compatible with .NET Framework 4.8
       var startTask = _webSocketServer.StartAsync();
       if (await Task.WhenAny(startTask, Task.Delay(AppConfig.WebSocket.ServerStartupTimeoutMs)) != startTask)
-      {
-        throw new TimeoutException($"WebSocket server startup timed out after {AppConfig.WebSocket.ServerStartupTimeoutMs}ms");
-      }
+        throw new TimeoutException(
+          $"WebSocket server startup timed out after {AppConfig.WebSocket.ServerStartupTimeoutMs}ms");
       await startTask; // Propagate any exceptions
       logMessage?.Invoke($"WebSocket Port: {_port}");
     }
@@ -163,12 +162,12 @@ public class CommunicationHandler : IDisposable
   }
 
   /// <summary>
-  /// Marshals WebSocket operations to Grasshopper's main thread using RhinoApp.InvokeOnUiThread.
-  /// Required because parameter updates must occur on the UI thread to avoid race conditions.
+  ///   Marshals WebSocket operations to Grasshopper's main thread using RhinoApp.InvokeOnUiThread.
+  ///   Required because parameter updates must occur on the UI thread to avoid race conditions.
   /// </summary>
   /// <remarks>
-  /// Uses Task.Run to avoid blocking the WebSocket receive loop, then marshals the callback
-  /// to the main thread for actual parameter modification.
+  ///   Uses Task.Run to avoid blocking the WebSocket receive loop, then marshals the callback
+  ///   to the main thread for actual parameter modification.
   /// </remarks>
   private void MarshalToMainThread(Action callback)
   {

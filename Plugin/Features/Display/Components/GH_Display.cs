@@ -20,7 +20,7 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
 {
   private const string DefaultMeshPrefix = "";
 
-  //TODO: At the moment each mesh is processed and compressed individually. As well as wehen same meterial is used multiple times.
+  //TODO: At the moment each mesh is processed and compressed individually. As well as when same material is used multiple times.
   //On the web part each mesh is decompressed individually as well.
   //Consider batching meshes together with metadata to reduce overhead and make better use of compression.
 
@@ -309,7 +309,7 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
 
   private ThreeDisplay CreateThreeDisplay(Mesh mesh, string name, ThreeMaterial material)
   {
-    var display = new ThreeDisplay { name = name };
+    var display = new ThreeDisplay { Name = name };
 
     // Copy all material properties automatically
     material.CopyPropertiesTo(display);
@@ -317,9 +317,9 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
     // Add mesh data
     var (triangleCount, quadCount) = GeoMeshProcessor.CalculateFaceCounts(mesh);
     var (vertices, faces) = GeoMeshProcessor.ConvertMeshToArrays(mesh, triangleCount, quadCount);
-    display.meshData = GeoMeshProcessor.CompressAndSerialize(vertices, faces);
-    display.vertexCount = vertices.Length;
-    display.faceCount = faces.Length;
+    display.MeshData = GeoMeshProcessor.CompressAndSerialize(vertices, faces);
+    display.VertexCount = vertices.Length;
+    display.FaceCount = faces.Length;
 
     return display;
   }

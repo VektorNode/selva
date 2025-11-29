@@ -10,13 +10,13 @@ namespace Selva.Features.ComputeIO.Components;
 ///   Custom IGH_Goo type for ValueList data
 /// </summary>
 [Guid("F5A0C45C-1B2D-4E7F-9A3C-8D2E5F7B4C6A")]
-public class GH_ValueListData : GH_Goo<string>
+public class GH_ValueListDataGoo : GH_Goo<string>
 {
-  public GH_ValueListData()
+  public GH_ValueListDataGoo()
   {
   }
 
-  public GH_ValueListData(string value, List<(string Name, string Expression)> items, int selectedIndex = 0)
+  public GH_ValueListDataGoo(string value, List<(string Name, string Expression)> items, int selectedIndex = 0)
   {
     Value = value;
     Items = items;
@@ -53,7 +53,7 @@ public class GH_ValueListData : GH_Goo<string>
 
   public override IGH_Goo Duplicate()
   {
-    return new GH_ValueListData(Value, new List<(string, string)>(Items), SelectedIndex);
+    return new GH_ValueListDataGoo(Value, new List<(string, string)>(Items), SelectedIndex);
   }
 
   public override string ToString()
@@ -101,20 +101,6 @@ public class GH_ValueListData : GH_Goo<string>
   }
 
   /// <summary>
-  ///   Returns values as an object for contextual serialization
-  /// </summary>
-  public JObject GetValuesObject()
-  {
-    var valuesObj = new JObject();
-    foreach (var item in Items)
-    {
-      valuesObj[item.Name] = item.Expression;
-    }
-
-    return valuesObj;
-  }
-
-  /// <summary>
   ///   Returns the default value (selected value)
   /// </summary>
   public string GetDefaultValue()
@@ -124,7 +110,7 @@ public class GH_ValueListData : GH_Goo<string>
     return Value; // Fallback to current value
   }
 
-  public static GH_ValueListData FromJson(JObject json)
+  public static GH_ValueListDataGoo FromJson(JObject json)
   {
     if (json == null) return null;
 
@@ -142,14 +128,14 @@ public class GH_ValueListData : GH_Goo<string>
         ));
       }
 
-    return new GH_ValueListData(value, items, selectedIndex);
+    return new GH_ValueListDataGoo(value, items, selectedIndex);
   }
 
   public override bool CastFrom(object source)
   {
     if (source == null) return false;
 
-    if (source is GH_ValueListData vld)
+    if (source is GH_ValueListDataGoo vld)
     {
       Value = vld.Value;
       Items = new List<(string, string)>(vld.Items);
@@ -169,7 +155,6 @@ public class GH_ValueListData : GH_Goo<string>
       return true;
     }
 
-    // Handle numeric types
     if (source is int intVal)
     {
       Value = intVal.ToString();
@@ -188,7 +173,6 @@ public class GH_ValueListData : GH_Goo<string>
       return true;
     }
 
-    // Fallback: convert anything to string
     Value = source.ToString();
     return true;
   }
@@ -203,15 +187,13 @@ public class GH_ValueListData : GH_Goo<string>
       return true;
     }
 
-    // Cast to same type
-    if (typeof(T) == typeof(GH_ValueListData))
+    if (typeof(T) == typeof(GH_ValueListDataGoo))
     {
       object obj = this;
       target = (T)obj;
       return true;
     }
 
-    // Cast to double/number
     if (typeof(T) == typeof(GH_Number))
     {
       if (double.TryParse(Value, out var numValue))
@@ -224,7 +206,6 @@ public class GH_ValueListData : GH_Goo<string>
       return false;
     }
 
-    // Cast to integer
     if (typeof(T) == typeof(GH_Integer))
     {
       if (int.TryParse(Value, out var intValue))
@@ -237,7 +218,6 @@ public class GH_ValueListData : GH_Goo<string>
       return false;
     }
 
-    // Cast to boolean
     if (typeof(T) == typeof(GH_Boolean))
     {
       if (bool.TryParse(Value, out var boolValue))
@@ -247,7 +227,6 @@ public class GH_ValueListData : GH_Goo<string>
         return true;
       }
 
-      // Also try numeric conversion (0 = false, non-zero = true)
       if (double.TryParse(Value, out var numValue))
       {
         object obj = new GH_Boolean(Math.Abs(numValue) > 1e-10);
@@ -261,9 +240,9 @@ public class GH_ValueListData : GH_Goo<string>
     return false;
   }
 
-  private class GH_ValueListDataProxy : GH_GooProxy<GH_ValueListData>
+  private class GH_ValueListDataProxy : GH_GooProxy<GH_ValueListDataGoo>
   {
-    public GH_ValueListDataProxy(GH_ValueListData owner) : base(owner)
+    public GH_ValueListDataProxy(GH_ValueListDataGoo owner) : base(owner)
     {
     }
 

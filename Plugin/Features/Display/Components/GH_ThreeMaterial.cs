@@ -48,11 +48,11 @@ public class GH_ThreeMaterial : GH_Component
 
     var material = new ThreeMaterial
     {
-      color = color,
-      metalness = metalness,
-      roughness = roughness,
-      opacity = opacity,
-      transparent = transparent
+      Color = color,
+      Metalness = metalness,
+      Roughness = roughness,
+      Opacity = opacity,
+      Transparent = transparent
     };
 
     DA.SetData(0, new ThreeMaterialGoo(material));

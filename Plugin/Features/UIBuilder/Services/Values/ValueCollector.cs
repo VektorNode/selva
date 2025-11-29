@@ -213,7 +213,7 @@ public class ValueCollector
   /// </summary>
   private object ExtractKeyFromValueListData(IGH_Goo data)
   {
-    if (data is GH_ValueListData valueListData) return valueListData.SelectedName;
+    if (data is GH_ValueListDataGoo valueListData) return valueListData.SelectedName;
 
     return ExtractValue(data);
   }

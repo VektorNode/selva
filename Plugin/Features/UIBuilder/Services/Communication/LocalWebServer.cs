@@ -20,7 +20,6 @@ public class LocalWebServer : IDisposable
   private const int BUFFER_SIZE = AppConfig.HttpServer.BufferSizeBytes;
   private const string EMBEDDED_RESOURCE_PREFIX = AppConfig.HttpServer.EmbeddedResourcePrefix;
   private readonly Assembly _assembly;
-  private readonly HashSet<string> _resourceNames;
 
   private readonly object _lock = new();
 
@@ -33,17 +32,18 @@ public class LocalWebServer : IDisposable
     { ".png", "image/png" },
     { ".jpg", "image/jpeg" },
     { ".jpeg", "image/jpeg" },
-    { ".gif", "image/gif" },
     { ".svg", "image/svg+xml" },
     { ".ico", "image/x-icon" },
     { ".woff", "font/woff" },
     { ".woff2", "font/woff2" },
     { ".ttf", "font/ttf" },
     { ".eot", "application/vnd.ms-fontobject" },
-    { ".txt", "text/plain; charset=utf-8" },
+    { ".txt", "text/plain; charset=utf-8" }
     // { ".hdr", "application/octet-stream" }, // HDR files for 3D viewer
     // { ".gh", "application/octet-stream" } // Grasshopper files
   };
+
+  private readonly HashSet<string> _resourceNames;
 
   private CancellationTokenSource _cancellationTokenSource;
   private HttpListener _httpListener;
@@ -61,16 +61,16 @@ public class LocalWebServer : IDisposable
   public int Port { get; private set; }
   public string BaseUrl => $"http://localhost:{Port}";
 
-  ~LocalWebServer()
-  {
-    Dispose();
-  }
-
   public void Dispose()
   {
     Stop();
     _cancellationTokenSource?.Dispose();
     GC.SuppressFinalize(this);
+  }
+
+  ~LocalWebServer()
+  {
+    Dispose();
   }
 
   /// <summary>
@@ -148,18 +148,15 @@ public class LocalWebServer : IDisposable
       {
         var context = await _httpListener.GetContextAsync();
 
-        // Process request in background to avoid blocking
         _ = Task.Run(() => ProcessRequestAsync(context, cancellationToken), cancellationToken);
       }
       catch (HttpListenerException ex)
       {
-        // Listener was stopped
         Debug.WriteLine($"HTTP listener stopped: {ex.Message}");
         break;
       }
       catch (Exception ex)
       {
-        // Log error but continue accepting requests
         Debug.WriteLine($"Error accepting HTTP request: {ex.Message}");
       }
     }
@@ -175,7 +172,6 @@ public class LocalWebServer : IDisposable
       var request = context.Request;
       var response = context.Response;
 
-      // Get requested path (remove leading slash)
       var path = request.Url.AbsolutePath.TrimStart('/');
 
       // Default to index.html for root path
@@ -198,7 +194,6 @@ public class LocalWebServer : IDisposable
         return;
       }
 
-      // Get MIME type
       var extension = Path.GetExtension(path).ToLowerInvariant();
       var mimeType = _mimeTypes.ContainsKey(extension)
         ? _mimeTypes[extension]
@@ -280,7 +275,6 @@ public class LocalWebServer : IDisposable
   /// </summary>
   private int FindAvailablePort()
   {
-    // Try to find an available port in the configured range
     var random = new Random();
     for (var i = 0; i < AppConfig.HttpServer.PortDiscoveryAttempts; i++)
     {
@@ -302,7 +296,6 @@ public class LocalWebServer : IDisposable
       }
     }
 
-    // Fallback: use a higher range
     return random.Next(AppConfig.HttpServer.PortRangeMax, AppConfig.HttpServer.PortRangeMax + 1000);
   }
 }

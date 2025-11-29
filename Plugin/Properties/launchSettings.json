@@ -19,6 +19,6 @@
         "RHINO_PACKAGE_DIRS": "$(ProjectDir)/bin/Debug"
       },
       "nativeDebugging": true
-    },
+    }
   }
 }

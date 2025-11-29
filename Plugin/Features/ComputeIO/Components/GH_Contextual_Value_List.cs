@@ -17,13 +17,12 @@ namespace Selva.Features.ComputeIO.Components;
 ///   A contextual parameter that captures value list data including all options and the selected default.
 ///   The connected GH_ValueList is the single source of truth - data is read directly from it.
 /// </summary>
-public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualParameter
+public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_ContextualParameter
 {
   private Guid _connectedValueListGuid = Guid.Empty;
-  private GH_ValueListData[] _contextual;
-  private DataTree<GH_ValueListData> _contextualDataTree;
+  private GH_ValueListDataGoo[] _contextual;
+  private DataTree<GH_ValueListDataGoo> _contextualDataTree;
 
-  // Stored items for use when ValueList isn't connected (e.g., in Compute)
   private List<(string Name, string Expression)> _storedItems = new();
 
   public GetValueListParameter()
@@ -42,14 +41,12 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
   {
     get
     {
-      // First try the cached GUID
       if (_connectedValueListGuid != Guid.Empty)
       {
         var cached = OnPingDocument()?.FindObject(_connectedValueListGuid, false) as GH_ValueList;
         if (cached != null) return cached;
       }
 
-      // Fallback: check Sources directly (in case GUID wasn't set yet)
       if (Sources != null)
         foreach (var source in Sources)
         {
@@ -122,14 +119,14 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
       foreach (var selected in SelectedItems)
       {
         var index = ListItems.ToList().IndexOf(selected);
-        yield return new GH_ValueListData(selected.Expression, items, index);
+        yield return new GH_ValueListDataGoo(selected.Expression, items, index);
       }
     }
   }
 
   public void AssignContextualData(IEnumerable data)
   {
-    var list = new List<GH_ValueListData>();
+    var list = new List<GH_ValueListDataGoo>();
     var items = GetItemTuples();
     var currentSelectedIndex = SelectedIndex;
 
@@ -147,7 +144,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
         ? items[matchIndex].Expression
         : stringValue;
 
-      list.Add(new GH_ValueListData(expressionValue, items, selectedIndex));
+      list.Add(new GH_ValueListDataGoo(expressionValue, items, selectedIndex));
     }
 
     _contextual = list.ToArray();
@@ -217,7 +214,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
   /// <summary>
   ///   Assigns contextual data as a tree structure for multi-branch data.
   /// </summary>
-  public void AssignContextualDataTree(DataTree<GH_ValueListData> data)
+  public void AssignContextualDataTree(DataTree<GH_ValueListDataGoo> data)
   {
     _contextualDataTree = data;
     ExpireSolution(false);
@@ -235,7 +232,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
     var expressionValue = matchIndex >= 0 && matchIndex < items.Count
       ? items[matchIndex].Expression
       : value;
-    _contextual = new[] { new GH_ValueListData(expressionValue, items, matchIndex) };
+    _contextual = new[] { new GH_ValueListDataGoo(expressionValue, items, matchIndex) };
     ExpireSolution(false);
   }
 
@@ -246,7 +243,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
   public void SetValues(IEnumerable<string> values)
   {
     var items = GetItemTuples();
-    var list = new List<GH_ValueListData>();
+    var list = new List<GH_ValueListDataGoo>();
 
     foreach (var value in values)
     {
@@ -255,7 +252,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
       var expressionValue = matchIndex >= 0 && matchIndex < items.Count
         ? items[matchIndex].Expression
         : value;
-      list.Add(new GH_ValueListData(expressionValue, items, matchIndex));
+      list.Add(new GH_ValueListDataGoo(expressionValue, items, matchIndex));
     }
 
     _contextual = list.ToArray();
@@ -314,12 +311,12 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
 
         // Build data directly from the ValueList's current state
         var items = GetItemTuples();
-        var selectedData = new List<GH_ValueListData>();
+        var selectedData = new List<GH_ValueListDataGoo>();
 
         foreach (var selectedItem in vl.SelectedItems)
         {
           var index = vl.ListItems.IndexOf(selectedItem);
-          selectedData.Add(new GH_ValueListData(selectedItem.Expression, items, index));
+          selectedData.Add(new GH_ValueListDataGoo(selectedItem.Expression, items, index));
         }
 
         if (selectedData.Count > 0) m_data.AppendRange(selectedData, new GH_Path(0));
@@ -344,7 +341,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
       var branch = sourceData.get_Branch(path);
       if (branch == null) continue;
 
-      var converted = new List<GH_ValueListData>();
+      var converted = new List<GH_ValueListDataGoo>();
       foreach (var item in branch)
       {
         var stringValue = ExtractStringValue(item);
@@ -355,7 +352,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
         var expressionValue = matchIndex >= 0 && matchIndex < items.Count
           ? items[matchIndex].Expression
           : stringValue;
-        converted.Add(new GH_ValueListData(expressionValue, items, matchIndex));
+        converted.Add(new GH_ValueListDataGoo(expressionValue, items, matchIndex));
       }
 
       if (converted.Count > 0) m_data.AppendRange(converted, path);
@@ -402,7 +399,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListData>, IGH_ContextualP
     return item switch
     {
       null => null,
-      GH_ValueListData vld => vld.Value,
+      GH_ValueListDataGoo vld => vld.Value,
       GH_String ghString => ghString.Value,
       string str => str,
       IGH_Goo goo when goo.CastTo(out string castValue) => castValue,

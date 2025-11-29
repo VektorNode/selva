@@ -125,6 +125,6 @@ public class ThreeMaterialGoo : IGH_Goo
     if (Value == null) return "ThreeMaterial (null)";
 
     return
-      $"ThreeMaterial: color={Value.color}, metalness={Value.metalness}, roughness={Value.roughness}, opacity={Value.opacity}, transparent={Value.transparent}";
+      $"ThreeMaterial: color={Value.Color}, metalness={Value.Metalness}, roughness={Value.Roughness}, opacity={Value.Opacity}, transparent={Value.Transparent}";
   }
 }
