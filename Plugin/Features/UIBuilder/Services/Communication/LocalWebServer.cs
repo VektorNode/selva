@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Selva.Config;
 
 namespace Selva.Features.UIBuilder.Services;
 
@@ -16,8 +17,8 @@ namespace Selva.Features.UIBuilder.Services;
 /// </summary>
 public class LocalWebServer : IDisposable
 {
-  private const int BUFFER_SIZE = 64 * 1024; // 64KB buffer for file transfers
-  private const string EMBEDDED_RESOURCE_PREFIX = "Selva.EmbeddedAssets.web.";
+  private const int BUFFER_SIZE = AppConfig.HttpServer.BufferSizeBytes;
+  private const string EMBEDDED_RESOURCE_PREFIX = AppConfig.HttpServer.EmbeddedResourcePrefix;
   private readonly Assembly _assembly;
   private readonly HashSet<string> _resourceNames;
 
@@ -124,9 +125,9 @@ public class LocalWebServer : IDisposable
         _httpListener?.Stop();
         _httpListener?.Close();
       }
-      catch
+      catch (Exception ex)
       {
-        // Ignore errors during shutdown
+        Debug.WriteLine($"Error stopping HTTP server: {ex.Message}");
       }
       finally
       {
@@ -150,15 +151,16 @@ public class LocalWebServer : IDisposable
         // Process request in background to avoid blocking
         _ = Task.Run(() => ProcessRequestAsync(context, cancellationToken), cancellationToken);
       }
-      catch (HttpListenerException)
+      catch (HttpListenerException ex)
       {
         // Listener was stopped
+        Debug.WriteLine($"HTTP listener stopped: {ex.Message}");
         break;
       }
       catch (Exception ex)
       {
         // Log error but continue accepting requests
-        Debug.WriteLine($"Error accepting request: {ex.Message}");
+        Debug.WriteLine($"Error accepting HTTP request: {ex.Message}");
       }
     }
   }
@@ -227,16 +229,16 @@ public class LocalWebServer : IDisposable
     }
     catch (Exception ex)
     {
-      Debug.WriteLine($"Error processing request: {ex.Message}");
+      Debug.WriteLine($"Error processing HTTP request for {context.Request.Url?.AbsolutePath}: {ex.Message}");
 
       try
       {
         context.Response.StatusCode = 500;
         context.Response.Close();
       }
-      catch
+      catch (Exception closeEx)
       {
-        // Ignore errors during error handling
+        Debug.WriteLine($"Error sending 500 response: {closeEx.Message}");
       }
     }
   }
@@ -278,11 +280,11 @@ public class LocalWebServer : IDisposable
   /// </summary>
   private int FindAvailablePort()
   {
-    // Try to find an available port in the range 8000-9000
+    // Try to find an available port in the configured range
     var random = new Random();
-    for (var i = 0; i < 100; i++)
+    for (var i = 0; i < AppConfig.HttpServer.PortDiscoveryAttempts; i++)
     {
-      var port = random.Next(8000, 9000);
+      var port = random.Next(AppConfig.HttpServer.PortRangeMin, AppConfig.HttpServer.PortRangeMax);
 
       try
       {
@@ -294,13 +296,13 @@ public class LocalWebServer : IDisposable
           return port;
         }
       }
-      catch
+      catch (Exception)
       {
         // Port not available, try next
       }
     }
 
     // Fallback: use a higher range
-    return random.Next(9000, 10000);
+    return random.Next(AppConfig.HttpServer.PortRangeMax, AppConfig.HttpServer.PortRangeMax + 1000);
   }
 }

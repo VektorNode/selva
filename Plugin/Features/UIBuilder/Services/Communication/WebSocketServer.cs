@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Net.WebSockets;
 using System.Text;
@@ -102,12 +103,18 @@ public class WebSocketServer : IDisposable
       {
         try
         {
-          client?.CloseAsync(WebSocketCloseStatus.NormalClosure, "Server shutting down",
-            CancellationToken.None).Wait(1000);
+          // Attempt graceful close with timeout - compatible with .NET Framework 4.8
+          var closeTask = client?.CloseAsync(WebSocketCloseStatus.NormalClosure, "Server shutting down",
+            CancellationToken.None);
+          if (closeTask != null)
+          {
+            closeTask.Wait(AppConfig.WebSocket.ClientCloseTimeoutMs);
+          }
           client?.Dispose();
         }
         catch
         {
+          // Ignore errors during shutdown
         }
       }
 
@@ -150,10 +157,12 @@ public class WebSocketServer : IDisposable
         }
         catch (OperationCanceledException)
         {
+          Debug.WriteLine($"Broadcast timeout for client - removing from pool");
           clientsToRemove.Add(client);
         }
-        catch
+        catch (Exception ex)
         {
+          Debug.WriteLine($"Broadcast failed for client: {ex.Message}");
           clientsToRemove.Add(client);
         }
       else
@@ -171,8 +180,9 @@ public class WebSocketServer : IDisposable
           {
             client.Dispose();
           }
-          catch
+          catch (Exception ex)
           {
+            Debug.WriteLine($"Error disposing WebSocket client: {ex.Message}");
           }
         }
       }
@@ -196,12 +206,14 @@ public class WebSocketServer : IDisposable
           context.Response.Close();
         }
       }
-      catch (HttpListenerException)
+      catch (HttpListenerException ex)
       {
+        Debug.WriteLine($"WebSocket listener stopped: {ex.Message}");
         break;
       }
-      catch (Exception)
+      catch (Exception ex)
       {
+        Debug.WriteLine($"Error accepting WebSocket connection: {ex.Message}");
       }
     }
   }
@@ -238,8 +250,9 @@ public class WebSocketServer : IDisposable
 
       await ReceiveMessagesAsync(webSocket, cancellationToken);
     }
-    catch (Exception)
+    catch (Exception ex)
     {
+      Debug.WriteLine($"WebSocket request processing error: {ex.Message}");
     }
     finally
     {
@@ -258,8 +271,9 @@ public class WebSocketServer : IDisposable
 
           webSocket.Dispose();
         }
-        catch
+        catch (Exception ex)
         {
+          Debug.WriteLine($"Error closing WebSocket: {ex.Message}");
         }
       }
     }
@@ -354,8 +368,9 @@ public class WebSocketServer : IDisposable
               );
             }
           }
-          catch
+          catch (Exception ex)
           {
+            Debug.WriteLine($"Heartbeat failed for client: {ex.Message}");
             clientsToRemove.Add(client);
           }
         else
@@ -372,8 +387,9 @@ public class WebSocketServer : IDisposable
             {
               client.Dispose();
             }
-            catch
+            catch (Exception ex)
             {
+              Debug.WriteLine($"Error disposing WebSocket during heartbeat cleanup: {ex.Message}");
             }
           }
         }

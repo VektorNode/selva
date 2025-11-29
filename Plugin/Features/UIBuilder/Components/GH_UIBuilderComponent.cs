@@ -6,10 +6,12 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using GH_IO.Serialization;
 using Grasshopper.Kernel;
 using Newtonsoft.Json;
+using Rhino;
 using Selva.Config;
 using Selva.Core.Guards;
 using Selva.Features.UIBuilder.Helpers;
@@ -293,10 +295,23 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     if (!_communicationHandler.IsRunning)
       try
       {
-        // Start WebSocket server for real-time communication
-        _communicationHandler.Start(msg =>
+        // Start WebSocket server for real-time communication (async fire-and-forget)
+        _ = Task.Run(async () =>
         {
-          /* Silent */
+          try
+          {
+            await _communicationHandler.StartAsync(msg =>
+            {
+              /* Silent */
+            });
+          }
+          catch (Exception ex)
+          {
+            RhinoApp.InvokeOnUiThread(new Action(() =>
+            {
+              AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"WebSocket server failed: {ex.Message}");
+            }));
+          }
         });
 
         // Start embedded web server (production mode only - check if resources exist)
@@ -448,7 +463,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       var task = _communicationHandler.BroadcastSchemaSaved(true);
 
       //Expire to update component to reflect new schema (When user saves it will now properly internalize the new schema)
-      document.ScheduleSolution(10, doc => { ExpireSolution(true); });
+      document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc => { ExpireSolution(true); });
 
       AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Schema saved successfully");
     }
@@ -570,7 +585,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       {
         _embeddedSchema = updatedSchema;
         HandleParameterDeletion(removedIds);
-        e.Document.ScheduleSolution(10, doc => { ExpireSolution(false); });
+        e.Document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc => { ExpireSolution(false); });
       }
       else
       {

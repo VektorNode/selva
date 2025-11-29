@@ -85,7 +85,7 @@ public class ValueApplicator
       }
     }
 
-    if (_pendingExpirations.Count > 0) document.ScheduleSolution(10, ExpireCallback);
+    if (_pendingExpirations.Count > 0) document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, ExpireCallback);
 
     return updateCount;
   }

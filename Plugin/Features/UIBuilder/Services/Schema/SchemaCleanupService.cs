@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Grasshopper.Kernel;
+using Selva.Config;
 using Selva.Features.UIBuilder.Models;
 
 namespace Selva.Features.UIBuilder.Services;
@@ -44,14 +45,12 @@ public class SchemaCleanupService
       // 3. Schema is already updated by caller (ValidateSchemaAndTrackChanges)
       // This is the commit point - schema changes are persisted
 
-      // 4. Broadcast to web UI
+      // 4. Broadcast to web UI (fire-and-forget with timeout)
       var broadcastTask = communicationHandler?.BroadcastSchemaUpdate(schema, removedIds);
-
-      // Wait briefly for broadcast to complete (fire-and-forget with timeout)
       if (broadcastTask != null)
         try
         {
-          broadcastTask.Wait(100);
+          broadcastTask.Wait(AppConfig.ComponentLifecycle.SchemaCleanupBroadcastTimeoutMs);
         }
         catch
         {

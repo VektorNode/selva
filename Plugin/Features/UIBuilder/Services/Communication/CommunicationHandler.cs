@@ -53,7 +53,7 @@ public class CommunicationHandler : IDisposable
   /// <summary>
   ///   Start WebSocket server
   /// </summary>
-  public void Start(Action<string> logMessage)
+  public async Task StartAsync(Action<string> logMessage)
   {
     if (_webSocketServer != null && _webSocketServer.IsRunning) return;
 
@@ -74,7 +74,7 @@ public class CommunicationHandler : IDisposable
       _webSocketServer.OnMessageReceived += (sender, message) =>
       {
         // Process message on background thread to avoid blocking WebSocket thread
-        Task.Run(() =>
+        _ = Task.Run(() =>
         {
           try
           {
@@ -120,8 +120,19 @@ public class CommunicationHandler : IDisposable
         });
       };
 
-      Task.Run(async () => await _webSocketServer.StartAsync()).Wait(5000);
+      // Start server with timeout - compatible with .NET Framework 4.8
+      var startTask = _webSocketServer.StartAsync();
+      if (await Task.WhenAny(startTask, Task.Delay(AppConfig.WebSocket.ServerStartupTimeoutMs)) != startTask)
+      {
+        throw new TimeoutException($"WebSocket server startup timed out after {AppConfig.WebSocket.ServerStartupTimeoutMs}ms");
+      }
+      await startTask; // Propagate any exceptions
       logMessage?.Invoke($"WebSocket Port: {_port}");
+    }
+    catch (TimeoutException ex)
+    {
+      logMessage?.Invoke(ex.Message);
+      throw;
     }
     catch (Exception ex)
     {
@@ -152,9 +163,13 @@ public class CommunicationHandler : IDisposable
   }
 
   /// <summary>
-  ///   Marshal a callback to execute on the main Rhino thread
-  ///   Critical for Grasshopper operations that trigger UI updates
+  /// Marshals WebSocket operations to Grasshopper's main thread using RhinoApp.InvokeOnUiThread.
+  /// Required because parameter updates must occur on the UI thread to avoid race conditions.
   /// </summary>
+  /// <remarks>
+  /// Uses Task.Run to avoid blocking the WebSocket receive loop, then marshals the callback
+  /// to the main thread for actual parameter modification.
+  /// </remarks>
   private void MarshalToMainThread(Action callback)
   {
     // If we're already on the main thread, execute directly
@@ -169,9 +184,10 @@ public class CommunicationHandler : IDisposable
     {
       RhinoApp.InvokeOnUiThread(callback);
     }
-    catch
+    catch (Exception ex)
     {
       // If marshaling fails, execute directly (may cause issues but better than deadlock)
+      Debug.WriteLine($"Failed to marshal to UI thread: {ex.Message}");
       callback?.Invoke();
     }
   }

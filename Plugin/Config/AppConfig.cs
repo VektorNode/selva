@@ -19,6 +19,23 @@ public static class AppConfig
     public const int ServerStartupTimeoutMs = 5000; // 5 seconds
   }
 
+  // HTTP Server Configuration
+  public static class HttpServer
+  {
+    public const int BufferSizeBytes = 64 * 1024; // 64KB for file transfers
+    public const string EmbeddedResourcePrefix = "Selva.EmbeddedAssets.web.";
+    public const int PortRangeMin = 8000;
+    public const int PortRangeMax = 9000;
+    public const int PortDiscoveryAttempts = 100;
+  }
+
+  // Component Lifecycle
+  public static class ComponentLifecycle
+  {
+    public const int ScheduleSolutionDelayMs = 10;
+    public const int SchemaCleanupBroadcastTimeoutMs = 100;
+  }
+
   // Value Constraints
   public static class ValueLimits
   {
