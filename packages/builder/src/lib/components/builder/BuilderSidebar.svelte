@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Panel } from '$lib/components/layout';
+  import * as Card from '$lib/components/ui/card';
   import { Button } from '$lib/components/ui';
   import { SchemaInfoPanel, AvailableItemList } from '$lib/components/builder';
   import type {
@@ -37,35 +37,38 @@
 <aside class="flex flex-col gap-6">
   <SchemaInfoPanel {schema} onSchemaChange={onSchemaChange} />
 
-  <Panel title="Available Parameters">
-    {#snippet headerActions()}
+  <Card.Root class="shadow-sm">
+    <Card.Header class="flex flex-row items-center justify-between space-y-0">
+      <Card.Title class="text-xl">Available Parameters</Card.Title>
       {#if syncNeeded}
         <Button variant="default" size="sm" onclick={onSync} class="bg-amber-500 hover:bg-amber-600">
           Sync
         </Button>
       {/if}
-    {/snippet}
-    <p class="mb-4 text-sm text-accent-foreground/40">
-      Drag parameters into groups below or use the context menu to add them to specific
-      tabs/groups.
-    </p>
+    </Card.Header>
+    <Card.Content>
+      <p class="mb-4 text-sm text-accent-foreground/40">
+        Drag parameters into groups below or use the context menu to add them to specific
+        tabs/groups.
+      </p>
 
-    <AvailableItemList
-      items={availableInputs}
-      title="Inputs"
-      {placedIds}
-      tabs={schema?.layout?.tabs || []}
-      {onAddToGroup}
-      {onAddToNewGroup}
-    />
+      <AvailableItemList
+        items={availableInputs}
+        title="Inputs"
+        {placedIds}
+        tabs={schema?.layout?.tabs || []}
+        {onAddToGroup}
+        {onAddToNewGroup}
+      />
 
-    <AvailableItemList
-      items={availableOutputs}
-      title="Outputs"
-      {placedIds}
-      tabs={schema?.layout?.tabs || []}
-      {onAddToGroup}
-      {onAddToNewGroup}
-    />
-  </Panel>
+      <AvailableItemList
+        items={availableOutputs}
+        title="Outputs"
+        {placedIds}
+        tabs={schema?.layout?.tabs || []}
+        {onAddToGroup}
+        {onAddToNewGroup}
+      />
+    </Card.Content>
+  </Card.Root>
 </aside>

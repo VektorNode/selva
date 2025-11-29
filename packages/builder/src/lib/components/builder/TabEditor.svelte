@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Panel } from '$lib/components/layout';
+  import * as Card from '$lib/components/ui/card';
   import { Button, StateDisplay } from '$lib/components/ui';
   import { EditableTabNav, EditableGroup, BuilderGroupItem } from '$lib/components/builder';
   import type { TabConfig, AvailableParameter } from '$lib/types/generated';
@@ -37,69 +37,71 @@
   const activeTab = $derived(tabs.find((t) => t.id === activeTabId));
 </script>
 
-<Panel>
-  {#snippet headerActions()}
+<Card.Root class="shadow-sm">
+  <Card.Header class="flex flex-row items-center justify-between space-y-0">
+    <div></div>
     <Button onclick={onAddTab}>+ Add Tab</Button>
-  {/snippet}
+  </Card.Header>
+  <Card.Content>
+    <div class="min-h-[200px]">
+      {#if !tabs || tabs.length === 0}
+        <StateDisplay
+          type="empty"
+          size="large"
+          title="No tabs yet"
+          message="Click 'Add Tab' to create your first tab"
+        />
+      {:else}
+        <!-- Tab Navigation -->
+        <EditableTabNav
+          {tabs}
+          {activeTabId}
+          onTabChange={onTabChange}
+          onRemoveTab={onRemoveTab}
+          onReorderTabs={onReorderTabs}
+        />
 
-  <div class="min-h-[200px]">
-    {#if !tabs || tabs.length === 0}
-      <StateDisplay
-        type="empty"
-        size="large"
-        title="No tabs yet"
-        message="Click 'Add Tab' to create your first tab"
-      />
-    {:else}
-      <!-- Tab Navigation -->
-      <EditableTabNav
-        {tabs}
-        {activeTabId}
-        onTabChange={onTabChange}
-        onRemoveTab={onRemoveTab}
-        onReorderTabs={onReorderTabs}
-      />
-
-      <!-- Active Tab Content -->
-      {#if activeTab}
-        <div class="animate-[fadeIn_0.2s]">
-          <div class="mb-6 flex justify-end">
-            <Button variant="outline" onclick={() => onAddGroup(activeTab.id)}>
-              + Add Group
-            </Button>
-          </div>
-
-          {#if activeTab.groups.length === 0}
-            <StateDisplay
-              type="empty"
-              size="medium"
-              message="No groups yet. Click 'Add Group' to organize your parameters."
-            />
-          {:else}
-            <div class="flex flex-col gap-6">
-              {#each activeTab.groups as group, groupIndex (group.id)}
-                <EditableGroup
-                  bind:group={activeTab.groups[groupIndex]}
-                  onDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
-                  {onReorder}
-                  onRemove={() => onRemoveGroup(activeTab.id, group.id)}
-                >
-                  {#each group.items as item (item.id)}
-                    {@const paramInfo = getParameterInfo(item.paramId)}
-                    <BuilderGroupItem
-                      {item}
-                      {paramInfo}
-                      tabId={activeTab.id}
-                      groupId={group.id}
-                      onRemove={() => onRemoveItem(activeTab.id, group.id, item.id)}
-                    />
-                  {/each}
-                </EditableGroup>
-              {/each}
+        <!-- Active Tab Content -->
+        {#if activeTab}
+          <div class="animate-[fadeIn_0.2s]">
+            <div class="mb-6 flex justify-end">
+              <Button variant="outline" onclick={() => onAddGroup(activeTab.id)}>
+                + Add Group
+              </Button>
             </div>
-          {/if}
-        </div>
+
+            {#if activeTab.groups.length === 0}
+              <StateDisplay
+                type="empty"
+                size="medium"
+                message="No groups yet. Click 'Add Group' to organize your parameters."
+              />
+            {:else}
+              <div class="flex flex-col gap-6">
+                {#each activeTab.groups as group, groupIndex (group.id)}
+                  <EditableGroup
+                    bind:group={activeTab.groups[groupIndex]}
+                    onDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
+                    {onReorder}
+                    onRemove={() => onRemoveGroup(activeTab.id, group.id)}
+                  >
+                    {#each group.items as item (item.id)}
+                      {@const paramInfo = getParameterInfo(item.paramId)}
+                      <BuilderGroupItem
+                        {item}
+                        {paramInfo}
+                        tabId={activeTab.id}
+                        groupId={group.id}
+                        onRemove={() => onRemoveItem(activeTab.id, group.id, item.id)}
+                      />
+                    {/each}
+                  </EditableGroup>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
       {/if}
-    {/if}
-  </div>
-</Panel>
+    </div>
+  </Card.Content>
+</Card.Root>
