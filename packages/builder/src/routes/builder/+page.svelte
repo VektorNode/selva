@@ -31,6 +31,11 @@
 
   // Navigate to specific routes with session preservation
   function navigateTo(route: '/' | '/preview') {
+    // Auto-save schema when switching to interactive mode
+    if (route === '/preview') {
+      saveSchema();
+    }
+
     const url = route === '/' ? `/?session=${sessionId}` : `/preview?session=${sessionId}`;
     goto(url);
   }
