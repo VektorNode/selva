@@ -3,7 +3,7 @@ import type { UISchema, AvailableParameter, AvailableOutput } from '$lib/types/g
 import { processInitialDataSchema } from '$lib/utils/session';
 import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 
-interface BuilderState {
+interface BuilderWebSocketState {
   availableParams: AvailableParameter[];
   availableOutputs: AvailableOutput[];
   schema: UISchema | null;
@@ -16,7 +16,7 @@ interface BuilderState {
 export function useBuilderState(sessionId: string) {
   const wsState = getWebSocketState();
 
-  let state = $state<BuilderState>({
+  const state = $state<BuilderWebSocketState>({
     availableParams: [],
     availableOutputs: [],
     schema: null,
@@ -127,9 +127,6 @@ export function useBuilderState(sessionId: string) {
 
     // Trigger reactivity
     if (updateCount > 0) {
-      state.schema = state.schema;
-      state.availableParams = state.availableParams;
-      state.availableOutputs = state.availableOutputs;
       toast.success(`Parameter${updateCount > 1 ? 's' : ''} updated: ${updatedNames.join(', ')}`);
 
       // Auto-save schema
@@ -178,8 +175,6 @@ export function useBuilderState(sessionId: string) {
             state.activeTabId = state.schema.layout.tabs.length > 0 ? state.schema.layout.tabs[0].id : null;
           }
         }
-
-        state.schema = state.schema;
 
         toast.info(
           `${removedCount} item${removedCount > 1 ? 's' : ''} removed from Grasshopper and cleaned from layout`

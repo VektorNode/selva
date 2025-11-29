@@ -103,11 +103,14 @@
             dropPosition: dropPosition || 'after',
           };
 
-    const event = new CustomEvent(dragData.dropType === 'group-item' ? 'reorder' : 'parameterdrop', {
-      detail,
-      bubbles: true,
-      composed: true,
-    });
+    const event = new CustomEvent(
+      dragData.dropType === 'group-item' ? 'reorder' : 'parameterdrop',
+      {
+        detail,
+        bubbles: true,
+        composed: true,
+      }
+    );
 
     (e.currentTarget as HTMLElement).dispatchEvent(event);
     dropPosition = null;
@@ -141,11 +144,9 @@
     <div class="grid grid-cols-[20px_1fr] gap-3 p-2">
       <div class="flex items-start pt-0.5">
         {#if item.type === 'input'}
-          <ArrowDownToLine size={14} class="text-muted-foreground" />
-        {:else if item.widgetType === 'file'}
-          <Download size={14} class="text-muted-foreground" />
-        {:else}
           <ArrowUpFromLine size={14} class="text-muted-foreground" />
+        {:else}
+          <ArrowDownToLine size={14} class="text-muted-foreground" />
         {/if}
       </div>
 

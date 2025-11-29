@@ -348,7 +348,11 @@
     if (!builderState?.state.schema) return;
     removeTab(builderState.state.schema, tabId);
 
-    if (builderState.state.activeTabId === tabId && builderState.state.schema.layout.tabs && builderState.state.schema.layout.tabs.length > 0) {
+    if (
+      builderState.state.activeTabId === tabId &&
+      builderState.state.schema.layout.tabs &&
+      builderState.state.schema.layout.tabs.length > 0
+    ) {
       builderState.state.activeTabId = builderState.state.schema.layout.tabs[0].id;
     }
   }
@@ -413,7 +417,7 @@
 
           <BuilderSidebar
             schema={builderState.state.schema}
-            availableInputs={availableInputs}
+            {availableInputs}
             availableOutputs={availableOutputsUnplaced}
             placedIds={placedInLayoutIds()}
             syncNeeded={builderState.state.syncNeeded}
@@ -439,7 +443,7 @@
                 onParameterDrop={handleParameterDrop}
                 onReorder={handleReorder}
                 onRemoveItem={handleRemoveItem}
-                getParameterInfo={getParameterInfo}
+                {getParameterInfo}
               />
             {/if}
 
