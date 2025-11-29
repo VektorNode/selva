@@ -247,7 +247,7 @@
             schema.layout.tabs = schema.layout.tabs.filter((t) => t.groups.length > 0);
 
             // If active tab was removed, switch to first available tab
-            if (activeTabId && !schema.layout.tabs.find(t => t.id === activeTabId)) {
+            if (activeTabId && !schema.layout.tabs.find((t) => t.id === activeTabId)) {
               activeTabId = schema.layout.tabs.length > 0 ? schema.layout.tabs[0].id : null;
             }
           }
@@ -532,14 +532,17 @@
     }
 
     // Look up the full parameter to get all metadata (including options for ValueList)
-    const fullParam = itemType === 'input'
-      ? availableParams.find((p) => p.id === paramId)
-      : undefined;
+    const fullParam =
+      itemType === 'input' ? availableParams.find((p) => p.id === paramId) : undefined;
 
     // Get config if needed
     const config =
       itemType === 'input' && paramType
-        ? createDefaultWidgetConfig(resolvedWidgetType as any, fullParam || { paramType } as any, 'input')
+        ? createDefaultWidgetConfig(
+            resolvedWidgetType as any,
+            fullParam || ({ paramType } as any),
+            'input'
+          )
         : itemType === 'output' && paramType
           ? createDefaultWidgetConfig(resolvedWidgetType as any, { paramType } as any, 'output')
           : {};
@@ -822,13 +825,13 @@
 
               <AvailableItemList
                 items={availableInputs}
-                title="📥 Inputs"
+                title="Inputs"
                 placedIds={placedInLayoutIds()}
               />
 
               <AvailableItemList
                 items={availableOutputsUnplaced}
-                title="📤 Outputs"
+                title="Outputs"
                 placedIds={placedInLayoutIds()}
               />
             </Panel>

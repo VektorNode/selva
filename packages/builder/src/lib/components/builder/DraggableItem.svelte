@@ -33,6 +33,9 @@
     dragStore.clear();
   }
 
+  const badgeContent =
+    'paramType' in item ? item.paramType : (item as AvailableOutput).outputType || 'Unknown';
+
   // Variant-based styling
   const styles = {
     input: {
@@ -41,17 +44,16 @@
       badgeText: 'text-primary',
     },
     output: {
-      bg: 'bg-outputparam',
+      bg: badgeContent === 'print' ? 'bg-outputparam' : 'bg-downloadparam',
       badgeBg: 'bg-primary/10',
       badgeText: 'text-primary',
     },
   };
-
   const style = styles[variant];
-  const badgeContent =
-    'paramType' in item
-      ? item.paramType
-      : (item as AvailableOutput).outputType || 'Unknown';
+
+  function capitalize(str: string) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
 </script>
 
 <Card.Root
@@ -68,9 +70,11 @@
   ondragend={handleDragEnd}
 >
   <div class="flex flex-1 items-center gap-3">
-    <strong class="text-foreground">{item.nickname || ('name' in item ? item.name : 'Unknown')}</strong>
+    <strong class="text-foreground"
+      >{item.nickname || ('name' in item ? item.name : 'Unknown')}</strong
+    >
     <span class={`rounded px-2 py-1 text-sm ${style.badgeBg} ${style.badgeText}`}>
-      {badgeContent}
+      {capitalize(badgeContent)}
     </span>
   </div>
   <span class="cursor-grab font-bold text-muted-foreground select-none">⋮⋮</span>

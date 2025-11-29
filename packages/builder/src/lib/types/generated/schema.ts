@@ -103,7 +103,7 @@ export interface DropdownWidgetConfig {
   };
   required?: boolean;
 }
-export interface CheckboxWidgetConfig {}
+export interface CheckboxWidgetConfig { }
 export interface InputNumberLayoutItem {
   id: string;
   /**
