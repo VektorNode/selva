@@ -20,10 +20,6 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
 {
   private const string DefaultMeshPrefix = "";
 
-  //TODO: At the moment each mesh is processed and compressed individually. As well as when same material is used multiple times.
-  //On the web part each mesh is decompressed individually as well.
-  //Consider batching meshes together with metadata to reduce overhead and make better use of compression.
-
   public WebDisplay()
     : base("Display", "D", "Converts geometry to display file", "Selva", "Display")
   {
@@ -46,7 +42,7 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
 
   protected override void RegisterOutputParams(GH_OutputParamManager pManager)
   {
-    pManager.AddGenericParameter("ThreeDisplay", "TD", "ThreeDisplay objects (flattened)", GH_ParamAccess.list);
+    pManager.AddTextParameter("MeshBatch", "MB", "Batched mesh data (JSON)", GH_ParamAccess.item);
   }
 
   protected override void SolveInstance(IGH_DataAccess DA)
@@ -105,7 +101,13 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
         AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, warning);
       }
 
-    DA.SetDataList(0, result.Displays);
+    if (result.Remarks.Any())
+      foreach (var remark in result.Remarks)
+      {
+        AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, remark);
+      }
+
+    DA.SetData(0, result.BatchJson);
   }
 
   private DisplayResults Compute(
@@ -129,10 +131,35 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
       var names = PrepareNames(geometries.Count, nameGoos);
       var materials = PrepareMaterials(geometries.Count, materialGoos);
 
-      result.Displays = ProcessMeshesParallel(meshes, names, materials, result.Warnings);
+      var validMeshes = new List<Mesh>();
+      var validNames = new List<string>();
+      var validMaterials = new List<ThreeMaterial>();
 
-      if (result.Displays.Count != geometries.Count)
-        result.Warnings.Add($"Successfully processed {result.Displays.Count} out of {geometries.Count} geometries.");
+      for (var i = 0; i < meshes.Count; i++)
+      {
+        if (meshes[i] != null && meshes[i].IsValid)
+        {
+          validMeshes.Add(meshes[i]);
+          validNames.Add(names[i]);
+          validMaterials.Add(materials[i]);
+        }
+      }
+
+      if (validMeshes.Count == 0)
+      {
+        result.Error = "No valid meshes generated from input geometry";
+        return result;
+      }
+
+      // Create optimized batch
+      var batch = MeshBatchProcessor.CreateBatch(validMeshes, validNames, validMaterials);
+      result.BatchJson = Newtonsoft.Json.JsonConvert.SerializeObject(batch);
+
+      if (validMeshes.Count != geometries.Count)
+        result.Warnings.Add($"Successfully processed {validMeshes.Count} out of {geometries.Count} geometries.");
+
+      // Add statistics as remarks
+      result.Remarks.Add($"Optimized: {validMeshes.Count} meshes, {batch.Materials.Count} unique materials, {batch.Groups.Count} material groups");
     }
     catch (Exception ex)
     {
@@ -275,53 +302,6 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
     mesh.Normals.ComputeNormals();
     mesh.Compact();
     return mesh;
-  }
-
-  #endregion
-
-  #region Mesh Processing
-
-  private List<ThreeDisplayGoo> ProcessMeshesParallel(List<Mesh> meshes, List<string> names,
-    List<ThreeMaterial> materials, List<string> warnings)
-  {
-    var resultDict = new ConcurrentDictionary<int, ThreeDisplayGoo>();
-
-    Parallel.For(0, meshes.Count, index =>
-    {
-      if (meshes[index] == null || !meshes[index].IsValid) return;
-
-      try
-      {
-        var display = CreateThreeDisplay(meshes[index], names[index], materials[index]);
-        resultDict.TryAdd(index, new ThreeDisplayGoo(display));
-      }
-      catch (Exception ex)
-      {
-        lock (warnings)
-        {
-          warnings.Add($"Error processing mesh {index}: {ex.Message}");
-        }
-      }
-    });
-
-    return resultDict.OrderBy(kvp => kvp.Key).Select(kvp => kvp.Value).ToList();
-  }
-
-  private ThreeDisplay CreateThreeDisplay(Mesh mesh, string name, ThreeMaterial material)
-  {
-    var display = new ThreeDisplay { Name = name };
-
-    // Copy all material properties automatically
-    material.CopyPropertiesTo(display);
-
-    // Add mesh data
-    var (triangleCount, quadCount) = GeoMeshProcessor.CalculateFaceCounts(mesh);
-    var (vertices, faces) = GeoMeshProcessor.ConvertMeshToArrays(mesh, triangleCount, quadCount);
-    display.MeshData = GeoMeshProcessor.CompressAndSerialize(vertices, faces);
-    display.VertexCount = vertices.Length;
-    display.FaceCount = faces.Length;
-
-    return display;
   }
 
   #endregion

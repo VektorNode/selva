@@ -98,7 +98,6 @@ public static class GeoMeshProcessor
   public static string CompressAndSerialize(float[] vertices, int[] faceIndices)
   {
     byte[] serializedData;
-    //Convert ot float array to reduce size
     using (var memoryStream = new MemoryStream())
     {
       using (var writer = new BinaryWriter(memoryStream))

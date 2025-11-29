@@ -3,6 +3,8 @@ import * as fflate from 'fflate';
 import { decodeBase64ToBinary } from '@/core/index';
 import { RhinoComputeError, ErrorCodes } from '@/core/errors';
 
+import type { DecompressedMeshData } from './types';
+
 interface MeshData {
   verticesArray: Float32Array;
   faceIndicesArray: Uint32Array;
@@ -31,6 +33,124 @@ export function decompressMeshData(base64String: string): MeshData {
       }
     );
   }
+}
+
+/**
+ * Decompresses batched mesh data (new format with all meshes in one compressed blob).
+ * @param base64String - The base64-encoded compressed data.
+ * @returns Decompressed vertices and faces arrays.
+ * @throws {RhinoComputeError} If decompression fails or data is invalid.
+ */
+export function decompressBatchedMeshData(base64String: string): DecompressedMeshData {
+  try {
+    const bytes = decodeBase64ToBinary(base64String);
+    const decompressedData = fflate.gunzipSync(bytes);
+    return parseBatchedMeshBinaryData(decompressedData);
+  } catch (error) {
+    throw new RhinoComputeError(
+      error instanceof RhinoComputeError
+        ? error.message
+        : `Failed to decompress batched data: ${error instanceof Error ? error.message : String(error)}`,
+      error instanceof RhinoComputeError ? error.code : ErrorCodes.VALIDATION_ERROR,
+      {
+        context: { base64StringLength: base64String.length },
+        originalError: error instanceof Error ? error : new Error(String(error)),
+      }
+    );
+  }
+}
+
+/**
+ * Parses batched binary mesh data (all vertices and faces together).
+ * @param binaryMeshData - The binary mesh data to parse.
+ * @returns The parsed mesh data with vertices and faces.
+ * @throws {RhinoComputeError} If data is invalid or insufficient.
+ */
+function parseBatchedMeshBinaryData(binaryMeshData: Uint8Array): DecompressedMeshData {
+  const dataView = new DataView(
+    binaryMeshData.buffer,
+    binaryMeshData.byteOffset,
+    binaryMeshData.byteLength
+  );
+  let offset = 0;
+
+  // Read vertex data
+  if (offset + 4 > dataView.byteLength) {
+    throw new RhinoComputeError(
+      'Insufficient data to read the number of vertex floats.',
+      ErrorCodes.VALIDATION_ERROR,
+      { context: { expectedBytes: 4, availableBytes: dataView.byteLength, offset } }
+    );
+  }
+  const numVertexFloats = dataView.getUint32(offset, true);
+  offset += 4;
+
+  if (numVertexFloats % 3 !== 0) {
+    throw new RhinoComputeError(
+      'Invalid number of vertex floats; should be divisible by 3.',
+      ErrorCodes.VALIDATION_ERROR,
+      { context: { numVertexFloats, remainder: numVertexFloats % 3 } }
+    );
+  }
+
+  const verticesByteLength = numVertexFloats * Float32Array.BYTES_PER_ELEMENT;
+  if (offset + verticesByteLength > dataView.byteLength) {
+    throw new RhinoComputeError(
+      'Insufficient data to read vertices.',
+      ErrorCodes.VALIDATION_ERROR,
+      {
+        context: {
+          expectedBytes: verticesByteLength,
+          availableBytes: dataView.byteLength - offset,
+          offset,
+        },
+      }
+    );
+  }
+
+  const vertices = new Float32Array(
+    binaryMeshData.buffer,
+    binaryMeshData.byteOffset + offset,
+    numVertexFloats
+  );
+  offset += verticesByteLength;
+
+  // Read face indices
+  if (offset + 4 > dataView.byteLength) {
+    throw new RhinoComputeError(
+      'Insufficient data to read the number of face indices.',
+      ErrorCodes.VALIDATION_ERROR,
+      { context: { expectedBytes: 4, availableBytes: dataView.byteLength - offset, offset } }
+    );
+  }
+  const numIndices = dataView.getUint32(offset, true);
+  offset += 4;
+
+  const indicesByteLength = numIndices * Uint32Array.BYTES_PER_ELEMENT;
+  if (offset + indicesByteLength > dataView.byteLength) {
+    throw new RhinoComputeError(
+      'Insufficient data to read face indices.',
+      ErrorCodes.VALIDATION_ERROR,
+      {
+        context: {
+          expectedBytes: indicesByteLength,
+          availableBytes: dataView.byteLength - offset,
+          offset,
+        },
+      }
+    );
+  }
+
+  const faces = new Uint32Array(
+    binaryMeshData.buffer,
+    binaryMeshData.byteOffset + offset,
+    numIndices
+  );
+
+  return {
+    vertices,
+    faces,
+  };
 }
 
 /**

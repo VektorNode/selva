@@ -3,9 +3,11 @@ import * as THREE from 'three';
 import { applyOffset, computeCombinedBoundingBox } from '../threejs';
 import { parseColor, ThreeDisplay, VerticesToThreeMesh } from '../threejs/three-helpers';
 
+import { parseMeshBatch } from './batch-parser';
 import { decompressMeshData } from './mesh-compression';
 
 import type { DataItem, GrasshopperComputeResponse } from '@/features/grasshopper/types';
+import type { MeshBatch } from './types';
 
 // Constants
 const SCALE_FACTORS: Record<string, number> = {
@@ -23,6 +25,60 @@ const ROTATION_SIN = Math.sin(-Math.PI / 2); // -1
  * The component type string used to identify display meshes from Grasshopper WebDisplay.
  */
 const DISPLAY_COMPONENT_TYPE = 'ThreeDisplay';
+
+/**
+ * Parses batched mesh data from the new optimized format.
+ * This format uses material deduplication and batched compression for better performance.
+ *
+ * @param batchJson - JSON string containing batched mesh data
+ * @param debug - If true, logs processing time to the console
+ * @param options - Parsing options
+ * @returns Array of THREE.Mesh objects
+ */
+export function getThreeMeshesFromBatch(
+  batchJson: string,
+  debug = false,
+  options?: {
+    /** Merge meshes with same material into single geometry (better for many small meshes) */
+    mergeByMaterial?: boolean;
+    /** Apply scaling based on unit type */
+    allowScaling?: boolean;
+    /** Apply auto-positioning to ground plane */
+    allowAutoPosition?: boolean;
+  }
+): THREE.Mesh[] {
+  const startTime = performance.now();
+  const { mergeByMaterial = true, allowScaling = true, allowAutoPosition = true } = options ?? {};
+
+  try {
+    // Parse the batch (scaling is handled separately if needed)
+    const meshes = parseMeshBatch(batchJson, {
+      mergeByMaterial,
+      applyTransforms: true, // Always apply coordinate transform
+    });
+
+    // Apply scaling if needed (uniform scale on all meshes)
+    if (allowScaling) {
+      // Note: We'd need unit info passed separately, or embed it in the batch
+      // For now, assume scaling is handled in Grasshopper or passed separately
+    }
+
+    // Apply ground offset if needed
+    if (allowAutoPosition) {
+      applyGroundOffset(meshes);
+    }
+
+    return meshes;
+  } catch (error) {
+    console.error('Error parsing batched mesh data:', error);
+    handleError(error, []);
+    throw error;
+  } finally {
+    if (debug) {
+      logProcessingTime(startTime);
+    }
+  }
+}
 
 /**
  * Extracts and processes display meshes from a ComputePointerResponse using the Grasshopper WebDisplay component.

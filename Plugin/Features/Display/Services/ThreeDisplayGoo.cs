@@ -30,7 +30,6 @@ public class ThreeDisplayGoo : IGH_Goo
 
   public IGH_Goo Duplicate()
   {
-    // Structs are value types, so this creates a copy automatically
     return new ThreeDisplayGoo(Value);
   }
 
