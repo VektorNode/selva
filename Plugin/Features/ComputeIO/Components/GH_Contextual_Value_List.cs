@@ -30,6 +30,8 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
   {
   }
 
+  public override GH_Exposure Exposure => GH_Exposure.quarternary;
+
   public override string TypeName => "ValueList";
   public override Guid ComponentGuid => new("0CC81276-5DB7-4306-9968-086524EC0C6E");
   public bool TreeAccess { get; set; }

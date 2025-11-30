@@ -55,9 +55,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
 
   public GH_UIBuilderComponent()
-    : base("UI Builder", "UIBuilder",
+    : base("UI Bridge", "UIBridge",
       "Build and interact with your UI - WebSocket-only communication",
-      "Selva", "Core")
+      "Selva", "UI")
   {
   }
 
