@@ -81,7 +81,7 @@ export interface AvailableOutput {
   /**
    * Type of output component
    */
-  outputType: 'print' | 'bake' | 'file';
+  outputType: 'Print' | 'File';
 }
 export interface NumberWidgetConfig {
   minimum?: number;

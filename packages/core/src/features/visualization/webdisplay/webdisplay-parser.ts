@@ -1,9 +1,8 @@
 import * as THREE from 'three';
 
 import { applyOffset, computeCombinedBoundingBox } from '../threejs';
-import { parseColor, ThreeDisplay, VerticesToThreeMesh } from '../threejs/three-helpers';
 
-import { decompressMeshData } from './mesh-compression';
+import { parseMeshBatch } from './batch-parser';
 
 import type { DataItem, GrasshopperComputeResponse } from '@/features/grasshopper/types';
 
@@ -16,13 +15,11 @@ const SCALE_FACTORS: Record<string, number> = {
   Feet: 1 / 3.28084,
 };
 
-// Pre-compute rotation constants
-const ROTATION_COS = Math.cos(-Math.PI / 2); // 0
-const ROTATION_SIN = Math.sin(-Math.PI / 2); // -1
 /**
  * The component type string used to identify display meshes from Grasshopper WebDisplay.
  */
-const DISPLAY_COMPONENT_TYPE = 'ThreeDisplay';
+const DISPLAY_COMPONENT_TYPE = 'Display';
+
 
 /**
  * Extracts and processes display meshes from a ComputePointerResponse using the Grasshopper WebDisplay component.
@@ -36,33 +33,37 @@ const DISPLAY_COMPONENT_TYPE = 'ThreeDisplay';
  * THREE.Mesh instances using processBranch, and combines all meshes. It then computes a vertical offset
  * from the combined bounding box so the collection sits on the Z=0 plane.
  *
+ * **Note:** Mesh decompression happens asynchronously in a Web Worker to prevent UI blocking.
+ *
  * @param data - The ComputePointerResponse containing Grasshopper output trees.
  * @param debug - If true, logs processing time to the console.
- * @returns Array of THREE.Mesh objects (may be empty).
+ * @returns Promise resolving to array of THREE.Mesh objects (may be empty).
  * @throws Rethrows unexpected errors after attempting to dispose any created meshes.
  *
  * @remarks
  * - Only works with the WebDisplay component of GHHeadless.
  * - Requires changes to Rhino.Compute (see the fork above).
  * - Provides a performant way to display mesh data in Three.js.
+ * - Decompression is performed in a Web Worker for non-blocking UI updates.
  */
-export function getThreeMeshesFromComputeResponse(
+export async function getThreeMeshesFromComputeResponse(
   data: GrasshopperComputeResponse,
   debug = false,
   options?: {
     allowScaling?: boolean;
     allowAutoPosition?: boolean;
   }
-): THREE.Mesh[] {
+): Promise<THREE.Mesh[]> {
   const startTime = performance.now();
   const meshes: THREE.Mesh[] = [];
+
 
   // Provide default values for options
   const { allowScaling = true, allowAutoPosition = true } = options ?? {};
 
   try {
     const scaleFactor = allowScaling ? getScaleFactor(data.modelunits) : 1;
-    extractMeshesFromData(data, meshes, scaleFactor);
+    await extractMeshesFromData(data, meshes, scaleFactor);
     if (allowAutoPosition) {
       applyGroundOffset(meshes);
     }
@@ -88,11 +89,11 @@ function getScaleFactor(modelUnits: string): number {
 /**
  * Extracts meshes from compute response data.
  */
-function extractMeshesFromData(
+async function extractMeshesFromData(
   data: GrasshopperComputeResponse,
   meshes: THREE.Mesh[],
   scaleFactor: number
-): void {
+): Promise<void> {
   for (const value of data.values) {
     const innerTree = value.InnerTree as { [key: string]: DataItem[] };
 
@@ -100,20 +101,31 @@ function extractMeshesFromData(
       const branch = innerTree[path];
       if (!branch) continue;
 
-      processDataBranch(branch, meshes, scaleFactor);
+      await processDataBranch(branch, meshes, scaleFactor);
     }
   }
 }
 
 /**
- * Processes a single data branch to extract display meshes.
+ * Processes a single data branch to extract MeshBatch display meshes.
  */
-function processDataBranch(branch: DataItem[], meshes: THREE.Mesh[], scaleFactor: number): void {
+async function processDataBranch(branch: DataItem[], meshes: THREE.Mesh[], scaleFactor: number): Promise<void> {
   for (const item of branch) {
     if (item.type.includes(DISPLAY_COMPONENT_TYPE)) {
-      const rhinoMeshData = parseRhinoMeshData(item.data);
-      const branchMeshes = processBranch(rhinoMeshData, scaleFactor);
-      meshes.push(...branchMeshes);
+      // Parse MeshBatch format (decompression happens in Web Worker)
+      const batchMeshes = await parseMeshBatch(item.data, {
+        mergeByMaterial: true,
+        applyTransforms: true,
+      });
+
+      // Apply scaling if needed
+      if (scaleFactor !== 1) {
+        for (const mesh of batchMeshes) {
+          mesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
+        }
+      }
+
+      meshes.push(...batchMeshes);
     }
   }
 }
@@ -127,20 +139,6 @@ function applyGroundOffset(meshes: THREE.Mesh[]): void {
   const combinedBoundingBox = computeCombinedBoundingBox(meshes);
   const offsetY = combinedBoundingBox.min.y;
   applyOffset(meshes, offsetY);
-}
-
-/**
- * Parses Rhino mesh data from string or object format.
- */
-function parseRhinoMeshData(data: string | unknown): ThreeDisplay {
-  if (typeof data === 'string') {
-    try {
-      return JSON.parse(data) as ThreeDisplay;
-    } catch {
-      return data as unknown as ThreeDisplay;
-    }
-  }
-  return data as ThreeDisplay;
 }
 
 /**
@@ -176,91 +174,4 @@ function disposeMeshes(meshes: THREE.Mesh[]): void {
 function logProcessingTime(startTime: number): void {
   const elapsed = performance.now() - startTime;
   console.info('Time to process meshes:', `${elapsed.toFixed(2)}ms`);
-}
-
-/**
- * Processes a branch of tree data and generates an array of THREE.Mesh objects.
- *
- * @param treeData - The tree data containing mesh information and display properties. (This data is generated from the WebDisplay component in Grasshopper).
- * @param scaleFactor - The factor by which to scale the mesh vertices.
- * @returns An array of THREE.Mesh objects created from the provided tree data.
- *
- * @remarks
- * - Decompresses the mesh data, scales and rotates the vertices, and applies material properties.
- * - If decompression fails, logs an error and returns an empty array.
- */
-function processBranch(treeData: ThreeDisplay, scaleFactor: number): THREE.Mesh[] {
-  try {
-    const decompressedData = decompressMeshData(treeData.meshData);
-
-    if (!decompressedData) {
-      console.error(`Failed to decompress mesh data for: ${treeData.name}`);
-      return [];
-    }
-
-    const { verticesArray, faceIndicesArray } = decompressedData;
-
-    if (!verticesArray || verticesArray.length === 0) {
-      console.error(`Empty vertices array for: ${treeData.name}`);
-      return [];
-    }
-
-    scaleAndRotateVertices(verticesArray, scaleFactor);
-    const mesh = VerticesToThreeMesh(verticesArray, faceIndicesArray);
-    mesh.name = treeData.name;
-    applyMaterial(mesh, treeData);
-
-    return [mesh];
-  } catch (error) {
-    console.error(`Error processing mesh ${treeData.name}:`, error);
-    return [];
-  }
-}
-
-/**
- * Applies a material to a THREE.Mesh object.
- *
- * @param mesh - The mesh to apply the material to.
- * @param rhinoMeshData - Object from grasshopper containing the material information.
- */
-function applyMaterial(mesh: THREE.Mesh, rhinoMeshData: ThreeDisplay) {
-  const color =
-    typeof rhinoMeshData.color === 'string'
-      ? parseColor(rhinoMeshData.color)
-      : new THREE.Color(0xffffff);
-
-  mesh.material = new THREE.MeshPhysicalMaterial({
-    color,
-    metalness: rhinoMeshData.metalness,
-    roughness: rhinoMeshData.roughness,
-    side: THREE.DoubleSide,
-    opacity: rhinoMeshData.opacity,
-    transparent: rhinoMeshData.opacity < 1,
-  });
-
-  mesh.receiveShadow = true;
-  mesh.castShadow = true;
-}
-
-/**
- * Scales and rotates the vertices of a mesh based on the given scale factor.
- *
- * @param vertices - The vertices of the mesh as a Float32Array.
- * @param scaleFactor - The scale factor to apply to the vertices.
- */
-function scaleAndRotateVertices(vertices: Float32Array | undefined, scaleFactor: number): void {
-  if (!vertices?.length) {
-    console.error('Vertices array is undefined or empty.');
-    return;
-  }
-
-  for (let i = 0; i < vertices.length; i += 3) {
-    const x = vertices[i];
-    const y = vertices[i + 1];
-    const z = vertices[i + 2];
-
-    vertices[i] = x * scaleFactor;
-    vertices[i + 1] = (y * ROTATION_COS - z * ROTATION_SIN) * scaleFactor;
-    vertices[i + 2] = (y * ROTATION_SIN + z * ROTATION_COS) * scaleFactor;
-  }
 }

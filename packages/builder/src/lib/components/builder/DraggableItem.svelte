@@ -1,13 +1,25 @@
 <script lang="ts">
   import { dragStore } from '$lib/stores/dragStore.svelte';
-  import type { AvailableParameter, AvailableOutput } from '$lib/types/generated';
+  import type { AvailableParameter, AvailableOutput, TabConfig } from '$lib/types/generated';
   import * as Card from '$lib/components/ui/card';
+  import * as ContextMenu from '$lib/components/ui/context-menu';
+  import { Input } from '$lib/components/ui';
+  import { FolderPlus } from '@lucide/svelte';
 
   interface Props {
     item: AvailableParameter | AvailableOutput;
+    tabs?: TabConfig[];
+    onAddToGroup?: (
+      tabId: string,
+      groupId: string,
+      item: AvailableParameter | AvailableOutput
+    ) => void;
+    onAddToNewGroup?: (path: string, item: AvailableParameter | AvailableOutput) => void;
   }
 
-  let { item }: Props = $props();
+  let { item, tabs = [], onAddToGroup, onAddToNewGroup }: Props = $props();
+
+  let newGroupPath = $state('');
 
   // Infer variant from item type
   const variant = 'paramType' in item ? 'input' : 'output';
@@ -33,6 +45,9 @@
     dragStore.clear();
   }
 
+  const badgeContent =
+    'paramType' in item ? item.paramType : (item as AvailableOutput).outputType || 'Unknown';
+
   // Variant-based styling
   const styles = {
     input: {
@@ -41,37 +56,106 @@
       badgeText: 'text-primary',
     },
     output: {
-      bg: 'bg-outputparam',
+      bg: badgeContent === 'Print' ? 'bg-outputparam' : 'bg-downloadparam',
       badgeBg: 'bg-primary/10',
       badgeText: 'text-primary',
     },
   };
-
   const style = styles[variant];
-  const badgeContent =
-    'paramType' in item
-      ? item.paramType
-      : (item as AvailableOutput).outputType || 'Unknown';
+
+  function capitalize(str: string) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  function handleAddToGroup(tabId: string, groupId: string) {
+    onAddToGroup?.(tabId, groupId, item);
+  }
+
+  function handleAddToNewGroup() {
+    if (newGroupPath.trim()) {
+      onAddToNewGroup?.(newGroupPath.trim(), item);
+      newGroupPath = '';
+    }
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddToNewGroup();
+    }
+  }
 </script>
 
-<Card.Root
-  class={`
-    mb-2 flex cursor-grab flex-row items-center
-    justify-between gap-4 rounded-xl border-2 border-transparent
-    p-3 transition-all hover:border-primary
-    hover:bg-muted ${style.bg}
-    ${isDragging ? 'cursor-grabbing opacity-50' : ''}
-  `}
-  draggable="true"
-  role="button"
-  ondragstart={handleDragStart}
-  ondragend={handleDragEnd}
->
-  <div class="flex flex-1 items-center gap-3">
-    <strong class="text-foreground">{item.nickname || ('name' in item ? item.name : 'Unknown')}</strong>
-    <span class={`rounded px-2 py-1 text-sm ${style.badgeBg} ${style.badgeText}`}>
-      {badgeContent}
-    </span>
-  </div>
-  <span class="cursor-grab font-bold text-muted-foreground select-none">⋮⋮</span>
-</Card.Root>
+<ContextMenu.Root>
+  <ContextMenu.Trigger>
+    <div
+      tabindex="-1"
+      class={`
+        mb-2 flex cursor-grab flex-row items-center
+        justify-between gap-4 rounded-xl border-2 border-transparent
+        p-3 transition-all hover:border-primary
+        hover:bg-muted ${style.bg}
+        ${isDragging ? 'cursor-grabbing opacity-50' : ''}
+      `}
+      draggable="true"
+      role="button"
+      ondragstart={handleDragStart}
+      ondragend={handleDragEnd}
+    >
+      <div class="flex flex-1 items-center gap-3">
+        <strong class="text-foreground"
+          >{item.nickname || ('name' in item ? item.name : 'Unknown')}</strong
+        >
+        <span class={`rounded px-2 py-1 text-sm ${style.badgeBg} ${style.badgeText}`}>
+          {capitalize(badgeContent)}
+        </span>
+      </div>
+      <span class="cursor-grab font-bold text-muted-foreground select-none">⋮⋮</span>
+    </div>
+  </ContextMenu.Trigger>
+
+  <ContextMenu.Content class="w-64">
+    {#if tabs.length > 0}
+      <ContextMenu.Group>
+        <ContextMenu.GroupHeading>Add to Existing Group</ContextMenu.GroupHeading>
+        {#each tabs as tab (tab.id)}
+          {#if tab.groups.length > 0}
+            <ContextMenu.Sub>
+              <ContextMenu.SubTrigger>{tab.label}</ContextMenu.SubTrigger>
+              <ContextMenu.SubContent>
+                {#each tab.groups as group (group.id)}
+                  <ContextMenu.Item onclick={() => handleAddToGroup(tab.id, group.id)}>
+                    {group.label}
+                  </ContextMenu.Item>
+                {/each}
+              </ContextMenu.SubContent>
+            </ContextMenu.Sub>
+          {/if}
+        {/each}
+      </ContextMenu.Group>
+      <ContextMenu.Separator />
+    {/if}
+
+    <ContextMenu.Group>
+      <ContextMenu.GroupHeading>
+        <div class="flex items-center gap-2">
+          <FolderPlus class="size-4" />
+          Create New Group
+        </div>
+      </ContextMenu.GroupHeading>
+      <div class="px-2 py-1.5">
+        <Input
+          type="text"
+          placeholder="Tab/Group or Group"
+          bind:value={newGroupPath}
+          onkeydown={handleKeydown}
+          class="h-8 text-sm"
+        />
+        <p class="mt-1 text-xs text-muted-foreground">Use "Tab/Group" to create in specific tab</p>
+      </div>
+      <ContextMenu.Item onclick={handleAddToNewGroup} disabled={!newGroupPath.trim()}>
+        Add to New Group
+      </ContextMenu.Item>
+    </ContextMenu.Group>
+  </ContextMenu.Content>
+</ContextMenu.Root>

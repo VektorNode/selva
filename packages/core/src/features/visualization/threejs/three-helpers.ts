@@ -1,19 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-// ThreeDisplay is now generated from compute-schema.json
 
-/**
- * Rhino display data containing the mesh data and material information.
- */
-export type ThreeDisplay = {
-  id?: number;
-  color: string;
-  metalness: number;
-  roughness: number;
-  opacity: number;
-  meshData: string;
-  name: string;
-};
 /**
  * Updates the scene with the given meshes and camera settings.
  * If initialPositionSet is false, it positions the camera and sets the controls target based on the bounding boxes of the meshes.
@@ -62,46 +49,53 @@ export function updateScene(
   }
 }
 
-/**
- * Converts an array of vertices and indices into a THREE.Mesh object.
- *
- * @param vertices - The array of vertices.
- * @param indices - The array of indices.
- * @returns The THREE.Mesh object representing the vertices and indices.
- */
-export function VerticesToThreeMesh(
-  vertices: number[] | Float32Array,
-  indices: number[] | Uint32Array
-): THREE.Mesh {
-  const floatVertices = vertices instanceof Float32Array ? vertices : new Float32Array(vertices);
-  const floatFaceIndices = indices instanceof Uint32Array ? indices : new Uint32Array(indices);
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(floatVertices, 3));
-  geometry.setIndex(new THREE.BufferAttribute(floatFaceIndices, 1));
-  geometry.computeVertexNormals();
-
-  // Don't create material here - let applyMaterial handle it
-  const mesh = new THREE.Mesh(geometry);
-  return mesh;
-}
-
 // =========================
 // Helper functions
 // =========================
 
 /**
- * Parses a color string in format "R, G, B" to a THREE.Color object.
+ * Parses a color string in multiple formats to a THREE.Color object.
+ * Supported formats:
+ * - Hex: "#C7A5A5", "C7A5A5"
+ * - RGB: "199, 165, 165"
+ * - CSS named colors: "red", "blue", etc.
  * @param colorString - The color string to parse.
  * @returns A THREE.Color object.
  */
 export function parseColor(colorString: string): THREE.Color {
-  const rgb = colorString.split(',').map((c) => parseInt(c.trim(), 10));
-  if (rgb.length === 3 && rgb.every((n) => !isNaN(n) && n >= 0 && n <= 255)) {
-    return new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255);
+  if (!colorString || typeof colorString !== 'string') {
+    console.warn(`Invalid color input: ${colorString}, using white`);
+    return new THREE.Color(0xffffff);
   }
-  console.warn(`Invalid color string: ${colorString}, using white`);
-  return new THREE.Color(0xffffff);
+
+  const trimmed = colorString.trim();
+
+  // Try hex format (#C7A5A5 or C7A5A5)
+  if (trimmed.startsWith('#') || /^[0-9A-Fa-f]{6}$/.test(trimmed)) {
+    try {
+      const hex = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+      return new THREE.Color(hex);
+    } catch {
+      console.warn(`Invalid hex color: ${colorString}, using white`);
+      return new THREE.Color(0xffffff);
+    }
+  }
+
+  // Try RGB format (R, G, B)
+  if (trimmed.includes(',')) {
+    const rgb = trimmed.split(',').map((c) => parseInt(c.trim(), 10));
+    if (rgb.length === 3 && rgb.every((n) => !isNaN(n) && n >= 0 && n <= 255)) {
+      return new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255);
+    }
+  }
+
+  // Try CSS named color
+  try {
+    return new THREE.Color(trimmed.toLowerCase());
+  } catch {
+    console.warn(`Invalid color string: ${colorString}, using white`);
+    return new THREE.Color(0xffffff);
+  }
 }
 
 export function applyOffset(meshes: THREE.Mesh[], offsetY: number): void {

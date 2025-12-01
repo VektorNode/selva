@@ -1,56 +1,48 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { getWebSocketState } from '$lib/websocket/websocket.svelte';
-  import { PageContainer, PageHeader, Panel } from '$lib/components/layout';
+  import { PageContainer, PageHeader } from '$lib/components/layout';
   import { StateDisplay, Button } from '$lib/components/ui';
-  import {
-    DragDropContext,
-    AvailableItemList,
-    SchemaInfoPanel,
-    EditableTabNav,
-    EditableGroup,
-    BuilderGroupItem,
-  } from '$lib/components/builder';
+  import { DragDropContext, BuilderSidebar, TabEditor } from '$lib/components/builder';
   import type {
     UISchema,
     AvailableParameter,
     AvailableOutput,
-    InputParamSchema,
-    OutputParamSchema,
-    TabConfig,
-    GroupConfig,
     LayoutItem,
-    InputLayoutItem,
-    OutputLayoutItem,
   } from '$lib/types/generated';
-  import { mapParamTypeToWidgetType, createDefaultWidgetConfig } from '$lib/utils/widget-config';
-  import { initializeWebSocketSession, processInitialDataSchema } from '$lib/utils/session';
+  import { initializeWebSocketSession } from '$lib/utils/session';
+  import {
+    handleItemDrop,
+    handleGroupItemDrop,
+    addTab,
+    removeTab,
+    addGroup,
+    removeGroup,
+    removeItem,
+    reorderTabs,
+  } from '$lib/utils/builder-operations';
   import Save from '$lib/components/ui/icons/Save.svelte';
   import { toast } from '$lib/components/ui/sonner';
   import { onMount } from 'svelte';
-
-  // Get WebSocket state singleton - reactive properties update automatically
-  const wsState = getWebSocketState();
+  import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
 
   let sessionId = $state('');
-  let schema = $state<UISchema | null>(null);
-  let availableParams = $state<AvailableParameter[]>([]);
-  let availableOutputs = $state<AvailableOutput[]>([]);
-  let loading = $state(true);
-  let error = $state('');
-  let activeTabId = $state<string | null>(null);
-  let syncNeeded = $state(false);
+  let builderState = $state<ReturnType<typeof useBuilderState> | null>(null);
 
   // Navigate to specific routes with session preservation
   function navigateTo(route: '/' | '/preview') {
+    // Auto-save schema when switching to interactive mode
+    if (route === '/preview') {
+      saveSchema();
+    }
+
     const url = route === '/' ? `/?session=${sessionId}` : `/preview?session=${sessionId}`;
     goto(url);
   }
 
   const placedInLayoutIds = $derived(() => {
     const ids = new Set<string>();
-    schema?.layout?.tabs?.forEach((tab) => {
+    builderState?.state.schema?.layout?.tabs?.forEach((tab) => {
       tab.groups.forEach((group) => {
         group.items.forEach((item) => {
           ids.add(item.paramId);
@@ -60,272 +52,49 @@
     return ids;
   });
 
-  const availableInputs = $derived(availableParams.filter((p) => !placedInLayoutIds().has(p.id)));
+  const availableInputs = $derived(
+    builderState?.state.availableParams.filter((p) => !placedInLayoutIds().has(p.id)) || []
+  );
 
   const availableOutputsUnplaced = $derived(
-    availableOutputs.filter((o) => !placedInLayoutIds().has(o.id))
+    builderState?.state.availableOutputs.filter((o) => !placedInLayoutIds().has(o.id)) || []
   );
-  const activeTab = $derived(schema?.layout?.tabs?.find((t) => t.id === activeTabId));
-
-  function syncParameters() {
-    console.log('[Builder] Syncing parameters from Grasshopper');
-    syncNeeded = false;
-    wsState.requestInitialData(sessionId);
-    toast.info('Syncing parameters...');
-  }
 
   function saveSchema() {
-    if (!schema || !sessionId) return;
+    if (!builderState?.state.schema || !sessionId) return;
 
-    if (!wsState.connected) {
+    if (!builderState.wsState.connected) {
       toast.error('Not connected to Grasshopper');
       return;
     }
 
-    wsState.saveSchema(sessionId, $state.snapshot(schema));
+    builderState.wsState.saveSchema(sessionId, $state.snapshot(builderState.state.schema));
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      saveSchema();
+    }
   }
 
   onMount(() => {
-    const handleInitialData = (message: any) => {
-      if (message.sessionId === sessionId) {
-        const result = processInitialDataSchema(message, true);
-        console.log('[Builder] Received initial data:', result);
-
-        availableParams = result.availableParams;
-        availableOutputs = result.availableOutputs;
-
-        schema = result.schema;
-
-        if (availableParams.length === 0 && availableOutputs.length === 0) {
-          error =
-            'No parameters or outputs found. Please ensure the UI Builder component is active in Grasshopper and click Refresh.';
-        }
-
-        if (schema?.layout?.tabs && schema.layout.tabs.length > 0) {
-          activeTabId = schema.layout.tabs[0].id;
-        }
-
-        loading = false;
-      }
-    };
-
-    const handleSchemaSaved = (message: any) => {
-      if (message.sessionId === sessionId) {
-        if (message.success) {
-          toast.success('Schema saved successfully!');
-        } else {
-          toast.error(`Failed to save schema: ${message.message || 'Unknown error'}`);
-        }
-      }
-    };
-
-    const handleMetadataUpdated = (message: any) => {
-      if (message.sessionId === sessionId && schema) {
-        console.log('[Builder] Parameter metadata updated:', message.changedParams);
-
-        const changedParams = message.changedParams || [];
-        if (changedParams.length === 0) return;
-
-        let updateCount = 0;
-        const updatedNames: string[] = [];
-
-        // Update input parameters with new metadata
-        changedParams.forEach((updated: any) => {
-          const inputIndex = schema!.inputs.findIndex((inp) => inp.id === updated.id);
-          if (inputIndex !== -1) {
-            const input = schema!.inputs[inputIndex];
-            let changed = false;
-
-            if (updated.nickname !== undefined && input.nickname !== updated.nickname) {
-              input.nickname = updated.nickname;
-              updatedNames.push(input.nickname);
-              updateCount++;
-              changed = true;
-              console.log(`[Builder] Updated input: ${input.nickname}`);
-            }
-            if (updated.description !== undefined && input.description !== updated.description) {
-              input.description = updated.description;
-              changed = true;
-            }
-
-            // Update available params list to reflect changes
-            const availIndex = availableParams.findIndex((p) => p.id === updated.id);
-            if (availIndex !== -1) {
-              if (updated.nickname !== undefined)
-                availableParams[availIndex].nickname = updated.nickname;
-              if (updated.description !== undefined)
-                availableParams[availIndex].description = updated.description;
-              if (updated.minimum !== undefined)
-                availableParams[availIndex].minimum = updated.minimum;
-              if (updated.maximum !== undefined)
-                availableParams[availIndex].maximum = updated.maximum;
-              if (updated.stepSize !== undefined)
-                availableParams[availIndex].stepSize = updated.stepSize;
-            }
-          }
-
-          // Update output parameters with new metadata
-          const outputIndex = schema!.outputs.findIndex((out) => out.id === updated.id);
-          if (outputIndex !== -1) {
-            const output = schema!.outputs[outputIndex];
-            let changed = false;
-
-            if (updated.nickname !== undefined && output.nickname !== updated.nickname) {
-              output.nickname = updated.nickname;
-              updatedNames.push(output.nickname);
-              updateCount++;
-              changed = true;
-              console.log(`[Builder] Updated output: ${output.nickname}`);
-            }
-            if (updated.description !== undefined && output.description !== updated.description) {
-              output.description = updated.description;
-              changed = true;
-            }
-
-            // Update availableOutputs list to reflect changes
-            const availOutputIndex = availableOutputs.findIndex((o) => o.id === updated.id);
-            if (availOutputIndex !== -1) {
-              if (updated.nickname !== undefined)
-                availableOutputs[availOutputIndex].nickname = updated.nickname;
-              if (updated.description !== undefined)
-                availableOutputs[availOutputIndex].description = updated.description;
-            }
-          }
-        });
-
-        // Trigger reactivity by reassigning schema, availableParams, and availableOutputs
-        if (updateCount > 0) {
-          schema = schema;
-          availableParams = availableParams;
-          availableOutputs = availableOutputs;
-          toast.success(
-            `Parameter${updateCount > 1 ? 's' : ''} updated: ${updatedNames.join(', ')}`
-          );
-
-          // Auto-save schema to persist changes back to Grasshopper
-          if (wsState.connected) {
-            console.log('[Builder] Auto-saving schema after metadata update');
-            wsState.saveSchema(sessionId, $state.snapshot(schema));
-          }
-        }
-      }
-    };
-
-    const handleSchemaUpdated = (message: any) => {
-      if (message.sessionId !== sessionId) return;
-
-      console.log('[Builder] Schema structure changed:', {
-        schema: message.schema,
-        removedIds: message.removedIds,
-      });
-
-      const removedIds = message.removedIds || [];
-      const removedCount = removedIds.length;
-
-      if (removedCount > 0) {
-        // 1. Remove from available lists
-        availableParams = availableParams.filter((p) => !removedIds.includes(p.id));
-        availableOutputs = availableOutputs.filter((o) => !removedIds.includes(o.id));
-
-        // 2. Remove from schema inputs/outputs
-        if (schema) {
-          schema.inputs = schema.inputs.filter((i) => !removedIds.includes(i.id));
-          schema.outputs = schema.outputs.filter((o) => !removedIds.includes(o.id));
-
-          // 3. CRITICAL: Remove from layout items (fixes ghost items bug)
-          if (schema.layout?.tabs) {
-            schema.layout.tabs.forEach((tab) => {
-              tab.groups.forEach((group) => {
-                // Filter out items referencing deleted parameters
-                group.items = group.items.filter((item) => !removedIds.includes(item.paramId));
-              });
-              // Clean up empty groups
-              tab.groups = tab.groups.filter((g) => g.items.length > 0);
-            });
-
-            // 4. Clean up empty tabs
-            schema.layout.tabs = schema.layout.tabs.filter((t) => t.groups.length > 0);
-
-            // If active tab was removed, switch to first available tab
-            if (activeTabId && !schema.layout.tabs.find(t => t.id === activeTabId)) {
-              activeTabId = schema.layout.tabs.length > 0 ? schema.layout.tabs[0].id : null;
-            }
-          }
-
-          // 5. Trigger reactivity
-          schema = schema;
-
-          // 6. Send confirmation back to Grasshopper (future enhancement)
-          // wsState.send('schemaUpdateConfirmed', { sessionId, removedIds, timestamp: Date.now() });
-
-          toast.info(
-            `${removedCount} item${removedCount > 1 ? 's' : ''} removed from Grasshopper and cleaned from layout`
-          );
-        }
-      } else {
-        // New parameters/outputs may have been added - request fresh data
-        wsState.requestInitialData(sessionId);
-        toast.info('Schema structure updated - checking for new items...');
-      }
-    };
-
-    const handleParametersAdded = (message: any) => {
-      if (message.sessionId === sessionId) {
-        console.log('[Builder] New items added to Grasshopper:', {
-          params: message.availableParams,
-          outputs: message.availableOutputs,
-        });
-
-        let updated = false;
-
-        if (message.availableParams && Array.isArray(message.availableParams)) {
-          availableParams = message.availableParams;
-          updated = true;
-        }
-
-        if (message.availableOutputs && Array.isArray(message.availableOutputs)) {
-          availableOutputs = message.availableOutputs;
-          updated = true;
-        }
-
-        if (updated) {
-          // Mark that sync is needed to pick up the new items in schema
-          syncNeeded = true;
-          toast.info('New items detected - click Sync to add them to your schema');
-        } else {
-          // Fallback: request fresh data
-          wsState.requestInitialData(sessionId);
-          toast.info('New items detected - refreshing...');
-        }
-      }
-    };
-
-    const handleKeydown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        saveSchema();
-      }
-    };
+    const urlSessionId = page.url.searchParams.get('session') || '';
+    sessionId = urlSessionId;
 
     const initializeBuilder = async () => {
-      const urlSessionId = page.url.searchParams.get('session') || '';
-      sessionId = urlSessionId;
-
       const result = await initializeWebSocketSession(urlSessionId);
 
       if (result.error) {
-        error = result.error;
-        loading = false;
+        if (builderState) {
+          builderState.state.error = result.error;
+          builderState.state.loading = false;
+        }
         return;
       }
 
-      wsState.on('initialData', handleInitialData);
-      wsState.on('schemaSaved', handleSchemaSaved);
-      wsState.on('metadataUpdated', handleMetadataUpdated);
-      wsState.on('schemaUpdated', handleSchemaUpdated);
-      wsState.on('parametersAdded', handleParametersAdded);
-
-      wsState.requestInitialData(sessionId);
+      builderState = useBuilderState(urlSessionId);
+      builderState.initialize();
     };
 
     initializeBuilder();
@@ -333,316 +102,19 @@
 
     return () => {
       window.removeEventListener('keydown', handleKeydown);
-      wsState.off('initialData', handleInitialData);
-      wsState.off('schemaSaved', handleSchemaSaved);
-      wsState.off('metadataUpdated', handleMetadataUpdated);
-      wsState.off('schemaUpdated', handleSchemaUpdated);
-      wsState.off('parametersAdded', handleParametersAdded);
-      // Don't disconnect - keep connection alive for page switching
+      builderState?.cleanup();
     };
   });
 
-  function reorderTabs(fromIndex: number, toIndex: number) {
-    if (!schema || !schema.layout.tabs) return;
-
-    const tabs = [...schema.layout.tabs];
-    const [movedTab] = tabs.splice(fromIndex, 1);
-    tabs.splice(toIndex, 0, movedTab);
-
-    // Update order property for each tab
-    tabs.forEach((tab, index) => {
-      tab.order = index;
-    });
-
-    schema.layout.tabs = tabs;
-  }
-
-  /**
-   * Check if an item is used anywhere in the layout
-   */
-  function isItemUsedInLayout(paramId: string): boolean {
-    return (
-      schema?.layout?.tabs?.some((t) =>
-        t.groups.some((g) => g.items.some((i) => i.paramId === paramId))
-      ) ?? false
-    );
-  }
-
-  /**
-   * Remove a parameter from schema if it's not used anywhere in the layout.
-   */
-  function removeItemIfOrphaned(paramId: string, itemType: 'input' | 'output') {
-    if (!schema) return;
-    const isUsed = isItemUsedInLayout(paramId);
-    if (!isUsed) {
-      if (itemType === 'input') {
-        schema.inputs = schema.inputs.filter((i) => i.id !== paramId);
-      } else if (itemType === 'output') {
-        schema.outputs = schema.outputs.filter((o) => o.id !== paramId);
-      }
-    }
-  }
-
-  function addTab() {
-    if (!schema || !schema.layout.tabs) return;
-
-    const newTab: TabConfig = {
-      id: crypto.randomUUID().substring(0, 8),
-      label: `Tab ${schema.layout.tabs.length + 1}`,
-      icon: '',
-      order: schema.layout.tabs.length,
-      groups: [],
-    };
-
-    schema.layout.tabs = [...schema.layout.tabs, newTab];
-    activeTabId = newTab.id;
-  }
-
-  function removeTab(tabId: string) {
-    if (!schema || !schema.layout.tabs) return;
-
-    const tab = schema.layout.tabs.find((t) => t.id === tabId);
-    if (!tab) return;
-
-    tab.groups.forEach((group) => {
-      group.items.forEach((item) => {
-        removeItemIfOrphaned(item.paramId, item.type);
-      });
-    });
-
-    schema.layout.tabs = schema.layout.tabs.filter((t) => t.id !== tabId);
-
-    if (activeTabId === tabId && schema.layout.tabs.length > 0) {
-      activeTabId = schema.layout.tabs[0].id;
-    }
-  }
-
-  function addGroup(tabId: string) {
-    if (!schema || !schema.layout.tabs) return;
-
-    const tab = schema.layout.tabs.find((t) => t.id === tabId);
-    if (!tab) return;
-
-    const newGroup: GroupConfig = {
-      id: crypto.randomUUID().substring(0, 8),
-      label: `Group ${tab.groups.length + 1}`,
-      description: '',
-      order: tab.groups.length,
-      collapsed: false,
-      columns: 1,
-      items: [],
-    };
-
-    tab.groups = [...tab.groups, newGroup];
-  }
-
-  function removeGroup(tabId: string, groupId: string) {
-    if (!schema || !schema.layout.tabs) return;
-
-    const tab = schema.layout.tabs.find((t) => t.id === tabId);
-    if (!tab) return;
-
-    const group = tab.groups.find((g) => g.id === groupId);
-    if (!group) return;
-
-    tab.groups = tab.groups.filter((g) => g.id !== groupId);
-    schema.layout.tabs = [...schema.layout.tabs];
-  }
-
-  /**
-   * Insert an item at the specified position in a group, or append if no position
-   */
-  function insertLayoutItem(
-    group: GroupConfig,
-    item: LayoutItem,
-    targetItem?: LayoutItem,
-    dropPosition?: 'before' | 'after'
-  ) {
-    if (!targetItem || !dropPosition) {
-      group.items = [...group.items, item];
-      return;
-    }
-
-    const targetIndex = group.items.findIndex((i) => i.id === targetItem.id);
-    if (targetIndex < 0) {
-      group.items = [...group.items, item];
-      return;
-    }
-
-    // Create new array to maintain reactivity
-    const newItems = [...group.items];
-    if (dropPosition === 'before') {
-      newItems.splice(targetIndex, 0, item);
-    } else {
-      newItems.splice(targetIndex + 1, 0, item);
-    }
-    group.items = newItems;
-  }
-
-  /**
-   * Handle reordering items between groups
-   */
-  function handleGroupItemDrop(
-    tabId: string,
-    groupId: string,
-    sourceTabId: string,
-    sourceGroupId: string,
-    sourceItem: LayoutItem,
-    targetItem?: LayoutItem,
-    dropPosition?: 'before' | 'after'
-  ) {
-    if (!schema?.layout.tabs) return;
-
-    const sourceTab = schema.layout.tabs.find((t) => t.id === sourceTabId);
-    const targetTab = schema.layout.tabs.find((t) => t.id === tabId);
-    if (!sourceTab || !targetTab) return;
-
-    const sourceGroup = sourceTab.groups.find((g) => g.id === sourceGroupId);
-    const targetGroup = targetTab.groups.find((g) => g.id === groupId);
-    if (!sourceGroup || !targetGroup) return;
-
-    const sourceIndex = sourceGroup.items.findIndex((i) => i.id === sourceItem.id);
-    if (sourceIndex < 0) return;
-
-    const [movedItem] = sourceGroup.items.splice(sourceIndex, 1);
-    insertLayoutItem(targetGroup, movedItem, targetItem, dropPosition);
-  }
-
-  /**
-   * Create a layout item for either a parameter or downloadable component
-   */
-  function createLayoutItem(
-    paramId: string,
-    displayName: string,
-    itemType: 'input' | 'output',
-    itemCount: number,
-    widgetType?: string,
-    paramType?: string
-  ): LayoutItem {
-    // Determine widget type
-    let resolvedWidgetType = widgetType;
-    if (!resolvedWidgetType) {
-      if (itemType === 'input' && paramType) {
-        resolvedWidgetType = mapParamTypeToWidgetType(paramType as any, 'input');
-      } else if (itemType === 'output' && paramType) {
-        resolvedWidgetType = mapParamTypeToWidgetType(paramType as any, 'output');
-      } else {
-        resolvedWidgetType = itemType === 'input' ? 'number' : 'text';
-      }
-    }
-
-    // Look up the full parameter to get all metadata (including options for ValueList)
-    const fullParam = itemType === 'input'
-      ? availableParams.find((p) => p.id === paramId)
-      : undefined;
-
-    // Get config if needed
-    const config =
-      itemType === 'input' && paramType
-        ? createDefaultWidgetConfig(resolvedWidgetType as any, fullParam || { paramType } as any, 'input')
-        : itemType === 'output' && paramType
-          ? createDefaultWidgetConfig(resolvedWidgetType as any, { paramType } as any, 'output')
-          : {};
-
-    return itemType === 'input'
-      ? ({
-          id: crypto.randomUUID().substring(0, 8),
-          paramId,
-          type: 'input',
-          displayName,
-          widgetType: resolvedWidgetType as any,
-          order: itemCount,
-          span: 1,
-          config,
-        } as InputLayoutItem)
-      : ({
-          id: crypto.randomUUID().substring(0, 8),
-          paramId,
-          type: 'output',
-          displayName,
-          widgetType: resolvedWidgetType as any,
-          order: itemCount,
-          span: 1,
-          config: itemType === 'output' && resolvedWidgetType === 'file' ? {} : config,
-        } as OutputLayoutItem);
-  }
-
-  /**
-   * Unified handler for dropping parameters and downloadables
-   */
-  function handleItemDrop(
-    group: GroupConfig,
-    paramId: string,
-    displayName: string,
-    itemType: 'input' | 'output',
-    paramType?: string,
-    widgetType?: string,
-    targetItem?: LayoutItem,
-    dropPosition?: 'before' | 'after',
-    outputType?: 'print' | 'bake' | 'file'
-  ) {
-    if (!schema) return;
-
-    // Check if already in this group
-    if (group.items.some((i) => i.paramId === paramId)) {
-      const itemTypeLabel =
-        widgetType === 'file' ? 'file component' : itemType === 'input' ? 'parameter' : 'output';
-      toast.warning(`This ${itemTypeLabel} is already in this group`);
-      return;
-    }
-
-    // Ensure it's in schema
-    if (itemType === 'input') {
-      const inputExists = schema.inputs.some((i) => i.id === paramId);
-      if (!inputExists) {
-        schema.inputs = [
-          ...schema.inputs,
-          {
-            id: paramId,
-            nickname: displayName,
-            paramType: (paramType as any) || 'Generic',
-            description: '',
-          } as InputParamSchema,
-        ];
-      }
-    } else {
-      const outputExists = schema.outputs.some((o) => o.id === paramId);
-      if (!outputExists) {
-        // Use passed outputType, or default to 'print' if not provided
-        const finalOutputType = outputType || 'print';
-
-        schema.outputs = [
-          ...schema.outputs,
-          {
-            id: paramId,
-            nickname: displayName,
-            outputType: finalOutputType,
-            description: '',
-          } as AvailableOutput,
-        ];
-      }
-    }
-
-    const newItem = createLayoutItem(
-      paramId,
-      displayName,
-      itemType,
-      group.items.length,
-      widgetType,
-      paramType
-    );
-    insertLayoutItem(group, newItem, targetItem, dropPosition);
-  }
-
   function handleParameterDrop(tabId: string, groupId: string, event: CustomEvent) {
-    if (!schema || !schema.layout.tabs) return;
+    if (!builderState?.state.schema) return;
 
     console.log('[Builder] Handling parameter/downloadable drop:', event.detail);
 
     const { dropType, data, targetItem, dropPosition, sourceTabId, sourceGroupId, sourceItem } =
       event.detail;
 
-    const tab = schema.layout.tabs.find((t) => t.id === tabId);
+    const tab = builderState.state.schema.layout.tabs?.find((t) => t.id === tabId);
     if (!tab) return;
 
     const group = tab.groups.find((g) => g.id === groupId);
@@ -651,6 +123,7 @@
     // Handle moving items within layout
     if (dropType === 'group-item') {
       handleGroupItemDrop(
+        builderState.state.schema,
         tabId,
         groupId,
         sourceTabId,
@@ -666,10 +139,12 @@
     if (dropType === 'input') {
       const param = data as AvailableParameter;
       handleItemDrop(
+        builderState.state.schema,
         group,
         param.id,
         param.nickname || param.name,
         'input',
+        builderState.state.availableParams,
         param.paramType,
         undefined,
         targetItem,
@@ -677,12 +152,14 @@
       );
     } else if (dropType === 'output') {
       const output = data as AvailableOutput;
-      const widgetType = output.outputType === 'file' ? 'file' : 'text';
+      const widgetType = output.outputType === 'File' ? 'File' : 'text';
       handleItemDrop(
+        builderState.state.schema,
         group,
         output.id,
         output.nickname,
         'output',
+        builderState.state.availableParams,
         undefined,
         widgetType,
         targetItem,
@@ -692,25 +169,8 @@
     }
   }
 
-  function removeItem(tabId: string, groupId: string, itemId: string) {
-    if (!schema || !schema.layout.tabs) return;
-
-    const tab = schema.layout.tabs.find((t) => t.id === tabId);
-    if (!tab) return;
-
-    const group = tab.groups.find((g) => g.id === groupId);
-    if (!group) return;
-
-    const item = group.items.find((i) => i.id === itemId);
-    group.items = group.items.filter((i) => i.id !== itemId);
-
-    if (item) {
-      removeItemIfOrphaned(item.paramId, item.type);
-    }
-  }
-
   function handleReorder(event: CustomEvent) {
-    if (!schema || !schema.layout.tabs) return;
+    if (!builderState?.state.schema) return;
 
     const {
       sourceItem,
@@ -724,8 +184,8 @@
 
     if (sourceItem.id === targetItem.id) return;
 
-    const sourceTab = schema.layout.tabs.find((t) => t.id === sourceTabId);
-    const targetTab = schema.layout.tabs.find((t) => t.id === targetTabId);
+    const sourceTab = builderState.state.schema.layout.tabs?.find((t) => t.id === sourceTabId);
+    const targetTab = builderState.state.schema.layout.tabs?.find((t) => t.id === targetTabId);
     if (!sourceTab || !targetTab) return;
 
     const sourceGroup = sourceTab.groups.find((g) => g.id === sourceGroupId);
@@ -755,7 +215,171 @@
   }
 
   function getParameterInfo(paramId: string) {
-    return availableParams.find((p) => p.id === paramId);
+    return builderState?.state.availableParams.find((p) => p.id === paramId);
+  }
+
+  /**
+   * Handle adding an item to an existing group via context menu
+   */
+  function handleAddToGroup(
+    tabId: string,
+    groupId: string,
+    item: AvailableParameter | AvailableOutput
+  ) {
+    if (!builderState?.state.schema) return;
+
+    const tab = builderState.state.schema.layout.tabs?.find((t) => t.id === tabId);
+    if (!tab) return;
+
+    const group = tab.groups.find((g) => g.id === groupId);
+    if (!group) return;
+
+    const itemType = 'paramType' in item ? 'input' : 'output';
+    const paramType = 'paramType' in item ? item.paramType : undefined;
+    const widgetType =
+      'paramType' in item ? undefined : item.outputType === 'File' ? 'File' : 'text';
+    const outputType = 'paramType' in item ? undefined : item.outputType;
+
+    handleItemDrop(
+      builderState.state.schema,
+      group,
+      item.id,
+      item.nickname || ('name' in item ? item.name : 'Unknown'),
+      itemType,
+      builderState.state.availableParams,
+      paramType,
+      widgetType,
+      undefined,
+      undefined,
+      outputType
+    );
+
+    toast.success(`Added to ${tab.label} / ${group.label}`);
+  }
+
+  /**
+   * Handle adding an item to a new group via context menu
+   */
+  function handleAddToNewGroup(path: string, item: AvailableParameter | AvailableOutput) {
+    if (!builderState?.state.schema) return;
+
+    const schema = builderState.state.schema;
+    const parts = path.split('/').map((p) => p.trim());
+    let tabId: string;
+    let groupLabel: string;
+
+    if (parts.length === 2) {
+      // Tab/Group syntax
+      const [tabLabel, grpLabel] = parts;
+      let tab = schema.layout.tabs?.find((t) => t.label.toLowerCase() === tabLabel.toLowerCase());
+
+      if (!tab) {
+        // Create new tab
+        const newTabId = addTab(schema);
+        tab = schema.layout.tabs?.find((t) => t.id === newTabId);
+        if (tab) {
+          tab.label = tabLabel;
+          toast.success(`Created new tab: ${tabLabel}`);
+        }
+      }
+
+      if (!tab) return;
+      tabId = tab.id;
+      groupLabel = grpLabel;
+    } else {
+      // Just "Group" syntax - use active tab or first tab
+      groupLabel = parts[0];
+      if (builderState.state.activeTabId) {
+        tabId = builderState.state.activeTabId;
+      } else if (schema.layout.tabs && schema.layout.tabs.length > 0) {
+        tabId = schema.layout.tabs[0].id;
+      } else {
+        // Create first tab
+        const newTabId = addTab(schema);
+        tabId = newTabId;
+        builderState.state.activeTabId = newTabId;
+      }
+    }
+
+    const tab = schema.layout.tabs?.find((t) => t.id === tabId);
+    if (!tab) return;
+
+    // Find or create group
+    let group = tab.groups.find((g) => g.label.toLowerCase() === groupLabel.toLowerCase());
+    if (!group) {
+      addGroup(schema, tabId);
+      group = tab.groups[tab.groups.length - 1];
+      group.label = groupLabel;
+      toast.success(`Created new group: ${groupLabel}`);
+    }
+
+    // Add item to group
+    const itemType = 'paramType' in item ? 'input' : 'output';
+    const paramType = 'paramType' in item ? item.paramType : undefined;
+    const widgetType =
+      'paramType' in item ? undefined : item.outputType === 'File' ? 'File' : 'Text';
+    const outputType = 'paramType' in item ? undefined : item.outputType;
+
+    handleItemDrop(
+      schema,
+      group,
+      item.id,
+      item.nickname || ('name' in item ? item.name : 'Unknown'),
+      itemType,
+      builderState.state.availableParams,
+      paramType,
+      widgetType,
+      undefined,
+      undefined,
+      outputType
+    );
+
+    toast.success(`Added ${item.nickname || 'item'} to ${tab.label} / ${group.label}`);
+  }
+
+  function handleTabChange(tabId: string) {
+    if (builderState) {
+      builderState.state.activeTabId = tabId;
+    }
+  }
+
+  function handleAddTab() {
+    if (!builderState?.state.schema) return;
+    const newTabId = addTab(builderState.state.schema);
+    builderState.state.activeTabId = newTabId;
+  }
+
+  function handleRemoveTab(tabId: string) {
+    if (!builderState?.state.schema) return;
+    removeTab(builderState.state.schema, tabId);
+
+    if (
+      builderState.state.activeTabId === tabId &&
+      builderState.state.schema.layout.tabs &&
+      builderState.state.schema.layout.tabs.length > 0
+    ) {
+      builderState.state.activeTabId = builderState.state.schema.layout.tabs[0].id;
+    }
+  }
+
+  function handleReorderTabs(fromIndex: number, toIndex: number) {
+    if (!builderState?.state.schema) return;
+    reorderTabs(builderState.state.schema, fromIndex, toIndex);
+  }
+
+  function handleAddGroup(tabId: string) {
+    if (!builderState?.state.schema) return;
+    addGroup(builderState.state.schema, tabId);
+  }
+
+  function handleRemoveGroup(tabId: string, groupId: string) {
+    if (!builderState?.state.schema) return;
+    removeGroup(builderState.state.schema, tabId, groupId);
+  }
+
+  function handleRemoveItem(tabId: string, groupId: string, itemId: string) {
+    if (!builderState?.state.schema) return;
+    removeItem(builderState.state.schema, tabId, groupId, itemId);
   }
 </script>
 
@@ -763,11 +387,11 @@
   <PageContainer background="white">
     <PageHeader title="Schema Builder" {sessionId} showModeToggle={true}>
       <nav class="flex items-center gap-2">
-        {#if syncNeeded}
+        {#if builderState?.state.syncNeeded}
           <Button
             variant="default"
             size="sm"
-            onclick={syncParameters}
+            onclick={() => builderState?.syncParameters()}
             class="animate-pulse bg-amber-500 hover:bg-amber-600"
           >
             ⚡ Sync Parameters
@@ -782,126 +406,51 @@
     </PageHeader>
 
     <div class="flex-1 overflow-auto">
-      {#if loading}
+      {#if builderState?.state.loading}
         <div class="flex min-h-[400px] items-center justify-center">
           <StateDisplay type="loading" size="large" message="Loading schema..." />
         </div>
-      {:else if schema}
+      {:else if builderState?.state.schema}
         <div
           class="mx-auto grid h-full max-w-[2000px] grid-cols-1 gap-6 p-6 xl:grid-cols-[400px_1fr]"
         >
-          {#if error}
+          {#if builderState.state.error}
             <div class="col-span-2">
-              <StateDisplay type="warning" size="medium" message={error} />
+              <StateDisplay type="warning" size="medium" message={builderState.state.error} />
             </div>
           {/if}
 
-          <!-- Left Sidebar: Schema Info & Available Parameters -->
-          <aside class="flex flex-col gap-6">
-            <SchemaInfoPanel
-              {schema}
-              onSchemaChange={(updatedSchema) => (schema = updatedSchema)}
-            />
+          <BuilderSidebar
+            schema={builderState.state.schema}
+            {availableInputs}
+            availableOutputs={availableOutputsUnplaced}
+            placedIds={placedInLayoutIds()}
+            syncNeeded={builderState.state.syncNeeded}
+            onSchemaChange={(updatedSchema) => {
+              if (builderState) builderState.state.schema = updatedSchema;
+            }}
+            onSync={() => builderState?.syncParameters()}
+            onAddToGroup={handleAddToGroup}
+            onAddToNewGroup={handleAddToNewGroup}
+          />
 
-            <Panel title="Available Parameters">
-              {#snippet headerActions()}
-                {#if syncNeeded}
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onclick={syncParameters}
-                    class="bg-amber-500 hover:bg-amber-600"
-                  >
-                    Sync
-                  </Button>
-                {/if}
-              {/snippet}
-              <p class="mb-4 text-sm text-accent-foreground/40">
-                Drag parameters into groups below
-              </p>
-
-              <AvailableItemList
-                items={availableInputs}
-                title="📥 Inputs"
-                placedIds={placedInLayoutIds()}
-              />
-
-              <AvailableItemList
-                items={availableOutputsUnplaced}
-                title="📤 Outputs"
-                placedIds={placedInLayoutIds()}
-              />
-            </Panel>
-          </aside>
-
-          <!-- Main Area: Tab & Group Builder -->
           <main class="flex flex-col gap-6">
-            <Panel>
-              {#snippet headerActions()}
-                <Button onclick={addTab}>+ Add Tab</Button>
-              {/snippet}
-
-              <div class="min-h-[200px]">
-                {#if !schema.layout.tabs || schema.layout.tabs.length === 0}
-                  <StateDisplay
-                    type="empty"
-                    size="large"
-                    title="No tabs yet"
-                    message="Click 'Add Tab' to create your first tab"
-                  />
-                {:else}
-                  <!-- Tab Navigation -->
-                  <EditableTabNav
-                    tabs={schema.layout.tabs}
-                    {activeTabId}
-                    onTabChange={(tabId) => (activeTabId = tabId)}
-                    onRemoveTab={removeTab}
-                    onReorderTabs={reorderTabs}
-                  />
-
-                  <!-- Active Tab Content -->
-                  {#if activeTab}
-                    <div class="animate-[fadeIn_0.2s]">
-                      <div class="mb-6 flex justify-end">
-                        <Button variant="outline" onclick={() => addGroup(activeTab.id)}>
-                          + Add Group
-                        </Button>
-                      </div>
-
-                      {#if activeTab.groups.length === 0}
-                        <StateDisplay
-                          type="empty"
-                          size="medium"
-                          message="No groups yet. Click 'Add Group' to organize your parameters."
-                        />
-                      {:else}
-                        <div class="flex flex-col gap-6">
-                          {#each activeTab.groups as group, groupIndex (group.id)}
-                            <EditableGroup
-                              bind:group={activeTab.groups[groupIndex]}
-                              onDrop={(e) => handleParameterDrop(activeTab.id, group.id, e)}
-                              onReorder={handleReorder}
-                              onRemove={() => removeGroup(activeTab.id, group.id)}
-                            >
-                              {#each group.items as item (item.id)}
-                                {@const paramInfo = getParameterInfo(item.paramId)}
-                                <BuilderGroupItem
-                                  {item}
-                                  {paramInfo}
-                                  tabId={activeTab.id}
-                                  groupId={group.id}
-                                  onRemove={() => removeItem(activeTab.id, group.id, item.id)}
-                                />
-                              {/each}
-                            </EditableGroup>
-                          {/each}
-                        </div>
-                      {/if}
-                    </div>
-                  {/if}
-                {/if}
-              </div>
-            </Panel>
+            {#if builderState.state.schema.layout?.tabs}
+              <TabEditor
+                bind:tabs={builderState.state.schema.layout.tabs}
+                activeTabId={builderState.state.activeTabId}
+                onTabChange={handleTabChange}
+                onAddTab={handleAddTab}
+                onRemoveTab={handleRemoveTab}
+                onReorderTabs={handleReorderTabs}
+                onAddGroup={handleAddGroup}
+                onRemoveGroup={handleRemoveGroup}
+                onParameterDrop={handleParameterDrop}
+                onReorder={handleReorder}
+                onRemoveItem={handleRemoveItem}
+                {getParameterInfo}
+              />
+            {/if}
 
             <div class="mb-20 flex justify-end gap-4">
               <Button onclick={saveSchema}><Save></Save>Save Schema</Button>

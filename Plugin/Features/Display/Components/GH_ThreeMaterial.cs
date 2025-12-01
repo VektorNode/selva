@@ -9,7 +9,7 @@ public class GH_ThreeMaterial : GH_Component
 {
   public GH_ThreeMaterial()
     : base("Three Material", "TM",
-      "Creates a ThreeMaterial object for use in ThreeDisplay",
+      "Creates a ThreeMaterial object for web display",
       "Selva", "Display")
   {
   }

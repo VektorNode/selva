@@ -49,11 +49,9 @@ public static class ParameterTypeHelper
 
     var getNumberType = param.GetType();
 
-    // Try to get min/max from parameter properties
     if (getNumberType.Name == "GetNumberParameter")
       ExtractParameterMinMax(param, availableParam, ref minimum, ref maximum);
 
-    // Helper to detect extreme sentinel values
     const double extremeThreshold = 7.9e307;
 
     bool IsExtreme(double v)
@@ -61,7 +59,6 @@ public static class ParameterTypeHelper
       return double.IsInfinity(v) || double.IsNaN(v) || Math.Abs(v) >= extremeThreshold;
     }
 
-    // Check if we need to look for alternative sources
     var needsAlternativeSource = !minimum.HasValue || !maximum.HasValue ||
                                  IsExtreme(minimum.GetValueOrDefault()) ||
                                  IsExtreme(maximum.GetValueOrDefault());
@@ -110,12 +107,9 @@ public static class ParameterTypeHelper
     }
 
     // Apply extracted values
-    if (minimum.HasValue && maximum.HasValue)
-    {
-      availableParam.Minimum = minimum.Value;
-      availableParam.Maximum = maximum.Value;
-      if (stepSize.HasValue) availableParam.StepSize = (double)stepSize.Value;
-    }
+    availableParam.Minimum = minimum.Value;
+    availableParam.Maximum = maximum.Value;
+    if (stepSize.HasValue) availableParam.StepSize = (double)stepSize.Value;
   }
 
   private static bool TryGetPropertyValue<T>(object obj, string propName, out T value)
@@ -316,7 +310,6 @@ public static class ParameterTypeHelper
         if (hasFileData)
         {
           var docObj = obj;
-          if (docObj == null) continue;
           var nickname = docObj.NickName;
           var instanceGuid = docObj.InstanceGuid;
 

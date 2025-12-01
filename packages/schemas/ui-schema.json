@@ -97,7 +97,7 @@
         "description": { "type": "string" },
         "outputType": {
           "type": "string",
-          "enum": ["print", "bake", "file"],
+          "enum": ["Print", "File"],
           "description": "Type of output component"
         }
       },
