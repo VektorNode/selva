@@ -140,7 +140,6 @@ function parseBatchedMeshBinaryData(binaryMeshData: Uint8Array): DecompressedMes
   );
   offset += verticesByteLength;
 
-  // Read face indices
   if (offset + 4 > dataView.byteLength) {
     throw new RhinoComputeError(
       'Insufficient data to read the number of face indices.',
@@ -192,7 +191,6 @@ function parseMeshBinaryData(binaryMeshData: Uint8Array): MeshData {
   );
   let offset = 0;
 
-  // Read the total number of floats in vertices array
   if (offset + 4 > dataView.byteLength) {
     throw new RhinoComputeError(
       'Insufficient data to read the number of vertex floats.',
@@ -226,7 +224,6 @@ function parseMeshBinaryData(binaryMeshData: Uint8Array): MeshData {
     );
   }
 
-  // Create Float32Array directly
   const vertices = new Float32Array(
     binaryMeshData.buffer,
     binaryMeshData.byteOffset + offset,
@@ -234,7 +231,6 @@ function parseMeshBinaryData(binaryMeshData: Uint8Array): MeshData {
   );
   offset += verticesByteLength;
 
-  // Read the total number of face indices
   if (offset + 4 > dataView.byteLength) {
     throw new RhinoComputeError(
       'Insufficient data to read the number of face indices.',
@@ -260,7 +256,6 @@ function parseMeshBinaryData(binaryMeshData: Uint8Array): MeshData {
     );
   }
 
-  // Create Uint32Array directly
   const faceIndices = new Uint32Array(
     binaryMeshData.buffer,
     binaryMeshData.byteOffset + offset,

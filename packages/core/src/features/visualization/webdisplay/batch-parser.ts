@@ -21,7 +21,7 @@ import type { MeshBatch, MaterialGroup, MeshMetadata, SerializableMaterial } fro
 export async function parseMeshBatch(
   batchJson: string,
   options?: {
-    /** Merge meshes with same material into single geometry (better performance) */
+    /** Merge meshes with same material into single geometry*/
     mergeByMaterial?: boolean;
     /** Apply coordinate system transformations */
     applyTransforms?: boolean;
@@ -39,7 +39,6 @@ export async function parseMeshBatch(
     const batch: MeshBatch = JSON.parse(batchJson);
     parseTime = performance.now() - parseStart;
 
-    // Decompress all geometry data at once (in a Web Worker)
     const decompressStart = performance.now();
     const { vertices, faces } = await decompressBatchedMeshData(batch.compressedData);
     decompressTime = performance.now() - decompressStart;
@@ -49,25 +48,22 @@ export async function parseMeshBatch(
     const compressionRatio = ((1 - (parseFloat(compressedSizeMB) / parseFloat(uncompressedSizeMB))) * 100).toFixed(1);
 
     if (debug) {
-      console.log('📊 Mesh Batch Stats:');
+      console.log('Mesh Batch Stats:');
       console.log(`  Materials: ${batch.materials.length} | Groups: ${batch.groups.length}`);
       console.log(`  Vertices: ${(vertices.length / 3).toLocaleString()} | Faces: ${(faces.length / 3).toLocaleString()}`);
       console.log(`  Compressed: ${compressedSizeMB} MB | Uncompressed: ${uncompressedSizeMB} MB`);
       console.log(`  Compression Ratio: ${compressionRatio}%`);
     }
 
-    // Apply transforms if needed
     if (applyTransforms) {
       applyCoordinateTransform(vertices);
     }
 
-    // Create material instances (reusable)
     const meshCreateStart = performance.now();
     const materials = batch.materials.map(createMaterial);
 
     const meshes: THREE.Mesh[] = [];
 
-    // Process each material group
     for (const group of batch.groups) {
       if (mergeByMaterial && group.meshes.length > 1) {
         const mergedMesh = createMergedMesh(group, vertices, faces, materials);
@@ -81,7 +77,7 @@ export async function parseMeshBatch(
 
     if (debug) {
       const totalTime = performance.now() - perfStart;
-      console.log('⏱️ Performance:');
+      console.log('Performance:');
       console.log(`  Parse JSON: ${parseTime.toFixed(2)}ms`);
       console.log(`  Decompress: ${decompressTime.toFixed(2)}ms`);
       console.log(`  Create Meshes: ${meshCreateTime.toFixed(2)}ms`);
@@ -124,7 +120,6 @@ function createMergedMesh(
 ): THREE.Mesh {
   const geometry = new THREE.BufferGeometry();
 
-  // Calculate total size
   let totalVertexFloats = 0;
   let totalFaceIndices = 0;
 
@@ -133,7 +128,6 @@ function createMergedMesh(
     totalFaceIndices += mesh.faceCount;
   }
 
-  // Allocate merged arrays
   const mergedVertices = new Float32Array(totalVertexFloats);
   const mergedIndices = new Uint32Array(totalFaceIndices);
 
@@ -141,18 +135,14 @@ function createMergedMesh(
   let indexWriteOffset = 0;
   let baseVertexIndex = 0;
 
-  // Merge all meshes - optimized loop
   for (const mesh of group.meshes) {
-    // Copy vertices using set() - zero-copy when possible
     mergedVertices.set(
       allVertices.subarray(mesh.vertexOffset, mesh.vertexOffset + mesh.vertexCount),
       vertexWriteOffset
     );
 
-    // Copy and adjust face indices
     const faceSlice = allFaces.subarray(mesh.faceOffset, mesh.faceOffset + mesh.faceCount);
 
-    // Optimized index adjustment
     for (let i = 0; i < faceSlice.length; i++) {
       mergedIndices[indexWriteOffset + i] = faceSlice[i] + baseVertexIndex;
     }
@@ -162,7 +152,6 @@ function createMergedMesh(
     baseVertexIndex += mesh.vertexCount / 3;
   }
 
-  // Set geometry attributes directly (no additional copies)
   geometry.setAttribute('position', new THREE.BufferAttribute(mergedVertices, 3));
   geometry.setIndex(new THREE.BufferAttribute(mergedIndices, 1));
   geometry.computeVertexNormals();
@@ -190,19 +179,16 @@ function createIndividualMeshes(
   for (const meshMeta of group.meshes) {
     const geometry = new THREE.BufferGeometry();
 
-    // Extract vertex data
     const vertices = allVertices.subarray(
       meshMeta.vertexOffset,
       meshMeta.vertexOffset + meshMeta.vertexCount
     );
 
-    // Extract and rebase face indices
     const faces = allFaces.subarray(
       meshMeta.faceOffset,
       meshMeta.faceOffset + meshMeta.faceCount
     );
 
-    // Rebase indices to start from 0
     const baseIndex = meshMeta.vertexOffset / 3;
     const rebasedFaces = new Uint32Array(faces.length);
     for (let i = 0; i < faces.length; i++) {
