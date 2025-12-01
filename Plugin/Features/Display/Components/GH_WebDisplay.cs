@@ -18,10 +18,8 @@ namespace Selva.Features.Display.Components;
 /// <summary>
 ///   Component that converts geometry to displayable format for web viewing.
 /// </summary>
-public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
+public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
 {
-  private const string DefaultMeshPrefix = "";
-
   public WebDisplay()
     : base("Display", "D", "Converts geometry to display file", "Selva", "Display")
   {
@@ -44,12 +42,11 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
 
   protected override void RegisterOutputParams(GH_OutputParamManager pManager)
   {
-    pManager.AddGenericParameter("WebDisplay", "WD", "Geometry data for web display", GH_ParamAccess.list);
+    pManager.AddGenericParameter("WebDisplay", "WD", "Geometry data for web display", GH_ParamAccess.item);
   }
 
   protected override void SolveInstance(IGH_DataAccess DA)
   {
-    // Get data trees
     GH_Structure<IGH_Goo> geoTree;
     GH_Structure<GH_String> nameTree;
     GH_Structure<IGH_Goo> materialTree;
@@ -65,133 +62,75 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
     DA.GetDataTree(2, out materialTree);
     DA.GetData(3, ref meshingParameters);
 
+    var meshSettings = meshingParameters?.Value ?? MeshingParameters.FastRenderMesh;
+    var allGeo = geoTree.FlattenData().ToList();
+    var allNames = nameTree?.FlattenData().ToList() ?? new List<GH_String>();
+    var allMaterials = materialTree?.FlattenData().ToList() ?? new List<IGH_Goo>();
+
     if (InPreSolve)
     {
-      var task = Task.Run(() =>
-      {
-        var meshSettings = meshingParameters?.Value ?? MeshingParameters.FastRenderMesh;
-        var allGeo = geoTree.FlattenData().ToList();
-        var allNames = nameTree?.FlattenData().ToList() ?? new List<GH_String>();
-        var allMaterials = materialTree?.FlattenData().ToList() ?? new List<IGH_Goo>();
-
-        return Compute(allGeo, allNames, allMaterials, meshSettings);
-      }, CancelToken);
-
+      var task = Task.Run(() => Compute(allGeo, allNames, allMaterials, meshSettings), CancelToken);
       TaskList.Add(task);
       return;
     }
 
-    if (!GetSolveResults(DA, out var result))
+    if (!GetSolveResults(DA, out var batch))
     {
-      var meshSettings = meshingParameters?.Value ?? MeshingParameters.FastRenderMesh;
-      var allGeo = geoTree.FlattenData().ToList();
-      var allNames = nameTree?.FlattenData().ToList() ?? new List<GH_String>();
-      var allMaterials = materialTree?.FlattenData().ToList() ?? new List<IGH_Goo>();
-
-      result = Compute(allGeo, allNames, allMaterials, meshSettings);
+      batch = Compute(allGeo, allNames, allMaterials, meshSettings);
     }
 
-    if (!string.IsNullOrEmpty(result.Error))
-    {
-      AddRuntimeMessage(GH_RuntimeMessageLevel.Error, result.Error);
-      return;
-    }
-
-    if (result.Warnings.Any())
-      foreach (var warning in result.Warnings)
-      {
-        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, warning);
-      }
-
-    if (result.Remarks.Any())
-      foreach (var remark in result.Remarks)
-      {
-        AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, remark);
-      }
-
-    DA.SetDataList(0, result.Displays);
+    DA.SetData(0, batch);
   }
 
-  private DisplayResults Compute(
+  private WebDisplayGoo Compute(
     List<IGH_Goo> geoGoos,
     List<GH_String> nameGoos,
     List<IGH_Goo> materialGoos,
     MeshingParameters meshSettings)
   {
-    var result = new DisplayResults();
     var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-    try
-    {
-      var extractStart = System.Diagnostics.Stopwatch.StartNew();
-      var geometries = ExtractGeometries(geoGoos, result.Warnings);
-      extractStart.Stop();
-      RhinoApp.WriteLine($"[WebDisplay] Geometry extraction: {extractStart.ElapsedMilliseconds}ms ({geometries.Count} geometries)");
+    // Extract geometries
+    var extractStart = System.Diagnostics.Stopwatch.StartNew();
+    var geometries = ExtractGeometries(geoGoos);
+    extractStart.Stop();
+    RhinoApp.WriteLine($"[WebDisplay] Geometry extraction: {extractStart.ElapsedMilliseconds}ms ({geometries.Count} geometries)");
 
-      if (geometries.Count == 0)
-      {
-        result.Error = "No valid geometry found in input";
-        return result;
-      }
+    if (geometries.Count == 0)
+      throw new Exception("No valid geometry found in input");
 
-      var meshStart = System.Diagnostics.Stopwatch.StartNew();
-      var meshes = ConvertToMeshesParallel(geometries, meshSettings, result.Warnings);
-      meshStart.Stop();
-      RhinoApp.WriteLine($"[WebDisplay] Mesh conversion: {meshStart.ElapsedMilliseconds}ms ({meshes.Count} meshes)");
+    // Convert to meshes
+    var meshStart = System.Diagnostics.Stopwatch.StartNew();
+    var meshes = ConvertToMeshesParallel(geometries, meshSettings);
+    meshStart.Stop();
+    RhinoApp.WriteLine($"[WebDisplay] Mesh conversion: {meshStart.ElapsedMilliseconds}ms ({meshes.Count} meshes)");
 
-      var namesStart = System.Diagnostics.Stopwatch.StartNew();
-      var names = PrepareNames(geometries.Count, nameGoos);
-      var materials = PrepareMaterials(geometries.Count, materialGoos);
-      namesStart.Stop();
-      RhinoApp.WriteLine($"[WebDisplay] Data preparation: {namesStart.ElapsedMilliseconds}ms");
+    if (meshes.Count == 0)
+      throw new Exception("No valid meshes generated from input geometry");
 
-      var validMeshes = new List<Mesh>();
-      var validNames = new List<string>();
-      var validMaterials = new List<ThreeMaterial>();
+    // Prepare names and materials
+    var namesStart = System.Diagnostics.Stopwatch.StartNew();
+    var names = PrepareNames(meshes.Count, nameGoos);
+    var materials = PrepareMaterials(meshes.Count, materialGoos);
+    namesStart.Stop();
+    RhinoApp.WriteLine($"[WebDisplay] Data preparation: {namesStart.ElapsedMilliseconds}ms");
 
-      for (var i = 0; i < meshes.Count; i++)
-      {
-        if (meshes[i] != null && meshes[i].IsValid)
-        {
-          validMeshes.Add(meshes[i]);
-          validNames.Add(names[i]);
-          validMaterials.Add(materials[i]);
-        }
-      }
-
-      if (validMeshes.Count == 0)
-      {
-        result.Error = "No valid meshes generated from input geometry";
-        return result;
-      }
-
-      var batchStart = System.Diagnostics.Stopwatch.StartNew();
-      var batch = MeshBatchProcessor.CreateBatch(validMeshes, validNames, validMaterials);
-      batchStart.Stop();
-      RhinoApp.WriteLine($"[WebDisplay] Batch creation: {batchStart.ElapsedMilliseconds}ms");
-
-      result.Displays.Add(new WebDisplayGoo(batch));
-
-      if (validMeshes.Count != geometries.Count)
-        result.Warnings.Add($"Successfully processed {validMeshes.Count} out of {geometries.Count} geometries.");
-
-      // Add statistics as remarks
-      result.Remarks.Add($"Optimized: {validMeshes.Count} meshes, {batch.Materials.Count} unique materials, {batch.Groups.Count} material groups");
-    }
-    catch (Exception ex)
-    {
-      result.Error = $"Error processing geometry: {ex.Message}";
-    }
+    // Create batch
+    var batchStart = System.Diagnostics.Stopwatch.StartNew();
+    var batch = MeshBatchProcessor.CreateBatch(meshes, names, materials);
+    batchStart.Stop();
+    RhinoApp.WriteLine($"[WebDisplay] Batch creation: {batchStart.ElapsedMilliseconds}ms");
 
     stopwatch.Stop();
     RhinoApp.WriteLine($"[WebDisplay] Total time: {stopwatch.ElapsedMilliseconds}ms");
+    RhinoApp.WriteLine($"[WebDisplay] Result: {meshes.Count} meshes, {batch.Materials.Count} unique materials, {batch.Groups.Count} groups");
 
-    return result;
+    return new WebDisplayGoo(batch);
   }
 
   #region Geometry Extraction
 
-  private List<GeometryBase> ExtractGeometries(List<IGH_Goo> gooList, List<string> warnings)
+  private List<GeometryBase> ExtractGeometries(List<IGH_Goo> gooList)
   {
     var geometries = new ConcurrentBag<(int Index, GeometryBase Geometry)>();
 
@@ -201,11 +140,6 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
       var geom = TryExtractGeometry(goo);
       if (geom != null && geom.IsValid)
         geometries.Add((i, geom));
-      else if (goo != null)
-        lock (warnings)
-        {
-          warnings.Add($"Could not extract valid geometry from: {goo.TypeName ?? "null"}");
-        }
     });
 
     return geometries.OrderBy(x => x.Index).Select(x => x.Geometry).ToList();
@@ -233,31 +167,22 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
 
   #region Mesh Conversion
 
-  private List<Mesh> ConvertToMeshesParallel(List<GeometryBase> geometries, MeshingParameters meshSettings,
-    List<string> warnings)
+  private List<Mesh> ConvertToMeshesParallel(List<GeometryBase> geometries, MeshingParameters meshSettings)
   {
     var meshDict = new ConcurrentDictionary<int, Mesh>();
 
     Parallel.For(0, geometries.Count, index =>
     {
-      var mesh = ConvertSingleGeometry(geometries[index], index, meshSettings, warnings);
+      var mesh = ConvertSingleGeometry(geometries[index], meshSettings);
       if (mesh != null) meshDict.TryAdd(index, mesh);
     });
 
     return meshDict.OrderBy(kvp => kvp.Key).Select(kvp => kvp.Value).ToList();
   }
 
-  private Mesh ConvertSingleGeometry(GeometryBase geom, int index, MeshingParameters mParams, List<string> warnings)
+  private Mesh ConvertSingleGeometry(GeometryBase geom, MeshingParameters mParams)
   {
-    if (geom == null || !geom.IsValid)
-    {
-      lock (warnings)
-      {
-        warnings.Add($"Invalid geometry at index {index}");
-      }
-
-      return null;
-    }
+    if (geom == null || !geom.IsValid) return null;
 
     try
     {
@@ -266,19 +191,20 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
         Mesh existingMesh => existingMesh.DuplicateMesh(),
         Brep brep => CreateMeshFromBrep(brep, mParams),
         Surface surface => Mesh.CreateFromSurface(surface, mParams),
-        Curve => HandleCurve(index, warnings),
+        Curve => null, // Curves cannot be meshed
         _ => null
       };
 
-      return FinalizeMesh(mesh, index, warnings);
-    }
-    catch (Exception ex)
-    {
-      lock (warnings)
+      if (mesh != null && mesh.IsValid)
       {
-        warnings.Add($"Error converting geometry at index {index}: {ex.Message}");
+        mesh.Normals.ComputeNormals();
+        mesh.Compact();
       }
 
+      return mesh;
+    }
+    catch
+    {
       return null;
     }
   }
@@ -289,38 +215,7 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
     if (meshArray == null || meshArray.Length == 0) return null;
 
     var mesh = new Mesh();
-    foreach (var m in meshArray)
-    {
-      mesh.Append(m);
-    }
-
-    return mesh;
-  }
-
-  private Mesh HandleCurve(int index, List<string> warnings)
-  {
-    lock (warnings)
-    {
-      warnings.Add($"Curves cannot be directly converted to mesh at index {index}. Consider using a pipe or sweep.");
-    }
-
-    return null;
-  }
-
-  private Mesh FinalizeMesh(Mesh mesh, int index, List<string> warnings)
-  {
-    if (mesh == null || !mesh.IsValid)
-    {
-      lock (warnings)
-      {
-        warnings.Add($"Failed to create valid mesh from geometry at index {index}");
-      }
-
-      return null;
-    }
-
-    mesh.Normals.ComputeNormals();
-    mesh.Compact();
+    foreach (var m in meshArray) mesh.Append(m);
     return mesh;
   }
 
@@ -335,7 +230,7 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
       .Where(n => !string.IsNullOrWhiteSpace(n))
       .ToList() ?? new List<string>();
 
-    return NormalizeList(names, count, i => $"{DefaultMeshPrefix}{i}");
+    return NormalizeList(names, count, i => i.ToString());
   }
 
   private List<ThreeMaterial> PrepareMaterials(int count, List<IGH_Goo> materialGoos)

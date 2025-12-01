@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using Rhino;
 using Rhino.Geometry;
@@ -10,6 +8,7 @@ namespace Selva.Features.Display.Services;
 
 /// <summary>
 ///   Processes meshes in batches with material deduplication and optimized compression.
+///   Directly processes meshes without intermediate structures for better performance.
 /// </summary>
 public static class MeshBatchProcessor
 {
@@ -29,36 +28,33 @@ public static class MeshBatchProcessor
       throw new ArgumentException("Meshes, names, and materials lists must have the same length");
 
     var materialCache = new MaterialCache();
-    var meshesWithMaterials = new List<MeshWithMaterial>();
 
-    // Process all meshes and deduplicate materials
+    // Convert meshes and assign material IDs (single conversion, no intermediate storage)
+    var processedMeshes = new List<ProcessedMesh>();
     for (var i = 0; i < meshes.Count; i++)
     {
       var mesh = meshes[i];
       if (mesh == null || !mesh.IsValid) continue;
 
-      var (triangleCount, quadCount) = GeoMeshProcessor.CalculateFaceCounts(mesh);
-      var (vertices, faces) = GeoMeshProcessor.ConvertMeshToArrays(mesh, triangleCount, quadCount);
+      var (vertices, faces) = GeoMeshProcessor.ConvertMeshToArrays(mesh);
       var materialId = materialCache.GetMaterialId(materials[i]);
 
-      meshesWithMaterials.Add(new MeshWithMaterial
+      processedMeshes.Add(new ProcessedMesh
       {
         Name = names[i],
         Vertices = vertices,
         Faces = faces,
-        MaterialId = materialId,
-        VertexCount = vertices.Length,
-        FaceCount = faces.Length
+        MaterialId = materialId
       });
     }
 
-    // Group meshes by material
-    var groupedMeshes = meshesWithMaterials
+    // Group by material for optimal batching
+    var groupedMeshes = processedMeshes
       .GroupBy(m => m.MaterialId)
       .OrderBy(g => g.Key)
       .ToList();
 
-    // Build the batch structure
+    // Build batch structure
     var batch = new MeshBatch
     {
       Materials = materialCache.GetAllMaterials()
@@ -67,12 +63,17 @@ public static class MeshBatchProcessor
       Groups = new List<MaterialGroup>()
     };
 
-    // Combine all vertex and face data for compression
-    var allVertices = new List<float>();
-    var allFaces = new List<int>();
+    // Calculate total sizes for single allocation
+    var totalVertexCount = processedMeshes.Sum(m => m.Vertices.Length);
+    var totalFaceCount = processedMeshes.Sum(m => m.Faces.Length);
+
+    // Single allocation for all mesh data
+    var allVertices = new float[totalVertexCount];
+    var allFaces = new int[totalFaceCount];
     var currentVertexOffset = 0;
     var currentFaceOffset = 0;
 
+    // Copy mesh data directly to final arrays
     foreach (var group in groupedMeshes)
     {
       var materialGroup = new MaterialGroup
@@ -83,83 +84,57 @@ public static class MeshBatchProcessor
 
       foreach (var mesh in group)
       {
+        var vertexCount = mesh.Vertices.Length;
+        var faceCount = mesh.Faces.Length;
+
         // Track metadata with offsets
         materialGroup.Meshes.Add(new MeshMetadata
         {
           Name = mesh.Name,
-          VertexCount = mesh.VertexCount,
-          FaceCount = mesh.FaceCount,
+          VertexCount = vertexCount,
+          FaceCount = faceCount,
           VertexOffset = currentVertexOffset,
           FaceOffset = currentFaceOffset
         });
 
-        allVertices.AddRange(mesh.Vertices);
-        currentVertexOffset += mesh.VertexCount;
+        // Copy vertices using Span for optimal performance
+        var vertexSpan = allVertices.AsSpan(currentVertexOffset, vertexCount);
+        mesh.Vertices.AsSpan().CopyTo(vertexSpan);
 
-        var baseVertexIndex = currentVertexOffset / 3 - mesh.Vertices.Length / 3;
-        var adjustedFaces = mesh.Faces.Select(f => f + baseVertexIndex).ToArray();
-        allFaces.AddRange(adjustedFaces);
-        currentFaceOffset += mesh.FaceCount;
+        // Adjust face indices and copy
+        var baseVertexIndex = currentVertexOffset / 3;
+        var faceSpan = allFaces.AsSpan(currentFaceOffset, faceCount);
+        for (int i = 0; i < faceCount; i++)
+        {
+          faceSpan[i] = mesh.Faces[i] + baseVertexIndex;
+        }
+
+        currentVertexOffset += vertexCount;
+        currentFaceOffset += faceCount;
       }
 
       batch.Groups.Add(materialGroup);
     }
 
-    batch.CompressedData = CompressGeometryData(allVertices.ToArray(), allFaces.ToArray());
+    // Compress using shared compression helper
+    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+    batch.CompressedData = CompressionHelper.CompressGeometryData(allVertices, allFaces);
+    stopwatch.Stop();
+
+    var sizeMb = batch.CompressedData.Length / 1024.0 / 1024.0;
+    RhinoApp.WriteLine($"Compressed data size: {sizeMb:F2} MB (compression took {stopwatch.ElapsedMilliseconds}ms)");
 
     return batch;
   }
 
   /// <summary>
-  ///   Compresses vertex and face data together using GZip.
-  ///   Returns raw bytes without Base64 encoding for direct JSON serialization.
+  ///   Lightweight struct for mesh data during processing (replaces MeshWithMaterial).
   /// </summary>
-  private static byte[] CompressGeometryData(float[] vertices, int[] faces)
+  private struct ProcessedMesh
   {
-    byte[] serializedData;
-
-    // Use MemoryStream with pre-allocated capacity
-    using (var memoryStream = new MemoryStream(sizeof(int) * 2 + vertices.Length * sizeof(float) + faces.Length * sizeof(int)))
-    {
-      using (var writer = new BinaryWriter(memoryStream))
-      {
-        // Write vertex count
-        writer.Write(vertices.Length);
-
-        // Write vertices
-        for (int i = 0; i < vertices.Length; i++)
-        {
-          writer.Write(vertices[i]);
-        }
-
-        // Write face count
-        writer.Write(faces.Length);
-
-        // Write faces
-        for (int i = 0; i < faces.Length; i++)
-        {
-          writer.Write(faces[i]);
-        }
-      }
-
-      serializedData = memoryStream.ToArray();
-    }
-
-    byte[] compressedData;
-    using (var outputStream = new MemoryStream())
-    {
-      // Use GZip compression
-      using (var compressionStream = new GZipStream(outputStream, CompressionLevel.Fastest))
-      {
-        compressionStream.Write(serializedData, 0, serializedData.Length);
-      }
-
-      compressedData = outputStream.ToArray();
-
-      // var sizeMb = compressedData.Length / 1024.0 / 1024.0;
-      // RhinoApp.WriteLine($"Compressed data size: {sizeMb:F2} MB");
-    }
-
-    return compressedData;
+    public string Name { get; set; }
+    public float[] Vertices { get; set; }
+    public int[] Faces { get; set; }
+    public int MaterialId { get; set; }
   }
 }

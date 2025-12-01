@@ -32,7 +32,7 @@ public class ThreeMaterialGoo : IGH_Goo
 
     var settings = new JsonSerializerSettings
     {
-      Converters = new List<JsonConverter> { new GeoMeshProcessor.ColorJsonConverter() }
+      Converters = new List<JsonConverter> { new ColorJsonConverter() }
     };
     var json = JsonConvert.SerializeObject(Value, settings);
     var copy = JsonConvert.DeserializeObject<ThreeMaterial>(json, settings);
@@ -57,7 +57,7 @@ public class ThreeMaterialGoo : IGH_Goo
       {
         var settings = new JsonSerializerSettings
         {
-          Converters = new List<JsonConverter> { new GeoMeshProcessor.ColorJsonConverter() }
+          Converters = new List<JsonConverter> { new ColorJsonConverter() }
         };
         Value = JsonConvert.DeserializeObject<ThreeMaterial>(s, settings);
         return Value != null;
@@ -81,7 +81,7 @@ public class ThreeMaterialGoo : IGH_Goo
     {
       var settings = new JsonSerializerSettings
       {
-        Converters = new List<JsonConverter> { new GeoMeshProcessor.ColorJsonConverter() }
+        Converters = new List<JsonConverter> { new ColorJsonConverter() }
       };
       target = (T)(object)JsonConvert.SerializeObject(Value, settings);
       return true;
@@ -100,7 +100,7 @@ public class ThreeMaterialGoo : IGH_Goo
   {
     var settings = new JsonSerializerSettings
     {
-      Converters = new List<JsonConverter> { new GeoMeshProcessor.ColorJsonConverter() }
+      Converters = new List<JsonConverter> { new ColorJsonConverter() }
     };
     var json = JsonConvert.SerializeObject(Value, settings);
     writer.SetString("ThreeMaterialJson", json);
@@ -114,7 +114,7 @@ public class ThreeMaterialGoo : IGH_Goo
     var json = reader.GetString("ThreeMaterialJson");
     var settings = new JsonSerializerSettings
     {
-      Converters = new List<JsonConverter> { new GeoMeshProcessor.ColorJsonConverter() }
+      Converters = new List<JsonConverter> { new ColorJsonConverter() }
     };
     Value = JsonConvert.DeserializeObject<ThreeMaterial>(json, settings);
     return true;

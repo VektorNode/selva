@@ -1,28 +1,32 @@
 ﻿using System;
-using System.Drawing;
-using System.IO;
-using System.IO.Compression;
-using Newtonsoft.Json;
 using Rhino.Geometry;
 
 namespace Selva.Features.Display.Services;
 
+/// <summary>
+///   Optimized mesh processing utilities that combine operations for better performance.
+/// </summary>
 public static class GeoMeshProcessor
 {
   /// <summary>
-  ///   Calculates the number of triangle and quad faces in a given mesh.
+  ///   Converts a Rhino.Geometry.Mesh into vertex and face arrays in a single pass.
+  ///   Combines face counting and array conversion for optimal performance.
   /// </summary>
-  /// <param name="mesh">The mesh to analyze.</param>
+  /// <param name="mesh">The mesh to convert.</param>
   /// <returns>
   ///   A tuple containing:
-  ///   - TriangleCount: The number of triangle faces in the mesh.
-  ///   - QuadCount: The number of quad faces in the mesh.
+  ///   - vertices: Array of vertex coordinates (x, y, z floats)
+  ///   - faces: Array of face indices (triangulated)
   /// </returns>
-  public static (int TriangleCount, int QuadCount) CalculateFaceCounts(Mesh mesh)
+  public static (float[] vertices, int[] faces) ConvertMeshToArrays(Mesh mesh)
   {
+    const int verticesPerTriangle = 3;
+    const int verticesPerQuad = 6;
+    const int componentsPerVertex = 3;
+
+    // First pass: count faces to pre-allocate arrays
     var triangleCount = 0;
     var quadCount = 0;
-
     foreach (var face in mesh.Faces)
     {
       if (face.IsTriangle)
@@ -32,26 +36,6 @@ public static class GeoMeshProcessor
       else
         Console.WriteLine("NGON detected. This component only supports triangles and quads.");
     }
-
-    return (triangleCount, quadCount);
-  }
-
-  /// <summary>
-  ///   Converts a Rhino.Geometry.Mesh object into arrays of vertices and faces.
-  /// </summary>
-  /// <param name="mesh">The mesh to convert.</param>
-  /// <param name="triangleCount">The number of triangles in the mesh.</param>
-  /// <param name="quadCount">The number of quads in the mesh.</param>
-  /// <returns>
-  ///   A tuple containing two arrays:
-  ///   - vertices: An array of doubles representing the vertex coordinates.
-  ///   - faces: An array of integers representing the face indices.
-  /// </returns>
-  public static (float[] vertices, int[] faces) ConvertMeshToArrays(Mesh mesh, int triangleCount, int quadCount)
-  {
-    const int verticesPerTriangle = 3;
-    const int verticesPerQuad = 6;
-    const int componentsPerVertex = 3;
 
     var totalIndices = triangleCount * verticesPerTriangle + quadCount * verticesPerQuad;
 
@@ -66,6 +50,7 @@ public static class GeoMeshProcessor
       vertices[vertexIndex++] = vertex.Z;
     }
 
+    // Convert faces (triangulate quads)
     var faceIndex = 0;
     foreach (var face in mesh.Faces)
     {
@@ -87,72 +72,5 @@ public static class GeoMeshProcessor
     }
 
     return (vertices, faces);
-  }
-
-  /// <summary>
-  ///   Compresses and serializes the given arrays of vertices and face indices using Brotli (.NET 7) or GZip (.NET 4.8).
-  ///   Uses pre-allocated buffer for better performance.
-  /// </summary>
-  /// <param name="vertices">An array of floats representing the vertex coordinates.</param>
-  /// <param name="faceIndices">An array of integers representing the face indices.</param>
-  /// <returns>A base64 encoded string of the compressed and serialized data.</returns>
-  public static string CompressAndSerialize(float[] vertices, int[] faceIndices)
-  {
-    byte[] serializedData;
-
-    // Use MemoryStream with pre-allocated capacity
-    using (var memoryStream = new MemoryStream(sizeof(int) * 2 + vertices.Length * sizeof(float) + faceIndices.Length * sizeof(int)))
-    {
-      using (var writer = new BinaryWriter(memoryStream))
-      {
-        // Write vertex count
-        writer.Write(vertices.Length);
-
-        // Write vertices
-        for (int i = 0; i < vertices.Length; i++)
-        {
-          writer.Write(vertices[i]);
-        }
-
-        // Write face count
-        writer.Write(faceIndices.Length);
-
-        // Write faces
-        for (int i = 0; i < faceIndices.Length; i++)
-        {
-          writer.Write(faceIndices[i]);
-        }
-      }
-
-      serializedData = memoryStream.ToArray();
-    }
-
-    byte[] compressedData;
-    using (var outputStream = new MemoryStream())
-    {
-      // Use GZip compression with Optimal level for best compression
-      using (var compressionStream = new GZipStream(outputStream, CompressionLevel.Optimal))
-      {
-        compressionStream.Write(serializedData, 0, serializedData.Length);
-      }
-
-      compressedData = outputStream.ToArray();
-    }
-
-    return Convert.ToBase64String(compressedData);
-  }
-
-  public class ColorJsonConverter : JsonConverter<Color>
-  {
-    public override void WriteJson(JsonWriter writer, Color value, JsonSerializer serializer)
-    {
-      writer.WriteValue(ColorTranslator.ToHtml(value));
-    }
-
-    public override Color ReadJson(JsonReader reader, Type objectType, Color existingValue, bool hasExistingValue,
-      JsonSerializer serializer)
-    {
-      return ColorTranslator.FromHtml((string)reader.Value);
-    }
   }
 }

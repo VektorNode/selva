@@ -57,19 +57,6 @@ public class MaterialCache
 }
 
 /// <summary>
-///   Represents a mesh with its material reference.
-/// </summary>
-public class MeshWithMaterial
-{
-  public string Name { get; set; }
-  public float[] Vertices { get; set; }
-  public int[] Faces { get; set; }
-  public int MaterialId { get; set; }
-  public int VertexCount { get; set; }
-  public int FaceCount { get; set; }
-}
-
-/// <summary>
 ///   Represents a batch of meshes optimized for Three.js rendering.
 ///   Meshes are grouped by material for efficient batching on the web.
 /// </summary>
