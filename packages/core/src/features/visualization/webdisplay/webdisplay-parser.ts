@@ -107,6 +107,7 @@ export function getThreeMeshesFromComputeResponse(
   const startTime = performance.now();
   const meshes: THREE.Mesh[] = [];
 
+
   // Provide default values for options
   const { allowScaling = true, allowAutoPosition = true } = options ?? {};
 
@@ -161,6 +162,14 @@ function extractMeshesFromData(
 function processDataBranch(branch: DataItem[], meshes: THREE.Mesh[], scaleFactor: number): void {
   for (const item of branch) {
     if (item.type.includes(DISPLAY_COMPONENT_TYPE)) {
+      if (typeof item.data === 'string') {
+        console.log(`MeshBatch data size: ${(item.data.length / (1024 * 1024)).toFixed(2)} MB`);
+      } else if (item.data instanceof ArrayBuffer) {
+        console.log(`MeshBatch data size: ${(item.data.byteLength / (1024 * 1024)).toFixed(2)} MB`);
+      }
+
+
+
       // Parse MeshBatch format
       const batchMeshes = parseMeshBatch(item.data, {
         mergeByMaterial: true,

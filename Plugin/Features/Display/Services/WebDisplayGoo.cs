@@ -6,34 +6,34 @@ using Newtonsoft.Json;
 namespace Selva.Features.Display.Services;
 
 /// <summary>
-///   Grasshopper Goo wrapper for MeshBatch to prevent double JSON encoding.
+///   Grasshopper Goo wrapper for WebDisplay data to prevent double JSON encoding.
 /// </summary>
-public class MeshBatchGoo : GH_Goo<MeshBatch>
+public class WebDisplayGoo : GH_Goo<MeshBatch>
 {
-  public MeshBatchGoo()
+  public WebDisplayGoo()
   {
   }
 
-  public MeshBatchGoo(MeshBatch value)
+  public WebDisplayGoo(MeshBatch value)
   {
     Value = value;
   }
 
   public override bool IsValid => Value != null && Value.Materials != null && Value.Groups != null;
 
-  public override string TypeName => "MeshBatch";
+  public override string TypeName => "WebDisplay";
 
-  public override string TypeDescription => "Batched mesh data for web display";
+  public override string TypeDescription => "Geometry data for web display";
 
   public override IGH_Goo Duplicate()
   {
-    return new MeshBatchGoo(Value);
+    return new WebDisplayGoo(Value);
   }
 
   public override string ToString()
   {
-    if (!IsValid) return "Invalid MeshBatch";
-    return $"MeshBatch: {Value.Materials.Count} materials, {Value.Groups.Count} groups";
+    if (!IsValid) return "Invalid WebDisplay";
+    return $"WebDisplay: {Value.Materials.Count} materials, {Value.Groups.Count} groups";
   }
 
   public override bool Write(GH_IWriter writer)
@@ -41,15 +41,15 @@ public class MeshBatchGoo : GH_Goo<MeshBatch>
     if (!IsValid) return false;
 
     var json = JsonConvert.SerializeObject(Value);
-    writer.SetString("MeshBatchJson", json);
+    writer.SetString("WebDisplayJson", json);
     return true;
   }
 
   public override bool Read(GH_IReader reader)
   {
-    if (!reader.ItemExists("MeshBatchJson")) return false;
+    if (!reader.ItemExists("WebDisplayJson")) return false;
 
-    var json = reader.GetString("MeshBatchJson");
+    var json = reader.GetString("WebDisplayJson");
     Value = JsonConvert.DeserializeObject<MeshBatch>(json);
     return true;
   }

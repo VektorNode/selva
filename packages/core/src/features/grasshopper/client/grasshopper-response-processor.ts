@@ -24,7 +24,10 @@ export default class GrasshopperResponseProcessor {
   /**
    * Store the compute response for reuse.
    */
-  constructor(private readonly response: GrasshopperComputeResponse) {}
+  constructor(
+    private readonly response: GrasshopperComputeResponse,
+    private readonly debug: boolean = false
+  ) { }
 
   /**
    * Extract all values in the response.
@@ -99,7 +102,7 @@ export default class GrasshopperResponseProcessor {
    * ```
    */
   public extractMeshesFromResponse() {
-    return getThreeMeshesFromComputeResponse(this.response);
+    return getThreeMeshesFromComputeResponse(this.response, this.debug);
   }
 
   /**

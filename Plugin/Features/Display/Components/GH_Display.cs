@@ -42,7 +42,7 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
 
   protected override void RegisterOutputParams(GH_OutputParamManager pManager)
   {
-    pManager.AddGenericParameter("MeshBatch", "MB", "Batched mesh data for web display", GH_ParamAccess.list);
+    pManager.AddGenericParameter("WebDisplay", "WD", "Geometry data for web display", GH_ParamAccess.list);
   }
 
   protected override void SolveInstance(IGH_DataAccess DA)
@@ -153,7 +153,7 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
 
       // Create optimized batch
       var batch = MeshBatchProcessor.CreateBatch(validMeshes, validNames, validMaterials);
-      result.Displays.Add(new MeshBatchGoo(batch));
+      result.Displays.Add(new WebDisplayGoo(batch));
 
       if (validMeshes.Count != geometries.Count)
         result.Warnings.Add($"Successfully processed {validMeshes.Count} out of {geometries.Count} geometries.");
