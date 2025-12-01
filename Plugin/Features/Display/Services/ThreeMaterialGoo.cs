@@ -24,7 +24,7 @@ public class ThreeMaterialGoo : IGH_Goo
 
   public string TypeName => "ThreeMaterial";
 
-  public string TypeDescription => "Material properties for ThreeDisplay";
+  public string TypeDescription => "Material properties for web display";
 
   public IGH_Goo Duplicate()
   {

@@ -1,19 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-// ThreeDisplay is now generated from compute-schema.json
 
-/**
- * Rhino display data containing the mesh data and material information.
- */
-export type ThreeDisplay = {
-  id?: number;
-  color: string;
-  metalness: number;
-  roughness: number;
-  opacity: number;
-  meshData: string;
-  name: string;
-};
 /**
  * Updates the scene with the given meshes and camera settings.
  * If initialPositionSet is false, it positions the camera and sets the controls target based on the bounding boxes of the meshes.
@@ -60,30 +47,6 @@ export function updateScene(
 
     controls.update();
   }
-}
-
-/**
- * Converts an array of vertices and indices into a THREE.Mesh object.
- *
- * @param vertices - The array of vertices.
- * @param indices - The array of indices.
- * @returns The THREE.Mesh object representing the vertices and indices.
- */
-export function VerticesToThreeMesh(
-  vertices: number[] | Float32Array,
-  indices: number[] | Uint32Array
-): THREE.Mesh {
-  const floatVertices = vertices instanceof Float32Array ? vertices : new Float32Array(vertices);
-  const floatFaceIndices = indices instanceof Uint32Array ? indices : new Uint32Array(indices);
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(floatVertices, 3));
-  geometry.setIndex(new THREE.BufferAttribute(floatFaceIndices, 1));
-  geometry.computeVertexNormals();
-
-  // Don't create material here - let applyMaterial handle it
-  const mesh = new THREE.Mesh(geometry);
-  return mesh;
 }
 
 // =========================

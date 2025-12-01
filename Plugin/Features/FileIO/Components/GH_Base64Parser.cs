@@ -31,6 +31,7 @@ public class GH_Base64Parser : GH_Component
   }
 
   protected override Bitmap Icon => null;
+  public override GH_Exposure Exposure => GH_Exposure.hidden;
 
   public override Guid ComponentGuid => new("F7688036-191F-4277-9E87-C5CDDC92DC71");
 

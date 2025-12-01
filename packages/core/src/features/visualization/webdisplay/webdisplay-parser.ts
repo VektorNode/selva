@@ -1,13 +1,10 @@
 import * as THREE from 'three';
 
 import { applyOffset, computeCombinedBoundingBox } from '../threejs';
-import { parseColor, ThreeDisplay, VerticesToThreeMesh } from '../threejs/three-helpers';
 
 import { parseMeshBatch } from './batch-parser';
-import { decompressMeshData } from './mesh-compression';
 
 import type { DataItem, GrasshopperComputeResponse } from '@/features/grasshopper/types';
-import type { MeshBatch } from './types';
 
 // Constants
 const SCALE_FACTORS: Record<string, number> = {
@@ -18,13 +15,10 @@ const SCALE_FACTORS: Record<string, number> = {
   Feet: 1 / 3.28084,
 };
 
-// Pre-compute rotation constants
-const ROTATION_COS = Math.cos(-Math.PI / 2); // 0
-const ROTATION_SIN = Math.sin(-Math.PI / 2); // -1
 /**
  * The component type string used to identify display meshes from Grasshopper WebDisplay.
  */
-const DISPLAY_COMPONENT_TYPE = 'ThreeDisplay';
+const DISPLAY_COMPONENT_TYPE = 'Display';
 
 /**
  * Parses batched mesh data from the new optimized format.
@@ -162,14 +156,25 @@ function extractMeshesFromData(
 }
 
 /**
- * Processes a single data branch to extract display meshes.
+ * Processes a single data branch to extract MeshBatch display meshes.
  */
 function processDataBranch(branch: DataItem[], meshes: THREE.Mesh[], scaleFactor: number): void {
   for (const item of branch) {
     if (item.type.includes(DISPLAY_COMPONENT_TYPE)) {
-      const rhinoMeshData = parseRhinoMeshData(item.data);
-      const branchMeshes = processBranch(rhinoMeshData, scaleFactor);
-      meshes.push(...branchMeshes);
+      // Parse MeshBatch format
+      const batchMeshes = parseMeshBatch(item.data, {
+        mergeByMaterial: true,
+        applyTransforms: true,
+      });
+
+      // Apply scaling if needed
+      if (scaleFactor !== 1) {
+        for (const mesh of batchMeshes) {
+          mesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
+        }
+      }
+
+      meshes.push(...batchMeshes);
     }
   }
 }
@@ -183,20 +188,6 @@ function applyGroundOffset(meshes: THREE.Mesh[]): void {
   const combinedBoundingBox = computeCombinedBoundingBox(meshes);
   const offsetY = combinedBoundingBox.min.y;
   applyOffset(meshes, offsetY);
-}
-
-/**
- * Parses Rhino mesh data from string or object format.
- */
-function parseRhinoMeshData(data: string | unknown): ThreeDisplay {
-  if (typeof data === 'string') {
-    try {
-      return JSON.parse(data) as ThreeDisplay;
-    } catch {
-      return data as unknown as ThreeDisplay;
-    }
-  }
-  return data as ThreeDisplay;
 }
 
 /**
@@ -232,91 +223,4 @@ function disposeMeshes(meshes: THREE.Mesh[]): void {
 function logProcessingTime(startTime: number): void {
   const elapsed = performance.now() - startTime;
   console.info('Time to process meshes:', `${elapsed.toFixed(2)}ms`);
-}
-
-/**
- * Processes a branch of tree data and generates an array of THREE.Mesh objects.
- *
- * @param treeData - The tree data containing mesh information and display properties. (This data is generated from the WebDisplay component in Grasshopper).
- * @param scaleFactor - The factor by which to scale the mesh vertices.
- * @returns An array of THREE.Mesh objects created from the provided tree data.
- *
- * @remarks
- * - Decompresses the mesh data, scales and rotates the vertices, and applies material properties.
- * - If decompression fails, logs an error and returns an empty array.
- */
-function processBranch(treeData: ThreeDisplay, scaleFactor: number): THREE.Mesh[] {
-  try {
-    const decompressedData = decompressMeshData(treeData.meshData);
-
-    if (!decompressedData) {
-      console.error(`Failed to decompress mesh data for: ${treeData.name}`);
-      return [];
-    }
-
-    const { verticesArray, faceIndicesArray } = decompressedData;
-
-    if (!verticesArray || verticesArray.length === 0) {
-      console.error(`Empty vertices array for: ${treeData.name}`);
-      return [];
-    }
-
-    scaleAndRotateVertices(verticesArray, scaleFactor);
-    const mesh = VerticesToThreeMesh(verticesArray, faceIndicesArray);
-    mesh.name = treeData.name;
-    applyMaterial(mesh, treeData);
-
-    return [mesh];
-  } catch (error) {
-    console.error(`Error processing mesh ${treeData.name}:`, error);
-    return [];
-  }
-}
-
-/**
- * Applies a material to a THREE.Mesh object.
- *
- * @param mesh - The mesh to apply the material to.
- * @param rhinoMeshData - Object from grasshopper containing the material information.
- */
-function applyMaterial(mesh: THREE.Mesh, rhinoMeshData: ThreeDisplay) {
-  const color =
-    typeof rhinoMeshData.color === 'string'
-      ? parseColor(rhinoMeshData.color)
-      : new THREE.Color(0xffffff);
-
-  mesh.material = new THREE.MeshPhysicalMaterial({
-    color,
-    metalness: rhinoMeshData.metalness,
-    roughness: rhinoMeshData.roughness,
-    side: THREE.DoubleSide,
-    opacity: rhinoMeshData.opacity,
-    transparent: rhinoMeshData.opacity < 1,
-  });
-
-  mesh.receiveShadow = true;
-  mesh.castShadow = true;
-}
-
-/**
- * Scales and rotates the vertices of a mesh based on the given scale factor.
- *
- * @param vertices - The vertices of the mesh as a Float32Array.
- * @param scaleFactor - The scale factor to apply to the vertices.
- */
-function scaleAndRotateVertices(vertices: Float32Array | undefined, scaleFactor: number): void {
-  if (!vertices?.length) {
-    console.error('Vertices array is undefined or empty.');
-    return;
-  }
-
-  for (let i = 0; i < vertices.length; i += 3) {
-    const x = vertices[i];
-    const y = vertices[i + 1];
-    const z = vertices[i + 2];
-
-    vertices[i] = x * scaleFactor;
-    vertices[i + 1] = (y * ROTATION_COS - z * ROTATION_SIN) * scaleFactor;
-    vertices[i + 2] = (y * ROTATION_SIN + z * ROTATION_COS) * scaleFactor;
-  }
 }

@@ -35,6 +35,8 @@ export function parseMeshBatch(
     // Decompress all geometry data at once
     const { vertices, faces } = decompressBatchedMeshData(batch.compressedData);
 
+    console.log(`Decompressed batch: ${batch.materials.length} materials, ${batch.groups.length} groups, ${vertices.length / 3} vertices, ${faces.length / 3} faces`);
+
     // Apply transforms if needed
     if (applyTransforms) {
       applyCoordinateTransform(vertices);

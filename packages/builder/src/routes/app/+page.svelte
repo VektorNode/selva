@@ -109,7 +109,7 @@
 
       const solved = await res.json();
 
-      console.log('Processing output:', solved);
+      console.log('Extracted meshes for viewer:', solved);
       const processor = new rhinoCompute!.GrasshopperResponseProcessor(solved);
 
       if (schema.enable3dViewer && scene) {
