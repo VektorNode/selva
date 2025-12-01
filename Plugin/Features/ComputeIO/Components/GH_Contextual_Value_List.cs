@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Linq;
 using GH_IO.Serialization;
 using Grasshopper;
@@ -10,6 +12,7 @@ using Grasshopper.Kernel.Special;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Selva.Properties;
 
 namespace Selva.Features.ComputeIO.Components;
 
@@ -30,10 +33,44 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
   {
   }
 
+  internal static Bitmap ContextualiseIcon(Bitmap bitmap)
+  {
+    Bitmap bitmap1 = (Bitmap)bitmap.Clone();
+    using (Graphics graphics = Graphics.FromImage((Image)bitmap1))
+    {
+      graphics.SmoothingMode = SmoothingMode.None;
+      graphics.PixelOffsetMode = PixelOffsetMode.None;
+      graphics.FillRectangle(Brushes.Purple, 0, 16 /*0x10*/, 24, 7);
+    }
+
+    Color white = Color.White;
+    for (int x = 1; x < 9; ++x)
+    {
+      bitmap1.SetPixel(x, 17, white);
+      bitmap1.SetPixel(x, 19, white);
+      bitmap1.SetPixel(x, 21, white);
+    }
+
+    for (int x = 11; x < 22; x += 2)
+      bitmap1.SetPixel(x, 21, white);
+    bitmap1.SetPixel(11, 17, white);
+    bitmap1.SetPixel(13, 17, white);
+    bitmap1.SetPixel(12, 18, white);
+    bitmap1.SetPixel(12, 19, white);
+    bitmap1.SetPixel(12, 20, white);
+    return bitmap1;
+  }
+
   public override GH_Exposure Exposure => GH_Exposure.quinary;
 
   public override string TypeName => "ValueList";
   public override Guid ComponentGuid => new("0CC81276-5DB7-4306-9968-086524EC0C6E");
+
+  protected override Bitmap Internal_Icon_24x24
+  {
+    get => ContextualiseIcon(Resources.GetValueList);
+  }
+
   public bool TreeAccess { get; set; }
 
   /// <summary>

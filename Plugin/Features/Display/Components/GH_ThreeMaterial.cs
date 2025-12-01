@@ -2,6 +2,7 @@
 using System.Drawing;
 using Grasshopper.Kernel;
 using Selva.Features.Display.Services;
+using Selva.Properties;
 
 namespace Selva.Features.Display.Components;
 
@@ -16,7 +17,7 @@ public class GH_ThreeMaterial : GH_Component
 
   public override Guid ComponentGuid => new("D7A8738A-85AA-4707-A486-DCB84AA21C6B");
 
-  protected override Bitmap Icon => null;
+  protected override Bitmap Icon => Resources.ThreeMaterial;
 
   protected override void RegisterInputParams(GH_InputParamManager pManager)
   {

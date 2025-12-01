@@ -11,6 +11,7 @@ using Grasshopper.Kernel.Types;
 using Rhino;
 using Rhino.Geometry;
 using Selva.Features.Display.Services;
+using Selva.Properties;
 
 namespace Selva.Features.Display.Components;
 
@@ -26,7 +27,7 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
   {
   }
 
-  protected override Bitmap Icon => null;
+  protected override Bitmap Icon => Resources.WebDisplay;
   public override Guid ComponentGuid => new("3B108239-0103-4D4B-8407-534A78811090");
 
   protected override void RegisterInputParams(GH_InputParamManager pManager)

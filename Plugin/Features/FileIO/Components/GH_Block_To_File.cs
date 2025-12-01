@@ -10,6 +10,7 @@ using Rhino.DocObjects;
 using Rhino.Geometry;
 using Selva.Config;
 using Selva.Features.FileIO.Services;
+using Selva.Properties;
 
 namespace Selva.Features.FileIO.Components;
 
@@ -38,7 +39,7 @@ public class GH_Block_To_File : GH_Component
 
   public override Guid ComponentGuid => new("06308887-AADB-40EE-A6A8-9CC8E05900EB");
 
-  protected override Bitmap Icon => null;
+  protected override Bitmap Icon => Resources.BlockToFile;
 
   protected override void RegisterInputParams(GH_InputParamManager pManager)
   {

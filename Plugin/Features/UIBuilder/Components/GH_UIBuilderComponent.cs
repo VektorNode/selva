@@ -17,6 +17,7 @@ using Selva.Core.Guards;
 using Selva.Features.UIBuilder.Helpers;
 using Selva.Features.UIBuilder.Models;
 using Selva.Features.UIBuilder.Services;
+using Selva.Properties;
 
 namespace Selva.Features.UIBuilder.Components;
 
@@ -68,7 +69,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
   public override Guid ComponentGuid => new("D4E5F6A7-B8C9-4D5E-0F1A-2B3C4D5E6F7A");
 
-  protected override Bitmap Icon => null;
+  protected override Bitmap Icon => Resources.UIBridge;
 
   public void Dispose()
   {

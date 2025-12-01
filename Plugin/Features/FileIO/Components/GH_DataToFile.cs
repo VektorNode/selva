@@ -10,6 +10,7 @@ using Rhino.DocObjects;
 using Rhino.Geometry;
 using Selva.Config;
 using Selva.Features.FileIO.Services;
+using Selva.Properties;
 using Point = Rhino.Geometry.Point;
 
 namespace Selva.Features.FileIO.Components;
@@ -28,7 +29,7 @@ public class GH_DataToFile : GH_Component
   ///   Initializes a new instance of the DataToFile class.
   /// </summary>
   public GH_DataToFile()
-    : base("DataToFile", "DTF",
+    : base("Geometry To File", "GTF",
       "Exports geometry to file format(s) with layer organization. Supports both single file (list input) and multiple files (tree input).",
       "Selva", "IO")
   {
@@ -38,7 +39,7 @@ public class GH_DataToFile : GH_Component
   /// <summary>
   ///   Provides an Icon for the component.
   /// </summary>
-  protected override Bitmap Icon => null;
+  protected override Bitmap Icon => Resources.DataToFile;
 
   /// <summary>
   ///   Gets the unique ID for this component. Do not change this ID after release.
