@@ -179,8 +179,24 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
   /// </summary>
   public string GetDefaultValue()
   {
-    var selected = SelectedItems;
-    return selected.Count > 0 ? selected[0].Expression : null;
+    // Get the selected item's expression first
+    var vl = ConnectedValueList;
+    if (vl != null && vl.SelectedItems.Count > 0)
+    {
+      var selectedExpression = vl.SelectedItems[0].Expression;
+      // Return the name/key, not the expression
+      return vl.SelectedItems[0].Name;
+    }
+
+    // Fall back to stored items if ValueList not connected
+    var items = GetItemTuples();
+    if (items.Count > 0)
+    {
+      // Return first item's name
+      return items[0].Name;
+    }
+
+    return string.Empty;
   }
 
   /// <summary>

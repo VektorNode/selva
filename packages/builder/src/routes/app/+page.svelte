@@ -40,6 +40,9 @@
 
     for (const input of schema.inputs) {
       v[input.id] = input.default ?? getDefaultValue(input.paramType);
+      // if (input.paramType === 'ValueList') {
+      //   console.log('Initialized ValueList input:', input.id, 'with value:', v[input.id]);
+      // }
     }
     for (const output of schema.outputs) {
       v[output.id] = null;
@@ -107,7 +110,7 @@
 
       const solved = await res.json();
 
-      const processor = new rhinoCompute!.GrasshopperResponseProcessor(solved, true);
+      const processor = new rhinoCompute!.GrasshopperResponseProcessor(solved, false);
 
       if (schema.enable3dViewer && scene) {
         const meshes = await processor.extractMeshesFromResponse();

@@ -7,7 +7,6 @@ import {
 } from '@selva/core';
 import type { UISchema } from '$lib/types/generated';
 import { PUBLIC_COMPUTE_SERVER_URL, PUBLIC_GH_DEFINITION } from '$env/static/public';
-import { console } from 'inspector';
 
 export const load = (async () => {
   let client;
@@ -21,9 +20,8 @@ export const load = (async () => {
     });
   }
 
-  console.log('Checking compute server status...');
-
   const definition = await client.getIO(PUBLIC_GH_DEFINITION);
+  console.log('Fetched GH definition:', definition);
 
   // Solve with default values to get the schema
   const tree = DataTree.fromInputParams(definition.inputs);
