@@ -101,7 +101,7 @@
 
       // Update 3D scene
       if (result && scene) {
-        const meshes = getThreeMeshesFromComputeResponse(result);
+        const meshes = await getThreeMeshesFromComputeResponse(result);
         updateScene(scene, meshes, camera, controls, viewerInitialized);
         viewerInitialized = true;
       }

@@ -8,6 +8,7 @@ using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
+using Rhino;
 using Rhino.Geometry;
 using Selva.Features.Display.Services;
 
@@ -117,19 +118,31 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
     MeshingParameters meshSettings)
   {
     var result = new DisplayResults();
+    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
     try
     {
+      var extractStart = System.Diagnostics.Stopwatch.StartNew();
       var geometries = ExtractGeometries(geoGoos, result.Warnings);
+      extractStart.Stop();
+      RhinoApp.WriteLine($"[WebDisplay] Geometry extraction: {extractStart.ElapsedMilliseconds}ms ({geometries.Count} geometries)");
+
       if (geometries.Count == 0)
       {
         result.Error = "No valid geometry found in input";
         return result;
       }
 
+      var meshStart = System.Diagnostics.Stopwatch.StartNew();
       var meshes = ConvertToMeshesParallel(geometries, meshSettings, result.Warnings);
+      meshStart.Stop();
+      RhinoApp.WriteLine($"[WebDisplay] Mesh conversion: {meshStart.ElapsedMilliseconds}ms ({meshes.Count} meshes)");
+
+      var namesStart = System.Diagnostics.Stopwatch.StartNew();
       var names = PrepareNames(geometries.Count, nameGoos);
       var materials = PrepareMaterials(geometries.Count, materialGoos);
+      namesStart.Stop();
+      RhinoApp.WriteLine($"[WebDisplay] Data preparation: {namesStart.ElapsedMilliseconds}ms");
 
       var validMeshes = new List<Mesh>();
       var validNames = new List<string>();
@@ -151,8 +164,11 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
         return result;
       }
 
-      // Create optimized batch
+      var batchStart = System.Diagnostics.Stopwatch.StartNew();
       var batch = MeshBatchProcessor.CreateBatch(validMeshes, validNames, validMaterials);
+      batchStart.Stop();
+      RhinoApp.WriteLine($"[WebDisplay] Batch creation: {batchStart.ElapsedMilliseconds}ms");
+
       result.Displays.Add(new WebDisplayGoo(batch));
 
       if (validMeshes.Count != geometries.Count)
@@ -165,6 +181,9 @@ public class WebDisplay : GH_TaskCapableComponent<DisplayResults>
     {
       result.Error = $"Error processing geometry: {ex.Message}";
     }
+
+    stopwatch.Stop();
+    RhinoApp.WriteLine($"[WebDisplay] Total time: {stopwatch.ElapsedMilliseconds}ms");
 
     return result;
   }

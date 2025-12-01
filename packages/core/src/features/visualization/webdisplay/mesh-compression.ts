@@ -11,7 +11,7 @@ interface MeshData {
 }
 
 /**
- * Decompresses a base64-encoded string and returns the decompressed MeshData.
+ * Decompresses a base64-encoded string using GZip.
  * @param base64String - The base64-encoded string to decompress.
  * @returns The decompressed MeshData.
  * @throws {RhinoComputeError} If decompression fails or data is invalid.
@@ -36,28 +36,53 @@ export function decompressMeshData(base64String: string): MeshData {
 }
 
 /**
- * Decompresses batched mesh data (new format with all meshes in one compressed blob).
+ * Decompresses batched mesh data asynchronously using requestIdleCallback for non-blocking decompression.
  * @param base64String - The base64-encoded compressed data.
- * @returns Decompressed vertices and faces arrays.
+ * @returns Promise resolving to decompressed vertices and faces arrays.
  * @throws {RhinoComputeError} If decompression fails or data is invalid.
  */
-export function decompressBatchedMeshData(base64String: string): DecompressedMeshData {
-  try {
-    const bytes = decodeBase64ToBinary(base64String);
-    const decompressedData = fflate.gunzipSync(bytes);
-    return parseBatchedMeshBinaryData(decompressedData);
-  } catch (error) {
-    throw new RhinoComputeError(
-      error instanceof RhinoComputeError
-        ? error.message
-        : `Failed to decompress batched data: ${error instanceof Error ? error.message : String(error)}`,
-      error instanceof RhinoComputeError ? error.code : ErrorCodes.VALIDATION_ERROR,
-      {
-        context: { base64StringLength: base64String.length },
-        originalError: error instanceof Error ? error : new Error(String(error)),
+export async function decompressBatchedMeshData(base64String: string): Promise<DecompressedMeshData> {
+  return new Promise((resolve, reject) => {
+    try {
+      // Use requestIdleCallback for non-blocking decompression if available
+      const decompressFn = () => {
+        try {
+          const bytes = decodeBase64ToBinary(base64String);
+          const decompressedData = fflate.gunzipSync(bytes);
+          const result = parseBatchedMeshBinaryData(decompressedData);
+          resolve(result);
+        } catch (error) {
+          reject(
+            new RhinoComputeError(
+              error instanceof RhinoComputeError
+                ? error.message
+                : `Failed to decompress batched data: ${error instanceof Error ? error.message : String(error)}`,
+              error instanceof RhinoComputeError ? error.code : ErrorCodes.VALIDATION_ERROR,
+              {
+                context: { base64StringLength: base64String.length },
+                originalError: error instanceof Error ? error : new Error(String(error)),
+              }
+            )
+          );
+        }
+      };
+
+      if ('requestIdleCallback' in globalThis) {
+        (globalThis as any).requestIdleCallback(decompressFn, { timeout: 5000 });
+      } else {
+        // Fallback: use setTimeout with 0 delay to yield to other tasks
+        setTimeout(decompressFn, 0);
       }
-    );
-  }
+    } catch (error) {
+      reject(
+        new RhinoComputeError(
+          `Failed to schedule decompression: ${error instanceof Error ? error.message : String(error)}`,
+          ErrorCodes.VALIDATION_ERROR,
+          { originalError: error instanceof Error ? error : new Error(String(error)) }
+        )
+      );
+    }
+  });
 }
 
 /**
@@ -89,7 +114,7 @@ function parseBatchedMeshBinaryData(binaryMeshData: Uint8Array): DecompressedMes
     throw new RhinoComputeError(
       'Invalid number of vertex floats; should be divisible by 3.',
       ErrorCodes.VALIDATION_ERROR,
-      { context: { numVertexFloats, remainder: numVertexFloats % 3 } }
+      { context: { numVertexFloats, remainder: numVertexFloats % 3, totalBytes: dataView.byteLength } }
     );
   }
 

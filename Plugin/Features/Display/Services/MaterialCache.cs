@@ -91,7 +91,7 @@ public class MeshBatch
   ///   Compressed binary data containing all vertices and faces.
   /// </summary>
   [JsonProperty("compressedData")]
-  public string CompressedData { get; set; }
+  public byte[] CompressedData { get; set; }
 }
 
 /// <summary>

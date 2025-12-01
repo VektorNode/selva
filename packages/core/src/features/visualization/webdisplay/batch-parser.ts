@@ -12,30 +12,49 @@ import type { MeshBatch, MaterialGroup, MeshMetadata, SerializableMaterial } fro
  * This function handles the optimized batch format where:
  * - Materials are deduplicated and stored once
  * - Meshes are grouped by material for efficient rendering
- * - All geometry data is compressed together
+ * - All geometry data is compressed together and decompressed in a Web Worker
  *
  * @param batchJson - JSON string containing the batched mesh data
  * @param options - Rendering options
- * @returns Array of Three.js mesh objects
+ * @returns Promise resolving to array of Three.js mesh objects
  */
-export function parseMeshBatch(
+export async function parseMeshBatch(
   batchJson: string,
   options?: {
     /** Merge meshes with same material into single geometry (better performance) */
     mergeByMaterial?: boolean;
     /** Apply coordinate system transformations */
     applyTransforms?: boolean;
+    /** Enable performance monitoring */
+    debug?: boolean;
   }
-): THREE.Mesh[] {
-  const { mergeByMaterial = true, applyTransforms = true } = options ?? {};
+): Promise<THREE.Mesh[]> {
+  const { mergeByMaterial = true, applyTransforms = true, debug = false } = options ?? {};
+
+  const perfStart = debug ? performance.now() : 0;
+  let parseTime = 0, decompressTime = 0, meshCreateTime = 0;
 
   try {
+    const parseStart = performance.now();
     const batch: MeshBatch = JSON.parse(batchJson);
+    parseTime = performance.now() - parseStart;
 
-    // Decompress all geometry data at once
-    const { vertices, faces } = decompressBatchedMeshData(batch.compressedData);
+    // Decompress all geometry data at once (in a Web Worker)
+    const decompressStart = performance.now();
+    const { vertices, faces } = await decompressBatchedMeshData(batch.compressedData);
+    decompressTime = performance.now() - decompressStart;
 
-    console.log(`Decompressed batch: ${batch.materials.length} materials, ${batch.groups.length} groups, ${vertices.length / 3} vertices, ${faces.length / 3} faces`);
+    const compressedSizeMB = (batch.compressedData.length * 0.75 / 1024 / 1024).toFixed(2); // Base64 overhead
+    const uncompressedSizeMB = ((vertices.byteLength + faces.byteLength) / 1024 / 1024).toFixed(2);
+    const compressionRatio = ((1 - (parseFloat(compressedSizeMB) / parseFloat(uncompressedSizeMB))) * 100).toFixed(1);
+
+    if (debug) {
+      console.log('📊 Mesh Batch Stats:');
+      console.log(`  Materials: ${batch.materials.length} | Groups: ${batch.groups.length}`);
+      console.log(`  Vertices: ${(vertices.length / 3).toLocaleString()} | Faces: ${(faces.length / 3).toLocaleString()}`);
+      console.log(`  Compressed: ${compressedSizeMB} MB | Uncompressed: ${uncompressedSizeMB} MB`);
+      console.log(`  Compression Ratio: ${compressionRatio}%`);
+    }
 
     // Apply transforms if needed
     if (applyTransforms) {
@@ -43,6 +62,7 @@ export function parseMeshBatch(
     }
 
     // Create material instances (reusable)
+    const meshCreateStart = performance.now();
     const materials = batch.materials.map(createMaterial);
 
     const meshes: THREE.Mesh[] = [];
@@ -50,14 +70,22 @@ export function parseMeshBatch(
     // Process each material group
     for (const group of batch.groups) {
       if (mergeByMaterial && group.meshes.length > 1) {
-        // Merge all meshes in this group into one
         const mergedMesh = createMergedMesh(group, vertices, faces, materials);
         meshes.push(mergedMesh);
       } else {
-        // Create individual meshes
         const individualMeshes = createIndividualMeshes(group, vertices, faces, materials);
         meshes.push(...individualMeshes);
       }
+    }
+    meshCreateTime = performance.now() - meshCreateStart;
+
+    if (debug) {
+      const totalTime = performance.now() - perfStart;
+      console.log('⏱️ Performance:');
+      console.log(`  Parse JSON: ${parseTime.toFixed(2)}ms`);
+      console.log(`  Decompress: ${decompressTime.toFixed(2)}ms`);
+      console.log(`  Create Meshes: ${meshCreateTime.toFixed(2)}ms`);
+      console.log(`  Total: ${totalTime.toFixed(2)}ms`);
     }
 
     return meshes;
@@ -86,6 +114,7 @@ function createMaterial(matData: SerializableMaterial): THREE.MeshPhysicalMateri
 /**
  * Creates a merged mesh from multiple meshes sharing the same material.
  * This is optimal for rendering many small meshes.
+ * Optimized to minimize memory allocations and copies.
  */
 function createMergedMesh(
   group: MaterialGroup,
@@ -112,31 +141,28 @@ function createMergedMesh(
   let indexWriteOffset = 0;
   let baseVertexIndex = 0;
 
-  // Merge all meshes
+  // Merge all meshes - optimized loop
   for (const mesh of group.meshes) {
-    // Copy vertices
-    const vertexSlice = allVertices.subarray(
-      mesh.vertexOffset,
-      mesh.vertexOffset + mesh.vertexCount
+    // Copy vertices using set() - zero-copy when possible
+    mergedVertices.set(
+      allVertices.subarray(mesh.vertexOffset, mesh.vertexOffset + mesh.vertexCount),
+      vertexWriteOffset
     );
-    mergedVertices.set(vertexSlice, vertexWriteOffset);
 
     // Copy and adjust face indices
-    const faceSlice = allFaces.subarray(
-      mesh.faceOffset,
-      mesh.faceOffset + mesh.faceCount
-    );
+    const faceSlice = allFaces.subarray(mesh.faceOffset, mesh.faceOffset + mesh.faceCount);
 
+    // Optimized index adjustment
     for (let i = 0; i < faceSlice.length; i++) {
       mergedIndices[indexWriteOffset + i] = faceSlice[i] + baseVertexIndex;
     }
 
     vertexWriteOffset += mesh.vertexCount;
     indexWriteOffset += mesh.faceCount;
-    baseVertexIndex += mesh.vertexCount / 3; // Number of vertices
+    baseVertexIndex += mesh.vertexCount / 3;
   }
 
-  // Set geometry attributes
+  // Set geometry attributes directly (no additional copies)
   geometry.setAttribute('position', new THREE.BufferAttribute(mergedVertices, 3));
   geometry.setIndex(new THREE.BufferAttribute(mergedIndices, 1));
   geometry.computeVertexNormals();

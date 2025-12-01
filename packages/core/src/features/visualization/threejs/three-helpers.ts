@@ -54,17 +54,48 @@ export function updateScene(
 // =========================
 
 /**
- * Parses a color string in format "R, G, B" to a THREE.Color object.
+ * Parses a color string in multiple formats to a THREE.Color object.
+ * Supported formats:
+ * - Hex: "#C7A5A5", "C7A5A5"
+ * - RGB: "199, 165, 165"
+ * - CSS named colors: "red", "blue", etc.
  * @param colorString - The color string to parse.
  * @returns A THREE.Color object.
  */
 export function parseColor(colorString: string): THREE.Color {
-  const rgb = colorString.split(',').map((c) => parseInt(c.trim(), 10));
-  if (rgb.length === 3 && rgb.every((n) => !isNaN(n) && n >= 0 && n <= 255)) {
-    return new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255);
+  if (!colorString || typeof colorString !== 'string') {
+    console.warn(`Invalid color input: ${colorString}, using white`);
+    return new THREE.Color(0xffffff);
   }
-  console.warn(`Invalid color string: ${colorString}, using white`);
-  return new THREE.Color(0xffffff);
+
+  const trimmed = colorString.trim();
+
+  // Try hex format (#C7A5A5 or C7A5A5)
+  if (trimmed.startsWith('#') || /^[0-9A-Fa-f]{6}$/.test(trimmed)) {
+    try {
+      const hex = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+      return new THREE.Color(hex);
+    } catch {
+      console.warn(`Invalid hex color: ${colorString}, using white`);
+      return new THREE.Color(0xffffff);
+    }
+  }
+
+  // Try RGB format (R, G, B)
+  if (trimmed.includes(',')) {
+    const rgb = trimmed.split(',').map((c) => parseInt(c.trim(), 10));
+    if (rgb.length === 3 && rgb.every((n) => !isNaN(n) && n >= 0 && n <= 255)) {
+      return new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255);
+    }
+  }
+
+  // Try CSS named color
+  try {
+    return new THREE.Color(trimmed.toLowerCase());
+  } catch {
+    console.warn(`Invalid color string: ${colorString}, using white`);
+    return new THREE.Color(0xffffff);
+  }
 }
 
 export function applyOffset(meshes: THREE.Mesh[], offsetY: number): void {

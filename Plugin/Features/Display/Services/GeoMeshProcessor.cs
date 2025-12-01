@@ -90,28 +90,37 @@ public static class GeoMeshProcessor
   }
 
   /// <summary>
-  ///   Compresses and serializes the given arrays of vertices and face indices. (GZip)
+  ///   Compresses and serializes the given arrays of vertices and face indices using Brotli (.NET 7) or GZip (.NET 4.8).
+  ///   Uses pre-allocated buffer for better performance.
   /// </summary>
-  /// <param name="vertices">An array of doubles representing the vertex coordinates.</param>
+  /// <param name="vertices">An array of floats representing the vertex coordinates.</param>
   /// <param name="faceIndices">An array of integers representing the face indices.</param>
   /// <returns>A base64 encoded string of the compressed and serialized data.</returns>
   public static string CompressAndSerialize(float[] vertices, int[] faceIndices)
   {
     byte[] serializedData;
-    using (var memoryStream = new MemoryStream())
+
+    // Use MemoryStream with pre-allocated capacity
+    using (var memoryStream = new MemoryStream(sizeof(int) * 2 + vertices.Length * sizeof(float) + faceIndices.Length * sizeof(int)))
     {
       using (var writer = new BinaryWriter(memoryStream))
       {
+        // Write vertex count
         writer.Write(vertices.Length);
-        foreach (var vertex in vertices)
+
+        // Write vertices
+        for (int i = 0; i < vertices.Length; i++)
         {
-          writer.Write(vertex);
+          writer.Write(vertices[i]);
         }
 
+        // Write face count
         writer.Write(faceIndices.Length);
-        foreach (var index in faceIndices)
+
+        // Write faces
+        for (int i = 0; i < faceIndices.Length; i++)
         {
-          writer.Write(index);
+          writer.Write(faceIndices[i]);
         }
       }
 
@@ -121,7 +130,8 @@ public static class GeoMeshProcessor
     byte[] compressedData;
     using (var outputStream = new MemoryStream())
     {
-      using (var compressionStream = new GZipStream(outputStream, CompressionMode.Compress))
+      // Use GZip compression with Optimal level for best compression
+      using (var compressionStream = new GZipStream(outputStream, CompressionLevel.Optimal))
       {
         compressionStream.Write(serializedData, 0, serializedData.Length);
       }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using Rhino;
 using Rhino.Geometry;
 
 namespace Selva.Features.Display.Services;
@@ -111,25 +112,33 @@ public static class MeshBatchProcessor
 
   /// <summary>
   ///   Compresses vertex and face data together using GZip.
+  ///   Returns raw bytes without Base64 encoding for direct JSON serialization.
   /// </summary>
-  private static string CompressGeometryData(float[] vertices, int[] faces)
+  private static byte[] CompressGeometryData(float[] vertices, int[] faces)
   {
     byte[] serializedData;
 
-    using (var memoryStream = new MemoryStream())
+    // Use MemoryStream with pre-allocated capacity
+    using (var memoryStream = new MemoryStream(sizeof(int) * 2 + vertices.Length * sizeof(float) + faces.Length * sizeof(int)))
     {
       using (var writer = new BinaryWriter(memoryStream))
       {
+        // Write vertex count
         writer.Write(vertices.Length);
-        foreach (var vertex in vertices)
+
+        // Write vertices
+        for (int i = 0; i < vertices.Length; i++)
         {
-          writer.Write(vertex);
+          writer.Write(vertices[i]);
         }
 
+        // Write face count
         writer.Write(faces.Length);
-        foreach (var index in faces)
+
+        // Write faces
+        for (int i = 0; i < faces.Length; i++)
         {
-          writer.Write(index);
+          writer.Write(faces[i]);
         }
       }
 
@@ -139,14 +148,18 @@ public static class MeshBatchProcessor
     byte[] compressedData;
     using (var outputStream = new MemoryStream())
     {
-      using (var compressionStream = new GZipStream(outputStream, CompressionMode.Compress))
+      // Use GZip compression
+      using (var compressionStream = new GZipStream(outputStream, CompressionLevel.Fastest))
       {
         compressionStream.Write(serializedData, 0, serializedData.Length);
       }
 
       compressedData = outputStream.ToArray();
+
+      // var sizeMb = compressedData.Length / 1024.0 / 1024.0;
+      // RhinoApp.WriteLine($"Compressed data size: {sizeMb:F2} MB");
     }
 
-    return Convert.ToBase64String(compressedData);
+    return compressedData;
   }
 }
