@@ -16,8 +16,12 @@ export { initThree, updateScene, Materials } from './threejs';
 // WEB DISPLAY PARSING
 // ============================================================================
 
+// High-level API
 export { getThreeMeshesFromComputeResponse } from './webdisplay';
-export { decompressMeshData } from './webdisplay/mesh-compression';
+
+// Low-level APIs for advanced use cases
+export { parseMeshBatch } from './webdisplay/batch-parser';
+export { decompressMeshData, decompressBatchedMeshData } from './webdisplay/mesh-compression';
 
 // ============================================================================
 // TYPE EXPORTS
@@ -33,3 +37,13 @@ export type {
   ControlsConfig,
   EventConfig,
 } from './types';
+
+export type {
+  MeshBatchParsingOptions,
+  MeshExtractionOptions,
+  SerializableMaterial,
+  MeshMetadata,
+  MaterialGroup,
+  MeshBatch,
+  DecompressedMeshData,
+} from './webdisplay/types';

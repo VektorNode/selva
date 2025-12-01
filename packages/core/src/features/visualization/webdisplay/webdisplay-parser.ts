@@ -5,6 +5,7 @@ import { applyOffset, computeCombinedBoundingBox } from '../threejs';
 import { parseMeshBatch } from './batch-parser';
 
 import type { DataItem, GrasshopperComputeResponse } from '@/features/grasshopper/types';
+import type { MeshExtractionOptions, MeshBatchParsingOptions } from './types';
 
 // Constants
 const SCALE_FACTORS: Record<string, number> = {
@@ -15,55 +16,66 @@ const SCALE_FACTORS: Record<string, number> = {
   Feet: 1 / 3.28084,
 };
 
-/**
- * The component type string used to identify display meshes from Grasshopper WebDisplay.
- */
 const DISPLAY_COMPONENT_TYPE = 'Display';
-
 
 /**
  * Extracts and processes display meshes from a ComputePointerResponse using the Grasshopper WebDisplay component.
  *
- * This function is an alternative to the standard "context bake" output of Hops/Grasshopper.
- * It is specifically designed to work with the WebDisplay component from the Compuceraptor Grasshopper plugin,
- * enabling performant mesh visualization in Three.js applications.
- *
- * Rhino Compute must be modified as already implemented in https://github.com/TheVessen/compute.rhino3d".
- *
- * THREE.Mesh instances using processBranch, and combines all meshes. It then computes a vertical offset
- * from the combined bounding box so the collection sits on the Z=0 plane.
+ * This is the primary entry point for extracting mesh geometry from Grasshopper compute responses.
+ * It handles all aspects of mesh processing: decompression, coordinate transformation, scaling, and positioning.
  *
  * **Note:** Mesh decompression happens asynchronously in a Web Worker to prevent UI blocking.
  *
  * @param data - The ComputePointerResponse containing Grasshopper output trees.
- * @param debug - If true, logs processing time to the console.
+ * @param options - Configuration for mesh extraction and parsing behavior. All options are optional with sensible defaults.
  * @returns Promise resolving to array of THREE.Mesh objects (may be empty).
  * @throws Rethrows unexpected errors after attempting to dispose any created meshes.
  *
  * @remarks
  * - Only works with the WebDisplay component of GHHeadless.
- * - Requires changes to Rhino.Compute (see the fork above).
+ * - Requires changes to Rhino.Compute (see https://github.com/TheVessen/compute.rhino3d).
  * - Provides a performant way to display mesh data in Three.js.
  * - Decompression is performed in a Web Worker for non-blocking UI updates.
+ *
+ * @example
+ * ```ts
+ * // Simple usage with defaults (all processing enabled)
+ * const meshes = await getThreeMeshesFromComputeResponse(response);
+ *
+ * // With debugging enabled
+ * const meshes = await getThreeMeshesFromComputeResponse(response, { debug: true });
+ *
+ * // With advanced options
+ * const meshes = await getThreeMeshesFromComputeResponse(response, {
+ *   debug: true,
+ *   allowScaling: true,
+ *   allowAutoPosition: false,
+ *   parsing: {
+ *     mergeByMaterial: false,
+ *     applyTransforms: true,
+ *     debug: true,
+ *   },
+ * });
+ * ```
  */
 export async function getThreeMeshesFromComputeResponse(
   data: GrasshopperComputeResponse,
-  debug = false,
-  options?: {
-    allowScaling?: boolean;
-    allowAutoPosition?: boolean;
-  }
+  options?: MeshExtractionOptions
 ): Promise<THREE.Mesh[]> {
   const startTime = performance.now();
   const meshes: THREE.Mesh[] = [];
 
-
-  // Provide default values for options
-  const { allowScaling = true, allowAutoPosition = true } = options ?? {};
+  const {
+    allowScaling = true,
+    allowAutoPosition = true,
+    debug = false,
+    parsing: parsingOptions = {},
+  } = options ?? {};
 
   try {
     const scaleFactor = allowScaling ? getScaleFactor(data.modelunits) : 1;
-    await extractMeshesFromData(data, meshes, scaleFactor);
+    await extractMeshesFromData(data, meshes, scaleFactor, parsingOptions, debug);
+
     if (allowAutoPosition) {
       applyGroundOffset(meshes);
     }
@@ -92,7 +104,9 @@ function getScaleFactor(modelUnits: string): number {
 async function extractMeshesFromData(
   data: GrasshopperComputeResponse,
   meshes: THREE.Mesh[],
-  scaleFactor: number
+  scaleFactor: number,
+  parsingOptions: MeshBatchParsingOptions,
+  debug: boolean
 ): Promise<void> {
   for (const value of data.values) {
     const innerTree = value.InnerTree as { [key: string]: DataItem[] };
@@ -101,7 +115,7 @@ async function extractMeshesFromData(
       const branch = innerTree[path];
       if (!branch) continue;
 
-      await processDataBranch(branch, meshes, scaleFactor);
+      await processDataBranch(branch, meshes, scaleFactor, parsingOptions, debug);
     }
   }
 }
@@ -109,16 +123,24 @@ async function extractMeshesFromData(
 /**
  * Processes a single data branch to extract MeshBatch display meshes.
  */
-async function processDataBranch(branch: DataItem[], meshes: THREE.Mesh[], scaleFactor: number): Promise<void> {
+async function processDataBranch(
+  branch: DataItem[],
+  meshes: THREE.Mesh[],
+  scaleFactor: number,
+  parsingOptions: MeshBatchParsingOptions,
+  debug: boolean
+): Promise<void> {
   for (const item of branch) {
     if (item.type.includes(DISPLAY_COMPONENT_TYPE)) {
-      // Parse MeshBatch format (decompression happens in Web Worker)
-      const batchMeshes = await parseMeshBatch(item.data, {
+      const mergedParsingOptions = {
         mergeByMaterial: true,
         applyTransforms: true,
-      });
+        debug: false,
+        ...parsingOptions,
+      };
 
-      // Apply scaling if needed
+      const batchMeshes = await parseMeshBatch(item.data, mergedParsingOptions);
+
       if (scaleFactor !== 1) {
         for (const mesh of batchMeshes) {
           mesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
@@ -126,6 +148,10 @@ async function processDataBranch(branch: DataItem[], meshes: THREE.Mesh[], scale
       }
 
       meshes.push(...batchMeshes);
+
+      if (debug) {
+        console.log(`Extracted ${batchMeshes.length} meshes from batch`);
+      }
     }
   }
 }

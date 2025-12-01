@@ -51,3 +51,29 @@ export interface DecompressedMeshData {
   vertices: Float32Array;
   faces: Uint32Array;
 }
+
+/**
+ * Options for parsing mesh batch data.
+ */
+export interface MeshBatchParsingOptions {
+  /** Merge meshes with same material into single geometry (better performance). Defaults to true. */
+  mergeByMaterial?: boolean;
+  /** Apply coordinate system transformations (Rhino Z-up to Three.js Y-up). Defaults to true. */
+  applyTransforms?: boolean;
+  /** Enable performance monitoring in console. Defaults to false. */
+  debug?: boolean;
+}
+
+/**
+ * Options for extracting and processing meshes from compute responses.
+ */
+export interface MeshExtractionOptions {
+  /** Configuration for parsing mesh batches. */
+  parsing?: MeshBatchParsingOptions;
+  /** Apply scaling based on model units. Defaults to true. */
+  allowScaling?: boolean;
+  /** Apply automatic ground offset positioning (Z=0). Defaults to true. */
+  allowAutoPosition?: boolean;
+  /** Enable verbose logging. Defaults to false. */
+  debug?: boolean;
+}

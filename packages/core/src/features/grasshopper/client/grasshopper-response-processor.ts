@@ -1,6 +1,7 @@
 import { downloadFileData } from '@/features/file-handling';
 import { FileBaseInfo, FileData } from '@/features/file-handling/types';
 import { getThreeMeshesFromComputeResponse } from '@/features/visualization';
+import type { MeshExtractionOptions } from '@/features/visualization/webdisplay/types';
 
 import { GrasshopperComputeResponse } from '../types';
 
@@ -93,6 +94,10 @@ export default class GrasshopperResponseProcessor {
    * This uses internal helpers to decode Rhino geometry into Three.js
    * primitives such as meshes and lines, making them ready for rendering.
    *
+   * All processing options (scaling, positioning, compression, etc.) can be customized.
+   * The processor's debug flag is merged with options - explicit options take precedence.
+   *
+   * @param options - Configuration for mesh extraction and parsing. Overrides processor's debug flag if provided.
    * @returns Promise resolving to an array of Three.js mesh objects.
    *
    * @example
@@ -100,9 +105,27 @@ export default class GrasshopperResponseProcessor {
    * const meshes = await processor.extractMeshesFromResponse();
    * scene.add(...meshes);
    * ```
+   *
+   * @example
+   * ```ts
+   * const meshes = await processor.extractMeshesFromResponse({
+   *   debug: true,
+   *   allowScaling: true,
+   *   allowAutoPosition: false,
+   *   parsing: {
+   *     mergeByMaterial: false,
+   *     applyTransforms: true,
+   *     debug: true,
+   *   },
+   * });
+   * ```
    */
-  public extractMeshesFromResponse() {
-    return getThreeMeshesFromComputeResponse(this.response, this.debug);
+  public extractMeshesFromResponse(options?: MeshExtractionOptions) {
+    const mergedOptions: MeshExtractionOptions = {
+      debug: this.debug,
+      ...options,
+    };
+    return getThreeMeshesFromComputeResponse(this.response, mergedOptions);
   }
 
   /**
