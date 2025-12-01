@@ -11,18 +11,15 @@
   "scripts": {
     "dev": "pnpm --filter @selva/frontenddev",
     "build:all": "pnpm --filter @selva/core build && pnpm --filter @selva/svelte-ui build && pnpm --filter @selva/frontendbuild",
-    "build:web": "pnpm --filter @selva/frontendbuild",
+    "build:web": "pnpm --filter @selva/frontend build",
     "build:plugin": "node scripts/build-production.js",
-    "preview": "pnpm --filter @selva/frontendpreview",
     "check": "pnpm --filter ./packages --recursive run check",
     "type-check": "pnpm --filter ./packages --recursive run type-check",
-    "test": "pnpm --filter ./packages --recursive run test",
-    "test:watch": "pnpm --filter ./packages --recursive run test:watch",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{ts,tsx,svelte,json,yaml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,svelte,json,yaml,md}\"",
-    "clean:all": "pnpm clean && pnpm install && pnpm build",
+    "clean:reinstall": "pnpm clean && pnpm install && pnpm build:all",
     "clean": "node scripts/clean.js"
   },
   "devDependencies": {
