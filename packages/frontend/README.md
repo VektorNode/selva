@@ -37,12 +37,8 @@ Standalone web app deployed independently (Vercel, Netlify, etc):
 ## Development
 
 ```bash
-npm install
-npm run dev           # http://localhost:5173 (dev server)
-npm run start         # http://localhost:5173 (for use with Selva.gha)
-npm run check         # Type checking
-npm run build         # Production build
-npm run preview       # Test production build
+pnpm install
+pnpm run dev           # http://localhost:5173 (dev server)
 ```
 
 ## Technology
