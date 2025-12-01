@@ -269,12 +269,10 @@
     let groupLabel: string;
 
     if (parts.length === 2) {
-      // Tab/Group syntax
       const [tabLabel, grpLabel] = parts;
       let tab = schema.layout.tabs?.find((t) => t.label.toLowerCase() === tabLabel.toLowerCase());
 
       if (!tab) {
-        // Create new tab
         const newTabId = addTab(schema);
         tab = schema.layout.tabs?.find((t) => t.id === newTabId);
         if (tab) {
@@ -287,7 +285,6 @@
       tabId = tab.id;
       groupLabel = grpLabel;
     } else {
-      // Just "Group" syntax - use active tab or first tab
       groupLabel = parts[0];
       if (builderState.state.activeTabId) {
         tabId = builderState.state.activeTabId;

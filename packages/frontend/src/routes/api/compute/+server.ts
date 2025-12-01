@@ -72,7 +72,6 @@ export const POST: RequestHandler = async ({ request }) => {
       throw error(400, 'Missing required fields: inputs, values, or definitionUrl');
     }
 
-    // Transform inputs to data trees
     const inputTree = DataTree.fromInputParams(
       inputs
         .filter((input) => input.paramType)

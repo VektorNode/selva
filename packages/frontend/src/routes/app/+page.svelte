@@ -40,9 +40,6 @@
 
     for (const input of schema.inputs) {
       v[input.id] = input.default ?? getDefaultValue(input.paramType);
-      // if (input.paramType === 'ValueList') {
-      //   console.log('Initialized ValueList input:', input.id, 'with value:', v[input.id]);
-      // }
     }
     for (const output of schema.outputs) {
       v[output.id] = null;
@@ -76,7 +73,6 @@
     camera = c;
     controls = ctl;
 
-    // Initial solve to populate viewer
     await performSolve();
   }
 
@@ -152,7 +148,6 @@
     if (hasPendingChanges) performSolve();
   }
 
-  // Badge binding
   const BADGES = {
     solving: { label: 'Solving...', variant: 'solving' } as const,
     compute: { label: 'Rhino Compute', variant: 'compute' } as const,

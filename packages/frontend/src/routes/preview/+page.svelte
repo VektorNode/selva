@@ -72,7 +72,6 @@
       return;
     }
 
-    // Update local values (using GUID as key)
     values[paramId] = value;
 
     // If instanceSolve is false, track pending changes instead of sending immediately
@@ -88,7 +87,6 @@
         [paramId]: value,
       });
 
-      // Send via WebSocket with GUID keys (what C# expects)
       wsState.sendValueUpdate(sessionId, $state.snapshot(values));
     } else if (!wsState.connected) {
       console.warn('[Preview] Cannot send values - WebSocket not connected');
@@ -189,7 +187,6 @@
         console.log('[Preview] Received outputs:', message.outputs);
         console.log('[Preview] Received file outputs:', message.fileOutputs);
 
-        // Handle regular outputs
         const outputUpdates = Object.fromEntries(
           Object.entries(message.outputs || {}).filter(([paramId]) =>
             schema?.outputs.some((o) => o.id === paramId)
@@ -346,11 +343,7 @@
           }
         });
 
-        // Trigger reactivity by reassigning schema
         if (updatedCount > 0) {
-          schema = schema;
-
-          // Show notification with count
           showNotification(
             `Parameter${updatedCount > 1 ? 's' : ''} updated: ${updatedNames.join(', ')}`
           );
