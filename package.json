@@ -9,11 +9,11 @@
     "pnpm": ">=9.0.0"
   },
   "scripts": {
-    "dev": "pnpm --filter @selva/web dev",
-    "build:all": "pnpm --filter @selva/core build && pnpm --filter @selva/svelte-ui build && pnpm --filter @selva/web build",
-    "build:web": "pnpm --filter @selva/web build",
+    "dev": "pnpm --filter @selva/frontenddev",
+    "build:all": "pnpm --filter @selva/core build && pnpm --filter @selva/svelte-ui build && pnpm --filter @selva/frontendbuild",
+    "build:web": "pnpm --filter @selva/frontendbuild",
     "build:plugin": "node scripts/build-production.js",
-    "preview": "pnpm --filter @selva/web preview",
+    "preview": "pnpm --filter @selva/frontendpreview",
     "check": "pnpm --filter ./packages --recursive run check",
     "type-check": "pnpm --filter ./packages --recursive run type-check",
     "test": "pnpm --filter ./packages --recursive run test",

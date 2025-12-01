@@ -45,7 +45,7 @@ pnpm dev
 # Build specific package
 pnpm --filter @selva/core build
 pnpm --filter @selva/svelte-ui build
-pnpm --filter @selva/web build
+pnpm --filter @selva/frontendbuild
 
 # Run tests
 pnpm test
@@ -151,20 +151,20 @@ pnpm --filter @selva/svelte-ui run check
 pnpm --filter @selva/svelte-ui test
 ```
 
-#### @selva/web (builder application)
+#### @selva/frontend(builder application)
 
 ```bash
 # Dev server (http://localhost:5173)
-pnpm --filter @selva/web dev
+pnpm --filter @selva/frontenddev
 
 # Build for production
-pnpm --filter @selva/web build
+pnpm --filter @selva/frontendbuild
 
 # Preview production build
-pnpm --filter @selva/web preview
+pnpm --filter @selva/frontendpreview
 
 # Type checking
-pnpm --filter @selva/web run check
+pnpm --filter @selva/frontendrun check
 ```
 
 ### Schema Generation (Single Source of Truth)
@@ -592,7 +592,7 @@ pnpm test:watch
 # Run tests for a specific package
 pnpm --filter @selva/core test
 pnpm --filter @selva/svelte-ui test
-pnpm --filter @selva/web test
+pnpm --filter @selva/frontendtest
 ```
 
 ### Manual Integration Testing

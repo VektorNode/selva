@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 
 async function main() {
   const schemaPath = path.join(__dirname, 'ui-schema.json');
-  const outputPath = path.join(__dirname, '../builder/src/lib/types/generated/schema.ts');
+  const outputPath = path.join(__dirname, '../frontend/src/lib/types/generated/schema.ts');
 
   const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 

@@ -22,7 +22,7 @@ console.log('');
 try {
   // Step 1: Build web application
   console.log('[1/4] Building web application...');
-  execSync('pnpm --filter @selva/web run build', {
+  execSync('pnpm --filter @selva/frontendrun build', {
     cwd: projectRoot,
     stdio: 'inherit',
   });

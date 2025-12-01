@@ -1,267 +1,51 @@
 # Selva
 
-[![npm version](https://img.shields.io/npm/v/@selva/core)](https://www.npmjs.com/package/@selva/core)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/)
-[![Svelte](https://img.shields.io/badge/Svelte-5.0-FF3E00)](https://svelte.dev)
-[![.NET](https://img.shields.io/badge/.NET-4.8%2F7.0-512BD4)](https://dotnet.microsoft.com/)
+A full-stack toolkit for building Grasshopper-driven web applications. Provides a type-safe TypeScript client for Rhino Compute, Grasshopper components for UI integration, and a web application that runs in both local (WebSocket) and cloud (Rhino.Compute) modes.
 
-A comprehensive, cross-platform toolkit for building web-based UIs for Rhino Grasshopper parametric models using **Rhino Compute**. Selva combines a powerful C# plugin, type-safe TypeScript libraries, and an intuitive web builder to streamline parametric design workflows.
+**Core Library**
+- **`@selva/core`** — Type-safe Rhino Compute client with discriminated unions, error handling, Three.js helpers, and file/data utilities. Works in browsers and Node.js.
 
-## 🎯 What is Selva?
+**Web Application**
+- **`@selva/web`** — SvelteKit-based UI builder and runtime.
+  - **Local Mode:** Drag-and-drop schema designer connected to Grasshopper via WebSocket.
+  - **Cloud Mode:** Standalone web app that solves Grasshopper definitions through Rhino.Compute.
 
-Selva enables you to:
+**Grasshopper Plugin**
+- **`Selva.gha`** — Components that link Grasshopper parameters to the web stack.
+  - `UIBuilderComponent` for schema linking
+  - `ThreeMaterial`, `DataToFile`, `ValueListData` for visualization and data output
+  - Works with the custom Rhino Compute fork
 
-- **Build web UIs** for Grasshopper definitions without writing code
-- **Deploy parametric models** as interactive web applications
-- **Work locally or in the cloud** with Rhino Compute servers
-- **Maintain full type safety** across C# and TypeScript layers
-- **Visualize 3D geometry** with integrated Three.js viewer
+**Supporting Tools**
+- **`@selva/schemas`** — Generates synchronized TypeScript and C# types from a shared schema.
 
-### Key Features
+---
 
-- 🎨 **Visual UI Builder** - Drag-and-drop interface for designing parameter layouts
-- 🔌 **Grasshopper Plugin** - Custom components for geometry processing and data export
-- 📦 **Type-Safe Libraries** - Full TypeScript support with zero dependencies
-- 🌐 **Web Framework** - SvelteKit-based builder and preview system
-- 📊 **3D Visualization** - Built-in Three.js integration for geometry display
-- ⚡ **Real-Time Communication** - WebSocket support for live parameter updates
-- 🚀 **Cloud-Ready** - Deploy to Vercel, Firebase, or self-hosted servers
-- 🔄 **Rhino Compute Compatible** - Works with official Rhino Compute servers
+## Architecture Overview
 
-## 📦 What's Included
+1. **Core (`@selva/core`)**
+   Lightweight, dependency-free Rhino Compute client used directly in custom web deployments.
 
-### Packages
+2. **Grasshopper Plugin (`Selva.gha`)**
+   Exposes Grasshopper parameters and helpers needed by the web interface.
 
-| Package                                  | Purpose                                       | Status        |
-| ---------------------------------------- | --------------------------------------------- | ------------- |
-| [`@selva/core`](packages/core)           | Type-safe Rhino Compute client library        | ✅ Production |
-| [`@selva/svelte-ui`](packages/svelte-ui) | Reusable Svelte components for inputs/outputs | ✅ Production |
-| [`@selva/builder`](packages/builder)     | Web UI builder application                    | ✅ Production |
-| [`@selva/schemas`](packages/schemas)     | Shared TypeScript/C# type definitions         | ✅ Production |
+3. **Web App (`@selva/web`)**
+   One codebase supporting live local development and cloud deployment.
 
-### Examples
+**Type Safety End-to-End**
+A single schema (`packages/schemas/ui-schema.json`) generates both the TypeScript types for the UI and the C# types used by the plugin, keeping the entire system in sync.
 
-| Example                                               | Purpose                            |
-| ----------------------------------------------------- | ---------------------------------- |
-| [`svelte-app`](examples/svelte-app)                   | Complete example with all features |
-| [`svelte-template-app`](examples/svelte-template-app) | Starter template for new projects  |
+---
 
-### Plugin
+## Getting Started
 
-| Component             | Purpose                      |
-| --------------------- | ---------------------------- |
-| [`Selva.gha`](Plugin) | Grasshopper plugin (C# .NET) |
+Requires the custom Rhino Compute fork:
+https://github.com/VektorNode/compute.rhino3d
 
-## 🚀 Quick Start
+Full setup and workflow instructions:
+[docs/QuickStart.md](./docs/QuickStart.md)
 
-### For Web Developers
+---
 
-```bash
-# Install the core library
-npm install @selva/core
-
-# Use in your project
-import { GrasshopperClient } from '@selva/core';
-
-const client = new GrasshopperClient({
-  serverUrl: 'https://compute.rhino3d.com',
-});
-
-const { inputs, outputs } = await client.getIO(definitionUrl);
-```
-
-See [`packages/core/README.md`](packages/core/README.md) for detailed documentation.
-
-### For Designers (Using the Builder)
-
-1. **Install the plugin:**
-
-   ```bash
-   dotnet build --configuration Release
-   # Copy bin/Release/net7.0/Selva.gha to Grasshopper Libraries
-   ```
-
-2. **Open the builder:**
-
-   ```bash
-   cd packages/builder
-   npm install && npm run dev
-   ```
-
-3. **Create your UI** - Drag and drop inputs/outputs in the visual editor
-
-### For Full Setup
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd Selva
-
-# Install dependencies
-pnpm install
-
-# Build everything
-pnpm build
-
-# Start development
-pnpm dev
-```
-
-## 📚 Documentation
-
-- **[CLAUDE.md](CLAUDE.md)** - Complete architecture and development guide
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines and development setup
-- **[MONOREPO.md](MONOREPO.md)** - Monorepo structure and workflows
-- **[Plugin Overview](Plugin/OVERVIEW.md)** - C# plugin documentation
-
-### Key Documentation by Role
-
-**Web Developers:** Start with [`packages/core/README.md`](packages/core/README.md)
-
-**UI/UX Designers:** See [`packages/builder/README.md`](packages/builder/README.md)
-
-**Plugin Developers:** Check [`Plugin/README.md`](Plugin/README.md)
-
-**Monorepo Contributors:** Read [`MONOREPO.md`](MONOREPO.md)
-
-## 🏗️ Architecture
-
-```
-Selva
-├── Backend (C#)
-│   └── Plugin/                    # Grasshopper components
-│       ├── Components/            # UI builder, display, IO
-│       ├── Utils/                 # Geometry processing
-│       └── Models/                # Schema definitions
-│
-├── Frontend (TypeScript/Svelte)
-│   ├── packages/
-│   │   ├── core/                  # Rhino Compute client library
-│   │   ├── svelte-ui/             # Reusable UI components
-│   │   ├── builder/               # Web UI builder app
-│   │   └── schemas/               # Shared type definitions
-│   │
-│   └── examples/                  # Reference implementations
-│
-└── Communication
-    ├── WebSocket (port 8765)      # Real-time updates
-    └── Session Files              # Data persistence
-```
-
-## 🔌 Communication Flow
-
-```
-Grasshopper Plugin ←→ [WebSocket] ←→ Web Browser
-                   ←→ [File I/O]  ←→ Disk Storage
-```
-
-## ✨ Use Cases
-
-### 1. **Local UI Development**
-
-Use the builder to create interfaces for your Grasshopper definitions and preview them locally.
-
-### 2. **Cloud Deployment**
-
-Deploy web apps to Vercel or Firebase that solve definitions via Rhino Compute servers.
-
-### 3. **Custom Workflows**
-
-Use the core library to build your own applications with Rhino Compute integration.
-
-### 4. **Data Processing**
-
-Export geometry and data from Grasshopper to files or web services.
-
-## 🛠️ Development
-
-### Prerequisites
-
-- **Rhino** 7 (Windows) or 8 (Windows/macOS)
-- **.NET SDK** 7.0+
-- **Node.js** 18+
-- **pnpm** (recommended) or npm
-
-### Common Commands
-
-```bash
-# Install all dependencies
-pnpm install
-
-# Build all packages
-pnpm build
-
-# Start development servers
-pnpm dev
-
-# Type checking
-pnpm type-check
-
-# Linting
-pnpm lint
-
-# Build C# plugin
-dotnet build --configuration Release
-```
-
-### Project Structure
-
-```
-packages/
-  ├── core/            # Main TypeScript library
-  ├── svelte-ui/       # UI component library
-  ├── builder/         # Web application
-  └── schemas/         # Type definitions
-
-examples/
-  ├── svelte-app/      # Full-featured example
-  └── svelte-template-app/  # Starter template
-
-Plugin/               # C# Grasshopper plugin
-  ├── Components/
-  ├── Utils/
-  └── Models/
-
-scripts/              # Utility scripts
-```
-
-## 🧪 Testing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for testing procedures.
-
-## 🤝 Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
-
-- Development setup
-- Code style guidelines
-- Testing requirements
-- Pull request process
-
-### Important Rules
-
-- **Never edit generated files** - Always modify `schemas/ui-schema.json` and run `generate-schemas.sh`
-- **Type safety first** - Use TypeScript strict mode
-- **Document your changes** - Update relevant README files
-- **Test thoroughly** - Follow testing checklist before submitting PRs
-
-## 📋 Roadmap
-
-### Implemented ✅
-
-- ✅ Visual UI builder with drag-and-drop
-- ✅ Rhino Compute integration
-- ✅ Three.js 3D visualization
-- ✅ Type-safe client library
-- ✅ Real-time WebSocket communication
-- ✅ Cross-platform plugin (Windows/macOS)
-
-### Planned 🚀
-
-- 🚀 Advanced chart components
-- 🚀 Multi-user collaboration
-- 🚀 Schema versioning and migration
-- 🚀 Authentication providers
-- 🚀 Performance analytics dashboard
-- 🚀 Custom component marketplace
+## License
+[MIT](./LICENSE)
