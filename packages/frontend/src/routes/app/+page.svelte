@@ -8,7 +8,7 @@
   import { PUBLIC_COMPUTE_SERVER_URL, PUBLIC_GH_DEFINITION } from '$env/static/public';
 
   let { data }: PageProps = $props();
-  let schema = $state(data.schema);
+  let schema = $derived(data.schema);
 
   // Core state
   let values = $state<Record<string, unknown>>({});
