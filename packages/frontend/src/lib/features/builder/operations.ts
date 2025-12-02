@@ -9,12 +9,9 @@ import type {
   InputLayoutItem,
   OutputLayoutItem,
 } from '$lib/types/generated';
-import { mapParamTypeToWidgetType, createDefaultWidgetConfig } from '$lib/utils/widget-config';
+import { mapParamTypeToWidgetType, createDefaultWidgetConfig } from './widget-config';
 import { toast } from '$lib/components/ui/sonner';
 
-/**
- * Check if an item is used anywhere in the layout
- */
 export function isItemUsedInLayout(schema: UISchema | null, paramId: string): boolean {
   return (
     schema?.layout?.tabs?.some((t) =>
@@ -23,9 +20,6 @@ export function isItemUsedInLayout(schema: UISchema | null, paramId: string): bo
   );
 }
 
-/**
- * Remove a parameter from schema if it's not used anywhere in the layout
- */
 export function removeItemIfOrphaned(
   schema: UISchema,
   paramId: string,
@@ -41,9 +35,6 @@ export function removeItemIfOrphaned(
   }
 }
 
-/**
- * Create a layout item for either a parameter or downloadable component
- */
 export function createLayoutItem(
   paramId: string,
   displayName: string,
@@ -53,7 +44,6 @@ export function createLayoutItem(
   widgetType?: string,
   paramType?: string
 ): LayoutItem {
-  // Determine widget type
   let resolvedWidgetType = widgetType;
   if (!resolvedWidgetType) {
     if (itemType === 'input' && paramType) {
@@ -65,48 +55,43 @@ export function createLayoutItem(
     }
   }
 
-  // Look up the full parameter to get all metadata (including options for ValueList)
   const fullParam =
     itemType === 'input' ? availableInputs.find((p) => p.id === paramId) : undefined;
 
-  // Get config if needed
   const config =
     itemType === 'input' && paramType
       ? createDefaultWidgetConfig(
-        resolvedWidgetType as any,
-        fullParam || ({ type: paramType } as any),
-        'input'
-      )
+          resolvedWidgetType as any,
+          fullParam || ({ type: paramType } as any),
+          'input'
+        )
       : itemType === 'output' && paramType
         ? createDefaultWidgetConfig(resolvedWidgetType as any, { type: paramType } as any, 'output')
         : {};
 
   return itemType === 'input'
     ? ({
-      id: crypto.randomUUID().substring(0, 8),
-      paramId,
-      type: 'input',
-      displayName,
-      widgetType: resolvedWidgetType as any,
-      order: itemCount,
-      span: 1,
-      config,
-    } as InputLayoutItem)
+        id: crypto.randomUUID().substring(0, 8),
+        paramId,
+        type: 'input',
+        displayName,
+        widgetType: resolvedWidgetType as any,
+        order: itemCount,
+        span: 1,
+        config,
+      } as InputLayoutItem)
     : ({
-      id: crypto.randomUUID().substring(0, 8),
-      paramId,
-      type: 'output',
-      displayName,
-      widgetType: resolvedWidgetType as any,
-      order: itemCount,
-      span: 1,
-      config: itemType === 'output' && resolvedWidgetType === 'file' ? {} : config,
-    } as OutputLayoutItem);
+        id: crypto.randomUUID().substring(0, 8),
+        paramId,
+        type: 'output',
+        displayName,
+        widgetType: resolvedWidgetType as any,
+        order: itemCount,
+        span: 1,
+        config: itemType === 'output' && resolvedWidgetType === 'file' ? {} : config,
+      } as OutputLayoutItem);
 }
 
-/**
- * Insert an item at the specified position in a group, or append if no position
- */
 export function insertLayoutItem(
   group: GroupConfig,
   item: LayoutItem,
@@ -124,7 +109,6 @@ export function insertLayoutItem(
     return;
   }
 
-  // Create new array to maintain reactivity
   const newItems = [...group.items];
   if (dropPosition === 'before') {
     newItems.splice(targetIndex, 0, item);
@@ -134,9 +118,6 @@ export function insertLayoutItem(
   group.items = newItems;
 }
 
-/**
- * Unified handler for dropping parameters and downloadables
- */
 export function handleItemDrop(
   schema: UISchema,
   group: GroupConfig,
@@ -150,7 +131,6 @@ export function handleItemDrop(
   dropPosition?: 'before' | 'after',
   outputType?: 'text' | 'number' | 'file'
 ) {
-  // Check if already in this group
   if (group.items.some((i) => i.paramId === paramId)) {
     const itemTypeLabel =
       widgetType === 'file' ? 'file component' : itemType === 'input' ? 'parameter' : 'output';
@@ -158,7 +138,6 @@ export function handleItemDrop(
     return;
   }
 
-  // Ensure it's in schema
   if (itemType === 'input') {
     const inputExists = schema.inputs.some((i) => i.id === paramId);
     if (!inputExists) {
@@ -201,9 +180,6 @@ export function handleItemDrop(
   insertLayoutItem(group, newItem, targetItem, dropPosition);
 }
 
-/**
- * Handle reordering items between groups
- */
 export function handleGroupItemDrop(
   schema: UISchema,
   tabId: string,
@@ -231,9 +207,6 @@ export function handleGroupItemDrop(
   insertLayoutItem(targetGroup, movedItem, targetItem, dropPosition);
 }
 
-/**
- * Add a new tab to the schema
- */
 export function addTab(schema: UISchema): string {
   if (!schema.layout.tabs) return '';
 
@@ -249,9 +222,6 @@ export function addTab(schema: UISchema): string {
   return newTab.id;
 }
 
-/**
- * Remove a tab from the schema
- */
 export function removeTab(schema: UISchema, tabId: string) {
   if (!schema.layout.tabs) return;
 
@@ -267,9 +237,6 @@ export function removeTab(schema: UISchema, tabId: string) {
   schema.layout.tabs = schema.layout.tabs.filter((t) => t.id !== tabId);
 }
 
-/**
- * Add a new group to a tab
- */
 export function addGroup(schema: UISchema, tabId: string) {
   if (!schema.layout.tabs) return;
 
@@ -289,9 +256,6 @@ export function addGroup(schema: UISchema, tabId: string) {
   tab.groups = [...tab.groups, newGroup];
 }
 
-/**
- * Remove a group from a tab
- */
 export function removeGroup(schema: UISchema, tabId: string, groupId: string) {
   if (!schema.layout.tabs) return;
 
@@ -302,9 +266,6 @@ export function removeGroup(schema: UISchema, tabId: string, groupId: string) {
   schema.layout.tabs = [...schema.layout.tabs];
 }
 
-/**
- * Remove an item from a group
- */
 export function removeItem(schema: UISchema, tabId: string, groupId: string, itemId: string) {
   if (!schema.layout.tabs) return;
 
@@ -322,9 +283,6 @@ export function removeItem(schema: UISchema, tabId: string, groupId: string, ite
   }
 }
 
-/**
- * Reorder tabs
- */
 export function reorderTabs(schema: UISchema, fromIndex: number, toIndex: number) {
   if (!schema.layout.tabs) return;
 
@@ -332,7 +290,6 @@ export function reorderTabs(schema: UISchema, fromIndex: number, toIndex: number
   const [movedTab] = tabs.splice(fromIndex, 1);
   tabs.splice(toIndex, 0, movedTab);
 
-  // Update order property for each tab
   tabs.forEach((tab, index) => {
     tab.order = index;
   });

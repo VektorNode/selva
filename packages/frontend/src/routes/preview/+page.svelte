@@ -6,26 +6,32 @@
   import { TabLayout } from '$lib/components/preview';
   import { PageContainer, PageHeader } from '$lib/components/layout';
   import { StateDisplay, Button } from '$lib/components/ui';
-  import {
-    initializeWebSocketSession,
-    ensureSchemaLayoutDefaults,
-    getDefaultValue,
-  } from '$lib/utils/session';
+  import { initializeWebSocketSession, ensureSchemaLayoutDefaults } from '$lib/utils/session';
   import { onMount } from 'svelte';
   import type { MeshBatch } from '@selva/core';
   import {
-    parseMeshBatchObject,
-    applyOffset,
-    computeCombinedBoundingBox,
-    SCALE_FACTORS,
-  } from '@selva/core';
-  import type { ThreeInitializerOptions } from '@selva/core/visualization';
+    ensureRhinoComputeLoaded as loadRhinoCompute,
+    initializeViewerScene,
+    updateViewerScene,
+    processMeshBatches,
+    applyMeshTransforms,
+    type ViewerState,
+  } from '$lib/features/preview/viewer';
+  import {
+    initializeValues,
+    processOutputUpdate,
+    updateParameterMetadata,
+    removeParametersFromValues,
+  } from '$lib/features/preview/handlers';
+  import {
+    formatParameterUpdateMessage,
+    formatMetadataUpdateMessage,
+  } from '$lib/features/preview/notifications';
 
   type RuntimeMode = 'local' | 'compute';
 
   let sessionId = $state('');
   let schema = $state<UISchema | null>(null);
-  // Values stored by GUID (stable across parameter name changes)
   let values = $state<Record<string, unknown>>({});
   let loading = $state(true);
   let error = $state('');
@@ -40,53 +46,18 @@
   let solving = $state(false);
   let syncNeeded = $state(false);
 
-  // 3D Viewer state
   let displayMeshes = $state<any[]>([]);
-  let viewerInitialized = $state(false);
-  let scene: any = null;
-  let camera: any = null;
-  let controls: any = null;
+  let viewerState = $state<ViewerState>({
+    scene: null,
+    camera: null,
+    controls: null,
+    initialized: false,
+  });
   let modelUnits = $state<string>('Meters');
 
-  // Deferred imports
   let rhinoCompute: typeof import('@selva/core') | null = null;
 
-  async function applyMeshTransforms(meshes: any[]) {
-    if (meshes.length === 0) return;
-
-    // Apply ground offset using core lib function
-    if (meshes.length > 0) {
-      try {
-        const boundingBox = computeCombinedBoundingBox(meshes);
-        console.log('[Preview] Combined bounding box:', boundingBox);
-        const offsetY = boundingBox.min.y;
-        if (offsetY !== 0) {
-          console.log(`[Preview] Applying ground offset: ${offsetY}`);
-          applyOffset(meshes, offsetY);
-        }
-      } catch (err) {
-        console.warn('[Preview] Could not apply ground offset:', err);
-      }
-    }
-  }
-
-  // Navigate to specific routes with session preservation
-  function navigateTo(route: '/' | '/builder') {
-    const url = route === '/' ? `/?session=${sessionId}` : `/builder?session=${sessionId}`;
-    goto(url);
-  }
-
-  function syncParameters() {
-    console.log('[Preview] Syncing parameters from Grasshopper');
-    syncNeeded = false;
-    wsState.requestInitialData(sessionId);
-    showNotification('Syncing parameters...');
-  }
-
-  // Track if we're updating values from remote (to avoid feedback loop)
   let isRemoteUpdate = $state(false);
-
-  // Manual solve mode: track pending changes
   let pendingValues = $state<Record<string, unknown>>({});
   let hasPendingChanges = $state(false);
 
@@ -101,59 +72,37 @@
     }, duration);
   }
 
-  // -----------------------------
-  // 3D Viewer Initialization
-  // -----------------------------
-  async function ensureRhinoComputeLoaded() {
+  async function ensureViewerModuleLoaded() {
     if (!rhinoCompute) {
-      rhinoCompute = await import('@selva/core');
+      rhinoCompute = await loadRhinoCompute();
     }
   }
 
   async function initializeViewer() {
-    if (!canvas || viewerInitialized) return;
+    if (!canvas || viewerState.initialized) return;
 
-    await ensureRhinoComputeLoaded();
+    await ensureViewerModuleLoaded();
 
-    const opts: ThreeInitializerOptions = {
-      environment: { backgroundColor: '#4b5357' },
-    };
-
-    const { scene: s, camera: c, controls: ctl } = rhinoCompute!.initThree(canvas, opts);
-
-    scene = s;
-    camera = c;
-    controls = ctl;
-    viewerInitialized = true;
-
-    console.log('[Preview] 3D viewer initialized');
+    const state = await initializeViewerScene(canvas, rhinoCompute!);
+    viewerState = state;
   }
 
   async function updateViewer() {
-    if (!scene || !camera || !controls || displayMeshes.length === 0) return;
-
-    await ensureRhinoComputeLoaded();
-
-    console.log(`[Preview] updateViewer called with ${displayMeshes.length} meshes`);
-    rhinoCompute!.updateScene(scene, displayMeshes, camera, controls, viewerInitialized);
-    console.log(`[Preview] Updated viewer with ${displayMeshes.length} meshes`);
+    if (!viewerState.initialized || displayMeshes.length === 0) return;
+    await ensureViewerModuleLoaded();
+    await updateViewerScene(rhinoCompute!, viewerState, displayMeshes);
   }
 
-  // Watch for display meshes and initialize/update viewer
   $effect(() => {
     if (displayMeshes.length > 0) {
-      if (!viewerInitialized && canvas) {
+      if (!viewerState.initialized && canvas) {
         initializeViewer().then(() => updateViewer());
-      } else if (viewerInitialized) {
+      } else if (viewerState.initialized) {
         updateViewer();
       }
     }
   });
 
-  /**
-   * Handle value changes from UI
-   * Only send to Grasshopper if change came from user (not from remote)
-   */
   async function handleValueChange(paramId: string, value: SupportedTypes) {
     if (isRemoteUpdate) {
       console.log('[Preview] Skipping send for remote update on paramId:', paramId);
@@ -162,39 +111,38 @@
 
     values[paramId] = value;
 
-    // If instanceSolve is false, track pending changes instead of sending immediately
     if (schema?.instanceSolve === false) {
       pendingValues[paramId] = value;
       hasPendingChanges = true;
       return;
     }
 
-    // Instance solve mode: send immediately
     if (runtimeMode === 'local' && wsState.connected) {
-      console.log('[Preview] Sending value update to Grasshopper (GUID keys):', {
-        [paramId]: value,
-      });
-
       wsState.sendValueUpdate(sessionId, $state.snapshot(values));
     } else if (!wsState.connected) {
       console.warn('[Preview] Cannot send values - WebSocket not connected');
     }
   }
 
-  /**
-   * Manual solve: send all pending changes to Grasshopper
-   */
   function handleCalculate() {
     if (!hasPendingChanges) return;
-
     if (runtimeMode === 'local' && wsState.connected) {
-      console.log('[Preview] Sending pending values to Grasshopper:', pendingValues);
       wsState.sendValueUpdate(sessionId, $state.snapshot(values));
       pendingValues = {};
       hasPendingChanges = false;
     } else if (!wsState.connected) {
-      console.warn('[Preview] Cannot calculate - WebSocket not connected');
     }
+  }
+
+  function navigateTo(route: '/' | '/builder') {
+    const url = route === '/' ? `/?session=${sessionId}` : `/builder?session=${sessionId}`;
+    goto(url);
+  }
+
+  function syncParameters() {
+    syncNeeded = false;
+    wsState.requestInitialData(sessionId);
+    showNotification('Syncing parameters...');
   }
 
   const badgeConfig = $derived(
@@ -217,9 +165,6 @@
 
         const receivedSchema = message.schema;
         const availableParams = message.availableParams as AvailableParameters;
-        const currentValues = message.currentValues || {};
-
-        console.log('[Preview] Available Parameters:', availableParams);
 
         if (!receivedSchema) {
           error = 'No schema configured. Please use the Schema Builder to create a UI.';
@@ -234,27 +179,15 @@
           return;
         }
 
-        // Initialize values from available params defaults
-        processedSchema.inputs.forEach((input: any) => {
-          const availableParam = availableParams?.inputs?.find((p) => p.id === input.id);
-          const defaultValue =
-            availableParam?.default !== null && availableParam?.default !== undefined
-              ? availableParam.default
-              : getDefaultValue(input.paramType);
-
-          values[input.id] = defaultValue;
+        const newValues = initializeValues({
+          schema: processedSchema,
+          availableParams,
+          currentValues: message.currentValues,
         });
 
-        processedSchema.outputs.forEach((output: any) => {
-          values[output.id] = null;
-        });
-
-        // Apply current values from Grasshopper
-        if (currentValues && Object.keys(currentValues).length > 0) {
-          isRemoteUpdate = true;
-          values = { ...values, ...currentValues };
-          isRemoteUpdate = false;
-        }
+        isRemoteUpdate = true;
+        values = newValues;
+        isRemoteUpdate = false;
 
         schema = processedSchema;
         loading = false;
@@ -272,65 +205,30 @@
 
     const handleOutputs = async (message: any) => {
       if (message.sessionId === sessionId) {
-        console.log('[Preview] Received outputs:', message.outputs);
-        console.log('[Preview] Received file outputs:', message.fileOutputs);
-        console.log('[Preview] Received display data:', message.displayData);
-        console.log('[Preview] Model units:', message.modelUnits);
-
-        // Store model units for scaling
         if (message.modelUnits) {
           modelUnits = message.modelUnits;
         }
 
-        // Handle display data (MeshBatch objects from WebDisplay components)
         if (message.displayData) {
           try {
-            const allMeshes: any[] = [];
-
-            // Ensure displayData is an array (handle both array and single object cases)
             const dataArray = Array.isArray(message.displayData)
               ? message.displayData
               : [message.displayData];
 
-            console.log(`[Preview] Processing ${dataArray.length} batch(es)`);
-
-            // Get scale factor from model units
-            const scaleFactor = SCALE_FACTORS[modelUnits] ?? 1;
-            console.log(`[Preview] Using scale factor: ${scaleFactor} (units: ${modelUnits})`);
-
-            for (const batchData of dataArray as MeshBatch[]) {
-              const meshes = await parseMeshBatchObject(batchData, {
-                mergeByMaterial: true,
-                applyTransforms: true,
-                scaleFactor: scaleFactor,
-                debug: false,
-              });
-              console.log(`[Preview] Batch parsed to ${meshes.length} mesh(es)`);
-              allMeshes.push(...meshes);
-            }
-
-            // Apply ground offset
+            const allMeshes = await processMeshBatches(dataArray as MeshBatch[], modelUnits);
             await applyMeshTransforms(allMeshes);
 
-            console.log(`[Preview] Total processed meshes: ${allMeshes.length}`);
             displayMeshes = allMeshes;
-            console.log(`[Preview] displayMeshes updated with ${allMeshes.length} meshes`);
-          } catch (error) {
-            console.error('[Preview] Error parsing display data:', error);
+          } catch (err) {
+            console.error('[Preview] Error parsing display data:', err);
           }
         }
 
-        const outputUpdates = Object.fromEntries(
-          Object.entries(message.outputs || {}).filter(([paramId]) =>
-            schema?.outputs.some((o) => o.id === paramId)
-          )
-        );
-
-        // Handle file outputs from downloading.components
-        const fileOutputUpdates = message.fileOutputs || {};
-
-        // Combine all updates
-        const allUpdates = { ...outputUpdates, ...fileOutputUpdates };
+        const allUpdates = processOutputUpdate({
+          outputs: message.outputs,
+          fileOutputs: message.fileOutputs,
+          schema,
+        });
 
         if (Object.keys(allUpdates).length > 0) {
           isRemoteUpdate = true;
@@ -342,16 +240,14 @@
 
     const handleOutputUpdate = (message: any) => {
       if (message.sessionId === sessionId) {
-        console.log('[Preview] Received output update:', message.outputs);
-        const outputUpdates = Object.fromEntries(
-          Object.entries(message.outputs).filter(([paramId]) =>
-            schema?.outputs.some((o) => o.id === paramId)
-          )
-        );
+        const allUpdates = processOutputUpdate({
+          outputs: message.outputs,
+          schema,
+        });
 
-        if (Object.keys(outputUpdates).length > 0) {
+        if (Object.keys(allUpdates).length > 0) {
           isRemoteUpdate = true;
-          values = { ...values, ...outputUpdates };
+          values = { ...values, ...allUpdates };
           isRemoteUpdate = false;
         }
       }
@@ -359,34 +255,19 @@
 
     const handleSchemaUpdated = (message: any) => {
       if (message.sessionId === sessionId) {
-        console.log('[Preview] Schema updated:', {
-          schema: message.schema,
-          removedIds: message.removedIds,
-        });
-
         const removedCount = message.removedIds?.length || 0;
-
         const newSchema = ensureSchemaLayoutDefaults(JSON.parse(JSON.stringify(message.schema)));
 
         if (message.removedIds && message.removedIds.length > 0) {
-          const newValues = { ...values };
-          message.removedIds.forEach((id: string) => {
-            delete newValues[id];
-          });
-          values = newValues;
-
-          console.log(`[Preview] Removed ${message.removedIds.length} parameter(s) from UI`);
+          values = removeParametersFromValues(values, message.removedIds);
         }
 
         schema = null;
-
         setTimeout(() => {
           schema = newSchema;
-
           if (removedCount > 0) {
-            showNotification(
-              `Schema updated: ${removedCount} parameter${removedCount > 1 ? 's' : ''} removed`
-            );
+            const msg = formatParameterUpdateMessage(removedCount);
+            showNotification(msg);
           }
         }, 10);
       }
@@ -394,101 +275,20 @@
 
     const handleMetadataUpdated = (message: any) => {
       if (message.sessionId === sessionId && schema) {
-        console.log('[Preview] Parameter metadata updated:', message.changedParams);
-
         const changedParams = message.changedParams || [];
         if (changedParams.length === 0) return;
 
-        let updatedCount = 0;
-        const updatedNames: string[] = [];
+        const result = updateParameterMetadata(schema, changedParams);
 
-        // Update input parameters with new metadata
-        changedParams.forEach((updated: any) => {
-          const inputIndex = schema!.inputs.findIndex((inp) => inp.id === updated.id);
-          if (inputIndex !== -1) {
-            const input = schema!.inputs[inputIndex];
-            let changed = false;
-
-            if (updated.nickname !== undefined && input.nickname !== updated.nickname) {
-              input.nickname = updated.nickname;
-              changed = true;
-            }
-            if (updated.description !== undefined && input.description !== updated.description) {
-              input.description = updated.description;
-              changed = true;
-            }
-
-            if (changed) {
-              updatedCount++;
-              updatedNames.push(input.nickname);
-              console.log(`[Preview] Updated input metadata: ${input.nickname}`);
-            }
-
-            // Update layout item configurations (min/max/stepSize for number widgets)
-            if (schema!.layout.tabs) {
-              schema!.layout.tabs.forEach((tab) => {
-                tab.groups?.forEach((group) => {
-                  group.items?.forEach((layoutItem: any) => {
-                    if (layoutItem.paramId === updated.id && layoutItem.type === 'input') {
-                      const config = layoutItem.config || {};
-
-                      if (updated.minimum !== undefined && config.minimum !== updated.minimum) {
-                        config.minimum = updated.minimum;
-                        changed = true;
-                      }
-                      if (updated.maximum !== undefined && config.maximum !== updated.maximum) {
-                        config.maximum = updated.maximum;
-                        changed = true;
-                      }
-                      if (updated.stepSize !== undefined && config.stepSize !== updated.stepSize) {
-                        config.stepSize = updated.stepSize;
-                        changed = true;
-                      }
-
-                      layoutItem.config = config;
-                    }
-                  });
-                });
-              });
-            }
-          }
-
-          // Update output parameters with new metadata
-          const outputIndex = schema!.outputs.findIndex((out) => out.id === updated.id);
-          if (outputIndex !== -1) {
-            const output = schema!.outputs[outputIndex];
-            let changed = false;
-
-            if (updated.nickname !== undefined && output.nickname !== updated.nickname) {
-              output.nickname = updated.nickname;
-              changed = true;
-            }
-            if (updated.description !== undefined && output.description !== updated.description) {
-              output.description = updated.description;
-              changed = true;
-            }
-
-            if (changed) {
-              updatedCount++;
-              updatedNames.push(output.nickname);
-              console.log(`[Preview] Updated output metadata: ${output.nickname}`);
-            }
-          }
-        });
-
-        if (updatedCount > 0) {
-          showNotification(
-            `Parameter${updatedCount > 1 ? 's' : ''} updated: ${updatedNames.join(', ')}`
-          );
+        if (result.updated > 0) {
+          const msg = formatMetadataUpdateMessage(result.names);
+          showNotification(msg);
         }
       }
     };
 
     const handleParametersAdded = (message: any) => {
       if (message.sessionId === sessionId) {
-        console.log('[Preview] New parameters added to Grasshopper:', message.availableParams);
-
-        // Mark that sync is needed to pick up the new parameters
         syncNeeded = true;
         showNotification('New parameters detected - click Sync to add them to your UI');
       }
@@ -506,7 +306,6 @@
           return;
         }
 
-        // Register handlers
         wsState.on('initialData', handleInitialData);
         wsState.on('currentValues', handleCurrentValues);
         wsState.on('outputs', handleOutputs);
@@ -515,7 +314,6 @@
         wsState.on('metadataUpdated', handleMetadataUpdated);
         wsState.on('parametersAdded', handleParametersAdded);
 
-        // Request initial data from Grasshopper
         console.log('[Preview] Requesting initial data from Grasshopper');
         wsState.requestInitialData(sessionId);
       }
@@ -531,7 +329,6 @@
       wsState.off('schemaUpdated', handleSchemaUpdated);
       wsState.off('metadataUpdated', handleMetadataUpdated);
       wsState.off('parametersAdded', handleParametersAdded);
-      // Don't disconnect - keep connection alive for page switching
     };
   });
 </script>

@@ -14,7 +14,6 @@ import type {
   OutputFileLayoutItem,
 } from '$lib/types/generated';
 
-// Widget type literals extracted from schema layout items
 export type InputWidgetType =
   | InputNumberLayoutItem['widgetType']
   | InputTextLayoutItem['widgetType']
@@ -28,7 +27,6 @@ export type OutputWidgetType =
 
 export type WidgetType = InputWidgetType | OutputWidgetType;
 
-// Union type for all widget configs (from generated schema)
 export type InputWidgetConfig =
   | NumberWidgetConfig
   | TextWidgetConfig
@@ -39,15 +37,11 @@ export type OutputWidgetConfig = Record<string, never>;
 
 export type WidgetConfig = InputWidgetConfig | OutputWidgetConfig;
 
-/**
- * Map Grasshopper parameter types to default UI widget types
- */
 export function mapParamTypeToWidgetType(
   paramType: GrasshopperParamType,
   category: 'input' | 'output'
 ): WidgetType {
   if (category === 'output') {
-    // Output widgets
     switch (paramType) {
       case 'number':
       case 'integer':
@@ -56,7 +50,6 @@ export function mapParamTypeToWidgetType(
         return 'text';
     }
   } else {
-    // Input widgets
     switch (paramType) {
       case 'number':
       case 'integer':
@@ -73,9 +66,6 @@ export function mapParamTypeToWidgetType(
   }
 }
 
-/**
- * Create default widget configuration based on parameter type
- */
 export function createDefaultWidgetConfig(
   widgetType: WidgetType,
   param: AvailableInput,
@@ -114,14 +104,11 @@ export function createDefaultWidgetConfig(
       }
 
       default: {
-        // Exhaustiveness check - TypeScript will error if we miss a case
-        // Note: 'file' is an output-only type, so it shouldn't reach here
         const _exhaustive: never = widgetType as never;
         throw new Error(`Unsupported input widget type: ${_exhaustive}`);
       }
     }
   } else {
-    // Output config
     switch (widgetType) {
       case 'text':
       case 'number':
@@ -130,11 +117,9 @@ export function createDefaultWidgetConfig(
 
       case 'dropdown':
       case 'checkbox':
-        // Input widget types used in output context
         throw new Error(`Widget type '${widgetType}' is not valid for output parameters`);
 
       default: {
-        // Exhaustiveness check
         const _exhaustive: never = widgetType;
         throw new Error(`Unsupported widget type: ${_exhaustive}`);
       }

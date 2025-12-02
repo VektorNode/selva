@@ -4,7 +4,7 @@
   import { PageContainer, PageHeader } from '$lib/components/layout';
   import { StateDisplay, Button } from '$lib/components/ui';
   import { DragDropContext, BuilderSidebar, TabEditor } from '$lib/components/builder';
-  import type { UISchema, AvailableInput, AvailableOutput, LayoutItem } from '$lib/types/generated';
+  import type { AvailableInput, AvailableOutput } from '$lib/types/generated';
   import { initializeWebSocketSession } from '$lib/utils/session';
   import {
     handleItemDrop,
@@ -15,7 +15,7 @@
     removeGroup,
     removeItem,
     reorderTabs,
-  } from '$lib/utils/builder-operations';
+  } from '$lib/features/builder/operations';
   import Save from '$lib/components/ui/icons/Save.svelte';
   import { toast } from '$lib/components/ui/sonner';
   import { onMount } from 'svelte';
@@ -229,8 +229,7 @@
 
     const itemType = 'name' in item ? 'input' : 'output';
     const paramType = 'name' in item ? item.type : undefined;
-    const widgetType =
-      'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
+    const widgetType = 'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
     const outputType = 'name' in item ? undefined : item.type;
 
     handleItemDrop(
@@ -306,8 +305,7 @@
     // Add item to group
     const itemType = 'name' in item ? 'input' : 'output';
     const paramType = 'name' in item ? item.type : undefined;
-    const widgetType =
-      'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
+    const widgetType = 'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
     const outputType = 'name' in item ? undefined : item.type;
 
     handleItemDrop(

@@ -129,7 +129,6 @@ export function useBuilderState(sessionId: string) {
 
       // Auto-save schema
       if (wsState.connected) {
-        console.log('[Builder] Auto-saving schema after metadata update');
         wsState.saveSchema(sessionId, $state.snapshot(state.schema));
       }
     }
@@ -137,11 +136,6 @@ export function useBuilderState(sessionId: string) {
 
   function handleSchemaUpdated(message: any) {
     if (message.sessionId !== sessionId) return;
-
-    console.log('[Builder] Schema structure changed:', {
-      schema: message.schema,
-      removedIds: message.removedIds,
-    });
 
     const removedIds = message.removedIds || [];
     const removedCount = removedIds.length;
@@ -189,10 +183,6 @@ export function useBuilderState(sessionId: string) {
     if (message.sessionId !== sessionId) return;
 
     const availableParams = message.availableParams;
-    console.log('[Builder] New items added to Grasshopper:', {
-      inputs: availableParams?.inputs,
-      outputs: availableParams?.outputs,
-    });
 
     let updated = false;
 
@@ -216,7 +206,6 @@ export function useBuilderState(sessionId: string) {
   }
 
   function syncParameters() {
-    console.log('[Builder] Syncing parameters from Grasshopper');
     state.syncNeeded = false;
     wsState.requestInitialData(sessionId);
     toast.info('Syncing parameters...');
