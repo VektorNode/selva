@@ -219,6 +219,12 @@ namespace Selva.Features.UIBuilder.Models
 
         [JsonProperty("groups")]
         public List<GroupConfig> Groups { get; set; } = new List<GroupConfig>();
+
+/// <summary>
+/// Horizontal region where this tab should be positioned in multi-column layouts
+/// </summary>
+        [JsonProperty("position", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string Position { get; set; } = "center";
     }
 
     public class LayoutConfig

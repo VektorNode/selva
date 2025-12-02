@@ -9,11 +9,7 @@
   interface Props {
     item: AvailableInput | AvailableOutput;
     tabs?: TabConfig[];
-    onAddToGroup?: (
-      tabId: string,
-      groupId: string,
-      item: AvailableInput | AvailableOutput
-    ) => void;
+    onAddToGroup?: (tabId: string, groupId: string, item: AvailableInput | AvailableOutput) => void;
     onAddToNewGroup?: (path: string, item: AvailableInput | AvailableOutput) => void;
   }
 
@@ -57,7 +53,7 @@
       badgeText: 'text-primary',
     },
     output: {
-      bg: badgeContent === 'file' ? 'bg-downloadparam' : 'bg-outputparam',
+      bg: 'bg-outputparam',
       badgeBg: 'bg-primary/10',
       badgeText: 'text-primary',
     },

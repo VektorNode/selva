@@ -234,6 +234,10 @@ export interface TabConfig {
   icon?: string;
   order?: number;
   groups: GroupConfig[];
+  /**
+   * Horizontal region where this tab should be positioned in multi-column layouts
+   */
+  position?: 'left' | 'center' | 'right';
 }
 export interface LayoutConfig {
   type?: 'tabbed' | 'flat';

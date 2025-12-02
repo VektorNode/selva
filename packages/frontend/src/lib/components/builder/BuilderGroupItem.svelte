@@ -132,7 +132,7 @@
 			hover:shadow-sm hover:border-primary
 			${isDragging ? 'cursor-grabbing opacity-50' : ''}
 			${isDragOver ? 'border-primary' : ''}
-			${item.type === 'input' ? 'bg-inputparam' : item.widgetType === 'file' ? 'bg-downloadparam' : 'bg-outputparam'}
+			${item.type === 'input' ? 'bg-inputparam' : 'bg-outputparam'}
 		`}
     draggable="true"
     ondragstart={handleDragStart}
