@@ -181,7 +181,6 @@ public class DocumentEventManager : IDisposable
     // Check if any changed objects are contextual parameters or output components
     var relevantChange = false;
     foreach (var obj in e.Objects)
-    {
       if (obj is IGH_ContextualParameter ||
           ParameterTypeHelper.IsContextOutputComponent(obj) ||
           ParameterTypeHelper.IsContextBakeComponent(obj))
@@ -189,7 +188,6 @@ public class DocumentEventManager : IDisposable
         relevantChange = true;
         break;
       }
-    }
 
     if (!relevantChange) return;
 
@@ -260,11 +258,12 @@ public class DocumentEventManager : IDisposable
     var displayData = _valueCollector.CollectDisplayData(_currentDocument);
 
     // Only include display data if allowLocalRendering is enabled in schema
-    bool includeDisplayData = schema.AllowLocalRendering ?? false;
+    var includeDisplayData = schema.AllowLocalRendering ?? false;
 
     if (outputValues.Count > 0 || fileOutputs.Count > 0 || displayData.Count > 0)
     {
-      var _ = _communicationHandler.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData, includeDisplayData);
+      var _ = _communicationHandler.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData,
+        includeDisplayData);
     }
   }
 }

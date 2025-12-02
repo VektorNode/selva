@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
@@ -63,7 +62,6 @@ public class WebDisplayGoo : GH_Goo<MeshBatch>
     }
 
     if (source is GH_String ghString)
-    {
       try
       {
         Value = JsonConvert.DeserializeObject<MeshBatch>(ghString.Value);
@@ -73,7 +71,6 @@ public class WebDisplayGoo : GH_Goo<MeshBatch>
       {
         return false;
       }
-    }
 
     return false;
   }

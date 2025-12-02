@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
@@ -74,10 +75,7 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
       return;
     }
 
-    if (!GetSolveResults(DA, out var batch))
-    {
-      batch = Compute(allGeo, allNames, allMaterials, meshSettings);
-    }
+    if (!GetSolveResults(DA, out var batch)) batch = Compute(allGeo, allNames, allMaterials, meshSettings);
 
     DA.SetData(0, batch);
   }
@@ -88,19 +86,20 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
     List<IGH_Goo> materialGoos,
     MeshingParameters meshSettings)
   {
-    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+    var stopwatch = Stopwatch.StartNew();
 
     // Extract geometries
-    var extractStart = System.Diagnostics.Stopwatch.StartNew();
+    var extractStart = Stopwatch.StartNew();
     var geometries = ExtractGeometries(geoGoos);
     extractStart.Stop();
-    RhinoApp.WriteLine($"[WebDisplay] Geometry extraction: {extractStart.ElapsedMilliseconds}ms ({geometries.Count} geometries)");
+    RhinoApp.WriteLine(
+      $"[WebDisplay] Geometry extraction: {extractStart.ElapsedMilliseconds}ms ({geometries.Count} geometries)");
 
     if (geometries.Count == 0)
       throw new Exception("No valid geometry found in input");
 
     // Convert to meshes
-    var meshStart = System.Diagnostics.Stopwatch.StartNew();
+    var meshStart = Stopwatch.StartNew();
     var meshes = ConvertToMeshesParallel(geometries, meshSettings);
     meshStart.Stop();
     RhinoApp.WriteLine($"[WebDisplay] Mesh conversion: {meshStart.ElapsedMilliseconds}ms ({meshes.Count} meshes)");
@@ -109,21 +108,22 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
       throw new Exception("No valid meshes generated from input geometry");
 
     // Prepare names and materials
-    var namesStart = System.Diagnostics.Stopwatch.StartNew();
+    var namesStart = Stopwatch.StartNew();
     var names = PrepareNames(meshes.Count, nameGoos);
     var materials = PrepareMaterials(meshes.Count, materialGoos);
     namesStart.Stop();
     RhinoApp.WriteLine($"[WebDisplay] Data preparation: {namesStart.ElapsedMilliseconds}ms");
 
     // Create batch
-    var batchStart = System.Diagnostics.Stopwatch.StartNew();
+    var batchStart = Stopwatch.StartNew();
     var batch = MeshBatchProcessor.CreateBatch(meshes, names, materials);
     batchStart.Stop();
     RhinoApp.WriteLine($"[WebDisplay] Batch creation: {batchStart.ElapsedMilliseconds}ms");
 
     stopwatch.Stop();
     RhinoApp.WriteLine($"[WebDisplay] Total time: {stopwatch.ElapsedMilliseconds}ms");
-    RhinoApp.WriteLine($"[WebDisplay] Result: {meshes.Count} meshes, {batch.Materials.Count} unique materials, {batch.Groups.Count} groups");
+    RhinoApp.WriteLine(
+      $"[WebDisplay] Result: {meshes.Count} meshes, {batch.Materials.Count} unique materials, {batch.Groups.Count} groups");
 
     return new WebDisplayGoo(batch);
   }
@@ -264,10 +264,7 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
     var result = new List<T>(targetCount);
     var lastItem = input.Last();
 
-    for (var i = 0; i < targetCount; i++)
-    {
-      result.Add(i < input.Count ? input[i] : lastItem);
-    }
+    for (var i = 0; i < targetCount; i++) result.Add(i < input.Count ? input[i] : lastItem);
 
     return result;
   }

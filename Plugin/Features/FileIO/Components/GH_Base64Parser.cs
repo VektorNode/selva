@@ -116,7 +116,6 @@ public class GH_Base64Parser : GH_Component
     var ghGeometry = new List<IGH_GeometricGoo>();
 
     foreach (var geo in geometry)
-    {
       if (geo is Curve curve)
         ghGeometry.Add(new GH_Curve(curve));
       else if (geo is Brep brep)
@@ -126,7 +125,6 @@ public class GH_Base64Parser : GH_Component
       else if (geo is Surface surface)
         ghGeometry.Add(new GH_Surface(surface));
       else if (geo is Point point) ghGeometry.Add(new GH_Point(point.Location));
-    }
 
     DA.SetDataList(0, ghGeometry);
     DA.SetDataList(1, blockNames);

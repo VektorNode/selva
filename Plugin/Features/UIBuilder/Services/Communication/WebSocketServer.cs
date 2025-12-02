@@ -99,7 +99,6 @@ public class WebSocketServer : IDisposable
     lock (_clientsLock)
     {
       foreach (var client in _connectedClients)
-      {
         try
         {
           // Attempt graceful close with timeout
@@ -112,7 +111,6 @@ public class WebSocketServer : IDisposable
         {
           // Ignore errors during shutdown
         }
-      }
 
       _connectedClients.Clear();
     }
@@ -141,7 +139,6 @@ public class WebSocketServer : IDisposable
     var clientsToRemove = new List<WebSocket>();
 
     foreach (var client in clientsCopy)
-    {
       if (client.State == WebSocketState.Open)
         try
         {
@@ -163,7 +160,6 @@ public class WebSocketServer : IDisposable
         }
       else
         clientsToRemove.Add(client);
-    }
 
     // Remove dead clients
     if (clientsToRemove.Count > 0)
@@ -187,7 +183,6 @@ public class WebSocketServer : IDisposable
   private async Task AcceptConnectionsAsync(CancellationToken cancellationToken)
   {
     while (!cancellationToken.IsCancellationRequested && IsRunning)
-    {
       try
       {
         var context = await _httpListener.GetContextAsync();
@@ -211,7 +206,6 @@ public class WebSocketServer : IDisposable
       {
         Debug.WriteLine($"Error accepting WebSocket connection: {ex.Message}");
       }
-    }
   }
 
   private async void ProcessWebSocketRequest(HttpListenerContext context, CancellationToken cancellationToken)
@@ -281,7 +275,6 @@ public class WebSocketServer : IDisposable
     var messageBuffer = new List<byte>();
 
     while (webSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
-    {
       try
       {
         messageBuffer.Clear();
@@ -298,10 +291,7 @@ public class WebSocketServer : IDisposable
             return;
           }
 
-          for (var i = 0; i < result.Count; i++)
-          {
-            messageBuffer.Add(buffer[i]);
-          }
+          for (var i = 0; i < result.Count; i++) messageBuffer.Add(buffer[i]);
 
           if (messageBuffer.Count > MAX_MESSAGE_SIZE)
           {
@@ -326,7 +316,6 @@ public class WebSocketServer : IDisposable
       {
         break;
       }
-    }
   }
 
   /// <summary>
@@ -347,7 +336,6 @@ public class WebSocketServer : IDisposable
       var clientsToRemove = new List<WebSocket>();
 
       foreach (var client in clients)
-      {
         if (client.State == WebSocketState.Open)
           try
           {
@@ -371,7 +359,6 @@ public class WebSocketServer : IDisposable
           }
         else
           clientsToRemove.Add(client);
-      }
 
       if (clientsToRemove.Count > 0)
         lock (_clientsLock)

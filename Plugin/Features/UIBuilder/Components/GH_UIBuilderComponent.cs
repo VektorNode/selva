@@ -89,7 +89,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     var document = OnPingDocument();
     if (document == null || _schemaManager == null)
-      return new AvailableParameters { SessionId = _sessionId, Inputs = new List<AvailableInput>(), Outputs = new List<AvailableOutput>() };
+      return new AvailableParameters
+        { SessionId = _sessionId, Inputs = new List<AvailableInput>(), Outputs = new List<AvailableOutput>() };
 
     return _schemaManager.ScanParameters(document);
   }
@@ -751,5 +752,4 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     return base.Read(reader);
   }
-
 }

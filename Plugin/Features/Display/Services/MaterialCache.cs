@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Drawing;
 using Newtonsoft.Json;
@@ -10,9 +9,14 @@ namespace Selva.Features.Display.Services;
 /// </summary>
 public class MaterialCache
 {
-  private readonly Dictionary<string, int> _materialToId = new();
   private readonly List<ThreeMaterial> _materials = new();
-  private int _nextId = 0;
+  private readonly Dictionary<string, int> _materialToId = new();
+  private int _nextId;
+
+  /// <summary>
+  ///   Gets the total number of unique materials.
+  /// </summary>
+  public int Count => _materials.Count;
 
   /// <summary>
   ///   Gets or creates a material ID for the given material properties.
@@ -22,10 +26,7 @@ public class MaterialCache
   {
     var key = GetMaterialKey(material);
 
-    if (_materialToId.TryGetValue(key, out var existingId))
-    {
-      return existingId;
-    }
+    if (_materialToId.TryGetValue(key, out var existingId)) return existingId;
 
     var newId = _nextId++;
     _materialToId[key] = newId;
@@ -42,17 +43,13 @@ public class MaterialCache
   }
 
   /// <summary>
-  ///   Gets the total number of unique materials.
-  /// </summary>
-  public int Count => _materials.Count;
-
-  /// <summary>
   ///   Creates a unique key for a material based on its properties.
   /// </summary>
   private string GetMaterialKey(ThreeMaterial material)
   {
     // Create a compact key that uniquely identifies the material
-    return $"{material.Color.ToArgb()}|{material.Metalness:F3}|{material.Roughness:F3}|{material.Opacity:F3}|{material.Transparent}";
+    return
+      $"{material.Color.ToArgb()}|{material.Metalness:F3}|{material.Roughness:F3}|{material.Opacity:F3}|{material.Transparent}";
   }
 }
 
@@ -105,14 +102,11 @@ public class MaterialGroup
 /// </summary>
 public class MeshMetadata
 {
-  [JsonProperty("name")]
-  public string Name { get; set; }
+  [JsonProperty("name")] public string Name { get; set; }
 
-  [JsonProperty("vertexCount")]
-  public int VertexCount { get; set; }
+  [JsonProperty("vertexCount")] public int VertexCount { get; set; }
 
-  [JsonProperty("faceCount")]
-  public int FaceCount { get; set; }
+  [JsonProperty("faceCount")] public int FaceCount { get; set; }
 
   /// <summary>
   ///   Offset in the combined vertex array (in number of floats, divide by 3 for vertex index).
@@ -132,26 +126,21 @@ public class MeshMetadata
 /// </summary>
 public class SerializableMaterial
 {
-  [JsonProperty("color")]
-  public string Color { get; set; }
+  [JsonProperty("color")] public string Color { get; set; }
 
-  [JsonProperty("metalness")]
-  public double Metalness { get; set; }
+  [JsonProperty("metalness")] public double Metalness { get; set; }
 
-  [JsonProperty("roughness")]
-  public double Roughness { get; set; }
+  [JsonProperty("roughness")] public double Roughness { get; set; }
 
-  [JsonProperty("opacity")]
-  public double Opacity { get; set; }
+  [JsonProperty("opacity")] public double Opacity { get; set; }
 
-  [JsonProperty("transparent")]
-  public bool Transparent { get; set; }
+  [JsonProperty("transparent")] public bool Transparent { get; set; }
 
   public static SerializableMaterial FromThreeMaterial(ThreeMaterial material)
   {
     return new SerializableMaterial
     {
-      Color = System.Drawing.ColorTranslator.ToHtml(material.Color),
+      Color = ColorTranslator.ToHtml(material.Color),
       Metalness = material.Metalness,
       Roughness = material.Roughness,
       Opacity = material.Opacity,

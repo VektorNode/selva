@@ -5,9 +5,9 @@ using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Selva.Features.ComputeIO.Components;
+using Selva.Features.Display.Services;
 using Selva.Features.FileIO.Services;
 using Selva.Features.UIBuilder.Models;
-using Selva.Features.Display.Services;
 
 namespace Selva.Features.UIBuilder.Services;
 
@@ -27,7 +27,6 @@ public class ValueCollector
     if (schema?.Inputs == null || schema.Inputs.Count == 0) return currentValues;
 
     foreach (var input in schema.Inputs)
-    {
       try
       {
         var paramObject = document.FindObject(input.Id, false);
@@ -44,7 +43,6 @@ public class ValueCollector
         addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
           $"Error collecting current value for '{input.Nickname}': {ex.Message}");
       }
-    }
 
     return currentValues;
   }
@@ -60,7 +58,6 @@ public class ValueCollector
     if (schema?.Outputs == null || schema.Outputs.Count == 0) return outputValues;
 
     foreach (var output in schema.Outputs)
-    {
       try
       {
         var paramObject = document.FindObject(output.Id, false);
@@ -77,7 +74,6 @@ public class ValueCollector
         addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
           $"Error collecting output '{output.Nickname}': {ex.Message}");
       }
-    }
 
     return outputValues;
   }
@@ -95,7 +91,6 @@ public class ValueCollector
     var fileOutputs = schema.Outputs.Where(o => o.Type == "file").ToList();
 
     foreach (var fileOutput in fileOutputs)
-    {
       try
       {
         var componentObject = document.FindObject(fileOutput.Id, false);
@@ -115,7 +110,6 @@ public class ValueCollector
         addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
           $"Error collecting file output '{fileOutput.Nickname}': {ex.Message}");
       }
-    }
 
     return fileOutputData;
   }
@@ -133,9 +127,7 @@ public class ValueCollector
     if (document == null) return displayDataList;
 
     foreach (var docObject in document.Objects)
-    {
       if (docObject is IGH_Component component)
-      {
         try
         {
           var displayData = ExtractWebDisplayDataFromComponent(component, addMessage);
@@ -147,8 +139,6 @@ public class ValueCollector
           addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
             $"Error collecting display data from component '{component.NickName}': {ex.Message}");
         }
-      }
-    }
 
     return displayDataList;
   }
@@ -223,7 +213,6 @@ public class ValueCollector
 
       var allData = inputParam.VolatileData.AllData(true);
       foreach (var gooObj in allData)
-      {
         if (gooObj?.GetType().FullName != null &&
             gooObj.GetType().FullName.IndexOf("FileDataGoo", StringComparison.OrdinalIgnoreCase) >= 0)
           try
@@ -236,7 +225,6 @@ public class ValueCollector
             addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
               $"Error extracting FileData from Goo: {ex.Message}");
           }
-      }
     }
 
     return fileDataList;
@@ -258,9 +246,7 @@ public class ValueCollector
 
       var allData = outputParam.VolatileData.AllData(true);
       foreach (var gooObj in allData)
-      {
         if (gooObj is WebDisplayGoo webDisplayGoo && webDisplayGoo.IsValid)
-        {
           try
           {
             return webDisplayGoo.Value;
@@ -270,8 +256,6 @@ public class ValueCollector
             addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
               $"Error extracting WebDisplayGoo data: {ex.Message}");
           }
-        }
-      }
     }
 
     return null;

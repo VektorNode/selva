@@ -49,6 +49,8 @@ public class GH_ValueListDataGoo : GH_Goo<string>
   /// </summary>
   public string SelectedExpression => Value;
 
+  public override bool IsValid => !string.IsNullOrEmpty(Value);
+
   /// <summary>
   ///   For serialization: returns the name (key) instead of the expression value.
   ///   This ensures Grasshopper receives the human-readable item name when values are sent from compute.
@@ -59,8 +61,6 @@ public class GH_ValueListDataGoo : GH_Goo<string>
     // e.g., "Sphere" instead of "0"
     return SelectedName ?? Value ?? string.Empty;
   }
-
-  public override bool IsValid => !string.IsNullOrEmpty(Value);
 
   public override IGH_Goo Duplicate()
   {
@@ -135,12 +135,10 @@ public class GH_ValueListDataGoo : GH_Goo<string>
     var items = new List<(string Name, string Expression)>();
     if (itemsArray != null)
       foreach (var item in itemsArray)
-      {
         items.Add((
           item["Name"]?.ToString() ?? "",
           item["Expression"]?.ToString() ?? ""
         ));
-      }
 
     return new GH_ValueListDataGoo(value, items, selectedIndex);
   }
@@ -152,28 +150,18 @@ public class GH_ValueListDataGoo : GH_Goo<string>
   public static GH_ValueListDataGoo FromComputeValue(string incomingValue, List<(string Name, string Expression)> items)
   {
     if (string.IsNullOrEmpty(incomingValue) || items == null || items.Count == 0)
-    {
       return new GH_ValueListDataGoo(incomingValue, items ?? new List<(string, string)>(), -1);
-    }
 
     // Try to find matching item by name first (preferred from compute)
     for (var i = 0; i < items.Count; i++)
-    {
       if (items[i].Name == incomingValue)
-      {
         // Store the expression value, but remember the index
         return new GH_ValueListDataGoo(items[i].Expression, items, i);
-      }
-    }
 
     // Fallback: try matching by expression (for backwards compatibility)
     for (var i = 0; i < items.Count; i++)
-    {
       if (items[i].Expression == incomingValue)
-      {
         return new GH_ValueListDataGoo(items[i].Expression, items, i);
-      }
-    }
 
     // No match found, store as-is
     return new GH_ValueListDataGoo(incomingValue, items, -1);
@@ -233,9 +221,8 @@ public class GH_ValueListDataGoo : GH_Goo<string>
     if (expression == null) return string.Empty;
 
     foreach (var item in Items)
-    {
-      if (item.Expression == expression) return item.Name;
-    }
+      if (item.Expression == expression)
+        return item.Name;
 
     return string.Empty;
   }
@@ -334,10 +321,7 @@ public class GH_ValueListDataGoo : GH_Goo<string>
       get
       {
         var valuesObj = new JObject();
-        foreach (var item in Owner.Items)
-        {
-          valuesObj[item.Name] = item.Expression;
-        }
+        foreach (var item in Owner.Items) valuesObj[item.Name] = item.Expression;
 
         return valuesObj;
       }
@@ -350,14 +334,12 @@ public class GH_ValueListDataGoo : GH_Goo<string>
       // FromString receives the name (key), not the expression value
       // Try to find a matching item by name and use its expression
       for (var i = 0; i < Owner.Items.Count; i++)
-      {
         if (Owner.Items[i].Name == input)
         {
           var item = Owner.Items[i];
           Owner.Value = item.Expression;
           return true;
         }
-      }
 
       // Fallback: treat as raw value if no name match found
       Owner.Value = input;

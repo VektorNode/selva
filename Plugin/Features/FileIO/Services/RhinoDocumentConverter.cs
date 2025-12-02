@@ -153,9 +153,7 @@ public class RhinoDocumentConverter : IDisposable
             }
 
             for (long i = 0; i < fileInfo.Length; i += buffer.Length)
-            {
               stream.Write(buffer, 0, (int)Math.Min(buffer.Length, fileInfo.Length - i));
-            }
           }
         }
 

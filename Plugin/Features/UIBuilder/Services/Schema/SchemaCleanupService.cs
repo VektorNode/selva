@@ -38,9 +38,7 @@ public class SchemaCleanupService
       // 2. Remove from embedded values
       if (embeddedValues != null)
         foreach (var key in valuesToRemove)
-        {
           embeddedValues.Remove(key);
-        }
 
       // 3. Schema is already updated by caller (ValidateSchemaAndTrackChanges)
       // This is the commit point - schema changes are persisted

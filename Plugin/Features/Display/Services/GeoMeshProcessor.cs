@@ -28,14 +28,12 @@ public static class GeoMeshProcessor
     var triangleCount = 0;
     var quadCount = 0;
     foreach (var face in mesh.Faces)
-    {
       if (face.IsTriangle)
         triangleCount++;
       else if (face.IsQuad)
         quadCount++;
       else
         Console.WriteLine("NGON detected. This component only supports triangles and quads.");
-    }
 
     var totalIndices = triangleCount * verticesPerTriangle + quadCount * verticesPerQuad;
 
@@ -53,7 +51,6 @@ public static class GeoMeshProcessor
     // Convert faces (triangulate quads)
     var faceIndex = 0;
     foreach (var face in mesh.Faces)
-    {
       if (face.IsTriangle)
       {
         faces[faceIndex++] = face.A;
@@ -69,7 +66,6 @@ public static class GeoMeshProcessor
         faces[faceIndex++] = face.D;
         faces[faceIndex++] = face.A;
       }
-    }
 
     return (vertices, faces);
   }

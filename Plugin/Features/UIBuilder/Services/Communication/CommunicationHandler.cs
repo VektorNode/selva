@@ -35,7 +35,6 @@ public class CommunicationHandler : IDisposable
   {
     _sessionId = sessionId;
     _port = port;
-
   }
 
   public bool IsRunning => _webSocketServer?.IsRunning ?? false;
@@ -254,12 +253,9 @@ public class CommunicationHandler : IDisposable
     if (_webSocketServer != null && _webSocketServer.IsRunning)
     {
       // Get model units from active document
-      string modelUnits = "Meters"; // Default
-      var doc = Rhino.RhinoDoc.ActiveDoc;
-      if (doc != null)
-      {
-        modelUnits = doc.ModelUnitSystem.ToString();
-      }
+      var modelUnits = "Meters"; // Default
+      var doc = RhinoDoc.ActiveDoc;
+      if (doc != null) modelUnits = doc.ModelUnitSystem.ToString();
 
       var message = new
       {

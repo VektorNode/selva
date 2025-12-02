@@ -55,7 +55,7 @@ public class ThreeMaterial
   /// <summary>
   ///   Copies all properties from this material to a target object using reflection.
   ///   This automatically handles any new properties added to ThreeMaterial.
-  /// TODO: CHECK IF I STILL NEED THAT?
+  ///   TODO: CHECK IF I STILL NEED THAT?
   /// </summary>
   public void CopyPropertiesTo(object target)
   {

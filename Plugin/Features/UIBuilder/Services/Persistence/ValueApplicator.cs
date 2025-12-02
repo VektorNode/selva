@@ -47,7 +47,6 @@ public class ValueApplicator
     _pendingExpirations.Clear();
 
     foreach (var input in schema.Inputs)
-    {
       try
       {
         var paramObject = document.FindObject(input.Id, false);
@@ -83,7 +82,6 @@ public class ValueApplicator
         addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
           $"Error applying value to '{input.Nickname}': {ex.Message}");
       }
-    }
 
     if (_pendingExpirations.Count > 0)
       document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, ExpireCallback);
@@ -96,10 +94,7 @@ public class ValueApplicator
   /// </summary>
   private void ExpireCallback(GH_Document doc)
   {
-    foreach (var obj in _pendingExpirations)
-    {
-      obj.ExpireSolution(false);
-    }
+    foreach (var obj in _pendingExpirations) obj.ExpireSolution(false);
 
     _pendingExpirations.Clear();
   }
@@ -159,10 +154,7 @@ public class ValueApplicator
   {
     if (keys == null) return;
 
-    foreach (var key in keys)
-    {
-      _lastAppliedValues.TryRemove(key, out _);
-    }
+    foreach (var key in keys) _lastAppliedValues.TryRemove(key, out _);
   }
 
   /// <summary>
@@ -321,9 +313,7 @@ public class ValueApplicator
           var connectedVLProperty = contextParam.GetType().GetProperty("ConnectedValueList",
             BindingFlags.NonPublic | BindingFlags.Instance);
           if (connectedVLProperty?.GetValue(contextParam) is IGH_ActiveObject connectedVL)
-          {
             _pendingExpirations.Add(connectedVL);
-          }
           return true;
         }
 

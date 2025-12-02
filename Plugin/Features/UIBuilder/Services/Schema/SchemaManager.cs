@@ -82,13 +82,11 @@ public class SchemaManager
           if (selectedValue != null && availableParam.Options != null)
           {
             foreach (var kvp in availableParam.Options)
-            {
               if (kvp.Value?.ToString() == selectedValue?.ToString())
               {
                 availableParam.Default = kvp.Key;
                 break;
               }
-            }
 
             if (availableParam.Default == null && availableParam.Options.Count > 0)
               availableParam.Default = availableParam.Options.Keys.First();
@@ -141,10 +139,8 @@ public class SchemaManager
 
       // For Print components, try to detect if output is numeric
       if (output.Name.IndexOf("Print", StringComparison.OrdinalIgnoreCase) >= 0)
-      {
         // Check if we can infer numeric output (simplified - in real scenario would need input analysis)
         displayType = "text"; // Keep as text by default, can be enhanced based on actual output
-      }
 
       outputs.Add(new AvailableOutput
       {
@@ -158,7 +154,6 @@ public class SchemaManager
     // Scan for ContextBake components that have FileData (file downloads)
     var (hasFileOutputs, fileOutputs) = ParameterTypeHelper.DetectDownloadableOutputs(document);
     foreach (var fileOutput in fileOutputs)
-    {
       outputs.Add(new AvailableOutput
       {
         Id = fileOutput.Id,
@@ -166,7 +161,6 @@ public class SchemaManager
         Description = fileOutput.Description ?? "",
         Type = "file"
       });
-    }
 
     return outputs;
   }
@@ -229,13 +223,11 @@ public class SchemaManager
       foreach (var tab in schema.Layout.Tabs)
       {
         foreach (var group in tab.Groups)
-        {
           group.Items.RemoveAll(item =>
           {
             var paramObject = document.FindObject(item.ParamId, false);
             return paramObject == null;
           });
-        }
 
         tab.Groups.RemoveAll(g => g.Items.Count == 0);
       }
@@ -293,9 +285,8 @@ public class SchemaManager
     };
 
     foreach (var kvp in typeKeywords)
-    {
-      if (typeName.Contains(kvp.Key)) return kvp.Value;
-    }
+      if (typeName.Contains(kvp.Key))
+        return kvp.Value;
 
     return "generic";
   }
@@ -377,34 +368,30 @@ public class SchemaManager
     {
       // Find and update the layout item for this parameter
       foreach (var tab in schema.Layout.Tabs)
+      foreach (var group in tab.Groups)
+      foreach (var item in group.Items)
       {
-        foreach (var group in tab.Groups)
+        if (item.ParamId != change.Id) continue;
+
+        // Update based on widget type
+        switch (item)
         {
-          foreach (var item in group.Items)
-          {
-            if (item.ParamId != change.Id) continue;
+          case InputNumberLayoutItem numberItem:
+            numberItem.Config ??= new NumberWidgetConfig();
+            numberItem.Config.Minimum = change.Minimum;
+            numberItem.Config.Maximum = change.Maximum;
+            numberItem.Config.StepSize = change.StepSize;
+            break;
 
-            // Update based on widget type
-            switch (item)
-            {
-              case InputNumberLayoutItem numberItem:
-                numberItem.Config ??= new NumberWidgetConfig();
-                numberItem.Config.Minimum = change.Minimum;
-                numberItem.Config.Maximum = change.Maximum;
-                numberItem.Config.StepSize = change.StepSize;
-                break;
-
-              case InputDropdownLayoutItem dropdownItem:
-                dropdownItem.Config ??= new DropdownWidgetConfig();
-                dropdownItem.Config.Options = change.Options;
-                break;
-            }
-
-            // Also update displayName/description if changed
-            item.DisplayName = change.Nickname;
-            item.Description = change.Description;
-          }
+          case InputDropdownLayoutItem dropdownItem:
+            dropdownItem.Config ??= new DropdownWidgetConfig();
+            dropdownItem.Config.Options = change.Options;
+            break;
         }
+
+        // Also update displayName/description if changed
+        item.DisplayName = change.Nickname;
+        item.Description = change.Description;
       }
 
       // Also update the Inputs list
@@ -421,17 +408,13 @@ public class SchemaManager
     {
       // Update displayName/description in layout items
       foreach (var tab in schema.Layout.Tabs)
+      foreach (var group in tab.Groups)
+      foreach (var item in group.Items)
       {
-        foreach (var group in tab.Groups)
-        {
-          foreach (var item in group.Items)
-          {
-            if (item.ParamId != change.Id) continue;
+        if (item.ParamId != change.Id) continue;
 
-            item.DisplayName = change.Nickname;
-            item.Description = change.Description;
-          }
-        }
+        item.DisplayName = change.Nickname;
+        item.Description = change.Description;
       }
 
       // Also update the Outputs list
@@ -562,10 +545,8 @@ internal class ParameterMetadataSnapshot
     if (a.Count != b.Count) return false;
 
     foreach (var kvp in a)
-    {
       if (!b.TryGetValue(kvp.Key, out var value) || value != kvp.Value)
         return false;
-    }
 
     return true;
   }

@@ -407,7 +407,6 @@ public class GH_DataToFile : GH_Component
     var layerCache = new Dictionary<string, int>();
 
     foreach (var (geometry, originalIndex) in geometries)
-    {
       try
       {
         var layerName = GetLayerName(layerNames, originalIndex);
@@ -457,7 +456,6 @@ public class GH_DataToFile : GH_Component
         AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
           $"Error processing geometry at index {originalIndex}: {ex.Message}");
       }
-    }
   }
 
   /// <summary>

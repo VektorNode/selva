@@ -124,14 +124,12 @@ public static class ParameterTypeHelper
     var prop = type.GetProperty(propName, flags);
     if (prop == null)
       foreach (var p in type.GetProperties(flags))
-      {
         if (string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase) ||
             p.Name.EndsWith("." + propName, StringComparison.Ordinal))
         {
           prop = p;
           break;
         }
-      }
 
     if (prop == null) return false;
 
@@ -184,7 +182,6 @@ public static class ParameterTypeHelper
     var recipientsToExpire = new HashSet<IGH_ActiveObject>();
 
     foreach (var contextParam in contextualParams)
-    {
       try
       {
         ClearSingleParameter(contextParam);
@@ -202,7 +199,6 @@ public static class ParameterTypeHelper
           $"Error clearing {paramName}: {ex.Message}");
         errorCount++;
       }
-    }
 
     ExpireRecipients(recipientsToExpire, component);
 
@@ -230,15 +226,13 @@ public static class ParameterTypeHelper
   {
     if (contextParam is IGH_Param param)
       foreach (var recipient in param.Recipients)
-      {
-        if (recipient is IGH_ActiveObject activeRecipient) recipients.Add(activeRecipient);
-      }
+        if (recipient is IGH_ActiveObject activeRecipient)
+          recipients.Add(activeRecipient);
   }
 
   private static void ExpireRecipients(HashSet<IGH_ActiveObject> recipients, GH_Component component)
   {
     foreach (var recipient in recipients)
-    {
       try
       {
         recipient.ExpirePreview(false);
@@ -248,7 +242,6 @@ public static class ParameterTypeHelper
         component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
           $"Error expiring component: {ex.Message}");
       }
-    }
   }
 
   /// <summary>
@@ -289,14 +282,12 @@ public static class ParameterTypeHelper
             // Iterate through all data in the param
             var allData = data.AllData(true);
             foreach (var item in allData)
-            {
               // Check if this item is FileDataGoo
               if (item?.GetType().Name == "FileDataGoo")
               {
                 hasFileData = true;
                 break;
               }
-            }
           }
           catch
           {

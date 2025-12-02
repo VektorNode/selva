@@ -29,7 +29,7 @@ public class FileData
   ///   Gets or sets a value indicating whether the file data is Base64 encoded.
   /// </summary>
   [JsonProperty("isBase64Encoded")]
-  public bool IsBase64Encoded { get; set; } = false;
+  public bool IsBase64Encoded { get; set; }
 
   /// <summary>
   ///   Gets or sets the subfolder path where the file should be stored. Defaults to an empty string.

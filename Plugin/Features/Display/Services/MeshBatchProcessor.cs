@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Rhino;
 using Rhino.Geometry;
@@ -70,9 +71,9 @@ public static class MeshBatchProcessor
     // Single allocation for all mesh data
     var allVertices = new float[totalVertexCount];
     var allFaces = new int[totalFaceCount];
-    var currentVertexOffset = 0;  // Offset in floats
-    var currentFaceOffset = 0;    // Offset in indices
-    var currentVertexCount = 0;   // Count of vertices (for face index rebasing)
+    var currentVertexOffset = 0; // Offset in floats
+    var currentFaceOffset = 0; // Offset in indices
+    var currentVertexCount = 0; // Count of vertices (for face index rebasing)
 
     // Copy mesh data directly to final arrays
     foreach (var group in groupedMeshes)
@@ -105,23 +106,20 @@ public static class MeshBatchProcessor
         // Adjust face indices and copy
         // mesh.Faces[i] is a vertex index within this mesh (0-based, relative to mesh start)
         // We need to offset it by the number of vertices already in the combined array
-        var baseVertexIndex = currentVertexCount;  // Number of vertices already in combined array
+        var baseVertexIndex = currentVertexCount; // Number of vertices already in combined array
         var faceSpan = allFaces.AsSpan(currentFaceOffset, faceCount);
-        for (int i = 0; i < faceCount; i++)
-        {
-          faceSpan[i] = mesh.Faces[i] + baseVertexIndex;
-        }
+        for (var i = 0; i < faceCount; i++) faceSpan[i] = mesh.Faces[i] + baseVertexIndex;
 
         currentVertexOffset += vertexCount;
         currentFaceOffset += faceCount;
-        currentVertexCount += vertexCount / 3;  // vertexCount is in floats, divide by 3 to get vertex count
+        currentVertexCount += vertexCount / 3; // vertexCount is in floats, divide by 3 to get vertex count
       }
 
       batch.Groups.Add(materialGroup);
     }
 
     // Compress using shared compression helper
-    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+    var stopwatch = Stopwatch.StartNew();
     batch.CompressedData = CompressionHelper.CompressGeometryData(allVertices, allFaces);
     stopwatch.Stop();
 

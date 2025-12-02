@@ -33,43 +33,12 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
   {
   }
 
-  internal static Bitmap ContextualiseIcon(Bitmap bitmap)
-  {
-    Bitmap bitmap1 = (Bitmap)bitmap.Clone();
-    using (Graphics graphics = Graphics.FromImage((Image)bitmap1))
-    {
-      graphics.SmoothingMode = SmoothingMode.None;
-      graphics.PixelOffsetMode = PixelOffsetMode.None;
-      graphics.FillRectangle(Brushes.Purple, 0, 16 /*0x10*/, 24, 7);
-    }
-
-    Color white = Color.White;
-    for (int x = 1; x < 9; ++x)
-    {
-      bitmap1.SetPixel(x, 17, white);
-      bitmap1.SetPixel(x, 19, white);
-      bitmap1.SetPixel(x, 21, white);
-    }
-
-    for (int x = 11; x < 22; x += 2)
-      bitmap1.SetPixel(x, 21, white);
-    bitmap1.SetPixel(11, 17, white);
-    bitmap1.SetPixel(13, 17, white);
-    bitmap1.SetPixel(12, 18, white);
-    bitmap1.SetPixel(12, 19, white);
-    bitmap1.SetPixel(12, 20, white);
-    return bitmap1;
-  }
-
   public override GH_Exposure Exposure => GH_Exposure.quinary;
 
   public override string TypeName => "ValueList";
   public override Guid ComponentGuid => new("0CC81276-5DB7-4306-9968-086524EC0C6E");
 
-  protected override Bitmap Internal_Icon_24x24
-  {
-    get => ContextualiseIcon(Resources.GetValueList);
-  }
+  protected override Bitmap Internal_Icon_24x24 => ContextualiseIcon(Resources.GetValueList);
 
   public bool TreeAccess { get; set; }
 
@@ -88,13 +57,11 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
 
       if (Sources != null)
         foreach (var source in Sources)
-        {
           if (source is GH_ValueList vl)
           {
             _connectedValueListGuid = vl.InstanceGuid;
             return vl;
           }
-        }
 
       return null;
     }
@@ -135,10 +102,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     get
     {
       var dict = new Dictionary<string, string>();
-      foreach (var item in ListItems)
-      {
-        dict[item.Name] = item.Expression;
-      }
+      foreach (var item in ListItems) dict[item.Name] = item.Expression;
 
       return dict;
     }
@@ -194,13 +158,11 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     {
       var firstValue = _contextual[0].Value;
       for (var i = 0; i < vl.ListItems.Count; i++)
-      {
         if (vl.ListItems[i].Expression == firstValue)
         {
           vl.SelectItem(i);
           break;
         }
-      }
     }
 
     ExpireSolution(false);
@@ -209,6 +171,34 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
   public bool AutoAssignContextualData(GH_ParameterContext context)
   {
     return ConnectedValueList != null;
+  }
+
+  internal static Bitmap ContextualiseIcon(Bitmap bitmap)
+  {
+    var bitmap1 = (Bitmap)bitmap.Clone();
+    using (var graphics = Graphics.FromImage(bitmap1))
+    {
+      graphics.SmoothingMode = SmoothingMode.None;
+      graphics.PixelOffsetMode = PixelOffsetMode.None;
+      graphics.FillRectangle(Brushes.Purple, 0, 16 /*0x10*/, 24, 7);
+    }
+
+    var white = Color.White;
+    for (var x = 1; x < 9; ++x)
+    {
+      bitmap1.SetPixel(x, 17, white);
+      bitmap1.SetPixel(x, 19, white);
+      bitmap1.SetPixel(x, 21, white);
+    }
+
+    for (var x = 11; x < 22; x += 2)
+      bitmap1.SetPixel(x, 21, white);
+    bitmap1.SetPixel(11, 17, white);
+    bitmap1.SetPixel(13, 17, white);
+    bitmap1.SetPixel(12, 18, white);
+    bitmap1.SetPixel(12, 19, white);
+    bitmap1.SetPixel(12, 20, white);
+    return bitmap1;
   }
 
   /// <summary>
@@ -228,10 +218,8 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     // Fall back to stored items if ValueList not connected
     var items = GetItemTuples();
     if (items.Count > 0)
-    {
       // Return first item's name
       return items[0].Name;
-    }
 
     return string.Empty;
   }
@@ -248,14 +236,12 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     if (vl == null) return false;
 
     for (var i = 0; i < vl.ListItems.Count; i++)
-    {
       // Match by name (primary) OR expression (Compute compatibility)
       if (vl.ListItems[i].Name == value || vl.ListItems[i].Expression == value)
       {
         vl.SelectItem(i);
         return true;
       }
-    }
 
     return false;
   }
@@ -346,9 +332,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     {
       m_data.Clear();
       for (var i = 0; i < _contextualDataTree.BranchCount; i++)
-      {
         m_data.AppendRange(_contextualDataTree.Branches[i], _contextualDataTree.Paths[i]);
-      }
 
       return;
     }
@@ -358,7 +342,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     if (Sources == null || Sources.Count == 0) return;
 
     foreach (var source in Sources)
-    {
       if (source is GH_ValueList vl)
       {
         // Track the connected ValueList
@@ -381,7 +364,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         // Handle non-ValueList sources by matching against our items
         ProcessGenericSource(source);
       }
-    }
   }
 
   private void ProcessGenericSource(IGH_Param source)
@@ -434,17 +416,15 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     // Try connected ValueList first
     var items = ListItems;
     for (var i = 0; i < items.Count; i++)
-    {
       // Match by expression OR by name
-      if (items[i].Expression == value || items[i].Name == value) return i;
-    }
+      if (items[i].Expression == value || items[i].Name == value)
+        return i;
 
     // Fall back to stored items
     for (var i = 0; i < _storedItems.Count; i++)
-    {
       // Match by expression OR by name
-      if (_storedItems[i].Expression == value || _storedItems[i].Name == value) return i;
-    }
+      if (_storedItems[i].Expression == value || _storedItems[i].Name == value)
+        return i;
 
     return -1;
   }
@@ -476,13 +456,11 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     var items = GetItemTuples();
     var itemsJson = new JArray();
     foreach (var item in items)
-    {
       itemsJson.Add(new JObject
       {
         { "name", item.Name },
         { "expression", item.Expression }
       });
-    }
 
     writer.SetString("StoredItems", itemsJson.ToString());
 
@@ -518,12 +496,10 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         var array = JArray.Parse(itemsJson);
         _storedItems.Clear();
         foreach (var item in array)
-        {
           _storedItems.Add((
             item["name"]?.ToString() ?? "",
             item["expression"]?.ToString() ?? ""
           ));
-        }
       }
       catch
       {

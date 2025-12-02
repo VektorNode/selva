@@ -143,7 +143,6 @@ public class LocalWebServer : IDisposable
   private async Task AcceptRequestsAsync(CancellationToken cancellationToken)
   {
     while (!cancellationToken.IsCancellationRequested && IsRunning)
-    {
       try
       {
         var context = await _httpListener.GetContextAsync();
@@ -159,7 +158,6 @@ public class LocalWebServer : IDisposable
       {
         Debug.WriteLine($"Error accepting HTTP request: {ex.Message}");
       }
-    }
   }
 
   /// <summary>
