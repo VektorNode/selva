@@ -1,3 +1,8 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-blue)](https://www.typescriptlang.org/)
+[![Svelte](https://img.shields.io/badge/Svelte-5.0-FF3E00)](https://svelte.dev)
+[![.NET](https://img.shields.io/badge/.NET-4.8%2F7.0-512BD4)](https://dotnet.microsoft.com/)
+
 # Selva
 
 A full-stack toolkit for building Grasshopper-driven web applications. Provides a type-safe TypeScript client for Rhino Compute, Grasshopper components for UI integration, and a web application that runs in both local (WebSocket) and cloud (Rhino.Compute) modes.
