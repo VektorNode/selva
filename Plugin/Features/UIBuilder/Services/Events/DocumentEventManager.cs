@@ -259,9 +259,12 @@ public class DocumentEventManager : IDisposable
     var fileOutputs = _valueCollector.CollectFileOutputs(_currentDocument, schema);
     var displayData = _valueCollector.CollectDisplayData(_currentDocument);
 
+    // Only include display data if allowLocalRendering is enabled in schema
+    bool includeDisplayData = schema.AllowLocalRendering ?? false;
+
     if (outputValues.Count > 0 || fileOutputs.Count > 0 || displayData.Count > 0)
     {
-      var _ = _communicationHandler.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData);
+      var _ = _communicationHandler.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData, includeDisplayData);
     }
   }
 }

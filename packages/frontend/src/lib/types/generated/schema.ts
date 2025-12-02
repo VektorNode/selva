@@ -277,6 +277,10 @@ export interface UISchema {
   lastModified?: string;
   enable3dViewer?: boolean;
   /**
+   * If true, display mesh data is sent to the preview. If false, meshes are only rendered in Rhino viewport.
+   */
+  allowLocalRendering?: boolean;
+  /**
    * If true, changes trigger immediate solving. If false, user must press Calculate button.
    */
   instanceSolve?: boolean;

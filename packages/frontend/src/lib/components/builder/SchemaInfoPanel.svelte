@@ -54,6 +54,18 @@
       </p>
       <div class="flex items-center gap-2">
         <Checkbox
+          id="enable-local-rendering"
+          checked={schema.allowLocalRendering}
+          onCheckedChange={(checked) => updateSchema({ allowLocalRendering: !!checked })}
+        />
+        <Label for="enable-3d-viewer" class="cursor-pointer">Enable Local Render</Label>
+      </div>
+      <p class="text-xs text-muted-foreground">
+        When enabled, users can render geometry locally in their browser without needing a remote
+        server.
+      </p>
+      <div class="flex items-center gap-2">
+        <Checkbox
           id="instance-solve"
           checked={schema.instanceSolve ?? true}
           onCheckedChange={(checked) => updateSchema({ instanceSolve: !!checked })}

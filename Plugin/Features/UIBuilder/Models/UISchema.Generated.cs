@@ -60,6 +60,12 @@ namespace Selva.Features.UIBuilder.Models
         public bool? Enable3dViewer { get; set; } = false;
 
 /// <summary>
+/// If true, display mesh data is sent to the preview. If false, meshes are only rendered in Rhino viewport.
+/// </summary>
+        [JsonProperty("allowLocalRendering", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool? AllowLocalRendering { get; set; } = false;
+
+/// <summary>
 /// If true, changes trigger immediate solving. If false, user must press Calculate button.
 /// </summary>
         [JsonProperty("instanceSolve", DefaultValueHandling = DefaultValueHandling.Ignore)]
