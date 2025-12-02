@@ -1,6 +1,6 @@
 <script lang="ts">
   import InputHandler from '$lib/InputHandler.svelte';
-  import { exampleInputs2 } from '$lib/utils/data.js';
+  import { exampleInputs2 } from '$lib/mocks/data.js';
 </script>
 
 <main>
