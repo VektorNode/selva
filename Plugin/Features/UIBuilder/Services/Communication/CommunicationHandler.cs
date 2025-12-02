@@ -338,9 +338,10 @@ public class CommunicationHandler : IDisposable
   /// <summary>
   ///   Broadcast parameter metadata changes (nickname, min/max, stepsize, etc.)
   /// </summary>
-  public async Task BroadcastMetadataChanges(List<AvailableParameter> changedParams)
+  public async Task BroadcastMetadataChanges(AvailableParameters changedParams)
   {
-    if (_webSocketServer != null && _webSocketServer.IsRunning && changedParams?.Count > 0)
+    if (_webSocketServer != null && _webSocketServer.IsRunning && changedParams != null &&
+        (changedParams.Inputs?.Count > 0 || changedParams.Outputs?.Count > 0))
     {
       var message = new
       {

@@ -1,6 +1,6 @@
 import type {
   UISchema,
-  AvailableParameter,
+  AvailableInput,
   AvailableOutput,
   InputParamSchema,
   TabConfig,
@@ -49,7 +49,7 @@ export function createLayoutItem(
   displayName: string,
   itemType: 'input' | 'output',
   itemCount: number,
-  availableParams: AvailableParameter[],
+  availableInputs: AvailableInput[],
   widgetType?: string,
   paramType?: string
 ): LayoutItem {
@@ -67,18 +67,18 @@ export function createLayoutItem(
 
   // Look up the full parameter to get all metadata (including options for ValueList)
   const fullParam =
-    itemType === 'input' ? availableParams.find((p) => p.id === paramId) : undefined;
+    itemType === 'input' ? availableInputs.find((p) => p.id === paramId) : undefined;
 
   // Get config if needed
   const config =
     itemType === 'input' && paramType
       ? createDefaultWidgetConfig(
         resolvedWidgetType as any,
-        fullParam || ({ paramType } as any),
+        fullParam || ({ type: paramType } as any),
         'input'
       )
       : itemType === 'output' && paramType
-        ? createDefaultWidgetConfig(resolvedWidgetType as any, { paramType } as any, 'output')
+        ? createDefaultWidgetConfig(resolvedWidgetType as any, { type: paramType } as any, 'output')
         : {};
 
   return itemType === 'input'
@@ -143,12 +143,12 @@ export function handleItemDrop(
   paramId: string,
   displayName: string,
   itemType: 'input' | 'output',
-  availableParams: AvailableParameter[],
+  availableParams: AvailableInput[],
   paramType?: string,
   widgetType?: string,
   targetItem?: LayoutItem,
   dropPosition?: 'before' | 'after',
-  outputType?: 'Print' | 'File'
+  outputType?: 'text' | 'number' | 'file'
 ) {
   // Check if already in this group
   if (group.items.some((i) => i.paramId === paramId)) {
@@ -167,7 +167,7 @@ export function handleItemDrop(
         {
           id: paramId,
           nickname: displayName,
-          paramType: (paramType as any) || 'Generic',
+          paramType: (paramType as any) || 'generic',
           description: '',
         } as InputParamSchema,
       ];
@@ -175,14 +175,14 @@ export function handleItemDrop(
   } else {
     const outputExists = schema.outputs.some((o) => o.id === paramId);
     if (!outputExists) {
-      const finalOutputType = outputType || 'print';
+      const finalOutputType = outputType || 'text';
 
       schema.outputs = [
         ...schema.outputs,
         {
           id: paramId,
           nickname: displayName,
-          outputType: finalOutputType,
+          type: finalOutputType,
           description: '',
         } as AvailableOutput,
       ];

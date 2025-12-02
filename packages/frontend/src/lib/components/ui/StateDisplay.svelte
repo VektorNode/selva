@@ -39,34 +39,35 @@
     },
   };
 
+  /* Fully semantic, contrast-safe mappings */
   const typeClasses = {
     loading: {
-      icon: 'text-blue-500',
-      title: 'text-blue-900 dark:text-blue-100',
-      message: 'text-blue-700 dark:text-blue-300',
-      border: 'border-blue-200 dark:border-blue-800',
-      background: 'bg-blue-50/50 dark:bg-blue-950/20',
+      icon: 'text-primary',
+      title: 'text-primary-foreground',
+      message: 'text-primary-foreground/80',
+      border: 'border-primary',
+      background: 'bg-primary/15',
     },
     error: {
-      icon: 'text-red-500',
-      title: 'text-red-900 dark:text-red-100',
-      message: 'text-red-700 dark:text-red-300',
-      border: 'border-red-200 dark:border-red-800',
-      background: 'bg-red-50/50 dark:bg-red-950/20',
+      icon: 'text-destructive',
+      title: 'text-destructive-foreground',
+      message: 'text-destructive-foreground/80',
+      border: 'border-destructive',
+      background: 'bg-destructive/15',
     },
     warning: {
-      icon: 'text-yellow-500',
-      title: 'text-yellow-900 dark:text-yellow-100',
-      message: 'text-yellow-700 dark:text-yellow-300',
-      border: 'border-yellow-200 dark:border-yellow-800',
-      background: 'bg-yellow-50/50 dark:bg-yellow-950/20',
+      icon: 'text-accent',
+      title: 'text-accent-foreground',
+      message: 'text-accent-foreground/80',
+      border: 'border-accent',
+      background: 'bg-accent/15',
     },
     empty: {
-      icon: 'text-gray-400 dark:text-gray-500',
-      title: 'text-gray-900 dark:text-gray-100',
-      message: 'text-gray-600 dark:text-gray-400',
-      border: 'border-gray-200 dark:border-gray-700',
-      background: 'bg-gray-50/50 dark:bg-gray-900/20',
+      icon: 'text-neutral',
+      title: 'text-neutral-foreground',
+      message: 'text-neutral-foreground/80',
+      border: 'border-neutral',
+      background: 'bg-neutral/15',
     },
   };
 
@@ -74,9 +75,11 @@
   const typeConfig = $derived(typeClasses[type]);
 </script>
 
-<Card.Root class="border-2 {typeConfig.border} {typeConfig.background} {className}">
-  <Card.Content class="flex flex-col items-center justify-center text-center {sizeConfig.container}">
-    <div class="flex items-center justify-center {sizeConfig.icon} {typeConfig.icon}">
+<Card.Root class="border-2 rounded-lg {typeConfig.border} {typeConfig.background} {className}">
+  <Card.Content
+    class="flex flex-col items-center justify-center text-center {sizeConfig.container}"
+  >
+    <div class="{sizeConfig.icon} {typeConfig.icon}">
       {#if type === 'loading'}
         <Loader class="w-full h-full animate-spin" />
       {:else if type === 'error'}
@@ -89,7 +92,9 @@
     </div>
 
     {#if title}
-      <h3 class="{sizeConfig.title} {typeConfig.title} mt-1">{title}</h3>
+      <h3 class="{sizeConfig.title} {typeConfig.title} mt-1">
+        {title}
+      </h3>
     {/if}
 
     {#if message}

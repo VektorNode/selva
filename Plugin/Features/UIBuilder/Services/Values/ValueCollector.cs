@@ -91,7 +91,7 @@ public class ValueCollector
 
     if (schema?.Outputs == null || schema.Outputs.Count == 0) return fileOutputData;
 
-    var fileOutputs = schema.Outputs.Where(o => o.OutputType == "file").ToList();
+    var fileOutputs = schema.Outputs.Where(o => o.Type == "file").ToList();
 
     foreach (var fileOutput in fileOutputs)
     {

@@ -153,10 +153,14 @@ public class DocumentEventManager : IDisposable
 
     try
     {
-      var metadataChanges = new List<AvailableParameter>();
+      var metadataChanges = new AvailableParameters
+      {
+        Inputs = new List<AvailableInput>(),
+        Outputs = new List<AvailableOutput>()
+      };
       MetadataChanged?.Invoke(this, new MetadataChangedEventArgs { Changes = metadataChanges });
 
-      if (metadataChanges.Count > 0)
+      if (metadataChanges.Inputs.Count > 0 || metadataChanges.Outputs.Count > 0)
       {
         var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
       }
@@ -206,7 +210,7 @@ public class DocumentEventManager : IDisposable
     try
     {
       var metadataChanges = _schemaManager.DetectMetadataChanges(_currentDocument, schema);
-      if (metadataChanges.Count > 0)
+      if (metadataChanges.Inputs.Count > 0 || metadataChanges.Outputs.Count > 0)
       {
         var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
         MetadataChanged?.Invoke(this, new MetadataChangedEventArgs
@@ -225,9 +229,10 @@ public class DocumentEventManager : IDisposable
   /// <summary>
   ///   Check if metadata changes require solution recalculation
   /// </summary>
-  private bool ShouldRecalculateAfterMetadataChange(List<AvailableParameter> changes)
+  private bool ShouldRecalculateAfterMetadataChange(AvailableParameters changes)
   {
-    return changes.Any(change =>
+    // Check input changes
+    var hasInputChanges = changes.Inputs.Any(change =>
     {
       var paramObj = _currentDocument.FindObject(change.Id, false);
       if (paramObj is GetValueListParameter && change.Options != null) return true; // ValueList options changed
@@ -238,6 +243,9 @@ public class DocumentEventManager : IDisposable
 
       return false;
     });
+
+    // Output changes don't typically require recalculation
+    return hasInputChanges;
   }
 
   /// <summary>
@@ -270,6 +278,6 @@ public class ParametersChangedEventArgs : EventArgs
 /// </summary>
 public class MetadataChangedEventArgs : EventArgs
 {
-  public List<AvailableParameter> Changes { get; set; }
+  public AvailableParameters Changes { get; set; }
   public bool RequiresRecalculation { get; set; }
 }

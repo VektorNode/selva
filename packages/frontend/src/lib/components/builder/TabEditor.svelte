@@ -2,7 +2,7 @@
   import * as Card from '$lib/components/ui/card';
   import { Button, StateDisplay } from '$lib/components/ui';
   import { EditableTabNav, EditableGroup, BuilderGroupItem } from '$lib/components/builder';
-  import type { TabConfig, AvailableParameter } from '$lib/types/generated';
+  import type { TabConfig, AvailableInput } from '$lib/types/generated';
 
   interface Props {
     tabs: TabConfig[];
@@ -16,7 +16,7 @@
     onParameterDrop: (tabId: string, groupId: string, event: CustomEvent) => void;
     onReorder: (event: CustomEvent) => void;
     onRemoveItem: (tabId: string, groupId: string, itemId: string) => void;
-    getParameterInfo: (paramId: string) => AvailableParameter | undefined;
+    getParameterInfo: (paramId: string) => AvailableInput | undefined;
   }
 
   let {

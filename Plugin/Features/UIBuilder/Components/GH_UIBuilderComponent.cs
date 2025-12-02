@@ -89,7 +89,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     var document = OnPingDocument();
     if (document == null || _schemaManager == null)
-      return new AvailableParameters { SessionId = _sessionId, Parameters = new List<AvailableParameter>() };
+      return new AvailableParameters { SessionId = _sessionId, Inputs = new List<AvailableInput>(), Outputs = new List<AvailableOutput>() };
 
     return _schemaManager.ScanParameters(document);
   }
@@ -564,16 +564,15 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     try
     {
       var currentParams = GetCurrentAvailableParameters();
-      var currentOutputs = GetCurrentAvailableOutputs();
 
       if (_embeddedSchema == null)
       {
-        if (currentParams.Parameters.Count > 0 || currentOutputs.Count > 0)
+        if (currentParams.Inputs.Count > 0 || currentParams.Outputs.Count > 0)
         {
           var _ = _communicationHandler.BroadcastMessage("parametersAdded",
-            new { availableParams = currentParams.Parameters, availableOutputs = currentOutputs });
+            new { availableParams = currentParams });
           AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-            $"Parameter(s)/Output(s) detected: {currentParams.Parameters.Count} params, {currentOutputs.Count} outputs. Check web UI.");
+            $"Parameter(s)/Output(s) detected: {currentParams.Inputs.Count} params, {currentParams.Outputs.Count} outputs. Check web UI.");
         }
 
         return;
@@ -590,12 +589,12 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       }
       else
       {
-        var newParamIds = currentParams.Parameters
+        var newParamIds = currentParams.Inputs
           .Where(p => !_embeddedSchema.Inputs.Any(i => i.Id == p.Id))
           .Select(p => p.Id)
           .ToList();
 
-        var newOutputIds = currentOutputs
+        var newOutputIds = currentParams.Outputs
           .Where(o => !_embeddedSchema.Outputs.Any(so => so.Id == o.Id))
           .Select(o => o.Id)
           .ToList();
@@ -603,7 +602,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         if (newParamIds.Count > 0 || newOutputIds.Count > 0)
         {
           var _ = _communicationHandler.BroadcastMessage("parametersAdded",
-            new { availableParams = currentParams.Parameters, availableOutputs = currentOutputs });
+            new { availableParams = currentParams });
           AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
             $"New items added: {newParamIds.Count} param(s), {newOutputIds.Count} output(s). Check web UI.");
         }
@@ -622,7 +621,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     try
     {
-      if (e.Changes.Count > 0 && _currentDocument != null)
+      if ((e.Changes.Inputs.Count > 0 || e.Changes.Outputs.Count > 0) && _currentDocument != null)
       {
         _currentDocument.Modified();
 

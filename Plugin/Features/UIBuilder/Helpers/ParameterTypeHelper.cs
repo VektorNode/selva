@@ -41,7 +41,7 @@ public static class ParameterTypeHelper
   public static void ExtractNumberParameterConstraints(
     IGH_ContextualParameter param,
     IGH_Param ghParam,
-    AvailableParameter availableParam)
+    AvailableInput availableParam)
   {
     double? minimum = null;
     double? maximum = null;
@@ -163,7 +163,7 @@ public static class ParameterTypeHelper
 
   private static void ExtractParameterMinMax(
     IGH_ContextualParameter param,
-    AvailableParameter availableParam,
+    AvailableInput availableParam,
     ref double? minimum,
     ref double? maximum)
   {
@@ -317,7 +317,7 @@ public static class ParameterTypeHelper
           {
             Id = instanceGuid,
             Nickname = nickname,
-            OutputType = "file"
+            Type = "file"
           });
         }
       }

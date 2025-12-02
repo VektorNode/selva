@@ -5,7 +5,7 @@
  * and run `npm run generate:ts` in the schemas directory to regenerate this file.
  */
 
-export type GrasshopperParamType = 'Number' | 'Integer' | 'Boolean' | 'Text' | 'ValueList' | 'Generic' | 'File';
+export type GrasshopperParamType = 'number' | 'integer' | 'boolean' | 'text' | 'valueList' | 'generic';
 export type LayoutItem =
   | InputNumberLayoutItem
   | InputTextLayoutItem
@@ -40,7 +40,7 @@ export interface OutputParamSchema {
   paramType: GrasshopperParamType;
   description?: string;
 }
-export interface AvailableParameter {
+export interface AvailableInput {
   /**
    * Grasshopper parameter instance GUID
    */
@@ -48,8 +48,7 @@ export interface AvailableParameter {
   name: string;
   nickname: string;
   description: string;
-  category: 'input' | 'output';
-  paramType: GrasshopperParamType;
+  type: GrasshopperParamType;
   default?: unknown;
   minimum?: number;
   maximum?: number;
@@ -58,17 +57,11 @@ export interface AvailableParameter {
   atMost?: number;
   treeAccess?: boolean;
   /**
-   * Key-value pairs for dropdown options
+   * Key-value pairs for dropdown/selection options
    */
   options?: {
     [k: string]: string | undefined;
   };
-  [k: string]: unknown | undefined;
-}
-export interface AvailableParameters {
-  sessionId: string;
-  timestamp: string;
-  parameters: AvailableParameter[];
   [k: string]: unknown | undefined;
 }
 export interface AvailableOutput {
@@ -79,9 +72,22 @@ export interface AvailableOutput {
   nickname: string;
   description?: string;
   /**
-   * Type of output component
+   * Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files
    */
-  outputType: 'Print' | 'File';
+  type: 'text' | 'number' | 'file';
+}
+export interface AvailableParameters {
+  sessionId: string;
+  timestamp: string;
+  /**
+   * List of input parameters available for UI building
+   */
+  inputs: AvailableInput[];
+  /**
+   * List of output components available for UI building
+   */
+  outputs: AvailableOutput[];
+  [k: string]: unknown | undefined;
 }
 export interface NumberWidgetConfig {
   minimum?: number;

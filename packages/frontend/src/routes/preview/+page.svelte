@@ -148,7 +148,7 @@
 
         // Initialize values from available params defaults
         processedSchema.inputs.forEach((input: any) => {
-          const availableParam = availableParams?.parameters?.find((p) => p.id === input.id);
+          const availableParam = availableParams?.inputs?.find((p) => p.id === input.id);
           const defaultValue =
             availableParam?.default !== null && availableParam?.default !== undefined
               ? availableParam.default

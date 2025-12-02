@@ -4,21 +4,21 @@
   import { SchemaInfoPanel, AvailableItemList } from '$lib/components/builder';
   import type {
     UISchema,
-    AvailableParameter,
+    AvailableInput,
     AvailableOutput,
     TabConfig,
   } from '$lib/types/generated';
 
   interface Props {
     schema: UISchema;
-    availableInputs: AvailableParameter[];
+    availableInputs: AvailableInput[];
     availableOutputs: AvailableOutput[];
     placedIds: Set<string>;
     syncNeeded?: boolean;
     onSchemaChange: (schema: UISchema) => void;
     onSync: () => void;
-    onAddToGroup: (tabId: string, groupId: string, item: AvailableParameter | AvailableOutput) => void;
-    onAddToNewGroup: (path: string, item: AvailableParameter | AvailableOutput) => void;
+    onAddToGroup: (tabId: string, groupId: string, item: AvailableInput | AvailableOutput) => void;
+    onAddToNewGroup: (path: string, item: AvailableInput | AvailableOutput) => void;
   }
 
   let {

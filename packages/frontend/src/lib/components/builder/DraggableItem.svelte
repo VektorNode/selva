@@ -1,20 +1,20 @@
 <script lang="ts">
   import { dragStore } from '$lib/stores/dragStore.svelte';
-  import type { AvailableParameter, AvailableOutput, TabConfig } from '$lib/types/generated';
+  import type { AvailableInput, AvailableOutput, TabConfig } from '$lib/types/generated';
   import * as Card from '$lib/components/ui/card';
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { Input } from '$lib/components/ui';
   import { FolderPlus } from '@lucide/svelte';
 
   interface Props {
-    item: AvailableParameter | AvailableOutput;
+    item: AvailableInput | AvailableOutput;
     tabs?: TabConfig[];
     onAddToGroup?: (
       tabId: string,
       groupId: string,
-      item: AvailableParameter | AvailableOutput
+      item: AvailableInput | AvailableOutput
     ) => void;
-    onAddToNewGroup?: (path: string, item: AvailableParameter | AvailableOutput) => void;
+    onAddToNewGroup?: (path: string, item: AvailableInput | AvailableOutput) => void;
   }
 
   let { item, tabs = [], onAddToGroup, onAddToNewGroup }: Props = $props();
@@ -22,7 +22,7 @@
   let newGroupPath = $state('');
 
   // Infer variant from item type
-  const variant = 'paramType' in item ? 'input' : 'output';
+  const variant = $derived('name' in item ? 'input' : 'output');
 
   let isDragging = $state(false);
 
@@ -45,27 +45,24 @@
     dragStore.clear();
   }
 
-  const badgeContent =
-    'paramType' in item ? item.paramType : (item as AvailableOutput).outputType || 'Unknown';
+  const badgeContent = $derived(
+    'name' in item ? item.type : (item as AvailableOutput).type || 'Unknown'
+  );
 
   // Variant-based styling
-  const styles = {
+  const styles = $derived({
     input: {
       bg: 'bg-inputparam',
       badgeBg: 'bg-primary/10',
       badgeText: 'text-primary',
     },
     output: {
-      bg: badgeContent === 'Print' ? 'bg-outputparam' : 'bg-downloadparam',
+      bg: badgeContent === 'file' ? 'bg-downloadparam' : 'bg-outputparam',
       badgeBg: 'bg-primary/10',
       badgeText: 'text-primary',
     },
-  };
-  const style = styles[variant];
-
-  function capitalize(str: string) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-  }
+  });
+  const style = $derived(styles[variant]);
 
   function handleAddToGroup(tabId: string, groupId: string) {
     onAddToGroup?.(tabId, groupId, item);
@@ -107,7 +104,7 @@
           >{item.nickname || ('name' in item ? item.name : 'Unknown')}</strong
         >
         <span class={`rounded px-2 py-1 text-sm ${style.badgeBg} ${style.badgeText}`}>
-          {capitalize(badgeContent)}
+          {badgeContent}
         </span>
       </div>
       <span class="cursor-grab font-bold text-muted-foreground select-none">⋮⋮</span>

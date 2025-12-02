@@ -1,6 +1,6 @@
 <script lang="ts">
   import type {
-    AvailableParameter,
+    AvailableInput,
     AvailableOutput,
     GrasshopperParamType,
     TabConfig,
@@ -12,13 +12,13 @@
   import { Search, X } from '@lucide/svelte';
 
   interface AvailableItemListProps {
-    items: (AvailableParameter | AvailableOutput)[];
+    items: (AvailableInput | AvailableOutput)[];
     title: string;
     placedIds?: Set<string>;
     emptyMessage?: string;
     tabs?: TabConfig[];
-    onAddToGroup?: (tabId: string, groupId: string, item: AvailableParameter | AvailableOutput) => void;
-    onAddToNewGroup?: (path: string, item: AvailableParameter | AvailableOutput) => void;
+    onAddToGroup?: (tabId: string, groupId: string, item: AvailableInput | AvailableOutput) => void;
+    onAddToNewGroup?: (path: string, item: AvailableInput | AvailableOutput) => void;
   }
 
   let {
@@ -34,17 +34,17 @@
   let searchQuery = $state('');
   let selectedType = $state<GrasshopperParamType | 'all' | string>('all');
 
-  const isParameter = (item: AvailableParameter | AvailableOutput): item is AvailableParameter => {
-    return 'paramType' in item;
+  const isParameter = (item: AvailableInput | AvailableOutput): item is AvailableInput => {
+    return 'name' in item;
   };
 
   const availableTypes = $derived.by(() => {
     const types = new Set<GrasshopperParamType | string>();
     items.forEach((item) => {
       if (isParameter(item)) {
-        types.add(item.paramType);
+        types.add(item.type);
       } else {
-        types.add(item.outputType);
+        types.add(item.type);
       }
     });
     return Array.from(types).sort();
@@ -66,11 +66,7 @@
 
     if (selectedType !== 'all') {
       filtered = filtered.filter((item) => {
-        if (isParameter(item)) {
-          return item.paramType === selectedType;
-        } else {
-          return item.outputType === selectedType;
-        }
+        return item.type === selectedType;
       });
     }
 

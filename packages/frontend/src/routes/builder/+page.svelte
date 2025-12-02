@@ -4,12 +4,7 @@
   import { PageContainer, PageHeader } from '$lib/components/layout';
   import { StateDisplay, Button } from '$lib/components/ui';
   import { DragDropContext, BuilderSidebar, TabEditor } from '$lib/components/builder';
-  import type {
-    UISchema,
-    AvailableParameter,
-    AvailableOutput,
-    LayoutItem,
-  } from '$lib/types/generated';
+  import type { UISchema, AvailableInput, AvailableOutput, LayoutItem } from '$lib/types/generated';
   import { initializeWebSocketSession } from '$lib/utils/session';
   import {
     handleItemDrop,
@@ -53,7 +48,7 @@
   });
 
   const availableInputs = $derived(
-    builderState?.state.availableParams.filter((p) => !placedInLayoutIds().has(p.id)) || []
+    builderState?.state.availableInputs.filter((p) => !placedInLayoutIds().has(p.id)) || []
   );
 
   const availableOutputsUnplaced = $derived(
@@ -109,8 +104,6 @@
   function handleParameterDrop(tabId: string, groupId: string, event: CustomEvent) {
     if (!builderState?.state.schema) return;
 
-    console.log('[Builder] Handling parameter/downloadable drop:', event.detail);
-
     const { dropType, data, targetItem, dropPosition, sourceTabId, sourceGroupId, sourceItem } =
       event.detail;
 
@@ -137,34 +130,34 @@
 
     // Handle dropping inputs or outputs
     if (dropType === 'input') {
-      const param = data as AvailableParameter;
+      const param = data as AvailableInput;
       handleItemDrop(
         builderState.state.schema,
         group,
         param.id,
         param.nickname || param.name,
         'input',
-        builderState.state.availableParams,
-        param.paramType,
+        builderState.state.availableInputs,
+        param.type,
         undefined,
         targetItem,
         dropPosition
       );
     } else if (dropType === 'output') {
       const output = data as AvailableOutput;
-      const widgetType = output.outputType === 'File' ? 'File' : 'text';
+      const widgetType = output.type === 'file' ? 'file' : 'text';
       handleItemDrop(
         builderState.state.schema,
         group,
         output.id,
         output.nickname,
         'output',
-        builderState.state.availableParams,
+        builderState.state.availableInputs,
         undefined,
         widgetType,
         targetItem,
         dropPosition,
-        output.outputType
+        output.type
       );
     }
   }
@@ -215,7 +208,7 @@
   }
 
   function getParameterInfo(paramId: string) {
-    return builderState?.state.availableParams.find((p) => p.id === paramId);
+    return builderState?.state.availableInputs.find((p) => p.id === paramId);
   }
 
   /**
@@ -224,7 +217,7 @@
   function handleAddToGroup(
     tabId: string,
     groupId: string,
-    item: AvailableParameter | AvailableOutput
+    item: AvailableInput | AvailableOutput
   ) {
     if (!builderState?.state.schema) return;
 
@@ -234,11 +227,11 @@
     const group = tab.groups.find((g) => g.id === groupId);
     if (!group) return;
 
-    const itemType = 'paramType' in item ? 'input' : 'output';
-    const paramType = 'paramType' in item ? item.paramType : undefined;
+    const itemType = 'name' in item ? 'input' : 'output';
+    const paramType = 'name' in item ? item.type : undefined;
     const widgetType =
-      'paramType' in item ? undefined : item.outputType === 'File' ? 'File' : 'text';
-    const outputType = 'paramType' in item ? undefined : item.outputType;
+      'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
+    const outputType = 'name' in item ? undefined : item.type;
 
     handleItemDrop(
       builderState.state.schema,
@@ -246,7 +239,7 @@
       item.id,
       item.nickname || ('name' in item ? item.name : 'Unknown'),
       itemType,
-      builderState.state.availableParams,
+      builderState.state.availableInputs,
       paramType,
       widgetType,
       undefined,
@@ -260,7 +253,7 @@
   /**
    * Handle adding an item to a new group via context menu
    */
-  function handleAddToNewGroup(path: string, item: AvailableParameter | AvailableOutput) {
+  function handleAddToNewGroup(path: string, item: AvailableInput | AvailableOutput) {
     if (!builderState?.state.schema) return;
 
     const schema = builderState.state.schema;
@@ -311,11 +304,11 @@
     }
 
     // Add item to group
-    const itemType = 'paramType' in item ? 'input' : 'output';
-    const paramType = 'paramType' in item ? item.paramType : undefined;
+    const itemType = 'name' in item ? 'input' : 'output';
+    const paramType = 'name' in item ? item.type : undefined;
     const widgetType =
-      'paramType' in item ? undefined : item.outputType === 'File' ? 'File' : 'Text';
-    const outputType = 'paramType' in item ? undefined : item.outputType;
+      'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
+    const outputType = 'name' in item ? undefined : item.type;
 
     handleItemDrop(
       schema,
@@ -323,7 +316,7 @@
       item.id,
       item.nickname || ('name' in item ? item.name : 'Unknown'),
       itemType,
-      builderState.state.availableParams,
+      builderState.state.availableInputs,
       paramType,
       widgetType,
       undefined,

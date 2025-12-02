@@ -114,12 +114,12 @@ export function createDefaultSchema(): UISchema {
  */
 export function getDefaultValue(paramType: string): unknown {
   switch (paramType) {
-    case 'Number':
-    case 'Integer':
+    case 'number':
+    case 'integer':
       return 0;
-    case 'Boolean':
+    case 'boolean':
       return false;
-    case 'Text':
+    case 'text':
       return '';
     default:
       return null;
@@ -133,16 +133,15 @@ export function processInitialDataSchema(
   message: {
     schema?: UISchema;
     availableParams?: AvailableParameters;
-    availableOutputs?: AvailableOutput[];
   },
   createNewIfMissing: boolean = false
 ): {
   schema: UISchema | null;
-  availableParams: AvailableParameters['parameters'];
-  availableOutputs: AvailableOutput[];
+  availableInputs: AvailableParameters['inputs'];
+  availableOutputs: AvailableParameters['outputs'];
 } {
-  const availableParams = message.availableParams?.parameters || [];
-  const availableOutputs = message.availableOutputs || [];
+  const availableInputs = message.availableParams?.inputs || [];
+  const availableOutputs = message.availableParams?.outputs || [];
   let schema = message.schema || null;
 
   if (!schema && createNewIfMissing) {
@@ -151,5 +150,5 @@ export function processInitialDataSchema(
     schema = ensureSchemaLayoutDefaults(schema);
   }
 
-  return { schema, availableParams, availableOutputs };
+  return { schema, availableInputs, availableOutputs };
 }

@@ -1,10 +1,10 @@
 import { toast } from '$lib/components/ui/sonner';
-import type { UISchema, AvailableParameter, AvailableOutput } from '$lib/types/generated';
+import type { UISchema, AvailableInput, AvailableOutput } from '$lib/types/generated';
 import { processInitialDataSchema } from '$lib/utils/session';
 import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 
 interface BuilderWebSocketState {
-  availableParams: AvailableParameter[];
+  availableInputs: AvailableInput[];
   availableOutputs: AvailableOutput[];
   schema: UISchema | null;
   loading: boolean;
@@ -17,7 +17,7 @@ export function useBuilderState(sessionId: string) {
   const wsState = getWebSocketState();
 
   const state = $state<BuilderWebSocketState>({
-    availableParams: [],
+    availableInputs: [],
     availableOutputs: [],
     schema: null,
     loading: true,
@@ -30,13 +30,12 @@ export function useBuilderState(sessionId: string) {
     if (message.sessionId !== sessionId) return;
 
     const result = processInitialDataSchema(message, true);
-    console.log('[Builder] Received initial data:', result);
 
-    state.availableParams = result.availableParams;
+    state.availableInputs = result.availableInputs;
     state.availableOutputs = result.availableOutputs;
     state.schema = result.schema;
 
-    if (state.availableParams.length === 0 && state.availableOutputs.length === 0) {
+    if (state.availableInputs.length === 0 && state.availableOutputs.length === 0) {
       state.error =
         'No parameters or outputs found. Please ensure the UI Builder component is active in Grasshopper and click Refresh.';
     }
@@ -61,7 +60,6 @@ export function useBuilderState(sessionId: string) {
   function handleMetadataUpdated(message: any) {
     if (message.sessionId !== sessionId || !state.schema) return;
 
-    console.log('[Builder] Parameter metadata updated:', message.changedParams);
 
     const changedParams = message.changedParams || [];
     if (changedParams.length === 0) return;
@@ -84,19 +82,19 @@ export function useBuilderState(sessionId: string) {
           input.description = updated.description;
         }
 
-        // Update available params list
-        const availIndex = state.availableParams.findIndex((p) => p.id === updated.id);
+        // Update available inputs list
+        const availIndex = state.availableInputs.findIndex((p) => p.id === updated.id);
         if (availIndex !== -1) {
           if (updated.nickname !== undefined)
-            state.availableParams[availIndex].nickname = updated.nickname;
+            state.availableInputs[availIndex].nickname = updated.nickname;
           if (updated.description !== undefined)
-            state.availableParams[availIndex].description = updated.description;
+            state.availableInputs[availIndex].description = updated.description;
           if (updated.minimum !== undefined)
-            state.availableParams[availIndex].minimum = updated.minimum;
+            state.availableInputs[availIndex].minimum = updated.minimum;
           if (updated.maximum !== undefined)
-            state.availableParams[availIndex].maximum = updated.maximum;
+            state.availableInputs[availIndex].maximum = updated.maximum;
           if (updated.stepSize !== undefined)
-            state.availableParams[availIndex].stepSize = updated.stepSize;
+            state.availableInputs[availIndex].stepSize = updated.stepSize;
         }
       }
 
@@ -150,7 +148,7 @@ export function useBuilderState(sessionId: string) {
 
     if (removedCount > 0) {
       // Remove from available lists
-      state.availableParams = state.availableParams.filter((p) => !removedIds.includes(p.id));
+      state.availableInputs = state.availableInputs.filter((p) => !removedIds.includes(p.id));
       state.availableOutputs = state.availableOutputs.filter((o) => !removedIds.includes(o.id));
 
       // Remove from schema
@@ -190,20 +188,21 @@ export function useBuilderState(sessionId: string) {
   function handleParametersAdded(message: any) {
     if (message.sessionId !== sessionId) return;
 
+    const availableParams = message.availableParams;
     console.log('[Builder] New items added to Grasshopper:', {
-      params: message.availableParams,
-      outputs: message.availableOutputs,
+      inputs: availableParams?.inputs,
+      outputs: availableParams?.outputs,
     });
 
     let updated = false;
 
-    if (message.availableParams && Array.isArray(message.availableParams)) {
-      state.availableParams = message.availableParams;
+    if (availableParams?.inputs && Array.isArray(availableParams.inputs)) {
+      state.availableInputs = availableParams.inputs;
       updated = true;
     }
 
-    if (message.availableOutputs && Array.isArray(message.availableOutputs)) {
-      state.availableOutputs = message.availableOutputs;
+    if (availableParams?.outputs && Array.isArray(availableParams.outputs)) {
+      state.availableOutputs = availableParams.outputs;
       updated = true;
     }
 

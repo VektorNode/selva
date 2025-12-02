@@ -23,7 +23,7 @@ public class SchemaManager
   }
 
   /// <summary>
-  ///   Scan document and return available parameters (inputs only)
+  ///   Scan document and return available parameters (inputs and outputs)
   /// </summary>
   public AvailableParameters ScanParameters(GH_Document document)
   {
@@ -36,7 +36,8 @@ public class SchemaManager
     {
       SessionId = _sessionId,
       Timestamp = DateTime.UtcNow,
-      Parameters = new List<AvailableParameter>()
+      Inputs = new List<AvailableInput>(),
+      Outputs = ScanOutputs(document)
     };
 
     foreach (var param in allParams)
@@ -47,14 +48,13 @@ public class SchemaManager
       var ghParam = param as IGH_Param;
       var paramType = GetParameterTypeName(param);
 
-      var availableParam = new AvailableParameter
+      var availableParam = new AvailableInput
       {
         Id = docObj.InstanceGuid,
         Name = docObj.Name,
         Nickname = docObj.NickName,
         Description = docObj.Description ?? "",
-        Category = "input",
-        ParamType = paramType,
+        Type = paramType,
         Default = null, // Will be set below based on parameter type
         AtLeast = param.AtLeast,
         AtMost = param.AtMost
@@ -113,7 +113,7 @@ public class SchemaManager
       }
 
       ParameterTypeHelper.ExtractNumberParameterConstraints(param, ghParam, availableParam);
-      availableParameters.Parameters.Add(availableParam);
+      availableParameters.Inputs.Add(availableParam);
     }
 
     return availableParameters;
@@ -135,16 +135,23 @@ public class SchemaManager
     {
       if (output == null) continue;
 
-      // Determine output type based on component type
-      var outputType = "print"; // Default
-      if (output.Name.IndexOf("Bake", StringComparison.OrdinalIgnoreCase) >= 0) outputType = "bake";
+      // Determine output display type based on component content
+      // Try to parse if the content is numeric (for Print components)
+      var displayType = "text"; // Default for Print components
+
+      // For Print components, try to detect if output is numeric
+      if (output.Name.IndexOf("Print", StringComparison.OrdinalIgnoreCase) >= 0)
+      {
+        // Check if we can infer numeric output (simplified - in real scenario would need input analysis)
+        displayType = "text"; // Keep as text by default, can be enhanced based on actual output
+      }
 
       outputs.Add(new AvailableOutput
       {
         Id = output.InstanceGuid,
         Nickname = output.NickName,
         Description = output.Description ?? "",
-        OutputType = outputType
+        Type = displayType
       });
     }
 
@@ -157,7 +164,7 @@ public class SchemaManager
         Id = fileOutput.Id,
         Nickname = fileOutput.Nickname,
         Description = fileOutput.Description ?? "",
-        OutputType = "file"
+        Type = "file"
       });
     }
 
@@ -169,7 +176,7 @@ public class SchemaManager
   /// </summary>
   public List<string> ValidateDuplicates(AvailableParameters parameters)
   {
-    return parameters.Parameters
+    return parameters.Inputs
       .GroupBy(p => p.Nickname)
       .Where(g => g.Count() > 1)
       .Select(g => g.Key)
@@ -246,7 +253,7 @@ public class SchemaManager
   {
     if (contextParam is IGH_Param param) return GetParameterTypeNameFromParam(param);
 
-    return "Unknown";
+    return "generic";
   }
 
   /// <summary>
@@ -254,35 +261,35 @@ public class SchemaManager
   /// </summary>
   private string GetParameterTypeNameFromParam(IGH_Param param)
   {
-    if (param == null) return "Unknown";
+    if (param == null) return "generic";
 
     var typeName = param.GetType().Name;
 
     //Will make proper use of this in the future
     var typeKeywords = new Dictionary<string, string>
     {
-      { "GetNumberParameter", "Number" },
-      { "Slider", "Number" },
-      { "ValueList", "ValueList" },
-      { "Integer", "Integer" },
-      { "Boolean", "Boolean" },
-      { "Toggle", "Boolean" },
-      { "String", "Text" },
-      { "Text", "Text" },
-      { "Panel", "Text" },
-      { "Point", "Point" },
-      { "Vector", "Vector" },
-      { "Plane", "Plane" },
-      { "Line", "Line" },
-      { "Circle", "Circle" },
-      { "Rectangle", "Rectangle" },
-      { "Box", "Box" },
-      { "Curve", "Curve" },
-      { "Surface", "Surface" },
-      { "Brep", "Brep" },
-      { "Mesh", "Mesh" },
-      { "SubD", "SubD" },
-      { "Geometry", "Geometry" }
+      { "GetNumberParameter", "number" },
+      { "Slider", "number" },
+      { "ValueList", "valueList" },
+      { "Integer", "integer" },
+      { "Boolean", "boolean" },
+      { "Toggle", "boolean" },
+      { "String", "text" },
+      { "Text", "text" },
+      { "Panel", "text" },
+      { "Point", "point" },
+      { "Vector", "vector" },
+      { "Plane", "plane" },
+      { "Line", "line" },
+      { "Circle", "circle" },
+      { "Rectangle", "rectangle" },
+      { "Box", "box" },
+      { "Curve", "curve" },
+      { "Surface", "surface" },
+      { "Brep", "brep" },
+      { "Mesh", "mesh" },
+      { "SubD", "subd" },
+      { "Geometry", "geometry" }
     };
 
     foreach (var kvp in typeKeywords)
@@ -290,16 +297,22 @@ public class SchemaManager
       if (typeName.Contains(kvp.Key)) return kvp.Value;
     }
 
-    return "Generic";
+    return "generic";
   }
 
   /// <summary>
   ///   Detect metadata changes in parameters since last scan.
-  ///   Returns list of parameters with changed metadata and also applies changes to the schema.
+  ///   Returns AvailableParameters with changed metadata and also applies changes to the schema.
   /// </summary>
-  public List<AvailableParameter> DetectMetadataChanges(GH_Document document, UISchema schema)
+  public AvailableParameters DetectMetadataChanges(GH_Document document, UISchema schema)
   {
-    var changes = new List<AvailableParameter>();
+    var changes = new AvailableParameters
+    {
+      SessionId = _sessionId,
+      Timestamp = DateTime.UtcNow,
+      Inputs = new List<AvailableInput>(),
+      Outputs = new List<AvailableOutput>()
+    };
 
     if (schema == null) return changes;
 
@@ -315,9 +328,9 @@ public class SchemaManager
       if (_metadataCache.TryGetValue(inputParam.Id, out var previousSnapshot))
         if (!currentSnapshot.Equals(previousSnapshot))
         {
-          // Metadata changed - create updated AvailableParameter
-          var updatedParam = CreateAvailableParameterFromSnapshot(currentSnapshot, inputParam.Id, "input");
-          changes.Add(updatedParam);
+          // Metadata changed - create updated AvailableInput
+          var updatedParam = CreateAvailableInputFromSnapshot(currentSnapshot, inputParam.Id);
+          changes.Inputs.Add(updatedParam);
         }
 
       // Always update cache with current state
@@ -336,8 +349,8 @@ public class SchemaManager
       if (_metadataCache.TryGetValue(outputParam.Id, out var previousSnapshot))
         if (!currentSnapshot.Equals(previousSnapshot))
         {
-          var updatedParam = CreateAvailableParameterFromSnapshot(currentSnapshot, outputParam.Id, "output");
-          changes.Add(updatedParam);
+          var updatedParam = CreateAvailableOutputFromSnapshot(currentSnapshot, outputParam.Id);
+          changes.Outputs.Add(updatedParam);
         }
 
       // Always update cache with current state
@@ -345,7 +358,7 @@ public class SchemaManager
     }
 
     // Apply changes to the schema so it stays in sync
-    if (changes.Count > 0) ApplyMetadataChangesToSchema(schema, changes);
+    if (changes.Inputs.Count > 0 || changes.Outputs.Count > 0) ApplyMetadataChangesToSchema(schema, changes);
 
     return changes;
   }
@@ -354,11 +367,13 @@ public class SchemaManager
   ///   Apply detected metadata changes to the schema.
   ///   Updates layout item configs (min/max/stepSize for numbers, options for dropdowns).
   /// </summary>
-  public void ApplyMetadataChangesToSchema(UISchema schema, List<AvailableParameter> changes)
+  public void ApplyMetadataChangesToSchema(UISchema schema, AvailableParameters changes)
   {
-    if (schema?.Layout?.Tabs == null || changes == null || changes.Count == 0) return;
+    if (schema?.Layout?.Tabs == null || changes == null) return;
+    if (changes.Inputs.Count == 0 && changes.Outputs.Count == 0) return;
 
-    foreach (var change in changes)
+    // Process input changes
+    foreach (var change in changes.Inputs)
     {
       // Find and update the layout item for this parameter
       foreach (var tab in schema.Layout.Tabs)
@@ -400,6 +415,33 @@ public class SchemaManager
         inputParam.Description = change.Description;
       }
     }
+
+    // Process output changes
+    foreach (var change in changes.Outputs)
+    {
+      // Update displayName/description in layout items
+      foreach (var tab in schema.Layout.Tabs)
+      {
+        foreach (var group in tab.Groups)
+        {
+          foreach (var item in group.Items)
+          {
+            if (item.ParamId != change.Id) continue;
+
+            item.DisplayName = change.Nickname;
+            item.Description = change.Description;
+          }
+        }
+      }
+
+      // Also update the Outputs list
+      var outputParam = schema.Outputs.FirstOrDefault(o => o.Id == change.Id);
+      if (outputParam != null)
+      {
+        outputParam.Nickname = change.Nickname;
+        outputParam.Description = change.Description;
+      }
+    }
   }
 
   /// <summary>
@@ -422,7 +464,7 @@ public class SchemaManager
     // Extract numeric constraints if applicable
     if (param != null && ghParam != null)
     {
-      var availableParam = new AvailableParameter { Id = docObj.InstanceGuid };
+      var availableParam = new AvailableInput { Id = docObj.InstanceGuid };
       ParameterTypeHelper.ExtractNumberParameterConstraints(param, ghParam, availableParam);
 
       snapshot.Minimum = availableParam.Minimum;
@@ -437,27 +479,43 @@ public class SchemaManager
   }
 
   /// <summary>
-  ///   Create an AvailableParameter from a metadata snapshot
+  ///   Create an AvailableInput from a metadata snapshot
   /// </summary>
-  private AvailableParameter CreateAvailableParameterFromSnapshot(
+  private AvailableInput CreateAvailableInputFromSnapshot(
     ParameterMetadataSnapshot snapshot,
-    Guid id,
-    string category)
+    Guid id)
   {
-    var param = new AvailableParameter
+    var param = new AvailableInput
     {
       Id = id,
       Nickname = snapshot.Nickname,
       Description = snapshot.Description,
       Minimum = snapshot.Minimum,
       Maximum = snapshot.Maximum,
-      StepSize = snapshot.StepSize,
-      Category = category
+      StepSize = snapshot.StepSize
     };
 
     // Convert Options to the expected format
     if (snapshot.Options != null)
       param.Options = snapshot.Options.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value);
+
+    return param;
+  }
+
+  /// <summary>
+  ///   Create an AvailableOutput from a metadata snapshot
+  /// </summary>
+  private AvailableOutput CreateAvailableOutputFromSnapshot(
+    ParameterMetadataSnapshot snapshot,
+    Guid id)
+  {
+    var param = new AvailableOutput
+    {
+      Id = id,
+      Nickname = snapshot.Nickname,
+      Description = snapshot.Description,
+      Type = "text" // Default to text output
+    };
 
     return param;
   }

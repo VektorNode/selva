@@ -1,6 +1,6 @@
 <script lang="ts">
   import { dragStore } from '$lib/stores/dragStore.svelte';
-  import type { LayoutItem, AvailableParameter, NumberWidgetConfig } from '$lib/types/generated';
+  import type { LayoutItem, AvailableInput, NumberWidgetConfig } from '$lib/types/generated';
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
   import * as Card from '$lib/components/ui/card';
@@ -9,7 +9,7 @@
 
   interface BuilderGroupItemProps {
     item: LayoutItem;
-    paramInfo?: AvailableParameter;
+    paramInfo?: AvailableInput;
     tabId: string;
     groupId: string;
     onRemove: () => void;
@@ -183,11 +183,21 @@
           onmouseleave={() => (canDrag = true)}
         />
 
-        <!-- Parameter Info -->
+        <!-- Parameter Info / Type Badge -->
         {#if paramInfo}
           <div class="flex items-center gap-2">
-            <Badge variant="default" class="px-1 py-0 text-[9px]">{paramInfo.paramType}</Badge>
-            <span class="font-mono text-[9px] text-muted-foreground">GH: {paramInfo.nickname}</span>
+            <Badge variant="default" class="px-1 py-0 text-[9px] rounded-xs">
+              {paramInfo.type}
+            </Badge>
+            <span class="font-mono text-[9px] text-muted-foreground">
+              GH: {paramInfo.nickname}
+            </span>
+          </div>
+        {:else if item.type === 'output'}
+          <div class="flex items-center gap-2">
+            <Badge variant="default" class="px-1 py-0 text-[9px] rounded-xs">
+              {item.widgetType}
+            </Badge>
           </div>
         {/if}
 

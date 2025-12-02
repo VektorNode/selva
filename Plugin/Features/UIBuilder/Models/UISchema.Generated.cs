@@ -17,7 +17,7 @@ namespace Selva.Features.UIBuilder.Models
     // ============================================================================
 
     // GrasshopperParamType is a string for compatibility
-    // Valid values: "Number", "Integer", "Boolean", "Text", "ValueList", "Generic", "File"
+    // Valid values: "number", "integer", "boolean", "text", "valueList", "generic"
 
 // ============================================================================
     // UISchema
@@ -268,7 +268,7 @@ namespace Selva.Features.UIBuilder.Models
     // AVAILABLE PARAMETERS
     // ============================================================================
 
-    public class AvailableParameter
+    public class AvailableInput
     {
 
 /// <summary>
@@ -286,11 +286,8 @@ namespace Selva.Features.UIBuilder.Models
         [JsonProperty("description")]
         public string Description { get; set; }
 
-        [JsonProperty("category")]
-        public string Category { get; set; }
-
-        [JsonProperty("paramType")]
-        public string ParamType { get; set; }
+        [JsonProperty("type")]
+        public string Type { get; set; }
 
         [JsonProperty("default", NullValueHandling = NullValueHandling.Ignore)]
         public object Default { get; set; }
@@ -314,23 +311,10 @@ namespace Selva.Features.UIBuilder.Models
         public bool? TreeAccess { get; set; } = false;
 
 /// <summary>
-/// Key-value pairs for dropdown options
+/// Key-value pairs for dropdown/selection options
 /// </summary>
         [JsonProperty("options")]
         public Dictionary<string, object> Options { get; set; }
-    }
-
-    public class AvailableParameters
-    {
-
-        [JsonProperty("sessionId")]
-        public string SessionId { get; set; }
-
-        [JsonProperty("timestamp")]
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-
-        [JsonProperty("parameters")]
-        public List<AvailableParameter> Parameters { get; set; } = new List<AvailableParameter>();
     }
 
     public class AvailableOutput
@@ -349,10 +333,32 @@ namespace Selva.Features.UIBuilder.Models
         public string Description { get; set; }
 
 /// <summary>
-/// Type of output component
+/// Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files
 /// </summary>
-        [JsonProperty("outputType")]
-        public string OutputType { get; set; }
+        [JsonProperty("type")]
+        public string Type { get; set; }
+    }
+
+    public class AvailableParameters
+    {
+
+        [JsonProperty("sessionId")]
+        public string SessionId { get; set; }
+
+        [JsonProperty("timestamp")]
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+
+/// <summary>
+/// List of input parameters available for UI building
+/// </summary>
+        [JsonProperty("inputs")]
+        public List<AvailableInput> Inputs { get; set; } = new List<AvailableInput>();
+
+/// <summary>
+/// List of output components available for UI building
+/// </summary>
+        [JsonProperty("outputs")]
+        public List<AvailableOutput> Outputs { get; set; } = new List<AvailableOutput>();
     }
 
 // ============================================================================

@@ -4,7 +4,9 @@
       "Bash(tree:*)",
       "Bash(pnpm check:*)",
       "Bash(npm run generate:all:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(dotnet build:*)",
+      "Bash(pnpm run check:*)"
     ],
     "deny": [],
     "ask": []

@@ -7,8 +7,8 @@
   "definitions": {
     "GrasshopperParamType": {
       "type": "string",
-      "enum": ["Number", "Integer", "Boolean", "Text", "ValueList", "Generic", "File"],
-      "description": "Grasshopper parameter types"
+      "enum": ["number", "integer", "boolean", "text", "valueList", "generic"],
+      "description": "Grasshopper contextual parameter data types"
     },
 
     "InputParamSchema": {
@@ -42,8 +42,9 @@
       "additionalProperties": false
     },
 
-    "AvailableParameter": {
+    "AvailableInput": {
       "type": "object",
+      "description": "Input parameter discovered in Grasshopper document",
       "properties": {
         "id": {
           "type": "string",
@@ -52,11 +53,7 @@
         "name": { "type": "string" },
         "nickname": { "type": "string" },
         "description": { "type": "string" },
-        "category": {
-          "type": "string",
-          "enum": ["input", "output"]
-        },
-        "paramType": { "$ref": "#/definitions/GrasshopperParamType" },
+        "type": { "$ref": "#/definitions/GrasshopperParamType" },
         "default": {},
         "minimum": { "type": "number" },
         "maximum": { "type": "number" },
@@ -67,27 +64,15 @@
         "options": {
           "type": "object",
           "additionalProperties": { "type": "string" },
-          "description": "Key-value pairs for dropdown options"
+          "description": "Key-value pairs for dropdown/selection options"
         }
       },
-      "required": ["id", "name", "nickname", "description", "category", "paramType"]
-    },
-
-    "AvailableParameters": {
-      "type": "object",
-      "properties": {
-        "sessionId": { "type": "string" },
-        "timestamp": { "type": "string", "format": "date-time" },
-        "parameters": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/AvailableParameter" }
-        }
-      },
-      "required": ["sessionId", "timestamp", "parameters"]
+      "required": ["id", "name", "nickname", "description", "type"]
     },
 
     "AvailableOutput": {
       "type": "object",
+      "description": "Output component discovered in Grasshopper document",
       "properties": {
         "id": {
           "type": "string",
@@ -95,14 +80,34 @@
         },
         "nickname": { "type": "string" },
         "description": { "type": "string" },
-        "outputType": {
+        "type": {
           "type": "string",
-          "enum": ["Print", "File"],
-          "description": "Type of output component"
+          "enum": ["text", "number", "file"],
+          "description": "Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files"
         }
       },
-      "required": ["id", "nickname", "outputType"],
+      "required": ["id", "nickname", "type"],
       "additionalProperties": false
+    },
+
+    "AvailableParameters": {
+      "type": "object",
+      "description": "Collection of input and output parameters discovered in the current Grasshopper document",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "inputs": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/AvailableInput" },
+          "description": "List of input parameters available for UI building"
+        },
+        "outputs": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/AvailableOutput" },
+          "description": "List of output components available for UI building"
+        }
+      },
+      "required": ["sessionId", "timestamp", "inputs", "outputs"]
     },
 
     "NumberWidgetConfig": {

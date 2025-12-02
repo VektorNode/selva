@@ -32,22 +32,22 @@ function transformInputParameter(
     id: input.id,
   };
 
-  if (input.paramType === 'Number' || input.paramType === 'Integer') {
+  if (input.paramType === 'number' || input.paramType === 'integer') {
     return {
       ...base,
-      paramType: input.paramType as 'Number' | 'Integer',
+      paramType: input.paramType === 'integer' ? 'Integer' : 'Number',
       minimum: input.minimum,
       maximum: input.maximum,
-      stepSize: input.paramType === 'Integer' ? 1 : input.stepSize,
+      stepSize: input.paramType === 'integer' ? 1 : input.stepSize,
       default: value ?? input.default,
     } as NumericInputType;
-  } else if (input.paramType === 'Text') {
+  } else if (input.paramType === 'text') {
     return {
       ...base,
       paramType: 'Text',
       default: (value as string) ?? input.default ?? '',
     } as TextInputType;
-  } else if (input.paramType === 'Boolean') {
+  } else if (input.paramType === 'boolean') {
     return {
       ...base,
       paramType: 'Boolean',

@@ -1,5 +1,5 @@
 import type {
-  AvailableParameter,
+  AvailableInput,
   GrasshopperParamType,
   NumberWidgetConfig,
   TextWidgetConfig,
@@ -49,8 +49,8 @@ export function mapParamTypeToWidgetType(
   if (category === 'output') {
     // Output widgets
     switch (paramType) {
-      case 'Number':
-      case 'Integer':
+      case 'number':
+      case 'integer':
         return 'number';
       default:
         return 'text';
@@ -58,14 +58,14 @@ export function mapParamTypeToWidgetType(
   } else {
     // Input widgets
     switch (paramType) {
-      case 'Number':
-      case 'Integer':
+      case 'number':
+      case 'integer':
         return 'number';
-      case 'Boolean':
+      case 'boolean':
         return 'checkbox';
-      case 'Text':
+      case 'text':
         return 'text';
-      case 'ValueList':
+      case 'valueList':
         return 'dropdown';
       default:
         return 'text';
@@ -78,7 +78,7 @@ export function mapParamTypeToWidgetType(
  */
 export function createDefaultWidgetConfig(
   widgetType: WidgetType,
-  param: AvailableParameter,
+  param: AvailableInput,
   category: 'input' | 'output'
 ): WidgetConfig {
 
@@ -88,7 +88,7 @@ export function createDefaultWidgetConfig(
         const config: NumberWidgetConfig = {
           minimum: param.minimum ?? 0,
           maximum: param.maximum ?? 100,
-          stepSize: param.paramType === 'Integer' ? 1 : (param.stepSize ?? 0.1),
+          stepSize: param.type === 'integer' ? 1 : (param.stepSize ?? 0.1),
           renderAsSlider: true,
         };
         return config;
