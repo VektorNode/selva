@@ -240,6 +240,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
   ///   Selects an item by its name (key). Returns true if found and selected.
   ///   Primary format: name/key (e.g., "Cylinder")
   ///   Also accepts expression values (e.g., "1") for Rhino.Compute compatibility
+  ///   Note: Does NOT call ExpireSolution - caller is responsible for triggering solution
   /// </summary>
   public bool SelectItemByName(string value)
   {
@@ -252,7 +253,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
       if (vl.ListItems[i].Name == value || vl.ListItems[i].Expression == value)
       {
         vl.SelectItem(i);
-        ExpireSolution(false);
         return true;
       }
     }

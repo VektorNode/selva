@@ -22,11 +22,11 @@ public class ValueApplicator
   private static readonly Dictionary<string, (Type GhType, Func<object, IGH_Goo> Converter)> TypeHandlers =
     new()
     {
-      { "Number", (typeof(GH_Number), val => new GH_Number(Convert.ToDouble(val))) },
-      { "Integer", (typeof(GH_Integer), val => new GH_Integer(Convert.ToInt32(val))) },
-      { "Text", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) },
-      { "Boolean", (typeof(GH_Boolean), val => new GH_Boolean(Convert.ToBoolean(val))) },
-      { "ValueList", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) }
+      { "number", (typeof(GH_Number), val => new GH_Number(Convert.ToDouble(val))) },
+      { "integer", (typeof(GH_Integer), val => new GH_Integer(Convert.ToInt32(val))) },
+      { "text", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) },
+      { "boolean", (typeof(GH_Boolean), val => new GH_Boolean(Convert.ToBoolean(val))) },
+      { "valueList", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) }
     };
 
   private static readonly ConcurrentDictionary<Type, ReflectionCache> _reflectionCache = new();
@@ -250,7 +250,7 @@ public class ValueApplicator
     try
     {
       // Special handling for ValueList - use the parameter's native type
-      if (paramTypeName == "ValueList") return ApplyToValueList(contextParam, value, addMessage);
+      if (paramTypeName == "valueList") return ApplyToValueList(contextParam, value, addMessage);
 
       if (!TypeHandlers.TryGetValue(paramTypeName, out var handler))
       {
@@ -295,6 +295,7 @@ public class ValueApplicator
 
   /// <summary>
   ///   Apply a value to a ValueList parameter by selecting the item by name
+  ///   Also adds the connected GH_ValueList to pending expirations
   /// </summary>
   private bool ApplyToValueList(IGH_ContextualParameter contextParam, object value,
     Action<GH_RuntimeMessageLevel, string> addMessage)
@@ -313,7 +314,18 @@ public class ValueApplicator
       if (selectMethod != null)
       {
         var result = selectMethod.Invoke(contextParam, new object[] { selectedKey });
-        if (result is bool success && success) return true;
+        if (result is bool success && success)
+        {
+          // Also add the connected GH_ValueList to pending expirations
+          // This ensures the actual ValueList component gets expired too
+          var connectedVLProperty = contextParam.GetType().GetProperty("ConnectedValueList",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+          if (connectedVLProperty?.GetValue(contextParam) is IGH_ActiveObject connectedVL)
+          {
+            _pendingExpirations.Add(connectedVL);
+          }
+          return true;
+        }
 
         addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
           $"Could not find item '{selectedKey}' in ValueList");
