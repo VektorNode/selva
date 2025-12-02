@@ -17,7 +17,7 @@ export { initThree, updateScene, Materials } from './threejs';
 // ============================================================================
 
 // High-level API
-export { getThreeMeshesFromComputeResponse } from './webdisplay';
+export { getThreeMeshesFromComputeResponse, SCALE_FACTORS } from './webdisplay';
 
 // Low-level APIs for advanced use cases
 export { parseMeshBatch, parseMeshBatchObject } from './webdisplay/batch-parser';

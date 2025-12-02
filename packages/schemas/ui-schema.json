@@ -763,6 +763,11 @@
           "type": "boolean",
           "default": false
         },
+        "allowLocalRendering": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, display mesh data is sent to the preview. If false, meshes are only rendered in Rhino viewport."
+        },
         "instanceSolve": {
           "type": "boolean",
           "default": true,

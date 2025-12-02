@@ -13,7 +13,13 @@
   } from '$lib/utils/session';
   import { onMount } from 'svelte';
   import type { MeshBatch } from '@selva/core';
-  import { parseMeshBatchObject } from '@selva/core';
+  import {
+    parseMeshBatchObject,
+    applyOffset,
+    computeCombinedBoundingBox,
+    SCALE_FACTORS,
+  } from '@selva/core';
+  import type { ThreeInitializerOptions } from '@selva/core/visualization';
 
   type RuntimeMode = 'local' | 'compute';
 
@@ -40,9 +46,29 @@
   let scene: any = null;
   let camera: any = null;
   let controls: any = null;
+  let modelUnits = $state<string>('Meters');
 
   // Deferred imports
   let rhinoCompute: typeof import('@selva/core') | null = null;
+
+  async function applyMeshTransforms(meshes: any[]) {
+    if (meshes.length === 0) return;
+
+    // Apply ground offset using core lib function
+    if (meshes.length > 0) {
+      try {
+        const boundingBox = computeCombinedBoundingBox(meshes);
+        console.log('[Preview] Combined bounding box:', boundingBox);
+        const offsetY = boundingBox.min.y;
+        if (offsetY !== 0) {
+          console.log(`[Preview] Applying ground offset: ${offsetY}`);
+          applyOffset(meshes, offsetY);
+        }
+      } catch (err) {
+        console.warn('[Preview] Could not apply ground offset:', err);
+      }
+    }
+  }
 
   // Navigate to specific routes with session preservation
   function navigateTo(route: '/' | '/builder') {
@@ -89,8 +115,8 @@
 
     await ensureRhinoComputeLoaded();
 
-    const opts = {
-      environment: { backgroundColor: '#f3f4f6' },
+    const opts: ThreeInitializerOptions = {
+      environment: { backgroundColor: '#4b5357' },
     };
 
     const { scene: s, camera: c, controls: ctl } = rhinoCompute!.initThree(canvas, opts);
@@ -108,6 +134,7 @@
 
     await ensureRhinoComputeLoaded();
 
+    console.log(`[Preview] updateViewer called with ${displayMeshes.length} meshes`);
     rhinoCompute!.updateScene(scene, displayMeshes, camera, controls, viewerInitialized);
     console.log(`[Preview] Updated viewer with ${displayMeshes.length} meshes`);
   }
@@ -248,23 +275,46 @@
         console.log('[Preview] Received outputs:', message.outputs);
         console.log('[Preview] Received file outputs:', message.fileOutputs);
         console.log('[Preview] Received display data:', message.displayData);
+        console.log('[Preview] Model units:', message.modelUnits);
+
+        // Store model units for scaling
+        if (message.modelUnits) {
+          modelUnits = message.modelUnits;
+        }
 
         // Handle display data (MeshBatch objects from WebDisplay components)
-        if (message.displayData && Array.isArray(message.displayData)) {
+        if (message.displayData) {
           try {
             const allMeshes: any[] = [];
 
-            for (const batchData of message.displayData as MeshBatch[]) {
+            // Ensure displayData is an array (handle both array and single object cases)
+            const dataArray = Array.isArray(message.displayData)
+              ? message.displayData
+              : [message.displayData];
+
+            console.log(`[Preview] Processing ${dataArray.length} batch(es)`);
+
+            // Get scale factor from model units
+            const scaleFactor = SCALE_FACTORS[modelUnits] ?? 1;
+            console.log(`[Preview] Using scale factor: ${scaleFactor} (units: ${modelUnits})`);
+
+            for (const batchData of dataArray as MeshBatch[]) {
               const meshes = await parseMeshBatchObject(batchData, {
                 mergeByMaterial: true,
                 applyTransforms: true,
-                debug: false
+                scaleFactor: scaleFactor,
+                debug: false,
               });
+              console.log(`[Preview] Batch parsed to ${meshes.length} mesh(es)`);
               allMeshes.push(...meshes);
             }
 
+            // Apply ground offset
+            await applyMeshTransforms(allMeshes);
+
+            console.log(`[Preview] Total processed meshes: ${allMeshes.length}`);
             displayMeshes = allMeshes;
-            console.log(`[Preview] Parsed ${allMeshes.length} display meshes`);
+            console.log(`[Preview] displayMeshes updated with ${allMeshes.length} meshes`);
           } catch (error) {
             console.error('[Preview] Error parsing display data:', error);
           }
@@ -524,7 +574,11 @@
     {:else if schema}
       <div class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row">
         <!-- Controls -->
-        <div class="w-full shrink-0 overflow-y-auto {displayMeshes.length > 0 ? 'lg:w-[480px] xl:w-[520px]' : 'mx-auto max-w-6xl'}">
+        <div
+          class="w-full shrink-0 overflow-y-auto {displayMeshes.length > 0
+            ? 'lg:w-[480px] xl:w-[520px]'
+            : 'mx-auto max-w-6xl'}"
+        >
           {#if schema.layout.type === 'tabbed' && schema.layout.tabs && schema.layout.tabs.length > 0}
             <TabLayout
               {schema}
@@ -595,10 +649,6 @@
     </div>
   {/if}
 </PageContainer>
-
-<div class="min-h-[500px] flex-1 overflow-hidden rounded-lg bg-white shadow-lg">
-  <canvas class="block h-full w-full" bind:this={canvas}></canvas>
-</div>
 
 <style>
   @keyframes slideInRight {

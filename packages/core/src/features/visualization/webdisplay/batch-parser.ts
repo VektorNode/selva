@@ -61,6 +61,8 @@ export async function parseMeshBatchObject(
     mergeByMaterial?: boolean;
     /** Apply coordinate system transformations */
     applyTransforms?: boolean;
+    /** Scale factor to apply to meshes (e.g., for unit conversion) */
+    scaleFactor?: number;
     /** Enable performance monitoring */
     debug?: boolean;
     /** Parse time (optional, for debugging) */
@@ -69,7 +71,7 @@ export async function parseMeshBatchObject(
     perfStart?: number;
   }
 ): Promise<THREE.Mesh[]> {
-  const { mergeByMaterial = true, applyTransforms = true, debug = false, parseTime = 0, perfStart = debug ? performance.now() : 0 } = options ?? {};
+  const { mergeByMaterial = true, applyTransforms = true, scaleFactor = 1, debug = false, parseTime = 0, perfStart = debug ? performance.now() : 0 } = options ?? {};
 
   let decompressTime = 0, meshCreateTime = 0;
 
@@ -109,6 +111,14 @@ export async function parseMeshBatchObject(
         meshes.push(...individualMeshes);
       }
     }
+
+    // Apply scaling if needed
+    if (scaleFactor !== 1) {
+      for (const mesh of meshes) {
+        mesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
+      }
+    }
+
     meshCreateTime = performance.now() - meshCreateStart;
 
     if (debug) {
@@ -179,8 +189,14 @@ function createMergedMesh(
 
     const faceSlice = allFaces.subarray(mesh.faceOffset, mesh.faceOffset + mesh.faceCount);
 
+    // Face indices are already rebased in the C# batching process
+    // We need to adjust them based on where we're copying the vertices to in the merged array
+    const originalBaseVertexIndex = Math.floor(mesh.vertexOffset / 3);
+    const newBaseVertexIndex = Math.floor(vertexWriteOffset / 3);
+    const indexOffset = newBaseVertexIndex - originalBaseVertexIndex;
+
     for (let i = 0; i < faceSlice.length; i++) {
-      mergedIndices[indexWriteOffset + i] = faceSlice[i] + baseVertexIndex;
+      mergedIndices[indexWriteOffset + i] = faceSlice[i] + indexOffset;
     }
 
     vertexWriteOffset += mesh.vertexCount;
@@ -225,7 +241,9 @@ function createIndividualMeshes(
       meshMeta.faceOffset + meshMeta.faceCount
     );
 
-    const baseIndex = meshMeta.vertexOffset / 3;
+    // Faces are already rebased in C# batching, but we need to rebase them for this
+    // individual mesh since we're using a subarray of vertices starting at 0
+    const baseIndex = Math.floor(meshMeta.vertexOffset / 3);
     const rebasedFaces = new Uint32Array(faces.length);
     for (let i = 0; i < faces.length; i++) {
       rebasedFaces[i] = faces[i] - baseIndex;

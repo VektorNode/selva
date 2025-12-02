@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @selva/frontend dev",
-    "build:all": "pnpm --filter @selva/core build && pnpm build && pnpm --filter @selva/frontend build",
+    "build:all": "pnpm --filter @selva/core build && pnpm --filter @selva/frontend build",
     "build:frontend": "pnpm --filter @selva/frontend build",
     "build:plugin": "node scripts/build-production.js",
     "check": "pnpm --filter ./packages --recursive run check",

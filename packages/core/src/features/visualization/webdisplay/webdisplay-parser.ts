@@ -8,7 +8,7 @@ import type { DataItem, GrasshopperComputeResponse } from '@/features/grasshoppe
 import type { MeshExtractionOptions, MeshBatchParsingOptions } from './types';
 
 // Constants
-const SCALE_FACTORS: Record<string, number> = {
+export const SCALE_FACTORS: Record<string, number> = {
   Millimeters: 1 / 1000,
   Centimeters: 1 / 100,
   Meters: 1,
