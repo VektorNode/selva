@@ -1,10 +1,11 @@
-# @selva/web
+# @selva/frontend
 
 SvelteKit web application for building and deploying Grasshopper UIs. Works in two modes: **local** (with Grasshopper via WebSocket) or **cloud** (standalone app with Rhino Compute integration).
 
 ## Two Deployment Modes
 
 ### Local Development Mode
+
 When used with `Selva.gha` plugin in Grasshopper:
 
 - **Routes:**
@@ -21,6 +22,7 @@ When used with `Selva.gha` plugin in Grasshopper:
   6. `/preview` shows live UI with real-time updates
 
 ### Cloud Deployment Mode
+
 Standalone web app deployed independently (Vercel, Netlify, etc):
 
 - **Routes:**

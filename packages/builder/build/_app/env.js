@@ -1,0 +1,1 @@
+export const env={"PUBLIC_COMPUTE_SERVER_URL":"http://localhost:5000","PUBLIC_GH_DEFINITION":"http://localhost:5173/builder_test.gh"}

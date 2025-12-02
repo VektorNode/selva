@@ -46,6 +46,7 @@ dotnet build
 ```
 
 Benefits:
+
 - Hot reload on web changes (Vite dev server)
 - Debug plugin in IDE
 - Fast iteration
@@ -65,16 +66,19 @@ This creates a self-contained `.gha` file with embedded web assets. Follow the i
 After building, copy the plugin to your Grasshopper Libraries folder:
 
 **Windows (Rhino 7):**
+
 ```bash
 copy "Plugin\bin\Release\net48\Selva.gha" "%APPDATA%\Grasshopper\Libraries\"
 ```
 
 **Windows (Rhino 8):**
+
 ```bash
 copy "Plugin\bin\Release\net7.0\Selva.gha" "%APPDATA%\Grasshopper\Libraries-8\"
 ```
 
 **macOS (Rhino 8):**
+
 ```bash
 cp Plugin/bin/Release/net7.0/Selva.gha ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/
 ```
@@ -85,7 +89,7 @@ Restart Rhino completely after installation.
 
 Once the plugin is installed, you can use:
 
-- **UIBuilderComponent** — Design web UIs for your definitions (connects to `@selva/web`)
+- **UIBuilderComponent** — Design web UIs for your definitions (connects to `@selva/frontend`)
 - **ThreeMaterial** — Configure materials for 3D web display
 - **DataToFile** — Export geometry to various file formats
 - **ValueListData** — Create interactive value selections

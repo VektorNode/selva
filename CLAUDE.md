@@ -39,7 +39,7 @@ pnpm build:all
 # Build production plugin with embedded web assets (recommended for deployment)
 pnpm build:plugin
 
-# Start web dev server for development (packages/builder → @selva/web)
+# Start web dev server for development (packages/builder → @selva/frontend)
 pnpm dev
 
 # Build specific package
@@ -72,12 +72,14 @@ pnpm build:plugin
 ```
 
 **This command:**
-1. Builds web application (`@selva/web`) as static assets
+
+1. Builds web application (`@selva/frontend`) as static assets
 2. Copies web assets to `Plugin/EmbeddedAssets/web/`
 3. Builds C# plugin with embedded resources for both Rhino 7 and Rhino 8
 4. Outputs self-contained `.gha` files
 
 **Output locations:**
+
 - Rhino 7: `Plugin/bin/Release/net48/Selva.gha`
 - Rhino 8: `Plugin/bin/Release/net7.0/Selva.gha`
 
@@ -183,6 +185,7 @@ npm run generate:all
 **Source:** `packages/schemas/ui-schema.json`
 
 **Generated files:**
+
 - TypeScript: `packages/builder/src/lib/types/generated/schema.ts`
 - C#: `Plugin/Models/Generated/UISchema.Generated.cs`
 
@@ -288,6 +291,7 @@ Data Storage:
 **Temp Directory:** `%TEMP%\Selva\` (Windows) or `/tmp/Selva/` (macOS/Linux)
 
 **Used ONLY for:**
+
 - File format conversion (RhinoDocumentConverter) - creates temporary subdirectories for geometry processing
 - NOT used for session data, schema, or values (all stored in .gh files and transmitted via WebSocket)
 
@@ -415,7 +419,7 @@ This approach allows supporting multiple parameter types without strong coupling
 - **Dependencies**: Core package only
 - **Testing**: Component behavior and rendering
 
-#### packages/builder (package name: @selva/web)
+#### packages/builder (package name: @selva/frontend)
 
 **Build Configuration:**
 
@@ -495,6 +499,7 @@ The system uses a **dual-layer communication model**:
 - **Connection:** Manages client connections with auto-reconnect (exponential backoff)
 
 **Message Types:**
+
 - **From Web UI → Grasshopper:**
   - `valueUpdate` - User changes parameter values
   - `saveSchema` - Save configured schema
@@ -508,6 +513,7 @@ The system uses a **dual-layer communication model**:
   - `availableParameters` - Discovered contextual parameters
 
 **Benefits:**
+
 - Real-time updates (no polling delay)
 - Bidirectional communication
 - Single connection for all data
@@ -524,6 +530,7 @@ The system uses a **dual-layer communication model**:
 - **Serialization:** JSON format with custom `SchemaSerializationSettings`
 
 **Benefits:**
+
 - Schema travels with .gh file (portable)
 - No external files to manage
 - Version control friendly (text-based JSON in .gh)
@@ -606,7 +613,6 @@ pnpm --filter @selva/frontendtest
    ```
 
 2. **Install to Grasshopper** (copy `.gha` file from appropriate bin directory)
-
    - Rhino 7: `Plugin/bin/Release/net48/Selva.gha` → `%APPDATA%\Grasshopper\Libraries\` (Windows)
    - Rhino 8: `Plugin/bin/Release/net7.0/Selva.gha` → `%APPDATA%\Grasshopper\Libraries-8\` (Windows)
    - Rhino 8: `Plugin/bin/Release/net7.0/Selva.gha` → `~/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/` (macOS)
@@ -761,7 +767,8 @@ pnpm build:plugin
 ```
 
 This command:
-1. Builds `@selva/web` package as static assets (SvelteKit adapter-static)
+
+1. Builds `@selva/frontend` package as static assets (SvelteKit adapter-static)
 2. Copies `packages/builder/build/` → `Plugin/EmbeddedAssets/web/`
 3. Builds C# plugin with assets embedded as `EmbeddedResource`
 4. Outputs `Selva.gha` for both Rhino 7 (net48) and Rhino 8 (net7.0)
@@ -784,6 +791,7 @@ This command:
 4. Restart Rhino - plugin is ready to use
 
 **No user setup required:**
+
 - ❌ No web server installation
 - ❌ No Node.js or npm required
 - ❌ No separate web app deployment
@@ -804,6 +812,7 @@ cd Plugin && dotnet build --configuration Release
 ```
 
 In development mode:
+
 - Web UI runs on http://localhost:5173 (Vite dev server)
 - WebSocket still on port 8765
 - Hot module replacement for fast iteration

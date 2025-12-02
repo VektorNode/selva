@@ -130,7 +130,7 @@ All components export TypeScript types from `@selva/core` for full type safety.
 ## Related Packages
 
 - [`@selva/core`](../core) — Type-safe Rhino Compute client
-- [`@selva/web`](../builder) — Full UI builder application with WebSocket support
+- [`@selva/frontend`](../builder) — Full UI builder application with WebSocket support
 
 ## License
 

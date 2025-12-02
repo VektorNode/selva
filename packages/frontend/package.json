@@ -1,5 +1,5 @@
 {
-  "name": "@selva/web",
+  "name": "@selva/frontend",
   "description": "Selva web interface built with SvelteKit",
   "private": true,
   "version": "1.0.0",
