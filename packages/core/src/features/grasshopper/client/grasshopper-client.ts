@@ -40,21 +40,19 @@ export default class GrasshopperClient {
   }
 
   /**
- * Creates and initializes a GrasshopperClient with server validation.
- *
- * @throws {RhinoComputeError} with code NETWORK_ERROR if server is offline
- * @throws {RhinoComputeError} with code INVALID_CONFIG if configuration is invalid
- */
+   * Creates and initializes a GrasshopperClient with server validation.
+   *
+   * @throws {RhinoComputeError} with code NETWORK_ERROR if server is offline
+   * @throws {RhinoComputeError} with code INVALID_CONFIG if configuration is invalid
+   */
   static async create(config: GrasshopperComputeConfig): Promise<GrasshopperClient> {
     const client = new GrasshopperClient(config);
 
     // Check server is online before returning
     if (!(await client.serverStats.isServerOnline())) {
-      throw new RhinoComputeError(
-        'Rhino Compute server is not online',
-        ErrorCodes.NETWORK_ERROR,
-        { context: { serverUrl: client.config.serverUrl } }
-      );
+      throw new RhinoComputeError('Rhino Compute server is not online', ErrorCodes.NETWORK_ERROR, {
+        context: { serverUrl: client.config.serverUrl },
+      });
     }
 
     return client;

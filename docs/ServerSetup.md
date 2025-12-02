@@ -7,6 +7,7 @@ Guide to setting up Rhino Compute servers for use with Selva.
 For production deployments using the official Rhino Compute server.
 
 **Resources:**
+
 - [Rhino Compute Documentation](https://developer.rhino3d.com/guides/compute/)
 - [Rhino Compute GitHub](https://github.com/mcneel/compute.rhino3d)
 - [Deployment to Production Servers](https://developer.rhino3d.com/guides/compute/deploy-to-iis/)
@@ -20,11 +21,13 @@ Selva uses a custom fork of Rhino Compute with enhanced features and compatibili
 [VektorNode/compute.rhino3d](https://github.com/VektorNode/compute.rhino3d)
 
 **Differences from Official:**
+
 - (Details on fork enhancements)
 - (Parameter grouping features)
 - (Custom schema support)
 
 **Setup Instructions:**
+
 - (Fork-specific setup)
 - (Building from source)
 - (Configuration)
@@ -34,6 +37,7 @@ Selva uses a custom fork of Rhino Compute with enhanced features and compatibili
 For testing and development without a full production setup.
 
 **Resources:**
+
 - (Local Compute server setup)
 - (Development environment configuration)
 - (Quick start for testing)
@@ -43,12 +47,14 @@ For testing and development without a full production setup.
 Deploying Selva web applications to cloud platforms.
 
 **Platforms:**
+
 - (Vercel setup)
 - (Netlify setup)
 - (Self-hosted options)
 - (Docker containerization)
 
 **Configuration:**
+
 - (Environment variables)
 - (API endpoint configuration)
 - (CORS and security settings)
@@ -58,6 +64,7 @@ Deploying Selva web applications to cloud platforms.
 Securing your Compute server and web deployment.
 
 **Topics:**
+
 - (API key management)
 - (Authentication setup)
 - (CORS configuration)
@@ -69,6 +76,7 @@ Securing your Compute server and web deployment.
 Common server setup issues and solutions.
 
 **Common Issues:**
+
 - (Connection problems)
 - (Port conflicts)
 - (Timeout errors)
@@ -80,6 +88,7 @@ Common server setup issues and solutions.
 Optimizing server performance for production use.
 
 **Topics:**
+
 - (Worker thread configuration)
 - (Memory management)
 - (Request queuing)

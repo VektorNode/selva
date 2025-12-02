@@ -28,7 +28,7 @@ export default class GrasshopperResponseProcessor {
   constructor(
     private readonly response: GrasshopperComputeResponse,
     private readonly debug: boolean = false
-  ) { }
+  ) {}
 
   /**
    * Extract all values in the response.

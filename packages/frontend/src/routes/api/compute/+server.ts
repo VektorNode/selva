@@ -78,7 +78,7 @@ export const POST: RequestHandler = async ({ request }) => {
         .map((input) => transformInputParameter(input, values[input.id]))
     );
 
-    const client = await GrasshopperClient.create({ serverUrl: PUBLIC_COMPUTE_SERVER_URL })
+    const client = await GrasshopperClient.create({ serverUrl: PUBLIC_COMPUTE_SERVER_URL });
     const solvedDefinition = await client.solve(PUBLIC_GH_DEFINITION, inputTree);
 
     return json(solvedDefinition);

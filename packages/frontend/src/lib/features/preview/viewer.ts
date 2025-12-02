@@ -54,10 +54,7 @@ export async function updateViewerScene(
   );
 }
 
-export async function processMeshBatches(
-  batches: MeshBatch[],
-  modelUnits: string
-): Promise<any[]> {
+export async function processMeshBatches(batches: MeshBatch[], modelUnits: string): Promise<any[]> {
   const allMeshes: any[] = [];
   const scaleFactor = SCALE_FACTORS[modelUnits] ?? 1;
 

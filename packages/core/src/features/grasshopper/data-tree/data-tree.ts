@@ -447,7 +447,9 @@ export class TreeBuilder {
         }
         // Multiple values: return array of deserialized values
         return items
-          .map((item) => (item?.data !== undefined ? TreeBuilder.deserializeValue(item.data) : null))
+          .map((item) =>
+            item?.data !== undefined ? TreeBuilder.deserializeValue(item.data) : null
+          )
           .filter((v) => v !== null);
       }
 

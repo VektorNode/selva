@@ -39,7 +39,13 @@ export async function parseMeshBatch(
     const batch: MeshBatch = JSON.parse(batchJson);
     parseTime = performance.now() - parseStart;
 
-    return await parseMeshBatchObject(batch, { mergeByMaterial, applyTransforms, debug, parseTime, perfStart });
+    return await parseMeshBatchObject(batch, {
+      mergeByMaterial,
+      applyTransforms,
+      debug,
+      parseTime,
+      perfStart,
+    });
   } catch (error) {
     console.error('Error parsing mesh batch:', error);
     return [];
@@ -71,24 +77,36 @@ export async function parseMeshBatchObject(
     perfStart?: number;
   }
 ): Promise<THREE.Mesh[]> {
-  const { mergeByMaterial = true, applyTransforms = true, scaleFactor = 1, debug = false, parseTime = 0, perfStart = debug ? performance.now() : 0 } = options ?? {};
+  const {
+    mergeByMaterial = true,
+    applyTransforms = true,
+    scaleFactor = 1,
+    debug = false,
+    parseTime = 0,
+    perfStart = debug ? performance.now() : 0,
+  } = options ?? {};
 
-  let decompressTime = 0, meshCreateTime = 0;
+  let decompressTime = 0,
+    meshCreateTime = 0;
 
   try {
-
     const decompressStart = performance.now();
     const { vertices, faces } = await decompressBatchedMeshData(batch.compressedData);
     decompressTime = performance.now() - decompressStart;
 
-    const compressedSizeMB = (batch.compressedData.length * 0.75 / 1024 / 1024).toFixed(2); // Base64 overhead
+    const compressedSizeMB = ((batch.compressedData.length * 0.75) / 1024 / 1024).toFixed(2); // Base64 overhead
     const uncompressedSizeMB = ((vertices.byteLength + faces.byteLength) / 1024 / 1024).toFixed(2);
-    const compressionRatio = ((1 - (parseFloat(compressedSizeMB) / parseFloat(uncompressedSizeMB))) * 100).toFixed(1);
+    const compressionRatio = (
+      (1 - parseFloat(compressedSizeMB) / parseFloat(uncompressedSizeMB)) *
+      100
+    ).toFixed(1);
 
     if (debug) {
       console.log('Mesh Batch Stats:');
       console.log(`  Materials: ${batch.materials.length} | Groups: ${batch.groups.length}`);
-      console.log(`  Vertices: ${(vertices.length / 3).toLocaleString()} | Faces: ${(faces.length / 3).toLocaleString()}`);
+      console.log(
+        `  Vertices: ${(vertices.length / 3).toLocaleString()} | Faces: ${(faces.length / 3).toLocaleString()}`
+      );
       console.log(`  Compressed: ${compressedSizeMB} MB | Uncompressed: ${uncompressedSizeMB} MB`);
       console.log(`  Compression Ratio: ${compressionRatio}%`);
     }
@@ -236,10 +254,7 @@ function createIndividualMeshes(
       meshMeta.vertexOffset + meshMeta.vertexCount
     );
 
-    const faces = allFaces.subarray(
-      meshMeta.faceOffset,
-      meshMeta.faceOffset + meshMeta.faceCount
-    );
+    const faces = allFaces.subarray(meshMeta.faceOffset, meshMeta.faceOffset + meshMeta.faceCount);
 
     // Faces are already rebased in C# batching, but we need to rebase them for this
     // individual mesh since we're using a subarray of vertices starting at 0

@@ -5,7 +5,9 @@ This directory contains extracted utility modules from the original `+page.svelt
 ## Module Organization
 
 ### `viewer.ts` - 3D Viewer Management
+
 Handles all Three.js viewer initialization and mesh processing:
+
 - `initializeViewerScene()` - Set up Three.js scene, camera, and controls
 - `updateViewerScene()` - Update viewer with new mesh data
 - `processMeshBatches()` - Parse and scale mesh batch data
@@ -13,14 +15,18 @@ Handles all Three.js viewer initialization and mesh processing:
 - `ensureRhinoComputeLoaded()` - Lazy-load rhino-compute module
 
 ### `handlers.ts` - Data Processing
+
 Contains pure functions for processing WebSocket messages:
+
 - `initializeValues()` - Initialize parameter values from schema and defaults
 - `processOutputUpdate()` - Filter and merge output updates
 - `updateParameterMetadata()` - Update parameter metadata (nickname, description, constraints)
 - `removeParametersFromValues()` - Clean up values when parameters are removed
 
 ### `notifications.ts` - UI Notifications
+
 Message formatting and notification management:
+
 - `formatParameterUpdateMessage()` - Format schema update notifications
 - `formatMetadataUpdateMessage()` - Format metadata change notifications
 

@@ -6,14 +6,7 @@
   "definitions": {
     "GrasshopperParamType": {
       "type": "string",
-      "enum": [
-        "number",
-        "integer",
-        "boolean",
-        "text",
-        "valueList",
-        "generic"
-      ],
+      "enum": ["number", "integer", "boolean", "text", "valueList", "generic"],
       "description": "Grasshopper contextual parameter data types"
     },
     "InputParamSchema": {
@@ -34,12 +27,7 @@
         },
         "default": {}
       },
-      "required": [
-        "id",
-        "name",
-        "nickname",
-        "paramType"
-      ],
+      "required": ["id", "name", "nickname", "paramType"],
       "additionalProperties": false
     },
     "OutputParamSchema": {
@@ -59,12 +47,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "id",
-        "name",
-        "nickname",
-        "paramType"
-      ],
+      "required": ["id", "name", "nickname", "paramType"],
       "additionalProperties": false
     },
     "AvailableInput": {
@@ -117,13 +100,7 @@
           "description": "Key-value pairs for dropdown/selection options"
         }
       },
-      "required": [
-        "id",
-        "name",
-        "nickname",
-        "description",
-        "type"
-      ]
+      "required": ["id", "name", "nickname", "description", "type"]
     },
     "AvailableOutput": {
       "type": "object",
@@ -141,19 +118,11 @@
         },
         "type": {
           "type": "string",
-          "enum": [
-            "text",
-            "number",
-            "file"
-          ],
+          "enum": ["text", "number", "file"],
           "description": "Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files"
         }
       },
-      "required": [
-        "id",
-        "nickname",
-        "type"
-      ],
+      "required": ["id", "nickname", "type"],
       "additionalProperties": false
     },
     "AvailableParameters": {
@@ -182,12 +151,7 @@
           "description": "List of output components available for UI building"
         }
       },
-      "required": [
-        "sessionId",
-        "timestamp",
-        "inputs",
-        "outputs"
-      ]
+      "required": ["sessionId", "timestamp", "inputs", "outputs"]
     },
     "NumberWidgetConfig": {
       "type": "object",
@@ -236,9 +200,7 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "options"
-      ],
+      "required": ["options"],
       "additionalProperties": false
     },
     "CheckboxWidgetConfig": {
@@ -282,13 +244,7 @@
           "$ref": "#/definitions/NumberWidgetConfig"
         }
       },
-      "required": [
-        "id",
-        "paramId",
-        "type",
-        "widgetType",
-        "config"
-      ]
+      "required": ["id", "paramId", "type", "widgetType", "config"]
     },
     "InputTextLayoutItem": {
       "type": "object",
@@ -326,13 +282,7 @@
           "$ref": "#/definitions/TextWidgetConfig"
         }
       },
-      "required": [
-        "id",
-        "paramId",
-        "type",
-        "widgetType",
-        "config"
-      ]
+      "required": ["id", "paramId", "type", "widgetType", "config"]
     },
     "InputDropdownLayoutItem": {
       "type": "object",
@@ -370,13 +320,7 @@
           "$ref": "#/definitions/DropdownWidgetConfig"
         }
       },
-      "required": [
-        "id",
-        "paramId",
-        "type",
-        "widgetType",
-        "config"
-      ]
+      "required": ["id", "paramId", "type", "widgetType", "config"]
     },
     "InputCheckboxLayoutItem": {
       "type": "object",
@@ -414,12 +358,7 @@
           "$ref": "#/definitions/CheckboxWidgetConfig"
         }
       },
-      "required": [
-        "id",
-        "paramId",
-        "type",
-        "widgetType"
-      ]
+      "required": ["id", "paramId", "type", "widgetType"]
     },
     "OutputTextLayoutItem": {
       "type": "object",
@@ -454,12 +393,7 @@
           "const": "text"
         }
       },
-      "required": [
-        "id",
-        "paramId",
-        "type",
-        "widgetType"
-      ]
+      "required": ["id", "paramId", "type", "widgetType"]
     },
     "OutputNumberLayoutItem": {
       "type": "object",
@@ -494,12 +428,7 @@
           "const": "number"
         }
       },
-      "required": [
-        "id",
-        "paramId",
-        "type",
-        "widgetType"
-      ]
+      "required": ["id", "paramId", "type", "widgetType"]
     },
     "OutputFileLayoutItem": {
       "type": "object",
@@ -548,12 +477,7 @@
           "additionalProperties": false
         }
       },
-      "required": [
-        "id",
-        "paramId",
-        "type",
-        "widgetType"
-      ]
+      "required": ["id", "paramId", "type", "widgetType"]
     },
     "LayoutItem": {
       "oneOf": [
@@ -611,11 +535,7 @@
           }
         }
       },
-      "required": [
-        "id",
-        "label",
-        "items"
-      ],
+      "required": ["id", "label", "items"],
       "additionalProperties": false
     },
     "TabConfig": {
@@ -642,20 +562,12 @@
         },
         "position": {
           "type": "string",
-          "enum": [
-            "left",
-            "center",
-            "right"
-          ],
+          "enum": ["left", "center", "right"],
           "default": "center",
           "description": "Horizontal region where this tab should be positioned in multi-column layouts"
         }
       },
-      "required": [
-        "id",
-        "label",
-        "groups"
-      ],
+      "required": ["id", "label", "groups"],
       "additionalProperties": false
     },
     "LayoutConfig": {
@@ -663,10 +575,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": [
-            "tabbed",
-            "flat"
-          ],
+          "enum": ["tabbed", "flat"],
           "default": "tabbed"
         },
         "gap": {
@@ -697,18 +606,10 @@
         },
         "mode": {
           "type": "string",
-          "enum": [
-            "builder",
-            "preview"
-          ]
+          "enum": ["builder", "preview"]
         }
       },
-      "required": [
-        "sessionId",
-        "active",
-        "lastUpdate",
-        "mode"
-      ]
+      "required": ["sessionId", "active", "lastUpdate", "mode"]
     },
     "RuntimeValues": {
       "type": "object",
@@ -722,10 +623,7 @@
           "additionalProperties": {}
         }
       },
-      "required": [
-        "timestamp",
-        "values"
-      ]
+      "required": ["timestamp", "values"]
     },
     "UISchema": {
       "type": "object",
@@ -790,13 +688,7 @@
           "$ref": "#/definitions/LayoutConfig"
         }
       },
-      "required": [
-        "id",
-        "name",
-        "inputs",
-        "outputs",
-        "layout"
-      ],
+      "required": ["id", "name", "inputs", "outputs", "layout"],
       "additionalProperties": false
     }
   },

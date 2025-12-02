@@ -60,7 +60,6 @@ export function useBuilderState(sessionId: string) {
   function handleMetadataUpdated(message: any) {
     if (message.sessionId !== sessionId || !state.schema) return;
 
-
     const changedParams = message.changedParams || [];
     if (changedParams.length === 0) return;
 
@@ -163,8 +162,12 @@ export function useBuilderState(sessionId: string) {
           state.schema.layout.tabs = state.schema.layout.tabs.filter((t) => t.groups.length > 0);
 
           // If active tab was removed, switch to first available
-          if (state.activeTabId && !state.schema.layout.tabs.find((t) => t.id === state.activeTabId)) {
-            state.activeTabId = state.schema.layout.tabs.length > 0 ? state.schema.layout.tabs[0].id : null;
+          if (
+            state.activeTabId &&
+            !state.schema.layout.tabs.find((t) => t.id === state.activeTabId)
+          ) {
+            state.activeTabId =
+              state.schema.layout.tabs.length > 0 ? state.schema.layout.tabs[0].id : null;
           }
         }
 

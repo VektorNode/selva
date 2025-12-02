@@ -2,12 +2,7 @@
   import * as Card from '$lib/components/ui/card';
   import { Button } from '$lib/components/ui';
   import { SchemaInfoPanel, AvailableItemList } from '$lib/components/builder';
-  import type {
-    UISchema,
-    AvailableInput,
-    AvailableOutput,
-    TabConfig,
-  } from '$lib/types/generated';
+  import type { UISchema, AvailableInput, AvailableOutput, TabConfig } from '$lib/types/generated';
 
   interface Props {
     schema: UISchema;
@@ -35,13 +30,18 @@
 </script>
 
 <aside class="flex flex-col gap-6">
-  <SchemaInfoPanel {schema} onSchemaChange={onSchemaChange} />
+  <SchemaInfoPanel {schema} {onSchemaChange} />
 
   <Card.Root class="shadow-sm">
     <Card.Header class="flex flex-row items-center justify-between space-y-0">
       <Card.Title class="text-xl">Available Parameters</Card.Title>
       {#if syncNeeded}
-        <Button variant="default" size="sm" onclick={onSync} class="bg-amber-500 hover:bg-amber-600">
+        <Button
+          variant="default"
+          size="sm"
+          onclick={onSync}
+          class="bg-amber-500 hover:bg-amber-600"
+        >
           Sync
         </Button>
       {/if}

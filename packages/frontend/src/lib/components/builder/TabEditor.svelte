@@ -53,13 +53,7 @@
         />
       {:else}
         <!-- Tab Navigation -->
-        <EditableTabNav
-          {tabs}
-          {activeTabId}
-          onTabChange={onTabChange}
-          onRemoveTab={onRemoveTab}
-          onReorderTabs={onReorderTabs}
-        />
+        <EditableTabNav {tabs} {activeTabId} {onTabChange} {onRemoveTab} {onReorderTabs} />
 
         <!-- Active Tab Content -->
         {#if activeTab}

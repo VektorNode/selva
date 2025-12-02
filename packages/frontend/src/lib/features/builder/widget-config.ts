@@ -71,7 +71,6 @@ export function createDefaultWidgetConfig(
   param: AvailableInput,
   category: 'input' | 'output'
 ): WidgetConfig {
-
   if (category === 'input') {
     switch (widgetType) {
       case 'number': {

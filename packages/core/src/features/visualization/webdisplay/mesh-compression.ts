@@ -41,7 +41,9 @@ export function decompressMeshData(base64String: string): MeshData {
  * @returns Promise resolving to decompressed vertices and faces arrays.
  * @throws {RhinoComputeError} If decompression fails or data is invalid.
  */
-export async function decompressBatchedMeshData(base64String: string): Promise<DecompressedMeshData> {
+export async function decompressBatchedMeshData(
+  base64String: string
+): Promise<DecompressedMeshData> {
   return new Promise((resolve, reject) => {
     try {
       // Use requestIdleCallback for non-blocking decompression if available
@@ -114,7 +116,13 @@ function parseBatchedMeshBinaryData(binaryMeshData: Uint8Array): DecompressedMes
     throw new RhinoComputeError(
       'Invalid number of vertex floats; should be divisible by 3.',
       ErrorCodes.VALIDATION_ERROR,
-      { context: { numVertexFloats, remainder: numVertexFloats % 3, totalBytes: dataView.byteLength } }
+      {
+        context: {
+          numVertexFloats,
+          remainder: numVertexFloats % 3,
+          totalBytes: dataView.byteLength,
+        },
+      }
     );
   }
 

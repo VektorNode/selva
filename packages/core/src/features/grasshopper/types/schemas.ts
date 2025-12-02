@@ -44,9 +44,7 @@ export interface GrasshopperDefinitionSource {
  * Extends base config with Grasshopper-specific options
  */
 export interface GrasshopperComputeConfig
-  extends ComputeConfig,
-  GrasshopperBaseSchema,
-  GrasshopperDefinitionSource { }
+  extends ComputeConfig, GrasshopperBaseSchema, GrasshopperDefinitionSource {}
 
 /**
  * Raw I/O response schema from API (PascalCase)
@@ -74,8 +72,7 @@ export interface IoResponseSchema {
  * Includes config options + definition source + input values
  */
 export interface GrasshopperRequestSchema
-  extends GrasshopperBaseSchema,
-  GrasshopperDefinitionSource {
+  extends GrasshopperBaseSchema, GrasshopperDefinitionSource {
   /** Input values organized by parameter */
   values?: DataTree[];
 }
@@ -85,8 +82,7 @@ export interface GrasshopperRequestSchema
  * Includes all schema fields + computed results
  */
 export interface GrasshopperComputeResponse
-  extends GrasshopperBaseSchema,
-  GrasshopperDefinitionSource {
+  extends GrasshopperBaseSchema, GrasshopperDefinitionSource {
   /** Whether cache was used (always present in response) */
   cachesolve: boolean;
   /** Model units (always present in response) */

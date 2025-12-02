@@ -5,7 +5,6 @@
 
 import { downloadFileData, type FileData } from '@selva/core';
 
-
 /**
  * Download file(s) from Grasshopper outputs
  * Single files are downloaded directly, multiple files are packaged as ZIP
