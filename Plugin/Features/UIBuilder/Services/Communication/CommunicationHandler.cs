@@ -245,6 +245,26 @@ public class CommunicationHandler : IDisposable
   }
 
   /// <summary>
+  ///   Broadcast output values, file data, and display data to all connected clients in a single message
+  /// </summary>
+  public async Task BroadcastOutputsWithFilesAndDisplay(Dictionary<string, object> outputs,
+    Dictionary<string, object> fileOutputs, List<object> displayData)
+  {
+    if (_webSocketServer != null && _webSocketServer.IsRunning)
+    {
+      var message = new
+      {
+        type = "outputs",
+        sessionId = _sessionId,
+        outputs,
+        fileOutputs,
+        displayData
+      };
+      await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+    }
+  }
+
+  /// <summary>
   ///   Broadcast current input values to all connected clients
   /// </summary>
   public async Task BroadcastCurrentValues(Dictionary<string, object> values)

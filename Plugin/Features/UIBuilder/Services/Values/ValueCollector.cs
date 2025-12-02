@@ -7,6 +7,7 @@ using Grasshopper.Kernel.Types;
 using Selva.Features.ComputeIO.Components;
 using Selva.Features.FileIO.Services;
 using Selva.Features.UIBuilder.Models;
+using Selva.Features.Display.Services;
 
 namespace Selva.Features.UIBuilder.Services;
 
@@ -120,6 +121,39 @@ public class ValueCollector
   }
 
   /// <summary>
+  ///   Collect display data from all WebDisplay components in the document.
+  ///   Returns an array of MeshBatch objects (as JSON-serializable objects).
+  ///   This is not tied to specific output schema items - it collects from ALL WebDisplay components.
+  /// </summary>
+  public List<object> CollectDisplayData(GH_Document document,
+    Action<GH_RuntimeMessageLevel, string> addMessage = null)
+  {
+    var displayDataList = new List<object>();
+
+    if (document == null) return displayDataList;
+
+    foreach (var docObject in document.Objects)
+    {
+      if (docObject is IGH_Component component)
+      {
+        try
+        {
+          var displayData = ExtractWebDisplayDataFromComponent(component, addMessage);
+          if (displayData != null)
+            displayDataList.Add(displayData);
+        }
+        catch (Exception ex)
+        {
+          addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+            $"Error collecting display data from component '{component.NickName}': {ex.Message}");
+        }
+      }
+    }
+
+    return displayDataList;
+  }
+
+  /// <summary>
   ///   Extract value from a parameter, handling ValueList parameters specially
   /// </summary>
   private object ExtractParameterValue(IGH_Param ghParam, InputParamSchema input)
@@ -206,6 +240,41 @@ public class ValueCollector
     }
 
     return fileDataList;
+  }
+
+  /// <summary>
+  ///   Extract WebDisplayGoo data from a component's output parameters.
+  ///   Returns the MeshBatch object if found, null otherwise.
+  /// </summary>
+  private object ExtractWebDisplayDataFromComponent(IGH_Component component,
+    Action<GH_RuntimeMessageLevel, string> addMessage)
+  {
+    if (component?.Params?.Output == null || component.Params.Output.Count == 0)
+      return null;
+
+    foreach (var outputParam in component.Params.Output)
+    {
+      if (outputParam?.VolatileData == null || outputParam.VolatileData.IsEmpty) continue;
+
+      var allData = outputParam.VolatileData.AllData(true);
+      foreach (var gooObj in allData)
+      {
+        if (gooObj is WebDisplayGoo webDisplayGoo && webDisplayGoo.IsValid)
+        {
+          try
+          {
+            return webDisplayGoo.Value;
+          }
+          catch (Exception ex)
+          {
+            addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+              $"Error extracting WebDisplayGoo data: {ex.Message}");
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   /// <summary>

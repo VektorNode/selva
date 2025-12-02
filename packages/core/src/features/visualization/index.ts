@@ -20,7 +20,7 @@ export { initThree, updateScene, Materials } from './threejs';
 export { getThreeMeshesFromComputeResponse } from './webdisplay';
 
 // Low-level APIs for advanced use cases
-export { parseMeshBatch } from './webdisplay/batch-parser';
+export { parseMeshBatch, parseMeshBatchObject } from './webdisplay/batch-parser';
 export { decompressMeshData, decompressBatchedMeshData } from './webdisplay/mesh-compression';
 
 // ============================================================================

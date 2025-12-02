@@ -32,12 +32,48 @@ export async function parseMeshBatch(
   const { mergeByMaterial = true, applyTransforms = true, debug = false } = options ?? {};
 
   const perfStart = debug ? performance.now() : 0;
-  let parseTime = 0, decompressTime = 0, meshCreateTime = 0;
+  let parseTime = 0;
 
   try {
     const parseStart = performance.now();
     const batch: MeshBatch = JSON.parse(batchJson);
     parseTime = performance.now() - parseStart;
+
+    return await parseMeshBatchObject(batch, { mergeByMaterial, applyTransforms, debug, parseTime, perfStart });
+  } catch (error) {
+    console.error('Error parsing mesh batch:', error);
+    return [];
+  }
+}
+
+/**
+ * Parses a MeshBatch object and creates Three.js meshes.
+ * This is useful when you already have a deserialized MeshBatch object.
+ *
+ * @param batch - MeshBatch object
+ * @param options - Rendering options
+ * @returns Promise resolving to array of Three.js mesh objects
+ */
+export async function parseMeshBatchObject(
+  batch: MeshBatch,
+  options?: {
+    /** Merge meshes with same material into single geometry*/
+    mergeByMaterial?: boolean;
+    /** Apply coordinate system transformations */
+    applyTransforms?: boolean;
+    /** Enable performance monitoring */
+    debug?: boolean;
+    /** Parse time (optional, for debugging) */
+    parseTime?: number;
+    /** Performance start time (optional, for debugging) */
+    perfStart?: number;
+  }
+): Promise<THREE.Mesh[]> {
+  const { mergeByMaterial = true, applyTransforms = true, debug = false, parseTime = 0, perfStart = debug ? performance.now() : 0 } = options ?? {};
+
+  let decompressTime = 0, meshCreateTime = 0;
+
+  try {
 
     const decompressStart = performance.now();
     const { vertices, faces } = await decompressBatchedMeshData(batch.compressedData);
@@ -78,7 +114,7 @@ export async function parseMeshBatch(
     if (debug) {
       const totalTime = performance.now() - perfStart;
       console.log('Performance:');
-      console.log(`  Parse JSON: ${parseTime.toFixed(2)}ms`);
+      if (parseTime > 0) console.log(`  Parse JSON: ${parseTime.toFixed(2)}ms`);
       console.log(`  Decompress: ${decompressTime.toFixed(2)}ms`);
       console.log(`  Create Meshes: ${meshCreateTime.toFixed(2)}ms`);
       console.log(`  Total: ${totalTime.toFixed(2)}ms`);
@@ -86,7 +122,7 @@ export async function parseMeshBatch(
 
     return meshes;
   } catch (error) {
-    console.error('Error parsing mesh batch:', error);
+    console.error('Error parsing mesh batch object:', error);
     return [];
   }
 }

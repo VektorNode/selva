@@ -12,6 +12,8 @@
     getDefaultValue,
   } from '$lib/utils/session';
   import { onMount } from 'svelte';
+  import type { MeshBatch } from '@selva/core';
+  import { parseMeshBatchObject } from '@selva/core';
 
   type RuntimeMode = 'local' | 'compute';
 
@@ -21,6 +23,7 @@
   let values = $state<Record<string, unknown>>({});
   let loading = $state(true);
   let error = $state('');
+  let canvas: HTMLCanvasElement | null = $state(null);
 
   const wsState = getWebSocketState();
 
@@ -30,6 +33,16 @@
   let runtimeMode = $state<RuntimeMode>('local');
   let solving = $state(false);
   let syncNeeded = $state(false);
+
+  // 3D Viewer state
+  let displayMeshes = $state<any[]>([]);
+  let viewerInitialized = $state(false);
+  let scene: any = null;
+  let camera: any = null;
+  let controls: any = null;
+
+  // Deferred imports
+  let rhinoCompute: typeof import('@selva/core') | null = null;
 
   // Navigate to specific routes with session preservation
   function navigateTo(route: '/' | '/builder') {
@@ -61,6 +74,54 @@
       notificationTimer = null;
     }, duration);
   }
+
+  // -----------------------------
+  // 3D Viewer Initialization
+  // -----------------------------
+  async function ensureRhinoComputeLoaded() {
+    if (!rhinoCompute) {
+      rhinoCompute = await import('@selva/core');
+    }
+  }
+
+  async function initializeViewer() {
+    if (!canvas || viewerInitialized) return;
+
+    await ensureRhinoComputeLoaded();
+
+    const opts = {
+      environment: { backgroundColor: '#f3f4f6' },
+    };
+
+    const { scene: s, camera: c, controls: ctl } = rhinoCompute!.initThree(canvas, opts);
+
+    scene = s;
+    camera = c;
+    controls = ctl;
+    viewerInitialized = true;
+
+    console.log('[Preview] 3D viewer initialized');
+  }
+
+  async function updateViewer() {
+    if (!scene || !camera || !controls || displayMeshes.length === 0) return;
+
+    await ensureRhinoComputeLoaded();
+
+    rhinoCompute!.updateScene(scene, displayMeshes, camera, controls, viewerInitialized);
+    console.log(`[Preview] Updated viewer with ${displayMeshes.length} meshes`);
+  }
+
+  // Watch for display meshes and initialize/update viewer
+  $effect(() => {
+    if (displayMeshes.length > 0) {
+      if (!viewerInitialized && canvas) {
+        initializeViewer().then(() => updateViewer());
+      } else if (viewerInitialized) {
+        updateViewer();
+      }
+    }
+  });
 
   /**
    * Handle value changes from UI
@@ -182,10 +243,32 @@
       }
     };
 
-    const handleOutputs = (message: any) => {
+    const handleOutputs = async (message: any) => {
       if (message.sessionId === sessionId) {
         console.log('[Preview] Received outputs:', message.outputs);
         console.log('[Preview] Received file outputs:', message.fileOutputs);
+        console.log('[Preview] Received display data:', message.displayData);
+
+        // Handle display data (MeshBatch objects from WebDisplay components)
+        if (message.displayData && Array.isArray(message.displayData)) {
+          try {
+            const allMeshes: any[] = [];
+
+            for (const batchData of message.displayData as MeshBatch[]) {
+              const meshes = await parseMeshBatchObject(batchData, {
+                mergeByMaterial: true,
+                applyTransforms: true,
+                debug: false
+              });
+              allMeshes.push(...meshes);
+            }
+
+            displayMeshes = allMeshes;
+            console.log(`[Preview] Parsed ${allMeshes.length} display meshes`);
+          } catch (error) {
+            console.error('[Preview] Error parsing display data:', error);
+          }
+        }
 
         const outputUpdates = Object.fromEntries(
           Object.entries(message.outputs || {}).filter(([paramId]) =>
@@ -439,36 +522,46 @@
         <StateDisplay type="error" size="large" message={error} />
       </div>
     {:else if schema}
-      <div class="mx-auto max-w-6xl p-8">
-        {#if schema.layout.type === 'tabbed' && schema.layout.tabs && schema.layout.tabs.length > 0}
-          <TabLayout
-            {schema}
-            bind:values
-            onValueChange={handleValueChange}
-            debounceSliders={true}
-          />
-        {/if}
+      <div class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row">
+        <!-- Controls -->
+        <div class="w-full shrink-0 overflow-y-auto {displayMeshes.length > 0 ? 'lg:w-[480px] xl:w-[520px]' : 'mx-auto max-w-6xl'}">
+          {#if schema.layout.type === 'tabbed' && schema.layout.tabs && schema.layout.tabs.length > 0}
+            <TabLayout
+              {schema}
+              bind:values
+              onValueChange={handleValueChange}
+              debounceSliders={true}
+            />
+          {/if}
 
-        {#if schema.instanceSolve === false}
-          <div class="sticky bottom-8 mt-8 flex justify-center">
-            <Button
-              variant={hasPendingChanges ? 'default' : 'outline'}
-              size="lg"
-              onclick={handleCalculate}
-              disabled={!hasPendingChanges || wsState.isSolving}
-              class="shadow-lg"
-            >
-              {#if wsState.isSolving}
-                <div
-                  class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"
-                ></div>
-                Solving...
-              {:else if hasPendingChanges}
-                Calculate
-              {:else}
-                No Changes
-              {/if}
-            </Button>
+          {#if schema.instanceSolve === false}
+            <div class="sticky bottom-0 mt-6 flex justify-center">
+              <Button
+                variant={hasPendingChanges ? 'default' : 'outline'}
+                size="lg"
+                onclick={handleCalculate}
+                disabled={!hasPendingChanges || wsState.isSolving}
+                class="shadow-lg"
+              >
+                {#if wsState.isSolving}
+                  <div
+                    class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"
+                  ></div>
+                  Solving...
+                {:else if hasPendingChanges}
+                  Calculate
+                {:else}
+                  No Changes
+                {/if}
+              </Button>
+            </div>
+          {/if}
+        </div>
+
+        <!-- 3D Viewer (conditional) -->
+        {#if displayMeshes.length > 0}
+          <div class="min-h-[500px] flex-1 overflow-hidden rounded-lg bg-white shadow-lg">
+            <canvas class="block h-full w-full" bind:this={canvas}></canvas>
           </div>
         {/if}
       </div>
@@ -502,6 +595,10 @@
     </div>
   {/if}
 </PageContainer>
+
+<div class="min-h-[500px] flex-1 overflow-hidden rounded-lg bg-white shadow-lg">
+  <canvas class="block h-full w-full" bind:this={canvas}></canvas>
+</div>
 
 <style>
   @keyframes slideInRight {

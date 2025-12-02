@@ -257,10 +257,11 @@ public class DocumentEventManager : IDisposable
 
     var outputValues = _valueCollector.CollectOutputValues(_currentDocument, schema);
     var fileOutputs = _valueCollector.CollectFileOutputs(_currentDocument, schema);
+    var displayData = _valueCollector.CollectDisplayData(_currentDocument);
 
-    if (outputValues.Count > 0 || fileOutputs.Count > 0)
+    if (outputValues.Count > 0 || fileOutputs.Count > 0 || displayData.Count > 0)
     {
-      var _ = _communicationHandler.BroadcastOutputsWithFiles(outputValues, fileOutputs);
+      var _ = _communicationHandler.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData);
     }
   }
 }
