@@ -43,9 +43,9 @@ export type InnerTreeData = {
 };
 
 /**
- * Inner tree with parameter metadata (used in compute responses)
+ * Tree with parameter metadata (used in compute responses)
  */
-export interface InnerTree {
+export interface DataTree {
   InnerTree: InnerTreeData;
   ParamName: string;
 }
@@ -53,7 +53,7 @@ export interface InnerTree {
 /**
  * Array of inner tree values (used in compute requests/responses)
  */
-export type Values = InnerTree[];
+export type Values = DataTree[];
 
 /**
  * Processed data item for output handling

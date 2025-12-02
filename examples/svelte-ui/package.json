@@ -21,9 +21,7 @@
     "!dist/**/*.test.*",
     "!dist/**/*.spec.*"
   ],
-  "sideEffects": [
-    "**/*.css"
-  ],
+
   "svelte": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "type": "module",
@@ -31,8 +29,20 @@
     ".": {
       "types": "./dist/index.d.ts",
       "svelte": "./dist/index.js"
+    },
+    "./InputHandler": {
+      "types": "./dist/InputHandler.svelte.d.ts",
+      "svelte": "./dist/InputHandler.svelte"
+    },
+    "./components/*": {
+      "types": "./dist/components/*",
+      "svelte": "./dist/components/*"
     }
   },
+  "sideEffects": [
+    "**/*.css",
+    "**/*.svelte"
+  ],
   "peerDependencies": {
     "@selva/core": "^1.0.3",
     "svelte": "^5.0.0"
@@ -40,7 +50,6 @@
   "devDependencies": {
     "@eslint/compat": "^1.4.0",
     "@eslint/js": "^9.37.0",
-    "@lucide/svelte": "^0.544.0",
     "@sveltejs/adapter-auto": "^6.1.1",
     "@sveltejs/kit": "^2.46.5",
     "@sveltejs/package": "^2.5.4",
@@ -67,7 +76,8 @@
     "vite": "^7.1.10"
   },
   "dependencies": {
-    "@selva/core": "workspace:*"
+    "@selva/core": "workspace:*",
+    "@lucide/svelte": "^0.544.0"
   },
   "keywords": [
     "compute",

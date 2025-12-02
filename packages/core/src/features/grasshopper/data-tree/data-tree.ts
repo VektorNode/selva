@@ -1,4 +1,4 @@
-import { DataTreeDefault, DataTreePath, InputParam, InnerTree } from '../types';
+import { DataTreeDefault, DataTreePath, InputParam, DataTree } from '../types';
 
 /**
  * Value types that can be stored in a DataTree
@@ -20,18 +20,18 @@ type ComputeInnerTreeData = {
 };
 
 /**
- * Standalone DataTree class for constructing Grasshopper DataTree structures.
+ * Standalone TreeBuilder class for constructing Grasshopper TreeBuilder structures.
  * Does not depend on RhinoCompute library.
  *
  * @example
  * ```ts
- * const tree = new DataTree('MyParam')
+ * const tree = new TreeBuilder('MyParam')
  *   .append([0], [1, 2, 3])
  *   .append([1], [4, 5])
  *   .toComputeFormat();
  * ```
  */
-export class DataTree {
+export class TreeBuilder {
   private innerTree: ComputeInnerTreeData;
   private paramName: string;
 
@@ -48,14 +48,14 @@ export class DataTree {
    * @returns this for method chaining
    */
   public append(path: number[], items: DataTreeValue[]): this {
-    const pathKey = DataTree.formatPathString(path);
+    const pathKey = TreeBuilder.formatPathString(path);
 
     if (!this.innerTree[pathKey]) {
       this.innerTree[pathKey] = [];
     }
 
     const dataItems: ComputeDataItem[] = items.map((item) => ({
-      data: DataTree.serializeValue(item),
+      data: TreeBuilder.serializeValue(item),
     }));
 
     this.innerTree[pathKey].push(...dataItems);
@@ -77,7 +77,7 @@ export class DataTree {
    * Set values from a DataTreeDefault structure.
    * Replaces any existing tree data.
    *
-   * @param treeData - DataTree structure with path keys like "{0;1}"
+   * @param treeData - TreeBuilder structure with path keys like "{0;1}"
    * @returns this for method chaining
    */
   public fromDataTreeDefault(treeData: DataTreeDefault): this {
@@ -85,7 +85,7 @@ export class DataTree {
 
     for (const [pathStr, items] of Object.entries(treeData)) {
       if (!Array.isArray(items)) continue;
-      const path = DataTree.parsePathString(pathStr);
+      const path = TreeBuilder.parsePathString(pathStr);
       this.append(path, items);
     }
 
@@ -115,7 +115,7 @@ export class DataTree {
     for (const items of Object.values(this.innerTree)) {
       if (Array.isArray(items)) {
         for (const item of items) {
-          result.push(DataTree.deserializeValue(item.data));
+          result.push(TreeBuilder.deserializeValue(item.data));
         }
       }
     }
@@ -139,10 +139,10 @@ export class DataTree {
    * @returns Array of values or undefined if path doesn't exist
    */
   public getPath(path: number[]): DataTreeValue[] | undefined {
-    const pathKey = DataTree.formatPathString(path);
+    const pathKey = TreeBuilder.formatPathString(path);
     const items = this.innerTree[pathKey];
     if (!items) return undefined;
-    return items.map((item: ComputeDataItem) => DataTree.deserializeValue(item.data));
+    return items.map((item: ComputeDataItem) => TreeBuilder.deserializeValue(item.data));
   }
 
   /**
@@ -150,7 +150,7 @@ export class DataTree {
    *
    * @returns InnerTree object ready for compute
    */
-  public toComputeFormat(): InnerTree {
+  public toComputeFormat(): DataTree {
     return {
       ParamName: this.paramName,
       InnerTree: this.innerTree as any, // Cast to any because request format differs from response type
@@ -188,29 +188,29 @@ export class DataTree {
    *
    * @example
    * ```ts
-   * const trees = DataTree.fromInputParams(inputs);
+   * const trees = TreeBuilder.fromInputParams(inputs);
    * ```
    */
-  public static fromInputParams(inputs: InputParam[]): InnerTree[] {
+  public static fromInputParams(inputs: InputParam[]): DataTree[] {
     return inputs
-      .filter((input) => DataTree.hasValidValue(input.default))
+      .filter((input) => TreeBuilder.hasValidValue(input.default))
       .map((input) => {
-        const tree = new DataTree(input.name);
+        const tree = new TreeBuilder(input.name);
         const value = input.default;
 
-        // Handle tree access (complex DataTree structure)
-        if (input.treeAccess && DataTree.isDataTreeStructure(value)) {
+        // Handle tree access (complex TreeBuilder structure)
+        if (input.treeAccess && TreeBuilder.isDataTreeStructure(value)) {
           tree.fromDataTreeDefault(value as DataTreeDefault);
 
           // Apply numeric constraints to tree items
-          if (DataTree.isNumericInput(input)) {
+          if (TreeBuilder.isNumericInput(input)) {
             tree.applyNumericConstraints(input.minimum, input.maximum, input.name);
           }
         }
         // Handle flat inputs
         else {
           const values = Array.isArray(value) ? value : [value];
-          const processed = DataTree.processValues(values, input);
+          const processed = TreeBuilder.processValues(values, input);
           tree.appendFlat(processed);
         }
 
@@ -219,20 +219,250 @@ export class DataTree {
   }
 
   /**
-   * Create a DataTree from a single InputParam.
+   * Create a TreeBuilder from a single InputParam.
    *
    * @param input - Input parameter definition
    * @returns InnerTree ready for compute or undefined if value is invalid
    */
-  public static fromInputParam(input: InputParam): InnerTree | undefined {
-    if (!DataTree.hasValidValue(input.default)) return undefined;
+  public static fromInputParam(input: InputParam): DataTree | undefined {
+    if (!TreeBuilder.hasValidValue(input.default)) return undefined;
 
-    const trees = DataTree.fromInputParams([input]);
+    const trees = TreeBuilder.fromInputParams([input]);
     return trees[0];
   }
 
   /**
-   * Parse a DataTree path string like "{0;1;2}" into [0, 1, 2].
+   * Set or replace a parameter value within a TreeBuilder or InnerTree array.
+   *
+   * Supports both high-level `DataTree[]` instances and low-level `InnerTree[]` format.
+   *
+   * **Architecture Note:**
+   * - Use with `DataTree[]` when building/modifying before computation
+   * - Use with `InnerTree[]` when modifying compute API results
+   * - `DataTree` is the high-level builder; `InnerTree` is the Rhino Compute format
+   *
+   * @overload For TreeBuilder instances (high-level builder)
+   * @param trees - Array of TreeBuilder instances to modify
+   * @param paramName - The parameter name to set or replace
+   * @param newValue - The new value (scalar, array, or TreeBuilder structure)
+   * @returns A new/modified TreeBuilder array with the updated parameter
+   *
+   * @overload For compiled InnerTree (low-level API format)
+   * @param trees - The compiled InnerTree array (typically from `client.solve()`)
+   * @param paramName - The parameter name to set or replace
+   * @param newValue - The new value (scalar, array, or TreeBuilder structure)
+   * @returns A new/modified InnerTree array with the updated parameter
+   *
+   * @example
+   * ```ts
+   * // With TreeBuilder instances (high-level)
+   * let trees = [new TreeBuilder('X'), new TreeBuilder('Y')];
+   * trees = TreeBuilder.replaceTreeValue(trees, 'X', 42);
+   * const result = await client.solve(definitionUrl,
+   *   trees.map(t => t.toComputeFormat())
+   * );
+   * ```
+   *
+   * @example
+   * ```ts
+   * // With InnerTree format (low-level, from API)
+   * let trees = await client.solve(definitionUrl, initialInputs);
+   * trees = TreeBuilder.replaceTreeValue(trees, 'X', 42);
+   * trees = TreeBuilder.replaceTreeValue(trees, 'Y', [1, 2, 3]);
+   * ```
+   */
+  public static replaceTreeValue(
+    trees: TreeBuilder[],
+    paramName: string,
+    newValue: DataTreeValue
+  ): TreeBuilder[];
+  public static replaceTreeValue(
+    trees: DataTree[],
+    paramName: string,
+    newValue: DataTreeValue
+  ): DataTree[];
+  public static replaceTreeValue(
+    trees: TreeBuilder[] | DataTree[],
+    paramName: string,
+    newValue: DataTreeValue
+  ): TreeBuilder[] | DataTree[] {
+    // Check if we're working with TreeBuilder instances or InnerTree objects
+    const isDataTreeArray = trees.length > 0 && trees[0] instanceof TreeBuilder;
+
+    if (isDataTreeArray) {
+      // Handle DataTree[] instances
+      const dataTrees = trees as TreeBuilder[];
+      const existingIndex = dataTrees.findIndex((t) => t.getParamName() === paramName);
+      const tree = new TreeBuilder(paramName);
+
+      // Handle different input formats
+      if (
+        typeof newValue === 'object' &&
+        newValue !== null &&
+        !Array.isArray(newValue) &&
+        TreeBuilder.isDataTreeStructure(newValue)
+      ) {
+        tree.fromDataTreeDefault(newValue as DataTreeDefault);
+      } else if (Array.isArray(newValue)) {
+        tree.appendFlat(newValue);
+      } else {
+        tree.appendFlat(newValue);
+      }
+
+      if (existingIndex !== -1) {
+        dataTrees[existingIndex] = tree;
+      } else {
+        dataTrees.push(tree);
+      }
+
+      return dataTrees;
+    } else {
+      // Handle InnerTree[] (compiled format)
+      const innerTrees = trees as DataTree[];
+      const existingIndex = innerTrees.findIndex((t) => t.ParamName === paramName);
+      const tree = new TreeBuilder(paramName);
+
+      // Handle different input formats
+      if (
+        typeof newValue === 'object' &&
+        newValue !== null &&
+        !Array.isArray(newValue) &&
+        TreeBuilder.isDataTreeStructure(newValue)
+      ) {
+        tree.fromDataTreeDefault(newValue as DataTreeDefault);
+      } else if (Array.isArray(newValue)) {
+        tree.appendFlat(newValue);
+      } else {
+        tree.appendFlat(newValue);
+      }
+
+      const newTree = tree.toComputeFormat();
+
+      if (existingIndex !== -1) {
+        innerTrees[existingIndex] = newTree;
+      } else {
+        innerTrees.push(newTree);
+      }
+
+      return innerTrees;
+    }
+  }
+
+  /**
+   * Extract a value from a TreeBuilder or InnerTree array by parameter name.
+   *
+   * Automatically unwraps single values for convenience.
+   * Works with both high-level `DataTree[]` instances and low-level `InnerTree[]` format.
+   *
+   * **Architecture Note:**
+   * - Use with `DataTree[]` to read builder instances
+   * - Use with `InnerTree[]` to read compute API responses
+   * - Return behavior is consistent across both formats
+   *
+   * **Return Value Behavior:**
+   * - Single value → unwrapped (returns `5` not `[5]`)
+   * - Multiple values → array of values
+   * - Not found → `null`
+   *
+   * @overload For TreeBuilder instances
+   * @param trees - Array of TreeBuilder instances to read from
+   * @param paramName - The parameter name to retrieve
+   * @returns The unwrapped value, array of values, or null if parameter not found
+   *
+   * @overload For compiled InnerTree
+   * @param trees - The compiled InnerTree array (typically from `client.solve()`)
+   * @param paramName - The parameter name to retrieve
+   * @returns The unwrapped value, array of values, or null if parameter not found
+   *
+   * @example
+   * ```ts
+   * // With TreeBuilder instances
+   * const trees = [new TreeBuilder('X'), new TreeBuilder('Y')];
+   * trees[0].appendFlat(42);
+   * const x = TreeBuilder.getTreeValue(trees, 'X'); // Returns 42
+   * ```
+   *
+   * @example
+   * ```ts
+   * // With InnerTree from compute results
+   * const result = await client.solve(definitionUrl, inputs);
+   * const x = TreeBuilder.getTreeValue(result, 'X'); // Returns 42 (not [42])
+   * const points = TreeBuilder.getTreeValue(result, 'Points'); // Returns [point1, point2, ...]
+   * ```
+   */
+  public static getTreeValue(trees: TreeBuilder[], paramName: string): DataTreeValue | null;
+  public static getTreeValue(trees: DataTree[], paramName: string): DataTreeValue | null;
+  public static getTreeValue(
+    trees: TreeBuilder[] | DataTree[],
+    paramName: string
+  ): DataTreeValue | null {
+    // Check if we're working with TreeBuilder instances or InnerTree objects
+    const isDataTreeArray = trees.length > 0 && trees[0] instanceof TreeBuilder;
+
+    if (isDataTreeArray) {
+      // Handle DataTree[] instances
+      const dataTrees = trees as TreeBuilder[];
+      const tree = dataTrees.find((t) => t.getParamName() === paramName);
+
+      if (!tree) {
+        return null;
+      }
+
+      const values = tree.flatten();
+
+      if (values.length === 0) return null;
+      if (values.length === 1) return values[0];
+      return values;
+    } else {
+      // Handle InnerTree[] (compiled format)
+      const innerTrees = trees as DataTree[];
+      const tree = innerTrees.find((t) => t.ParamName === paramName);
+
+      if (!tree) {
+        return null;
+      }
+
+      const innerTree = tree.InnerTree;
+
+      // Handle missing InnerTree
+      if (!innerTree) {
+        return null;
+      }
+
+      // Get the first path (usually "{0}")
+      const firstKey = Object.keys(innerTree)[0];
+      if (!firstKey) {
+        return null;
+      }
+
+      // @ts-ignore
+      const items = innerTree[firstKey];
+
+      // Handle array of values
+      if (Array.isArray(items)) {
+        // Single value: unwrap the data property
+        if (items.length === 1) {
+          const value = items[0]?.data;
+          return value !== undefined ? TreeBuilder.deserializeValue(value) : null;
+        }
+        // Multiple values: return array of deserialized values
+        return items
+          .map((item) => (item?.data !== undefined ? TreeBuilder.deserializeValue(item.data) : null))
+          .filter((v) => v !== null);
+      }
+
+      // Handle single object with data property
+      if (items?.data !== undefined) {
+        return TreeBuilder.deserializeValue(items.data);
+      }
+
+      // Return raw value
+      return items;
+    }
+  }
+
+  /**
+   * Parse a TreeBuilder path string like "{0;1;2}" into [0, 1, 2].
    *
    * @param pathStr - Path string
    * @returns Array of path indices
@@ -240,14 +470,14 @@ export class DataTree {
   public static parsePathString(pathStr: string): number[] {
     const match = pathStr.match(/^\{([\d;]+)\}$/);
     if (!match) {
-      console.warn(`Invalid DataTree path format: ${pathStr}, using [0]`);
+      console.warn(`Invalid TreeBuilder path format: ${pathStr}, using [0]`);
       return [0];
     }
     return match[1].split(';').map(Number);
   }
 
   /**
-   * Format a path array into DataTree path string format.
+   * Format a path array into TreeBuilder path string format.
    *
    * @param path - Path as number array
    * @returns Formatted path string like "{0;1;2}"
@@ -272,10 +502,10 @@ export class DataTree {
       if (!Array.isArray(items)) continue;
 
       for (const item of items) {
-        const value = DataTree.deserializeValue(item.data);
+        const value = TreeBuilder.deserializeValue(item.data);
         if (typeof value === 'number') {
-          const clamped = DataTree.clampValue(value, min, max, inputName);
-          item.data = DataTree.serializeValue(clamped);
+          const clamped = TreeBuilder.clampValue(value, min, max, inputName);
+          item.data = TreeBuilder.serializeValue(clamped);
         }
       }
     }
@@ -340,7 +570,7 @@ export class DataTree {
   }
 
   /**
-   * Check if value is a DataTree structure.
+   * Check if value is a TreeBuilder structure.
    */
   private static isDataTreeStructure(value: unknown): value is DataTreeDefault {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
@@ -367,8 +597,8 @@ export class DataTree {
     return values
       .map((val) => {
         // Apply numeric constraints
-        if (DataTree.isNumericInput(input) && typeof val === 'number') {
-          return DataTree.clampValue(val, input.minimum, input.maximum, input.name);
+        if (TreeBuilder.isNumericInput(input) && typeof val === 'number') {
+          return TreeBuilder.clampValue(val, input.minimum, input.maximum, input.name);
         }
 
         // Keep objects and strings as-is (serialization happens in append)

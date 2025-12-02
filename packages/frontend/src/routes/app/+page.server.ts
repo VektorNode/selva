@@ -2,7 +2,7 @@ import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
 import {
   GrasshopperResponseProcessor,
-  DataTree,
+  TreeBuilder,
   GrasshopperClient,
 } from '@selva/core';
 import type { UISchema } from '$lib/types/generated';
@@ -23,7 +23,7 @@ export const load = (async () => {
   const definition = await client.getIO(PUBLIC_GH_DEFINITION);
 
   // Solve with default values to get the schema
-  const tree = DataTree.fromInputParams(definition.inputs);
+  const tree = TreeBuilder.fromInputParams(definition.inputs);
 
   const solvedDefinition = await client.solve(PUBLIC_GH_DEFINITION, tree);
 

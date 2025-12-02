@@ -1,176 +1,152 @@
 <script lang="ts">
-  import NestedAccordion from './components/NestedAccordion.svelte';
-
   import * as Accordion from '$lib/components/ui/accordion/index.js';
-  import Input from '$lib/components/ui/input/input.svelte';
+  import { Input } from '$lib/components/ui/input/index.js';
   import * as Checkbox from '$lib/components/ui/checkbox/index.js';
   import * as Select from '$lib/components/ui/select/index.js';
-  import * as Slider from '$lib/components/ui/slider/index.js';
+  import { Label } from '$lib/components/ui/label/index.js';
 
-  import { type InputParam } from '@selva/core/grasshopper';
-
-  import { untrack } from 'svelte';
-  import {
-    groupedInputsToDataTrees,
-    groupInputs,
-    groupInputsNested,
-    type NestedGroupNode,
-  } from './utils/input-grouping.js';
+  import { TreeBuilder, type DataTree, type InputParam } from '@selva/core/grasshopper';
+  import {  } from '@selva/core';
 
   interface Props {
     input: InputParam[];
-    onChange: (tree: any[]) => void;
+    onChange: (tree: DataTree[]) => void;
     headerText?: string;
     customStyles?: string;
-    autoUpdate?: boolean;
-    children?: any;
-    showSliders?: boolean;
-    showRangeIndicator?: boolean;
-    useNestedGroups?: boolean;
   }
 
-  let props: Props = $props();
+  let { input, onChange, headerText = '', customStyles = '' }: Props = $props();
 
-  // Reactive array with tracked nested mutations
-  let input = $state(props.input);
+  // Simple state object
+  let values = $state<Record<string, any>>({});
 
-  // Auto-detect nested structure based on "::"
-  let useNested = $derived(props.useNestedGroups || input.some((p) => p.groupName?.includes('::')));
-
-  // Single grouping source
-  let groups = $derived(useNested ? groupInputsNested(input) : groupInputs(input));
-
-  // Reactive tree
-  let dataTree = $derived(groupedInputsToDataTrees(groupInputs(input)));
-
-  // Auto-propagate input changes
+  // Initialize values
   $effect(() => {
-    untrack(() => props.onChange(dataTree));
+    values = input.reduce(
+      (acc: Record<string, any>, param: InputParam) => {
+        acc[param.name] = param.default ?? '';
+        return acc;
+      },
+      {} as Record<string, any>
+    );
   });
 
-  const isVisible = (p: InputParam) => {
-    const g = p.groupName?.toLowerCase();
-    return g !== 'hide' && g !== 'hidden';
+  // Convert to DataTree and notify parent of changes
+  $effect(() => {
+    let tree: any[] = [];
+    Object.entries(values).forEach(([key, value]) => {
+      tree = TreeBuilder.replaceTreeValue(tree, key, value);
+    });
+    onChange(tree);
+  });
+
+  // Parse nested group names (e.g., "Geometry::Dimensions" -> just "Dimensions")
+  const parseGroupName = (fullName: string): string => {
+    const parts = fullName.split('::');
+    return parts[parts.length - 1] || fullName;
   };
+
+  // Group inputs by groupName for accordion
+  const getGroupedInputs = () => {
+    const groups: Record<string, InputParam[]> = {};
+
+    input.forEach((param: InputParam) => {
+      const fullGroupName = param.groupName ?? 'General';
+      const displayName = parseGroupName(fullGroupName);
+
+      if (!groups[displayName]) {
+        groups[displayName] = [];
+      }
+      groups[displayName].push(param);
+    });
+
+    return groups;
+  };
+
+const isVisible = (param: InputParam) => {
+  const g = param.groupName?.toLowerCase();
+  return g !== 'hide' && g !== 'hidden';
+};
 </script>
 
-<div class="parameter-panel {props.customStyles}">
-  {#if props.headerText}
+<div class="parameter-panel {customStyles}">
+  {#if headerText}
     <header class="panel-header">
-      <h2>{props.headerText}</h2>
+      <h2>{headerText}</h2>
     </header>
   {/if}
 
   <main class="panel-content">
     <div class="scrollable-content">
-      {#if useNested}
-        <!-- Nested mode -->
-        {@const rootNodes = Object.values(groups) as NestedGroupNode[]}
-
-        <div class="nested-accordion-container">
-          {#each rootNodes as root (root.path)}
-            <NestedAccordion node={root} defaultOpen={true}>
-              {#snippet nodeChildren(node)}
-                <div class="input-group">
-                  {#each node.inputs as param (param.name)}
-                    {#if isVisible(param)}
-                      {@const i = input.findIndex((x) => x.name === param.name)}
-                      <div class="input-field">
-                        <label>{param.name}</label>
-                        {@render renderInput(param, i)}
-                      </div>
-                    {/if}
-                  {/each}
-                </div>
-              {/snippet}
-            </NestedAccordion>
-          {/each}
-        </div>
-      {:else}
-        <!-- Flat mode -->
-        <Accordion.Root type="multiple" value={Object.keys(groups)}>
-          {#each Object.entries(groups) as [groupName, group]}
-            <Accordion.Item value={groupName}>
-              <Accordion.Trigger>{groupName}</Accordion.Trigger>
-
-              <Accordion.Content>
-                <div class="input-group">
-                  {#each group.inputs as param (param.name)}
-                    {#if isVisible(param)}
-                      {@const i = input.findIndex((x) => x.name === param.name)}
-                      <div class="input-field">
-                        <label>{param.name}</label>
-                        {@render renderInput(param, i)}
-                      </div>
-                    {/if}
-                  {/each}
-                </div>
-              </Accordion.Content>
-            </Accordion.Item>
-          {/each}
-        </Accordion.Root>
-      {/if}
-    </div>
-
-    {#if props.children}
-      <div class="children-container">
-        {@render props.children()}
-      </div>
+      <Accordion.Root type="multiple" value={Object.keys(getGroupedInputs())}>
+  {#each Object.entries(getGroupedInputs()) as [groupName, params]}
+    {#if params.some(p => isVisible(p))}
+          <Accordion.Item value={groupName}>
+            <Accordion.Trigger>{groupName}</Accordion.Trigger>
+            <Accordion.Content>
+              <div class="input-group">
+                {#each params as param (param.name)}
+                  {#if isVisible(param)}
+                    <div class="input-field">
+                      <Label for={param.name}>{param.name}</Label>
+                      {#if param.paramType === 'Number' || param.paramType === 'Integer'}
+                        <Input
+                          id={param.name}
+                          type="number"
+                          value={values[param.name] ?? param.default ?? ''}
+                          min={param.minimum}
+                          max={param.maximum}
+                          step={param.paramType === 'Integer' ? 1 : 0.01}
+                          onchange={(e) => {
+                            values = { ...values, [param.name]: parseFloat(e.currentTarget.value) };
+                          }}
+                        />
+                      {:else if param.paramType === 'Boolean'}
+                        <Checkbox.Root
+                          checked={values[param.name] ?? param.default ?? false}
+                          onCheckedChange={(checked) => {
+                            values = { ...values, [param.name]: checked };
+                          }}
+                        />
+                      {:else if param.paramType === 'Text'}
+                        <Input
+                          id={param.name}
+                          type="text"
+                          value={values[param.name] ?? param.default ?? ''}
+                          onchange={(e) => {
+                            values = { ...values, [param.name]: e.currentTarget.value };
+                          }}
+                        />
+                      {:else if param.paramType === 'ValueList'}
+                        <Select.Root
+                          type="single"
+                          value={values[param.name] ?? param.default ?? ''}
+                          onValueChange={(value: string) => {
+                            if (value) values = { ...values, [param.name]: value };
+                          }}
+                        >
+                          <Select.Trigger class="w-full">
+                            {values[param.name] ?? param.default ?? 'Select'}
+                          </Select.Trigger>
+                          <Select.Content>
+                            {#each Object.keys(param.values ?? {}) as key (key)}
+                              <Select.Item value={key} label={key}>{key}</Select.Item>
+                            {/each}
+                          </Select.Content>
+                        </Select.Root>
+                      {/if}
+                    </div>
+                  {/if}
+                {/each}
+              </div>
+            </Accordion.Content>
+          </Accordion.Item>
     {/if}
+  {/each}
+      </Accordion.Root>
+    </div>
   </main>
 </div>
-
-<!-- Unified input rendering -->
-{#snippet renderInput(param: InputParam, index: number)}
-  {#if param.paramType === 'Number' || param.paramType === 'Integer'}
-    {#if props.showSliders && param.minimum != null && param.maximum != null}
-      <Slider.Root
-        type="single"
-        value={input[index].default as number}
-        min={param.minimum}
-        max={param.maximum}
-        step={param.paramType === 'Integer' ? 1 : 0.01}
-        onValueChange={(v) => (input[index].default = v)}
-      />
-    {/if}
-
-    <Input
-      type="number"
-      value={input[index].default}
-      min={param.minimum}
-      max={param.maximum}
-      step={param.paramType === 'Integer' ? 1 : 0.01}
-      oninput={(e) => (input[index].default = parseFloat(e.currentTarget.value))}
-    />
-  {:else if param.paramType === 'Boolean'}
-    <Checkbox.Root
-      checked={input[index].default as boolean}
-      onCheckedChange={(v) => (input[index].default = v === true)}
-    />
-  {:else if param.paramType === 'Text'}
-    <Input
-      type="text"
-      value={input[index].default}
-      oninput={(e) => (input[index].default = e.currentTarget.value)}
-    />
-  {:else if param.paramType === 'ValueList'}
-    <Select.Root
-      type="single"
-      value={input[index].default as string}
-      onValueChange={(v) => v && (input[index].default = v)}
-    >
-      <Select.Trigger class="w-full">
-        {input[index].default || 'Select'}
-      </Select.Trigger>
-
-      <Select.Content>
-        {#each Object.keys(param.values || {}) as key (key)}
-          <Select.Item value={key} label={key}>{key}</Select.Item>
-        {/each}
-      </Select.Content>
-    </Select.Root>
-  {/if}
-{/snippet}
 
 <style>
   .parameter-panel {
@@ -182,12 +158,16 @@
   }
 
   .panel-header {
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid hsl(var(--border));
   }
 
   .panel-header h2 {
     font-size: 1.25rem;
-    font-weight: 600;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+    margin: 0;
   }
 
   .panel-content {
@@ -203,15 +183,11 @@
     padding-right: 0.5rem;
   }
 
-  .children-container {
-    border-top: 1px solid #e5e7eb;
-    padding: 1rem 0.5rem 0 0;
-  }
-
   .input-group {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 1.25rem;
+    padding: 0.75rem 0;
   }
 
   .input-field {
@@ -220,14 +196,20 @@
     gap: 0.5rem;
   }
 
-  .input-field label {
-    font-size: 0.875rem;
-    font-weight: 500;
+  /* Enhance accordion trigger (group headers) */
+  :global(.parameter-panel [data-accordion-trigger]) {
+    font-weight: 600;
+    font-size: 0.9375rem;
   }
 
-  .nested-accordion-container {
-    border: 1px solid #e2e8f0;
-    border-radius: 0.75rem;
-    overflow: hidden;
+  :global(.parameter-panel [data-accordion-trigger][data-state="open"]) {
+    font-weight: 700;
+  }
+
+  /* Make parameter labels smaller and secondary */
+  :global(.parameter-panel label) {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: hsl(215, 13%, 50%);
   }
 </style>

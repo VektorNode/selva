@@ -13,6 +13,14 @@ const config = {
     // See https://svelte.dev/docs/kit/adapters for more information about adapters.
     adapter: adapter(),
   },
+
+  onwarn: (warning, handler) => {
+    // Ignore SvelteKit generated file warnings
+    if (warning.filename?.includes('.svelte-kit/generated')) {
+      return;
+    }
+    handler(warning);
+  },
 };
 
 export default config;

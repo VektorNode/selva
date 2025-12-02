@@ -9,7 +9,7 @@
  */
 
 import type { ComputeConfig, RhinoModelUnit } from '@/core/types';
-import type { InnerTree } from './trees';
+import type { DataTree } from './trees';
 
 /**
  * Base Grasshopper schema properties shared by config, args, and response
@@ -45,8 +45,8 @@ export interface GrasshopperDefinitionSource {
  */
 export interface GrasshopperComputeConfig
   extends ComputeConfig,
-    GrasshopperBaseSchema,
-    GrasshopperDefinitionSource {}
+  GrasshopperBaseSchema,
+  GrasshopperDefinitionSource { }
 
 /**
  * Raw I/O response schema from API (PascalCase)
@@ -75,9 +75,9 @@ export interface IoResponseSchema {
  */
 export interface GrasshopperRequestSchema
   extends GrasshopperBaseSchema,
-    GrasshopperDefinitionSource {
+  GrasshopperDefinitionSource {
   /** Input values organized by parameter */
-  values?: InnerTree[];
+  values?: DataTree[];
 }
 
 /**
@@ -86,7 +86,7 @@ export interface GrasshopperRequestSchema
  */
 export interface GrasshopperComputeResponse
   extends GrasshopperBaseSchema,
-    GrasshopperDefinitionSource {
+  GrasshopperDefinitionSource {
   /** Whether cache was used (always present in response) */
   cachesolve: boolean;
   /** Model units (always present in response) */
@@ -100,7 +100,7 @@ export interface GrasshopperComputeResponse
   /** Recursion level used */
   recursionlevel?: number;
   /** Output values organized by parameter */
-  values: InnerTree[];
+  values: DataTree[];
   /** Computation errors */
   errors?: string[];
   /** Computation warnings */

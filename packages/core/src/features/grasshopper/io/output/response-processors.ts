@@ -9,6 +9,11 @@ export interface ParsedContext {
 export interface GetValuesOptions {
   parseValues?: boolean;
   rhino?: any;
+  /**
+   * If true, only include values of type System.String in the result.
+   * Non-string types are filtered out.
+   */
+  stringOnly?: boolean;
 }
 
 export interface GetValuesResult<T = ParsedContext> {
@@ -116,11 +121,14 @@ export function getValues<T = ParsedContext>(
   byId: boolean = false,
   options: GetValuesOptions = {}
 ): GetValuesResult<T> {
-  const { parseValues = true, rhino } = options;
+  const { parseValues = true, rhino, stringOnly = false } = options;
   const result: ParsedContext = {};
 
   for (const param of response.values) {
     forEachTreeItem(param.InnerTree, (item) => {
+      // Skip non-string types if stringOnly is enabled
+      if (stringOnly && item.type !== SYSTEM_TYPES.STRING) return;
+
       const key = byId ? item.id : param.ParamName;
       if (!key) return;
 
@@ -161,7 +169,7 @@ export function getValue(
   options: { byName: string } | { byId: string },
   parseOptions: GetValuesOptions = {}
 ): any {
-  const { parseValues = true, rhino } = parseOptions;
+  const { parseValues = true, rhino, stringOnly = false } = parseOptions;
 
   let targetParam: GrasshopperComputeResponse['values'][0] | undefined;
 
@@ -183,6 +191,8 @@ export function getValue(
 
   forEachTreeItem(targetParam.InnerTree, (item) => {
     if ('byId' in options && item.id !== options.byId) return;
+    // Skip non-string types if stringOnly is enabled
+    if (stringOnly && item.type !== SYSTEM_TYPES.STRING) return;
     const v = extractItemValue(item.data, item.type, parseValues, rhino);
     collected.push(v);
   });

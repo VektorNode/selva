@@ -5,7 +5,7 @@ import {
   type TextInputType,
   type BooleanInputType,
   type InputParam,
-  DataTree,
+  TreeBuilder,
   GrasshopperClient,
 } from '@selva/core';
 import type { InputParamSchema } from '$lib/types/generated';
@@ -72,7 +72,7 @@ export const POST: RequestHandler = async ({ request }) => {
       throw error(400, 'Missing required fields: inputs, values, or definitionUrl');
     }
 
-    const inputTree = DataTree.fromInputParams(
+    const inputTree = TreeBuilder.fromInputParams(
       inputs
         .filter((input) => input.paramType)
         .map((input) => transformInputParameter(input, values[input.id]))

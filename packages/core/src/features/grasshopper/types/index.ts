@@ -9,7 +9,7 @@ export type {
   DataItem,
   DataTreeDefault,
   InnerTreeData,
-  InnerTree,
+  DataTree,
   Values,
   ProcessedDataItem,
 } from './trees';

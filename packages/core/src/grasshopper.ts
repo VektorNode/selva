@@ -45,7 +45,7 @@ export { fetchDefinitionIO, fetchParsedDefinitionIO } from './features/grasshopp
 // INPUT HELPERS (Convert data to DataTree format)
 // ============================================================================
 
-export { processInputs, processInput, DataTree } from './features/grasshopper';
+export { processInputs, processInput, TreeBuilder } from './features/grasshopper';
 export type { DataTreeValue } from './features/grasshopper/data-tree/data-tree';
 
 // ============================================================================
@@ -55,7 +55,7 @@ export type { DataTreeValue } from './features/grasshopper/data-tree/data-tree';
 // Core Grasshopper types
 export type {
   DataItem,
-  InnerTree,
+  DataTree,
   GrasshopperParsedIO,
   GrasshopperRequestSchema,
   GrasshopperComputeResponse,

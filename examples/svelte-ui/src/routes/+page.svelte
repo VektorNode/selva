@@ -1,7 +1,6 @@
 <script lang="ts">
   import InputHandler from '$lib/InputHandler.svelte';
-  import { exampleInputs } from '$lib/utils/data.js';
-  import type { DataTree } from '@selva/core';
+  import { exampleInputs2 } from '$lib/utils/data.js';
 </script>
 
 <main>
@@ -9,11 +8,10 @@
   <p>This is a test page for the InputHandler component with dummy data.</p>
 
   <InputHandler
-    input={exampleInputs}
-    onChange={(tree: DataTree[]) => {
+    input={exampleInputs2}
+    onChange={(tree: any[]) => {
       console.log('Input tree changed:', tree);
     }}
-    autoUpdate={true}
   ></InputHandler>
 </main>
 
