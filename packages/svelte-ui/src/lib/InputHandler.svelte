@@ -6,8 +6,6 @@
   import { Label } from '$lib/components/ui/label/index.js';
 
   import { TreeBuilder, type DataTree, type InputParam } from '@selva/core/grasshopper';
-  import {  } from '@selva/core';
-
   interface Props {
     input: InputParam[];
     onChange: (tree: DataTree[]) => void;
@@ -63,10 +61,10 @@
     return groups;
   };
 
-const isVisible = (param: InputParam) => {
-  const g = param.groupName?.toLowerCase();
-  return g !== 'hide' && g !== 'hidden';
-};
+  const isVisible = (param: InputParam) => {
+    const g = param.groupName?.toLowerCase();
+    return g !== 'hide' && g !== 'hidden';
+  };
 </script>
 
 <div class="parameter-panel {customStyles}">
@@ -79,70 +77,73 @@ const isVisible = (param: InputParam) => {
   <main class="panel-content">
     <div class="scrollable-content">
       <Accordion.Root type="multiple" value={Object.keys(getGroupedInputs())}>
-  {#each Object.entries(getGroupedInputs()) as [groupName, params]}
-    {#if params.some(p => isVisible(p))}
-          <Accordion.Item value={groupName}>
-            <Accordion.Trigger>{groupName}</Accordion.Trigger>
-            <Accordion.Content>
-              <div class="input-group">
-                {#each params as param (param.name)}
-                  {#if isVisible(param)}
-                    <div class="input-field">
-                      <Label for={param.name}>{param.name}</Label>
-                      {#if param.paramType === 'Number' || param.paramType === 'Integer'}
-                        <Input
-                          id={param.name}
-                          type="number"
-                          value={values[param.name] ?? param.default ?? ''}
-                          min={param.minimum}
-                          max={param.maximum}
-                          step={param.paramType === 'Integer' ? 1 : 0.01}
-                          onchange={(e) => {
-                            values = { ...values, [param.name]: parseFloat(e.currentTarget.value) };
-                          }}
-                        />
-                      {:else if param.paramType === 'Boolean'}
-                        <Checkbox.Root
-                          checked={values[param.name] ?? param.default ?? false}
-                          onCheckedChange={(checked) => {
-                            values = { ...values, [param.name]: checked };
-                          }}
-                        />
-                      {:else if param.paramType === 'Text'}
-                        <Input
-                          id={param.name}
-                          type="text"
-                          value={values[param.name] ?? param.default ?? ''}
-                          onchange={(e) => {
-                            values = { ...values, [param.name]: e.currentTarget.value };
-                          }}
-                        />
-                      {:else if param.paramType === 'ValueList'}
-                        <Select.Root
-                          type="single"
-                          value={values[param.name] ?? param.default ?? ''}
-                          onValueChange={(value: string) => {
-                            if (value) values = { ...values, [param.name]: value };
-                          }}
-                        >
-                          <Select.Trigger class="w-full">
-                            {values[param.name] ?? param.default ?? 'Select'}
-                          </Select.Trigger>
-                          <Select.Content>
-                            {#each Object.keys(param.values ?? {}) as key (key)}
-                              <Select.Item value={key} label={key}>{key}</Select.Item>
-                            {/each}
-                          </Select.Content>
-                        </Select.Root>
-                      {/if}
-                    </div>
-                  {/if}
-                {/each}
-              </div>
-            </Accordion.Content>
-          </Accordion.Item>
-    {/if}
-  {/each}
+        {#each Object.entries(getGroupedInputs()) as [groupName, params]}
+          {#if params.some((p) => isVisible(p))}
+            <Accordion.Item value={groupName}>
+              <Accordion.Trigger>{groupName}</Accordion.Trigger>
+              <Accordion.Content>
+                <div class="input-group">
+                  {#each params as param (param.name)}
+                    {#if isVisible(param)}
+                      <div class="input-field">
+                        <Label for={param.name}>{param.name}</Label>
+                        {#if param.paramType === 'Number' || param.paramType === 'Integer'}
+                          <Input
+                            id={param.name}
+                            type="number"
+                            value={values[param.name] ?? param.default ?? ''}
+                            min={param.minimum}
+                            max={param.maximum}
+                            step={param.paramType === 'Integer' ? 1 : 0.01}
+                            onchange={(e) => {
+                              values = {
+                                ...values,
+                                [param.name]: parseFloat(e.currentTarget.value),
+                              };
+                            }}
+                          />
+                        {:else if param.paramType === 'Boolean'}
+                          <Checkbox.Root
+                            checked={values[param.name] ?? param.default ?? false}
+                            onCheckedChange={(checked) => {
+                              values = { ...values, [param.name]: checked };
+                            }}
+                          />
+                        {:else if param.paramType === 'Text'}
+                          <Input
+                            id={param.name}
+                            type="text"
+                            value={values[param.name] ?? param.default ?? ''}
+                            onchange={(e) => {
+                              values = { ...values, [param.name]: e.currentTarget.value };
+                            }}
+                          />
+                        {:else if param.paramType === 'ValueList'}
+                          <Select.Root
+                            type="single"
+                            value={values[param.name] ?? param.default ?? ''}
+                            onValueChange={(value: string) => {
+                              if (value) values = { ...values, [param.name]: value };
+                            }}
+                          >
+                            <Select.Trigger class="w-full">
+                              {values[param.name] ?? param.default ?? 'Select'}
+                            </Select.Trigger>
+                            <Select.Content>
+                              {#each Object.keys(param.values ?? {}) as key (key)}
+                                <Select.Item value={key} label={key}>{key}</Select.Item>
+                              {/each}
+                            </Select.Content>
+                          </Select.Root>
+                        {/if}
+                      </div>
+                    {/if}
+                  {/each}
+                </div>
+              </Accordion.Content>
+            </Accordion.Item>
+          {/if}
+        {/each}
       </Accordion.Root>
     </div>
   </main>
@@ -202,7 +203,7 @@ const isVisible = (param: InputParam) => {
     font-size: 0.9375rem;
   }
 
-  :global(.parameter-panel [data-accordion-trigger][data-state="open"]) {
+  :global(.parameter-panel [data-accordion-trigger][data-state='open']) {
     font-weight: 700;
   }
 

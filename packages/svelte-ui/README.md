@@ -43,12 +43,7 @@ npm install @selva/svelte-ui @selva/core
   }
 </script>
 
-<InputHandler
-  {inputs}
-  onChange={handleSolve}
-  headerText="Parameters"
-  autoUpdate={true}
-/>
+<InputHandler {inputs} onChange={handleSolve} headerText="Parameters" autoUpdate={true} />
 ```
 
 ## Main Component
@@ -72,6 +67,7 @@ Auto-generates form controls for all Grasshopper parameters:
 ```
 
 **Props:**
+
 - `input` — Array of Grasshopper parameters
 - `onChange` — Callback when values change (ready for `client.solve()`)
 - `autoUpdate` — Auto-trigger onChange on changes
@@ -89,15 +85,22 @@ Display errors, warnings, and compute messages:
   warnings={[]}
   computeErrors={[]}
   showMessages={true}
-  onShowMessagesToggle={(show) => { /* ... */ }}
-  onDismissMessage={(type, index) => { /* ... */ }}
-  onClearAllMessages={() => { /* ... */ }}
+  onShowMessagesToggle={(show) => {
+    /* ... */
+  }}
+  onDismissMessage={(type, index) => {
+    /* ... */
+  }}
+  onClearAllMessages={() => {
+    /* ... */
+  }}
 />
 ```
 
 ## Additional Components
 
 Individual parameter components for custom layouts:
+
 - **NumberParam**, **TextParam**, **BoolParam**, **PointParam** — Single parameters
 - **Accordion** — Collapsible groups
 
@@ -106,19 +109,25 @@ All components export TypeScript types from `@selva/core` for full type safety.
 ## Customization
 
 **Custom styling:**
+
 ```svelte
 <InputHandler input={inputs} onChange={handleChange} customStyles="my-style" />
 ```
 
 **Dark mode:**
+
 ```svelte
 <InputHandler input={inputs} onChange={handleChange} displayOptions={{ darkMode: true }} />
 ```
 
 **Override components:**
+
 ```svelte
-<InputHandler input={inputs} onChange={handleChange}
-  customComponents={{ Number: MyCustomSlider }} />
+<InputHandler
+  input={inputs}
+  onChange={handleChange}
+  customComponents={{ Number: MyCustomSlider }}
+/>
 ```
 
 ## Requirements

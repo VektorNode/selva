@@ -24,6 +24,7 @@ For setup and environment configuration, see [docs/quickstart](./docs/quickstart
 ### C#
 
 - Use explicit block syntax - no inline conditionals
+
   ```csharp
   // Good
   if (condition)
@@ -38,6 +39,7 @@ For setup and environment configuration, see [docs/quickstart](./docs/quickstart
 ### Schema Changes
 
 **Important:** Never edit generated files directly
+
 - Modify `packages/schemas/ui-schema.json`
 - Run `./generate-schemas.sh` to regenerate C# and TypeScript
 - Generated files: `packages/builder/src/lib/types/generated/schema.ts` and `Plugin/Models/Generated/UISchema.Generated.cs`
