@@ -6,7 +6,6 @@ import { createGrasshopperClient } from "$lib/client";
 
 export const POST: RequestHandler = async ({
   request,
-  url,
 }): Promise<Response> => {
   try {
     const { tree } = (await request.json()) as {

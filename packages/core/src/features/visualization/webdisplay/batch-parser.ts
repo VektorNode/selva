@@ -4,7 +4,7 @@ import { parseColor } from '../threejs/three-helpers';
 
 import { decompressBatchedMeshData } from './mesh-compression';
 
-import type { MeshBatch, MaterialGroup, MeshMetadata, SerializableMaterial } from './types';
+import type { MeshBatch, MaterialGroup, SerializableMaterial } from './types';
 
 /**
  * Parses a batched mesh JSON and creates Three.js meshes.
@@ -197,7 +197,6 @@ function createMergedMesh(
 
   let vertexWriteOffset = 0;
   let indexWriteOffset = 0;
-  let baseVertexIndex = 0;
 
   for (const mesh of group.meshes) {
     mergedVertices.set(
@@ -219,7 +218,6 @@ function createMergedMesh(
 
     vertexWriteOffset += mesh.vertexCount;
     indexWriteOffset += mesh.faceCount;
-    baseVertexIndex += mesh.vertexCount / 3;
   }
 
   geometry.setAttribute('position', new THREE.BufferAttribute(mergedVertices, 3));

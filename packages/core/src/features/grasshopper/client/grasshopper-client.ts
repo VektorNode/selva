@@ -192,7 +192,7 @@ export default class GrasshopperClient {
     // Validate URL format
     try {
       new URL(config.serverUrl);
-    } catch (err) {
+    } catch {
       throw new RhinoComputeError('serverUrl must be a valid URL', ErrorCodes.INVALID_CONFIG, {
         context: { receivedServerUrl: config.serverUrl },
       });

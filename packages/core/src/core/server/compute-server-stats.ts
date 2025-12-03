@@ -219,7 +219,7 @@ export default class ComputeServerStats {
     let active = true;
     let currentTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    console.warn(`🔄 Starting server stats monitoring every ${intervalMs}ms`);
+    console.error(`🔄 Starting server stats monitoring every ${intervalMs}ms`);
 
     const check = async () => {
       // Clear current timeout from tracking since it has fired
@@ -230,12 +230,12 @@ export default class ComputeServerStats {
 
       if (!active || this.disposed) return;
 
-      const stats = await this.getServerStats();
+      const _stats = await this.getServerStats();
 
       // Check again after async operation to prevent race condition
       if (!active || this.disposed) return;
 
-      callback(stats);
+      callback(_stats);
 
       if (active && !this.disposed) {
         currentTimeoutId = setTimeout(() => void check(), intervalMs);

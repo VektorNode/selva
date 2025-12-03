@@ -1,6 +1,6 @@
 import { page } from '$app/state';
 import { getWebSocketState, type WebSocketState } from '$lib/websocket/websocket.svelte';
-import type { UISchema, AvailableParameters, AvailableOutput } from '$lib/types/generated';
+import type { UISchema, AvailableParameters } from '$lib/types/generated';
 
 /**
  * Session initialization result

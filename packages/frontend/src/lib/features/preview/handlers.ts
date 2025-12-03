@@ -1,5 +1,5 @@
-import type { UISchema, AvailableParameters, SupportedTypes } from '$lib/types/generated';
-import { ensureSchemaLayoutDefaults, getDefaultValue } from '$lib/utils/session';
+import type { UISchema, AvailableParameters } from '$lib/types/generated';
+import { getDefaultValue } from '$lib/utils/session';
 
 export interface InitializeValuesOptions {
   schema: UISchema;

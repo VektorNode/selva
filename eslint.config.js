@@ -11,6 +11,7 @@ export default [
       '.svelte-kit',
       'coverage',
       'packages/*/dist',
+      'packages/*/build',
       'packages/*/.svelte-kit',
       'examples/*/dist',
       'examples/*/.svelte-kit',
@@ -37,11 +38,13 @@ export default [
         process: 'readonly',
         __dirname: 'readonly',
         require: 'readonly',
+        setTimeout: 'readonly',
       },
     },
     rules: {
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'no-unused-vars': 'off',
+      'no-prototype-builtins': 'warn',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
@@ -51,6 +54,13 @@ export default [
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/ban-ts-comment': 'warn',
+    },
+  },
+  {
+    files: ['scripts/**/*.{js,ts}'],
+    rules: {
+      'no-console': 'off',
     },
   },
 ];

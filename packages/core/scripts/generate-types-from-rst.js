@@ -51,7 +51,7 @@ function parseFile(content) {
     const className = parts[1];
     // extract func name and params from last part
     const last = parts.slice(2).join('.');
-    const sigMatch = last.match(/^([^\(]+)\((.*)\)$/);
+    const sigMatch = last.match(/^([^(]+)\((.*)\)$/);
     const funcName = sigMatch ? sigMatch[1].trim() : last;
     const sigParams = sigMatch ? sigMatch[2].trim() : '';
     // collect subsequent :param and :rtype: lines

@@ -1,6 +1,5 @@
 import { RhinoComputeError } from './base';
 import { ErrorCodes } from './error-codes';
-import type { ErrorCode } from './error-codes';
 
 /**
  * Factory functions for creating consistent error instances across the codebase.

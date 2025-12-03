@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @selva/frontend dev",
-    "build:all": "pnpm --filter @selva/core build && pnpm --filter @selva/frontend build",
+    "build:all": "pnpm --filter @selva/core build && pnpm --filter @selva/svelte-ui build &&  pnpm --filter @selva/frontend build",
     "build:frontend": "pnpm --filter @selva/frontend build",
     "build:plugin": "node scripts/build-production.js",
     "check": "pnpm --filter ./packages --recursive run check",
@@ -24,13 +24,16 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-    "@typescript-eslint/eslint-plugin": "^8.47.0",
-    "@typescript-eslint/parser": "^8.47.0",
+    "@types/node": "^22.18.10",
+    "@typescript-eslint/eslint-plugin": "^8.48.1",
+    "@typescript-eslint/parser": "^8.48.1",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
-    "prettier": "^3.6.2",
+    "eslint-plugin-svelte": "^3.12.4",
+    "globals": "^16.4.0",
+    "prettier": "^3.7.4",
     "prettier-plugin-svelte": "^3.4.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.47.0"
+    "typescript-eslint": "^8.48.1"
   }
 }

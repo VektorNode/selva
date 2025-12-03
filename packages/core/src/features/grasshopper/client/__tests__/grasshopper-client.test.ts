@@ -232,7 +232,7 @@ describe('GrasshopperClient', () => {
         suppressClientSideWarning: true,
       });
 
-      const testClient = GrasshopperClient['create'](originalConfig);
+      void GrasshopperClient['create'](originalConfig);
       // Note: In real tests, you'd need to handle the async nature properly
       // This is a simplified example showing the structure
     });
