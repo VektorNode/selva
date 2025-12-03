@@ -168,6 +168,9 @@ function createMaterial(matData: SerializableMaterial): THREE.MeshPhysicalMateri
     opacity: matData.opacity,
     transparent: matData.transparent,
     side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
   });
 }
 

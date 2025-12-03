@@ -8,7 +8,7 @@
   import { StateDisplay, Button } from '$lib/components/ui';
   import { initializeWebSocketSession, ensureSchemaLayoutDefaults } from '$lib/utils/session';
   import { onMount } from 'svelte';
-  import type { MeshBatch } from '@selva/core';
+  import { computeCombinedBoundingBox, type MeshBatch } from '@selva/core';
   import {
     ensureRhinoComputeLoaded as loadRhinoCompute,
     initializeViewerScene,

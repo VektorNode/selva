@@ -80,6 +80,10 @@ export async function applyMeshTransforms(meshes: any[]) {
   try {
     const boundingBox = computeCombinedBoundingBox(meshes);
     console.log('[Viewer] Combined bounding box:', boundingBox);
+
+    // Normalize geometry scale to prevent z-fighting with mixed scales
+    normalizeGeometryScale(meshes, boundingBox as any);
+
     const offsetY = boundingBox.min.y;
     if (offsetY !== 0) {
       console.log(`[Viewer] Applying ground offset: ${offsetY}`);
@@ -87,5 +91,34 @@ export async function applyMeshTransforms(meshes: any[]) {
     }
   } catch (err) {
     console.warn('[Viewer] Could not apply ground offset:', err);
+  }
+}
+
+/**
+ * Detects and normalizes geometry scales to prevent z-fighting.
+ *
+ * When meshes have vastly different sizes (e.g., 1 unit vs 10,000 units),
+ * the GPU depth buffer loses precision. This function detects the scale range
+ * and applies a uniform scale to normalize everything into a reasonable range.
+ */
+function normalizeGeometryScale(meshes: any[], boundingBox: any): void {
+  const size = boundingBox.getSize({ x: 0, y: 0, z: 0 });
+  const maxDimension = Math.max(size.x, size.y, size.z);
+  const minDimension = Math.min(size.x, size.y, size.z);
+
+  const scaleRatio = maxDimension / minDimension;
+  const TARGET_RANGE = 100;
+
+  if (scaleRatio > 100 || maxDimension > 10000) {
+    const normalizationScale = TARGET_RANGE / maxDimension;
+    console.log(
+      `[Viewer] Normalizing geometry: scale ratio ${scaleRatio.toFixed(1)}:1, applying scale ${normalizationScale.toFixed(6)}`
+    );
+
+    for (const mesh of meshes) {
+      mesh.scale.x *= normalizationScale;
+      mesh.scale.y *= normalizationScale;
+      mesh.scale.z *= normalizationScale;
+    }
   }
 }

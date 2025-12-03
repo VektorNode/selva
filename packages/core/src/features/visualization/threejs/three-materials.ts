@@ -70,6 +70,9 @@ export const PLASTIC_MATERIAL = new THREE.MeshPhysicalMaterial({
   depthWrite: true,
   side: THREE.FrontSide,
   dithering: true,
+  polygonOffset: true,
+  polygonOffsetFactor: 1,
+  polygonOffsetUnits: 1,
 });
 
 export const GLASS_MATERIAL = new THREE.MeshPhysicalMaterial({
@@ -86,6 +89,9 @@ export const GLASS_MATERIAL = new THREE.MeshPhysicalMaterial({
   reflectivity: 0.9,
   thickness: 1.0,
   side: THREE.DoubleSide,
+  polygonOffset: true,
+  polygonOffsetFactor: 1,
+  polygonOffsetUnits: 1,
 });
 
 export const RUBBER_MATERIAL = new THREE.MeshPhysicalMaterial({
@@ -100,6 +106,9 @@ export const RUBBER_MATERIAL = new THREE.MeshPhysicalMaterial({
   transmission: 0.0,
   depthWrite: true,
   side: THREE.FrontSide,
+  polygonOffset: true,
+  polygonOffsetFactor: 1,
+  polygonOffsetUnits: 1,
 });
 
 export const WOOD_MATERIAL = new THREE.MeshPhysicalMaterial({
@@ -115,4 +124,7 @@ export const WOOD_MATERIAL = new THREE.MeshPhysicalMaterial({
   depthWrite: true,
   side: THREE.FrontSide,
   dithering: true,
+  polygonOffset: true,
+  polygonOffsetFactor: 1,
+  polygonOffsetUnits: 1,
 });
