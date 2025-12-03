@@ -100,9 +100,7 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
       var stopwatch = Stopwatch.StartNew();
 
       // Extract geometries
-      var extractStart = Stopwatch.StartNew();
       var geometries = ExtractGeometries(geoGoos);
-      extractStart.Stop();
 
       if (geometries.Count == 0)
       {
@@ -112,9 +110,7 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
       }
 
       // Convert to meshes
-      var meshStart = Stopwatch.StartNew();
       var meshes = ConvertToMeshesParallel(geometries, meshSettings);
-      meshStart.Stop();
 
       if (meshes.Count == 0)
       {
@@ -131,17 +127,13 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
       }
 
       // Prepare names and materials
-      var namesStart = Stopwatch.StartNew();
       var names = PrepareNames(meshes.Count, nameGoos);
       var materials = PrepareMaterials(meshes.Count, materialGoos);
-      namesStart.Stop();
 
       // Create batch
-      var batchStart = Stopwatch.StartNew();
       var batch = MeshBatchProcessor.CreateBatch(meshes, names, materials);
-      batchStart.Stop();
 
-      stopwatch.Stop();
+      RhinoApp.WriteLine("TOAL TIME WEB DISPLAY: " + stopwatch.ElapsedMilliseconds + " ms");
 
       return new WebDisplayGoo(batch);
     }

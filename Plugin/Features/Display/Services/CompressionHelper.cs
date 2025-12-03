@@ -41,6 +41,7 @@ public static class CompressionHelper
     }
   }
 
+
   /// <summary>
   ///   Writes a float array to a stream using ArrayPool to minimize allocations.
   /// </summary>
