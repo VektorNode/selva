@@ -75,7 +75,16 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
       return;
     }
 
-    if (!GetSolveResults(DA, out var batch)) batch = Compute(allGeo, allNames, allMaterials, meshSettings);
+    if (!GetSolveResults(DA, out var batch))
+    {
+      batch = Compute(allGeo, allNames, allMaterials, meshSettings);
+    }
+
+    if (batch == null)
+    {
+      AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Failed to generate valid geometry for display");
+      return;
+    }
 
     DA.SetData(0, batch);
   }
@@ -86,60 +95,86 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
     List<IGH_Goo> materialGoos,
     MeshingParameters meshSettings)
   {
-    var stopwatch = Stopwatch.StartNew();
+    try
+    {
+      var stopwatch = Stopwatch.StartNew();
 
-    // Extract geometries
-    var extractStart = Stopwatch.StartNew();
-    var geometries = ExtractGeometries(geoGoos);
-    extractStart.Stop();
-    RhinoApp.WriteLine(
-      $"[WebDisplay] Geometry extraction: {extractStart.ElapsedMilliseconds}ms ({geometries.Count} geometries)");
+      // Extract geometries
+      var extractStart = Stopwatch.StartNew();
+      var geometries = ExtractGeometries(geoGoos);
+      extractStart.Stop();
 
-    if (geometries.Count == 0)
-      throw new Exception("No valid geometry found in input");
+      if (geometries.Count == 0)
+      {
+        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+          $"No valid geometry found in {geoGoos.Count} input items. Ensure geometry is valid.");
+        return null;
+      }
 
-    // Convert to meshes
-    var meshStart = Stopwatch.StartNew();
-    var meshes = ConvertToMeshesParallel(geometries, meshSettings);
-    meshStart.Stop();
-    RhinoApp.WriteLine($"[WebDisplay] Mesh conversion: {meshStart.ElapsedMilliseconds}ms ({meshes.Count} meshes)");
+      // Convert to meshes
+      var meshStart = Stopwatch.StartNew();
+      var meshes = ConvertToMeshesParallel(geometries, meshSettings);
+      meshStart.Stop();
 
-    if (meshes.Count == 0)
-      throw new Exception("No valid meshes generated from input geometry");
+      if (meshes.Count == 0)
+      {
+        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+          $"No meshes could be generated from {geometries.Count} geometry items. Check geometry validity and meshing parameters.");
+        return null;
+      }
 
-    // Prepare names and materials
-    var namesStart = Stopwatch.StartNew();
-    var names = PrepareNames(meshes.Count, nameGoos);
-    var materials = PrepareMaterials(meshes.Count, materialGoos);
-    namesStart.Stop();
-    RhinoApp.WriteLine($"[WebDisplay] Data preparation: {namesStart.ElapsedMilliseconds}ms");
+      if (meshes.Count < geometries.Count)
+      {
+        var skipped = geometries.Count - meshes.Count;
+        AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+          $"Successfully meshed {meshes.Count} of {geometries.Count} geometries ({skipped} skipped)");
+      }
 
-    // Create batch
-    var batchStart = Stopwatch.StartNew();
-    var batch = MeshBatchProcessor.CreateBatch(meshes, names, materials);
-    batchStart.Stop();
-    RhinoApp.WriteLine($"[WebDisplay] Batch creation: {batchStart.ElapsedMilliseconds}ms");
+      // Prepare names and materials
+      var namesStart = Stopwatch.StartNew();
+      var names = PrepareNames(meshes.Count, nameGoos);
+      var materials = PrepareMaterials(meshes.Count, materialGoos);
+      namesStart.Stop();
 
-    stopwatch.Stop();
-    RhinoApp.WriteLine($"[WebDisplay] Total time: {stopwatch.ElapsedMilliseconds}ms");
-    RhinoApp.WriteLine(
-      $"[WebDisplay] Result: {meshes.Count} meshes, {batch.Materials.Count} unique materials, {batch.Groups.Count} groups");
+      // Create batch
+      var batchStart = Stopwatch.StartNew();
+      var batch = MeshBatchProcessor.CreateBatch(meshes, names, materials);
+      batchStart.Stop();
 
-    return new WebDisplayGoo(batch);
+      stopwatch.Stop();
+
+      return new WebDisplayGoo(batch);
+    }
+    catch (Exception ex)
+    {
+      AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
+        $"Failed to process geometry: {ex.Message}");
+      return null;
+    }
   }
 
   #region Geometry Extraction
 
   private List<GeometryBase> ExtractGeometries(List<IGH_Goo> gooList)
   {
+    if (gooList == null || gooList.Count == 0)
+      return new List<GeometryBase>();
+
     var geometries = new ConcurrentBag<(int Index, GeometryBase Geometry)>();
 
     Parallel.For(0, gooList.Count, i =>
     {
-      var goo = gooList[i];
-      var geom = TryExtractGeometry(goo);
-      if (geom != null && geom.IsValid)
-        geometries.Add((i, geom));
+      try
+      {
+        var goo = gooList[i];
+        var geom = TryExtractGeometry(goo);
+        if (geom != null && geom.IsValid)
+          geometries.Add((i, geom));
+      }
+      catch
+      {
+        // Silently skip invalid items in parallel processing
+      }
     });
 
     return geometries.OrderBy(x => x.Index).Select(x => x.Geometry).ToList();
@@ -169,12 +204,23 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
 
   private List<Mesh> ConvertToMeshesParallel(List<GeometryBase> geometries, MeshingParameters meshSettings)
   {
+    if (geometries == null || geometries.Count == 0)
+      return new List<Mesh>();
+
     var meshDict = new ConcurrentDictionary<int, Mesh>();
 
     Parallel.For(0, geometries.Count, index =>
     {
-      var mesh = ConvertSingleGeometry(geometries[index], meshSettings);
-      if (mesh != null) meshDict.TryAdd(index, mesh);
+      try
+      {
+        var mesh = ConvertSingleGeometry(geometries[index], meshSettings);
+        if (mesh != null && mesh.IsValid)
+          meshDict.TryAdd(index, mesh);
+      }
+      catch
+      {
+        // Silently skip invalid geometry in parallel processing
+      }
     });
 
     return meshDict.OrderBy(kvp => kvp.Key).Select(kvp => kvp.Value).ToList();
@@ -199,9 +245,10 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
       {
         mesh.Normals.ComputeNormals();
         mesh.Compact();
+        return mesh;
       }
 
-      return mesh;
+      return null;
     }
     catch
     {
@@ -211,12 +258,26 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
 
   private Mesh CreateMeshFromBrep(Brep brep, MeshingParameters mParams)
   {
-    var meshArray = Mesh.CreateFromBrep(brep, mParams);
-    if (meshArray == null || meshArray.Length == 0) return null;
+    if (brep == null || !brep.IsValid) return null;
 
-    var mesh = new Mesh();
-    foreach (var m in meshArray) mesh.Append(m);
-    return mesh;
+    try
+    {
+      var meshArray = Mesh.CreateFromBrep(brep, mParams);
+      if (meshArray == null || meshArray.Length == 0) return null;
+
+      var mesh = new Mesh();
+      foreach (var m in meshArray)
+      {
+        if (m != null && m.IsValid)
+          mesh.Append(m);
+      }
+
+      return mesh.Faces.Count > 0 ? mesh : null;
+    }
+    catch
+    {
+      return null;
+    }
   }
 
   #endregion

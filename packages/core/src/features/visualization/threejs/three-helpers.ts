@@ -35,15 +35,33 @@ export function updateScene(
     const size = unionBoundingBox.getSize(new THREE.Vector3());
 
     // Calculate a distance that is slightly larger than the largest dimension of the union bounding box
-    const distance = Math.max(size.x, size.y, size.z) * 4;
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const distance = maxDim * 4;
 
-    if (distance > camera.far) {
-      camera.far = distance * 4;
-      camera.updateProjectionMatrix();
+    // Adaptive camera frustum for extreme scale ranges
+    // This prevents depth precision issues with vastly different scales
+    const scaleRatio = maxDim / Math.min(size.x || 1, size.y || 1, size.z || 1);
+
+    if (scaleRatio > 100 || maxDim > 10000) {
+      // Large scale range detected - use logarithmic depth buffer approach
+      camera.near = maxDim * 0.0001; // 0.01% of max dimension
+      camera.far = maxDim * 100; // 100x max dimension
+    } else if (maxDim > 1000) {
+      // Large scene
+      camera.near = maxDim * 0.001;
+      camera.far = maxDim * 50;
+    } else {
+      // Normal scene
+      camera.near = Math.max(0.01, maxDim * 0.01);
+      camera.far = Math.max(2000, maxDim * 20);
     }
+
+    camera.updateProjectionMatrix();
 
     camera.position.set(center.x + distance * 0.8, center.y + distance, center.z + distance * 1.2);
     controls.target = center;
+    controls.minDistance = camera.near * 2;
+    controls.maxDistance = camera.far * 0.9;
 
     controls.update();
   }
@@ -113,6 +131,58 @@ export function computeCombinedBoundingBox(meshes: THREE.Mesh[]): THREE.Box3 {
     }
   });
   return combinedBoundingBox;
+}
+
+/**
+ * Updates shadow camera bounds to match scene geometry.
+ * This prevents shadow artifacts and ensures proper shadow coverage.
+ */
+export function updateShadowCameraBounds(
+  scene: THREE.Scene,
+  directionalLight: THREE.DirectionalLight
+): void {
+  const bbox = new THREE.Box3();
+
+  scene.traverse((object) => {
+    if (object instanceof THREE.Mesh && object.userData.id !== 'floor') {
+      bbox.expandByObject(object);
+    }
+  });
+
+  if (bbox.isEmpty()) return;
+
+  const size = bbox.getSize(new THREE.Vector3());
+  const center = bbox.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+
+  // Position light relative to scene center
+  const lightDistance = maxDim * 2;
+  directionalLight.position.set(
+    center.x + lightDistance * 0.5,
+    center.y + lightDistance,
+    center.z + lightDistance * 0.5
+  );
+  directionalLight.target.position.copy(center);
+
+  // Adjust shadow camera bounds to scene size with padding
+  const padding = maxDim * 0.2;
+  directionalLight.shadow.camera.left = -maxDim / 2 - padding;
+  directionalLight.shadow.camera.right = maxDim / 2 + padding;
+  directionalLight.shadow.camera.top = maxDim / 2 + padding;
+  directionalLight.shadow.camera.bottom = -maxDim / 2 - padding;
+  directionalLight.shadow.camera.near = 0.1;
+  directionalLight.shadow.camera.far = lightDistance * 3;
+
+  // Improve shadow quality for extreme scales
+  if (maxDim > 1000) {
+    directionalLight.shadow.bias = -0.001;
+    directionalLight.shadow.normalBias = 0.05;
+  } else {
+    directionalLight.shadow.bias = -0.0001;
+    directionalLight.shadow.normalBias = 0.02;
+  }
+
+  directionalLight.shadow.camera.updateProjectionMatrix();
 }
 
 /**

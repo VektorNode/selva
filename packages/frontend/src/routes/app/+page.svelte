@@ -64,7 +64,7 @@
     await ensureModulesLoaded();
 
     const opts = {
-      environment: { backgroundColor: '#4b5357' },
+      environment: { backgroundColor: '#E6E6E6' },
     };
 
     const { scene: s, camera: c, controls: ctl } = rhinoCompute!.initThree(canvas, opts);
@@ -105,6 +105,8 @@
       }
 
       const solved = await res.json();
+
+      console.log('Compute response:', solved);
 
       const processor = new rhinoCompute!.GrasshopperResponseProcessor(solved, false);
 
@@ -158,7 +160,7 @@
 </script>
 
 <PageContainer>
-  <PageHeader title={schema.name} badge={badgeConfig} />
+  <PageHeader title={schema.name} badge={badgeConfig} showModeToggle={true} />
 
   <div class="flex-1 overflow-hidden bg-background">
     {#if error}

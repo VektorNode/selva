@@ -23,7 +23,7 @@ export async function initializeViewerScene(
   rhinoCompute: typeof import('@selva/core')
 ): Promise<ViewerState> {
   const opts: ThreeInitializerOptions = {
-    environment: { backgroundColor: '#4b5357' },
+    environment: { backgroundColor: '#E6E6E6' },
   };
 
   const { scene, camera, controls } = rhinoCompute.initThree(canvas, opts);

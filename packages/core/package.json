@@ -1,6 +1,6 @@
 {
   "name": "@selva/core",
-  "version": "1.0.4",
+  "version": "1.0.3",
   "description": "TypeScript library for Rhino Compute Server - Grasshopper and RhinoCommon",
   "author": "VektorNode felix@vektornode.com",
   "license": "MIT",

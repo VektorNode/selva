@@ -168,9 +168,14 @@ function createMaterial(matData: SerializableMaterial): THREE.MeshPhysicalMateri
     opacity: matData.opacity,
     transparent: matData.transparent,
     side: THREE.DoubleSide,
+    // Reduced polygon offset to minimize artifacts
+    // Only use minimal offset to prevent z-fighting on coplanar faces
     polygonOffset: true,
-    polygonOffsetFactor: 1,
-    polygonOffsetUnits: 1,
+    polygonOffsetFactor: 0.5,
+    polygonOffsetUnits: 0.5,
+    // Improve depth rendering
+    depthWrite: true,
+    depthTest: true,
   });
 }
 

@@ -502,6 +502,9 @@ function setupRenderer(
     alpha: true,
     powerPreference: 'high-performance',
     preserveDrawingBuffer: config.render.preserveDrawingBuffer,
+    // Enable logarithmic depth buffer for extreme scale ranges
+    // This dramatically improves depth precision for mixed scales (mm to km)
+    logarithmicDepthBuffer: true,
   });
 
   // Get proper dimensions - parent container or window
@@ -522,13 +525,17 @@ function setupRenderer(
   // Enhanced shadow settings
   if (config.render.enableShadows) {
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Use VSM for better quality with extreme scales
+    renderer.shadowMap.type = THREE.VSMShadowMap;
   }
 
   // Improved tone mapping and color management
   renderer.toneMapping = config.render.toneMapping || THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = config.render.toneMappingExposure || 1.0;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  // Additional quality settings for depth rendering
+  renderer.sortObjects = true; // Ensure proper render order
 
   return renderer;
 }
