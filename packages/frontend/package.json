@@ -34,6 +34,7 @@
   },
   "dependencies": {
     "@selva/core": "workspace:*",
+    "@selva/svelte-ui": "workspace:*",
     "mode-watcher": "^1.1.0",
     "three": "^0.179.1"
   }

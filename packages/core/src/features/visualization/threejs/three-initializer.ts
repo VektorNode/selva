@@ -667,17 +667,14 @@ function setupEventHandlers(
   if (config.events?.enableKeyboardControls) {
     // Make canvas focusable
     canvas.setAttribute('tabindex', '0');
+    // Only listen for keydown when canvas has focus
     canvas.addEventListener('keydown', handleKeydown);
-
-    // Also listen on window for global shortcuts
-    window.addEventListener('keydown', handleKeydown);
   }
 
   // Disposal function
   const dispose = () => {
     canvas.removeEventListener('click', handleCanvasClick);
     canvas.removeEventListener('keydown', handleKeydown);
-    window.removeEventListener('keydown', handleKeydown);
     clearSelection();
   };
 

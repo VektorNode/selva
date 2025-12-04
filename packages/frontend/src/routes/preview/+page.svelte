@@ -4,6 +4,7 @@
   import { getWebSocketState } from '$lib/websocket/websocket.svelte';
   import type { UISchema, AvailableParameters, SupportedTypes } from '$lib/types/generated';
   import { TabLayout } from '$lib/components/preview';
+  import { ViewerSettingsMenu } from '@selva/svelte-ui';
   import { PageContainer, PageHeader } from '$lib/components/layout';
   import { StateDisplay, Button } from '$lib/components/ui';
   import { initializeWebSocketSession, ensureSchemaLayoutDefaults } from '$lib/utils/session';
@@ -411,8 +412,13 @@
 
         <!-- 3D Viewer (conditional) -->
         {#if displayMeshes.length > 0}
-          <div class="min-h-[500px] flex-1 overflow-hidden rounded-lg bg-white shadow-lg">
+          <div class="relative min-h-[500px] flex-1 overflow-hidden rounded-lg bg-white shadow-lg">
             <canvas class="block h-full w-full" bind:this={canvas}></canvas>
+            <ViewerSettingsMenu
+              scene={viewerState.scene}
+              camera={viewerState.camera}
+              controls={viewerState.controls}
+            />
           </div>
         {/if}
       </div>
