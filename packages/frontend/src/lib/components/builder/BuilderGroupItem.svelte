@@ -52,6 +52,9 @@
 
   function handleDragOver(e: DragEvent) {
     const dragData = dragStore.current;
+
+    // Only show indicators for item/input/output drags (not group drags)
+    // Group drags don't set dragStore, so this naturally filters them out
     if (!dragData || !['group-item', 'input', 'output'].includes(dragData.dropType)) return;
 
     e.preventDefault();

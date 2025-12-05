@@ -15,6 +15,7 @@
     removeGroup,
     removeItem,
     reorderTabs,
+    reorderGroups,
   } from '$lib/features/builder/operations';
   import Save from '$lib/components/ui/icons/Save.svelte';
   import { toast } from '$lib/components/ui/sonner';
@@ -188,20 +189,29 @@
     const sourceIndex = sourceGroup.items.findIndex((i) => i.id === sourceItem.id);
     if (sourceIndex < 0) return;
 
-    const [movedItem] = sourceGroup.items.splice(sourceIndex, 1);
-
+    // Store the target index BEFORE removing the source item
     let targetIndex = targetGroup.items.findIndex((i) => i.id === targetItem.id);
+
+    const [movedItem] = sourceGroup.items.splice(sourceIndex, 1);
 
     if (targetIndex < 0) {
       targetGroup.items.push(movedItem);
     } else {
-      if (sourceGroup === targetGroup && sourceIndex < targetIndex) {
-        targetIndex--;
-      }
+      // When moving within the same group, we need to account for the removed item
+      const isSameGroup = sourceGroup === targetGroup;
 
       if (dropPosition === 'before') {
+        // Adjust target index if we removed an item before it
+        if (isSameGroup && sourceIndex < targetIndex) {
+          targetIndex--;
+        }
         targetGroup.items.splice(targetIndex, 0, movedItem);
       } else {
+        // dropPosition === 'after'
+        // Adjust target index only if we removed an item BEFORE the target
+        if (isSameGroup && sourceIndex < targetIndex) {
+          targetIndex--;
+        }
         targetGroup.items.splice(targetIndex + 1, 0, movedItem);
       }
     }
@@ -355,6 +365,11 @@
     reorderTabs(builderState.state.schema, fromIndex, toIndex);
   }
 
+  function handleReorderGroups(tabId: string, fromIndex: number, toIndex: number) {
+    if (!builderState?.state.schema) return;
+    reorderGroups(builderState.state.schema, tabId, fromIndex, toIndex);
+  }
+
   function handleAddGroup(tabId: string) {
     if (!builderState?.state.schema) return;
     addGroup(builderState.state.schema, tabId);
@@ -433,6 +448,7 @@
                 onReorderTabs={handleReorderTabs}
                 onAddGroup={handleAddGroup}
                 onRemoveGroup={handleRemoveGroup}
+                onReorderGroups={handleReorderGroups}
                 onParameterDrop={handleParameterDrop}
                 onReorder={handleReorder}
                 onRemoveItem={handleRemoveItem}

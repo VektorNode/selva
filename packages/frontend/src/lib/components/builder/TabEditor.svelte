@@ -3,6 +3,7 @@
   import { Button, StateDisplay } from '$lib/components/ui';
   import { EditableTabNav, EditableGroup, BuilderGroupItem } from '$lib/components/builder';
   import type { TabConfig, AvailableInput } from '$lib/types/generated';
+  import { dragStore } from '$lib/stores/dragStore.svelte';
 
   interface Props {
     tabs: TabConfig[];
@@ -13,6 +14,7 @@
     onReorderTabs: (fromIndex: number, toIndex: number) => void;
     onAddGroup: (tabId: string) => void;
     onRemoveGroup: (tabId: string, groupId: string) => void;
+    onReorderGroups: (tabId: string, fromIndex: number, toIndex: number) => void;
     onParameterDrop: (tabId: string, groupId: string, event: CustomEvent) => void;
     onReorder: (event: CustomEvent) => void;
     onRemoveItem: (tabId: string, groupId: string, itemId: string) => void;
@@ -28,6 +30,7 @@
     onReorderTabs,
     onAddGroup,
     onRemoveGroup,
+    onReorderGroups,
     onParameterDrop,
     onReorder,
     onRemoveItem,
@@ -35,6 +38,108 @@
   }: Props = $props();
 
   const activeTab = $derived(tabs.find((t) => t.id === activeTabId));
+
+  // Drag state for group reordering
+  let draggedGroupId: string | null = $state(null);
+  let dragOverGroupId: string | null = $state(null);
+
+  function handleGroupDragStart(e: DragEvent, groupId: string) {
+    draggedGroupId = groupId;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('application/x-group', groupId); // Use custom MIME type to distinguish from parameter drops
+    }
+  }
+
+  function handleGroupDragOver(e: DragEvent, groupId: string) {
+    // Only handle group drag over if we're actually dragging a group
+    if (!draggedGroupId || draggedGroupId === groupId) return;
+
+    // Check if we're dragging a group (not an item)
+    // If dragStore has data, it means we're dragging an item, not a group
+    if (dragStore.current) return;
+
+    // Check if we're dragging a group via MIME type
+    if (!e.dataTransfer?.types.includes('application/x-group')) return;
+
+    e.preventDefault();
+    dragOverGroupId = groupId;
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move';
+    }
+  }
+
+  function handleGroupDragLeave(e: DragEvent, groupId: string) {
+    // Only handle if we're actually highlighting this group
+    if (dragOverGroupId !== groupId) return;
+
+    // Only clear highlight if actually leaving the group wrapper (not child elements)
+    const relatedTarget = e.relatedTarget as Node | null;
+    const currentTarget = e.currentTarget as Node;
+    if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
+      dragOverGroupId = null;
+    }
+  }
+
+  function handleGroupDrop(e: DragEvent, targetGroupId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!draggedGroupId || !activeTab) return;
+
+    const fromIndex = activeTab.groups.findIndex((g) => g.id === draggedGroupId);
+    const toIndex = activeTab.groups.findIndex((g) => g.id === targetGroupId);
+
+    if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
+      onReorderGroups(activeTab.id, fromIndex, toIndex);
+    }
+
+    // Always clear states after drop
+    draggedGroupId = null;
+    dragOverGroupId = null;
+  }
+
+  function handleGroupDragEnd() {
+    // Always clear states when drag ends (whether dropped or cancelled)
+    draggedGroupId = null;
+    dragOverGroupId = null;
+  }
+
+  // Computed flag to check if we're actually dragging a group (not an item)
+  const isDraggingGroup = $derived(!!draggedGroupId && !dragStore.current);
+
+  // State for drop zone at the end
+  let isDropZoneActive = $state(false);
+
+  function handleEndZoneDragOver(e: DragEvent) {
+    e.preventDefault();
+    if (draggedGroupId && activeTab) {
+      isDropZoneActive = true;
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'move';
+      }
+    }
+  }
+
+  function handleEndZoneDragLeave() {
+    isDropZoneActive = false;
+  }
+
+  function handleEndZoneDrop(e: DragEvent) {
+    e.preventDefault();
+
+    if (!draggedGroupId || !activeTab) return;
+
+    const fromIndex = activeTab.groups.findIndex((g) => g.id === draggedGroupId);
+    const toIndex = activeTab.groups.length - 1; // Move to end
+
+    if (fromIndex !== -1 && fromIndex !== toIndex) {
+      onReorderGroups(activeTab.id, fromIndex, toIndex);
+    }
+
+    draggedGroupId = null;
+    isDropZoneActive = false;
+  }
 </script>
 
 <Card.Root class="shadow-sm">
@@ -73,24 +178,59 @@
             {:else}
               <div class="flex flex-col gap-6">
                 {#each activeTab.groups as group, groupIndex (group.id)}
-                  <EditableGroup
-                    bind:group={activeTab.groups[groupIndex]}
-                    onDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
-                    {onReorder}
-                    onRemove={() => onRemoveGroup(activeTab.id, group.id)}
+                  <div
+                    class="cursor-grab transition-opacity {draggedGroupId === group.id
+                      ? 'cursor-grabbing opacity-50'
+                      : ''} {dragOverGroupId === group.id ? 'border-t-4 border-t-primary' : ''}"
+                    draggable="true"
+                    ondragstart={(e) => handleGroupDragStart(e, group.id)}
+                    ondragover={(e) => handleGroupDragOver(e, group.id)}
+                    ondragleave={(e) => handleGroupDragLeave(e, group.id)}
+                    ondrop={(e) => handleGroupDrop(e, group.id)}
+                    ondragend={handleGroupDragEnd}
+                    role="group"
+                    tabindex="-1"
+                    title="Drag to reorder groups"
                   >
-                    {#each group.items as item (item.id)}
-                      {@const paramInfo = getParameterInfo(item.paramId)}
-                      <BuilderGroupItem
-                        {item}
-                        {paramInfo}
-                        tabId={activeTab.id}
-                        groupId={group.id}
-                        onRemove={() => onRemoveItem(activeTab.id, group.id, item.id)}
-                      />
-                    {/each}
-                  </EditableGroup>
+                    <EditableGroup
+                      bind:group={activeTab.groups[groupIndex]}
+                      onDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
+                      {onReorder}
+                      onRemove={() => onRemoveGroup(activeTab.id, group.id)}
+                    >
+                      {#each group.items as item (item.id)}
+                        {@const paramInfo = getParameterInfo(item.paramId)}
+                        <BuilderGroupItem
+                          {item}
+                          {paramInfo}
+                          tabId={activeTab.id}
+                          groupId={group.id}
+                          onRemove={() => onRemoveItem(activeTab.id, group.id, item.id)}
+                        />
+                      {/each}
+                    </EditableGroup>
+                  </div>
                 {/each}
+
+                <!-- Drop zone at the end for placing groups at the bottom -->
+                {#if isDraggingGroup && activeTab.groups.length > 1}
+                  <div
+                    class="min-h-16 rounded-lg border-2 border-dashed transition-colors {isDropZoneActive
+                      ? 'border-primary bg-primary/5'
+                      : 'border-muted-foreground/30'}"
+                    ondragover={handleEndZoneDragOver}
+                    ondragleave={handleEndZoneDragLeave}
+                    ondrop={handleEndZoneDrop}
+                    role="region"
+                    aria-label="Drop zone to place group at the end"
+                  >
+                    <div
+                      class="flex h-full items-center justify-center text-sm text-muted-foreground"
+                    >
+                      Drop here to place at the end
+                    </div>
+                  </div>
+                {/if}
               </div>
             {/if}
           </div>

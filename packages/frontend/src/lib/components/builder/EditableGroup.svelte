@@ -23,30 +23,6 @@
     group.collapsed = !group.collapsed;
   }
 
-  function handleHeaderDragOver(e: DragEvent) {
-    // Auto-expand when dragging over a collapsed group
-    if (group.collapsed) {
-      e.preventDefault();
-      isDragOver = true;
-    }
-  }
-
-  function handleHeaderDragEnter(_e: DragEvent) {
-    if (group.collapsed) {
-      isDragOver = true;
-      // Auto-expand after a short delay
-      setTimeout(() => {
-        if (isDragOver && group.collapsed) {
-          group.collapsed = false;
-        }
-      }, 300);
-    }
-  }
-
-  function handleHeaderDragLeave() {
-    isDragOver = false;
-  }
-
   function handleReorderEvent(e: Event) {
     if (onReorder && e instanceof CustomEvent) {
       onReorder(e);
@@ -86,9 +62,6 @@
 >
   <Card.Header
     class="flex flex-row items-center justify-between gap-2 space-y-0 border-b border-border bg-card px-3 py-2"
-    ondragover={handleHeaderDragOver}
-    ondragenter={handleHeaderDragEnter}
-    ondragleave={handleHeaderDragLeave}
     role="button"
     tabindex={0}
   >

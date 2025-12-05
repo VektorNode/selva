@@ -296,3 +296,21 @@ export function reorderTabs(schema: UISchema, fromIndex: number, toIndex: number
 
   schema.layout.tabs = tabs;
 }
+
+export function reorderGroups(schema: UISchema, tabId: string, fromIndex: number, toIndex: number) {
+  if (!schema.layout.tabs) return;
+
+  const tab = schema.layout.tabs.find((t) => t.id === tabId);
+  if (!tab) return;
+
+  const groups = [...tab.groups];
+  const [movedGroup] = groups.splice(fromIndex, 1);
+  groups.splice(toIndex, 0, movedGroup);
+
+  groups.forEach((group, index) => {
+    group.order = index;
+  });
+
+  tab.groups = groups;
+  schema.layout.tabs = [...schema.layout.tabs];
+}
