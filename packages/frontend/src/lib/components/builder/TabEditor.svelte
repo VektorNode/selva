@@ -43,6 +43,14 @@
   let draggedGroupId: string | null = $state(null);
   let dragOverGroupId: string | null = $state(null);
 
+  // Clear group drag state when items are being dragged
+  $effect(() => {
+    if (dragStore.current) {
+      draggedGroupId = null;
+      dragOverGroupId = null;
+    }
+  });
+
   function handleGroupDragStart(e: DragEvent, groupId: string) {
     draggedGroupId = groupId;
     if (e.dataTransfer) {
@@ -107,39 +115,6 @@
 
   // Computed flag to check if we're actually dragging a group (not an item)
   const isDraggingGroup = $derived(!!draggedGroupId && !dragStore.current);
-
-  // State for drop zone at the end
-  let isDropZoneActive = $state(false);
-
-  function handleEndZoneDragOver(e: DragEvent) {
-    e.preventDefault();
-    if (draggedGroupId && activeTab) {
-      isDropZoneActive = true;
-      if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = 'move';
-      }
-    }
-  }
-
-  function handleEndZoneDragLeave() {
-    isDropZoneActive = false;
-  }
-
-  function handleEndZoneDrop(e: DragEvent) {
-    e.preventDefault();
-
-    if (!draggedGroupId || !activeTab) return;
-
-    const fromIndex = activeTab.groups.findIndex((g) => g.id === draggedGroupId);
-    const toIndex = activeTab.groups.length - 1; // Move to end
-
-    if (fromIndex !== -1 && fromIndex !== toIndex) {
-      onReorderGroups(activeTab.id, fromIndex, toIndex);
-    }
-
-    draggedGroupId = null;
-    isDropZoneActive = false;
-  }
 </script>
 
 <Card.Root class="shadow-sm">
@@ -211,26 +186,6 @@
                     </EditableGroup>
                   </div>
                 {/each}
-
-                <!-- Drop zone at the end for placing groups at the bottom -->
-                {#if isDraggingGroup && activeTab.groups.length > 1}
-                  <div
-                    class="min-h-16 rounded-lg border-2 border-dashed transition-colors {isDropZoneActive
-                      ? 'border-primary bg-primary/5'
-                      : 'border-muted-foreground/30'}"
-                    ondragover={handleEndZoneDragOver}
-                    ondragleave={handleEndZoneDragLeave}
-                    ondrop={handleEndZoneDrop}
-                    role="region"
-                    aria-label="Drop zone to place group at the end"
-                  >
-                    <div
-                      class="flex h-full items-center justify-center text-sm text-muted-foreground"
-                    >
-                      Drop here to place at the end
-                    </div>
-                  </div>
-                {/if}
               </div>
             {/if}
           </div>
