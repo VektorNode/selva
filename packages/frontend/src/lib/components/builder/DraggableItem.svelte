@@ -1,7 +1,6 @@
 <script lang="ts">
   import { dragStore } from '$lib/stores/dragStore.svelte';
   import type { AvailableInput, AvailableOutput, TabConfig } from '$lib/types/generated';
-  import * as Card from '$lib/components/ui/card';
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { Input } from '$lib/components/ui';
   import { FolderPlus } from '@lucide/svelte';
