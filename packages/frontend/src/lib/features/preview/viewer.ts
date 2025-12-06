@@ -8,9 +8,9 @@ import {
 import type { ThreeInitializerOptions } from '@selva/core/visualization';
 
 export interface ViewerState {
-  scene: any;
-  camera: any;
-  controls: any;
+  scene: unknown | null;
+  camera: unknown | null;
+  controls: unknown | null;
   initialized: boolean;
 }
 
@@ -32,7 +32,7 @@ export async function initializeViewerScene(
     scene,
     camera,
     controls,
-    initialized: true,
+    initialized: false,
   };
 }
 
@@ -46,12 +46,14 @@ export async function updateViewerScene(
   }
 
   rhinoCompute.updateScene(
-    state.scene,
+    state.scene as any,
     displayMeshes,
-    state.camera,
-    state.controls,
+    state.camera as any,
+    state.controls as any,
     state.initialized
   );
+
+  state.initialized = true;
 }
 
 export async function processMeshBatches(batches: MeshBatch[], modelUnits: string): Promise<any[]> {
@@ -67,7 +69,6 @@ export async function processMeshBatches(batches: MeshBatch[], modelUnits: strin
       scaleFactor: scaleFactor,
       debug: false,
     });
-    console.log(`[Viewer] Batch parsed to ${meshes.length} mesh(es)`);
     allMeshes.push(...meshes);
   }
 
@@ -79,14 +80,11 @@ export async function applyMeshTransforms(meshes: any[]) {
 
   try {
     const boundingBox = computeCombinedBoundingBox(meshes);
-    console.log('[Viewer] Combined bounding box:', boundingBox);
 
-    // Normalize geometry scale to prevent z-fighting with mixed scales
-    normalizeGeometryScale(meshes, boundingBox as any);
+    normalizeGeometryScale(meshes, boundingBox);
 
     const offsetY = boundingBox.min.y;
     if (offsetY !== 0) {
-      console.log(`[Viewer] Applying ground offset: ${offsetY}`);
       applyOffset(meshes, offsetY);
     }
   } catch (err) {
@@ -111,9 +109,6 @@ function normalizeGeometryScale(meshes: any[], boundingBox: any): void {
 
   if (scaleRatio > 100 || maxDimension > 10000) {
     const normalizationScale = TARGET_RANGE / maxDimension;
-    console.log(
-      `[Viewer] Normalizing geometry: scale ratio ${scaleRatio.toFixed(1)}:1, applying scale ${normalizationScale.toFixed(6)}`
-    );
 
     for (const mesh of meshes) {
       mesh.scale.x *= normalizationScale;

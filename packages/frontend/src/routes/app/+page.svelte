@@ -3,7 +3,7 @@
   import { TabLayout } from '$lib/components/preview';
   import { PageContainer, PageHeader } from '$lib/components/layout';
   import { StateDisplay, Button } from '$lib/components/ui';
-  import { onMount } from 'svelte';
+  import { ViewerSettingsMenu } from '@selva/svelte-ui';
   import { getDefaultValue } from '$lib/utils/session';
   import { PUBLIC_COMPUTE_SERVER_URL, PUBLIC_GH_DEFINITION } from '$env/static/public';
 
@@ -18,17 +18,17 @@
 
   // Viewer refs
   let canvas: HTMLCanvasElement | null = $state(null);
-  let scene: any = null;
-  let camera: any = null;
-  let controls: any = null;
+  let scene = $state<unknown | null>(null);
+  let camera = $state<unknown | null>(null);
+  let controls = $state<unknown | null>(null);
 
   // Deferred imports
   let rhinoCompute: typeof import('@selva/core') | null = null;
-  let THREE: typeof import('three') | null = null;
 
   // Manual solve mode
   let pendingValues = $state<Record<string, unknown>>({});
   let hasPendingChanges = $state(false);
+  let isViewerFullscreen = $state(false);
 
   // -----------------------------
   // Initialization
@@ -55,11 +55,10 @@
   // -----------------------------
   async function ensureModulesLoaded() {
     if (!rhinoCompute) rhinoCompute = await import('@selva/core');
-    if (schema.enable3dViewer && !THREE) THREE = await import('three');
   }
 
   async function initializeViewer() {
-    if (!schema.enable3dViewer || !canvas || viewerInitialized) return;
+    if (!schema.enable3dViewer || !canvas || scene) return;
 
     await ensureModulesLoaded();
 
@@ -73,7 +72,7 @@
     camera = c;
     controls = ctl;
 
-    await performSolve();
+    viewerInitialized = true;
   }
 
   // -----------------------------
@@ -110,10 +109,19 @@
 
       const processor = new rhinoCompute!.GrasshopperResponseProcessor(solved, false);
 
-      if (schema.enable3dViewer && scene) {
+      if (schema.enable3dViewer) {
         const meshes = await processor.extractMeshesFromResponse();
-        rhinoCompute!.updateScene(scene, meshes, camera, controls, viewerInitialized);
-        viewerInitialized = true;
+
+        // Initialize viewer on first mesh render
+        if (!scene && meshes.length > 0) {
+          await initializeViewer();
+        }
+
+        // Update scene if viewer is initialized
+        if (scene && meshes.length > 0) {
+          rhinoCompute!.updateScene(scene as any, meshes, camera as any, controls as any, viewerInitialized);
+          viewerInitialized = true;
+        }
       }
 
       const outputs: Record<string, unknown> = {};
@@ -150,13 +158,16 @@
     if (hasPendingChanges) performSolve();
   }
 
+  function handleFullscreenToggle(enabled: boolean) {
+    isViewerFullscreen = enabled;
+  }
+
   const BADGES = {
     solving: { label: 'Solving...', variant: 'solving' } as const,
     compute: { label: 'Rhino Compute', variant: 'compute' } as const,
   };
 
   const badgeConfig = $derived(solving ? BADGES.solving : BADGES.compute);
-  onMount(initializeViewer);
 </script>
 
 <PageContainer>
@@ -172,9 +183,9 @@
         <StateDisplay type="loading" size="large" message="Loading schema..." />
       </div>
     {:else}
-      <div class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row">
+      <div class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen ? 'fullscreen-container' : ''}">
         <!-- Controls -->
-        <div class="w-full shrink-0 overflow-y-auto lg:w-[480px] xl:w-[520px]">
+        <div class="w-full shrink-0 overflow-y-auto lg:w-[480px] xl:w-[520px] {isViewerFullscreen ? 'hidden' : ''}">
           {#if schema.layout.type === 'tabbed'}
             <TabLayout
               {schema}
@@ -210,11 +221,38 @@
 
         <!-- Viewer -->
         {#if schema.enable3dViewer}
-          <div class="min-h-[500px] flex-1 overflow-hidden rounded-lg bg-white shadow-lg">
-            <canvas class="block h-full w-full" bind:this={canvas}></canvas>
+          <div class="relative min-h-[500px] flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen ? 'fullscreen-viewer' : ''}">
+            <div class="absolute inset-0">
+              <canvas class="block h-full w-full rounded-lg" bind:this={canvas}></canvas>
+            </div>
+            <ViewerSettingsMenu
+              {scene}
+              {camera}
+              {controls}
+              onFullscreenToggle={handleFullscreenToggle}
+            />
           </div>
         {/if}
       </div>
     {/if}
   </div>
 </PageContainer>
+
+<style>
+  .fullscreen-container {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    padding: 0 !important;
+    background: white;
+  }
+
+  .fullscreen-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    border-radius: 0 !important;
+    min-height: 100vh;
+    width: 100vw;
+  }
+</style>

@@ -58,7 +58,7 @@
           checked={schema.allowLocalRendering}
           onCheckedChange={(checked) => updateSchema({ allowLocalRendering: !!checked })}
         />
-        <Label for="enable-3d-viewer" class="cursor-pointer">Enable Local Render</Label>
+        <Label for="enable-local-rendering" class="cursor-pointer">Enable Local Render</Label>
       </div>
       <p class="text-xs text-muted-foreground">
         When enabled, users can render geometry locally in their browser without needing a remote

@@ -1,13 +1,12 @@
 <script lang="ts">
-  import { ChevronUp, RotateCcw, Eye, Grid3X3, Maximize2, Lightbulb } from '@lucide/svelte';
+  import { ChevronUp, Eye, Maximize } from '@lucide/svelte';
 
   interface Props {
     scene?: any;
     camera?: any;
     controls?: any;
     onRefocus?: () => void;
-    onGridToggle?: (enabled: boolean) => void;
-    onAutoLightToggle?: (enabled: boolean) => void;
+    onFullscreenToggle?: (enabled: boolean) => void;
   }
 
   let {
@@ -15,97 +14,85 @@
     camera,
     controls,
     onRefocus,
-    onGridToggle,
-    onAutoLightToggle,
+    onFullscreenToggle,
   }: Props = $props();
 
   let isOpen = $state(false);
-  let showGrid = $state(false);
-  let autoLight = $state(true);
+  let isFullscreen = $state(false);
 
-  function resetCamera() {
+  async function loadThree() {
+    if (!(window as any).THREE) {
+      const THREE = await import('three');
+      (window as any).THREE = THREE;
+    }
+    return (window as any).THREE;
+  }
+
+  async function fitToView() {
     if (!scene || !camera || !controls) return;
 
-    const THREE = (window as any).THREE;
+    const THREE = await loadThree();
     const box3 = new THREE.Box3();
-    const meshes = scene.children.filter((obj: any) => obj instanceof THREE.Mesh);
 
-    if (meshes.length > 0) {
-      meshes.forEach((mesh: any) => {
-        box3.expandByObject(mesh);
-      });
+    // Get all visible meshes except floor
+    const meshes = (scene as any).children.filter((obj: any) => {
+      return obj.visible && obj.userData?.id !== 'floor' && obj.type === 'Mesh';
+    });
 
-      const size = box3.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const fov = camera.fov * (Math.PI / 180);
-      let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+    if (meshes.length === 0) return;
 
-      const center = box3.getCenter(new THREE.Vector3());
-      camera.position.copy(center);
-      camera.position.z += cameraZ * 1.2;
-      camera.lookAt(center);
-      controls.target.copy(center);
-      controls.update();
-    }
-  }
+    // Compute bounding box
+    meshes.forEach((mesh: any) => {
+      box3.expandByObject(mesh);
+    });
 
-  function toggleGrid() {
-    if (!scene) return;
+    const center = box3.getCenter(new THREE.Vector3());
+    const size = box3.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = (camera as any).fov * (Math.PI / 180);
+    let distance = maxDim / (2 * Math.tan(fov / 2));
 
-    showGrid = !showGrid;
+    // Add padding
+    distance *= 1.5;
 
-    const gridName = 'viewer-grid-helper';
-    const existingGrid = scene.getObjectByName(gridName);
+    // Position camera
+    const direction = (camera as any).position.clone().sub((controls as any).target).normalize();
+    (camera as any).position.copy(center.clone().add(direction.multiplyScalar(distance)));
+    (controls as any).target.copy(center);
+    (controls as any).update();
 
-    if (existingGrid) {
-      scene.remove(existingGrid);
-      existingGrid.geometry?.dispose();
-      existingGrid.material?.dispose();
-    } else {
-      const THREE = (window as any).THREE;
-      const size = 100;
-      const divisions = 10;
-      const gridHelper = new THREE.GridHelper(size, divisions);
-      gridHelper.name = gridName;
-      gridHelper.position.y = 0;
-      scene.add(gridHelper);
-    }
-
-    onGridToggle?.(showGrid);
-  }
-
-  function refocusCamera() {
-    resetCamera();
     onRefocus?.();
   }
 
-  function toggleAutoLight() {
-    autoLight = !autoLight;
-    onAutoLightToggle?.(autoLight);
-  }
-
-  function fitToView() {
-    refocusCamera();
+  function toggleFullscreen() {
+    isFullscreen = !isFullscreen;
+    onFullscreenToggle?.(isFullscreen);
   }
 </script>
 
-<div class="relative">
-  <!-- Menu Toggle Button -->
-  <button
-    class="absolute bottom-6 left-6 z-40 flex h-12 w-12 items-center justify-center rounded-lg bg-white shadow-lg transition-all hover:shadow-xl hover:bg-gray-50 active:scale-95"
-    onclick={() => (isOpen = !isOpen)}
-    title={isOpen ? 'Close viewer settings' : 'Open viewer settings'}
-  >
-    <ChevronUp
-      class="h-6 w-6 text-gray-700 transition-transform"
-      style={isOpen ? 'transform: rotate(0deg)' : 'transform: rotate(180deg)'}
-    />
-  </button>
+<!-- Menu Toggle Button -->
+<button
+  class="absolute bottom-4 left-4 z-50 flex h-12 w-12 items-center justify-center rounded-lg bg-white shadow-lg transition-all hover:shadow-xl hover:bg-gray-50 active:scale-95"
+  onclick={() => (isOpen = !isOpen)}
+  title={isOpen ? 'Close viewer settings' : 'Open viewer settings'}
+>
+  <ChevronUp
+    class="h-6 w-6 text-gray-700 transition-transform"
+    style={isOpen ? 'transform: rotate(0deg)' : 'transform: rotate(180deg)'}
+  />
+</button>
 
   <!-- Settings Menu (conditional) -->
   {#if isOpen}
+    <button
+      type="button"
+      class="fixed inset-0 z-40 cursor-default"
+      onclick={() => (isOpen = false)}
+      aria-label="Close viewer settings"
+      tabindex="-1"
+    ></button>
     <div
-      class="absolute bottom-20 left-6 z-40 flex min-w-60 flex-col gap-2 rounded-lg bg-white p-3 shadow-xl border border-gray-200 animate-in fade-in slide-in-from-bottom-2 duration-200"
+      class="absolute bottom-20 left-4 z-50 flex min-w-60 flex-col gap-2 rounded-lg bg-white p-3 shadow-xl border border-gray-200 animate-in fade-in slide-in-from-bottom-2 duration-200"
     >
       <div class="px-2 py-1">
         <h3 class="text-xs font-semibold text-gray-700 uppercase tracking-wider">Viewer Settings</h3>
@@ -113,60 +100,29 @@
 
       <hr class="my-1 border-gray-200" />
 
-      <!-- Refocus/Reset View -->
-      <button
-        class="flex items-center gap-3 rounded px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-700"
-        onclick={refocusCamera}
-        title="Reset camera to fit all objects in view"
-      >
-        <Maximize2 class="h-4 w-4" />
-        <span>Refocus View</span>
-      </button>
-
-      <!-- Fit to View -->
+      <!-- Fit to View (F) -->
       <button
         class="flex items-center gap-3 rounded px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-700"
         onclick={fitToView}
-        title="Fit model to viewport"
+        title="Fit model to viewport (F)"
       >
         <Eye class="h-4 w-4" />
         <span>Fit to View</span>
-      </button>
-
-      <!-- Reset Camera -->
-      <button
-        class="flex items-center gap-3 rounded px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-amber-50 hover:text-amber-700"
-        onclick={resetCamera}
-        title="Reset camera to default position"
-      >
-        <RotateCcw class="h-4 w-4" />
-        <span>Reset Camera</span>
+        <kbd class="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">F</kbd>
       </button>
 
       <hr class="my-1 border-gray-200" />
 
-      <!-- Toggle Grid -->
+      <!-- Toggle Fullscreen -->
       <button
-        class="flex items-center gap-3 rounded px-3 py-2 text-sm transition-colors {showGrid
-          ? 'bg-green-50 text-green-700'
-          : 'text-gray-700 hover:bg-green-50 hover:text-green-700'}"
-        onclick={toggleGrid}
-        title={showGrid ? 'Hide grid' : 'Show grid for reference'}
+        class="flex items-center gap-3 rounded px-3 py-2 text-sm transition-colors {isFullscreen
+          ? 'bg-blue-50 text-blue-700'
+          : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'}"
+        onclick={toggleFullscreen}
+        title={isFullscreen ? 'Exit fullscreen mode' : 'Enter fullscreen mode'}
       >
-        <Grid3X3 class="h-4 w-4" />
-        <span>{showGrid ? 'Hide Grid' : 'Show Grid'}</span>
-      </button>
-
-      <!-- Toggle Auto Lighting -->
-      <button
-        class="flex items-center gap-3 rounded px-3 py-2 text-sm transition-colors {autoLight
-          ? 'bg-purple-50 text-purple-700'
-          : 'text-gray-700 hover:bg-purple-50 hover:text-purple-700'}"
-        onclick={toggleAutoLight}
-        title="Auto-adjust lighting for better visibility"
-      >
-        <Lightbulb class="h-4 w-4" />
-        <span>{autoLight ? 'Auto Light On' : 'Auto Light Off'}</span>
+        <Maximize class="h-4 w-4" />
+        <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
       </button>
 
       <hr class="my-1 border-gray-200" />
@@ -184,17 +140,6 @@
     </div>
   {/if}
 
-  <!-- Backdrop to close menu when clicking outside -->
-  {#if isOpen}
-    <button
-      type="button"
-      class="fixed inset-0 z-30 cursor-default"
-      aria-label="Close viewer settings menu"
-      onclick={() => (isOpen = false)}
-      onkeydown={(e) => e.key === 'Escape' && (isOpen = false)}
-    ></button>
-  {/if}
-</div>
 
 <style>
   @keyframes slide-in-from-bottom-2 {

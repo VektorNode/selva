@@ -9,7 +9,7 @@
   import { StateDisplay, Button } from '$lib/components/ui';
   import { initializeWebSocketSession, ensureSchemaLayoutDefaults } from '$lib/utils/session';
   import { onMount } from 'svelte';
-  import { computeCombinedBoundingBox, type MeshBatch } from '@selva/core';
+  import { type MeshBatch } from '@selva/core';
   import {
     ensureRhinoComputeLoaded as loadRhinoCompute,
     initializeViewerScene,
@@ -55,12 +55,14 @@
     initialized: false,
   });
   let modelUnits = $state<string>('Meters');
+  let shouldShowViewer = $state(false);
 
   let rhinoCompute: typeof import('@selva/core') | null = null;
 
   let isRemoteUpdate = $state(false);
   let pendingValues = $state<Record<string, unknown>>({});
   let hasPendingChanges = $state(false);
+  let isViewerFullscreen = $state(false);
 
   function showNotification(message: string, duration: number = 3000) {
     schemaUpdateNotification = message;
@@ -80,27 +82,36 @@
   }
 
   async function initializeViewer() {
-    if (!canvas || viewerState.initialized) return;
+    if (!canvas || viewerState.scene) return;
 
     await ensureViewerModuleLoaded();
 
     const state = await initializeViewerScene(canvas, rhinoCompute!);
     viewerState = state;
+
+    // Update with current meshes if any exist
+    if (displayMeshes.length > 0) {
+      await updateViewerScene(rhinoCompute!, viewerState, displayMeshes);
+    }
   }
 
   async function updateViewer() {
-    if (!viewerState.initialized || displayMeshes.length === 0) return;
+    if (!viewerState.scene || displayMeshes.length === 0) return;
     await ensureViewerModuleLoaded();
     await updateViewerScene(rhinoCompute!, viewerState, displayMeshes);
   }
 
+  // Initialize viewer when first mesh arrives
   $effect(() => {
-    if (displayMeshes.length > 0) {
-      if (!viewerState.initialized && canvas) {
-        initializeViewer().then(() => updateViewer());
-      } else if (viewerState.initialized) {
-        updateViewer();
-      }
+    if (shouldShowViewer && canvas && !viewerState.scene && displayMeshes.length > 0) {
+      initializeViewer();
+    }
+  });
+
+  // Update viewer when meshes change (after initialization)
+  $effect(() => {
+    if (viewerState.scene && displayMeshes.length > 0) {
+      updateViewer();
     }
   });
 
@@ -144,6 +155,10 @@
     syncNeeded = false;
     wsState.requestInitialData(sessionId);
     showNotification('Syncing parameters...');
+  }
+
+  function handleFullscreenToggle(enabled: boolean) {
+    isViewerFullscreen = enabled;
   }
 
   const badgeConfig = $derived(
@@ -192,6 +207,11 @@
 
         schema = processedSchema;
         loading = false;
+
+        // Show viewer immediately in local mode if allowed
+        if (runtimeMode === 'local' && processedSchema.allowLocalRendering) {
+          shouldShowViewer = true;
+        }
       }
     };
 
@@ -370,12 +390,12 @@
         <StateDisplay type="error" size="large" message={error} />
       </div>
     {:else if schema}
-      <div class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row">
+      <div class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen ? 'fullscreen-container' : ''}">
         <!-- Controls -->
         <div
-          class="w-full shrink-0 overflow-y-auto {displayMeshes.length > 0
+          class="w-full shrink-0 overflow-y-auto {shouldShowViewer
             ? 'lg:w-[480px] xl:w-[520px]'
-            : 'mx-auto max-w-6xl'}"
+            : 'mx-auto max-w-6xl'} {isViewerFullscreen ? 'hidden' : ''}"
         >
           {#if schema.layout.type === 'tabbed' && schema.layout.tabs && schema.layout.tabs.length > 0}
             <TabLayout
@@ -411,13 +431,16 @@
         </div>
 
         <!-- 3D Viewer (conditional) -->
-        {#if displayMeshes.length > 0}
-          <div class="relative min-h-[500px] flex-1 overflow-hidden rounded-lg bg-white shadow-lg">
-            <canvas class="block h-full w-full" bind:this={canvas}></canvas>
+        {#if shouldShowViewer}
+          <div class="relative min-h-[500px] flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen ? 'fullscreen-viewer' : ''}">
+            <div class="absolute inset-0">
+              <canvas class="block h-full w-full rounded-lg" bind:this={canvas}></canvas>
+            </div>
             <ViewerSettingsMenu
               scene={viewerState.scene}
               camera={viewerState.camera}
               controls={viewerState.controls}
+              onFullscreenToggle={handleFullscreenToggle}
             />
           </div>
         {/if}
@@ -474,5 +497,22 @@
       transform: translateX(0);
       opacity: 1;
     }
+  }
+
+  .fullscreen-container {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    padding: 0 !important;
+    background: white;
+  }
+
+  .fullscreen-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    border-radius: 0 !important;
+    min-height: 100vh;
+    width: 100vw;
   }
 </style>
