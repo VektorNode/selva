@@ -2,8 +2,15 @@
   "name": "@selva/svelte-ui",
   "version": "1.0.3",
   "description": "A Svelte component library for rhino3dm and rhino.compute",
-  "author": "VektorNode felix@vektornode.com",
+  "author": "VektorNode",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vektornode/selva.git",
+    "directory": "packages/svelte-ui"
+  },
+  "bugs": "https://github.com/vektornode/selva/issues",
+  "homepage": "https://github.com/vektornode/selva/tree/main/packages/svelte-ui",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build && pnpm prepack",

@@ -4,6 +4,12 @@
   "description": "Selva - TypeScript/Rhino integration monorepo",
   "private": true,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vektornode/selva.git"
+  },
+  "bugs": "https://github.com/vektornode/selva/issues",
+  "homepage": "https://github.com/vektornode/selva",
   "engines": {
     "node": ">=18.0.0",
     "pnpm": ">=9.0.0"

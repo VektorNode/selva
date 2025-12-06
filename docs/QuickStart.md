@@ -4,7 +4,7 @@
 
 - [pnpm](https://pnpm.io) (Node.js package manager)
 - .NET SDK 7.0+ (for plugin development)
-- Rhino 7 or 8 (for using the plugin)
+- Rhino 8 (for using the plugin)
 
 ## Initial Setup
 
@@ -13,10 +13,6 @@ pnpm install
 ```
 
 **Add .env to `packages/frontend`** (required for build):
-
-```bash
-echo "VITE_API_BASE=http://localhost:8765" > packages/frontend/.env
-```
 
 **Build all packages:**
 
@@ -31,7 +27,7 @@ pnpm run build:all
 **Terminal 1: Start web dev server**
 
 ```bash
-cd packages/builder
+cd packages/frontend
 pnpm start
 # Web app runs on http://localhost:5173
 ```
@@ -64,12 +60,6 @@ This creates a self-contained `.gha` file with embedded web assets. Follow the i
 ## Installation to Grasshopper
 
 After building, copy the plugin to your Grasshopper Libraries folder:
-
-**Windows (Rhino 7):**
-
-```bash
-copy "Plugin\bin\Release\net48\Selva.gha" "%APPDATA%\Grasshopper\Libraries\"
-```
 
 **Windows (Rhino 8):**
 
@@ -119,10 +109,3 @@ Once the plugin is installed, you can use:
 - Ensure port 8765 is not blocked by firewall
 - Verify web dev server is running: `pnpm start` in `packages/frontend`
 - Check browser console (F12) for connection errors
-
-## Next Steps
-
-- **Building web apps**: See [`@selva/core` README](../packages/core/README.md)
-- **Using UI components**: See [`@selva/svelte-ui` README](../packages/svelte-ui/README.md)
-- **Full architecture**: See [CLAUDE.md](../CLAUDE.md)
-- **Plugin development**: See [Plugin/README.md](../Plugin/README.md)

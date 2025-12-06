@@ -1,9 +1,16 @@
 {
   "name": "@selva/core",
-  "version": "1.0.3",
+  "version": "1.0.0",
   "description": "TypeScript library for Rhino Compute Server - Grasshopper and RhinoCommon",
-  "author": "VektorNode felix@vektornode.com",
+  "author": "VektorNode",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vektornode/selva.git",
+    "directory": "packages/core"
+  },
+  "bugs": "https://github.com/vektornode/selva/issues",
+  "homepage": "https://github.com/vektornode/selva/tree/main/packages/core",
   "type": "module",
   "keywords": [
     "compute",
