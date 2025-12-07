@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [tailwindcss(), sveltekit()],
   build: {
     rollupOptions: {
-      external: ['compute-rhino3d', 'fflate', /^rhino-compute-core/],
+      external: ['compute-rhino3d', 'fflate', "@svelte/core", 'three'],
     },
   },
 });

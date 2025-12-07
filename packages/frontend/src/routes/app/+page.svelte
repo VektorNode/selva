@@ -57,13 +57,18 @@
     if (!rhinoCompute) rhinoCompute = await import('@selva/core');
   }
 
+  // Check if viewer should be shown (either enableLocal or enableRemote)
+  const shouldShowViewer = $derived(
+    schema?.viewerOptions?.enableLocal || schema?.viewerOptions?.enableRemote
+  );
+
   async function initializeViewer() {
-    if (!schema.enable3dViewer || !canvas || scene) return;
+    if (!shouldShowViewer || !canvas || scene) return;
 
     await ensureModulesLoaded();
 
     const opts = {
-      environment: { backgroundColor: '#E6E6E6' },
+      environment: { backgroundColor: schema?.viewerOptions?.backgroundColor ?? '#E6E6E6' },
     };
 
     const { scene: s, camera: c, controls: ctl } = rhinoCompute!.initThree(canvas, opts);
@@ -109,7 +114,7 @@
 
       const processor = new rhinoCompute!.GrasshopperResponseProcessor(solved, false);
 
-      if (schema.enable3dViewer) {
+      if (shouldShowViewer) {
         const meshes = await processor.extractMeshesFromResponse();
 
         // Initialize viewer on first mesh render
@@ -220,7 +225,7 @@
         </div>
 
         <!-- Viewer -->
-        {#if schema.enable3dViewer}
+        {#if shouldShowViewer}
           <div class="relative min-h-[500px] flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen ? 'fullscreen-viewer' : ''}">
             <div class="absolute inset-0">
               <canvas class="block h-full w-full rounded-lg" bind:this={canvas}></canvas>

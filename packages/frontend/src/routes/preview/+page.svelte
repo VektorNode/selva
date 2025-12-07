@@ -4,8 +4,8 @@
   import { getWebSocketState } from '$lib/websocket/websocket.svelte';
   import type { UISchema, AvailableParameters, SupportedTypes } from '$lib/types/generated';
   import { TabLayout } from '$lib/components/preview';
-  import { ViewerSettingsMenu } from '@selva/svelte-ui';
   import { PageContainer, PageHeader } from '$lib/components/layout';
+  import { Maximize, Minimize } from '@lucide/svelte';
   import { StateDisplay, Button } from '$lib/components/ui';
   import { initializeWebSocketSession, ensureSchemaLayoutDefaults } from '$lib/utils/session';
   import { onMount } from 'svelte';
@@ -86,7 +86,7 @@
 
     await ensureViewerModuleLoaded();
 
-    const state = await initializeViewerScene(canvas, rhinoCompute!);
+    const state = await initializeViewerScene(canvas, rhinoCompute!, schema!);
     viewerState = state;
 
     // Update with current meshes if any exist
@@ -157,8 +157,8 @@
     showNotification('Syncing parameters...');
   }
 
-  function handleFullscreenToggle(enabled: boolean) {
-    isViewerFullscreen = enabled;
+  function toggleFullscreen() {
+    isViewerFullscreen = !isViewerFullscreen;
   }
 
   const badgeConfig = $derived(
@@ -209,8 +209,13 @@
         loading = false;
 
         // Show viewer immediately in local mode if allowed
-        if (runtimeMode === 'local' && processedSchema.allowLocalRendering) {
+        if (runtimeMode === 'local' && processedSchema.viewerOptions?.enableLocal) {
           shouldShowViewer = true;
+        }
+
+        // Trigger initial solution with current values
+        if (runtimeMode === 'local' && wsState.connected) {
+          wsState.sendValueUpdate(sessionId, $state.snapshot(newValues));
         }
       }
     };
@@ -390,7 +395,11 @@
         <StateDisplay type="error" size="large" message={error} />
       </div>
     {:else if schema}
-      <div class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen ? 'fullscreen-container' : ''}">
+      <div
+        class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen
+          ? 'fullscreen-container'
+          : ''}"
+      >
         <!-- Controls -->
         <div
           class="w-full shrink-0 overflow-y-auto {shouldShowViewer
@@ -432,16 +441,26 @@
 
         <!-- 3D Viewer (conditional) -->
         {#if shouldShowViewer}
-          <div class="relative min-h-[500px] flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen ? 'fullscreen-viewer' : ''}">
+          <div
+            class="relative min-h-[500px] flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen
+              ? 'fullscreen-viewer'
+              : ''}"
+          >
             <div class="absolute inset-0">
               <canvas class="block h-full w-full rounded-lg" bind:this={canvas}></canvas>
             </div>
-            <ViewerSettingsMenu
-              scene={viewerState.scene}
-              camera={viewerState.camera}
-              controls={viewerState.controls}
-              onFullscreenToggle={handleFullscreenToggle}
-            />
+            <!-- Fullscreen Toggle Button -->
+            <button
+              class="absolute right-4 bottom-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg bg-white/90 shadow-lg transition-all hover:bg-white hover:shadow-xl active:scale-95"
+              onclick={toggleFullscreen}
+              title={isViewerFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            >
+              {#if isViewerFullscreen}
+                <Minimize class="h-5 w-5 text-gray-700" />
+              {:else}
+                <Maximize class="h-5 w-5 text-gray-700" />
+              {/if}
+            </button>
           </div>
         {/if}
       </div>

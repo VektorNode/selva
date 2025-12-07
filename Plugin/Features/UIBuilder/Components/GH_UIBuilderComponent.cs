@@ -161,9 +161,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
   protected override void RegisterOutputParams(GH_OutputParamManager pManager)
   {
-    pManager.AddTextParameter("Session ID", "ID", "Session identifier", GH_ParamAccess.item);
-    pManager.AddTextParameter("Info", "Info", "Status information", GH_ParamAccess.item);
-    pManager.AddTextParameter("Schema", "Schema", "Current UI schema (JSON)", GH_ParamAccess.item);
+    pManager.AddGenericParameter("Schema", "Schema", "Current UI schema", GH_ParamAccess.item);
   }
 
   protected override void SolveInstance(IGH_DataAccess DA)
@@ -174,7 +172,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     // Initialize dependencies on first run
     InitializeDependencies();
 
-    DA.SetData(0, _sessionId);
 
     var document = OnPingDocument();
     if (!DocumentGuards.IsValid(document, out var error))
@@ -248,6 +245,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       _stateManager.SetSolving(false);
       _eventManager.CollectAndBroadcastOutputs(_embeddedSchema);
       _eventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
+      ClearAllContextualParameters();
     };
     _eventManager.ParametersChanged += HandleParametersChanged;
     _eventManager.MetadataChanged += HandleMetadataChanged;
@@ -281,10 +279,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     if (_embeddedValues != null && _embeddedSchema != null)
       _valueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, _embeddedValues, AddRuntimeMessage);
 
-    DA.SetData(1, ComponentMessageFormatter.CreateInfoMessage(_sessionId, transition.IsEnabled, _embeddedSchema,
-      false, true));
-    DA.SetData(2,
-      _embeddedSchema != null ? JsonConvert.SerializeObject(_embeddedSchema, SchemaSerializationSettings) : "");
+
+    DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
     Message = ComponentMessageFormatter.CreateDisplayMessage(transition.IsEnabled, false, _embeddedSchema, _sessionId);
   }
 
@@ -328,17 +324,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       catch (Exception ex)
       {
         AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Failed to start servers: {ex.Message}");
-        DA.SetData(1, ComponentMessageFormatter.CreateErrorInfoMessage("Could not start servers"));
         return;
       }
 
     if (_embeddedSchema != null && transition.EnableRising)
       _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
 
-    DA.SetData(1, ComponentMessageFormatter.CreateInfoMessage(_sessionId, true, _embeddedSchema, IsConnected));
-    DA.SetData(2, _embeddedSchema != null
-      ? JsonConvert.SerializeObject(_embeddedSchema, SchemaSerializationSettings)
-      : "");
+    DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
   }
 
   /// <summary>
@@ -371,10 +363,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   /// </summary>
   private void HandleDisabledState(IGH_DataAccess DA, GH_Document document)
   {
-    DA.SetData(1, ComponentMessageFormatter.CreateInfoMessage(_sessionId, false, _embeddedSchema, false));
-    DA.SetData(2, _embeddedSchema != null
-      ? JsonConvert.SerializeObject(_embeddedSchema, SchemaSerializationSettings)
-      : "");
+    DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
     Message = ComponentMessageFormatter.CreateDisplayMessage(false, false, _embeddedSchema, _sessionId);
   }
 
@@ -612,6 +601,40 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     catch (Exception ex)
     {
       AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Error updating schema: {ex.Message}");
+    }
+  }
+
+  /// <summary>
+  ///   Clear contextual data from all inputs and outputs after each solve
+  /// </summary>
+  private void ClearAllContextualParameters()
+  {
+    var document = OnPingDocument();
+    if (document == null) return;
+
+    try
+    {
+      // Clear all contextual input parameters
+      var contextualParams = document.Objects.OfType<IGH_ContextualParameter>().ToList();
+      foreach (var contextParam in contextualParams)
+      {
+        var clearMethod = contextParam.GetType().GetMethod("ClearContextualData");
+        clearMethod?.Invoke(contextParam, null);
+      }
+
+      // Clear context output components (ContextPrintComponent)
+      foreach (var obj in document.Objects)
+      {
+        if (ParameterTypeHelper.IsContextOutputComponent(obj) || ParameterTypeHelper.IsContextBakeComponent(obj))
+        {
+          var clearMethod = obj.GetType().GetMethod("ClearContextualData");
+          clearMethod?.Invoke(obj, null);
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Error clearing contextual data: {ex.Message}");
     }
   }
 

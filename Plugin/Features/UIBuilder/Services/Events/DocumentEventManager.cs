@@ -257,8 +257,8 @@ public class DocumentEventManager : IDisposable
     var fileOutputs = _valueCollector.CollectFileOutputs(_currentDocument, schema);
     var displayData = _valueCollector.CollectDisplayData(_currentDocument);
 
-    // Only include display data if allowLocalRendering is enabled in schema
-    var includeDisplayData = schema.AllowLocalRendering ?? false;
+    // Only include display data if enableLocal is enabled in viewerOptions
+    var includeDisplayData = schema.ViewerOptions?.EnableLocal ?? false;
 
     if (outputValues.Count > 0 || fileOutputs.Count > 0 || displayData.Count > 0)
     {

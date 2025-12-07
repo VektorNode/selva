@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { UISchema } from '$lib/types/generated';
+  import type { UISchema, ViewerOptions } from '$lib/types/generated';
   import * as Card from '$lib/components/ui/card';
   import { Input } from '$lib/components/ui/input';
   import { Textarea } from '$lib/components/ui/textarea';
@@ -16,6 +16,13 @@
   function updateSchema(updates: Partial<UISchema>) {
     const updatedSchema = { ...schema, ...updates };
     onSchemaChange?.(updatedSchema);
+  }
+
+  function updateViewerOptions(updates: Partial<ViewerOptions>) {
+    const currentOptions = schema.viewerOptions ?? {};
+    updateSchema({
+      viewerOptions: { ...currentOptions, ...updates },
+    });
   }
 </script>
 
@@ -43,20 +50,9 @@
       </div>
       <div class="flex items-center gap-2">
         <Checkbox
-          id="enable-3d-viewer"
-          checked={schema.enable3dViewer}
-          onCheckedChange={(checked) => updateSchema({ enable3dViewer: !!checked })}
-        />
-        <Label for="enable-3d-viewer" class="cursor-pointer">Enable 3D Viewer Output</Label>
-      </div>
-      <p class="text-xs text-muted-foreground">
-        When enabled, a 3D viewer will be added to the UI to visualize geometry outputs.
-      </p>
-      <div class="flex items-center gap-2">
-        <Checkbox
           id="enable-local-rendering"
-          checked={schema.allowLocalRendering}
-          onCheckedChange={(checked) => updateSchema({ allowLocalRendering: !!checked })}
+          checked={schema.viewerOptions?.enableLocal ?? false}
+          onCheckedChange={(checked) => updateViewerOptions({ enableLocal: !!checked })}
         />
         <Label for="enable-local-rendering" class="cursor-pointer">Enable Local Render</Label>
       </div>
@@ -64,6 +60,36 @@
         When enabled, users can render geometry locally in their browser without needing a remote
         server.
       </p>
+      <!-- <div class="flex items-center gap-2">
+        <Checkbox
+          id="enable-remote-rendering"
+          checked={schema.viewerOptions?.enableRemote ?? false}
+          onCheckedChange={(checked) => updateViewerOptions({ enableRemote: !!checked })}
+        />
+        <Label for="enable-remote-rendering" class="cursor-pointer">Enable Remote Render</Label>
+      </div>
+      <p class="text-xs text-muted-foreground">
+        When enabled, geometry can be rendered remotely via Rhino Compute.
+      </p> -->
+      <div class="flex flex-col gap-2">
+        <Label for="viewer-background">Viewer Background Color</Label>
+        <div class="flex items-center gap-2">
+          <Input
+            id="viewer-background"
+            type="color"
+            class="h-10 w-16 cursor-pointer p-1"
+            value={schema.viewerOptions?.backgroundColor ?? '#ffffff'}
+            oninput={(e) => updateViewerOptions({ backgroundColor: e.currentTarget.value })}
+          />
+          <Input
+            type="text"
+            class="flex-1 font-mono"
+            value={schema.viewerOptions?.backgroundColor ?? '#ffffff'}
+            oninput={(e) => updateViewerOptions({ backgroundColor: e.currentTarget.value })}
+            placeholder="#ffffff"
+          />
+        </div>
+      </div>
       <div class="flex items-center gap-2">
         <Checkbox
           id="instance-solve"

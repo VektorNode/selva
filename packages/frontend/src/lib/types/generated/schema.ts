@@ -5,13 +5,7 @@
  * and run `npm run generate:ts` in the schemas directory to regenerate this file.
  */
 
-export type GrasshopperParamType =
-  | 'number'
-  | 'integer'
-  | 'boolean'
-  | 'text'
-  | 'valueList'
-  | 'generic';
+export type GrasshopperParamType = 'number' | 'integer' | 'boolean' | 'text' | 'valueList' | 'generic';
 export type LayoutItem =
   | InputNumberLayoutItem
   | InputTextLayoutItem
@@ -264,6 +258,20 @@ export interface RuntimeValues {
   };
   [k: string]: unknown | undefined;
 }
+export interface ViewerOptions {
+  /**
+   * If true, display mesh data is sent to the web preview for local rendering
+   */
+  enableLocal?: boolean;
+  /**
+   * If true, enables remote rendering via Rhino Compute
+   */
+  enableRemote?: boolean;
+  /**
+   * Background color for the 3D viewer as hex string (e.g., '#ffffff')
+   */
+  backgroundColor?: string;
+}
 export interface UISchema {
   id: string;
   name: string;
@@ -281,11 +289,7 @@ export interface UISchema {
    * Last modification timestamp
    */
   lastModified?: string;
-  enable3dViewer?: boolean;
-  /**
-   * If true, display mesh data is sent to the preview. If false, meshes are only rendered in Rhino viewport.
-   */
-  allowLocalRendering?: boolean;
+  viewerOptions?: ViewerOptions1;
   /**
    * If true, changes trigger immediate solving. If false, user must press Calculate button.
    */
@@ -297,24 +301,34 @@ export interface UISchema {
   outputs: AvailableOutput[];
   layout: LayoutConfig;
 }
+/**
+ * Configuration for the 3D viewer
+ */
+export interface ViewerOptions1 {
+  /**
+   * If true, display mesh data is sent to the web preview for local rendering
+   */
+  enableLocal?: boolean;
+  /**
+   * If true, enables remote rendering via Rhino Compute
+   */
+  enableRemote?: boolean;
+  /**
+   * Background color for the 3D viewer as hex string (e.g., '#ffffff')
+   */
+  backgroundColor?: string;
+}
+
 
 // ============================================================================
 // TYPE GUARDS
 // ============================================================================
 
-export function isInputLayoutItem(
-  item: LayoutItem
-): item is
-  | InputNumberLayoutItem
-  | InputTextLayoutItem
-  | InputDropdownLayoutItem
-  | InputCheckboxLayoutItem {
+export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem {
   return item.type === 'input';
 }
 
-export function isOutputLayoutItem(
-  item: LayoutItem
-): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem {
+export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem {
   return item.type === 'output';
 }
 
@@ -335,10 +349,6 @@ export function isCheckboxWidget(item: LayoutItem): item is InputCheckboxLayoutI
 }
 
 // Helper type aliases
-export type InputLayoutItem =
-  | InputNumberLayoutItem
-  | InputTextLayoutItem
-  | InputDropdownLayoutItem
-  | InputCheckboxLayoutItem;
+export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem;
 export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem;
 export type SupportedTypes = string | number | boolean;

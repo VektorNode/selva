@@ -41,6 +41,8 @@ public class GH_Block_To_File : GH_Component
 
   protected override Bitmap Icon => Resources.BlockToFile;
 
+  public override GH_Exposure Exposure => GH_Exposure.hidden;
+
   protected override void RegisterInputParams(GH_InputParamManager pManager)
   {
     pManager.AddParameter(

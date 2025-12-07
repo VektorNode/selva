@@ -279,6 +279,8 @@
         tab = schema.layout.tabs?.find((t) => t.id === newTabId);
         if (tab) {
           tab.label = tabLabel;
+          // Auto-select the newly created tab
+          builderState.state.activeTabId = newTabId;
           toast.success(`Created new tab: ${tabLabel}`);
         }
       }
@@ -341,6 +343,12 @@
     }
   }
 
+  const badgeConfig = $derived(
+    builderState?.wsState.connected
+      ? { label: 'Connected', variant: 'connected' as const }
+      : { label: 'Disconnected', variant: 'disconnected' as const }
+  );
+
   function handleAddTab() {
     if (!builderState?.state.schema) return;
     const newTabId = addTab(builderState.state.schema);
@@ -388,7 +396,7 @@
 
 <DragDropContext>
   <PageContainer background="white">
-    <PageHeader title="Schema Builder" {sessionId} showModeToggle={true}>
+    <PageHeader title="Schema Builder" {sessionId} showModeToggle={true} badge={badgeConfig}>
       <nav class="flex items-center gap-2">
         {#if builderState?.state.syncNeeded}
           <Button

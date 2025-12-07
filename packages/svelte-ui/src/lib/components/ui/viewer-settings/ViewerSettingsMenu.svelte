@@ -9,13 +9,7 @@
     onFullscreenToggle?: (enabled: boolean) => void;
   }
 
-  let {
-    scene,
-    camera,
-    controls,
-    onRefocus,
-    onFullscreenToggle,
-  }: Props = $props();
+  let { scene, camera, controls, onRefocus, onFullscreenToggle }: Props = $props();
 
   let isOpen = $state(false);
   let isFullscreen = $state(false);
@@ -56,7 +50,10 @@
     distance *= 1.5;
 
     // Position camera
-    const direction = (camera as any).position.clone().sub((controls as any).target).normalize();
+    const direction = (camera as any).position
+      .clone()
+      .sub((controls as any).target)
+      .normalize();
     (camera as any).position.copy(center.clone().add(direction.multiplyScalar(distance)));
     (controls as any).target.copy(center);
     (controls as any).update();
@@ -82,64 +79,63 @@
   />
 </button>
 
-  <!-- Settings Menu (conditional) -->
-  {#if isOpen}
-    <button
-      type="button"
-      class="fixed inset-0 z-40 cursor-default"
-      onclick={() => (isOpen = false)}
-      aria-label="Close viewer settings"
-      tabindex="-1"
-    ></button>
-    <div
-      class="absolute bottom-20 left-4 z-50 flex min-w-60 flex-col gap-2 rounded-lg bg-white p-3 shadow-xl border border-gray-200 animate-in fade-in slide-in-from-bottom-2 duration-200"
-    >
-      <div class="px-2 py-1">
-        <h3 class="text-xs font-semibold text-gray-700 uppercase tracking-wider">Viewer Settings</h3>
-      </div>
-
-      <hr class="my-1 border-gray-200" />
-
-      <!-- Fit to View (F) -->
-      <button
-        class="flex items-center gap-3 rounded px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-700"
-        onclick={fitToView}
-        title="Fit model to viewport (F)"
-      >
-        <Eye class="h-4 w-4" />
-        <span>Fit to View</span>
-        <kbd class="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">F</kbd>
-      </button>
-
-      <hr class="my-1 border-gray-200" />
-
-      <!-- Toggle Fullscreen -->
-      <button
-        class="flex items-center gap-3 rounded px-3 py-2 text-sm transition-colors {isFullscreen
-          ? 'bg-blue-50 text-blue-700'
-          : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'}"
-        onclick={toggleFullscreen}
-        title={isFullscreen ? 'Exit fullscreen mode' : 'Enter fullscreen mode'}
-      >
-        <Maximize class="h-4 w-4" />
-        <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
-      </button>
-
-      <hr class="my-1 border-gray-200" />
-
-      <!-- Info Section -->
-      <div class="px-2 py-2 text-xs text-gray-500">
-        <p class="font-medium text-gray-600 mb-1">Camera Controls:</p>
-        <ul class="space-y-0.5 text-gray-500">
-          <li>• <span class="font-medium">Left Drag</span> - Rotate</li>
-          <li>• <span class="font-medium">Right Drag</span> - Pan</li>
-          <li>• <span class="font-medium">Scroll</span> - Zoom</li>
-          <li>• <span class="font-medium">F</span> - Fit to view</li>
-        </ul>
-      </div>
+<!-- Settings Menu (conditional) -->
+{#if isOpen}
+  <button
+    type="button"
+    class="fixed inset-0 z-40 cursor-default"
+    onclick={() => (isOpen = false)}
+    aria-label="Close viewer settings"
+    tabindex="-1"
+  ></button>
+  <div
+    class="absolute bottom-20 left-4 z-50 flex min-w-60 flex-col gap-2 rounded-lg bg-white p-3 shadow-xl border border-gray-200 animate-in fade-in slide-in-from-bottom-2 duration-200"
+  >
+    <div class="px-2 py-1">
+      <h3 class="text-xs font-semibold text-gray-700 uppercase tracking-wider">Viewer Settings</h3>
     </div>
-  {/if}
 
+    <hr class="my-1 border-gray-200" />
+
+    <!-- Fit to View (F) -->
+    <button
+      class="flex items-center gap-3 rounded px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-700"
+      onclick={fitToView}
+      title="Fit model to viewport (F)"
+    >
+      <Eye class="h-4 w-4" />
+      <span>Fit to View</span>
+      <kbd class="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">F</kbd>
+    </button>
+
+    <hr class="my-1 border-gray-200" />
+
+    <!-- Toggle Fullscreen -->
+    <button
+      class="flex items-center gap-3 rounded px-3 py-2 text-sm transition-colors {isFullscreen
+        ? 'bg-blue-50 text-blue-700'
+        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'}"
+      onclick={toggleFullscreen}
+      title={isFullscreen ? 'Exit fullscreen mode' : 'Enter fullscreen mode'}
+    >
+      <Maximize class="h-4 w-4" />
+      <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+    </button>
+
+    <hr class="my-1 border-gray-200" />
+
+    <!-- Info Section -->
+    <div class="px-2 py-2 text-xs text-gray-500">
+      <p class="font-medium text-gray-600 mb-1">Camera Controls:</p>
+      <ul class="space-y-0.5 text-gray-500">
+        <li>• <span class="font-medium">Left Drag</span> - Rotate</li>
+        <li>• <span class="font-medium">Right Drag</span> - Pan</li>
+        <li>• <span class="font-medium">Scroll</span> - Zoom</li>
+        <li>• <span class="font-medium">F</span> - Fit to view</li>
+      </ul>
+    </div>
+  </div>
+{/if}
 
 <style>
   @keyframes slide-in-from-bottom-2 {

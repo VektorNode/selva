@@ -1,3 +1,4 @@
+import type { UISchema } from '$lib/types/generated';
 import type { MeshBatch } from '@selva/core';
 import {
   parseMeshBatchObject,
@@ -20,10 +21,11 @@ export async function ensureRhinoComputeLoaded() {
 
 export async function initializeViewerScene(
   canvas: HTMLCanvasElement,
-  rhinoCompute: typeof import('@selva/core')
+  rhinoCompute: typeof import('@selva/core'),
+  schema: UISchema
 ): Promise<ViewerState> {
   const opts: ThreeInitializerOptions = {
-    environment: { backgroundColor: '#E6E6E6' },
+    environment: { backgroundColor: schema.viewerOptions?.backgroundColor || '#ffffff' },
   };
 
   const { scene, camera, controls } = rhinoCompute.initThree(canvas, opts);

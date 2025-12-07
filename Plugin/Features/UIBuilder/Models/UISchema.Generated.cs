@@ -56,14 +56,11 @@ namespace Selva.Features.UIBuilder.Models
         [JsonProperty("lastModified", NullValueHandling = NullValueHandling.Ignore)]
         public DateTime LastModified { get; set; } = DateTime.UtcNow;
 
-        [JsonProperty("enable3dViewer", DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public bool? Enable3dViewer { get; set; } = false;
-
 /// <summary>
-/// If true, display mesh data is sent to the preview. If false, meshes are only rendered in Rhino viewport.
+/// Configuration for the 3D viewer
 /// </summary>
-        [JsonProperty("allowLocalRendering", DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public bool? AllowLocalRendering { get; set; } = false;
+        [JsonProperty("viewerOptions", NullValueHandling = NullValueHandling.Ignore)]
+        public ViewerOptions ViewerOptions { get; set; }
 
 /// <summary>
 /// If true, changes trigger immediate solving. If false, user must press Calculate button.
@@ -274,6 +271,28 @@ namespace Selva.Features.UIBuilder.Models
 
         [JsonProperty("values")]
         public Dictionary<string, object> Values { get; set; }
+    }
+
+    public class ViewerOptions
+    {
+
+/// <summary>
+/// If true, display mesh data is sent to the web preview for local rendering
+/// </summary>
+        [JsonProperty("enableLocal", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool? EnableLocal { get; set; } = false;
+
+/// <summary>
+/// If true, enables remote rendering via Rhino Compute
+/// </summary>
+        [JsonProperty("enableRemote", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool? EnableRemote { get; set; } = false;
+
+/// <summary>
+/// Background color for the 3D viewer as hex string (e.g., '#ffffff')
+/// </summary>
+        [JsonProperty("backgroundColor", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string BackgroundColor { get; set; } = "#ffffff";
     }
 
 // ============================================================================

@@ -104,7 +104,11 @@ export function createDefaultSchema(): UISchema {
       gap: 16,
       tabs: [],
     },
-    enable3dViewer: false,
+    viewerOptions: {
+      enableLocal: false,
+      enableRemote: false,
+      backgroundColor: '#ffffff',
+    },
     instanceSolve: true,
   };
 }

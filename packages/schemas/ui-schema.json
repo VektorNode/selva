@@ -625,6 +625,29 @@
       },
       "required": ["timestamp", "values"]
     },
+    "ViewerOptions": {
+      "type": "object",
+      "description": "Configuration options for the 3D viewer",
+      "properties": {
+        "enableLocal": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, display mesh data is sent to the web preview for local rendering"
+        },
+        "enableRemote": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, enables remote rendering via Rhino Compute"
+        },
+        "backgroundColor": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "default": "#ffffff",
+          "description": "Background color for the 3D viewer as hex string (e.g., '#ffffff')"
+        }
+      },
+      "additionalProperties": false
+    },
     "UISchema": {
       "type": "object",
       "properties": {
@@ -657,14 +680,9 @@
           "format": "date-time",
           "description": "Last modification timestamp"
         },
-        "enable3dViewer": {
-          "type": "boolean",
-          "default": false
-        },
-        "allowLocalRendering": {
-          "type": "boolean",
-          "default": false,
-          "description": "If true, display mesh data is sent to the preview. If false, meshes are only rendered in Rhino viewport."
+        "viewerOptions": {
+          "$ref": "#/definitions/ViewerOptions",
+          "description": "Configuration for the 3D viewer"
         },
         "instanceSolve": {
           "type": "boolean",
