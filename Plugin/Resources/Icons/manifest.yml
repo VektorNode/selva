@@ -1,0 +1,16 @@
+---
+name: Selva
+version: 0.1.0
+authors:
+  - Felix Brunold
+  - VektorNode
+description: A Grasshopper plugin for building web-based UIs and bridging Grasshopper definitions with Rhino Compute.
+keywords:
+  - grasshopper
+  - rhino
+  - rhino-compute
+  - web-ui
+  - parametric
+  - three-js
+
+icon: icon.png
