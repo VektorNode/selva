@@ -181,10 +181,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       return;
     }
 
-    // Process state transition
     var transition = _stateManager.ProcessEnableInput(enable);
 
-    // Handle headless mode
     if (transition.IsHeadless)
     {
       HandleHeadlessMode(DA, document, transition);
@@ -201,14 +199,12 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     // Validate for duplicates on enable rising
     if (transition.EnableRising) ValidateForDuplicates(document);
 
-    // Handle enabled state
     if (transition.IsEnabled)
     {
       HandleEnabledState(DA, document, transition);
       return;
     }
 
-    // Handle disabled state
     if (transition.EnableFalling) HandleDisablingState(document);
 
     HandleDisabledState(DA, document);
@@ -347,7 +343,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       }
       catch
       {
-        /* ignore */
+        // Ignore errors during shutdown
       }
 
       _communicationHandler.Stop();
@@ -519,10 +515,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     base.AppendMenuItems(menu);
 
-    // Add a separator
     menu.Items.Add(new ToolStripSeparator());
 
-    // Add "Open UI in Browser" menu item
     var openUIItem = new ToolStripMenuItem(
       "Open UI in Browser",
       null,
