@@ -22,7 +22,7 @@ console.log('');
 try {
   // Step 1: Build web application
   console.log('[1/4] Building web application...');
-  execSync('pnpm --filter @selva/frontendrun build', {
+  execSync('pnpm --filter @selva/frontend run build', {
     cwd: projectRoot,
     stdio: 'inherit',
   });
@@ -32,7 +32,7 @@ try {
   // Step 2: Copy web assets to plugin directory
   console.log('[2/4] Copying web assets to plugin...');
   const webDir = join(projectRoot, 'Plugin/EmbeddedAssets/web');
-  const buildDir = join(projectRoot, 'packages/builder/build');
+  const buildDir = join(projectRoot, 'packages/frontend/build');
 
   mkdirSync(webDir, { recursive: true });
   rmSync(webDir, { recursive: true, force: true });
