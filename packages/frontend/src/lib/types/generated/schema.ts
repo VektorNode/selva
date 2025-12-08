@@ -277,6 +277,30 @@ export interface UISchema {
   name: string;
   description?: string;
   /**
+   * Grasshopper document file name (e.g., 'myfile.gh')
+   */
+  projectFileName?: string;
+  /**
+   * Grasshopper document unique identifier (GUID)
+   */
+  documentId?: string;
+  /**
+   * Version of Selva plugin that created/last modified this schema
+   */
+  pluginVersion?: string;
+  /**
+   * User-defined tags for organizing schemas (e.g., ['architecture', 'facade'])
+   */
+  tags?: string[];
+  /**
+   * User or organization who created the schema
+   */
+  author?: string;
+  /**
+   * Organization/company name
+   */
+  organization?: string;
+  /**
    * Semantic version of the schema format (MAJOR.MINOR.PATCH)
    */
   schemaVersion?: string;

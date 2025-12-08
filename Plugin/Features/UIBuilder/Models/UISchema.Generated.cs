@@ -36,6 +36,42 @@ namespace Selva.Features.UIBuilder.Models
         public string Description { get; set; }
 
 /// <summary>
+/// Grasshopper document file name (e.g., 'myfile.gh')
+/// </summary>
+        [JsonProperty("projectFileName")]
+        public string ProjectFileName { get; set; }
+
+/// <summary>
+/// Grasshopper document unique identifier (GUID)
+/// </summary>
+        [JsonProperty("documentId", NullValueHandling = NullValueHandling.Ignore)]
+        public Guid DocumentId { get; set; }
+
+/// <summary>
+/// Version of Selva plugin that created/last modified this schema
+/// </summary>
+        [JsonProperty("pluginVersion")]
+        public string PluginVersion { get; set; }
+
+/// <summary>
+/// User-defined tags for organizing schemas (e.g., ['architecture', 'facade'])
+/// </summary>
+        [JsonProperty("tags")]
+        public List<string> Tags { get; set; } = new List<string>();
+
+/// <summary>
+/// User or organization who created the schema
+/// </summary>
+        [JsonProperty("author")]
+        public string Author { get; set; }
+
+/// <summary>
+/// Organization/company name
+/// </summary>
+        [JsonProperty("organization")]
+        public string Organization { get; set; }
+
+/// <summary>
 /// Semantic version of the schema format (MAJOR.MINOR.PATCH)
 /// </summary>
         [JsonProperty("schemaVersion", DefaultValueHandling = DefaultValueHandling.Ignore)]

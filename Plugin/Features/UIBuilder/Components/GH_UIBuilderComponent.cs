@@ -71,6 +71,24 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
   protected override Bitmap Icon => Resources.UIBridge;
 
+  /// <summary>
+  ///   Override Locked property to handle right-click disable/enable
+  /// </summary>
+  public override bool Locked
+  {
+    get => base.Locked;
+    set
+    {
+      // If component is being locked (disabled), cleanup communication
+      if (value && !base.Locked)
+      {
+        CleanupCommunication();
+      }
+
+      base.Locked = value;
+    }
+  }
+
   public void Dispose()
   {
     Dispose(true);
@@ -90,9 +108,42 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     var document = OnPingDocument();
     if (document == null || _schemaManager == null)
       return new AvailableParameters
-        { SessionId = _sessionId, Inputs = new List<AvailableInput>(), Outputs = new List<AvailableOutput>() };
+      { SessionId = _sessionId, Inputs = new List<AvailableInput>(), Outputs = new List<AvailableOutput>() };
 
     return _schemaManager.ScanParameters(document);
+  }
+
+  /// <summary>
+  ///   Create a default schema with document metadata
+  /// </summary>
+  private UISchema CreateDefaultSchema(GH_Document document)
+  {
+    return new UISchema
+    {
+      Id = Guid.NewGuid().ToString(),
+      Name = "New Schema",
+      Description = "Configure your Grasshopper UI",
+      ProjectFileName = document.Properties.ProjectFileName,
+      DocumentId = document.DocumentID,
+      PluginVersion = SchemaMigrator.PLUGIN_VERSION.ToString(),
+      Tags = [],
+      Created = DateTime.UtcNow,
+      Inputs = [],
+      Outputs = [],
+      Layout = new LayoutConfig
+      {
+        Type = "tabbed",
+        Gap = 16,
+        Tabs = []
+      },
+      ViewerOptions = new ViewerOptions
+      {
+        EnableLocal = false,
+        EnableRemote = false,
+        BackgroundColor = "#ffffff"
+      },
+      InstanceSolve = true
+    };
   }
 
   /// <summary>
@@ -334,20 +385,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   /// </summary>
   private void HandleDisablingState(GH_Document document)
   {
-    if (IsConnected)
-    {
-      try
-      {
-        var _ = _communicationHandler.BroadcastMessage("disconnecting", new { reason = "Component disabled" });
-        Thread.Sleep(100);
-      }
-      catch
-      {
-        // Ignore errors during shutdown
-      }
-
-      _communicationHandler.Stop();
-    }
+    CleanupCommunication();
 
     var contextualParams = document.Objects.OfType<IGH_ContextualParameter>().ToList();
     ParameterTypeHelper.ClearContextualParameters(contextualParams, this);
@@ -418,8 +456,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       var (validatedSchema, removedIds) = GetValidatedSchema();
       if (removedIds.Count > 0) HandleParameterDeletion(removedIds);
 
+      // Create default schema if none exists
+      var schemaToSend = validatedSchema ?? _embeddedSchema ?? CreateDefaultSchema(document);
+
       var broadcastTask = _communicationHandler.BroadcastInitialData(
-        validatedSchema ?? _embeddedSchema,
+        schemaToSend,
         currentParams,
         currentOutputs,
         currentValues
@@ -444,6 +485,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         var _ = _communicationHandler.BroadcastSchemaSaved(false, "No document available");
         return;
       }
+
+      // Enrich schema with document metadata
+      schema.ProjectFileName = document.Properties.ProjectFileName;
+      schema.DocumentId = document.DocumentID;
+      schema.PluginVersion = SchemaMigrator.PLUGIN_VERSION.ToString();
 
       _embeddedSchema = _schemaManager.ValidateSchema(schema, document);
       var task = _communicationHandler.BroadcastSchemaSaved(true);
@@ -656,10 +702,32 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
   }
 
+  /// <summary>
+  ///   Cleanup communication servers and notify clients
+  /// </summary>
+  private void CleanupCommunication()
+  {
+    if (IsConnected)
+    {
+      try
+      {
+        var _ = _communicationHandler.BroadcastMessage("disconnecting", new { reason = "Component disabled" });
+        Thread.Sleep(100);
+      }
+      catch
+      {
+        // Ignore errors during shutdown
+      }
+
+      _communicationHandler.Stop();
+    }
+
+    _webServer?.Stop();
+  }
+
   private void Cleanup()
   {
-    _communicationHandler?.Stop();
-    _webServer?.Stop();
+    CleanupCommunication();
     _eventManager?.UnregisterEvents();
     _valueApplicator?.Clear();
     _schemaManager?.ClearMetadataCache();

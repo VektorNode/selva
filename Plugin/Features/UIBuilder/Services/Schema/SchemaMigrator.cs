@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using Selva.Features.UIBuilder.Models;
 
 namespace Selva.Features.UIBuilder.Services;
@@ -10,7 +11,27 @@ public static class SchemaMigrator
 {
   // Current version of the plugin's schema format
   public static readonly Version CURRENT_SCHEMA_VERSION = new(1, 0, 0);
-  public static readonly Version PLUGIN_VERSION = new(1, 0, 0);
+
+  // Get plugin version from assembly
+  public static readonly Version PLUGIN_VERSION = GetPluginVersion();
+
+  /// <summary>
+  ///   Retrieve the plugin version from the assembly
+  /// </summary>
+  private static Version GetPluginVersion()
+  {
+    try
+    {
+      var assembly = Assembly.GetExecutingAssembly();
+      var version = assembly.GetName().Version;
+      return version ?? new Version(0, 0, 0);
+    }
+    catch
+    {
+      // Fallback if assembly version cannot be read
+      return new Version(0, 0, 0);
+    }
+  }
 
   /// <summary>
   ///   Migrate schema to current version

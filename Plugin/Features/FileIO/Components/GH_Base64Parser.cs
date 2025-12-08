@@ -157,7 +157,6 @@ public class GH_Base64Parser : GH_Component
     }
     catch (Exception ex)
     {
-      RhinoApp.WriteLine($"Import error: {ex.Message}");
       return false;
     }
     finally
@@ -192,7 +191,6 @@ public class GH_Base64Parser : GH_Component
     }
     catch (Exception ex)
     {
-      RhinoApp.WriteLine($"3DM import error: {ex.Message}");
       return false;
     }
   }
@@ -206,7 +204,6 @@ public class GH_Base64Parser : GH_Component
     }
     catch (Exception ex)
     {
-      RhinoApp.WriteLine($"STEP import error: {ex.Message}");
       return false;
     }
   }

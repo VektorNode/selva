@@ -29,7 +29,7 @@ export function useBuilderState(sessionId: string) {
   function handleInitialData(message: any) {
     if (message.sessionId !== sessionId) return;
 
-    const result = processInitialDataSchema(message, true);
+    const result = processInitialDataSchema(message);
 
     state.availableInputs = result.availableInputs;
     state.availableOutputs = result.availableOutputs;

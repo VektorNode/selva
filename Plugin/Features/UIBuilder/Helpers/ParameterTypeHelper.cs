@@ -186,10 +186,6 @@ public static class ParameterTypeHelper
       {
         ClearSingleParameter(contextParam);
         clearedCount++;
-
-        var paramName = (contextParam as IGH_DocumentObject)?.NickName ?? "Unknown";
-        component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, $"Cleared: {paramName}");
-
         CollectRecipients(contextParam, recipientsToExpire);
       }
       catch (Exception ex)

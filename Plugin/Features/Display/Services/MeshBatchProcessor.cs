@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using Rhino;
 using Rhino.Geometry;
 
 namespace Selva.Features.Display.Services;
@@ -117,14 +115,6 @@ public static class MeshBatchProcessor
 
       batch.Groups.Add(materialGroup);
     }
-
-    // Compress using shared compression helper
-    var stopwatch = Stopwatch.StartNew();
-    batch.CompressedData = CompressionHelper.CompressGeometryData(allVertices, allFaces);
-    stopwatch.Stop();
-
-    var sizeMb = batch.CompressedData.Length / 1024.0 / 1024.0;
-    RhinoApp.WriteLine($"Compressed data size: {sizeMb:F2} MB (compression took {stopwatch.ElapsedMilliseconds}ms)");
 
     return batch;
   }

@@ -660,6 +660,33 @@
         "description": {
           "type": "string"
         },
+        "projectFileName": {
+          "type": "string",
+          "description": "Grasshopper document file name (e.g., 'myfile.gh')"
+        },
+        "documentId": {
+          "type": "string",
+          "description": "Grasshopper document unique identifier (GUID)"
+        },
+        "pluginVersion": {
+          "type": "string",
+          "description": "Version of Selva plugin that created/last modified this schema"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "User-defined tags for organizing schemas (e.g., ['architecture', 'facade'])"
+        },
+        "author": {
+          "type": "string",
+          "description": "User or organization who created the schema"
+        },
+        "organization": {
+          "type": "string",
+          "description": "Organization/company name"
+        },
         "schemaVersion": {
           "type": "string",
           "pattern": "^\\d+\\.\\d+\\.\\d+$",

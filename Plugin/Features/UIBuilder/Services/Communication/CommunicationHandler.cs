@@ -185,8 +185,6 @@ public class CommunicationHandler : IDisposable
     }
     catch (Exception ex)
     {
-      // If marshaling fails, execute directly (may cause issues but better than deadlock)
-      Debug.WriteLine($"Failed to marshal to UI thread: {ex.Message}");
       callback?.Invoke();
     }
   }

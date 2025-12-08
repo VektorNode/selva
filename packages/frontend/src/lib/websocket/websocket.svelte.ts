@@ -25,6 +25,8 @@ export class WebSocketState {
   private reconnectDelay = WEBSOCKET_RECONNECT_INTERVAL;
   private isConnecting = false;
   private _pendingValueUpdate: { sessionId: string; values: Record<string, unknown> } | null = null;
+  private _serverDisconnected = false;
+  private _shouldReloadOnReconnect = false;
 
   // Reactive state using Svelte 5 runes
   connected = $state(false);
@@ -60,8 +62,15 @@ export class WebSocketState {
         this.socket = new WebSocket(this.url);
 
         this.socket.onopen = () => {
-          console.log('[WebSocket] Connected to Grasshopper');
+          // If reconnecting after server disconnect, reload the page to get fresh state
+          if (this._shouldReloadOnReconnect) {
+            console.warn('[WebSocket] Server is back online, reloading page...');
+            window.location.reload();
+            return;
+          }
+
           this.reconnectAttempts = 0;
+          this._serverDisconnected = false;
           this.isConnecting = false;
           this.connected = true;
           resolve(true);
@@ -206,15 +215,13 @@ export class WebSocketState {
     if (message && typeof message === 'object' && 'type' in message) {
       const msg = message as { type: string; data?: unknown };
       if (msg.type === 'disconnecting') {
-        console.log(
+        console.warn(
           '[WebSocket] Server is disconnecting:',
           (msg.data as { reason?: string } | undefined)?.reason || 'No reason provided'
         );
-        if (this.reconnectTimer) {
-          clearTimeout(this.reconnectTimer);
-          this.reconnectTimer = null;
-        }
-        this.reconnectAttempts = this.maxReconnectAttempts;
+        // Mark as server-initiated disconnect - will reload page on reconnect
+        this._serverDisconnected = true;
+        this._shouldReloadOnReconnect = true;
         return;
       }
 
@@ -226,9 +233,23 @@ export class WebSocketState {
   }
 
   /**
-   * Attempt to reconnect with exponential backoff
+   * Attempt to reconnect
+   * - If server disconnected: use fixed 5-second interval indefinitely
+   * - Otherwise: use exponential backoff with max attempts
    */
   private attemptReconnect() {
+    // If server disconnected, keep trying with fixed interval (no max attempts)
+    if (this._serverDisconnected) {
+      const fixedDelay = 5000; // 5 seconds
+      console.log(`[WebSocket] Server disconnected, retrying in ${fixedDelay}ms`);
+
+      this.reconnectTimer = setTimeout(() => {
+        this.connect();
+      }, fixedDelay);
+      return;
+    }
+
+    // Otherwise, use exponential backoff with max attempts
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.log('[WebSocket] Max reconnection attempts reached');
       return;

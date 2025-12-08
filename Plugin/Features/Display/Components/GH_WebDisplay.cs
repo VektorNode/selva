@@ -133,7 +133,6 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
       // Create batch
       var batch = MeshBatchProcessor.CreateBatch(meshes, names, materials);
 
-      RhinoApp.WriteLine("TOAL TIME WEB DISPLAY: " + stopwatch.ElapsedMilliseconds + " ms");
 
       return new WebDisplayGoo(batch);
     }

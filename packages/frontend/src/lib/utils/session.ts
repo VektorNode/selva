@@ -89,31 +89,6 @@ export function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | 
 }
 
 /**
- * Create a new empty schema with defaults
- */
-export function createDefaultSchema(): UISchema {
-  return {
-    id: crypto.randomUUID(),
-    name: 'New Schema',
-    description: 'Configure your Grasshopper UI',
-    created: new Date().toISOString(),
-    inputs: [],
-    outputs: [],
-    layout: {
-      type: 'tabbed',
-      gap: 16,
-      tabs: [],
-    },
-    viewerOptions: {
-      enableLocal: false,
-      enableRemote: false,
-      backgroundColor: '#ffffff',
-    },
-    instanceSolve: true,
-  };
-}
-
-/**
  * Get default value for a parameter type
  */
 export function getDefaultValue(paramType: string): unknown {
@@ -132,13 +107,14 @@ export function getDefaultValue(paramType: string): unknown {
 
 /**
  * Process initial data message and extract schema with defaults
+ * Note: Default schema creation is now handled by the C# UIBuilderComponent,
+ * which includes document metadata (projectFileName, documentId)
  */
 export function processInitialDataSchema(
   message: {
     schema?: UISchema;
     availableParams?: AvailableParameters;
-  },
-  createNewIfMissing: boolean = false
+  }
 ): {
   schema: UISchema | null;
   availableInputs: AvailableParameters['inputs'];
@@ -148,9 +124,7 @@ export function processInitialDataSchema(
   const availableOutputs = message.availableParams?.outputs || [];
   let schema = message.schema || null;
 
-  if (!schema && createNewIfMissing) {
-    schema = createDefaultSchema();
-  } else if (schema) {
+  if (schema) {
     schema = ensureSchemaLayoutDefaults(schema);
   }
 
