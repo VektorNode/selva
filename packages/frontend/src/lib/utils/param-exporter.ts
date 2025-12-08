@@ -166,8 +166,6 @@ export function extractLoadableValues(
   return values;
 }
 
-
-
 /**
  * Export state as .sps (Selva Param State) file
  */
