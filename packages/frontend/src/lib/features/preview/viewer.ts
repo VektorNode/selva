@@ -47,6 +47,7 @@ export async function updateViewerScene(
     return;
   }
 
+
   rhinoCompute.updateScene(
     state.scene as any,
     displayMeshes,
@@ -62,7 +63,9 @@ export async function processMeshBatches(batches: MeshBatch[], modelUnits: strin
   const allMeshes: any[] = [];
   const scaleFactor = SCALE_FACTORS[modelUnits] ?? 1;
 
-  console.log(`[Viewer] Using scale factor: ${scaleFactor} (units: ${modelUnits})`);
+  console.log('[Viewer] Updating scene with meshes:', batches);
+
+
 
   for (const batchData of batches) {
     const meshes = await parseMeshBatchObject(batchData, {

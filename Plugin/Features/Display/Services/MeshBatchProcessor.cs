@@ -97,6 +97,7 @@ public static class MeshBatchProcessor
           FaceOffset = currentFaceOffset
         });
 
+
         // Copy vertices using Span for optimal performance
         var vertexSpan = allVertices.AsSpan(currentVertexOffset, vertexCount);
         mesh.Vertices.AsSpan().CopyTo(vertexSpan);
@@ -115,6 +116,9 @@ public static class MeshBatchProcessor
 
       batch.Groups.Add(materialGroup);
     }
+
+    // Compress all vertex and face data
+    batch.CompressedData = CompressionHelper.CompressGeometryData(allVertices, allFaces);
 
     return batch;
   }
