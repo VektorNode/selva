@@ -122,19 +122,6 @@ export function validateSavedState(
         }
       });
     }
-
-    // Check type changed (error)
-    if (inputDef.paramType !== paramState.paramType) {
-      issues.push({
-        paramId: paramState.paramId,
-        severity: 'error',
-        message: `Parameter "${paramState.nickname}" type changed - cannot load value`,
-        details: {
-          expected: paramState.paramType,
-          actual: inputDef.paramType
-        }
-      });
-    }
   }
 
   // Can load if no errors (warnings are ok)
@@ -179,74 +166,7 @@ export function extractLoadableValues(
   return values;
 }
 
-/**
- * Save state to local storage
- */
-export function saveStateToLocalStorage(
-  documentId: string,
-  savedState: SavedState
-): void {
-  const key = `selva_states_${documentId}`;
 
-  // Get existing states for this document
-  const existingStatesJson = localStorage.getItem(key);
-  const existingStates: SavedState[] = existingStatesJson
-    ? JSON.parse(existingStatesJson)
-    : [];
-
-  // Add or update state
-  const existingIndex = existingStates.findIndex(s => s.id === savedState.id);
-  if (existingIndex >= 0) {
-    existingStates[existingIndex] = savedState;
-  } else {
-    existingStates.push(savedState);
-  }
-
-  // Save back to localStorage
-  localStorage.setItem(key, JSON.stringify(existingStates));
-}
-
-/**
- * Load all states for a document from local storage
- */
-export function loadStatesFromLocalStorage(documentId: string): SavedState[] {
-  const key = `selva_states_${documentId}`;
-  const statesJson = localStorage.getItem(key);
-
-  if (!statesJson) {
-    return [];
-  }
-
-  try {
-    return JSON.parse(statesJson) as SavedState[];
-  } catch (error) {
-    console.error('Failed to parse saved states:', error);
-    return [];
-  }
-}
-
-/**
- * Delete a state from local storage
- */
-export function deleteStateFromLocalStorage(
-  documentId: string,
-  stateId: string
-): void {
-  const key = `selva_states_${documentId}`;
-  const statesJson = localStorage.getItem(key);
-
-  if (!statesJson) {
-    return;
-  }
-
-  try {
-    const states: SavedState[] = JSON.parse(statesJson);
-    const filtered = states.filter(s => s.id !== stateId);
-    localStorage.setItem(key, JSON.stringify(filtered));
-  } catch (error) {
-    console.error('Failed to delete state:', error);
-  }
-}
 
 /**
  * Export state as .sps (Selva Param State) file

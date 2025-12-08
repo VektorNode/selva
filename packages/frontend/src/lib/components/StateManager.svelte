@@ -152,7 +152,7 @@
   <input
     bind:this={fileInputRef}
     type="file"
-    accept=".json"
+    accept=".sps"
     onchange={handleImport}
     class="hidden"
   />
@@ -163,7 +163,7 @@
   <DialogContent>
     <DialogHeader>
       <DialogTitle>Save Parameter State</DialogTitle>
-      <DialogDescription>Save the current parameter values as a JSON file</DialogDescription>
+      <DialogDescription>Save the current parameter values as a .sps file</DialogDescription>
     </DialogHeader>
 
     <div class="grid gap-4 py-4">
@@ -199,7 +199,7 @@
 
     <DialogFooter>
       <Button variant="outline" onclick={() => (showExportDialog = false)}>Cancel</Button>
-      <Button onclick={handleExport}>Save JSON</Button>
+      <Button onclick={handleExport}>Save State</Button>
     </DialogFooter>
   </DialogContent>
 </Dialog>
@@ -209,13 +209,13 @@
   <DialogContent>
     <DialogHeader>
       <DialogTitle>Load Parameter State</DialogTitle>
-      <DialogDescription>Select a JSON state file from your drive to load</DialogDescription>
+      <DialogDescription>Select a .sps state file from your drive to load</DialogDescription>
     </DialogHeader>
 
     <div class="py-8">
       <Button onclick={handleLoadClick} class="w-full" size="lg">
         <Upload class="mr-2 h-4 w-4" />
-        Select JSON File
+        Select .sps File
       </Button>
     </div>
 
