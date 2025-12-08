@@ -249,7 +249,7 @@ export function deleteStateFromLocalStorage(
 }
 
 /**
- * Export state as JSON file
+ * Export state as .sps (Selva Param State) file
  */
 export function exportStateAsJson(savedState: SavedState): void {
   const json = JSON.stringify(savedState, null, 2);
@@ -258,7 +258,7 @@ export function exportStateAsJson(savedState: SavedState): void {
 
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${savedState.name.replace(/[^a-z0-9]/gi, '_')}_${savedState.timestamp.split('T')[0].replace(/-/g, '_')}.json`;
+  a.download = `${savedState.name.replace(/[^a-z0-9]/gi, '_')}_${savedState.timestamp.split('T')[0].replace(/-/g, '_')}.sps`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -266,7 +266,7 @@ export function exportStateAsJson(savedState: SavedState): void {
 }
 
 /**
- * Import state from JSON file
+ * Import state from .sps (Selva Param State) file
  */
 export async function importStateFromJson(file: File): Promise<SavedState> {
   const text = await file.text();

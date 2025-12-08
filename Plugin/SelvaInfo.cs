@@ -10,7 +10,7 @@ public class SelvaInfo : GH_AssemblyInfo
   public override string Name => "Selva";
 
   //Return a 24x24 pixel bitmap to represent this GHA library.
-  public override Bitmap Icon => Resources.IconPlugin;
+  public override Bitmap Icon => Resources.Icon;
 
   //Return a short string describing the purpose of this GHA library.
   public override string Description => "";
