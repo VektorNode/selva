@@ -8,6 +8,7 @@
   import { Maximize, Minimize } from '@lucide/svelte';
   import { StateDisplay, Button } from '$lib/components/ui';
   import { initializeWebSocketSession, ensureSchemaLayoutDefaults } from '$lib/utils/session';
+  import StateManager from '$lib/components/StateManager.svelte';
   import { onMount } from 'svelte';
   import { type MeshBatch } from '@selva/core';
   import {
@@ -414,6 +415,26 @@
               debounceSliders={true}
             />
           {/if}
+
+          <!-- State Manager -->
+          <div class="mt-6">
+            <StateManager
+              {schema}
+              currentValues={values}
+              onLoadValues={(loadedValues) => {
+                // Apply loaded values
+                for (const [paramId, value] of Object.entries(loadedValues)) {
+                  values[paramId] = value;
+                }
+                // Send to Grasshopper
+                if (schema?.instanceSolve !== false) {
+                  wsState.sendValueUpdate(sessionId, $state.snapshot(values));
+                } else {
+                  hasPendingChanges = true;
+                }
+              }}
+            />
+          </div>
 
           {#if schema.instanceSolve === false}
             <div class="sticky bottom-0 mt-6 flex justify-center">

@@ -342,6 +342,88 @@ export interface ViewerOptions1 {
    */
   backgroundColor?: string;
 }
+export interface ParameterState {
+  /**
+   * Parameter GUID - primary reference
+   */
+  paramId: string;
+  /**
+   * Parameter nickname for validation
+   */
+  nickname: string;
+  /**
+   * Display name for validation
+   */
+  displayName?: string;
+  /**
+   * Parameter type for validation
+   */
+  paramType: string;
+  value: unknown;
+  /**
+   * Group name for validation (optional)
+   */
+  groupName?: string;
+}
+export interface ValidationIssue {
+  paramId: string;
+  /**
+   * warning = can still load, error = cannot load
+   */
+  severity: 'warning' | 'error';
+  message: string;
+  details?: {
+    expected?: string;
+    actual?: string;
+    [k: string]: unknown | undefined;
+  };
+}
+export interface SavedState {
+  /**
+   * Unique identifier for this saved state
+   */
+  id: string;
+  /**
+   * User-friendly state name
+   */
+  name: string;
+  /**
+   * Optional description of this state
+   */
+  description?: string;
+  /**
+   * When this state was saved
+   */
+  timestamp: string;
+  /**
+   * References UISchema.id
+   */
+  schemaId: string;
+  /**
+   * Must match UISchema.documentId for validation
+   */
+  documentId: string;
+  /**
+   * Document file name for reference
+   */
+  projectFileName?: string;
+  /**
+   * Plugin version when state was saved
+   */
+  pluginVersion?: string;
+  /**
+   * Who saved this state
+   */
+  author?: string;
+  /**
+   * Tags for organizing states
+   */
+  tags?: string[];
+  /**
+   * All parameter values
+   */
+  parameters: ParameterState[];
+}
 
 
 // ============================================================================

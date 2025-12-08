@@ -735,6 +735,124 @@
       },
       "required": ["id", "name", "inputs", "outputs", "layout"],
       "additionalProperties": false
+    },
+    "ParameterState": {
+      "type": "object",
+      "description": "Saved state for a single parameter",
+      "properties": {
+        "paramId": {
+          "type": "string",
+          "description": "Parameter GUID - primary reference"
+        },
+        "nickname": {
+          "type": "string",
+          "description": "Parameter nickname for validation"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name for validation"
+        },
+        "paramType": {
+          "type": "string",
+          "description": "Parameter type for validation"
+        },
+        "value": {},
+        "groupName": {
+          "type": "string",
+          "description": "Group name for validation (optional)"
+        }
+      },
+      "required": ["paramId", "nickname", "paramType", "value"],
+      "additionalProperties": false
+    },
+    "ValidationIssue": {
+      "type": "object",
+      "description": "Validation warning or error for a parameter",
+      "properties": {
+        "paramId": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["warning", "error"],
+          "description": "warning = can still load, error = cannot load"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "expected": {
+              "type": "string"
+            },
+            "actual": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": ["paramId", "severity", "message"],
+      "additionalProperties": false
+    },
+    "SavedState": {
+      "type": "object",
+      "description": "Saved parameter state for a Grasshopper document",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this saved state"
+        },
+        "name": {
+          "type": "string",
+          "description": "User-friendly state name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description of this state"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this state was saved"
+        },
+        "schemaId": {
+          "type": "string",
+          "description": "References UISchema.id"
+        },
+        "documentId": {
+          "type": "string",
+          "description": "Must match UISchema.documentId for validation"
+        },
+        "projectFileName": {
+          "type": "string",
+          "description": "Document file name for reference"
+        },
+        "pluginVersion": {
+          "type": "string",
+          "description": "Plugin version when state was saved"
+        },
+        "author": {
+          "type": "string",
+          "description": "Who saved this state"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tags for organizing states"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ParameterState"
+          },
+          "description": "All parameter values"
+        }
+      },
+      "required": ["id", "name", "timestamp", "documentId", "schemaId", "parameters"],
+      "additionalProperties": false
     }
   },
   "$ref": "#/definitions/UISchema"
