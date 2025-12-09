@@ -1,0 +1,102 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: '[Bug]: '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please check the [documentation](https://github.com/anthropics/selva/blob/master/CLAUDE.md) first to ensure this is not expected behavior.
+
+  - type: checkboxes
+    id: documentation
+    attributes:
+      label: Documentation Check
+      description: Have you checked the documentation?
+      options:
+        - label: I have searched existing issues to avoid duplicates
+          required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug you encountered
+      placeholder: A clear and concise description of what the bug is
+    validations:
+      required: true
+
+  - type: textarea
+    id: why-issue
+    attributes:
+      label: Why is this a problem?
+      description: Explain the impact of this bug
+      placeholder: What workflow is blocked? What behavior did you expect instead?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: affected-areas
+    attributes:
+      label: Affected Components
+      description: Which parts of Selva are affected?
+      options:
+        - label: Frontend (Web UI - @selva/frontend)
+        - label: Plugin (C# Grasshopper component)
+        - label: Schema (JSON Schema / Type definitions)
+        - label: Core (@selva/core)
+        - label: Svelte UI (@selva/svelte-ui)
+        - label: Communication (WebSocket/HTTP)
+        - label: Build System
+        - label: Documentation
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this bug?
+      placeholder: |
+        1. Open Grasshopper
+        2. Add UIBuilderComponent
+        3. Set Enable = true
+        4. Notice that...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Which platform are you using?
+      options:
+        - Windows - Rhino 7
+        - Windows - Rhino 8
+        - macOS - Rhino 8
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Selva Version
+      description: What version of Selva are you using?
+      placeholder: e.g., 1.0.0 or commit hash
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error Messages / Logs
+      description: Include any error messages, browser console output, or Grasshopper component messages
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, screenshots, or files that might help
+    validations:
+      required: false

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/anthropics/selva/blob/master/CLAUDE.md
+    about: Read the full project documentation before submitting an issue
+  - name: Question or Discussion
+    url: https://github.com/anthropics/selva/discussions
+    about: Ask questions or discuss ideas in GitHub Discussions

@@ -1,0 +1,91 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please check the [documentation](https://github.com/anthropics/selva/blob/master/CLAUDE.md) first to ensure this feature doesn't already exist.
+
+  - type: checkboxes
+    id: documentation
+    attributes:
+      label: Documentation Check
+      description: Have you checked the documentation?
+      options:
+        - label: I have read the [CLAUDE.md documentation](https://github.com/anthropics/selva/blob/master/CLAUDE.md)
+          required: true
+        - label: I have searched existing issues to avoid duplicates
+          required: true
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Feature Description
+      description: What feature would you like to see?
+      placeholder: A clear and concise description of the feature
+    validations:
+      required: true
+
+  - type: textarea
+    id: why-needed
+    attributes:
+      label: Why is this needed?
+      description: Explain the problem this feature would solve
+      placeholder: What use case does this enable? What workflow would this improve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-changes
+    attributes:
+      label: What should change?
+      description: Describe what you expect to change in Selva's behavior or API
+      placeholder: What new components, parameters, or UI elements would be added? How should users interact with this feature?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: affected-areas
+    attributes:
+      label: Affected Components
+      description: Which parts of Selva would this feature impact?
+      options:
+        - label: Frontend (Web UI - @selva/frontend)
+        - label: Plugin (C# Grasshopper component)
+        - label: Schema (JSON Schema / Type definitions)
+        - label: Core (@selva/core)
+        - label: Svelte UI (@selva/svelte-ui)
+        - label: Communication (WebSocket/HTTP)
+        - label: Build System
+        - label: Documentation
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered alternative solutions or workarounds?
+      placeholder: What other approaches could solve this problem?
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, mockups, or examples
+    validations:
+      required: false
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Would you be willing to contribute this feature?
+      options:
+        - "Yes, I can implement this"
+        - "Yes, with guidance"
+        - "No, but I can test it"
+        - "No"
+    validations:
+      required: false
