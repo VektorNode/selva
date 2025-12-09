@@ -152,10 +152,8 @@ public class GH_ValueListDataGoo : GH_Goo<string>
     if (string.IsNullOrEmpty(incomingValue) || items == null || items.Count == 0)
       return new GH_ValueListDataGoo(incomingValue, items ?? new List<(string, string)>(), -1);
 
-    // Try to find matching item by name first (preferred from compute)
     for (var i = 0; i < items.Count; i++)
       if (items[i].Name == incomingValue)
-        // Store the expression value, but remember the index
         return new GH_ValueListDataGoo(items[i].Expression, items, i);
 
     // Fallback: try matching by expression (for backwards compatibility)
@@ -163,7 +161,6 @@ public class GH_ValueListDataGoo : GH_Goo<string>
       if (items[i].Expression == incomingValue)
         return new GH_ValueListDataGoo(items[i].Expression, items, i);
 
-    // No match found, store as-is
     return new GH_ValueListDataGoo(incomingValue, items, -1);
   }
 

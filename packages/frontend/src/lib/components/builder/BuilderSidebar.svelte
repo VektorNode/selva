@@ -48,8 +48,8 @@
     </Card.Header>
     <Card.Content>
       <p class="mb-4 text-sm text-accent-foreground/40">
-        Drag parameters into groups below or use the context menu to add them to specific
-        tabs/groups.
+        Drag parameters into groups below or use the context menu (right click on param) to add them
+        to specific tabs/groups.
       </p>
 
       <AvailableItemList

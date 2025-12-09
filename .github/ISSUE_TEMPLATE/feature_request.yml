@@ -1,12 +1,12 @@
 name: Feature Request
 description: Suggest a new feature or enhancement
-title: "[Feature]: "
-labels: ["enhancement"]
+title: '[Feature]: '
+labels: ['enhancement']
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for suggesting a feature! Please check the [documentation](https://github.com/anthropics/selva/blob/master/CLAUDE.md) first to ensure this feature doesn't already exist.
+        Thanks for suggesting a feature!.
 
   - type: checkboxes
     id: documentation
@@ -14,8 +14,6 @@ body:
       label: Documentation Check
       description: Have you checked the documentation?
       options:
-        - label: I have read the [CLAUDE.md documentation](https://github.com/anthropics/selva/blob/master/CLAUDE.md)
-          required: true
         - label: I have searched existing issues to avoid duplicates
           required: true
 
@@ -83,9 +81,9 @@ body:
     attributes:
       label: Would you be willing to contribute this feature?
       options:
-        - "Yes, I can implement this"
-        - "Yes, with guidance"
-        - "No, but I can test it"
-        - "No"
+        - 'Yes, I can implement this'
+        - 'Yes, with guidance'
+        - 'No, but I can test it'
+        - 'No'
     validations:
       required: false
