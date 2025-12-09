@@ -84,7 +84,7 @@
       tabindex="-1"
       class={`
         mb-2 flex cursor-grab flex-row items-center
-        justify-between gap-4 rounded-xl border-2 border-transparent
+        justify-between gap-4 rounded-xl border border-ring/50
         p-3 transition-all hover:border-primary
         hover:bg-muted ${style.bg}
         ${isDragging ? 'cursor-grabbing opacity-50' : ''}

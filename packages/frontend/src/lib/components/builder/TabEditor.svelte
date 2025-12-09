@@ -52,6 +52,20 @@
   });
 
   function handleGroupDragStart(e: DragEvent, groupId: string) {
+    // Prevent drag if initiated from an input element or any interactive element
+    const target = e.target as HTMLElement;
+
+    // Check if the target itself or any of its parents up to the draggable container is an input/button
+    let element: HTMLElement | null = target;
+    while (element && element !== e.currentTarget) {
+      if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'BUTTON') {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      element = element.parentElement;
+    }
+
     draggedGroupId = groupId;
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move';
@@ -154,24 +168,23 @@
               <div class="flex flex-col gap-6">
                 {#each activeTab.groups as group, groupIndex (group.id)}
                   <div
-                    class="cursor-grab transition-opacity {draggedGroupId === group.id
-                      ? 'cursor-grabbing opacity-50'
+                    class="transition-opacity {draggedGroupId === group.id
+                      ? 'opacity-50'
                       : ''} {dragOverGroupId === group.id ? 'border-t-4 border-t-primary' : ''}"
-                    draggable="true"
-                    ondragstart={(e) => handleGroupDragStart(e, group.id)}
                     ondragover={(e) => handleGroupDragOver(e, group.id)}
                     ondragleave={(e) => handleGroupDragLeave(e, group.id)}
                     ondrop={(e) => handleGroupDrop(e, group.id)}
-                    ondragend={handleGroupDragEnd}
                     role="group"
                     tabindex="-1"
-                    title="Drag to reorder groups"
                   >
                     <EditableGroup
                       bind:group={activeTab.groups[groupIndex]}
                       onDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
                       {onReorder}
                       onRemove={() => onRemoveGroup(activeTab.id, group.id)}
+                      onDragStart={(e) => handleGroupDragStart(e, group.id)}
+                      onDragEnd={handleGroupDragEnd}
+                      isDragging={draggedGroupId === group.id}
                     >
                       {#each group.items as item (item.id)}
                         {@const paramInfo = getParameterInfo(item.paramId)}

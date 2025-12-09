@@ -83,6 +83,9 @@
             bind:value={group.label}
             class="flex-1 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-sm font-medium text-foreground hover:border-border focus:border-primary focus:outline-none"
             placeholder="Group name"
+            draggable="false"
+            onmousedown={(e) => e.stopPropagation()}
+            ondragstart={(e) => e.preventDefault()}
           />
         </div>
 
@@ -91,6 +94,9 @@
           bind:value={group.description}
           class="flex-1 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-xs text-muted-foreground hover:border-border focus:border-primary focus:outline-none"
           placeholder="Description"
+          draggable="false"
+          onmousedown={(e) => e.stopPropagation()}
+          ondragstart={(e) => e.preventDefault()}
         />
       </div>
     </div>
@@ -104,6 +110,9 @@
             min="1"
             max="4"
             class="w-10 rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground"
+            draggable="false"
+            onmousedown={(e) => e.stopPropagation()}
+            ondragstart={(e) => e.preventDefault()}
           />
         </label>
       {:else}
@@ -118,7 +127,7 @@
   </Card.Header>
 
   {#if !group.collapsed}
-    <Card.Content class="animate-[fadeIn_0.2s] p-4">
+    <Card.Content class="animate-[fadeIn_0.2s] p-4 bg-neutral-50 dark:bg-neutral-800">
       <DropZone
         isEmpty={group.items.length === 0}
         label="Drag parameters here"
