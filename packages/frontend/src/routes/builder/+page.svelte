@@ -396,7 +396,7 @@
 
 <DragDropContext>
   <PageContainer background="white">
-    <PageHeader title="Schema Builder" {sessionId} showModeToggle={true} badge={badgeConfig}>
+    <PageHeader title="Schema Builder" {sessionId} showModeToggle={true} showThemeSwitcher={true} badge={badgeConfig}>
       <nav class="flex items-center gap-2">
         {#if builderState?.state.syncNeeded}
           <Button

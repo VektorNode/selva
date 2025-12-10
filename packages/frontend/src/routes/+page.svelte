@@ -16,7 +16,7 @@
 </script>
 
 <PageContainer background="white">
-  <PageHeader title="Selva" showModeToggle={true} />
+  <PageHeader title="Selva" showModeToggle={true} showThemeSwitcher={true} />
   {#if !sessionId}
     <div class="flex min-h-screen items-center justify-center">
       <StateDisplay

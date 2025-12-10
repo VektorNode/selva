@@ -1,14 +1,19 @@
-type Theme = 'neutral' | 'selva';
+type Theme = 'neutral' | 'selva' | 'ocean' | 'cyberpunk';
 
 const STORAGE_KEY = 'selva-theme';
+const DEFAULT_THEME: Theme = 'neutral';
+
+// Available themes list - add new themes here
+const AVAILABLE_THEMES: Theme[] = ['neutral', 'selva', 'ocean', 'cyberpunk'];
 
 class ThemeStore {
-  private _theme = $state<Theme>('neutral');
+  private _theme = $state<Theme>(DEFAULT_THEME);
 
   constructor() {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-      if (stored && (stored === 'neutral' || stored === 'selva')) {
+      // Validate that stored theme is in available themes
+      if (stored && AVAILABLE_THEMES.includes(stored)) {
         this._theme = stored;
       }
     }
@@ -18,7 +23,15 @@ class ThemeStore {
     return this._theme;
   }
 
+  get availableThemes(): Theme[] {
+    return AVAILABLE_THEMES;
+  }
+
   set(theme: Theme) {
+    if (!AVAILABLE_THEMES.includes(theme)) {
+      console.warn(`Theme "${theme}" is not available. Falling back to default.`);
+      return;
+    }
     this._theme = theme;
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, theme);
@@ -31,7 +44,9 @@ class ThemeStore {
   }
 
   toggle() {
-    this.set(this._theme === 'neutral' ? 'selva' : 'neutral');
+    const currentIndex = AVAILABLE_THEMES.indexOf(this._theme);
+    const nextIndex = (currentIndex + 1) % AVAILABLE_THEMES.length;
+    this.set(AVAILABLE_THEMES[nextIndex]);
   }
 }
 

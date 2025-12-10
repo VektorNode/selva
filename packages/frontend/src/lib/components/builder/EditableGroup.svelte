@@ -127,7 +127,7 @@
   </Card.Header>
 
   {#if !group.collapsed}
-    <Card.Content class="animate-[fadeIn_0.2s] p-4 bg-neutral-50 dark:bg-neutral-800">
+    <Card.Content class="animate-[fadeIn_0.2s] p-4 bg-muted">
       <DropZone
         isEmpty={group.items.length === 0}
         label="Drag parameters here"

@@ -365,6 +365,7 @@
     title={schema?.name || 'Interactive Preview'}
     badge={badgeConfig}
     showModeToggle={true}
+    showThemeSwitcher={true}
     {sessionId}
   >
     <nav class="flex items-center gap-2">
