@@ -95,7 +95,7 @@ public class GH_DataToFile : GH_Component
   /// </summary>
   protected override void RegisterOutputParams(GH_OutputParamManager pManager)
   {
-    pManager.AddGenericParameter("Base64", "B64",
+    pManager.AddGenericParameter("File", "F",
       "Exported file data. Single item for list input, multiple items for tree input",
       GH_ParamAccess.list);
   }

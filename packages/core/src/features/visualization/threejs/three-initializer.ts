@@ -35,7 +35,7 @@ export const initThree = function (
   const controls = setupControls(camera, canvas, config);
 
   // Setup environment and lighting
-  setupEnvironment(renderer, scene, config);
+  setupEnvironment(scene, config);
   setupLighting(scene, config);
 
   // Add floor if enabled
@@ -359,7 +359,6 @@ function setupResponsiveResize(
  * Sets up environment lighting and HDR.
  */
 function setupEnvironment(
-  renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
   config: Required<ThreeInitializerOptions>
 ) {

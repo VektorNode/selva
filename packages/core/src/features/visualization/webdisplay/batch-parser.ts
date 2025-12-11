@@ -233,7 +233,9 @@ function createMergedMesh(
   geometry.computeVertexNormals();
 
   const threeMesh = new THREE.Mesh(geometry, materials[group.materialId]);
-  threeMesh.name = `merged_material_${group.materialId}`;
+  // Use the first mesh's name, or combine names if multiple meshes
+  const meshNames = group.meshes.map(m => m.name).filter(name => name && name.length > 0);
+  threeMesh.name = meshNames.length > 0 ? meshNames[0] : `merged_material_${group.materialId}`;
   threeMesh.castShadow = true;
   threeMesh.receiveShadow = true;
 

@@ -513,18 +513,7 @@ export class TreeBuilder {
     }
   }
 
-  /**
-   * Infer the type of a value for Grasshopper.
-   */
-  private static inferType(value: DataTreeValue): string {
-    if (typeof value === 'string') return 'System.String';
-    if (typeof value === 'number') {
-      return Number.isInteger(value) ? 'System.Int32' : 'System.Double';
-    }
-    if (typeof value === 'boolean') return 'System.Boolean';
-    if (typeof value === 'object' && value !== null) return 'System.Object';
-    return 'System.String';
-  }
+
 
   /**
    * Serialize a value to string format for compute.
