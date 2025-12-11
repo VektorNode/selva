@@ -46,6 +46,14 @@ public class GH_Base64Parser : GH_Component
     pManager[1].Optional = true;
   }
 
+  /// <summary>
+  ///   Creates custom component attributes
+  /// </summary>
+  public override void CreateAttributes()
+  {
+    m_attributes = new GH_ContextBakeOutputAttributes(this);
+  }
+
   protected override void RegisterOutputParams(GH_OutputParamManager pManager)
   {
     pManager.AddGeometryParameter("Geometry", "G", "Parsed geometry objects", GH_ParamAccess.list);

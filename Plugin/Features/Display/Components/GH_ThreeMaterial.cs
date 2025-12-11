@@ -30,7 +30,7 @@ public class GH_ThreeMaterial : GH_Component
 
   protected override void RegisterOutputParams(GH_OutputParamManager pManager)
   {
-    pManager.AddGenericParameter("Material", "M", "ThreeMaterial object", GH_ParamAccess.item);
+    pManager.AddGenericParameter("T-Material", "TM", "Three Material object", GH_ParamAccess.item);
   }
 
   protected override void SolveInstance(IGH_DataAccess DA)

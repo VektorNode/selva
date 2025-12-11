@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using Grasshopper.GUI;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Attributes;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Rhino;
@@ -14,6 +16,8 @@ using Selva.Properties;
 using Point = Rhino.Geometry.Point;
 
 namespace Selva.Features.FileIO.Components;
+
+
 
 public class GH_DataToFile : GH_Component
 {
@@ -45,6 +49,14 @@ public class GH_DataToFile : GH_Component
   ///   Gets the unique ID for this component. Do not change this ID after release.
   /// </summary>
   public override Guid ComponentGuid => new("A51C8F6A-D422-4387-8170-F9F34D8E5351");
+
+  /// <summary>
+  ///   Creates custom component attributes
+  /// </summary>
+  public override void CreateAttributes()
+  {
+    m_attributes = new GH_ContextBakeOutputAttributes(this);
+  }
 
   /// <summary>
   ///   Ensures the converter is initialized (singleton pattern)

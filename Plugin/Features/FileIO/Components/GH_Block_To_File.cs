@@ -85,6 +85,14 @@ public class GH_Block_To_File : GH_Component
     }
   }
 
+  /// <summary>
+  ///   Creates custom component attributes
+  /// </summary>
+  public override void CreateAttributes()
+  {
+    m_attributes = new GH_ContextBakeOutputAttributes(this);
+  }
+
   private bool TryGetBlockInput(IGH_DataAccess DA, out ModelObject blockObj)
   {
     blockObj = null;

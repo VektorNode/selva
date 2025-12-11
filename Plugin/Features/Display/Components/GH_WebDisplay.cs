@@ -33,7 +33,7 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
   {
     pManager.AddGenericParameter("Geo", "G", "Geometry to display", GH_ParamAccess.tree);
     pManager.AddTextParameter("Mesh Name", "N", "Name of the mesh", GH_ParamAccess.tree, "");
-    pManager.AddGenericParameter("Three Material", "TM", "ThreeMaterial for display", GH_ParamAccess.tree);
+    pManager.AddGenericParameter("T-Material", "TM", "ThreeMaterial for display", GH_ParamAccess.tree);
     pManager.AddParameter(new Param_MeshParameters(), "Meshing Settings", "MS",
       "Meshing settings to use. Default is FastRenderMesh.", GH_ParamAccess.item);
 
@@ -41,9 +41,17 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
     pManager[3].Optional = true;
   }
 
+  /// <summary>
+  ///   Creates custom component attributes
+  /// </summary>
+  public override void CreateAttributes()
+  {
+    m_attributes = new GH_ContextBakeOutputAttributes(this);
+  }
+
   protected override void RegisterOutputParams(GH_OutputParamManager pManager)
   {
-    pManager.AddGenericParameter("WebDisplay", "WD", "Geometry data for web display", GH_ParamAccess.item);
+    pManager.AddGenericParameter("Web Display", "WD", "Geometry data for web display", GH_ParamAccess.item);
   }
 
   protected override void SolveInstance(IGH_DataAccess DA)
