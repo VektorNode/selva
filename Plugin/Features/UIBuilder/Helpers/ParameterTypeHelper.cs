@@ -296,8 +296,10 @@ public static class ParameterTypeHelper
         // If this ContextBake has FileData, record it as an AvailableOutput with outputType="file"
         if (hasFileData)
         {
+
+
           var docObj = obj;
-          var nickname = docObj.NickName;
+          var nickname = contextBakeComponent.Params.Input[0].NickName;
           var instanceGuid = docObj.InstanceGuid;
 
           downloadableComponents.Add(new AvailableOutput

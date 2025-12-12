@@ -110,7 +110,26 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       return new AvailableParameters
       { SessionId = _sessionId, Inputs = new List<AvailableInput>(), Outputs = new List<AvailableOutput>() };
 
-    return _schemaManager.ScanParameters(document);
+    var availableParams = _schemaManager.ScanParameters(document, this);
+
+    // Validate and report duplicates only when requested
+    var (duplicateInputs, duplicateOutputs) = _schemaManager.GetValidationResults(availableParams);
+
+    foreach (var duplicateParam in duplicateInputs)
+    {
+      AddRuntimeMessage(
+        GH_RuntimeMessageLevel.Error,
+        $"Duplicate parameter name: '{duplicateParam}'. Parameter names should be unique.");
+    }
+
+    foreach (var duplicateOutput in duplicateOutputs)
+    {
+      AddRuntimeMessage(
+        GH_RuntimeMessageLevel.Error,
+        $"Duplicate output name: '{duplicateOutput}'. Output names should be unique.");
+    }
+
+    return availableParams;
   }
 
   /// <summary>
@@ -247,8 +266,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       _eventManager.RegisterEvents(document);
     }
 
-    // Validate for duplicates on enable rising
-    if (transition.EnableRising) ValidateForDuplicates(document);
 
     if (transition.IsEnabled)
     {
@@ -298,29 +315,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     _eventManager.MetadataChanged += HandleMetadataChanged;
   }
 
-  /// <summary>
-  ///   Validate for duplicate parameter names
-  /// </summary>
-  private void ValidateForDuplicates(GH_Document document)
-  {
-    var currentParams = GetCurrentAvailableParameters();
-    var duplicates = _schemaManager.ValidateDuplicates(currentParams);
 
-    if (duplicates.Any())
-    {
-      var duplicateList = string.Join(", ", duplicates.Select(n => $"'{n}'"));
-      AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
-        $"Duplicate parameter names found: {duplicateList}. Each parameter must have a unique name.");
-    }
-  }
+
 
   /// <summary>
   ///   Handle headless mode execution
   /// </summary>
   private void HandleHeadlessMode(IGH_DataAccess DA, GH_Document document, StateTransition transition)
   {
-    if (transition.EnableRising) ValidateForDuplicates(document);
-
     if (_embeddedSchema != null) _embeddedSchema = _schemaManager.ValidateSchema(_embeddedSchema, document);
 
     if (_embeddedValues != null && _embeddedSchema != null)
@@ -595,6 +597,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
       var currentParams = GetCurrentAvailableParameters();
 
+      // Validate naming conflicts whenever parameters change
       if (_embeddedSchema == null)
       {
         if (currentParams.Inputs.Count > 0 || currentParams.Outputs.Count > 0)

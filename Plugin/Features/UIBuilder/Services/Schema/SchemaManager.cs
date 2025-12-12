@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Grasshopper.Kernel;
+using Selva.Config;
 using Selva.Features.ComputeIO.Components;
 using Selva.Features.UIBuilder.Helpers;
 using Selva.Features.UIBuilder.Models;
@@ -25,7 +26,7 @@ public class SchemaManager
   /// <summary>
   ///   Scan document and return available parameters (inputs and outputs)
   /// </summary>
-  public AvailableParameters ScanParameters(GH_Document document)
+  public AvailableParameters ScanParameters(GH_Document document, GH_Component uiBridge)
   {
     // Scan for all contextual parameters (inputs only)
     var allParams = document.Objects
@@ -114,6 +115,7 @@ public class SchemaManager
       availableParameters.Inputs.Add(availableParam);
     }
 
+    // ValidateAndReportDuplicates(availableParameters, uiBridge);
     return availableParameters;
   }
 
@@ -131,7 +133,9 @@ public class SchemaManager
 
     foreach (var output in contextOutputs)
     {
-      if (output == null) continue;
+
+      var outputComponent = output as GH_Component;
+      if (outputComponent == null) continue;
 
       // Determine output display type based on component content
       // Try to parse if the content is numeric (for Print components)
@@ -142,17 +146,20 @@ public class SchemaManager
         // Check if we can infer numeric output (simplified - in real scenario would need input analysis)
         displayType = "text"; // Keep as text by default, can be enhanced based on actual output
 
+      IGH_Param param = outputComponent.Params.Input[0];
+      var paramName = param != null ? param.NickName : "Output";
+
       outputs.Add(new AvailableOutput
       {
         Id = output.InstanceGuid,
-        Nickname = output.NickName,
+        Nickname = paramName,
         Description = output.Description ?? "",
         Type = displayType
       });
     }
 
     // Scan for ContextBake components that have FileData (file downloads)
-    var (hasFileOutputs, fileOutputs) = ParameterTypeHelper.DetectDownloadableOutputs(document);
+    var (_, fileOutputs) = ParameterTypeHelper.DetectDownloadableOutputs(document);
     foreach (var fileOutput in fileOutputs)
       outputs.Add(new AvailableOutput
       {
@@ -166,9 +173,18 @@ public class SchemaManager
   }
 
   /// <summary>
+  ///   Get validation results (duplicate inputs and outputs)
+  /// </summary>
+  public (List<string> DuplicateInputs, List<string> DuplicateOutputs) GetValidationResults(
+    AvailableParameters availableParameters)
+  {
+    return (ValidateDuplicatesInputs(availableParameters), ValidateDuplicateOutputs(availableParameters));
+  }
+
+  /// <summary>
   ///   Validate no duplicate parameter names
   /// </summary>
-  public List<string> ValidateDuplicates(AvailableParameters parameters)
+  public List<string> ValidateDuplicatesInputs(AvailableParameters parameters)
   {
     return parameters.Inputs
       .GroupBy(p => p.Nickname)
@@ -176,6 +192,22 @@ public class SchemaManager
       .Select(g => g.Key)
       .ToList();
   }
+
+  /// <summary>
+  ///   Validate for duplicate output names
+  /// </summary>
+  public List<string> ValidateDuplicateOutputs(AvailableParameters parameters)
+  {
+    if (parameters?.Outputs == null)
+      return new List<string>();
+
+    return parameters.Outputs
+      .GroupBy(o => o.Nickname, StringComparer.OrdinalIgnoreCase)
+      .Where(g => g.Count() > 1)
+      .Select(g => g.Key)
+      .ToList();
+  }
+
 
   /// <summary>
   ///   Validate schema against current document - removes references to missing parameters
@@ -328,7 +360,6 @@ public class SchemaManager
       _metadataCache[inputParam.Id] = currentSnapshot;
     }
 
-    // Check output parameters
     foreach (var outputParam in schema.Outputs)
     {
       var docObj = document.FindObject(outputParam.Id, false);
@@ -344,11 +375,9 @@ public class SchemaManager
           changes.Outputs.Add(updatedParam);
         }
 
-      // Always update cache with current state
       _metadataCache[outputParam.Id] = currentSnapshot;
     }
 
-    // Apply changes to the schema so it stays in sync
     if (changes.Inputs.Count > 0 || changes.Outputs.Count > 0) ApplyMetadataChangesToSchema(schema, changes);
 
     return changes;
@@ -363,38 +392,34 @@ public class SchemaManager
     if (schema?.Layout?.Tabs == null || changes == null) return;
     if (changes.Inputs.Count == 0 && changes.Outputs.Count == 0) return;
 
-    // Process input changes
     foreach (var change in changes.Inputs)
     {
       // Find and update the layout item for this parameter
       foreach (var tab in schema.Layout.Tabs)
-      foreach (var group in tab.Groups)
-      foreach (var item in group.Items)
-      {
-        if (item.ParamId != change.Id) continue;
+        foreach (var group in tab.Groups)
+          foreach (var item in group.Items)
+          {
+            if (item.ParamId != change.Id) continue;
 
-        // Update based on widget type
-        switch (item)
-        {
-          case InputNumberLayoutItem numberItem:
-            numberItem.Config ??= new NumberWidgetConfig();
-            numberItem.Config.Minimum = change.Minimum;
-            numberItem.Config.Maximum = change.Maximum;
-            numberItem.Config.StepSize = change.StepSize;
-            break;
+            switch (item)
+            {
+              case InputNumberLayoutItem numberItem:
+                numberItem.Config ??= new NumberWidgetConfig();
+                numberItem.Config.Minimum = change.Minimum;
+                numberItem.Config.Maximum = change.Maximum;
+                numberItem.Config.StepSize = change.StepSize;
+                break;
 
-          case InputDropdownLayoutItem dropdownItem:
-            dropdownItem.Config ??= new DropdownWidgetConfig();
-            dropdownItem.Config.Options = change.Options;
-            break;
-        }
+              case InputDropdownLayoutItem dropdownItem:
+                dropdownItem.Config ??= new DropdownWidgetConfig();
+                dropdownItem.Config.Options = change.Options;
+                break;
+            }
 
-        // Also update displayName/description if changed
-        item.DisplayName = change.Nickname;
-        item.Description = change.Description;
-      }
+            item.DisplayName = change.Nickname;
+            item.Description = change.Description;
+          }
 
-      // Also update the Inputs list
       var inputParam = schema.Inputs.FirstOrDefault(i => i.Id == change.Id);
       if (inputParam != null)
       {
@@ -408,14 +433,14 @@ public class SchemaManager
     {
       // Update displayName/description in layout items
       foreach (var tab in schema.Layout.Tabs)
-      foreach (var group in tab.Groups)
-      foreach (var item in group.Items)
-      {
-        if (item.ParamId != change.Id) continue;
+        foreach (var group in tab.Groups)
+          foreach (var item in group.Items)
+          {
+            if (item.ParamId != change.Id) continue;
 
-        item.DisplayName = change.Nickname;
-        item.Description = change.Description;
-      }
+            item.DisplayName = change.Nickname;
+            item.Description = change.Description;
+          }
 
       // Also update the Outputs list
       var outputParam = schema.Outputs.FirstOrDefault(o => o.Id == change.Id);
