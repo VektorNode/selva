@@ -18,10 +18,14 @@ export const load = (async () => {
 
   const definition = await client.getIO(PUBLIC_GH_DEFINITION);
 
+  console.log('Fetched GH definition:', definition);
+
   // Solve with default values to get the schema
   const tree = TreeBuilder.fromInputParams(definition.inputs);
 
   const solvedDefinition = await client.solve(PUBLIC_GH_DEFINITION, tree);
+
+  console.log('Solved GH definition with default inputs:', solvedDefinition);
 
   const schema = new GrasshopperResponseProcessor(solvedDefinition).getValueByParamName('Schema', {
     parseValues: true,

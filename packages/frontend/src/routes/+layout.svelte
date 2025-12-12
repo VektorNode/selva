@@ -21,7 +21,7 @@
 
       const link = document.createElement('link');
       link.rel = 'stylesheet';
-      link.href = `/css/themes/${theme}.css`;
+      link.href = `/styles/themes/${theme}.css`;
       link.setAttribute('data-theme-link', 'true');
       document.head.appendChild(link);
     }

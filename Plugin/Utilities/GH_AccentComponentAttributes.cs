@@ -39,6 +39,7 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
 
   private void RenderComponentCapsuleWithAccent(GH_Canvas canvas, Graphics graphics)
   {
+
     // Get the component's palette based on its state
     var palette = GH_CapsuleRenderEngine.GetImpliedPalette(Owner);
 
@@ -91,7 +92,7 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
         float inputRight = Owner.Params.Input.Last().Attributes.Bounds.Right;
         iconX = inputRight + 5f;
         var inputBounds = Owner.Params.Input.Last().Attributes.Bounds;
-        middleY = (inputBounds.Top + inputBounds.Bottom) / 2f - 12f;
+        middleY = (inputBounds.Top + inputBounds.Bottom) / 2f;
       }
       else
       {
@@ -99,7 +100,7 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
         float outputLeft = Owner.Params.Output.First().Attributes.Bounds.Left;
         iconX = outputLeft - 29f; // Icon is 24x24, plus 5px margin
         var outputBounds = Owner.Params.Output.First().Attributes.Bounds;
-        middleY = (outputBounds.Top + outputBounds.Bottom) / 2f - 12f;
+        middleY = (outputBounds.Top + outputBounds.Bottom) / 2f;
       }
 
       float iconY = middleY - 12f; // Icon is 24x24, so offset by half

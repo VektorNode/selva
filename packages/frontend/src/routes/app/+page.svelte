@@ -3,7 +3,7 @@
   import { TabLayout } from '$lib/components/preview';
   import { PageContainer, PageHeader } from '$lib/components/layout';
   import { StateDisplay, Button } from '$lib/components/ui';
-  import { ViewerSettingsMenu } from '@selva/svelte-ui';
+  import { Maximize, Minimize } from '@lucide/svelte';
   import { getDefaultValue } from '$lib/utils/session';
   import { PUBLIC_COMPUTE_SERVER_URL, PUBLIC_GH_DEFINITION } from '$env/static/public';
 
@@ -124,7 +124,13 @@
 
         // Update scene if viewer is initialized
         if (scene && meshes.length > 0) {
-          rhinoCompute!.updateScene(scene as any, meshes, camera as any, controls as any, viewerInitialized);
+          rhinoCompute!.updateScene(
+            scene as any,
+            meshes,
+            camera as any,
+            controls as any,
+            viewerInitialized
+          );
           viewerInitialized = true;
         }
       }
@@ -163,8 +169,8 @@
     if (hasPendingChanges) performSolve();
   }
 
-  function handleFullscreenToggle(enabled: boolean) {
-    isViewerFullscreen = enabled;
+  function toggleFullscreen() {
+    isViewerFullscreen = !isViewerFullscreen;
   }
 
   const BADGES = {
@@ -176,7 +182,7 @@
 </script>
 
 <PageContainer>
-  <PageHeader title={schema.name} badge={badgeConfig} showModeToggle={true} />
+  <PageHeader title={schema.name} badge={badgeConfig} showModeToggle={true} showThemeSwitcher />
 
   <div class="flex-1 overflow-hidden bg-background">
     {#if error}
@@ -188,9 +194,17 @@
         <StateDisplay type="loading" size="large" message="Loading schema..." />
       </div>
     {:else}
-      <div class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen ? 'fullscreen-container' : ''}">
+      <div
+        class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen
+          ? 'fullscreen-container'
+          : ''}"
+      >
         <!-- Controls -->
-        <div class="w-full shrink-0 overflow-y-auto lg:w-[480px] xl:w-[520px] {isViewerFullscreen ? 'hidden' : ''}">
+        <div
+          class="w-full shrink-0 overflow-y-auto lg:w-[480px] xl:w-[520px] {isViewerFullscreen
+            ? 'hidden'
+            : ''}"
+        >
           {#if schema.layout.type === 'tabbed'}
             <TabLayout
               {schema}
@@ -226,16 +240,26 @@
 
         <!-- Viewer -->
         {#if shouldShowViewer}
-          <div class="relative min-h-[500px] flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen ? 'fullscreen-viewer' : ''}">
+          <div
+            class="relative min-h-[500px] flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen
+              ? 'fullscreen-viewer'
+              : ''}"
+          >
             <div class="absolute inset-0">
               <canvas class="block h-full w-full rounded-lg" bind:this={canvas}></canvas>
             </div>
-            <ViewerSettingsMenu
-              {scene}
-              {camera}
-              {controls}
-              onFullscreenToggle={handleFullscreenToggle}
-            />
+            <!-- Fullscreen Toggle Button -->
+            <button
+              class="absolute right-4 bottom-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg bg-white/90 shadow-lg transition-all hover:bg-white hover:shadow-xl active:scale-95"
+              onclick={toggleFullscreen}
+              title={isViewerFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            >
+              {#if isViewerFullscreen}
+                <Minimize class="h-5 w-5 text-gray-700" />
+              {:else}
+                <Maximize class="h-5 w-5 text-gray-700" />
+              {/if}
+            </button>
           </div>
         {/if}
       </div>

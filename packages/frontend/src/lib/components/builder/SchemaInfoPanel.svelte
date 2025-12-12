@@ -112,17 +112,17 @@
         When enabled, users can render geometry locally in their browser without needing a remote
         server.
       </p>
-      <!-- <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2">
         <Checkbox
           id="enable-remote-rendering"
           checked={schema.viewerOptions?.enableRemote ?? false}
           onCheckedChange={(checked) => updateViewerOptions({ enableRemote: !!checked })}
         />
-        <Label for="enable-remote-rendering" class="cursor-pointer">Enable Remote Render</Label>
+        <Label for="enable-remote-rendering" class="cursor-pointer">Enable Compute Render</Label>
       </div>
       <p class="text-xs text-muted-foreground">
         When enabled, geometry can be rendered remotely via Rhino Compute.
-      </p> -->
+      </p>
       <div class="flex flex-col gap-2">
         <Label for="viewer-background">Viewer Background Color</Label>
         <div class="flex items-center gap-2">
