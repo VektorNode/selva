@@ -2,6 +2,9 @@
   import type { OutputLayoutItem } from '$lib/types/generated';
   import { Button } from '../ui';
   import FileDownloadWidget from './FileDownloadWidget.svelte';
+  import * as Dialog from '$lib/components/ui/dialog';
+  import { Info } from '@lucide/svelte';
+  import { Label } from '$lib/components/ui/label';
 
   interface Props {
     item: OutputLayoutItem;
@@ -58,6 +61,29 @@
 </script>
 
 <div class="flex flex-col gap-2">
+  <div class="flex items-center gap-2">
+    <Label>
+      {displayName || item.displayName || item.paramId}
+    </Label>
+    {#if item.description}
+      <Dialog.Root>
+        <Dialog.Trigger class="cursor-help opacity-60 transition-opacity hover:opacity-100">
+          <button class="p-1">
+            <Info size={16} />
+          </button>
+        </Dialog.Trigger>
+        <Dialog.Content class="sm:max-w-md">
+          <Dialog.Header>
+            <Dialog.Title>{displayName || item.displayName || item.paramId}</Dialog.Title>
+            <Dialog.Description>
+              {item.description}
+            </Dialog.Description>
+          </Dialog.Header>
+        </Dialog.Content>
+      </Dialog.Root>
+    {/if}
+  </div>
+
   {#if isFileDisplay(item)}
     <FileDownloadWidget {displayName} fileData={value} />
   {:else if isNumberDisplay(item)}
