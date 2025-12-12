@@ -12,10 +12,13 @@
     onDrop?: (event: CustomEvent) => void;
     onReorder?: (event: CustomEvent) => void;
     onRemove: () => void;
+    onDragStart?: (event: DragEvent) => void;
+    onDragEnd?: (event: DragEvent) => void;
+    isDragging?: boolean;
     children: Snippet;
   }
 
-  let { group = $bindable(), onDrop, onReorder, onRemove, children }: EditableGroupProps = $props();
+  let { group = $bindable(), onDrop, onReorder, onRemove, onDragStart, onDragEnd, isDragging = false, children }: EditableGroupProps = $props();
 
   let isDragOver = $state(false);
 
@@ -61,9 +64,12 @@
   class="gap-0 overflow-hidden border-2 bg-muted py-0 {isDragOver ? 'border-primary' : ''}"
 >
   <Card.Header
-    class="flex flex-row items-center justify-between gap-2 space-y-0 border-b border-border bg-card px-3 py-2"
+    class="flex flex-row items-center justify-between gap-2 space-y-0 border-b border-border bg-card px-3 py-2 {isDragging ? 'opacity-50' : 'cursor-grab'} hover:bg-accent/50 transition-colors"
     role="button"
     tabindex={0}
+    draggable={true}
+    ondragstart={onDragStart}
+    ondragend={onDragEnd}
   >
     <div class="flex flex-1 items-center gap-1.5">
       <div class="flex flex-1 flex-col">

@@ -130,15 +130,15 @@
             id="viewer-background"
             type="color"
             class="h-10 w-16 cursor-pointer p-1"
-            value={schema.viewerOptions?.backgroundColor ?? '#ffffff'}
+            value={schema.viewerOptions?.backgroundColor ?? '#E0E0E0'}
             oninput={(e) => updateViewerOptions({ backgroundColor: e.currentTarget.value })}
           />
           <Input
             type="text"
             class="flex-1 font-mono"
-            value={schema.viewerOptions?.backgroundColor ?? '#ffffff'}
+            value={schema.viewerOptions?.backgroundColor ?? '#E0E0E0'}
             oninput={(e) => updateViewerOptions({ backgroundColor: e.currentTarget.value })}
-            placeholder="#ffffff"
+            placeholder="#E0E0E0"
           />
         </div>
       </div>

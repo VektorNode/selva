@@ -63,10 +63,6 @@ export async function processMeshBatches(batches: MeshBatch[], modelUnits: strin
   const allMeshes: any[] = [];
   const scaleFactor = SCALE_FACTORS[modelUnits] ?? 1;
 
-  console.log('[Viewer] Updating scene with meshes:', batches);
-
-
-
   for (const batchData of batches) {
     const meshes = await parseMeshBatchObject(batchData, {
       mergeByMaterial: true,
@@ -105,9 +101,30 @@ export async function applyMeshTransforms(meshes: any[]) {
  * and applies a uniform scale to normalize everything into a reasonable range.
  */
 function normalizeGeometryScale(meshes: any[], boundingBox: any): void {
-  const size = boundingBox.getSize({ x: 0, y: 0, z: 0 });
-  const maxDimension = Math.max(size.x, size.y, size.z);
-  const minDimension = Math.min(size.x, size.y, size.z);
+  // Ensure boundingBox is valid and has min/max properties
+  if (!boundingBox || !boundingBox.min || !boundingBox.max) {
+    console.warn('[Viewer] Invalid bounding box object, skipping normalization');
+    return;
+  }
+
+  // Manually compute size to avoid Three.js Vector3 dependency
+  const sizeX = boundingBox.max.x - boundingBox.min.x;
+  const sizeY = boundingBox.max.y - boundingBox.min.y;
+  const sizeZ = boundingBox.max.z - boundingBox.min.z;
+
+  if (!Number.isFinite(sizeX) || !Number.isFinite(sizeY) || !Number.isFinite(sizeZ)) {
+    console.warn('[Viewer] Could not compute valid mesh size, skipping normalization');
+    return;
+  }
+
+  const maxDimension = Math.max(sizeX, sizeY, sizeZ);
+  const minDimension = Math.min(sizeX, sizeY, sizeZ);
+
+  // Avoid division by zero
+  if (minDimension === 0) {
+    console.warn('[Viewer] Mesh has zero dimension, skipping normalization');
+    return;
+  }
 
   const scaleRatio = maxDimension / minDimension;
   const TARGET_RANGE = 100;
@@ -116,9 +133,11 @@ function normalizeGeometryScale(meshes: any[], boundingBox: any): void {
     const normalizationScale = TARGET_RANGE / maxDimension;
 
     for (const mesh of meshes) {
-      mesh.scale.x *= normalizationScale;
-      mesh.scale.y *= normalizationScale;
-      mesh.scale.z *= normalizationScale;
+      if (mesh && mesh.scale) {
+        mesh.scale.x *= normalizationScale;
+        mesh.scale.y *= normalizationScale;
+        mesh.scale.z *= normalizationScale;
+      }
     }
   }
 }

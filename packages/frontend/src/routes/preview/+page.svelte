@@ -178,8 +178,6 @@
   onMount(() => {
     const handleInitialData = (message: any) => {
       if (message.sessionId === sessionId) {
-        console.log('[Preview] Received initial data:', message);
-
         const receivedSchema = message.schema;
         const availableParams = message.availableParams as AvailableParameters;
 

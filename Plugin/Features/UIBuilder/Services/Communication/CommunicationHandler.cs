@@ -30,11 +30,22 @@ public class CommunicationHandler : IDisposable
   private bool _disposed;
   private int _mainThreadId;
   private WebSocketServer _webSocketServer;
+  private bool? _lastBroadcastedSolvingState; // Track last state to prevent duplicates
+  private bool _suppressSolvingStateUpdates; // Suppress during schema operations
 
   public CommunicationHandler(string sessionId, int port = 8765)
   {
     _sessionId = sessionId;
     _port = port;
+  }
+
+  /// <summary>
+  ///   Temporarily suppress solving state updates (used during schema saves)
+  /// </summary>
+  public void SetSuppressSolvingStateUpdates(bool suppress)
+  {
+    _suppressSolvingStateUpdates = suppress;
+    Debug.WriteLine($"[CommunicationHandler] Solving state updates {(suppress ? "SUPPRESSED" : "ENABLED")}");
   }
 
   public bool IsRunning => _webSocketServer?.IsRunning ?? false;
@@ -158,6 +169,7 @@ public class CommunicationHandler : IDisposable
       finally
       {
         _webSocketServer = null;
+        _lastBroadcastedSolvingState = null; // Reset for next session
       }
   }
 
@@ -344,11 +356,27 @@ public class CommunicationHandler : IDisposable
 
   /// <summary>
   ///   Broadcast solving state to all connected clients
+  ///   Deduplicates rapid state changes and respects suppression flag
   /// </summary>
   public async Task BroadcastSolvingState(bool isSolving)
   {
+    // Skip if updates are suppressed (e.g., during schema save)
+    if (_suppressSolvingStateUpdates)
+    {
+      Debug.WriteLine($"[CommunicationHandler] Skipping solving state (suppressed): {isSolving}");
+      return;
+    }
+
+    // Skip if this is the same state we just sent
+    if (_lastBroadcastedSolvingState == isSolving)
+    {
+      Debug.WriteLine($"[CommunicationHandler] Skipping duplicate solving state: {isSolving}");
+      return;
+    }
+
     if (_webSocketServer != null && _webSocketServer.IsRunning)
     {
+      _lastBroadcastedSolvingState = isSolving;
       var message = new
       {
         type = "solvingState",

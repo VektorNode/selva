@@ -36,19 +36,25 @@ export class WebSocketState {
   constructor(private url: string = WEBSOCKET_URL) {
     this.on('solvingState', (data) => {
       if (data && typeof data === 'object' && 'isSolving' in data) {
-        this.isSolving = Boolean(data.isSolving);
-        console.info(`[WebSocket] Grasshopper solving state: ${this.isSolving}`);
+        const newState = Boolean(data.isSolving);
 
-        // Clear any pending timeout when we get an explicit solving state update
-        if (this.solvingTimeout) {
-          clearTimeout(this.solvingTimeout);
-          this.solvingTimeout = null;
-        }
+        // Only log and process if state actually changed
+        if (newState !== this.isSolving) {
+          console.info(`[WebSocket] Grasshopper solving state: ${newState} (was: ${this.isSolving})`);
+          this.isSolving = newState;
 
-        // If solving just finished and we have a pending update, send it
-        if (!this.isSolving && this._pendingValueUpdate) {
-          this.send('valueUpdate', this._pendingValueUpdate);
-          this._pendingValueUpdate = null;
+          // Clear any pending timeout when we get an explicit solving state update
+          if (this.solvingTimeout) {
+            clearTimeout(this.solvingTimeout);
+            this.solvingTimeout = null;
+          }
+
+          // If solving just finished and we have a pending update, send it
+          if (!this.isSolving && this._pendingValueUpdate) {
+            console.log('[WebSocket] Solving completed, sending pending value update');
+            this.send('valueUpdate', this._pendingValueUpdate);
+            this._pendingValueUpdate = null;
+          }
         }
       }
     });
@@ -167,7 +173,7 @@ export class WebSocketState {
 
     this.send('valueUpdate', { sessionId, values });
 
-    // Set a timeout to auto-clear solving state if no update received from server
+    // Set a single timeout to auto-clear solving state if no update received from server
     // This prevents the UI from getting stuck in "Solving..." state if messages are lost
     if (this.solvingTimeout) {
       clearTimeout(this.solvingTimeout);

@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { PageContainer, PageHeader } from '$lib/components/layout';
   import { StateDisplay, Button } from '$lib/components/ui';
+  import * as Dialog from '$lib/components/ui/dialog/index.js';
   import { DragDropContext, BuilderSidebar, TabEditor } from '$lib/components/builder';
   import type { AvailableInput, AvailableOutput } from '$lib/types/generated';
   import { initializeWebSocketSession } from '$lib/utils/session';
@@ -512,27 +513,28 @@
       {/if}
     </div>
 
-    {#if showBatchProcessor}
-      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div class="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
-          <h2 class="mb-4 text-xl font-semibold">Batch Processor - Number Inputs</h2>
-          <p class="mb-6 text-sm text-gray-600">
+    <Dialog.Root bind:open={showBatchProcessor}>
+      <Dialog.Content>
+        <Dialog.Header>
+          <Dialog.Title>Batch Processor - Number Inputs</Dialog.Title>
+          <Dialog.Description>
             Convert all number/slider inputs across the entire schema in one action.
-          </p>
+          </Dialog.Description>
+        </Dialog.Header>
 
-          <div class="space-y-3">
-            <Button variant="default" class="w-full" onclick={handleBatchConvertToSliders}>
-              Convert All to Sliders
-            </Button>
-            <Button variant="default" class="w-full" onclick={handleBatchConvertToNumberInputs}>
-              Convert All to Number Inputs
-            </Button>
-            <Button variant="outline" class="w-full" onclick={() => (showBatchProcessor = false)}>
-              Close
-            </Button>
-          </div>
+        <div class="space-y-3">
+          <Button variant="default" class="w-full" onclick={handleBatchConvertToSliders}>
+            Convert All to Sliders
+          </Button>
+          <Button variant="default" class="w-full" onclick={handleBatchConvertToNumberInputs}>
+            Convert All to Number Inputs
+          </Button>
         </div>
-      </div>
-    {/if}
+
+        <Dialog.Footer>
+          <Button variant="outline" onclick={() => (showBatchProcessor = false)}>Close</Button>
+        </Dialog.Footer>
+      </Dialog.Content>
+    </Dialog.Root>
   </PageContainer>
 </DragDropContext>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Selva.Features.ComputeIO.Components;
@@ -130,7 +131,9 @@ public class DocumentEventManager : IDisposable
 
     if (_communicationHandler.IsRunning)
     {
-      var _ = _communicationHandler.BroadcastSolvingState(true);
+      // Fire and forget is ok for start message - it's informational
+      // Note: SetSolving now returns false if debounced, so we always broadcast to be safe
+      _ = _communicationHandler.BroadcastSolvingState(true);
     }
   }
 
@@ -140,7 +143,20 @@ public class DocumentEventManager : IDisposable
 
     if (_communicationHandler.IsRunning)
     {
-      var _ = _communicationHandler.BroadcastSolvingState(false);
+      // Critical: Ensure solving=false is sent. If this fails, clients may get stuck.
+      // We use Task.Run to avoid blocking Grasshopper's event thread
+      _ = Task.Run(async () =>
+      {
+        try
+        {
+          await _communicationHandler.BroadcastSolvingState(false);
+        }
+        catch (Exception ex)
+        {
+          System.Diagnostics.Debug.WriteLine($"[DocumentEventManager] Failed to broadcast solving=false: {ex.Message}");
+          // Even if broadcast fails, state should eventually timeout on client side
+        }
+      });
     }
   }
 

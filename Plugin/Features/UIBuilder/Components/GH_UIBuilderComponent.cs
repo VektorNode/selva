@@ -488,6 +488,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         return;
       }
 
+      // Suppress solving state updates during schema save to avoid flashing indicator
+      _communicationHandler.SetSuppressSolvingStateUpdates(true);
+
       // Enrich schema with document metadata
       schema.ProjectFileName = document.Properties.ProjectFileName;
       schema.DocumentId = document.DocumentID;
@@ -497,12 +500,24 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       var task = _communicationHandler.BroadcastSchemaSaved(true);
 
       //Expire to update component to reflect new schema (When user saves it will now properly internalize the new schema)
-      document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc => { ExpireSolution(true); });
+      document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc =>
+      {
+        ExpireSolution(true);
+      });
+
+      // Keep suppression enabled for 1 second to cover the entire solve cycle
+      Task.Run(async () =>
+      {
+        await Task.Delay(1000);
+        _communicationHandler.SetSuppressSolvingStateUpdates(false);
+      });
 
       AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Schema saved successfully");
     }
     catch (Exception ex)
     {
+      // Re-enable solving state updates if there's an error
+      _communicationHandler.SetSuppressSolvingStateUpdates(false);
       var _ = _communicationHandler.BroadcastSchemaSaved(false, ex.Message);
       AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error saving schema: {ex.Message}");
     }

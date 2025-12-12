@@ -1,15 +1,20 @@
+using System;
+using System.Diagnostics;
 using Rhino;
 
 namespace Selva.Features.UIBuilder.Services;
 
 /// <summary>
-///   Manages component lifecycle state
+///   Manages component lifecycle state with robust solving state tracking
 /// </summary>
 public class ComponentStateManager
 {
   private bool _lastEnable;
+  private bool _isSolving;
+  private DateTime _lastStateChangeTime = DateTime.MinValue;
+  private const int STATE_CHANGE_DEBOUNCE_MS = 100; // Prevent duplicate broadcasts within 100ms
 
-  public bool IsSolving { get; private set; }
+  public bool IsSolving => _isSolving;
 
   /// <summary>
   ///   Check if running in headless mode (no Rhino UI)
@@ -38,19 +43,42 @@ public class ComponentStateManager
 
   /// <summary>
   ///   Set solving state (called during solution start/end)
+  ///   Returns true if state actually changed and should be broadcast
   /// </summary>
-  public void SetSolving(bool isSolving)
+  public bool SetSolving(bool isSolving)
   {
-    IsSolving = isSolving;
+    if (_isSolving != isSolving)
+    {
+      // Check if we're debouncing - ignore rapid state changes
+      var now = DateTime.UtcNow;
+      var timeSinceLastChange = (now - _lastStateChangeTime).TotalMilliseconds;
+
+      if (timeSinceLastChange < STATE_CHANGE_DEBOUNCE_MS)
+      {
+        // Too soon - ignore this state change to prevent rapid toggling
+        Debug.WriteLine(
+          $"[ComponentStateManager] State change debounced (attempted {isSolving}, {timeSinceLastChange:F0}ms since last change)");
+        return false;
+      }
+
+      _isSolving = isSolving;
+      _lastStateChangeTime = now;
+      Debug.WriteLine($"[ComponentStateManager] Solving state changed to: {isSolving}");
+      return true;
+    }
+
+    return false;
   }
+
 
   /// <summary>
   ///   Reset all state (called when component is disabled or cleaned up)
   /// </summary>
   public void Reset()
   {
-    IsSolving = false;
+    _isSolving = false;
     _lastEnable = false;
+    _lastStateChangeTime = DateTime.MinValue;
   }
 }
 

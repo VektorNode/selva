@@ -4,6 +4,9 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [tailwindcss(), sveltekit()],
+  esbuild: {
+    drop: ['console', 'debugger']
+  },
   server: {
     fs: {
       allow: ['..', '../../node_modules'],
