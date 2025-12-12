@@ -16,6 +16,7 @@
     removeItem,
     reorderTabs,
     reorderGroups,
+    batchSetNumberWidgetType,
   } from '$lib/features/builder/operations';
   import Save from '$lib/components/ui/icons/Save.svelte';
   import { toast } from '$lib/components/ui/sonner';
@@ -24,6 +25,7 @@
 
   let sessionId = $state('');
   let builderState = $state<ReturnType<typeof useBuilderState> | null>(null);
+  let showBatchProcessor = $state(false);
 
   // Navigate to specific routes with session preservation
   function navigateTo(route: '/' | '/preview') {
@@ -392,11 +394,41 @@
     if (!builderState?.state.schema) return;
     removeItem(builderState.state.schema, tabId, groupId, itemId);
   }
+
+  function handleBatchConvertToSliders() {
+    if (!builderState?.state.schema) return;
+
+    const result = batchSetNumberWidgetType(builderState.state.schema, true);
+    if (result.changed > 0) {
+      toast.success(`Converted ${result.changed} number input(s) to sliders`);
+      showBatchProcessor = false;
+    } else {
+      toast.info('No number inputs found to convert');
+    }
+  }
+
+  function handleBatchConvertToNumberInputs() {
+    if (!builderState?.state.schema) return;
+
+    const result = batchSetNumberWidgetType(builderState.state.schema, false);
+    if (result.changed > 0) {
+      toast.success(`Converted ${result.changed} slider(s) to number inputs`);
+      showBatchProcessor = false;
+    } else {
+      toast.info('No sliders found to convert');
+    }
+  }
 </script>
 
 <DragDropContext>
   <PageContainer background="white">
-    <PageHeader title="Schema Builder" {sessionId} showModeToggle={true} showThemeSwitcher={true} badge={badgeConfig}>
+    <PageHeader
+      title="Schema Builder"
+      {sessionId}
+      showModeToggle={true}
+      showThemeSwitcher={true}
+      badge={badgeConfig}
+    >
       <nav class="flex items-center gap-2">
         {#if builderState?.state.syncNeeded}
           <Button
@@ -412,6 +444,14 @@
         <Button variant="default" size="sm">Schema Builder</Button>
         <Button variant="outline" size="sm" onclick={() => navigateTo('/preview')}>
           Interactive Preview
+        </Button>
+        <div class="h-6 w-px bg-gray-300"></div>
+        <Button
+          variant="outline"
+          size="sm"
+          onclick={() => (showBatchProcessor = !showBatchProcessor)}
+        >
+          Batch Processors
         </Button>
       </nav>
     </PageHeader>
@@ -471,5 +511,28 @@
         </div>
       {/if}
     </div>
+
+    {#if showBatchProcessor}
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div class="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
+          <h2 class="mb-4 text-xl font-semibold">Batch Processor - Number Inputs</h2>
+          <p class="mb-6 text-sm text-gray-600">
+            Convert all number/slider inputs across the entire schema in one action.
+          </p>
+
+          <div class="space-y-3">
+            <Button variant="default" class="w-full" onclick={handleBatchConvertToSliders}>
+              Convert All to Sliders
+            </Button>
+            <Button variant="default" class="w-full" onclick={handleBatchConvertToNumberInputs}>
+              Convert All to Number Inputs
+            </Button>
+            <Button variant="outline" class="w-full" onclick={() => (showBatchProcessor = false)}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </div>
+    {/if}
   </PageContainer>
 </DragDropContext>

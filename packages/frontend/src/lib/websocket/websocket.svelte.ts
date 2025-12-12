@@ -27,6 +27,7 @@ export class WebSocketState {
   private _pendingValueUpdate: { sessionId: string; values: Record<string, unknown> } | null = null;
   private _serverDisconnected = false;
   private _shouldReloadOnReconnect = false;
+  private solvingTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // Reactive state using Svelte 5 runes
   connected = $state(false);
@@ -37,6 +38,12 @@ export class WebSocketState {
       if (data && typeof data === 'object' && 'isSolving' in data) {
         this.isSolving = Boolean(data.isSolving);
         console.info(`[WebSocket] Grasshopper solving state: ${this.isSolving}`);
+
+        // Clear any pending timeout when we get an explicit solving state update
+        if (this.solvingTimeout) {
+          clearTimeout(this.solvingTimeout);
+          this.solvingTimeout = null;
+        }
 
         // If solving just finished and we have a pending update, send it
         if (!this.isSolving && this._pendingValueUpdate) {
@@ -159,6 +166,19 @@ export class WebSocketState {
     }
 
     this.send('valueUpdate', { sessionId, values });
+
+    // Set a timeout to auto-clear solving state if no update received from server
+    // This prevents the UI from getting stuck in "Solving..." state if messages are lost
+    if (this.solvingTimeout) {
+      clearTimeout(this.solvingTimeout);
+    }
+    this.solvingTimeout = setTimeout(() => {
+      if (this.isSolving) {
+        console.warn('[WebSocket] Solving state timeout - clearing stuck solving indicator');
+        this.isSolving = false;
+      }
+      this.solvingTimeout = null;
+    }, 30000); // 30 second timeout
   }
 
   /**

@@ -314,3 +314,30 @@ export function reorderGroups(schema: UISchema, tabId: string, fromIndex: number
   tab.groups = groups;
   schema.layout.tabs = [...schema.layout.tabs];
 }
+
+export function batchSetNumberWidgetType(
+  schema: UISchema,
+  renderAsSlider: boolean
+): { changed: number } {
+  let count = 0;
+
+  if (!schema.layout.tabs) {
+    return { changed: count };
+  }
+
+  schema.layout.tabs.forEach((tab) => {
+    tab.groups.forEach((group) => {
+      group.items.forEach((item) => {
+        // Only process input number widgets
+        if (item.type === 'input' && item.widgetType === 'number') {
+          if (item.config && 'renderAsSlider' in item.config) {
+            item.config.renderAsSlider = renderAsSlider;
+            count++;
+          }
+        }
+      });
+    });
+  });
+
+  return { changed: count };
+}

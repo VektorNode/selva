@@ -448,7 +448,9 @@
               >
                 {#if wsState.isSolving}
                   <div
-                    class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"
+                    class="mr-2 h-4 w-4 animate-spin rounded-full border-2 {hasPendingChanges
+                      ? 'border-primary-foreground'
+                      : 'border-foreground'} border-t-transparent"
                   ></div>
                   Solving...
                 {:else if hasPendingChanges}
@@ -487,7 +489,7 @@
         {/if}
       </div>
 
-      {#if wsState.isSolving}
+      {#if wsState.isSolving && schema.instanceSolve !== false}
         <div
           class="fixed bottom-8 left-8 z-50 flex animate-[slideInLeft_0.3s_ease-out] items-center gap-3 rounded-lg bg-primary px-4 py-3 text-primary-foreground shadow-lg"
         >
