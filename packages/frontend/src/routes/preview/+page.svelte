@@ -200,7 +200,40 @@
         }
   );
 
-  const handleInitialData = (message: any) => {
+  async function handleOutputs(message: any) {
+    if (message.sessionId === sessionId) {
+      if (message.modelUnits) {
+        modelUnits = message.modelUnits;
+      }
+
+      if (message.displayData) {
+        try {
+          const dataArray = Array.isArray(message.displayData)
+            ? message.displayData
+            : [message.displayData];
+
+          const allMeshes = await processMeshBatches(dataArray as MeshBatch[], modelUnits);
+          displayMeshes = allMeshes;
+        } catch (err) {
+          console.error('[Preview] Error parsing display data:', err);
+        }
+      }
+
+      const allUpdates = processOutputUpdate({
+        outputs: message.outputs,
+        fileOutputs: message.fileOutputs,
+        schema,
+      });
+
+      if (Object.keys(allUpdates).length > 0) {
+        isRemoteUpdate = true;
+        values = { ...values, ...allUpdates };
+        isRemoteUpdate = false;
+      }
+    }
+  }
+
+  function handleInitialData(message: any) {
     if (message.sessionId === sessionId) {
       const receivedSchema = message.schema;
       const availableParams = message.availableParams as AvailableParameters;
@@ -236,55 +269,33 @@
         shouldShowViewer = true;
       }
 
-      // Trigger initial solution with current values (only if instanceSolve is enabled)
-      if (wsState.connected && processedSchema.instanceSolve !== false) {
-        wsState.sendValueUpdate(sessionId, $state.snapshot(newValues));
+      // Check for initial outputs/display data
+      if (message.outputs || message.displayData) {
+        console.log('[Preview] Initial data contains outputs, processing...');
+        handleOutputs(message);
       }
-    }
-  };
 
-  const handleCurrentValues = (message: any) => {
+      // Trigger initial solution with current values
+      // Use a small timeout to ensure state is settled and backend is ready
+      setTimeout(() => {
+        if (wsState.connected) {
+          console.log('[Preview] Triggering initial solution...');
+          // Bypass isSolving check to force initial solve
+          wsState.send('valueUpdate', { sessionId, values: $state.snapshot(newValues) });
+        }
+      }, 500);
+    }
+  }
+
+  function handleCurrentValues(message: any) {
     if (message.sessionId === sessionId) {
       isRemoteUpdate = true;
       values = { ...values, ...message.values };
       isRemoteUpdate = false;
     }
-  };
+  }
 
-  const handleOutputs = async (message: any) => {
-    if (message.sessionId === sessionId) {
-      if (message.modelUnits) {
-        modelUnits = message.modelUnits;
-      }
-
-      if (message.displayData) {
-        try {
-          const dataArray = Array.isArray(message.displayData)
-            ? message.displayData
-            : [message.displayData];
-
-          const allMeshes = await processMeshBatches(dataArray as MeshBatch[], modelUnits);
-          displayMeshes = allMeshes;
-        } catch (err) {
-          console.error('[Preview] Error parsing display data:', err);
-        }
-      }
-
-      const allUpdates = processOutputUpdate({
-        outputs: message.outputs,
-        fileOutputs: message.fileOutputs,
-        schema,
-      });
-
-      if (Object.keys(allUpdates).length > 0) {
-        isRemoteUpdate = true;
-        values = { ...values, ...allUpdates };
-        isRemoteUpdate = false;
-      }
-    }
-  };
-
-  const handleOutputUpdate = (message: any) => {
+  function handleOutputUpdate(message: any) {
     if (message.sessionId === sessionId) {
       const allUpdates = processOutputUpdate({
         outputs: message.outputs,
@@ -297,9 +308,9 @@
         isRemoteUpdate = false;
       }
     }
-  };
+  }
 
-  const handleSchemaUpdated = (message: any) => {
+  function handleSchemaUpdated(message: any) {
     if (message.sessionId === sessionId) {
       const removedCount = message.removedIds?.length || 0;
       const newSchema = ensureSchemaLayoutDefaults(JSON.parse(JSON.stringify(message.schema)));
@@ -316,9 +327,9 @@
         showNotification(msg);
       }
     }
-  };
+  }
 
-  const handleMetadataUpdated = (message: any) => {
+  function handleMetadataUpdated(message: any) {
     if (message.sessionId === sessionId && schema) {
       const changedParams = message.changedParams || [];
       if (changedParams.length === 0) return;
@@ -330,14 +341,14 @@
         showNotification(msg);
       }
     }
-  };
+  }
 
-  const handleParametersAdded = (message: any) => {
+  function handleParametersAdded(message: any) {
     if (message.sessionId === sessionId) {
       syncNeeded = true;
       showNotification('New parameters detected - click Sync to add them to your UI');
     }
-  };
+  }
 
   async function initializeSchema(currentSessionId: string) {
     if (!currentSessionId) return;

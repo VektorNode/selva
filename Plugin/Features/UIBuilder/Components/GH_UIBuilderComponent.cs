@@ -478,6 +478,35 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       // Create default schema if none exists
       var schemaToSend = validatedSchema ?? _embeddedSchema ?? CreateDefaultSchema(document);
 
+      // Collect current outputs and display data to send with initial data
+      // This ensures the client gets the current state immediately without needing a re-solve
+      var outputs = new Dictionary<string, object>();
+      var fileOutputs = new Dictionary<string, object>();
+      var displayData = new List<object>();
+
+      try
+      {
+        // Collect outputs using the event manager's logic
+        // We need to access the private helper methods or duplicate logic here
+        // Since we can't easily access private methods, we'll use the ValueCollector directly if possible
+        // or just rely on the fact that if we have values, we might have outputs
+
+        // For now, let's try to trigger a broadcast of outputs immediately after initial data
+        // This is safer than modifying BroadcastInitialData signature
+        Task.Run(async () =>
+        {
+          await Task.Delay(100); // Small delay to ensure client processed initial data
+          RhinoApp.InvokeOnUiThread(new Action(() =>
+          {
+            _eventManager.CollectAndBroadcastOutputs(schemaToSend);
+          }));
+        });
+      }
+      catch (Exception ex)
+      {
+        Debug.WriteLine($"Error collecting initial outputs: {ex.Message}");
+      }
+
       var broadcastTask = _communicationHandler.BroadcastInitialData(
         schemaToSend,
         currentParams,
