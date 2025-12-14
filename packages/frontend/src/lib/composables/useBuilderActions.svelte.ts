@@ -15,7 +15,7 @@ import {
 import type { useBuilderState } from './useBuilderState.svelte';
 
 export function useBuilderActions(getBuilderState: () => ReturnType<typeof useBuilderState> | null) {
-  
+
   function ensureSchema() {
     const builderState = getBuilderState();
     if (!builderState?.state.schema) return null;
