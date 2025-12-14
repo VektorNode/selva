@@ -29,9 +29,7 @@
     formatMetadataUpdateMessage,
   } from '$lib/features/preview/notifications';
 
-  type RuntimeMode = 'local' | 'compute';
-
-  let sessionId = $state('');
+  const sessionId = $derived(page.url.searchParams.get('session') || '');
   let schema = $state<UISchema | null>(null);
   let values = $state<Record<string, unknown>>({});
   let loading = $state(true);
@@ -43,24 +41,25 @@
   let schemaUpdateNotification = $state('');
   let notificationTimer: ReturnType<typeof setTimeout> | null = null;
 
-  let runtimeMode = $state<RuntimeMode>('local');
-  let solving = $state(false);
   let syncNeeded = $state(false);
 
   let displayMeshes = $state<any[]>([]);
-  let viewerState = $state<ViewerState>({
+
+  // Non-reactive viewer state to avoid proxying Three.js objects
+  let viewerContext: ViewerState = {
     scene: null,
     camera: null,
     controls: null,
     initialized: false,
-  });
+  };
+  let viewerInitialized = $state(false);
+
   let modelUnits = $state<string>('Meters');
   let shouldShowViewer = $state(false);
 
   let rhinoCompute: typeof import('@selva/core') | null = null;
 
   let isRemoteUpdate = $state(false);
-  let pendingValues = $state<Record<string, unknown>>({});
   let hasPendingChanges = $state(false);
   let isViewerFullscreen = $state(false);
 
@@ -82,32 +81,34 @@
   }
 
   async function initializeViewer() {
-    if (!canvas || viewerState.scene) return;
+    if (!canvas || viewerContext.scene) return;
 
     await ensureViewerModuleLoaded();
 
     console.log('[Preview] Initializing viewer scene...');
 
     const newState = await initializeViewerScene(canvas, rhinoCompute!, schema!);
-    viewerState = { ...newState, initialized: false };
+    Object.assign(viewerContext, newState);
+    viewerContext.initialized = false;
 
     if (displayMeshes.length > 0) {
-      await updateViewerScene(rhinoCompute!, viewerState, displayMeshes);
-      viewerState.initialized = true;
+      await updateViewerScene(rhinoCompute!, viewerContext, displayMeshes);
+      viewerContext.initialized = true;
+      viewerInitialized = true;
     }
   }
 
   async function updateViewer() {
-    if (!viewerState.scene || displayMeshes.length === 0) return;
+    if (!viewerContext.scene || displayMeshes.length === 0) return;
 
     await ensureViewerModuleLoaded();
-    await updateViewerScene(rhinoCompute!, viewerState, displayMeshes);
+    await updateViewerScene(rhinoCompute!, viewerContext, displayMeshes);
   }
 
   // Manage viewer lifecycle - initialize on first mesh, update on subsequent changes
   $effect(() => {
     if (shouldShowViewer && canvas && displayMeshes.length > 0) {
-      if (!viewerState.scene) {
+      if (!viewerContext.scene) {
         initializeViewer();
       } else {
         updateViewer();
@@ -123,14 +124,13 @@
     values[paramId] = value;
 
     if (schema?.instanceSolve === false) {
-      pendingValues[paramId] = value;
       hasPendingChanges = true;
       return;
     }
 
-    if (runtimeMode === 'local' && wsState.connected) {
+    if (wsState.connected) {
       wsState.sendValueUpdate(sessionId, $state.snapshot(values));
-    } else if (!wsState.connected) {
+    } else {
       console.warn('[Preview] Cannot send values - WebSocket not connected');
     }
   }
@@ -139,11 +139,10 @@
     if (!hasPendingChanges) {
       return;
     }
-    if (runtimeMode === 'local' && wsState.connected) {
+    if (wsState.connected) {
       wsState.sendValueUpdate(sessionId, $state.snapshot(values));
-      pendingValues = {};
       hasPendingChanges = false;
-    } else if (!wsState.connected) {
+    } else {
       console.warn('[Preview] Cannot calculate - WebSocket not connected');
     }
   }
@@ -163,228 +162,220 @@
     isViewerFullscreen = !isViewerFullscreen;
 
     // Notify Three.js of size change after DOM updates
-    if (viewerState.scene && canvas) {
+    if (viewerContext.scene && canvas) {
       requestAnimationFrame(() => {
         const width = canvas!.clientWidth;
         const height = canvas!.clientHeight;
 
         // Update camera aspect ratio if it has the property
         if (
-          viewerState.camera &&
-          typeof viewerState.camera === 'object' &&
-          'aspect' in viewerState.camera
+          viewerContext.camera &&
+          typeof viewerContext.camera === 'object' &&
+          'aspect' in viewerContext.camera
         ) {
-          (viewerState.camera as any).aspect = width / height;
-          if ('updateProjectionMatrix' in viewerState.camera) {
-            (viewerState.camera as any).updateProjectionMatrix();
+          (viewerContext.camera as any).aspect = width / height;
+          if ('updateProjectionMatrix' in viewerContext.camera) {
+            (viewerContext.camera as any).updateProjectionMatrix();
           }
         }
 
         // Update controls if they have an update method
         if (
-          viewerState.controls &&
-          typeof viewerState.controls === 'object' &&
-          'update' in viewerState.controls
+          viewerContext.controls &&
+          typeof viewerContext.controls === 'object' &&
+          'update' in viewerContext.controls
         ) {
-          (viewerState.controls as any).update();
+          (viewerContext.controls as any).update();
         }
       });
     }
   }
 
   const badgeConfig = $derived(
-    runtimeMode === 'local'
-      ? wsState.connected
-        ? { label: 'Connected', variant: 'connected' as const }
-        : {
-            label: 'Disconnected',
-            variant: 'disconnected' as const,
-          }
-      : solving
-        ? { label: '⚙️ Solving...', variant: 'solving' as const }
-        : { label: '☁️ Rhino Compute', variant: 'compute' as const }
+    wsState.connected
+      ? { label: 'Connected', variant: 'connected' as const }
+      : {
+          label: 'Disconnected',
+          variant: 'disconnected' as const,
+        }
   );
 
-  onMount(() => {
-    const handleInitialData = (message: any) => {
-      if (message.sessionId === sessionId) {
-        const receivedSchema = message.schema;
-        const availableParams = message.availableParams as AvailableParameters;
+  const handleInitialData = (message: any) => {
+    if (message.sessionId === sessionId) {
+      const receivedSchema = message.schema;
+      const availableParams = message.availableParams as AvailableParameters;
 
-        if (!receivedSchema) {
-          error = 'No schema configured. Please use the Schema Builder to create a UI.';
-          loading = false;
-          return;
-        }
-
-        const processedSchema = ensureSchemaLayoutDefaults(receivedSchema);
-        if (!processedSchema) {
-          error = 'Failed to process schema.';
-          loading = false;
-          return;
-        }
-
-        const newValues = initializeValues({
-          schema: processedSchema,
-          availableParams,
-          currentValues: message.currentValues,
-        });
-
-        isRemoteUpdate = true;
-        values = newValues;
-        isRemoteUpdate = false;
-
-        schema = processedSchema;
+      if (!receivedSchema) {
+        error = 'No schema configured. Please use the Schema Builder to create a UI.';
         loading = false;
+        return;
+      }
 
-        // Show viewer immediately in local mode if allowed
-        if (runtimeMode === 'local' && processedSchema.viewerOptions?.enableLocal) {
-          shouldShowViewer = true;
-        }
+      const processedSchema = ensureSchemaLayoutDefaults(receivedSchema);
+      if (!processedSchema) {
+        error = 'Failed to process schema.';
+        loading = false;
+        return;
+      }
 
-        // Trigger initial solution with current values (only if instanceSolve is enabled)
-        if (
-          runtimeMode === 'local' &&
-          wsState.connected &&
-          processedSchema.instanceSolve !== false
-        ) {
-          wsState.sendValueUpdate(sessionId, $state.snapshot(newValues));
+      const newValues = initializeValues({
+        schema: processedSchema,
+        availableParams,
+        currentValues: message.currentValues,
+      });
+
+      isRemoteUpdate = true;
+      values = newValues;
+      isRemoteUpdate = false;
+
+      schema = processedSchema;
+      loading = false;
+
+      // Show viewer immediately in local mode if allowed
+      if (processedSchema.viewerOptions?.enableLocal) {
+        shouldShowViewer = true;
+      }
+
+      // Trigger initial solution with current values (only if instanceSolve is enabled)
+      if (wsState.connected && processedSchema.instanceSolve !== false) {
+        wsState.sendValueUpdate(sessionId, $state.snapshot(newValues));
+      }
+    }
+  };
+
+  const handleCurrentValues = (message: any) => {
+    if (message.sessionId === sessionId) {
+      isRemoteUpdate = true;
+      values = { ...values, ...message.values };
+      isRemoteUpdate = false;
+    }
+  };
+
+  const handleOutputs = async (message: any) => {
+    if (message.sessionId === sessionId) {
+      if (message.modelUnits) {
+        modelUnits = message.modelUnits;
+      }
+
+      if (message.displayData) {
+        try {
+          const dataArray = Array.isArray(message.displayData)
+            ? message.displayData
+            : [message.displayData];
+
+          const allMeshes = await processMeshBatches(dataArray as MeshBatch[], modelUnits);
+          displayMeshes = allMeshes;
+        } catch (err) {
+          console.error('[Preview] Error parsing display data:', err);
         }
       }
-    };
 
-    const handleCurrentValues = (message: any) => {
-      if (message.sessionId === sessionId) {
+      const allUpdates = processOutputUpdate({
+        outputs: message.outputs,
+        fileOutputs: message.fileOutputs,
+        schema,
+      });
+
+      if (Object.keys(allUpdates).length > 0) {
         isRemoteUpdate = true;
-        values = { ...values, ...message.values };
+        values = { ...values, ...allUpdates };
         isRemoteUpdate = false;
       }
-    };
+    }
+  };
 
-    const handleOutputs = async (message: any) => {
-      if (message.sessionId === sessionId) {
-        if (message.modelUnits) {
-          modelUnits = message.modelUnits;
-        }
+  const handleOutputUpdate = (message: any) => {
+    if (message.sessionId === sessionId) {
+      const allUpdates = processOutputUpdate({
+        outputs: message.outputs,
+        schema,
+      });
 
-        if (message.displayData) {
-          try {
-            const dataArray = Array.isArray(message.displayData)
-              ? message.displayData
-              : [message.displayData];
-
-            const allMeshes = await processMeshBatches(dataArray as MeshBatch[], modelUnits);
-            displayMeshes = allMeshes;
-          } catch (err) {
-            console.error('[Preview] Error parsing display data:', err);
-          }
-        }
-
-        const allUpdates = processOutputUpdate({
-          outputs: message.outputs,
-          fileOutputs: message.fileOutputs,
-          schema,
-        });
-
-        if (Object.keys(allUpdates).length > 0) {
-          isRemoteUpdate = true;
-          values = { ...values, ...allUpdates };
-          isRemoteUpdate = false;
-        }
+      if (Object.keys(allUpdates).length > 0) {
+        isRemoteUpdate = true;
+        values = { ...values, ...allUpdates };
+        isRemoteUpdate = false;
       }
-    };
+    }
+  };
 
-    const handleOutputUpdate = (message: any) => {
-      if (message.sessionId === sessionId) {
-        const allUpdates = processOutputUpdate({
-          outputs: message.outputs,
-          schema,
-        });
+  const handleSchemaUpdated = (message: any) => {
+    if (message.sessionId === sessionId) {
+      const removedCount = message.removedIds?.length || 0;
+      const newSchema = ensureSchemaLayoutDefaults(JSON.parse(JSON.stringify(message.schema)));
 
-        if (Object.keys(allUpdates).length > 0) {
-          isRemoteUpdate = true;
-          values = { ...values, ...allUpdates };
-          isRemoteUpdate = false;
-        }
+      if (message.removedIds && message.removedIds.length > 0) {
+        values = removeParametersFromValues(values, message.removedIds);
       }
-    };
 
-    const handleSchemaUpdated = (message: any) => {
-      if (message.sessionId === sessionId) {
-        const removedCount = message.removedIds?.length || 0;
-        const newSchema = ensureSchemaLayoutDefaults(JSON.parse(JSON.stringify(message.schema)));
+      // Update schema directly, {#key schema} in template will handle re-render
+      schema = newSchema;
 
-        if (message.removedIds && message.removedIds.length > 0) {
-          values = removeParametersFromValues(values, message.removedIds);
-        }
-
-        schema = null;
-        setTimeout(() => {
-          schema = newSchema;
-          if (removedCount > 0) {
-            const msg = formatParameterUpdateMessage(removedCount);
-            showNotification(msg);
-          }
-        }, 10);
+      if (removedCount > 0) {
+        const msg = formatParameterUpdateMessage(removedCount);
+        showNotification(msg);
       }
-    };
+    }
+  };
 
-    const handleMetadataUpdated = (message: any) => {
-      if (message.sessionId === sessionId && schema) {
-        const changedParams = message.changedParams || [];
-        if (changedParams.length === 0) return;
+  const handleMetadataUpdated = (message: any) => {
+    if (message.sessionId === sessionId && schema) {
+      const changedParams = message.changedParams || [];
+      if (changedParams.length === 0) return;
 
-        const result = updateParameterMetadata(schema, changedParams);
+      const result = updateParameterMetadata(schema, changedParams);
 
-        if (result.updated > 0) {
-          const msg = formatMetadataUpdateMessage(result.names);
-          showNotification(msg);
-        }
+      if (result.updated > 0) {
+        const msg = formatMetadataUpdateMessage(result.names);
+        showNotification(msg);
       }
-    };
+    }
+  };
 
-    const handleParametersAdded = (message: any) => {
-      if (message.sessionId === sessionId) {
-        syncNeeded = true;
-        showNotification('New parameters detected - click Sync to add them to your UI');
-      }
-    };
+  const handleParametersAdded = (message: any) => {
+    if (message.sessionId === sessionId) {
+      syncNeeded = true;
+      showNotification('New parameters detected - click Sync to add them to your UI');
+    }
+  };
 
-    const initializeSchema = async () => {
-      sessionId = page.url.searchParams.get('session') || '';
+  async function initializeSchema(currentSessionId: string) {
+    if (!currentSessionId) return;
 
-      if (runtimeMode === 'local') {
-        const result = await initializeWebSocketSession(sessionId);
+    const result = await initializeWebSocketSession(currentSessionId);
 
-        if (result.error) {
-          error = result.error;
-          loading = false;
-          return;
-        }
+    if (result.error) {
+      error = result.error;
+      loading = false;
+      return;
+    }
 
-        wsState.on('initialData', handleInitialData);
-        wsState.on('currentValues', handleCurrentValues);
-        wsState.on('outputs', handleOutputs);
-        wsState.on('outputUpdate', handleOutputUpdate);
-        wsState.on('schemaUpdated', handleSchemaUpdated);
-        wsState.on('metadataUpdated', handleMetadataUpdated);
-        wsState.on('parametersAdded', handleParametersAdded);
+    wsState.requestInitialData(currentSessionId);
+  }
 
-        wsState.requestInitialData(sessionId);
-      }
-    };
+  $effect(() => {
+    if (sessionId) {
+      // Register handlers
+      wsState.on('initialData', handleInitialData);
+      wsState.on('currentValues', handleCurrentValues);
+      wsState.on('outputs', handleOutputs);
+      wsState.on('outputUpdate', handleOutputUpdate);
+      wsState.on('schemaUpdated', handleSchemaUpdated);
+      wsState.on('metadataUpdated', handleMetadataUpdated);
+      wsState.on('parametersAdded', handleParametersAdded);
 
-    initializeSchema();
+      initializeSchema(sessionId);
 
-    return () => {
-      wsState.off('initialData', handleInitialData);
-      wsState.off('currentValues', handleCurrentValues);
-      wsState.off('outputs', handleOutputs);
-      wsState.off('outputUpdate', handleOutputUpdate);
-      wsState.off('schemaUpdated', handleSchemaUpdated);
-      wsState.off('metadataUpdated', handleMetadataUpdated);
-      wsState.off('parametersAdded', handleParametersAdded);
-    };
+      return () => {
+        wsState.off('initialData', handleInitialData);
+        wsState.off('currentValues', handleCurrentValues);
+        wsState.off('outputs', handleOutputs);
+        wsState.off('outputUpdate', handleOutputUpdate);
+        wsState.off('schemaUpdated', handleSchemaUpdated);
+        wsState.off('metadataUpdated', handleMetadataUpdated);
+        wsState.off('parametersAdded', handleParametersAdded);
+      };
+    }
   });
 </script>
 
@@ -425,97 +416,98 @@
         <StateDisplay type="error" size="large" message={error} />
       </div>
     {:else if schema}
-      <div
-        class="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen
-          ? 'fullscreen-container'
-          : ''}"
-      >
-        <!-- Controls -->
+      {#key schema}
         <div
-          class="min-h-0 w-full overflow-y-auto {shouldShowViewer
-            ? 'lg:w-[480px] xl:w-[520px]'
-            : 'mx-auto max-w-6xl'} {isViewerFullscreen ? 'hidden' : ''}"
+          class="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen
+            ? 'fullscreen-container'
+            : ''}"
         >
-          {#if schema.layout.type === 'tabbed' && schema.layout.tabs && schema.layout.tabs.length > 0}
-            <TabLayout
-              {schema}
-              bind:values
-              onValueChange={handleValueChange}
-              debounceSliders={true}
-            />
-          {/if}
+          <!-- Controls -->
+          <div
+            class="min-h-0 w-full overflow-y-auto {shouldShowViewer
+              ? 'lg:w-[480px] xl:w-[520px]'
+              : 'mx-auto max-w-6xl'} {isViewerFullscreen ? 'hidden' : ''}"
+          >
+            {#if schema.layout.type === 'tabbed' && schema.layout.tabs && schema.layout.tabs.length > 0}
+              <TabLayout
+                {schema}
+                bind:values
+                onValueChange={handleValueChange}
+                debounceSliders={true}
+              />
+            {/if}
 
-          <!-- State Manager -->
-          <div class="mt-6">
-            <StateManager
-              {schema}
-              currentValues={values}
-              onLoadValues={(loadedValues) => {
-                // Apply loaded values
-                for (const [paramId, value] of Object.entries(loadedValues)) {
-                  values[paramId] = value;
-                }
-                // Send to Grasshopper
-                if (schema?.instanceSolve !== false) {
-                  wsState.sendValueUpdate(sessionId, $state.snapshot(values));
-                } else {
-                  hasPendingChanges = true;
-                }
-              }}
-            />
+            <!-- State Manager -->
+            <div class="mt-6">
+              <StateManager
+                {schema}
+                currentValues={values}
+                onLoadValues={(loadedValues) => {
+                  // Apply loaded values
+                  values = { ...values, ...loadedValues };
+
+                  // Send to Grasshopper
+                  if (schema?.instanceSolve !== false) {
+                    wsState.sendValueUpdate(sessionId, $state.snapshot(values));
+                  } else {
+                    hasPendingChanges = true;
+                  }
+                }}
+              />
+            </div>
+
+            {#if schema.instanceSolve === false}
+              <div class="sticky bottom-0 mt-6 flex justify-center">
+                <Button
+                  variant={hasPendingChanges ? 'default' : 'outline'}
+                  size="lg"
+                  onclick={handleCalculate}
+                  disabled={!hasPendingChanges || wsState.isSolving}
+                  class="shadow-lg"
+                >
+                  {#if wsState.isSolving}
+                    <div
+                      class="mr-2 h-4 w-4 animate-spin rounded-full border-2 {hasPendingChanges
+                        ? 'border-primary-foreground'
+                        : 'border-foreground'} border-t-transparent"
+                    ></div>
+                    Solving...
+                  {:else if hasPendingChanges}
+                    Calculate
+                  {:else}
+                    No Changes
+                  {/if}
+                </Button>
+              </div>
+            {/if}
           </div>
 
-          {#if schema.instanceSolve === false}
-            <div class="sticky bottom-0 mt-6 flex justify-center">
-              <Button
-                variant={hasPendingChanges ? 'default' : 'outline'}
-                size="lg"
-                onclick={handleCalculate}
-                disabled={!hasPendingChanges || wsState.isSolving}
-                class="shadow-lg"
+          <!-- 3D Viewer (conditional) -->
+          {#if shouldShowViewer}
+            <div
+              class="relative min-h-0 flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen
+                ? 'fullscreen-viewer'
+                : ''}"
+            >
+              <div class="h-full w-full">
+                <canvas class="block h-full w-full rounded-lg" bind:this={canvas}></canvas>
+              </div>
+              <!-- Fullscreen Toggle Button -->
+              <button
+                class="absolute right-4 bottom-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg bg-white/90 shadow-lg transition-all hover:bg-white hover:shadow-xl active:scale-95"
+                onclick={toggleFullscreen}
+                title={isViewerFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
               >
-                {#if wsState.isSolving}
-                  <div
-                    class="mr-2 h-4 w-4 animate-spin rounded-full border-2 {hasPendingChanges
-                      ? 'border-primary-foreground'
-                      : 'border-foreground'} border-t-transparent"
-                  ></div>
-                  Solving...
-                {:else if hasPendingChanges}
-                  Calculate
+                {#if isViewerFullscreen}
+                  <Minimize class="h-5 w-5 text-gray-700" />
                 {:else}
-                  No Changes
+                  <Maximize class="h-5 w-5 text-gray-700" />
                 {/if}
-              </Button>
+              </button>
             </div>
           {/if}
         </div>
-
-        <!-- 3D Viewer (conditional) -->
-        {#if shouldShowViewer}
-          <div
-            class="relative min-h-0 flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen
-              ? 'fullscreen-viewer'
-              : ''}"
-          >
-            <div class="h-full w-full">
-              <canvas class="block h-full w-full rounded-lg" bind:this={canvas}></canvas>
-            </div>
-            <!-- Fullscreen Toggle Button -->
-            <button
-              class="absolute right-4 bottom-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg bg-white/90 shadow-lg transition-all hover:bg-white hover:shadow-xl active:scale-95"
-              onclick={toggleFullscreen}
-              title={isViewerFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-            >
-              {#if isViewerFullscreen}
-                <Minimize class="h-5 w-5 text-gray-700" />
-              {:else}
-                <Maximize class="h-5 w-5 text-gray-700" />
-              {/if}
-            </button>
-          </div>
-        {/if}
-      </div>
+      {/key}
 
       {#if wsState.isSolving && schema.instanceSolve !== false}
         <div
