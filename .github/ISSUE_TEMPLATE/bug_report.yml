@@ -8,15 +8,6 @@ body:
       value: |
         Thanks for taking the time to report a bug! Please check the [documentation](https://github.com/anthropics/selva/blob/master/CLAUDE.md) first to ensure this is not expected behavior.
 
-  - type: checkboxes
-    id: documentation
-    attributes:
-      label: Documentation Check
-      description: Have you checked the documentation?
-      options:
-        - label: I have searched existing issues to avoid duplicates
-          required: true
-
   - type: textarea
     id: what-happened
     attributes:
@@ -26,12 +17,16 @@ body:
     validations:
       required: true
 
-  - type: textarea
-    id: why-issue
+  - type: checkboxes
+    id: severity
     attributes:
-      label: Why is this a problem?
-      description: Explain the impact of this bug
-      placeholder: What workflow is blocked? What behavior did you expect instead?
+      label: Severity
+      description: How severe is this bug?
+      options:
+        - label: Low (minor inconvenience, does not affect functionality)
+        - label: Medium (affects functionality but has a workaround)
+        - label: High (major functionality is broken, no workaround)
+        - label: Critical (application crashes or data loss)
     validations:
       required: true
 
@@ -51,6 +46,17 @@ body:
         - label: Documentation
 
   - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: What is your operating system and browser?
+      placeholder: |
+        OS: Windows 11
+        Browser: Chrome 131.0
+    validations:
+      required: false
+
+  - type: textarea
     id: reproduction
     attributes:
       label: Steps to Reproduce
@@ -60,18 +66,6 @@ body:
         2. Add UIBuilderComponent
         3. Set Enable = true
         4. Notice that...
-    validations:
-      required: true
-
-  - type: dropdown
-    id: platform
-    attributes:
-      label: Platform
-      description: Which platform are you using?
-      options:
-        - Windows - Rhino 7
-        - Windows - Rhino 8
-        - macOS - Rhino 8
     validations:
       required: true
 
@@ -90,13 +84,5 @@ body:
       label: Error Messages / Logs
       description: Include any error messages, browser console output, or Grasshopper component messages
       render: shell
-    validations:
-      required: false
-
-  - type: textarea
-    id: additional
-    attributes:
-      label: Additional Context
-      description: Add any other context, screenshots, or files that might help
     validations:
       required: false
