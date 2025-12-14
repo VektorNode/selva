@@ -49,15 +49,16 @@ public class ComponentStateManager
   {
     if (_isSolving != isSolving)
     {
-      // Check if we're debouncing - ignore rapid state changes
       var now = DateTime.UtcNow;
       var timeSinceLastChange = (now - _lastStateChangeTime).TotalMilliseconds;
 
-      if (timeSinceLastChange < STATE_CHANGE_DEBOUNCE_MS)
+      // Only debounce transitions TO solving (true), never FROM solving (false)
+      // This ensures we never get stuck in a solving state
+      if (isSolving && timeSinceLastChange < STATE_CHANGE_DEBOUNCE_MS)
       {
-        // Too soon - ignore this state change to prevent rapid toggling
+        // Too soon to start another solve - ignore rapid solve starts
         Debug.WriteLine(
-          $"[ComponentStateManager] State change debounced (attempted {isSolving}, {timeSinceLastChange:F0}ms since last change)");
+          $"[ComponentStateManager] Solve start debounced ({timeSinceLastChange:F0}ms since last change)");
         return false;
       }
 

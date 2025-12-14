@@ -65,9 +65,9 @@
   }
 </script>
 
-<Card.Root class="w-full gap-0 overflow-hidden py-0 shadow-sm">
+<Card.Root class="flex min-h-0 w-full flex-col gap-0 overflow-hidden py-0 shadow-sm">
   <!-- Tab Navigation -->
-  <div class="flex overflow-x-auto border-b-2 border-border bg-muted">
+  <div class="flex shrink-0 overflow-x-auto border-b-2 border-border bg-muted">
     {#each schema.layout.tabs || [] as tab}
       <button
         class={`flex items-center gap-2 border-b-4 px-6 py-4 font-medium whitespace-nowrap transition-all ${
@@ -85,7 +85,7 @@
 
   <!-- Tab Content -->
   {#if activeTab}
-    <Card.Content class="animate-[fadeIn_0.3s] p-8">
+    <Card.Content class="min-h-0 animate-[fadeIn_0.3s] overflow-y-auto p-8">
       {#if activeTab.groups.length === 0}
         <StateDisplay type="empty" size="medium" message="This tab has no groups configured." />
       {:else}

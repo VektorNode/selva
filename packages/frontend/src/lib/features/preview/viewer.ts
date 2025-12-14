@@ -2,8 +2,6 @@ import type { UISchema } from '$lib/types/generated';
 import type { MeshBatch } from '@selva/core';
 import {
   parseMeshBatchObject,
-  applyOffset,
-  computeCombinedBoundingBox,
   SCALE_FACTORS,
 } from '@selva/core';
 import type { ThreeInitializerOptions } from '@selva/core/visualization';
@@ -12,7 +10,7 @@ export interface ViewerState {
   scene: unknown | null;
   camera: unknown | null;
   controls: unknown | null;
-  initialized: boolean;
+  initialized?: boolean;
 }
 
 export async function ensureRhinoComputeLoaded() {
@@ -34,7 +32,6 @@ export async function initializeViewerScene(
     scene,
     camera,
     controls,
-    initialized: false,
   };
 }
 
@@ -42,7 +39,7 @@ export async function updateViewerScene(
   rhinoCompute: typeof import('@selva/core'),
   state: ViewerState,
   displayMeshes: any[]
-) {
+): Promise<void> {
   if (!state.scene || !state.camera || !state.controls || displayMeshes.length === 0) {
     return;
   }
@@ -53,10 +50,8 @@ export async function updateViewerScene(
     displayMeshes,
     state.camera as any,
     state.controls as any,
-    state.initialized
+    state.initialized ?? false
   );
-
-  state.initialized = true;
 }
 
 export async function processMeshBatches(batches: MeshBatch[], modelUnits: string): Promise<any[]> {
@@ -76,68 +71,3 @@ export async function processMeshBatches(batches: MeshBatch[], modelUnits: strin
   return allMeshes;
 }
 
-export async function applyMeshTransforms(meshes: any[]) {
-  if (meshes.length === 0) return;
-
-  try {
-    const boundingBox = computeCombinedBoundingBox(meshes);
-
-    normalizeGeometryScale(meshes, boundingBox);
-
-    const offsetY = boundingBox.min.y;
-    if (offsetY !== 0) {
-      applyOffset(meshes, offsetY);
-    }
-  } catch (err) {
-    console.warn('[Viewer] Could not apply ground offset:', err);
-  }
-}
-
-/**
- * Detects and normalizes geometry scales to prevent z-fighting.
- *
- * When meshes have vastly different sizes (e.g., 1 unit vs 10,000 units),
- * the GPU depth buffer loses precision. This function detects the scale range
- * and applies a uniform scale to normalize everything into a reasonable range.
- */
-function normalizeGeometryScale(meshes: any[], boundingBox: any): void {
-  // Ensure boundingBox is valid and has min/max properties
-  if (!boundingBox || !boundingBox.min || !boundingBox.max) {
-    console.warn('[Viewer] Invalid bounding box object, skipping normalization');
-    return;
-  }
-
-  // Manually compute size to avoid Three.js Vector3 dependency
-  const sizeX = boundingBox.max.x - boundingBox.min.x;
-  const sizeY = boundingBox.max.y - boundingBox.min.y;
-  const sizeZ = boundingBox.max.z - boundingBox.min.z;
-
-  if (!Number.isFinite(sizeX) || !Number.isFinite(sizeY) || !Number.isFinite(sizeZ)) {
-    console.warn('[Viewer] Could not compute valid mesh size, skipping normalization');
-    return;
-  }
-
-  const maxDimension = Math.max(sizeX, sizeY, sizeZ);
-  const minDimension = Math.min(sizeX, sizeY, sizeZ);
-
-  // Avoid division by zero
-  if (minDimension === 0) {
-    console.warn('[Viewer] Mesh has zero dimension, skipping normalization');
-    return;
-  }
-
-  const scaleRatio = maxDimension / minDimension;
-  const TARGET_RANGE = 100;
-
-  if (scaleRatio > 100 || maxDimension > 10000) {
-    const normalizationScale = TARGET_RANGE / maxDimension;
-
-    for (const mesh of meshes) {
-      if (mesh && mesh.scale) {
-        mesh.scale.x *= normalizationScale;
-        mesh.scale.y *= normalizationScale;
-        mesh.scale.z *= normalizationScale;
-      }
-    }
-  }
-}

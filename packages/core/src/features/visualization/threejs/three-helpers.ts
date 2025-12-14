@@ -29,34 +29,36 @@ export function updateScene(
     unionBoundingBox.union(boundingBox);
   });
 
+  // Get the center of the union bounding box
+  const center = unionBoundingBox.getCenter(new THREE.Vector3());
+  const size = unionBoundingBox.getSize(new THREE.Vector3());
+
+  // Calculate a distance that is slightly larger than the largest dimension of the union bounding box
+  const maxDim = Math.max(size.x, size.y, size.z);
+
+  // Always update camera frustum to ensure geometry is visible
+  // This prevents clipping when geometry size changes significantly
+  const scaleRatio = maxDim / Math.min(size.x || 1, size.y || 1, size.z || 1);
+
+  if (scaleRatio > 100 || maxDim > 10000) {
+    // Large scale range detected - use logarithmic depth buffer approach
+    camera.near = maxDim * 0.0001; // 0.01% of max dimension
+    camera.far = maxDim * 100; // 100x max dimension
+  } else if (maxDim > 1000) {
+    // Large scene
+    camera.near = maxDim * 0.001;
+    camera.far = maxDim * 50;
+  } else {
+    // Normal scene
+    camera.near = Math.max(0.01, maxDim * 0.01);
+    camera.far = Math.max(2000, maxDim * 20);
+  }
+
+  camera.updateProjectionMatrix();
+
+  // Only reposition camera and controls on first frame
   if (!initialPositionSet) {
-    // Get the center of the union bounding box
-    const center = unionBoundingBox.getCenter(new THREE.Vector3());
-    const size = unionBoundingBox.getSize(new THREE.Vector3());
-
-    // Calculate a distance that is slightly larger than the largest dimension of the union bounding box
-    const maxDim = Math.max(size.x, size.y, size.z);
     const distance = maxDim * 4;
-
-    // Adaptive camera frustum for extreme scale ranges
-    // This prevents depth precision issues with vastly different scales
-    const scaleRatio = maxDim / Math.min(size.x || 1, size.y || 1, size.z || 1);
-
-    if (scaleRatio > 100 || maxDim > 10000) {
-      // Large scale range detected - use logarithmic depth buffer approach
-      camera.near = maxDim * 0.0001; // 0.01% of max dimension
-      camera.far = maxDim * 100; // 100x max dimension
-    } else if (maxDim > 1000) {
-      // Large scene
-      camera.near = maxDim * 0.001;
-      camera.far = maxDim * 50;
-    } else {
-      // Normal scene
-      camera.near = Math.max(0.01, maxDim * 0.01);
-      camera.far = Math.max(2000, maxDim * 20);
-    }
-
-    camera.updateProjectionMatrix();
 
     camera.position.set(center.x + distance * 0.8, center.y + distance, center.z + distance * 1.2);
     controls.target = center;
@@ -64,6 +66,10 @@ export function updateScene(
     controls.maxDistance = camera.far * 0.9;
 
     controls.update();
+  } else {
+    // Update control constraints to match new frustum
+    controls.minDistance = camera.near * 2;
+    controls.maxDistance = camera.far * 0.9;
   }
 }
 
