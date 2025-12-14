@@ -415,7 +415,7 @@
     </nav>
   </PageHeader>
 
-  <div class="relative flex-1 overflow-auto">
+  <div class="relative flex flex-1 flex-col overflow-hidden">
     {#if loading}
       <div class="flex min-h-[400px] items-center justify-center">
         <StateDisplay type="loading" size="large" message="Loading preview..." />
@@ -426,7 +426,7 @@
       </div>
     {:else if schema}
       <div
-        class="flex min-h-0 flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen
+        class="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen
           ? 'fullscreen-container'
           : ''}"
       >
@@ -494,11 +494,11 @@
         <!-- 3D Viewer (conditional) -->
         {#if shouldShowViewer}
           <div
-            class="relative min-h-[500px] flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen
+            class="relative min-h-0 flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen
               ? 'fullscreen-viewer'
               : ''}"
           >
-            <div class="absolute inset-0">
+            <div class="h-full w-full">
               <canvas class="block h-full w-full rounded-lg" bind:this={canvas}></canvas>
             </div>
             <!-- Fullscreen Toggle Button -->
