@@ -14,6 +14,7 @@ using Newtonsoft.Json;
 using Rhino;
 using Selva.Config;
 using Selva.Core.Guards;
+using Selva.Core.Helpers;
 using Selva.Features.UIBuilder.Helpers;
 using Selva.Features.UIBuilder.Models;
 using Selva.Features.UIBuilder.Services;
@@ -415,29 +416,28 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     try
     {
-      Debug.WriteLine($"[UIBuilder] HandleWebSocketValueUpdate called with {values?.Count ?? 0} values, IsSolving={_stateManager.IsSolving}");
 
       if (_stateManager.IsSolving)
       {
-        Debug.WriteLine("[UIBuilder] Skipping value update - currently solving");
+        Logger.Log("[UIBuilder] Skipping value update - currently solving");
         return;
       }
 
       var document = OnPingDocument();
       if (!DocumentGuards.DocumentAndSchemaValid(document, _embeddedSchema, out _))
       {
-        Debug.WriteLine("[UIBuilder] Document or schema invalid, skipping value update");
+        Logger.Warn("[UIBuilder] Document or schema invalid, skipping value update");
         return;
       }
 
       var updated = _valueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, values, AddRuntimeMessage);
-      Debug.WriteLine($"[UIBuilder] Applied {updated} value updates");
+      Logger.Log($"[UIBuilder] Applied {updated} value updates");
 
       if (updated > 0) _embeddedValues = new Dictionary<string, object>(values);
     }
     catch (Exception ex)
     {
-      Debug.WriteLine($"[UIBuilder] Error handling value update: {ex.Message}");
+      Logger.Error($"[UIBuilder] Error handling value update: {ex.Message}");
       AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
     }
   }
@@ -504,7 +504,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       }
       catch (Exception ex)
       {
-        Debug.WriteLine($"Error collecting initial outputs: {ex.Message}");
+        Logger.Error($"Error collecting initial outputs: {ex.Message}");
       }
 
       var broadcastTask = _communicationHandler.BroadcastInitialData(
@@ -663,8 +663,17 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       {
         if (currentParams.Inputs.Count > 0 || currentParams.Outputs.Count > 0)
         {
-          var _ = _communicationHandler.BroadcastMessage("parametersAdded",
-            new { availableParams = currentParams });
+          _ = _communicationHandler.BroadcastMessage("parametersAdded",
+            new { availableParams = currentParams })
+            .ContinueWith(t =>
+            {
+              if (t.IsFaulted)
+              {
+                Logger.Error("Failed to broadcast parametersAdded", t.Exception);
+                RhinoApp.InvokeOnUiThread(new Action(() =>
+                  AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Failed to broadcast parametersAdded")));
+              }
+            });
           AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
             $"Parameter(s)/Output(s) detected: {currentParams.Inputs.Count} params, {currentParams.Outputs.Count} outputs. Check web UI.");
         }
@@ -695,8 +704,17 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
         if (newParamIds.Count > 0 || newOutputIds.Count > 0)
         {
-          var _ = _communicationHandler.BroadcastMessage("parametersAdded",
-            new { availableParams = currentParams });
+          _ = _communicationHandler.BroadcastMessage("parametersAdded",
+            new { availableParams = currentParams })
+            .ContinueWith(t =>
+            {
+              if (t.IsFaulted)
+              {
+                Logger.Error("Failed to broadcast parametersAdded", t.Exception);
+                RhinoApp.InvokeOnUiThread(new Action(() =>
+                  AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Failed to broadcast parametersAdded")));
+              }
+            });
           AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
             $"New items added: {newParamIds.Count} param(s), {newOutputIds.Count} output(s). Check web UI.");
         }
@@ -778,9 +796,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         var _ = _communicationHandler.BroadcastMessage("disconnecting", new { reason = "Component disabled" });
         Thread.Sleep(100);
       }
-      catch
+      catch (Exception ex)
       {
-        // Ignore errors during shutdown
+        Logger.Warn($"Error during communication cleanup: {ex.Message}");
       }
 
       _communicationHandler.Stop();

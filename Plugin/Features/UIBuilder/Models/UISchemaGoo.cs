@@ -1,6 +1,7 @@
 using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
+using Selva.Core.Helpers;
 
 namespace Selva.Features.UIBuilder.Models;
 
@@ -53,8 +54,9 @@ public class UISchemaGoo : IGH_Goo
         Value = JsonConvert.DeserializeObject<UISchema>(s, SchemaSerializationSettings.Settings);
         return Value != null;
       }
-      catch
+      catch (System.Exception ex)
       {
+        Logger.Warn($"Failed to cast to UISchema: {ex.Message}");
       }
 
     return false;

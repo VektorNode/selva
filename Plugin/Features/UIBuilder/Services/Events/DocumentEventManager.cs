@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Selva.Features.ComputeIO.Components;
+using Selva.Core.Helpers;
 using Selva.Features.UIBuilder.Helpers;
 using Selva.Features.UIBuilder.Models;
 
@@ -67,9 +68,9 @@ public class DocumentEventManager : IDisposable
     {
       Instances.DocumentServer.DocumentRemoved += OnDocumentRemoved;
     }
-    catch
+    catch (Exception ex)
     {
-      /* ignore */
+      Logger.Error("Failed to subscribe to DocumentRemoved event", ex);
     }
 
     try
@@ -80,9 +81,9 @@ public class DocumentEventManager : IDisposable
       _currentDocument.ObjectsDeleted += OnObjectsChanged;
       _currentDocument.UndoStateChanged += OnUndoStateChanged;
     }
-    catch
+    catch (Exception ex)
     {
-      /* ignore */
+      Logger.Error("Failed to subscribe to document events", ex);
     }
 
     _eventsRegistered = true;
@@ -99,9 +100,9 @@ public class DocumentEventManager : IDisposable
     {
       Instances.DocumentServer.DocumentRemoved -= OnDocumentRemoved;
     }
-    catch
+    catch (Exception ex)
     {
-      /* ignore */
+      Logger.Warn($"Failed to unsubscribe from DocumentRemoved event: {ex.Message}");
     }
 
     if (_currentDocument != null)
@@ -113,9 +114,9 @@ public class DocumentEventManager : IDisposable
         _currentDocument.ObjectsDeleted -= OnObjectsChanged;
         _currentDocument.UndoStateChanged -= OnUndoStateChanged;
       }
-      catch
+      catch (Exception ex)
       {
-        /* ignore */
+        Logger.Warn($"Failed to unsubscribe from document events: {ex.Message}");
       }
 
     _eventsRegistered = false;
@@ -158,7 +159,7 @@ public class DocumentEventManager : IDisposable
         }
         catch (Exception ex)
         {
-          System.Diagnostics.Debug.WriteLine($"[DocumentEventManager] Failed to broadcast solving=false: {ex.Message}");
+          Logger.Warn($"[DocumentEventManager] Failed to broadcast solving=false: {ex.Message}");
           // Even if broadcast fails, state should eventually timeout on client side
         }
       });

@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Selva.Config;
+using Selva.Core.Helpers;
 
 namespace Selva.Features.UIBuilder.Services;
 
@@ -107,9 +108,9 @@ public class WebSocketServer : IDisposable
           if (closeTask != null) closeTask.Wait(AppConfig.WebSocket.ClientCloseTimeoutMs);
           client?.Dispose();
         }
-        catch
+        catch (Exception ex)
         {
-          // Ignore errors during shutdown
+          Logger.Warn($"Error disposing WebSocket client: {ex.Message}");
         }
 
       _connectedClients.Clear();
@@ -150,12 +151,12 @@ public class WebSocketServer : IDisposable
         }
         catch (OperationCanceledException)
         {
-          Debug.WriteLine("Broadcast timeout for client - removing from pool");
+          Logger.Warn("Broadcast timeout for client - removing from pool");
           clientsToRemove.Add(client);
         }
         catch (Exception ex)
         {
-          Debug.WriteLine($"Broadcast failed for client: {ex.Message}");
+          Logger.Warn($"Broadcast failed for client: {ex.Message}");
           clientsToRemove.Add(client);
         }
       else
@@ -174,7 +175,7 @@ public class WebSocketServer : IDisposable
           }
           catch (Exception ex)
           {
-            Debug.WriteLine($"Error disposing WebSocket client: {ex.Message}");
+            Logger.Warn($"Error disposing WebSocket client: {ex.Message}");
           }
         }
       }
@@ -199,12 +200,12 @@ public class WebSocketServer : IDisposable
       }
       catch (HttpListenerException ex)
       {
-        Debug.WriteLine($"WebSocket listener stopped: {ex.Message}");
+        Logger.Warn($"WebSocket listener stopped: {ex.Message}");
         break;
       }
       catch (Exception ex)
       {
-        Debug.WriteLine($"Error accepting WebSocket connection: {ex.Message}");
+        Logger.Error($"Error accepting WebSocket connection: {ex.Message}");
       }
   }
 
@@ -242,7 +243,7 @@ public class WebSocketServer : IDisposable
     }
     catch (Exception ex)
     {
-      Debug.WriteLine($"WebSocket request processing error: {ex.Message}");
+      Logger.Error($"WebSocket request processing error: {ex.Message}");
     }
     finally
     {
@@ -263,7 +264,7 @@ public class WebSocketServer : IDisposable
         }
         catch (Exception ex)
         {
-          Debug.WriteLine($"Error closing WebSocket: {ex.Message}");
+          Logger.Warn($"Error closing WebSocket: {ex.Message}");
         }
       }
     }
@@ -308,12 +309,14 @@ public class WebSocketServer : IDisposable
           OnMessageReceived?.Invoke(this, message);
         }
       }
-      catch (WebSocketException)
+      catch (WebSocketException ex)
       {
+        Logger.Warn($"WebSocket exception: {ex.Message}");
         break;
       }
       catch (OperationCanceledException)
       {
+        Logger.Log("WebSocket operation canceled");
         break;
       }
   }
@@ -354,7 +357,7 @@ public class WebSocketServer : IDisposable
           }
           catch (Exception ex)
           {
-            Debug.WriteLine($"Heartbeat failed for client: {ex.Message}");
+            Logger.Warn($"Heartbeat failed for client: {ex.Message}");
             clientsToRemove.Add(client);
           }
         else
@@ -372,7 +375,7 @@ public class WebSocketServer : IDisposable
             }
             catch (Exception ex)
             {
-              Debug.WriteLine($"Error disposing WebSocket during heartbeat cleanup: {ex.Message}");
+              Logger.Warn($"Error disposing WebSocket during heartbeat cleanup: {ex.Message}");
             }
           }
         }

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Rhino;
 using Selva.Config;
+using Selva.Core.Helpers;
 using Selva.Features.UIBuilder.Models;
 
 namespace Selva.Features.UIBuilder.Services;
@@ -45,7 +46,7 @@ public class CommunicationHandler : IDisposable
   public void SetSuppressSolvingStateUpdates(bool suppress)
   {
     _suppressSolvingStateUpdates = suppress;
-    Debug.WriteLine($"[CommunicationHandler] Solving state updates {(suppress ? "SUPPRESSED" : "ENABLED")}");
+    Logger.Log($"[CommunicationHandler] Solving state updates {(suppress ? "SUPPRESSED" : "ENABLED")}");
   }
 
   public bool IsRunning => _webSocketServer?.IsRunning ?? false;
@@ -96,7 +97,7 @@ public class CommunicationHandler : IDisposable
               var valueMsg = JsonConvert.DeserializeObject<ValueUpdateMessage>(message, SecureJsonSettings);
               if (valueMsg != null && valueMsg.SessionId == _sessionId)
               {
-                Debug.WriteLine($"[CommunicationHandler] Received valueUpdate with {valueMsg.Values?.Count ?? 0} values");
+                Logger.Log($"[CommunicationHandler] Received valueUpdate with {valueMsg.Values?.Count ?? 0} values");
                 // Marshal back to main thread - critical for Grasshopper UI updates
                 MarshalToMainThread(() => OnValuesReceived?.Invoke(this, valueMsg.Values));
               }
@@ -167,7 +168,7 @@ public class CommunicationHandler : IDisposable
       }
       catch (Exception ex)
       {
-        Debug.WriteLine($"Error stopping WebSocket: {ex.Message}");
+        Logger.Warn($"Error stopping WebSocket: {ex.Message}");
       }
       finally
       {
@@ -366,14 +367,14 @@ public class CommunicationHandler : IDisposable
     // Skip if updates are suppressed (e.g., during schema save)
     if (_suppressSolvingStateUpdates)
     {
-      Debug.WriteLine($"[CommunicationHandler] Skipping solving state (suppressed): {isSolving}");
+      Logger.Log($"[CommunicationHandler] Skipping solving state (suppressed): {isSolving}");
       return;
     }
 
     // Skip if this is the same state we just sent
     if (_lastBroadcastedSolvingState == isSolving)
     {
-      Debug.WriteLine($"[CommunicationHandler] Skipping duplicate solving state: {isSolving}");
+      Logger.Log($"[CommunicationHandler] Skipping duplicate solving state: {isSolving}");
       return;
     }
 
