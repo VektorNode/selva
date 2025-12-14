@@ -16,7 +16,6 @@
     initializeViewerScene,
     updateViewerScene,
     processMeshBatches,
-    applyMeshTransforms,
     type ViewerState,
   } from '$lib/features/preview/viewer';
   import {
@@ -87,38 +86,37 @@
 
     await ensureViewerModuleLoaded();
 
-    const state = await initializeViewerScene(canvas, rhinoCompute!, schema!);
-    viewerState = state;
+    console.log('[Preview] Initializing viewer scene...');
 
-    // Update with current meshes if any exist
+    const newState = await initializeViewerScene(canvas, rhinoCompute!, schema!);
+    viewerState = { ...newState, initialized: false };
+
     if (displayMeshes.length > 0) {
       await updateViewerScene(rhinoCompute!, viewerState, displayMeshes);
+      viewerState.initialized = true;
     }
   }
 
   async function updateViewer() {
     if (!viewerState.scene || displayMeshes.length === 0) return;
+
     await ensureViewerModuleLoaded();
     await updateViewerScene(rhinoCompute!, viewerState, displayMeshes);
   }
 
-  // Initialize viewer when first mesh arrives
+  // Manage viewer lifecycle - initialize on first mesh, update on subsequent changes
   $effect(() => {
-    if (shouldShowViewer && canvas && !viewerState.scene && displayMeshes.length > 0) {
-      initializeViewer();
-    }
-  });
-
-  // Update viewer when meshes change (after initialization)
-  $effect(() => {
-    if (viewerState.scene && displayMeshes.length > 0) {
-      updateViewer();
+    if (shouldShowViewer && canvas && displayMeshes.length > 0) {
+      if (!viewerState.scene) {
+        initializeViewer();
+      } else {
+        updateViewer();
+      }
     }
   });
 
   async function handleValueChange(paramId: string, value: SupportedTypes) {
     if (isRemoteUpdate) {
-      console.log('[Preview] Skipping send for remote update on paramId:', paramId);
       return;
     }
 
@@ -138,12 +136,15 @@
   }
 
   function handleCalculate() {
-    if (!hasPendingChanges) return;
+    if (!hasPendingChanges) {
+      return;
+    }
     if (runtimeMode === 'local' && wsState.connected) {
       wsState.sendValueUpdate(sessionId, $state.snapshot(values));
       pendingValues = {};
       hasPendingChanges = false;
     } else if (!wsState.connected) {
+      console.warn('[Preview] Cannot calculate - WebSocket not connected');
     }
   }
 
@@ -160,6 +161,35 @@
 
   function toggleFullscreen() {
     isViewerFullscreen = !isViewerFullscreen;
+
+    // Notify Three.js of size change after DOM updates
+    if (viewerState.scene && canvas) {
+      requestAnimationFrame(() => {
+        const width = canvas!.clientWidth;
+        const height = canvas!.clientHeight;
+
+        // Update camera aspect ratio if it has the property
+        if (
+          viewerState.camera &&
+          typeof viewerState.camera === 'object' &&
+          'aspect' in viewerState.camera
+        ) {
+          (viewerState.camera as any).aspect = width / height;
+          if ('updateProjectionMatrix' in viewerState.camera) {
+            (viewerState.camera as any).updateProjectionMatrix();
+          }
+        }
+
+        // Update controls if they have an update method
+        if (
+          viewerState.controls &&
+          typeof viewerState.controls === 'object' &&
+          'update' in viewerState.controls
+        ) {
+          (viewerState.controls as any).update();
+        }
+      });
+    }
   }
 
   const badgeConfig = $derived(
@@ -212,8 +242,12 @@
           shouldShowViewer = true;
         }
 
-        // Trigger initial solution with current values
-        if (runtimeMode === 'local' && wsState.connected) {
+        // Trigger initial solution with current values (only if instanceSolve is enabled)
+        if (
+          runtimeMode === 'local' &&
+          wsState.connected &&
+          processedSchema.instanceSolve !== false
+        ) {
           wsState.sendValueUpdate(sessionId, $state.snapshot(newValues));
         }
       }
@@ -221,7 +255,6 @@
 
     const handleCurrentValues = (message: any) => {
       if (message.sessionId === sessionId) {
-        console.log('[Preview] Received current values:', message.values);
         isRemoteUpdate = true;
         values = { ...values, ...message.values };
         isRemoteUpdate = false;
@@ -241,8 +274,6 @@
               : [message.displayData];
 
             const allMeshes = await processMeshBatches(dataArray as MeshBatch[], modelUnits);
-            await applyMeshTransforms(allMeshes);
-
             displayMeshes = allMeshes;
           } catch (err) {
             console.error('[Preview] Error parsing display data:', err);
@@ -339,7 +370,6 @@
         wsState.on('metadataUpdated', handleMetadataUpdated);
         wsState.on('parametersAdded', handleParametersAdded);
 
-        console.log('[Preview] Requesting initial data from Grasshopper');
         wsState.requestInitialData(sessionId);
       }
     };
@@ -396,13 +426,13 @@
       </div>
     {:else if schema}
       <div
-        class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen
+        class="flex min-h-0 flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen
           ? 'fullscreen-container'
           : ''}"
       >
         <!-- Controls -->
         <div
-          class="w-full shrink-0 overflow-y-auto {shouldShowViewer
+          class="min-h-0 w-full overflow-y-auto {shouldShowViewer
             ? 'lg:w-[480px] xl:w-[520px]'
             : 'mx-auto max-w-6xl'} {isViewerFullscreen ? 'hidden' : ''}"
         >

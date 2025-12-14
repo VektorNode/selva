@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
@@ -126,20 +127,28 @@ public class ValueCollector
 
     if (document == null) return displayDataList;
 
+    var componentCount = 0;
     foreach (var docObject in document.Objects)
       if (docObject is IGH_Component component)
+      {
+        componentCount++;
         try
         {
           var displayData = ExtractWebDisplayDataFromComponent(component, addMessage);
           if (displayData != null)
+          {
+            Debug.WriteLine($"[ValueCollector] Found display data from component '{component.NickName}'");
             displayDataList.Add(displayData);
+          }
         }
         catch (Exception ex)
         {
           addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
             $"Error collecting display data from component '{component.NickName}': {ex.Message}");
         }
+      }
 
+    Debug.WriteLine($"[ValueCollector] CollectDisplayData: scanned {componentCount} components, found {displayDataList.Count} display data items");
     return displayDataList;
   }
 

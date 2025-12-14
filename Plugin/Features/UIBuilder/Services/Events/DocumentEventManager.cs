@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Grasshopper;
@@ -22,6 +23,10 @@ public class DocumentEventManager : IDisposable
   private GH_Document _currentDocument;
   private bool _disposed;
   private bool _eventsRegistered;
+
+  // Debounce output broadcasts to prevent duplicate sends
+  private DateTime _lastOutputBroadcast = DateTime.MinValue;
+  private const int OUTPUT_BROADCAST_DEBOUNCE_MS = 100;
 
   public DocumentEventManager(SchemaManager schemaManager, ValueCollector valueCollector,
     CommunicationHandler communicationHandler)

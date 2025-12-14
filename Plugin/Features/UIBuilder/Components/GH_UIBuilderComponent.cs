@@ -306,9 +306,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     _eventManager.SolutionStarted += (s, e) => _stateManager.SetSolving(true);
     _eventManager.SolutionEnded += (s, e) =>
     {
-      _stateManager.SetSolving(false);
-      _eventManager.CollectAndBroadcastOutputs(_embeddedSchema);
-      _eventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
+      // Only broadcast outputs if we were actually solving (state changed)
+      // This prevents duplicate broadcasts when SolutionEnded fires without a matching SolutionStarted
+      var wasActuallySolving = _stateManager.SetSolving(false);
+      if (wasActuallySolving)
+      {
+        _eventManager.CollectAndBroadcastOutputs(_embeddedSchema);
+        _eventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
+      }
       ClearAllContextualParameters();
     };
     _eventManager.ParametersChanged += HandleParametersChanged;
@@ -410,17 +415,29 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     try
     {
-      if (_stateManager.IsSolving) return;
+      Debug.WriteLine($"[UIBuilder] HandleWebSocketValueUpdate called with {values?.Count ?? 0} values, IsSolving={_stateManager.IsSolving}");
+
+      if (_stateManager.IsSolving)
+      {
+        Debug.WriteLine("[UIBuilder] Skipping value update - currently solving");
+        return;
+      }
 
       var document = OnPingDocument();
-      if (!DocumentGuards.DocumentAndSchemaValid(document, _embeddedSchema, out _)) return;
+      if (!DocumentGuards.DocumentAndSchemaValid(document, _embeddedSchema, out _))
+      {
+        Debug.WriteLine("[UIBuilder] Document or schema invalid, skipping value update");
+        return;
+      }
 
       var updated = _valueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, values, AddRuntimeMessage);
+      Debug.WriteLine($"[UIBuilder] Applied {updated} value updates");
 
       if (updated > 0) _embeddedValues = new Dictionary<string, object>(values);
     }
     catch (Exception ex)
     {
+      Debug.WriteLine($"[UIBuilder] Error handling value update: {ex.Message}");
       AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
     }
   }

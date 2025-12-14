@@ -95,8 +95,11 @@ public class CommunicationHandler : IDisposable
             {
               var valueMsg = JsonConvert.DeserializeObject<ValueUpdateMessage>(message, SecureJsonSettings);
               if (valueMsg != null && valueMsg.SessionId == _sessionId)
+              {
+                Debug.WriteLine($"[CommunicationHandler] Received valueUpdate with {valueMsg.Values?.Count ?? 0} values");
                 // Marshal back to main thread - critical for Grasshopper UI updates
                 MarshalToMainThread(() => OnValuesReceived?.Invoke(this, valueMsg.Values));
+              }
             }
             else if (msg.Type == "requestCurrentValues")
             {
