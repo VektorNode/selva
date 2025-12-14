@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using Rhino;
 using Selva.Config;
+using Selva.Core.Helpers;
 
 namespace Selva.Features.FileIO.Services;
 
@@ -160,8 +161,9 @@ public class RhinoDocumentConverter : IDisposable
         File.Delete(path);
       }
     }
-    catch (Exception)
+    catch (Exception ex)
     {
+      Logger.Warn($"Failed to securely delete file: {ex.Message}");
     }
   }
 }

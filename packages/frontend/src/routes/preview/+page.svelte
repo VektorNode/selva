@@ -62,6 +62,7 @@
   let isRemoteUpdate = $state(false);
   let hasPendingChanges = $state(false);
   let isViewerFullscreen = $state(false);
+  let initialSolveTriggered = false;
 
   function showNotification(message: string, duration: number = 3000) {
     schemaUpdateNotification = message;
@@ -278,8 +279,9 @@
       // Trigger initial solution with current values
       // Use a small timeout to ensure state is settled and backend is ready
       setTimeout(() => {
-        if (wsState.connected) {
+        if (wsState.connected && !initialSolveTriggered) {
           console.log('[Preview] Triggering initial solution...');
+          initialSolveTriggered = true;
           // Bypass isSolving check to force initial solve
           wsState.send('valueUpdate', { sessionId, values: $state.snapshot(newValues) });
         }
@@ -366,6 +368,7 @@
 
   $effect(() => {
     if (sessionId) {
+      initialSolveTriggered = false;
       // Register handlers
       wsState.on('initialData', handleInitialData);
       wsState.on('currentValues', handleCurrentValues);

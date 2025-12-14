@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Grasshopper.Kernel;
+using Rhino;
 using Selva.Config;
+using Selva.Core.Helpers;
 using Selva.Features.UIBuilder.Models;
 
 namespace Selva.Features.UIBuilder.Services;
@@ -43,19 +45,20 @@ public class SchemaCleanupService
       // 3. Schema is already updated by caller (ValidateSchemaAndTrackChanges)
       // This is the commit point - schema changes are persisted
 
-      // 4. Broadcast to web UI (fire-and-forget with timeout)
+      // 4. Broadcast to web UI (fire-and-forget)
       var broadcastTask = communicationHandler?.BroadcastSchemaUpdate(schema, removedIds);
       if (broadcastTask != null)
-        try
+      {
+        _ = broadcastTask.ContinueWith(t =>
         {
-          broadcastTask.Wait(AppConfig.ComponentLifecycle.SchemaCleanupBroadcastTimeoutMs);
-        }
-        catch
-        {
-          // Broadcast failed - log but don't fail the deletion
-          addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-            "Failed to notify web UI of deletion - please refresh");
-        }
+          if (t.IsFaulted)
+          {
+            Logger.Error("Failed to notify web UI of deletion", t.Exception);
+            RhinoApp.InvokeOnUiThread(new Action(() =>
+              addMessage?.Invoke(GH_RuntimeMessageLevel.Warning, "Failed to notify web UI of deletion")));
+          }
+        });
+      }
 
       // 5. Mark document as modified so changes persist on save
       document?.Modified();

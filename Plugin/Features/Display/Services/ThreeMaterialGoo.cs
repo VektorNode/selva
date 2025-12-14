@@ -2,6 +2,7 @@
 using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
+using Selva.Core.Helpers;
 
 namespace Selva.Features.Display.Services;
 
@@ -62,8 +63,9 @@ public class ThreeMaterialGoo : IGH_Goo
         Value = JsonConvert.DeserializeObject<ThreeMaterial>(s, settings);
         return Value != null;
       }
-      catch
+      catch (System.Exception ex)
       {
+        Logger.Warn($"Failed to cast to ThreeMaterial: {ex.Message}");
       }
 
     return false;

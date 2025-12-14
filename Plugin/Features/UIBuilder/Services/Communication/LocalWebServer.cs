@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Selva.Config;
+using Selva.Core.Helpers;
 
 namespace Selva.Features.UIBuilder.Services;
 
@@ -127,7 +128,7 @@ public class LocalWebServer : IDisposable
       }
       catch (Exception ex)
       {
-        Debug.WriteLine($"Error stopping HTTP server: {ex.Message}");
+        Logger.Error($"Error stopping HTTP server: {ex.Message}");
       }
       finally
       {
@@ -151,12 +152,12 @@ public class LocalWebServer : IDisposable
       }
       catch (HttpListenerException ex)
       {
-        Debug.WriteLine($"HTTP listener stopped: {ex.Message}");
+        Logger.Warn($"HTTP listener stopped: {ex.Message}");
         break;
       }
       catch (Exception ex)
       {
-        Debug.WriteLine($"Error accepting HTTP request: {ex.Message}");
+        Logger.Error($"Error accepting HTTP request: {ex.Message}");
       }
   }
 
@@ -222,7 +223,7 @@ public class LocalWebServer : IDisposable
     }
     catch (Exception ex)
     {
-      Debug.WriteLine($"Error processing HTTP request for {context.Request.Url?.AbsolutePath}: {ex.Message}");
+      Logger.Error($"Error processing HTTP request for {context.Request.Url?.AbsolutePath}: {ex.Message}");
 
       try
       {
@@ -231,7 +232,7 @@ public class LocalWebServer : IDisposable
       }
       catch (Exception closeEx)
       {
-        Debug.WriteLine($"Error sending 500 response: {closeEx.Message}");
+        Logger.Error($"Error sending 500 response: {closeEx.Message}");
       }
     }
   }
@@ -291,6 +292,7 @@ public class LocalWebServer : IDisposable
       catch (Exception)
       {
         // Port not available, try next
+        Logger.Log($"Port {port} not available");
       }
     }
 
