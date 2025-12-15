@@ -186,7 +186,7 @@ public class GH_Base64Parser : GH_Component
         _ => false
       };
     }
-    catch (Exception ex)
+    catch
     {
       return false;
     }
@@ -225,7 +225,7 @@ public class GH_Base64Parser : GH_Component
     {
       return doc.Import(filePath);
     }
-    catch (Exception ex)
+    catch
     {
       return false;
     }
@@ -238,7 +238,7 @@ public class GH_Base64Parser : GH_Component
       var importOptions = new FileStpReadOptions();
       return FileStp.Read(filePath, doc, importOptions);
     }
-    catch (Exception ex)
+    catch
     {
       return false;
     }
