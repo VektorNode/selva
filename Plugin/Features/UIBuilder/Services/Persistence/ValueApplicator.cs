@@ -335,7 +335,7 @@ public class ValueApplicator
   }
 
   /// <summary>
-  ///   Cache for reflection results per type - eliminates 10-15ms overhead per parameter update
+  ///   Cache for reflection results per type - eliminates overhead per parameter update
   /// </summary>
   private class ReflectionCache
   {

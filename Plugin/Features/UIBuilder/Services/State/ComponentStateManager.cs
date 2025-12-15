@@ -12,7 +12,7 @@ public class ComponentStateManager
   private bool _lastEnable;
   private bool _isSolving;
   private DateTime _lastStateChangeTime = DateTime.MinValue;
-  private const int STATE_CHANGE_DEBOUNCE_MS = 100; // Prevent duplicate broadcasts within 100ms
+  private const int STATE_CHANGE_DEBOUNCE_MS = 100;
 
   public bool IsSolving => _isSolving;
 
