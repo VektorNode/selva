@@ -31,8 +31,6 @@ public class ValueApplicator
 
   private static readonly ConcurrentDictionary<Type, ReflectionCache> _reflectionCache = new();
 
-  private readonly List<IGH_ActiveObject> _pendingExpirations = new();
-
   private ConcurrentDictionary<string, object> _lastAppliedValues = new();
 
   /// <summary>
@@ -44,11 +42,17 @@ public class ValueApplicator
     Action<GH_RuntimeMessageLevel, string> addMessage)
   {
     var updateCount = 0;
-    _pendingExpirations.Clear();
+    var pendingExpirations = new HashSet<IGH_ActiveObject>(); // Local snapshot, HashSet dedupes
 
     foreach (var input in schema.Inputs)
       try
       {
+        var inputKey = input.Id.ToString();
+
+        // Check if value exists in payload FIRST (filters before expensive FindObject)
+        if (!values.TryGetValue(inputKey, out var value)) continue;
+
+        // Only lookup parameter if we have a value to apply
         var paramObject = document.FindObject(input.Id, false);
         if (paramObject == null)
         {
@@ -57,9 +61,6 @@ public class ValueApplicator
           continue;
         }
 
-        var inputKey = input.Id.ToString();
-        if (!values.TryGetValue(inputKey, out var value)) continue;
-
         if (!HasValueChanged(inputKey, value)) continue;
 
         // Validate value before applying (security check)
@@ -67,13 +68,13 @@ public class ValueApplicator
 
         if (paramObject is IGH_ContextualParameter contextParam)
         {
-          var success = ApplyToContextualParameter(contextParam, input.ParamType, value, addMessage);
+          var success = ApplyToContextualParameter(contextParam, input.ParamType, value, addMessage, pendingExpirations);
           if (success)
           {
             updateCount++;
             _lastAppliedValues[inputKey] = value;
 
-            if (paramObject is IGH_ActiveObject activeObj) _pendingExpirations.Add(activeObj);
+            if (paramObject is IGH_ActiveObject activeObj) pendingExpirations.Add(activeObj);
           }
         }
       }
@@ -83,20 +84,17 @@ public class ValueApplicator
           $"Error applying value to '{input.Nickname}': {ex.Message}");
       }
 
-    if (_pendingExpirations.Count > 0)
-      document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, ExpireCallback);
+    // Schedule expiration with local snapshot (thread-safe)
+    if (pendingExpirations.Count > 0)
+    {
+      var toExpire = pendingExpirations; // Capture for closure
+      document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc =>
+      {
+        foreach (var obj in toExpire) obj.ExpireSolution(false);
+      });
+    }
 
     return updateCount;
-  }
-
-  /// <summary>
-  ///   Callback for ScheduleSolution - expires parameters and nothing else
-  /// </summary>
-  private void ExpireCallback(GH_Document doc)
-  {
-    foreach (var obj in _pendingExpirations) obj.ExpireSolution(false);
-
-    _pendingExpirations.Clear();
   }
 
   /// <summary>
@@ -237,12 +235,12 @@ public class ValueApplicator
   ///   Uses cached reflection to eliminate overhead
   /// </summary>
   private bool ApplyToContextualParameter(IGH_ContextualParameter contextParam, string paramTypeName,
-    object value, Action<GH_RuntimeMessageLevel, string> addMessage)
+    object value, Action<GH_RuntimeMessageLevel, string> addMessage, HashSet<IGH_ActiveObject> pendingExpirations)
   {
     try
     {
       // Special handling for ValueList - use the parameter's native type
-      if (paramTypeName == "valueList") return ApplyToValueList(contextParam, value, addMessage);
+      if (paramTypeName == "valueList") return ApplyToValueList(contextParam, value, addMessage, pendingExpirations);
 
       if (!TypeHandlers.TryGetValue(paramTypeName, out var handler))
       {
@@ -290,7 +288,7 @@ public class ValueApplicator
   ///   Also adds the connected GH_ValueList to pending expirations
   /// </summary>
   private bool ApplyToValueList(IGH_ContextualParameter contextParam, object value,
-    Action<GH_RuntimeMessageLevel, string> addMessage)
+    Action<GH_RuntimeMessageLevel, string> addMessage, HashSet<IGH_ActiveObject> pendingExpirations)
   {
     try
     {
@@ -313,7 +311,7 @@ public class ValueApplicator
           var connectedVLProperty = contextParam.GetType().GetProperty("ConnectedValueList",
             BindingFlags.NonPublic | BindingFlags.Instance);
           if (connectedVLProperty?.GetValue(contextParam) is IGH_ActiveObject connectedVL)
-            _pendingExpirations.Add(connectedVL);
+            pendingExpirations.Add(connectedVL);
           return true;
         }
 

@@ -220,6 +220,7 @@ public class SchemaManager
 
   /// <summary>
   ///   Validate schema and optionally track what changed (removed parameters)
+  ///   Optimized to cache FindObject results and avoid redundant lookups
   /// </summary>
   public (UISchema Schema, List<Guid> RemovedIds) ValidateSchemaAndTrackChanges(
     UISchema schema,
@@ -230,36 +231,42 @@ public class SchemaManager
 
     var removedIds = trackChanges ? new List<Guid>() : null;
 
-    var inputsToRemove = schema.Inputs.Where(input =>
+    // Build cache of existing IDs with a single scan (avoids N*FindObject calls)
+    var allIds = new HashSet<Guid>();
+    allIds.UnionWith(schema.Inputs.Select(i => i.Id));
+    allIds.UnionWith(schema.Outputs.Select(o => o.Id));
+    if (schema.Layout.Tabs != null)
     {
-      var paramObject = document.FindObject(input.Id, false);
-      return paramObject == null;
-    }).ToList();
+      foreach (var tab in schema.Layout.Tabs)
+        foreach (var group in tab.Groups)
+          allIds.UnionWith(group.Items.Select(item => item.ParamId));
+    }
 
+    // Single pass: check which IDs actually exist in document
+    var existingIds = new HashSet<Guid>();
+    foreach (var id in allIds)
+    {
+      if (document.FindObject(id, false) != null)
+        existingIds.Add(id);
+    }
+
+    // Remove inputs that don't exist
+    var inputsToRemove = schema.Inputs.Where(input => !existingIds.Contains(input.Id)).ToList();
     if (trackChanges) removedIds.AddRange(inputsToRemove.Select(i => i.Id));
-
     schema.Inputs.RemoveAll(input => inputsToRemove.Contains(input));
 
-    var outputsToRemove = schema.Outputs.Where(output =>
-    {
-      var paramObject = document.FindObject(output.Id, false);
-      return paramObject == null;
-    }).ToList();
-
+    // Remove outputs that don't exist
+    var outputsToRemove = schema.Outputs.Where(output => !existingIds.Contains(output.Id)).ToList();
     if (trackChanges) removedIds.AddRange(outputsToRemove.Select(o => o.Id));
-
     schema.Outputs.RemoveAll(output => outputsToRemove.Contains(output));
 
+    // Remove layout items that don't exist
     if (schema.Layout.Tabs != null)
     {
       foreach (var tab in schema.Layout.Tabs)
       {
         foreach (var group in tab.Groups)
-          group.Items.RemoveAll(item =>
-          {
-            var paramObject = document.FindObject(item.ParamId, false);
-            return paramObject == null;
-          });
+          group.Items.RemoveAll(item => !existingIds.Contains(item.ParamId));
 
         tab.Groups.RemoveAll(g => g.Items.Count == 0);
       }
@@ -349,15 +356,22 @@ public class SchemaManager
       if (currentSnapshot == null) continue;
 
       if (_metadataCache.TryGetValue(inputParam.Id, out var previousSnapshot))
+      {
         if (!currentSnapshot.Equals(previousSnapshot))
         {
           // Metadata changed - create updated AvailableInput
           var updatedParam = CreateAvailableInputFromSnapshot(currentSnapshot, inputParam.Id);
           changes.Inputs.Add(updatedParam);
-        }
 
-      // Always update cache with current state
-      _metadataCache[inputParam.Id] = currentSnapshot;
+          // Update cache only when changed
+          _metadataCache[inputParam.Id] = currentSnapshot;
+        }
+      }
+      else
+      {
+        // New parameter - add to cache
+        _metadataCache[inputParam.Id] = currentSnapshot;
+      }
     }
 
     foreach (var outputParam in schema.Outputs)
@@ -369,13 +383,21 @@ public class SchemaManager
       if (currentSnapshot == null) continue;
 
       if (_metadataCache.TryGetValue(outputParam.Id, out var previousSnapshot))
+      {
         if (!currentSnapshot.Equals(previousSnapshot))
         {
           var updatedParam = CreateAvailableOutputFromSnapshot(currentSnapshot, outputParam.Id);
           changes.Outputs.Add(updatedParam);
-        }
 
-      _metadataCache[outputParam.Id] = currentSnapshot;
+          // Update cache only when changed
+          _metadataCache[outputParam.Id] = currentSnapshot;
+        }
+      }
+      else
+      {
+        // New output - add to cache
+        _metadataCache[outputParam.Id] = currentSnapshot;
+      }
     }
 
     if (changes.Inputs.Count > 0 || changes.Outputs.Count > 0) ApplyMetadataChangesToSchema(schema, changes);

@@ -57,10 +57,17 @@ public class DocumentEventManager : IDisposable
   /// </summary>
   public void RegisterEvents(GH_Document document)
   {
-    if (document == null || _eventsRegistered) return;
+    if (document == null) return;
 
     // Unregister from previous document if switching documents
-    if (_currentDocument != null && _currentDocument.DocumentID != document.DocumentID) UnregisterEvents();
+    if (_currentDocument != null && _currentDocument.DocumentID != document.DocumentID)
+    {
+      UnregisterEvents();
+    }
+
+    // Early return if already registered for THIS document
+    if (_eventsRegistered && _currentDocument != null && _currentDocument.DocumentID == document.DocumentID)
+      return;
 
     _currentDocument = document;
 
