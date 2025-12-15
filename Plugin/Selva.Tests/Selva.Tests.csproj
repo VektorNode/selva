@@ -24,4 +24,10 @@
     <ProjectReference Include="..\Selva.Core\Selva.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="TestFiles\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
