@@ -1,4 +1,4 @@
-import type { UISchema, SavedState, ParameterState, ValidationIssue } from '$lib/types/generated';
+import type { UISchema, SavedState, ParameterState, ValidationIssueMessage } from '$lib/types/generated';
 
 /**
  * Create a saved state from current schema and values
@@ -66,10 +66,10 @@ export function validateSavedState(
   currentSchema: UISchema
 ): {
   isValid: boolean;
-  issues: ValidationIssue[];
+  issues: ValidationIssueMessage[];
   canLoad: boolean; // Can we load despite issues?
 } {
-  const issues: ValidationIssue[] = [];
+  const issues: ValidationIssueMessage[] = [];
 
   // Check document ID match
   if (savedState.documentId !== (currentSchema.documentId || '')) {

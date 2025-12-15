@@ -198,6 +198,99 @@ npm run generate:all
 
 **Important:** Never edit the generated files directly - they will be overwritten.
 
+### Schema Evolution & Migration
+
+The schema system uses semantic versioning and automated migration to safely evolve the data model over time.
+
+**Key Principles:**
+- JSON Schema (`ui-schema.json`) is the single source of truth
+- Schemas are versioned using semantic versioning (MAJOR.MINOR.PATCH)
+- Backward-compatible changes use MINOR version bumps
+- Breaking changes require MAJOR version bumps and migrations
+- All changes are documented in `SCHEMA_CHANGELOG.md`
+
+**Making Schema Changes:**
+
+```bash
+# 1. Edit the schema
+vim packages/schemas/ui-schema.json
+
+# 2. Regenerate types
+./generate-schemas.sh
+
+# 3. Add migration if needed (for breaking changes)
+vim Plugin/Features/UIBuilder/Services/Schema/SchemaMigrator.cs
+
+# 4. Update changelog
+vim packages/schemas/SCHEMA_CHANGELOG.md
+
+# 5. Test migration
+dotnet test --filter "FullyQualifiedName~SchemaMigrator"
+```
+
+**Documentation:**
+- [SCHEMA_EVOLUTION_GUIDE.md](packages/schemas/SCHEMA_EVOLUTION_GUIDE.md) - Comprehensive guide with examples
+- [SCHEMA_CHANGELOG.md](packages/schemas/SCHEMA_CHANGELOG.md) - Version history and changes
+
+**Quick Reference:**
+
+| Change Type | Version Bump | Migration Needed? | Example |
+|-------------|--------------|-------------------|---------|
+| Add optional field | MINOR (1.0.0 → 1.1.0) | No | Adding `placeholder` to `NumberWidgetConfig` |
+| Add required field | MINOR | Yes | Adding `label` field to all layout items |
+| Rename field | MAJOR (1.x.x → 2.0.0) | Yes | Renaming `columns` to `columnCount` |
+| Remove field | MAJOR | Yes | Removing deprecated `tags` array |
+| Change field type | MAJOR | Yes | Changing `stepSize` from number to string |
+| Add widget type | MINOR | No | Adding new `date-picker` widget |
+
+**Validation:**
+
+Frontend validation:
+```typescript
+import { validateSchema } from '$lib/api/schema-validator';
+
+const result = validateSchema(schema);
+if (!result.isValid) {
+  console.error('Validation errors:', result.issues);
+}
+```
+
+Backend validation:
+```csharp
+var validator = new SchemaValidator();
+var result = validator.Validate(schema);
+if (!result.IsValid) {
+  foreach (var error in result.Errors) {
+    Logger.Error(error.Message);
+  }
+}
+```
+
+**Migration System:**
+
+The `SchemaMigrator` class handles automatic schema upgrades:
+
+```csharp
+// Migrate with tracking
+var (migratedSchema, changes) = SchemaMigrator.MigrateWithTracking(schema);
+foreach (var change in changes) {
+  Logger.Info($"Migration: {change}");
+}
+
+// Dry-run validation
+var (success, issues) = SchemaMigrator.ValidateMigration(schema);
+if (success) {
+  Logger.Info("Migration will succeed");
+} else {
+  Logger.Error("Migration will fail: " + string.Join(", ", issues));
+}
+```
+
+**See also:**
+- `Plugin/Features/UIBuilder/Services/Schema/SchemaMigrator.cs` - Migration logic
+- `Plugin/Features/UIBuilder/Services/Schema/SchemaValidator.cs` - Validation rules
+- `packages/frontend/src/lib/api/schema-validator.ts` - Frontend validation
+
 ## Architecture Overview
 
 ### Hybrid Communication Architecture

@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const schemaPath = path.join(__dirname, 'ui-schema.json');
-const outputPath = path.join(__dirname, '../../Plugin/Features/UIBuilder/Models/UISchema.Generated.cs');
+const outputPath = path.join(__dirname, '../../Plugin/Selva.Core/Models/UISchema.Generated.cs');
 
 const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 const definitions = schema.definitions;
@@ -223,7 +223,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Selva.Features.UIBuilder.Models
+namespace Selva.Core.Models
 {
 `;
 

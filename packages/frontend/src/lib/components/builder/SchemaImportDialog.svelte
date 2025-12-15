@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { UISchema, ValidationIssue } from '$lib/types/generated';
+  import type { UISchema } from '$lib/types/generated';
   import * as Dialog from '$lib/components/ui/dialog';
   import * as Alert from '$lib/components/ui/alert-dialog';
   import { Button } from '$lib/components/ui/button';
@@ -97,7 +97,7 @@
           </div>
           <div class="flex justify-between">
             <dt class="text-muted-foreground">Tabs:</dt>
-            <dd class="font-medium">{importedSchema.schema.layout.tabs.length}</dd>
+            <dd class="font-medium">{importedSchema.schema.layout.tabs?.length}</dd>
           </div>
           {#if importedSchema.metadata.exportedAt}
             <div class="flex justify-between">
@@ -151,7 +151,7 @@
             {#each validation.issues as issue}
               {@const Icon = getIssueIcon(issue.severity)}
               <div class="flex gap-2 text-sm">
-                <Icon class="mt-0.5 h-4 w-4 flex-shrink-0 {getIssueColorClass(issue.severity)}" />
+                <Icon class="mt-0.5 h-4 w-4 shrink-0 {getIssueColorClass(issue.severity)}" />
                 <div class="flex-1">
                   <p class="font-medium {getIssueColorClass(issue.severity)}">
                     {issue.message}

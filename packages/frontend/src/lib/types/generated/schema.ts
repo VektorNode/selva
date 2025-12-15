@@ -365,7 +365,7 @@ export interface ParameterState {
    */
   groupName?: string;
 }
-export interface ValidationIssue {
+export interface ValidationIssueMessage {
   paramId: string;
   /**
    * warning = can still load, error = cannot load

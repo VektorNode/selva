@@ -1,4 +1,4 @@
-import type { UISchema, ValidationIssue } from '$lib/types/generated';
+import type { UISchema, ValidationIssueMessage } from '$lib/types/generated';
 
 export interface SchemaExportMetadata {
   exportedAt: string;
@@ -13,7 +13,7 @@ export interface ExportedSchema {
 
 export interface SchemaValidationResult {
   isValid: boolean;
-  issues: ValidationIssue[];
+  issues: ValidationIssueMessage[];
   canLoad: boolean;
 }
 
@@ -25,7 +25,7 @@ export function validateImportedSchema(
   currentDocumentId: string,
   currentProjectFileName?: string
 ): SchemaValidationResult {
-  const issues: ValidationIssue[] = [];
+  const issues: ValidationIssueMessage[] = [];
 
   // Check if documentId exists in imported schema
   if (!importedSchema.documentId) {
