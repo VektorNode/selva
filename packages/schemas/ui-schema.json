@@ -765,7 +765,7 @@
       "required": ["paramId", "nickname", "paramType", "value"],
       "additionalProperties": false
     },
-    "ValidationIssue": {
+    "ValidationIssueMessage": {
       "type": "object",
       "description": "Validation warning or error for a parameter",
       "properties": {
