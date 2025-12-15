@@ -1,31 +1,27 @@
-using System.IO;
-using Xunit;
 using Newtonsoft.Json;
 using Selva.Core.Models;
-using Selva.Core.Services;
 
-namespace Selva.Tests
+namespace Selva.Tests;
+
+public class JsonSchemaTests
 {
-  public class JsonSchemaTests
+  private readonly SchemaValidator _validator;
+
+  public JsonSchemaTests()
   {
-    private readonly SchemaValidator _validator;
+    _validator = new SchemaValidator();
+  }
 
-    public JsonSchemaTests()
-    {
-      _validator = new SchemaValidator();
-    }
+  [Theory]
+  [InlineData("valid_schema.json")]
+  public void Validate_JsonSchema_ReturnsSuccess(string fileName)
+  {
+    var filePath = Path.Combine("TestFiles", fileName);
+    var json = File.ReadAllText(filePath);
+    var schema = JsonConvert.DeserializeObject<UISchema>(json);
 
-    [Theory]
-    [InlineData("valid_schema.json")]
-    public void Validate_JsonSchema_ReturnsSuccess(string fileName)
-    {
-      var filePath = Path.Combine("TestFiles", fileName);
-      var json = File.ReadAllText(filePath);
-      var schema = JsonConvert.DeserializeObject<UISchema>(json);
+    var result = _validator.Validate(schema);
 
-      var result = _validator.Validate(schema);
-
-      Assert.True(result.IsValid);
-    }
+    Assert.True(result.IsValid);
   }
 }
