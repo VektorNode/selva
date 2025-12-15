@@ -28,14 +28,14 @@ public class WebSocketServer : IDisposable
   private Timer _heartbeatTimer;
   private HttpListener _httpListener;
 
-  public WebSocketServer(int port = 8765)
+  public WebSocketServer(int port = AppConfig.WebSocket.DefaultPort)
   {
     Port = port;
   }
 
   public bool IsRunning { get; private set; }
 
-  public int Port { get; }
+  public int Port { get; private set; }
 
   public void Dispose()
   {
@@ -54,7 +54,7 @@ public class WebSocketServer : IDisposable
   public event EventHandler<WebSocket> OnClientConnected;
 
   /// <summary>
-  ///   Start the WebSocket server
+  ///   Start the WebSocket server with dynamic port allocation
   /// </summary>
   public Task StartAsync()
   {
@@ -64,6 +64,13 @@ public class WebSocketServer : IDisposable
     }
 
     _cancellationTokenSource = new CancellationTokenSource();
+
+    // If port is 0, find an available port dynamically
+    if (Port == 0)
+    {
+      Port = FindAvailablePort();
+    }
+
     _httpListener = new HttpListener();
     _httpListener.Prefixes.Add($"http://localhost:{Port}/");
 
@@ -71,6 +78,7 @@ public class WebSocketServer : IDisposable
     {
       _httpListener.Start();
       IsRunning = true;
+      Logger.Log($"WebSocket server started on port {Port}");
 
       // Start accepting connections in background
       _ = Task.Run(async () => await AcceptConnectionsAsync(_cancellationTokenSource.Token));
@@ -79,6 +87,32 @@ public class WebSocketServer : IDisposable
       StartHeartbeat();
 
       return Task.CompletedTask;
+    }
+    catch (HttpListenerException ex)
+    {
+      // If the specified port failed, try to find an available port
+      Logger.Warn($"Port {Port} failed to bind, attempting to find alternative port: {ex.Message}");
+      Port = FindAvailablePort();
+
+      // Retry with discovered port
+      _httpListener = new HttpListener();
+      _httpListener.Prefixes.Add($"http://localhost:{Port}/");
+
+      try
+      {
+        _httpListener.Start();
+        IsRunning = true;
+        Logger.Log($"WebSocket server started on fallback port {Port}");
+
+        _ = Task.Run(async () => await AcceptConnectionsAsync(_cancellationTokenSource.Token));
+        StartHeartbeat();
+
+        return Task.CompletedTask;
+      }
+      catch (Exception retryEx)
+      {
+        throw new Exception($"Failed to start WebSocket server on port {Port}: {retryEx.Message}", retryEx);
+      }
     }
     catch (Exception ex)
     {
@@ -354,6 +388,58 @@ public class WebSocketServer : IDisposable
         break;
       }
     }
+  }
+
+  /// <summary>
+  ///   Find an available port for WebSocket server
+  ///   Tries default port first, then random ports in configured range
+  /// </summary>
+  private int FindAvailablePort()
+  {
+    // First, try the default port (fast path for single instance)
+    try
+    {
+      using (var listener = new HttpListener())
+      {
+        listener.Prefixes.Add($"http://localhost:{AppConfig.WebSocket.DefaultPort}/");
+        listener.Start();
+        listener.Stop();
+        Logger.Log($"WebSocket port {AppConfig.WebSocket.DefaultPort} available (default)");
+        return AppConfig.WebSocket.DefaultPort;
+      }
+    }
+    catch (Exception)
+    {
+      Logger.Log($"Default WebSocket port {AppConfig.WebSocket.DefaultPort} not available, searching for alternative...");
+    }
+
+    // Default port unavailable, try random ports in range
+    var random = new Random();
+    for (var i = 0; i < AppConfig.WebSocket.PortDiscoveryAttempts; i++)
+    {
+      var port = random.Next(AppConfig.WebSocket.PortRangeMin, AppConfig.WebSocket.PortRangeMax);
+
+      try
+      {
+        using (var listener = new HttpListener())
+        {
+          listener.Prefixes.Add($"http://localhost:{port}/");
+          listener.Start();
+          listener.Stop();
+          Logger.Log($"WebSocket port {port} available (fallback)");
+          return port;
+        }
+      }
+      catch (Exception)
+      {
+        // Port not available, try next
+      }
+    }
+
+    // All attempts failed, return random port in extended range as last resort
+    var fallbackPort = random.Next(AppConfig.WebSocket.PortRangeMax, AppConfig.WebSocket.PortRangeMax + 1000);
+    Logger.Warn($"Could not find available port in preferred range, using fallback port {fallbackPort}");
+    return fallbackPort;
   }
 
   /// <summary>

@@ -9,6 +9,9 @@ public static class AppConfig
   public static class WebSocket
   {
     public const int DefaultPort = 8765;
+    public const int PortRangeMin = 8765;
+    public const int PortRangeMax = 8865;
+    public const int PortDiscoveryAttempts = 100;
     public const int MaxMessageSizeBytes = 10 * 1024 * 1024; // 10MB
     public const int BufferSizeBytes = 4096;
     public const int MaxConcurrentClients = 10;

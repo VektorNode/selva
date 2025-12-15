@@ -18,14 +18,19 @@
 
   const actions = useBuilderActions(() => builderState);
 
-  // Navigate to specific routes with session preservation
+  // Navigate to specific routes with session and wsPort preservation
   function navigateTo(route: '/' | '/preview') {
     // Auto-save schema when switching to interactive mode
     if (route === '/preview') {
       saveSchema();
     }
 
-    const url = route === '/' ? `/?session=${sessionId}` : `/preview?session=${sessionId}`;
+    const params = new URLSearchParams();
+    if (sessionId) params.set('session', sessionId);
+    const wsPort = page.url.searchParams.get('wsPort');
+    if (wsPort) params.set('wsPort', wsPort);
+
+    const url = `${route}?${params.toString()}`;
     goto(url);
   }
 

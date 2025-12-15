@@ -1,6 +1,7 @@
 import { page } from '$app/state';
 import { getWebSocketState, type WebSocketState } from '$lib/websocket/websocket.svelte';
 import type { UISchema, AvailableParameters } from '$lib/types/generated';
+import { DEFAULT_WEBSOCKET_PORT, WEBSOCKET_PORT_QUERY_PARAM } from '$lib/app.config';
 
 /**
  * Session initialization result
@@ -30,10 +31,27 @@ export function getSessionIdFromUrl(): string {
 }
 
 /**
+ * Get WebSocket port from URL parameters
+ * Falls back to default port (8765) if not specified
+ */
+export function getWebSocketPortFromUrl(): number {
+  const portParam = page.url.searchParams.get(WEBSOCKET_PORT_QUERY_PARAM);
+  if (portParam) {
+    const port = parseInt(portParam, 10);
+    if (!isNaN(port) && port > 0 && port <= 65535) {
+      return port;
+    }
+  }
+  return DEFAULT_WEBSOCKET_PORT;
+}
+
+/**
  * Initialize WebSocket connection for a session
  */
 export async function initializeWebSocketSession(sessionId: string): Promise<SessionInitResult> {
-  const wsClient = getWebSocketState();
+  // Get WebSocket port from URL or use default
+  const wsPort = getWebSocketPortFromUrl();
+  const wsClient = getWebSocketState(wsPort);
 
   if (!sessionId) {
     return {
@@ -51,8 +69,7 @@ export async function initializeWebSocketSession(sessionId: string): Promise<Ses
       sessionId,
       wsClient,
       connected: false,
-      error:
-        'Failed to connect to Grasshopper via WebSocket. Make sure the UI Builder component is enabled and port 8765 is available.',
+      error: `Failed to connect to Grasshopper via WebSocket on port ${wsPort}. Make sure the UI Builder component is enabled.`,
     };
   }
 

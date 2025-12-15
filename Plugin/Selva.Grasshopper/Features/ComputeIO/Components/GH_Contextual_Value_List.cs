@@ -12,6 +12,7 @@ using Grasshopper.Kernel.Special;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Rhino;
 using Selva.Grasshopper.Properties;
 
 namespace Selva.Grasshopper.Features.ComputeIO.Components;
@@ -267,7 +268,17 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     {
       if (vl.ListItems[i].Name == value || vl.ListItems[i].Expression == value)
       {
-        vl.SelectItem(i);
+        var index = i;
+        // SelectItem accesses UI controls - must run on UI thread
+        try
+        {
+          RhinoApp.InvokeOnUiThread(new Action(() => vl.SelectItem(index)));
+        }
+        catch
+        {
+          // Fallback if RhinoApp.InvokeOnUiThread fails
+          vl.SelectItem(index);
+        }
         return true;
       }
     }

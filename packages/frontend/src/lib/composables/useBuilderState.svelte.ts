@@ -1,6 +1,6 @@
 import { toast } from '$lib/components/ui/sonner';
 import type { UISchema, AvailableInput, AvailableOutput } from '$lib/types/generated';
-import { processInitialDataSchema } from '$lib/utils/session';
+import { processInitialDataSchema, getWebSocketPortFromUrl } from '$lib/utils/session';
 import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 
 interface BuilderWebSocketState {
@@ -14,7 +14,9 @@ interface BuilderWebSocketState {
 }
 
 export function useBuilderState(sessionId: string) {
-  const wsState = getWebSocketState();
+  // Get WebSocket port from URL to ensure we connect to the correct instance
+  const wsPort = getWebSocketPortFromUrl();
+  const wsState = getWebSocketState(wsPort);
 
   const state = $state<BuilderWebSocketState>({
     availableInputs: [],

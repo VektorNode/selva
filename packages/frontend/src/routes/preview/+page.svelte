@@ -7,7 +7,7 @@
   import { PageContainer, PageHeader } from '$lib/components/layout';
   import { Maximize, Minimize } from '@lucide/svelte';
   import { StateDisplay, Button } from '$lib/components/ui';
-  import { initializeWebSocketSession, ensureSchemaLayoutDefaults } from '$lib/utils/session';
+  import { initializeWebSocketSession, ensureSchemaLayoutDefaults, getWebSocketPortFromUrl } from '$lib/utils/session';
   import StateManager from '$lib/components/StateManager.svelte';
   import { onMount } from 'svelte';
   import { type MeshBatch } from '@selva/core';
@@ -36,7 +36,9 @@
   let error = $state('');
   let canvas: HTMLCanvasElement | null = $state(null);
 
-  const wsState = getWebSocketState();
+  // Get WebSocket port from URL to ensure we connect to the correct instance
+  const wsPort = getWebSocketPortFromUrl();
+  const wsState = getWebSocketState(wsPort);
 
   let schemaUpdateNotification = $state('');
   let notificationTimer: ReturnType<typeof setTimeout> | null = null;
@@ -149,7 +151,12 @@
   }
 
   function navigateTo(route: '/' | '/builder') {
-    const url = route === '/' ? `/?session=${sessionId}` : `/builder?session=${sessionId}`;
+    const params = new URLSearchParams();
+    if (sessionId) params.set('session', sessionId);
+    const wsPort = page.url.searchParams.get('wsPort');
+    if (wsPort) params.set('wsPort', wsPort);
+
+    const url = `${route}?${params.toString()}`;
     goto(url);
   }
 

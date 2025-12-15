@@ -6,7 +6,7 @@
 import {
   WEBSOCKET_MAX_RECONNECT_ATTEMPTS,
   WEBSOCKET_RECONNECT_INTERVAL,
-  WEBSOCKET_URL,
+  DEFAULT_WEBSOCKET_PORT,
 } from '$lib/app.config';
 import type { UISchema } from '$lib/types/generated';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
@@ -33,7 +33,7 @@ export class WebSocketState {
   connected = $state(false);
   isSolving = $state(false);
 
-  constructor(private url: string = WEBSOCKET_URL) {
+  constructor(private url: string) {
     this.on('solvingState', (data) => {
       if (data && typeof data === 'object' && 'isSolving' in data) {
         const newState = Boolean(data.isSolving);
@@ -292,15 +292,27 @@ export class WebSocketState {
   }
 }
 
-// Singleton instance
-let wsState: WebSocketState | null = null;
+// Singleton instances (one per port for multi-instance support)
+const wsStateByPort: Map<number, WebSocketState> = new Map();
 
 /**
- * Get or create the WebSocket state instance (singleton)
+ * Get or create the WebSocket state instance (singleton per port)
+ * Constructs WebSocket URL dynamically from query parameters or uses default port
+ * Supports multiple instances by caching WebSocket connections per port
  */
-export function getWebSocketState(): WebSocketState {
-  if (!wsState) {
-    wsState = new WebSocketState();
+export function getWebSocketState(port?: number): WebSocketState {
+  const wsPort = port ?? DEFAULT_WEBSOCKET_PORT;
+
+  // Check if we already have a connection for this port
+  if (wsStateByPort.has(wsPort)) {
+    return wsStateByPort.get(wsPort)!;
   }
-  return wsState;
+
+  // Create new WebSocket connection for this port
+  const url = `ws://localhost:${wsPort}`;
+  console.log(`[WebSocket] Initializing new connection with URL: ${url}`);
+  const newWsState = new WebSocketState(url);
+  wsStateByPort.set(wsPort, newWsState);
+
+  return newWsState;
 }

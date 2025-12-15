@@ -45,6 +45,8 @@ public class CommunicationHandler : IDisposable
 
   public bool IsRunning => _webSocketServer?.IsRunning ?? false;
 
+  public int WebSocketPort => _webSocketServer?.Port ?? _port;
+
   public void Dispose()
   {
     Dispose(true);
@@ -190,7 +192,7 @@ public class CommunicationHandler : IDisposable
       }
 
       await startTask; // Propagate any exceptions
-      logMessage?.Invoke($"WebSocket Port: {_port}");
+      logMessage?.Invoke($"WebSocket server started on port {_webSocketServer.Port}");
     }
     catch (TimeoutException ex)
     {
