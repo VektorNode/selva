@@ -1,0 +1,21 @@
+{
+  "id": "test-schema",
+  "name": "Test Schema",
+  "pluginVersion": "1.0.0",
+  "inputs": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "nickname": "I1",
+      "paramType": "number"
+    }
+  ],
+  "outputs": [],
+  "layout": {
+    "tabs": [
+      {
+        "id": "tab1",
+        "label": "Tab 1"
+      }
+    ]
+  }
+}
