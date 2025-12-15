@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Rhino;
 using Selva.Config;
 using Selva.Core.Helpers;
@@ -33,6 +34,8 @@ public class CommunicationHandler : IDisposable
   private WebSocketServer _webSocketServer;
   private bool? _lastBroadcastedSolvingState; // Track last state to prevent duplicates
   private bool _suppressSolvingStateUpdates; // Suppress during schema operations
+  private CancellationTokenSource _suppressionCts; // Cancellation for suppression delay
+  private readonly SemaphoreSlim _messageProcessingSemaphore = new SemaphoreSlim(1, 1); // Sequential message processing
 
   public CommunicationHandler(string sessionId, int port = 8765)
   {
@@ -42,11 +45,41 @@ public class CommunicationHandler : IDisposable
 
   /// <summary>
   ///   Temporarily suppress solving state updates (used during schema saves)
+  ///   Uses cancellation to prevent overlapping suppression periods
   /// </summary>
-  public void SetSuppressSolvingStateUpdates(bool suppress)
+  public void SetSuppressSolvingStateUpdates(bool suppress, int durationMs = 0)
   {
+    // Cancel any previous suppression delay
+    _suppressionCts?.Cancel();
+    _suppressionCts?.Dispose();
+    _suppressionCts = null;
+
     _suppressSolvingStateUpdates = suppress;
     Logger.Log($"[CommunicationHandler] Solving state updates {(suppress ? "SUPPRESSED" : "ENABLED")}");
+
+    // If suppressing with a duration, auto-unsuppress after delay
+    if (suppress && durationMs > 0)
+    {
+      _suppressionCts = new CancellationTokenSource();
+      var cts = _suppressionCts; // Capture for closure
+
+      Task.Run(async () =>
+      {
+        try
+        {
+          await Task.Delay(durationMs, cts.Token);
+          if (!cts.Token.IsCancellationRequested)
+          {
+            _suppressSolvingStateUpdates = false;
+            Logger.Log("[CommunicationHandler] Solving state updates ENABLED (auto)");
+          }
+        }
+        catch (TaskCanceledException)
+        {
+          // Expected when a new suppression cancels the old one
+        }
+      });
+    }
   }
 
   public bool IsRunning => _webSocketServer?.IsRunning ?? false;
@@ -82,55 +115,61 @@ public class CommunicationHandler : IDisposable
         // This prevents duplicate initial data being sent
       };
 
-      // Handle incoming messages asynchronously to avoid blocking UI thread
+      // Handle incoming messages sequentially to preserve order
       _webSocketServer.OnMessageReceived += (sender, message) =>
       {
-        // Process message on background thread to avoid blocking WebSocket thread
-        _ = Task.Run(() =>
+        // Process message sequentially (no concurrent Task.Run)
+        _ = Task.Run(async () =>
         {
+          // Use semaphore to ensure sequential processing
+          await _messageProcessingSemaphore.WaitAsync();
           try
           {
-            var msg = JsonConvert.DeserializeObject<WebSocketMessage>(message, SecureJsonSettings);
+            // Parse JSON once using JObject
+            var jObj = JObject.Parse(message);
+            var msgType = jObj["type"]?.ToString();
+            var sessionId = jObj["sessionId"]?.ToString();
 
-            if (msg.Type == "valueUpdate")
+            // Validate session ID first
+            if (sessionId != _sessionId) return;
+
+            if (msgType == "valueUpdate")
             {
-              var valueMsg = JsonConvert.DeserializeObject<ValueUpdateMessage>(message, SecureJsonSettings);
-              if (valueMsg != null && valueMsg.SessionId == _sessionId)
+              var values = jObj["values"]?.ToObject<Dictionary<string, object>>(JsonSerializer.Create(SecureJsonSettings));
+              if (values != null)
               {
-                Logger.Log($"[CommunicationHandler] Received valueUpdate with {valueMsg.Values?.Count ?? 0} values");
+                Logger.Log($"[CommunicationHandler] Received valueUpdate with {values.Count} values");
                 // Marshal back to main thread - critical for Grasshopper UI updates
-                MarshalToMainThread(() => OnValuesReceived?.Invoke(this, valueMsg.Values));
+                MarshalToMainThread(() => OnValuesReceived?.Invoke(this, values));
               }
             }
-            else if (msg.Type == "requestCurrentValues")
+            else if (msgType == "requestCurrentValues")
             {
-              if (msg.SessionId == _sessionId)
-              {
-                logMessage?.Invoke("Web UI requested current values");
-                MarshalToMainThread(() => OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty));
-              }
+              logMessage?.Invoke("Web UI requested current values");
+              MarshalToMainThread(() => OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty));
             }
-            else if (msg.Type == "requestInitialData")
+            else if (msgType == "requestInitialData")
             {
-              if (msg.SessionId == _sessionId)
-              {
-                logMessage?.Invoke("Web UI requested initial data");
-                MarshalToMainThread(() => OnClientConnected?.Invoke(this, EventArgs.Empty));
-              }
+              logMessage?.Invoke("Web UI requested initial data");
+              MarshalToMainThread(() => OnClientConnected?.Invoke(this, EventArgs.Empty));
             }
-            else if (msg.Type == "saveSchema")
+            else if (msgType == "saveSchema")
             {
-              var schemaMsg = JsonConvert.DeserializeObject<SchemaSaveMessage>(message, SecureJsonSettings);
-              if (schemaMsg != null && schemaMsg.SessionId == _sessionId)
+              var schema = jObj["schema"]?.ToObject<UISchema>(JsonSerializer.Create(SecureJsonSettings));
+              if (schema != null)
               {
                 logMessage?.Invoke("Web UI saving schema");
-                MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, schemaMsg.Schema));
+                MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, schema));
               }
             }
           }
           catch (Exception ex)
           {
             logMessage?.Invoke($"WebSocket message error: {ex.Message}");
+          }
+          finally
+          {
+            _messageProcessingSemaphore.Release();
           }
         });
       };
@@ -160,6 +199,11 @@ public class CommunicationHandler : IDisposable
   /// </summary>
   public void Stop()
   {
+    // Cancel any pending suppression delays
+    _suppressionCts?.Cancel();
+    _suppressionCts?.Dispose();
+    _suppressionCts = null;
+
     if (_webSocketServer != null)
       try
       {
@@ -413,7 +457,11 @@ public class CommunicationHandler : IDisposable
   {
     if (_disposed) return;
 
-    if (disposing) Stop();
+    if (disposing)
+    {
+      Stop();
+      _messageProcessingSemaphore?.Dispose();
+    }
 
     _disposed = true;
   }

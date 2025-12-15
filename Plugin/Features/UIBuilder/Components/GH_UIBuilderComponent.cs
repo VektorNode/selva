@@ -46,6 +46,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   // Session and schema
   private string _sessionId;
 
+  // Guard against concurrent WebSocket starts
+  private bool _isStartingWebSocket;
+
 
   public GH_UIBuilderComponent()
     : base("UI Bridge", "UIBridge",
@@ -328,9 +331,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   /// </summary>
   private void HandleEnabledState(IGH_DataAccess DA, GH_Document document, StateTransition transition)
   {
-    if (!_service.CommunicationHandler.IsRunning)
+    if (!_service.CommunicationHandler.IsRunning && !_isStartingWebSocket)
       try
       {
+        _isStartingWebSocket = true;
+
         // Start WebSocket server for real-time communication (async fire-and-forget)
         _ = Task.Run(async () =>
         {
@@ -348,6 +353,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
               AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"WebSocket server failed: {ex.Message}");
             }));
           }
+          finally
+          {
+            _isStartingWebSocket = false;
+          }
         });
 
         // Start embedded web server (production mode only - check if resources exist)
@@ -362,6 +371,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       }
       catch (Exception ex)
       {
+        _isStartingWebSocket = false;
         AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Failed to start servers: {ex.Message}");
         return;
       }
@@ -462,41 +472,23 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       // Create default schema if none exists
       var schemaToSend = validatedSchema ?? _embeddedSchema ?? CreateDefaultSchema(document);
 
-      // Collect current outputs and display data to send with initial data
-      // This ensures the client gets the current state immediately without needing a re-solve
-      var outputs = new Dictionary<string, object>();
-      var fileOutputs = new Dictionary<string, object>();
-      var displayData = new List<object>();
-
-      try
-      {
-        // Collect outputs using the event manager's logic
-        // We need to access the private helper methods or duplicate logic here
-        // Since we can't easily access private methods, we'll use the ValueCollector directly if possible
-        // or just rely on the fact that if we have values, we might have outputs
-
-        // For now, let's try to trigger a broadcast of outputs immediately after initial data
-        // This is safer than modifying BroadcastInitialData signature
-        Task.Run(async () =>
-        {
-          await Task.Delay(100); // Small delay to ensure client processed initial data
-          RhinoApp.InvokeOnUiThread(new Action(() =>
-          {
-            _service.EventManager.CollectAndBroadcastOutputs(schemaToSend);
-          }));
-        });
-      }
-      catch (Exception ex)
-      {
-        Logger.Error($"Error collecting initial outputs: {ex.Message}");
-      }
-
+      // Broadcast initial data
       var broadcastTask = _service.CommunicationHandler.BroadcastInitialData(
         schemaToSend,
         currentParams,
         currentOutputs,
         currentValues
       );
+
+      // Trigger output broadcast after a small delay to ensure client processed initial data
+      Task.Run(async () =>
+      {
+        await Task.Delay(100);
+        RhinoApp.InvokeOnUiThread(new Action(() =>
+        {
+          _service.EventManager.CollectAndBroadcastOutputs(schemaToSend);
+        }));
+      });
     }
     catch (Exception ex)
     {
@@ -518,8 +510,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         return;
       }
 
-      // Suppress solving state updates during schema save to avoid flashing indicator
-      _service.CommunicationHandler.SetSuppressSolvingStateUpdates(true);
+      // Suppress solving state updates during schema save to avoid flashing indicator (with 1s auto-unsuppress)
+      _service.CommunicationHandler.SetSuppressSolvingStateUpdates(true, durationMs: 1000);
 
       // Enrich schema with document metadata
       schema.ProjectFileName = document.Properties.ProjectFileName;
@@ -535,18 +527,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         ExpireSolution(true);
       });
 
-      // Keep suppression enabled for 1 second to cover the entire solve cycle
-      Task.Run(async () =>
-      {
-        await Task.Delay(1000);
-        _service.CommunicationHandler.SetSuppressSolvingStateUpdates(false);
-      });
-
       AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Schema saved successfully");
     }
     catch (Exception ex)
     {
-      // Re-enable solving state updates if there's an error
+      // Re-enable solving state updates if there's an error (cancel auto-unsuppress)
       _service.CommunicationHandler.SetSuppressSolvingStateUpdates(false);
       var _ = _service.CommunicationHandler.BroadcastSchemaSaved(false, ex.Message);
       AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error saving schema: {ex.Message}");
