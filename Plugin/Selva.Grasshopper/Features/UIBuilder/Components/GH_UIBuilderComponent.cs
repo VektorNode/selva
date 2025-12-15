@@ -368,6 +368,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       {
         _isStartingWebSocket = true;
 
+        // Start embedded web server first (production mode only - check if resources exist)
+        var hasEmbeddedAssets = HasEmbeddedWebAssets();
+        if (!_service.WebServer.IsRunning && hasEmbeddedAssets)
+        {
+          _service.WebServer.Start();
+        }
+
         // Start WebSocket server for real-time communication (async fire-and-forget)
         _ = Task.Run(async () =>
         {
@@ -377,6 +384,17 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             {
               /* Silent */
             });
+
+            // After WebSocket starts successfully, show the remark with correct port
+            if (hasEmbeddedAssets && _service.WebServer.IsRunning)
+            {
+              var wsPort = _service.CommunicationHandler?.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
+              RhinoApp.InvokeOnUiThread(new Action(() =>
+              {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                  $"Web UI available at: {_service.WebServer.BaseUrl}/?session={_sessionId}&wsPort={wsPort}");
+              }));
+            }
           }
           catch (Exception ex)
           {
@@ -390,14 +408,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             _isStartingWebSocket = false;
           }
         });
-
-        // Start embedded web server (production mode only - check if resources exist)
-        if (!_service.WebServer.IsRunning && HasEmbeddedWebAssets())
-        {
-          _service.WebServer.Start();
-          AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-            $"Web UI available at: {_service.WebServer.BaseUrl}/?session={_sessionId}");
-        }
 
         Message = ComponentMessageFormatter.CreateDisplayMessage(true, true, _embeddedSchema, _sessionId);
       }
@@ -612,10 +622,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     try
     {
+      // Get WebSocket port from CommunicationHandler
+      var wsPort = _service?.CommunicationHandler?.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
+
       // Use embedded web server if available, otherwise fall back to dev server
       var url = _service?.WebServer?.IsRunning == true
-        ? $"{_service.WebServer.BaseUrl}/?session={_sessionId}"
-        : $"http://localhost:5173/?session={_sessionId}";
+        ? $"{_service.WebServer.BaseUrl}/?session={_sessionId}&wsPort={wsPort}"
+        : $"http://localhost:5173/?session={_sessionId}&wsPort={wsPort}";
 
       Process.Start(new ProcessStartInfo
       {

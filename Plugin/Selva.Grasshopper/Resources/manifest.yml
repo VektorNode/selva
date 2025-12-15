@@ -1,6 +1,6 @@
 ---
 name: Selva
-version: 0.1.0
+version: $version
 authors:
   - Felix Brunold
   - VektorNode

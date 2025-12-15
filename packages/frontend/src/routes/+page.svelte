@@ -9,9 +9,13 @@
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
 
   var sessionId = page.url.searchParams.get('session');
+  var wsPort = page.url.searchParams.get('wsPort');
 
   function navigateTo(path: string) {
-    goto(`/${path}?session=${sessionId}`);
+    const params = new URLSearchParams();
+    if (sessionId) params.set('session', sessionId);
+    if (wsPort) params.set('wsPort', wsPort);
+    goto(`/${path}?${params.toString()}`);
   }
 </script>
 
