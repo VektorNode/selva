@@ -255,7 +255,7 @@ public class CommunicationHandler : IDisposable
     {
       RhinoApp.InvokeOnUiThread(callback);
     }
-    catch (Exception ex)
+    catch
     {
       callback?.Invoke();
     }
