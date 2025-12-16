@@ -34,12 +34,14 @@ Initial schema release with comprehensive UI builder functionality.
 ### Added
 
 **Core Schema Structure**
+
 - `UISchema` - Main schema container with metadata, versioning, and configuration
 - `schemaVersion` - Semantic version tracking (1.0.0)
 - `pluginVersion` - Version of plugin that created the schema
 - `minPluginVersion` - Minimum plugin version required to use schema
 
 **Parameter Definitions**
+
 - `InputParamSchema` - Input parameter configuration with Grasshopper metadata
 - `OutputParamSchema` - Output parameter configuration
 - `GrasshopperParamType` - Enum for parameter types (number, integer, boolean, text, valueList, generic)
@@ -47,12 +49,14 @@ Initial schema release with comprehensive UI builder functionality.
 - `AvailableParameters` - Collection of available inputs and outputs with session info
 
 **Widget Configurations**
+
 - `NumberWidgetConfig` - Number input with min, max, stepSize, renderAsSlider options
 - `TextWidgetConfig` - Text input with placeholder and required flag
 - `DropdownWidgetConfig` - Dropdown with options dictionary and required flag
 - `CheckboxWidgetConfig` - Boolean checkbox widget
 
 **Layout System** (Discriminated Union)
+
 - `LayoutItem` - Union type for all layout items
 - `InputNumberLayoutItem` - Number input layout configuration
 - `InputTextLayoutItem` - Text input layout configuration
@@ -63,11 +67,13 @@ Initial schema release with comprehensive UI builder functionality.
 - `OutputFileLayoutItem` - File output display configuration
 
 **Layout Organization**
+
 - `GroupConfig` - Collapsible groups with items, label, columns, order
 - `TabConfig` - Tabs containing groups with position (left/center/right)
 - `LayoutConfig` - Top-level layout with type (tabbed/flat), gap, tabs array
 
 **Runtime & Persistence**
+
 - `SessionState` - Active session tracking with sessionId, documentId, timestamps
 - `RuntimeValues` - Current parameter values with timestamp
 - `ParameterState` - Saved parameter state with paramId, value, groupName
@@ -75,9 +81,11 @@ Initial schema release with comprehensive UI builder functionality.
 - `ValidationIssue` - Validation errors/warnings with severity, message, details
 
 **3D Viewer**
+
 - `ViewerOptions` - Three.js viewer configuration (camera, controls, lighting, grid)
 
 **Schema Features**
+
 - `instanceSolve` - Auto-compute flag for Grasshopper solver
 - `author`, `organization` - Schema authorship metadata
 - `tags` - Array of tags for categorization
@@ -86,6 +94,7 @@ Initial schema release with comprehensive UI builder functionality.
 ### Technical Implementation
 
 **C# Code Generation**
+
 - 100% schema-driven C# class generation
 - Automatic discriminated union detection via `oneOf` patterns
 - Auto-generated JSON converters for polymorphic types
@@ -93,12 +102,14 @@ Initial schema release with comprehensive UI builder functionality.
 - Type-safe deserialization with discriminator fields
 
 **TypeScript Code Generation**
+
 - Full TypeScript interface generation from JSON Schema
 - Type guard functions for discriminated unions
 - Type aliases for union convenience
 - Re-exported from single index file
 
 **Migration System**
+
 - `SchemaMigrator.cs` - Version validation and migration framework
 - `CURRENT_SCHEMA_VERSION` tracking
 - `PLUGIN_VERSION` auto-detection from assembly
@@ -107,7 +118,7 @@ Initial schema release with comprehensive UI builder functionality.
 - Legacy schema handling (auto-upgrade schemas without version)
 
 **Validation**
-- Frontend validation in `schema-exporter.ts`
+
 - Document ID matching (critical validation)
 - Project file name matching (warning)
 - Schema structure validation
@@ -127,31 +138,38 @@ When adding a new version, copy this template:
 ## [X.Y.Z] - YYYY-MM-DD
 
 ### Added
+
 - New features, fields, or types
 - Format: `TypeName.fieldName` (type, required/optional) - Description
 
 ### Changed
+
 - Modifications to existing functionality
 - Format: `TypeName.fieldName` - What changed and why
 
 ### Deprecated
+
 - Features marked for future removal
 - Format: `TypeName.fieldName` - What to use instead. Will be removed in vX.Y.Z
 
 ### Removed
+
 - Features removed from the schema
 - Format: `TypeName.fieldName` - Why removed, migration path
 
 ### Fixed
+
 - Bug fixes
 - Format: Fixed issue where `TypeName.fieldName` caused ...
 
 ### BREAKING CHANGES (if applicable)
+
 - List all breaking changes prominently
 - Explain impact and migration path
 - Specify minimum plugin version requirements
 
 ### Migration Notes
+
 - Explain how old schemas are migrated
 - List any manual steps required
 - Note any data transformations
@@ -177,16 +195,20 @@ When adding a new version, copy this template:
 ## [1.1.0] - 2025-01-20
 
 ### Added
+
 - `NumberWidgetConfig.placeholder` (string, optional) - Placeholder text shown when input is empty
 - `ViewerOptions.showGrid` (boolean, optional, default: true) - Toggle grid visibility in 3D viewer
 
 ### Changed
+
 - `GroupConfig.columns` default changed from 1 to 2 for better default layout
 
 ### Deprecated
+
 - `UISchema.tags` - Use `UISchema.metadata.tags` instead. Will be removed in v2.0.0
 
 ### Migration Notes
+
 - Optional fields added - no migration required
 - Old schemas work without changes
 - `placeholder` defaults to null (no placeholder shown)
@@ -198,15 +220,18 @@ When adding a new version, copy this template:
 ## [1.1.0] - 2025-01-20
 
 ### Added
+
 - Some new fields
 - Better configuration options
 
 ### Changed
+
 - Improved layout system
 - Various fixes
 ```
 
 Why this is bad:
+
 - Not specific (which fields?)
 - No types or descriptions
 - No migration information
@@ -216,9 +241,9 @@ Why this is bad:
 
 ## Schema Version History
 
-| Version | Date | Summary |
-|---------|------|---------|
-| 1.0.0 | 2024-12-15 | Initial release with full UI builder functionality |
+| Version | Date       | Summary                                            |
+| ------- | ---------- | -------------------------------------------------- |
+| 1.0.0   | 2024-12-15 | Initial release with full UI builder functionality |
 
 ---
 
