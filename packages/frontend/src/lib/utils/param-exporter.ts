@@ -1,4 +1,4 @@
-import type { UISchema, SavedState, ParameterState, ValidationIssueMessage } from '$lib/types/generated';
+import type { UISchema, ParameterPreset, ParameterState, ValidationIssueMessage } from '$lib/types/generated';
 
 /**
  * Create a saved state from current schema and values
@@ -12,33 +12,42 @@ export function createSavedState(
     author?: string;
     tags?: string[];
   }
-): SavedState {
+): ParameterPreset {
   // Collect parameter states from schema
   const parameters: ParameterState[] = [];
 
-  // Process all layout items to extract parameter info
-  if (schema.layout?.tabs) {
-    for (const tab of schema.layout.tabs) {
-      for (const group of tab.groups || []) {
-        for (const item of group.items || []) {
-          if (item.type === 'input') {
-            const value = currentValues[item.paramId];
+  const processGroup = (group: any) => {
+    for (const item of group.items || []) {
+      if (item.type === 'input') {
+        const value = currentValues[item.paramId];
 
-            // Find the input parameter definition for type info
-            const inputDef = schema.inputs.find(i => i.id === item.paramId);
+        // Find the input parameter definition for type info
+        const inputDef = schema.inputs.find(i => i.id === item.paramId);
 
-            if (value !== undefined && inputDef) {
-              parameters.push({
-                paramId: item.paramId,
-                nickname: inputDef.nickname,
-                displayName: item.displayName || inputDef.nickname,
-                paramType: inputDef.paramType,
-                value,
-                groupName: group.label
-              });
-            }
-          }
+        if (value !== undefined && inputDef) {
+          parameters.push({
+            paramId: item.paramId,
+            nickname: inputDef.nickname,
+            displayName: item.displayName || inputDef.nickname,
+            paramType: inputDef.paramType,
+            value,
+            groupName: group.label
+          });
         }
+      }
+    }
+  };
+
+  if (schema.layout) {
+    if (schema.layout.type === 'tabbed') {
+      for (const tab of schema.layout.tabs) {
+        for (const group of tab.groups || []) {
+          processGroup(group);
+        }
+      }
+    } else if (schema.layout.type === 'flat') {
+      for (const group of schema.layout.groups || []) {
+        processGroup(group);
       }
     }
   }
@@ -62,7 +71,7 @@ export function createSavedState(
  * Validate a saved state against the current schema
  */
 export function validateSavedState(
-  savedState: SavedState,
+  savedState: ParameterPreset,
   currentSchema: UISchema
 ): {
   isValid: boolean;
@@ -139,7 +148,7 @@ export function validateSavedState(
  * Extract values from saved state that can be safely loaded
  */
 export function extractLoadableValues(
-  savedState: SavedState,
+  savedState: ParameterPreset,
   currentSchema: UISchema,
   validation: ReturnType<typeof validateSavedState>
 ): Record<string, unknown> {
@@ -169,7 +178,7 @@ export function extractLoadableValues(
 /**
  * Export state as .sps (Selva Param State) file
  */
-export function exportStateAsJson(savedState: SavedState): void {
+export function exportStateAsJson(savedState: ParameterPreset): void {
   const json = JSON.stringify(savedState, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -186,9 +195,9 @@ export function exportStateAsJson(savedState: SavedState): void {
 /**
  * Import state from .sps (Selva Param State) file
  */
-export async function importStateFromJson(file: File): Promise<SavedState> {
+export async function importStateFromJson(file: File): Promise<ParameterPreset> {
   const text = await file.text();
-  const state = JSON.parse(text) as SavedState;
+  const state = JSON.parse(text) as ParameterPreset;
 
   // Basic validation
   if (!state.id || !state.name || !state.documentId || !state.parameters) {

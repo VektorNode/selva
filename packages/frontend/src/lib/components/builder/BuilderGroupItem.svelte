@@ -1,6 +1,6 @@
 <script lang="ts">
   import { dragStore } from '$lib/stores/dragStore.svelte';
-  import type { LayoutItem, AvailableInput, NumberWidgetConfig } from '$lib/types/generated';
+  import type { LayoutItem, DiscoveredInput, NumberWidgetConfig } from '$lib/types/generated';
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
   import * as Card from '$lib/components/ui/card';
@@ -9,7 +9,7 @@
 
   interface BuilderGroupItemProps {
     item: LayoutItem;
-    paramInfo?: AvailableInput;
+    paramInfo?: DiscoveredInput;
     tabId: string;
     groupId: string;
     onRemove: () => void;

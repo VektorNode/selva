@@ -3,3 +3,4 @@
  * Import from here: import { UISchema, LayoutItem } from '$lib/types/generated';
  */
 export * from './schema';
+export * from './preset';

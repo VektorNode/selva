@@ -1,5 +1,5 @@
 import { toast } from '$lib/components/ui/sonner';
-import type { AvailableInput, AvailableOutput } from '$lib/types/generated';
+import type { DiscoveredInput, DiscoveredOutput, GroupConfig } from '$lib/types/generated';
 import {
   handleItemDrop,
   handleGroupItemDrop,
@@ -30,10 +30,16 @@ export function useBuilderActions(getBuilderState: () => ReturnType<typeof useBu
     const { dropType, data, targetItem, dropPosition, sourceTabId, sourceGroupId, sourceItem } =
       event.detail;
 
-    const tab = schema.layout.tabs?.find((t) => t.id === tabId);
-    if (!tab) return;
+    let group: GroupConfig | undefined;
 
-    const group = tab.groups.find((g) => g.id === groupId);
+    if (schema.layout.type === 'tabbed') {
+      const tab = schema.layout.tabs.find((t) => t.id === tabId);
+      if (!tab) return;
+      group = tab.groups.find((g) => g.id === groupId);
+    } else if (schema.layout.type === 'flat') {
+      group = schema.layout.groups.find((g) => g.id === groupId);
+    }
+
     if (!group) return;
 
     // Handle moving items within layout
@@ -53,7 +59,7 @@ export function useBuilderActions(getBuilderState: () => ReturnType<typeof useBu
 
     // Handle dropping inputs or outputs
     if (dropType === 'input') {
-      const param = data as AvailableInput;
+      const param = data as DiscoveredInput;
       handleItemDrop(
         schema,
         group,
@@ -67,7 +73,7 @@ export function useBuilderActions(getBuilderState: () => ReturnType<typeof useBu
         dropPosition
       );
     } else if (dropType === 'output') {
-      const output = data as AvailableOutput;
+      const output = data as DiscoveredOutput;
       const widgetType = output.type === 'file' ? 'file' : 'text';
       handleItemDrop(
         schema,
@@ -102,12 +108,21 @@ export function useBuilderActions(getBuilderState: () => ReturnType<typeof useBu
 
     if (sourceItem.id === targetItem.id) return;
 
-    const sourceTab = schema.layout.tabs?.find((t) => t.id === sourceTabId);
-    const targetTab = schema.layout.tabs?.find((t) => t.id === targetTabId);
-    if (!sourceTab || !targetTab) return;
+    let sourceGroup: GroupConfig | undefined;
+    let targetGroup: GroupConfig | undefined;
 
-    const sourceGroup = sourceTab.groups.find((g) => g.id === sourceGroupId);
-    const targetGroup = targetTab.groups.find((g) => g.id === targetGroupId);
+    if (schema.layout.type === 'tabbed') {
+      const sourceTab = schema.layout.tabs.find((t) => t.id === sourceTabId);
+      const targetTab = schema.layout.tabs.find((t) => t.id === targetTabId);
+      if (!sourceTab || !targetTab) return;
+
+      sourceGroup = sourceTab.groups.find((g) => g.id === sourceGroupId);
+      targetGroup = targetTab.groups.find((g) => g.id === targetGroupId);
+    } else if (schema.layout.type === 'flat') {
+      sourceGroup = schema.layout.groups.find((g) => g.id === sourceGroupId);
+      targetGroup = schema.layout.groups.find((g) => g.id === targetGroupId);
+    }
+
     if (!sourceGroup || !targetGroup) return;
 
     const sourceIndex = sourceGroup.items.findIndex((i) => i.id === sourceItem.id);
@@ -144,16 +159,25 @@ export function useBuilderActions(getBuilderState: () => ReturnType<typeof useBu
   function onAddToGroup(
     tabId: string,
     groupId: string,
-    item: AvailableInput | AvailableOutput
+    item: DiscoveredInput | DiscoveredOutput
   ) {
     const context = ensureSchema();
     if (!context) return;
     const { builderState, schema } = context;
 
-    const tab = schema.layout.tabs?.find((t) => t.id === tabId);
-    if (!tab) return;
+    let group: GroupConfig | undefined;
+    let tabLabel = '';
 
-    const group = tab.groups.find((g) => g.id === groupId);
+    if (schema.layout.type === 'tabbed') {
+      const tab = schema.layout.tabs.find((t) => t.id === tabId);
+      if (!tab) return;
+      tabLabel = tab.label;
+      group = tab.groups.find((g) => g.id === groupId);
+    } else if (schema.layout.type === 'flat') {
+      group = schema.layout.groups.find((g) => g.id === groupId);
+      tabLabel = 'Layout';
+    }
+
     if (!group) return;
 
     const itemType = 'name' in item ? 'input' : 'output';
@@ -175,83 +199,117 @@ export function useBuilderActions(getBuilderState: () => ReturnType<typeof useBu
       outputType
     );
 
-    toast.success(`Added to ${tab.label} / ${group.label}`);
+    toast.success(`Added to ${tabLabel} / ${group.label}`);
   }
 
-  function onAddToNewGroup(path: string, item: AvailableInput | AvailableOutput) {
+  function onAddToNewGroup(path: string, item: DiscoveredInput | DiscoveredOutput) {
     const context = ensureSchema();
     if (!context) return;
     const { builderState, schema } = context;
 
     const parts = path.split('/').map((p) => p.trim());
-    let tabId: string;
+    let tabId: string = '';
     let groupLabel: string;
 
-    if (parts.length === 2) {
-      const [tabLabel, grpLabel] = parts;
-      let tab = schema.layout.tabs?.find((t) => t.label.toLowerCase() === tabLabel.toLowerCase());
+    if (schema.layout.type === 'tabbed') {
+      if (parts.length === 2) {
+        const [tabLabel, grpLabel] = parts;
+        let tab = schema.layout.tabs.find((t) => t.label.toLowerCase() === tabLabel.toLowerCase());
 
-      if (!tab) {
-        const newTabId = addTab(schema);
-        tab = schema.layout.tabs?.find((t) => t.id === newTabId);
-        if (tab) {
-          tab.label = tabLabel;
-          // Auto-select the newly created tab
+        if (!tab) {
+          const newTabId = addTab(schema);
+          tab = schema.layout.tabs.find((t) => t.id === newTabId);
+          if (tab) {
+            tab.label = tabLabel;
+            // Auto-select the newly created tab
+            builderState.state.activeTabId = newTabId;
+            toast.success(`Created new tab: ${tabLabel}`);
+          }
+        }
+
+        if (!tab) return;
+        tabId = tab.id;
+        groupLabel = grpLabel;
+      } else {
+        groupLabel = parts[0];
+        if (builderState.state.activeTabId) {
+          tabId = builderState.state.activeTabId;
+        } else if (schema.layout.tabs.length > 0) {
+          tabId = schema.layout.tabs[0].id;
+        } else {
+          // Create first tab
+          const newTabId = addTab(schema);
+          tabId = newTabId;
           builderState.state.activeTabId = newTabId;
-          toast.success(`Created new tab: ${tabLabel}`);
         }
       }
 
+      const tab = schema.layout.tabs.find((t) => t.id === tabId);
       if (!tab) return;
-      tabId = tab.id;
-      groupLabel = grpLabel;
-    } else {
-      groupLabel = parts[0];
-      if (builderState.state.activeTabId) {
-        tabId = builderState.state.activeTabId;
-      } else if (schema.layout.tabs && schema.layout.tabs.length > 0) {
-        tabId = schema.layout.tabs[0].id;
-      } else {
-        // Create first tab
-        const newTabId = addTab(schema);
-        tabId = newTabId;
-        builderState.state.activeTabId = newTabId;
+
+      // Find or create group
+      let group = tab.groups.find((g) => g.label.toLowerCase() === groupLabel.toLowerCase());
+      if (!group) {
+        addGroup(schema, tabId);
+        group = tab.groups[tab.groups.length - 1];
+        group.label = groupLabel;
+        toast.success(`Created new group: ${groupLabel}`);
       }
+
+      // Add item to group
+      const itemType = 'name' in item ? 'input' : 'output';
+      const paramType = 'name' in item ? item.type : undefined;
+      const widgetType = 'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
+      const outputType = 'name' in item ? undefined : item.type;
+
+      handleItemDrop(
+        schema,
+        group,
+        item.id,
+        item.nickname || ('name' in item ? item.name : 'Unknown'),
+        itemType,
+        builderState.state.availableInputs,
+        paramType,
+        widgetType,
+        undefined,
+        undefined,
+        outputType
+      );
+
+      toast.success(`Added ${item.nickname || 'item'} to ${tab.label} / ${group.label}`);
+    } else if (schema.layout.type === 'flat') {
+      groupLabel = parts[parts.length - 1];
+
+      let group = schema.layout.groups.find((g) => g.label.toLowerCase() === groupLabel.toLowerCase());
+      if (!group) {
+        addGroup(schema, '');
+        group = schema.layout.groups[schema.layout.groups.length - 1];
+        group.label = groupLabel;
+        toast.success(`Created new group: ${groupLabel}`);
+      }
+
+      // Add item to group
+      const itemType = 'name' in item ? 'input' : 'output';
+      const paramType = 'name' in item ? item.type : undefined;
+      const widgetType = 'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
+      const outputType = 'name' in item ? undefined : item.type;
+
+      handleItemDrop(
+        schema,
+        group,
+        item.id,
+        item.nickname || ('name' in item ? item.name : 'Unknown'),
+        itemType,
+        builderState.state.availableInputs,
+        paramType,
+        widgetType,
+        undefined,
+        undefined,
+        outputType
+      );
+
+      toast.success(`Added ${item.nickname || 'item'} to ${group.label}`);
     }
-
-    const tab = schema.layout.tabs?.find((t) => t.id === tabId);
-    if (!tab) return;
-
-    // Find or create group
-    let group = tab.groups.find((g) => g.label.toLowerCase() === groupLabel.toLowerCase());
-    if (!group) {
-      addGroup(schema, tabId);
-      group = tab.groups[tab.groups.length - 1];
-      group.label = groupLabel;
-      toast.success(`Created new group: ${groupLabel}`);
-    }
-
-    // Add item to group
-    const itemType = 'name' in item ? 'input' : 'output';
-    const paramType = 'name' in item ? item.type : undefined;
-    const widgetType = 'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
-    const outputType = 'name' in item ? undefined : item.type;
-
-    handleItemDrop(
-      schema,
-      group,
-      item.id,
-      item.nickname || ('name' in item ? item.name : 'Unknown'),
-      itemType,
-      builderState.state.availableInputs,
-      paramType,
-      widgetType,
-      undefined,
-      undefined,
-      outputType
-    );
-
-    toast.success(`Added ${item.nickname || 'item'} to ${tab.label} / ${group.label}`);
   }
 
   function onAddTab() {
@@ -269,8 +327,8 @@ export function useBuilderActions(getBuilderState: () => ReturnType<typeof useBu
     removeTab(schema, tabId);
 
     if (
+      schema.layout.type === 'tabbed' &&
       builderState.state.activeTabId === tabId &&
-      schema.layout.tabs &&
       schema.layout.tabs.length > 0
     ) {
       builderState.state.activeTabId = schema.layout.tabs[0].id;

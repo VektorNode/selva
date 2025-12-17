@@ -27,17 +27,17 @@ public class SchemaValidatorTests
       Id = "test-schema",
       Name = "Test Schema",
       PluginVersion = "1.0.0",
-      Inputs = new List<InputParamSchema>
+      Inputs = new List<SchemaInput>
       {
-        new InputParamSchema
+        new SchemaInput
         {
           Id = Guid.NewGuid(),
           Nickname = "I1",
           ParamType = "number"
         }
       },
-      Outputs = new List<AvailableOutput>(),
-      Layout = new LayoutConfig
+      Outputs = new List<SchemaOutput>(),
+      Layout = new TabbedLayoutConfig
       {
         Tabs = new List<TabConfig>
         {

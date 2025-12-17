@@ -245,6 +245,8 @@ export class WebSocketState {
           '[WebSocket] Server is disconnecting:',
           (msg.data as { reason?: string } | undefined)?.reason || 'No reason provided'
         );
+
+        console.log(message)
         // Mark as server-initiated disconnect - will reload page on reconnect
         this._serverDisconnected = true;
         this._shouldReloadOnReconnect = true;

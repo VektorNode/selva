@@ -11,6 +11,7 @@
   ],
   "outputs": [],
   "layout": {
+    "type": "tabbed",
     "tabs": [
       {
         "id": "tab1",

@@ -94,7 +94,6 @@
         inputs: schema.inputs,
         values: $state.snapshot(values),
         definitionUrl: PUBLIC_GH_DEFINITION,
-        serverUrl: PUBLIC_COMPUTE_SERVER_URL,
       };
 
       const res = await fetch('/api/compute', {

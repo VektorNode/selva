@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json.Linq;
 using Selva.Core.Models;
 
 namespace Selva.Core.Services;
@@ -11,14 +12,110 @@ namespace Selva.Core.Services;
 public static class SchemaMigrator
 {
   // Current version of the plugin's schema format
-  public static readonly Version CURRENT_SCHEMA_VERSION = new Version(1, 0, 0);
+  public static readonly Version CURRENT_SCHEMA_VERSION = new Version(2, 0, 0);
 
   // Migration registry: maps version -> migration function
   private static readonly Dictionary<Version, Func<UISchema, UISchema>> _migrations =
     new Dictionary<Version, Func<UISchema, UISchema>>
     {
-      // Example: { new Version(1, 1, 0), MigrateTo_1_1_0 },
+      { new Version(2, 0, 0), MigrateTo_2_0_0 },
     };
+
+  /// <summary>
+  ///   Pre-deserialization migration for structural changes that cannot be handled by the C# model
+  /// </summary>
+  public static JObject MigrateJson(JObject json)
+  {
+    var versionStr = json["schemaVersion"]?.Value<string>();
+    // Handle legacy schemas without version
+    if (string.IsNullOrEmpty(versionStr))
+    {
+      versionStr = "1.0.0";
+      json["schemaVersion"] = versionStr;
+    }
+
+    var version = Version.Parse(versionStr);
+
+    if (version < new Version(2, 0, 0))
+    {
+      // Migration to 2.0.0:
+      var layout = json["layout"] as JObject;
+      if (layout != null)
+      {
+        // 1. Ensure 'type' discriminator exists (required for v2 polymorphism)
+        var type = layout["type"]?.Value<string>();
+        if (string.IsNullOrEmpty(type))
+        {
+          // Infer type from structure or default to tabbed (v1 default)
+          if (layout["tabs"] != null)
+          {
+            type = "tabbed";
+          }
+          else if (layout["groups"] != null)
+          {
+            type = "flat";
+          }
+          else
+          {
+            type = "tabbed"; // Default
+          }
+          layout["type"] = type;
+        }
+
+        // 2. Handle Flat Layout structural change (tabs -> groups)
+        if (type == "flat")
+        {
+          var tabs = layout["tabs"] as JArray;
+          if (tabs != null)
+          {
+            var allGroups = new JArray();
+            foreach (var tab in tabs)
+            {
+              var groups = tab["groups"] as JArray;
+              if (groups != null)
+              {
+                foreach (var group in groups)
+                {
+                  allGroups.Add(group);
+                }
+              }
+            }
+            layout["groups"] = allGroups;
+            layout.Remove("tabs");
+          }
+        }
+      }
+
+      // Update version
+      json["schemaVersion"] = "2.0.0";
+    }
+
+    return json;
+  }
+
+  private static UISchema MigrateTo_2_0_0(UISchema schema)
+  {
+    schema.SchemaVersion = "2.0.0";
+
+    // Ensure Name is populated (migration from 1.0.0 where Name might be missing)
+    foreach (var input in schema.Inputs)
+    {
+      if (string.IsNullOrEmpty(input.Name))
+      {
+        input.Name = input.Nickname;
+      }
+    }
+
+    foreach (var output in schema.Outputs)
+    {
+      if (string.IsNullOrEmpty(output.Name))
+      {
+        output.Name = output.Nickname;
+      }
+    }
+
+    return schema;
+  }
 
   /// <summary>
   ///   Migrate schema to current version

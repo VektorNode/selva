@@ -11,6 +11,7 @@ using System.Windows.Forms;
 using GH_IO.Serialization;
 using Grasshopper.Kernel;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Rhino;
 using Selva.Core.Models;
 using Selva.Core.Services;
@@ -105,13 +106,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   /// <summary>
   ///   Get current available parameters from document (single source of truth)
   /// </summary>
-  private AvailableParameters GetCurrentAvailableParameters()
+  private DiscoveredParameters GetCurrentAvailableParameters()
   {
     var document = OnPingDocument();
     if (document == null || _service?.SchemaManager == null)
     {
-      return new AvailableParameters
-        { SessionId = _sessionId, Inputs = new List<AvailableInput>(), Outputs = new List<AvailableOutput>() };
+      return new DiscoveredParameters
+      { SessionId = _sessionId, Inputs = new List<DiscoveredInput>(), Outputs = new List<DiscoveredOutput>() };
     }
 
     var availableParams = _service.SchemaManager.ScanParameters(document, this);
@@ -153,10 +154,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       Created = DateTime.UtcNow,
       Inputs = [],
       Outputs = [],
-      Layout = new LayoutConfig
+      Layout = new TabbedLayoutConfig
       {
-        Type = "tabbed",
-        Gap = 16,
         Tabs = []
       },
       ViewerOptions = new ViewerOptions
@@ -172,12 +171,12 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   /// <summary>
   ///   Get current available outputs from document (single source of truth)
   /// </summary>
-  private List<AvailableOutput> GetCurrentAvailableOutputs()
+  private List<DiscoveredOutput> GetCurrentAvailableOutputs()
   {
     var document = OnPingDocument();
     if (document == null || _service?.SchemaManager == null)
     {
-      return new List<AvailableOutput>();
+      return new List<DiscoveredOutput>();
     }
 
     return _service.SchemaManager.ScanOutputs(document);
@@ -514,7 +513,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       }
 
       var currentParams = GetCurrentAvailableParameters();
-      var currentOutputs = GetCurrentAvailableOutputs();
       var currentValues = _service.ValueCollector.CollectInputValues(document, _embeddedSchema, AddRuntimeMessage);
 
       var (validatedSchema, removedIds) = GetValidatedSchema();
@@ -530,7 +528,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
       var broadcastTask = _service.CommunicationHandler.BroadcastInitialData(
         schemaToSend,
         currentParams,
-        currentOutputs,
         currentValues
       );
 
@@ -925,9 +922,16 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         var schemaJson = reader.GetString("Schema");
         if (!string.IsNullOrEmpty(schemaJson))
         {
-          var rawSchema = JsonConvert.DeserializeObject<UISchema>(schemaJson);
+          // Parse as JObject first to handle structural migrations
+          var jObject = JObject.Parse(schemaJson);
 
-          // MIGRATE TO CURRENT VERSION
+          // Run JSON-level migration (structural changes)
+          jObject = SchemaMigrator.MigrateJson(jObject);
+
+          // Deserialize the migrated JSON
+          var rawSchema = jObject.ToObject<UISchema>();
+
+          // MIGRATE TO CURRENT VERSION (Logic/Defaults)
           var originalVersion = rawSchema.SchemaVersion;
           _embeddedSchema = SchemaMigrator.MigrateToCurrentVersion(rawSchema, PluginVersion);
 

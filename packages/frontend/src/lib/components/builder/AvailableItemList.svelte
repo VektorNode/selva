@@ -1,7 +1,7 @@
 <script lang="ts">
   import type {
-    AvailableInput,
-    AvailableOutput,
+    DiscoveredInput,
+    DiscoveredOutput,
     GrasshopperParamType,
     TabConfig,
   } from '$lib/types/generated';
@@ -12,13 +12,17 @@
   import { Search, X } from '@lucide/svelte';
 
   interface AvailableItemListProps {
-    items: (AvailableInput | AvailableOutput)[];
+    items: (DiscoveredInput | DiscoveredOutput)[];
     title: string;
     placedIds?: Set<string>;
     emptyMessage?: string;
     tabs?: TabConfig[];
-    onAddToGroup?: (tabId: string, groupId: string, item: AvailableInput | AvailableOutput) => void;
-    onAddToNewGroup?: (path: string, item: AvailableInput | AvailableOutput) => void;
+    onAddToGroup?: (
+      tabId: string,
+      groupId: string,
+      item: DiscoveredInput | DiscoveredOutput
+    ) => void;
+    onAddToNewGroup?: (path: string, item: DiscoveredInput | DiscoveredOutput) => void;
   }
 
   let {
@@ -34,7 +38,7 @@
   let searchQuery = $state('');
   let selectedType = $state<GrasshopperParamType | 'all' | string>('all');
 
-  const isParameter = (item: AvailableInput | AvailableOutput): item is AvailableInput => {
+  const isParameter = (item: DiscoveredInput | DiscoveredOutput): item is DiscoveredInput => {
     return 'name' in item;
   };
 

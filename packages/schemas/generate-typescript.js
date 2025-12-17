@@ -8,9 +8,14 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function main() {
-  const schemaPath = path.join(__dirname, 'ui-schema.json');
-  const outputPath = path.join(__dirname, '../frontend/src/lib/types/generated/schema.ts');
+async function generateSchema(schemaFileName, outputFileName, rootTypeName, options = {}) {
+  const schemaPath = path.join(__dirname, schemaFileName);
+  const outputPath = path.join(__dirname, `../frontend/src/lib/types/generated/${outputFileName}`);
+
+  if (!fs.existsSync(schemaPath)) {
+    console.warn(`Schema file not found: ${schemaPath}`);
+    return;
+  }
 
   const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 
@@ -18,9 +23,8 @@ async function main() {
   delete schema.$ref;
 
   try {
-    const ts = await compile(schema, 'UISchemaRoot', {
-      bannerComment:
-        '/* eslint-disable */\n/**\n * This file was automatically generated from schemas/ui-schema.json.\n * DO NOT MODIFY IT BY HAND. Instead, modify the source JSON Schema file,\n * and run `npm run generate:ts` in the schemas directory to regenerate this file.\n */\n',
+    const ts = await compile(schema, rootTypeName, {
+      bannerComment: `/* eslint-disable */\n/**\n * This file was automatically generated from schemas/${schemaFileName}.\n * DO NOT MODIFY IT BY HAND. Instead, modify the source JSON Schema file,\n * and run \`npm run generate:ts\` in the schemas directory to regenerate this file.\n */\n`,
       style: {
         singleQuote: true,
       },
@@ -28,10 +32,8 @@ async function main() {
       strictIndexSignatures: true,
     });
 
-    // Post-process to remove "referenced by" comments and add type guards
+    // Post-process to remove "referenced by" comments
     let output = ts;
-
-    // Remove all "This interface was referenced by..." comment blocks
     const lines = output.split('\n');
     const filtered = [];
     let inReferenceComment = false;
@@ -39,29 +41,22 @@ async function main() {
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-
-      // Check if this line contains the "referenced by" text
       if (line.includes('This interface was referenced by')) {
         inReferenceComment = true;
-        // Find where the comment block started
         for (let j = filtered.length - 1; j >= 0; j--) {
           if (filtered[j].trim() === '/**') {
             commentStartIndex = j;
             break;
           }
           if (filtered[j].trim() === '*/') {
-            // There's a previous comment block, this is a new one
             commentStartIndex = filtered.length;
             break;
           }
         }
         continue;
       }
-
-      // If we're in a reference comment, skip until we find the closing
       if (inReferenceComment) {
         if (line.trim() === '*/') {
-          // Remove the opening /** if we found it
           if (commentStartIndex >= 0 && commentStartIndex < filtered.length) {
             filtered.splice(commentStartIndex);
           }
@@ -70,12 +65,33 @@ async function main() {
         }
         continue;
       }
-
       filtered.push(line);
     }
 
-    output = filtered.join('\n'); // Add type guards at the end
-    const typeGuards = `
+    output = filtered.join('\n');
+
+    if (options.appendCode) {
+      output += options.appendCode;
+    }
+
+    // Ensure output directory exists
+    const outputDir = path.dirname(outputPath);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    fs.writeFileSync(outputPath, output);
+    console.log(`Generated TypeScript types at: ${outputPath}`);
+  } catch (error) {
+    console.error(`Error generating TypeScript for ${schemaFileName}:`, error);
+    process.exit(1);
+  }
+}
+
+async function main() {
+  // Generate UI Schema types
+  await generateSchema('ui-schema.json', 'schema.ts', 'UISchemaRoot', {
+    appendCode: `
 
 // ============================================================================
 // TYPE GUARDS
@@ -109,22 +125,11 @@ export function isCheckboxWidget(item: LayoutItem): item is InputCheckboxLayoutI
 export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem;
 export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem;
 export type SupportedTypes = string | number | boolean;
-`;
+`,
+  });
 
-    output += typeGuards;
-
-    // Ensure output directory exists
-    const outputDir = path.dirname(outputPath);
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true });
-    }
-
-    fs.writeFileSync(outputPath, output);
-    console.log(`Generated TypeScript types at: ${outputPath}`);
-  } catch (error) {
-    console.error('Error generating TypeScript:', error);
-    process.exit(1);
-  }
+  // Generate Preset Schema types
+  await generateSchema('preset-schema.json', 'preset.ts', 'ParameterPresetRoot');
 }
 
 main();

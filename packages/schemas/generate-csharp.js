@@ -11,6 +11,43 @@ const outputPath = path.join(__dirname, '../../Plugin/Selva.Core/Models/UISchema
 const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 const definitions = schema.definitions;
 
+// Helper to resolve properties from allOf inheritance
+function resolveDefinition(def) {
+  let properties = {};
+  let required = [];
+
+  if (def.properties) {
+    properties = { ...def.properties };
+  }
+  if (def.required) {
+    required = [...def.required];
+  }
+
+  if (def.allOf) {
+    for (const item of def.allOf) {
+      if (item.$ref) {
+        const refName = item.$ref.replace('#/definitions/', '');
+        const refDef = definitions[refName];
+        if (refDef) {
+          const resolved = resolveDefinition(refDef);
+          Object.assign(properties, resolved.properties);
+          required = [...required, ...resolved.required];
+        }
+      } else {
+        // Inline object in allOf
+        if (item.properties) {
+          Object.assign(properties, item.properties);
+        }
+        if (item.required) {
+          required = [...required, ...item.required];
+        }
+      }
+    }
+  }
+
+  return { properties, required };
+}
+
 // Type mappings from JSON Schema to C#
 function jsonTypeToCSharp(prop, propName, required) {
   if (!prop) return 'object';
@@ -23,8 +60,8 @@ function jsonTypeToCSharp(prop, propName, required) {
       return 'string';
     }
     // LayoutItem is a discriminated union - use the base class
-    if (refName === 'LayoutItem') {
-      return 'LayoutItemBase';
+    if (Object.keys(discriminatedUnions).includes(refName)) {
+      return `${refName}Base`;
     }
     return refName;
   }
@@ -120,11 +157,12 @@ function generateProperty(name, prop, required) {
 
 function generateClass(name, def) {
   // Skip if not an object type
-  if (def.type !== 'object' && !def.properties) return '';
+  if (def.type !== 'object' && !def.properties && !def.allOf) return '';
 
-  const required = def.required || [];
-  const props = def.properties
-    ? Object.entries(def.properties)
+  const { properties, required } = resolveDefinition(def);
+
+  const props = properties
+    ? Object.entries(properties)
         .map(([propName, prop]) => generateProperty(propName, prop, required.includes(propName)))
         .join('\n')
     : '';
@@ -157,8 +195,10 @@ function detectDiscriminatedUnions() {
         const firstVariant = definitions[variants[0]];
         const discriminators = [];
 
-        if (firstVariant?.properties) {
-          for (const [propName, propDef] of Object.entries(firstVariant.properties)) {
+        const firstResolved = resolveDefinition(firstVariant);
+
+        if (firstResolved.properties) {
+          for (const [propName, propDef] of Object.entries(firstResolved.properties)) {
             if (propDef.const) {
               discriminators.push(propName);
             }
@@ -168,10 +208,10 @@ function detectDiscriminatedUnions() {
         // Find common properties across all variants (for base class)
         const commonProps = new Set();
         if (variants.length > 0) {
-          const firstProps = Object.keys(definitions[variants[0]]?.properties || {});
+          const firstProps = Object.keys(firstResolved.properties || {});
           firstProps.forEach((prop) => {
             const isCommon = variants.every(
-              (v) => definitions[v]?.properties?.[prop] !== undefined
+              (v) => resolveDefinition(definitions[v]).properties?.[prop] !== undefined
             );
             if (isCommon) {
               commonProps.add(prop);
@@ -306,12 +346,15 @@ function classifySections() {
 
 // Generate regular classes (non-union items)
 const allUnionVariants = getAllUnionVariants();
+const unionBaseClasses = Object.values(discriminatedUnions).map((u) => u.baseClassName);
+
 const regularClasses = Object.entries(definitions)
   .filter(
     ([name]) =>
       !Object.keys(discriminatedUnions).includes(name) &&
       name !== 'GrasshopperParamType' &&
-      !allUnionVariants.has(name)
+      !allUnionVariants.has(name) &&
+      !unionBaseClasses.includes(name)
   )
   .map(([name, def]) => {
     if (def.enum) {
@@ -362,8 +405,9 @@ function generateUnionBaseClass(unionName, config) {
     } else {
       // Regular common properties
       const firstVariant = definitions[config.variants[0]];
-      const prop = firstVariant.properties[propName];
-      const required = firstVariant.required?.includes(propName) || false;
+      const { properties, required: requiredFields } = resolveDefinition(firstVariant);
+      const prop = properties[propName];
+      const required = requiredFields.includes(propName);
 
       baseProps += `${generateProperty(propName, prop, required)}
 `;
@@ -384,19 +428,19 @@ function generateUnionBaseClass(unionName, config) {
  */
 function generateUnionVariantClass(variantName, unionConfig) {
   const def = definitions[variantName];
-  const required = def.required || [];
+  const { properties, required } = resolveDefinition(def);
   const { commonProps, discriminators, baseClassName } = unionConfig;
 
   // Get discriminator values
   const discriminatorOverrides = discriminators
     .map((disc) => {
-      const value = def.properties[disc]?.const || 'unknown';
+      const value = properties[disc]?.const || 'unknown';
       return `public override string ${pascalCase(disc)} => "${value}";`;
     })
     .join('\n');
 
   // Get variant-specific properties (not in base class)
-  const variantProps = Object.entries(def.properties)
+  const variantProps = Object.entries(properties)
     .filter(([propName]) => !commonProps.includes(propName))
     .map(([propName, prop]) => generateProperty(propName, prop, required.includes(propName)))
     .join('\n');
@@ -419,9 +463,10 @@ function generateUnionConverter(unionName, config) {
   const conditions = variants
     .map((variantName, index) => {
       const def = definitions[variantName];
+      const { properties } = resolveDefinition(def);
       const checks = discriminators
         .map((disc) => {
-          const value = def.properties[disc]?.const || 'unknown';
+          const value = properties[disc]?.const || 'unknown';
           return `${disc} == "${value}"`;
         })
         .join(' && ');

@@ -195,7 +195,7 @@ public class ValueApplicator
   ///   Validate input value against security constraints
   ///   Note: Parameter range constraints (min/max) are enforced at UI level and not redundantly checked here
   /// </summary>
-  private bool ValidateValue(InputParamSchema input, object value,
+  private bool ValidateValue(SchemaInput input, object value,
     Action<GH_RuntimeMessageLevel, string> addMessage)
   {
     if (value == null)

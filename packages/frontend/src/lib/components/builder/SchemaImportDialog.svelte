@@ -96,8 +96,14 @@
             <dd class="font-medium">{importedSchema.schema.outputs.length}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-muted-foreground">Tabs:</dt>
-            <dd class="font-medium">{importedSchema.schema.layout.tabs?.length}</dd>
+            <dt class="text-muted-foreground">
+              {importedSchema.schema.layout.type === 'tabbed' ? 'Tabs' : 'Groups'}:
+            </dt>
+            <dd class="font-medium">
+              {importedSchema.schema.layout.type === 'tabbed'
+                ? importedSchema.schema.layout.tabs.length
+                : importedSchema.schema.layout.groups.length}
+            </dd>
           </div>
           {#if importedSchema.metadata.exportedAt}
             <div class="flex justify-between">

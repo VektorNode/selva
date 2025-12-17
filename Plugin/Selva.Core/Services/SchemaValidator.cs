@@ -166,82 +166,70 @@ public class SchemaValidator
       return; // Already flagged in basic structure validation
     }
 
-    if (schema.Layout.Tabs == null || !schema.Layout.Tabs.Any())
-    {
-      issues.Add(ValidationIssue.Warning(
-        null,
-        "Layout has no tabs defined",
-        "Layout should contain at least one tab"));
-      return;
-    }
-
     var inputParamIds = new HashSet<Guid>(schema.Inputs?.Select(i => i.Id) ?? Enumerable.Empty<Guid>());
     var outputParamIds = new HashSet<Guid>(schema.Outputs?.Select(o => o.Id) ?? Enumerable.Empty<Guid>());
     var layoutItemIds = new HashSet<string>();
+    IEnumerable<LayoutItemBase> allItems = Enumerable.Empty<LayoutItemBase>();
 
-    // Validate each tab
-    foreach (var tab in schema.Layout.Tabs)
+    if (schema.Layout is TabbedLayoutConfig tabbedLayout)
     {
-      if (string.IsNullOrEmpty(tab.Label))
+      if (tabbedLayout.Tabs == null || !tabbedLayout.Tabs.Any())
       {
         issues.Add(ValidationIssue.Warning(
           null,
-          "Tab has no label",
-          "All tabs should have a label for user clarity"));
+          "Layout has no tabs defined",
+          "Layout should contain at least one tab"));
+        return;
       }
 
-      if (tab.Groups == null || !tab.Groups.Any())
+      foreach (var tab in tabbedLayout.Tabs)
       {
-        issues.Add(ValidationIssue.Warning(
-          null,
-          $"Tab '{tab.Label}' has no groups",
-          "Tabs should contain at least one group"));
-        continue;
-      }
-
-      // Validate each group
-      foreach (var group in tab.Groups)
-      {
-        if (string.IsNullOrEmpty(group.Label))
+        if (string.IsNullOrEmpty(tab.Label))
         {
           issues.Add(ValidationIssue.Warning(
             null,
-            "Group has no label",
-            "All groups should have a label for user clarity"));
+            "Tab has no label",
+            "All tabs should have a label for user clarity"));
         }
 
-        if (group.Items == null || !group.Items.Any())
+        if (tab.Groups == null || !tab.Groups.Any())
         {
           issues.Add(ValidationIssue.Warning(
             null,
-            $"Group '{group.Label}' has no items",
-            "Groups should contain at least one item"));
+            $"Tab '{tab.Label}' has no groups",
+            "Tabs should contain at least one group"));
           continue;
         }
 
-        // Validate column count
-        if (group.Columns.HasValue && group.Columns.Value <= 0)
+        foreach (var group in tab.Groups)
         {
-          issues.Add(ValidationIssue.Error(
-            null,
-            $"Group '{group.Label}' has invalid column count: {group.Columns}",
-            "Column count must be greater than 0"));
-        }
-
-        // Validate each item
-        foreach (var item in group.Items)
-        {
-          ValidateLayoutItem(item, inputParamIds, outputParamIds, layoutItemIds, issues);
+          ValidateGroup(group, inputParamIds, outputParamIds, layoutItemIds, issues);
         }
       }
+
+      allItems = tabbedLayout.Tabs.SelectMany(t => t.Groups).SelectMany(g => g.Items);
+    }
+    else if (schema.Layout is FlatLayoutConfig flatLayout)
+    {
+      if (flatLayout.Groups == null || !flatLayout.Groups.Any())
+      {
+        issues.Add(ValidationIssue.Warning(
+          null,
+          "Layout has no groups defined",
+          "Layout should contain at least one group"));
+        return;
+      }
+
+      foreach (var group in flatLayout.Groups)
+      {
+        ValidateGroup(group, inputParamIds, outputParamIds, layoutItemIds, issues);
+      }
+
+      allItems = flatLayout.Groups.SelectMany(g => g.Items);
     }
 
     // Check for orphaned parameters (parameters not in layout)
-    var usedParamIds = new HashSet<Guid>(
-      schema.Layout.Tabs
-        .SelectMany(t => t.Groups)
-        .SelectMany(g => g.Items)
-        .Select(i => i.ParamId));
+    var usedParamIds = new HashSet<Guid>(allItems.Select(i => i.ParamId));
 
     var unusedInputs = inputParamIds.Except(usedParamIds).ToList();
     var unusedOutputs = outputParamIds.Except(usedParamIds).ToList();
@@ -260,6 +248,46 @@ public class SchemaValidator
         null,
         $"Unused output parameters: {string.Join(", ", unusedOutputs)}",
         "These output parameters are defined but not included in the layout"));
+    }
+  }
+
+  private void ValidateGroup(
+    GroupConfig group,
+    HashSet<Guid> inputParamIds,
+    HashSet<Guid> outputParamIds,
+    HashSet<string> layoutItemIds,
+    List<ValidationIssue> issues)
+  {
+    if (string.IsNullOrEmpty(group.Label))
+    {
+      issues.Add(ValidationIssue.Warning(
+        null,
+        "Group has no label",
+        "All groups should have a label for user clarity"));
+    }
+
+    if (group.Items == null || !group.Items.Any())
+    {
+      issues.Add(ValidationIssue.Warning(
+        null,
+        $"Group '{group.Label}' has no items",
+        "Groups should contain at least one item"));
+      return;
+    }
+
+    // Validate column count
+    if (group.Columns.HasValue && group.Columns.Value <= 0)
+    {
+      issues.Add(ValidationIssue.Error(
+        null,
+        $"Group '{group.Label}' has invalid column count: {group.Columns}",
+        "Column count must be greater than 0"));
+    }
+
+    // Validate each item
+    foreach (var item in group.Items)
+    {
+      ValidateLayoutItem(item, inputParamIds, outputParamIds, layoutItemIds, issues);
     }
   }
 
@@ -350,7 +378,7 @@ public class SchemaValidator
       case InputDropdownLayoutItem dropdownItem:
         ValidateDropdownWidgetConfig(dropdownItem, issues);
         break;
-      // Other widget types don't require special validation
+        // Other widget types don't require special validation
     }
   }
 

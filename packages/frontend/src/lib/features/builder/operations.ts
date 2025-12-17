@@ -1,8 +1,8 @@
 import type {
   UISchema,
-  AvailableInput,
-  AvailableOutput,
-  InputParamSchema,
+  DiscoveredInput,
+  DiscoveredOutput,
+  SchemaInput,
   TabConfig,
   GroupConfig,
   LayoutItem,
@@ -13,11 +13,20 @@ import { mapParamTypeToWidgetType, createDefaultWidgetConfig } from './widget-co
 import { toast } from '$lib/components/ui/sonner';
 
 export function isItemUsedInLayout(schema: UISchema | null, paramId: string): boolean {
-  return (
-    schema?.layout?.tabs?.some((t) =>
-      t.groups.some((g) => g.items.some((i) => i.paramId === paramId))
-    ) ?? false
-  );
+  if (!schema?.layout) return false;
+
+  if (schema.layout.type === 'tabbed') {
+    return (
+      schema.layout.tabs.some((t) =>
+        t.groups.some((g) => g.items.some((i) => i.paramId === paramId))
+      ) ?? false
+    );
+  } else if (schema.layout.type === 'flat') {
+    return (
+      schema.layout.groups.some((g) => g.items.some((i) => i.paramId === paramId)) ?? false
+    );
+  }
+  return false;
 }
 
 export function removeItemIfOrphaned(
@@ -40,7 +49,7 @@ export function createLayoutItem(
   displayName: string,
   itemType: 'input' | 'output',
   itemCount: number,
-  availableInputs: AvailableInput[],
+  availableInputs: DiscoveredInput[],
   widgetType?: string,
   paramType?: string
 ): LayoutItem {
@@ -61,35 +70,35 @@ export function createLayoutItem(
   const config =
     itemType === 'input' && paramType
       ? createDefaultWidgetConfig(
-          resolvedWidgetType as any,
-          fullParam || ({ type: paramType } as any),
-          'input'
-        )
+        resolvedWidgetType as any,
+        fullParam || ({ type: paramType } as any),
+        'input'
+      )
       : itemType === 'output' && paramType
         ? createDefaultWidgetConfig(resolvedWidgetType as any, { type: paramType } as any, 'output')
         : {};
 
   return itemType === 'input'
     ? ({
-        id: crypto.randomUUID().substring(0, 8),
-        paramId,
-        type: 'input',
-        displayName,
-        widgetType: resolvedWidgetType as any,
-        order: itemCount,
-        span: 1,
-        config,
-      } as InputLayoutItem)
+      id: crypto.randomUUID().substring(0, 8),
+      paramId,
+      type: 'input',
+      displayName,
+      widgetType: resolvedWidgetType as any,
+      order: itemCount,
+      span: 1,
+      config,
+    } as InputLayoutItem)
     : ({
-        id: crypto.randomUUID().substring(0, 8),
-        paramId,
-        type: 'output',
-        displayName,
-        widgetType: resolvedWidgetType as any,
-        order: itemCount,
-        span: 1,
-        config: itemType === 'output' && resolvedWidgetType === 'file' ? {} : config,
-      } as OutputLayoutItem);
+      id: crypto.randomUUID().substring(0, 8),
+      paramId,
+      type: 'output',
+      displayName,
+      widgetType: resolvedWidgetType as any,
+      order: itemCount,
+      span: 1,
+      config: itemType === 'output' && resolvedWidgetType === 'file' ? {} : config,
+    } as OutputLayoutItem);
 }
 
 export function insertLayoutItem(
@@ -124,7 +133,7 @@ export function handleItemDrop(
   paramId: string,
   displayName: string,
   itemType: 'input' | 'output',
-  availableParams: AvailableInput[],
+  availableParams: DiscoveredInput[],
   paramType?: string,
   widgetType?: string,
   targetItem?: LayoutItem,
@@ -148,7 +157,7 @@ export function handleItemDrop(
           nickname: displayName,
           paramType: (paramType as any) || 'generic',
           description: '',
-        } as InputParamSchema,
+        } as SchemaInput,
       ];
     }
   } else {
@@ -163,7 +172,7 @@ export function handleItemDrop(
           nickname: displayName,
           type: finalOutputType,
           description: '',
-        } as AvailableOutput,
+        } as DiscoveredOutput,
       ];
     }
   }
@@ -190,14 +199,23 @@ export function handleGroupItemDrop(
   targetItem?: LayoutItem,
   dropPosition?: 'before' | 'after'
 ) {
-  if (!schema?.layout.tabs) return;
+  if (!schema?.layout) return;
 
-  const sourceTab = schema.layout.tabs.find((t) => t.id === sourceTabId);
-  const targetTab = schema.layout.tabs.find((t) => t.id === tabId);
-  if (!sourceTab || !targetTab) return;
+  let sourceGroup: GroupConfig | undefined;
+  let targetGroup: GroupConfig | undefined;
 
-  const sourceGroup = sourceTab.groups.find((g) => g.id === sourceGroupId);
-  const targetGroup = targetTab.groups.find((g) => g.id === groupId);
+  if (schema.layout.type === 'tabbed') {
+    const sourceTab = schema.layout.tabs.find((t) => t.id === sourceTabId);
+    const targetTab = schema.layout.tabs.find((t) => t.id === tabId);
+    if (!sourceTab || !targetTab) return;
+
+    sourceGroup = sourceTab.groups.find((g) => g.id === sourceGroupId);
+    targetGroup = targetTab.groups.find((g) => g.id === groupId);
+  } else if (schema.layout.type === 'flat') {
+    sourceGroup = schema.layout.groups.find((g) => g.id === sourceGroupId);
+    targetGroup = schema.layout.groups.find((g) => g.id === groupId);
+  }
+
   if (!sourceGroup || !targetGroup) return;
 
   const sourceIndex = sourceGroup.items.findIndex((i) => i.id === sourceItem.id);
@@ -208,7 +226,7 @@ export function handleGroupItemDrop(
 }
 
 export function addTab(schema: UISchema): string {
-  if (!schema.layout.tabs) return '';
+  if (!schema.layout || schema.layout.type !== 'tabbed') return '';
 
   const newTab: TabConfig = {
     id: crypto.randomUUID().substring(0, 8),
@@ -223,7 +241,7 @@ export function addTab(schema: UISchema): string {
 }
 
 export function removeTab(schema: UISchema, tabId: string) {
-  if (!schema.layout.tabs) return;
+  if (!schema.layout || schema.layout.type !== 'tabbed') return;
 
   const tab = schema.layout.tabs.find((t) => t.id === tabId);
   if (!tab) return;
@@ -238,41 +256,65 @@ export function removeTab(schema: UISchema, tabId: string) {
 }
 
 export function addGroup(schema: UISchema, tabId: string) {
-  if (!schema.layout.tabs) return;
+  if (!schema.layout) return;
 
-  const tab = schema.layout.tabs.find((t) => t.id === tabId);
-  if (!tab) return;
+  if (schema.layout.type === 'tabbed') {
+    const tab = schema.layout.tabs.find((t) => t.id === tabId);
+    if (!tab) return;
 
-  const newGroup: GroupConfig = {
-    id: crypto.randomUUID().substring(0, 8),
-    label: `Group ${tab.groups.length + 1}`,
-    description: '',
-    order: tab.groups.length,
-    collapsed: false,
-    columns: 1,
-    items: [],
-  };
+    const newGroup: GroupConfig = {
+      id: crypto.randomUUID().substring(0, 8),
+      label: `Group ${tab.groups.length + 1}`,
+      description: '',
+      order: tab.groups.length,
+      collapsed: false,
+      columns: 1,
+      items: [],
+    };
 
-  tab.groups = [...tab.groups, newGroup];
+    tab.groups = [...tab.groups, newGroup];
+  } else if (schema.layout.type === 'flat') {
+    const newGroup: GroupConfig = {
+      id: crypto.randomUUID().substring(0, 8),
+      label: `Group ${schema.layout.groups.length + 1}`,
+      description: '',
+      order: schema.layout.groups.length,
+      collapsed: false,
+      columns: 1,
+      items: [],
+    };
+
+    schema.layout.groups = [...schema.layout.groups, newGroup];
+  }
 }
 
 export function removeGroup(schema: UISchema, tabId: string, groupId: string) {
-  if (!schema.layout.tabs) return;
+  if (!schema.layout) return;
 
-  const tab = schema.layout.tabs.find((t) => t.id === tabId);
-  if (!tab) return;
+  if (schema.layout.type === 'tabbed') {
+    const tab = schema.layout.tabs.find((t) => t.id === tabId);
+    if (!tab) return;
 
-  tab.groups = tab.groups.filter((g) => g.id !== groupId);
-  schema.layout.tabs = [...schema.layout.tabs];
+    tab.groups = tab.groups.filter((g) => g.id !== groupId);
+    schema.layout.tabs = [...schema.layout.tabs];
+  } else if (schema.layout.type === 'flat') {
+    schema.layout.groups = schema.layout.groups.filter((g) => g.id !== groupId);
+  }
 }
 
 export function removeItem(schema: UISchema, tabId: string, groupId: string, itemId: string) {
-  if (!schema.layout.tabs) return;
+  if (!schema.layout) return;
 
-  const tab = schema.layout.tabs.find((t) => t.id === tabId);
-  if (!tab) return;
+  let group: GroupConfig | undefined;
 
-  const group = tab.groups.find((g) => g.id === groupId);
+  if (schema.layout.type === 'tabbed') {
+    const tab = schema.layout.tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+    group = tab.groups.find((g) => g.id === groupId);
+  } else if (schema.layout.type === 'flat') {
+    group = schema.layout.groups.find((g) => g.id === groupId);
+  }
+
   if (!group) return;
 
   const item = group.items.find((i) => i.id === itemId);
@@ -284,7 +326,7 @@ export function removeItem(schema: UISchema, tabId: string, groupId: string, ite
 }
 
 export function reorderTabs(schema: UISchema, fromIndex: number, toIndex: number) {
-  if (!schema.layout.tabs) return;
+  if (!schema.layout || schema.layout.type !== 'tabbed') return;
 
   const tabs = [...schema.layout.tabs];
   const [movedTab] = tabs.splice(fromIndex, 1);
@@ -298,21 +340,35 @@ export function reorderTabs(schema: UISchema, fromIndex: number, toIndex: number
 }
 
 export function reorderGroups(schema: UISchema, tabId: string, fromIndex: number, toIndex: number) {
-  if (!schema.layout.tabs) return;
+  if (!schema.layout) return;
 
-  const tab = schema.layout.tabs.find((t) => t.id === tabId);
-  if (!tab) return;
+  let groups: GroupConfig[] | undefined;
 
-  const groups = [...tab.groups];
-  const [movedGroup] = groups.splice(fromIndex, 1);
-  groups.splice(toIndex, 0, movedGroup);
+  if (schema.layout.type === 'tabbed') {
+    const tab = schema.layout.tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+    groups = tab.groups;
+  } else if (schema.layout.type === 'flat') {
+    groups = schema.layout.groups;
+  }
 
-  groups.forEach((group, index) => {
+  if (!groups) return;
+
+  const newGroups = [...groups];
+  const [movedGroup] = newGroups.splice(fromIndex, 1);
+  newGroups.splice(toIndex, 0, movedGroup);
+
+  newGroups.forEach((group, index) => {
     group.order = index;
   });
 
-  tab.groups = groups;
-  schema.layout.tabs = [...schema.layout.tabs];
+  if (schema.layout.type === 'tabbed') {
+    const tab = schema.layout.tabs.find((t) => t.id === tabId);
+    if (tab) tab.groups = newGroups;
+    schema.layout.tabs = [...schema.layout.tabs];
+  } else if (schema.layout.type === 'flat') {
+    schema.layout.groups = newGroups;
+  }
 }
 
 export function batchSetNumberWidgetType(
@@ -321,23 +377,29 @@ export function batchSetNumberWidgetType(
 ): { changed: number } {
   let count = 0;
 
-  if (!schema.layout.tabs) {
+  if (!schema.layout) {
     return { changed: count };
   }
 
-  schema.layout.tabs.forEach((tab) => {
-    tab.groups.forEach((group) => {
-      group.items.forEach((item) => {
-        // Only process input number widgets
-        if (item.type === 'input' && item.widgetType === 'number') {
-          if (item.config && 'renderAsSlider' in item.config) {
-            item.config.renderAsSlider = renderAsSlider;
-            count++;
-          }
+  const processGroup = (group: GroupConfig) => {
+    group.items.forEach((item) => {
+      // Only process input number widgets
+      if (item.type === 'input' && item.widgetType === 'number') {
+        if (item.config && 'renderAsSlider' in item.config) {
+          item.config.renderAsSlider = renderAsSlider;
+          count++;
         }
-      });
+      }
     });
-  });
+  };
+
+  if (schema.layout.type === 'tabbed') {
+    schema.layout.tabs.forEach((tab) => {
+      tab.groups.forEach(processGroup);
+    });
+  } else if (schema.layout.type === 'flat') {
+    schema.layout.groups.forEach(processGroup);
+  }
 
   return { changed: count };
 }
