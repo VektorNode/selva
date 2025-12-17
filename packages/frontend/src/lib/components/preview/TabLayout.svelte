@@ -1,8 +1,8 @@
 <script lang="ts">
   import type {
     UISchema,
-    InputParamSchema,
-    AvailableOutput,
+    SchemaInput,
+    DiscoveredOutput,
     SupportedTypes,
   } from '$lib/types/generated';
   import * as Card from '$lib/components/ui/card';
@@ -26,12 +26,12 @@
 
   // Initialize first tab as active and set initial collapsed states
   $effect(() => {
-    if (schema.layout.tabs && schema.layout.tabs.length > 0 && !activeTabId) {
+    if (schema.layout.type === 'tabbed' && schema.layout.tabs.length > 0 && !activeTabId) {
       activeTabId = schema.layout.tabs[0].id;
     }
 
     // Initialize collapsed states from schema
-    if (schema.layout.tabs) {
+    if (schema.layout.type === 'tabbed') {
       const initialCollapsed: Record<string, boolean> = {};
       schema.layout.tabs.forEach((tab) => {
         tab.groups.forEach((group) => {
@@ -53,14 +53,18 @@
     };
   }
 
-  const activeTab = $derived(schema.layout.tabs?.find((t) => t.id === activeTabId));
+  const activeTab = $derived(
+    schema.layout.type === 'tabbed'
+      ? schema.layout.tabs.find((t) => t.id === activeTabId)
+      : undefined
+  );
 
   // Lookup by paramId (GUID from LayoutItem)
-  function getInputById(paramId: string): InputParamSchema | undefined {
+  function getInputById(paramId: string): SchemaInput | undefined {
     return schema.inputs.find((i) => i.id === paramId);
   }
 
-  function getOutputById(paramId: string): AvailableOutput | undefined {
+  function getOutputById(paramId: string): DiscoveredOutput | undefined {
     return schema.outputs.find((o) => o.id === paramId);
   }
 </script>
@@ -68,7 +72,7 @@
 <Card.Root class="flex min-h-0 w-full flex-col gap-0 overflow-hidden py-0 shadow-sm">
   <!-- Tab Navigation -->
   <div class="flex shrink-0 overflow-x-auto border-b-2 border-border bg-muted">
-    {#each schema.layout.tabs || [] as tab}
+    {#each schema.layout.type === 'tabbed' ? schema.layout.tabs : [] as tab}
       <button
         class={`flex items-center gap-2 border-b-4 px-6 py-4 font-medium whitespace-nowrap transition-all ${
           activeTabId === tab.id

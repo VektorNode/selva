@@ -200,10 +200,10 @@ public class DocumentEventManager : IDisposable
 
     try
     {
-      var metadataChanges = new AvailableParameters
+      var metadataChanges = new DiscoveredParameters
       {
-        Inputs = new List<AvailableInput>(),
-        Outputs = new List<AvailableOutput>()
+        Inputs = new List<DiscoveredInput>(),
+        Outputs = new List<DiscoveredOutput>()
       };
       MetadataChanged?.Invoke(this, new MetadataChangedEventArgs { Changes = metadataChanges });
 
@@ -285,7 +285,7 @@ public class DocumentEventManager : IDisposable
   /// <summary>
   ///   Check if metadata changes require solution recalculation
   /// </summary>
-  private bool ShouldRecalculateAfterMetadataChange(AvailableParameters changes)
+  private bool ShouldRecalculateAfterMetadataChange(DiscoveredParameters changes)
   {
     // Check input changes
     var hasInputChanges = changes.Inputs.Any(change =>
@@ -347,6 +347,6 @@ public class ParametersChangedEventArgs : EventArgs
 /// </summary>
 public class MetadataChangedEventArgs : EventArgs
 {
-  public AvailableParameters Changes { get; set; }
+  public DiscoveredParameters Changes { get; set; }
   public bool RequiresRecalculation { get; set; }
 }

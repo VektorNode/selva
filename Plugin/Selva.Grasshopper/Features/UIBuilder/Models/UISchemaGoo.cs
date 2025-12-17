@@ -120,8 +120,17 @@ public class UISchemaGoo : IGH_Goo
 
     var inputCount = Value.Inputs?.Count ?? 0;
     var outputCount = Value.Outputs?.Count ?? 0;
-    var tabCount = Value.Layout?.Tabs?.Count ?? 0;
+    var layoutInfo = "unknown layout";
 
-    return $"UISchema: {Value.Name} (inputs={inputCount}, outputs={outputCount}, tabs={tabCount})";
+    if (Value.Layout is TabbedLayoutConfig tabbed)
+    {
+      layoutInfo = $"{tabbed.Tabs?.Count ?? 0} tabs";
+    }
+    else if (Value.Layout is FlatLayoutConfig flat)
+    {
+      layoutInfo = $"{flat.Groups?.Count ?? 0} groups";
+    }
+
+    return $"UISchema: {Value.Name} (inputs={inputCount}, outputs={outputCount}, {layoutInfo})";
   }
 }

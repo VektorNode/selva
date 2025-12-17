@@ -36,13 +36,23 @@
 
   const placedInLayoutIds = $derived.by(() => {
     const ids = new Set<string>();
-    builderState?.state.schema?.layout?.tabs?.forEach((tab) => {
-      tab.groups.forEach((group) => {
+    const layout = builderState?.state.schema?.layout;
+
+    if (layout?.type === 'tabbed') {
+      layout.tabs.forEach((tab) => {
+        tab.groups.forEach((group) => {
+          group.items.forEach((item) => {
+            ids.add(item.paramId);
+          });
+        });
+      });
+    } else if (layout?.type === 'flat') {
+      layout.groups.forEach((group) => {
         group.items.forEach((item) => {
           ids.add(item.paramId);
         });
       });
-    });
+    }
     return ids;
   });
 
@@ -56,6 +66,7 @@
 
   function saveSchema() {
     if (!builderState?.state.schema || !sessionId) return;
+    console.log($state.snapshot(builderState.state.schema));
 
     if (!builderState.wsState.connected) {
       toast.error('Not connected to Grasshopper');
@@ -183,7 +194,7 @@
           />
 
           <main class="flex flex-col gap-6">
-            {#if builderState.state.schema.layout?.tabs}
+            {#if builderState.state.schema.layout?.type === 'tabbed'}
               <TabEditor
                 bind:tabs={builderState.state.schema.layout.tabs}
                 activeTabId={builderState.state.activeTabId}

@@ -27,18 +27,18 @@ public class SchemaManager
   /// <summary>
   ///   Scan document and return available parameters (inputs and outputs)
   /// </summary>
-  public AvailableParameters ScanParameters(GH_Document document, GH_Component uiBridge)
+  public DiscoveredParameters ScanParameters(GH_Document document, GH_Component uiBridge)
   {
     // Scan for all contextual parameters (inputs only)
     var allParams = document.Objects
       .OfType<IGH_ContextualParameter>()
       .ToList();
 
-    var availableParameters = new AvailableParameters
+    var availableParameters = new DiscoveredParameters
     {
       SessionId = _sessionId,
       Timestamp = DateTime.UtcNow,
-      Inputs = new List<AvailableInput>(),
+      Inputs = new List<DiscoveredInput>(),
       Outputs = ScanOutputs(document)
     };
 
@@ -53,7 +53,7 @@ public class SchemaManager
       var ghParam = param as IGH_Param;
       var paramType = GetParameterTypeName(param);
 
-      var availableParam = new AvailableInput
+      var availableParam = new DiscoveredInput
       {
         Id = docObj.InstanceGuid,
         Name = docObj.Name,
@@ -137,9 +137,9 @@ public class SchemaManager
   /// <summary>
   ///   Scan document and return available outputs (separate from parameters)
   /// </summary>
-  public List<AvailableOutput> ScanOutputs(GH_Document document)
+  public List<DiscoveredOutput> ScanOutputs(GH_Document document)
   {
-    var outputs = new List<AvailableOutput>();
+    var outputs = new List<DiscoveredOutput>();
 
     // Scan for context output components (print, bake)
     var contextOutputs = document.Objects
@@ -160,7 +160,7 @@ public class SchemaManager
 
       // For Print components, try to detect if output is numeric
       if (output.Name.IndexOf("Print", StringComparison.OrdinalIgnoreCase) >= 0)
-        // Check if we can infer numeric output (simplified - in real scenario would need input analysis)
+      // Check if we can infer numeric output (simplified - in real scenario would need input analysis)
       {
         displayType = "text"; // Keep as text by default, can be enhanced based on actual output
       }
@@ -168,7 +168,7 @@ public class SchemaManager
       var param = outputComponent.Params.Input[0];
       var paramName = param != null ? param.NickName : "Output";
 
-      outputs.Add(new AvailableOutput
+      outputs.Add(new DiscoveredOutput
       {
         Id = output.InstanceGuid,
         Nickname = paramName,
@@ -181,7 +181,7 @@ public class SchemaManager
     var (_, fileOutputs) = ParameterTypeHelper.DetectDownloadableOutputs(document);
     foreach (var fileOutput in fileOutputs)
     {
-      outputs.Add(new AvailableOutput
+      outputs.Add(new DiscoveredOutput
       {
         Id = fileOutput.Id,
         Nickname = fileOutput.Nickname,
@@ -197,7 +197,7 @@ public class SchemaManager
   ///   Get validation results (duplicate inputs and outputs)
   /// </summary>
   public (List<string> DuplicateInputs, List<string> DuplicateOutputs) GetValidationResults(
-    AvailableParameters availableParameters)
+    DiscoveredParameters availableParameters)
   {
     return (ValidateDuplicatesInputs(availableParameters), ValidateDuplicateOutputs(availableParameters));
   }
@@ -205,7 +205,7 @@ public class SchemaManager
   /// <summary>
   ///   Validate no duplicate parameter names
   /// </summary>
-  public List<string> ValidateDuplicatesInputs(AvailableParameters parameters)
+  public List<string> ValidateDuplicatesInputs(DiscoveredParameters parameters)
   {
     return parameters.Inputs
       .GroupBy(p => p.Nickname)
@@ -217,7 +217,7 @@ public class SchemaManager
   /// <summary>
   ///   Validate for duplicate output names
   /// </summary>
-  public List<string> ValidateDuplicateOutputs(AvailableParameters parameters)
+  public List<string> ValidateDuplicateOutputs(DiscoveredParameters parameters)
   {
     if (parameters?.Outputs == null)
     {
@@ -261,12 +261,26 @@ public class SchemaManager
     var allIds = new HashSet<Guid>();
     allIds.UnionWith(schema.Inputs.Select(i => i.Id));
     allIds.UnionWith(schema.Outputs.Select(o => o.Id));
-    if (schema.Layout.Tabs != null)
+
+    if (schema.Layout is TabbedLayoutConfig tabbed)
     {
-      foreach (var tab in schema.Layout.Tabs)
-      foreach (var group in tab.Groups)
+      if (tabbed.Tabs != null)
       {
-        allIds.UnionWith(group.Items.Select(item => item.ParamId));
+        foreach (var tab in tabbed.Tabs)
+          foreach (var group in tab.Groups)
+          {
+            allIds.UnionWith(group.Items.Select(item => item.ParamId));
+          }
+      }
+    }
+    else if (schema.Layout is FlatLayoutConfig flat)
+    {
+      if (flat.Groups != null)
+      {
+        foreach (var group in flat.Groups)
+        {
+          allIds.UnionWith(group.Items.Select(item => item.ParamId));
+        }
       }
     }
 
@@ -299,19 +313,34 @@ public class SchemaManager
     schema.Outputs.RemoveAll(output => outputsToRemove.Contains(output));
 
     // Remove layout items that don't exist
-    if (schema.Layout.Tabs != null)
+    if (schema.Layout is TabbedLayoutConfig tabbedLayout)
     {
-      foreach (var tab in schema.Layout.Tabs)
+      if (tabbedLayout.Tabs != null)
       {
-        foreach (var group in tab.Groups)
+        foreach (var tab in tabbedLayout.Tabs)
+        {
+          foreach (var group in tab.Groups)
+          {
+            group.Items.RemoveAll(item => !existingIds.Contains(item.ParamId));
+          }
+
+          tab.Groups.RemoveAll(g => g.Items.Count == 0);
+        }
+
+        tabbedLayout.Tabs.RemoveAll(t => t.Groups.Count == 0);
+      }
+    }
+    else if (schema.Layout is FlatLayoutConfig flatLayout)
+    {
+      if (flatLayout.Groups != null)
+      {
+        foreach (var group in flatLayout.Groups)
         {
           group.Items.RemoveAll(item => !existingIds.Contains(item.ParamId));
         }
 
-        tab.Groups.RemoveAll(g => g.Items.Count == 0);
+        flatLayout.Groups.RemoveAll(g => g.Items.Count == 0);
       }
-
-      schema.Layout.Tabs.RemoveAll(t => t.Groups.Count == 0);
     }
 
     return (schema, removedIds ?? new List<Guid>());
@@ -382,16 +411,16 @@ public class SchemaManager
 
   /// <summary>
   ///   Detect metadata changes in parameters since last scan.
-  ///   Returns AvailableParameters with changed metadata and also applies changes to the schema.
+  ///   Returns DiscoveredParameters with changed metadata and also applies changes to the schema.
   /// </summary>
-  public AvailableParameters DetectMetadataChanges(GH_Document document, UISchema schema)
+  public DiscoveredParameters DetectMetadataChanges(GH_Document document, UISchema schema)
   {
-    var changes = new AvailableParameters
+    var changes = new DiscoveredParameters
     {
       SessionId = _sessionId,
       Timestamp = DateTime.UtcNow,
-      Inputs = new List<AvailableInput>(),
-      Outputs = new List<AvailableOutput>()
+      Inputs = new List<DiscoveredInput>(),
+      Outputs = new List<DiscoveredOutput>()
     };
 
     if (schema == null)
@@ -477,9 +506,9 @@ public class SchemaManager
   ///   Apply detected metadata changes to the schema.
   ///   Updates layout item configs (min/max/stepSize for numbers, options for dropdowns).
   /// </summary>
-  public void ApplyMetadataChangesToSchema(UISchema schema, AvailableParameters changes)
+  public void ApplyMetadataChangesToSchema(UISchema schema, DiscoveredParameters changes)
   {
-    if (schema?.Layout?.Tabs == null || changes == null)
+    if (schema?.Layout == null || changes == null)
     {
       return;
     }
@@ -489,12 +518,27 @@ public class SchemaManager
       return;
     }
 
+    IEnumerable<LayoutItemBase> allItems = Enumerable.Empty<LayoutItemBase>();
+
+    if (schema.Layout is TabbedLayoutConfig tabbedLayout)
+    {
+      if (tabbedLayout.Tabs != null)
+      {
+        allItems = tabbedLayout.Tabs.SelectMany(t => t.Groups).SelectMany(g => g.Items);
+      }
+    }
+    else if (schema.Layout is FlatLayoutConfig flatLayout)
+    {
+      if (flatLayout.Groups != null)
+      {
+        allItems = flatLayout.Groups.SelectMany(g => g.Items);
+      }
+    }
+
     foreach (var change in changes.Inputs)
     {
       // Find and update the layout item for this parameter
-      foreach (var tab in schema.Layout.Tabs)
-      foreach (var group in tab.Groups)
-      foreach (var item in group.Items)
+      foreach (var item in allItems)
       {
         if (item.ParamId != change.Id)
         {
@@ -532,9 +576,7 @@ public class SchemaManager
     foreach (var change in changes.Outputs)
     {
       // Update displayName/description in layout items
-      foreach (var tab in schema.Layout.Tabs)
-      foreach (var group in tab.Groups)
-      foreach (var item in group.Items)
+      foreach (var item in allItems)
       {
         if (item.ParamId != change.Id)
         {
@@ -578,7 +620,7 @@ public class SchemaManager
     // Extract numeric constraints if applicable
     if (param != null && ghParam != null)
     {
-      var availableParam = new AvailableInput { Id = docObj.InstanceGuid };
+      var availableParam = new DiscoveredInput { Id = docObj.InstanceGuid };
       ParameterTypeHelper.ExtractNumberParameterConstraints(param, ghParam, availableParam);
 
       snapshot.Minimum = availableParam.Minimum;
@@ -596,13 +638,13 @@ public class SchemaManager
   }
 
   /// <summary>
-  ///   Create an AvailableInput from a metadata snapshot
+  ///   Create an DiscoveredInput from a metadata snapshot
   /// </summary>
-  private AvailableInput CreateAvailableInputFromSnapshot(
+  private DiscoveredInput CreateAvailableInputFromSnapshot(
     ParameterMetadataSnapshot snapshot,
     Guid id)
   {
-    var param = new AvailableInput
+    var param = new DiscoveredInput
     {
       Id = id,
       Nickname = snapshot.Nickname,
@@ -622,13 +664,13 @@ public class SchemaManager
   }
 
   /// <summary>
-  ///   Create an AvailableOutput from a metadata snapshot
+  ///   Create an DiscoveredOutput from a metadata snapshot
   /// </summary>
-  private AvailableOutput CreateAvailableOutputFromSnapshot(
+  private DiscoveredOutput CreateAvailableOutputFromSnapshot(
     ParameterMetadataSnapshot snapshot,
     Guid id)
   {
-    var param = new AvailableOutput
+    var param = new DiscoveredOutput
     {
       Id = id,
       Nickname = snapshot.Nickname,

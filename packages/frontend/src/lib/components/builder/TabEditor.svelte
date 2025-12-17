@@ -2,7 +2,7 @@
   import * as Card from '$lib/components/ui/card';
   import { Button, StateDisplay } from '$lib/components/ui';
   import { EditableTabNav, EditableGroup, BuilderGroupItem } from '$lib/components/builder';
-  import type { TabConfig, AvailableInput } from '$lib/types/generated';
+  import type { TabConfig, DiscoveredInput } from '$lib/types/generated';
   import { dragStore } from '$lib/stores/dragStore.svelte';
 
   interface Props {
@@ -18,7 +18,7 @@
     onParameterDrop: (tabId: string, groupId: string, event: CustomEvent) => void;
     onReorder: (event: CustomEvent) => void;
     onRemoveItem: (tabId: string, groupId: string, itemId: string) => void;
-    getParameterInfo: (paramId: string) => AvailableInput | undefined;
+    getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
   }
 
   let {
@@ -58,7 +58,11 @@
     // Check if the target itself or any of its parents up to the draggable container is an input/button
     let element: HTMLElement | null = target;
     while (element && element !== e.currentTarget) {
-      if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'BUTTON') {
+      if (
+        element.tagName === 'INPUT' ||
+        element.tagName === 'TEXTAREA' ||
+        element.tagName === 'BUTTON'
+      ) {
         e.preventDefault();
         e.stopPropagation();
         return;

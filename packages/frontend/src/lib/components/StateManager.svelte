@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Download, Upload, AlertTriangle, CheckCircle } from '@lucide/svelte';
-  import type { UISchema, SavedState } from '$lib/types/generated';
+  import type { UISchema, ParameterPreset } from '$lib/types/generated';
   import {
     createSavedState,
     validateSavedState,
@@ -40,7 +40,7 @@
   // Import/validation state
   let showValidationDialog = $state(false);
   let showLoadDialog = $state(false);
-  let importedState = $state<SavedState | null>(null);
+  let importedState = $state<ParameterPreset | null>(null);
   let validationResult = $state<ReturnType<typeof validateSavedState> | null>(null);
   let fileInputRef = $state<HTMLInputElement | null>(null);
 

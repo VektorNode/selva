@@ -2,12 +2,16 @@
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { getWebSocketState } from '$lib/websocket/websocket.svelte';
-  import type { UISchema, AvailableParameters, SupportedTypes } from '$lib/types/generated';
+  import type { UISchema, DiscoveredParameters, SupportedTypes } from '$lib/types/generated';
   import { TabLayout } from '$lib/components/preview';
   import { PageContainer, PageHeader } from '$lib/components/layout';
   import { Maximize, Minimize } from '@lucide/svelte';
   import { StateDisplay, Button } from '$lib/components/ui';
-  import { initializeWebSocketSession, ensureSchemaLayoutDefaults, getWebSocketPortFromUrl } from '$lib/utils/session';
+  import {
+    initializeWebSocketSession,
+    ensureSchemaLayoutDefaults,
+    getWebSocketPortFromUrl,
+  } from '$lib/utils/session';
   import StateManager from '$lib/components/StateManager.svelte';
   import { onMount } from 'svelte';
   import { type MeshBatch } from '@selva/core';
@@ -244,7 +248,7 @@
   function handleInitialData(message: any) {
     if (message.sessionId === sessionId) {
       const receivedSchema = message.schema;
-      const availableParams = message.availableParams as AvailableParameters;
+      const availableParams = message.availableParams as DiscoveredParameters;
 
       if (!receivedSchema) {
         error = 'No schema configured. Please use the Schema Builder to create a UI.';

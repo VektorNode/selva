@@ -381,10 +381,10 @@ public class CommunicationHandler : IDisposable
   }
 
   /// <summary>
-  ///   Broadcast initial data to all connected clients (schema, available params, available outputs, current values)
+  ///   Broadcast initial data to all connected clients (schema, available params, current values)
   /// </summary>
-  public async Task BroadcastInitialData(UISchema schema, AvailableParameters availableParams,
-    List<AvailableOutput> availableOutputs, Dictionary<string, object> currentValues)
+  public async Task BroadcastInitialData(UISchema schema, DiscoveredParameters availableParams,
+    Dictionary<string, object> currentValues)
   {
     if (_webSocketServer != null && _webSocketServer.IsRunning)
     {
@@ -394,7 +394,6 @@ public class CommunicationHandler : IDisposable
         sessionId = _sessionId,
         schema,
         availableParams,
-        availableOutputs,
         currentValues
       };
       await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
@@ -455,7 +454,7 @@ public class CommunicationHandler : IDisposable
   /// <summary>
   ///   Broadcast parameter metadata changes (nickname, min/max, stepsize, etc.)
   /// </summary>
-  public async Task BroadcastMetadataChanges(AvailableParameters changedParams)
+  public async Task BroadcastMetadataChanges(DiscoveredParameters changedParams)
   {
     if (_webSocketServer != null && _webSocketServer.IsRunning && changedParams != null &&
         (changedParams.Inputs?.Count > 0 || changedParams.Outputs?.Count > 0))

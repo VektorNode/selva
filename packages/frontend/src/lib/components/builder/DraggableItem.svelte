@@ -1,15 +1,19 @@
 <script lang="ts">
   import { dragStore } from '$lib/stores/dragStore.svelte';
-  import type { AvailableInput, AvailableOutput, TabConfig } from '$lib/types/generated';
+  import type { DiscoveredInput, DiscoveredOutput, TabConfig } from '$lib/types/generated';
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { Input } from '$lib/components/ui';
   import { FolderPlus } from '@lucide/svelte';
 
   interface Props {
-    item: AvailableInput | AvailableOutput;
+    item: DiscoveredInput | DiscoveredOutput;
     tabs?: TabConfig[];
-    onAddToGroup?: (tabId: string, groupId: string, item: AvailableInput | AvailableOutput) => void;
-    onAddToNewGroup?: (path: string, item: AvailableInput | AvailableOutput) => void;
+    onAddToGroup?: (
+      tabId: string,
+      groupId: string,
+      item: DiscoveredInput | DiscoveredOutput
+    ) => void;
+    onAddToNewGroup?: (path: string, item: DiscoveredInput | DiscoveredOutput) => void;
   }
 
   let { item, tabs = [], onAddToGroup, onAddToNewGroup }: Props = $props();
@@ -41,7 +45,7 @@
   }
 
   const badgeContent = $derived(
-    'name' in item ? item.type : (item as AvailableOutput).type || 'Unknown'
+    'name' in item ? item.type : (item as DiscoveredOutput).type || 'Unknown'
   );
 
   // Variant-based styling

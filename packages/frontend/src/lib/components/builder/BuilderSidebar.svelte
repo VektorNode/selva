@@ -2,18 +2,27 @@
   import * as Card from '$lib/components/ui/card';
   import { Button } from '$lib/components/ui';
   import { SchemaInfoPanel, AvailableItemList } from '$lib/components/builder';
-  import type { UISchema, AvailableInput, AvailableOutput, TabConfig } from '$lib/types/generated';
+  import type {
+    UISchema,
+    DiscoveredInput,
+    DiscoveredOutput,
+    TabConfig,
+  } from '$lib/types/generated';
 
   interface Props {
     schema: UISchema;
-    availableInputs: AvailableInput[];
-    availableOutputs: AvailableOutput[];
+    availableInputs: DiscoveredInput[];
+    availableOutputs: DiscoveredOutput[];
     placedIds: Set<string>;
     syncNeeded?: boolean;
     onSchemaChange: (schema: UISchema) => void;
     onSync: () => void;
-    onAddToGroup: (tabId: string, groupId: string, item: AvailableInput | AvailableOutput) => void;
-    onAddToNewGroup: (path: string, item: AvailableInput | AvailableOutput) => void;
+    onAddToGroup: (
+      tabId: string,
+      groupId: string,
+      item: DiscoveredInput | DiscoveredOutput
+    ) => void;
+    onAddToNewGroup: (path: string, item: DiscoveredInput | DiscoveredOutput) => void;
   }
 
   let {
@@ -56,7 +65,7 @@
         items={availableInputs}
         title="Inputs"
         {placedIds}
-        tabs={schema?.layout?.tabs || []}
+        tabs={schema?.layout?.type === 'tabbed' ? schema.layout.tabs : []}
         {onAddToGroup}
         {onAddToNewGroup}
       />
@@ -65,7 +74,7 @@
         items={availableOutputs}
         title="Outputs"
         {placedIds}
-        tabs={schema?.layout?.tabs || []}
+        tabs={schema?.layout?.type === 'tabbed' ? schema.layout.tabs : []}
         {onAddToGroup}
         {onAddToNewGroup}
       />

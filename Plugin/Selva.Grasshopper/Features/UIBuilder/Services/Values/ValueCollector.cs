@@ -193,7 +193,7 @@ public class ValueCollector
   /// <summary>
   ///   Extract value from a parameter, handling ValueList parameters specially
   /// </summary>
-  private object ExtractParameterValue(IGH_Param ghParam, InputParamSchema input)
+  private object ExtractParameterValue(IGH_Param ghParam, SchemaInput input)
   {
     if (ghParam is GetValueListParameter valueListParam)
     {

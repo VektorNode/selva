@@ -47,7 +47,7 @@ public static class ParameterTypeHelper
   public static void ExtractNumberParameterConstraints(
     IGH_ContextualParameter param,
     IGH_Param ghParam,
-    AvailableInput availableParam)
+    DiscoveredInput availableParam)
   {
     double? minimum = null;
     double? maximum = null;
@@ -185,7 +185,7 @@ public static class ParameterTypeHelper
 
   private static void ExtractParameterMinMax(
     IGH_ContextualParameter param,
-    AvailableInput availableParam,
+    DiscoveredInput availableParam,
     ref double? minimum,
     ref double? maximum)
   {
@@ -292,12 +292,12 @@ public static class ParameterTypeHelper
   ///   Detect ContextBake components that have FileData in their input sources
   ///   Returns a tuple containing:
   ///   - bool: whether downloadable outputs exist
-  ///   - List<AvailableOutput>: ContextBake components with FileData, marked with outputType="file"
+  ///   - List<DiscoveredOutput>: ContextBake components with FileData, marked with outputType="file"
   /// </summary>
-  public static (bool HasDownloadableOutputs, List<AvailableOutput> DownloadableComponents) DetectDownloadableOutputs(
+  public static (bool HasDownloadableOutputs, List<DiscoveredOutput> DownloadableComponents) DetectDownloadableOutputs(
     GH_Document document)
   {
-    var downloadableComponents = new List<AvailableOutput>();
+    var downloadableComponents = new List<DiscoveredOutput>();
 
     if (document == null)
     {
@@ -341,7 +341,7 @@ public static class ParameterTypeHelper
             // Iterate through all data in the param
             var allData = data.AllData(true);
             foreach (var item in allData)
-              // Check if this item is FileDataGoo
+            // Check if this item is FileDataGoo
             {
               if (item?.GetType().Name == "FileDataGoo")
               {
@@ -368,7 +368,7 @@ public static class ParameterTypeHelper
           var nickname = contextBakeComponent.Params.Input[0].NickName;
           var instanceGuid = docObj.InstanceGuid;
 
-          downloadableComponents.Add(new AvailableOutput
+          downloadableComponents.Add(new DiscoveredOutput
           {
             Id = instanceGuid,
             Nickname = nickname,

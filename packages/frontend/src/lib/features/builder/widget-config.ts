@@ -1,5 +1,5 @@
 import type {
-  AvailableInput,
+  DiscoveredInput,
   GrasshopperParamType,
   NumberWidgetConfig,
   TextWidgetConfig,
@@ -68,7 +68,7 @@ export function mapParamTypeToWidgetType(
 
 export function createDefaultWidgetConfig(
   widgetType: WidgetType,
-  param: AvailableInput,
+  param: DiscoveredInput,
   category: 'input' | 'output'
 ): WidgetConfig {
   if (category === 'input') {

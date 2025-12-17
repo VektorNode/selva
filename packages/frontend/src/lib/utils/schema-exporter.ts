@@ -100,7 +100,7 @@ export function validateImportedSchema(
     });
   }
 
-  if (!importedSchema.layout || !Array.isArray(importedSchema.layout.tabs)) {
+  if (!importedSchema.layout || (importedSchema.layout.type === 'tabbed' && !Array.isArray(importedSchema.layout.tabs)) || (importedSchema.layout.type === 'flat' && !Array.isArray(importedSchema.layout.groups))) {
     issues.push({
       paramId: '__schema__',
       severity: 'error',
@@ -183,6 +183,21 @@ export async function importSchemaFromFile(file: File): Promise<ExportedSchema> 
   // Basic structure validation
   if (!parsed.metadata || !parsed.schema) {
     throw new Error('Invalid schema file format. Missing metadata or schema.');
+  }
+
+  // Migration for v1 schemas (missing layout.type)
+  if (parsed.schema.layout && !parsed.schema.layout.type) {
+    if ('tabs' in parsed.schema.layout) {
+      (parsed.schema.layout as any).type = 'tabbed';
+    } else if ('groups' in parsed.schema.layout) {
+      (parsed.schema.layout as any).type = 'flat';
+    } else {
+      // Default to tabbed
+      (parsed.schema.layout as any).type = 'tabbed';
+      if (!(parsed.schema.layout as any).tabs) {
+        (parsed.schema.layout as any).tabs = [];
+      }
+    }
   }
 
   if (!parsed.schema.id || !parsed.schema.name) {

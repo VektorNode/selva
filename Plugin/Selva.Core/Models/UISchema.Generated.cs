@@ -75,7 +75,7 @@ namespace Selva.Core.Models
 /// Semantic version of the schema format (MAJOR.MINOR.PATCH)
 /// </summary>
         [JsonProperty("schemaVersion", DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public string SchemaVersion { get; set; } = "1.0.0";
+        public string SchemaVersion { get; set; } = "2.0.0";
 
 /// <summary>
 /// Minimum plugin version required to load this schema
@@ -105,61 +105,16 @@ namespace Selva.Core.Models
         public bool? InstanceSolve { get; set; } = true;
 
         [JsonProperty("inputs")]
-        public List<InputParamSchema> Inputs { get; set; } = new List<InputParamSchema>();
+        public List<SchemaInput> Inputs { get; set; } = new List<SchemaInput>();
 
 /// <summary>
 /// All output components (print, bake, file download)
 /// </summary>
         [JsonProperty("outputs")]
-        public List<AvailableOutput> Outputs { get; set; } = new List<AvailableOutput>();
+        public List<SchemaOutput> Outputs { get; set; } = new List<SchemaOutput>();
 
         [JsonProperty("layout")]
-        public LayoutConfig Layout { get; set; }
-    }
-
-// ============================================================================
-    // PARAMETER SCHEMAS
-    // ============================================================================
-
-    public class InputParamSchema
-    {
-
-/// <summary>
-/// Grasshopper parameter instance GUID
-/// </summary>
-        [JsonProperty("id")]
-        public Guid Id { get; set; }
-
-        [JsonProperty("nickname")]
-        public string Nickname { get; set; }
-
-        [JsonProperty("paramType")]
-        public string ParamType { get; set; }
-
-        [JsonProperty("description")]
-        public string Description { get; set; }
-
-        [JsonProperty("default", NullValueHandling = NullValueHandling.Ignore)]
-        public object Default { get; set; }
-    }
-
-    public class OutputParamSchema
-    {
-
-/// <summary>
-/// Grasshopper parameter instance GUID
-/// </summary>
-        [JsonProperty("id")]
-        public Guid Id { get; set; }
-
-        [JsonProperty("nickname")]
-        public string Nickname { get; set; }
-
-        [JsonProperty("paramType")]
-        public string ParamType { get; set; }
-
-        [JsonProperty("description")]
-        public string Description { get; set; }
+        public LayoutConfigBase Layout { get; set; }
     }
 
 // ============================================================================
@@ -210,6 +165,19 @@ namespace Selva.Core.Models
 
     public class CheckboxWidgetConfig
     {
+    }
+
+    public class FileWidgetConfig
+    {
+
+        [JsonProperty("buttonLabel", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string ButtonLabel { get; set; } = "Download";
+
+/// <summary>
+/// File format hint (e.g., 'zip', '3dm')
+/// </summary>
+        [JsonProperty("fileFormat")]
+        public string FileFormat { get; set; }
     }
 
 // ============================================================================
@@ -266,202 +234,11 @@ namespace Selva.Core.Models
         public string Position { get; set; } = "center";
     }
 
-    public class LayoutConfig
-    {
-
-        [JsonProperty("type", DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public string Type { get; set; } = "tabbed";
-
-        [JsonProperty("gap", DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public int? Gap { get; set; } = 16;
-
-        [JsonProperty("tabs")]
-        public List<TabConfig> Tabs { get; set; } = new List<TabConfig>();
-    }
-
 // ============================================================================
     // RUNTIME DATA
     // ============================================================================
 
-    public class SessionState
-    {
-
-        [JsonProperty("sessionId")]
-        public string SessionId { get; set; }
-
-        [JsonProperty("active")]
-        public bool Active { get; set; }
-
-        [JsonProperty("lastUpdate")]
-        public DateTime LastUpdate { get; set; } = DateTime.UtcNow;
-
-        [JsonProperty("mode")]
-        public string Mode { get; set; }
-    }
-
-    public class RuntimeValues
-    {
-
-        [JsonProperty("timestamp")]
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-
-        [JsonProperty("values")]
-        public Dictionary<string, object> Values { get; set; }
-    }
-
-    public class ViewerOptions
-    {
-
-/// <summary>
-/// If true, display mesh data is sent to the web preview for local rendering
-/// </summary>
-        [JsonProperty("enableLocal", DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public bool? EnableLocal { get; set; } = false;
-
-/// <summary>
-/// If true, enables remote rendering via Rhino Compute
-/// </summary>
-        [JsonProperty("enableRemote", DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public bool? EnableRemote { get; set; } = false;
-
-/// <summary>
-/// Background color for the 3D viewer as hex string (e.g., '#ffffff')
-/// </summary>
-        [JsonProperty("backgroundColor", DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public string BackgroundColor { get; set; } = "#ffffff";
-    }
-
-    public class ParameterState
-    {
-
-/// <summary>
-/// Parameter GUID - primary reference
-/// </summary>
-        [JsonProperty("paramId")]
-        public Guid ParamId { get; set; }
-
-/// <summary>
-/// Parameter nickname for validation
-/// </summary>
-        [JsonProperty("nickname")]
-        public string Nickname { get; set; }
-
-/// <summary>
-/// Display name for validation
-/// </summary>
-        [JsonProperty("displayName")]
-        public string DisplayName { get; set; }
-
-/// <summary>
-/// Parameter type for validation
-/// </summary>
-        [JsonProperty("paramType")]
-        public string ParamType { get; set; }
-
-        [JsonProperty("value")]
-        public object Value { get; set; }
-
-/// <summary>
-/// Group name for validation (optional)
-/// </summary>
-        [JsonProperty("groupName")]
-        public string GroupName { get; set; }
-    }
-
-    public class ValidationIssueMessage
-    {
-
-        [JsonProperty("paramId")]
-        public string ParamId { get; set; }
-
-/// <summary>
-/// warning = can still load, error = cannot load
-/// </summary>
-        [JsonProperty("severity")]
-        public string Severity { get; set; }
-
-        [JsonProperty("message")]
-        public string Message { get; set; }
-
-        [JsonProperty("details", NullValueHandling = NullValueHandling.Ignore)]
-        public object Details { get; set; }
-    }
-
-    public class SavedState
-    {
-
-/// <summary>
-/// Unique identifier for this saved state
-/// </summary>
-        [JsonProperty("id")]
-        public string Id { get; set; }
-
-/// <summary>
-/// User-friendly state name
-/// </summary>
-        [JsonProperty("name")]
-        public string Name { get; set; }
-
-/// <summary>
-/// Optional description of this state
-/// </summary>
-        [JsonProperty("description")]
-        public string Description { get; set; }
-
-/// <summary>
-/// When this state was saved
-/// </summary>
-        [JsonProperty("timestamp")]
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-
-/// <summary>
-/// References UISchema.id
-/// </summary>
-        [JsonProperty("schemaId")]
-        public string SchemaId { get; set; }
-
-/// <summary>
-/// Must match UISchema.documentId for validation
-/// </summary>
-        [JsonProperty("documentId")]
-        public string DocumentId { get; set; }
-
-/// <summary>
-/// Document file name for reference
-/// </summary>
-        [JsonProperty("projectFileName")]
-        public string ProjectFileName { get; set; }
-
-/// <summary>
-/// Plugin version when state was saved
-/// </summary>
-        [JsonProperty("pluginVersion")]
-        public string PluginVersion { get; set; }
-
-/// <summary>
-/// Who saved this state
-/// </summary>
-        [JsonProperty("author")]
-        public string Author { get; set; }
-
-/// <summary>
-/// Tags for organizing states
-/// </summary>
-        [JsonProperty("tags")]
-        public List<string> Tags { get; set; } = new List<string>();
-
-/// <summary>
-/// All parameter values
-/// </summary>
-        [JsonProperty("parameters")]
-        public List<ParameterState> Parameters { get; set; } = new List<ParameterState>();
-    }
-
-// ============================================================================
-    // AVAILABLE PARAMETERS
-    // ============================================================================
-
-    public class AvailableInput
+    public class DiscoveredInput
     {
 
 /// <summary>
@@ -510,7 +287,7 @@ namespace Selva.Core.Models
         public Dictionary<string, object> Options { get; set; }
     }
 
-    public class AvailableOutput
+    public class DiscoveredOutput
     {
 
 /// <summary>
@@ -532,7 +309,128 @@ namespace Selva.Core.Models
         public string Type { get; set; }
     }
 
-    public class AvailableParameters
+    public class SchemaInput
+    {
+
+/// <summary>
+/// Grasshopper parameter instance GUID
+/// </summary>
+        [JsonProperty("id")]
+        public Guid Id { get; set; }
+
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        [JsonProperty("nickname")]
+        public string Nickname { get; set; }
+
+        [JsonProperty("paramType")]
+        public string ParamType { get; set; }
+
+        [JsonProperty("description")]
+        public string Description { get; set; }
+
+        [JsonProperty("default", NullValueHandling = NullValueHandling.Ignore)]
+        public object Default { get; set; }
+    }
+
+    public class SchemaOutput
+    {
+
+/// <summary>
+/// Grasshopper parameter instance GUID
+/// </summary>
+        [JsonProperty("id")]
+        public Guid Id { get; set; }
+
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        [JsonProperty("nickname")]
+        public string Nickname { get; set; }
+
+        [JsonProperty("description")]
+        public string Description { get; set; }
+
+/// <summary>
+/// Output display type
+/// </summary>
+        [JsonProperty("type")]
+        public string Type { get; set; }
+    }
+
+    public class ViewerOptions
+    {
+
+/// <summary>
+/// If true, display mesh data is sent to the web preview for local rendering
+/// </summary>
+        [JsonProperty("enableLocal", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool? EnableLocal { get; set; } = false;
+
+/// <summary>
+/// If true, enables remote rendering via Rhino Compute
+/// </summary>
+        [JsonProperty("enableRemote", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool? EnableRemote { get; set; } = false;
+
+/// <summary>
+/// Background color for the 3D viewer as hex string (e.g., '#ffffff')
+/// </summary>
+        [JsonProperty("backgroundColor", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string BackgroundColor { get; set; } = "#ffffff";
+    }
+
+    public class SessionState
+    {
+
+        [JsonProperty("sessionId")]
+        public string SessionId { get; set; }
+
+        [JsonProperty("active")]
+        public bool Active { get; set; }
+
+        [JsonProperty("lastUpdate")]
+        public DateTime LastUpdate { get; set; } = DateTime.UtcNow;
+
+        [JsonProperty("mode")]
+        public string Mode { get; set; }
+    }
+
+    public class RuntimeValues
+    {
+
+        [JsonProperty("timestamp")]
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+
+        [JsonProperty("values")]
+        public Dictionary<string, object> Values { get; set; }
+    }
+
+    public class ValidationIssueMessage
+    {
+
+        [JsonProperty("paramId")]
+        public string ParamId { get; set; }
+
+/// <summary>
+/// warning = can still load, error = cannot load
+/// </summary>
+        [JsonProperty("severity")]
+        public string Severity { get; set; }
+
+        [JsonProperty("message")]
+        public string Message { get; set; }
+
+        [JsonProperty("details", NullValueHandling = NullValueHandling.Ignore)]
+        public object Details { get; set; }
+    }
+
+// ============================================================================
+    // AVAILABLE PARAMETERS
+    // ============================================================================
+
+    public class DiscoveredParameters
     {
 
         [JsonProperty("sessionId")]
@@ -545,13 +443,13 @@ namespace Selva.Core.Models
 /// List of input parameters available for UI building
 /// </summary>
         [JsonProperty("inputs")]
-        public List<AvailableInput> Inputs { get; set; } = new List<AvailableInput>();
+        public List<DiscoveredInput> Inputs { get; set; } = new List<DiscoveredInput>();
 
 /// <summary>
 /// List of output components available for UI building
 /// </summary>
         [JsonProperty("outputs")]
-        public List<AvailableOutput> Outputs { get; set; } = new List<AvailableOutput>();
+        public List<DiscoveredOutput> Outputs { get; set; } = new List<DiscoveredOutput>();
     }
 
 // ============================================================================
@@ -564,11 +462,14 @@ namespace Selva.Core.Models
     [JsonConverter(typeof(LayoutItemBaseConverter))]
     public abstract class LayoutItemBase
     {
+/// <summary>
+/// Unique identifier for this layout item in the UI tree (not the parameter ID)
+/// </summary>
         [JsonProperty("id")]
         public string Id { get; set; }
 
 /// <summary>
-/// References the Grasshopper component InstanceGuid
+/// References the Grasshopper component InstanceGuid (Data Source)
 /// </summary>
         [JsonProperty("paramId")]
         public Guid ParamId { get; set; }
@@ -598,7 +499,7 @@ public class InputNumberLayoutItem : LayoutItemBase
 public override string Type => "input";
 public override string WidgetType => "number";
 
-        [JsonProperty("config")]
+        [JsonProperty("config", NullValueHandling = NullValueHandling.Ignore)]
         public NumberWidgetConfig Config { get; set; }
     }
 
@@ -607,7 +508,7 @@ public class InputTextLayoutItem : LayoutItemBase
 public override string Type => "input";
 public override string WidgetType => "text";
 
-        [JsonProperty("config")]
+        [JsonProperty("config", NullValueHandling = NullValueHandling.Ignore)]
         public TextWidgetConfig Config { get; set; }
     }
 
@@ -647,7 +548,41 @@ public override string Type => "output";
 public override string WidgetType => "file";
 
         [JsonProperty("config", NullValueHandling = NullValueHandling.Ignore)]
-        public object Config { get; set; }
+        public FileWidgetConfig Config { get; set; }
+    }
+
+// ============================================================================
+    // LAYOUTCONFIG (Discriminated Union)
+    // ============================================================================
+
+/// <summary>
+    /// Base class for LayoutConfig discriminated union
+    /// </summary>
+    [JsonConverter(typeof(LayoutConfigBaseConverter))]
+    public abstract class LayoutConfigBase
+    {
+[JsonProperty("type")]
+        public abstract string Type { get; }
+
+        [JsonProperty("gap", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int? Gap { get; set; } = 16;
+
+    }
+
+public class TabbedLayoutConfig : LayoutConfigBase
+    {
+public override string Type => "tabbed";
+
+        [JsonProperty("tabs")]
+        public List<TabConfig> Tabs { get; set; } = new List<TabConfig>();
+    }
+
+public class FlatLayoutConfig : LayoutConfigBase
+    {
+public override string Type => "flat";
+
+        [JsonProperty("groups")]
+        public List<GroupConfig> Groups { get; set; } = new List<GroupConfig>();
     }
 
 // ============================================================================
@@ -696,6 +631,76 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
         }
 
         public override void WriteJson(JsonWriter writer, LayoutItemBase value, JsonSerializer serializer)
+        {
+            // Serialize by writing properties directly to avoid converter recursion
+            writer.WriteStartObject();
+
+            // Use reflection to get all properties from the concrete type
+            var properties = value.GetType().GetProperties();
+            foreach (var property in properties)
+            {
+                var propValue = property.GetValue(value);
+
+                // Skip null values if configured
+                if (propValue == null && serializer.NullValueHandling == NullValueHandling.Ignore)
+                    continue;
+
+                // Get JsonProperty attribute - check property and base declaration
+                var jsonAttr = property.GetCustomAttributes(typeof(JsonPropertyAttribute), true)
+                    .FirstOrDefault() as JsonPropertyAttribute;
+
+                // If not found and property is an override, check base class
+                if (jsonAttr == null && property.GetGetMethod()?.GetBaseDefinition() != property.GetGetMethod())
+                {
+                    var baseProperty = property.DeclaringType?.BaseType?.GetProperty(property.Name);
+                    if (baseProperty != null)
+                    {
+                        jsonAttr = baseProperty.GetCustomAttributes(typeof(JsonPropertyAttribute), true)
+                            .FirstOrDefault() as JsonPropertyAttribute;
+                    }
+                }
+
+                var jsonName = jsonAttr?.PropertyName ?? property.Name;
+
+                writer.WritePropertyName(jsonName);
+                serializer.Serialize(writer, propValue);
+            }
+
+            writer.WriteEndObject();
+        }
+    }
+
+
+    /// <summary>
+    /// JSON converter for LayoutConfigBase discriminated union
+    /// </summary>
+    public class LayoutConfigBaseConverter : JsonConverter<LayoutConfigBase>
+    {
+        public override LayoutConfigBase ReadJson(JsonReader reader, Type objectType, LayoutConfigBase existingValue, bool hasExistingValue, JsonSerializer serializer)
+        {
+            var jsonObject = JObject.Load(reader);
+var type = jsonObject["type"]?.Value<string>();
+
+            // Check if all discriminators are null or empty
+            var allEmpty = string.IsNullOrEmpty(type);
+            if (allEmpty)
+            {
+                throw new JsonSerializationException($"LayoutConfig discriminator fields are missing or empty. JSON: {jsonObject.ToString()}");
+            }
+
+            LayoutConfigBase item;
+            if (type == "tabbed")
+                item = new TabbedLayoutConfig();
+            else if (type == "flat")
+                item = new FlatLayoutConfig();
+            else
+                throw new JsonSerializationException($"Unknown LayoutConfig variant: {type}. JSON: {jsonObject.ToString()}");
+
+            serializer.Populate(jsonObject.CreateReader(), item);
+            return item;
+        }
+
+        public override void WriteJson(JsonWriter writer, LayoutConfigBase value, JsonSerializer serializer)
         {
             // Serialize by writing properties directly to avoid converter recursion
             writer.WriteStartObject();

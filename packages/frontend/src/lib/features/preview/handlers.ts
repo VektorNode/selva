@@ -1,9 +1,9 @@
-import type { UISchema, AvailableParameters } from '$lib/types/generated';
+import type { UISchema, DiscoveredParameters } from '$lib/types/generated';
 import { getDefaultValue } from '$lib/utils/session';
 
 export interface InitializeValuesOptions {
   schema: UISchema;
-  availableParams?: AvailableParameters;
+  availableParams?: DiscoveredParameters;
   currentValues?: Record<string, unknown>;
 }
 
@@ -76,31 +76,35 @@ export function updateParameterMetadata(
         console.log(`[Preview] Updated input metadata: ${input.nickname}`);
       }
 
-      if (schema.layout.tabs) {
-        schema.layout.tabs.forEach((tab) => {
-          tab.groups?.forEach((group) => {
-            group.items?.forEach((layoutItem: any) => {
-              if (layoutItem.paramId === updated.id && layoutItem.type === 'input') {
-                const config = layoutItem.config || {};
+      const processGroup = (group: any) => {
+        group.items?.forEach((layoutItem: any) => {
+          if (layoutItem.paramId === updated.id && layoutItem.type === 'input') {
+            const config = layoutItem.config || {};
 
-                if (updated.minimum !== undefined && config.minimum !== updated.minimum) {
-                  config.minimum = updated.minimum;
-                  changed = true;
-                }
-                if (updated.maximum !== undefined && config.maximum !== updated.maximum) {
-                  config.maximum = updated.maximum;
-                  changed = true;
-                }
-                if (updated.stepSize !== undefined && config.stepSize !== updated.stepSize) {
-                  config.stepSize = updated.stepSize;
-                  changed = true;
-                }
+            if (updated.minimum !== undefined && config.minimum !== updated.minimum) {
+              config.minimum = updated.minimum;
+              changed = true;
+            }
+            if (updated.maximum !== undefined && config.maximum !== updated.maximum) {
+              config.maximum = updated.maximum;
+              changed = true;
+            }
+            if (updated.stepSize !== undefined && config.stepSize !== updated.stepSize) {
+              config.stepSize = updated.stepSize;
+              changed = true;
+            }
 
-                layoutItem.config = config;
-              }
-            });
-          });
+            layoutItem.config = config;
+          }
         });
+      };
+
+      if (schema.layout.type === 'tabbed') {
+        schema.layout.tabs.forEach((tab) => {
+          tab.groups?.forEach(processGroup);
+        });
+      } else if (schema.layout.type === 'flat') {
+        schema.layout.groups.forEach(processGroup);
       }
     }
 

@@ -6,6 +6,46 @@
  */
 
 export type GrasshopperParamType = 'number' | 'integer' | 'boolean' | 'text' | 'valueList' | 'generic';
+export type InputNumberLayoutItem = LayoutItemBase & {
+  type: 'input';
+  widgetType: 'number';
+  config?: NumberWidgetConfig;
+  [k: string]: unknown | undefined;
+};
+export type InputTextLayoutItem = LayoutItemBase & {
+  type: 'input';
+  widgetType: 'text';
+  config?: TextWidgetConfig;
+  [k: string]: unknown | undefined;
+};
+export type InputDropdownLayoutItem = LayoutItemBase & {
+  type: 'input';
+  widgetType: 'dropdown';
+  config: DropdownWidgetConfig;
+  [k: string]: unknown | undefined;
+};
+export type InputCheckboxLayoutItem = LayoutItemBase & {
+  type: 'input';
+  widgetType: 'checkbox';
+  config?: CheckboxWidgetConfig;
+  [k: string]: unknown | undefined;
+};
+export type OutputTextLayoutItem = LayoutItemBase & {
+  type: 'output';
+  widgetType: 'text';
+  [k: string]: unknown | undefined;
+};
+export type OutputNumberLayoutItem = LayoutItemBase & {
+  type: 'output';
+  widgetType: 'number';
+  [k: string]: unknown | undefined;
+};
+export type OutputFileLayoutItem = LayoutItemBase & {
+  type: 'output';
+  widgetType: 'file';
+  config?: FileWidgetConfig;
+  [k: string]: unknown | undefined;
+};
 export type LayoutItem =
   | InputNumberLayoutItem
   | InputTextLayoutItem
@@ -14,79 +54,12 @@ export type LayoutItem =
   | OutputTextLayoutItem
   | OutputNumberLayoutItem
   | OutputFileLayoutItem;
+export type LayoutConfig = TabbedLayoutConfig | FlatLayoutConfig;
 
 /**
  * Schema definitions for Selva UI configuration
  */
 export interface SelvaUISchema {
-  [k: string]: unknown | undefined;
-}
-export interface InputParamSchema {
-  /**
-   * Grasshopper parameter instance GUID
-   */
-  id: string;
-  nickname: string;
-  paramType: GrasshopperParamType;
-  description?: string;
-  default?: unknown;
-}
-export interface OutputParamSchema {
-  /**
-   * Grasshopper parameter instance GUID
-   */
-  id: string;
-  nickname: string;
-  paramType: GrasshopperParamType;
-  description?: string;
-}
-export interface AvailableInput {
-  /**
-   * Grasshopper parameter instance GUID
-   */
-  id: string;
-  name: string;
-  nickname: string;
-  description: string;
-  type: GrasshopperParamType;
-  default?: unknown;
-  minimum?: number;
-  maximum?: number;
-  stepSize?: number;
-  atLeast?: number;
-  atMost?: number;
-  treeAccess?: boolean;
-  /**
-   * Key-value pairs for dropdown/selection options
-   */
-  options?: {
-    [k: string]: string | undefined;
-  };
-  [k: string]: unknown | undefined;
-}
-export interface AvailableOutput {
-  /**
-   * Grasshopper component instance GUID
-   */
-  id: string;
-  nickname: string;
-  description?: string;
-  /**
-   * Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files
-   */
-  type: 'text' | 'number' | 'file';
-}
-export interface AvailableParameters {
-  sessionId: string;
-  timestamp: string;
-  /**
-   * List of input parameters available for UI building
-   */
-  inputs: AvailableInput[];
-  /**
-   * List of output components available for UI building
-   */
-  outputs: AvailableOutput[];
   [k: string]: unknown | undefined;
 }
 export interface NumberWidgetConfig {
@@ -110,113 +83,26 @@ export interface DropdownWidgetConfig {
   required?: boolean;
 }
 export interface CheckboxWidgetConfig {}
-export interface InputNumberLayoutItem {
-  id: string;
+export interface FileWidgetConfig {
+  buttonLabel?: string;
   /**
-   * References the Grasshopper component InstanceGuid
+   * File format hint (e.g., 'zip', '3dm')
    */
-  paramId: string;
-  displayName?: string;
-  description?: string;
-  order?: number;
-  span?: number;
-  type: 'input';
-  widgetType: 'number';
-  config: NumberWidgetConfig;
-  [k: string]: unknown | undefined;
+  fileFormat?: string;
 }
-export interface InputTextLayoutItem {
+export interface LayoutItemBase {
+  /**
+   * Unique identifier for this layout item in the UI tree (not the parameter ID)
+   */
   id: string;
   /**
-   * References the Grasshopper component InstanceGuid
+   * References the Grasshopper component InstanceGuid (Data Source)
    */
   paramId: string;
   displayName?: string;
   description?: string;
   order?: number;
   span?: number;
-  type: 'input';
-  widgetType: 'text';
-  config: TextWidgetConfig;
-  [k: string]: unknown | undefined;
-}
-export interface InputDropdownLayoutItem {
-  id: string;
-  /**
-   * References the Grasshopper component InstanceGuid
-   */
-  paramId: string;
-  displayName?: string;
-  description?: string;
-  order?: number;
-  span?: number;
-  type: 'input';
-  widgetType: 'dropdown';
-  config: DropdownWidgetConfig;
-  [k: string]: unknown | undefined;
-}
-export interface InputCheckboxLayoutItem {
-  id: string;
-  /**
-   * References the Grasshopper component InstanceGuid
-   */
-  paramId: string;
-  displayName?: string;
-  description?: string;
-  order?: number;
-  span?: number;
-  type: 'input';
-  widgetType: 'checkbox';
-  config?: CheckboxWidgetConfig;
-  [k: string]: unknown | undefined;
-}
-export interface OutputTextLayoutItem {
-  id: string;
-  /**
-   * References the Grasshopper component InstanceGuid
-   */
-  paramId: string;
-  displayName?: string;
-  description?: string;
-  order?: number;
-  span?: number;
-  type: 'output';
-  widgetType: 'text';
-  [k: string]: unknown | undefined;
-}
-export interface OutputNumberLayoutItem {
-  id: string;
-  /**
-   * References the Grasshopper component InstanceGuid
-   */
-  paramId: string;
-  displayName?: string;
-  description?: string;
-  order?: number;
-  span?: number;
-  type: 'output';
-  widgetType: 'number';
-  [k: string]: unknown | undefined;
-}
-export interface OutputFileLayoutItem {
-  id: string;
-  /**
-   * References the ContextBake component InstanceGuid for file download
-   */
-  paramId: string;
-  displayName?: string;
-  description?: string;
-  order?: number;
-  span?: number;
-  type: 'output';
-  widgetType: 'file';
-  config?: {
-    buttonLabel?: string;
-    /**
-     * File format hint (e.g., 'zip', '3dm')
-     */
-    fileFormat?: string;
-  };
   [k: string]: unknown | undefined;
 }
 export interface GroupConfig {
@@ -239,24 +125,88 @@ export interface TabConfig {
    */
   position?: 'left' | 'center' | 'right';
 }
-export interface LayoutConfig {
-  type?: 'tabbed' | 'flat';
+export interface TabbedLayoutConfig {
+  type: 'tabbed';
   gap?: number;
-  tabs?: TabConfig[];
+  tabs: TabConfig[];
 }
-export interface SessionState {
-  sessionId: string;
-  active: boolean;
-  lastUpdate: string;
-  mode: 'builder' | 'preview';
-  [k: string]: unknown | undefined;
+export interface FlatLayoutConfig {
+  type: 'flat';
+  gap?: number;
+  groups: GroupConfig[];
 }
-export interface RuntimeValues {
-  timestamp: string;
-  values: {
-    [k: string]: unknown | undefined;
+export interface DiscoveredInput {
+  /**
+   * Grasshopper parameter instance GUID
+   */
+  id: string;
+  name: string;
+  nickname: string;
+  description: string;
+  type: GrasshopperParamType;
+  default?: unknown;
+  minimum?: number;
+  maximum?: number;
+  stepSize?: number;
+  atLeast?: number;
+  atMost?: number;
+  treeAccess?: boolean;
+  /**
+   * Key-value pairs for dropdown/selection options
+   */
+  options?: {
+    [k: string]: string | undefined;
   };
   [k: string]: unknown | undefined;
+}
+export interface DiscoveredOutput {
+  /**
+   * Grasshopper component instance GUID
+   */
+  id: string;
+  nickname: string;
+  description?: string;
+  /**
+   * Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files
+   */
+  type: 'text' | 'number' | 'file';
+}
+export interface DiscoveredParameters {
+  sessionId: string;
+  timestamp: string;
+  /**
+   * List of input parameters available for UI building
+   */
+  inputs: DiscoveredInput[];
+  /**
+   * List of output components available for UI building
+   */
+  outputs: DiscoveredOutput[];
+  [k: string]: unknown | undefined;
+}
+export interface SchemaInput {
+  /**
+   * Grasshopper parameter instance GUID
+   */
+  id: string;
+  name: string;
+  nickname: string;
+  paramType: GrasshopperParamType;
+  description?: string;
+  default?: unknown;
+}
+export interface SchemaOutput {
+  /**
+   * Grasshopper parameter instance GUID
+   */
+  id: string;
+  name?: string;
+  nickname: string;
+  description?: string;
+  /**
+   * Output display type
+   */
+  type: 'text' | 'number' | 'file';
 }
 export interface ViewerOptions {
   /**
@@ -318,11 +268,11 @@ export interface UISchema {
    * If true, changes trigger immediate solving. If false, user must press Calculate button.
    */
   instanceSolve?: boolean;
-  inputs: InputParamSchema[];
+  inputs: SchemaInput[];
   /**
    * All output components (print, bake, file download)
    */
-  outputs: AvailableOutput[];
+  outputs: SchemaOutput[];
   layout: LayoutConfig;
 }
 /**
@@ -342,28 +292,19 @@ export interface ViewerOptions1 {
    */
   backgroundColor?: string;
 }
-export interface ParameterState {
-  /**
-   * Parameter GUID - primary reference
-   */
-  paramId: string;
-  /**
-   * Parameter nickname for validation
-   */
-  nickname: string;
-  /**
-   * Display name for validation
-   */
-  displayName?: string;
-  /**
-   * Parameter type for validation
-   */
-  paramType: string;
-  value: unknown;
-  /**
-   * Group name for validation (optional)
-   */
-  groupName?: string;
+export interface SessionState {
+  sessionId: string;
+  active: boolean;
+  lastUpdate: string;
+  mode: 'builder' | 'preview';
+  [k: string]: unknown | undefined;
+}
+export interface RuntimeValues {
+  timestamp: string;
+  values: {
+    [k: string]: unknown | undefined;
+  };
+  [k: string]: unknown | undefined;
 }
 export interface ValidationIssueMessage {
   paramId: string;
@@ -377,52 +318,6 @@ export interface ValidationIssueMessage {
     actual?: string;
     [k: string]: unknown | undefined;
   };
-}
-export interface SavedState {
-  /**
-   * Unique identifier for this saved state
-   */
-  id: string;
-  /**
-   * User-friendly state name
-   */
-  name: string;
-  /**
-   * Optional description of this state
-   */
-  description?: string;
-  /**
-   * When this state was saved
-   */
-  timestamp: string;
-  /**
-   * References UISchema.id
-   */
-  schemaId: string;
-  /**
-   * Must match UISchema.documentId for validation
-   */
-  documentId: string;
-  /**
-   * Document file name for reference
-   */
-  projectFileName?: string;
-  /**
-   * Plugin version when state was saved
-   */
-  pluginVersion?: string;
-  /**
-   * Who saved this state
-   */
-  author?: string;
-  /**
-   * Tags for organizing states
-   */
-  tags?: string[];
-  /**
-   * All parameter values
-   */
-  parameters: ParameterState[];
 }
 
 

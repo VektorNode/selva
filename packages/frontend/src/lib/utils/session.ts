@@ -1,6 +1,6 @@
 import { page } from '$app/state';
 import { getWebSocketState, type WebSocketState } from '$lib/websocket/websocket.svelte';
-import type { UISchema, AvailableParameters } from '$lib/types/generated';
+import type { UISchema, DiscoveredParameters } from '$lib/types/generated';
 import { DEFAULT_WEBSOCKET_PORT, WEBSOCKET_PORT_QUERY_PARAM } from '$lib/app.config';
 
 /**
@@ -94,7 +94,19 @@ export function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | 
       tabs: [],
     };
   }
-  if (!schema.layout.tabs) {
+
+  // Migration for v1 schemas (missing layout.type)
+  if (schema.layout && !schema.layout.type) {
+    if ('tabs' in schema.layout) {
+      (schema.layout as any).type = 'tabbed';
+    } else if ('groups' in schema.layout) {
+      (schema.layout as any).type = 'flat';
+    } else {
+      (schema.layout as any).type = 'tabbed';
+    }
+  }
+
+  if (schema.layout.type === 'tabbed' && !schema.layout.tabs) {
     schema.layout.tabs = [];
   }
   // Ensure instanceSolve has a default value
@@ -130,12 +142,12 @@ export function getDefaultValue(paramType: string): unknown {
 export function processInitialDataSchema(
   message: {
     schema?: UISchema;
-    availableParams?: AvailableParameters;
+    availableParams?: DiscoveredParameters;
   }
 ): {
   schema: UISchema | null;
-  availableInputs: AvailableParameters['inputs'];
-  availableOutputs: AvailableParameters['outputs'];
+  availableInputs: DiscoveredParameters['inputs'];
+  availableOutputs: DiscoveredParameters['outputs'];
 } {
   const availableInputs = message.availableParams?.inputs || [];
   const availableOutputs = message.availableParams?.outputs || [];

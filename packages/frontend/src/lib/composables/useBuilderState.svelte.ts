@@ -1,11 +1,11 @@
 import { toast } from '$lib/components/ui/sonner';
-import type { UISchema, AvailableInput, AvailableOutput } from '$lib/types/generated';
+import type { UISchema, DiscoveredInput, DiscoveredOutput } from '$lib/types/generated';
 import { processInitialDataSchema, getWebSocketPortFromUrl } from '$lib/utils/session';
 import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 
 interface BuilderWebSocketState {
-  availableInputs: AvailableInput[];
-  availableOutputs: AvailableOutput[];
+  availableInputs: DiscoveredInput[];
+  availableOutputs: DiscoveredOutput[];
   schema: UISchema | null;
   loading: boolean;
   error: string;
@@ -42,7 +42,7 @@ export function useBuilderState(sessionId: string) {
         'No parameters or outputs found. Please ensure the UI Builder component is active in Grasshopper and click Refresh.';
     }
 
-    if (state.schema?.layout?.tabs && state.schema.layout.tabs.length > 0) {
+    if (state.schema?.layout?.type === 'tabbed' && state.schema.layout.tabs.length > 0) {
       state.activeTabId = state.schema.layout.tabs[0].id;
     }
 
@@ -152,24 +152,31 @@ export function useBuilderState(sessionId: string) {
         state.schema.outputs = state.schema.outputs.filter((o) => !removedIds.includes(o.id));
 
         // Remove from layout items
-        if (state.schema.layout?.tabs) {
-          state.schema.layout.tabs.forEach((tab) => {
-            tab.groups.forEach((group) => {
+        if (state.schema.layout) {
+          if (state.schema.layout.type === 'tabbed') {
+            state.schema.layout.tabs.forEach((tab) => {
+              tab.groups.forEach((group) => {
+                group.items = group.items.filter((item) => !removedIds.includes(item.paramId));
+              });
+              tab.groups = tab.groups.filter((g) => g.items.length > 0);
+            });
+
+            // Clean up empty tabs
+            state.schema.layout.tabs = state.schema.layout.tabs.filter((t) => t.groups.length > 0);
+
+            // If active tab was removed, switch to first available
+            if (
+              state.activeTabId &&
+              !state.schema.layout.tabs.find((t) => t.id === state.activeTabId)
+            ) {
+              state.activeTabId =
+                state.schema.layout.tabs.length > 0 ? state.schema.layout.tabs[0].id : null;
+            }
+          } else if (state.schema.layout.type === 'flat') {
+            state.schema.layout.groups.forEach((group) => {
               group.items = group.items.filter((item) => !removedIds.includes(item.paramId));
             });
-            tab.groups = tab.groups.filter((g) => g.items.length > 0);
-          });
-
-          // Clean up empty tabs
-          state.schema.layout.tabs = state.schema.layout.tabs.filter((t) => t.groups.length > 0);
-
-          // If active tab was removed, switch to first available
-          if (
-            state.activeTabId &&
-            !state.schema.layout.tabs.find((t) => t.id === state.activeTabId)
-          ) {
-            state.activeTabId =
-              state.schema.layout.tabs.length > 0 ? state.schema.layout.tabs[0].id : null;
+            state.schema.layout.groups = state.schema.layout.groups.filter((g) => g.items.length > 0);
           }
         }
 
