@@ -15,10 +15,14 @@
     "pnpm": ">=9.0.0"
   },
   "scripts": {
-    "dev": "pnpm --filter @selva/frontend dev",
-    "build:all": "pnpm --filter @selva/core build && pnpm --filter @selva/svelte-ui build &&  pnpm --filter @selva/frontend build",
-    "build:frontend": "pnpm --filter @selva/frontend build",
-    "build:plugin": "node scripts/build-production.js",
+    "dev": "pnpm --filter @selva/builder-app dev",
+    "dev:compute": "pnpm --filter @selva/compute-app dev",
+    "build:themes": "echo 'Themes are pure CSS, no build needed'",
+    "build:ui-shared": "pnpm --filter @selva/ui-shared build",
+    "build:builder": "pnpm --filter @selva/builder-app build",
+    "build:compute": "pnpm --filter @selva/compute-app build",
+    "build:all": "pnpm --filter @selva/core build && pnpm --filter @selva/svelte-ui build && pnpm build:ui-shared && pnpm build:builder && pnpm build:compute",
+    "build:plugin": "pnpm --filter @selva/core build && pnpm build:ui-shared && pnpm build:builder && node scripts/build-production.js",
     "check": "pnpm --filter ./packages --recursive run check",
     "type-check": "pnpm --filter ./packages --recursive run type-check",
     "lint": "eslint .",

@@ -1,0 +1,16 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@source "../../ui-shared/dist";
+
+/* Import base theme styles from @selva/themes */
+@import '@selva/themes/base.css';
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body {
+    @apply bg-background text-foreground;
+  }
+}
