@@ -8,7 +8,7 @@
     exportStateAsJson,
     importStateFromJson,
   } from '../utils/param-exporter';
-  import { Button, Input, Label, Textarea, Dialog, Card } from '../ui';
+  import { Button, Input, Label, Textarea, Dialog, Card } from '../components/ui';
 
   interface Props {
     schema: UISchema;
