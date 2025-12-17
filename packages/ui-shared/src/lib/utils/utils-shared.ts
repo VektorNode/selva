@@ -1,7 +1,5 @@
 import type { UISchema } from '$lib/types/generated';
 
-//TODO: ALL OF THIS SHOULD ONLY GO TO THE BUILDER PACKAGE
-
 /**
  * Get default value for a parameter type
  */

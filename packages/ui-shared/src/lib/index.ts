@@ -11,6 +11,7 @@ export { default as FileDownloadWidget } from './components/preview/FileDownload
 // UI components
 export * from './components/ui';
 export { default as StateDisplay } from './components/ui/StateDisplay.svelte';
+export { default as StateManager } from './components/StateManager.svelte';
 
 // Features - Preview handlers
 export * from './features/preview/handlers';
@@ -21,6 +22,7 @@ export * from './features/preview/viewer';
 export * from './utils/debounce';
 export * from './utils/utils-shared';
 export * from './utils/file-download';
+export * from './utils/param-exporter';
 
 // Stores
 export { themeStore } from './stores/themeStore.svelte';
