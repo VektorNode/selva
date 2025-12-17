@@ -1,14 +1,14 @@
 <script lang="ts">
   import { Download, Upload, AlertTriangle, CheckCircle } from '@lucide/svelte';
-  import type { UISchema, ParameterPreset } from '@selva/ui-shared';
+  import type { UISchema, ParameterPreset } from '../types/generated';
   import {
     createSavedState,
     validateSavedState,
     extractLoadableValues,
     exportStateAsJson,
     importStateFromJson,
-  } from '$lib/utils/param-exporter';
-  import { Button, Input, Label, Textarea, Dialog, Card } from '@selva/ui-shared';
+  } from '../utils/param-exporter';
+  import { Button, Input, Label, Textarea, Dialog, Card } from '../ui';
 
   interface Props {
     schema: UISchema;

@@ -1,4 +1,4 @@
-import type { UISchema, ParameterPreset, ParameterState, ValidationIssueMessage } from '@selva/ui-shared'
+import type { UISchema, ParameterPreset, ParameterState, ValidationIssueMessage } from '../types/generated'
 
 /**
  * Create a saved state from current schema and values

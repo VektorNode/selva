@@ -7,6 +7,7 @@
     PageHeader,
     StateDisplay,
     Button,
+    StateManager,
     getDefaultValue,
   } from '@selva/ui-shared';
   import { Maximize, Minimize } from '@lucide/svelte';
@@ -229,6 +230,25 @@
                 debounceSliders={false}
               />
             {/if}
+
+            <!-- State Manager -->
+            <div class="mt-6">
+              <StateManager
+                {schema}
+                currentValues={values}
+                onLoadValues={async (loadedValues) => {
+                  // Apply loaded values
+                  values = { ...values, ...loadedValues };
+
+                  // Trigger solve based on instanceSolve setting
+                  if (schema?.instanceSolve !== false) {
+                    await performSolve();
+                  } else {
+                    hasPendingChanges = true;
+                  }
+                }}
+              />
+            </div>
 
             {#if schema.instanceSolve === false}
               <div class="sticky bottom-0 mt-6 flex justify-center">

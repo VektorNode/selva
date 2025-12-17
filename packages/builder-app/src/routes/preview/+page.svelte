@@ -9,6 +9,7 @@
     PageHeader,
     StateDisplay,
     Button,
+    StateManager,
     ensureSchemaLayoutDefaults,
     initializeValues,
     processOutputUpdate,
@@ -22,7 +23,6 @@
     formatMetadataUpdateMessage,
     type ViewerState,
   } from '@selva/ui-shared';
-  import StateManager from '$lib/components/StateManager.svelte';
   import { Maximize, Minimize } from '@lucide/svelte';
   import { initializeWebSocketSession, getWebSocketPortFromUrl } from '$lib/utils/session';
   import { type MeshBatch } from '@selva/core';
