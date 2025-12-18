@@ -2,11 +2,11 @@
 
 // shadcn-svelte components
 export {
-  Button,
-  buttonVariants,
-  type ButtonProps,
-  type ButtonVariant,
-  type ButtonSize,
+	Button,
+	buttonVariants,
+	type ButtonProps,
+	type ButtonVariant,
+	type ButtonSize
 } from './button';
 export { Badge, badgeVariants, type BadgeVariant } from './badge';
 export { Input } from './input';

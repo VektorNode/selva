@@ -1,94 +1,94 @@
 {
-  "name": "@selva/svelte-ui",
-  "version": "1.0.3",
-  "description": "A Svelte component library for rhino3dm and rhino.compute",
-  "author": "VektorNode",
-  "license": "MIT",
-  "deprecated": true,
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/vektornode/selva.git",
-    "directory": "packages/svelte-ui"
-  },
-  "bugs": "https://github.com/vektornode/selva/issues",
-  "homepage": "https://github.com/vektornode/selva/tree/main/packages/svelte-ui",
-  "scripts": {
-    "dev": "vite dev",
-    "build": "vite build && pnpm prepack",
-    "preview": "vite preview",
-    "prepare": "svelte-kit sync || echo ''",
-    "prepack": "svelte-kit sync && svelte-package && publint",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "format": "prettier --write .",
-    "lint": "prettier --check . && eslint .",
-    "pack": "pnpm build && pnpm pack"
-  },
-  "files": [
-    "dist",
-    "!dist/**/*.test.*",
-    "!dist/**/*.spec.*"
-  ],
-  "svelte": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "type": "module",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "svelte": "./dist/index.js"
-    },
-    "./InputHandler": {
-      "types": "./dist/InputHandler.svelte.d.ts",
-      "svelte": "./dist/InputHandler.svelte"
-    },
-    "./components/*": {
-      "types": "./dist/components/*",
-      "svelte": "./dist/components/*"
-    }
-  },
-  "sideEffects": [
-    "**/*.css",
-    "**/*.svelte"
-  ],
-  "peerDependencies": {
-    "@selva/core": "^1.0.3",
-    "svelte": "^5.0.0",
-    "three": ">=0.179.0"
-  },
-  "peerDependenciesMeta": {
-    "three": {
-      "optional": true
-    }
-  },
-  "devDependencies": {
-    "@selva/config": "workspace:*",
-    "bits-ui": "^2.14.4",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^3.4.0",
-    "tailwind-variants": "^3.1.1",
-    "tw-animate-css": "^1.4.0"
-  },
-  "dependencies": {
-    "@selva/core": "workspace:*",
-    "@lucide/svelte": "^0.544.0"
-  },
-  "keywords": [
-    "compute",
-    "rhino",
-    "grasshopper",
-    "geometry",
-    "3d",
-    "cad",
-    "parametric",
-    "modeling",
-    "rhino3dm",
-    "automation",
-    "geometry-processing",
-    "design",
-    "cloud",
-    "gh",
-    "rhino.compute",
-    "computational-design",
-    "ui"
-  ]
+	"name": "@selva/svelte-ui",
+	"version": "1.0.3",
+	"description": "A Svelte component library for rhino3dm and rhino.compute",
+	"author": "VektorNode",
+	"license": "MIT",
+	"deprecated": true,
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/vektornode/selva.git",
+		"directory": "packages/svelte-ui"
+	},
+	"bugs": "https://github.com/vektornode/selva/issues",
+	"homepage": "https://github.com/vektornode/selva/tree/main/packages/svelte-ui",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build && pnpm prepack",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"prepack": "svelte-kit sync && svelte-package && publint",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"format": "prettier --write .",
+		"lint": "prettier --check . && eslint .",
+		"pack": "pnpm build && pnpm pack"
+	},
+	"files": [
+		"dist",
+		"!dist/**/*.test.*",
+		"!dist/**/*.spec.*"
+	],
+	"svelte": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"svelte": "./dist/index.js"
+		},
+		"./InputHandler": {
+			"types": "./dist/InputHandler.svelte.d.ts",
+			"svelte": "./dist/InputHandler.svelte"
+		},
+		"./components/*": {
+			"types": "./dist/components/*",
+			"svelte": "./dist/components/*"
+		}
+	},
+	"sideEffects": [
+		"**/*.css",
+		"**/*.svelte"
+	],
+	"peerDependencies": {
+		"@selva/core": "^1.0.3",
+		"svelte": "^5.0.0",
+		"three": ">=0.179.0"
+	},
+	"peerDependenciesMeta": {
+		"three": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@selva/config": "workspace:*",
+		"bits-ui": "^2.14.4",
+		"clsx": "^2.1.1",
+		"tailwind-merge": "^3.4.0",
+		"tailwind-variants": "^3.1.1",
+		"tw-animate-css": "^1.4.0"
+	},
+	"dependencies": {
+		"@selva/core": "workspace:*",
+		"@lucide/svelte": "^0.544.0"
+	},
+	"keywords": [
+		"compute",
+		"rhino",
+		"grasshopper",
+		"geometry",
+		"3d",
+		"cad",
+		"parametric",
+		"modeling",
+		"rhino3dm",
+		"automation",
+		"geometry-processing",
+		"design",
+		"cloud",
+		"gh",
+		"rhino.compute",
+		"computational-design",
+		"ui"
+	]
 }

@@ -21,12 +21,12 @@ npm install @selva/core
 import { GrasshopperClient } from '@selva/core/grasshopper';
 
 const client = new GrasshopperClient({
-  url: 'http://localhost:5000',
-  apiKey: 'your-api-key'
+	url: 'http://localhost:5000',
+	apiKey: 'your-api-key'
 });
 
 const result = await client.solve('definition.gh', {
-  'slider': 0.5
+	slider: 0.5
 });
 ```
 

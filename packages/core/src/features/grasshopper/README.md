@@ -9,8 +9,8 @@ through Rhino Compute.
 import { GrasshopperClient } from '@rhino-compute/core';
 
 const client = new GrasshopperClient({
-  serverUrl: 'https://compute.rhino3d.com',
-  apiKey: 'YOUR_API_KEY',
+	serverUrl: 'https://compute.rhino3d.com',
+	apiKey: 'YOUR_API_KEY'
 });
 
 // Fetch definition inputs/outputs
@@ -92,24 +92,24 @@ const boxes = result.data.boxes; // Typed as Brep[]
 ```typescript
 // Single values
 const result = await client.solve(definitionUrl, {
-  count: 5,
+	count: 5
 });
 
 // Arrays (become {0} branch)
 const result = await client.solve(definitionUrl, {
-  points: [
-    [0, 0, 0],
-    [1, 1, 1],
-    [2, 2, 2],
-  ],
+	points: [
+		[0, 0, 0],
+		[1, 1, 1],
+		[2, 2, 2]
+	]
 });
 
 // Data trees (explicit paths)
 const result = await client.solve(definitionUrl, {
-  values: {
-    '{0}': [1, 2, 3],
-    '{1}': [4, 5, 6],
-  },
+	values: {
+		'{0}': [1, 2, 3],
+		'{1}': [4, 5, 6]
+	}
 });
 ```
 
@@ -121,8 +121,8 @@ const { inputs } = await client.getIO(definitionUrl);
 // Group inputs by category
 import { groupInputs } from '@rhino-compute/core';
 const grouped = groupInputs(inputs, {
-  showUngrouped: true,
-  capitalize: true,
+	showUngrouped: true,
+	capitalize: true
 });
 
 // Result:
@@ -137,20 +137,20 @@ const grouped = groupInputs(inputs, {
 
 ```typescript
 try {
-  const result = await client.solve(definitionUrl, values);
+	const result = await client.solve(definitionUrl, values);
 
-  if (result.errors?.length) {
-    console.error('Computation errors:', result.errors);
-  }
+	if (result.errors?.length) {
+		console.error('Computation errors:', result.errors);
+	}
 
-  if (result.warnings?.length) {
-    console.warn('Computation warnings:', result.warnings);
-  }
+	if (result.warnings?.length) {
+		console.warn('Computation warnings:', result.warnings);
+	}
 } catch (error) {
-  if (error instanceof RhinoComputeError) {
-    console.error('Code:', error.code);
-    console.error('Context:', error.context);
-  }
+	if (error instanceof RhinoComputeError) {
+		console.error('Code:', error.code);
+		console.error('Context:', error.context);
+	}
 }
 ```
 
@@ -191,21 +191,21 @@ works.
 
 ```typescript
 interface GrasshopperComputeConfig {
-  // Required
-  serverUrl: string;
+	// Required
+	serverUrl: string;
 
-  // Optional
-  apiKey?: string;
-  authToken?: string;
-  timeoutMs?: number;
-  debug?: boolean;
-  suppressClientSideWarning?: boolean;
+	// Optional
+	apiKey?: string;
+	authToken?: string;
+	timeoutMs?: number;
+	debug?: boolean;
+	suppressClientSideWarning?: boolean;
 
-  // Grasshopper-specific
-  cachesolve?: boolean;
-  absolutetolerance?: number;
-  angletolerance?: number;
-  modelunits?: RhinoModelUnit;
+	// Grasshopper-specific
+	cachesolve?: boolean;
+	absolutetolerance?: number;
+	angletolerance?: number;
+	modelunits?: RhinoModelUnit;
 }
 ```
 

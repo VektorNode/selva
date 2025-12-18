@@ -30,20 +30,20 @@ import type { InputParamSchema } from '@/features/grasshopper/types';
  * ```
  */
 export function createInputSchema(overrides: Partial<InputParamSchema> = {}): InputParamSchema {
-  return {
-    name: 'test',
-    nickname: 'T',
-    description: '',
-    paramType: 'Number',
-    treeAccess: false,
-    groupName: null,
-    minimum: null,
-    maximum: null,
-    atLeast: 1,
-    atMost: 1,
-    default: null,
-    ...overrides,
-  } as InputParamSchema;
+	return {
+		name: 'test',
+		nickname: 'T',
+		description: '',
+		paramType: 'Number',
+		treeAccess: false,
+		groupName: null,
+		minimum: null,
+		maximum: null,
+		atLeast: 1,
+		atMost: 1,
+		default: null,
+		...overrides
+	} as InputParamSchema;
 }
 
 /**
@@ -57,12 +57,12 @@ export function createInputSchema(overrides: Partial<InputParamSchema> = {}): In
  * ```
  */
 export function createNumericInputSchema(
-  overrides: Partial<InputParamSchema> = {}
+	overrides: Partial<InputParamSchema> = {}
 ): InputParamSchema {
-  return createInputSchema({
-    paramType: 'Number',
-    ...overrides,
-  });
+	return createInputSchema({
+		paramType: 'Number',
+		...overrides
+	});
 }
 
 /**
@@ -75,10 +75,10 @@ export function createNumericInputSchema(
  * ```
  */
 export function createTextInputSchema(overrides: Partial<InputParamSchema> = {}): InputParamSchema {
-  return createInputSchema({
-    paramType: 'Text',
-    ...overrides,
-  });
+	return createInputSchema({
+		paramType: 'Text',
+		...overrides
+	});
 }
 
 /**
@@ -91,12 +91,12 @@ export function createTextInputSchema(overrides: Partial<InputParamSchema> = {})
  * ```
  */
 export function createBooleanInputSchema(
-  overrides: Partial<InputParamSchema> = {}
+	overrides: Partial<InputParamSchema> = {}
 ): InputParamSchema {
-  return createInputSchema({
-    paramType: 'Boolean',
-    ...overrides,
-  });
+	return createInputSchema({
+		paramType: 'Boolean',
+		...overrides
+	});
 }
 
 /**
@@ -109,13 +109,13 @@ export function createBooleanInputSchema(
  * ```
  */
 export function createIntegerInputSchema(
-  overrides: Partial<InputParamSchema> = {}
+	overrides: Partial<InputParamSchema> = {}
 ): InputParamSchema {
-  return createInputSchema({
-    paramType: 'Integer',
-    stepSize: 1,
-    ...overrides,
-  });
+	return createInputSchema({
+		paramType: 'Integer',
+		stepSize: 1,
+		...overrides
+	});
 }
 
 // ============================================================================
@@ -127,68 +127,68 @@ export function createIntegerInputSchema(
  * @deprecated Use createInputSchema() for new tests
  */
 export function createMockGrasshopperInput(overrides: Partial<any> = {}) {
-  return {
-    Name: 'TestInput',
-    Nickname: 'TI',
-    Description: 'Test input parameter',
-    AtLeast: 1,
-    AtMost: 1,
-    TypeHint: 'number',
-    Default: null,
-    ...overrides,
-  };
+	return {
+		Name: 'TestInput',
+		Nickname: 'TI',
+		Description: 'Test input parameter',
+		AtLeast: 1,
+		AtMost: 1,
+		TypeHint: 'number',
+		Default: null,
+		...overrides
+	};
 }
 
 /**
  * Creates a mock Grasshopper output parameter
  */
 export function createMockGrasshopperOutput(overrides: Partial<any> = {}) {
-  return {
-    Name: 'TestOutput',
-    Nickname: 'TO',
-    Description: 'Test output parameter',
-    ...overrides,
-  };
+	return {
+		Name: 'TestOutput',
+		Nickname: 'TO',
+		Description: 'Test output parameter',
+		...overrides
+	};
 }
 
 /**
  * Creates a mock data tree structure
  */
 export function createMockDataTree(values: any[] = [1, 2, 3]) {
-  return values.map((value, index) => ({
-    ParentID: index,
-    type: typeof value,
-    data: value,
-  }));
+	return values.map((value, index) => ({
+		ParentID: index,
+		type: typeof value,
+		data: value
+	}));
 }
 
 /**
  * Creates a mock Grasshopper response
  */
 export function createMockGrasshopperResponse(overrides: Partial<any> = {}) {
-  return {
-    values: [],
-    errors: [],
-    warnings: [],
-    ...overrides,
-  };
+	return {
+		values: [],
+		errors: [],
+		warnings: [],
+		...overrides
+	};
 }
 
 /**
  * Creates a mock Three.js geometry
  */
 export function createMockThreeGeometry() {
-  return {
-    vertices: [
-      { x: 0, y: 0, z: 0 },
-      { x: 1, y: 0, z: 0 },
-      { x: 1, y: 1, z: 0 },
-    ],
-    faces: [[0, 1, 2]],
-    normals: [
-      { x: 0, y: 0, z: 1 },
-      { x: 0, y: 0, z: 1 },
-      { x: 0, y: 0, z: 1 },
-    ],
-  };
+	return {
+		vertices: [
+			{ x: 0, y: 0, z: 0 },
+			{ x: 1, y: 0, z: 0 },
+			{ x: 1, y: 1, z: 0 }
+		],
+		faces: [[0, 1, 2]],
+		normals: [
+			{ x: 0, y: 0, z: 1 },
+			{ x: 0, y: 0, z: 1 },
+			{ x: 0, y: 0, z: 1 }
+		]
+	};
 }

@@ -9,20 +9,20 @@
  *  - When multiple is true: returns an array of tuples T[]
  */
 export function zipArgs<T extends any[]>(multiple: boolean, ...args: T): T | T[] {
-  if (!multiple) return args;
+	if (!multiple) return args;
 
-  if (args.length === 0) return [];
+	if (args.length === 0) return [];
 
-  const length = (args[0] as any[]).length;
-  const result: T[] = [] as unknown as T[];
+	const length = (args[0] as any[]).length;
+	const result: T[] = [] as unknown as T[];
 
-  for (let i = 0; i < length; i++) {
-    const row: any[] = [];
-    for (let j = 0; j < args.length; j++) {
-      row.push((args[j] as any[])[i]);
-    }
-    result.push(row as unknown as T);
-  }
+	for (let i = 0; i < length; i++) {
+		const row: any[] = [];
+		for (let j = 0; j < args.length; j++) {
+			row.push((args[j] as any[])[i]);
+		}
+		result.push(row as unknown as T);
+	}
 
-  return result;
+	return result;
 }

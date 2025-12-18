@@ -12,9 +12,9 @@ import type { InputParamSchema } from '../../types';
  * Context for validation operations
  */
 export interface ValidationContext {
-  inputName: string;
-  paramType?: string;
-  expectedType?: string;
+	inputName: string;
+	paramType?: string;
+	expectedType?: string;
 }
 
 /**
@@ -24,9 +24,9 @@ export interface ValidationContext {
  * @throws {RhinoComputeError} If values object is missing or empty
  */
 export function validateValueListValues(input: InputParamSchema): void {
-  if (!input.values || typeof input.values !== 'object' || Object.keys(input.values).length === 0) {
-    throw ValidationErrors.missingValues(input.nickname || 'unnamed', 'ValueList');
-  }
+	if (!input.values || typeof input.values !== 'object' || Object.keys(input.values).length === 0) {
+		throw ValidationErrors.missingValues(input.nickname || 'unnamed', 'ValueList');
+	}
 }
 
 /**
@@ -36,22 +36,26 @@ export function validateValueListValues(input: InputParamSchema): void {
  * @param warnOnly - If true, logs warning instead of throwing (default: true)
  */
 export function validateValueListDefault(input: InputParamSchema, warnOnly: boolean = true): void {
-  if (!input.values || input.default === undefined || input.default === null) {
-    return;
-  }
+	if (!input.values || input.default === undefined || input.default === null) {
+		return;
+	}
 
-  // Case-insensitive check
-  const defaultLower = String(input.default).toLowerCase();
-  const valueExists = Object.keys(input.values).some(key => key.toLowerCase() === defaultLower);
+	// Case-insensitive check
+	const defaultLower = String(input.default).toLowerCase();
+	const valueExists = Object.keys(input.values).some((key) => key.toLowerCase() === defaultLower);
 
-  if (!valueExists) {
-    const message = `ValueList input "${input.nickname || 'unnamed'}" default value "${input.default}" is not in available values`;
-    if (warnOnly) {
-      console.warn(message);
-    } else {
-      throw ValidationErrors.invalidDefault(input.nickname || 'unnamed', input.default, Object.values(input.values));
-    }
-  }
+	if (!valueExists) {
+		const message = `ValueList input "${input.nickname || 'unnamed'}" default value "${input.default}" is not in available values`;
+		if (warnOnly) {
+			console.warn(message);
+		} else {
+			throw ValidationErrors.invalidDefault(
+				input.nickname || 'unnamed',
+				input.default,
+				Object.values(input.values)
+			);
+		}
+	}
 }
 
 /**
@@ -63,13 +67,13 @@ export function validateValueListDefault(input: InputParamSchema, warnOnly: bool
  * @throws {RhinoComputeError} If paramType is not in the valid types list
  */
 export function validateParameterType(
-  paramType: string,
-  validTypes: string[],
-  inputName?: string
+	paramType: string,
+	validTypes: string[],
+	inputName?: string
 ): void {
-  if (!validTypes.includes(paramType)) {
-    throw ValidationErrors.unknownParamType(paramType, inputName);
-  }
+	if (!validTypes.includes(paramType)) {
+		throw ValidationErrors.unknownParamType(paramType, inputName);
+	}
 }
 
 /**
@@ -86,23 +90,23 @@ export function validateParameterType(
  * - Optionally capitalizes for display
  */
 export function normalizeGroupName(
-  groupName: string,
-  options?: {
-    capitalize?: boolean;
-    handleHidden?: boolean;
-  }
+	groupName: string,
+	options?: {
+		capitalize?: boolean;
+		handleHidden?: boolean;
+	}
 ): string {
-  let normalized = groupName.trim().replace(/\s+/g, '').toLowerCase();
+	let normalized = groupName.trim().replace(/\s+/g, '').toLowerCase();
 
-  if (options?.handleHidden && (normalized === 'hidden' || normalized === 'hide')) {
-    return '__hidden__';
-  }
+	if (options?.handleHidden && (normalized === 'hidden' || normalized === 'hide')) {
+		return '__hidden__';
+	}
 
-  if (options?.capitalize) {
-    normalized = normalized.replace(/\b\w/g, (char) => char.toUpperCase());
-  }
+	if (options?.capitalize) {
+		normalized = normalized.replace(/\b\w/g, (char) => char.toUpperCase());
+	}
 
-  return normalized;
+	return normalized;
 }
 
 /**
@@ -112,28 +116,28 @@ export function normalizeGroupName(
  * @throws {RhinoComputeError} If constraints are invalid
  */
 export function validateNumericConstraints(input: InputParamSchema): void {
-  if (
-    input.minimum !== undefined &&
-    input.minimum !== null &&
-    input.maximum !== undefined &&
-    input.maximum !== null
-  ) {
-    if (input.minimum > input.maximum) {
-      throw ValidationErrors.invalid(
-        input.nickname || 'unnamed',
-        `minimum (${input.minimum}) cannot be greater than maximum (${input.maximum})`
-      );
-    }
-  }
+	if (
+		input.minimum !== undefined &&
+		input.minimum !== null &&
+		input.maximum !== undefined &&
+		input.maximum !== null
+	) {
+		if (input.minimum > input.maximum) {
+			throw ValidationErrors.invalid(
+				input.nickname || 'unnamed',
+				`minimum (${input.minimum}) cannot be greater than maximum (${input.maximum})`
+			);
+		}
+	}
 
-  if (input.atLeast !== undefined && input.atMost !== undefined) {
-    if (input.atLeast > input.atMost) {
-      throw ValidationErrors.invalid(
-        input.nickname || 'unnamed',
-        `atLeast (${input.atLeast}) cannot be greater than atMost (${input.atMost})`
-      );
-    }
-  }
+	if (input.atLeast !== undefined && input.atMost !== undefined) {
+		if (input.atLeast > input.atMost) {
+			throw ValidationErrors.invalid(
+				input.nickname || 'unnamed',
+				`atLeast (${input.atLeast}) cannot be greater than atMost (${input.atMost})`
+			);
+		}
+	}
 }
 
 /**
@@ -143,25 +147,25 @@ export function validateNumericConstraints(input: InputParamSchema): void {
  * @returns Number of decimal places
  */
 export function extractNumericPrecision(value: number): number {
-  if (!Number.isFinite(value) || value === 0) {
-    return 0;
-  }
+	if (!Number.isFinite(value) || value === 0) {
+		return 0;
+	}
 
-  const str = String(value);
+	const str = String(value);
 
-  // Handle exponential notation
-  const expMatch = str.toLowerCase().match(/e(-?\d+)/);
-  if (expMatch) {
-    return Math.abs(Number(expMatch[1]));
-  }
+	// Handle exponential notation
+	const expMatch = str.toLowerCase().match(/e(-?\d+)/);
+	if (expMatch) {
+		return Math.abs(Number(expMatch[1]));
+	}
 
-  // Handle standard decimal notation
-  const decimalPart = str.split('.')[1];
-  if (!decimalPart) {
-    return 0;
-  }
+	// Handle standard decimal notation
+	const decimalPart = str.split('.')[1];
+	if (!decimalPart) {
+		return 0;
+	}
 
-  return Math.min(decimalPart.length, 12);
+	return Math.min(decimalPart.length, 12);
 }
 
 /**
@@ -172,13 +176,13 @@ export function extractNumericPrecision(value: number): number {
  * @throws {RhinoComputeError} If structure doesn't match expectations
  */
 export function validateInputStructure(
-  input: unknown,
-  expectedStructure: string,
-  inputName?: string
+	input: unknown,
+	expectedStructure: string,
+	inputName?: string
 ): void {
-  if (!input || typeof input !== 'object') {
-    throw ValidationErrors.invalidStructure(inputName || 'unknown', expectedStructure);
-  }
+	if (!input || typeof input !== 'object') {
+		throw ValidationErrors.invalidStructure(inputName || 'unknown', expectedStructure);
+	}
 }
 
 /**
@@ -190,18 +194,18 @@ export function validateInputStructure(
  * @throws {RhinoComputeError} If any required property is missing
  */
 export function validateRequiredProperties(
-  obj: Record<string, unknown>,
-  requiredProps: string[],
-  context: ValidationContext
+	obj: Record<string, unknown>,
+	requiredProps: string[],
+	context: ValidationContext
 ): void {
-  const missing = requiredProps.filter((prop) => !(prop in obj));
+	const missing = requiredProps.filter((prop) => !(prop in obj));
 
-  if (missing.length > 0) {
-    throw ValidationErrors.invalid(
-      context.inputName,
-      `missing required properties: ${missing.join(', ')}`
-    );
-  }
+	if (missing.length > 0) {
+		throw ValidationErrors.invalid(
+			context.inputName,
+			`missing required properties: ${missing.join(', ')}`
+		);
+	}
 }
 
 /**
@@ -219,70 +223,70 @@ export function validateRequiredProperties(
  * - Type-aware parsing (numbers, booleans, JSON)
  */
 export function preProcessInputDefault(input: InputParamSchema): void {
-  if (typeof input.default !== 'object' || input.default === null) {
-    return;
-  }
+	if (typeof input.default !== 'object' || input.default === null) {
+		return;
+	}
 
-  if (!('innerTree' in input.default)) {
-    console.warn('Unexpected structure in input.default:', input.default);
-    input.default = null;
-    return;
-  }
+	if (!('innerTree' in input.default)) {
+		console.warn('Unexpected structure in input.default:', input.default);
+		input.default = null;
+		return;
+	}
 
-  const innerTree = (input.default as any).innerTree;
+	const innerTree = (input.default as any).innerTree;
 
-  // If innerTree is empty, set default to undefined
-  if (Object.keys(innerTree).length === 0) {
-    input.default = undefined;
-    return;
-  }
+	// If innerTree is empty, set default to undefined
+	if (Object.keys(innerTree).length === 0) {
+		input.default = undefined;
+		return;
+	}
 
-  // If treeAccess is true or atMost > 1, preserve the tree structure
-  if (input.treeAccess || (input.atMost && input.atMost > 1)) {
-    // Convert each branch to an array of parsed data
-    const tree: Record<string, any[]> = {};
-    for (const [branch, items] of Object.entries(innerTree)) {
-      tree[branch] = (items as any[]).map((item) => {
-        // Try to parse numbers, booleans, or JSON if possible
-        if (typeof item.data === 'string') {
-          if (item.type === 'System.Double' || item.type === 'System.Int32') {
-            const num = Number(item.data);
-            return Number.isNaN(num) ? item.data : num;
-          }
-          if (item.type === 'System.Boolean') {
-            return item.data.toLowerCase() === 'true';
-          }
-          if (item.type.startsWith('Rhino.Geometry') || item.type === 'System.String') {
-            try {
-              return JSON.parse(item.data);
-            } catch {
-              return item.data;
-            }
-          }
-        }
-        return item.data;
-      });
-    }
-    input.default = tree;
-    return;
-  }
+	// If treeAccess is true or atMost > 1, preserve the tree structure
+	if (input.treeAccess || (input.atMost && input.atMost > 1)) {
+		// Convert each branch to an array of parsed data
+		const tree: Record<string, any[]> = {};
+		for (const [branch, items] of Object.entries(innerTree)) {
+			tree[branch] = (items as any[]).map((item) => {
+				// Try to parse numbers, booleans, or JSON if possible
+				if (typeof item.data === 'string') {
+					if (item.type === 'System.Double' || item.type === 'System.Int32') {
+						const num = Number(item.data);
+						return Number.isNaN(num) ? item.data : num;
+					}
+					if (item.type === 'System.Boolean') {
+						return item.data.toLowerCase() === 'true';
+					}
+					if (item.type.startsWith('Rhino.Geometry') || item.type === 'System.String') {
+						try {
+							return JSON.parse(item.data);
+						} catch {
+							return item.data;
+						}
+					}
+				}
+				return item.data;
+			});
+		}
+		input.default = tree;
+		return;
+	}
 
-  // Otherwise, flatten all values as before
-  const allValues: any[] = [];
-  for (const items of Object.values(innerTree)) {
-    if (Array.isArray(items)) {
-      items.forEach((item) => {
-        if (item && typeof item === 'object' && 'data' in item) {
-          allValues.push(item.data);
-        }
-      });
-    }
-  }
-  if (allValues.length === 0) {
-    input.default = undefined;
-  } else if (allValues.length === 1) {
-    input.default = allValues[0];
-  } else {
-    input.default = allValues;
-  }
+	// Otherwise, flatten all values as before
+	const allValues: any[] = [];
+	for (const items of Object.values(innerTree)) {
+		if (Array.isArray(items)) {
+			items.forEach((item) => {
+				if (item && typeof item === 'object' && 'data' in item) {
+					allValues.push(item.data);
+				}
+			});
+		}
+	}
+	if (allValues.length === 0) {
+		input.default = undefined;
+	} else if (allValues.length === 1) {
+		input.default = allValues[0];
+	} else {
+		input.default = allValues;
+	}
 }

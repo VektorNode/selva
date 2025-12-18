@@ -84,15 +84,15 @@ Initializes a Three.js scene with camera, renderer, controls, and lighting.
 
 ```typescript
 const { scene, camera, renderer, controls, dispose, resize } = initThree(canvas, {
-  sceneScale: 'mm',
-  camera: {
-    fov: 45,
-    position: new THREE.Vector3(100, 100, 100),
-  },
-  environment: {
-    backgroundColor: '#f5f5f5',
-    showGrid: true,
-  },
+	sceneScale: 'mm',
+	camera: {
+		fov: 45,
+		position: new THREE.Vector3(100, 100, 100)
+	},
+	environment: {
+		backgroundColor: '#f5f5f5',
+		showGrid: true
+	}
 });
 ```
 
@@ -102,63 +102,63 @@ const { scene, camera, renderer, controls, dispose, resize } = initThree(canvas,
 
 ```typescript
 interface ThreeInitializerOptions {
-  // Scene scale - affects camera distance, grid size, etc.
-  sceneScale?: 'mm' | 'cm' | 'm';
+	// Scene scale - affects camera distance, grid size, etc.
+	sceneScale?: 'mm' | 'cm' | 'm';
 
-  camera?: {
-    fov?: number; // Field of view (default: 45)
-    position?: THREE.Vector3; // Initial camera position
-    near?: number; // Near clipping plane
-    far?: number; // Far clipping plane
-  };
+	camera?: {
+		fov?: number; // Field of view (default: 45)
+		position?: THREE.Vector3; // Initial camera position
+		near?: number; // Near clipping plane
+		far?: number; // Far clipping plane
+	};
 
-  environment?: {
-    backgroundColor?: string | THREE.Color; // Scene background
-    showGrid?: boolean; // Show ground grid (default: true)
-    showAxes?: boolean; // Show axis helper (default: false)
-    gridSize?: number; // Grid size override
-  };
+	environment?: {
+		backgroundColor?: string | THREE.Color; // Scene background
+		showGrid?: boolean; // Show ground grid (default: true)
+		showAxes?: boolean; // Show axis helper (default: false)
+		gridSize?: number; // Grid size override
+	};
 
-  lighting?: {
-    ambient?: {
-      color?: string | THREE.Color;
-      intensity?: number;
-    };
-    directional?: {
-      color?: string | THREE.Color;
-      intensity?: number;
-      position?: THREE.Vector3;
-      castShadow?: boolean;
-    };
-  };
+	lighting?: {
+		ambient?: {
+			color?: string | THREE.Color;
+			intensity?: number;
+		};
+		directional?: {
+			color?: string | THREE.Color;
+			intensity?: number;
+			position?: THREE.Vector3;
+			castShadow?: boolean;
+		};
+	};
 
-  floor?: {
-    show?: boolean;
-    color?: string | THREE.Color;
-    size?: number;
-    roughness?: number;
-    metalness?: number;
-    receiveShadow?: boolean;
-  };
+	floor?: {
+		show?: boolean;
+		color?: string | THREE.Color;
+		size?: number;
+		roughness?: number;
+		metalness?: number;
+		receiveShadow?: boolean;
+	};
 
-  controls?: {
-    enableDamping?: boolean;
-    dampingFactor?: number;
-    autoRotate?: boolean;
-    autoRotateSpeed?: number;
-    enableZoom?: boolean;
-    minDistance?: number;
-    maxDistance?: number;
-  };
+	controls?: {
+		enableDamping?: boolean;
+		dampingFactor?: number;
+		autoRotate?: boolean;
+		autoRotateSpeed?: number;
+		enableZoom?: boolean;
+		minDistance?: number;
+		maxDistance?: number;
+	};
 
-  render?: {
-    enableShadows?: boolean;
-    shadowMapSize?: number;
-    antialias?: boolean;
-    toneMapping?: THREE.ToneMapping;
-    toneMappingExposure?: number;
-    pixelRatio?: number;
-  };
+	render?: {
+		enableShadows?: boolean;
+		shadowMapSize?: number;
+		antialias?: boolean;
+		toneMapping?: THREE.ToneMapping;
+		toneMappingExposure?: number;
+		pixelRatio?: number;
+	};
 }
 ```
 
@@ -252,24 +252,24 @@ The scene automatically adjusts settings based on the `sceneScale` option:
 
 ```typescript
 const { scene, camera, controls } = initThree(canvas, {
-  sceneScale: 'mm',
-  camera: {
-    fov: 35, // Narrower FOV for less distortion
-    position: new THREE.Vector3(500, 500, 500),
-  },
-  environment: {
-    backgroundColor: '#f5f5f5',
-    showGrid: true,
-  },
-  controls: {
-    autoRotate: false,
-    enableDamping: true,
-    dampingFactor: 0.1,
-  },
-  render: {
-    enableShadows: false, // Often not needed for CAD
-    antialias: true,
-  },
+	sceneScale: 'mm',
+	camera: {
+		fov: 35, // Narrower FOV for less distortion
+		position: new THREE.Vector3(500, 500, 500)
+	},
+	environment: {
+		backgroundColor: '#f5f5f5',
+		showGrid: true
+	},
+	controls: {
+		autoRotate: false,
+		enableDamping: true,
+		dampingFactor: 0.1
+	},
+	render: {
+		enableShadows: false, // Often not needed for CAD
+		antialias: true
+	}
 });
 ```
 
@@ -277,31 +277,31 @@ const { scene, camera, controls } = initThree(canvas, {
 
 ```typescript
 const { scene, camera, controls } = initThree(canvas, {
-  sceneScale: 'm',
-  camera: {
-    fov: 60,
-    position: new THREE.Vector3(50, 30, 50),
-  },
-  environment: {
-    backgroundColor: '#87CEEB', // Sky blue
-    showGrid: true,
-  },
-  floor: {
-    show: true,
-    color: '#cccccc',
-    receiveShadow: true,
-  },
-  lighting: {
-    directional: {
-      intensity: 1.2,
-      castShadow: true,
-    },
-  },
-  render: {
-    enableShadows: true,
-    toneMapping: THREE.ACESFilmicToneMapping,
-    toneMappingExposure: 1.0,
-  },
+	sceneScale: 'm',
+	camera: {
+		fov: 60,
+		position: new THREE.Vector3(50, 30, 50)
+	},
+	environment: {
+		backgroundColor: '#87CEEB', // Sky blue
+		showGrid: true
+	},
+	floor: {
+		show: true,
+		color: '#cccccc',
+		receiveShadow: true
+	},
+	lighting: {
+		directional: {
+			intensity: 1.2,
+			castShadow: true
+		}
+	},
+	render: {
+		enableShadows: true,
+		toneMapping: THREE.ACESFilmicToneMapping,
+		toneMappingExposure: 1.0
+	}
 });
 ```
 
@@ -309,30 +309,30 @@ const { scene, camera, controls } = initThree(canvas, {
 
 ```typescript
 const { scene, camera, controls } = initThree(canvas, {
-  sceneScale: 'cm',
-  environment: {
-    backgroundColor: new THREE.Color(0x1a1a1a),
-  },
-  floor: {
-    show: true,
-    color: '#2a2a2a',
-    roughness: 0.2,
-    metalness: 0.8,
-    receiveShadow: true,
-  },
-  lighting: {
-    ambient: {
-      intensity: 0.4,
-    },
-    directional: {
-      intensity: 0.8,
-      castShadow: true,
-    },
-  },
-  controls: {
-    autoRotate: true,
-    autoRotateSpeed: 2.0,
-  },
+	sceneScale: 'cm',
+	environment: {
+		backgroundColor: new THREE.Color(0x1a1a1a)
+	},
+	floor: {
+		show: true,
+		color: '#2a2a2a',
+		roughness: 0.2,
+		metalness: 0.8,
+		receiveShadow: true
+	},
+	lighting: {
+		ambient: {
+			intensity: 0.4
+		},
+		directional: {
+			intensity: 0.8,
+			castShadow: true
+		}
+	},
+	controls: {
+		autoRotate: true,
+		autoRotateSpeed: 2.0
+	}
 });
 ```
 
@@ -368,13 +368,13 @@ const meshes = getMeshesFromDoc(result.rawResponse);
 
 // Apply custom material to specific meshes
 meshes.forEach((mesh, index) => {
-  if (mesh.name === 'walls') {
-    mesh.material = new THREE.MeshPhysicalMaterial({
-      color: 0xffffff,
-      roughness: 0.8,
-      clearcoat: 0.3,
-    });
-  }
+	if (mesh.name === 'walls') {
+		mesh.material = new THREE.MeshPhysicalMaterial({
+			color: 0xffffff,
+			roughness: 0.8,
+			clearcoat: 0.3
+		});
+	}
 });
 
 updateScene(scene, meshes, camera, controls);
@@ -406,9 +406,9 @@ window.addEventListener('resize', resize);
 
 // Or use your own resize handler:
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+	camera.aspect = window.innerWidth / window.innerHeight;
+	camera.updateProjectionMatrix();
+	renderer.setSize(window.innerWidth, window.innerHeight);
 });
 ```
 
@@ -431,13 +431,13 @@ Rhino display data containing mesh and material information:
 
 ```typescript
 type ThreeDisplay = {
-  id?: number;
-  color: string; // Hex color string
-  metalness: number; // 0-1
-  roughness: number; // 0-1
-  opacity: number; // 0-1
-  meshData: string; // Compressed mesh data
-  name: string; // Mesh name
+	id?: number;
+	color: string; // Hex color string
+	metalness: number; // 0-1
+	roughness: number; // 0-1
+	opacity: number; // 0-1
+	meshData: string; // Compressed mesh data
+	name: string; // Mesh name
 };
 ```
 
@@ -451,7 +451,7 @@ type ThreeDisplay = {
 3. **Adjust pixel ratio**: Limit `pixelRatio` to 2 for high-DPI displays:
    ```typescript
    render: {
-     pixelRatio: Math.min(window.devicePixelRatio, 2);
+   	pixelRatio: Math.min(window.devicePixelRatio, 2);
    }
    ```
 4. **Dispose properly**: Always call `dispose()` when cleaning up to prevent memory leaks
@@ -469,19 +469,19 @@ import { initThree, getMeshesFromDoc, updateScene } from 'rhino-compute-core/thr
 // Setup
 const canvas = document.querySelector('canvas')!;
 const { scene, camera, controls, dispose } = initThree(canvas, {
-  sceneScale: 'mm',
+	sceneScale: 'mm'
 });
 
 const client = new RhinoComputeClient({
-  serverUrl: 'http://localhost:6500',
+	serverUrl: 'http://localhost:6500'
 });
 
 // Compute and visualize
 async function runCompute(inputs: Record<string, any>) {
-  const result = await client.solveFromUrl('http://example.com/definition.gh', inputs);
+	const result = await client.solveFromUrl('http://example.com/definition.gh', inputs);
 
-  const meshes = getMeshesFromDoc(result.rawResponse);
-  updateScene(scene, meshes, camera, controls);
+	const meshes = getMeshesFromDoc(result.rawResponse);
+	updateScene(scene, meshes, camera, controls);
 }
 
 // Run with parameters

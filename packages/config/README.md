@@ -38,10 +38,10 @@ In your package's `vite.config.ts`:
 import { createConfig } from '@selva/config/vite';
 
 export default createConfig({
-  // Package-specific overrides
-  plugins: [
-    // ...
-  ],
+	// Package-specific overrides
+	plugins: [
+		// ...
+	]
 });
 ```
 
@@ -65,13 +65,14 @@ Or with overrides:
 import sharedConfig from '@selva/config/prettier';
 
 export default {
-  ...sharedConfig,
-  // Package-specific overrides
-  tailwindStylesheet: './src/custom/path.css',
+	...sharedConfig,
+	// Package-specific overrides
+	tailwindStylesheet: './src/custom/path.css'
 };
 ```
 
 The shared config uses:
+
 - Tabs for indentation
 - Single quotes
 - No trailing commas

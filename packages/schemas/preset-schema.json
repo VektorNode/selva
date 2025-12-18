@@ -1,94 +1,94 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://selva.dev/schemas/preset-schema.json",
-  "title": "Selva Parameter Preset Schema",
-  "version": "1.0.0",
-  "description": "Schema for saved parameter states (presets) for Selva Grasshopper documents",
-  "definitions": {
-    "ParameterState": {
-      "type": "object",
-      "description": "Saved state for a single parameter",
-      "properties": {
-        "paramId": {
-          "type": "string",
-          "description": "Parameter GUID - primary reference"
-        },
-        "nickname": {
-          "type": "string",
-          "description": "Parameter nickname for validation"
-        },
-        "displayName": {
-          "type": "string",
-          "description": "Display name for validation"
-        },
-        "paramType": {
-          "type": "string",
-          "description": "Parameter type for validation"
-        },
-        "value": {},
-        "groupName": {
-          "type": "string",
-          "description": "Group name for validation (optional)"
-        }
-      },
-      "required": ["paramId", "nickname", "paramType", "value"],
-      "additionalProperties": false
-    },
-    "ParameterPreset": {
-      "type": "object",
-      "description": "Saved parameter state (preset) for a Grasshopper document",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for this preset"
-        },
-        "name": {
-          "type": "string",
-          "description": "User-friendly preset name"
-        },
-        "description": {
-          "type": "string",
-          "description": "Optional description of this preset"
-        },
-        "timestamp": {
-          "type": "string",
-          "format": "date-time",
-          "description": "When this preset was saved"
-        },
-        "schemaId": {
-          "type": "string",
-          "description": "References UISchema.id"
-        },
-        "documentId": {
-          "type": "string",
-          "description": "Must match UISchema.documentId for validation"
-        },
-        "projectFileName": {
-          "type": "string",
-          "description": "Document file name for reference"
-        },
-        "pluginVersion": {
-          "type": "string",
-          "description": "Plugin version when preset was saved"
-        },
-        "author": {
-          "type": "string",
-          "description": "Who saved this preset"
-        },
-        "tags": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Tags for organizing presets"
-        },
-        "parameters": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/ParameterState" },
-          "description": "All parameter values"
-        }
-      },
-      "required": ["id", "name", "timestamp", "documentId", "schemaId", "parameters"],
-      "additionalProperties": false
-    }
-  },
-  "$ref": "#/definitions/ParameterPreset"
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://selva.dev/schemas/preset-schema.json",
+	"title": "Selva Parameter Preset Schema",
+	"version": "1.0.0",
+	"description": "Schema for saved parameter states (presets) for Selva Grasshopper documents",
+	"definitions": {
+		"ParameterState": {
+			"type": "object",
+			"description": "Saved state for a single parameter",
+			"properties": {
+				"paramId": {
+					"type": "string",
+					"description": "Parameter GUID - primary reference"
+				},
+				"nickname": {
+					"type": "string",
+					"description": "Parameter nickname for validation"
+				},
+				"displayName": {
+					"type": "string",
+					"description": "Display name for validation"
+				},
+				"paramType": {
+					"type": "string",
+					"description": "Parameter type for validation"
+				},
+				"value": {},
+				"groupName": {
+					"type": "string",
+					"description": "Group name for validation (optional)"
+				}
+			},
+			"required": ["paramId", "nickname", "paramType", "value"],
+			"additionalProperties": false
+		},
+		"ParameterPreset": {
+			"type": "object",
+			"description": "Saved parameter state (preset) for a Grasshopper document",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Unique identifier for this preset"
+				},
+				"name": {
+					"type": "string",
+					"description": "User-friendly preset name"
+				},
+				"description": {
+					"type": "string",
+					"description": "Optional description of this preset"
+				},
+				"timestamp": {
+					"type": "string",
+					"format": "date-time",
+					"description": "When this preset was saved"
+				},
+				"schemaId": {
+					"type": "string",
+					"description": "References UISchema.id"
+				},
+				"documentId": {
+					"type": "string",
+					"description": "Must match UISchema.documentId for validation"
+				},
+				"projectFileName": {
+					"type": "string",
+					"description": "Document file name for reference"
+				},
+				"pluginVersion": {
+					"type": "string",
+					"description": "Plugin version when preset was saved"
+				},
+				"author": {
+					"type": "string",
+					"description": "Who saved this preset"
+				},
+				"tags": {
+					"type": "array",
+					"items": { "type": "string" },
+					"description": "Tags for organizing presets"
+				},
+				"parameters": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/ParameterState" },
+					"description": "All parameter values"
+				}
+			},
+			"required": ["id", "name", "timestamp", "documentId", "schemaId", "parameters"],
+			"additionalProperties": false
+		}
+	},
+	"$ref": "#/definitions/ParameterPreset"
 }

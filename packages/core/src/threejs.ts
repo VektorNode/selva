@@ -6,12 +6,12 @@
 export { initThree, updateScene, Materials } from './features/visualization/threejs';
 
 export type {
-  ThreeInitializerOptions,
-  CameraConfig,
-  ControlsConfig,
-  EnvironmentConfig,
-  LightingConfig,
-  RenderConfig,
-  FloorConfig,
-  EventConfig,
+	ThreeInitializerOptions,
+	CameraConfig,
+	ControlsConfig,
+	EnvironmentConfig,
+	LightingConfig,
+	RenderConfig,
+	FloorConfig,
+	EventConfig
 } from './features/visualization';

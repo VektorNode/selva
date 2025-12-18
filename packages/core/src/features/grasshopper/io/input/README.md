@@ -47,18 +47,18 @@ Raw API Response (PascalCase, inconsistent types)
 
 ```typescript
 export function processInputs(rawInputs: InputParamSchema[]): InputParam[] {
-  return rawInputs.map((input) => {
-    switch (input.paramType.toLowerCase()) {
-      case 'number':
-      case 'integer':
-        return parseNumericInput(input);
-      case 'text':
-        return parseTextInput(input);
-      case 'boolean':
-        return parseBooleanInput(input);
-      // ... etc
-    }
-  });
+	return rawInputs.map((input) => {
+		switch (input.paramType.toLowerCase()) {
+			case 'number':
+			case 'integer':
+				return parseNumericInput(input);
+			case 'text':
+				return parseTextInput(input);
+			case 'boolean':
+				return parseBooleanInput(input);
+			// ... etc
+		}
+	});
 }
 ```
 
@@ -67,20 +67,20 @@ export function processInputs(rawInputs: InputParamSchema[]): InputParam[] {
 ```typescript
 // Example: numeric-parser.ts
 export function parseNumericInput(raw: InputParamSchemaRaw): NumericInputType {
-  return {
-    paramType: raw.paramType === 'Integer' ? 'Integer' : 'Number',
-    name: raw.name,
-    nickname: raw.nickname,
-    description: raw.description,
-    treeAccess: raw.treeAccess,
-    groupName: raw.groupName || 'Default',
-    minimum: raw.minimum,
-    maximum: raw.maximum,
-    atLeast: raw.atLeast,
-    atMost: raw.atMost,
-    stepSize: raw.stepSize,
-    default: parseDefaultValue(raw.default),
-  };
+	return {
+		paramType: raw.paramType === 'Integer' ? 'Integer' : 'Number',
+		name: raw.name,
+		nickname: raw.nickname,
+		description: raw.description,
+		treeAccess: raw.treeAccess,
+		groupName: raw.groupName || 'Default',
+		minimum: raw.minimum,
+		maximum: raw.maximum,
+		atLeast: raw.atLeast,
+		atMost: raw.atMost,
+		stepSize: raw.stepSize,
+		default: parseDefaultValue(raw.default)
+	};
 }
 ```
 
@@ -90,10 +90,10 @@ export function parseNumericInput(raw: InputParamSchemaRaw): NumericInputType {
 const inputs = processInputs(rawApiResponse);
 
 inputs.forEach((input) => {
-  if (input.paramType === 'Number') {
-    // TypeScript knows input has minimum, maximum, etc.
-    console.log(input.minimum, input.maximum);
-  }
+	if (input.paramType === 'Number') {
+		// TypeScript knows input has minimum, maximum, etc.
+		console.log(input.minimum, input.maximum);
+	}
 });
 ```
 
@@ -106,9 +106,9 @@ To support a new Grasshopper parameter type:
 ```typescript
 // filepath: src/features/grasshopper/types.ts
 export interface CustomInputType extends BaseInputType {
-  paramType: 'Custom';
-  customProperty: string;
-  default: DefaultValue<CustomType>;
+	paramType: 'Custom';
+	customProperty: string;
+	default: DefaultValue<CustomType>;
 }
 ```
 
@@ -136,23 +136,23 @@ import type { InputParamSchema, CustomInputType } from '../../../types';
  * @returns Processed custom input type
  */
 export function parseCustomInput(raw: InputParamSchema): CustomInputType {
-  return {
-    paramType: 'Custom',
-    name: raw.name,
-    nickname: raw.nickname,
-    description: raw.description,
-    treeAccess: raw.treeAccess,
-    groupName: raw.groupName || 'Default',
-    customProperty: raw.customProperty || 'default',
-    default: parseCustomDefault(raw.default),
-  };
+	return {
+		paramType: 'Custom',
+		name: raw.name,
+		nickname: raw.nickname,
+		description: raw.description,
+		treeAccess: raw.treeAccess,
+		groupName: raw.groupName || 'Default',
+		customProperty: raw.customProperty || 'default',
+		default: parseCustomDefault(raw.default)
+	};
 }
 
 function parseCustomDefault(value: any): DefaultValue<CustomType> {
-  // Transform raw default value to CustomType
-  if (!value) return undefined;
-  // ... parsing logic
-  return value;
+	// Transform raw default value to CustomType
+	if (!value) return undefined;
+	// ... parsing logic
+	return value;
 }
 ```
 
@@ -163,15 +163,15 @@ function parseCustomDefault(value: any): DefaultValue<CustomType> {
 import { parseCustomInput } from './custom-parser';
 
 export function processInputs(rawInputs: InputParamSchema[]): InputParam[] {
-  return rawInputs.map((input) => {
-    switch (input.paramType.toLowerCase()) {
-      case 'custom':
-        return parseCustomInput(input);
-      // ...existing cases...
-      default:
-        throw new Error(`Unsupported parameter type: ${input.paramType}`);
-    }
-  });
+	return rawInputs.map((input) => {
+		switch (input.paramType.toLowerCase()) {
+			case 'custom':
+				return parseCustomInput(input);
+			// ...existing cases...
+			default:
+				throw new Error(`Unsupported parameter type: ${input.paramType}`);
+		}
+	});
 }
 ```
 
@@ -189,26 +189,26 @@ export { parseCustomInput } from './custom-parser';
 import { parseCustomInput } from '@/features/grasshopper/io/input/input-parsers';
 
 describe('parseCustomInput', () => {
-  it('should parse custom parameter correctly', () => {
-    const raw = {
-      paramType: 'Custom',
-      name: 'testParam',
-      nickname: 'TP',
-      description: 'Test parameter',
-      treeAccess: false,
-      groupName: 'TestGroup',
-      customProperty: 'value',
-      default: {
-        /* ... */
-      },
-    };
+	it('should parse custom parameter correctly', () => {
+		const raw = {
+			paramType: 'Custom',
+			name: 'testParam',
+			nickname: 'TP',
+			description: 'Test parameter',
+			treeAccess: false,
+			groupName: 'TestGroup',
+			customProperty: 'value',
+			default: {
+				/* ... */
+			}
+		};
 
-    const result = parseCustomInput(raw);
+		const result = parseCustomInput(raw);
 
-    expect(result.paramType).toBe('Custom');
-    expect(result.customProperty).toBe('value');
-    // ... more assertions
-  });
+		expect(result.paramType).toBe('Custom');
+		expect(result.customProperty).toBe('value');
+		// ... more assertions
+	});
 });
 ```
 
@@ -226,12 +226,12 @@ describe('parseCustomInput', () => {
 ```typescript
 // 1. API returns raw data
 const apiResponse = {
-  paramType: 'Number',
-  name: 'radius',
-  minimum: 0,
-  maximum: 100,
-  default: 10,
-  // ... other fields
+	paramType: 'Number',
+	name: 'radius',
+	minimum: 0,
+	maximum: 100,
+	default: 10
+	// ... other fields
 };
 
 // 2. Processor routes to numeric parser
@@ -240,7 +240,7 @@ const processed = processInputs([apiResponse]);
 // 3. Result is strongly typed
 const input = processed[0];
 if (input.paramType === 'Number') {
-  console.log(input.minimum); // TypeScript knows this exists
-  console.log(input.default); // Type: number | number[] | DataTreeDefault<number>
+	console.log(input.minimum); // TypeScript knows this exists
+	console.log(input.default); // Type: number | number[] | DataTreeDefault<number>
 }
 ```

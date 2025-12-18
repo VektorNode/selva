@@ -6,8 +6,8 @@ import { RhinoComputeError, ErrorCodes } from '@/core/errors';
 import type { DecompressedMeshData } from './types';
 
 interface MeshData {
-  verticesArray: Float32Array;
-  faceIndicesArray: Uint32Array;
+	verticesArray: Float32Array;
+	faceIndicesArray: Uint32Array;
 }
 
 /**
@@ -17,22 +17,22 @@ interface MeshData {
  * @throws {RhinoComputeError} If decompression fails or data is invalid.
  */
 export function decompressMeshData(base64String: string): MeshData {
-  try {
-    const bytes = decodeBase64ToBinary(base64String);
-    const decompressedData = fflate.gunzipSync(bytes);
-    return parseMeshBinaryData(decompressedData);
-  } catch (error) {
-    throw new RhinoComputeError(
-      error instanceof RhinoComputeError
-        ? error.message
-        : `Failed to decompress data: ${error instanceof Error ? error.message : String(error)}`,
-      error instanceof RhinoComputeError ? error.code : ErrorCodes.VALIDATION_ERROR,
-      {
-        context: { base64StringLength: base64String.length },
-        originalError: error instanceof Error ? error : new Error(String(error)),
-      }
-    );
-  }
+	try {
+		const bytes = decodeBase64ToBinary(base64String);
+		const decompressedData = fflate.gunzipSync(bytes);
+		return parseMeshBinaryData(decompressedData);
+	} catch (error) {
+		throw new RhinoComputeError(
+			error instanceof RhinoComputeError
+				? error.message
+				: `Failed to decompress data: ${error instanceof Error ? error.message : String(error)}`,
+			error instanceof RhinoComputeError ? error.code : ErrorCodes.VALIDATION_ERROR,
+			{
+				context: { base64StringLength: base64String.length },
+				originalError: error instanceof Error ? error : new Error(String(error))
+			}
+		);
+	}
 }
 
 /**
@@ -42,49 +42,49 @@ export function decompressMeshData(base64String: string): MeshData {
  * @throws {RhinoComputeError} If decompression fails or data is invalid.
  */
 export async function decompressBatchedMeshData(
-  base64String: string
+	base64String: string
 ): Promise<DecompressedMeshData> {
-  return new Promise((resolve, reject) => {
-    try {
-      // Use requestIdleCallback for non-blocking decompression if available
-      const decompressFn = () => {
-        try {
-          const bytes = decodeBase64ToBinary(base64String);
-          const decompressedData = fflate.gunzipSync(bytes);
-          const result = parseBatchedMeshBinaryData(decompressedData);
-          resolve(result);
-        } catch (error) {
-          reject(
-            new RhinoComputeError(
-              error instanceof RhinoComputeError
-                ? error.message
-                : `Failed to decompress batched data: ${error instanceof Error ? error.message : String(error)}`,
-              error instanceof RhinoComputeError ? error.code : ErrorCodes.VALIDATION_ERROR,
-              {
-                context: { base64StringLength: base64String.length },
-                originalError: error instanceof Error ? error : new Error(String(error)),
-              }
-            )
-          );
-        }
-      };
+	return new Promise((resolve, reject) => {
+		try {
+			// Use requestIdleCallback for non-blocking decompression if available
+			const decompressFn = () => {
+				try {
+					const bytes = decodeBase64ToBinary(base64String);
+					const decompressedData = fflate.gunzipSync(bytes);
+					const result = parseBatchedMeshBinaryData(decompressedData);
+					resolve(result);
+				} catch (error) {
+					reject(
+						new RhinoComputeError(
+							error instanceof RhinoComputeError
+								? error.message
+								: `Failed to decompress batched data: ${error instanceof Error ? error.message : String(error)}`,
+							error instanceof RhinoComputeError ? error.code : ErrorCodes.VALIDATION_ERROR,
+							{
+								context: { base64StringLength: base64String.length },
+								originalError: error instanceof Error ? error : new Error(String(error))
+							}
+						)
+					);
+				}
+			};
 
-      if ('requestIdleCallback' in globalThis) {
-        (globalThis as any).requestIdleCallback(decompressFn, { timeout: 5000 });
-      } else {
-        // Fallback: use setTimeout with 0 delay to yield to other tasks
-        setTimeout(decompressFn, 0);
-      }
-    } catch (error) {
-      reject(
-        new RhinoComputeError(
-          `Failed to schedule decompression: ${error instanceof Error ? error.message : String(error)}`,
-          ErrorCodes.VALIDATION_ERROR,
-          { originalError: error instanceof Error ? error : new Error(String(error)) }
-        )
-      );
-    }
-  });
+			if ('requestIdleCallback' in globalThis) {
+				(globalThis as any).requestIdleCallback(decompressFn, { timeout: 5000 });
+			} else {
+				// Fallback: use setTimeout with 0 delay to yield to other tasks
+				setTimeout(decompressFn, 0);
+			}
+		} catch (error) {
+			reject(
+				new RhinoComputeError(
+					`Failed to schedule decompression: ${error instanceof Error ? error.message : String(error)}`,
+					ErrorCodes.VALIDATION_ERROR,
+					{ originalError: error instanceof Error ? error : new Error(String(error)) }
+				)
+			);
+		}
+	});
 }
 
 /**
@@ -94,95 +94,95 @@ export async function decompressBatchedMeshData(
  * @throws {RhinoComputeError} If data is invalid or insufficient.
  */
 function parseBatchedMeshBinaryData(binaryMeshData: Uint8Array): DecompressedMeshData {
-  const dataView = new DataView(
-    binaryMeshData.buffer,
-    binaryMeshData.byteOffset,
-    binaryMeshData.byteLength
-  );
-  let offset = 0;
+	const dataView = new DataView(
+		binaryMeshData.buffer,
+		binaryMeshData.byteOffset,
+		binaryMeshData.byteLength
+	);
+	let offset = 0;
 
-  // Read vertex data
-  if (offset + 4 > dataView.byteLength) {
-    throw new RhinoComputeError(
-      'Insufficient data to read the number of vertex floats.',
-      ErrorCodes.VALIDATION_ERROR,
-      { context: { expectedBytes: 4, availableBytes: dataView.byteLength, offset } }
-    );
-  }
-  const numVertexFloats = dataView.getUint32(offset, true);
-  offset += 4;
+	// Read vertex data
+	if (offset + 4 > dataView.byteLength) {
+		throw new RhinoComputeError(
+			'Insufficient data to read the number of vertex floats.',
+			ErrorCodes.VALIDATION_ERROR,
+			{ context: { expectedBytes: 4, availableBytes: dataView.byteLength, offset } }
+		);
+	}
+	const numVertexFloats = dataView.getUint32(offset, true);
+	offset += 4;
 
-  if (numVertexFloats % 3 !== 0) {
-    throw new RhinoComputeError(
-      'Invalid number of vertex floats; should be divisible by 3.',
-      ErrorCodes.VALIDATION_ERROR,
-      {
-        context: {
-          numVertexFloats,
-          remainder: numVertexFloats % 3,
-          totalBytes: dataView.byteLength,
-        },
-      }
-    );
-  }
+	if (numVertexFloats % 3 !== 0) {
+		throw new RhinoComputeError(
+			'Invalid number of vertex floats; should be divisible by 3.',
+			ErrorCodes.VALIDATION_ERROR,
+			{
+				context: {
+					numVertexFloats,
+					remainder: numVertexFloats % 3,
+					totalBytes: dataView.byteLength
+				}
+			}
+		);
+	}
 
-  const verticesByteLength = numVertexFloats * Float32Array.BYTES_PER_ELEMENT;
-  if (offset + verticesByteLength > dataView.byteLength) {
-    throw new RhinoComputeError(
-      'Insufficient data to read vertices.',
-      ErrorCodes.VALIDATION_ERROR,
-      {
-        context: {
-          expectedBytes: verticesByteLength,
-          availableBytes: dataView.byteLength - offset,
-          offset,
-        },
-      }
-    );
-  }
+	const verticesByteLength = numVertexFloats * Float32Array.BYTES_PER_ELEMENT;
+	if (offset + verticesByteLength > dataView.byteLength) {
+		throw new RhinoComputeError(
+			'Insufficient data to read vertices.',
+			ErrorCodes.VALIDATION_ERROR,
+			{
+				context: {
+					expectedBytes: verticesByteLength,
+					availableBytes: dataView.byteLength - offset,
+					offset
+				}
+			}
+		);
+	}
 
-  const vertices = new Float32Array(
-    binaryMeshData.buffer,
-    binaryMeshData.byteOffset + offset,
-    numVertexFloats
-  );
-  offset += verticesByteLength;
+	const vertices = new Float32Array(
+		binaryMeshData.buffer,
+		binaryMeshData.byteOffset + offset,
+		numVertexFloats
+	);
+	offset += verticesByteLength;
 
-  if (offset + 4 > dataView.byteLength) {
-    throw new RhinoComputeError(
-      'Insufficient data to read the number of face indices.',
-      ErrorCodes.VALIDATION_ERROR,
-      { context: { expectedBytes: 4, availableBytes: dataView.byteLength - offset, offset } }
-    );
-  }
-  const numIndices = dataView.getUint32(offset, true);
-  offset += 4;
+	if (offset + 4 > dataView.byteLength) {
+		throw new RhinoComputeError(
+			'Insufficient data to read the number of face indices.',
+			ErrorCodes.VALIDATION_ERROR,
+			{ context: { expectedBytes: 4, availableBytes: dataView.byteLength - offset, offset } }
+		);
+	}
+	const numIndices = dataView.getUint32(offset, true);
+	offset += 4;
 
-  const indicesByteLength = numIndices * Uint32Array.BYTES_PER_ELEMENT;
-  if (offset + indicesByteLength > dataView.byteLength) {
-    throw new RhinoComputeError(
-      'Insufficient data to read face indices.',
-      ErrorCodes.VALIDATION_ERROR,
-      {
-        context: {
-          expectedBytes: indicesByteLength,
-          availableBytes: dataView.byteLength - offset,
-          offset,
-        },
-      }
-    );
-  }
+	const indicesByteLength = numIndices * Uint32Array.BYTES_PER_ELEMENT;
+	if (offset + indicesByteLength > dataView.byteLength) {
+		throw new RhinoComputeError(
+			'Insufficient data to read face indices.',
+			ErrorCodes.VALIDATION_ERROR,
+			{
+				context: {
+					expectedBytes: indicesByteLength,
+					availableBytes: dataView.byteLength - offset,
+					offset
+				}
+			}
+		);
+	}
 
-  const faces = new Uint32Array(
-    binaryMeshData.buffer,
-    binaryMeshData.byteOffset + offset,
-    numIndices
-  );
+	const faces = new Uint32Array(
+		binaryMeshData.buffer,
+		binaryMeshData.byteOffset + offset,
+		numIndices
+	);
 
-  return {
-    vertices,
-    faces,
-  };
+	return {
+		vertices,
+		faces
+	};
 }
 
 /**
@@ -192,86 +192,86 @@ function parseBatchedMeshBinaryData(binaryMeshData: Uint8Array): DecompressedMes
  * @throws {RhinoComputeError} If data is invalid or insufficient.
  */
 function parseMeshBinaryData(binaryMeshData: Uint8Array): MeshData {
-  const dataView = new DataView(
-    binaryMeshData.buffer,
-    binaryMeshData.byteOffset,
-    binaryMeshData.byteLength
-  );
-  let offset = 0;
+	const dataView = new DataView(
+		binaryMeshData.buffer,
+		binaryMeshData.byteOffset,
+		binaryMeshData.byteLength
+	);
+	let offset = 0;
 
-  if (offset + 4 > dataView.byteLength) {
-    throw new RhinoComputeError(
-      'Insufficient data to read the number of vertex floats.',
-      ErrorCodes.VALIDATION_ERROR,
-      { context: { expectedBytes: 4, availableBytes: dataView.byteLength, offset } }
-    );
-  }
-  const numVertexFloats = dataView.getUint32(offset, true);
-  offset += 4;
+	if (offset + 4 > dataView.byteLength) {
+		throw new RhinoComputeError(
+			'Insufficient data to read the number of vertex floats.',
+			ErrorCodes.VALIDATION_ERROR,
+			{ context: { expectedBytes: 4, availableBytes: dataView.byteLength, offset } }
+		);
+	}
+	const numVertexFloats = dataView.getUint32(offset, true);
+	offset += 4;
 
-  if (numVertexFloats % 3 !== 0) {
-    throw new RhinoComputeError(
-      'Invalid number of vertex floats; should be divisible by 3.',
-      ErrorCodes.VALIDATION_ERROR,
-      { context: { numVertexFloats, remainder: numVertexFloats % 3 } }
-    );
-  }
+	if (numVertexFloats % 3 !== 0) {
+		throw new RhinoComputeError(
+			'Invalid number of vertex floats; should be divisible by 3.',
+			ErrorCodes.VALIDATION_ERROR,
+			{ context: { numVertexFloats, remainder: numVertexFloats % 3 } }
+		);
+	}
 
-  const verticesByteLength = numVertexFloats * Float32Array.BYTES_PER_ELEMENT;
-  if (offset + verticesByteLength > dataView.byteLength) {
-    throw new RhinoComputeError(
-      'Insufficient data to read vertices.',
-      ErrorCodes.VALIDATION_ERROR,
-      {
-        context: {
-          expectedBytes: verticesByteLength,
-          availableBytes: dataView.byteLength - offset,
-          offset,
-        },
-      }
-    );
-  }
+	const verticesByteLength = numVertexFloats * Float32Array.BYTES_PER_ELEMENT;
+	if (offset + verticesByteLength > dataView.byteLength) {
+		throw new RhinoComputeError(
+			'Insufficient data to read vertices.',
+			ErrorCodes.VALIDATION_ERROR,
+			{
+				context: {
+					expectedBytes: verticesByteLength,
+					availableBytes: dataView.byteLength - offset,
+					offset
+				}
+			}
+		);
+	}
 
-  const vertices = new Float32Array(
-    binaryMeshData.buffer,
-    binaryMeshData.byteOffset + offset,
-    numVertexFloats
-  );
-  offset += verticesByteLength;
+	const vertices = new Float32Array(
+		binaryMeshData.buffer,
+		binaryMeshData.byteOffset + offset,
+		numVertexFloats
+	);
+	offset += verticesByteLength;
 
-  if (offset + 4 > dataView.byteLength) {
-    throw new RhinoComputeError(
-      'Insufficient data to read the number of face indices.',
-      ErrorCodes.VALIDATION_ERROR,
-      { context: { expectedBytes: 4, availableBytes: dataView.byteLength - offset, offset } }
-    );
-  }
-  const numIndices = dataView.getUint32(offset, true);
-  offset += 4;
+	if (offset + 4 > dataView.byteLength) {
+		throw new RhinoComputeError(
+			'Insufficient data to read the number of face indices.',
+			ErrorCodes.VALIDATION_ERROR,
+			{ context: { expectedBytes: 4, availableBytes: dataView.byteLength - offset, offset } }
+		);
+	}
+	const numIndices = dataView.getUint32(offset, true);
+	offset += 4;
 
-  const indicesByteLength = numIndices * Uint32Array.BYTES_PER_ELEMENT;
-  if (offset + indicesByteLength > dataView.byteLength) {
-    throw new RhinoComputeError(
-      'Insufficient data to read face indices.',
-      ErrorCodes.VALIDATION_ERROR,
-      {
-        context: {
-          expectedBytes: indicesByteLength,
-          availableBytes: dataView.byteLength - offset,
-          offset,
-        },
-      }
-    );
-  }
+	const indicesByteLength = numIndices * Uint32Array.BYTES_PER_ELEMENT;
+	if (offset + indicesByteLength > dataView.byteLength) {
+		throw new RhinoComputeError(
+			'Insufficient data to read face indices.',
+			ErrorCodes.VALIDATION_ERROR,
+			{
+				context: {
+					expectedBytes: indicesByteLength,
+					availableBytes: dataView.byteLength - offset,
+					offset
+				}
+			}
+		);
+	}
 
-  const faceIndices = new Uint32Array(
-    binaryMeshData.buffer,
-    binaryMeshData.byteOffset + offset,
-    numIndices
-  );
+	const faceIndices = new Uint32Array(
+		binaryMeshData.buffer,
+		binaryMeshData.byteOffset + offset,
+		numIndices
+	);
 
-  return {
-    verticesArray: vertices,
-    faceIndicesArray: faceIndices,
-  };
+	return {
+		verticesArray: vertices,
+		faceIndicesArray: faceIndices
+	};
 }

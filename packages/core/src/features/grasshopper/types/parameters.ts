@@ -8,21 +8,21 @@ import type { DataTreeDefault } from './trees';
  * Output types supported from Grasshopper/Rhino Compute
  */
 export type OutputType =
-  | 'System.String'
-  | 'System.Double'
-  | 'System.Int32'
-  | 'System.Boolean'
-  | 'Rhino.Geometry.Point3d'
-  | 'Rhino.Geometry.Line'
-  | 'Rhino.Geometry.Circle'
-  | 'Rhino.Geometry.Arc'
-  | 'Rhino.Geometry.NurbsCurve'
-  | 'Rhino.Geometry.Brep'
-  | 'Rhino.Geometry.Mesh'
-  | 'Rhino.Geometry.Vector3d'
-  | 'Rhino.Geometry.Plane'
-  | 'Rhino.Geometry.Box'
-  | string;
+	| 'System.String'
+	| 'System.Double'
+	| 'System.Int32'
+	| 'System.Boolean'
+	| 'Rhino.Geometry.Point3d'
+	| 'Rhino.Geometry.Line'
+	| 'Rhino.Geometry.Circle'
+	| 'Rhino.Geometry.Arc'
+	| 'Rhino.Geometry.NurbsCurve'
+	| 'Rhino.Geometry.Brep'
+	| 'Rhino.Geometry.Mesh'
+	| 'Rhino.Geometry.Vector3d'
+	| 'Rhino.Geometry.Plane'
+	| 'Rhino.Geometry.Box'
+	| string;
 
 /**
  * Union type for all possible default value types
@@ -33,66 +33,66 @@ export type DefaultValue<T> = T | T[] | DataTreeDefault<T> | undefined | null;
  * Base properties common to all processed input types
  */
 export interface BaseInputType {
-  description: string;
-  name: string;
-  nickname: string | null;
-  treeAccess: boolean;
-  groupName: string;
-  id: string;
+	description: string;
+	name: string;
+	nickname: string | null;
+	treeAccess: boolean;
+	groupName: string;
+	id: string;
 }
 
 /**
  * Numeric input type (Number or Integer)
  */
 export interface NumericInputType extends BaseInputType {
-  paramType: 'Number' | 'Integer';
-  minimum?: number | null;
-  maximum?: number | null;
-  atLeast?: number | null;
-  atMost?: number | null;
-  stepSize?: number | null;
-  default: DefaultValue<number>;
+	paramType: 'Number' | 'Integer';
+	minimum?: number | null;
+	maximum?: number | null;
+	atLeast?: number | null;
+	atMost?: number | null;
+	stepSize?: number | null;
+	default: DefaultValue<number>;
 }
 
 /**
  * Text input type
  */
 export interface TextInputType extends BaseInputType {
-  paramType: 'Text';
-  default: DefaultValue<string>;
+	paramType: 'Text';
+	default: DefaultValue<string>;
 }
 
 /**
  * Boolean input type
  */
 export interface BooleanInputType extends BaseInputType {
-  paramType: 'Boolean';
-  default: DefaultValue<boolean>;
+	paramType: 'Boolean';
+	default: DefaultValue<boolean>;
 }
 
 /**
  * Geometry input type (generic geometry)
  */
 export interface GeometryInputType extends BaseInputType {
-  paramType: 'Geometry';
-  default: DefaultValue<object | string>;
+	paramType: 'Geometry';
+	default: DefaultValue<object | string>;
 }
 
 /**
  * ValueList input type (dropdown/select)
  */
 export interface ValueListInputType extends BaseInputType {
-  paramType: 'ValueList';
-  values: Record<string, string>;
-  default?: string;
+	paramType: 'ValueList';
+	values: Record<string, string>;
+	default?: string;
 }
 
 /**
  * Discriminated union of all input parameter types
  */
 export type InputParam =
-  | NumericInputType
-  | BooleanInputType
-  | TextInputType
-  | ValueListInputType
-  | GeometryInputType;
+	| NumericInputType
+	| BooleanInputType
+	| TextInputType
+	| ValueListInputType
+	| GeometryInputType;

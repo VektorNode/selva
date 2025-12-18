@@ -53,11 +53,11 @@ If the platform requires an iframe tag, use this:
 
 ```html
 <iframe
-  src="https://compute.selva.app/selva_example_0_1_0?embed=true&primary=%23000000"
-  width="100%"
-  height="700"
-  frameborder="0"
-  allow="fullscreen"
+	src="https://compute.selva.app/selva_example_0_1_0?embed=true&primary=%23000000"
+	width="100%"
+	height="700"
+	frameborder="0"
+	allow="fullscreen"
 >
 </iframe>
 ```

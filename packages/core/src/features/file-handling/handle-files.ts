@@ -18,15 +18,15 @@ import { FileBaseInfo, FileData, ProcessedFile } from './types';
  * });
  */
 export const extractFilesFromComputeResponse = async (
-  downloadableFiles: FileData[],
-  additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null
+	downloadableFiles: FileData[],
+	additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null
 ): Promise<ProcessedFile[]> => {
-  try {
-    return await processFiles(downloadableFiles, additionalFiles);
-  } catch (err) {
-    console.error('Error extracting files:', err);
-    throw new Error('Failed to extract files from compute response');
-  }
+	try {
+		return await processFiles(downloadableFiles, additionalFiles);
+	} catch (err) {
+		console.error('Error extracting files:', err);
+		throw new Error('Failed to extract files from compute response');
+	}
 };
 
 /**
@@ -43,17 +43,17 @@ export const extractFilesFromComputeResponse = async (
  * // Downloads 'my-export.zip'
  */
 export const downloadFileData = async (
-  downloadableFiles: FileData[],
-  fileFoldername: string,
-  additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null
+	downloadableFiles: FileData[],
+	fileFoldername: string,
+	additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null
 ): Promise<void> => {
-  try {
-    const processedFiles = await processFiles(downloadableFiles, additionalFiles);
-    await createAndDownloadZip(processedFiles, fileFoldername);
-  } catch (err) {
-    console.error('Error downloading files:', err);
-    throw new Error('Failed to download files from compute response');
-  }
+	try {
+		const processedFiles = await processFiles(downloadableFiles, additionalFiles);
+		await createAndDownloadZip(processedFiles, fileFoldername);
+	} catch (err) {
+		console.error('Error downloading files:', err);
+		throw new Error('Failed to download files from compute response');
+	}
 };
 
 /**
@@ -65,63 +65,63 @@ export const downloadFileData = async (
  * @returns A Promise resolving to an array of ProcessedFile objects.
  */
 const processFiles = async (
-  dataItems: FileData[],
-  additionalFiles: FileBaseInfo[] | FileBaseInfo | null
+	dataItems: FileData[],
+	additionalFiles: FileBaseInfo[] | FileBaseInfo | null
 ): Promise<ProcessedFile[]> => {
-  const processedFiles: ProcessedFile[] = [];
+	const processedFiles: ProcessedFile[] = [];
 
-  // Process compute response files
-  dataItems.forEach((item) => {
-    let filePath = `${item.FileName}${item.FileType}`;
+	// Process compute response files
+	dataItems.forEach((item) => {
+		let filePath = `${item.FileName}${item.FileType}`;
 
-    if (item.SubFolder && item.SubFolder.trim() !== '') {
-      filePath = `${item.SubFolder}/${filePath}`;
-    }
+		if (item.SubFolder && item.SubFolder.trim() !== '') {
+			filePath = `${item.SubFolder}/${filePath}`;
+		}
 
-    if (item.IsBase64Encoded === true && item.Data) {
-      const bites = decodeBase64ToBinary(item.Data);
-      processedFiles.push({
-        fileName: `${item.FileName}${item.FileType}`,
-        content: new Uint8Array(bites.buffer),
-        path: filePath,
-      });
-    } else if (item.IsBase64Encoded === false && item.Data) {
-      processedFiles.push({
-        fileName: `${item.FileName}${item.FileType}`,
-        content: item.Data,
-        path: filePath,
-      });
-    }
-  });
+		if (item.IsBase64Encoded === true && item.Data) {
+			const bites = decodeBase64ToBinary(item.Data);
+			processedFiles.push({
+				fileName: `${item.FileName}${item.FileType}`,
+				content: new Uint8Array(bites.buffer),
+				path: filePath
+			});
+		} else if (item.IsBase64Encoded === false && item.Data) {
+			processedFiles.push({
+				fileName: `${item.FileName}${item.FileType}`,
+				content: item.Data,
+				path: filePath
+			});
+		}
+	});
 
-  if (additionalFiles) {
-    const filesArray = Array.isArray(additionalFiles) ? additionalFiles : [additionalFiles];
-    const additionalProcessed = await Promise.all(
-      filesArray.map(async (file) => {
-        try {
-          const response = await fetch(file.FilePath);
-          if (!response.ok) {
-            console.error(`Failed to fetch additional file from URL: ${file.FilePath}`);
-            return null;
-          }
-          const fileBlob = await response.blob();
-          const arrayBuffer = await fileBlob.arrayBuffer();
-          return {
-            fileName: file.FileName,
-            content: new Uint8Array(arrayBuffer),
-            path: file.FileName,
-          } as ProcessedFile;
-        } catch (error) {
-          console.error(`Error fetching additional file from URL: ${file.FilePath}`, error);
-          return null;
-        }
-      })
-    );
+	if (additionalFiles) {
+		const filesArray = Array.isArray(additionalFiles) ? additionalFiles : [additionalFiles];
+		const additionalProcessed = await Promise.all(
+			filesArray.map(async (file) => {
+				try {
+					const response = await fetch(file.FilePath);
+					if (!response.ok) {
+						console.error(`Failed to fetch additional file from URL: ${file.FilePath}`);
+						return null;
+					}
+					const fileBlob = await response.blob();
+					const arrayBuffer = await fileBlob.arrayBuffer();
+					return {
+						fileName: file.FileName,
+						content: new Uint8Array(arrayBuffer),
+						path: file.FileName
+					} as ProcessedFile;
+				} catch (error) {
+					console.error(`Error fetching additional file from URL: ${file.FilePath}`, error);
+					return null;
+				}
+			})
+		);
 
-    processedFiles.push(...additionalProcessed.filter((f): f is ProcessedFile => f !== null));
-  }
+		processedFiles.push(...additionalProcessed.filter((f): f is ProcessedFile => f !== null));
+	}
 
-  return processedFiles;
+	return processedFiles;
 };
 
 /**
@@ -132,18 +132,18 @@ const processFiles = async (
  * @returns A Promise that resolves when the ZIP is generated and download is triggered.
  */
 async function createAndDownloadZip(files: ProcessedFile[], zipName: string): Promise<void> {
-  const { zipSync, strToU8 } = await import('fflate');
+	const { zipSync, strToU8 } = await import('fflate');
 
-  // Convert files to fflate format
-  const zipData: Record<string, Uint8Array> = {};
-  files.forEach((file) => {
-    zipData[file.path] = typeof file.content === 'string' ? strToU8(file.content) : file.content;
-  });
+	// Convert files to fflate format
+	const zipData: Record<string, Uint8Array> = {};
+	files.forEach((file) => {
+		zipData[file.path] = typeof file.content === 'string' ? strToU8(file.content) : file.content;
+	});
 
-  const zipped = zipSync(zipData, { level: 6 });
+	const zipped = zipSync(zipData, { level: 6 });
 
-  const blob = new Blob([zipped as BlobPart], { type: 'application/zip' });
-  saveFile(blob, `${zipName}.zip`);
+	const blob = new Blob([zipped as BlobPart], { type: 'application/zip' });
+	saveFile(blob, `${zipName}.zip`);
 }
 
 /**
@@ -153,9 +153,9 @@ async function createAndDownloadZip(files: ProcessedFile[], zipName: string): Pr
  * @param filename - The name to give the downloaded file (including extension).
  */
 function saveFile(blob: Blob, filename: string) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(a.href);
+	const a = document.createElement('a');
+	a.href = URL.createObjectURL(blob);
+	a.download = filename;
+	a.click();
+	URL.revokeObjectURL(a.href);
 }

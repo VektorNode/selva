@@ -1,74 +1,74 @@
 import * as THREE from 'three';
 
 export type CameraConfig = {
-  position?: THREE.Vector3;
-  fov?: number;
-  near?: number;
-  far?: number;
-  target?: THREE.Vector3;
+	position?: THREE.Vector3;
+	fov?: number;
+	near?: number;
+	far?: number;
+	target?: THREE.Vector3;
 };
 
 export type LightingConfig = {
-  enableSunlight?: boolean;
-  sunlightIntensity?: number;
-  sunlightPosition?: THREE.Vector3;
-  ambientLightColor?: THREE.Color;
-  ambientLightIntensity?: number;
-  sunlightColor?: THREE.Color | number;
+	enableSunlight?: boolean;
+	sunlightIntensity?: number;
+	sunlightPosition?: THREE.Vector3;
+	ambientLightColor?: THREE.Color;
+	ambientLightIntensity?: number;
+	sunlightColor?: THREE.Color | number;
 };
 
 export type EnvironmentConfig = {
-  hdrPath?: string;
-  backgroundColor?: THREE.Color | string;
-  enableEnvironmentLighting?: boolean;
-  sceneUp?: THREE.Vector3;
-  showEnvironment?: boolean;
+	hdrPath?: string;
+	backgroundColor?: THREE.Color | string;
+	enableEnvironmentLighting?: boolean;
+	sceneUp?: THREE.Vector3;
+	showEnvironment?: boolean;
 };
 
 export type FloorConfig = {
-  enabled?: boolean;
-  size?: number;
-  color?: THREE.Color | string;
-  roughness?: number;
-  metalness?: number;
-  receiveShadow?: boolean;
+	enabled?: boolean;
+	size?: number;
+	color?: THREE.Color | string;
+	roughness?: number;
+	metalness?: number;
+	receiveShadow?: boolean;
 };
 
 export type RenderConfig = {
-  enableShadows?: boolean;
-  shadowMapSize?: number;
-  antialias?: boolean;
-  pixelRatio?: number;
-  toneMapping?: THREE.ToneMapping;
-  toneMappingExposure?: number;
-  preserveDrawingBuffer?: boolean;
+	enableShadows?: boolean;
+	shadowMapSize?: number;
+	antialias?: boolean;
+	pixelRatio?: number;
+	toneMapping?: THREE.ToneMapping;
+	toneMappingExposure?: number;
+	preserveDrawingBuffer?: boolean;
 };
 
 export type ControlsConfig = {
-  enableDamping?: boolean;
-  dampingFactor?: number;
-  autoRotate?: boolean;
-  autoRotateSpeed?: number;
-  enableZoom?: boolean;
-  enablePan?: boolean;
-  minDistance?: number;
-  maxDistance?: number;
+	enableDamping?: boolean;
+	dampingFactor?: number;
+	autoRotate?: boolean;
+	autoRotateSpeed?: number;
+	enableZoom?: boolean;
+	enablePan?: boolean;
+	minDistance?: number;
+	maxDistance?: number;
 };
 
 export type ThreeInitializerOptions = {
-  sceneScale?: 'mm' | 'cm' | 'm' | 'inches' | 'feet';
-  camera?: CameraConfig;
-  lighting?: LightingConfig;
-  environment?: EnvironmentConfig;
-  floor?: FloorConfig;
-  render?: RenderConfig;
-  controls?: ControlsConfig;
-  events?: EventConfig;
+	sceneScale?: 'mm' | 'cm' | 'm' | 'inches' | 'feet';
+	camera?: CameraConfig;
+	lighting?: LightingConfig;
+	environment?: EnvironmentConfig;
+	floor?: FloorConfig;
+	render?: RenderConfig;
+	controls?: ControlsConfig;
+	events?: EventConfig;
 };
 
 export type EventConfig = {
-  onBackgroundClicked?: (event: { x: number; y: number }) => void;
-  onObjectSelected?: (object: THREE.Object3D) => void;
-  enableKeyboardControls?: boolean;
-  enableClickToFocus?: boolean;
+	onBackgroundClicked?: (event: { x: number; y: number }) => void;
+	onObjectSelected?: (object: THREE.Object3D) => void;
+	enableKeyboardControls?: boolean;
+	enableClickToFocus?: boolean;
 };

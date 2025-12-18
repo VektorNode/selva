@@ -1,15 +1,15 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(tree:*)",
-      "Bash(pnpm check:*)",
-      "Bash(npm run generate:all:*)",
-      "Bash(cat:*)",
-      "Bash(dotnet build:*)",
-      "Bash(pnpm run check:*)",
-      "Bash(pnpm run build:*)"
-    ],
-    "deny": [],
-    "ask": []
-  }
+	"permissions": {
+		"allow": [
+			"Bash(tree:*)",
+			"Bash(pnpm check:*)",
+			"Bash(npm run generate:all:*)",
+			"Bash(cat:*)",
+			"Bash(dotnet build:*)",
+			"Bash(pnpm run check:*)",
+			"Bash(pnpm run build:*)"
+		],
+		"deny": [],
+		"ask": []
+	}
 }

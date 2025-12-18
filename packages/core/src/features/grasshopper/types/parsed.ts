@@ -10,14 +10,14 @@ import type { OutputParamSchema } from './schemas';
  * Parsed input/output structure with raw schemas
  */
 export interface GrasshopperParsedIORaw {
-  inputs: InputParamSchema[];
-  outputs: OutputParamSchema[];
+	inputs: InputParamSchema[];
+	outputs: OutputParamSchema[];
 }
 
 /**
  * Parsed input/output structure with processed types
  */
 export interface GrasshopperParsedIO {
-  inputs: InputParam[];
-  outputs: OutputParamSchema[];
+	inputs: InputParam[];
+	outputs: OutputParamSchema[];
 }

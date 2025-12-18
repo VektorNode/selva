@@ -2,10 +2,10 @@ import { base64ByteArray, fetchRhinoCompute } from '@/core';
 import { warnIfClientSide } from '@/core/compute-fetch';
 
 import {
-  GrasshopperRequestSchema,
-  GrasshopperComputeConfig,
-  GrasshopperComputeResponse,
-  DataTree,
+	GrasshopperRequestSchema,
+	GrasshopperComputeConfig,
+	GrasshopperComputeResponse,
+	DataTree
 } from '../types';
 
 /**
@@ -35,24 +35,24 @@ import {
  * await solveGrasshopperDefinition(trees, fileData, config);
  */
 export async function solveGrasshopperDefinition(
-  dataTree: DataTree[],
-  definition: string | Uint8Array,
-  config: GrasshopperComputeConfig
+	dataTree: DataTree[],
+	definition: string | Uint8Array,
+	config: GrasshopperComputeConfig
 ): Promise<GrasshopperComputeResponse> {
-  if (config.debug) {
-    warnIfClientSide('solveGrasshopperDefinition', config.suppressClientSideWarning);
-  }
+	if (config.debug) {
+		warnIfClientSide('solveGrasshopperDefinition', config.suppressClientSideWarning);
+	}
 
-  const args = prepareGrasshopperArgs(definition, dataTree);
-  applyOptionalComputeSettings(args, config);
+	const args = prepareGrasshopperArgs(definition, dataTree);
+	applyOptionalComputeSettings(args, config);
 
-  const result = await fetchRhinoCompute('grasshopper', args, config);
+	const result = await fetchRhinoCompute('grasshopper', args, config);
 
-  if ('pointer' in result) {
-    delete (result as any).pointer;
-  }
+	if ('pointer' in result) {
+		delete (result as any).pointer;
+	}
 
-  return result;
+	return result;
 }
 
 // ============================================================================
@@ -68,30 +68,30 @@ export async function solveGrasshopperDefinition(
  * @internal
  */
 export function prepareGrasshopperArgs(
-  definition: string | Uint8Array,
-  dataTree: DataTree[]
+	definition: string | Uint8Array,
+	dataTree: DataTree[]
 ): GrasshopperRequestSchema {
-  const args: GrasshopperRequestSchema = {
-    algo: null,
-    pointer: null,
-    values: dataTree,
-  };
+	const args: GrasshopperRequestSchema = {
+		algo: null,
+		pointer: null,
+		values: dataTree
+	};
 
-  if (definition instanceof Uint8Array) {
-    // Binary data → convert to base64
-    args.algo = base64ByteArray(definition);
-  } else if (definition.startsWith('http')) {
-    // URL → use as pointer reference
-    args.pointer = definition;
-  } else if (isBase64(definition)) {
-    // Already base64 → use as-is
-    args.algo = definition;
-  } else {
-    // Plain string → encode to base64
-    args.algo = btoa(definition);
-  }
+	if (definition instanceof Uint8Array) {
+		// Binary data → convert to base64
+		args.algo = base64ByteArray(definition);
+	} else if (definition.startsWith('http')) {
+		// URL → use as pointer reference
+		args.pointer = definition;
+	} else if (isBase64(definition)) {
+		// Already base64 → use as-is
+		args.algo = definition;
+	} else {
+		// Plain string → encode to base64
+		args.algo = btoa(definition);
+	}
 
-  return args;
+	return args;
 }
 
 /**
@@ -102,24 +102,24 @@ export function prepareGrasshopperArgs(
  * @returns True if the string is valid base64-encoded
  */
 export function isBase64(str: string): boolean {
-  try {
-    return btoa(atob(str)) === str;
-  } catch {
-    return false;
-  }
+	try {
+		return btoa(atob(str)) === str;
+	} catch {
+		return false;
+	}
 }
 
 /**
  * @internal
  */
 export function applyOptionalComputeSettings(
-  arglist: GrasshopperRequestSchema,
-  options: GrasshopperComputeConfig
+	arglist: GrasshopperRequestSchema,
+	options: GrasshopperComputeConfig
 ): void {
-  if (options.cachesolve !== null) arglist.cachesolve = options.cachesolve;
-  if (options.modelunits !== null) arglist.modelunits = options.modelunits;
-  if (options.angletolerance !== null) arglist.angletolerance = options.angletolerance;
-  if (options.absolutetolerance !== null) arglist.absolutetolerance = options.absolutetolerance;
-  if (options.dataversion !== null) arglist.dataversion = options.dataversion;
-  if (options.filename !== null) arglist.filename = options.filename;
+	if (options.cachesolve !== null) arglist.cachesolve = options.cachesolve;
+	if (options.modelunits !== null) arglist.modelunits = options.modelunits;
+	if (options.angletolerance !== null) arglist.angletolerance = options.angletolerance;
+	if (options.absolutetolerance !== null) arglist.absolutetolerance = options.absolutetolerance;
+	if (options.dataversion !== null) arglist.dataversion = options.dataversion;
+	if (options.filename !== null) arglist.filename = options.filename;
 }

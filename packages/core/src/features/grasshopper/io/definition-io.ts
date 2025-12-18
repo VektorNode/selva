@@ -3,10 +3,10 @@ import { fetchRhinoCompute } from '@/core/compute-fetch/compute-fetch';
 import { camelcaseKeys, warnIfClientSide } from '@/core/utils';
 
 import {
-  InputParam,
-  GrasshopperParsedIO,
-  GrasshopperParsedIORaw,
-  IoResponseSchema,
+	InputParam,
+	GrasshopperParsedIO,
+	GrasshopperParsedIORaw,
+	IoResponseSchema
 } from '../types';
 
 import { processInputs } from './input/input-processors';
@@ -23,31 +23,31 @@ import { processInputs } from './input/input-processors';
  * @public Use `fetchParsedDefinitionIO()` for processed, type-safe inputs
  */
 export async function fetchDefinitionIO(
-  definitionUrl: string,
-  config: ComputeConfig
+	definitionUrl: string,
+	config: ComputeConfig
 ): Promise<GrasshopperParsedIORaw> {
-  const response = await fetchRhinoCompute<'io'>('io', { pointer: definitionUrl }, config);
+	const response = await fetchRhinoCompute<'io'>('io', { pointer: definitionUrl }, config);
 
-  if (!response || typeof response !== 'object') {
-    throw new RhinoComputeError('Invalid IO response structure', undefined, {
-      context: { response, definitionUrl },
-    });
-  }
+	if (!response || typeof response !== 'object') {
+		throw new RhinoComputeError('Invalid IO response structure', undefined, {
+			context: { response, definitionUrl }
+		});
+	}
 
-  // Validate structure
-  if (!response || typeof response !== 'object') {
-    throw new RhinoComputeError('Invalid IO response structure', undefined, {
-      context: { response, definitionUrl },
-    });
-  }
+	// Validate structure
+	if (!response || typeof response !== 'object') {
+		throw new RhinoComputeError('Invalid IO response structure', undefined, {
+			context: { response, definitionUrl }
+		});
+	}
 
-  // Convert PascalCase to camelCase
-  const camelCased = camelcaseKeys(response, { deep: true }) as IoResponseSchema;
+	// Convert PascalCase to camelCase
+	const camelCased = camelcaseKeys(response, { deep: true }) as IoResponseSchema;
 
-  return {
-    inputs: camelCased.inputs,
-    outputs: camelCased.outputs,
-  };
+	return {
+		inputs: camelCased.inputs,
+		outputs: camelCased.outputs
+	};
 }
 
 /**
@@ -77,13 +77,13 @@ export async function fetchDefinitionIO(
  * ```
  */
 export async function fetchParsedDefinitionIO(
-  definitionUrl: string,
-  config: ComputeConfig
+	definitionUrl: string,
+	config: ComputeConfig
 ): Promise<GrasshopperParsedIO> {
-  warnIfClientSide('fetchParsedDefinitionIO', config.suppressClientSideWarning);
+	warnIfClientSide('fetchParsedDefinitionIO', config.suppressClientSideWarning);
 
-  const { inputs: rawInputs, outputs } = await fetchDefinitionIO(definitionUrl, config);
-  const inputs: InputParam[] = processInputs(rawInputs);
+	const { inputs: rawInputs, outputs } = await fetchDefinitionIO(definitionUrl, config);
+	const inputs: InputParam[] = processInputs(rawInputs);
 
-  return { inputs, outputs };
+	return { inputs, outputs };
 }
