@@ -4,58 +4,58 @@ import { preProcessInputDefault } from './input-validators';
 import { PARSERS } from './input-parsers';
 
 import type {
-  BaseInputType,
-  BooleanInputType,
-  GeometryInputType,
-  InputParam,
-  NumericInputType,
-  InputParamSchema,
-  TextInputType,
-  ValueListInputType,
+	BaseInputType,
+	BooleanInputType,
+	GeometryInputType,
+	InputParam,
+	NumericInputType,
+	InputParamSchema,
+	TextInputType,
+	ValueListInputType
 } from '../../types';
 
 /**
  * Creates a safe default InputType when processing fails
  */
 function createSafeDefault(rawInput: InputParamSchema, baseInput: BaseInputType): InputParam {
-  switch (rawInput.paramType) {
-    case 'Number':
-    case 'Integer':
-      return {
-        ...baseInput,
-        paramType: rawInput.paramType,
-        minimum: rawInput.minimum,
-        maximum: rawInput.maximum,
-        atLeast: rawInput.atLeast,
-        atMost: rawInput.atMost,
-        default: rawInput.atMost > 1 ? [0] : 0,
-      } as NumericInputType;
-    case 'Boolean':
-      return {
-        ...baseInput,
-        paramType: 'Boolean',
-        default: rawInput.atMost > 1 ? [false] : false,
-      } as BooleanInputType;
-    case 'Text':
-      return {
-        ...baseInput,
-        paramType: 'Text',
-        default: rawInput.atMost > 1 ? [''] : '',
-      } as TextInputType;
-    case 'ValueList':
-      return {
-        ...baseInput,
-        paramType: 'ValueList',
-        values: rawInput.values ?? {},
-        default: rawInput.atMost > 1 ? [rawInput.default] : rawInput.default,
-      } as ValueListInputType;
-    default:
-      return {
-        ...baseInput,
-        paramType: 'Geometry',
-        default: rawInput.atMost > 1 ? [null] : null,
-      } as GeometryInputType;
-  }
+	switch (rawInput.paramType) {
+		case 'Number':
+		case 'Integer':
+			return {
+				...baseInput,
+				paramType: rawInput.paramType,
+				minimum: rawInput.minimum,
+				maximum: rawInput.maximum,
+				atLeast: rawInput.atLeast,
+				atMost: rawInput.atMost,
+				default: rawInput.atMost > 1 ? [0] : 0
+			} as NumericInputType;
+		case 'Boolean':
+			return {
+				...baseInput,
+				paramType: 'Boolean',
+				default: rawInput.atMost > 1 ? [false] : false
+			} as BooleanInputType;
+		case 'Text':
+			return {
+				...baseInput,
+				paramType: 'Text',
+				default: rawInput.atMost > 1 ? [''] : ''
+			} as TextInputType;
+		case 'ValueList':
+			return {
+				...baseInput,
+				paramType: 'ValueList',
+				values: rawInput.values ?? {},
+				default: rawInput.atMost > 1 ? [rawInput.default] : rawInput.default
+			} as ValueListInputType;
+		default:
+			return {
+				...baseInput,
+				paramType: 'Geometry',
+				default: rawInput.atMost > 1 ? [null] : null
+			} as GeometryInputType;
+	}
 }
 
 /**
@@ -101,89 +101,89 @@ function createSafeDefault(rawInput: InputParamSchema, baseInput: BaseInputType)
  * ```
  */
 export function processInput(rawInput: InputParamSchema): InputParam {
-  // Create base properties outside try-catch so it's accessible in catch block
-  const baseInput: BaseInputType = {
-    description: rawInput.description,
-    name: rawInput.name,
-    nickname: rawInput.nickname,
-    treeAccess: rawInput.treeAccess,
-    groupName: rawInput.groupName ?? '',
-    id: rawInput.id,
-  };
+	// Create base properties outside try-catch so it's accessible in catch block
+	const baseInput: BaseInputType = {
+		description: rawInput.description,
+		name: rawInput.name,
+		nickname: rawInput.nickname,
+		treeAccess: rawInput.treeAccess,
+		groupName: rawInput.groupName ?? '',
+		id: rawInput.id
+	};
 
-  try {
-    // Handle default object processing
-    preProcessInputDefault(rawInput);
+	try {
+		// Handle default object processing
+		preProcessInputDefault(rawInput);
 
-    // Get parser for this type
-    const parser = PARSERS[rawInput.paramType];
-    if (!parser) {
-      throw ValidationErrors.unknownParamType(rawInput.paramType, rawInput.name);
-    }
+		// Get parser for this type
+		const parser = PARSERS[rawInput.paramType];
+		if (!parser) {
+			throw ValidationErrors.unknownParamType(rawInput.paramType, rawInput.name);
+		}
 
-    // Apply type-specific parsing
-    parser(rawInput);
+		// Apply type-specific parsing
+		parser(rawInput);
 
-    // Return typed result based on paramType
-    switch (rawInput.paramType) {
-      case 'Number':
-      case 'Integer':
-        return {
-          ...baseInput,
-          paramType: rawInput.paramType,
-          minimum: rawInput.minimum,
-          maximum: rawInput.maximum,
-          atLeast: rawInput.atLeast,
-          atMost: rawInput.atMost,
-          stepSize: rawInput.stepSize,
-          default: rawInput.default as number | undefined,
-        } as NumericInputType;
-      case 'Boolean':
-        return {
-          ...baseInput,
-          paramType: 'Boolean',
-          default: rawInput.default as boolean | undefined,
-        } as BooleanInputType;
-      case 'Text':
-        return {
-          ...baseInput,
-          paramType: 'Text',
-          default: rawInput.default as string | undefined,
-        } as TextInputType;
-      case 'ValueList':
-        return {
-          ...baseInput,
-          paramType: 'ValueList',
-          values: rawInput.values as Record<string, string>,
-          default: rawInput.default as string | undefined,
-        } as ValueListInputType;
-      case 'Geometry':
-        return {
-          ...baseInput,
-          paramType: rawInput.paramType as 'Geometry',
-          default: rawInput.default as object | string | undefined,
-        } as GeometryInputType;
-      default:
-        // This should be unreachable due to parser registry check above
-        throw ValidationErrors.unknownParamType(rawInput.paramType, rawInput.name);
-    }
-  } catch (error) {
-    if (error instanceof RhinoComputeError) {
-      console.error(`Validation error for input ${rawInput.name || 'unknown'}:`, error.message);
-      // Return a safe default based on paramType
-      return createSafeDefault(rawInput, baseInput);
-    } else {
-      // Transform unexpected errors
-      throw new RhinoComputeError(
-        error instanceof Error ? error.message : String(error),
-        'VALIDATION_ERROR',
-        {
-          context: { paramName: rawInput.name, paramType: rawInput.paramType },
-          originalError: error instanceof Error ? error : new Error(String(error)),
-        }
-      );
-    }
-  }
+		// Return typed result based on paramType
+		switch (rawInput.paramType) {
+			case 'Number':
+			case 'Integer':
+				return {
+					...baseInput,
+					paramType: rawInput.paramType,
+					minimum: rawInput.minimum,
+					maximum: rawInput.maximum,
+					atLeast: rawInput.atLeast,
+					atMost: rawInput.atMost,
+					stepSize: rawInput.stepSize,
+					default: rawInput.default as number | undefined
+				} as NumericInputType;
+			case 'Boolean':
+				return {
+					...baseInput,
+					paramType: 'Boolean',
+					default: rawInput.default as boolean | undefined
+				} as BooleanInputType;
+			case 'Text':
+				return {
+					...baseInput,
+					paramType: 'Text',
+					default: rawInput.default as string | undefined
+				} as TextInputType;
+			case 'ValueList':
+				return {
+					...baseInput,
+					paramType: 'ValueList',
+					values: rawInput.values as Record<string, string>,
+					default: rawInput.default as string | undefined
+				} as ValueListInputType;
+			case 'Geometry':
+				return {
+					...baseInput,
+					paramType: rawInput.paramType as 'Geometry',
+					default: rawInput.default as object | string | undefined
+				} as GeometryInputType;
+			default:
+				// This should be unreachable due to parser registry check above
+				throw ValidationErrors.unknownParamType(rawInput.paramType, rawInput.name);
+		}
+	} catch (error) {
+		if (error instanceof RhinoComputeError) {
+			console.error(`Validation error for input ${rawInput.name || 'unknown'}:`, error.message);
+			// Return a safe default based on paramType
+			return createSafeDefault(rawInput, baseInput);
+		} else {
+			// Transform unexpected errors
+			throw new RhinoComputeError(
+				error instanceof Error ? error.message : String(error),
+				'VALIDATION_ERROR',
+				{
+					context: { paramName: rawInput.name, paramType: rawInput.paramType },
+					originalError: error instanceof Error ? error : new Error(String(error))
+				}
+			);
+		}
+	}
 }
 
 /**
@@ -229,5 +229,5 @@ export function processInput(rawInput: InputParamSchema): InputParam {
  * @see {@link preProcessRawInput} for default value normalization
  */
 export function processInputs(rawInputs: InputParamSchema[]): InputParam[] {
-  return rawInputs.map((rawInput) => processInput(rawInput));
+	return rawInputs.map((rawInput) => processInput(rawInput));
 }

@@ -20,10 +20,10 @@ const tree = new DataTree('MyParameter').appendFlat([1, 2, 3, 4, 5]).toComputeFo
 
 // Create a multi-branch tree
 const complexTree = new DataTree('Points')
-  .append([0], [{ x: 0, y: 0, z: 0 }])
-  .append([0, 1], [{ x: 1, y: 1, z: 1 }])
-  .append([1], [{ x: 2, y: 2, z: 2 }])
-  .toComputeFormat();
+	.append([0], [{ x: 0, y: 0, z: 0 }])
+	.append([0, 1], [{ x: 1, y: 1, z: 1 }])
+	.append([1], [{ x: 2, y: 2, z: 2 }])
+	.toComputeFormat();
 ```
 
 ### Creating from InputParams
@@ -48,9 +48,9 @@ const result = await client.solve(definitionUrl, trees);
 ```typescript
 // From a DataTreeDefault structure
 const tree = new DataTree('Values').fromDataTreeDefault({
-  '{0}': [1, 2, 3],
-  '{0;0}': [4, 5],
-  '{1}': [6, 7, 8],
+	'{0}': [1, 2, 3],
+	'{0;0}': [4, 5],
+	'{1}': [6, 7, 8]
 });
 
 // Get all branch paths
@@ -79,14 +79,14 @@ The DataTree class automatically applies numeric constraints from `InputParam` d
 
 ```typescript
 const inputs: InputParam[] = [
-  {
-    name: 'radius',
-    paramType: 'Number',
-    minimum: 0,
-    maximum: 100,
-    default: 150, // Will be clamped to 100
-    // ... other properties
-  },
+	{
+		name: 'radius',
+		paramType: 'Number',
+		minimum: 0,
+		maximum: 100,
+		default: 150 // Will be clamped to 100
+		// ... other properties
+	}
 ];
 
 // Constraints are automatically applied
@@ -116,13 +116,13 @@ const { inputs } = await client.getIO('definition.gh');
 
 // Modify specific input values
 const modifiedInputs = inputs.map((input) => {
-  if (input.name === 'radius') {
-    return { ...input, default: 25 };
-  }
-  if (input.name === 'height') {
-    return { ...input, default: 50 };
-  }
-  return input;
+	if (input.name === 'radius') {
+		return { ...input, default: 25 };
+	}
+	if (input.name === 'height') {
+		return { ...input, default: 50 };
+	}
+	return input;
 });
 
 // Convert to trees

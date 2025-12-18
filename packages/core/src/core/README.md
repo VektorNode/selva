@@ -63,15 +63,15 @@ import { fetchFromCompute } from 'rhino-compute-core/core/compute-fetch';
 import { ValidationError } from 'rhino-compute-core/core/errors';
 
 async function fetchModel() {
-  try {
-    const data = await fetchFromCompute('/rhino/compute/some-endpoint');
-    // process data...
-  } catch (e) {
-    if (e instanceof ValidationError) {
-      // handle validation problems specifically
-    }
-    throw e;
-  }
+	try {
+		const data = await fetchFromCompute('/rhino/compute/some-endpoint');
+		// process data...
+	} catch (e) {
+		if (e instanceof ValidationError) {
+			// handle validation problems specifically
+		}
+		throw e;
+	}
 }
 ```
 

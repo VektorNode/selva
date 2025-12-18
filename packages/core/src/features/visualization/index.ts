@@ -28,22 +28,22 @@ export { decompressMeshData, decompressBatchedMeshData } from './webdisplay/mesh
 // ============================================================================
 
 export type {
-  ThreeInitializerOptions,
-  CameraConfig,
-  LightingConfig,
-  EnvironmentConfig,
-  FloorConfig,
-  RenderConfig,
-  ControlsConfig,
-  EventConfig,
+	ThreeInitializerOptions,
+	CameraConfig,
+	LightingConfig,
+	EnvironmentConfig,
+	FloorConfig,
+	RenderConfig,
+	ControlsConfig,
+	EventConfig
 } from './types';
 
 export type {
-  MeshBatchParsingOptions,
-  MeshExtractionOptions,
-  SerializableMaterial,
-  MeshMetadata,
-  MaterialGroup,
-  MeshBatch,
-  DecompressedMeshData,
+	MeshBatchParsingOptions,
+	MeshExtractionOptions,
+	SerializableMaterial,
+	MeshMetadata,
+	MaterialGroup,
+	MeshBatch,
+	DecompressedMeshData
 } from './webdisplay/types';

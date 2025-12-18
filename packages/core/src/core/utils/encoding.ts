@@ -8,22 +8,22 @@
  * @throws {RhinoComputeError} If base64 decoding is not supported in this environment.
  */
 export function decodeBase64ToBinary(base64File: string): Uint8Array {
-  if (typeof globalThis.atob === 'function') {
-    return Uint8Array.from(globalThis.atob(base64File), (c) => c.charCodeAt(0));
-  }
-  if (typeof (globalThis as any).Buffer === 'function') {
-    // Buffer.from returns a Uint8Array-compatible Buffer
-    return (globalThis as any).Buffer.from(base64File, 'base64');
-  }
+	if (typeof globalThis.atob === 'function') {
+		return Uint8Array.from(globalThis.atob(base64File), (c) => c.charCodeAt(0));
+	}
+	if (typeof (globalThis as any).Buffer === 'function') {
+		// Buffer.from returns a Uint8Array-compatible Buffer
+		return (globalThis as any).Buffer.from(base64File, 'base64');
+	}
 
-  // Import here to avoid circular dependencies at top level
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
-  throw new RhinoComputeError(
-    'Base64 decoding not supported in this environment.',
-    ErrorCodes.INVALID_STATE,
-    { context: { environmentInfo: 'atob or Buffer not available' } }
-  );
+	// Import here to avoid circular dependencies at top level
+	// eslint-disable-next-line @typescript-eslint/no-require-imports
+	const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
+	throw new RhinoComputeError(
+		'Base64 decoding not supported in this environment.',
+		ErrorCodes.INVALID_STATE,
+		{ context: { environmentInfo: 'atob or Buffer not available' } }
+	);
 }
 
 /**
@@ -41,157 +41,157 @@ export function decodeBase64ToBinary(base64File: string): Uint8Array {
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 export function base64ByteArray(bytes: Uint8Array | null | undefined): string {
-  if (bytes === null || bytes === undefined) {
-    // Import here to avoid circular dependencies at top level
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
-    throw new RhinoComputeError(
-      'Input bytes must not be null or undefined',
-      ErrorCodes.INVALID_INPUT,
-      { context: { receivedValue: bytes } }
-    );
-  }
+	if (bytes === null || bytes === undefined) {
+		// Import here to avoid circular dependencies at top level
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
+		throw new RhinoComputeError(
+			'Input bytes must not be null or undefined',
+			ErrorCodes.INVALID_INPUT,
+			{ context: { receivedValue: bytes } }
+		);
+	}
 
-  const encodings = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+	const encodings = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
-  let inputBytes = bytes;
+	let inputBytes = bytes;
 
-  // strip bom (Byte Order Mark)
-  if (
-    inputBytes.length >= 3 &&
-    inputBytes[0] === 239 &&
-    inputBytes[1] === 187 &&
-    inputBytes[2] === 191
-  ) {
-    inputBytes = inputBytes.slice(3);
-  }
+	// strip bom (Byte Order Mark)
+	if (
+		inputBytes.length >= 3 &&
+		inputBytes[0] === 239 &&
+		inputBytes[1] === 187 &&
+		inputBytes[2] === 191
+	) {
+		inputBytes = inputBytes.slice(3);
+	}
 
-  const byteLength = inputBytes.byteLength;
-  const byteRemainder = byteLength % 3;
-  const mainLength = byteLength - byteRemainder;
+	const byteLength = inputBytes.byteLength;
+	const byteRemainder = byteLength % 3;
+	const mainLength = byteLength - byteRemainder;
 
-  let base64 = '';
-  let a, b, c, d;
-  let chunk;
+	let base64 = '';
+	let a, b, c, d;
+	let chunk;
 
-  // Main loop deals with bytes in chunks of 3
-  for (let i = 0; i < mainLength; i += 3) {
-    // Combine the three bytes into a single integer
-    if (!Array.isArray(inputBytes)) {
-      // Import here to avoid circular dependencies at top level
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
-      throw new RhinoComputeError('inputBytes must be an array', ErrorCodes.INVALID_INPUT, {
-        context: { receivedType: typeof inputBytes },
-      });
-    }
+	// Main loop deals with bytes in chunks of 3
+	for (let i = 0; i < mainLength; i += 3) {
+		// Combine the three bytes into a single integer
+		if (!Array.isArray(inputBytes)) {
+			// Import here to avoid circular dependencies at top level
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
+			throw new RhinoComputeError('inputBytes must be an array', ErrorCodes.INVALID_INPUT, {
+				context: { receivedType: typeof inputBytes }
+			});
+		}
 
-    if (typeof i !== 'number' || i < 0 || i >= inputBytes.length) {
-      // Import here to avoid circular dependencies at top level
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
-      throw new RhinoComputeError('Invalid index i', ErrorCodes.INVALID_INPUT, {
-        context: { index: i, arrayLength: inputBytes.length },
-      });
-    }
+		if (typeof i !== 'number' || i < 0 || i >= inputBytes.length) {
+			// Import here to avoid circular dependencies at top level
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
+			throw new RhinoComputeError('Invalid index i', ErrorCodes.INVALID_INPUT, {
+				context: { index: i, arrayLength: inputBytes.length }
+			});
+		}
 
-    const byte1 = inputBytes[i] !== undefined ? inputBytes[i] : 0;
-    const byte2 = inputBytes[i + 1] !== undefined ? inputBytes[i + 1] : 0;
-    const byte3 = inputBytes[i + 2] !== undefined ? inputBytes[i + 2] : 0;
+		const byte1 = inputBytes[i] !== undefined ? inputBytes[i] : 0;
+		const byte2 = inputBytes[i + 1] !== undefined ? inputBytes[i + 1] : 0;
+		const byte3 = inputBytes[i + 2] !== undefined ? inputBytes[i + 2] : 0;
 
-    const innerChunk = (byte1 << 16) | (byte2 << 8) | byte3;
+		const innerChunk = (byte1 << 16) | (byte2 << 8) | byte3;
 
-    // Use bitmasks to extract 6-bit segments from the triplet
-    a = (innerChunk & 16515072) >> 18;
-    b = (innerChunk & 258048) >> 12;
-    c = (innerChunk & 4032) >> 6;
-    d = innerChunk & 63;
+		// Use bitmasks to extract 6-bit segments from the triplet
+		a = (innerChunk & 16515072) >> 18;
+		b = (innerChunk & 258048) >> 12;
+		c = (innerChunk & 4032) >> 6;
+		d = innerChunk & 63;
 
-    // Convert the raw binary segments to the appropriate ASCII encoding
-    if (typeof encodings !== 'string') {
-      throw new Error('encodings must be a string');
-    }
+		// Convert the raw binary segments to the appropriate ASCII encoding
+		if (typeof encodings !== 'string') {
+			throw new Error('encodings must be a string');
+		}
 
-    if (typeof a !== 'number' || a < 0 || a >= encodings.length) {
-      throw new Error('Invalid index a');
-    }
+		if (typeof a !== 'number' || a < 0 || a >= encodings.length) {
+			throw new Error('Invalid index a');
+		}
 
-    if (typeof b !== 'number' || b < 0 || b >= encodings.length) {
-      throw new Error('Invalid index b');
-    }
+		if (typeof b !== 'number' || b < 0 || b >= encodings.length) {
+			throw new Error('Invalid index b');
+		}
 
-    if (typeof c !== 'number' || c < 0 || c >= encodings.length) {
-      throw new Error('Invalid index c');
-    }
+		if (typeof c !== 'number' || c < 0 || c >= encodings.length) {
+			throw new Error('Invalid index c');
+		}
 
-    if (typeof d !== 'number' || d < 0 || d >= encodings.length) {
-      throw new Error('Invalid index d');
-    }
+		if (typeof d !== 'number' || d < 0 || d >= encodings.length) {
+			throw new Error('Invalid index d');
+		}
 
-    const charA = encodings[a];
-    const charB = encodings[b];
-    const charC = encodings[c];
-    const charD = encodings[d];
+		const charA = encodings[a];
+		const charB = encodings[b];
+		const charC = encodings[c];
+		const charD = encodings[d];
 
-    if (charA === undefined || charB === undefined || charC === undefined || charD === undefined) {
-      throw new Error('Invalid encoding index');
-    }
+		if (charA === undefined || charB === undefined || charC === undefined || charD === undefined) {
+			throw new Error('Invalid encoding index');
+		}
 
-    base64 += charA + charB + charC + charD;
-  }
+		base64 += charA + charB + charC + charD;
+	}
 
-  // Deal with the remaining bytes and padding
-  if (byteRemainder === 1) {
-    chunk = inputBytes[mainLength];
+	// Deal with the remaining bytes and padding
+	if (byteRemainder === 1) {
+		chunk = inputBytes[mainLength];
 
-    if (chunk === undefined) {
-      throw new Error("'chunk' must not be undefined");
-    }
+		if (chunk === undefined) {
+			throw new Error("'chunk' must not be undefined");
+		}
 
-    a = (chunk & 252) >> 2;
-    b = (chunk & 3) << 4;
+		a = (chunk & 252) >> 2;
+		b = (chunk & 3) << 4;
 
-    const charA = encodings[a];
-    const charB = encodings[b];
+		const charA = encodings[a];
+		const charB = encodings[b];
 
-    if (charA === undefined || charB === undefined) {
-      throw new Error('Invalid encoding index');
-    }
+		if (charA === undefined || charB === undefined) {
+			throw new Error('Invalid encoding index');
+		}
 
-    base64 += `${charA + charB}==`;
-  } else if (byteRemainder === 2) {
-    const byte1 = inputBytes[mainLength] ?? 0;
-    const byte2 = inputBytes[mainLength + 1] !== undefined ? inputBytes[mainLength + 1] : 0;
+		base64 += `${charA + charB}==`;
+	} else if (byteRemainder === 2) {
+		const byte1 = inputBytes[mainLength] ?? 0;
+		const byte2 = inputBytes[mainLength + 1] !== undefined ? inputBytes[mainLength + 1] : 0;
 
-    if (
-      typeof byte1 !== 'number' ||
-      byte1 < 0 ||
-      byte1 > 255 ||
-      typeof byte2 !== 'number' ||
-      byte2 < 0 ||
-      byte2 > 255
-    ) {
-      throw new Error('Invalid byte1');
-    }
+		if (
+			typeof byte1 !== 'number' ||
+			byte1 < 0 ||
+			byte1 > 255 ||
+			typeof byte2 !== 'number' ||
+			byte2 < 0 ||
+			byte2 > 255
+		) {
+			throw new Error('Invalid byte1');
+		}
 
-    chunk = (byte1 << 8) | byte2;
+		chunk = (byte1 << 8) | byte2;
 
-    a = (chunk & 64512) >> 10;
-    b = (chunk & 1008) >> 4;
-    c = (chunk & 15) << 2;
+		a = (chunk & 64512) >> 10;
+		b = (chunk & 1008) >> 4;
+		c = (chunk & 15) << 2;
 
-    const charA = encodings[a];
-    const charB = encodings[b];
-    const charC = encodings[c];
+		const charA = encodings[a];
+		const charB = encodings[b];
+		const charC = encodings[c];
 
-    if (charA === undefined || charB === undefined || charC === undefined) {
-      throw new Error('Invalid encoding index');
-    }
+		if (charA === undefined || charB === undefined || charC === undefined) {
+			throw new Error('Invalid encoding index');
+		}
 
-    base64 += `${charA + charB + charC}=`;
-  }
+		base64 += `${charA + charB + charC}=`;
+	}
 
-  return base64;
+	return base64;
 }
 
 /**
@@ -205,33 +205,36 @@ export function base64ByteArray(bytes: Uint8Array | null | undefined): string {
  * @returns
  */
 export function base64ToRhinoObject(
-  rhino: any,
-  item: {
-    type: string;
-    data: string;
-  }
+	rhino: any,
+	item: {
+		type: string;
+		data: string;
+	}
 ) {
-  //Make a type definition for this?
-  let decodata: null | object = null;
-  try {
-    decodata = JSON.parse(item.data);
-  } catch (error) {
-    decodata = item;
-    console.warn('Failed to parse JSON, returning original data:', error, item);
-  }
-  if (item.type === 'System.String') {
-    try {
-      return rhino.DracoCompression.decompressBase64String(decodata);
-    } catch (error) {
-      console.error(error);
-    }
-  } else if (typeof decodata === 'object' && Object.prototype.hasOwnProperty.call(decodata, 'opennurbs')) {
-    return rhino.CommonObject.decode(decodata);
-  } else if (typeof decodata === 'object') {
-    try {
-      return rhino.CommonObject.decode(decodata);
-    } catch (error) {
-      console.error(error);
-    }
-  }
+	//Make a type definition for this?
+	let decodata: null | object = null;
+	try {
+		decodata = JSON.parse(item.data);
+	} catch (error) {
+		decodata = item;
+		console.warn('Failed to parse JSON, returning original data:', error, item);
+	}
+	if (item.type === 'System.String') {
+		try {
+			return rhino.DracoCompression.decompressBase64String(decodata);
+		} catch (error) {
+			console.error(error);
+		}
+	} else if (
+		typeof decodata === 'object' &&
+		Object.prototype.hasOwnProperty.call(decodata, 'opennurbs')
+	) {
+		return rhino.CommonObject.decode(decodata);
+	} else if (typeof decodata === 'object') {
+		try {
+			return rhino.CommonObject.decode(decodata);
+		} catch (error) {
+			console.error(error);
+		}
+	}
 }

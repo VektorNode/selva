@@ -4,5 +4,5 @@ import sharedConfig from '@selva/config/prettier';
 export default {
 	...sharedConfig,
 	// Override tailwindStylesheet for this package
-	tailwindStylesheet: './src/routes/layout.css'
+	tailwindStylesheet: './src/lib/styles/base.css'
 };

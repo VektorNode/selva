@@ -28,19 +28,19 @@ npm install @selva/svelte-ui @selva/core
 
 ```svelte
 <script lang="ts">
-  import { GrasshopperClient } from '@selva/core';
-  import { InputHandler } from '@selva/svelte-ui';
+	import { GrasshopperClient } from '@selva/core';
+	import { InputHandler } from '@selva/svelte-ui';
 
-  const client = new GrasshopperClient({
-    serverUrl: 'https://compute.rhino3d.com',
-  });
+	const client = new GrasshopperClient({
+		serverUrl: 'https://compute.rhino3d.com'
+	});
 
-  const { inputs } = await client.getIO('https://example.com/definition.gh');
+	const { inputs } = await client.getIO('https://example.com/definition.gh');
 
-  async function handleSolve(values) {
-    const result = await client.solve('https://example.com/definition.gh', values);
-    console.log(result.data);
-  }
+	async function handleSolve(values) {
+		const result = await client.solve('https://example.com/definition.gh', values);
+		console.log(result.data);
+	}
 </script>
 
 <InputHandler {inputs} onChange={handleSolve} headerText="Parameters" autoUpdate={true} />
@@ -54,15 +54,15 @@ Auto-generates form controls for all Grasshopper parameters:
 
 ```svelte
 <InputHandler
-  input={grasshopperInputs}
-  onChange={handleChange}
-  headerText="Parameters"
-  autoUpdate={true}
-  displayOptions={{
-    darkMode: false,
-    showSliders: true,
-    accordionSeparated: true,
-  }}
+	input={grasshopperInputs}
+	onChange={handleChange}
+	headerText="Parameters"
+	autoUpdate={true}
+	displayOptions={{
+		darkMode: false,
+		showSliders: true,
+		accordionSeparated: true
+	}}
 />
 ```
 
@@ -81,19 +81,19 @@ Display errors, warnings, and compute messages:
 
 ```svelte
 <MessageOverlay
-  errorMessage={null}
-  warnings={[]}
-  computeErrors={[]}
-  showMessages={true}
-  onShowMessagesToggle={(show) => {
-    /* ... */
-  }}
-  onDismissMessage={(type, index) => {
-    /* ... */
-  }}
-  onClearAllMessages={() => {
-    /* ... */
-  }}
+	errorMessage={null}
+	warnings={[]}
+	computeErrors={[]}
+	showMessages={true}
+	onShowMessagesToggle={(show) => {
+		/* ... */
+	}}
+	onDismissMessage={(type, index) => {
+		/* ... */
+	}}
+	onClearAllMessages={() => {
+		/* ... */
+	}}
 />
 ```
 
@@ -124,9 +124,9 @@ All components export TypeScript types from `@selva/core` for full type safety.
 
 ```svelte
 <InputHandler
-  input={inputs}
-  onChange={handleChange}
-  customComponents={{ Number: MyCustomSlider }}
+	input={inputs}
+	onChange={handleChange}
+	customComponents={{ Number: MyCustomSlider }}
 />
 ```
 

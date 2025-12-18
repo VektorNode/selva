@@ -1,520 +1,520 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://selva.dev/schemas/ui-schema.json",
-  "title": "Selva UI Schema",
-  "description": "Schema definitions for Selva UI configuration",
-  "definitions": {
-    "//_COMMENT": "--- PRIMITIVES ---",
-    "GrasshopperParamType": {
-      "type": "string",
-      "enum": ["number", "integer", "boolean", "text", "valueList", "generic"],
-      "description": "Grasshopper contextual parameter data types"
-    },
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://selva.dev/schemas/ui-schema.json",
+	"title": "Selva UI Schema",
+	"description": "Schema definitions for Selva UI configuration",
+	"definitions": {
+		"//_COMMENT": "--- PRIMITIVES ---",
+		"GrasshopperParamType": {
+			"type": "string",
+			"enum": ["number", "integer", "boolean", "text", "valueList", "generic"],
+			"description": "Grasshopper contextual parameter data types"
+		},
 
-    "//_COMMENT": "--- WIDGET CONFIGURATIONS ---",
-    "NumberWidgetConfig": {
-      "type": "object",
-      "properties": {
-        "minimum": { "type": "number" },
-        "maximum": { "type": "number" },
-        "stepSize": { "type": "number" },
-        "placeholder": { "type": "string" },
-        "renderAsSlider": { "type": "boolean" }
-      },
-      "additionalProperties": false
-    },
-    "TextWidgetConfig": {
-      "type": "object",
-      "properties": {
-        "placeholder": { "type": "string" },
-        "required": { "type": "boolean" }
-      },
-      "additionalProperties": false
-    },
-    "DropdownWidgetConfig": {
-      "type": "object",
-      "properties": {
-        "options": {
-          "type": "object",
-          "additionalProperties": { "type": "string" },
-          "description": "Key-value pairs for dropdown options"
-        },
-        "required": { "type": "boolean" }
-      },
-      "required": ["options"],
-      "additionalProperties": false
-    },
-    "CheckboxWidgetConfig": {
-      "type": "object",
-      "properties": {},
-      "additionalProperties": false
-    },
-    "FileWidgetConfig": {
-      "type": "object",
-      "properties": {
-        "buttonLabel": {
-          "type": "string",
-          "default": "Download"
-        },
-        "fileFormat": {
-          "type": "string",
-          "description": "File format hint (e.g., 'zip', '3dm')"
-        }
-      },
-      "additionalProperties": false
-    },
+		"//_COMMENT": "--- WIDGET CONFIGURATIONS ---",
+		"NumberWidgetConfig": {
+			"type": "object",
+			"properties": {
+				"minimum": { "type": "number" },
+				"maximum": { "type": "number" },
+				"stepSize": { "type": "number" },
+				"placeholder": { "type": "string" },
+				"renderAsSlider": { "type": "boolean" }
+			},
+			"additionalProperties": false
+		},
+		"TextWidgetConfig": {
+			"type": "object",
+			"properties": {
+				"placeholder": { "type": "string" },
+				"required": { "type": "boolean" }
+			},
+			"additionalProperties": false
+		},
+		"DropdownWidgetConfig": {
+			"type": "object",
+			"properties": {
+				"options": {
+					"type": "object",
+					"additionalProperties": { "type": "string" },
+					"description": "Key-value pairs for dropdown options"
+				},
+				"required": { "type": "boolean" }
+			},
+			"required": ["options"],
+			"additionalProperties": false
+		},
+		"CheckboxWidgetConfig": {
+			"type": "object",
+			"properties": {},
+			"additionalProperties": false
+		},
+		"FileWidgetConfig": {
+			"type": "object",
+			"properties": {
+				"buttonLabel": {
+					"type": "string",
+					"default": "Download"
+				},
+				"fileFormat": {
+					"type": "string",
+					"description": "File format hint (e.g., 'zip', '3dm')"
+				}
+			},
+			"additionalProperties": false
+		},
 
-    "//_COMMENT": "--- LAYOUT DEFINITIONS ---",
-    "LayoutItemBase": {
-      "type": "object",
-      "description": "Base properties shared by all layout items",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for this layout item in the UI tree (not the parameter ID)"
-        },
-        "paramId": {
-          "type": "string",
-          "description": "References the Grasshopper component InstanceGuid (Data Source)"
-        },
-        "displayName": { "type": "string" },
-        "description": { "type": "string" },
-        "order": {
-          "type": "integer",
-          "default": 0
-        },
-        "span": {
-          "type": "integer",
-          "default": 1
-        }
-      },
-      "required": ["id", "paramId"]
-    },
-    "InputNumberLayoutItem": {
-      "allOf": [
-        { "$ref": "#/definitions/LayoutItemBase" },
-        {
-          "type": "object",
-          "properties": {
-            "type": { "const": "input" },
-            "widgetType": { "const": "number" },
-            "config": { "$ref": "#/definitions/NumberWidgetConfig" }
-          },
-          "required": ["type", "widgetType"]
-        }
-      ]
-    },
-    "InputTextLayoutItem": {
-      "allOf": [
-        { "$ref": "#/definitions/LayoutItemBase" },
-        {
-          "type": "object",
-          "properties": {
-            "type": { "const": "input" },
-            "widgetType": { "const": "text" },
-            "config": { "$ref": "#/definitions/TextWidgetConfig" }
-          },
-          "required": ["type", "widgetType"]
-        }
-      ]
-    },
-    "InputDropdownLayoutItem": {
-      "allOf": [
-        { "$ref": "#/definitions/LayoutItemBase" },
-        {
-          "type": "object",
-          "properties": {
-            "type": { "const": "input" },
-            "widgetType": { "const": "dropdown" },
-            "config": { "$ref": "#/definitions/DropdownWidgetConfig" }
-          },
-          "required": ["type", "widgetType", "config"]
-        }
-      ]
-    },
-    "InputCheckboxLayoutItem": {
-      "allOf": [
-        { "$ref": "#/definitions/LayoutItemBase" },
-        {
-          "type": "object",
-          "properties": {
-            "type": { "const": "input" },
-            "widgetType": { "const": "checkbox" },
-            "config": { "$ref": "#/definitions/CheckboxWidgetConfig" }
-          },
-          "required": ["type", "widgetType"]
-        }
-      ]
-    },
-    "OutputTextLayoutItem": {
-      "allOf": [
-        { "$ref": "#/definitions/LayoutItemBase" },
-        {
-          "type": "object",
-          "properties": {
-            "type": { "const": "output" },
-            "widgetType": { "const": "text" }
-          },
-          "required": ["type", "widgetType"]
-        }
-      ]
-    },
-    "OutputNumberLayoutItem": {
-      "allOf": [
-        { "$ref": "#/definitions/LayoutItemBase" },
-        {
-          "type": "object",
-          "properties": {
-            "type": { "const": "output" },
-            "widgetType": { "const": "number" }
-          },
-          "required": ["type", "widgetType"]
-        }
-      ]
-    },
-    "OutputFileLayoutItem": {
-      "allOf": [
-        { "$ref": "#/definitions/LayoutItemBase" },
-        {
-          "type": "object",
-          "properties": {
-            "type": { "const": "output" },
-            "widgetType": { "const": "file" },
-            "config": { "$ref": "#/definitions/FileWidgetConfig" }
-          },
-          "required": ["type", "widgetType"]
-        }
-      ]
-    },
-    "LayoutItem": {
-      "oneOf": [
-        { "$ref": "#/definitions/InputNumberLayoutItem" },
-        { "$ref": "#/definitions/InputTextLayoutItem" },
-        { "$ref": "#/definitions/InputDropdownLayoutItem" },
-        { "$ref": "#/definitions/InputCheckboxLayoutItem" },
-        { "$ref": "#/definitions/OutputTextLayoutItem" },
-        { "$ref": "#/definitions/OutputNumberLayoutItem" },
-        { "$ref": "#/definitions/OutputFileLayoutItem" }
-      ]
-    },
-    "GroupConfig": {
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "label": { "type": "string" },
-        "description": { "type": "string" },
-        "order": { "type": "integer", "default": 0 },
-        "collapsed": { "type": "boolean", "default": false },
-        "columns": { "type": "integer", "default": 1 },
-        "items": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/LayoutItem" }
-        }
-      },
-      "required": ["id", "label", "items"],
-      "additionalProperties": false
-    },
-    "TabConfig": {
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "label": { "type": "string" },
-        "icon": { "type": "string" },
-        "order": { "type": "integer", "default": 0 },
-        "groups": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/GroupConfig" }
-        },
-        "position": {
-          "type": "string",
-          "enum": ["left", "center", "right"],
-          "default": "center",
-          "description": "Horizontal region where this tab should be positioned in multi-column layouts"
-        }
-      },
-      "required": ["id", "label", "groups"],
-      "additionalProperties": false
-    },
-    "TabbedLayoutConfig": {
-      "type": "object",
-      "description": "Tabbed layout with multiple tabs containing groups",
-      "properties": {
-        "type": { "const": "tabbed" },
-        "gap": { "type": "integer", "default": 16 },
-        "tabs": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/TabConfig" }
-        }
-      },
-      "required": ["type", "tabs"],
-      "additionalProperties": false
-    },
-    "FlatLayoutConfig": {
-      "type": "object",
-      "description": "Flat layout with a single list of groups",
-      "properties": {
-        "type": { "const": "flat" },
-        "gap": { "type": "integer", "default": 16 },
-        "groups": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/GroupConfig" }
-        }
-      },
-      "required": ["type", "groups"],
-      "additionalProperties": false
-    },
-    "LayoutConfig": {
-      "type": "object",
-      "oneOf": [
-        { "$ref": "#/definitions/TabbedLayoutConfig" },
-        { "$ref": "#/definitions/FlatLayoutConfig" }
-      ]
-    },
+		"//_COMMENT": "--- LAYOUT DEFINITIONS ---",
+		"LayoutItemBase": {
+			"type": "object",
+			"description": "Base properties shared by all layout items",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Unique identifier for this layout item in the UI tree (not the parameter ID)"
+				},
+				"paramId": {
+					"type": "string",
+					"description": "References the Grasshopper component InstanceGuid (Data Source)"
+				},
+				"displayName": { "type": "string" },
+				"description": { "type": "string" },
+				"order": {
+					"type": "integer",
+					"default": 0
+				},
+				"span": {
+					"type": "integer",
+					"default": 1
+				}
+			},
+			"required": ["id", "paramId"]
+		},
+		"InputNumberLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "input" },
+						"widgetType": { "const": "number" },
+						"config": { "$ref": "#/definitions/NumberWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"InputTextLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "input" },
+						"widgetType": { "const": "text" },
+						"config": { "$ref": "#/definitions/TextWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"InputDropdownLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "input" },
+						"widgetType": { "const": "dropdown" },
+						"config": { "$ref": "#/definitions/DropdownWidgetConfig" }
+					},
+					"required": ["type", "widgetType", "config"]
+				}
+			]
+		},
+		"InputCheckboxLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "input" },
+						"widgetType": { "const": "checkbox" },
+						"config": { "$ref": "#/definitions/CheckboxWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"OutputTextLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "output" },
+						"widgetType": { "const": "text" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"OutputNumberLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "output" },
+						"widgetType": { "const": "number" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"OutputFileLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "output" },
+						"widgetType": { "const": "file" },
+						"config": { "$ref": "#/definitions/FileWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"LayoutItem": {
+			"oneOf": [
+				{ "$ref": "#/definitions/InputNumberLayoutItem" },
+				{ "$ref": "#/definitions/InputTextLayoutItem" },
+				{ "$ref": "#/definitions/InputDropdownLayoutItem" },
+				{ "$ref": "#/definitions/InputCheckboxLayoutItem" },
+				{ "$ref": "#/definitions/OutputTextLayoutItem" },
+				{ "$ref": "#/definitions/OutputNumberLayoutItem" },
+				{ "$ref": "#/definitions/OutputFileLayoutItem" }
+			]
+		},
+		"GroupConfig": {
+			"type": "object",
+			"properties": {
+				"id": { "type": "string" },
+				"label": { "type": "string" },
+				"description": { "type": "string" },
+				"order": { "type": "integer", "default": 0 },
+				"collapsed": { "type": "boolean", "default": false },
+				"columns": { "type": "integer", "default": 1 },
+				"items": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/LayoutItem" }
+				}
+			},
+			"required": ["id", "label", "items"],
+			"additionalProperties": false
+		},
+		"TabConfig": {
+			"type": "object",
+			"properties": {
+				"id": { "type": "string" },
+				"label": { "type": "string" },
+				"icon": { "type": "string" },
+				"order": { "type": "integer", "default": 0 },
+				"groups": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/GroupConfig" }
+				},
+				"position": {
+					"type": "string",
+					"enum": ["left", "center", "right"],
+					"default": "center",
+					"description": "Horizontal region where this tab should be positioned in multi-column layouts"
+				}
+			},
+			"required": ["id", "label", "groups"],
+			"additionalProperties": false
+		},
+		"TabbedLayoutConfig": {
+			"type": "object",
+			"description": "Tabbed layout with multiple tabs containing groups",
+			"properties": {
+				"type": { "const": "tabbed" },
+				"gap": { "type": "integer", "default": 16 },
+				"tabs": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/TabConfig" }
+				}
+			},
+			"required": ["type", "tabs"],
+			"additionalProperties": false
+		},
+		"FlatLayoutConfig": {
+			"type": "object",
+			"description": "Flat layout with a single list of groups",
+			"properties": {
+				"type": { "const": "flat" },
+				"gap": { "type": "integer", "default": 16 },
+				"groups": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/GroupConfig" }
+				}
+			},
+			"required": ["type", "groups"],
+			"additionalProperties": false
+		},
+		"LayoutConfig": {
+			"type": "object",
+			"oneOf": [
+				{ "$ref": "#/definitions/TabbedLayoutConfig" },
+				{ "$ref": "#/definitions/FlatLayoutConfig" }
+			]
+		},
 
-    "//_COMMENT": "--- DISCOVERY MODELS (From Grasshopper) ---",
-    "DiscoveredInput": {
-      "type": "object",
-      "description": "Input parameter discovered in Grasshopper document",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Grasshopper parameter instance GUID"
-        },
-        "name": { "type": "string" },
-        "nickname": { "type": "string" },
-        "description": { "type": "string" },
-        "type": { "$ref": "#/definitions/GrasshopperParamType" },
-        "default": {},
-        "minimum": { "type": "number" },
-        "maximum": { "type": "number" },
-        "stepSize": { "type": "number" },
-        "atLeast": { "type": "integer", "default": 1 },
-        "atMost": { "type": "integer", "default": 1 },
-        "treeAccess": { "type": "boolean", "default": false },
-        "options": {
-          "type": "object",
-          "additionalProperties": { "type": "string" },
-          "description": "Key-value pairs for dropdown/selection options"
-        }
-      },
-      "required": ["id", "name", "nickname", "description", "type"]
-    },
-    "DiscoveredOutput": {
-      "type": "object",
-      "description": "Output component discovered in Grasshopper document",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Grasshopper component instance GUID"
-        },
-        "nickname": { "type": "string" },
-        "description": { "type": "string" },
-        "type": {
-          "type": "string",
-          "enum": ["text", "number", "file"],
-          "description": "Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files"
-        }
-      },
-      "required": ["id", "nickname", "type"],
-      "additionalProperties": false
-    },
-    "DiscoveredParameters": {
-      "type": "object",
-      "description": "Collection of input and output parameters discovered in the current Grasshopper document",
-      "properties": {
-        "sessionId": { "type": "string" },
-        "timestamp": { "type": "string", "format": "date-time" },
-        "inputs": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/DiscoveredInput" },
-          "description": "List of input parameters available for UI building"
-        },
-        "outputs": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/DiscoveredOutput" },
-          "description": "List of output components available for UI building"
-        }
-      },
-      "required": ["sessionId", "timestamp", "inputs", "outputs"]
-    },
+		"//_COMMENT": "--- DISCOVERY MODELS (From Grasshopper) ---",
+		"DiscoveredInput": {
+			"type": "object",
+			"description": "Input parameter discovered in Grasshopper document",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Grasshopper parameter instance GUID"
+				},
+				"name": { "type": "string" },
+				"nickname": { "type": "string" },
+				"description": { "type": "string" },
+				"type": { "$ref": "#/definitions/GrasshopperParamType" },
+				"default": {},
+				"minimum": { "type": "number" },
+				"maximum": { "type": "number" },
+				"stepSize": { "type": "number" },
+				"atLeast": { "type": "integer", "default": 1 },
+				"atMost": { "type": "integer", "default": 1 },
+				"treeAccess": { "type": "boolean", "default": false },
+				"options": {
+					"type": "object",
+					"additionalProperties": { "type": "string" },
+					"description": "Key-value pairs for dropdown/selection options"
+				}
+			},
+			"required": ["id", "name", "nickname", "description", "type"]
+		},
+		"DiscoveredOutput": {
+			"type": "object",
+			"description": "Output component discovered in Grasshopper document",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Grasshopper component instance GUID"
+				},
+				"nickname": { "type": "string" },
+				"description": { "type": "string" },
+				"type": {
+					"type": "string",
+					"enum": ["text", "number", "file"],
+					"description": "Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files"
+				}
+			},
+			"required": ["id", "nickname", "type"],
+			"additionalProperties": false
+		},
+		"DiscoveredParameters": {
+			"type": "object",
+			"description": "Collection of input and output parameters discovered in the current Grasshopper document",
+			"properties": {
+				"sessionId": { "type": "string" },
+				"timestamp": { "type": "string", "format": "date-time" },
+				"inputs": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/DiscoveredInput" },
+					"description": "List of input parameters available for UI building"
+				},
+				"outputs": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/DiscoveredOutput" },
+					"description": "List of output components available for UI building"
+				}
+			},
+			"required": ["sessionId", "timestamp", "inputs", "outputs"]
+		},
 
-    "//_COMMENT": "--- SCHEMA MODELS (Persisted) ---",
-    "SchemaInput": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Grasshopper parameter instance GUID"
-        },
-        "nickname": { "type": "string" },
-        "paramType": { "$ref": "#/definitions/GrasshopperParamType" },
-        "description": { "type": "string" },
-        "default": {}
-      },
-      "required": ["id", "nickname", "paramType"],
-      "additionalProperties": false
-    },
-    "SchemaOutput": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Grasshopper parameter instance GUID"
-        },
-        "nickname": { "type": "string" },
-        "description": { "type": "string" },
-        "type": {
-          "type": "string",
-          "enum": ["text", "number", "file"],
-          "description": "Output display type"
-        }
-      },
-      "required": ["id", "nickname", "type"],
-      "additionalProperties": false
-    },
-    "ViewerOptions": {
-      "type": "object",
-      "description": "Configuration options for the 3D viewer",
-      "properties": {
-        "enableLocal": {
-          "type": "boolean",
-          "default": false,
-          "description": "If true, display mesh data is sent to the web preview for local rendering"
-        },
-        "enableRemote": {
-          "type": "boolean",
-          "default": false,
-          "description": "If true, enables remote rendering via Rhino Compute"
-        },
-        "backgroundColor": {
-          "type": "string",
-          "pattern": "^#[0-9A-Fa-f]{6}$",
-          "default": "#ffffff",
-          "description": "Background color for the 3D viewer as hex string (e.g., '#ffffff')"
-        }
-      },
-      "additionalProperties": false
-    },
-    "UISchema": {
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "description": { "type": "string" },
-        "projectFileName": {
-          "type": "string",
-          "description": "Grasshopper document file name (e.g., 'myfile.gh')"
-        },
-        "documentId": {
-          "type": "string",
-          "description": "Grasshopper document unique identifier (GUID)"
-        },
-        "pluginVersion": {
-          "type": "string",
-          "description": "Version of Selva plugin that created/last modified this schema"
-        },
-        "tags": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "User-defined tags for organizing schemas (e.g., ['architecture', 'facade'])"
-        },
-        "author": {
-          "type": "string",
-          "description": "User or organization who created the schema"
-        },
-        "organization": {
-          "type": "string",
-          "description": "Organization/company name"
-        },
-        "schemaVersion": {
-          "type": "string",
-          "pattern": "^\\d+\\.\\d+\\.\\d+$",
-          "default": "2.0.0",
-          "description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
-        },
-        "minPluginVersion": {
-          "type": "string",
-          "pattern": "^\\d+\\.\\d+\\.\\d+$",
-          "description": "Minimum plugin version required to load this schema"
-        },
-        "created": { "type": "string", "format": "date-time" },
-        "lastModified": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Last modification timestamp"
-        },
-        "viewerOptions": {
-          "$ref": "#/definitions/ViewerOptions",
-          "description": "Configuration for the 3D viewer"
-        },
-        "instanceSolve": {
-          "type": "boolean",
-          "default": true,
-          "description": "If true, changes trigger immediate solving. If false, user must press Calculate button."
-        },
-        "inputs": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/SchemaInput" }
-        },
-        "outputs": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/SchemaOutput" },
-          "description": "All output components (print, bake, file download)"
-        },
-        "layout": { "$ref": "#/definitions/LayoutConfig" }
-      },
-      "required": ["id", "name", "inputs", "outputs", "layout"],
-      "additionalProperties": false
-    },
+		"//_COMMENT": "--- SCHEMA MODELS (Persisted) ---",
+		"SchemaInput": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Grasshopper parameter instance GUID"
+				},
+				"nickname": { "type": "string" },
+				"paramType": { "$ref": "#/definitions/GrasshopperParamType" },
+				"description": { "type": "string" },
+				"default": {}
+			},
+			"required": ["id", "nickname", "paramType"],
+			"additionalProperties": false
+		},
+		"SchemaOutput": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Grasshopper parameter instance GUID"
+				},
+				"nickname": { "type": "string" },
+				"description": { "type": "string" },
+				"type": {
+					"type": "string",
+					"enum": ["text", "number", "file"],
+					"description": "Output display type"
+				}
+			},
+			"required": ["id", "nickname", "type"],
+			"additionalProperties": false
+		},
+		"ViewerOptions": {
+			"type": "object",
+			"description": "Configuration options for the 3D viewer",
+			"properties": {
+				"enableLocal": {
+					"type": "boolean",
+					"default": false,
+					"description": "If true, display mesh data is sent to the web preview for local rendering"
+				},
+				"enableRemote": {
+					"type": "boolean",
+					"default": false,
+					"description": "If true, enables remote rendering via Rhino Compute"
+				},
+				"backgroundColor": {
+					"type": "string",
+					"pattern": "^#[0-9A-Fa-f]{6}$",
+					"default": "#ffffff",
+					"description": "Background color for the 3D viewer as hex string (e.g., '#ffffff')"
+				}
+			},
+			"additionalProperties": false
+		},
+		"UISchema": {
+			"type": "object",
+			"properties": {
+				"id": { "type": "string" },
+				"name": { "type": "string" },
+				"description": { "type": "string" },
+				"projectFileName": {
+					"type": "string",
+					"description": "Grasshopper document file name (e.g., 'myfile.gh')"
+				},
+				"documentId": {
+					"type": "string",
+					"description": "Grasshopper document unique identifier (GUID)"
+				},
+				"pluginVersion": {
+					"type": "string",
+					"description": "Version of Selva plugin that created/last modified this schema"
+				},
+				"tags": {
+					"type": "array",
+					"items": { "type": "string" },
+					"description": "User-defined tags for organizing schemas (e.g., ['architecture', 'facade'])"
+				},
+				"author": {
+					"type": "string",
+					"description": "User or organization who created the schema"
+				},
+				"organization": {
+					"type": "string",
+					"description": "Organization/company name"
+				},
+				"schemaVersion": {
+					"type": "string",
+					"pattern": "^\\d+\\.\\d+\\.\\d+$",
+					"default": "2.0.0",
+					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
+				},
+				"minPluginVersion": {
+					"type": "string",
+					"pattern": "^\\d+\\.\\d+\\.\\d+$",
+					"description": "Minimum plugin version required to load this schema"
+				},
+				"created": { "type": "string", "format": "date-time" },
+				"lastModified": {
+					"type": "string",
+					"format": "date-time",
+					"description": "Last modification timestamp"
+				},
+				"viewerOptions": {
+					"$ref": "#/definitions/ViewerOptions",
+					"description": "Configuration for the 3D viewer"
+				},
+				"instanceSolve": {
+					"type": "boolean",
+					"default": true,
+					"description": "If true, changes trigger immediate solving. If false, user must press Calculate button."
+				},
+				"inputs": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/SchemaInput" }
+				},
+				"outputs": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/SchemaOutput" },
+					"description": "All output components (print, bake, file download)"
+				},
+				"layout": { "$ref": "#/definitions/LayoutConfig" }
+			},
+			"required": ["id", "name", "inputs", "outputs", "layout"],
+			"additionalProperties": false
+		},
 
-    "//_COMMENT": "--- STATE & RUNTIME ---",
+		"//_COMMENT": "--- STATE & RUNTIME ---",
 
-    "SessionState": {
-      "type": "object",
-      "properties": {
-        "sessionId": { "type": "string" },
-        "active": { "type": "boolean" },
-        "lastUpdate": { "type": "string", "format": "date-time" },
-        "mode": {
-          "type": "string",
-          "enum": ["builder", "preview"]
-        }
-      },
-      "required": ["sessionId", "active", "lastUpdate", "mode"]
-    },
-    "RuntimeValues": {
-      "type": "object",
-      "properties": {
-        "timestamp": { "type": "string", "format": "date-time" },
-        "values": {
-          "type": "object",
-          "additionalProperties": {}
-        }
-      },
-      "required": ["timestamp", "values"]
-    },
-    "ValidationIssueMessage": {
-      "type": "object",
-      "description": "Validation warning or error for a parameter",
-      "properties": {
-        "paramId": { "type": "string" },
-        "severity": {
-          "type": "string",
-          "enum": ["warning", "error"],
-          "description": "warning = can still load, error = cannot load"
-        },
-        "message": { "type": "string" },
-        "details": {
-          "type": "object",
-          "properties": {
-            "expected": { "type": "string" },
-            "actual": { "type": "string" }
-          }
-        }
-      },
-      "required": ["paramId", "severity", "message"],
-      "additionalProperties": false
-    }
-  },
-  "$ref": "#/definitions/UISchema"
+		"SessionState": {
+			"type": "object",
+			"properties": {
+				"sessionId": { "type": "string" },
+				"active": { "type": "boolean" },
+				"lastUpdate": { "type": "string", "format": "date-time" },
+				"mode": {
+					"type": "string",
+					"enum": ["builder", "preview"]
+				}
+			},
+			"required": ["sessionId", "active", "lastUpdate", "mode"]
+		},
+		"RuntimeValues": {
+			"type": "object",
+			"properties": {
+				"timestamp": { "type": "string", "format": "date-time" },
+				"values": {
+					"type": "object",
+					"additionalProperties": {}
+				}
+			},
+			"required": ["timestamp", "values"]
+		},
+		"ValidationIssueMessage": {
+			"type": "object",
+			"description": "Validation warning or error for a parameter",
+			"properties": {
+				"paramId": { "type": "string" },
+				"severity": {
+					"type": "string",
+					"enum": ["warning", "error"],
+					"description": "warning = can still load, error = cannot load"
+				},
+				"message": { "type": "string" },
+				"details": {
+					"type": "object",
+					"properties": {
+						"expected": { "type": "string" },
+						"actual": { "type": "string" }
+					}
+				}
+			},
+			"required": ["paramId", "severity", "message"],
+			"additionalProperties": false
+		}
+	},
+	"$ref": "#/definitions/UISchema"
 }
