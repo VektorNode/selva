@@ -4,7 +4,7 @@ import { GrasshopperResponseProcessor, TreeBuilder, GrasshopperClient } from '@s
 import type { UISchema } from '@selva/shared';
 import { getServerConfig } from '$lib/server/config.server';
 
-export const load = (async ({ url, params }) => {
+export const load = (async ({ url, params: _params }) => {
   const config = getServerConfig();
 
   // Get filename from URL param (only filename, not full URL)

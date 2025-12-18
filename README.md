@@ -13,9 +13,8 @@ A full-stack toolkit for building Grasshopper-driven web applications. Provides 
 
 **Web Application**
 
-- **`@selva/frontend`** — SvelteKit-based UI builder and runtime.
+- **`@selva/builder-app`** — SvelteKit-based UI builder and runtime.
   - **Local Mode:** Drag-and-drop schema designer connected to Grasshopper via WebSocket.
-  - **Cloud Mode:** Standalone web app that solves Grasshopper definitions through Rhino.Compute.
 
 **Grasshopper Plugin**
 

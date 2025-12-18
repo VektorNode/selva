@@ -238,13 +238,3 @@ Why this is bad:
 - "Various fixes" is meaningless
 
 ---
-
-## Schema Version History
-
-| Version | Date       | Summary                                            |
-| ------- | ---------- | -------------------------------------------------- |
-| 1.0.0   | 2024-12-15 | Initial release with full UI builder functionality |
-
----
-
-For detailed schema evolution guidelines, see [SCHEMA_EVOLUTION_GUIDE.md](./SCHEMA_EVOLUTION_GUIDE.md).

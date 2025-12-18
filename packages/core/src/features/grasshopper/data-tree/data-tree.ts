@@ -436,7 +436,7 @@ export class TreeBuilder {
         return null;
       }
 
-      // @ts-ignore
+      // @ts-expect-error - Dynamic key access on innerTree
       const items = innerTree[firstKey];
 
       // Handle array of values

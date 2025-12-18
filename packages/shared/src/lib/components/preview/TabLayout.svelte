@@ -17,7 +17,7 @@
     debounceSliders?: boolean;
   }
 
-  let { schema, values = $bindable(), onValueChange, debounceSliders = false }: Props = $props();
+  let { schema, values = $bindable(), onValueChange }: Props = $props();
 
   let activeTabId: string | null = $state(null);
 

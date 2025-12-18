@@ -15,9 +15,8 @@
     "pnpm": ">=9.0.0"
   },
   "scripts": {
-    "dev": "pnpm --filter @selva/builder-app dev",
+    "dev:builder": "pnpm --filter @selva/builder-app dev",
     "dev:compute": "pnpm --filter @selva/compute-app dev",
-    "build:themes": "echo 'Themes are pure CSS, no build needed'",
     "build:shared": "pnpm --filter @selva/shared build",
     "build:builder": "pnpm --filter @selva/builder-app build",
     "build:compute": "pnpm --filter @selva/compute-app build",
