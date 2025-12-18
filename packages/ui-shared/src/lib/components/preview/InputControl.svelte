@@ -134,7 +134,7 @@
       <Checkbox
         id={inputId}
         checked={typeof value === 'boolean' ? value : false}
-        onCheckedChange={(checked) => handleChange(checked)}
+        onCheckedChange={(checked) => handleChange(checked === true)}
       />
       <Label for={inputId} class="cursor-pointer text-sm text-muted-foreground">Enabled</Label>
     </div>

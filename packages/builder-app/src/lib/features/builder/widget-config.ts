@@ -92,7 +92,7 @@ export function createDefaultWidgetConfig(
 
       case 'text': {
         const config: TextWidgetConfig = {
-          placeholder: `Enter ${param.name}`,
+          placeholder: `Enter ${param.nickname}`,
         };
         return config;
       }

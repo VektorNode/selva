@@ -1,6 +1,8 @@
 // Layout components
 export { default as PageContainer } from './components/layout/PageContainer.svelte';
 export { default as PageHeader } from './components/layout/PageHeader.svelte';
+export { default as PageFooter } from './components/layout/PageFooter.svelte';
+
 
 // Preview components
 export { default as TabLayout } from './components/preview/TabLayout.svelte';

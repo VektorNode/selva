@@ -346,13 +346,12 @@
           "type": "string",
           "description": "Grasshopper parameter instance GUID"
         },
-        "name": { "type": "string" },
         "nickname": { "type": "string" },
         "paramType": { "$ref": "#/definitions/GrasshopperParamType" },
         "description": { "type": "string" },
         "default": {}
       },
-      "required": ["id", "name", "nickname", "paramType"],
+      "required": ["id", "nickname", "paramType"],
       "additionalProperties": false
     },
     "SchemaOutput": {
@@ -362,7 +361,6 @@
           "type": "string",
           "description": "Grasshopper parameter instance GUID"
         },
-        "name": { "type": "string" },
         "nickname": { "type": "string" },
         "description": { "type": "string" },
         "type": {

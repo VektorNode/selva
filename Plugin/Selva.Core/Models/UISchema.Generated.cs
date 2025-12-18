@@ -318,9 +318,6 @@ namespace Selva.Core.Models
         [JsonProperty("id")]
         public Guid Id { get; set; }
 
-        [JsonProperty("name")]
-        public string Name { get; set; }
-
         [JsonProperty("nickname")]
         public string Nickname { get; set; }
 
@@ -342,9 +339,6 @@ namespace Selva.Core.Models
 /// </summary>
         [JsonProperty("id")]
         public Guid Id { get; set; }
-
-        [JsonProperty("name")]
-        public string Name { get; set; }
 
         [JsonProperty("nickname")]
         public string Nickname { get; set; }

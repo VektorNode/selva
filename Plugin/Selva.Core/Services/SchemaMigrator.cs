@@ -97,22 +97,7 @@ public static class SchemaMigrator
   {
     schema.SchemaVersion = "2.0.0";
 
-    // Ensure Name is populated (migration from 1.0.0 where Name might be missing)
-    foreach (var input in schema.Inputs)
-    {
-      if (string.IsNullOrEmpty(input.Name))
-      {
-        input.Name = input.Nickname;
-      }
-    }
-
-    foreach (var output in schema.Outputs)
-    {
-      if (string.IsNullOrEmpty(output.Name))
-      {
-        output.Name = output.Nickname;
-      }
-    }
+    // Name field removed in 2.0.0 - now only using nickname
 
     return schema;
   }

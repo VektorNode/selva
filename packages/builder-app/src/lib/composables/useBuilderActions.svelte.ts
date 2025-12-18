@@ -64,7 +64,7 @@ export function useBuilderActions(getBuilderState: () => ReturnType<typeof useBu
         schema,
         group,
         param.id,
-        param.nickname || param.name,
+        param.nickname || 'unnamed',
         'input',
         builderState.state.availableInputs,
         param.type,
