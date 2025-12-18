@@ -1,0 +1,15 @@
+{
+  "name": "@selva/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./eslint": "./eslint.config.js",
+    "./vite": "./vite.config.js"
+  },
+  "peerDependencies": {
+    "eslint": "^9.0.0",
+    "vite": "^5.0.0 || ^6.0.0 || ^7.0.0",
+    "svelte": "^5.0.0"
+  }
+}

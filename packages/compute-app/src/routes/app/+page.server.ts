@@ -1,7 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
 import { GrasshopperResponseProcessor, TreeBuilder, GrasshopperClient } from '@selva/core';
-import type { UISchema } from '@selva/ui-shared';
+import type { UISchema } from '@selva/shared';
 import { getServerConfig } from '$lib/server/config.server';
 
 export const load = (async ({ url, params }) => {

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Card, Button, StateDisplay } from '@selva/ui-shared';
+  import { Card, Button, StateDisplay } from '@selva/shared';
   import { EditableTabNav, EditableGroup, BuilderGroupItem } from '$lib/components/builder';
-  import type { TabConfig, DiscoveredInput } from '@selva/ui-shared';
+  import type { TabConfig, DiscoveredInput } from '@selva/shared';
   import { dragStore } from '$lib/stores/dragStore.svelte';
 
   interface Props {

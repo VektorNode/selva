@@ -12,7 +12,7 @@ import type {
   OutputTextLayoutItem,
   OutputNumberLayoutItem,
   OutputFileLayoutItem,
-} from '@selva/ui-shared';
+} from '@selva/shared';
 
 export type InputWidgetType =
   | InputNumberLayoutItem['widgetType']

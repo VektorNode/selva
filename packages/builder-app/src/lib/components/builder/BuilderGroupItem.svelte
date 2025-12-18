@@ -1,7 +1,7 @@
 <script lang="ts">
   import { dragStore } from '$lib/stores/dragStore.svelte';
-  import type { LayoutItem, DiscoveredInput, NumberWidgetConfig } from '@selva/ui-shared';
-  import { Badge, Button, Card, Switch } from '@selva/ui-shared';
+  import type { LayoutItem, DiscoveredInput, NumberWidgetConfig } from '@selva/shared';
+  import { Badge, Button, Card, Switch } from '@selva/shared';
   import { ArrowDownToLine, ArrowUpFromLine, Download, ChevronDown } from '@lucide/svelte';
 
   interface BuilderGroupItemProps {

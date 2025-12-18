@@ -2,7 +2,7 @@
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { getWebSocketState } from '$lib/websocket/websocket.svelte';
-  import type { UISchema, DiscoveredParameters, SupportedTypes } from '@selva/ui-shared';
+  import type { UISchema, DiscoveredParameters, SupportedTypes } from '@selva/shared';
   import {
     TabLayout,
     PageContainer,
@@ -22,7 +22,7 @@
     formatParameterUpdateMessage,
     formatMetadataUpdateMessage,
     type ViewerState,
-  } from '@selva/ui-shared';
+  } from '@selva/shared';
   import { Maximize, Minimize } from '@lucide/svelte';
   import { initializeWebSocketSession, getWebSocketPortFromUrl } from '$lib/utils/session';
   import { type MeshBatch } from '@selva/core';

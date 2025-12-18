@@ -1,5 +1,5 @@
-import { toast } from '@selva/ui-shared';
-import type { DiscoveredInput, DiscoveredOutput, GroupConfig } from '@selva/ui-shared';
+import { toast } from '@selva/shared';
+import type { DiscoveredInput, DiscoveredOutput, GroupConfig } from '@selva/shared';
 import {
   handleItemDrop,
   handleGroupItemDrop,

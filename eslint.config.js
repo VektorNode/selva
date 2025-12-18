@@ -1,8 +1,19 @@
-import js from '@eslint/js';
-import prettier from 'eslint-config-prettier';
-import ts from 'typescript-eslint';
+import sharedConfig from './packages/config/eslint.config.js';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default [
+  ...sharedConfig,
+  {
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: __dirname,
+      },
+    },
+  },
   {
     ignores: [
       'node_modules',
@@ -17,45 +28,10 @@ export default [
       'examples/*/.svelte-kit',
       'bin',
       'obj',
-      '**/*.svelte',
-      '**/eslint.config.*',
       '**/Generated/**',
       'packages/schemas/generate-*.js',
       '**/*.d.ts',
     ],
-  },
-  js.configs.recommended,
-  ...ts.configs.recommended,
-  prettier,
-  {
-    files: ['**/*.{js,mjs,cjs,ts,tsx}'],
-    languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: 'module',
-      globals: {
-        URL: 'readonly',
-        console: 'readonly',
-        process: 'readonly',
-        __dirname: 'readonly',
-        require: 'readonly',
-        setTimeout: 'readonly',
-      },
-    },
-    rules: {
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
-      'no-unused-vars': 'off',
-      'no-prototype-builtins': 'warn',
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        {
-          argsIgnorePattern: '^_',
-          varsIgnorePattern: '^_',
-        },
-      ],
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-require-imports': 'off',
-      '@typescript-eslint/ban-ts-comment': 'warn',
-    },
   },
   {
     files: ['scripts/**/*.{js,ts}'],

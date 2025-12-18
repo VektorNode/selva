@@ -1,14 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import {
-    PageContainer,
-    PageHeader,
-    StateDisplay,
-    Button,
-    Dialog,
-    toast,
-  } from '@selva/ui-shared';
+  import { PageContainer, PageHeader, StateDisplay, Button, Dialog, toast } from '@selva/shared';
   import { Save } from '@lucide/svelte';
   import { DragDropContext, BuilderSidebar, TabEditor } from '$lib/components/builder';
   import { initializeWebSocketSession } from '$lib/utils/session';
