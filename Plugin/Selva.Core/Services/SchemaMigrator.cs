@@ -11,328 +11,280 @@ namespace Selva.Core.Services;
 /// </summary>
 public static class SchemaMigrator
 {
-  // Current version of the plugin's schema format
-  public static readonly Version CURRENT_SCHEMA_VERSION = new Version(2, 0, 0);
+	// Current version of the plugin's schema format
+	public static readonly Version CURRENT_SCHEMA_VERSION = new(2, 0, 0);
 
-  // Migration registry: maps version -> migration function
-  private static readonly Dictionary<Version, Func<UISchema, UISchema>> _migrations =
-    new Dictionary<Version, Func<UISchema, UISchema>>
-    {
-      { new Version(2, 0, 0), MigrateTo_2_0_0 },
-    };
+	// Migration registry: maps version -> migration function
+	private static readonly Dictionary<Version, Func<UISchema, UISchema>> _migrations =
+		new()
+		{
+			{ new Version(2, 0, 0), MigrateTo_2_0_0 }
+		};
 
-  /// <summary>
-  ///   Pre-deserialization migration for structural changes that cannot be handled by the C# model
-  /// </summary>
-  public static JObject MigrateJson(JObject json)
-  {
-    var versionStr = json["schemaVersion"]?.Value<string>();
-    // Handle legacy schemas without version
-    if (string.IsNullOrEmpty(versionStr))
-    {
-      versionStr = "1.0.0";
-      json["schemaVersion"] = versionStr;
-    }
+	/// <summary>
+	///   Pre-deserialization migration for structural changes that cannot be handled by the C# model
+	/// </summary>
+	public static JObject MigrateJson(JObject json)
+	{
+		var versionStr = json["schemaVersion"]?.Value<string>();
+		// Handle legacy schemas without version
+		if (string.IsNullOrEmpty(versionStr))
+		{
+			versionStr = "1.0.0";
+			json["schemaVersion"] = versionStr;
+		}
 
-    var version = Version.Parse(versionStr);
+		var version = Version.Parse(versionStr);
 
-    if (version < new Version(2, 0, 0))
-    {
-      // Migration to 2.0.0:
-      var layout = json["layout"] as JObject;
-      if (layout != null)
-      {
-        // 1. Ensure 'type' discriminator exists (required for v2 polymorphism)
-        var type = layout["type"]?.Value<string>();
-        if (string.IsNullOrEmpty(type))
-        {
-          // Infer type from structure or default to tabbed (v1 default)
-          if (layout["tabs"] != null)
-          {
-            type = "tabbed";
-          }
-          else if (layout["groups"] != null)
-          {
-            type = "flat";
-          }
-          else
-          {
-            type = "tabbed"; // Default
-          }
-          layout["type"] = type;
-        }
+		if (version < new Version(2, 0, 0))
+		{
+			// Migration to 2.0.0:
+			var layout = json["layout"] as JObject;
+			if (layout != null)
+			{
+				// 1. Ensure 'type' discriminator exists (required for v2 polymorphism)
+				var type = layout["type"]?.Value<string>();
+				if (string.IsNullOrEmpty(type))
+				{
+					// Infer type from structure or default to tabbed (v1 default)
+					if (layout["tabs"] != null)
+						type = "tabbed";
+					else if (layout["groups"] != null)
+						type = "flat";
+					else
+						type = "tabbed"; // Default
+					layout["type"] = type;
+				}
 
-        // 2. Handle Flat Layout structural change (tabs -> groups)
-        if (type == "flat")
-        {
-          var tabs = layout["tabs"] as JArray;
-          if (tabs != null)
-          {
-            var allGroups = new JArray();
-            foreach (var tab in tabs)
-            {
-              var groups = tab["groups"] as JArray;
-              if (groups != null)
-              {
-                foreach (var group in groups)
-                {
-                  allGroups.Add(group);
-                }
-              }
-            }
-            layout["groups"] = allGroups;
-            layout.Remove("tabs");
-          }
-        }
-      }
+				// 2. Handle Flat Layout structural change (tabs -> groups)
+				if (type == "flat")
+				{
+					var tabs = layout["tabs"] as JArray;
+					if (tabs != null)
+					{
+						var allGroups = new JArray();
+						foreach (var tab in tabs)
+						{
+							var groups = tab["groups"] as JArray;
+							if (groups != null)
+								foreach (var group in groups)
+									allGroups.Add(group);
+						}
 
-      // Update version
-      json["schemaVersion"] = "2.0.0";
-    }
+						layout["groups"] = allGroups;
+						layout.Remove("tabs");
+					}
+				}
+			}
 
-    return json;
-  }
+			// Update version
+			json["schemaVersion"] = "2.0.0";
+		}
 
-  private static UISchema MigrateTo_2_0_0(UISchema schema)
-  {
-    schema.SchemaVersion = "2.0.0";
+		return json;
+	}
 
-    // Name field removed in 2.0.0 - now only using nickname
+	private static UISchema MigrateTo_2_0_0(UISchema schema)
+	{
+		schema.SchemaVersion = "2.0.0";
 
-    return schema;
-  }
+		// Name field removed in 2.0.0 - now only using nickname
 
-  /// <summary>
-  ///   Migrate schema to current version
-  /// </summary>
-  public static UISchema MigrateToCurrentVersion(UISchema schema, Version currentPluginVersion)
-  {
-    var (migratedSchema, _) = MigrateWithTracking(schema, currentPluginVersion);
-    return migratedSchema;
-  }
+		return schema;
+	}
 
-  /// <summary>
-  ///   Migrate schema to current version with change tracking
-  /// </summary>
-  public static (UISchema Schema, List<string> Changes) MigrateWithTracking(UISchema schema,
-    Version currentPluginVersion)
-  {
-    if (schema == null)
-    {
-      throw new ArgumentNullException(nameof(schema));
-    }
+	/// <summary>
+	///   Migrate schema to current version
+	/// </summary>
+	public static UISchema MigrateToCurrentVersion(UISchema schema, Version currentPluginVersion)
+	{
+		var (migratedSchema, _) = MigrateWithTracking(schema, currentPluginVersion);
+		return migratedSchema;
+	}
 
-    var changes = new List<string>();
+	/// <summary>
+	///   Migrate schema to current version with change tracking
+	/// </summary>
+	public static (UISchema Schema, List<string> Changes) MigrateWithTracking(UISchema schema,
+		Version currentPluginVersion)
+	{
+		if (schema == null) throw new ArgumentNullException(nameof(schema));
 
-    // Handle legacy schemas without version
-    if (string.IsNullOrEmpty(schema.SchemaVersion))
-    {
-      schema.SchemaVersion = "1.0.0";
-      changes.Add("Set schema version to 1.0.0 (legacy schema detected)");
-    }
+		var changes = new List<string>();
 
-    Version schemaVersion;
-    try
-    {
-      schemaVersion = Version.Parse(schema.SchemaVersion);
-    }
-    catch (Exception ex)
-    {
-      throw new IncompatibleSchemaException($"Invalid schema version format '{schema.SchemaVersion}': {ex.Message}");
-    }
+		// Handle legacy schemas without version
+		if (string.IsNullOrEmpty(schema.SchemaVersion))
+		{
+			schema.SchemaVersion = "1.0.0";
+			changes.Add("Set schema version to 1.0.0 (legacy schema detected)");
+		}
 
-    // Validate minimum plugin version compatibility
-    if (!string.IsNullOrEmpty(schema.MinPluginVersion))
-    {
-      Version minVersion;
-      try
-      {
-        minVersion = Version.Parse(schema.MinPluginVersion);
-      }
-      catch (Exception ex)
-      {
-        throw new IncompatibleSchemaException(
-          $"Invalid minimum plugin version format '{schema.MinPluginVersion}': {ex.Message}");
-      }
+		Version schemaVersion;
+		try
+		{
+			schemaVersion = Version.Parse(schema.SchemaVersion);
+		}
+		catch (Exception ex)
+		{
+			throw new IncompatibleSchemaException($"Invalid schema version format '{schema.SchemaVersion}': {ex.Message}");
+		}
 
-      if (currentPluginVersion < minVersion)
-      {
-        throw new IncompatibleSchemaException(
-          $"This schema requires plugin version {minVersion} or higher. Current version: {currentPluginVersion}");
-      }
-    }
+		// Validate minimum plugin version compatibility
+		if (!string.IsNullOrEmpty(schema.MinPluginVersion))
+		{
+			Version minVersion;
+			try
+			{
+				minVersion = Version.Parse(schema.MinPluginVersion);
+			}
+			catch (Exception ex)
+			{
+				throw new IncompatibleSchemaException(
+					$"Invalid minimum plugin version format '{schema.MinPluginVersion}': {ex.Message}");
+			}
 
-    // No migration needed if already at current version
-    if (schemaVersion >= CURRENT_SCHEMA_VERSION)
-    {
-      return (schema, changes);
-    }
+			if (currentPluginVersion < minVersion)
+				throw new IncompatibleSchemaException(
+					$"This schema requires plugin version {minVersion} or higher. Current version: {currentPluginVersion}");
+		}
 
-    var migratedSchema = schema;
-    var migrationPath = GetMigrationPath(schemaVersion, CURRENT_SCHEMA_VERSION);
+		// No migration needed if already at current version
+		if (schemaVersion >= CURRENT_SCHEMA_VERSION) return (schema, changes);
 
-    // Apply migrations in order
-    foreach (var targetVersion in migrationPath)
-    {
-      if (_migrations.TryGetValue(targetVersion, out var migration))
-      {
-        try
-        {
-          var before = migratedSchema.SchemaVersion;
-          migratedSchema = migration(migratedSchema);
-          changes.Add($"Applied migration from {before} to {targetVersion}");
-        }
-        catch (Exception ex)
-        {
-          throw new SchemaMigrationException($"Migration to {targetVersion} failed: {ex.Message}", ex);
-        }
-      }
-      else
-      {
-        migratedSchema.SchemaVersion = targetVersion.ToString();
-        changes.Add($"Updated version to {targetVersion} (no data changes)");
-      }
-    }
+		var migratedSchema = schema;
+		var migrationPath = GetMigrationPath(schemaVersion, CURRENT_SCHEMA_VERSION);
 
-    migratedSchema.SchemaVersion = CURRENT_SCHEMA_VERSION.ToString();
-    migratedSchema.LastModified = DateTime.UtcNow;
+		// Apply migrations in order
+		foreach (var targetVersion in migrationPath)
+			if (_migrations.TryGetValue(targetVersion, out var migration))
+			{
+				try
+				{
+					var before = migratedSchema.SchemaVersion;
+					migratedSchema = migration(migratedSchema);
+					changes.Add($"Applied migration from {before} to {targetVersion}");
+				}
+				catch (Exception ex)
+				{
+					throw new SchemaMigrationException($"Migration to {targetVersion} failed: {ex.Message}", ex);
+				}
+			}
+			else
+			{
+				migratedSchema.SchemaVersion = targetVersion.ToString();
+				changes.Add($"Updated version to {targetVersion} (no data changes)");
+			}
 
-    return (migratedSchema, changes);
-  }
+		migratedSchema.SchemaVersion = CURRENT_SCHEMA_VERSION.ToString();
+		migratedSchema.LastModified = DateTime.UtcNow;
 
-  public static List<Version> GetMigrationPath(Version from, Version to)
-  {
-    return _migrations.Keys
-      .Where(v => v > from && v <= to)
-      .OrderBy(v => v)
-      .ToList();
-  }
+		return (migratedSchema, changes);
+	}
 
-  public static (bool Success, List<string> Issues) ValidateMigration(UISchema schema, Version currentPluginVersion)
-  {
-    if (schema == null)
-    {
-      return (false, new List<string> { "Schema is null" });
-    }
+	public static List<Version> GetMigrationPath(Version from, Version to)
+	{
+		return _migrations.Keys
+			.Where(v => v > from && v <= to)
+			.OrderBy(v => v)
+			.ToList();
+	}
 
-    var issues = new List<string>();
+	public static (bool Success, List<string> Issues) ValidateMigration(UISchema schema, Version currentPluginVersion)
+	{
+		if (schema == null) return (false, new List<string> { "Schema is null" });
 
-    if (string.IsNullOrEmpty(schema.SchemaVersion))
-    {
-      issues.Add("Legacy schema without version - will be migrated to 1.0.0");
-    }
-    else
-    {
-      if (!Version.TryParse(schema.SchemaVersion, out var schemaVersion))
-      {
-        return (false, new List<string> { $"Invalid schema version format: {schema.SchemaVersion}" });
-      }
+		var issues = new List<string>();
 
-      if (schemaVersion >= CURRENT_SCHEMA_VERSION)
-      {
-        issues.Add("Schema is already at current version - no migration needed");
-        return (true, issues);
-      }
+		if (string.IsNullOrEmpty(schema.SchemaVersion))
+		{
+			issues.Add("Legacy schema without version - will be migrated to 1.0.0");
+		}
+		else
+		{
+			if (!Version.TryParse(schema.SchemaVersion, out var schemaVersion))
+				return (false, new List<string> { $"Invalid schema version format: {schema.SchemaVersion}" });
 
-      var migrationPath = GetMigrationPath(schemaVersion, CURRENT_SCHEMA_VERSION);
-      if (migrationPath.Any())
-      {
-        issues.Add($"Migration path: {string.Join(" -> ", migrationPath)}");
-        foreach (var version in migrationPath)
-        {
-          issues.Add(_migrations.ContainsKey(version)
-            ? $"✓ Migration to {version} available"
-            : $"⚠ No explicit migration for {version} (version update only)");
-        }
-      }
-    }
+			if (schemaVersion >= CURRENT_SCHEMA_VERSION)
+			{
+				issues.Add("Schema is already at current version - no migration needed");
+				return (true, issues);
+			}
 
-    if (!string.IsNullOrEmpty(schema.MinPluginVersion))
-    {
-      if (!Version.TryParse(schema.MinPluginVersion, out var minVersion))
-      {
-        return (false, new List<string> { $"Invalid minimum plugin version format: {schema.MinPluginVersion}" });
-      }
+			var migrationPath = GetMigrationPath(schemaVersion, CURRENT_SCHEMA_VERSION);
+			if (migrationPath.Any())
+			{
+				issues.Add($"Migration path: {string.Join(" -> ", migrationPath)}");
+				foreach (var version in migrationPath)
+					issues.Add(_migrations.ContainsKey(version)
+						? $"✓ Migration to {version} available"
+						: $"⚠ No explicit migration for {version} (version update only)");
+			}
+		}
 
-      if (currentPluginVersion < minVersion)
-      {
-        return (false,
-          new List<string>
-          {
-            $"Incompatible: Schema requires plugin version {minVersion}, current version is {currentPluginVersion}"
-          });
-      }
-    }
+		if (!string.IsNullOrEmpty(schema.MinPluginVersion))
+		{
+			if (!Version.TryParse(schema.MinPluginVersion, out var minVersion))
+				return (false, new List<string> { $"Invalid minimum plugin version format: {schema.MinPluginVersion}" });
 
-    return (true, issues);
-  }
+			if (currentPluginVersion < minVersion)
+				return (false,
+					new List<string>
+					{
+						$"Incompatible: Schema requires plugin version {minVersion}, current version is {currentPluginVersion}"
+					});
+		}
 
-  public static bool NeedsMigration(UISchema schema)
-  {
-    if (schema == null || string.IsNullOrEmpty(schema.SchemaVersion))
-    {
-      return true;
-    }
+		return (true, issues);
+	}
 
-    try
-    {
-      return Version.Parse(schema.SchemaVersion) < CURRENT_SCHEMA_VERSION;
-    }
-    catch
-    {
-      return true;
-    }
-  }
+	public static bool NeedsMigration(UISchema schema)
+	{
+		if (schema == null || string.IsNullOrEmpty(schema.SchemaVersion)) return true;
 
-  public static (bool IsCompatible, string Message) ValidateCompatibility(UISchema schema, Version currentPluginVersion)
-  {
-    if (schema == null)
-    {
-      return (false, "Schema is null");
-    }
+		try
+		{
+			return Version.Parse(schema.SchemaVersion) < CURRENT_SCHEMA_VERSION;
+		}
+		catch
+		{
+			return true;
+		}
+	}
 
-    if (string.IsNullOrEmpty(schema.SchemaVersion))
-    {
-      return (true, "Legacy schema detected - will be migrated on load");
-    }
+	public static (bool IsCompatible, string Message) ValidateCompatibility(UISchema schema, Version currentPluginVersion)
+	{
+		if (schema == null) return (false, "Schema is null");
 
-    if (!Version.TryParse(schema.SchemaVersion, out var schemaVersion))
-    {
-      return (false, "Invalid schema version format");
-    }
+		if (string.IsNullOrEmpty(schema.SchemaVersion)) return (true, "Legacy schema detected - will be migrated on load");
 
-    if (!string.IsNullOrEmpty(schema.MinPluginVersion))
-    {
-      if (!Version.TryParse(schema.MinPluginVersion, out var minVersion))
-      {
-        return (false, "Invalid minimum plugin version format");
-      }
+		if (!Version.TryParse(schema.SchemaVersion, out var schemaVersion)) return (false, "Invalid schema version format");
 
-      if (currentPluginVersion < minVersion)
-      {
-        return (false, $"Schema requires plugin version {minVersion} or higher. Current: {currentPluginVersion}");
-      }
-    }
+		if (!string.IsNullOrEmpty(schema.MinPluginVersion))
+		{
+			if (!Version.TryParse(schema.MinPluginVersion, out var minVersion))
+				return (false, "Invalid minimum plugin version format");
 
-    if (schemaVersion.Major > CURRENT_SCHEMA_VERSION.Major)
-    {
-      return (false, $"Schema version {schemaVersion} requires a newer version of Selva");
-    }
+			if (currentPluginVersion < minVersion)
+				return (false, $"Schema requires plugin version {minVersion} or higher. Current: {currentPluginVersion}");
+		}
 
-    return (true, "Schema is compatible");
-  }
+		if (schemaVersion.Major > CURRENT_SCHEMA_VERSION.Major)
+			return (false, $"Schema version {schemaVersion} requires a newer version of Selva");
+
+		return (true, "Schema is compatible");
+	}
 }
 
 public class IncompatibleSchemaException : Exception
 {
-  public IncompatibleSchemaException(string message) : base(message)
-  {
-  }
+	public IncompatibleSchemaException(string message) : base(message)
+	{
+	}
 }
 
 public class SchemaMigrationException : Exception
 {
-  public SchemaMigrationException(string message, Exception inner) : base(message, inner)
-  {
-  }
+	public SchemaMigrationException(string message, Exception inner) : base(message, inner)
+	{
+	}
 }

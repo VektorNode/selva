@@ -1,6 +1,6 @@
 {
 	"name": "@selva/svelte-ui",
-	"version": "1.0.3",
+	"version": "1.0.0",
 	"description": "A Svelte component library for rhino3dm and rhino.compute",
 	"author": "VektorNode",
 	"license": "MIT",

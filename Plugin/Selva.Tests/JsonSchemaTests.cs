@@ -5,23 +5,23 @@ namespace Selva.Tests;
 
 public class JsonSchemaTests
 {
-  private readonly SchemaValidator _validator;
+	private readonly SchemaValidator _validator;
 
-  public JsonSchemaTests()
-  {
-    _validator = new SchemaValidator();
-  }
+	public JsonSchemaTests()
+	{
+		_validator = new SchemaValidator();
+	}
 
-  [Theory]
-  [InlineData("valid_schema.json")]
-  public void Validate_JsonSchema_ReturnsSuccess(string fileName)
-  {
-    var filePath = Path.Combine("TestFiles", fileName);
-    var json = File.ReadAllText(filePath);
-    var schema = JsonConvert.DeserializeObject<UISchema>(json);
+	[Theory]
+	[InlineData("valid_schema.json")]
+	public void Validate_JsonSchema_ReturnsSuccess(string fileName)
+	{
+		var filePath = Path.Combine("TestFiles", fileName);
+		var json = File.ReadAllText(filePath);
+		var schema = JsonConvert.DeserializeObject<UISchema>(json);
 
-    var result = _validator.Validate(schema);
+		var result = _validator.Validate(schema);
 
-    Assert.True(result.IsValid);
-  }
+		Assert.True(result.IsValid);
+	}
 }

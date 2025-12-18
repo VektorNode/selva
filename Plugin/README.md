@@ -34,11 +34,10 @@ Restart Rhino after installation.
 pnpm build:plugin
 
 # Output locations:
-# - Rhino 7: Plugin/bin/Release/net48/Selva.gha
 # - Rhino 8: Plugin/bin/Release/net7.0/Selva.gha
 ```
 
 ## Requirements
 
-- Rhino 7 (Windows) or Rhino 8 (Windows/macOS)
+- Rhino 8 (Windows/macOS)
 - Grasshopper

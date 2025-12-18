@@ -1,0 +1,36 @@
+version: 2
+updates:
+  # npm/pnpm dependencies
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '03:00'
+    allow:
+      - dependency-type: 'all'
+    open-pull-requests-limit: 10
+    reviewers:
+      - 'VektorNode/maintainers'
+    # Group dependencies by type
+    groups:
+      production:
+        dependency-type: 'production'
+        update-types:
+          - 'minor'
+          - 'patch'
+      development:
+        dependency-type: 'development'
+      major-updates:
+        dependency-type: 'all'
+        update-types:
+          - 'major'
+
+  # GitHub Actions
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '04:00'
+    open-pull-requests-limit: 5
