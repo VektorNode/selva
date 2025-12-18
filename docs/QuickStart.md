@@ -1,111 +1,81 @@
-# Quick Start Guide
+# Getting Started
 
-## Requirements
+## Prerequisites
 
-- [pnpm](https://pnpm.io) (Node.js package manager)
-- .NET SDK 7.0+ (for plugin development)
-- Rhino 8 (for using the plugin)
+- **Node.js** and **pnpm** installed (see `.node-version` for required Node version)
+- **Visual Studio or Rider** (for C# plugin development)
+- **Rhino 8**
 
 ## Initial Setup
 
-```bash
-pnpm install
-```
+1. Install dependencies:
 
-**Add .env to `packages/frontend`** (required for build):
+   ```bash
+   pnpm install
+   ```
 
-**Build all packages:**
+2. Build all packages:
+   ```bash
+   pnpm run build:all
+   ```
 
-```bash
-pnpm run build:all
-```
+## Development
 
-## Development Workflow
+### Builder App
 
-### Option 1: Web + Plugin in Dev Mode (Recommended for Development)
+To run the builder app in development mode:
 
-**Terminal 1: Start web dev server**
+1. Start the C# application in Visual Studio or Rider (debug mode)
+2. Run the frontend in another terminal:
+   ```bash
+   cd packages/builder-app
+   pnpm run dev
+   ```
 
-```bash
-cd packages/frontend
-pnpm start
-# Web app runs on http://localhost:5173
-```
+**Note:** The initial page load may take a while as the frontend compiles.
 
-**Terminal 2: Build and run plugin in IDE**
+### Compute App
 
-```bash
-cd Plugin
-dotnet build
-# Then run in Visual Studio Code, Rider, or Visual Studio
-# The plugin will automatically connect to the dev server via WebSocket (port 8765)
-```
+The compute-app provides Grasshopper computation via Rhino.Compute.
 
-Benefits:
+#### Configuration
 
-- Hot reload on web changes (Vite dev server)
-- Debug plugin in IDE
-- Fast iteration
+1. Create a `.env` file in `packages/compute-app/` (use the provided example env file)
+2. Configure the environment variables:
+   - For **local development**: Point to your local Rhino.Compute instance
+   - For **hosted Rhino.Compute**: Provide the API key and endpoint
 
-### Option 2: Standalone Self-Contained Plugin Build
+#### Full Feature Setup
 
-For production deployment:
+To use all features:
 
-```bash
-pnpm run build:plugin
-```
+1. Install the [Selva plugin](../Plugin/) in Rhino or link in Grasshopper.Developper settings
+2. Set up the custom [Rhino.Compute fork](https://github.com/VektorNode/compute.rhino3d.git):
+   ```bash
+   git clone https://github.com/VektorNode/compute.rhino3d.git
+   ```
+   Follow the setup guide in that repository.
 
-This creates a self-contained `.gha` file with embedded web assets. Follow the instructions in the console for installing to Grasshopper.
+#### Embedding
 
-## Installation to Grasshopper
+To generate iframe embed code, use the tool at `examples/embed-code-generator.html`:
 
-After building, copy the plugin to your Grasshopper Libraries folder:
+use the Live Server to serve the file
 
-**Windows (Rhino 8):**
+## Deployment
 
-```bash
-copy "Plugin\bin\Release\net7.0\Selva.gha" "%APPDATA%\Grasshopper\Libraries-8\"
-```
+### Builder App
 
-**macOS (Rhino 8):**
+Choose an adapter based on your hosting platform:
 
-```bash
-cp Plugin/bin/Release/net7.0/Selva.gha ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/
-```
+- **Vercel or Firebase**: Use `adapter-auto`
+- **Node.js hosting**: Configure for Node.js adapter (default)
 
-Restart Rhino completely after installation.
+### Compute App
 
-## Using Selva Components in Grasshopper
-
-Once the plugin is installed, you can use:
-
-- **UIBuilderComponent** — Design web UIs for your definitions (connects to `@selva/frontend`)
-- **ThreeMaterial** — Configure materials for 3D web display
-- **DataToFile** — Export geometry to various file formats
-- **ValueListData** — Create interactive value selections
-
-1. Add components to Grasshopper
-2. Connect your parameters to **UIBuilderComponent**
-3. Start the web dev server (`pnpm start` in `packages/frontend`)
-4. The web UI will auto-discover your parameters via WebSocket
-5. Design your UI in the browser
-6. Changes trigger Grasshopper computation in real-time
+For deploying Rhino.Compute, follow the [official setup guide](https://github.com/VektorNode/compute.rhino3d.git).
 
 ## Troubleshooting
 
-### Build Fails
-
-- Ensure `.env` file exists in `packages/frontend` with `VITE_API_BASE=http://localhost:8765`
-- Run `pnpm install` to ensure all dependencies are installed
-
-### Plugin Won't Load
-
-- Verify correct installation path for your Rhino version
-- Restart Rhino completely (not just reopen file)
-- Check that .NET SDK 7.0+ is installed: `dotnet --version`
-
-### WebSocket Connection Issues
-
-- Ensure port 8765 is not blocked by firewall
-- Verify web dev server is running: `pnpm start` in `packages/frontend`
-- Check browser console (F12) for connection errors
+- **Frontend loads slowly**: This is normal on first build. Subsequent reloads are faster.
+- **Compute-app features missing**: Ensure Rhino.Compute is running and the `.env` is configured correctly.

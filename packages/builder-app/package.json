@@ -2,7 +2,7 @@
 	"name": "@selva/builder-app",
 	"description": "Selva Schema Builder and Preview Application",
 	"private": true,
-	"version": "1.0.0",
+	"version": "0.2.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",

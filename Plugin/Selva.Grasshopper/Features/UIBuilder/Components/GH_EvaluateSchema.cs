@@ -13,81 +13,69 @@ namespace Selva.Grasshopper.Features.UIBuilder.Components;
 
 public class GH_EvaluateSchema : GH_Component
 {
-  public GH_EvaluateSchema()
-    : base("Evaluate Schema", "EvalSchema",
-      "Inspects a UI Schema and provides detailed information and raw JSON",
-      "Selva", "UI")
-  {
-  }
+	public GH_EvaluateSchema()
+		: base("Evaluate Schema", "EvalSchema",
+			"Inspects a UI Schema and provides detailed information and raw JSON",
+			"Selva", "UI")
+	{
+	}
 
-  public override Guid ComponentGuid => new Guid("E7611CB2-9BAE-4A88-B47B-A94135394FA3");
+	public override Guid ComponentGuid => new("E7611CB2-9BAE-4A88-B47B-A94135394FA3");
 
-  protected override Bitmap Icon => Resources.UIBridge; // Using same icon for now, or null if preferred
+	protected override Bitmap Icon => Resources.UIBridge; // Using same icon for now, or null if preferred
 
-  public override GH_Exposure Exposure => GH_Exposure.secondary;
+	public override GH_Exposure Exposure => GH_Exposure.secondary;
 
-  protected override void RegisterInputParams(GH_InputParamManager pManager)
-  {
-    pManager.AddGenericParameter("Schema", "S", "The UI Schema to evaluate", GH_ParamAccess.item);
-  }
+	protected override void RegisterInputParams(GH_InputParamManager pManager)
+	{
+		pManager.AddGenericParameter("Schema", "S", "The UI Schema to evaluate", GH_ParamAccess.item);
+	}
 
-  protected override void RegisterOutputParams(GH_OutputParamManager pManager)
-  {
-    pManager.AddTextParameter("Info", "I", "Human-readable summary of the schema", GH_ParamAccess.item);
-    pManager.AddTextParameter("JSON", "J", "Raw JSON representation of the schema", GH_ParamAccess.item);
-    pManager.AddIntegerParameter("Input Count", "IC", "Number of inputs in the schema", GH_ParamAccess.item);
-    pManager.AddIntegerParameter("Output Count", "OC", "Number of outputs in the schema", GH_ParamAccess.item);
-  }
+	protected override void RegisterOutputParams(GH_OutputParamManager pManager)
+	{
+		pManager.AddTextParameter("Info", "I", "Human-readable summary of the schema", GH_ParamAccess.item);
+		pManager.AddTextParameter("JSON", "J", "Raw JSON representation of the schema", GH_ParamAccess.item);
+		pManager.AddIntegerParameter("Input Count", "IC", "Number of inputs in the schema", GH_ParamAccess.item);
+		pManager.AddIntegerParameter("Output Count", "OC", "Number of outputs in the schema", GH_ParamAccess.item);
+	}
 
-  protected override void SolveInstance(IGH_DataAccess DA)
-  {
-    IGH_Goo schemaGoo = null;
-    if (!DA.GetData(0, ref schemaGoo))
-    {
-      return;
-    }
+	protected override void SolveInstance(IGH_DataAccess DA)
+	{
+		IGH_Goo schemaGoo = null;
+		if (!DA.GetData(0, ref schemaGoo)) return;
 
-    UISchema schema = null;
+		UISchema schema = null;
 
-    // Try to extract UISchema from the input
-    if (schemaGoo is UISchemaGoo uiSchemaGoo)
-    {
-      schema = uiSchemaGoo.Value;
-    }
-    else if (schemaGoo is GH_ObjectWrapper wrapper && wrapper.Value is UISchema wrappedSchema)
-    {
-      schema = wrappedSchema;
-    }
+		// Try to extract UISchema from the input
+		if (schemaGoo is UISchemaGoo uiSchemaGoo)
+			schema = uiSchemaGoo.Value;
+		else if (schemaGoo is GH_ObjectWrapper wrapper && wrapper.Value is UISchema wrappedSchema) schema = wrappedSchema;
 
-    if (schema == null)
-    {
-      AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Input is not a valid UI Schema");
-      return;
-    }
+		if (schema == null)
+		{
+			AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Input is not a valid UI Schema");
+			return;
+		}
 
-    // 1. Generate Info Summary
-    var sb = new StringBuilder();
-    sb.AppendLine($"Schema: {schema.Name}");
-    sb.AppendLine($"ID: {schema.Id}");
-    sb.AppendLine($"Description: {schema.Description ?? "N/A"}");
-    sb.AppendLine($"Created: {schema.Created}");
-    sb.AppendLine($"Version: {schema.PluginVersion}");
-    sb.AppendLine($"Inputs: {schema.Inputs?.Count ?? 0}");
-    sb.AppendLine($"Outputs: {schema.Outputs?.Count ?? 0}");
+		// 1. Generate Info Summary
+		var sb = new StringBuilder();
+		sb.AppendLine($"Schema: {schema.Name}");
+		sb.AppendLine($"ID: {schema.Id}");
+		sb.AppendLine($"Description: {schema.Description ?? "N/A"}");
+		sb.AppendLine($"Created: {schema.Created}");
+		sb.AppendLine($"Version: {schema.PluginVersion}");
+		sb.AppendLine($"Inputs: {schema.Inputs?.Count ?? 0}");
+		sb.AppendLine($"Outputs: {schema.Outputs?.Count ?? 0}");
 
-    if (schema.Tags != null && schema.Tags.Any())
-    {
-      sb.AppendLine($"Tags: {string.Join(", ", schema.Tags)}");
-    }
+		if (schema.Tags != null && schema.Tags.Any()) sb.AppendLine($"Tags: {string.Join(", ", schema.Tags)}");
 
-    // 2. Generate JSON
-    var json = JsonConvert.SerializeObject(schema, Formatting.Indented);
+		// 2. Generate JSON
+		var json = JsonConvert.SerializeObject(schema, Formatting.Indented);
 
-    // Set Outputs
-    DA.SetData(0, sb.ToString());
-    DA.SetData(1, json);
-    DA.SetData(2, schema.Inputs?.Count ?? 0);
-    DA.SetData(3, schema.Outputs?.Count ?? 0);
-  }
+		// Set Outputs
+		DA.SetData(0, sb.ToString());
+		DA.SetData(1, json);
+		DA.SetData(2, schema.Inputs?.Count ?? 0);
+		DA.SetData(3, schema.Outputs?.Count ?? 0);
+	}
 }
-
