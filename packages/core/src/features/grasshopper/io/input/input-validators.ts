@@ -25,7 +25,7 @@ export interface ValidationContext {
  */
 export function validateValueListValues(input: InputParamSchema): void {
   if (!input.values || typeof input.values !== 'object' || Object.keys(input.values).length === 0) {
-    throw ValidationErrors.missingValues(input.name, 'ValueList');
+    throw ValidationErrors.missingValues(input.nickname || 'unnamed', 'ValueList');
   }
 }
 
@@ -40,13 +40,16 @@ export function validateValueListDefault(input: InputParamSchema, warnOnly: bool
     return;
   }
 
-  const valueExists = Object.values(input.values).includes(input.default);
+  // Case-insensitive check
+  const defaultLower = String(input.default).toLowerCase();
+  const valueExists = Object.keys(input.values).some(key => key.toLowerCase() === defaultLower);
+
   if (!valueExists) {
-    const message = `ValueList input "${input.name}" default value "${input.default}" is not in available values`;
+    const message = `ValueList input "${input.nickname || 'unnamed'}" default value "${input.default}" is not in available values`;
     if (warnOnly) {
       console.warn(message);
     } else {
-      throw ValidationErrors.invalidDefault(input.name, input.default, Object.values(input.values));
+      throw ValidationErrors.invalidDefault(input.nickname || 'unnamed', input.default, Object.values(input.values));
     }
   }
 }
@@ -117,7 +120,7 @@ export function validateNumericConstraints(input: InputParamSchema): void {
   ) {
     if (input.minimum > input.maximum) {
       throw ValidationErrors.invalid(
-        input.name,
+        input.nickname || 'unnamed',
         `minimum (${input.minimum}) cannot be greater than maximum (${input.maximum})`
       );
     }
@@ -126,7 +129,7 @@ export function validateNumericConstraints(input: InputParamSchema): void {
   if (input.atLeast !== undefined && input.atMost !== undefined) {
     if (input.atLeast > input.atMost) {
       throw ValidationErrors.invalid(
-        input.name,
+        input.nickname || 'unnamed',
         `atLeast (${input.atLeast}) cannot be greater than atMost (${input.atMost})`
       );
     }

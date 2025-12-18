@@ -343,6 +343,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
   {
     if (_embeddedSchema != null)
     {
+      // Synchronize nicknames with current Grasshopper state
+      _service.SchemaManager.SynchronizeSchemaMetadata(_embeddedSchema, document);
       _embeddedSchema = _service.SchemaManager.ValidateSchema(_embeddedSchema, document);
     }
 
@@ -420,6 +422,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     if (_embeddedSchema != null && transition.EnableRising)
     {
+      // CRITICAL: Synchronize nicknames with current Grasshopper state BEFORE validating
+      // This ensures the schema has up-to-date parameter nicknames after loading from file
+      _service.SchemaManager.SynchronizeSchemaMetadata(_embeddedSchema, document);
       _embeddedSchema = _service.SchemaManager.ValidateSchema(_embeddedSchema, document);
     }
 
@@ -563,6 +568,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
       // Suppress solving state updates during schema save to avoid flashing indicator (with 1s auto-unsuppress)
       _service.CommunicationHandler.SetSuppressSolvingStateUpdates(true, 1000);
+
+      // CRITICAL: Synchronize nicknames BEFORE saving to ensure schema has current parameter names
+      _service.SchemaManager.SynchronizeSchemaMetadata(schema, document);
 
       // Enrich schema with document metadata
       schema.ProjectFileName = document.Properties.ProjectFileName;

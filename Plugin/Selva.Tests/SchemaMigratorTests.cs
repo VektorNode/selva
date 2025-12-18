@@ -108,19 +108,19 @@ public class SchemaMigratorTests
       SchemaVersion = "1.0.0",
       Inputs = new List<SchemaInput>
       {
-        new SchemaInput { Id = Guid.NewGuid(), Nickname = "Input1", Name = null }
+        new SchemaInput { Id = Guid.NewGuid(), Nickname = "Input1" }
       },
       Outputs = new List<SchemaOutput>
       {
-        new SchemaOutput { Id = Guid.NewGuid(), Nickname = "Output1", Name = "" }
+        new SchemaOutput { Id = Guid.NewGuid(), Nickname = "Output1" }
       }
     };
 
     var (migratedSchema, changes) = SchemaMigrator.MigrateWithTracking(schema, new Version(2, 0, 0));
 
     Assert.Equal("2.0.0", migratedSchema.SchemaVersion);
-    Assert.Equal("Input1", migratedSchema.Inputs[0].Name);
-    Assert.Equal("Output1", migratedSchema.Outputs[0].Name);
+    Assert.Equal("Input1", migratedSchema.Inputs[0].Nickname);
+    Assert.Equal("Output1", migratedSchema.Outputs[0].Nickname);
     Assert.Contains(changes, c => c.Contains("Applied migration from 1.0.0 to 2.0.0"));
   }
 

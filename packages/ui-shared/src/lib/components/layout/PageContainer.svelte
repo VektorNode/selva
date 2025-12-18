@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import PageFooter from './PageFooter.svelte';
 
   interface PageContainerProps {
     background?: 'default' | 'white' | 'gray';
@@ -16,10 +17,13 @@
   };
 
   const combinedClasses = $derived(
-    `flex flex-col h-screen ${backgroundClasses[background]} ${className} `
+    `flex flex-col h-screen overflow-hidden ${backgroundClasses[background]} ${className} `
   );
 </script>
 
 <div class={combinedClasses}>
   {@render children()}
+  <div class="mt-auto shrink-0 z-50">
+    <PageFooter />
+  </div>
 </div>

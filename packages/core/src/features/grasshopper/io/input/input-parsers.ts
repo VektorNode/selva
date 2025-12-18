@@ -316,7 +316,7 @@ function processTextInput(input: InputParamSchema): void {
  */
 function parseToObject(input: InputParamSchema): void {
   processInputValue(input, {
-    transform: createObjectTransformer(input.name),
+    transform: createObjectTransformer(input.nickname || 'unnamed'),
     setUndefinedOnEmpty: true,
   });
 }
@@ -327,15 +327,18 @@ function parseToObject(input: InputParamSchema): void {
  */
 function processValueListInput(input: InputParamSchema): void {
   if (!input.values || typeof input.values !== 'object' || Object.keys(input.values).length === 0) {
-    throw ValidationErrors.missingValues(input.name, 'ValueList');
+    throw ValidationErrors.missingValues(input.nickname || 'unnamed', 'ValueList');
   }
 
   // Validate that default is one of the available values (if default exists)
   if (input.default !== undefined && input.default !== null) {
-    const valueExists = Object.values(input.values).includes(input.default);
+    // Case-insensitive check
+    const defaultLower = String(input.default).toLowerCase();
+    const valueExists = Object.keys(input.values).some(key => key.toLowerCase() === defaultLower);
+
     if (!valueExists) {
       console.warn(
-        `ValueList input "${input.name}" default value "${input.default}" is not in available values`
+        `ValueList input "${input.nickname || 'unnamed'}" default value "${input.default}" is not in available values`
       );
     }
   }

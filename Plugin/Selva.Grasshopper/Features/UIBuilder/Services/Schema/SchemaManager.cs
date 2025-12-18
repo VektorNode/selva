@@ -56,7 +56,7 @@ public class SchemaManager
       var availableParam = new DiscoveredInput
       {
         Id = docObj.InstanceGuid,
-        Name = docObj.Name,
+        Name = docObj.Name, // Keep for DiscoveredInput (used during builder phase)
         Nickname = docObj.NickName,
         Description = docObj.Description ?? "",
         Type = paramType,
@@ -239,6 +239,59 @@ public class SchemaManager
   public UISchema ValidateSchema(UISchema schema, GH_Document document)
   {
     return ValidateSchemaAndTrackChanges(schema, document, false).Schema;
+  }
+
+  /// <summary>
+  ///   Synchronize schema input parameter nicknames with current Grasshopper document state.
+  ///   CRITICAL: Ensures nicknames in schema match current parameter nicknames to prevent value application failures.
+  ///   Should be called before saving the schema and after loading it from file.
+  /// </summary>
+  public void SynchronizeSchemaMetadata(UISchema schema, GH_Document document)
+  {
+    if (schema == null || document == null)
+    {
+      return;
+    }
+
+    // Update Nickname for all input parameters in schema
+    foreach (var input in schema.Inputs)
+    {
+      var docObj = document.FindObject(input.Id, false);
+      if (docObj != null)
+      {
+        input.Nickname = docObj.NickName;
+        input.Description = docObj.Description ?? "";
+      }
+    }
+
+    // Also update DisplayName in layout items to match current nickname
+    IEnumerable<LayoutItemBase> allItems = Enumerable.Empty<LayoutItemBase>();
+
+    if (schema.Layout is TabbedLayoutConfig tabbedLayout)
+    {
+      if (tabbedLayout.Tabs != null)
+      {
+        allItems = tabbedLayout.Tabs.SelectMany(t => t.Groups).SelectMany(g => g.Items);
+      }
+    }
+    else if (schema.Layout is FlatLayoutConfig flatLayout)
+    {
+      if (flatLayout.Groups != null)
+      {
+        allItems = flatLayout.Groups.SelectMany(g => g.Items);
+      }
+    }
+
+    // Update DisplayName for each layout item based on current parameter nickname
+    foreach (var item in allItems)
+    {
+      var docObj = document.FindObject(item.ParamId, false);
+      if (docObj != null)
+      {
+        item.DisplayName = docObj.NickName;
+        item.Description = docObj.Description ?? "";
+      }
+    }
   }
 
   /// <summary>

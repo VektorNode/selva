@@ -189,7 +189,6 @@ export interface SchemaInput {
    * Grasshopper parameter instance GUID
    */
   id: string;
-  name: string;
   nickname: string;
   paramType: GrasshopperParamType;
   description?: string;
@@ -200,7 +199,6 @@ export interface SchemaOutput {
    * Grasshopper parameter instance GUID
    */
   id: string;
-  name?: string;
   nickname: string;
   description?: string;
   /**

@@ -97,7 +97,7 @@
       {/if}
     </div>
   {:else if isTextDisplay(item)}
-    <div class="relative">
+    <div class="relative group">
       {#if typeof value === 'object' && value !== null}
         <pre
           class="overflow-wrap-anywhere min-h-[50px] rounded border border-border bg-muted px-3 py-3 font-mono text-sm text-foreground overflow-auto max-h-96">{formatValue(
@@ -117,7 +117,7 @@
       {#if value !== null && value !== undefined}
         <Button
           onclick={() => copyToClipboard(formatValue(value))}
-          class="absolute top-2 right-2 "
+          class="absolute top-2 right-2 transition-opacity {copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}"
           size="sm"
         >
           {copied ? 'Copied!' : 'Copy'}

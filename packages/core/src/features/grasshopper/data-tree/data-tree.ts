@@ -7,9 +7,10 @@ export type DataTreeValue = string | number | boolean | object | null;
 
 /**
  * Simple data item for compute requests (not to be confused with DataItem interface for responses).
+ * Note: While TypeScript defines this as string, Rhino Compute accepts boolean/number primitives in JSON.
  */
 interface ComputeDataItem {
-  data: string;
+  data: string | boolean | number;
 }
 
 /**
@@ -195,7 +196,7 @@ export class TreeBuilder {
     return inputs
       .filter((input) => TreeBuilder.hasValidValue(input.default))
       .map((input) => {
-        const tree = new TreeBuilder(input.name);
+        const tree = new TreeBuilder(input.nickname || 'unnamed');
         const value = input.default;
 
         // Handle tree access (complex TreeBuilder structure)
@@ -204,7 +205,7 @@ export class TreeBuilder {
 
           // Apply numeric constraints to tree items
           if (TreeBuilder.isNumericInput(input)) {
-            tree.applyNumericConstraints(input.minimum, input.maximum, input.name);
+            tree.applyNumericConstraints(input.minimum, input.maximum, input.nickname || 'unnamed');
           }
         }
         // Handle flat inputs
@@ -516,9 +517,12 @@ export class TreeBuilder {
 
 
   /**
-   * Serialize a value to string format for compute.
+   * Serialize a value for compute requests.
+   * Preserves booleans and numbers as primitives for proper Grasshopper parameter handling.
    */
-  private static serializeValue(value: DataTreeValue): string {
+  private static serializeValue(value: DataTreeValue): string | boolean | number {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value;
     if (typeof value === 'string') return value;
     if (typeof value === 'object' && value !== null) {
       return JSON.stringify(value);
@@ -527,9 +531,17 @@ export class TreeBuilder {
   }
 
   /**
-   * Deserialize a string value back to its original type.
+   * Deserialize a value back to its original type.
+   * Handles both string-encoded values and primitive values.
    */
-  private static deserializeValue(data: string): DataTreeValue {
+  private static deserializeValue(data: string | boolean | number): DataTreeValue {
+    // If already a primitive type, return as-is
+    if (typeof data === 'boolean') return data;
+    if (typeof data === 'number') return data;
+
+    // Handle string values
+    if (typeof data !== 'string') return data;
+
     // Try to parse as JSON first
     if (data.startsWith('{') || data.startsWith('[')) {
       try {
@@ -589,7 +601,7 @@ export class TreeBuilder {
       .map((val) => {
         // Apply numeric constraints
         if (TreeBuilder.isNumericInput(input) && typeof val === 'number') {
-          return TreeBuilder.clampValue(val, input.minimum, input.maximum, input.name);
+          return TreeBuilder.clampValue(val, input.minimum, input.maximum, input.nickname || 'unnamed');
         }
 
         // Keep objects and strings as-is (serialization happens in append)
