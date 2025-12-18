@@ -8,15 +8,34 @@ export const load = (async ({ url, params }) => {
   const config = getServerConfig();
 
   // Get filename from URL param (only filename, not full URL)
-  let ghFilename = params.definition || url.searchParams.get('gh') || config.ghDefinitionsBaseUrl;
+  let ghFilename = params.definition || url.searchParams.get('gh');
 
-  // Ensure extension
-  if (!ghFilename.endsWith('.gh')) {
-    ghFilename += '.gh';
+  let fullGhUrl: string;
+
+  if (ghFilename) {
+    // Ensure extension
+    if (!ghFilename.endsWith('.gh')) {
+      ghFilename += '.gh';
+    }
+
+    // Determine base URL
+    let baseUrl = config.ghDefinitionsBaseUrl;
+
+    // If config URL looks like a file, strip the filename to get the base directory
+    if (baseUrl.endsWith('.gh')) {
+      baseUrl = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
+    }
+
+    // Ensure trailing slash
+    if (!baseUrl.endsWith('/')) {
+      baseUrl += '/';
+    }
+
+    fullGhUrl = `${baseUrl}${ghFilename}`;
+  } else {
+    // Use the default from config
+    fullGhUrl = config.ghDefinitionsBaseUrl;
   }
-
-  // Construct full URL server-side (secret)
-  const fullGhUrl = `${config.ghDefinitionsBaseUrl}${ghFilename}`;
 
   let client;
 
