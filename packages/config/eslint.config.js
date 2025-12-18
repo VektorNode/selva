@@ -24,6 +24,7 @@ export const config = [
     languageOptions: {
       parserOptions: {
         parser: ts.parser,
+        extraFileExtensions: ['.svelte'],
       },
     },
   },
@@ -57,11 +58,10 @@ export const config = [
 export const createConfig = (tsconfigRootDir) => [
   ...config,
   {
+    files: ['**/*.ts', '**/*.tsx', '**/*.svelte'],
     languageOptions: {
       parserOptions: {
-        projectService: {
-          allowDefaultProject: ['*.js', '*.mjs', '*.ts', '*.svelte'],
-        },
+        projectService: true,
         tsconfigRootDir,
         extraFileExtensions: ['.svelte'],
       },

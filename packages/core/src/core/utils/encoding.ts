@@ -17,6 +17,7 @@ export function decodeBase64ToBinary(base64File: string): Uint8Array {
   }
 
   // Import here to avoid circular dependencies at top level
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
   throw new RhinoComputeError(
     'Base64 decoding not supported in this environment.',
@@ -42,6 +43,7 @@ export function decodeBase64ToBinary(base64File: string): Uint8Array {
 export function base64ByteArray(bytes: Uint8Array | null | undefined): string {
   if (bytes === null || bytes === undefined) {
     // Import here to avoid circular dependencies at top level
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
     throw new RhinoComputeError(
       'Input bytes must not be null or undefined',
@@ -77,6 +79,7 @@ export function base64ByteArray(bytes: Uint8Array | null | undefined): string {
     // Combine the three bytes into a single integer
     if (!Array.isArray(inputBytes)) {
       // Import here to avoid circular dependencies at top level
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
       throw new RhinoComputeError('inputBytes must be an array', ErrorCodes.INVALID_INPUT, {
         context: { receivedType: typeof inputBytes },
@@ -85,6 +88,7 @@ export function base64ByteArray(bytes: Uint8Array | null | undefined): string {
 
     if (typeof i !== 'number' || i < 0 || i >= inputBytes.length) {
       // Import here to avoid circular dependencies at top level
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
       throw new RhinoComputeError('Invalid index i', ErrorCodes.INVALID_INPUT, {
         context: { index: i, arrayLength: inputBytes.length },
@@ -221,7 +225,7 @@ export function base64ToRhinoObject(
     } catch (error) {
       console.error(error);
     }
-  } else if (typeof decodata === 'object' && decodata?.hasOwnProperty('opennurbs')) {
+  } else if (typeof decodata === 'object' && Object.prototype.hasOwnProperty.call(decodata, 'opennurbs')) {
     return rhino.CommonObject.decode(decodata);
   } else if (typeof decodata === 'object') {
     try {

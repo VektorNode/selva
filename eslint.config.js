@@ -1,19 +1,11 @@
-import sharedConfig from './packages/config/eslint.config.js';
+import { createConfig } from './packages/config/eslint.config.js';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default [
-  ...sharedConfig,
-  {
-    languageOptions: {
-      parserOptions: {
-        projectService: true,
-        tsconfigRootDir: __dirname,
-      },
-    },
-  },
+  ...createConfig(__dirname),
   {
     ignores: [
       'node_modules',
