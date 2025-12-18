@@ -7,7 +7,7 @@ import {
   TreeBuilder,
   GrasshopperClient,
 } from '@selva/core';
-import type { SchemaInput } from '@selva/ui-shared';
+import type { SchemaInput } from '@selva/shared';
 import { error, json } from '@sveltejs/kit';
 import { getServerConfig } from '$lib/server/config.server';
 

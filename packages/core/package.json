@@ -85,7 +85,7 @@
     "rhino3dm": "8.9.0"
   },
   "peerDependencies": {
-    "three": ">=0.160.0"
+    "three": ">=0.179.0"
   },
   "peerDependenciesMeta": {
     "three": {
@@ -93,9 +93,8 @@
     }
   },
   "devDependencies": {
-    "@types/three": "^0.179.0",
+    "@selva/config": "workspace:*",
     "esbuild-plugin-file-path-extensions": "^2.1.4",
-    "three": "^0.179.1",
     "tsup": "^8.5.0",
     "vitest": "^3.2.4"
   }

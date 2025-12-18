@@ -1,7 +1,7 @@
 <script lang="ts">
   import '../app.css';
   import { ModeWatcher } from 'mode-watcher';
-  import { Toaster } from '@selva/ui-shared';
+  import { Toaster } from '@selva/shared';
 
   let { children } = $props();
 </script>

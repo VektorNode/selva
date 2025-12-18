@@ -15,13 +15,15 @@ onlyBuiltDependencies:
 catalogs:
   default:
     typescript: ^5.9.3
-    svelte: ^5.39.12
-    vite: ^7.1.10
-    '@sveltejs/kit': ^2.49.0
-    '@sveltejs/adapter-auto': ^6.1.1
+    svelte: ^5.45.6
+    vite: ^7.2.6
+    '@sveltejs/kit': ^2.49.1
+    '@sveltejs/adapter-auto': ^7.0.0
     '@sveltejs/vite-plugin-svelte': ^6.2.1
-    tailwindcss: ^4.1.14
-    '@tailwindcss/vite': ^4.1.14
-    eslint: ^9.39.0
-    prettier: ^3.6.2
+    tailwindcss: ^4.1.17
+    '@tailwindcss/vite': ^4.1.17
+    three: ^0.179.1
+    '@types/three': ^0.179.0
+    eslint: ^9.39.1
+    prettier: ^3.7.4
     '@types/node': ^22.18.10

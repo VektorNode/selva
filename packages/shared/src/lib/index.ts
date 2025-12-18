@@ -35,5 +35,5 @@ export * from './utils';
 // Re-export types from generated schema
 export type * from './types/generated';
 
-// Re-export theme types
-export type { Theme } from '@selva/themes';
+// Theme utilities
+export * from './themes';

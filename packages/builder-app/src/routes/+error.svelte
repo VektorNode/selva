@@ -1,6 +1,6 @@
 <script>
   import { page } from '$app/state';
-  import { Card, Button } from '@selva/ui-shared';
+  import { Card, Button } from '@selva/shared';
   import { AlertCircle } from '@lucide/svelte';
 </script>
 

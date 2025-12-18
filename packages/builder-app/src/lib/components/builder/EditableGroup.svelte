@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
-  import type { GroupConfig } from '@selva/ui-shared';
-  import { Button, Card } from '@selva/ui-shared';
+  import type { GroupConfig } from '@selva/shared';
+  import { Button, Card } from '@selva/shared';
   import DropZone from './DropZone.svelte';
   import { ChevronDown, Trash2 } from '@lucide/svelte';
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import type { TabConfig } from '@selva/ui-shared';
+  import type { TabConfig } from '@selva/shared';
   import { Pencil } from '@lucide/svelte';
 
   interface EditableTabNavProps {

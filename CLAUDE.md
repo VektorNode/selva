@@ -19,8 +19,7 @@ This is a monorepo with two distinct stacks:
 - **`@selva/core`** - Type-safe Rhino Compute client, Three.js helpers, file utilities (browser & Node.js)
 - **`@selva/builder-app`** - Schema designer connected to Grasshopper via WebSocket (local dev mode)
 - **`@selva/compute-app`** - Standalone app for solving Grasshopper definitions via Rhino.Compute (cloud mode)
-- **`@selva/ui-shared`** - Shared Svelte components and utilities
-- **`@selva/themes`** - Pure CSS theme files (no build step)
+- **`@selva/shared`** - Shared Svelte components, utilities, and theme styles (CSS + theme utilities)
 - **`@selva/svelte-ui`** - Legacy UI components (being phased out)
 - **`@selva/schemas`** - Schema definitions and code generators (TypeScript + C#)
 
@@ -44,7 +43,7 @@ pnpm dev:compute            # Start compute-app dev server
 
 # Build commands
 pnpm run build:all          # Build all packages in order
-pnpm run build:ui-shared    # Build shared UI components
+pnpm run build:shared    # Build shared UI components
 pnpm run build:builder      # Build builder-app
 pnpm run build:compute      # Build compute-app
 pnpm run build:plugin       # Build production plugin with embedded web assets
@@ -94,10 +93,12 @@ dotnet clean
 A single schema (`packages/schemas/ui-schema.json`) generates both TypeScript types for the UI and C# types for the plugin, keeping the entire system in sync.
 
 **Generated files:**
-- TypeScript: `packages/ui-shared/src/lib/types/generated/schema.ts`
+
+- TypeScript: `packages/shared/src/lib/types/generated/schema.ts`
 - C#: `Plugin/Selva.Core/Models/UISchema.Generated.cs`
 
 After modifying `ui-schema.json`, always run:
+
 ```bash
 cd packages/schemas && pnpm run generate:all
 ```
@@ -129,12 +130,14 @@ pnpm run build:plugin
 **Recommended**: Web + Plugin in Dev Mode
 
 Terminal 1:
+
 ```bash
 cd packages/builder-app && pnpm dev
 # Web app runs on http://localhost:5173
 ```
 
 Terminal 2:
+
 ```bash
 cd Plugin && dotnet build
 # Then run in Visual Studio, Rider, or VS Code
@@ -155,6 +158,7 @@ Located in `Plugin/Selva.Grasshopper/Features/`:
 ### Core Package Architecture (`@selva/core`)
 
 Modular exports for tree-shaking:
+
 - Main export: General utilities and types
 - `/grasshopper`: Rhino Compute client, data tree handling, input/output parsers
 - `/visualization`: Three.js helpers, WebDisplay utilities
@@ -162,6 +166,7 @@ Modular exports for tree-shaking:
 - `/core`: Low-level compute fetch and error handling
 
 Key features:
+
 - Discriminated unions for type-safe error handling
 - Data tree parsing and serialization
 - Three.js geometry conversion helpers
@@ -185,11 +190,13 @@ Key features:
 After building the plugin, copy to your Grasshopper Libraries folder:
 
 **Windows (Rhino 8):**
+
 ```bash
 copy "Plugin\bin\Release\net7.0\Selva.gha" "%APPDATA%\Grasshopper\Libraries-8\"
 ```
 
 **macOS (Rhino 8):**
+
 ```bash
 cp Plugin/bin/Release/net7.0/Selva.gha ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/
 ```
@@ -207,6 +214,7 @@ Restart Rhino completely after installation.
 ## Environment Variables
 
 Create `.env` in `packages/builder-app/` (required for build):
+
 ```
 VITE_API_BASE=http://localhost:8765
 ```

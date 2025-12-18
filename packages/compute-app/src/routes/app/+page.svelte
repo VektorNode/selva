@@ -9,7 +9,7 @@
     Button,
     StateManager,
     getDefaultValue,
-  } from '@selva/ui-shared';
+  } from '@selva/shared';
   import { Maximize, Minimize } from '@lucide/svelte';
   import { hexToOklch } from '$lib/utilities/color';
 
