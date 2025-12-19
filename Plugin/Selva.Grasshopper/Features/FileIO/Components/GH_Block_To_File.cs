@@ -42,7 +42,7 @@ public class GH_Block_To_File : GH_Component
 
 	protected override Bitmap Icon => Resources.BlockToFile;
 
-	public override GH_Exposure Exposure => GH_Exposure.hidden;
+	public override GH_Exposure Exposure => GH_Exposure.primary;
 
 	protected override void RegisterInputParams(GH_InputParamManager pManager)
 	{
@@ -52,12 +52,13 @@ public class GH_Block_To_File : GH_Component
 			"B",
 			"Block instance to export",
 			GH_ParamAccess.item);
+		pManager.AddTextParameter("Name", "N", "Optional name for the exported file", GH_ParamAccess.item);
 	}
 
 	protected override void RegisterOutputParams(GH_OutputParamManager pManager)
 	{
 		pManager.AddGenericParameter(
-			"File Data",
+			"File",
 			"F",
 			"Exported block as base64-encoded file data",
 			GH_ParamAccess.item);
@@ -69,7 +70,18 @@ public class GH_Block_To_File : GH_Component
 		{
 			if (!TryGetBlockInput(DA, out var blockObj)) return;
 
-			var exportedFile = ExportBlockToFile(blockObj);
+			string fileName = null;
+			if (!DA.GetData(1, ref fileName))
+			{
+				return;
+			}
+
+			if (!fileName.EndsWith(".3dm", StringComparison.OrdinalIgnoreCase))
+			{
+				fileName += ".3dm";
+			}
+
+			var exportedFile = ExportBlockToFile(blockObj, fileName);
 
 			if (exportedFile != null)
 				DA.SetData(0, new FileDataGoo(exportedFile));
@@ -109,17 +121,18 @@ public class GH_Block_To_File : GH_Component
 		return true;
 	}
 
-	private FileData ExportBlockToFile(ModelObject blockObj)
+	private FileData ExportBlockToFile(ModelObject blockObj, string fileName)
 	{
 		using var headlessDoc = RhinoDoc.CreateHeadless(null);
 		_copiedBlockIndices.Clear();
+
 
 		if (!TryProcessBlockObject(blockObj, headlessDoc, out var blockName)) return null;
 
 		var base64String = ConvertDocumentToBase64(headlessDoc);
 		if (string.IsNullOrEmpty(base64String)) return null;
 
-		return CreateFileData(blockName, base64String);
+		return CreateFileData(fileName, base64String);
 	}
 
 	private bool TryProcessBlockObject(ModelObject blockObj, RhinoDoc targetDoc, out string blockName)
@@ -135,7 +148,7 @@ public class GH_Block_To_File : GH_Component
 		CopyBlockRecursive(modelIdef, targetDoc);
 
 		if (_copiedBlockIndices.TryGetValue(blockName, out var idefIndex) &&
-		    instanceRef.Value != null)
+				instanceRef.Value != null)
 		{
 			var xform = instanceRef.Value.Xform;
 			targetDoc.Objects.AddInstanceObject(idefIndex, xform);
@@ -190,7 +203,7 @@ public class GH_Block_To_File : GH_Component
 		CopyBlockRecursive(nestedModelIdef, targetDoc);
 
 		if (_copiedBlockIndices.TryGetValue(nestedModelIdef.Name, out var nestedIdefIndex) &&
-		    nestedInstanceRef.Value != null)
+				nestedInstanceRef.Value != null)
 		{
 			var nestedIdef = targetDoc.InstanceDefinitions[nestedIdefIndex];
 			var xform = nestedInstanceRef.Value.Xform;
@@ -204,11 +217,11 @@ public class GH_Block_To_File : GH_Component
 		return _converter.DocToRhinoFile(doc);
 	}
 
-	private FileData CreateFileData(string blockName, string base64String)
+	private FileData CreateFileData(string fileName, string base64String)
 	{
 		return new FileData
 		{
-			FileName = $"block_{blockName}_{Guid.NewGuid():N}",
+			FileName = fileName,
 			Data = base64String,
 			FileType = ".3dm",
 			IsBase64Encoded = true

@@ -17,7 +17,7 @@ namespace Selva.Core.Models
     // ============================================================================
 
     // GrasshopperParamType is a string for compatibility
-    // Valid values: "number", "integer", "boolean", "text", "valueList", "generic"
+    // Valid values: "number", "integer", "boolean", "text", "valueList", "file", "generic"
 
 // ============================================================================
     // UISchema
@@ -178,6 +178,16 @@ namespace Selva.Core.Models
 /// </summary>
         [JsonProperty("fileFormat")]
         public string FileFormat { get; set; }
+    }
+
+    public class FileInputWidgetConfig
+    {
+
+/// <summary>
+/// List of accepted file extensions (e.g., ['.3dm', '.step'])
+/// </summary>
+        [JsonProperty("acceptedFormats")]
+        public List<string> AcceptedFormats { get; set; } = new List<string>();
     }
 
 // ============================================================================
@@ -524,6 +534,15 @@ public override string WidgetType => "checkbox";
         public CheckboxWidgetConfig Config { get; set; }
     }
 
+public class InputFileLayoutItem : LayoutItemBase
+    {
+public override string Type => "input";
+public override string WidgetType => "file";
+
+        [JsonProperty("config", NullValueHandling = NullValueHandling.Ignore)]
+        public FileInputWidgetConfig Config { get; set; }
+    }
+
 public class OutputTextLayoutItem : LayoutItemBase
     {
 public override string Type => "output";
@@ -611,6 +630,8 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
                 item = new InputDropdownLayoutItem();
             else if (type == "input" && widgetType == "checkbox")
                 item = new InputCheckboxLayoutItem();
+            else if (type == "input" && widgetType == "file")
+                item = new InputFileLayoutItem();
             else if (type == "output" && widgetType == "text")
                 item = new OutputTextLayoutItem();
             else if (type == "output" && widgetType == "number")

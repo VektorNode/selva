@@ -3,6 +3,9 @@ export { default as PageContainer } from './components/layout/PageContainer.svel
 export { default as PageHeader } from './components/layout/PageHeader.svelte';
 export { default as PageFooter } from './components/layout/PageFooter.svelte';
 
+// Error components
+export { default as ErrorScreen } from './components/ErrorScreen.svelte';
+
 // Preview components
 export { default as TabLayout } from './components/preview/TabLayout.svelte';
 export { default as InputControl } from './components/preview/InputControl.svelte';

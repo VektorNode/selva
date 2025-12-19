@@ -23,9 +23,9 @@ public class GH_Base64Parser : GH_Component
 	}
 
 	public GH_Base64Parser()
-		: base("Base64 Parser",
-			"BASE64PARSER",
-			"Parses a Base64 string into geometric data from various file formats.",
+		: base("Get File",
+			"GF",
+			"Get file from Base64 encoded string",
 			"Selva",
 			"IO")
 	{

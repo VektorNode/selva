@@ -9,5 +9,4 @@
 
 export * from './core';
 export * from './grasshopper';
-export * from './features/visualization';
 export * from './features/file-handling';

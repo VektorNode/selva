@@ -426,11 +426,11 @@
 
 	<div class="relative flex flex-1 flex-col overflow-hidden">
 		{#if loading}
-			<div class="flex min-h-[400px] items-center justify-center">
+			<div class="flex min-h-100 items-center justify-center">
 				<StateDisplay type="loading" size="large" message="Loading preview..." />
 			</div>
 		{:else if error}
-			<div class="flex min-h-[400px] items-center justify-center">
+			<div class="flex min-h-100 items-center justify-center">
 				<StateDisplay type="error" size="large" message={error} />
 			</div>
 		{:else if schema}
@@ -443,7 +443,7 @@
 					<!-- Controls -->
 					<div
 						class="min-h-0 w-full overflow-y-auto {shouldShowViewer
-							? 'lg:w-[480px] xl:w-[520px]'
+							? 'lg:w-120 xl:w-130'
 							: 'mx-auto max-w-6xl'} {isViewerFullscreen ? 'hidden' : ''}"
 					>
 						{#if schema.layout.type === 'tabbed' && schema.layout.tabs && schema.layout.tabs.length > 0}
@@ -452,6 +452,7 @@
 								bind:values
 								onValueChange={handleValueChange}
 								debounceSliders={true}
+								environment="local"
 							/>
 						{/if}
 

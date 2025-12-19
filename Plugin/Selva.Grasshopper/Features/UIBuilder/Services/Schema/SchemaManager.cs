@@ -363,6 +363,7 @@ public class SchemaManager
 			{ "GetNumberParameter", "number" },
 			{ "Slider", "number" },
 			{ "ValueList", "valueList" },
+			{ "GetFile", "file" },
 			{ "Integer", "integer" },
 			{ "Boolean", "boolean" },
 			{ "Toggle", "boolean" },

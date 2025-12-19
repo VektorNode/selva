@@ -7,7 +7,7 @@
 		"//_COMMENT": "--- PRIMITIVES ---",
 		"GrasshopperParamType": {
 			"type": "string",
-			"enum": ["number", "integer", "boolean", "text", "valueList", "generic"],
+			"enum": ["number", "integer", "boolean", "text", "valueList", "file", "generic"],
 			"description": "Grasshopper contextual parameter data types"
 		},
 
@@ -59,6 +59,17 @@
 				"fileFormat": {
 					"type": "string",
 					"description": "File format hint (e.g., 'zip', '3dm')"
+				}
+			},
+			"additionalProperties": false
+		},
+		"FileInputWidgetConfig": {
+			"type": "object",
+			"properties": {
+				"acceptedFormats": {
+					"type": "array",
+					"items": { "type": "string" },
+					"description": "List of accepted file extensions (e.g., ['.3dm', '.step'])"
 				}
 			},
 			"additionalProperties": false
@@ -146,6 +157,20 @@
 				}
 			]
 		},
+		"InputFileLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "input" },
+						"widgetType": { "const": "file" },
+						"config": { "$ref": "#/definitions/FileInputWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
 		"OutputTextLayoutItem": {
 			"allOf": [
 				{ "$ref": "#/definitions/LayoutItemBase" },
@@ -192,6 +217,7 @@
 				{ "$ref": "#/definitions/InputTextLayoutItem" },
 				{ "$ref": "#/definitions/InputDropdownLayoutItem" },
 				{ "$ref": "#/definitions/InputCheckboxLayoutItem" },
+				{ "$ref": "#/definitions/InputFileLayoutItem" },
 				{ "$ref": "#/definitions/OutputTextLayoutItem" },
 				{ "$ref": "#/definitions/OutputNumberLayoutItem" },
 				{ "$ref": "#/definitions/OutputFileLayoutItem" }

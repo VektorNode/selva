@@ -4,13 +4,15 @@
 		NumberWidgetConfig,
 		TextWidgetConfig,
 		DropdownWidgetConfig,
+		FileInputWidgetConfig,
 		SupportedTypes
 	} from '$lib/types/generated';
 	import {
 		isNumberWidget,
 		isTextWidget,
 		isDropdownWidget,
-		isCheckboxWidget
+		isCheckboxWidget,
+		isFileWidget
 	} from '$lib/types/generated';
 	import { debounce } from '$lib/utils/debounce';
 	import { Input } from '$lib/components/ui/input';
@@ -20,15 +22,17 @@
 	import * as Select from '$lib/components/ui/select';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { HelpCircle } from '@lucide/svelte';
+	import FileInput from '$lib/components/preview/FileInput.svelte';
 
 	interface Props {
 		item: InputLayoutItem;
 		value?: unknown;
 		displayName?: string;
 		onChange: (paramId: string, value: SupportedTypes) => void;
+		environment?: 'local' | 'compute';
 	}
 
-	let { item, value = $bindable(), displayName, onChange }: Props = $props();
+	let { item, value = $bindable(), displayName, onChange, environment }: Props = $props();
 
 	const inputId = $derived(`input-${item.paramId}-${Math.random().toString(36).substring(2, 11)}`);
 
@@ -120,7 +124,7 @@
 				max={config.maximum}
 				step={config.stepSize ?? 1}
 				placeholder={config.placeholder}
-				oninput={(e) => {
+				oninput={(e:any) => {
 					const target = e.currentTarget as HTMLInputElement;
 					const newValue = parseFloat(target.value);
 					if (!isNaN(newValue)) {
@@ -134,7 +138,7 @@
 			<Checkbox
 				id={inputId}
 				checked={typeof value === 'boolean' ? value : false}
-				onCheckedChange={(checked) => handleChange(checked === true)}
+				onCheckedChange={(checked: boolean) => handleChange(checked === true)}
 			/>
 			<Label for={inputId} class="text-sm cursor-pointer text-muted-foreground">Enabled</Label>
 		</div>
@@ -145,7 +149,7 @@
 			type="text"
 			bind:value
 			placeholder={config.placeholder}
-			oninput={(e) => {
+			oninput={(e:any) => {
 				const target = e.currentTarget as HTMLInputElement;
 				handleChange(target.value);
 			}}
@@ -172,5 +176,13 @@
 				{/each}
 			</Select.Content>
 		</Select.Root>
+	{:else if isFileWidget(item)}
+		{@const config = item.config as FileInputWidgetConfig}
+		{@const fileValue = typeof value === 'string' ? value : ''}
+		<FileInput
+			value={fileValue}
+			acceptedFormats={config?.acceptedFormats ?? []}
+			onChange={(newValue) => handleChange(newValue)}
+		/>
 	{/if}
 </div>

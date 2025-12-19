@@ -5,10 +5,12 @@ import type {
 	TextWidgetConfig,
 	DropdownWidgetConfig,
 	CheckboxWidgetConfig,
+	FileInputWidgetConfig,
 	InputNumberLayoutItem,
 	InputTextLayoutItem,
 	InputDropdownLayoutItem,
 	InputCheckboxLayoutItem,
+	InputFileLayoutItem,
 	OutputTextLayoutItem,
 	OutputNumberLayoutItem,
 	OutputFileLayoutItem
@@ -18,7 +20,8 @@ export type InputWidgetType =
 	| InputNumberLayoutItem['widgetType']
 	| InputTextLayoutItem['widgetType']
 	| InputDropdownLayoutItem['widgetType']
-	| InputCheckboxLayoutItem['widgetType'];
+	| InputCheckboxLayoutItem['widgetType']
+	| InputFileLayoutItem['widgetType'];
 
 export type OutputWidgetType =
 	| OutputTextLayoutItem['widgetType']
@@ -31,7 +34,8 @@ export type InputWidgetConfig =
 	| NumberWidgetConfig
 	| TextWidgetConfig
 	| DropdownWidgetConfig
-	| CheckboxWidgetConfig;
+	| CheckboxWidgetConfig
+	| FileInputWidgetConfig;
 
 export type OutputWidgetConfig = Record<string, never>;
 
@@ -60,6 +64,8 @@ export function mapParamTypeToWidgetType(
 				return 'text';
 			case 'valueList':
 				return 'dropdown';
+			case 'file':
+				return 'file';
 			default:
 				return 'text';
 		}
@@ -99,6 +105,14 @@ export function createDefaultWidgetConfig(
 
 			case 'checkbox': {
 				const config: CheckboxWidgetConfig = {};
+				return config;
+			}
+
+			case 'file': {
+				const config: FileInputWidgetConfig = {
+					acceptedFormats: ['.3dm', '.stp', '.step', '.igs', '.iges', '.dxf', '.dwg', '.obj', '.fbx', '.glb', '.gltf'],
+					defaultInputMode: 'path'
+				};
 				return config;
 			}
 

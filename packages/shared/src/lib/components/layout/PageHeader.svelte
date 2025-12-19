@@ -15,6 +15,7 @@
 		sessionId?: string;
 		badge?: BadgeConfig;
 		showModeToggle?: boolean;
+		logo?: string;
 		children?: Snippet;
 		class?: string;
 	}
@@ -23,6 +24,7 @@
 		title,
 		sessionId,
 		badge,
+		logo = '/favicon/favicon.svg',
 		children,
 		class: className = '',
 		showModeToggle = false
@@ -42,7 +44,10 @@
 >
 	<div class="gap-3 sm:flex-row sm:items-center sm:justify-between flex flex-col">
 		<!-- Left section -->
-		<div class="min-w-0 flex-1">
+		<div class="min-w-0 flex-1 flex items-center gap-3">
+			{#if logo}
+				<img src={logo} alt="Logo" class="h-8 w-8 shrink-0" />
+			{/if}
 			<h1 class="text-xl font-bold sm:text-2xl text-foreground">
 				{title}
 			</h1>

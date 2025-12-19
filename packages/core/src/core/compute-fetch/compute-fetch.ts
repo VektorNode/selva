@@ -1,4 +1,4 @@
-import RhinoCompute from 'compute-rhino3d';
+import { RhinoCompute } from 'compute-rhino3d';
 
 import { RhinoComputeError, ErrorCodes } from '../errors';
 

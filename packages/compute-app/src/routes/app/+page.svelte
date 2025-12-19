@@ -223,11 +223,11 @@
 
 		<div class="bg-background flex-1 overflow-hidden">
 			{#if error}
-				<div class="flex min-h-[400px] items-center justify-center p-8">
+				<div class="flex min-h-100 items-center justify-center p-8">
 					<StateDisplay type="error" size="medium" message={error} />
 				</div>
 			{:else if !schema}
-				<div class="flex min-h-[400px] items-center justify-center">
+				<div class="flex min-h-100 items-center justify-center">
 					<StateDisplay type="loading" size="large" message="Loading schema..." />
 				</div>
 			{:else}
@@ -238,7 +238,7 @@
 				>
 					<!-- Controls -->
 					<div
-						class="w-full shrink-0 overflow-y-auto lg:w-[480px] xl:w-[520px] {isViewerFullscreen
+						class="w-full shrink-0 overflow-y-auto lg:w-120 xl:w-130 {isViewerFullscreen
 							? 'hidden'
 							: ''}"
 					>
@@ -248,6 +248,7 @@
 								bind:values
 								onValueChange={handleValueChange}
 								debounceSliders={false}
+								environment="compute"
 							/>
 						{/if}
 
@@ -297,7 +298,7 @@
 					<!-- Viewer -->
 					{#if shouldShowViewer}
 						<div
-							class="relative min-h-[500px] flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen
+							class="relative min-h-125 flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen
 								? 'fullscreen-viewer'
 								: ''}"
 						>

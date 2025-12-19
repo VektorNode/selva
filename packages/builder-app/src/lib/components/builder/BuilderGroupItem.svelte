@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { dragStore } from '$lib/stores/dragStore.svelte';
-	import type { LayoutItem, DiscoveredInput, NumberWidgetConfig } from '@selva/shared';
+	import type {
+		LayoutItem,
+		DiscoveredInput,
+		NumberWidgetConfig,
+		FileInputWidgetConfig
+	} from '@selva/shared';
 	import { Badge, Button, Card, Switch } from '@selva/shared';
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown } from '@lucide/svelte';
 
@@ -15,8 +20,9 @@
 	let { item, paramInfo, tabId, groupId, onRemove }: BuilderGroupItemProps = $props();
 
 	let isNumberInput = $derived(item.type === 'input' && item.widgetType === 'number');
+	let isFileInput = $derived(item.type === 'input' && item.widgetType === 'file');
 	let showAdvanced = $state(false);
-	let hasAdvancedOptions = $derived(isNumberInput);
+	let hasAdvancedOptions = $derived(isNumberInput || isFileInput);
 
 	let isDragging = $state(false);
 	let isDragOver = $state(false);
@@ -27,6 +33,13 @@
 		if (!isNumberInput) return;
 		const config = item.config as NumberWidgetConfig;
 		config.renderAsSlider = !config.renderAsSlider;
+	}
+
+	function setFileInputMode(mode: 'path' | 'url' | 'upload') {
+		if (!isFileInput) return;
+		const config = item.config as FileInputWidgetConfig;
+		if (!config) return;
+		config.defaultInputMode = mode;
 	}
 
 	function handleDragStart(e: DragEvent) {
@@ -224,6 +237,48 @@
 									onCheckedChange={toggleSliderMode}
 									class="scale-75"
 								/>
+							</div>
+						{/if}
+
+						{#if showAdvanced && isFileInput}
+							{@const config = item.config as FileInputWidgetConfig}
+							<div class="gap-2 flex flex-col">
+								<!-- Input Mode Selection -->
+								<div class="gap-1 flex flex-col">
+									<span class="text-muted-foreground text-[10px] font-medium">Input Type</span>
+									<div class="gap-1 grid grid-cols-3">
+										<button
+											onclick={() => setFileInputMode('path')}
+											class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+												config?.defaultInputMode === 'path'
+													? 'bg-primary text-primary-foreground border-primary'
+													: 'border-border/70 hover:border-border hover:bg-accent'
+											}`}
+										>
+											Path
+										</button>
+										<button
+											onclick={() => setFileInputMode('url')}
+											class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+												config?.defaultInputMode === 'url'
+													? 'bg-primary text-primary-foreground border-primary'
+													: 'border-border/70 hover:border-border hover:bg-accent'
+											}`}
+										>
+											URL
+										</button>
+										<button
+											onclick={() => setFileInputMode('upload')}
+											class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+												config?.defaultInputMode === 'upload'
+													? 'bg-primary text-primary-foreground border-primary'
+													: 'border-border/70 hover:border-border hover:bg-accent'
+											}`}
+										>
+											Upload
+										</button>
+									</div>
+								</div>
 							</div>
 						{/if}
 					</div>
