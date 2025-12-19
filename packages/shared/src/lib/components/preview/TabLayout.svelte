@@ -15,9 +15,10 @@
 		values: Record<string, unknown>;
 		onValueChange: (paramId: string, value: SupportedTypes) => void;
 		debounceSliders?: boolean;
+		environment?: 'local' | 'compute';
 	}
 
-	let { schema, values = $bindable(), onValueChange }: Props = $props();
+	let { schema, values = $bindable(), onValueChange, environment }: Props = $props();
 
 	let activeTabId: string | null = $state(null);
 
@@ -137,8 +138,7 @@
 														item={layoutItem}
 														bind:value={values[input.id]}
 														displayName={layoutItem.displayName}
-														onChange={onValueChange}
-													/>
+														onChange={onValueChange}													environment={environment}													/>
 												</div>
 											{/if}
 										{:else if layoutItem.type === 'output'}

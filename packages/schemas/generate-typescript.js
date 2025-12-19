@@ -97,7 +97,7 @@ async function main() {
 // TYPE GUARDS
 // ============================================================================
 
-export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem {
+export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem {
   return item.type === 'input';
 }
 
@@ -121,8 +121,12 @@ export function isCheckboxWidget(item: LayoutItem): item is InputCheckboxLayoutI
   return item.type === 'input' && item.widgetType === 'checkbox';
 }
 
+export function isFileWidget(item: LayoutItem): item is InputFileLayoutItem {
+  return item.type === 'input' && item.widgetType === 'file';
+}
+
 // Helper type aliases
-export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem;
+export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem;
 export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem;
 export type SupportedTypes = string | number | boolean;
 `,

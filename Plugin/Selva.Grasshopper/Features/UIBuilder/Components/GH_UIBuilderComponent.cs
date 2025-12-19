@@ -52,6 +52,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 	// Guard against concurrent WebSocket starts
 	private bool _isStartingWebSocket;
 
+
 	private UIBuilderService _service;
 
 	// Session and schema

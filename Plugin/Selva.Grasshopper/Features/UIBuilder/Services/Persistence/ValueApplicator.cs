@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq.Expressions;
@@ -26,8 +27,18 @@ public class ValueApplicator
 			{ "integer", (typeof(GH_Integer), val => new GH_Integer(Convert.ToInt32(val))) },
 			{ "text", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) },
 			{ "boolean", (typeof(GH_Boolean), val => new GH_Boolean(Convert.ToBoolean(val))) },
-			{ "valueList", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) }
+			{ "valueList", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) },
+			{ "file", (typeof(Selva.Grasshopper.Features.FileIO.Services.FileInputGoo), val => {
+				var json = val?.ToString() ?? "";
+				try {
+					var fileData = Newtonsoft.Json.JsonConvert.DeserializeObject<Selva.Grasshopper.Features.FileIO.Services.FileInputData>(json);
+					return new Selva.Grasshopper.Features.FileIO.Services.FileInputGoo(fileData);
+				} catch {
+					return new Selva.Grasshopper.Features.FileIO.Services.FileInputGoo();
+				}
+			}) }
 		};
+
 
 	private static readonly ConcurrentDictionary<Type, ReflectionCache> _reflectionCache = new();
 
@@ -70,6 +81,18 @@ public class ValueApplicator
 				{
 					var success =
 						ApplyToContextualParameter(contextParam, input.ParamType, value, addMessage, pendingExpirations);
+					if (success)
+					{
+						updateCount++;
+						_lastAppliedValues[inputKey] = value;
+
+						if (paramObject is IGH_ActiveObject activeObj) pendingExpirations.Add(activeObj);
+					}
+				}
+				else if (input.ParamType == "file")
+				{
+					// Handle file parameters that aren't contextual (e.g., regular input parameters)
+					var success = ApplyToFileParameter(paramObject, value, addMessage, pendingExpirations);
 					if (success)
 					{
 						updateCount++;
@@ -243,6 +266,12 @@ public class ValueApplicator
 			// Special handling for ValueList - use the parameter's native type
 			if (paramTypeName == "valueList") return ApplyToValueList(contextParam, value, addMessage, pendingExpirations);
 
+			// Special handling for file parameters - don't use AssignContextualDataTree
+			if (paramTypeName == "file")
+			{
+				return ApplyToFileParameter((object)contextParam, value, addMessage, pendingExpirations);
+			}
+
 			if (!TypeHandlers.TryGetValue(paramTypeName, out var handler))
 			{
 				addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
@@ -330,6 +359,178 @@ public class ValueApplicator
 		{
 			addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
 				$"Error applying ValueList value: {ex.Message}");
+			return false;
+		}
+	}
+
+	/// <summary>
+	///   Apply a file value to a regular (non-contextual) parameter
+	///   Handles parameters like File_Selector or generic input parameters
+	///   File value can be: JSON string, JObject, or FileInputData instance
+	/// </summary>
+	private bool ApplyToFileParameter(object paramObject, object value,
+		Action<GH_RuntimeMessageLevel, string> addMessage, HashSet<IGH_ActiveObject> pendingExpirations)
+	{
+		try
+		{
+			// Only handle IGH_Param instances for file assignment
+			if (!(paramObject is IGH_Param param))
+			{
+				addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+					$"File parameter is not an IGH_Param");
+				return false;
+			}
+
+			// Deserialize the file data - handle multiple formats
+			Selva.Grasshopper.Features.FileIO.Services.FileInputData fileData = null;
+
+			try
+			{
+				// Try to handle different input formats
+				if (value is Selva.Grasshopper.Features.FileIO.Services.FileInputData existingData)
+				{
+					// Already deserialized
+					fileData = existingData;
+				}
+				else if (value is Newtonsoft.Json.Linq.JObject jObject)
+				{
+					// Convert JObject to FileInputData
+					fileData = jObject.ToObject<Selva.Grasshopper.Features.FileIO.Services.FileInputData>();
+				}
+				else if (value is Dictionary<string, object> dict)
+				{
+					// Convert dictionary to FileInputData
+					fileData = Newtonsoft.Json.JsonConvert.DeserializeObject<Selva.Grasshopper.Features.FileIO.Services.FileInputData>(
+						Newtonsoft.Json.JsonConvert.SerializeObject(dict));
+				}
+				else
+				{
+					// Try to parse as string
+					var strValue = value?.ToString() ?? "";
+
+					// Check if it looks like a JSON object (starts with {)
+					if (strValue.TrimStart().StartsWith("{"))
+					{
+						// Parse as JSON
+						fileData = Newtonsoft.Json.JsonConvert.DeserializeObject<Selva.Grasshopper.Features.FileIO.Services.FileInputData>(strValue);
+					}
+					else if (strValue.StartsWith("http://") || strValue.StartsWith("https://"))
+					{
+						// It's a URL - auto-create FileInputData
+						fileData = Selva.Grasshopper.Features.FileIO.Services.FileInputData.FromUrl(strValue);
+					}
+					else if (!string.IsNullOrEmpty(strValue))
+					{
+						// It's a file path - auto-create FileInputData
+						fileData = Selva.Grasshopper.Features.FileIO.Services.FileInputData.FromPath(strValue);
+					}
+					else
+					{
+						addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+							$"File data is empty");
+						return false;
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+					$"Invalid file data format: {ex.Message}");
+				return false;
+			}
+
+			if (fileData == null || string.IsNullOrEmpty(fileData.Type) || string.IsNullOrEmpty(fileData.File))
+			{
+				addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+					$"File data missing required fields (type, file)");
+				return false;
+			}
+
+			// Create a FileInputGoo and add it to the parameter's VolatileData
+			var fileGoo = new Selva.Grasshopper.Features.FileIO.Services.FileInputGoo(fileData);
+
+			// Try AssignContextualData first (for GetFileParameter and similar contextual file parameters)
+			if (param is IGH_ContextualParameter contextualParam)
+			{
+				var assignContextualDataMethod = param.GetType().GetMethod("AssignContextualData",
+					new[] { typeof(IEnumerable) });
+				if (assignContextualDataMethod != null)
+				{
+					try
+					{
+						// Create a list with the FileInputGoo
+						var dataList = new List<object> { fileGoo };
+						assignContextualDataMethod.Invoke(param, new object[] { dataList });
+
+						// Mark parameter as modified so it updates downstream
+						if (paramObject is IGH_ActiveObject activeObj)
+						{
+							pendingExpirations.Add(activeObj);
+						}
+
+						return true;
+					}
+					catch { /* Try next method */ }
+				}
+			}
+
+			// Fallback: Try standard data tree methods
+			var dataTree = new DataTree<Selva.Grasshopper.Features.FileIO.Services.FileInputGoo>();
+			dataTree.Add(fileGoo, new GH_Path(0));
+
+			// Attempt 1: AddVolatileDataTree with IGH_DataTree
+			var addVolatileMethod = param.GetType().GetMethod("AddVolatileDataTree",
+				new[] { typeof(IGH_DataTree) });
+			if (addVolatileMethod != null)
+			{
+				try
+				{
+					addVolatileMethod.Invoke(param, new object[] { dataTree });
+
+					if (paramObject is IGH_ActiveObject activeObj)
+					{
+						pendingExpirations.Add(activeObj);
+					}
+					return true;
+				}
+				catch { /* Try next method */ }
+			}
+
+			// Attempt 2: AddVolatileData with IGH_Goo
+			param.ClearData();
+			var addMethod = param.GetType().GetMethod("AddVolatileData",
+				new[] { typeof(IGH_Goo) });
+			if (addMethod != null)
+			{
+				try
+				{
+					addMethod.Invoke(param, new object[] { fileGoo });
+
+					if (paramObject is IGH_ActiveObject activeObj)
+					{
+						pendingExpirations.Add(activeObj);
+					}
+					return true;
+				}
+				catch { /* Try next method */ }
+			}
+
+			addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+				$"Could not find method to assign file data to parameter (tried: AssignContextualData, AddVolatileDataTree, AddVolatileData)");
+			return false;
+
+			// Mark parameter as modified so it updates downstream (unreachable, but kept for structure)
+			/*if (paramObject is IGH_ActiveObject activeObj)
+			{
+				pendingExpirations.Add(activeObj);
+			}*/
+
+			/*return true;*/
+		}
+		catch (Exception ex)
+		{
+			addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+				$"Error applying file value: {ex.Message}");
 			return false;
 		}
 	}
