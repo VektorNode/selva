@@ -267,6 +267,30 @@ namespace Selva.Core.Models
 {
 `;
 
+// Generate constants section
+if (schema.constants) {
+  output += `// ============================================================================
+    // CONSTANTS (from schema)
+    // ============================================================================
+
+`;
+  for (const [key, value] of Object.entries(schema.constants)) {
+    const pascalName = pascalCase(key);
+    if (Array.isArray(value)) {
+      const arrayType = typeof value[0] === 'string' ? 'string' : 'object';
+      const formattedValues = value.map(v =>
+        typeof v === 'string' ? `"${v}"` : JSON.stringify(v)
+      ).join(', ');
+      output += `    public static class ${pascalName}
+    {
+        public static readonly ${arrayType}[] Values = new ${arrayType}[] { ${formattedValues} };
+    }
+
+`;
+    }
+  }
+}
+
 // Generate type aliases section
 output += `// ============================================================================
     // TYPE ALIASES

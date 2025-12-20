@@ -13,6 +13,15 @@ using Newtonsoft.Json.Linq;
 namespace Selva.Core.Models
 {
 // ============================================================================
+    // CONSTANTS (from schema)
+    // ============================================================================
+
+    public static class AcceptedFileFormats
+    {
+        public static readonly string[] Values = new string[] { ".3dm", ".stp", ".step", ".igs", ".iges", ".dxf", ".dwg", ".obj", ".fbx", ".glb", ".gltf" };
+    }
+
+// ============================================================================
     // TYPE ALIASES
     // ============================================================================
 

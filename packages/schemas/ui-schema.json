@@ -3,6 +3,9 @@
 	"$id": "https://selva.dev/schemas/ui-schema.json",
 	"title": "Selva UI Schema",
 	"description": "Schema definitions for Selva UI configuration",
+	"constants": {
+		"acceptedFileFormats": [".3dm", ".stp", ".step", ".igs", ".iges", ".dxf", ".dwg", ".obj", ".fbx", ".glb", ".gltf"]
+	},
 	"definitions": {
 		"//_COMMENT": "--- PRIMITIVES ---",
 		"GrasshopperParamType": {
