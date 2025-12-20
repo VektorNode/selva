@@ -102,6 +102,10 @@ export interface FileInputWidgetConfig {
    * List of accepted file extensions (e.g., ['.3dm', '.step'])
    */
   acceptedFormats?: string[];
+  /**
+   * Default input mode for file input (upload or url)
+   */
+  defaultInputMode?: 'upload' | 'url';
 }
 export interface LayoutItemBase {
   /**

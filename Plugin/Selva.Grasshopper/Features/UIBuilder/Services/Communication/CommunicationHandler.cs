@@ -127,16 +127,21 @@ public class CommunicationHandler : IDisposable
 					await _messageProcessingSemaphore.WaitAsync();
 					try
 					{
+						Logger.Log($"[CommunicationHandler] Received message, length: {message.Length} bytes");
+
 						// Parse JSON once using JObject
 						var jObj = JObject.Parse(message);
 						var msgType = jObj["type"]?.ToString();
 						var sessionId = jObj["sessionId"]?.ToString();
+
+						Logger.Log($"[CommunicationHandler] Message type: {msgType}, SessionId match: {sessionId == _sessionId}");
 
 						// Validate session ID first
 						if (sessionId != _sessionId) return;
 
 						if (msgType == "valueUpdate")
 						{
+							Logger.Log("[CommunicationHandler] Deserializing valueUpdate...");
 							var values = jObj["values"]
 								?.ToObject<Dictionary<string, object>>(JsonSerializer.Create(SecureJsonSettings));
 							if (values != null)
@@ -144,6 +149,10 @@ public class CommunicationHandler : IDisposable
 								Logger.Log($"[CommunicationHandler] Received valueUpdate with {values.Count} values");
 								// Marshal back to main thread - critical for Grasshopper UI updates
 								MarshalToMainThread(() => OnValuesReceived?.Invoke(this, values));
+							}
+							else
+							{
+								Logger.Warn("[CommunicationHandler] valueUpdate 'values' object was null");
 							}
 						}
 						else if (msgType == "requestCurrentValues")
@@ -444,7 +453,7 @@ public class CommunicationHandler : IDisposable
 	public async Task BroadcastMetadataChanges(DiscoveredParameters changedParams)
 	{
 		if (_webSocketServer != null && _webSocketServer.IsRunning && changedParams != null &&
-		    (changedParams.Inputs?.Count > 0 || changedParams.Outputs?.Count > 0))
+				(changedParams.Inputs?.Count > 0 || changedParams.Outputs?.Count > 0))
 		{
 			var message = new
 			{

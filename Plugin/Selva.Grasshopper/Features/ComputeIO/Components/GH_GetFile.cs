@@ -6,6 +6,7 @@ using System.Linq;
 using GH_IO.Serialization;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
+using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -38,7 +39,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 	public override string TypeName => "File";
 	public override Guid ComponentGuid => new("B4F6E8D2-9A3C-4E7B-8D1F-5A9C7E2B4D6F");
 
-	protected override Bitmap Internal_Icon_24x24 => ContextualiseIcon(Resources.GetValueList);
+	protected override Bitmap Internal_Icon_24x24 => ContextualiseIcon(Resources.DataToFile);
 
 	// IGH_ContextualParameter properties
 	public string Prompt { get; set; } = "Select a file to import";
@@ -59,19 +60,44 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 	{
 		_contextualFileData = null;
 
-		foreach (var item in data)
+		if (data == null)
 		{
-			var fileData = ExtractFileInputData(item);
-			if (fileData != null)
+			ExpireSolution(false);
+			return;
+		}
+
+		try
+		{
+			var count = 0;
+			foreach (var item in data)
 			{
-				_contextualFileData = fileData;
-				_isFromContextual = true;
-				break; // Only take first item (AtMost = 1)
+				// Prevent processing too many items
+				if (++count > 100)
+				{
+					AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+						"Too many contextual data items");
+					break;
+				}
+
+				var fileData = ExtractFileInputData(item);
+				if (fileData != null && ValidateFileInputData(fileData))
+				{
+					_contextualFileData = fileData;
+					_isFromContextual = true;
+					break; // Only take first item (AtMost = 1)
+				}
 			}
+		}
+		catch (Exception ex)
+		{
+			AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+				$"Error assigning contextual data: {ex.Message}");
 		}
 
 		ExpireSolution(false);
 	}
+
+
 
 	public bool AutoAssignContextualData(GH_ParameterContext context)
 	{
@@ -120,16 +146,50 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 		{
 			if (source == null) continue;
 
-			foreach (var item in source.VolatileData.AllData(true))
+			try
 			{
-				var fileData = ExtractFileInputData(item);
+				IGH_Goo firstItem = null;
+
+				// Support both Param_FilePath and Param_String
+				if (source is Param_FilePath filePathParam)
+				{
+					var persistentData = filePathParam.PersistentData;
+					if (persistentData != null && !persistentData.IsEmpty)
+						firstItem = persistentData.AllData(true).FirstOrDefault();
+				}
+				else if (source is Param_String stringParam)
+				{
+					var persistentData = stringParam.PersistentData;
+					if (persistentData != null && !persistentData.IsEmpty)
+					{
+						firstItem = persistentData.AllData(true).FirstOrDefault();
+					}
+					else
+					{
+						var volatileData = stringParam.VolatileData;
+						if (volatileData != null && !volatileData.IsEmpty)
+							firstItem = volatileData.AllData(true).FirstOrDefault();
+					}
+				}
+
+				if (firstItem == null)
+					continue;
+
+				var fileData = ExtractFileInputData(firstItem);
 				if (fileData != null)
 				{
 					ImportAndOutputGeometry(fileData);
-					return; // Only process first valid file
+					return;
 				}
 			}
+			catch (Exception ex)
+			{
+				AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+					$"Error reading from source '{source.NickName}': {ex.Message}");
+			}
 		}
+
+		// If no data found, that's OK - just silently empty (don't show floating warning)
 	}
 
 	/// <summary>
@@ -201,6 +261,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 		};
 	}
 
+
 	/// <summary>
 	///   Attempts to parse a string as FileInputData JSON or fallback to path.
 	/// </summary>
@@ -208,19 +269,90 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 	{
 		if (string.IsNullOrEmpty(str)) return null;
 
+		// Prevent DoS from large JSON strings
+		if (str.Length > 10 * 1024 * 1024) // 10MB limit for JSON
+			return null;
+
 		// Try to parse as JSON first
 		try
 		{
-			var data = JsonConvert.DeserializeObject<FileInputData>(str);
-			if (data != null && !string.IsNullOrEmpty(data.File)) return data;
+			var settings = new JsonSerializerSettings
+			{
+				MaxDepth = 10, // Prevent deeply nested JSON attacks
+				TypeNameHandling = TypeNameHandling.None // Prevent type injection attacks
+			};
+
+			var data = JsonConvert.DeserializeObject<FileInputData>(str, settings);
+
+			// Validate deserialized data
+			if (data != null && !string.IsNullOrEmpty(data.File))
+			{
+				// Sanitize the Type field
+				if (data.Type != null)
+				{
+					var validTypes = new[] { "path", "url", "base64" };
+					if (!validTypes.Contains(data.Type.ToLowerInvariant()))
+						return null;
+				}
+
+				return data;
+			}
 		}
-		catch
+		catch (JsonException)
 		{
 			// Not JSON, treat as path
 		}
+		catch (Exception)
+		{
+			// Unexpected error during deserialization
+			return null;
+		}
 
 		// Fallback: treat as file path
-		return FileInputData.FromPath(str);
+		try
+		{
+			// Validate path string before creating FileInputData
+			if (str.Length > 32767) // Max path length
+				return null;
+
+			return FileInputData.FromPath(str);
+		}
+		catch
+		{
+			// Invalid path format
+			return null;
+		}
+	}
+
+	/// <summary>
+	///   Validates FileInputData for security issues.
+	/// </summary>
+	private static bool ValidateFileInputData(FileInputData fileData)
+	{
+		if (fileData == null || string.IsNullOrWhiteSpace(fileData.File))
+			return false;
+
+		// Check for excessively long data
+		if (fileData.File.Length > 100 * 1024 * 1024) // 100MB for base64
+			return false;
+
+		// Validate type
+		if (fileData.Type != null)
+		{
+			var validTypes = new[] { "path", "url", "base64" };
+			if (!validTypes.Contains(fileData.Type.ToLowerInvariant()))
+				return false;
+		}
+
+		// Validate file extension
+		if (fileData.FileEnding != null)
+		{
+			var allowedExtensions = new[] { ".3dm", ".stp", ".step", ".igs", ".iges", ".dxf", ".dwg", ".obj", ".fbx", ".glb", ".gltf" };
+			if (!allowedExtensions.Contains(fileData.FileEnding.ToLowerInvariant()))
+				return false;
+		}
+
+		return true;
 	}
 
 	public override bool Write(GH_IWriter writer)
@@ -236,19 +368,27 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 
 	public override bool Read(GH_IReader reader)
 	{
-		Prompt = reader.GetString("Prompt");
+		try
+		{
+			Prompt = reader.GetString("Prompt") ?? "Select a file to import";
 
-		var atLeast = 1;
-		if (reader.TryGetInt32("AtLeast", ref atLeast)) AtLeast = atLeast;
+			var atLeast = 1;
+			if (reader.TryGetInt32("AtLeast", ref atLeast)) AtLeast = atLeast;
 
-		var atMost = 1;
-		if (reader.TryGetInt32("AtMost", ref atMost)) AtMost = atMost;
+			var atMost = 1;
+			if (reader.TryGetInt32("AtMost", ref atMost)) AtMost = atMost;
 
-		var treeAccess = false;
-		if (reader.TryGetBoolean("TreeAccess", ref treeAccess)) TreeAccess = treeAccess;
+			var treeAccess = false;
+			if (reader.TryGetBoolean("TreeAccess", ref treeAccess)) TreeAccess = treeAccess;
 
-		var immediate = true;
-		if (reader.TryGetBoolean("Immediate", ref immediate)) Immediate = immediate;
+			var immediate = true;
+			if (reader.TryGetBoolean("Immediate", ref immediate)) Immediate = immediate;
+		}
+		catch (Exception ex)
+		{
+			AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+				$"Error reading saved data: {ex.Message}");
+		}
 
 		return base.Read(reader);
 	}

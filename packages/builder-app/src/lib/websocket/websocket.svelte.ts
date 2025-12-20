@@ -155,7 +155,14 @@ export class WebSocketState {
 	send(type: string, data: Record<string, unknown>) {
 		if (this.socket?.readyState === WebSocket.OPEN) {
 			const message = { type, ...data };
-			this.socket.send(JSON.stringify(message));
+			const jsonStr = JSON.stringify(message);
+			console.log(`[WebSocket] Sending ${type} message, size: ${(jsonStr.length / 1024 / 1024).toFixed(2)}MB`);
+			try {
+				this.socket.send(jsonStr);
+				console.log(`[WebSocket] Message sent successfully`);
+			} catch (error) {
+				console.error(`[WebSocket] Failed to send message:`, error);
+			}
 		} else {
 			console.warn('[WebSocket] Cannot send message - not connected');
 		}
@@ -166,6 +173,7 @@ export class WebSocketState {
 	 * If Grasshopper is currently solving, the update will be queued and sent when solving completes
 	 */
 	sendValueUpdate(sessionId: string, values: Record<string, unknown>) {
+		console.log('[WebSocket] Preparing to send value update to Grasshopper');
 		if (this.isSolving) {
 			// Queue the update - only keep the latest one
 			console.log('[WebSocket] Grasshopper is solving, queuing value update');
@@ -297,7 +305,7 @@ export class WebSocketState {
 }
 
 // Singleton instances (one per port for multi-instance support)
-const wsStateByPort: Map<number, WebSocketState> = new Map();
+const wsStateByPort: Map<number, WebSocketState> = new SvelteMap();
 
 /**
  * Get or create the WebSocket state instance (singleton per port)

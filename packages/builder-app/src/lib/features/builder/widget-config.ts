@@ -16,6 +16,11 @@ import type {
 	OutputFileLayoutItem
 } from '@selva/shared';
 
+// File input configuration constants
+export const ACCEPTED_FILE_FORMATS = ['.3dm', '.stp', '.step', '.igs', '.iges', '.dxf', '.dwg', '.obj', '.fbx', '.glb', '.gltf'] as const;
+export const FILE_INPUT_MODES = ['upload', 'url'] as const;
+export type FileInputMode = typeof FILE_INPUT_MODES[number];
+
 export type InputWidgetType =
 	| InputNumberLayoutItem['widgetType']
 	| InputTextLayoutItem['widgetType']
@@ -110,8 +115,8 @@ export function createDefaultWidgetConfig(
 
 			case 'file': {
 				const config: FileInputWidgetConfig = {
-					acceptedFormats: ['.3dm', '.stp', '.step', '.igs', '.iges', '.dxf', '.dwg', '.obj', '.fbx', '.glb', '.gltf'],
-					defaultInputMode: 'path'
+					acceptedFormats: [...ACCEPTED_FILE_FORMATS],
+					defaultInputMode: 'upload'
 				};
 				return config;
 			}

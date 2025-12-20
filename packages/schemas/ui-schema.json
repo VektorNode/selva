@@ -70,6 +70,11 @@
 					"type": "array",
 					"items": { "type": "string" },
 					"description": "List of accepted file extensions (e.g., ['.3dm', '.step'])"
+				},
+				"defaultInputMode": {
+					"type": "string",
+					"enum": ["upload", "url"],
+					"description": "Default input mode for file input (upload or url)"
 				}
 			},
 			"additionalProperties": false

@@ -231,6 +231,19 @@ public static class FileImporter
 			if (string.IsNullOrEmpty(base64Data))
 				return (false, null, "Base64 data is empty");
 
+			// Validate base64 length to prevent DoS
+			if (base64Data.Length > MAX_FILE_SIZE_BYTES * 2) // Base64 is ~1.37x larger
+				return (false, null, "Base64 data too large");
+
+			// Validate and sanitize file extension
+			var extension = !string.IsNullOrEmpty(fileEnding) ? fileEnding : ".tmp";
+			if (extension.Contains("..") || extension.Contains("/") || extension.Contains("\\"))
+				return (false, null, "Invalid file extension");
+
+			var allowedExtensions = new[] { ".3dm", ".stp", ".step", ".igs", ".iges", ".dxf", ".dwg", ".obj", ".fbx", ".glb", ".gltf", ".tmp" };
+			if (!allowedExtensions.Contains(extension?.ToLowerInvariant() ?? ""))
+				return (false, null, $"File extension '{extension}' is not supported");
+
 			var bytes = Convert.FromBase64String(base64Data);
 
 			// Check file size
@@ -238,7 +251,7 @@ public static class FileImporter
 				return (false, null,
 					$"Decoded file too large: {bytes.Length / 1024 / 1024}MB (max {MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)");
 
-			var extension = !string.IsNullOrEmpty(fileEnding) ? fileEnding : ".tmp";
+			// Use secure temp file name
 			var tempPath = Path.Combine(Path.GetTempPath(), $"selva_base64_{Guid.NewGuid():N}{extension}");
 
 			File.WriteAllBytes(tempPath, bytes);

@@ -1,4 +1,4 @@
-import { RhinoCompute } from 'compute-rhino3d';
+import RhinoCompute from 'compute-rhino3d';
 
 import { RhinoComputeError, ErrorCodes } from '../errors';
 
@@ -216,7 +216,7 @@ async function handleResponse(
  */
 export async function fetchRhinoCompute<E extends Endpoint>(
 	endpoint: E,
-	args: Record<string, any>,
+	args: Record<string, unknown>,
 	config: ComputeConfig | GrasshopperComputeConfig
 ): Promise<ComputeResponseFor<E>> {
 	const requestId = generateRequestId();
