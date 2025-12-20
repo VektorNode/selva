@@ -11,6 +11,7 @@ using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Rhino.Geometry;
+using Selva.Core.Models;
 using Selva.Grasshopper.Features.FileIO.Services;
 using Selva.Grasshopper.Properties;
 using static Selva.Grasshopper.Features.ComputeIO.Components.GetValueListParameter;
@@ -20,7 +21,7 @@ namespace Selva.Grasshopper.Features.ComputeIO.Components;
 
 /// <summary>
 ///   A contextual parameter that imports geometry from files (local path, URL, or base64).
-///   Supports: 3dm, STEP, IGES, DXF, DWG, OBJ, FBX, GLB
+///   Supported formats are defined in AcceptedFileFormats.Values (schema-driven).
 /// </summary>
 public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParameter
 {
@@ -125,7 +126,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 			{ "paramType", TypeName },
 			{
 				"acceptedFormats",
-				new JArray(".3dm", ".stp", ".step", ".igs", ".iges", ".dxf", ".dwg", ".obj", ".fbx", ".glb", ".gltf")
+				new JArray(AcceptedFileFormats.Values)
 			}
 		};
 	}
@@ -347,8 +348,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 		// Validate file extension
 		if (fileData.FileEnding != null)
 		{
-			var allowedExtensions = new[] { ".3dm", ".stp", ".step", ".igs", ".iges", ".dxf", ".dwg", ".obj", ".fbx", ".glb", ".gltf" };
-			if (!allowedExtensions.Contains(fileData.FileEnding.ToLowerInvariant()))
+			if (!AcceptedFileFormats.Values.Contains(fileData.FileEnding.ToLowerInvariant()))
 				return false;
 		}
 

@@ -89,10 +89,32 @@ async function generateSchema(schemaFileName, outputFileName, rootTypeName, opti
 }
 
 async function main() {
+  // Read schema to extract constants
+  const schemaPath = path.join(__dirname, 'ui-schema.json');
+  const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
+
+  // Generate constants code
+  let constantsCode = '';
+  if (schema.constants) {
+    constantsCode = `
+// ============================================================================
+// CONSTANTS (from schema)
+// ============================================================================
+
+`;
+    for (const [key, value] of Object.entries(schema.constants)) {
+      // Convert camelCase to SCREAMING_SNAKE_CASE
+      const constName = key
+        .replace(/([a-z])([A-Z])/g, '$1_$2')
+        .toUpperCase();
+      constantsCode += `export const ${constName} = ${JSON.stringify(value, null, 2)} as const;\n`;
+    }
+  }
+
   // Generate UI Schema types
   await generateSchema('ui-schema.json', 'schema.ts', 'UISchemaRoot', {
     appendCode: `
-
+${constantsCode}
 // ============================================================================
 // TYPE GUARDS
 // ============================================================================
