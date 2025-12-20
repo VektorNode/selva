@@ -318,8 +318,19 @@ public class WebSocketServer : IDisposable
 
 					if (result.MessageType == WebSocketMessageType.Close)
 					{
-						await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing",
-							CancellationToken.None);
+						// Use CloseOutputAsync instead of CloseAsync to allow receiving close frame
+						if (webSocket.State == WebSocketState.Open)
+						{
+							try
+							{
+								await webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Closing",
+									CancellationToken.None);
+							}
+							catch
+							{
+								// Already closed, just exit
+							}
+						}
 						return;
 					}
 
@@ -327,9 +338,19 @@ public class WebSocketServer : IDisposable
 
 					if (messageBuffer.Count > MAX_MESSAGE_SIZE)
 					{
-						await webSocket.CloseAsync(WebSocketCloseStatus.MessageTooBig,
-							$"Message exceeds maximum size of {MAX_MESSAGE_SIZE} bytes",
-							CancellationToken.None);
+						if (webSocket.State == WebSocketState.Open)
+						{
+							try
+							{
+								await webSocket.CloseOutputAsync(WebSocketCloseStatus.MessageTooBig,
+									$"Message exceeds maximum size of {MAX_MESSAGE_SIZE} bytes",
+									CancellationToken.None);
+							}
+							catch
+							{
+								// Already closed, just exit
+							}
+						}
 						return;
 					}
 				} while (!result.EndOfMessage);

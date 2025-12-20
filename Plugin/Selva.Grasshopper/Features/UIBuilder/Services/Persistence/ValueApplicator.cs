@@ -198,8 +198,8 @@ public class ValueApplicator
 
 		try
 		{
-			// Validate string length
-			if (value is string strValue)
+			// Validate string length (excluding file input data which has separate limits)
+			if (value is string strValue && input.ParamType != "file")
 				if (strValue.Length > MAX_STRING_LENGTH)
 				{
 					addMessage?.Invoke(GH_RuntimeMessageLevel.Error,

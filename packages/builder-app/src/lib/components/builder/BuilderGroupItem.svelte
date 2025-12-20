@@ -8,6 +8,7 @@
 	} from '@selva/shared';
 	import { Badge, Button, Card, Switch } from '@selva/shared';
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown } from '@lucide/svelte';
+	import { ACCEPTED_FILE_FORMATS } from '$lib/features/builder/widget-config';
 
 	interface BuilderGroupItemProps {
 		item: LayoutItem;
@@ -35,11 +36,32 @@
 		config.renderAsSlider = !config.renderAsSlider;
 	}
 
-	function setFileInputMode(mode: 'path' | 'url' | 'upload') {
+	function setFileInputMode(mode: 'upload' | 'url') {
 		if (!isFileInput) return;
 		const config = item.config as FileInputWidgetConfig;
 		if (!config) return;
 		config.defaultInputMode = mode;
+	}
+
+	function toggleAcceptedFormat(format: string) {
+		if (!isFileInput) return;
+		const config = item.config as FileInputWidgetConfig;
+		if (!config) return;
+		if (!config.acceptedFormats) {
+			config.acceptedFormats = Array.from(ACCEPTED_FILE_FORMATS);
+		}
+
+		const index = config.acceptedFormats.indexOf(format);
+		if (index > -1) {
+			config.acceptedFormats.splice(index, 1);
+		} else {
+			config.acceptedFormats.push(format);
+		}
+
+		// Ensure at least one format is selected
+		if (config.acceptedFormats.length === 0) {
+			config.acceptedFormats = [format];
+		}
 	}
 
 	function handleDragStart(e: DragEvent) {
@@ -242,20 +264,20 @@
 
 						{#if showAdvanced && isFileInput}
 							{@const config = item.config as FileInputWidgetConfig}
-							<div class="gap-2 flex flex-col">
-								<!-- Input Mode Selection -->
-								<div class="gap-1 flex flex-col">
+							<div class="flex flex-col gap-2">
+								<!-- Input Type -->
+								<div class="flex flex-col gap-1">
 									<span class="text-muted-foreground text-[10px] font-medium">Input Type</span>
-									<div class="gap-1 grid grid-cols-3">
+									<div class="grid grid-cols-2 gap-1">
 										<button
-											onclick={() => setFileInputMode('path')}
+											onclick={() => setFileInputMode('upload')}
 											class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-												config?.defaultInputMode === 'path'
+												config?.defaultInputMode === 'upload'
 													? 'bg-primary text-primary-foreground border-primary'
 													: 'border-border/70 hover:border-border hover:bg-accent'
 											}`}
 										>
-											Path
+											Upload
 										</button>
 										<button
 											onclick={() => setFileInputMode('url')}
@@ -267,16 +289,26 @@
 										>
 											URL
 										</button>
-										<button
-											onclick={() => setFileInputMode('upload')}
-											class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-												config?.defaultInputMode === 'upload'
-													? 'bg-primary text-primary-foreground border-primary'
-													: 'border-border/70 hover:border-border hover:bg-accent'
-											}`}
-										>
-											Upload
-										</button>
+									</div>
+								</div>
+
+								<!-- File Formats -->
+								<div class="flex flex-col gap-1">
+									<span class="text-muted-foreground text-[10px] font-medium">File Formats</span>
+									<div class="grid max-h-24 grid-cols-3 gap-1 overflow-y-auto">
+										{#each ACCEPTED_FILE_FORMATS as format}
+											{@const isChecked = config?.acceptedFormats?.includes(format)}
+											<button
+												onclick={() => toggleAcceptedFormat(format)}
+												class={`rounded border px-1.5 py-0.5 text-[9px] whitespace-nowrap transition-colors ${
+													isChecked
+														? 'bg-primary text-primary-foreground border-primary'
+														: 'border-border/70 hover:border-border hover:bg-accent'
+												}`}
+											>
+												{format}
+											</button>
+										{/each}
 									</div>
 								</div>
 							</div>

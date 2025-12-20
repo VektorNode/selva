@@ -188,6 +188,12 @@ namespace Selva.Core.Models
 /// </summary>
         [JsonProperty("acceptedFormats")]
         public List<string> AcceptedFormats { get; set; } = new List<string>();
+
+/// <summary>
+/// Default input mode for file input (upload or url)
+/// </summary>
+        [JsonProperty("defaultInputMode")]
+        public string DefaultInputMode { get; set; }
     }
 
 // ============================================================================

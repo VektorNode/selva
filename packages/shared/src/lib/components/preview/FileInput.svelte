@@ -2,25 +2,27 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
-	import { FileUp, Link, FolderOpen } from '@lucide/svelte';
+	import { FileUp, Link } from '@lucide/svelte';
 
 	interface Props {
 		value?: string;
 		acceptedFormats?: string[];
+		defaultInputMode?: 'upload' | 'url';
 		onChange: (value: string) => void;
 	}
 
 	let {
 		value = $bindable(),
 		acceptedFormats = [],
+		defaultInputMode = 'upload',
 		onChange
 	}: Props = $props();
 
 	let fileInput: HTMLInputElement | null = $state(null);
 	let uploadedFileName = $state('');
-	let pathInput = $state('');
 	let urlInput = $state('');
 	let isDragging = $state(false);
+	let isLoading = $state(false);
 
 	// Parse existing value if it's JSON
 	$effect(() => {
@@ -29,8 +31,6 @@
 				const parsed = JSON.parse(value);
 				if (parsed.type === 'base64') {
 					uploadedFileName = `Uploaded file (${parsed.fileEnding})`;
-				} else if (parsed.type === 'path') {
-					pathInput = parsed.file;
 				} else if (parsed.type === 'url') {
 					urlInput = parsed.file;
 				}
@@ -45,26 +45,61 @@
 		return ext.toLowerCase();
 	}
 
-	function handlePathChange() {
-		const fileEnding = getFileExtension(pathInput);
-		const data = JSON.stringify({
-			file: pathInput,
-			type: 'path',
-			fileEnding
-		});
-		value = data;
-		onChange(data);
+	function isValidFileExtension(fileEnding: string): boolean {
+		if (acceptedFormats.length === 0) return true;
+		return acceptedFormats.includes(fileEnding.toLowerCase());
 	}
 
-	function handleUrlChange() {
-		const fileEnding = getFileExtension(urlInput);
-		const data = JSON.stringify({
-			file: urlInput,
-			type: 'url',
-			fileEnding
-		});
-		value = data;
-		onChange(data);
+	async function handleUrlChange() {
+		if (!urlInput.trim()) return;
+
+		isLoading = true;
+		try {
+			// Validate URL
+			new URL(urlInput);
+
+			// Fetch the file
+			const response = await fetch(urlInput);
+			if (!response.ok) {
+				throw new Error(`Failed to fetch file: ${response.statusText}`);
+			}
+
+			const blob = await response.blob();
+			const fileEnding = getFileExtension(urlInput);
+
+			// Check file extension
+			if (!isValidFileExtension(fileEnding)) {
+				throw new Error(`File format not accepted: ${fileEnding}`);
+			}
+
+			// Check file size (e.g., max 100MB)
+			const maxSize = 100 * 1024 * 1024;
+			if (blob.size > maxSize) {
+				throw new Error(`File too large: ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
+			}
+
+			// Convert to base64
+			const reader = new FileReader();
+			reader.onload = (e) => {
+				const base64 = e.target?.result as string;
+				const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
+
+				const data = JSON.stringify({
+					file: base64Data,
+					type: 'base64',
+					fileEnding
+				});
+				value = data;
+				uploadedFileName = `Downloaded (${fileEnding})`;
+				onChange(data);
+				isLoading = false;
+			};
+			reader.readAsDataURL(blob);
+		} catch (error) {
+			console.error('URL fetch error:', error);
+			isLoading = false;
+			alert(`Error fetching file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
 	}
 
 	function handleFileUpload(event: Event) {
@@ -72,14 +107,20 @@
 		const file = target.files?.[0];
 		if (!file) return;
 
-		uploadedFileName = file.name;
 		const fileEnding = getFileExtension(file.name);
+
+		// Check file extension
+		if (!isValidFileExtension(fileEnding)) {
+			alert(`File format not accepted: ${fileEnding}`);
+			return;
+		}
+
+		uploadedFileName = file.name;
 
 		// Convert to base64 for web usage
 		const reader = new FileReader();
 		reader.onload = (e) => {
 			const base64 = e.target?.result as string;
-			// Remove data URL prefix (e.g., "data:application/octet-stream;base64,")
 			const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
 
 			const data = JSON.stringify({
@@ -135,64 +176,58 @@
 		class="hidden"
 	/>
 
-	<!-- Path Input (for direct Rhino usage without web UI) -->
-	<div class="gap-2 flex flex-col">
-		<Label for="path-input" class="gap-2 flex items-center">
-			<FolderOpen size={16} />
-			File Path
-		</Label>
-		<Input
-			id="path-input"
-			type="text"
-			bind:value={pathInput}
-			placeholder="C:\path\to\file.3dm"
-			oninput={handlePathChange}
-		/>
-		<p class="text-xs text-muted-foreground">
-			Enter a file path (used when running directly in Rhino without web interface).
-		</p>
-	</div>
-
-	<!-- URL Input -->
-	<div class="gap-2 flex flex-col">
-		<Label for="url-input" class="gap-2 flex items-center">
-			<Link size={16} />
-			File URL
-		</Label>
-		<Input
-			id="url-input"
-			type="url"
-			bind:value={urlInput}
-			placeholder="https://example.com/model.3dm"
-			oninput={handleUrlChange}
-		/>
-		<p class="text-xs text-muted-foreground">Enter a URL to download the file from.</p>
-	</div>
-
-	<!-- File Upload (for web usage - always base64) -->
-	<div class="gap-2 flex flex-col">
-		<Label for="file-upload" class="gap-2 flex items-center">
-			<FileUp size={16} />
-			Upload File
-		</Label>
-		<Button
-			type="button"
-			variant="outline"
-			class="gap-2 w-full {isDragging ? 'border-blue-500' : ''}"
-			onclick={openFilePicker}
-			ondragover={handleDragOver}
-			ondragleave={handleDragLeave}
-			ondrop={handleDrop}
-		>
-			<FileUp size={16} />
-			{uploadedFileName || 'Choose File or Drag & Drop'}
-		</Button>
-		{#if acceptedFormats.length > 0}
-			<p class="text-xs text-muted-foreground">
-				Accepted formats: {acceptedFormats.join(', ')}
-			</p>
-		{/if}
-	</div>
+	{#if defaultInputMode === 'url'}
+		<!-- URL Input -->
+		<div class="gap-2 flex flex-col">
+			<Label for="url-input" class="gap-2 flex items-center">
+				<Link size={16} />
+				File URL
+			</Label>
+			<div class="flex gap-2">
+				<Input
+					id="url-input"
+					type="url"
+					bind:value={urlInput}
+					placeholder="https://example.com/model.3dm"
+					disabled={isLoading}
+				/>
+				<Button
+					type="button"
+					variant="outline"
+					disabled={isLoading || !urlInput.trim()}
+					onclick={handleUrlChange}
+				>
+					{isLoading ? 'Loading...' : 'Fetch'}
+				</Button>
+			</div>
+			<p class="text-xs text-muted-foreground">Enter a URL and click Fetch to download and convert the file.</p>
+		</div>
+	{:else}
+		<!-- File Upload (for web usage - base64) -->
+		<div class="gap-2 flex flex-col">
+			<Label for="file-upload" class="gap-2 flex items-center">
+				<FileUp size={16} />
+				Upload File
+			</Label>
+			<Button
+				type="button"
+				variant="outline"
+				class="gap-2 w-full {isDragging ? 'border-blue-500' : ''}"
+				onclick={openFilePicker}
+				ondragover={handleDragOver}
+				ondragleave={handleDragLeave}
+				ondrop={handleDrop}
+			>
+				<FileUp size={16} />
+				{uploadedFileName || 'Choose File or Drag & Drop'}
+			</Button>
+			{#if acceptedFormats.length > 0}
+				<p class="text-xs text-muted-foreground">
+					Accepted formats: {acceptedFormats.join(', ')}
+				</p>
+			{/if}
+		</div>
+	{/if}
 </div>
 
 <style>
