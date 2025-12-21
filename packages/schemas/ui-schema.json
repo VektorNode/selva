@@ -4,7 +4,7 @@
 	"title": "Selva UI Schema",
 	"description": "Schema definitions for Selva UI configuration",
 	"constants": {
-		"acceptedFileFormats": [".3dm", ".stp", ".step", ".igs", ".iges", ".dxf", ".dwg", ".obj", ".fbx", ".glb", ".gltf"]
+		"acceptedFileFormats": [".3dm", ".stp", ".step"]
 	},
 	"definitions": {
 		"//_COMMENT": "--- PRIMITIVES ---",
