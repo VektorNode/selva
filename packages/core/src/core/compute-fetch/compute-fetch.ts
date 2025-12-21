@@ -216,7 +216,7 @@ async function handleResponse(
  */
 export async function fetchRhinoCompute<E extends Endpoint>(
 	endpoint: E,
-	args: Record<string, unknown>,
+	args: Record<string, any>,
 	config: ComputeConfig | GrasshopperComputeConfig
 ): Promise<ComputeResponseFor<E>> {
 	const requestId = generateRequestId();
