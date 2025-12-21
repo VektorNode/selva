@@ -28,6 +28,10 @@ export class WebSocketState {
 	private _serverDisconnected = false;
 	private _shouldReloadOnReconnect = false;
 	private solvingTimeout: ReturnType<typeof setTimeout> | null = null;
+	private batchTimer: ReturnType<typeof setTimeout> | null = null;
+	private batchedValues: Record<string, unknown> = {};
+	private currentSessionId: string | null = null;
+	private readonly BATCH_DELAY_MS = 50; // Batch updates within 50ms window
 
 	// Reactive state using Svelte 5 runes
 	connected = $state(false);
@@ -51,11 +55,21 @@ export class WebSocketState {
 						this.solvingTimeout = null;
 					}
 
-					// If solving just finished and we have a pending update, send it
-					if (!this.isSolving && this._pendingValueUpdate) {
-						console.log('[WebSocket] Solving completed, sending pending value update');
-						this.send('valueUpdate', this._pendingValueUpdate);
-						this._pendingValueUpdate = null;
+					// If solving just finished, handle pending/batched updates
+					if (!this.isSolving) {
+						// First, flush any batched updates
+						if (this.batchTimer) {
+							clearTimeout(this.batchTimer);
+							this.batchTimer = null;
+							this.flushBatchedUpdates();
+						}
+
+						// Then send any pending update from while solving
+						if (this._pendingValueUpdate) {
+							console.log('[WebSocket] Solving completed, sending pending value update');
+							this.send('valueUpdate', this._pendingValueUpdate);
+							this._pendingValueUpdate = null;
+						}
 					}
 				}
 			}
@@ -93,10 +107,9 @@ export class WebSocketState {
 
 				this.socket.onmessage = (event) => {
 					try {
-						// Skip empty or invalid messages
+						// Skip empty messages (note: server no longer sends ping messages)
 						if (!event.data || typeof event.data !== 'string' || event.data.trim() === '') {
-							console.warn('[WebSocket] Received empty or invalid message, skipping');
-							return;
+							return; // Silently ignore empty messages
 						}
 
 						const message = JSON.parse(event.data);
@@ -140,6 +153,16 @@ export class WebSocketState {
 			this.reconnectTimer = null;
 		}
 
+		if (this.batchTimer) {
+			clearTimeout(this.batchTimer);
+			this.batchTimer = null;
+		}
+
+		if (this.solvingTimeout) {
+			clearTimeout(this.solvingTimeout);
+			this.solvingTimeout = null;
+		}
+
 		if (this.socket) {
 			this.socket.close();
 			this.socket = null;
@@ -147,6 +170,8 @@ export class WebSocketState {
 
 		this.reconnectAttempts = 0;
 		this.connected = false;
+		this.batchedValues = {};
+		this._pendingValueUpdate = null;
 	}
 
 	/**
@@ -169,11 +194,13 @@ export class WebSocketState {
 	}
 
 	/**
-	 * Send value updates to Grasshopper
+	 * Send value updates to Grasshopper with batching
+	 * Multiple rapid updates are batched within a short time window to reduce network traffic
 	 * If Grasshopper is currently solving, the update will be queued and sent when solving completes
 	 */
 	sendValueUpdate(sessionId: string, values: Record<string, unknown>) {
 		console.log('[WebSocket] Preparing to send value update to Grasshopper');
+
 		if (this.isSolving) {
 			// Queue the update - only keep the latest one
 			console.log('[WebSocket] Grasshopper is solving, queuing value update');
@@ -181,6 +208,36 @@ export class WebSocketState {
 			return;
 		}
 
+		// Batch updates within the time window
+		this.currentSessionId = sessionId;
+		Object.assign(this.batchedValues, values);
+
+		// Clear existing timer and set new one
+		if (this.batchTimer) {
+			clearTimeout(this.batchTimer);
+		}
+
+		this.batchTimer = setTimeout(() => {
+			this.flushBatchedUpdates();
+		}, this.BATCH_DELAY_MS);
+	}
+
+	/**
+	 * Immediately send all batched value updates
+	 */
+	private flushBatchedUpdates() {
+		if (Object.keys(this.batchedValues).length === 0 || !this.currentSessionId) {
+			return;
+		}
+
+		const sessionId = this.currentSessionId;
+		const values = { ...this.batchedValues };
+
+		// Clear batch state
+		this.batchedValues = {};
+		this.batchTimer = null;
+
+		console.log(`[WebSocket] Sending batched value update with ${Object.keys(values).length} values`);
 		this.send('valueUpdate', { sessionId, values });
 
 		// Set a single timeout to auto-clear solving state if no update received from server

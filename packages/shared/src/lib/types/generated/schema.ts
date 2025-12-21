@@ -343,15 +343,7 @@ export interface ValidationIssueMessage {
 export const ACCEPTED_FILE_FORMATS = [
   ".3dm",
   ".stp",
-  ".step",
-  ".igs",
-  ".iges",
-  ".dxf",
-  ".dwg",
-  ".obj",
-  ".fbx",
-  ".glb",
-  ".gltf"
+  ".step"
 ] as const;
 
 // ============================================================================

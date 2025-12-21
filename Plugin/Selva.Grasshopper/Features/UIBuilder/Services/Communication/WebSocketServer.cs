@@ -21,9 +21,12 @@ public class WebSocketServer : IDisposable
 	private const int MAX_CLIENTS = AppConfig.WebSocket.MaxConcurrentClients;
 	private const int HEARTBEAT_INTERVAL = AppConfig.WebSocket.HeartbeatIntervalMs;
 	private const int BROADCAST_TIMEOUT = AppConfig.WebSocket.BroadcastTimeoutMs;
+	private const int MAX_SEND_QUEUE_SIZE = 10; // Max pending messages per client
+	private const int SEND_BUFFER_SIZE = 65536; // 64KB send buffer per client
 
 	private readonly object _clientsLock = new();
 	private readonly List<WebSocket> _connectedClients = new();
+	private readonly Dictionary<WebSocket, int> _clientPendingMessages = new();
 	private CancellationTokenSource _cancellationTokenSource;
 	private Timer _heartbeatTimer;
 	private HttpListener _httpListener;
@@ -153,7 +156,7 @@ public class WebSocketServer : IDisposable
 	}
 
 	/// <summary>
-	///   Send a message to all connected clients
+	///   Send a message to all connected clients with backpressure handling
 	/// </summary>
 	public async Task BroadcastAsync(string message)
 	{
@@ -169,29 +172,45 @@ public class WebSocketServer : IDisposable
 		}
 
 		var clientsToRemove = new List<WebSocket>();
+		var tasks = new List<Task>();
 
 		foreach (var client in clientsCopy)
-			if (client.State == WebSocketState.Open)
-				try
-				{
-					// Add timeout to prevent slow clients from blocking broadcast
-					using (var cts = new CancellationTokenSource(BROADCAST_TIMEOUT))
-					{
-						await client.SendAsync(segment, WebSocketMessageType.Text, true, cts.Token);
-					}
-				}
-				catch (OperationCanceledException)
-				{
-					Logger.Warn("Broadcast timeout for client - removing from pool");
-					clientsToRemove.Add(client);
-				}
-				catch (Exception ex)
-				{
-					Logger.Warn($"Broadcast failed for client: {ex.Message}");
-					clientsToRemove.Add(client);
-				}
-			else
+		{
+			if (client.State != WebSocketState.Open)
+			{
 				clientsToRemove.Add(client);
+				continue;
+			}
+
+			// Check backpressure - if client has too many pending messages, skip or drop
+			int pendingCount;
+			lock (_clientsLock)
+			{
+				_clientPendingMessages.TryGetValue(client, out pendingCount);
+			}
+
+			if (pendingCount >= MAX_SEND_QUEUE_SIZE)
+			{
+				Logger.Warn($"Client send queue full ({pendingCount} pending), dropping message to prevent backpressure");
+				continue;
+			}
+
+			// Increment pending count
+			lock (_clientsLock)
+			{
+				_clientPendingMessages[client] = pendingCount + 1;
+			}
+
+			// Send message asynchronously
+			var sendTask = SendToClientAsync(client, segment, clientsToRemove);
+			tasks.Add(sendTask);
+		}
+
+		// Wait for all sends to complete
+		if (tasks.Count > 0)
+		{
+			await Task.WhenAll(tasks);
+		}
 
 		// Remove dead clients
 		if (clientsToRemove.Count > 0)
@@ -200,6 +219,7 @@ public class WebSocketServer : IDisposable
 				foreach (var client in clientsToRemove)
 				{
 					_connectedClients.Remove(client);
+					_clientPendingMessages.Remove(client);
 					try
 					{
 						client.Dispose();
@@ -210,6 +230,50 @@ public class WebSocketServer : IDisposable
 					}
 				}
 			}
+	}
+
+	/// <summary>
+	///   Send message to a single client with timeout and error handling
+	/// </summary>
+	private async Task SendToClientAsync(WebSocket client, ArraySegment<byte> segment, List<WebSocket> clientsToRemove)
+	{
+		try
+		{
+			// Add timeout to prevent slow clients from blocking broadcast
+			using (var cts = new CancellationTokenSource(BROADCAST_TIMEOUT))
+			{
+				await client.SendAsync(segment, WebSocketMessageType.Text, true, cts.Token);
+			}
+		}
+		catch (OperationCanceledException)
+		{
+			Logger.Warn("Broadcast timeout for client - removing from pool");
+			lock (_clientsLock)
+			{
+				if (!clientsToRemove.Contains(client))
+					clientsToRemove.Add(client);
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Warn($"Broadcast failed for client: {ex.Message}");
+			lock (_clientsLock)
+			{
+				if (!clientsToRemove.Contains(client))
+					clientsToRemove.Add(client);
+			}
+		}
+		finally
+		{
+			// Decrement pending count
+			lock (_clientsLock)
+			{
+				if (_clientPendingMessages.TryGetValue(client, out var count))
+				{
+					_clientPendingMessages[client] = Math.Max(0, count - 1);
+				}
+			}
+		}
 	}
 
 	private async Task AcceptConnectionsAsync(CancellationToken cancellationToken)
@@ -255,7 +319,10 @@ public class WebSocketServer : IDisposable
 				if (_connectedClients.Count >= MAX_CLIENTS)
 					shouldReject = true;
 				else
+				{
 					_connectedClients.Add(webSocket);
+					_clientPendingMessages[webSocket] = 0; // Initialize pending message counter
+				}
 			}
 
 			if (shouldReject)
@@ -283,6 +350,7 @@ public class WebSocketServer : IDisposable
 				lock (_clientsLock)
 				{
 					_connectedClients.Remove(webSocket);
+					_clientPendingMessages.Remove(webSocket);
 				}
 
 				try
@@ -334,7 +402,8 @@ public class WebSocketServer : IDisposable
 						return;
 					}
 
-					for (var i = 0; i < result.Count; i++) messageBuffer.Add(buffer[i]);
+					// Use AddRange for efficient bulk copy instead of loop
+					messageBuffer.AddRange(new ArraySegment<byte>(buffer, 0, result.Count));
 
 					if (messageBuffer.Count > MAX_MESSAGE_SIZE)
 					{
@@ -428,10 +497,12 @@ public class WebSocketServer : IDisposable
 
 	/// <summary>
 	///   Start heartbeat timer to detect and clean up dead connections
+	///   Note: .NET WebSocket automatically handles ping/pong frames at the protocol level.
+	///   This timer just cleans up connections that are in a non-open state.
 	/// </summary>
 	private void StartHeartbeat()
 	{
-		_heartbeatTimer = new Timer(async _ =>
+		_heartbeatTimer = new Timer(_ =>
 		{
 			if (!IsRunning) return;
 
@@ -443,30 +514,15 @@ public class WebSocketServer : IDisposable
 
 			var clientsToRemove = new List<WebSocket>();
 
+			// Check connection states - .NET WebSocket handles ping/pong automatically
 			foreach (var client in clients)
-				if (client.State == WebSocketState.Open)
-					try
-					{
-						// Send ping by sending empty text message
-						// Note: Proper WebSocket ping frames would require lower-level control
-						var pingBuffer = Encoding.UTF8.GetBytes("");
-						using (var cts = new CancellationTokenSource(5000))
-						{
-							await client.SendAsync(
-								new ArraySegment<byte>(pingBuffer),
-								WebSocketMessageType.Text,
-								true,
-								cts.Token
-							);
-						}
-					}
-					catch (Exception ex)
-					{
-						Logger.Warn($"Heartbeat failed for client: {ex.Message}");
-						clientsToRemove.Add(client);
-					}
-				else
+			{
+				if (client.State != WebSocketState.Open && client.State != WebSocketState.Connecting)
+				{
+					Logger.Log($"Heartbeat detected dead connection in state: {client.State}");
 					clientsToRemove.Add(client);
+				}
+			}
 
 			if (clientsToRemove.Count > 0)
 				lock (_clientsLock)
@@ -474,6 +530,7 @@ public class WebSocketServer : IDisposable
 					foreach (var client in clientsToRemove)
 					{
 						_connectedClients.Remove(client);
+						_clientPendingMessages.Remove(client);
 						try
 						{
 							client.Dispose();
@@ -483,6 +540,8 @@ public class WebSocketServer : IDisposable
 							Logger.Warn($"Error disposing WebSocket during heartbeat cleanup: {ex.Message}");
 						}
 					}
+
+					Logger.Log($"Heartbeat cleaned up {clientsToRemove.Count} dead connection(s)");
 				}
 		}, null, HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL);
 	}

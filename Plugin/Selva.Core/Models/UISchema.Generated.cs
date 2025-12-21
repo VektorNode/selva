@@ -18,7 +18,7 @@ namespace Selva.Core.Models
 
     public static class AcceptedFileFormats
     {
-        public static readonly string[] Values = new string[] { ".3dm", ".stp", ".step", ".igs", ".iges", ".dxf", ".dwg", ".obj", ".fbx", ".glb", ".gltf" };
+        public static readonly string[] Values = new string[] { ".3dm", ".stp", ".step" };
     }
 
 // ============================================================================
