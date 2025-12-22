@@ -25,7 +25,7 @@
 	} from '@selva/shared';
 	import { Maximize, Minimize } from '@lucide/svelte';
 	import { initializeWebSocketSession, getWebSocketPortFromUrl } from '$lib/utils/session';
-	import { type MeshBatch } from '@selva/core';
+	import { type MeshBatch } from '@selva/core/visualization';
 
 	const sessionId = $derived(page.url.searchParams.get('session') || '');
 	let schema = $state<UISchema | null>(null);
@@ -122,13 +122,19 @@
 			return;
 		}
 
+		console.log(
+			`[Preview] Value changed for ${paramId}, value size:`,
+			value?.toString().length || 0
+		);
 		values[paramId] = value;
 
 		if (schema?.instanceSolve === false) {
+			console.log(`[Preview] instanceSolve is false, marking as pending change`);
 			hasPendingChanges = true;
 			return;
 		}
 
+		console.log(`[Preview] Sending immediate value update`);
 		if (wsState.connected) {
 			wsState.sendValueUpdate(sessionId, $state.snapshot(values));
 		} else {
@@ -141,6 +147,7 @@
 			return;
 		}
 		if (wsState.connected) {
+			console.log($state.snapshot(values));
 			wsState.sendValueUpdate(sessionId, $state.snapshot(values));
 			hasPendingChanges = false;
 		} else {

@@ -1,6 +1,6 @@
 import type { UISchema } from '$lib/types/generated';
-import type { MeshBatch } from '@selva/core';
-import { parseMeshBatchObject, SCALE_FACTORS } from '@selva/core';
+import type { MeshBatch } from '@selva/core/visualization';
+import { parseMeshBatchObject, SCALE_FACTORS, initThree, updateScene } from '@selva/core/visualization';
 import type { ThreeInitializerOptions } from '@selva/core/visualization';
 
 export interface ViewerState {
@@ -23,7 +23,7 @@ export async function initializeViewerScene(
 		environment: { backgroundColor: schema.viewerOptions?.backgroundColor || '#ffffff' }
 	};
 
-	const { scene, camera, controls } = rhinoCompute.initThree(canvas, opts);
+	const { scene, camera, controls } = initThree(canvas, opts);
 
 	return {
 		scene,
@@ -41,7 +41,7 @@ export async function updateViewerScene(
 		return;
 	}
 
-	rhinoCompute.updateScene(
+	updateScene(
 		state.scene as any,
 		displayMeshes,
 		state.camera as any,

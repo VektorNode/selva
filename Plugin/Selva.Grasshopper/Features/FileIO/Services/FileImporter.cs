@@ -2,26 +2,23 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
 using Rhino;
 using Rhino.DocObjects;
 using Rhino.FileIO;
 using Rhino.Geometry;
+using Selva.Core.Models;
 
 namespace Selva.Grasshopper.Features.FileIO.Services;
 
 /// <summary>
 ///   Centralizes file import logic for multiple file formats.
-///   Supports: 3dm, STEP, IGES, DXF, DWG, OBJ, FBX, GLB
 /// </summary>
 public static class FileImporter
 {
 	private const int MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100MB
-	private const int DOWNLOAD_TIMEOUT_SECONDS = 30;
 
 	/// <summary>
-	///   Imports a file from path, URL, or base64 data.
+	///   Imports a file from path or base64 data.
 	/// </summary>
 	public static (bool Success, List<GeometryWithName> Geometry, string DetectedFormat, string ErrorMessage)
 		ImportFromFileInputData(FileInputData fileData)
@@ -39,13 +36,6 @@ public static class FileImporter
 					tempPath = fileData.File;
 					break;
 
-				case "url":
-					var downloadResult = DownloadUrlToTempSync(fileData.File, fileData.FileEnding);
-					if (!downloadResult.Success)
-						return (false, new List<GeometryWithName>(), "", downloadResult.ErrorMessage);
-					tempPath = downloadResult.TempPath;
-					break;
-
 				case "base64":
 					var decodeResult = DecodeBase64ToTemp(fileData.File, fileData.FileEnding);
 					if (!decodeResult.Success)
@@ -54,29 +44,15 @@ public static class FileImporter
 					break;
 
 				default:
-					// Try to auto-detect: if starts with http/https, treat as URL, otherwise as path
-					if (fileData.File.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-					    fileData.File.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-					{
-						var autoDetectResult = DownloadUrlToTempSync(fileData.File, fileData.FileEnding);
-						if (!autoDetectResult.Success)
-							return (false, new List<GeometryWithName>(), "", autoDetectResult.ErrorMessage);
-						tempPath = autoDetectResult.TempPath;
-					}
-					else
-					{
-						tempPath = fileData.File;
-					}
-
+					// Treat as path
+					tempPath = fileData.File;
 					break;
 			}
 
-			// Import the file
 			return ImportFile(tempPath);
 		}
 		finally
 		{
-			// Clean up temp file only if it was created by us (not for direct path input)
 			if (!string.IsNullOrEmpty(tempPath) &&
 			    fileData.Type?.ToLowerInvariant() != "path" &&
 			    File.Exists(tempPath))
@@ -132,23 +108,7 @@ public static class FileImporter
 					importSuccess = ImportStep(filePath, doc);
 					break;
 
-				case ".igs":
-				case ".iges":
-					importSuccess = ImportIges(filePath, doc);
-					break;
-
-				case ".dxf":
-				case ".dwg":
-				case ".obj":
-				case ".fbx":
-				case ".glb":
-				case ".gltf":
-					// Try generic import for these formats
-					importSuccess = ImportGeneric(filePath, doc);
-					break;
-
 				default:
-					// Unknown format - try generic import as fallback
 					importSuccess = ImportGeneric(filePath, doc);
 					break;
 			}
@@ -173,54 +133,6 @@ public static class FileImporter
 	}
 
 	/// <summary>
-	///   Downloads a file from URL to a temp file.
-	/// </summary>
-	private static (bool Success, string TempPath, string ErrorMessage) DownloadUrlToTempSync(string url,
-		string fileEnding)
-	{
-		try
-		{
-			// Validate URL
-			if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-				return (false, null, "Invalid URL format");
-
-			if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
-				return (false, null, "Only HTTP and HTTPS URLs are supported");
-
-			// Create temp file path
-			var extension = !string.IsNullOrEmpty(fileEnding)
-				? fileEnding
-				: Path.GetExtension(uri.LocalPath);
-			var tempPath = Path.Combine(Path.GetTempPath(), $"selva_download_{Guid.NewGuid():N}{extension}");
-
-			// Download (synchronous wrapper for async)
-			var task = Task.Run(async () =>
-			{
-				using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(DOWNLOAD_TIMEOUT_SECONDS) };
-				var response = await client.GetAsync(url);
-				response.EnsureSuccessStatusCode();
-
-				var bytes = await response.Content.ReadAsByteArrayAsync();
-
-				// Check file size
-				if (bytes.Length > MAX_FILE_SIZE_BYTES)
-					return (false, null,
-						$"Downloaded file too large: {bytes.Length / 1024 / 1024}MB (max {MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)");
-
-				File.WriteAllBytes(tempPath, bytes);
-				return (true, tempPath, "");
-			});
-
-			task.Wait();
-			return task.Result;
-		}
-		catch (Exception ex)
-		{
-			return (false, null, $"Download failed: {ex.Message}");
-		}
-	}
-
-	/// <summary>
 	///   Decodes base64 data to a temp file.
 	/// </summary>
 	public static (bool Success, string TempPath, string ErrorMessage) DecodeBase64ToTemp(string base64Data,
@@ -231,6 +143,19 @@ public static class FileImporter
 			if (string.IsNullOrEmpty(base64Data))
 				return (false, null, "Base64 data is empty");
 
+			// Validate base64 length to prevent DoS
+			if (base64Data.Length > MAX_FILE_SIZE_BYTES * 2) // Base64 is ~1.37x larger
+				return (false, null, "Base64 data too large");
+
+			// Validate and sanitize file extension
+			var extension = !string.IsNullOrEmpty(fileEnding) ? fileEnding : ".tmp";
+			if (extension.Contains("..") || extension.Contains("/") || extension.Contains("\\"))
+				return (false, null, "Invalid file extension");
+
+			var allowedExtensions = AcceptedFileFormats.Values;
+			if (!allowedExtensions.Contains(extension?.ToLowerInvariant() ?? ""))
+				return (false, null, $"File extension '{extension}' is not supported");
+
 			var bytes = Convert.FromBase64String(base64Data);
 
 			// Check file size
@@ -238,7 +163,7 @@ public static class FileImporter
 				return (false, null,
 					$"Decoded file too large: {bytes.Length / 1024 / 1024}MB (max {MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)");
 
-			var extension = !string.IsNullOrEmpty(fileEnding) ? fileEnding : ".tmp";
+			// Use secure temp file name
 			var tempPath = Path.Combine(Path.GetTempPath(), $"selva_base64_{Guid.NewGuid():N}{extension}");
 
 			File.WriteAllBytes(tempPath, bytes);
@@ -287,18 +212,7 @@ public static class FileImporter
 	}
 
 	/// <summary>
-	///   Import IGES file (.igs, .iges).
-	///   Note: Falls back to generic import as FileIges may not be available in all Rhino versions.
-	/// </summary>
-	private static bool ImportIges(string filePath, RhinoDoc doc)
-	{
-		// FileIges.Read may not be available in all Rhino versions
-		// Fall back to generic doc.Import() which should handle IGES
-		return ImportGeneric(filePath, doc);
-	}
-
-	/// <summary>
-	///   Generic import for other formats (DXF, DWG, OBJ, FBX, GLB, etc.).
+	///   Generic import
 	/// </summary>
 	private static bool ImportGeneric(string filePath, RhinoDoc doc)
 	{

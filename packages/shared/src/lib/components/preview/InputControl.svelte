@@ -14,7 +14,7 @@
 		isCheckboxWidget,
 		isFileWidget
 	} from '$lib/types/generated';
-	import { debounce } from '$lib/utils/debounce';
+	import { throttle } from '$lib/utils/throttle';
 	import { Input } from '$lib/components/ui/input';
 	import { Slider } from '$lib/components/ui/slider';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -41,13 +41,17 @@
 		onChange(item.paramId, newValue);
 	}
 
-	const debouncedOnChange = debounce((paramId: string, newValue: SupportedTypes) => {
+	// Use throttle for sliders: immediate first update, then waits for user to pause/stop
+	// before sending next update. The WebSocket layer handles backpressure (queues latest
+	// value if Grasshopper is solving), so we can be more conservative here.
+	// 300ms = good balance between responsiveness and not spamming during rapid changes
+	const throttledOnChange = throttle((paramId: string, newValue: SupportedTypes) => {
 		onChange(paramId, newValue);
-	}, 150);
+	}, 300);
 
 	function handleSliderChange(newValue: number) {
 		value = newValue;
-		debouncedOnChange(item.paramId, newValue);
+		throttledOnChange(item.paramId, newValue);
 	}
 
 	// Calculate optimal step size for slider performance
@@ -183,6 +187,7 @@
 			value={fileValue}
 			acceptedFormats={config?.acceptedFormats ?? []}
 			onChange={(newValue) => handleChange(newValue)}
+			defaultInputMode={config.defaultInputMode}
 		/>
 	{/if}
 </div>

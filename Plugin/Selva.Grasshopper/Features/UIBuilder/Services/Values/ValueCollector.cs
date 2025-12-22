@@ -224,7 +224,7 @@ public class ValueCollector
 			var allData = inputParam.VolatileData.AllData(true);
 			foreach (var gooObj in allData)
 				if (gooObj?.GetType().FullName != null &&
-				    gooObj.GetType().FullName.IndexOf("FileDataGoo", StringComparison.OrdinalIgnoreCase) >= 0)
+						gooObj.GetType().FullName.IndexOf("FileDataGoo", StringComparison.OrdinalIgnoreCase) >= 0)
 					try
 					{
 						var extractedFileData = ExtractFileDataFromGoo(gooObj);
@@ -292,6 +292,29 @@ public class ValueCollector
 		if (data is GH_Integer ghInteger) return ghInteger.Value;
 
 		if (data is GH_Boolean ghBoolean) return ghBoolean.Value;
+
+		// Handle FileInputGoo - serialize as JSON
+		if (data?.GetType().FullName?.IndexOf("FileInputGoo", StringComparison.OrdinalIgnoreCase) >= 0)
+		{
+			try
+			{
+				var fileInputGooType = data.GetType();
+				var valueProperty = fileInputGooType.GetProperty("Value");
+				if (valueProperty != null)
+				{
+					var fileInputData = valueProperty.GetValue(data);
+					if (fileInputData != null)
+					{
+						// Serialize FileInputData to JSON string
+						return Newtonsoft.Json.JsonConvert.SerializeObject(fileInputData);
+					}
+				}
+			}
+			catch
+			{
+				// Fall through to default behavior
+			}
+		}
 
 		if (data.CastTo(out string strValue)) return strValue;
 

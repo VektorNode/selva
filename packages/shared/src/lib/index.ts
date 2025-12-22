@@ -37,5 +37,8 @@ export * from './utils';
 // Re-export types from generated schema
 export type * from './types/generated';
 
+// Re-export constants from generated schema
+export { ACCEPTED_FILE_FORMATS } from './types/generated/schema';
+
 // Theme utilities
 export * from './themes';
