@@ -3,6 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import { FileUp, Link } from '@lucide/svelte';
+	import { APP_CONSTANTS } from '$lib/constants';
 
 	interface Props {
 		value?: string;
@@ -28,9 +29,18 @@
 	$effect(() => {
 		if (value) {
 			try {
-				const parsed = JSON.parse(value);
+				// Handle both string and object formats
+				const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+
 				if (parsed.type === 'base64') {
-					uploadedFileName = `Uploaded file (${parsed.fileEnding})`;
+					// Check if this is metadata-only (from backend after file applied)
+					if (parsed._isMetadata && parsed._fileSize) {
+						const sizeMB = (parsed._fileSize / 1024 / 1024).toFixed(2);
+						uploadedFileName = `Uploaded file (${parsed.fileEnding}, ${sizeMB}MB)`;
+					} else {
+						// Full file data
+						uploadedFileName = `Uploaded file (${parsed.fileEnding})`;
+					}
 				} else if (parsed.type === 'url') {
 					urlInput = parsed.file;
 				}
@@ -72,10 +82,10 @@
 				throw new Error(`File format not accepted: ${fileEnding}`);
 			}
 
-			// Check file size (e.g., max 100MB)
-			const maxSize = 100 * 1024 * 1024;
+			// Check file size
+			const maxSize = APP_CONSTANTS.FILE_UPLOAD.MAX_SIZE_BYTES;
 			if (blob.size > maxSize) {
-				throw new Error(`File too large: ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
+				throw new Error(`File too large: ${(blob.size / 1024 / 1024).toFixed(2)}MB (Max: ${APP_CONSTANTS.FILE_UPLOAD.MAX_SIZE_MB}MB)`);
 			}
 
 			// Convert to base64

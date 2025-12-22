@@ -117,26 +117,62 @@
 		}
 	});
 
+	/**
+	 * Strip file metadata from values before sending to Grasshopper
+	 * Only sends back metadata-only file objects (not full file data)
+	 */
+	function prepareValuesForSend(values: Record<string, unknown>): Record<string, unknown> {
+		const prepared: Record<string, unknown> = {};
+
+		for (const [key, value] of Object.entries(values)) {
+			// Debug: log the value type and structure
+			const valueType = typeof value;
+			let isMetadata = false;
+
+			// Try to parse if it's a JSON string
+			let parsedValue = value;
+			if (typeof value === 'string' && value.trim().startsWith('{')) {
+				try {
+					parsedValue = JSON.parse(value);
+				} catch {
+					// Not JSON, keep as string
+				}
+			}
+
+			// Check if this is a file metadata object from backend
+			if (
+				parsedValue &&
+				typeof parsedValue === 'object' &&
+				'_isMetadata' in parsedValue &&
+				(parsedValue as any)._isMetadata === true
+			) {
+				// Skip sending metadata back - Grasshopper already has the file
+				isMetadata = true;
+				continue;
+			}
+
+			// Send all other values normally
+			prepared[key] = value;
+		}
+
+		return prepared;
+	}
+
 	async function handleValueChange(paramId: string, value: SupportedTypes) {
 		if (isRemoteUpdate) {
 			return;
 		}
 
-		console.log(
-			`[Preview] Value changed for ${paramId}, value size:`,
-			value?.toString().length || 0
-		);
 		values[paramId] = value;
 
 		if (schema?.instanceSolve === false) {
-			console.log(`[Preview] instanceSolve is false, marking as pending change`);
 			hasPendingChanges = true;
 			return;
 		}
 
-		console.log(`[Preview] Sending immediate value update`);
 		if (wsState.connected) {
-			wsState.sendValueUpdate(sessionId, $state.snapshot(values));
+			const preparedValues = prepareValuesForSend($state.snapshot(values));
+			wsState.sendValueUpdate(sessionId, preparedValues);
 		} else {
 			console.warn('[Preview] Cannot send values - WebSocket not connected');
 		}
@@ -147,8 +183,8 @@
 			return;
 		}
 		if (wsState.connected) {
-			console.log($state.snapshot(values));
-			wsState.sendValueUpdate(sessionId, $state.snapshot(values));
+			const preparedValues = prepareValuesForSend($state.snapshot(values));
+			wsState.sendValueUpdate(sessionId, preparedValues);
 			hasPendingChanges = false;
 		} else {
 			console.warn('[Preview] Cannot calculate - WebSocket not connected');
@@ -295,7 +331,8 @@
 					console.log('[Preview] Triggering initial solution...');
 					initialSolveTriggered = true;
 					// Bypass isSolving check to force initial solve
-					wsState.send('valueUpdate', { sessionId, values: $state.snapshot(newValues) });
+					const preparedValues = prepareValuesForSend($state.snapshot(newValues));
+					wsState.send('valueUpdate', { sessionId, values: preparedValues });
 				}
 			}, 500);
 		}

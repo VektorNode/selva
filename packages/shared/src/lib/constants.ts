@@ -1,0 +1,6 @@
+export const APP_CONSTANTS = {
+	FILE_UPLOAD: {
+		MAX_SIZE_MB: 150,
+		MAX_SIZE_BYTES: 150 * 1024 * 1024
+	}
+};

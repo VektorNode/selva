@@ -379,10 +379,13 @@ public class WebSocketServer : IDisposable
 			{
 				messageBuffer.Clear();
 				WebSocketReceiveResult result;
+				var receiveStartTime = DateTime.UtcNow;
+				var chunkCount = 0;
 
 				do
 				{
 					result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+					chunkCount++;
 
 					if (result.MessageType == WebSocketMessageType.Close)
 					{
@@ -405,8 +408,15 @@ public class WebSocketServer : IDisposable
 					// Use AddRange for efficient bulk copy instead of loop
 					messageBuffer.AddRange(new ArraySegment<byte>(buffer, 0, result.Count));
 
+					// Log progress for large messages (every 10MB)
+					if (messageBuffer.Count % (10 * 1024 * 1024) == 0 && messageBuffer.Count > 0)
+					{
+						Logger.Log($"[WebSocket] Receiving large message: {messageBuffer.Count / 1024 / 1024}MB received so far...");
+					}
+
 					if (messageBuffer.Count > MAX_MESSAGE_SIZE)
 					{
+						Logger.Warn($"[WebSocket] Message size {messageBuffer.Count} exceeds max {MAX_MESSAGE_SIZE}");
 						if (webSocket.State == WebSocketState.Open)
 						{
 							try
@@ -424,9 +434,17 @@ public class WebSocketServer : IDisposable
 					}
 				} while (!result.EndOfMessage);
 
+				var receiveTime = (DateTime.UtcNow - receiveStartTime).TotalMilliseconds;
+				var messageSizeMB = messageBuffer.Count / 1024.0 / 1024.0;
+				Logger.Log($"[WebSocket] Message received: {messageSizeMB:F2}MB in {receiveTime:F0}ms ({chunkCount} chunks)");
+
 				if (result.MessageType == WebSocketMessageType.Text)
 				{
+					var decodeStartTime = DateTime.UtcNow;
 					var message = Encoding.UTF8.GetString(messageBuffer.ToArray());
+					var decodeTime = (DateTime.UtcNow - decodeStartTime).TotalMilliseconds;
+					Logger.Log($"[WebSocket] UTF8 decoding completed in {decodeTime:F0}ms");
+
 					OnMessageReceived?.Invoke(this, message);
 				}
 			}

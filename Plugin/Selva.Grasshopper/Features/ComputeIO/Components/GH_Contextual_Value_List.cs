@@ -411,31 +411,23 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
 
 	private List<(string Name, string Expression)> GetItemTuples()
 	{
-		// Try connected ValueList first
 		var vl = ConnectedValueList;
 		if (vl != null && vl.ListItems.Count > 0)
 		{
-			// Update stored items while we have access
 			_storedItems = vl.ListItems.Select(x => (x.Name, x.Expression)).ToList();
-			return _storedItems;
 		}
 
-		// Fall back to stored items (for Compute scenarios)
 		return _storedItems;
 	}
 
 	private int FindMatchingIndex(string value)
 	{
-		// Try connected ValueList first
 		var items = ListItems;
 		for (var i = 0; i < items.Count; i++)
-			// Match by expression OR by name
 			if (items[i].Expression == value || items[i].Name == value)
 				return i;
 
-		// Fall back to stored items
 		for (var i = 0; i < _storedItems.Count; i++)
-			// Match by expression OR by name
 			if (_storedItems[i].Expression == value || _storedItems[i].Name == value)
 				return i;
 
@@ -501,7 +493,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
 		    Guid.TryParse(guidStr, out var guid))
 			_connectedValueListGuid = guid;
 
-		// Load stored items for Compute scenarios
 		string itemsJson = null;
 		if (reader.TryGetString("StoredItems", ref itemsJson) && !string.IsNullOrEmpty(itemsJson))
 			try
