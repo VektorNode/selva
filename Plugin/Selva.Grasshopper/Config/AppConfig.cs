@@ -12,11 +12,11 @@ public static class AppConfig
 		public const int PortRangeMin = 8765;
 		public const int PortRangeMax = 8865;
 		public const int PortDiscoveryAttempts = 100;
-		public const int MaxMessageSizeBytes = 10 * 1024 * 1024; // 10MB
+		public const int MaxMessageSizeBytes = 150 * 1024 * 1024; // 150MB for large file uploads
 		public const int BufferSizeBytes = 4096;
 		public const int MaxConcurrentClients = 10;
 		public const int HeartbeatIntervalMs = 30000; // 30 seconds
-		public const int BroadcastTimeoutMs = 5000; // 5 seconds
+		public const int BroadcastTimeoutMs = 30000; // 30 seconds for large file uploads
 		public const int ClientCloseTimeoutMs = 1000; // 1 second
 		public const int PingTimeoutMs = 5000; // 5 seconds
 		public const int ServerStartupTimeoutMs = 5000; // 5 seconds
@@ -42,7 +42,8 @@ public static class AppConfig
 	// Value Constraints
 	public static class ValueLimits
 	{
-		public const int MaxStringLength = 100000; // 100KB
+		public const int MaxStringLength = 100000; // 100KB for regular strings
+		public const int MaxBase64FileSize = 100 * 1024 * 1024; // 100MB for base64-encoded files
 	}
 
 	// Session Management

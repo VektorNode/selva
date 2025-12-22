@@ -26,7 +26,10 @@ public class CommunicationHandler : IDisposable
 		MetadataPropertyHandling = MetadataPropertyHandling.Ignore
 	};
 
-	private readonly SemaphoreSlim _messageProcessingSemaphore = new(1, 1); // Sequential message processing
+	// Message processing queues for parallel processing with ordering guarantees
+	private readonly Dictionary<string, Queue<Func<Task>>> _messageTypeQueues = new();
+	private readonly Dictionary<string, SemaphoreSlim> _messageTypeLocks = new();
+	private readonly object _queueLock = new();
 
 	private readonly int _port;
 	private readonly string _sessionId;
@@ -117,62 +120,71 @@ public class CommunicationHandler : IDisposable
 				// This prevents duplicate initial data being sent
 			};
 
-			// Handle incoming messages sequentially to preserve order
+			// Handle incoming messages with parallel processing but per-type ordering
 			_webSocketServer.OnMessageReceived += (sender, message) =>
 			{
-				// Process message sequentially (no concurrent Task.Run)
 				_ = Task.Run(async () =>
 				{
-					// Use semaphore to ensure sequential processing
-					await _messageProcessingSemaphore.WaitAsync();
 					try
 					{
+						Logger.Log($"[CommunicationHandler] Received message, length: {message.Length} bytes");
+
 						// Parse JSON once using JObject
 						var jObj = JObject.Parse(message);
 						var msgType = jObj["type"]?.ToString();
 						var sessionId = jObj["sessionId"]?.ToString();
 
+						Logger.Log($"[CommunicationHandler] Message type: {msgType}, SessionId match: {sessionId == _sessionId}");
+
 						// Validate session ID first
 						if (sessionId != _sessionId) return;
 
-						if (msgType == "valueUpdate")
+						// Create message processor task
+						Func<Task> processTask = async () =>
 						{
-							var values = jObj["values"]
-								?.ToObject<Dictionary<string, object>>(JsonSerializer.Create(SecureJsonSettings));
-							if (values != null)
+							if (msgType == "valueUpdate")
 							{
-								Logger.Log($"[CommunicationHandler] Received valueUpdate with {values.Count} values");
-								// Marshal back to main thread - critical for Grasshopper UI updates
-								MarshalToMainThread(() => OnValuesReceived?.Invoke(this, values));
+								Logger.Log("[CommunicationHandler] Deserializing valueUpdate...");
+								var values = jObj["values"]
+									?.ToObject<Dictionary<string, object>>(JsonSerializer.Create(SecureJsonSettings));
+								if (values != null)
+								{
+									Logger.Log($"[CommunicationHandler] Received valueUpdate with {values.Count} values");
+									// Marshal back to main thread - critical for Grasshopper UI updates
+									MarshalToMainThread(() => OnValuesReceived?.Invoke(this, values));
+								}
+								else
+								{
+									Logger.Warn("[CommunicationHandler] valueUpdate 'values' object was null");
+								}
 							}
-						}
-						else if (msgType == "requestCurrentValues")
-						{
-							logMessage?.Invoke("Web UI requested current values");
-							MarshalToMainThread(() => OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty));
-						}
-						else if (msgType == "requestInitialData")
-						{
-							logMessage?.Invoke("Web UI requested initial data");
-							MarshalToMainThread(() => OnClientConnected?.Invoke(this, EventArgs.Empty));
-						}
-						else if (msgType == "saveSchema")
-						{
-							var schema = jObj["schema"]?.ToObject<UISchema>(JsonSerializer.Create(SecureJsonSettings));
-							if (schema != null)
+							else if (msgType == "requestCurrentValues")
 							{
-								logMessage?.Invoke("Web UI saving schema");
-								MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, schema));
+								logMessage?.Invoke("Web UI requested current values");
+								MarshalToMainThread(() => OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty));
 							}
-						}
+							else if (msgType == "requestInitialData")
+							{
+								logMessage?.Invoke("Web UI requested initial data");
+								MarshalToMainThread(() => OnClientConnected?.Invoke(this, EventArgs.Empty));
+							}
+							else if (msgType == "saveSchema")
+							{
+								var schema = jObj["schema"]?.ToObject<UISchema>(JsonSerializer.Create(SecureJsonSettings));
+								if (schema != null)
+								{
+									logMessage?.Invoke("Web UI saving schema");
+									MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, schema));
+								}
+							}
+						};
+
+						// Enqueue and process with ordering guarantees per message type
+						await EnqueueMessageProcessing(msgType, processTask);
 					}
 					catch (Exception ex)
 					{
 						logMessage?.Invoke($"WebSocket message error: {ex.Message}");
-					}
-					finally
-					{
-						_messageProcessingSemaphore.Release();
 					}
 				});
 			};
@@ -223,6 +235,50 @@ public class CommunicationHandler : IDisposable
 				_webSocketServer = null;
 				_lastBroadcastedSolvingState = null; // Reset for next session
 			}
+	}
+
+	/// <summary>
+	///   Enqueue message processing with ordering guarantees per message type.
+	///   Different message types can process in parallel, but messages of the same type are processed in order.
+	/// </summary>
+	private async Task EnqueueMessageProcessing(string messageType, Func<Task> processTask)
+	{
+		if (string.IsNullOrEmpty(messageType)) return;
+
+		SemaphoreSlim typeLock;
+		Queue<Func<Task>> queue;
+
+		// Get or create queue and lock for this message type
+		lock (_queueLock)
+		{
+			if (!_messageTypeQueues.ContainsKey(messageType))
+			{
+				_messageTypeQueues[messageType] = new Queue<Func<Task>>();
+				_messageTypeLocks[messageType] = new SemaphoreSlim(1, 1);
+			}
+
+			queue = _messageTypeQueues[messageType];
+			typeLock = _messageTypeLocks[messageType];
+			queue.Enqueue(processTask);
+		}
+
+		// Process queue for this message type (ensures ordering)
+		await typeLock.WaitAsync();
+		try
+		{
+			Func<Task> task;
+			lock (_queueLock)
+			{
+				if (queue.Count == 0) return;
+				task = queue.Dequeue();
+			}
+
+			await task();
+		}
+		finally
+		{
+			typeLock.Release();
+		}
 	}
 
 	/// <summary>
@@ -444,7 +500,7 @@ public class CommunicationHandler : IDisposable
 	public async Task BroadcastMetadataChanges(DiscoveredParameters changedParams)
 	{
 		if (_webSocketServer != null && _webSocketServer.IsRunning && changedParams != null &&
-		    (changedParams.Inputs?.Count > 0 || changedParams.Outputs?.Count > 0))
+				(changedParams.Inputs?.Count > 0 || changedParams.Outputs?.Count > 0))
 		{
 			var message = new
 			{
@@ -463,7 +519,17 @@ public class CommunicationHandler : IDisposable
 		if (disposing)
 		{
 			Stop();
-			_messageProcessingSemaphore?.Dispose();
+
+			// Dispose all message type locks
+			lock (_queueLock)
+			{
+				foreach (var kvp in _messageTypeLocks)
+				{
+					kvp.Value?.Dispose();
+				}
+				_messageTypeLocks.Clear();
+				_messageTypeQueues.Clear();
+			}
 		}
 
 		_disposed = true;

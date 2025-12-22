@@ -13,6 +13,15 @@ using Newtonsoft.Json.Linq;
 namespace Selva.Core.Models
 {
 // ============================================================================
+    // CONSTANTS (from schema)
+    // ============================================================================
+
+    public static class AcceptedFileFormats
+    {
+        public static readonly string[] Values = new string[] { ".3dm", ".stp", ".step" };
+    }
+
+// ============================================================================
     // TYPE ALIASES
     // ============================================================================
 
@@ -188,6 +197,12 @@ namespace Selva.Core.Models
 /// </summary>
         [JsonProperty("acceptedFormats")]
         public List<string> AcceptedFormats { get; set; } = new List<string>();
+
+/// <summary>
+/// Default input mode for file input (upload or url)
+/// </summary>
+        [JsonProperty("defaultInputMode")]
+        public string DefaultInputMode { get; set; }
     }
 
 // ============================================================================
