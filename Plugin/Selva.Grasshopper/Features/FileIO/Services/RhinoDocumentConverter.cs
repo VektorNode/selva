@@ -10,6 +10,11 @@ namespace Selva.Grasshopper.Features.FileIO.Services;
 
 public class RhinoDocumentConverter : IDisposable
 {
+	// Constants for Rhino version validation
+	private const int MinRhinoVersion = 2;
+	private const int MaxRhinoVersion = 8;
+	private const int DefaultRhinoVersion = 7;
+
 	private readonly AppConfig.RhinoConverterOptions _options;
 	private readonly SemaphoreSlim _rateLimiter;
 	private readonly string _tempDirectory;
@@ -61,9 +66,9 @@ public class RhinoDocumentConverter : IDisposable
 			var fileInfo = new FileInfo(tempPath);
 			if (!fileInfo.Exists) throw new FileNotFoundException("Export succeeded but file not found", tempPath);
 
-			if (fileInfo.Length > _options.MaxFileSizeBytes)
+			if (fileInfo.Length > AppConfig.ValueLimits.MaxFileSizeBytes)
 				throw new InvalidOperationException(
-					$"Exported file size ({fileInfo.Length:N0} bytes) exceeds maximum allowed ({_options.MaxFileSizeBytes:N0} bytes)");
+					$"Exported file size ({fileInfo.Length:N0} bytes) exceeds maximum allowed ({AppConfig.ValueLimits.MaxFileSizeBytes:N0} bytes)");
 
 			string base64Result;
 			var fileBytes = File.ReadAllBytes(tempPath);
@@ -81,12 +86,12 @@ public class RhinoDocumentConverter : IDisposable
 	/// <summary>
 	///   Synchronous version - Converts a RhinoDoc to Base64 encoded .3dm file
 	/// </summary>
-	public string DocToRhinoFile(RhinoDoc doc, int version = 7)
+	public string DocToRhinoFile(RhinoDoc doc, int version = DefaultRhinoVersion)
 	{
 		if (doc == null) throw new ArgumentNullException(nameof(doc));
 
-		if (version < 2 || version > 8)
-			throw new ArgumentException("Rhino version must be between 2 and 8", nameof(version));
+		if (version < MinRhinoVersion || version > MaxRhinoVersion)
+			throw new ArgumentException($"Rhino version must be between {MinRhinoVersion} and {MaxRhinoVersion}", nameof(version));
 
 		var tempPath = GenerateTempPath(".3dm");
 
@@ -102,9 +107,9 @@ public class RhinoDocumentConverter : IDisposable
 			var fileInfo = new FileInfo(tempPath);
 			if (!fileInfo.Exists) throw new FileNotFoundException("SaveAs succeeded but file not found", tempPath);
 
-			if (fileInfo.Length > _options.MaxFileSizeBytes)
+			if (fileInfo.Length > AppConfig.ValueLimits.MaxFileSizeBytes)
 				throw new InvalidOperationException(
-					$"Saved file size ({fileInfo.Length:N0} bytes) exceeds maximum allowed ({_options.MaxFileSizeBytes:N0} bytes)");
+					$"Saved file size ({fileInfo.Length:N0} bytes) exceeds maximum allowed ({AppConfig.ValueLimits.MaxFileSizeBytes:N0} bytes)");
 
 			var fileBytes = File.ReadAllBytes(tempPath);
 			var base64Result = Convert.ToBase64String(fileBytes);

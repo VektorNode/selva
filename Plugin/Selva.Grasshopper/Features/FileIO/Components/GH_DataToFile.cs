@@ -81,16 +81,16 @@ public class GH_DataToFile : GH_Component
 		pManager.AddGeometryParameter("Geometry", "G",
 			"Geometry to be exported. Use list for single file, tree for multiple files (one per branch)",
 			GH_ParamAccess.tree);
-		pManager.AddTextParameter("LayerNames", "L",
+		pManager.AddTextParameter("Layer Names", "L",
 			"Names of the layers. Use list for single file, tree for multiple files",
 			GH_ParamAccess.tree);
-		pManager.AddColourParameter("LayerColors", "C",
+		pManager.AddColourParameter("Layer Colors", "C",
 			"Colors of the layers. Use list for single file, tree for multiple files",
 			GH_ParamAccess.tree);
-		pManager.AddTextParameter("FileNames", "F",
+		pManager.AddTextParameter("File Names", "F",
 			"Name(s) of the file. Use single value for list input, or tree for multiple files",
 			GH_ParamAccess.tree);
-		pManager.AddTextParameter("FileEnding", "E",
+		pManager.AddTextParameter("File Ending", "E",
 			"File ending of the geometry",
 			GH_ParamAccess.item, DefaultFileEnding);
 

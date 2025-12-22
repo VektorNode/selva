@@ -52,7 +52,7 @@ public class GH_Block_To_File : GH_Component
 			"B",
 			"Block instance to export",
 			GH_ParamAccess.item);
-		pManager.AddTextParameter("Name", "N", "Optional name for the exported file", GH_ParamAccess.item);
+		pManager.AddTextParameter("File Name", "FN", "Optional name for the exported file", GH_ParamAccess.item);
 	}
 
 	protected override void RegisterOutputParams(GH_OutputParamManager pManager)

@@ -293,7 +293,7 @@ public class ValueCollector
 
 		if (data is GH_Boolean ghBoolean) return ghBoolean.Value;
 
-		// Handle FileInputGoo - serialize as JSON
+		// Handle FileInputGoo - return metadata only (not the full base64 file content!)
 		if (data?.GetType().FullName?.IndexOf("FileInputGoo", StringComparison.OrdinalIgnoreCase) >= 0)
 		{
 			try
@@ -305,12 +305,32 @@ public class ValueCollector
 					var fileInputData = valueProperty.GetValue(data);
 					if (fileInputData != null)
 					{
-						// Serialize FileInputData to JSON string
-						return Newtonsoft.Json.JsonConvert.SerializeObject(fileInputData);
+						// Get the Type, FileEnding properties
+						var fileInputDataType = fileInputData.GetType();
+						var typeProperty = fileInputDataType.GetProperty("Type");
+						var fileEndingProperty = fileInputDataType.GetProperty("FileEnding");
+						var fileProperty = fileInputDataType.GetProperty("File");
+
+						var fileType = typeProperty?.GetValue(fileInputData)?.ToString() ?? "base64";
+						var fileEnding = fileEndingProperty?.GetValue(fileInputData)?.ToString() ?? "";
+						var fileContent = fileProperty?.GetValue(fileInputData)?.ToString() ?? "";
+
+						// Return metadata only - include a truncated preview of the file content
+						// This allows the frontend to know the file is set without re-sending the entire file
+						var metadata = new
+						{
+							type = fileType,
+							fileEnding = fileEnding,
+							file = fileContent.Length > 100 ? fileContent.Substring(0, 100) + "..." : fileContent,
+							_fileSize = fileContent.Length,
+							_isMetadata = true // Flag to indicate this is metadata only
+						};
+
+						return metadata;
 					}
 				}
 			}
-			catch
+			catch (Exception ex)
 			{
 				// Fall through to default behavior
 			}

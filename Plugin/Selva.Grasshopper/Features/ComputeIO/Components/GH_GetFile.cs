@@ -12,6 +12,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Rhino.Geometry;
 using Selva.Core.Models;
+using Selva.Grasshopper.Config;
 using Selva.Grasshopper.Features.FileIO.Services;
 using Selva.Grasshopper.Properties;
 using static Selva.Grasshopper.Features.ComputeIO.Components.GetValueListParameter;
@@ -25,6 +26,13 @@ namespace Selva.Grasshopper.Features.ComputeIO.Components;
 /// </summary>
 public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParameter
 {
+	// Constants for validation and limits
+	private const int MaxContextualDataItems = 100;
+	private const int MaxFileDataSize = AppConfig.ValueLimits.MaxBase64StringLength;
+	private const int MaxJsonDepth = AppConfig.JsonSerialization.MaxJsonDepth;
+	private const int MaxPathLength = 32767; // Windows MAX_PATH - maximum length for file paths
+
+
 	private FileInputData _contextualFileData;
 	private bool _isFromContextual;
 
@@ -33,7 +41,6 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 			GH_ParamAccess.list)
 	{
 	}
-
 
 	public override GH_Exposure Exposure => GH_Exposure.quinary;
 
@@ -73,7 +80,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 			foreach (var item in data)
 			{
 				// Prevent processing too many items
-				if (++count > 100)
+				if (++count > MaxContextualDataItems)
 				{
 					AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
 						"Too many contextual data items");
@@ -81,11 +88,19 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 				}
 
 				var fileData = ExtractFileInputData(item);
-				if (fileData != null && ValidateFileInputData(fileData))
+				if (fileData != null)
 				{
-					_contextualFileData = fileData;
-					_isFromContextual = true;
-					break; // Only take first item (AtMost = 1)
+					if (ValidateFileInputData(fileData))
+					{
+						_contextualFileData = fileData;
+						_isFromContextual = true;
+						break; // Only take first item (AtMost = 1)
+					}
+					else
+					{
+						AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+							$"File data validation failed. Size: {fileData.File?.Length ?? 0} chars (Max: {MaxFileDataSize})");
+					}
 				}
 			}
 		}
@@ -189,8 +204,6 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 					$"Error reading from source '{source.NickName}': {ex.Message}");
 			}
 		}
-
-		// If no data found, that's OK - just silently empty (don't show floating warning)
 	}
 
 	/// <summary>
@@ -270,8 +283,8 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 	{
 		if (string.IsNullOrEmpty(str)) return null;
 
-		// Prevent DoS from large JSON strings
-		if (str.Length > 10 * 1024 * 1024) // 10MB limit for JSON
+		// Prevent DoS from large file data strings
+		if (str.Length > MaxFileDataSize)
 			return null;
 
 		// Try to parse as JSON first
@@ -279,7 +292,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 		{
 			var settings = new JsonSerializerSettings
 			{
-				MaxDepth = 10, // Prevent deeply nested JSON attacks
+				MaxDepth = MaxJsonDepth,
 				TypeNameHandling = TypeNameHandling.None // Prevent type injection attacks
 			};
 
@@ -313,7 +326,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 		try
 		{
 			// Validate path string before creating FileInputData
-			if (str.Length > 32767) // Max path length
+			if (str.Length > MaxPathLength)
 				return null;
 
 			return FileInputData.FromPath(str);
@@ -334,7 +347,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 			return false;
 
 		// Check for excessively long data
-		if (fileData.File.Length > 100 * 1024 * 1024) // 100MB for base64
+		if (fileData.File.Length > MaxFileDataSize)
 			return false;
 
 		// Validate type

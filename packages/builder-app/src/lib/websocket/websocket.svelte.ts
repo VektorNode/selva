@@ -74,6 +74,23 @@ export class WebSocketState {
 				}
 			}
 		});
+
+		// Handle runtime messages from Grasshopper (errors, warnings, info)
+		this.on('runtimeMessage', (data) => {
+			if (data && typeof data === 'object' && 'level' in data && 'message' in data) {
+				const msg = data as { level: string; message: string; timestamp?: string };
+				console.log(`[WebSocket] Runtime message [${msg.level}]: ${msg.message}`);
+
+				// Dispatch custom event for toast notifications
+				if (typeof window !== 'undefined') {
+					window.dispatchEvent(
+						new CustomEvent('grasshopper-runtime-message', {
+							detail: msg
+						})
+					);
+				}
+			}
+		});
 	}
 
 	/**

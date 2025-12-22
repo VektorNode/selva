@@ -109,7 +109,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 		var document = OnPingDocument();
 		if (document == null || _service?.SchemaManager == null)
 			return new DiscoveredParameters
-				{ SessionId = _sessionId, Inputs = new List<DiscoveredInput>(), Outputs = new List<DiscoveredOutput>() };
+			{ SessionId = _sessionId, Inputs = new List<DiscoveredInput>(), Outputs = new List<DiscoveredOutput>() };
 
 		var availableParams = _service.SchemaManager.ScanParameters(document, this);
 
@@ -429,6 +429,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 			if (_service.StateManager.IsSolving)
 			{
 				Logger.Log("[UIBuilder] Skipping value update - currently solving");
+				BroadcastRuntimeMessageAsync("warning", "Skipping value update - currently solving");
 				return;
 			}
 
@@ -436,20 +437,71 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 			if (!DocumentGuards.DocumentAndSchemaValid(document, _embeddedSchema, out _))
 			{
 				Logger.Warn("[UIBuilder] Document or schema invalid, skipping value update");
+				BroadcastRuntimeMessageAsync("error", "Document or schema invalid");
 				return;
 			}
 
 			var updated =
-				_service.ValueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, values, AddRuntimeMessage);
-			Logger.Log($"[UIBuilder] Applied {updated} value updates");
+				_service.ValueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, values,
+					(level, msg) =>
+					{
+						AddRuntimeMessage(level, msg);
+						// Only broadcast errors and warnings, not info messages
+						if (level == GH_RuntimeMessageLevel.Error || level == GH_RuntimeMessageLevel.Warning)
+						{
+							BroadcastRuntimeMessageAsync(ConvertMessageLevel(level), msg);
+						}
+					});
 
-			if (updated > 0) _embeddedValues = new Dictionary<string, object>(values);
+			if (updated > 0)
+			{
+				_embeddedValues = new Dictionary<string, object>(values);
+				// Success - no toast needed, just log it
+			}
+			// else: No values updated (likely duplicate/unchanged values) - this is normal, don't show toast
 		}
 		catch (Exception ex)
 		{
-			Logger.Error($"[UIBuilder] Error handling value update: {ex.Message}");
+			Logger.Error($"[UIBuilder] Error handling value update: {ex.Message}", ex);
 			AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
+			BroadcastRuntimeMessageAsync("error", $"Error handling value update: {ex.Message}");
 		}
+	}
+
+	/// <summary>
+	///   Convert GH_RuntimeMessageLevel to string for frontend
+	/// </summary>
+	private string ConvertMessageLevel(GH_RuntimeMessageLevel level)
+	{
+		switch (level)
+		{
+			case GH_RuntimeMessageLevel.Error:
+				return "error";
+			case GH_RuntimeMessageLevel.Warning:
+				return "warning";
+			case GH_RuntimeMessageLevel.Remark:
+				return "info";
+			default:
+				return "info";
+		}
+	}
+
+	/// <summary>
+	///   Broadcast a runtime message to the frontend (fire and forget)
+	/// </summary>
+	private void BroadcastRuntimeMessageAsync(string level, string message)
+	{
+		_ = Task.Run(async () =>
+		{
+			try
+			{
+				await _service.CommunicationHandler.BroadcastRuntimeMessage(level, message);
+			}
+			catch (Exception ex)
+			{
+				Logger.Warn($"Failed to broadcast runtime message: {ex.Message}");
+			}
+		});
 	}
 
 	/// <summary>

@@ -57,7 +57,6 @@ public class GH_EvaluateSchema : GH_Component
 			return;
 		}
 
-		// 1. Generate Info Summary
 		var sb = new StringBuilder();
 		sb.AppendLine($"Schema: {schema.Name}");
 		sb.AppendLine($"ID: {schema.Id}");
@@ -69,10 +68,8 @@ public class GH_EvaluateSchema : GH_Component
 
 		if (schema.Tags != null && schema.Tags.Any()) sb.AppendLine($"Tags: {string.Join(", ", schema.Tags)}");
 
-		// 2. Generate JSON
 		var json = JsonConvert.SerializeObject(schema, Formatting.Indented);
 
-		// Set Outputs
 		DA.SetData(0, sb.ToString());
 		DA.SetData(1, json);
 		DA.SetData(2, schema.Inputs?.Count ?? 0);

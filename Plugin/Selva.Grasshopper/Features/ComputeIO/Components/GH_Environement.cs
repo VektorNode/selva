@@ -9,7 +9,6 @@ namespace Selva.Grasshopper.Features.ComputeIO.Components;
 
 public class GH_Environement : GH_Component
 {
-
 	public override Guid ComponentGuid
 	{
 		get { return new Guid("58782D53-DA8B-4EFE-8577-B3FA22DA9E0F"); }
@@ -18,9 +17,9 @@ public class GH_Environement : GH_Component
 	protected override Bitmap Icon => null;
 
 	public GH_Environement()
-		: base("GH_Environement", "Nickname",
-			"Description",
-			"Selva", "Subcategory")
+		: base("Environement", "Env",
+			"Get information about the current running environement",
+			"Selva", "Utilities")
 	{
 	}
 
@@ -29,23 +28,19 @@ public class GH_Environement : GH_Component
 	{
 	}
 
-
 	protected override void RegisterOutputParams(GH_OutputParamManager pManager)
 	{
-		pManager.AddBooleanParameter("IsCompute", "IC", "Is running in a compute environment", GH_ParamAccess.item);
+		pManager.AddBooleanParameter("Is Compute", "IC", "Is running in a compute environment", GH_ParamAccess.item);
 	}
 
 	protected override void SolveInstance(IGH_DataAccess DA)
 	{
 		bool isCompute = false;
-		bool isHeadless = false;
 
-		// Check for compute environment variable
 		var activeDoc = RhinoDoc.ActiveDoc;
 		if (activeDoc != null)
 		{
-			isHeadless = activeDoc.IsHeadless;
-			if (isHeadless) isCompute = true;
+			if (activeDoc.IsHeadless) isCompute = true;
 		}
 		else
 		{
@@ -54,6 +49,4 @@ public class GH_Environement : GH_Component
 
 		DA.SetData(0, isCompute);
 	}
-
 }
-

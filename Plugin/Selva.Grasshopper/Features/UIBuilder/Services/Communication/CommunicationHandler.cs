@@ -144,18 +144,18 @@ public class CommunicationHandler : IDisposable
 						{
 							if (msgType == "valueUpdate")
 							{
-								Logger.Log("[CommunicationHandler] Deserializing valueUpdate...");
 								var values = jObj["values"]
 									?.ToObject<Dictionary<string, object>>(JsonSerializer.Create(SecureJsonSettings));
+
 								if (values != null)
 								{
-									Logger.Log($"[CommunicationHandler] Received valueUpdate with {values.Count} values");
 									// Marshal back to main thread - critical for Grasshopper UI updates
 									MarshalToMainThread(() => OnValuesReceived?.Invoke(this, values));
 								}
 								else
 								{
 									Logger.Warn("[CommunicationHandler] valueUpdate 'values' object was null");
+									logMessage?.Invoke("Error: valueUpdate 'values' object was null");
 								}
 							}
 							else if (msgType == "requestCurrentValues")
@@ -507,6 +507,25 @@ public class CommunicationHandler : IDisposable
 				type = "metadataUpdated",
 				sessionId = _sessionId,
 				changedParams
+			};
+			await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+		}
+	}
+
+	/// <summary>
+	///   Broadcast a runtime message to the web UI (for toasts, notifications, etc.)
+	/// </summary>
+	public async Task BroadcastRuntimeMessage(string level, string messageText)
+	{
+		if (_webSocketServer != null && _webSocketServer.IsRunning)
+		{
+			var message = new
+			{
+				type = "runtimeMessage",
+				sessionId = _sessionId,
+				level, // "error", "warning", "remark", "info"
+				message = messageText,
+				timestamp = DateTime.UtcNow
 			};
 			await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
 		}

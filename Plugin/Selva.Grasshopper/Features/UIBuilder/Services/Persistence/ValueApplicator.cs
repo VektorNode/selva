@@ -434,7 +434,7 @@ public class ValueApplicator
 			}
 			catch (Exception ex)
 			{
-				addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+				addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
 					$"Invalid file data format: {ex.Message}");
 				return false;
 			}
@@ -442,7 +442,7 @@ public class ValueApplicator
 			if (fileData == null || string.IsNullOrEmpty(fileData.Type) || string.IsNullOrEmpty(fileData.File))
 			{
 				addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-					$"File data missing required fields (type, file)");
+					$"File data missing required fields (type: {fileData?.Type ?? "null"}, file: {(string.IsNullOrEmpty(fileData?.File) ? "empty" : fileData.File.Length + " chars")})");
 				return false;
 			}
 
@@ -470,7 +470,10 @@ public class ValueApplicator
 
 						return true;
 					}
-					catch { /* Try next method */ }
+					catch (Exception ex)
+					{
+						Utilities.Helpers.Logger.Log($"[ValueApplicator] AssignContextualData failed: {ex.Message}");
+					}
 				}
 			}
 
@@ -491,9 +494,13 @@ public class ValueApplicator
 					{
 						pendingExpirations.Add(activeObj);
 					}
+
 					return true;
 				}
-				catch { /* Try next method */ }
+				catch (Exception ex)
+				{
+					Utilities.Helpers.Logger.Log($"[ValueApplicator] AddVolatileDataTree failed: {ex.Message}");
+				}
 			}
 
 			// Attempt 2: AddVolatileData with IGH_Goo
@@ -510,13 +517,17 @@ public class ValueApplicator
 					{
 						pendingExpirations.Add(activeObj);
 					}
+
 					return true;
 				}
-				catch { /* Try next method */ }
+				catch (Exception ex)
+				{
+					Utilities.Helpers.Logger.Log($"[ValueApplicator] AddVolatileData failed: {ex.Message}");
+				}
 			}
 
-			addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-				$"Could not find method to assign file data to parameter (tried: AssignContextualData, AddVolatileDataTree, AddVolatileData)");
+			addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
+				$"Could not find any method to assign file data to parameter (tried: AssignContextualData, AddVolatileDataTree, AddVolatileData)");
 			return false;
 
 			// Mark parameter as modified so it updates downstream (unreachable, but kept for structure)
