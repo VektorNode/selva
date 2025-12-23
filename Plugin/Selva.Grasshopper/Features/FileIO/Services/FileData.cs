@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using System;
+using Newtonsoft.Json;
 
 namespace Selva.Grasshopper.Features.FileIO.Services;
 
@@ -7,6 +8,12 @@ namespace Selva.Grasshopper.Features.FileIO.Services;
 /// </summary>
 public class FileData
 {
+	/// <summary>
+	///   Gets or sets a unique identifier for this file data.
+	/// </summary>
+	[JsonProperty("id")]
+	public Guid Id { get; set; } = Guid.NewGuid();
+
 	/// <summary>
 	///   Gets or sets the name of the file, including its extension.
 	/// </summary>

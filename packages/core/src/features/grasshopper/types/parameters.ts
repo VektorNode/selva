@@ -88,6 +88,15 @@ export interface ValueListInputType extends BaseInputType {
 }
 
 /**
+ * File input type
+ */
+export interface FileInputType extends BaseInputType {
+	paramType: 'File';
+	acceptedFormats?: string[];
+	default: DefaultValue<object | string>;
+}
+
+/**
  * Discriminated union of all input parameter types
  */
 export type InputParam =
@@ -95,4 +104,5 @@ export type InputParam =
 	| BooleanInputType
 	| TextInputType
 	| ValueListInputType
-	| GeometryInputType;
+	| GeometryInputType
+	| FileInputType;

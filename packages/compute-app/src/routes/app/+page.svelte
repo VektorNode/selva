@@ -113,6 +113,8 @@
 
 			await ensureModulesLoaded();
 
+			console.log('Performing solve with values:', $state.snapshot(values));
+
 			const payload = {
 				inputs: schema.inputs,
 				values: $state.snapshot(values),
