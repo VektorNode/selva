@@ -21,9 +21,6 @@ public class SchemaPersistenceService
 
 	private readonly Version _pluginVersion;
 
-	private UISchema _currentSchema;
-	private Dictionary<string, object> _currentValues;
-
 	/// <summary>
 	/// Creates a new instance of SchemaPersistenceService.
 	/// </summary>
@@ -31,20 +28,6 @@ public class SchemaPersistenceService
 	public SchemaPersistenceService(Version pluginVersion)
 	{
 		_pluginVersion = pluginVersion ?? throw new ArgumentNullException(nameof(pluginVersion));
-	}
-
-	public UISchema CurrentSchema => _currentSchema;
-
-	public Dictionary<string, object> CurrentValues => _currentValues;
-
-	public void UpdateSchema(UISchema schema)
-	{
-		_currentSchema = schema;
-	}
-
-	public void UpdateValues(Dictionary<string, object> values)
-	{
-		_currentValues = values;
 	}
 
 	public bool SerializeToArchive(GH_IWriter writer, UISchema schema, Dictionary<string, object> values)
@@ -139,10 +122,6 @@ public class SchemaPersistenceService
 				throw new InvalidOperationException($"Failed to deserialize values: {ex.Message}", ex);
 			}
 		}
-
-		// Store loaded data
-		_currentSchema = schema;
-		_currentValues = values;
 
 		// If we have schema or values, return them along with any migration message
 		if (schema != null || values != null)

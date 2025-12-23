@@ -113,6 +113,54 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 		ExpireSolution(false);
 	}
 
+	/// <summary>
+	///   Assigns contextual data as a tree structure - called by Rhino.Compute via reflection.
+	///   Rhino.Compute sends data as DataTree of GH_String, so we extract from the first path.
+	/// </summary>
+	public void AssignContextualDataTree(GH_Structure<GH_String> data)
+	{
+		_contextualFileData = null;
+
+		if (data == null || data.IsEmpty)
+		{
+			ExpireSolution(false);
+			return;
+		}
+
+		try
+		{
+			// Take first item from first path (AtMost = 1)
+			var firstPath = data.Paths.FirstOrDefault();
+			if (firstPath != null)
+			{
+				var branch = data.get_Branch(firstPath);
+				if (branch != null && branch.Count > 0)
+				{
+					var firstString = branch[0];
+					var fileData = ExtractFileInputData(firstString);
+
+					if (fileData != null && ValidateFileInputData(fileData))
+					{
+						_contextualFileData = fileData;
+						_isFromContextual = true;
+					}
+					else if (fileData != null)
+					{
+						AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+							$"File data validation failed. Size: {fileData.File?.Length ?? 0} chars (Max: {MaxFileDataSize})");
+					}
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+				$"Error assigning contextual data tree: {ex.Message}");
+		}
+
+		ExpireSolution(false);
+	}
+
 
 
 	public bool AutoAssignContextualData(GH_ParameterContext context)
