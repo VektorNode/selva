@@ -24,11 +24,14 @@ public class DocumentSynchronizationService : IDisposable
 	private readonly CommunicationHandler _communicationHandler;
 	private readonly SchemaCleanupService _cleanupService;
 
-	private UISchema _currentSchema;
-	private Dictionary<string, object> _currentValues;
 	private GH_Component _component;
 	private GH_Document _currentDocument;
 	private bool _disposed;
+
+	// Callbacks to access component's schema/values (single source of truth)
+	private Func<UISchema> _getSchema;
+	private Func<Dictionary<string, object>> _getValues;
+	private Action<UISchema> _setSchema;
 
 	// Delegate for parameter deletion handling
 	public event Action<List<Guid>, GH_Document> OnParameterDeletionRequired;
@@ -48,32 +51,22 @@ public class DocumentSynchronizationService : IDisposable
 	/// <summary>
 	/// Initialize the service and wire up document event handlers.
 	/// </summary>
-	public void Initialize(GH_Component component, GH_Document document, UISchema schema, Dictionary<string, object> values)
+	public void Initialize(
+		GH_Component component,
+		GH_Document document,
+		Func<UISchema> getSchema,
+		Func<Dictionary<string, object>> getValues,
+		Action<UISchema> setSchema)
 	{
 		_component = component ?? throw new ArgumentNullException(nameof(component));
 		_currentDocument = document;
-		_currentSchema = schema;
-		_currentValues = values;
+		_getSchema = getSchema ?? throw new ArgumentNullException(nameof(getSchema));
+		_getValues = getValues ?? throw new ArgumentNullException(nameof(getValues));
+		_setSchema = setSchema ?? throw new ArgumentNullException(nameof(setSchema));
 
 		// Wire up document event handlers
 		_eventManager.ParametersChanged += HandleParametersChanged;
 		_eventManager.MetadataChanged += HandleMetadataChanged;
-	}
-
-	/// <summary>
-	/// Update the current schema reference.
-	/// </summary>
-	public void UpdateSchema(UISchema schema)
-	{
-		_currentSchema = schema;
-	}
-
-	/// <summary>
-	/// Update the current values reference.
-	/// </summary>
-	public void UpdateValues(Dictionary<string, object> values)
-	{
-		_currentValues = values;
 	}
 
 	public void Dispose()
@@ -94,10 +87,11 @@ public class DocumentSynchronizationService : IDisposable
 	{
 		try
 		{
+			var schema = _getSchema();
 			var currentParams = GetCurrentAvailableParameters(e.Document);
 
 			// If no schema exists, broadcast available parameters
-			if (_currentSchema == null)
+			if (schema == null)
 			{
 				if (currentParams.Inputs.Count > 0 || currentParams.Outputs.Count > 0)
 				{
@@ -119,11 +113,11 @@ public class DocumentSynchronizationService : IDisposable
 			}
 
 			// Validate schema and track changes
-			var (updatedSchema, removedIds) = _schemaManager.ValidateSchemaAndTrackChanges(_currentSchema, e.Document);
+			var (updatedSchema, removedIds) = _schemaManager.ValidateSchemaAndTrackChanges(schema, e.Document);
 
 			if (removedIds.Count > 0)
 			{
-				_currentSchema = updatedSchema;
+				_setSchema(updatedSchema);
 				OnParameterDeletionRequired?.Invoke(removedIds, e.Document);
 
 				e.Document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc =>
@@ -135,12 +129,12 @@ public class DocumentSynchronizationService : IDisposable
 			{
 				// Check for new parameters
 				var newParamIds = currentParams.Inputs
-					.Where(p => !_currentSchema.Inputs.Any(i => i.Id == p.Id))
+					.Where(p => !schema.Inputs.Any(i => i.Id == p.Id))
 					.Select(p => p.Id)
 					.ToList();
 
 				var newOutputIds = currentParams.Outputs
-					.Where(o => !_currentSchema.Outputs.Any(so => so.Id == o.Id))
+					.Where(o => !schema.Outputs.Any(so => so.Id == o.Id))
 					.Select(o => o.Id)
 					.ToList();
 

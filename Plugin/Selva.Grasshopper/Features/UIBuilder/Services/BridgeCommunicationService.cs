@@ -8,6 +8,7 @@ using Selva.Core.Models;
 using Selva.Grasshopper.Config;
 using Selva.Grasshopper.Features.UIBuilder.Helpers;
 using Selva.Grasshopper.Features.UIBuilder.Services.Communication;
+using Selva.Grasshopper.Features.UIBuilder.Services.Events;
 using Selva.Grasshopper.Features.UIBuilder.Services.Persistence;
 using Selva.Grasshopper.Features.UIBuilder.Services.Schema;
 using Selva.Grasshopper.Features.UIBuilder.Services.State;
@@ -29,12 +30,17 @@ public class BridgeCommunicationService : IDisposable
 	private readonly ValueCollector _valueCollector;
 	private readonly ComponentStateManager _stateManager;
 	private readonly SchemaCleanupService _cleanupService;
+	private readonly DocumentEventManager _eventManager;
 	private readonly Version _pluginVersion;
+	private readonly string _sessionId;
 
-	private UISchema _currentSchema;
-	private Dictionary<string, object> _currentValues;
 	private GH_Component _component;
 	private bool _disposed;
+
+	// Callbacks to access component's schema/values (single source of truth)
+	private Func<UISchema> _getSchema;
+	private Func<Dictionary<string, object>> _getValues;
+	private Action<UISchema> _setSchema;
 
 	public BridgeCommunicationService(
 		CommunicationHandler communicationHandler,
@@ -43,7 +49,9 @@ public class BridgeCommunicationService : IDisposable
 		ValueCollector valueCollector,
 		ComponentStateManager stateManager,
 		SchemaCleanupService cleanupService,
-		Version pluginVersion)
+		DocumentEventManager eventManager,
+		Version pluginVersion,
+		string sessionId)
 	{
 		_communicationHandler = communicationHandler ?? throw new ArgumentNullException(nameof(communicationHandler));
 		_schemaManager = schemaManager ?? throw new ArgumentNullException(nameof(schemaManager));
@@ -51,39 +59,30 @@ public class BridgeCommunicationService : IDisposable
 		_valueCollector = valueCollector ?? throw new ArgumentNullException(nameof(valueCollector));
 		_stateManager = stateManager ?? throw new ArgumentNullException(nameof(stateManager));
 		_cleanupService = cleanupService ?? throw new ArgumentNullException(nameof(cleanupService));
+		_eventManager = eventManager ?? throw new ArgumentNullException(nameof(eventManager));
 		_pluginVersion = pluginVersion ?? throw new ArgumentNullException(nameof(pluginVersion));
+		_sessionId = sessionId ?? throw new ArgumentNullException(nameof(sessionId));
 	}
 
 	/// <summary>
 	/// Initialize the service and wire up event handlers.
 	/// </summary>
-	public void Initialize(GH_Component component, UISchema schema, Dictionary<string, object> values)
+	public void Initialize(
+		GH_Component component,
+		Func<UISchema> getSchema,
+		Func<Dictionary<string, object>> getValues,
+		Action<UISchema> setSchema)
 	{
 		_component = component ?? throw new ArgumentNullException(nameof(component));
-		_currentSchema = schema;
-		_currentValues = values;
+		_getSchema = getSchema ?? throw new ArgumentNullException(nameof(getSchema));
+		_getValues = getValues ?? throw new ArgumentNullException(nameof(getValues));
+		_setSchema = setSchema ?? throw new ArgumentNullException(nameof(setSchema));
 
 		// Wire up WebSocket event handlers
 		_communicationHandler.OnValuesReceived += HandleWebSocketValueUpdate;
 		_communicationHandler.OnCurrentValuesRequested += HandleCurrentValuesRequest;
 		_communicationHandler.OnClientConnected += HandleClientConnected;
 		_communicationHandler.OnSchemaSaveRequested += HandleSchemaSave;
-	}
-
-	/// <summary>
-	/// Update the current schema reference.
-	/// </summary>
-	public void UpdateSchema(UISchema schema)
-	{
-		_currentSchema = schema;
-	}
-
-	/// <summary>
-	/// Update the current values reference.
-	/// </summary>
-	public void UpdateValues(Dictionary<string, object> values)
-	{
-		_currentValues = values;
 	}
 
 	public void Dispose()
@@ -114,14 +113,15 @@ public class BridgeCommunicationService : IDisposable
 			}
 
 			var document = _component.OnPingDocument();
-			if (!DocumentGuards.DocumentAndSchemaValid(document, _currentSchema, out _))
+			var schema = _getSchema();
+			if (!DocumentGuards.DocumentAndSchemaValid(document, schema, out _))
 			{
 				Logger.Warn("[BridgeCommunicationService] Document or schema invalid, skipping value update");
 				BroadcastRuntimeMessageAsync("error", "Document or schema invalid");
 				return;
 			}
 
-			var updated = _valueApplicator.ApplyValuesAndSchedule(document, _currentSchema, values,
+			var updated = _valueApplicator.ApplyValuesAndSchedule(document, schema, values,
 				(level, msg) =>
 				{
 					_component.AddRuntimeMessage(level, msg);
@@ -132,10 +132,7 @@ public class BridgeCommunicationService : IDisposable
 					}
 				});
 
-			if (updated > 0)
-			{
-				_currentValues = new Dictionary<string, object>(values);
-			}
+			// Values are updated in the component directly via ValueApplicator
 		}
 		catch (Exception ex)
 		{
@@ -152,27 +149,30 @@ public class BridgeCommunicationService : IDisposable
 			var document = _component.OnPingDocument();
 			if (!DocumentGuards.IsValid(document, out var error)) return;
 
+			var schema = _getSchema();
 			var currentParams = GetCurrentAvailableParameters(document);
-			var currentValues = _valueCollector.CollectInputValues(document, _currentSchema, _component.AddRuntimeMessage);
+			var currentValues = _valueCollector.CollectInputValues(document, schema, _component.AddRuntimeMessage);
 
-			var (validatedSchema, removedIds) = GetValidatedSchema(document);
+			var (validatedSchema, removedIds) = GetValidatedSchema(document, schema);
 			if (removedIds.Count > 0)
 			{
 				HandleParameterDeletion(removedIds, document);
 			}
 
 			// Create default schema if none exists
-			var schemaToSend = validatedSchema ?? _currentSchema ?? CreateDefaultSchema(document);
+			var schemaToSend = validatedSchema ?? schema ?? CreateDefaultSchema(document);
 
 			// Broadcast initial data
 			_ = _communicationHandler.BroadcastInitialData(schemaToSend, currentParams, currentValues);
 
-			// Trigger output broadcast after a small delay
+			// Trigger output broadcast after a small delay to ensure client processed initial data
 			Task.Run(async () =>
 			{
 				await Task.Delay(100);
-				// Note: EventManager.CollectAndBroadcastOutputs needs to be called from component
-				// This is a limitation we'll need to address
+				RhinoApp.InvokeOnUiThread(new Action(() =>
+				{
+					_eventManager.CollectAndBroadcastOutputs(schemaToSend);
+				}));
 			});
 		}
 		catch (Exception ex)
@@ -203,7 +203,8 @@ public class BridgeCommunicationService : IDisposable
 			schema.DocumentId = document.DocumentID;
 			schema.PluginVersion = _pluginVersion.ToString();
 
-			_currentSchema = _schemaManager.ValidateSchema(schema, document);
+			var validatedSchema = _schemaManager.ValidateSchema(schema, document);
+			_setSchema(validatedSchema); // Update component's schema (single source of truth)
 			_ = _communicationHandler.BroadcastSchemaSaved(true);
 
 			// Schedule solution to update component
@@ -229,7 +230,8 @@ public class BridgeCommunicationService : IDisposable
 			var document = _component.OnPingDocument();
 			if (document == null) return;
 
-			var currentValues = _valueCollector.CollectInputValues(document, _currentSchema, _component.AddRuntimeMessage);
+			var schema = _getSchema();
+			var currentValues = _valueCollector.CollectInputValues(document, schema, _component.AddRuntimeMessage);
 			_ = _communicationHandler.BroadcastCurrentValues(currentValues);
 		}
 		catch (Exception ex)
@@ -240,25 +242,27 @@ public class BridgeCommunicationService : IDisposable
 
 	private void HandleParameterDeletion(List<Guid> removedIds, GH_Document document)
 	{
+		var schema = _getSchema();
+		var values = _getValues();
 		_cleanupService.CleanupDeletedParameters(
 			removedIds,
-			_currentSchema,
+			schema,
 			_valueApplicator,
-			_currentValues,
+			values,
 			_communicationHandler,
 			document,
 			_component.AddRuntimeMessage
 		);
 	}
 
-	private (UISchema schema, List<Guid> removedIds) GetValidatedSchema(GH_Document document)
+	private (UISchema schema, List<Guid> removedIds) GetValidatedSchema(GH_Document document, UISchema schema)
 	{
-		if (document == null || _currentSchema == null || _schemaManager == null)
+		if (document == null || schema == null || _schemaManager == null)
 		{
 			return (null, new List<Guid>());
 		}
 
-		return _schemaManager.ValidateSchemaAndTrackChanges(_currentSchema, document);
+		return _schemaManager.ValidateSchemaAndTrackChanges(schema, document);
 	}
 
 	private DiscoveredParameters GetCurrentAvailableParameters(GH_Document document)
@@ -267,7 +271,7 @@ public class BridgeCommunicationService : IDisposable
 		{
 			return new DiscoveredParameters
 			{
-				SessionId = "",
+				SessionId = _sessionId,
 				Inputs = new List<DiscoveredInput>(),
 				Outputs = new List<DiscoveredOutput>()
 			};

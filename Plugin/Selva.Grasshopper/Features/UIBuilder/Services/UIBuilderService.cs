@@ -70,7 +70,9 @@ public class UIBuilderService : IDisposable
 			ValueCollector,
 			StateManager,
 			CleanupService,
-			PluginVersion
+			EventManager,
+			PluginVersion,
+			SessionId
 		);
 		DocumentSyncService = new DocumentSynchronizationService(
 			EventManager,

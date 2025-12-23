@@ -136,8 +136,12 @@ public class CommunicationHandler : IDisposable
 
 						Logger.Log($"[CommunicationHandler] Message type: {msgType}, SessionId match: {sessionId == _sessionId}");
 
-						// Validate session ID first
-						if (sessionId != _sessionId) return;
+						// Validate session ID first (except for requestInitialData which establishes the session)
+						if (msgType != "requestInitialData" && sessionId != _sessionId)
+						{
+							Logger.Warn($"[CommunicationHandler] Session ID mismatch. Expected: {_sessionId}, Received: {sessionId}");
+							return;
+						}
 
 						// Create message processor task
 						Func<Task> processTask = async () =>

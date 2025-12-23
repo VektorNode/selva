@@ -23,7 +23,6 @@ public class GH_Environement : GH_Component
 	{
 	}
 
-
 	protected override void RegisterInputParams(GH_InputParamManager pManager)
 	{
 	}

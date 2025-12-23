@@ -157,26 +157,37 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 	{
 		if (_service != null) return;
 
-		_service = new UIBuilderService(
-			string.IsNullOrEmpty(_sessionId) ? "" : _sessionId,
-			PluginVersion
-		);
-
-		// Initialize session if needed
+		// Create session FIRST before initializing services
+		// Services need the correct session ID during construction
+		var sessionManager = new SessionManager();
 		if (string.IsNullOrEmpty(_sessionId))
 		{
-			_sessionId = _service.SessionManager.CreateNewSession();
+			_sessionId = sessionManager.CreateNewSession();
 		}
 		else
 		{
-			// Restore existing session
-			_service.SessionManager.ClearSession();
-			_sessionId = _service.SessionManager.CreateNewSession();
+			// Always create a new session (don't restore from file)
+			sessionManager.ClearSession();
+			_sessionId = sessionManager.CreateNewSession();
 		}
 
-		// Initialize BridgeService and DocumentSyncService
-		_service.BridgeService.Initialize(this, _embeddedSchema, _embeddedValues);
-		_service.DocumentSyncService.Initialize(this, _currentDocument, _embeddedSchema, _embeddedValues);
+		// Now create UIBuilderService with the correct session ID
+		_service = new UIBuilderService(_sessionId, PluginVersion);
+
+		// Initialize BridgeService and DocumentSyncService with callbacks for single source of truth
+		_service.BridgeService.Initialize(
+			this,
+			() => _embeddedSchema,
+			() => _embeddedValues,
+			schema => _embeddedSchema = schema
+		);
+		_service.DocumentSyncService.Initialize(
+			this,
+			_currentDocument,
+			() => _embeddedSchema,
+			() => _embeddedValues,
+			schema => _embeddedSchema = schema
+		);
 
 		// Wire up parameter deletion handler
 		_service.DocumentSyncService.OnParameterDeletionRequired += HandleParameterDeletion;

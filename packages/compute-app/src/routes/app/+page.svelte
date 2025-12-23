@@ -12,6 +12,7 @@
 	} from '@selva/shared';
 	import { Maximize, Minimize } from '@lucide/svelte';
 	import { hexToOklch } from '$lib/utilities/color';
+	import { initThree, updateScene } from '@selva/core/visualization';
 
 	let { data }: PageProps = $props();
 	let schema = $derived(data.schema);
@@ -95,7 +96,7 @@
 			environment: { backgroundColor: schema?.viewerOptions?.backgroundColor ?? '#E6E6E6' }
 		};
 
-		const { scene: s, camera: c, controls: ctl } = rhinoCompute!.initThree(canvas, opts);
+		const { scene: s, camera: c, controls: ctl } = initThree(canvas, opts);
 
 		scene = s;
 		camera = c;
@@ -143,13 +144,7 @@
 
 				// Update scene if viewer is initialized
 				if (scene && meshes.length > 0) {
-					rhinoCompute!.updateScene(
-						scene as any,
-						meshes,
-						camera as any,
-						controls as any,
-						viewerInitialized
-					);
+					updateScene(scene as any, meshes, camera as any, controls as any, viewerInitialized);
 
 					// Focus camera on meshes after first solve
 					if (!viewerInitialized) {

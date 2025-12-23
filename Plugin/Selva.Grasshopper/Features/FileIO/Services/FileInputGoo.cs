@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 
@@ -120,5 +121,32 @@ public class FileInputGoo : GH_Goo<FileInputData>
 		{
 			return new FileInputGoo();
 		}
+	}
+
+	/// <summary>
+	///   Serialize to GH_IO for Rhino.Compute compatibility.
+	/// </summary>
+	public override bool Write(GH_IWriter writer)
+	{
+		if (Value == null) return false;
+
+		writer.SetString("File", Value.File ?? string.Empty);
+		writer.SetString("Type", Value.Type ?? string.Empty);
+		writer.SetString("FileEnding", Value.FileEnding ?? string.Empty);
+		return true;
+	}
+
+	/// <summary>
+	///   Deserialize from GH_IO for Rhino.Compute compatibility.
+	/// </summary>
+	public override bool Read(GH_IReader reader)
+	{
+		Value = new FileInputData
+		{
+			File = reader.ItemExists("File") ? reader.GetString("File") : string.Empty,
+			Type = reader.ItemExists("Type") ? reader.GetString("Type") : string.Empty,
+			FileEnding = reader.ItemExists("FileEnding") ? reader.GetString("FileEnding") : string.Empty
+		};
+		return true;
 	}
 }
