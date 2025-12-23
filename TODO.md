@@ -1,0 +1,1 @@
+- [ ] CORE: Check error messages from compute (does it give users proper error messages)
