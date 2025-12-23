@@ -11,7 +11,8 @@ import type {
 	NumericInputType,
 	InputParamSchema,
 	TextInputType,
-	ValueListInputType
+	ValueListInputType,
+	FileInputType
 } from '../../types';
 
 /**
@@ -49,6 +50,12 @@ function createSafeDefault(rawInput: InputParamSchema, baseInput: BaseInputType)
 				values: rawInput.values ?? {},
 				default: rawInput.atMost > 1 ? [rawInput.default] : rawInput.default
 			} as ValueListInputType;
+		case 'File':
+			return {
+				...baseInput,
+				paramType: 'File',
+				default: rawInput.atMost > 1 ? [null] : null
+			} as FileInputType;
 		default:
 			return {
 				...baseInput,
@@ -163,6 +170,13 @@ export function processInput(rawInput: InputParamSchema): InputParam {
 					paramType: rawInput.paramType as 'Geometry',
 					default: rawInput.default as object | string | undefined
 				} as GeometryInputType;
+			case 'File':
+				return {
+					...baseInput,
+					paramType: rawInput.paramType as 'File',
+					acceptedFormats: rawInput.acceptedFormats,
+					default: rawInput.default as object | string | undefined
+				} as FileInputType;
 			default:
 				// This should be unreachable due to parser registry check above
 				throw ValidationErrors.unknownParamType(rawInput.paramType, rawInput.name);

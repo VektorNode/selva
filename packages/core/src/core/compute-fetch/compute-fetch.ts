@@ -126,7 +126,7 @@ async function handleResponse(
 
 	if (!response.ok) {
 		// Read body once and reuse
-		const errorBody = await response.text();
+		let errorBody = await response.text();
 
 		// Enhanced logging for errors
 		if (debug) {
@@ -148,6 +148,7 @@ async function handleResponse(
 		if (response.status === 500) {
 			try {
 				const parsed = JSON.parse(errorBody);
+				// If it has values, it's a partial success with errors
 				if (parsed?.values && (parsed.errors || parsed.warnings)) {
 					if (debug) {
 						log(
@@ -163,7 +164,18 @@ async function handleResponse(
 					}
 					return parsed;
 				}
-			} catch {
+
+				// If it's a raw exception from the server (like ArgumentException), include it in the error message
+				if (parsed?.Message) {
+					errorBody = `${parsed.ExceptionType ? parsed.ExceptionType + ': ' : ''}${parsed.Message}\n${parsed.StackTrace || ''}`;
+				} else if (parsed?.error) {
+					errorBody =
+						typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error, null, 2);
+				}
+			} catch (e) {
+				if (debug) {
+					log(`   Failed to parse error body as JSON: ${e}`, true);
+				}
 				// Not valid JSON, proceed with HTTP error
 			}
 		}

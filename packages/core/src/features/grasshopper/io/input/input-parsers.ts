@@ -353,7 +353,8 @@ export const PARSERS: Record<string, (input: InputParamSchema) => void> = {
 	Boolean: processBooleanInput,
 	Text: processTextInput,
 	ValueList: processValueListInput,
-	Geometry: parseToObject
+	Geometry: parseToObject,
+	File: parseToObject
 };
 
 // Export parser functions for direct use

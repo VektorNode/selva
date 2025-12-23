@@ -24,6 +24,7 @@ export type {
 	BooleanInputType,
 	GeometryInputType,
 	ValueListInputType,
+	FileInputType,
 	InputParam
 } from './parameters';
 

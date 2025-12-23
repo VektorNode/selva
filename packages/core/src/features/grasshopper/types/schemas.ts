@@ -44,7 +44,7 @@ export interface GrasshopperDefinitionSource {
  * Extends base config with Grasshopper-specific options
  */
 export interface GrasshopperComputeConfig
-	extends ComputeConfig, GrasshopperBaseSchema, GrasshopperDefinitionSource {}
+	extends ComputeConfig, GrasshopperBaseSchema, GrasshopperDefinitionSource { }
 
 /**
  * Raw I/O response schema from API (PascalCase)
@@ -139,5 +139,9 @@ export interface InputParamSchema {
 	 * Key-value pairs for dropdown options
 	 */
 	values?: Record<string, string>;
+	/**
+	 * Accepted file formats for File input
+	 */
+	acceptedFormats?: string[];
 	groupName?: string | null;
 }

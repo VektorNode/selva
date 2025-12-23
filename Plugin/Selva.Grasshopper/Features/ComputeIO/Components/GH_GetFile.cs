@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using GH_IO.Serialization;
+using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Parameters;
@@ -117,11 +118,11 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 	///   Assigns contextual data as a tree structure - called by Rhino.Compute via reflection.
 	///   Rhino.Compute sends data as DataTree of GH_String, so we extract from the first path.
 	/// </summary>
-	public void AssignContextualDataTree(GH_Structure<GH_String> data)
+	public void AssignContextualDataTree(DataTree<GH_String> data)
 	{
 		_contextualFileData = null;
 
-		if (data == null || data.IsEmpty)
+		if (data == null || data.BranchCount == 0)
 		{
 			ExpireSolution(false);
 			return;
@@ -133,11 +134,11 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 			var firstPath = data.Paths.FirstOrDefault();
 			if (firstPath != null)
 			{
-				var branch = data.get_Branch(firstPath);
+				var branch = data.Branch(firstPath);
 				if (branch != null && branch.Count > 0)
 				{
-					var firstString = branch[0];
-					var fileData = ExtractFileInputData(firstString);
+					var firstItem = branch[0];
+					var fileData = ExtractFileInputData(firstItem);
 
 					if (fileData != null && ValidateFileInputData(fileData))
 					{
@@ -160,8 +161,6 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 
 		ExpireSolution(false);
 	}
-
-
 
 	public bool AutoAssignContextualData(GH_ParameterContext context)
 	{
@@ -318,6 +317,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 			FileInputGoo goo => goo.Value,
 			FileInputData data => data,
 			GH_String ghString => TryParseFileInputDataFromString(ghString.Value),
+			IGH_Goo goo => TryParseFileInputDataFromString(goo.ScriptVariable()?.ToString()),
 			string str => TryParseFileInputDataFromString(str),
 			_ => null
 		};
