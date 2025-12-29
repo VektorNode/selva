@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Selva.Core.Models;
@@ -52,6 +53,10 @@ public class WidgetConfigRule : IValidationRule
 				break;
 			case InputDropdownLayoutItem dropdownItem:
 				foreach (var issue in ValidateDropdownWidget(dropdownItem))
+					yield return issue;
+				break;
+			case InputTextLayoutItem textItem:
+				foreach (var issue in ValidateTextWidget(textItem))
 					yield return issue;
 				break;
 		}
@@ -118,5 +123,41 @@ public class WidgetConfigRule : IValidationRule
 				item.ParamId.ToString(),
 				$"Dropdown {item.DisplayName ?? item.ParamId.ToString()} has no options defined",
 				"DropdownWidgetConfig.Options must contain at least one option");
+	}
+
+	private IEnumerable<ValidationIssue> ValidateTextWidget(InputTextLayoutItem item)
+	{
+		if (item.Config == null) yield break;
+
+		var config = item.Config;
+
+		// Validate maxLength
+		if (config.MaxLength.HasValue && config.MaxLength.Value < 1)
+		{
+			yield return ValidationIssue.Error(
+				item.ParamId.ToString(),
+				$"Text input '{item.DisplayName ?? item.ParamId.ToString()}': maxLength must be positive",
+				$"maxLength is {config.MaxLength.Value} but must be at least 1");
+		}
+
+		// Validate regex pattern
+		if (!string.IsNullOrEmpty(config.Pattern))
+		{
+			ValidationIssue patternError = null;
+			try
+			{
+				_ = new System.Text.RegularExpressions.Regex(config.Pattern);
+			}
+			catch (Exception ex)
+			{
+				patternError = ValidationIssue.Error(
+					item.ParamId.ToString(),
+					$"Text input '{item.DisplayName ?? item.ParamId.ToString()}': invalid regex pattern - {ex.Message}",
+					$"Pattern: {config.Pattern}");
+			}
+
+			if (patternError != null)
+				yield return patternError;
+		}
 	}
 }

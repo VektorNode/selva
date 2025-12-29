@@ -108,6 +108,18 @@ public static class FileImporter
 					importSuccess = ImportStep(filePath, doc);
 					break;
 
+				case ".fbx":
+					importSuccess = ImportFbx(filePath, doc);
+					break;
+
+				case ".stl":
+					importSuccess = ImportStl(filePath, doc);
+					break;
+
+				case ".obj":
+					importSuccess = ImportObj(filePath, doc);
+					break;
+
 				default:
 					importSuccess = ImportGeneric(filePath, doc);
 					break;
@@ -202,8 +214,51 @@ public static class FileImporter
 	{
 		try
 		{
+
+
 			var options = new FileStpReadOptions();
 			return FileStp.Read(filePath, doc, options);
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+
+	private static bool ImportFbx(string filePath, RhinoDoc doc)
+	{
+		try
+		{
+			var options = new FileFbxReadOptions();
+			return FileFbx.Read(filePath, doc, options);
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	private static bool ImportStl(string filePath, RhinoDoc doc)
+	{
+		try
+		{
+			var options = new FileStlReadOptions();
+			return FileStl.Read(filePath, doc, options);
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	private static bool ImportObj(string filePath, RhinoDoc doc)
+	{
+		try
+		{
+			var fileReadOptions = new FileReadOptions();
+			var options = new FileObjReadOptions(fileReadOptions);
+			return FileObj.Read(filePath, doc, options);
 		}
 		catch
 		{

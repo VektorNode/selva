@@ -106,7 +106,10 @@ export function createDefaultWidgetConfig(
 
 			case 'text': {
 				const config: TextWidgetConfig = {
-					placeholder: `Enter ${param.nickname}`
+					placeholder: `Enter ${param.nickname}`,
+					maxLength: undefined,
+					pattern: undefined,
+					customErrorMessage: undefined
 				};
 				return config;
 			}

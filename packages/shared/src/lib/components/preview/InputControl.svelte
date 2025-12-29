@@ -36,9 +36,33 @@
 
 	const inputId = $derived(`input-${item.paramId}-${Math.random().toString(36).substring(2, 11)}`);
 
+	let validationError = $state<string | null>(null);
+
 	function handleChange(newValue: SupportedTypes) {
 		value = newValue;
 		onChange(item.paramId, newValue);
+	}
+
+	function validateTextInput(value: string, config: TextWidgetConfig): string | null {
+		// Max length validation
+		if (config.maxLength && value.length > config.maxLength) {
+			return `Maximum ${config.maxLength} characters allowed`;
+		}
+
+		// Pattern validation
+		if (config.pattern) {
+			try {
+				const regex = new RegExp(config.pattern);
+				if (!regex.test(value)) {
+					return config.customErrorMessage || 'Invalid format';
+				}
+			} catch (e) {
+				console.error('Invalid regex pattern:', config.pattern);
+				return 'Invalid validation pattern configured';
+			}
+		}
+
+		return null;
 	}
 
 	// Use throttle for sliders: immediate first update, then waits for user to pause/stop
@@ -148,16 +172,34 @@
 		</div>
 	{:else if isTextWidget(item)}
 		{@const config = item.config as TextWidgetConfig}
-		<Input
-			id={inputId}
-			type="text"
-			bind:value
-			placeholder={config.placeholder}
-			oninput={(e:any) => {
-				const target = e.currentTarget as HTMLInputElement;
-				handleChange(target.value);
-			}}
-		/>
+		<div class="space-y-1">
+			<Input
+				id={inputId}
+				type="text"
+				bind:value
+				placeholder={config.placeholder}
+				maxlength={config.maxLength}
+				class={validationError ? 'border-red-500' : ''}
+				oninput={(e: any) => {
+					const target = e.currentTarget as HTMLInputElement;
+					validationError = null; // Clear error while typing
+					// Don't send to Grasshopper on every keystroke - wait for blur
+				}}
+				onblur={(e: any) => {
+					const target = e.currentTarget as HTMLInputElement;
+					const error = validateTextInput(target.value, config);
+					validationError = error;
+
+					// Only send to Grasshopper if validation passes
+					if (!error) {
+						handleChange(target.value);
+					}
+				}}
+			/>
+			{#if validationError}
+				<p class="text-xs text-red-500">{validationError}</p>
+			{/if}
+		</div>
 	{:else if isDropdownWidget(item)}
 		{@const config = item.config as DropdownWidgetConfig}
 		{@const optionKeys = Object.keys(config.options || {})}

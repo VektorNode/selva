@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using GH_IO.Serialization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Selva.Core.Constants;
 using Selva.Core.Models;
 using Selva.Core.Services;
 
@@ -40,7 +41,7 @@ public class SchemaPersistenceService
 			{
 				// Ensure version is set before saving
 				if (string.IsNullOrEmpty(schema.SchemaVersion))
-					schema.SchemaVersion = SchemaMigrator.CURRENT_SCHEMA_VERSION.ToString();
+					schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
 
 				schema.LastModified = DateTime.UtcNow;
 
@@ -86,14 +87,25 @@ public class SchemaPersistenceService
 					// Deserialize the migrated JSON
 					var rawSchema = jObject.ToObject<UISchema>();
 
-					// MIGRATE TO CURRENT VERSION (Logic/Defaults)
+					// CREATE BACKUP BEFORE MIGRATION (if migration is needed)
 					var originalVersion = rawSchema.SchemaVersion;
+					if (SchemaMigrator.NeedsMigration(rawSchema))
+					{
+						var backupPath = SchemaBackupService.CreateBackup(rawSchema);
+						if (!string.IsNullOrEmpty(backupPath))
+						{
+							migrationMessage = $"Backup created at: {backupPath}\n";
+						}
+					}
+
+					// MIGRATE TO CURRENT VERSION (Logic/Defaults)
 					schema = SchemaMigrator.MigrateToCurrentVersion(rawSchema, _pluginVersion);
 
 					// Track migration for reporting
 					if (originalVersion != schema.SchemaVersion)
 					{
-						migrationMessage = $"Schema migrated from v{originalVersion ?? "legacy"} to v{schema.SchemaVersion}";
+						var msg = $"Schema migrated from v{originalVersion ?? "legacy"} to v{schema.SchemaVersion}";
+						migrationMessage = migrationMessage != null ? migrationMessage + msg : msg;
 					}
 				}
 			}

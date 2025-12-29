@@ -1,4 +1,5 @@
 using Newtonsoft.Json.Linq;
+using Selva.Core.Constants;
 using Selva.Core.Models;
 using Selva.Core.Services;
 
@@ -32,7 +33,7 @@ public class SchemaMigratorTests
 
 		var migrated = SchemaMigrator.MigrateJson(json);
 
-		Assert.Equal("2.0.0", migrated["schemaVersion"]?.ToString());
+		Assert.Equal(SchemaVersion.CURRENT_STRING, migrated["schemaVersion"]?.ToString());
 
 		var layout = migrated["layout"];
 		Assert.Null(layout["tabs"]); // Tabs should be removed
@@ -63,9 +64,9 @@ public class SchemaMigratorTests
 		var (migratedSchema, changes) = SchemaMigrator.MigrateWithTracking(schema, new Version(1, 0, 0));
 
 		// It first sets to 1.0.0, then migrates to 2.0.0
-		Assert.Equal("2.0.0", migratedSchema.SchemaVersion);
+		Assert.Equal(SchemaVersion.CURRENT_STRING, migratedSchema.SchemaVersion);
 		Assert.Contains(changes, c => c.Contains("legacy schema detected"));
-		Assert.Contains(changes, c => c.Contains("Applied migration from 1.0.0 to 2.0.0"));
+		Assert.Contains(changes, c => c.Contains($"Applied migration from 1.0.0 to {SchemaVersion.CURRENT}"));
 	}
 
 	[Fact]
@@ -90,7 +91,7 @@ public class SchemaMigratorTests
 		var schema = new UISchema
 		{
 			Id = "current-schema",
-			SchemaVersion = SchemaMigrator.CURRENT_SCHEMA_VERSION.ToString()
+			SchemaVersion = SchemaVersion.CURRENT_STRING
 		};
 
 		var (migratedSchema, changes) = SchemaMigrator.MigrateWithTracking(schema, new Version(1, 0, 0));
@@ -118,10 +119,10 @@ public class SchemaMigratorTests
 
 		var (migratedSchema, changes) = SchemaMigrator.MigrateWithTracking(schema, new Version(2, 0, 0));
 
-		Assert.Equal("2.0.0", migratedSchema.SchemaVersion);
+		Assert.Equal(SchemaVersion.CURRENT_STRING, migratedSchema.SchemaVersion);
 		Assert.Equal("Input1", migratedSchema.Inputs[0].Nickname);
 		Assert.Equal("Output1", migratedSchema.Outputs[0].Nickname);
-		Assert.Contains(changes, c => c.Contains("Applied migration from 1.0.0 to 2.0.0"));
+		Assert.Contains(changes, c => c.Contains($"Applied migration from 1.0.0 to {SchemaVersion.CURRENT}"));
 	}
 
 	[Fact]
@@ -138,7 +139,7 @@ public class SchemaMigratorTests
 
 		var migrated = SchemaMigrator.MigrateJson(json);
 
-		Assert.Equal("2.0.0", migrated["schemaVersion"]?.ToString());
+		Assert.Equal(SchemaVersion.CURRENT_STRING, migrated["schemaVersion"]?.ToString());
 		Assert.Equal("tabbed", migrated["layout"]?["type"]?.ToString());
 	}
 }
