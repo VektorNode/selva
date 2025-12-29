@@ -4,7 +4,8 @@
 		LayoutItem,
 		DiscoveredInput,
 		NumberWidgetConfig,
-		FileInputWidgetConfig
+		FileInputWidgetConfig,
+		TextWidgetConfig
 	} from '@selva/shared';
 	import { Badge, Button, Card, Switch } from '@selva/shared';
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown } from '@lucide/svelte';
@@ -22,8 +23,9 @@
 
 	let isNumberInput = $derived(item.type === 'input' && item.widgetType === 'number');
 	let isFileInput = $derived(item.type === 'input' && item.widgetType === 'file');
+	let isTextInput = $derived(item.type === 'input' && item.widgetType === 'text');
 	let showAdvanced = $state(false);
-	let hasAdvancedOptions = $derived(isNumberInput || isFileInput);
+	let hasAdvancedOptions = $derived(isNumberInput || isFileInput || isTextInput);
 
 	let isDragging = $state(false);
 	let isDragOver = $state(false);
@@ -311,6 +313,47 @@
 										{/each}
 									</div>
 								</div>
+							</div>
+						{/if}
+
+						{#if showAdvanced && isTextInput}
+							{@const config = item.config as TextWidgetConfig}
+							<div class="flex flex-col gap-2">
+								<!-- Max Length -->
+								<div class="flex flex-col gap-1">
+									<span class="text-muted-foreground text-[10px] font-medium">Max Length</span>
+									<input
+										type="number"
+										min="1"
+										bind:value={config.maxLength}
+										placeholder="No limit"
+										class="h-6 rounded border border-border/70 bg-background px-2 text-[10px] focus:border-primary focus:outline-none"
+									/>
+								</div>
+
+								<!-- Pattern (Regex) -->
+								<div class="flex flex-col gap-1">
+									<span class="text-muted-foreground text-[10px] font-medium">Validation Pattern (Regex)</span>
+									<input
+										type="text"
+										bind:value={config.pattern}
+										placeholder="e.g., ^[a-zA-Z0-9]+$"
+										class="h-6 rounded border border-border/70 bg-background px-2 text-[10px] focus:border-primary focus:outline-none font-mono"
+									/>
+								</div>
+
+								<!-- Custom Error Message -->
+								{#if config.pattern}
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium">Custom Error Message</span>
+										<input
+											type="text"
+											bind:value={config.customErrorMessage}
+											placeholder="Invalid format"
+											class="h-6 rounded border border-border/70 bg-background px-2 text-[10px] focus:border-primary focus:outline-none"
+										/>
+									</div>
+								{/if}
 							</div>
 						{/if}
 					</div>

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
+using Selva.Core.Constants;
 using Selva.Core.Models;
 
 namespace Selva.Core.Services;
@@ -11,14 +12,18 @@ namespace Selva.Core.Services;
 /// </summary>
 public static class SchemaMigrator
 {
-	// Current version of the plugin's schema format
-	public static readonly Version CURRENT_SCHEMA_VERSION = new(2, 0, 0);
+	/// <summary>
+	///   Current version of the plugin's schema format.
+	///   This is now a reference to the centralized version constant.
+	/// </summary>
+	[Obsolete("Use SchemaVersion.CURRENT instead", false)]
+	public static readonly Version CURRENT_SCHEMA_VERSION = SchemaVersion.CURRENT;
 
 	// Migration registry: maps version -> migration function
 	private static readonly Dictionary<Version, Func<UISchema, UISchema>> _migrations =
 		new()
 		{
-			{ new Version(2, 0, 0), MigrateTo_2_0_0 }
+			{ SchemaVersion.CURRENT, MigrateTo_2_0_0 }
 		};
 
 	/// <summary>
@@ -36,9 +41,9 @@ public static class SchemaMigrator
 
 		var version = Version.Parse(versionStr);
 
-		if (version < new Version(2, 0, 0))
+		if (version < SchemaVersion.CURRENT)
 		{
-			// Migration to 2.0.0:
+			// Migration to current version:
 			var layout = json["layout"] as JObject;
 			if (layout != null)
 			{
@@ -78,7 +83,7 @@ public static class SchemaMigrator
 			}
 
 			// Update version
-			json["schemaVersion"] = "2.0.0";
+			json["schemaVersion"] = SchemaVersion.CURRENT_STRING;
 		}
 
 		return json;
@@ -86,7 +91,7 @@ public static class SchemaMigrator
 
 	private static UISchema MigrateTo_2_0_0(UISchema schema)
 	{
-		schema.SchemaVersion = "2.0.0";
+		schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
 
 		// Name field removed in 2.0.0 - now only using nickname
 
@@ -149,10 +154,10 @@ public static class SchemaMigrator
 		}
 
 		// No migration needed if already at current version
-		if (schemaVersion >= CURRENT_SCHEMA_VERSION) return (schema, changes);
+		if (schemaVersion >= SchemaVersion.CURRENT) return (schema, changes);
 
 		var migratedSchema = schema;
-		var migrationPath = GetMigrationPath(schemaVersion, CURRENT_SCHEMA_VERSION);
+		var migrationPath = GetMigrationPath(schemaVersion, SchemaVersion.CURRENT);
 
 		// Apply migrations in order
 		foreach (var targetVersion in migrationPath)
@@ -175,7 +180,7 @@ public static class SchemaMigrator
 				changes.Add($"Updated version to {targetVersion} (no data changes)");
 			}
 
-		migratedSchema.SchemaVersion = CURRENT_SCHEMA_VERSION.ToString();
+		migratedSchema.SchemaVersion = SchemaVersion.CURRENT.ToString();
 		migratedSchema.LastModified = DateTime.UtcNow;
 
 		return (migratedSchema, changes);
@@ -204,13 +209,13 @@ public static class SchemaMigrator
 			if (!Version.TryParse(schema.SchemaVersion, out var schemaVersion))
 				return (false, new List<string> { $"Invalid schema version format: {schema.SchemaVersion}" });
 
-			if (schemaVersion >= CURRENT_SCHEMA_VERSION)
+			if (schemaVersion >= SchemaVersion.CURRENT)
 			{
 				issues.Add("Schema is already at current version - no migration needed");
 				return (true, issues);
 			}
 
-			var migrationPath = GetMigrationPath(schemaVersion, CURRENT_SCHEMA_VERSION);
+			var migrationPath = GetMigrationPath(schemaVersion, SchemaVersion.CURRENT);
 			if (migrationPath.Any())
 			{
 				issues.Add($"Migration path: {string.Join(" -> ", migrationPath)}");
@@ -243,7 +248,7 @@ public static class SchemaMigrator
 
 		try
 		{
-			return Version.Parse(schema.SchemaVersion) < CURRENT_SCHEMA_VERSION;
+			return Version.Parse(schema.SchemaVersion) < SchemaVersion.CURRENT;
 		}
 		catch
 		{
@@ -268,7 +273,7 @@ public static class SchemaMigrator
 				return (false, $"Schema requires plugin version {minVersion} or higher. Current: {currentPluginVersion}");
 		}
 
-		if (schemaVersion.Major > CURRENT_SCHEMA_VERSION.Major)
+		if (schemaVersion.Major > SchemaVersion.CURRENT.Major)
 			return (false, $"Schema version {schemaVersion} requires a newer version of Selva");
 
 		return (true, "Schema is compatible");

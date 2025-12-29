@@ -69,6 +69,47 @@ export type LayoutConfig = TabbedLayoutConfig | FlatLayoutConfig;
 export interface SelvaUISchema {
 	[k: string]: unknown | undefined;
 }
+export interface VisibilityRule {
+	/**
+	 * Parameter ID to watch for changes
+	 */
+	paramId: string;
+	/**
+	 * Comparison operator
+	 */
+	operator:
+	| 'equals'
+	| 'notEquals'
+	| 'greaterThan'
+	| 'lessThan'
+	| 'greaterThanOrEqual'
+	| 'lessThanOrEqual'
+	| 'in'
+	| 'notIn'
+	| 'between';
+	/**
+	 * Value to compare against (used for equals, notEquals, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual)
+	 */
+	value?: {
+		[k: string]: unknown | undefined;
+	};
+	/**
+	 * Array of values (used for 'in', 'notIn' operators, or [min, max] for 'between')
+	 */
+	values?: unknown[];
+}
+export interface VisibilityCondition {
+	/**
+	 * Evaluation mode: 'all' = AND (all rules must pass), 'any' = OR (at least one rule must pass)
+	 */
+	mode?: 'all' | 'any';
+	/**
+	 * List of rules to evaluate
+	 *
+	 * @minItems 1
+	 */
+	rules: [VisibilityRule, ...VisibilityRule[]];
+}
 export interface NumberWidgetConfig {
 	minimum?: number;
 	maximum?: number;
@@ -79,6 +120,18 @@ export interface NumberWidgetConfig {
 export interface TextWidgetConfig {
 	placeholder?: string;
 	required?: boolean;
+	/**
+	 * Maximum character length for text input
+	 */
+	maxLength?: number;
+	/**
+	 * Regex pattern for validation (e.g., email, phone)
+	 */
+	pattern?: string;
+	/**
+	 * Custom error message shown when pattern validation fails
+	 */
+	customErrorMessage?: string;
 }
 export interface DropdownWidgetConfig {
 	/**
@@ -93,7 +146,7 @@ export interface CheckboxWidgetConfig { }
 export interface FileWidgetConfig {
 	buttonLabel?: string;
 	/**
-	 * File format hint (e.g., 'zip', '3dm')
+	 * File format hint (e.g., '3dm') for setting download extension
 	 */
 	fileFormat?: string;
 }
@@ -107,7 +160,6 @@ export interface FileInputWidgetConfig {
 	 */
 	defaultInputMode?: 'upload' | 'url';
 }
-
 export interface LayoutItemBase {
 	/**
 	 * Unique identifier for this layout item in the UI tree (not the parameter ID)
@@ -121,7 +173,27 @@ export interface LayoutItemBase {
 	description?: string;
 	order?: number;
 	span?: number;
+	/**
+	 * Base visibility (static). If false, item is always hidden regardless of conditions.
+	 */
+	visible?: boolean;
+	visibilityCondition?: VisibilityCondition1;
 	[k: string]: unknown | undefined;
+}
+/**
+ * Dynamic visibility rules based on other parameter values. Evaluated only if visible is not false.
+ */
+export interface VisibilityCondition1 {
+	/**
+	 * Evaluation mode: 'all' = AND (all rules must pass), 'any' = OR (at least one rule must pass)
+	 */
+	mode?: 'all' | 'any';
+	/**
+	 * List of rules to evaluate
+	 *
+	 * @minItems 1
+	 */
+	rules: [VisibilityRule, ...VisibilityRule[]];
 }
 export interface GroupConfig {
 	id: string;
@@ -344,7 +416,12 @@ export interface ValidationIssueMessage {
 export const ACCEPTED_FILE_FORMATS = [
 	".3dm",
 	".stp",
-	".step"
+	".step",
+	".fbx",
+	".obj",
+	".dxf",
+	".fbx",
+	".stl"
 ] as const;
 
 // ============================================================================

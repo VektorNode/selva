@@ -132,7 +132,10 @@ function generateProperty(name, prop, required) {
   const attributeString = attributes.length > 0 ? ', ' + attributes.join(', ') : '';
 
   let defaultValue = '';
-  if (prop.default !== undefined) {
+  // Special handling for schemaVersion - use centralized constant
+  if (name === 'schemaVersion' && prop.default !== undefined) {
+    defaultValue = ' = Constants.SchemaVersion.CURRENT_STRING;';
+  } else if (prop.default !== undefined) {
     if (typeof prop.default === 'string') {
       defaultValue = ` = "${prop.default}";`;
     } else if (typeof prop.default === 'boolean') {

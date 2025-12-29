@@ -4,7 +4,7 @@
 	"title": "Selva UI Schema",
 	"description": "Schema definitions for Selva UI configuration",
 	"constants": {
-		"acceptedFileFormats": [".3dm", ".stp", ".step"]
+		"acceptedFileFormats": [".3dm", ".stp", ".step", ".fbx", ".obj", ".dxf", ".fbx", ".stl"]
 	},
 	"definitions": {
 		"//_COMMENT": "--- PRIMITIVES ---",
@@ -12,6 +12,62 @@
 			"type": "string",
 			"enum": ["number", "integer", "boolean", "text", "valueList", "file", "generic"],
 			"description": "Grasshopper contextual parameter data types"
+		},
+
+		"//_COMMENT": "--- VISIBILITY RULES ---",
+		"VisibilityRule": {
+			"type": "object",
+			"description": "Single rule for conditional visibility",
+			"properties": {
+				"paramId": {
+					"type": "string",
+					"description": "Parameter ID to watch for changes"
+				},
+				"operator": {
+					"type": "string",
+					"enum": [
+						"equals",
+						"notEquals",
+						"greaterThan",
+						"lessThan",
+						"greaterThanOrEqual",
+						"lessThanOrEqual",
+						"in",
+						"notIn",
+						"between"
+					],
+					"description": "Comparison operator"
+				},
+				"value": {
+					"description": "Value to compare against (used for equals, notEquals, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual)"
+				},
+				"values": {
+					"type": "array",
+					"description": "Array of values (used for 'in', 'notIn' operators, or [min, max] for 'between')"
+				}
+			},
+			"required": ["paramId", "operator"],
+			"additionalProperties": false
+		},
+		"VisibilityCondition": {
+			"type": "object",
+			"description": "Defines conditional visibility based on other parameter values",
+			"properties": {
+				"mode": {
+					"type": "string",
+					"enum": ["all", "any"],
+					"default": "all",
+					"description": "Evaluation mode: 'all' = AND (all rules must pass), 'any' = OR (at least one rule must pass)"
+				},
+				"rules": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/VisibilityRule" },
+					"minItems": 1,
+					"description": "List of rules to evaluate"
+				}
+			},
+			"required": ["rules"],
+			"additionalProperties": false
 		},
 
 		"//_COMMENT": "--- WIDGET CONFIGURATIONS ---",
@@ -30,7 +86,19 @@
 			"type": "object",
 			"properties": {
 				"placeholder": { "type": "string" },
-				"required": { "type": "boolean" }
+				"required": { "type": "boolean" },
+				"maxLength": {
+					"type": "integer",
+					"description": "Maximum character length for text input"
+				},
+				"pattern": {
+					"type": "string",
+					"description": "Regex pattern for validation (e.g., email, phone)"
+				},
+				"customErrorMessage": {
+					"type": "string",
+					"description": "Custom error message shown when pattern validation fails"
+				}
 			},
 			"additionalProperties": false
 		},
@@ -61,7 +129,7 @@
 				},
 				"fileFormat": {
 					"type": "string",
-					"description": "File format hint (e.g., 'zip', '3dm')"
+					"description": "File format hint (e.g., '3dm') for setting download extension"
 				}
 			},
 			"additionalProperties": false
@@ -105,6 +173,15 @@
 				"span": {
 					"type": "integer",
 					"default": 1
+				},
+				"visible": {
+					"type": "boolean",
+					"default": true,
+					"description": "Base visibility (static). If false, item is always hidden regardless of conditions."
+				},
+				"visibilityCondition": {
+					"$ref": "#/definitions/VisibilityCondition",
+					"description": "Dynamic visibility rules based on other parameter values. Evaluated only if visible is not false."
 				}
 			},
 			"required": ["id", "paramId"]
