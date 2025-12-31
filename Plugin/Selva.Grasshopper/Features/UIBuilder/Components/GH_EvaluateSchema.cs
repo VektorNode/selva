@@ -24,12 +24,13 @@ public class GH_EvaluateSchema : GH_Component
 
 	protected override Bitmap Icon => Resources.UIBridge; // Using same icon for now, or null if preferred
 
-	public override GH_Exposure Exposure => GH_Exposure.secondary;
+	public override GH_Exposure Exposure => GH_Exposure.hidden;
 
 	protected override void RegisterInputParams(GH_InputParamManager pManager)
 	{
 		pManager.AddGenericParameter("Schema", "S", "The UI Schema to evaluate", GH_ParamAccess.item);
 	}
+
 
 	protected override void RegisterOutputParams(GH_OutputParamManager pManager)
 	{
