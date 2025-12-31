@@ -4,6 +4,7 @@ using System.Drawing;
 using Grasshopper.Kernel;
 using Rhino;
 using Rhino.Geometry;
+using Selva.Grasshopper.Properties;
 
 namespace Selva.Grasshopper.Features.ComputeIO.Components;
 
@@ -14,14 +15,16 @@ public class GH_Environement : GH_Component
 		get { return new Guid("58782D53-DA8B-4EFE-8577-B3FA22DA9E0F"); }
 	}
 
-	protected override Bitmap Icon => null;
+	protected override Bitmap Icon => Resources.Environment;
 
 	public GH_Environement()
-		: base("Environement", "Env",
-			"Get information about the current running environement",
+		: base("Environment", "Env",
+			"Get information about the current running environment (Compute or Desktop)",
 			"Selva", "Utilities")
 	{
 	}
+
+	public override GH_Exposure Exposure => GH_Exposure.primary;
 
 	protected override void RegisterInputParams(GH_InputParamManager pManager)
 	{

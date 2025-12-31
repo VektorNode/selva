@@ -81,21 +81,32 @@ public class SchemaPersistenceService
 					// Parse as JObject first to handle structural migrations
 					var jObject = JObject.Parse(schemaJson);
 
+					// CAPTURE ORIGINAL VERSION BEFORE MIGRATION
+					var originalVersion = jObject["schemaVersion"]?.Value<string>();
+					bool needsBackup = string.IsNullOrEmpty(originalVersion) ||
+					                   Version.Parse(originalVersion ?? "1.0.0") < SchemaVersion.CURRENT;
+
 					// Run JSON-level migration (structural changes)
 					jObject = SchemaMigrator.MigrateJson(jObject);
 
 					// Deserialize the migrated JSON
 					var rawSchema = jObject.ToObject<UISchema>();
 
-					// CREATE BACKUP BEFORE MIGRATION (if migration is needed)
-					var originalVersion = rawSchema.SchemaVersion;
-					if (SchemaMigrator.NeedsMigration(rawSchema))
+					// CREATE BACKUP BEFORE OBJECT-LEVEL MIGRATION (if migration is needed)
+					if (needsBackup)
 					{
-						var backupPath = SchemaBackupService.CreateBackup(rawSchema);
+						// Temporarily restore original version for backup
+						var backupSchema = rawSchema;
+						backupSchema.SchemaVersion = originalVersion;
+
+						var backupPath = SchemaBackupService.CreateBackup(backupSchema);
 						if (!string.IsNullOrEmpty(backupPath))
 						{
 							migrationMessage = $"Backup created at: {backupPath}\n";
 						}
+
+						// Restore the migrated version
+						backupSchema.SchemaVersion = rawSchema.SchemaVersion;
 					}
 
 					// MIGRATE TO CURRENT VERSION (Logic/Defaults)
