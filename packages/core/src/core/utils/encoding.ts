@@ -77,23 +77,6 @@ export function base64ByteArray(bytes: Uint8Array | null | undefined): string {
 	// Main loop deals with bytes in chunks of 3
 	for (let i = 0; i < mainLength; i += 3) {
 		// Combine the three bytes into a single integer
-		if (!Array.isArray(inputBytes)) {
-			// Import here to avoid circular dependencies at top level
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
-			const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
-			throw new RhinoComputeError('inputBytes must be an array', ErrorCodes.INVALID_INPUT, {
-				context: { receivedType: typeof inputBytes }
-			});
-		}
-
-		if (typeof i !== 'number' || i < 0 || i >= inputBytes.length) {
-			// Import here to avoid circular dependencies at top level
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
-			const { RhinoComputeError, ErrorCodes } = require('./../../core/errors');
-			throw new RhinoComputeError('Invalid index i', ErrorCodes.INVALID_INPUT, {
-				context: { index: i, arrayLength: inputBytes.length }
-			});
-		}
 
 		const byte1 = inputBytes[i] !== undefined ? inputBytes[i] : 0;
 		const byte2 = inputBytes[i + 1] !== undefined ? inputBytes[i + 1] : 0;

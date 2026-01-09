@@ -1,0 +1,21 @@
+node_modules
+.DS_Store
+dist
+build
+.svelte-kit
+.env
+.env.*
+!.env.example
+.git
+.github
+.vscode
+coverage
+test-results
+
+# Ignore C# Plugin source and binaries for Node build
+Plugin/
+*.dll
+*.exe
+*.so
+bin/
+obj/

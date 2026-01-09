@@ -1,6 +1,7 @@
 import { ComputeConfig, RhinoComputeError } from '@/core';
 import { fetchRhinoCompute } from '@/core/compute-fetch/compute-fetch';
 import { camelcaseKeys, warnIfClientSide } from '@/core/utils';
+import { prepareGrasshopperArgs } from '../compute/solve';
 
 import {
 	InputParam,
@@ -15,7 +16,7 @@ import { processInputs } from './input/input-processors';
  * Fetches raw input/output schemas from a Grasshopper definition.
  * Returns unprocessed data exactly as received from the Rhino Compute API (camelCased).
  *
- * @param definitionUrl - URL of the Grasshopper definition
+ * @param definition - The Grasshopper definition (URL, base64 string, or Uint8Array)
  * @param config - Compute configuration (server URL, API key, etc.)
  * @returns Raw inputs and outputs with no type processing
  * @throws {RhinoComputeError} If fetch fails or response is invalid
@@ -23,21 +24,26 @@ import { processInputs } from './input/input-processors';
  * @public Use `fetchParsedDefinitionIO()` for processed, type-safe inputs
  */
 export async function fetchDefinitionIO(
-	definitionUrl: string,
+	definition: string | Uint8Array,
 	config: ComputeConfig
 ): Promise<GrasshopperParsedIORaw> {
-	const response = await fetchRhinoCompute<'io'>('io', { pointer: definitionUrl }, config);
+	const args = prepareGrasshopperArgs(definition, []);
+	const payload: { algo?: string | null; pointer?: string | null } = {};
+	if (args.algo) payload.algo = args.algo;
+	if (args.pointer) payload.pointer = args.pointer;
+
+	const response = await fetchRhinoCompute<'io'>('io', payload, config);
 
 	if (!response || typeof response !== 'object') {
 		throw new RhinoComputeError('Invalid IO response structure', undefined, {
-			context: { response, definitionUrl }
+			context: { response, definition }
 		});
 	}
 
 	// Validate structure
 	if (!response || typeof response !== 'object') {
 		throw new RhinoComputeError('Invalid IO response structure', undefined, {
-			context: { response, definitionUrl }
+			context: { response, definition }
 		});
 	}
 
@@ -56,7 +62,7 @@ export async function fetchDefinitionIO(
  *
  * @public This is the recommended way to fetch definition I/O schemas.
  *
- * @param definitionUrl - URL of the Grasshopper definition
+ * @param definition - The Grasshopper definition (URL, base64 string, or Uint8Array)
  * @param config - Compute configuration (server URL, API key, etc.)
  * @returns Processed inputs with discriminated union types and outputs
  * @throws {RhinoComputeError} If fetch fails or response is invalid
@@ -77,12 +83,12 @@ export async function fetchDefinitionIO(
  * ```
  */
 export async function fetchParsedDefinitionIO(
-	definitionUrl: string,
+	definition: string | Uint8Array,
 	config: ComputeConfig
 ): Promise<GrasshopperParsedIO> {
 	warnIfClientSide('fetchParsedDefinitionIO', config.suppressClientSideWarning);
 
-	const { inputs: rawInputs, outputs } = await fetchDefinitionIO(definitionUrl, config);
+	const { inputs: rawInputs, outputs } = await fetchDefinitionIO(definition, config);
 	const inputs: InputParam[] = processInputs(rawInputs);
 
 	return { inputs, outputs };

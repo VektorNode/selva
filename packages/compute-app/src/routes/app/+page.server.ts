@@ -3,6 +3,8 @@ import { error } from '@sveltejs/kit';
 import { GrasshopperResponseProcessor, TreeBuilder, GrasshopperClient } from '@selva/core';
 import type { UISchema } from '@selva/shared';
 import { getServerConfig } from '$lib/server/config.server';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 export const load = (async ({ url, params: _params }) => {
 	const config = getServerConfig();
@@ -10,31 +12,88 @@ export const load = (async ({ url, params: _params }) => {
 	// Get filename from URL param (only filename, not full URL)
 	let ghFilename = url.searchParams.get('gh');
 
-	let fullGhUrl: string;
+	let definitionSource: string | Uint8Array = '';
+	let clientDefUrl = ''; // Value passed to client for subsequent API calls
 
-	if (ghFilename) {
-		// Ensure extension
-		if (!ghFilename.endsWith('.gh')) {
-			ghFilename += '.gh';
+	// Strategy 1: Local File System (Preferred for safety)
+	if (config.ghDefinitionsPath) {
+		// If no filename is provided, try to find a default file in the directory
+		if (!ghFilename) {
+			try {
+				const files = await fs.readdir(config.ghDefinitionsPath);
+				const firstGhFile = files.find(f => f.endsWith('.gh'));
+				if (firstGhFile) {
+					ghFilename = firstGhFile;
+					console.log(`[Auto-Discovery] Using default definition: ${ghFilename}`);
+				}
+			} catch (err) {
+				console.warn(`[Auto-Discovery] Failed to list files in definition directory:`, err);
+			}
 		}
 
-		// Determine base URL
-		let baseUrl = config.ghDefinitionsBaseUrl;
+		if (ghFilename) {
+			// Normalize filename
+			if (!ghFilename.endsWith('.gh')) ghFilename += '.gh';
 
-		// If config URL looks like a file, strip the filename to get the base directory
-		if (baseUrl.endsWith('.gh')) {
-			baseUrl = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
+			// Security: Prevent directory traversal
+			const safeFilename = path.basename(ghFilename);
+			if (safeFilename !== ghFilename || !/^[a-zA-Z0-9_\-\.]+$/.test(safeFilename)) {
+				throw error(400, 'Invalid filename');
+			}
+
+			const filePath = path.join(config.ghDefinitionsPath, safeFilename);
+
+			try {
+				// Check if file exists and read it
+				await fs.access(filePath);
+				const fileBuffer = await fs.readFile(filePath);
+				definitionSource = new Uint8Array(fileBuffer);
+				clientDefUrl = `local:${safeFilename}`;
+			} catch {
+				console.warn(`[Strategy: Local] Failed to read definition '${safeFilename}' at '${filePath}'.`);
+				console.warn(` - If running in Docker, ensure volumes are mounted correctly.`);
+				console.warn(` - If running in Vercel/Cloud, local file access is often restricted. Consider using GH_DEFINITIONS_BASE_URL instead.`);
+
+				// Fall through to URL strategy if text logic fails
+			}
+		}
+	}
+
+	// Strategy 2: Remote URL (Fallback or Legacy)
+	if (!definitionSource) {
+		let fullGhUrl: string;
+
+		if (ghFilename) {
+			if (!ghFilename.endsWith('.gh')) ghFilename += '.gh';
+
+			// If we have a base URL, use it
+			let baseUrl = config.ghDefinitionsBaseUrl || '';
+
+			// If config URL looks like a file, strip the filename
+			if (baseUrl.endsWith('.gh')) {
+				baseUrl = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
+			}
+
+			if (baseUrl) {
+				if (!baseUrl.endsWith('/')) baseUrl += '/';
+				fullGhUrl = `${baseUrl}${ghFilename}`;
+			} else {
+				// No base URL configured, cant resolve
+				throw error(404, 'Definition not found locally and no base URL configured');
+			}
+		} else {
+			// Use the default from config
+			fullGhUrl = config.ghDefinitionsBaseUrl || '';
+			if (!fullGhUrl) {
+				const msg = config.ghDefinitionsPath
+					? `No definition specified. Please add a .gh file to '${config.ghDefinitionsPath}' or use ?gh=filename`
+					: 'No definition specified and no default configured';
+				throw error(400, msg);
+			}
 		}
 
-		// Ensure trailing slash
-		if (!baseUrl.endsWith('/')) {
-			baseUrl += '/';
-		}
-
-		fullGhUrl = `${baseUrl}${ghFilename}`;
-	} else {
-		// Use the default from config
-		fullGhUrl = config.ghDefinitionsBaseUrl;
+		definitionSource = fullGhUrl;
+		clientDefUrl = fullGhUrl;
 	}
 
 	let client;
@@ -46,33 +105,38 @@ export const load = (async ({ url, params: _params }) => {
 		error(503, `Failed to connect to Rhino Compute server: ${errorMessage}`);
 	}
 
-	const definition = await client.getIO(fullGhUrl);
+	try {
+		const definition = await client.getIO(definitionSource);
 
-	// Solve with default values to get the schema
-	const tree = TreeBuilder.fromInputParams(definition.inputs);
+		// Solve with default values to get the schema
+		const tree = TreeBuilder.fromInputParams(definition.inputs);
 
-	const solvedDefinition = await client.solve(fullGhUrl, tree);
+		const solvedDefinition = await client.solve(definitionSource, tree);
 
-	const schema = new GrasshopperResponseProcessor(solvedDefinition).getValueByParamName('Schema', {
-		parseValues: true
-	}) as UISchema;
+		const schema = new GrasshopperResponseProcessor(solvedDefinition).getValueByParamName('Schema', {
+			parseValues: true
+		}) as UISchema;
 
-	// Merge default values from Compute definition into schema inputs
-	const computeInputsByParamId = new Map(definition.inputs.map((input) => [input.id, input]));
+		// Merge default values from Compute definition into schema inputs
+		const computeInputsByParamId = new Map(definition.inputs.map((input) => [input.id, input]));
 
-	schema.inputs = schema.inputs.map((schemaInput) => {
-		const computeInput = computeInputsByParamId.get(schemaInput.id);
-		if (computeInput && computeInput.default !== undefined) {
-			return {
-				...schemaInput,
-				default: computeInput.default
-			};
-		}
-		return schemaInput;
-	});
+		schema.inputs = schema.inputs.map((schemaInput) => {
+			const computeInput = computeInputsByParamId.get(schemaInput.id);
+			if (computeInput && computeInput.default !== undefined) {
+				return {
+					...schemaInput,
+					default: computeInput.default
+				};
+			}
+			return schemaInput;
+		});
 
-	return {
-		schema,
-		ghDefinition: fullGhUrl // Pass to client for compute calls
-	};
+		return {
+			schema,
+			ghDefinition: clientDefUrl
+		};
+	} catch (err) {
+		console.error('Failed to load definition:', err);
+		throw error(500, `Failed to load definition: ${err instanceof Error ? err.message : String(err)}`);
+	}
 }) satisfies PageServerLoad;

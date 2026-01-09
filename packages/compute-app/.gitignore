@@ -18,6 +18,12 @@ Thumbs.db
 !.env.example
 !.env.test
 
+# Grasshopper definitions (valuable, keep private)
+*.gh
+*.ghx
+definitions/
+!definitions/.gitkeep
+
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
