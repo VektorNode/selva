@@ -77,13 +77,92 @@ sudo usermod -aG docker $USER
 
 ---
 
-## 3. Deploying to a Linux Server
+## 3. Network Configuration
+
+Before deploying, configure your server's network to allow external access to the app.
+
+### Firewall Setup
+
+You need to allow **inbound traffic on port 3000** (or whichever port you choose).
+
+**On Linux (using UFW):**
+
+```bash
+# Allow port 3000
+sudo ufw allow 3000/tcp
+
+# Allow SSH (if not already enabled)
+sudo ufw allow 22/tcp
+
+# Enable the firewall
+sudo ufw enable
+```
+
+**On Linux (using iptables):**
+
+```bash
+sudo iptables -A INPUT -p tcp --dport 3000 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+```
+
+**On Cloud Providers (AWS, Google Cloud, Azure, etc.):**
+
+Create a firewall/security group rule that allows:
+- **Protocol**: TCP
+- **Port**: 3000 (or your custom port)
+- **Source**: `0.0.0.0/0` (public access) or your specific IP range
+
+### Port Configuration
+
+The app runs on **port 3000 by default**. To change it:
+
+**In `docker-compose.yml`:**
+
+```yaml
+services:
+  web:
+    ports:
+      - '3001:3000'  # Maps container port 3000 to host port 3001
+```
+
+Then restart:
+
+```bash
+docker-compose down
+docker-compose up -d
+```
+
+Access the app at `http://YOUR-SERVER-IP:3001` instead.
+
+### ORIGIN Environment Variable
+
+The `ORIGIN` variable must match your **public URL** to prevent CSRF errors on form submissions.
+
+**Update in `.env`:**
+
+```bash
+# If accessing via IP
+ORIGIN=http://YOUR-SERVER-IP:3000
+
+# If accessing via domain
+ORIGIN=https://your-domain.com
+```
+
+Restart the container for changes to take effect:
+
+```bash
+docker-compose restart
+```
+
+---
+
+## 4. Deploying to a Linux Server
 
 Choose one of two approaches below:
 
 ---
 
-## 4. Option 1: Build Directly on Server (Recommended for Most Cases)
+## 5. Option 1: Build Directly on Server (Recommended for Most Cases)
 
 The most practical approach: clone and build directly on your Linux server. No need to manage Docker registries or image transfers.
 
@@ -234,7 +313,7 @@ http://YOUR-VM-EXTERNAL-IP:3000/app?gh=your-definition-name
 
 ---
 
-## 5. Option 2: Push to Docker Registry (For Frequent Updates)
+## 6. Option 2: Push to Docker Registry (For Frequent Updates)
 
 Build locally, push to a Docker registry, then pull on the server. This is cleaner and more scalable.
 
@@ -354,7 +433,7 @@ docker-compose logs -f web
 
 ---
 
-## 6. Updating the Deployment
+## 7. Updating the Deployment
 
 **With Option 1 (Build on Server):**
 
@@ -379,7 +458,7 @@ docker-compose up -d
 
 ---
 
-## Production Checklist
+## 8. Production Checklist
 
 - [ ] Rhino.Compute server is running and accessible
 - [ ] `.env` file is configured with correct server URLs
@@ -394,7 +473,7 @@ docker-compose up -d
 
 ---
 
-## 7. Troubleshooting
+## 9. Troubleshooting
 
 **Container won't start:**
 
