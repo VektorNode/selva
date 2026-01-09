@@ -30,6 +30,9 @@ RUN pnpm deploy --filter=@selva/compute-app --prod /app/deploy --legacy
 FROM base
 WORKDIR /app
 
+# Install health check dependency
+RUN apt-get update -qq && apt-get install --no-install-recommends -y wget
+
 # Copy deployed app + dependencies
 COPY --from=build /app/deploy .
 
