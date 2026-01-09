@@ -10,6 +10,8 @@ import {
 import type { SchemaInput } from '@selva/shared';
 import { error, json } from '@sveltejs/kit';
 import { getServerConfig } from '$lib/server/config.server';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 interface ComputeRequest {
 	inputs: (SchemaInput & { minimum?: number; maximum?: number; stepSize?: number })[];
@@ -74,6 +76,32 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Use server-side config (NEVER exposed to client)
 		const config = getServerConfig();
 
+		// Determine definition source
+		let definitionSource: string | Uint8Array = definitionUrl;
+
+		if (definitionUrl.startsWith('local:')) {
+			const filename = definitionUrl.substring(6);
+			if (!config.ghDefinitionsPath) {
+				throw error(500, 'Local definitions not configured on server');
+			}
+
+			// Security validation
+			const safeFilename = path.basename(filename);
+			if (safeFilename !== filename || !/^[a-zA-Z0-9_\-.]+$/.test(safeFilename)) {
+				throw error(400, 'Invalid definition filename');
+			}
+
+			const filePath = path.join(config.ghDefinitionsPath, safeFilename);
+			try {
+				const fileData = await fs.readFile(filePath);
+				definitionSource = new Uint8Array(fileData);
+
+			} catch (err) {
+				console.error(`Failed to read local definition: ${filePath}`, err);
+				throw error(404, `Definition '${filename}' not found`);
+			}
+		}
+
 		const inputTree = TreeBuilder.fromInputParams(
 			inputs
 				.filter((input) => input.paramType)
@@ -82,7 +110,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Use server-side COMPUTE_SERVER_URL (not PUBLIC_)
 		const client = await GrasshopperClient.create({ serverUrl: config.computeServerUrl });
-		const solvedDefinition = await client.solve(definitionUrl, inputTree);
+		const solvedDefinition = await client.solve(definitionSource, inputTree);
 
 		return json(solvedDefinition);
 	} catch (err) {

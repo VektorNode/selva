@@ -1,0 +1,39 @@
+services:
+  web:
+    build:
+      context: ../../
+      dockerfile: packages/compute-app/Dockerfile
+    container_name: selva-compute-app
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+
+    # Loads environment variables from a .env file automatically
+    env_file:
+      - .env
+
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - ADAPTER=node
+      # Fallbacks if not set in .env
+      - COMPUTE_SERVER_URL=${COMPUTE_SERVER_URL:-http://host.docker.internal:8081}
+      - GH_DEFINITIONS_BASE_URL=${GH_DEFINITIONS_BASE_URL:-http://localhost:3000/definitions}
+
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+    volumes:
+      # Map local definitions folder to container
+      # This allows adding .gh files without rebuilding the image
+      - ./definitions:/app/definitions
+
+    # Healthcheck ensures the container is truly ready to serve traffic
+    # Auto-restarts if the app hangs or crashes
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:3000/api/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s

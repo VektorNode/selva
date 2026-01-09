@@ -70,35 +70,37 @@ export default class GrasshopperClient {
 	/**
 	 * Get input/output parameters of a Grasshopper definition.
 	 */
-	public async getIO(definitionUrl: string) {
+	public async getIO(definition: string | Uint8Array) {
 		this.ensureNotDisposed();
-		return fetchParsedDefinitionIO(definitionUrl, this.config);
+		return fetchParsedDefinitionIO(definition, this.config);
 	}
 
-	public async getRawIO(definitionUrl: string) {
+	public async getRawIO(definition: string | Uint8Array) {
 		this.ensureNotDisposed();
-		return fetchDefinitionIO(definitionUrl, this.config);
+		return fetchDefinitionIO(definition, this.config);
 	}
 
 	/**
 	 * Run a compute job with a Grasshopper definition.
 	 *
-	 * @throws {RhinoComputeError} with code INVALID_INPUT if definitionUrl is empty
+	 * @throws {RhinoComputeError} with code INVALID_INPUT if definition is empty
 	 * @throws {RhinoComputeError} with code NETWORK_ERROR if server is offline
 	 * @throws {RhinoComputeError} with code COMPUTATION_ERROR if computation fails
 	 */
 	public async solve(
-		definitionUrl: string,
+		definition: string | Uint8Array,
 		dataTree: DataTree[]
 	): Promise<GrasshopperComputeResponse> {
 		this.ensureNotDisposed();
 
 		try {
 			// Validate inputs
-			if (!definitionUrl?.trim()) {
-				throw new RhinoComputeError('Definition URL is required', ErrorCodes.INVALID_INPUT, {
-					context: { receivedUrl: definitionUrl }
+			if (typeof definition === 'string' && !definition?.trim()) {
+				throw new RhinoComputeError('Definition URL/content is required', ErrorCodes.INVALID_INPUT, {
+					context: { receivedUrl: definition }
 				});
+			} else if (definition instanceof Uint8Array && definition.length === 0) {
+				throw new RhinoComputeError('Definition content is empty', ErrorCodes.INVALID_INPUT);
 			}
 
 			// Check server
@@ -111,7 +113,7 @@ export default class GrasshopperClient {
 			}
 
 			// Run computation
-			const result = await solveGrasshopperDefinition(dataTree, definitionUrl, this.config);
+			const result = await solveGrasshopperDefinition(dataTree, definition, this.config);
 
 			// Check for errors
 			if (result && typeof result === 'object' && 'message' in result && !('fileData' in result)) {
@@ -120,7 +122,7 @@ export default class GrasshopperClient {
 					ErrorCodes.COMPUTATION_ERROR,
 					{
 						context: {
-							definitionUrl,
+							definition: typeof definition === 'string' && definition.length < 200 ? definition : '...content...',
 							inputs: dataTree
 						}
 					}
@@ -141,7 +143,10 @@ export default class GrasshopperClient {
 				error instanceof Error ? error.message : String(error),
 				ErrorCodes.COMPUTATION_ERROR,
 				{
-					context: { definitionUrl, inputs: dataTree },
+					context: {
+						definition: typeof definition === 'string' && definition.length < 200 ? definition : '...content...',
+						inputs: dataTree
+					},
 					originalError: error instanceof Error ? error : new Error(String(error))
 				}
 			);

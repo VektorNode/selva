@@ -119,6 +119,8 @@
 				definitionUrl: ghDefinition // Use server-provided URL
 			};
 
+			console.log('Compute payload:', payload);
+
 			const res = await fetch('/api/compute', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -131,6 +133,8 @@
 			}
 
 			const solved = await res.json();
+
+			console.log('Compute solved:', solved);
 
 			const processor = new rhinoCompute!.GrasshopperResponseProcessor(solved, false);
 
