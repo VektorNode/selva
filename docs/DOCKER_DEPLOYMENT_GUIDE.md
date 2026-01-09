@@ -13,11 +13,13 @@ Before deploying, understand the key components that will be running:
 The Selva Compute App solves Grasshopper definitions by communicating with a **Rhino.Compute** server. You must have a running Compute server before deploying.
 
 **Required:**
+
 - Rhino.Compute instance (running on a server with Rhino installed)
 - Compute server URL and port (e.g., `http://compute-server:8081`)
 - (Optional) API key if your Compute server requires authentication
 
 **Resources:**
+
 - [Rhino.Compute Official Documentation](https://developer.rhino3d.com/guides/compute/deployment/) - Complete setup and deployment instructions
 - Custom fork: [VektorNode/compute.rhino3d](https://github.com/VektorNode/compute.rhino3d)
 
@@ -28,6 +30,7 @@ Your Grasshopper definition files are the core of your application. They define 
 **[Placeholder: See Grasshopper files documentation for details on preparing definition files]**
 
 **Key points:**
+
 - Place `.gh` files in a `definitions/` folder for Docker to mount
 - One container can serve multiple definitions via query parameters
 - Definitions are **not** embedded in the Docker image; they're mounted as volumes
@@ -64,10 +67,12 @@ sudo usermod -aG docker $USER
 ```
 
 **On Windows:**
+
 - Download [Docker Desktop](https://www.docker.com/products/docker-desktop)
 - Enable WSL 2 backend or Hyper-V
 
 **On macOS:**
+
 - Download [Docker Desktop](https://www.docker.com/products/docker-desktop)
 
 ### Network Configuration
@@ -83,186 +88,164 @@ If the Compute server is on a different machine, update `COMPUTE_SERVER_URL` in 
 
 ---
 
-## 3. Building a Docker Image for Production
+## 3. Deploying to a Linux Server
 
-### Step 1: Prepare the Environment
-
-Navigate to the `packages/compute-app` directory:
-
-```bash
-cd packages/compute-app
-```
-
-Create a `.env` file (use `.env.example` as a template):
-
-```bash
-# .env
-COMPUTE_SERVER_URL=http://compute-server:8081
-GH_DEFINITIONS_BASE_URL=/definitions
-COMPUTE_API_KEY=your-secret-key-here
-ORIGIN=http://localhost:3000
-```
-
-**Environment variables:**
-- `COMPUTE_SERVER_URL`: URL of your Rhino.Compute server
-- `GH_DEFINITIONS_BASE_URL`: Path where definitions are served from (`/definitions` for mounted volumes)
-- `COMPUTE_API_KEY`: (Optional) Authentication key for Compute server
-- `ORIGIN`: Your app's public URL (prevents CSRF errors)
-
-### Step 2: Prepare Definitions Folder
-
-Create a `definitions/` folder in `packages/compute-app/` and place your `.gh` files there:
-
-```bash
-# From packages/compute-app directory
-mkdir -p definitions
-cp /path/to/your/definitions/*.gh definitions/
-```
-
-Example structure:
-
-```
-packages/compute-app/
-├── definitions/
-│   ├── solver-1.gh
-│   ├── solver-2.gh
-│   └── analysis-tool.gh
-├── .env
-├── docker-compose.yml
-└── Dockerfile
-```
-
-### Step 3: Build the Docker Image
-
-From the **root of the monorepo**:
-
-```bash
-# Build the Docker image
-docker build \
-  --file packages/compute-app/Dockerfile \
-  --tag selva-compute-app:latest \
-  .
-```
-
-Or use Docker Compose (simpler):
-
-```bash
-cd packages/compute-app
-docker compose build
-```
-
-### Step 4: Run the Container
-
-**With Docker Compose (recommended):**
-
-```bash
-cd packages/compute-app
-docker compose up -d
-```
-
-This:
-- Starts the container in the background
-- Mounts the `definitions/` folder
-- Loads variables from `.env`
-- Exposes the app on port `3000`
-
-**Check logs:**
-
-```bash
-docker compose logs -f web
-```
-
-**Verify the app is running:**
-
-```bash
-curl http://localhost:3000/api/health
-```
-
-Expected response:
-
-```json
-{
-  "status": "healthy",
-  "message": "Compute app is running"
-}
-```
-
-### Step 5: Access the Application
-
-Open your browser and visit:
-
-```
-http://your-server-ip:3000/app?gh=solver-1
-```
-
-Replace `solver-1` with the name of your definition file (without the `.gh` extension).
-
-### Adding More Definitions
-
-To add new definitions without rebuilding:
-
-1. Place new `.gh` files in the `definitions/` folder
-2. Restart the container: `docker compose restart`
-3. Access via: `http://your-server-ip:3000/app?gh=new-definition`
-
-### Stopping the Container
-
-```bash
-docker compose down
-```
+Choose one of two approaches below:
 
 ---
 
-## 4. Deploying the Image to Your Linux Server
+## 4. Option 1: Build Directly on Server (Recommended for Most Cases)
 
-Once you have a Docker image, you need to get it onto your Linux server. Choose one of these options:
+The most practical approach: clone and build directly on your Linux server. No need to manage Docker registries or image transfers.
 
-### Option 1: Build Directly on the Server (Simplest)
+### Step 1: SSH Access with Key-Based Authentication (Until in public version)
 
-Clone your repository directly on the Linux server and build there.
+For secure access to your server, use SSH keys instead of passwords.
 
-**On your Linux server:**
+**Generate SSH key on your server:**
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/selva.git
-cd selva/packages/compute-app
+# On your Linux server via Google Cloud console or SSH terminal
+ssh-keygen -t ed25519 -C "your-email@example.com"
+# Press Enter for all prompts (no passphrase needed)
 
-# Create .env with your production configuration
+# Display the public key to add to GitHub
+cat ~/.ssh/id_ed25519.pub
+```
+
+**Add key to GitHub:**
+
+1. Go to [GitHub SSH Keys Settings](https://github.com/settings/keys)
+2. Click "New SSH key"
+3. Paste the public key content
+4. Name it (e.g., "Selva Test VM")
+5. Click "Add SSH key"
+
+### Step 2: Update System & Install Dependencies
+
+```bash
+# Update system packages
+sudo apt-get update && sudo apt-get upgrade -y
+
+# Install Docker
+sudo apt-get install -y docker.io docker-compose
+
+# Start Docker service
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Install Node.js 22+ (required for build)
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Install pnpm (Node package manager)
+sudo npm install -g pnpm
+
+# Verify installations
+node --version
+pnpm --version
+docker --version
+docker-compose --version
+```
+
+### Step 3: Clone Repository & Install Dependencies
+
+```bash
+# Clone using SSH (requires GitHub SSH key setup)
+git clone git@github.com:your-username/selva.git
+cd selva
+
+# Install all dependencies
+pnpm install
+
+# Build all packages in the correct order
+pnpm run build:all
+
+# Navigate to compute-app
+cd packages/compute-app
+```
+
+### Step 4: Configure Environment
+
+```bash
+# Create .env file with your production configuration
 cat > .env << EOF
-COMPUTE_SERVER_URL=http://compute-server:8081
-GH_DEFINITIONS_BASE_URL=/definitions
-COMPUTE_API_KEY=your-secret-key-here
-ORIGIN=https://your-domain.com
+COMPUTE_SERVER_URL=https://vektornode-compute.ch/
+GH_DEFINITIONS_PATH=./definitions
+COMPUTE_API_KEY=xxx
+ORIGIN=http://YOUR-VM-EXTERNAL-IP:3000
 EOF
+```
 
-# Copy your Grasshopper definition files
+Replace `YOUR-VM-EXTERNAL-IP` with your actual Google Cloud VM external IP.
+
+### Step 5: Prepare Definition Files
+
+```bash
+# Create definitions folder
 mkdir -p definitions
-# (copy your .gh files into the definitions folder)
 
-# Build the image on the server
-docker compose build
+# Copy your .gh files here
+# Option A: From local machine via SCP
+# scp /path/to/your/definitions/*.gh user@YOUR-VM-IP:~/selva/packages/compute-app/definitions/
 
-# Run the container
-docker compose up -d
+# Option B: If already on the server
+# cp /path/to/your/*.gh definitions/
 
-# Verify it's running
-docker compose logs -f web
+# Verify files are there
+ls -la definitions/
+```
+
+### Step 6: Build & Run Docker Image
+
+**Note:** With older Docker Compose versions, use `docker-compose` (with hyphen) instead of `docker compose`.
+
+```bash
+# Build the Docker image (takes 5-10 minutes)
+docker-compose build
+
+# Start the container in the background
+docker-compose up -d
+
+# Check status
+docker-compose ps
+
+# View logs
+docker-compose logs -f web
+```
+
+### Step 7: Verify & Access
+
+```bash
+# Test health endpoint
+curl http://localhost:3000/api/health
+
+# Expected response:
+# {"status":"healthy","message":"Compute app is running"}
+```
+
+Then open your browser:
+
+```
+http://YOUR-VM-EXTERNAL-IP:3000/app?gh=your-definition-name
 ```
 
 **Pros:**
-- Simple, no image transfer needed
-- Always builds with latest code
-- Easy to update (just `git pull && docker compose up -d`)
+
+- Simple, no image registry needed
+- Always builds with latest code from your repo
+- Easy updates: `git pull && pnpm install && pnpm run build:all && docker-compose up -d`
+- Full control over build process
 
 **Cons:**
+
 - Requires Node.js, build tools, and git on server
-- Slower initial deployment (build takes 5-10 minutes)
-- Takes up more disk space during build
+- Initial build takes 10-15 minutes
+- Takes disk space during build (~3-4GB)
 
 ---
 
-### Option 2: Push to Docker Registry (Best for Production)
+## 5. Option 2: Push to Docker Registry (For Frequent Updates)
 
 Build locally, push to a Docker registry, then pull on the server. This is cleaner and more scalable.
 
@@ -310,6 +293,17 @@ docker push ghcr.io/your-username/selva-compute-app:latest
 
 **Step 3: On Your Linux Server**
 
+**Setup Docker & Basic Dependencies (one-time):**
+
+```bash
+# Install Docker (if not already done)
+sudo apt-get update && sudo apt-get install -y docker.io docker-compose
+sudo systemctl start docker
+sudo systemctl enable docker
+```
+
+**Deploy the Image:**
+
 ```bash
 # Create a directory for the deployment
 mkdir -p ~/selva-compute && cd ~/selva-compute
@@ -338,25 +332,26 @@ EOF
 
 # Create .env file with your production configuration
 cat > .env << EOF
-COMPUTE_SERVER_URL=http://compute-server:8081
-GH_DEFINITIONS_BASE_URL=/definitions
-COMPUTE_API_KEY=your-secret-key-here
+COMPUTE_SERVER_URL=https://vektornode-compute.ch/
+GH_DEFINITIONS_PATH=./definitions
+COMPUTE_API_KEY=xxx
 ORIGIN=https://your-domain.com
 EOF
 
-# Create definitions folder
+# Create definitions folder and copy .gh files
 mkdir -p definitions
-# (copy your .gh files into the definitions folder)
+# scp /path/to/your/definitions/*.gh user@YOUR-VM-IP:~/selva-compute/definitions/
 
 # Pull and run the image
-docker pull your-docker-username/selva-compute-app:latest
-docker compose up -d
+docker-compose pull
+docker-compose up -d
 
 # Verify it's running
-docker compose logs -f web
+docker-compose logs -f web
 ```
 
 **Pros:**
+
 - Clean separation between build and deploy
 - Easy to update: `docker pull && docker compose up -d`
 - Works with CI/CD pipelines
@@ -364,28 +359,33 @@ docker compose logs -f web
 - Versioning support (tag images with version numbers)
 
 **Cons:**
+
 - Requires Docker Hub account or private registry setup
 - Network bandwidth for image transfer (~500MB)
 
 ---
 
-## Updating the Deployment
+## 6. Updating the Deployment
 
 **With Option 1 (Build on Server):**
+
 ```bash
 cd ~/selva/packages/compute-app
 git pull
-docker compose down
-docker compose build
-docker compose up -d
+pnpm install
+pnpm run build:all
+docker-compose down
+docker-compose build
+docker-compose up -d
 ```
 
 **With Option 2 (Docker Registry):**
+
 ```bash
 cd ~/selva-compute
-docker pull your-docker-username/selva-compute-app:latest
-docker compose down
-docker compose up -d
+docker-compose pull your-docker-username/selva-compute-app:latest
+docker-compose down
+docker-compose up -d
 ```
 
 ---
@@ -405,24 +405,38 @@ docker compose up -d
 
 ---
 
-## Troubleshooting
+## 7. Troubleshooting
 
 **Container won't start:**
+
 ```bash
-docker compose logs web
+docker-compose logs web
 ```
 
 **Can't reach Compute server:**
+
 - Verify `COMPUTE_SERVER_URL` in `.env`
-- Check network connectivity: `curl http://compute-server:8081/api/version`
+- Check network connectivity: `curl https://vektornode-compute.ch/api/version`
 
 **Definitions not loading:**
+
 - Verify files are in `definitions/` folder
 - Check spelling matches the `?gh=` query parameter
-- Restart container: `docker compose restart`
+- Restart container: `docker-compose restart`
 
 **Port already in use:**
+
 - Change port in `docker-compose.yml`: `ports: ['3001:3000']`
+- Then run: `docker-compose up -d`
+
+**Node.js version too old (build fails):**
+
+- Must have Node.js 20.19+ or 22+
+- Update: `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`
+
+**pnpm not found:**
+
+- Install: `sudo npm install -g pnpm`
 
 ---
 
