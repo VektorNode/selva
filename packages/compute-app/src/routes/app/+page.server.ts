@@ -99,44 +99,88 @@ export const load = (async ({ url, params: _params }) => {
 	let client;
 
 	try {
-		client = await GrasshopperClient.create({ serverUrl: config.computeServerUrl });
+		client = await GrasshopperClient.create({
+			serverUrl: config.computeServerUrl,
+			apiKey: config.computeApiKey
+		});
 	} catch (err) {
 		const errorMessage = err instanceof Error ? err.message : String(err);
+		const errorDetails = {
+			message: errorMessage,
+			computeServerUrl: config.computeServerUrl,
+			timestamp: new Date().toISOString(),
+			stack: process.env.NODE_ENV === 'development' && err instanceof Error ? err.stack : undefined
+		};
+
+		console.error('[PageLoad] Compute server connection failed:', JSON.stringify(errorDetails, null, 2));
+
+		// Development: include detailed error info
+		if (process.env.NODE_ENV === 'development') {
+			error(503, `Failed to connect to Rhino Compute server at ${config.computeServerUrl}: ${errorMessage}\n\nDebug info:\n${JSON.stringify(errorDetails, null, 2)}`);
+		}
+
 		error(503, `Failed to connect to Rhino Compute server: ${errorMessage}`);
 	}
 
 	try {
 		const definition = await client.getIO(definitionSource);
 
+		if (!definition) {
+			throw new Error(`Failed to get definition IO - server returned undefined. Definition URL: ${clientDefUrl}`);
+		}
+
 		// Solve with default values to get the schema
-		const tree = TreeBuilder.fromInputParams(definition.inputs);
+		try {
+			const tree = TreeBuilder.fromInputParams(definition.inputs);
 
-		const solvedDefinition = await client.solve(definitionSource, tree);
+			const solvedDefinition = await client.solve(definitionSource, tree);
 
-		const schema = new GrasshopperResponseProcessor(solvedDefinition).getValueByParamName('Schema', {
-			parseValues: true
-		}) as UISchema;
+			const schema = new GrasshopperResponseProcessor(solvedDefinition).getValueByParamName('Schema', {
+				parseValues: true
+			}) as UISchema;
 
-		// Merge default values from Compute definition into schema inputs
-		const computeInputsByParamId = new Map(definition.inputs.map((input) => [input.id, input]));
-
-		schema.inputs = schema.inputs.map((schemaInput) => {
-			const computeInput = computeInputsByParamId.get(schemaInput.id);
-			if (computeInput && computeInput.default !== undefined) {
-				return {
-					...schemaInput,
-					default: computeInput.default
-				};
+			if (!schema || !schema.inputs) {
+				throw new Error(`Failed to extract schema from computation response. Schema: ${JSON.stringify(schema)}`);
 			}
-			return schemaInput;
-		});
 
-		return {
-			schema,
-			ghDefinition: clientDefUrl
-		};
+			// Merge default values from Compute definition into schema inputs
+			const computeInputsByParamId = new Map(definition.inputs.map((input) => [input.id, input]));
+
+			schema.inputs = schema.inputs.map((schemaInput) => {
+				const computeInput = computeInputsByParamId.get(schemaInput.id);
+				if (computeInput && computeInput.default !== undefined) {
+					return {
+						...schemaInput,
+						default: computeInput.default
+					};
+				}
+				return schemaInput;
+			});
+
+			return {
+				schema,
+				ghDefinition: clientDefUrl
+			};
+		} catch (innerErr) {
+			console.error('[PageLoad] Inner computation failed:', innerErr);
+			throw innerErr;
+		}
 	} catch (err) {
-		console.error('Failed to load definition:', err);
+		const errorDetails = {
+			message: err instanceof Error ? err.message : String(err),
+			definitionUrl: clientDefUrl,
+			timestamp: new Date().toISOString(),
+			stack: process.env.NODE_ENV === 'development' && err instanceof Error ? err.stack : undefined
+		};
+
+		console.error('[PageLoad] Definition loading failed:', JSON.stringify(errorDetails, null, 2));
+
+		// Development: include detailed error info and hint
+		if (process.env.NODE_ENV === 'development') {
+			const hint = `\n\nTroubleshooting:\n1. Check /api/health/compute to diagnose server connectivity\n2. Check the browser console for more details\n3. Check the server logs above for full error stack`;
+			error(500, `Failed to load definition from ${clientDefUrl}: ${errorDetails.message}${hint}`);
+		}
+
 		throw error(500, `Failed to load definition: ${err instanceof Error ? err.message : String(err)}`);
 	}
 }) satisfies PageServerLoad;

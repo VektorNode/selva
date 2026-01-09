@@ -64,17 +64,18 @@ function transformInputParameter(
 }
 
 export const POST: RequestHandler = async ({ request }) => {
+	let definitionUrl: string = '';
+	const config = getServerConfig();
+
 	try {
 		const body: ComputeRequest = await request.json();
 
-		const { inputs, values, definitionUrl } = body;
+		const { inputs, values } = body;
+		definitionUrl = body.definitionUrl;
 
 		if (!inputs || !values || !definitionUrl) {
 			throw error(400, 'Missing required fields: inputs, values, or definitionUrl');
 		}
-
-		// Use server-side config (NEVER exposed to client)
-		const config = getServerConfig();
 
 		// Determine definition source
 		let definitionSource: string | Uint8Array = definitionUrl;
@@ -109,13 +110,34 @@ export const POST: RequestHandler = async ({ request }) => {
 		);
 
 		// Use server-side COMPUTE_SERVER_URL (not PUBLIC_)
-		const client = await GrasshopperClient.create({ serverUrl: config.computeServerUrl });
+		const client = await GrasshopperClient.create({
+			serverUrl: config.computeServerUrl,
+			apiKey: config.computeApiKey
+		});
 		const solvedDefinition = await client.solve(definitionSource, inputTree);
 
 		return json(solvedDefinition);
 	} catch (err) {
-		console.error('[API/Compute] Error:', err);
+		const errorDetails = {
+			message: err instanceof Error ? err.message : 'Unknown error',
+			timestamp: new Date().toISOString(),
+			computeServerUrl: config.computeServerUrl,
+			definitionUrl,
+			stack: process.env.NODE_ENV === 'development' && err instanceof Error ? err.stack : undefined
+		};
 
+		console.error('[API/Compute] Error:', JSON.stringify(errorDetails, null, 2));
+
+		// Return detailed error response in development mode
+		if (process.env.NODE_ENV === 'development') {
+			throw error(500, JSON.stringify({
+				error: 'Grasshopper computation failed',
+				details: errorDetails,
+				hint: 'Check /api/health/compute for server connectivity details'
+			}));
+		}
+
+		// Production: generic error message
 		if (err instanceof Error) {
 			throw error(500, err.message);
 		}
