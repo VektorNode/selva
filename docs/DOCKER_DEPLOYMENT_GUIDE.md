@@ -75,17 +75,6 @@ sudo usermod -aG docker $USER
 
 - Download [Docker Desktop](https://www.docker.com/products/docker-desktop)
 
-### Network Configuration
-
-Ensure your server can reach the Rhino.Compute server:
-
-```bash
-# Test connectivity (from your server)
-curl http://compute-server:8081/api/version
-```
-
-If the Compute server is on a different machine, update `COMPUTE_SERVER_URL` in your `.env` file to use the correct hostname/IP.
-
 ---
 
 ## 3. Deploying to a Linux Server

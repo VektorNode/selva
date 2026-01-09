@@ -14,7 +14,7 @@ RUN npm install -g pnpm
 
 # Install system dependencies
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3
+    apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3 wget
 
 # Copy entire repo (excludes .dockerignore files)
 COPY . .
