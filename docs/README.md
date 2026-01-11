@@ -17,6 +17,10 @@ All deployment guides have been consolidated into a clean structure under `deplo
   - **[Node.js Deployment](./deployment/compute-app/NODE_DEPLOYMENT.md)** — Deploy directly with PM2
   - **[Docker Deployment](./deployment/compute-app/DOCKER_DEPLOYMENT.md)** — Deploy with Docker containers
 
+## Release Management
+
+- **[CHANGELOG.md](./CHANGELOG.md)** — Guide to managing changelogs and versioning with Changesets across the monorepo
+
 ## Security
 
 - **[SECURITY.md](./SECURITY.md)** — Comprehensive security guide including intellectual property protection, network security, authentication, and secrets management
