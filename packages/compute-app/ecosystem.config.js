@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   apps: [{
     name: 'selva-compute',
     script: './build/index.js',
