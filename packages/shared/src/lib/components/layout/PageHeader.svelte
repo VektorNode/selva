@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { Badge } from '$lib/components/ui/badge';
 	import { ModeToggle } from '$lib/components/ui/mode-toggle';
 	//Maybe in the future again
@@ -46,7 +47,14 @@
 		<!-- Left section -->
 		<div class="min-w-0 flex-1 flex items-center gap-3">
 			{#if logo}
-				<img src={logo} alt="Logo" class="h-8 w-8 shrink-0" />
+				<button
+					type="button"
+					onclick={() => goto('/')}
+					class="cursor-pointer hover:opacity-75 transition-opacity"
+					title="Go to home"
+				>
+					<img src={logo} alt="Logo" class="h-8 w-8 shrink-0" />
+				</button>
 			{/if}
 			<h1 class="text-xl font-bold sm:text-2xl text-foreground">
 				{title}
@@ -85,9 +93,7 @@
 		<!-- Right section (Theme & Mode Toggle) -->
 		{#if showModeToggle}
 			<div class="gap-2 sm:self-center flex items-center self-start">
-				{#if showModeToggle}
-					<ModeToggle />
-				{/if}
+				<ModeToggle />
 			</div>
 		{/if}
 	</div>
