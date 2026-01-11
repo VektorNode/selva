@@ -76,11 +76,6 @@ public class GH_Block_To_File : GH_Component
 				return;
 			}
 
-			if (!fileName.EndsWith(".3dm", StringComparison.OrdinalIgnoreCase))
-			{
-				fileName += ".3dm";
-			}
-
 			var exportedFile = ExportBlockToFile(blockObj, fileName);
 
 			if (exportedFile != null)
