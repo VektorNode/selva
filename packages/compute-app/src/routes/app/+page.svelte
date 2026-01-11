@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 	import type { PageProps } from './$types';
 	import {
 		TabLayout,
@@ -18,6 +19,18 @@
 
 	let schema = $derived(data.schema);
 	let ghDefinition = $derived(data.ghDefinition);
+
+	// Definition switcher
+	let currentDefinition = $derived(data.currentDefinition);
+	let availableDefinitions = $derived(data.availableDefinitions);
+	let currentDefinitionMetadata = $derived(
+		availableDefinitions.find((d) => d.filename === currentDefinition)
+	);
+	let pageTitle = $derived(currentDefinitionMetadata?.displayName || schema.name);
+
+	function handleDefinitionChange(filename: string) {
+		goto(`/app?gh=${filename}`, { replaceState: false });
+	}
 
 	// Core state
 	let values = $state<Record<string, unknown>>({});
@@ -214,7 +227,15 @@
 <div style={customStyle} style:display="contents">
 	<PageContainer>
 		{#if !isEmbedded}
-			<PageHeader title={schema.name} badge={badgeConfig} showModeToggle={true} />
+			<PageHeader
+				title={pageTitle}
+				badge={badgeConfig}
+				showModeToggle={true}
+				showDefinitionSwitcher={availableDefinitions.length > 1}
+				currentDefinition={currentDefinition}
+				definitions={availableDefinitions}
+				onDefinitionChange={handleDefinitionChange}
+			/>
 		{/if}
 
 		<div class="bg-background flex-1 overflow-hidden">

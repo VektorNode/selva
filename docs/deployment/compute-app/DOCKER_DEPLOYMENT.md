@@ -4,43 +4,18 @@ A complete start-to-finish guide for deploying the Selva Compute App using Docke
 
 ---
 
-## 1. Preparation
+## Prerequisites
 
-Before deploying, understand the key components that will be running:
+**IMPORTANT:** Before starting this guide, complete all prerequisites in [PREREQUISITES.md](./PREREQUISITES.md), including:
 
-### Rhino.Compute Server
-
-The Selva Compute App solves Grasshopper definitions by communicating with a **Rhino.Compute** server. You must have a running Compute server before deploying.
-
-**Required:**
-
-- Rhino.Compute instance (running on a server with Rhino installed)
-- Compute server URL and port (e.g., `http://compute-server:8081`)
-- (Optional) API key if your Compute server requires authentication
-
-**Resources:**
-
-- [Rhino.Compute Official Documentation](https://developer.rhino3d.com/guides/compute/deployment/) - Complete setup and deployment instructions
-- Custom fork: [VektorNode/compute.rhino3d](https://github.com/VektorNode/compute.rhino3d)
-
-### Grasshopper Definition Files (.gh)
-
-Your Grasshopper definition files are the core of your application. They define what solvers/tools are available.
-
-**[Placeholder: See Grasshopper files documentation for details on preparing definition files]**
-
-**Key points:**
-
-- Place `.gh` files in a `definitions/` folder for Docker to mount
-- One container can serve multiple definitions via query parameters
-- Definitions are **not** embedded in the Docker image; they're mounted as volumes
-- Always keep `.gh` files in secure, access-controlled locations (never in public git repos)
+- Rhino.Compute server setup and testing
+- Grasshopper definition files preparation
+- Network and firewall configuration
+- Understanding of environment variables
 
 ---
 
-## 2. Setting Up a Server for Docker
-
-You'll need a server (VPS, local machine, or cloud instance) with Docker and Docker Compose installed.
+## 1. Docker-Specific Requirements
 
 ### System Requirements
 
@@ -49,7 +24,17 @@ You'll need a server (VPS, local machine, or cloud instance) with Docker and Doc
 - **Docker Compose**: Version 1.29+
 - **Hardware**: Minimum 2GB RAM, 2 CPU cores (adjust based on definition complexity)
 
-### Installation
+---
+
+## 2. Install Docker & Node.js for Building
+
+You need Node.js and pnpm to build the application. Install Docker for containerization.
+
+### Install Node.js and pnpm
+
+See [SERVER_SETUP.md](./SERVER_SETUP.md) for detailed Node.js and pnpm installation instructions.
+
+### Install Docker
 
 **On Linux (Ubuntu):**
 
@@ -79,40 +64,9 @@ sudo usermod -aG docker $USER
 
 ## 3. Network Configuration
 
-Before deploying, configure your server's network to allow external access to the app.
+See [PREREQUISITES.md](./PREREQUISITES.md#2-network-configuration) for detailed network and firewall configuration.
 
-### Firewall Setup
-
-You need to allow **inbound traffic on port 3000** (or whichever port you choose).
-
-**On Linux (using UFW):**
-
-```bash
-# Allow port 3000
-sudo ufw allow 3000/tcp
-
-# Allow SSH (if not already enabled)
-sudo ufw allow 22/tcp
-
-# Enable the firewall
-sudo ufw enable
-```
-
-**On Linux (using iptables):**
-
-```bash
-sudo iptables -A INPUT -p tcp --dport 3000 -j ACCEPT
-sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
-```
-
-**On Cloud Providers (AWS, Google Cloud, Azure, etc.):**
-
-Create a firewall/security group rule that allows:
-- **Protocol**: TCP
-- **Port**: 3000 (or your custom port)
-- **Source**: `0.0.0.0/0` (public access) or your specific IP range
-
-### Port Configuration
+### Docker-Specific Port Mapping
 
 The app runs on **port 3000 by default**. To change it:
 
@@ -122,7 +76,7 @@ The app runs on **port 3000 by default**. To change it:
 services:
   web:
     ports:
-      - '3001:3000'  # Maps container port 3000 to host port 3001
+      - '3001:3000' # Maps container port 3000 to host port 3001
 ```
 
 Then restart:
@@ -133,26 +87,6 @@ docker-compose up -d
 ```
 
 Access the app at `http://YOUR-SERVER-IP:3001` instead.
-
-### ORIGIN Environment Variable
-
-The `ORIGIN` variable must match your **public URL** to prevent CSRF errors on form submissions.
-
-**Update in `.env`:**
-
-```bash
-# If accessing via IP
-ORIGIN=http://YOUR-SERVER-IP:3000
-
-# If accessing via domain
-ORIGIN=https://your-domain.com
-```
-
-Restart the container for changes to take effect:
-
-```bash
-docker-compose restart
-```
 
 ---
 
@@ -166,30 +100,27 @@ Choose one of two approaches below:
 
 The most practical approach: clone and build directly on your Linux server. No need to manage Docker registries or image transfers.
 
-### Step 1: SSH Access with Key-Based Authentication (Until in public version)
+### Step 1: Complete Common Server Setup
 
-For secure access to your server, use SSH keys instead of passwords.
+Follow [SERVER_SETUP.md](./SERVER_SETUP.md) to:
 
-**Generate SSH key on your server:**
+- Set up SSH key authentication
+- Install Node.js and pnpm
+- Clone the repository
+- Install dependencies
+- Build all packages
+
+Then return here to configure Docker.
+
+**After completing SERVER_SETUP.md, navigate to compute-app:**
 
 ```bash
-# On your Linux server via Google Cloud console or SSH terminal
-ssh-keygen -t ed25519 -C "your-email@example.com"
-# Press Enter for all prompts (no passphrase needed)
-
-# Display the public key to add to GitHub
-cat ~/.ssh/id_ed25519.pub
+cd packages/compute-app
 ```
 
-**Add key to GitHub:**
+### Step 2: Install Docker & Configure Environment
 
-1. Go to [GitHub SSH Keys Settings](https://github.com/settings/keys)
-2. Click "New SSH key"
-3. Paste the public key content
-4. Name it (e.g., "Selva Test VM")
-5. Click "Add SSH key"
-
-### Step 2: Update System & Install Dependencies
+**Install Docker:**
 
 ```bash
 # Update system packages
@@ -201,53 +132,43 @@ sudo apt-get install -y docker.io docker-compose
 # Start Docker service
 sudo systemctl start docker
 sudo systemctl enable docker
-
-# Install Node.js 22+ (required for build)
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Install pnpm (Node package manager)
-sudo npm install -g pnpm
-
-# Verify installations
-node --version
-pnpm --version
-docker --version
-docker-compose --version
 ```
 
-### Step 3: Clone Repository & Install Dependencies
-
-```bash
-# Clone using SSH (requires GitHub SSH key setup)
-git clone git@github.com:your-username/selva.git
-cd selva
-
-# Install all dependencies
-pnpm install
-
-# Build all packages in the correct order
-pnpm run build:all
-
-# Navigate to compute-app
-cd packages/compute-app
-```
-
-### Step 4: Configure Environment
+### Step 3: Configure Environment
 
 ```bash
 # Create .env file with your production configuration
-cat > .env << EOF
-COMPUTE_SERVER_URL=https://vektornode-compute.ch/
+cat > .env << 'EOF'
+# ============================================================================
+# REQUIRED: Rhino.Compute Server
+# ============================================================================
+COMPUTE_SERVER_URL=http://localhost:5000
+
+# ============================================================================
+# REQUIRED: Grasshopper Definition Files
+# ============================================================================
 GH_DEFINITIONS_PATH=./definitions
-COMPUTE_API_KEY=xxx
-ORIGIN=http://YOUR-VM-EXTERNAL-IP:3000
+
+# ============================================================================
+# OPTIONAL: Rhino.Compute Authentication
+# ============================================================================
+# COMPUTE_API_KEY=your-api-key-here
+
+# ============================================================================
+# OPTIONAL: Server Configuration
+# ============================================================================
+PORT=3000
+HOST=0.0.0.0
+NODE_ENV=production
 EOF
 ```
 
-Replace `YOUR-VM-EXTERNAL-IP` with your actual Google Cloud VM external IP.
+**Replace these values:**
 
-### Step 5: Prepare Definition Files
+- `COMPUTE_SERVER_URL`: Your Rhino.Compute server URL (e.g., `http://compute-server:5000`)
+- `COMPUTE_API_KEY`: Uncomment and set if your Compute server requires authentication
+
+### Step 4: Prepare Definition Files
 
 ```bash
 # Create definitions folder
@@ -264,7 +185,7 @@ mkdir -p definitions
 ls -la definitions/
 ```
 
-### Step 6: Build & Run Docker Image
+### Step 5: Build & Run Docker Image
 
 **Note:** With older Docker Compose versions, use `docker-compose` (with hyphen) instead of `docker compose`.
 
@@ -282,7 +203,7 @@ docker-compose ps
 docker-compose logs -f web
 ```
 
-### Step 7: Verify & Access
+### Step 6: Verify & Access
 
 ```bash
 # Test health endpoint
@@ -399,11 +320,28 @@ services:
 EOF
 
 # Create .env file with your production configuration
-cat > .env << EOF
-COMPUTE_SERVER_URL=https://vektornode-compute.ch/
+cat > .env << 'EOF'
+# ============================================================================
+# REQUIRED: Rhino.Compute Server
+# ============================================================================
+COMPUTE_SERVER_URL=http://localhost:5000
+
+# ============================================================================
+# REQUIRED: Grasshopper Definition Files
+# ============================================================================
 GH_DEFINITIONS_PATH=./definitions
-COMPUTE_API_KEY=xxx
-ORIGIN=https://your-domain.com
+
+# ============================================================================
+# OPTIONAL: Rhino.Compute Authentication
+# ============================================================================
+# COMPUTE_API_KEY=your-api-key-here
+
+# ============================================================================
+# OPTIONAL: Server Configuration
+# ============================================================================
+PORT=3000
+HOST=0.0.0.0
+NODE_ENV=production
 EOF
 
 # Create definitions folder and copy .gh files
@@ -466,8 +404,6 @@ docker-compose up -d
 - [ ] Docker image builds without errors
 - [ ] Container starts and responds to health check
 - [ ] App is accessible from the browser
-- [ ] ORIGIN environment variable matches your public URL
-- [ ] `.gh` files are kept secure (not in public git repos)
 - [ ] Logs are monitored (use `docker compose logs`)
 - [ ] Docker is configured to restart containers on failure (`restart: unless-stopped`)
 
@@ -484,7 +420,17 @@ docker-compose logs web
 **Can't reach Compute server:**
 
 - Verify `COMPUTE_SERVER_URL` in `.env`
-- Check network connectivity: `curl https://vektornode-compute.ch/api/version`
+- Check network connectivity:
+
+  ```bash
+  # Without API key
+  curl http://YOUR-COMPUTE-SERVER:5000/version
+
+  # With API key (if required)
+  curl -H "RhinoComputeKey: your-api-key-here" http://YOUR-COMPUTE-SERVER:5000/version
+  ```
+
+- Ensure `COMPUTE_API_KEY` is set if your Compute server requires authentication
 
 **Definitions not loading:**
 
@@ -510,5 +456,9 @@ docker-compose logs web
 
 ## See Also
 
-- [Selva Deployment Guide](../packages/compute-app/DEPLOYMENT.md) - Environment variables and deployment strategies
+- [Deployment Overview](./OVERVIEW.md) - Quick start and deployment paths
+- [Server Setup](./SERVER_SETUP.md) - Common setup steps
+- [Prerequisites](./PREREQUISITES.md) - System requirements and network setup
+- [Definitions Configuration](./DEFINITIONS_SETUP.md) - Configure Grasshopper definitions
+- [Node.js Deployment](./NODE_DEPLOYMENT.md) - Alternative deployment method
 - [Rhino.Compute Documentation](https://developer.rhino3d.com/guides/compute/deployment/)

@@ -3,6 +3,7 @@ import { error } from '@sveltejs/kit';
 import { GrasshopperResponseProcessor, TreeBuilder, GrasshopperClient } from '@selva/core';
 import type { UISchema } from '@selva/shared';
 import { getServerConfig } from '$lib/server/config.server';
+import { loadDefinitionsConfig, type Definition } from '$lib/server/definitions.server';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -15,20 +16,30 @@ export const load = (async ({ url, params: _params }) => {
 	let definitionSource: string | Uint8Array = '';
 	let clientDefUrl = ''; // Value passed to client for subsequent API calls
 
+	// Load available definitions for switcher
+	let availableDefinitions: Definition[] = [];
+	if (config.ghDefinitionsPath) {
+		try {
+			availableDefinitions = await loadDefinitionsConfig();
+		} catch (err) {
+			console.warn('[App Load] Failed to load available definitions:', err);
+		}
+	}
+
 	// Strategy 1: Local File System (Preferred for safety)
 	if (config.ghDefinitionsPath) {
-		// If no filename is provided, try to find a default file in the directory
-		if (!ghFilename) {
-			try {
-				const files = await fs.readdir(config.ghDefinitionsPath);
-				const firstGhFile = files.find(f => f.endsWith('.gh'));
-				if (firstGhFile) {
-					ghFilename = firstGhFile;
-					console.log(`[Auto-Discovery] Using default definition: ${ghFilename}`);
-				}
-			} catch (err) {
-				console.warn(`[Auto-Discovery] Failed to list files in definition directory:`, err);
-			}
+		// If no filename is provided, use the first available definition from config
+		if (!ghFilename && availableDefinitions.length > 0) {
+			ghFilename = availableDefinitions[0].filename;
+		}
+
+		// If still no filename and no definitions configured, throw helpful error
+		if (!ghFilename && availableDefinitions.length === 0) {
+			const configPath = path.join(config.ghDefinitionsPath, 'definitions-config.json');
+			throw error(
+				400,
+				`No definitions configured.\n\nPlease create a definitions-config.json file at:\n${configPath}\n\nSee definitions-config.example.json for the format.`
+			);
 		}
 
 		if (ghFilename) {
@@ -37,7 +48,7 @@ export const load = (async ({ url, params: _params }) => {
 
 			// Security: Prevent directory traversal
 			const safeFilename = path.basename(ghFilename);
-			if (safeFilename !== ghFilename || !/^[a-zA-Z0-9_\-\.]+$/.test(safeFilename)) {
+			if (safeFilename !== ghFilename || !/^[a-zA-Z0-9_\-.]+$/.test(safeFilename)) {
 				throw error(400, 'Invalid filename');
 			}
 
@@ -159,7 +170,9 @@ export const load = (async ({ url, params: _params }) => {
 
 			return {
 				schema,
-				ghDefinition: clientDefUrl
+				ghDefinition: clientDefUrl,
+				currentDefinition: ghFilename ? ghFilename.replace(/\.gh$/, '') : '',
+				availableDefinitions
 			};
 		} catch (innerErr) {
 			console.error('[PageLoad] Inner computation failed:', innerErr);

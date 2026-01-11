@@ -1,0 +1,26 @@
+{
+  "definitions": {
+    "solver_01": {
+      "displayName": "Advanced Solver",
+      "description": "High-performance solver for complex optimization problems",
+      "coverImage": "https://example.com/images/solver.jpg",
+      "category": "Analysis",
+      "tags": ["optimization", "numerical", "solver"]
+    },
+    "parametric_form": {
+      "displayName": "Parametric Form Generator",
+      "description": "Create complex parametric forms with ease",
+      "coverImage": "https://example.com/images/parametric.jpg",
+      "category": "Geometry",
+      "tags": ["parametric", "geometry", "forms"]
+    },
+    "structural_analysis": {
+      "displayName": "Structural Analysis Tool",
+      "description": "Analyze and visualize structural properties",
+      "coverImage": "https://example.com/images/structural.jpg",
+      "category": "Engineering",
+      "tags": ["structural", "analysis", "engineering"]
+    }
+  }
+}
+
