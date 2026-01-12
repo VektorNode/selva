@@ -31,7 +31,10 @@
 		window.addEventListener('grasshopper-runtime-message', handleRuntimeMessage as EventListener);
 
 		return () => {
-			window.removeEventListener('grasshopper-runtime-message', handleRuntimeMessage as EventListener);
+			window.removeEventListener(
+				'grasshopper-runtime-message',
+				handleRuntimeMessage as EventListener
+			);
 		};
 	});
 </script>

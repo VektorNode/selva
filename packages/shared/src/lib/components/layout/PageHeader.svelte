@@ -45,12 +45,12 @@
 >
 	<div class="gap-3 sm:flex-row sm:items-center sm:justify-between flex flex-col">
 		<!-- Left section -->
-		<div class="min-w-0 flex-1 flex items-center gap-3">
+		<div class="min-w-0 gap-3 flex flex-1 items-center">
 			{#if logo}
 				<button
 					type="button"
 					onclick={() => goto('/')}
-					class="cursor-pointer hover:opacity-75 transition-opacity"
+					class="cursor-pointer transition-opacity hover:opacity-75"
 					title="Go to home"
 				>
 					<img src={logo} alt="Logo" class="h-8 w-8 shrink-0" />

@@ -61,9 +61,13 @@ export const load = (async ({ url, params: _params }) => {
 				definitionSource = new Uint8Array(fileBuffer);
 				clientDefUrl = `local:${safeFilename}`;
 			} catch {
-				console.warn(`[Strategy: Local] Failed to read definition '${safeFilename}' at '${filePath}'.`);
+				console.warn(
+					`[Strategy: Local] Failed to read definition '${safeFilename}' at '${filePath}'.`
+				);
 				console.warn(` - If running in Docker, ensure volumes are mounted correctly.`);
-				console.warn(` - If running in Vercel/Cloud, local file access is often restricted. Consider using GH_DEFINITIONS_BASE_URL instead.`);
+				console.warn(
+					` - If running in Vercel/Cloud, local file access is often restricted. Consider using GH_DEFINITIONS_BASE_URL instead.`
+				);
 
 				// Fall through to URL strategy if text logic fails
 			}
@@ -123,11 +127,17 @@ export const load = (async ({ url, params: _params }) => {
 			stack: process.env.NODE_ENV === 'development' && err instanceof Error ? err.stack : undefined
 		};
 
-		console.error('[PageLoad] Compute server connection failed:', JSON.stringify(errorDetails, null, 2));
+		console.error(
+			'[PageLoad] Compute server connection failed:',
+			JSON.stringify(errorDetails, null, 2)
+		);
 
 		// Development: include detailed error info
 		if (process.env.NODE_ENV === 'development') {
-			error(503, `Failed to connect to Rhino Compute server at ${config.computeServerUrl}: ${errorMessage}\n\nDebug info:\n${JSON.stringify(errorDetails, null, 2)}`);
+			error(
+				503,
+				`Failed to connect to Rhino Compute server at ${config.computeServerUrl}: ${errorMessage}\n\nDebug info:\n${JSON.stringify(errorDetails, null, 2)}`
+			);
 		}
 
 		error(503, `Failed to connect to Rhino Compute server: ${errorMessage}`);
@@ -137,7 +147,9 @@ export const load = (async ({ url, params: _params }) => {
 		const definition = await client.getIO(definitionSource);
 
 		if (!definition) {
-			throw new Error(`Failed to get definition IO - server returned undefined. Definition URL: ${clientDefUrl}`);
+			throw new Error(
+				`Failed to get definition IO - server returned undefined. Definition URL: ${clientDefUrl}`
+			);
 		}
 
 		// Solve with default values to get the schema
@@ -146,12 +158,17 @@ export const load = (async ({ url, params: _params }) => {
 
 			const solvedDefinition = await client.solve(definitionSource, tree);
 
-			const schema = new GrasshopperResponseProcessor(solvedDefinition).getValueByParamName('Schema', {
-				parseValues: true
-			}) as UISchema;
+			const schema = new GrasshopperResponseProcessor(solvedDefinition).getValueByParamName(
+				'Schema',
+				{
+					parseValues: true
+				}
+			) as UISchema;
 
 			if (!schema || !schema.inputs) {
-				throw new Error(`Failed to extract schema from computation response. Schema: ${JSON.stringify(schema)}`);
+				throw new Error(
+					`Failed to extract schema from computation response. Schema: ${JSON.stringify(schema)}`
+				);
 			}
 
 			// Merge default values from Compute definition into schema inputs
@@ -194,6 +211,9 @@ export const load = (async ({ url, params: _params }) => {
 			error(500, `Failed to load definition from ${clientDefUrl}: ${errorDetails.message}${hint}`);
 		}
 
-		throw error(500, `Failed to load definition: ${err instanceof Error ? err.message : String(err)}`);
+		throw error(
+			500,
+			`Failed to load definition: ${err instanceof Error ? err.message : String(err)}`
+		);
 	}
 }) satisfies PageServerLoad;

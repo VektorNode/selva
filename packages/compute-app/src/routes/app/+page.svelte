@@ -232,7 +232,7 @@
 				badge={badgeConfig}
 				showModeToggle={true}
 				showDefinitionSwitcher={availableDefinitions.length > 1}
-				currentDefinition={currentDefinition}
+				{currentDefinition}
 				definitions={availableDefinitions}
 				onDefinitionChange={handleDefinitionChange}
 			/>

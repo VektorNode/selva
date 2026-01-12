@@ -198,7 +198,9 @@ export class WebSocketState {
 		if (this.socket?.readyState === WebSocket.OPEN) {
 			const message = { type, ...data };
 			const jsonStr = JSON.stringify(message);
-			console.log(`[WebSocket] Sending ${type} message, size: ${(jsonStr.length / 1024 / 1024).toFixed(2)}MB`);
+			console.log(
+				`[WebSocket] Sending ${type} message, size: ${(jsonStr.length / 1024 / 1024).toFixed(2)}MB`
+			);
 			try {
 				this.socket.send(jsonStr);
 				console.log(`[WebSocket] Message sent successfully`);
@@ -254,7 +256,9 @@ export class WebSocketState {
 		this.batchedValues = {};
 		this.batchTimer = null;
 
-		console.log(`[WebSocket] Sending batched value update with ${Object.keys(values).length} values`);
+		console.log(
+			`[WebSocket] Sending batched value update with ${Object.keys(values).length} values`
+		);
 		this.send('valueUpdate', { sessionId, values });
 
 		// Set a single timeout to auto-clear solving state if no update received from server

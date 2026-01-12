@@ -1,6 +1,11 @@
 import type { UISchema } from '$lib/types/generated';
 import type { MeshBatch } from '@selva/core/visualization';
-import { parseMeshBatchObject, SCALE_FACTORS, initThree, updateScene } from '@selva/core/visualization';
+import {
+	parseMeshBatchObject,
+	SCALE_FACTORS,
+	initThree,
+	updateScene
+} from '@selva/core/visualization';
 import type { ThreeInitializerOptions } from '@selva/core/visualization';
 
 export interface ViewerState {

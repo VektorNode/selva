@@ -54,7 +54,7 @@ export async function loadDefinitionsConfig(): Promise<Definition[]> {
 		if (err instanceof Error && 'code' in err && err.code === 'ENOENT') {
 			throw new Error(
 				`No definitions-config.json found at ${configPath}. ` +
-				`Please create this file with your definition metadata.`
+					`Please create this file with your definition metadata.`
 			);
 		}
 		throw err;

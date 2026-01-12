@@ -24,13 +24,15 @@
 		</div>
 	</div>
 {:else}
-	<div class="flex h-screen flex-col bg-background">
+	<div class="bg-background flex h-screen flex-col">
 		<!-- Header -->
 		<PageHeader title="Definitions" showModeToggle={true} />
-		<p class="border-b border-border px-8 py-3 text-sm text-muted-foreground">Select a Grasshopper definition to get started</p>
+		<p class="border-border text-muted-foreground border-b px-8 py-3 text-sm">
+			Select a Grasshopper definition to get started
+		</p>
 
 		<!-- Definitions Grid -->
-		<div class="flex-1 overflow-y-auto px-8 py-6 flex flex-col">
+		<div class="flex flex-1 flex-col overflow-y-auto px-8 py-6">
 			{#if data.error}
 				<StateDisplay type="error" size="medium" message={data.error} />
 			{:else if data.definitions.length === 0}
@@ -40,10 +42,10 @@
 					{#each data.definitions as definition (definition.filename)}
 						<button
 							onclick={() => goto(`/app?gh=${definition.filename}`)}
-							class="group flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card text-left transition-all hover:border-muted-foreground hover:shadow-lg"
+							class="group border-border bg-card hover:border-muted-foreground flex h-full flex-col overflow-hidden rounded-lg border text-left transition-all hover:shadow-lg"
 						>
 							{#if definition.coverImage}
-								<div class="relative h-40 overflow-hidden bg-muted">
+								<div class="bg-muted relative h-40 overflow-hidden">
 									<img
 										src={definition.coverImage}
 										alt={definition.displayName}
@@ -51,32 +53,42 @@
 									/>
 								</div>
 							{:else}
-								<div class="h-40 bg-linear-to-br from-muted to-muted/70"></div>
+								<div class="from-muted to-muted/70 h-40 bg-linear-to-br"></div>
 							{/if}
 							<div class="flex flex-1 flex-col p-4">
-								<h3 class="mb-1.5 font-semibold text-foreground line-clamp-2 text-sm group-hover:text-primary">
+								<h3
+									class="text-foreground group-hover:text-primary mb-1.5 line-clamp-2 text-sm font-semibold"
+								>
 									{definition.displayName}
 								</h3>
 								{#if definition.description}
-									<p class="mb-3 text-xs text-muted-foreground line-clamp-2">
+									<p class="text-muted-foreground mb-3 line-clamp-2 text-xs">
 										{definition.description}
 									</p>
 								{/if}
 								{#if definition.tags && definition.tags.length > 0}
 									<div class="mb-3 flex flex-wrap gap-1.5">
 										{#each definition.tags.slice(0, 2) as tag}
-											<span class="inline-block rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+											<span
+												class="bg-muted text-muted-foreground inline-block rounded-full px-2 py-0.5 text-xs"
+											>
 												{tag}
 											</span>
 										{/each}
 										{#if definition.tags.length > 2}
-											<span class="text-xs text-muted-foreground">+{definition.tags.length - 2}</span>
+											<span class="text-muted-foreground text-xs"
+												>+{definition.tags.length - 2}</span
+											>
 										{/if}
 									</div>
 								{/if}
-								<div class="mt-auto flex items-center justify-between pt-2 text-xs text-muted-foreground group-hover:text-foreground">
+								<div
+									class="text-muted-foreground group-hover:text-foreground mt-auto flex items-center justify-between pt-2 text-xs"
+								>
 									<span class="truncate">{definition.filename}</span>
-									<ArrowRight class="ml-2 h-3.5 w-3.5 shrink-0 transition-all group-hover:translate-x-0.5" />
+									<ArrowRight
+										class="ml-2 h-3.5 w-3.5 shrink-0 transition-all group-hover:translate-x-0.5"
+									/>
 								</div>
 							</div>
 						</button>
@@ -86,8 +98,8 @@
 		</div>
 
 		<!-- Footer -->
-		<footer class="border-t border-border px-8 py-4 text-center text-sm text-muted-foreground">
-			<p><span class="font-semibold text-foreground">Selva</span></p>
+		<footer class="border-border text-muted-foreground border-t px-8 py-4 text-center text-sm">
+			<p><span class="text-foreground font-semibold">Selva</span></p>
 		</footer>
 	</div>
 {/if}

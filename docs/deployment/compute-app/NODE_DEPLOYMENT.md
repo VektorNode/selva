@@ -49,6 +49,7 @@ env: {
 ```
 
 **Required variables:**
+
 - `ORIGIN` - Public URL for CSRF checks
 - `COMPUTE_SERVER_URL` - Rhino.Compute server address
 - Use either `GH_DEFINITIONS_PATH` (local) or `GH_DEFINITIONS_BASE_URL` (remote), not both
@@ -99,24 +100,28 @@ pm2 restart selva-compute
 ## Common Issues
 
 **Port already in use:**
+
 ```bash
 lsof -i :3000
 # Change PORT in ecosystem.config.cjs and restart
 ```
 
 **Can't reach Compute server:**
+
 ```bash
 curl http://YOUR-COMPUTE-SERVER:5000/version
 # Verify COMPUTE_SERVER_URL and firewall rules
 ```
 
 **Definitions not loading:**
+
 ```bash
 ls -la definitions/
 # Check filenames match query parameters
 ```
 
 **Node.js too old:**
+
 ```bash
 node --version  # Need 20.19+
 # Update: curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -

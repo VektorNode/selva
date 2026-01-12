@@ -96,9 +96,13 @@ export default class GrasshopperClient {
 		try {
 			// Validate inputs
 			if (typeof definition === 'string' && !definition?.trim()) {
-				throw new RhinoComputeError('Definition URL/content is required', ErrorCodes.INVALID_INPUT, {
-					context: { receivedUrl: definition }
-				});
+				throw new RhinoComputeError(
+					'Definition URL/content is required',
+					ErrorCodes.INVALID_INPUT,
+					{
+						context: { receivedUrl: definition }
+					}
+				);
 			} else if (definition instanceof Uint8Array && definition.length === 0) {
 				throw new RhinoComputeError('Definition content is empty', ErrorCodes.INVALID_INPUT);
 			}
@@ -122,7 +126,10 @@ export default class GrasshopperClient {
 					ErrorCodes.COMPUTATION_ERROR,
 					{
 						context: {
-							definition: typeof definition === 'string' && definition.length < 200 ? definition : '...content...',
+							definition:
+								typeof definition === 'string' && definition.length < 200
+									? definition
+									: '...content...',
 							inputs: dataTree
 						}
 					}
@@ -144,7 +151,10 @@ export default class GrasshopperClient {
 				ErrorCodes.COMPUTATION_ERROR,
 				{
 					context: {
-						definition: typeof definition === 'string' && definition.length < 200 ? definition : '...content...',
+						definition:
+							typeof definition === 'string' && definition.length < 200
+								? definition
+								: '...content...',
 						inputs: dataTree
 					},
 					originalError: error instanceof Error ? error : new Error(String(error))
