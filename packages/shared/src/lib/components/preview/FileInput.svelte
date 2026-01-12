@@ -85,7 +85,9 @@
 			// Check file size
 			const maxSize = APP_CONSTANTS.FILE_UPLOAD.MAX_SIZE_BYTES;
 			if (blob.size > maxSize) {
-				throw new Error(`File too large: ${(blob.size / 1024 / 1024).toFixed(2)}MB (Max: ${APP_CONSTANTS.FILE_UPLOAD.MAX_SIZE_MB}MB)`);
+				throw new Error(
+					`File too large: ${(blob.size / 1024 / 1024).toFixed(2)}MB (Max: ${APP_CONSTANTS.FILE_UPLOAD.MAX_SIZE_MB}MB)`
+				);
 			}
 
 			// Convert to base64
@@ -193,7 +195,7 @@
 				<Link size={16} />
 				File URL
 			</Label>
-			<div class="flex gap-2">
+			<div class="gap-2 flex">
 				<Input
 					id="url-input"
 					type="url"
@@ -210,7 +212,9 @@
 					{isLoading ? 'Loading...' : 'Fetch'}
 				</Button>
 			</div>
-			<p class="text-xs text-muted-foreground">Enter a URL and click Fetch to download and convert the file.</p>
+			<p class="text-xs text-muted-foreground">
+				Enter a URL and click Fetch to download and convert the file.
+			</p>
 		</div>
 	{:else}
 		<!-- File Upload (for web usage - base64) -->

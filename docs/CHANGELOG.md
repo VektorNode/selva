@@ -28,6 +28,7 @@ pnpm changeset version
 ```
 
 This automatically:
+
 - Updates all `CHANGELOG.md` files
 - Bumps versions in `package.json`
 - Removes changeset files
@@ -44,8 +45,8 @@ Changesets are automatically created in `.changeset/[id].md`:
 
 ```markdown
 ---
-"@selva/core": minor
-"@selva/shared": patch
+'@selva/core': minor
+'@selva/shared': patch
 ---
 
 Brief description of what changed
@@ -71,9 +72,11 @@ Example entry:
 
 ```markdown
 ### Added
+
 - Add new validator for schema definitions
 
 ### Fixed
+
 - Fix WebSocket reconnection timeout
 ```
 

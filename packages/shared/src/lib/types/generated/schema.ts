@@ -5,7 +5,14 @@
  * and run `npm run generate:ts` in the schemas directory to regenerate this file.
  */
 
-export type GrasshopperParamType = 'number' | 'integer' | 'boolean' | 'text' | 'valueList' | 'file' | 'generic';
+export type GrasshopperParamType =
+	| 'number'
+	| 'integer'
+	| 'boolean'
+	| 'text'
+	| 'valueList'
+	| 'file'
+	| 'generic';
 export type InputNumberLayoutItem = LayoutItemBase & {
 	type: 'input';
 	widgetType: 'number';
@@ -78,15 +85,15 @@ export interface VisibilityRule {
 	 * Comparison operator
 	 */
 	operator:
-	| 'equals'
-	| 'notEquals'
-	| 'greaterThan'
-	| 'lessThan'
-	| 'greaterThanOrEqual'
-	| 'lessThanOrEqual'
-	| 'in'
-	| 'notIn'
-	| 'between';
+		| 'equals'
+		| 'notEquals'
+		| 'greaterThan'
+		| 'lessThan'
+		| 'greaterThanOrEqual'
+		| 'lessThanOrEqual'
+		| 'in'
+		| 'notIn'
+		| 'between';
 	/**
 	 * Value to compare against (used for equals, notEquals, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual)
 	 */
@@ -142,7 +149,7 @@ export interface DropdownWidgetConfig {
 	};
 	required?: boolean;
 }
-export interface CheckboxWidgetConfig { }
+export interface CheckboxWidgetConfig {}
 export interface FileWidgetConfig {
 	buttonLabel?: string;
 	/**
@@ -408,31 +415,39 @@ export interface ValidationIssueMessage {
 	};
 }
 
-
 // ============================================================================
 // CONSTANTS (from schema)
 // ============================================================================
 
 export const ACCEPTED_FILE_FORMATS = [
-	".3dm",
-	".stp",
-	".step",
-	".fbx",
-	".obj",
-	".dxf",
-	".fbx",
-	".stl"
+	'.3dm',
+	'.stp',
+	'.step',
+	'.fbx',
+	'.obj',
+	'.dxf',
+	'.fbx',
+	'.stl'
 ] as const;
 
 // ============================================================================
 // TYPE GUARDS
 // ============================================================================
 
-export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem {
+export function isInputLayoutItem(
+	item: LayoutItem
+): item is
+	| InputNumberLayoutItem
+	| InputTextLayoutItem
+	| InputDropdownLayoutItem
+	| InputCheckboxLayoutItem
+	| InputFileLayoutItem {
 	return item.type === 'input';
 }
 
-export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem {
+export function isOutputLayoutItem(
+	item: LayoutItem
+): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem {
 	return item.type === 'output';
 }
 
@@ -457,6 +472,11 @@ export function isFileWidget(item: LayoutItem): item is InputFileLayoutItem {
 }
 
 // Helper type aliases
-export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem;
+export type InputLayoutItem =
+	| InputNumberLayoutItem
+	| InputTextLayoutItem
+	| InputDropdownLayoutItem
+	| InputCheckboxLayoutItem
+	| InputFileLayoutItem;
 export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem;
 export type SupportedTypes = string | number | boolean;

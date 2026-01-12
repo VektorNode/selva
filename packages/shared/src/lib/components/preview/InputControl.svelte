@@ -152,7 +152,7 @@
 				max={config.maximum}
 				step={config.stepSize ?? 1}
 				placeholder={config.placeholder}
-				oninput={(e:any) => {
+				oninput={(e: any) => {
 					const target = e.currentTarget as HTMLInputElement;
 					const newValue = parseFloat(target.value);
 					if (!isNaN(newValue)) {

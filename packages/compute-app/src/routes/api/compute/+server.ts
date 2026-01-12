@@ -96,7 +96,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			try {
 				const fileData = await fs.readFile(filePath);
 				definitionSource = new Uint8Array(fileData);
-
 			} catch (err) {
 				console.error(`Failed to read local definition: ${filePath}`, err);
 				throw error(404, `Definition '${filename}' not found`);
@@ -130,11 +129,14 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Return detailed error response in development mode
 		if (process.env.NODE_ENV === 'development') {
-			throw error(500, JSON.stringify({
-				error: 'Grasshopper computation failed',
-				details: errorDetails,
-				hint: 'Check /api/health/compute for server connectivity details'
-			}));
+			throw error(
+				500,
+				JSON.stringify({
+					error: 'Grasshopper computation failed',
+					details: errorDetails,
+					hint: 'Check /api/health/compute for server connectivity details'
+				})
+			);
 		}
 
 		// Production: generic error message

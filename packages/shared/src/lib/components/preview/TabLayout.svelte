@@ -138,7 +138,9 @@
 														item={layoutItem}
 														bind:value={values[input.id]}
 														displayName={layoutItem.displayName}
-														onChange={onValueChange}													environment={environment}													/>
+														onChange={onValueChange}
+														{environment}
+													/>
 												</div>
 											{/if}
 										{:else if layoutItem.type === 'output'}

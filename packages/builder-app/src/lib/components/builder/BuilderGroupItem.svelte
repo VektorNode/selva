@@ -327,30 +327,34 @@
 										min="1"
 										bind:value={config.maxLength}
 										placeholder="No limit"
-										class="h-6 rounded border border-border/70 bg-background px-2 text-[10px] focus:border-primary focus:outline-none"
+										class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
 									/>
 								</div>
 
 								<!-- Pattern (Regex) -->
 								<div class="flex flex-col gap-1">
-									<span class="text-muted-foreground text-[10px] font-medium">Validation Pattern (Regex)</span>
+									<span class="text-muted-foreground text-[10px] font-medium"
+										>Validation Pattern (Regex)</span
+									>
 									<input
 										type="text"
 										bind:value={config.pattern}
 										placeholder="e.g., ^[a-zA-Z0-9]+$"
-										class="h-6 rounded border border-border/70 bg-background px-2 text-[10px] focus:border-primary focus:outline-none font-mono"
+										class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 font-mono text-[10px] focus:outline-none"
 									/>
 								</div>
 
 								<!-- Custom Error Message -->
 								{#if config.pattern}
 									<div class="flex flex-col gap-1">
-										<span class="text-muted-foreground text-[10px] font-medium">Custom Error Message</span>
+										<span class="text-muted-foreground text-[10px] font-medium"
+											>Custom Error Message</span
+										>
 										<input
 											type="text"
 											bind:value={config.customErrorMessage}
 											placeholder="Invalid format"
-											class="h-6 rounded border border-border/70 bg-background px-2 text-[10px] focus:border-primary focus:outline-none"
+											class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
 										/>
 									</div>
 								{/if}

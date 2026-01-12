@@ -47,7 +47,7 @@ export function getServerConfig() {
 		if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
 			throw new Error(
 				`❌ COMPUTE_SERVER_URL has invalid protocol: ${parsed.protocol}\n` +
-				'Only http:// and https:// are supported.'
+					'Only http:// and https:// are supported.'
 			);
 		}
 	}
