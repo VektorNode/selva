@@ -1,5 +1,5 @@
 // This file is used by PM2 to manage the compute app process when deployed with NODE
-export default {
+module.exports = {
 	apps: [
 		{
 			name: 'selva-compute',
