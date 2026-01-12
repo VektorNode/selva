@@ -50,7 +50,6 @@ You're deploying the Compute App to production for the first time.
    - More flexible
    - Container-based (easier updates)
    - Good for cloud providers and scaling
-   - Time: 45 minutes
 
 4. **Optional: [Set up Reverse Proxy with Caddy](./REVERSE_PROXY_LOAD_BALANCER.md)**
    - Forward port 80 to your app
