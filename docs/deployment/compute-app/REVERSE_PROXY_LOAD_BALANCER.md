@@ -1,86 +1,6 @@
-# Reverse Proxy & Load Balancer with Caddy
+# Reverse Proxy with Caddy + PM2
 
-Using Caddy for SSL/TLS termination, reverse proxying, and load balancing across multiple Selva Compute App instances.
-
-**Example configuration files are provided:**
-- [docker-compose.example.yml](./docker-compose.example.yml) - Docker Compose setup
-- [Caddyfile.example](./Caddyfile.example) - Caddy configuration
-- [ecosystem.config.example.js](./ecosystem.config.example.js) - PM2 configuration
-
-Copy and customize these files for your deployment.
-
----
-
-## Quick Start: Docker + Caddy
-
-**Copy [docker-compose.example.yml](./docker-compose.example.yml) as `docker-compose.yml` and update environment variables:**
-
-```yaml
-version: '3.8'
-
-services:
-  caddy:
-    image: caddy:latest
-    container_name: caddy-reverse-proxy
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - app-network
-    restart: unless-stopped
-
-  web-1:
-    image: selva-compute-app:latest
-    environment:
-      - PORT=3000
-      - ORIGIN=https://your-domain.com
-    networks:
-      - app-network
-    restart: unless-stopped
-    expose:
-      - 3000
-
-  web-2:
-    image: selva-compute-app:latest
-    environment:
-      - PORT=3000
-      - ORIGIN=https://your-domain.com
-    networks:
-      - app-network
-    restart: unless-stopped
-    expose:
-      - 3000
-
-volumes:
-  caddy_data:
-  caddy_config:
-
-networks:
-  app-network:
-    driver: bridge
-```
-
-**Copy [Caddyfile.example](./Caddyfile.example) as `Caddyfile` and update your domain:**
-
-```caddy
-your-domain.com {
-    reverse_proxy web-1:3000 web-2:3000 {
-        policy random
-    }
-}
-```
-
-**Start:**
-
-```bash
-docker-compose up -d
-```
-
-Caddy automatically handles SSL/TLS with Let's Encrypt.
+Using Caddy as a simple reverse proxy to forward traffic from port 80 to your Selva Compute App running on PM2.
 
 ---
 
@@ -89,8 +9,6 @@ Caddy automatically handles SSL/TLS with Let's Encrypt.
 **Install PM2 and Caddy:**
 
 ```bash
-sudo npm install -g pm2
-
 # Install Caddy (Ubuntu/Debian - official method)
 sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
@@ -99,15 +17,27 @@ sudo apt-get update
 sudo apt-get install caddy
 ```
 
-**Create Caddyfile** in your compute-app directory:
+**Create Caddyfile** in `/etc/caddy/Caddyfile`:
+
+```bash
+sudo nano /etc/caddy/Caddyfile
+```
+
+Add:
 
 ```caddy
-your-domain.com {
-    reverse_proxy localhost:3000
+:80 {
+    reverse_proxy localhost:3000 {
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Proto {http.request.proto}
+        header_up X-Forwarded-Host {http.request.host}
+    }
 }
 ```
 
 **Use ecosystem.config.cjs** (note: `.cjs` for CommonJS in ES module projects):
+
+Environment variables go in the `env` object:
 
 ```javascript
 module.exports = {
@@ -115,12 +45,19 @@ module.exports = {
 		{
 			name: 'selva-compute',
 			script: './build/index.js',
-			env_file: '.env',
 			instances: 1,
 			exec_mode: 'fork',
 			autorestart: true,
 			watch: false,
-			max_memory_restart: '1G'
+			max_memory_restart: '1G',
+			env: {
+				PORT: 3000,
+				ORIGIN: 'http://your-public-ip',
+				COMPUTE_SERVER_URL: 'http://your-compute-server:5000',
+				GH_DEFINITIONS_PATH: './definitions',
+				COMPUTE_API_KEY: 'your-api-key',
+				NODE_ENV: 'production'
+			}
 		}
 	]
 };
@@ -129,88 +66,58 @@ module.exports = {
 **Build and start:**
 
 ```bash
-# Build app
+# Build app (from project root)
 cd ~/selva
 pnpm install
 pnpm run build:compute
 
-# Start with PM2
+# Navigate to compute-app
 cd packages/compute-app
+
+# Start with PM2
 pm2 start ecosystem.config.cjs
 
-# Enable and start Caddy (requires sudo for ports 80/443)
-sudo systemctl enable caddy
-sudo systemctl start caddy
+# Start Caddy (simple approach - runs in foreground)
+sudo caddy run --config /etc/caddy/Caddyfile
+```
 
-# Verify
+**Verify:**
+
+```bash
+# Check PM2 app is running
 pm2 list
-sudo systemctl status caddy
-```
 
-**Monitor:**
-
-```bash
-pm2 monit
-sudo journalctl -u caddy -f
+# Test the reverse proxy (look for "Via: 1.1 Caddy" header)
+curl -v http://your-public-ip/api/health
 ```
 
 ---
 
-## Load Balancing Policies
+**Firewall (Google Cloud):**
 
-In Caddyfile, use:
-
-- `random` - Random selection (recommended)
-- `least_conn` - Least connections
-- `round_robin` - Sequential (default)
-
----
-
-## Important Settings
-
-**ORIGIN Environment Variable:**
-
-Must match your public domain:
+Create firewall rules to allow port 80 (and 443 if using HTTPS):
 
 ```bash
-ORIGIN=https://your-domain.com
+# Allow HTTP traffic (create via Google Cloud Console)
+# Name: allow-http
+# Direction: Ingress
+# Action: Allow
+# Source: 0.0.0.0/0
+# Protocol: tcp:80
+# Target tags: http-server
 ```
 
-Restart containers/PM2 after changing:
-
-```bash
-# Docker
-docker-compose restart
-
-# PM2
-pm2 restart all
-```
-
-**Firewall:**
-
-Allow ports 80 and 443 (NOT port 3000):
-
-```bash
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-```
+Then add the `http-server` tag to your VM instance under network tags.
 
 ---
 
 ## Monitoring
 
-**Docker:**
-
-```bash
-docker-compose logs caddy -f
-docker-compose ps
-```
-
 **PM2:**
 
 ```bash
 pm2 list
-pm2 logs
+pm2 logs selva-compute
 pm2 monit
 ```
 
@@ -218,58 +125,21 @@ pm2 monit
 
 ## Useful Commands
 
-**Docker - Update containers:**
+**PM2:**
 
 ```bash
-docker-compose down
-docker-compose build
-docker-compose up -d
+pm2 restart selva-compute
+pm2 stop selva-compute
+pm2 logs selva-compute
 ```
 
-**PM2 - Restart apps:**
+**Caddy:**
 
 ```bash
-pm2 restart all
-pm2 save
+# Stop Caddy (if running in background)
+sudo pkill -f "caddy run"
+
+# View Caddy status
+ps aux | grep caddy
+
 ```
-
-**Caddy - View certificates:**
-
-Caddy automatically renews Let's Encrypt certificates. No action needed.
-
----
-
-## Troubleshooting
-
-**Connection refused:**
-
-```bash
-# Check apps are running
-docker-compose ps    # Docker
-pm2 list             # PM2
-```
-
-**Certificate not issuing:**
-
-```bash
-# Check domain DNS
-nslookup your-domain.com
-
-# Check Caddy logs
-docker logs caddy-reverse-proxy    # Docker
-sudo journalctl -u caddy -f        # PM2 setup
-```
-
-**CSRF errors:**
-
-1. Verify `ORIGIN` matches your domain
-2. Restart containers: `docker-compose restart` or `pm2 restart all`
-3. Clear browser cache
-
----
-
-## Next Steps
-
-- [Docker Deployment Guide](./DOCKER_DEPLOYMENT.md)
-- [Node Deployment Guide](./NODE_DEPLOYMENT.md)
-- [Caddy Docs](https://caddyserver.com/docs/)

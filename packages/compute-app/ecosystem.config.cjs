@@ -11,10 +11,10 @@ module.exports = {
 			max_memory_restart: '1G',
 			env: {
 				PORT: 3000,
-				ORIGIN: 'http://35.240.50.56:3000',
-				COMPUTE_SERVER_URL: 'http://vektornode-compute.ch/',
+				ORIGIN: 'http://your-public-ip',
+				COMPUTE_SERVER_URL: 'http://your-compute-server:5000',
 				GH_DEFINITIONS_PATH: './definitions',
-				COMPUTE_API_KEY: 'xxxx',
+				COMPUTE_API_KEY: 'your-api-key',
 				NODE_ENV: 'production'
 			}
 		}

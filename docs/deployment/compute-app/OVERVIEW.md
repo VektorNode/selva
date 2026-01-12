@@ -29,12 +29,12 @@ You're deploying the Compute App to production for the first time.
 
 **Follow these steps in order:**
 
-1. **[Review Deployment Prerequisites](./PREREQUISITES.md)** (15 min)
+1. **[Review Deployment Prerequisites](./PREREQUISITES.md)**
    - Understand system requirements
    - Set up network and firewall
    - Prepare environment variables
 
-2. **[Complete Server Setup](./SERVER_SETUP.md)** (20 min)
+2. **[Complete Server Setup](./SERVER_SETUP.md)**
    - Install Node.js and pnpm
    - Clone the repository
    - Build all packages
@@ -42,10 +42,9 @@ You're deploying the Compute App to production for the first time.
 3. **Choose Your Deployment Method:**
 
    **Option A: [Node.js Deployment](./NODE_DEPLOYMENT.md)** (Recommended for most)
-   - Simpler setup
+   - Simpler setup with PM2 process manager
    - Lower resource usage
    - Good for single-server deployments
-   - Time: 30 minutes
 
    **Option B: [Docker Deployment](./DOCKER_DEPLOYMENT.md)** (Recommended for scale)
    - More flexible
@@ -53,17 +52,20 @@ You're deploying the Compute App to production for the first time.
    - Good for cloud providers and scaling
    - Time: 45 minutes
 
-4. **[compute-app deployment](./DEFINITIONS_SETUP.md)** (10 min)
+4. **Optional: [Set up Reverse Proxy with Caddy](./REVERSE_PROXY_LOAD_BALANCER.md)**
+   - Forward port 80 to your app
+   - Simple single-command setup
+   - Recommended for production
+
+5. **[Configure Grasshopper Definitions](./DEFINITIONS_SETUP.md)**
    - Prepare your `.gh` files
    - Create `definitions-config.json`
    - Test definition loading
 
-5. **Verify & Test**
-   - Access the health check: `curl http://YOUR-IP:3000/api/health`
-   - Open in browser: `http://YOUR-IP:3000/app?gh=your-definition`
+6. **Verify & Test**
+   - Access the health check: `curl http://YOUR-IP/api/health` (or `:3000` if no reverse proxy)
+   - Open in browser: `http://YOUR-IP/app?gh=your-definition`
    - Test with real data
-
-**Total time: ~2 hours**
 
 ---
 
@@ -107,4 +109,5 @@ See [Node.js Updating](./NODE_DEPLOYMENT.md#8-updating-the-application) or [Dock
 
 - [Prerequisites & Setup](./PREREQUISITES.md)
 - [Definitions Configuration](./DEFINITIONS_SETUP.md)
-- [Full Deployment Guides](./NODE_DEPLOYMENT.md)
+- [Node.js Deployment Guide](./NODE_DEPLOYMENT.md)
+- [Reverse Proxy Setup](./REVERSE_PROXY_LOAD_BALANCER.md) - Set up Caddy for public access
