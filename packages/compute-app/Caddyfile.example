@@ -1,0 +1,32 @@
+# Caddy configuration for Selva Compute App with load balancing
+# Replace 'your-domain.com' with your actual domain
+# Caddy automatically handles SSL/TLS with Let's Encrypt
+
+# Single instance (simple setup)
+# your-domain.com {
+#     reverse_proxy localhost:3000
+# }
+
+# Multiple instances with load balancing
+your-domain.com {
+    # Load balance across multiple app instances
+    # Docker: Use service names (web-1, web-2, etc.)
+    # PM2: Use localhost:3000, localhost:3001, etc.
+
+    # For Docker Compose (service names):
+    reverse_proxy web-1:3000 web-2:3000 web-3:3000 {
+        policy random
+    }
+
+    # For PM2 (localhost ports):
+    # reverse_proxy localhost:3000 localhost:3001 localhost:3002 {
+    #     policy random
+    # }
+
+    # Optional: Add headers
+    # header X-Frame-Options "SAMEORIGIN"
+    # header X-Content-Type-Options "nosniff"
+
+    # Optional: Add gzip compression
+    # encode gzip
+}

@@ -177,11 +177,11 @@ sudo npm install -g pm2
 
 **Start the application:**
 
-PM2 can automatically load environment variables from your `.env` file:
+PM2 will automatically load environment variables from your `.env` file using the `ecosystem.config.js`:
 
 ```bash
-# Start with PM2 and load .env file
-pm2 start build/index.js --name selva-compute --env-file .env
+# Start with PM2 (loads .env automatically)
+pm2 start ecosystem.config.js
 
 # View status
 pm2 status
@@ -191,6 +191,25 @@ pm2 logs selva-compute
 
 # View real-time logs
 pm2 logs selva-compute --lines 100
+
+# Monitor CPU/memory
+pm2 monit
+```
+
+**Stop or restart the application:**
+
+```bash
+# Restart
+pm2 restart selva-compute
+
+# Stop
+pm2 stop selva-compute
+
+# Delete
+pm2 delete selva-compute
+
+# Restart all
+pm2 restart all
 ```
 
 **If port is already in use:**
@@ -205,8 +224,9 @@ lsof -i :3000
 # or
 sudo netstat -tulpn | grep :3000
 
-# Start fresh
-pm2 start build/index.js --name selva-compute --env-file .env
+# Update PORT in .env if needed
+# Then restart
+pm2 start ecosystem.config.js
 ```
 
 **Enable auto-restart on server reboot:**

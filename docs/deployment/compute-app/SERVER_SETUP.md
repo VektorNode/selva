@@ -51,9 +51,9 @@ pnpm --version
 
 ---
 
-## 2. Set Up SSH Key Authentication (for Private Repositories)
+## 2. Set Up SSH Key Authentication (Currently needed since repository is still private)
 
-If your repository is private, set up SSH authentication:
+If your at this point let @TheVessen know to setup the SSH key so you get acces to it.
 
 ```bash
 # Generate SSH key
@@ -77,7 +77,7 @@ git clone git@github.com:your-username/selva.git
 cd selva
 
 # Or via HTTPS (requires credentials)
-git clone https://github.com/your-username/selva.git
+git clone https://github.com/VektorNode/selva.git
 cd selva
 ```
 
