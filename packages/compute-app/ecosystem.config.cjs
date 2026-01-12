@@ -1,4 +1,6 @@
 // This file is used by PM2 to manage the compute app process when deployed with NODE
+// environment variables. Adjust the values in the `env` section as needed for your setup.
+// IMPORTANT: Make sure not to commit sensitive information like API keys to version control.
 module.exports = {
 	apps: [
 		{
