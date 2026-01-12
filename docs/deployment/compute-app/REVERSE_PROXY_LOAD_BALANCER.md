@@ -86,72 +86,72 @@ Caddy automatically handles SSL/TLS with Let's Encrypt.
 
 ## Quick Start: PM2 + Caddy
 
-**Install PM2:**
+**Install PM2 and Caddy:**
 
 ```bash
 sudo npm install -g pm2
+
+# Install Caddy (Ubuntu/Debian - official method)
+sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt-get update
+sudo apt-get install caddy
 ```
 
-**Copy [ecosystem.config.example.js](./ecosystem.config.example.js) as `ecosystem.config.js` and update paths/environment variables:**
-
-```javascript
-module.exports = {
-  apps: [
-    {
-      name: 'selva-1',
-      script: './build/index.js',
-      cwd: '/path/to/selva/packages/compute-app',
-      env: {
-        PORT: 3000,
-        ORIGIN: 'https://your-domain.com',
-        COMPUTE_SERVER_URL: 'http://your-compute-server:8080',
-        GH_DEFINITIONS_PATH: './definitions',
-      },
-    },
-    {
-      name: 'selva-2',
-      script: './build/index.js',
-      cwd: '/path/to/selva/packages/compute-app',
-      env: {
-        PORT: 3001,
-        ORIGIN: 'https://your-domain.com',
-        COMPUTE_SERVER_URL: 'http://your-compute-server:8080',
-        GH_DEFINITIONS_PATH: './definitions',
-      },
-    },
-  ],
-};
-```
-
-**Caddyfile:**
+**Create Caddyfile** in your compute-app directory:
 
 ```caddy
 your-domain.com {
-    reverse_proxy localhost:3000 localhost:3001 {
-        policy random
-    }
+    reverse_proxy localhost:3000
 }
 ```
 
-**Start:**
+**Use ecosystem.config.cjs** (note: `.cjs` for CommonJS in ES module projects):
+
+```javascript
+module.exports = {
+	apps: [
+		{
+			name: 'selva-compute',
+			script: './build/index.js',
+			env_file: '.env',
+			instances: 1,
+			exec_mode: 'fork',
+			autorestart: true,
+			watch: false,
+			max_memory_restart: '1G'
+		}
+	]
+};
+```
+
+**Build and start:**
 
 ```bash
-# Build first
-cd /path/to/selva
+# Build app
+cd ~/selva
+pnpm install
 pnpm run build:compute
 
-# Start PM2
-pm2 start ecosystem.config.js
+# Start with PM2
+cd packages/compute-app
+pm2 start ecosystem.config.cjs
 
-# Install and start Caddy
-sudo apt-get update
-curl -1sLf 'https://dl.caddy.community/api/v1/repos/caddy/caddy/releases/download?os=linux&arch=amd64' | sudo bash
-sudo apt-get install caddy
-sudo systemctl start caddy
+# Enable and start Caddy (requires sudo for ports 80/443)
 sudo systemctl enable caddy
+sudo systemctl start caddy
 
-# Monitor
+# Verify
+pm2 list
+sudo systemctl status caddy
+```
+
+**Monitor:**
+
+```bash
 pm2 monit
+sudo journalctl -u caddy -f
 ```
 
 ---

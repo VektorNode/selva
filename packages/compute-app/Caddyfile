@@ -1,0 +1,13 @@
+# Caddy reverse proxy configuration for Selva Compute App
+# Forwards traffic from port 80/443 to PM2 app running on localhost:3000
+
+# Using IP address for ACME challenge (Let's Encrypt)
+# Note: For HTTPS with self-signed certificates, use 'http://' instead
+http://35.240.50.56 {
+    reverse_proxy localhost:3000 {
+        # Headers to preserve client info
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Proto {http.request.proto}
+        header_up X-Forwarded-Host {http.request.host}
+    }
+}
