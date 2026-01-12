@@ -177,11 +177,11 @@ sudo npm install -g pm2
 
 **Start the application:**
 
-PM2 will automatically load environment variables from your `.env` file using the `ecosystem.config.js`:
+PM2 will load environment variables from the `env` object in `ecosystem.config.cjs`:
 
 ```bash
-# Start with PM2 (loads .env automatically)
-pm2 start ecosystem.config.js
+# Start with PM2
+pm2 start ecosystem.config.cjs
 
 # View status
 pm2 status
@@ -195,6 +195,8 @@ pm2 logs selva-compute --lines 100
 # Monitor CPU/memory
 pm2 monit
 ```
+
+**Note:** The environment variables are defined in `ecosystem.config.cjs` in the `env` object. The `.env` file is optional and serves as a reference for local development.
 
 **Stop or restart the application:**
 
