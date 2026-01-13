@@ -5,6 +5,7 @@ using Grasshopper.GUI.Canvas;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Attributes;
 using GH_CanvasChannel = Grasshopper.GUI.Canvas.GH_CanvasChannel;
+using static Grasshopper.GUI.GH_GraphicsUtil;
 
 namespace Selva.Grasshopper.Utilities;
 
@@ -107,5 +108,11 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
 		// Now render the parameters on top
 		var impliedStyle = GH_CapsuleRenderEngine.GetImpliedStyle(palette, Selected, Owner.Locked, Owner.Hidden);
 		RenderComponentParameters(canvas, graphics, Owner, impliedStyle);
+
+		// Render obsolete overlay if needed
+		if (Owner.Obsolete && canvas.DrawingMode == GH_CanvasMode.Control)
+		{
+			RenderObjectOverlay(graphics, Owner, ContentBox);
+		}
 	}
 }

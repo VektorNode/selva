@@ -115,7 +115,9 @@ public class CommunicationHandler : IDisposable
 			_webSocketServer = new WebSocketServer(_port);
 			_webSocketServer.OnClientConnected += (sender, webSocket) =>
 			{
+#if DEBUG
 				logMessage?.Invoke("Web UI client connected");
+#endif
 				// Don't invoke OnClientConnected here - wait for explicit requestInitialData message
 				// This prevents duplicate initial data being sent
 			};
@@ -164,12 +166,16 @@ public class CommunicationHandler : IDisposable
 							}
 							else if (msgType == "requestCurrentValues")
 							{
+#if DEBUG
 								logMessage?.Invoke("Web UI requested current values");
+#endif
 								MarshalToMainThread(() => OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty));
 							}
 							else if (msgType == "requestInitialData")
 							{
+#if DEBUG
 								logMessage?.Invoke("Web UI requested initial data");
+#endif
 								MarshalToMainThread(() => OnClientConnected?.Invoke(this, EventArgs.Empty));
 							}
 							else if (msgType == "saveSchema")

@@ -73,7 +73,6 @@ export function updateParameterMetadata(
 			if (changed) {
 				updatedCount++;
 				updatedNames.push(input.nickname);
-				console.log(`[Preview] Updated input metadata: ${input.nickname}`);
 			}
 
 			const processGroup = (group: any) => {
@@ -125,7 +124,6 @@ export function updateParameterMetadata(
 			if (changed) {
 				updatedCount++;
 				updatedNames.push(output.nickname);
-				console.log(`[Preview] Updated output metadata: ${output.nickname}`);
 			}
 		}
 	});

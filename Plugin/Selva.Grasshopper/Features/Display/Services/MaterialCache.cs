@@ -119,6 +119,9 @@ public class MeshMetadata
 	/// </summary>
 	[JsonProperty("faceOffset")]
 	public int FaceOffset { get; set; }
+
+	[JsonProperty("metadata")]
+	public Dictionary<string, string> Metadata { get; set; }
 }
 
 /// <summary>

@@ -69,6 +69,12 @@ export type ThreeInitializerOptions = {
 export type EventConfig = {
 	onBackgroundClicked?: (event: { x: number; y: number }) => void;
 	onObjectSelected?: (object: THREE.Object3D) => void;
+	/** Called when a mesh with metadata is clicked. Receives the mesh's metadata object. */
+	onMeshMetadataClicked?: (metadata: Record<string, string>) => void;
+	/** Color to use for highlighting selected meshes. Defaults to red (#ff0000). */
+	selectionColor?: THREE.Color | string;
+	/** Enable all event handlers (click/selection/metadata). Defaults to true. */
+	enableEventHandlers?: boolean;
 	enableKeyboardControls?: boolean;
 	enableClickToFocus?: boolean;
 };

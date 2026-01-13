@@ -7,7 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Fixed double .3dm.3dm for exporting block files
+## [0.3.0] - 2026-01-13
+
+### Added
+
+**Web Viewer Enhancements**
+
+- Mesh selection system with click event detection via raycasting
+- Optional mesh metadata callback (`onMeshMetadataClicked`) to retrieve custom metadata from clicked meshes
+- Configurable selection highlight color (`selectionColor`) - defaults to red, supports any CSS color or THREE.Color
+- Material cloning on selection to highlight only selected mesh without affecting other meshes sharing the same material
+- Event handler control flags:
+  - `enableEventHandlers` - Master switch for all event listeners (defaults to true)
+  - `enableClickToFocus` - Individual control for click-to-focus behavior
+  - `enableKeyboardControls` - Individual control for keyboard shortcuts (F, Space, ESC)
+
+**Type Safety & API Improvements**
+
+- Proper TypeScript types for viewer configuration (`EventConfig`, `ThreeInitializerOptions`)
+- Type-safe model unit handling with `ModelUnit` type derived from valid scale factors
+- Improved `ViewerState` interface with proper Three.js types (THREE.Scene, THREE.PerspectiveCamera, OrbitControls)
+- `ProcessMeshBatchesOptions` interface for explicit mesh batch processing options
+
+**Documentation & Code Quality**
+
+- Enhanced JSDoc comments for all viewer-related functions
+- Cleaner API surface with re-exports from core visualization module
+
+### Changed
+
+**Breaking: Simplified Web Viewer API**
+
+- Removed wrapper functions from `@selva/shared` for cleaner abstraction:
+  - `initializeViewerScene()` → use `initThree()` directly
+  - `updateViewerScene()` → use `updateScene()` directly
+  - `processMeshBatches()` → use `parseMeshBatchObject()` in a loop
+
+## Fixed
+
+- No double 3dm.3dm ending for file export with block export
+
+### Migration Guide
+
+**Before (0.2.0):**
+
+```typescript
+import { initializeViewerScene, updateViewerScene, processMeshBatches } from '@selva/shared';
+
+const state = await initializeViewerScene(canvas, schema);
+await updateViewerScene(state, meshes);
+const allMeshes = await processMeshBatches(batches, { modelUnits: 'Meters' });
+```
+
+**After (0.3.0):**
+
+```typescript
+import {
+	initThree,
+	updateScene,
+	parseMeshBatchObject,
+	SCALE_FACTORS
+} from '@selva/core/visualization';
+
+const { scene, camera, controls } = initThree(canvas, {
+	environment: { backgroundColor: '#ffffff' },
+	events: {
+		onMeshMetadataClicked: (metadata) => console.log(metadata),
+		selectionColor: '#ff0000',
+		enableEventHandlers: true
+	}
+});
+
+updateScene(scene, meshes, camera, controls, false);
+
+// For mesh batches
+const scaleFactor = SCALE_FACTORS['Meters'] ?? 1;
+for (const batch of batches) {
+	const meshes = await parseMeshBatchObject(batch, { scaleFactor });
+}
+```
 
 ## [0.2.0] - 2025-12-31
 

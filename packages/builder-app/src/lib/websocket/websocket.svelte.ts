@@ -66,7 +66,6 @@ export class WebSocketState {
 
 						// Then send any pending update from while solving
 						if (this._pendingValueUpdate) {
-							console.log('[WebSocket] Solving completed, sending pending value update');
 							this.send('valueUpdate', this._pendingValueUpdate);
 							this._pendingValueUpdate = null;
 						}
@@ -79,7 +78,6 @@ export class WebSocketState {
 		this.on('runtimeMessage', (data) => {
 			if (data && typeof data === 'object' && 'level' in data && 'message' in data) {
 				const msg = data as { level: string; message: string; timestamp?: string };
-				console.log(`[WebSocket] Runtime message [${msg.level}]: ${msg.message}`);
 
 				// Dispatch custom event for toast notifications
 				if (typeof window !== 'undefined') {
@@ -110,7 +108,6 @@ export class WebSocketState {
 				this.socket.onopen = () => {
 					// If reconnecting after server disconnect, reload the page to get fresh state
 					if (this._shouldReloadOnReconnect) {
-						console.warn('[WebSocket] Server is back online, reloading page...');
 						window.location.reload();
 						return;
 					}
@@ -198,12 +195,9 @@ export class WebSocketState {
 		if (this.socket?.readyState === WebSocket.OPEN) {
 			const message = { type, ...data };
 			const jsonStr = JSON.stringify(message);
-			console.log(
-				`[WebSocket] Sending ${type} message, size: ${(jsonStr.length / 1024 / 1024).toFixed(2)}MB`
-			);
+
 			try {
 				this.socket.send(jsonStr);
-				console.log(`[WebSocket] Message sent successfully`);
 			} catch (error) {
 				console.error(`[WebSocket] Failed to send message:`, error);
 			}
@@ -218,11 +212,9 @@ export class WebSocketState {
 	 * If Grasshopper is currently solving, the update will be queued and sent when solving completes
 	 */
 	sendValueUpdate(sessionId: string, values: Record<string, unknown>) {
-		console.log('[WebSocket] Preparing to send value update to Grasshopper');
 
 		if (this.isSolving) {
 			// Queue the update - only keep the latest one
-			console.log('[WebSocket] Grasshopper is solving, queuing value update');
 			this._pendingValueUpdate = { sessionId, values };
 			return;
 		}
