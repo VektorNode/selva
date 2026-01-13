@@ -1,6 +1,6 @@
 # @selva/compute-app
 
-## 0.2.1
+## 0.3.0
 
 ### Patch Changes
 
