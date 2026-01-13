@@ -1,6 +1,6 @@
 {
 	"name": "@selva/shared",
-	"version": "0.2.0",
+	"version": "1.2.0",
 	"description": "Shared UI components and utilities for Selva applications",
 	"private": true,
 	"type": "module",
