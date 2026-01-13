@@ -39,6 +39,8 @@ You're deploying the Compute App to production for the first time.
    - Clone the repository
    - Build all packages
 
+   If you're deploying a prebuilt Docker image from a registry, you can skip the Node.js build steps and only install Docker.
+
 3. **Choose Your Deployment Method:**
 
    **Option A: [Node.js Deployment](./NODE_DEPLOYMENT.md)** (Recommended for most)

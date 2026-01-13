@@ -1,12 +1,14 @@
 # Server Setup for Selva Compute App
 
-Common setup steps for both Node.js and Docker deployments.
+Common setup steps for deployments that build the app from source.
+
+If you deploy a prebuilt Docker image from a registry, you can skip the Node.js/pnpm steps and only install Docker + Docker Compose.
 
 ---
 
 ## 1. Install Node.js and pnpm
 
-These are required for both deployment methods to build the application.
+These are required when building from source (Node.js deployment, or Docker “build on server”).
 
 ### On Linux (Ubuntu/Debian)
 
@@ -53,7 +55,7 @@ pnpm --version
 
 ## 2. Set Up SSH Key Authentication (Currently needed since repository is still private)
 
-If your at this point let @TheVessen know to setup the SSH key so you get acces to it.
+If you don't have repository access yet, ask a maintainer to grant access and/or help you add your SSH public key.
 
 ```bash
 # Generate SSH key

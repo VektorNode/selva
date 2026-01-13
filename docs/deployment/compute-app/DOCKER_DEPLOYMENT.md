@@ -11,7 +11,7 @@ A complete start-to-finish guide for deploying the Selva Compute App using Docke
 - Rhino.Compute server setup and testing
 - Grasshopper definition files preparation
 - Network and firewall configuration
-- Understanding of environment variables
+- Basic understanding of environment variables
 
 ---
 
@@ -28,7 +28,8 @@ A complete start-to-finish guide for deploying the Selva Compute App using Docke
 
 ## 2. Install Docker & Node.js for Building
 
-You need Node.js and pnpm to build the application. Install Docker for containerization.
+You only need Node.js + pnpm if you plan to build the image from source on the server.
+If you deploy a prebuilt image from a registry, Docker alone is enough.
 
 ### Install Node.js and pnpm
 
@@ -136,37 +137,19 @@ sudo systemctl enable docker
 
 ### Step 3: Configure Environment
 
+Create a `.env` file next to `docker-compose.yml` (this repo already includes an `.env` template):
+
 ```bash
-# Create .env file with your production configuration
-cat > .env << 'EOF'
-# ============================================================================
-# REQUIRED: Rhino.Compute Server
-# ============================================================================
-COMPUTE_SERVER_URL=http://localhost:5000
-
-# ============================================================================
-# REQUIRED: Grasshopper Definition Files
-# ============================================================================
-GH_DEFINITIONS_PATH=./definitions
-
-# ============================================================================
-# OPTIONAL: Rhino.Compute Authentication
-# ============================================================================
-# COMPUTE_API_KEY=your-api-key-here
-
-# ============================================================================
-# OPTIONAL: Server Configuration
-# ============================================================================
-PORT=3000
-HOST=0.0.0.0
-NODE_ENV=production
-EOF
+cp .env.example .env
+nano .env
 ```
 
-**Replace these values:**
+At minimum, set:
 
-- `COMPUTE_SERVER_URL`: Your Rhino.Compute server URL (e.g., `http://compute-server:5000`)
-- `COMPUTE_API_KEY`: Uncomment and set if your Compute server requires authentication
+- `COMPUTE_SERVER_URL`
+- One of: `GH_DEFINITIONS_PATH` (recommended) or `GH_DEFINITIONS_BASE_URL`
+
+If your Compute server requires authentication, also set `COMPUTE_API_KEY` (sent as `RhinoComputeKey`).
 
 ### Step 4: Prepare Definition Files
 
@@ -313,46 +296,36 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - HOST=0.0.0.0
+      - ADAPTER=node
     volumes:
       - ./definitions:/app/definitions
     extra_hosts:
       - 'host.docker.internal:host-gateway'
 EOF
 
-# Create .env file with your production configuration
-cat > .env << 'EOF'
-# ============================================================================
-# REQUIRED: Rhino.Compute Server
-# ============================================================================
-COMPUTE_SERVER_URL=http://localhost:5000
-
-# ============================================================================
-# REQUIRED: Grasshopper Definition Files
-# ============================================================================
+# Create .env (use the same variable names as PREREQUISITES.md)
+cat > .env << 'ENV'
+COMPUTE_SERVER_URL=http://YOUR-COMPUTE-SERVER:5000
 GH_DEFINITIONS_PATH=./definitions
-
-# ============================================================================
-# OPTIONAL: Rhino.Compute Authentication
-# ============================================================================
-# COMPUTE_API_KEY=your-api-key-here
-
-# ============================================================================
-# OPTIONAL: Server Configuration
-# ============================================================================
-PORT=3000
 HOST=0.0.0.0
+PORT=3000
 NODE_ENV=production
-EOF
+# COMPUTE_API_KEY=your-secret-key
+# ORIGIN=https://your-public-domain.com
+ENV
 
-# Create definitions folder and copy .gh files
+# Edit values
+nano .env
+```
+
+Create a `definitions/` folder and copy your `.gh` files into it:
+
+```bash
 mkdir -p definitions
 # scp /path/to/your/definitions/*.gh user@YOUR-VM-IP:~/selva-compute/definitions/
 
-# Pull and run the image
 docker-compose pull
 docker-compose up -d
-
-# Verify it's running
 docker-compose logs -f web
 ```
 
@@ -399,7 +372,7 @@ docker-compose up -d
 ## 8. Production Checklist
 
 - [ ] Rhino.Compute server is running and accessible
-- [ ] `.env` file is configured with correct server URLs
+- [ ] Environment variables are configured (via `.env`)
 - [ ] Definitions folder contains all required `.gh` files
 - [ ] Docker image builds without errors
 - [ ] Container starts and responds to health check

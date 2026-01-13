@@ -4,11 +4,7 @@ Configure Grasshopper definitions for the Selva compute application.
 
 ## Setup
 
-1. Set environment variable:
-
-   ```bash
-   GH_DEFINITIONS_PATH=./definitions
-   ```
+1. Ensure the app is configured to read definitions locally via `GH_DEFINITIONS_PATH` (see [PREREQUISITES.md](./PREREQUISITES.md#3-environment-configuration)).
 
 2. Create `definitions-config.json` in your definitions folder:
    ```json
