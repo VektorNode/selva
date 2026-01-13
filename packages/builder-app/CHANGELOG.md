@@ -1,5 +1,13 @@
 # @selva/builder-app
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [cd6ad4b]
+  - @selva/core@1.2.0
+  - @selva/shared@1.2.0
+
 ## 0.2.0
 
 ### Minor Changes
