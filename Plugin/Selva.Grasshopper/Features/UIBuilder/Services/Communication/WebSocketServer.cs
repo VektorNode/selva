@@ -75,7 +75,9 @@ public class WebSocketServer : IDisposable
 		{
 			_httpListener.Start();
 			IsRunning = true;
+#if DEBUG
 			Logger.Log($"WebSocket server started on port {Port}");
+#endif
 
 			// Start accepting connections in background
 			_ = Task.Run(async () => await AcceptConnectionsAsync(_cancellationTokenSource.Token));
@@ -99,7 +101,9 @@ public class WebSocketServer : IDisposable
 			{
 				_httpListener.Start();
 				IsRunning = true;
+#if DEBUG
 				Logger.Log($"WebSocket server started on fallback port {Port}");
+#endif
 
 				_ = Task.Run(async () => await AcceptConnectionsAsync(_cancellationTokenSource.Token));
 				StartHeartbeat();
@@ -409,10 +413,12 @@ public class WebSocketServer : IDisposable
 					messageBuffer.AddRange(new ArraySegment<byte>(buffer, 0, result.Count));
 
 					// Log progress for large messages (every 10MB)
+#if DEBUG
 					if (messageBuffer.Count % (10 * 1024 * 1024) == 0 && messageBuffer.Count > 0)
 					{
 						Logger.Log($"[WebSocket] Receiving large message: {messageBuffer.Count / 1024 / 1024}MB received so far...");
 					}
+#endif
 
 					if (messageBuffer.Count > MAX_MESSAGE_SIZE)
 					{

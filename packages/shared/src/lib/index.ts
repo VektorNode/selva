@@ -20,7 +20,6 @@ export { default as StateManager } from './components/StateManager.svelte';
 // Features - Preview handlers
 export * from './features/preview/handlers';
 export * from './features/preview/notifications';
-export * from './features/preview/viewer';
 
 // Utilities
 export * from './utils/debounce';

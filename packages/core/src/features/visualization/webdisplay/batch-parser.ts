@@ -239,6 +239,11 @@ function createMergedMesh(
 	threeMesh.castShadow = true;
 	threeMesh.receiveShadow = true;
 
+	const allMetadata = group.meshes.map((m) => m.metadata).filter((m) => m);
+	if (allMetadata.length > 0) {
+		threeMesh.userData.mergedMetadata = allMetadata;
+	}
+
 	return threeMesh;
 }
 
@@ -278,6 +283,9 @@ function createIndividualMeshes(
 
 		const mesh = new THREE.Mesh(geometry, materials[group.materialId]);
 		mesh.name = meshMeta.name;
+		if (meshMeta.metadata) {
+			mesh.userData = { ...mesh.userData, ...meshMeta.metadata };
+		}
 		mesh.castShadow = true;
 		mesh.receiveShadow = true;
 

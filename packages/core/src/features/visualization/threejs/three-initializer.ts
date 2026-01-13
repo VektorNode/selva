@@ -43,7 +43,9 @@ export const initThree = function (
 		addFloor(scene, config);
 	}
 
-	const eventHandlers = setupEventHandlers(canvas, scene, camera, controls, config);
+	const eventHandlers = config.events.enableEventHandlers !== false
+		? setupEventHandlers(canvas, scene, camera, controls, config)
+		: { dispose: () => { }, fitToView: () => { }, clearSelection: () => { } };
 
 	// Handle resizing
 	const { resize, dispose: disposeResize } = setupResponsiveResize(canvas, renderer, camera);
@@ -227,6 +229,9 @@ function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitiali
 		events: {
 			onBackgroundClicked: options.events?.onBackgroundClicked,
 			onObjectSelected: options.events?.onObjectSelected,
+			onMeshMetadataClicked: options.events?.onMeshMetadataClicked,
+			selectionColor: options.events?.selectionColor || '#ff0000', // Default to red
+			enableEventHandlers: options.events?.enableEventHandlers ?? true,
 			enableKeyboardControls: options.events?.enableKeyboardControls ?? true,
 			enableClickToFocus: options.events?.enableClickToFocus ?? true
 		}
@@ -549,8 +554,10 @@ function setupEventHandlers(
 	clearSelection: () => void;
 } {
 	const selectedObjects = new Set<THREE.Object3D>();
+	const originalMaterials = new Map<THREE.Object3D, THREE.Material | THREE.Material[]>();
 	const raycaster = new THREE.Raycaster();
 	const mouse = new THREE.Vector2();
+	const mouseDownPosition = new THREE.Vector2();
 
 	// Fit scene to view
 	const fitToView = () => {
@@ -588,20 +595,37 @@ function setupEventHandlers(
 		controls.update();
 	};
 
+	// Parse selection color
+	const selectionColorObj = typeof config.events.selectionColor === 'string'
+		? new THREE.Color(config.events.selectionColor)
+		: config.events.selectionColor instanceof THREE.Color
+			? config.events.selectionColor
+			: new THREE.Color('#ff0000');
+
 	// Clear selection
 	const clearSelection = () => {
 		selectedObjects.forEach((obj) => {
-			// Reset material or remove outline
-			if (obj instanceof THREE.Mesh && obj.material instanceof THREE.Material) {
-				// Remove selection highlighting
-				(obj.material as any).emissive?.setHex(0x000000);
+			// Restore original material
+			if (obj instanceof THREE.Mesh && originalMaterials.has(obj)) {
+				obj.material = originalMaterials.get(obj)!;
+				originalMaterials.delete(obj);
 			}
 		});
 		selectedObjects.clear();
 	};
 
+	const handleMouseDown = (event: MouseEvent) => {
+		mouseDownPosition.set(event.clientX, event.clientY);
+	};
+
 	// Handle canvas clicks
 	const handleCanvasClick = (event: MouseEvent) => {
+		// Ignore if mouse has moved significantly (drag)
+		const currentMousePosition = new THREE.Vector2(event.clientX, event.clientY);
+		if (mouseDownPosition.distanceTo(currentMousePosition) > 5) {
+			return;
+		}
+
 		// Calculate mouse position in normalized device coordinates
 		const rect = canvas.getBoundingClientRect();
 		mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -619,14 +643,23 @@ function setupEventHandlers(
 				clearSelection();
 				selectedObjects.add(clickedObject);
 
-				if (
-					clickedObject instanceof THREE.Mesh &&
-					clickedObject.material instanceof THREE.Material
-				) {
-					(clickedObject.material as any).emissive?.setHex(0x444444);
+				// Clone material and apply selection color only to this mesh
+				if (clickedObject instanceof THREE.Mesh && clickedObject.material instanceof THREE.Material) {
+					// Store original material
+					originalMaterials.set(clickedObject, clickedObject.material);
+
+					// Clone the material so we don't affect other meshes
+					const clonedMaterial = clickedObject.material.clone();
+					(clonedMaterial as any).emissive = selectionColorObj.clone();
+					clickedObject.material = clonedMaterial;
 				}
 
 				config.events?.onObjectSelected?.(clickedObject);
+
+				// Call metadata callback if the mesh has metadata
+				if (clickedObject instanceof THREE.Mesh && Object.keys(clickedObject.userData).length > 0) {
+					config.events?.onMeshMetadataClicked?.(clickedObject.userData);
+				}
 			}
 		} else {
 			// Background clicked
@@ -657,6 +690,7 @@ function setupEventHandlers(
 
 	// Add event listeners
 	if (config.events?.enableClickToFocus) {
+		canvas.addEventListener('mousedown', handleMouseDown);
 		canvas.addEventListener('click', handleCanvasClick);
 	}
 
@@ -669,6 +703,7 @@ function setupEventHandlers(
 
 	// Disposal function
 	const dispose = () => {
+		canvas.removeEventListener('mousedown', handleMouseDown);
 		canvas.removeEventListener('click', handleCanvasClick);
 		canvas.removeEventListener('keydown', handleKeydown);
 		clearSelection();

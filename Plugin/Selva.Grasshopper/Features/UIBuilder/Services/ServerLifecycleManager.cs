@@ -57,11 +57,13 @@ public class ServerLifecycleManager : IDisposable
 			// Start WebSocket server for real-time communication
 			await _communicationHandler.StartAsync(msg =>
 			{
+#if DEBUG
 				Logger.Log($"[ServerLifecycleManager] {msg}");
 				RhinoApp.InvokeOnUiThread(new Action(() =>
 				{
 					RhinoApp.WriteLine($"[Selva] {msg}");
 				}));
+#endif
 			});
 
 			Logger.Log($"[ServerLifecycleManager] WebSocket server started on port {_communicationHandler.WebSocketPort}");

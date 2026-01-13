@@ -36,6 +36,7 @@ const DISPLAY_COMPONENT_TYPE = 'Display';
  * - Requires changes to Rhino.Compute (see https://github.com/TheVessen/compute.rhino3d).
  * - Provides a performant way to display mesh data in Three.js.
  * - Decompression is performed in a Web Worker for non-blocking UI updates.
+ * - Supports mesh metadata (names, user data) if provided in the compute response.
  *
  * @example
  * ```ts

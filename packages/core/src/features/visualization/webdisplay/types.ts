@@ -20,6 +20,8 @@ export interface MeshMetadata {
 	vertexOffset: number;
 	/** Offset in the combined face index array (in number of integers) */
 	faceOffset: number;
+	/** Metadata for the mesh */
+	metadata?: Record<string, string>;
 }
 
 /**

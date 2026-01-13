@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -18,29 +18,29 @@ namespace Selva.Grasshopper.Features.Display.Components;
 
 /// <summary>
 ///   Component that converts geometry to displayable format for web viewing.
+///   OBSOLETE: Use the new version with Metadata support.
 /// </summary>
-public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
+public class OBSOLETE_WebDisplay_UntilV0_2_0 : GH_TaskCapableComponent<WebDisplayGoo>
 {
-	public WebDisplay()
-		: base("Display", "D", "Converts geometry to display file", "Selva", "Display")
+	public OBSOLETE_WebDisplay_UntilV0_2_0()
+		: base("Display", "D", "Converts geometry to display file (OBSOLETE)", "Selva", "Display")
 	{
 	}
 
 	protected override Bitmap Icon => Resources.WebDisplay;
-	public override Guid ComponentGuid => new("FCBBE140-D11C-4AA2-97E2-9DA0559CF0DF");
+	public override Guid ComponentGuid => new("3B108239-0103-4D4B-8407-534A78811090");
+	public override GH_Exposure Exposure => GH_Exposure.hidden;
 
 	protected override void RegisterInputParams(GH_InputParamManager pManager)
 	{
 		pManager.AddGenericParameter("Geo", "G", "Geometry to display", GH_ParamAccess.tree);
 		pManager.AddTextParameter("Mesh Name", "N", "Name of the mesh", GH_ParamAccess.tree, "");
-		pManager.AddTextParameter("Metadata", "D", "Metadata for the mesh (Format: 'Key=Value')", GH_ParamAccess.tree);
 		pManager.AddGenericParameter("T-Material", "TM", "ThreeMaterial for display", GH_ParamAccess.tree);
 		pManager.AddParameter(new Param_MeshParameters(), "Meshing Settings", "MS",
 			"Meshing settings to use. Default is FastRenderMesh.", GH_ParamAccess.item);
 
 		pManager[2].Optional = true;
 		pManager[3].Optional = true;
-		pManager[4].Optional = true;
 	}
 
 	/// <summary>
@@ -60,7 +60,6 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
 	{
 		GH_Structure<IGH_Goo> geoTree;
 		GH_Structure<GH_String> nameTree;
-		GH_Structure<GH_String> metadataTree;
 		GH_Structure<IGH_Goo> materialTree;
 		GH_MeshingParameters meshingParameters = null;
 
@@ -71,24 +70,22 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
 		}
 
 		DA.GetDataTree(1, out nameTree);
-		DA.GetDataTree(2, out metadataTree);
-		DA.GetDataTree(3, out materialTree);
-		DA.GetData(4, ref meshingParameters);
+		DA.GetDataTree(2, out materialTree);
+		DA.GetData(3, ref meshingParameters);
 
 		var meshSettings = meshingParameters?.Value ?? MeshingParameters.FastRenderMesh;
 		var allGeo = geoTree.FlattenData().ToList();
 		var allNames = nameTree?.FlattenData().ToList() ?? new List<GH_String>();
-		var allMetadata = metadataTree?.FlattenData().ToList() ?? new List<GH_String>();
 		var allMaterials = materialTree?.FlattenData().ToList() ?? new List<IGH_Goo>();
 
 		if (InPreSolve)
 		{
-			var task = Task.Run(() => Compute(allGeo, allNames, allMetadata, allMaterials, meshSettings), CancelToken);
+			var task = Task.Run(() => Compute(allGeo, allNames, allMaterials, meshSettings), CancelToken);
 			TaskList.Add(task);
 			return;
 		}
 
-		if (!GetSolveResults(DA, out var batch)) batch = Compute(allGeo, allNames, allMetadata, allMaterials, meshSettings);
+		if (!GetSolveResults(DA, out var batch)) batch = Compute(allGeo, allNames, allMaterials, meshSettings);
 
 		if (batch == null)
 		{
@@ -102,7 +99,6 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
 	private WebDisplayGoo Compute(
 		List<IGH_Goo> geoGoos,
 		List<GH_String> nameGoos,
-		List<GH_String> metadataGoos,
 		List<IGH_Goo> materialGoos,
 		MeshingParameters meshSettings)
 	{
@@ -139,11 +135,10 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
 
 			// Prepare names and materials
 			var names = PrepareNames(meshes.Count, nameGoos);
-			var metadata = PrepareMetadata(meshes.Count, metadataGoos);
 			var materials = PrepareMaterials(meshes.Count, materialGoos);
 
 			// Create batch
-			var batch = MeshBatchProcessor.CreateBatch(meshes, names, materials, metadata);
+			var batch = MeshBatchProcessor.CreateBatch(meshes, names, materials);
 
 
 			return new WebDisplayGoo(batch);
@@ -289,32 +284,6 @@ public class WebDisplay : GH_TaskCapableComponent<WebDisplayGoo>
 			.ToList() ?? new List<string>();
 
 		return NormalizeList(names, count, i => i.ToString());
-	}
-
-	private List<Dictionary<string, string>> PrepareMetadata(int count, List<GH_String> metadataGoos)
-	{
-		var metadataList = metadataGoos?
-			.Select(m => ParseMetadataString(m?.Value))
-			.ToList() ?? new List<Dictionary<string, string>>();
-
-		return NormalizeList(metadataList, count, _ => new Dictionary<string, string>());
-	}
-
-	private Dictionary<string, string> ParseMetadataString(string metadataString)
-	{
-		var metadata = new Dictionary<string, string>();
-		if (string.IsNullOrWhiteSpace(metadataString)) return metadata;
-
-		var pairs = metadataString.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
-		foreach (var pair in pairs)
-		{
-			var parts = pair.Split(new[] { '=' }, 2);
-			if (parts.Length == 2)
-			{
-				metadata[parts[0].Trim()] = parts[1].Trim();
-			}
-		}
-		return metadata;
 	}
 
 	private List<ThreeMaterial> PrepareMaterials(int count, List<IGH_Goo> materialGoos)

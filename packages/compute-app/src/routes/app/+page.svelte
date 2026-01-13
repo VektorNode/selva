@@ -227,15 +227,7 @@
 <div style={customStyle} style:display="contents">
 	<PageContainer>
 		{#if !isEmbedded}
-			<PageHeader
-				title={pageTitle}
-				badge={badgeConfig}
-				showModeToggle={true}
-				showDefinitionSwitcher={availableDefinitions.length > 1}
-				{currentDefinition}
-				definitions={availableDefinitions}
-				onDefinitionChange={handleDefinitionChange}
-			/>
+			<PageHeader title={pageTitle} badge={badgeConfig} showModeToggle={true} />
 		{/if}
 
 		<div class="bg-background flex-1 overflow-hidden">

@@ -18,12 +18,16 @@ public static class MeshBatchProcessor
 	public static MeshBatch CreateBatch(
 		List<Mesh> meshes,
 		List<string> names,
-		List<ThreeMaterial> materials)
+		List<ThreeMaterial> materials,
+		List<Dictionary<string, string>> metadataList = null)
 	{
 		if (meshes.Count == 0) throw new ArgumentException("Mesh list cannot be empty");
 
 		if (meshes.Count != names.Count || meshes.Count != materials.Count)
 			throw new ArgumentException("Meshes, names, and materials lists must have the same length");
+
+		if (metadataList != null && meshes.Count != metadataList.Count)
+			throw new ArgumentException("Metadata list must have the same length as meshes if provided");
 
 		var materialCache = new MaterialCache();
 
@@ -42,7 +46,8 @@ public static class MeshBatchProcessor
 				Name = names[i],
 				Vertices = vertices,
 				Faces = faces,
-				MaterialId = materialId
+				MaterialId = materialId,
+				Metadata = metadataList?[i]
 			});
 		}
 
@@ -93,7 +98,8 @@ public static class MeshBatchProcessor
 					VertexCount = vertexCount,
 					FaceCount = faceCount,
 					VertexOffset = currentVertexOffset,
-					FaceOffset = currentFaceOffset
+					FaceOffset = currentFaceOffset,
+					Metadata = mesh.Metadata
 				});
 
 
@@ -131,5 +137,6 @@ public static class MeshBatchProcessor
 		public float[] Vertices { get; set; }
 		public int[] Faces { get; set; }
 		public int MaterialId { get; set; }
+		public Dictionary<string, string> Metadata { get; set; }
 	}
 }

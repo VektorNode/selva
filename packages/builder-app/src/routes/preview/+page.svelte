@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+	import { onDestroy } from 'svelte';
 	import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 	import type { UISchema, DiscoveredParameters, SupportedTypes } from '@selva/shared';
 	import {
@@ -15,17 +16,19 @@
 		processOutputUpdate,
 		updateParameterMetadata,
 		removeParametersFromValues,
-		ensureRhinoComputeLoaded as loadRhinoCompute,
-		initializeViewerScene,
-		updateViewerScene,
-		processMeshBatches,
 		formatParameterUpdateMessage,
-		formatMetadataUpdateMessage,
-		type ViewerState
+		formatMetadataUpdateMessage
 	} from '@selva/shared';
 	import { Maximize, Minimize } from '@lucide/svelte';
 	import { initializeWebSocketSession, getWebSocketPortFromUrl } from '$lib/utils/session';
-	import { type MeshBatch } from '@selva/core/visualization';
+	import {
+		initThree,
+		updateScene,
+		parseMeshBatchObject,
+		SCALE_FACTORS
+	} from '@selva/core/visualization';
+	import type { MeshBatch } from '@selva/core/visualization';
+	import type * as THREE from 'three';
 
 	const sessionId = $derived(page.url.searchParams.get('session') || '');
 	let schema = $state<UISchema | null>(null);
@@ -43,17 +46,26 @@
 
 	let syncNeeded = $state(false);
 
-	let displayMeshes = $state<any[]>([]);
+	let displayMeshes = $state<THREE.Mesh[]>([]);
 
 	// Non-reactive viewer state to avoid proxying Three.js objects
-	let viewerContext: ViewerState = {
+	let viewerContext: {
+		scene: THREE.Scene | null;
+		camera: THREE.PerspectiveCamera | null;
+		controls: any | null;
+		renderer: THREE.WebGLRenderer | null;
+		dispose: (() => void) | null;
+		resize: (() => void) | null;
+		initialized?: boolean;
+	} = {
 		scene: null,
 		camera: null,
 		controls: null,
+		renderer: null,
+		dispose: null,
+		resize: null,
 		initialized: false
 	};
-	let viewerInitialized = $state(false);
-
 	let modelUnits = $state<string>('Meters');
 	let shouldShowViewer = $state(false);
 
@@ -75,35 +87,57 @@
 		}, duration);
 	}
 
-	async function ensureViewerModuleLoaded() {
-		if (!rhinoCompute) {
-			rhinoCompute = await loadRhinoCompute();
+	onDestroy(() => {
+		if (viewerContext.dispose) {
+			viewerContext.dispose();
 		}
-	}
+	});
 
+	// Make sure the compute-app behavior is the same as builder-app for viewer initialization
 	async function initializeViewer() {
-		if (!canvas || viewerContext.scene) return;
+		if (!canvas || !schema || viewerContext.scene) return;
 
-		await ensureViewerModuleLoaded();
+		const result = initThree(canvas, {
+			environment: { backgroundColor: schema.viewerOptions?.backgroundColor || '#ffffff' },
+			events: {
+				selectionColor: '#ff0000', // Red selection by default, customize with any color like '#00ff00' for green,
+				enableEventHandlers: false // Disable default event handlers for the moment (will get a proper UI later for previewing metadata)
+			}
+		});
 
-		console.log('[Preview] Initializing viewer scene...');
-
-		const newState = await initializeViewerScene(canvas, rhinoCompute!, schema!);
-		Object.assign(viewerContext, newState);
+		viewerContext.scene = result.scene;
+		viewerContext.camera = result.camera;
+		viewerContext.controls = result.controls;
+		viewerContext.renderer = result.renderer;
+		viewerContext.dispose = result.dispose;
+		viewerContext.resize = result.resize;
 		viewerContext.initialized = false;
 
+		// Force an initial resize to ensure dimensions are correct
+		result.resize();
+
 		if (displayMeshes.length > 0) {
-			await updateViewerScene(rhinoCompute!, viewerContext, displayMeshes);
+			updateScene(result.scene, displayMeshes, result.camera, result.controls, false);
 			viewerContext.initialized = true;
-			viewerInitialized = true;
 		}
 	}
 
 	async function updateViewer() {
-		if (!viewerContext.scene || displayMeshes.length === 0) return;
+		if (
+			!viewerContext.scene ||
+			!viewerContext.camera ||
+			!viewerContext.controls ||
+			displayMeshes.length === 0
+		)
+			return;
 
-		await ensureViewerModuleLoaded();
-		await updateViewerScene(rhinoCompute!, viewerContext, displayMeshes);
+		updateScene(
+			viewerContext.scene,
+			displayMeshes,
+			viewerContext.camera,
+			viewerContext.controls,
+			viewerContext.initialized ?? false
+		);
 	}
 
 	// Manage viewer lifecycle - initialize on first mesh, update on subsequent changes
@@ -261,7 +295,19 @@
 						? message.displayData
 						: [message.displayData];
 
-					const allMeshes = await processMeshBatches(dataArray as MeshBatch[], modelUnits);
+					const scaleFactor = SCALE_FACTORS[modelUnits as keyof typeof SCALE_FACTORS] ?? 1;
+					const allMeshes: THREE.Mesh[] = [];
+
+					for (const batchData of dataArray as MeshBatch[]) {
+						const meshes = await parseMeshBatchObject(batchData, {
+							mergeByMaterial: false,
+							applyTransforms: true,
+							scaleFactor: scaleFactor,
+							debug: false
+						});
+						allMeshes.push(...meshes);
+					}
+
 					displayMeshes = allMeshes;
 				} catch (err) {
 					console.error('[Preview] Error parsing display data:', err);
@@ -320,7 +366,6 @@
 
 			// Check for initial outputs/display data
 			if (message.outputs || message.displayData) {
-				console.log('[Preview] Initial data contains outputs, processing...');
 				handleOutputs(message);
 			}
 
@@ -328,7 +373,6 @@
 			// Use a small timeout to ensure state is settled and backend is ready
 			setTimeout(() => {
 				if (wsState.connected && !initialSolveTriggered) {
-					console.log('[Preview] Triggering initial solution...');
 					initialSolveTriggered = true;
 					// Bypass isSolving check to force initial solve
 					const preparedValues = prepareValuesForSend($state.snapshot(newValues));
