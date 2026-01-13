@@ -8,8 +8,8 @@ This document covers the common prerequisites and setup requirements needed befo
 
 The Selva Compute App requires two critical external dependencies to function:
 
-1. **Rhino.Compute Server** - Performs the actual Grasshopper definition solving see guide [Compute Guide](../../RHINO_COMPUTE.md)
-2. **Grasshopper Definition Files (.gh)** - Define your application logic see [Definition Setup](./DEFINITIONS_SETUP.md)
+1. **Rhino.Compute Server** - Performs the actual Grasshopper definition solving. See [Compute Guide](../../RHINO_COMPUTE.md).
+2. **Grasshopper Definition Files (.gh)** - Define your application logic. See [Definition Setup](./DEFINITIONS_SETUP.md).
 
 ## 1. System Requirements
 
@@ -81,7 +81,12 @@ If port 3000 is already in use, you can change it via environment variables.
 
 ## 3. Environment Configuration
 
-Both deployment methods (Node.js and Docker) require a `.env` file with the following configuration:
+The Compute App is configured via environment variables.
+
+- **Node.js (PM2)**: set variables in `packages/compute-app/ecosystem.config.cjs` under the `env` object.
+- **Docker**: use a `.env` file (typically `packages/compute-app/.env`) referenced by `docker-compose.yml`.
+
+The variable names and meanings are the same for both methods.
 
 ### Required Variables
 
@@ -95,34 +100,42 @@ Both deployment methods (Node.js and Docker) require a `.env` file with the foll
 
 ### Optional Variables
 
-| Variable          | Description                                                 | Default       |
-| ----------------- | ----------------------------------------------------------- | ------------- |
-| `COMPUTE_API_KEY` | API key for compute server (sent as RhinoComputeKey header) | None          |
-| `PORT`            | Server port                                                 | `3000`        |
-| `HOST`            | Host binding                                                | `localhost`   |
-| `NODE_ENV`        | Environment mode                                            | `development` |
+| Variable          | Description                                                  | Default       |
+| ----------------- | ------------------------------------------------------------ | ------------- |
+| `COMPUTE_API_KEY` | API key for compute server (sent as RhinoComputeKey header)  | None          |
+| `PORT`            | Server port                                                  | `3000`        |
+| `HOST`            | Host binding                                                 | `localhost`   |
+| `NODE_ENV`        | Environment mode                                             | `development` |
+| `ORIGIN`          | Public URL used for origin/CSRF checks (recommended in prod) | None          |
 
-### Example .env File
+### Example: Node.js (PM2 / ecosystem)
+
+Edit `packages/compute-app/ecosystem.config.cjs` and set values under `env`:
+
+```js
+env: {
+	PORT: 3000,
+	HOST: '0.0.0.0',
+	ORIGIN: 'https://your-public-domain.com',
+	COMPUTE_SERVER_URL: 'http://your-compute-server:5000',
+	GH_DEFINITIONS_PATH: './definitions',
+	// COMPUTE_API_KEY: 'your-secret-key',
+	NODE_ENV: 'production'
+}
+```
+
+### Example: Docker (.env)
+
+Use `packages/compute-app/.env.example` as a template and create `packages/compute-app/.env`:
 
 ```bash
-# Required: Rhino.Compute server
 COMPUTE_SERVER_URL=http://localhost:5000
-
-# Required: Path to Grasshopper definitions
 GH_DEFINITIONS_PATH=./definitions
-
-# Optional: API key for authentication
-# Sent as 'RhinoComputeKey' HTTP header to the compute server
-# COMPUTE_API_KEY=your-secret-key-here
-
-# Optional: Custom port
-PORT=3000
-
-# Optional: Host binding (use 0.0.0.0 for external access)
 HOST=0.0.0.0
-
-# Optional: Environment
+PORT=3000
 NODE_ENV=production
+# ORIGIN=https://your-public-domain.com
+# COMPUTE_API_KEY=your-secret-key
 ```
 
 ---
@@ -151,7 +164,7 @@ This loads `definitions/solver-1.gh`.
 
 1. User visits: `?gh=my-solver`
 2. App fetches: `https://example.com/gh/my-solver.gh`
-3. File url will be forwared to the Compute server
+3. File URL will be forwarded to the Compute server
 
 ### Multiple Definitions
 

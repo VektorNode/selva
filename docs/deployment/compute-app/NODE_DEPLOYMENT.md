@@ -40,7 +40,7 @@ Edit `packages/compute-app/ecosystem.config.cjs`:
 ```javascript
 env: {
 	PORT: 3000,
-	ORIGIN: 'http://your-public-ip',              // Required
+	ORIGIN: 'http://your-public-ip',              // Recommended (required for strict origin/CSRF setups)
 	COMPUTE_SERVER_URL: 'http://compute-server',  // Required
 	GH_DEFINITIONS_PATH: './definitions',
 	COMPUTE_API_KEY: 'your-key-if-needed',
@@ -50,9 +50,12 @@ env: {
 
 **Required variables:**
 
-- `ORIGIN` - Public URL for CSRF checks
 - `COMPUTE_SERVER_URL` - Rhino.Compute server address
 - Use either `GH_DEFINITIONS_PATH` (local) or `GH_DEFINITIONS_BASE_URL` (remote), not both
+
+**Recommended for production:**
+
+- `ORIGIN` - Public URL for origin/CSRF checks
 
 ---
 
