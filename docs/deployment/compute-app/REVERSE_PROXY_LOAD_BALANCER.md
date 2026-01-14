@@ -109,29 +109,7 @@ Create firewall rules to allow port 80 (and 443 if using HTTPS):
 
 Then add the `http-server` tag to your VM instance under network tags.
 
----
-
-## Monitoring
-
-**PM2:**
-
-```bash
-pm2 list
-pm2 logs selva-compute
-pm2 monit
-```
-
----
-
 ## Useful Commands
-
-**PM2:**
-
-```bash
-pm2 restart selva-compute
-pm2 stop selva-compute
-pm2 logs selva-compute
-```
 
 **Caddy:**
 

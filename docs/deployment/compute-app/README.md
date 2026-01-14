@@ -39,7 +39,7 @@ You're deploying the Compute App to production for the first time.
    - Clone the repository
    - Build all packages
 
-   If you're deploying a prebuilt Docker image from a registry, you can skip the Node.js build steps and only install Docker.
+   If you're deploying a prebuilt Docker image from a registry, you can skip the Node.js build steps and only install Docker. (NOT AVAILABLE YET)
 
 3. **Choose Your Deployment Method:**
 
@@ -88,27 +88,4 @@ pm2 restart selva-compute
 pm2 logs selva-compute
 ```
 
-**With Docker deployment:**
-
-```bash
-cd ~/selva-compute
-docker-compose pull your-docker-username/selva-compute-app:latest
-docker-compose down
-docker-compose up -d
-docker-compose logs -f web
-```
-
-See [Node.js Updating](./NODE_DEPLOYMENT.md#8-updating-the-application) or [Docker Updating](./DOCKER_DEPLOYMENT.md#7-updating-the-deployment) for details.
-
----
-
-## Next Steps
-
-**Ready to deploy?** Choose your path above and follow the link to get started.
-
-**Need more information?**
-
-- [Prerequisites & Setup](./PREREQUISITES.md)
-- [Definitions Configuration](./DEFINITIONS_SETUP.md)
-- [Node.js Deployment Guide](./NODE_DEPLOYMENT.md)
-- [Reverse Proxy Setup](./REVERSE_PROXY_LOAD_BALANCER.md) - Set up Caddy for public access
+TODO: DOCKER update docks

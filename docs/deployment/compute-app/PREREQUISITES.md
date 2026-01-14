@@ -20,14 +20,6 @@ The Selva Compute App requires two critical external dependencies to function:
 - **Disk**: 5GB free space
 - **Network**: Stable connection to Rhino.Compute server
 
-### Operating Systems
-
-**Supported:**
-
-- Linux (Ubuntu 20.04+, Debian, CentOS)
-- Windows Server 2019+
-- macOS (for development)
-
 **Recommended:** Linux (Ubuntu 22.04 LTS) for production deployments
 
 ---
@@ -92,7 +84,7 @@ The variable names and meanings are the same for both methods.
 
 | Variable                  | Description                             | Example                   |
 | ------------------------- | --------------------------------------- | ------------------------- |
-| `COMPUTE_SERVER_URL`      | URL of your Rhino.Compute server        | `http://localhost:5000`   |
+| `COMPUTE_SERVER_URL`      | URL of your Rhino.Compute server        | `http://your-compute.com` |
 | `GH_DEFINITIONS_PATH`     | Local path to `.gh` files               | `./definitions`           |
 | `GH_DEFINITIONS_BASE_URL` | Alternative: Remote URL for `.gh` files | `https://example.com/gh/` |
 
@@ -140,51 +132,10 @@ NODE_ENV=production
 
 ---
 
-## 4. Grasshopper Definition Loading
-
-### How Definitions Are Loaded
-
-The app loads Grasshopper definitions based on the `?gh=` query parameter:
-
-```
-http://YOUR-SERVER:3000/app?gh=solver-1
-```
-
-This loads `definitions/solver-1.gh`.
-
-### File Resolution
-
-**With `GH_DEFINITIONS_PATH=./definitions`:**
-
-1. User visits: `?gh=my-solver`
-2. App looks for: `./definitions/my-solver.gh`
-3. File is read from disk and sent to Compute server
-
-**With `GH_DEFINITIONS_BASE_URL=https://example.com/gh/`:**
-
-1. User visits: `?gh=my-solver`
-2. App fetches: `https://example.com/gh/my-solver.gh`
-3. File URL will be forwarded to the Compute server
-
-### Multiple Definitions
-
-You can serve multiple definitions from one deployment:
-
-```
-http://YOUR-SERVER:3000/app?gh=solver-1
-http://YOUR-SERVER:3000/app?gh=parametric-design
-http://YOUR-SERVER:3000/app?gh=analysis-tool
-```
-
-Each loads a different `.gh` file from your definitions folder.
-
----
-
 ## Next Steps
 
 After completing these prerequisites, choose your deployment method:
 
+- **[Server Setup](./SERVER_SETUP.md)** - Help to properly setup your server.
 - **[Node.js Deployment Guide](./NODE_DEPLOYMENT.md)** - Direct Node.js deployment with PM2
 - **[Docker Deployment Guide](./DOCKER_DEPLOYMENT.md)** - Container-based deployment
-
-Both guides assume you have completed all prerequisites in this document.
