@@ -4,7 +4,7 @@ Deploy the Selva Compute App using Node.js and PM2 for direct process management
 
 **Prerequisites:** Complete [SERVER_SETUP.md](./SERVER_SETUP.md) and [PREREQUISITES.md](./PREREQUISITES.md) first.
 
-**Requirements:** Node.js 20.19+, pnpm 9.0+, 2GB RAM, 2 CPU cores
+**Requirements:** Node.js 22.xx, pnpm 9.0+, 2GB RAM, 2 CPU cores
 
 ---
 
@@ -41,7 +41,7 @@ Edit `packages/compute-app/ecosystem.config.cjs`:
 env: {
 	PORT: 3000,
 	ORIGIN: 'http://your-public-ip',              // Recommended (required for strict origin/CSRF setups)
-	COMPUTE_SERVER_URL: 'http://compute-server',  // Required
+	COMPUTE_SERVER_URL: 'http://compute-server',
 	GH_DEFINITIONS_PATH: './definitions',
 	COMPUTE_API_KEY: 'your-key-if-needed',
 	NODE_ENV: 'production'
@@ -51,6 +51,7 @@ env: {
 **Required variables:**
 
 - `COMPUTE_SERVER_URL` - Rhino.Compute server address
+- `COMPUTE_API_KEY` - API key for your compute server
 - Use either `GH_DEFINITIONS_PATH` (local) or `GH_DEFINITIONS_BASE_URL` (remote), not both
 
 **Recommended for production:**
@@ -112,7 +113,7 @@ lsof -i :3000
 **Can't reach Compute server:**
 
 ```bash
-curl http://YOUR-COMPUTE-SERVER:5000/version
+curl http://YOUR-COMPUTE-SERVER/health
 # Verify COMPUTE_SERVER_URL and firewall rules
 ```
 
@@ -122,19 +123,3 @@ curl http://YOUR-COMPUTE-SERVER:5000/version
 ls -la definitions/
 # Check filenames match query parameters
 ```
-
-**Node.js too old:**
-
-```bash
-node --version  # Need 20.19+
-# Update: curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-```
-
----
-
-## See Also
-
-- [Deployment Overview](./OVERVIEW.md)
-- [Server Setup](./SERVER_SETUP.md)
-- [Prerequisites](./PREREQUISITES.md)
-- [Docker Deployment](./DOCKER_DEPLOYMENT.md)

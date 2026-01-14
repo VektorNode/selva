@@ -28,34 +28,9 @@ node --version  # Should show v22.x.x
 pnpm --version  # Should show 9.x.x
 ```
 
-### On Windows Server
-
-1. Download Node.js installer from [nodejs.org](https://nodejs.org/)
-2. Run installer and ensure "Add to PATH" is checked
-3. Open PowerShell as Administrator:
-   ```powershell
-   npm install -g pnpm
-   node --version
-   pnpm --version
-   ```
-
-### On macOS
-
-```bash
-# Using Homebrew
-brew install node@22
-brew install pnpm
-
-# Or download from nodejs.org
-node --version
-pnpm --version
-```
-
----
-
 ## 2. Set Up SSH Key Authentication (Currently needed since repository is still private)
 
-If you don't have repository access yet, ask a maintainer to grant access and/or help you add your SSH public key.
+If you don't have repository access yet, ask a maintainer to grant access.
 
 ```bash
 # Generate SSH key
@@ -65,7 +40,7 @@ ssh-keygen -t ed25519 -C "your-email@example.com"
 # Display public key
 cat ~/.ssh/id_ed25519.pub
 
-# Add this key to your GitHub account:
+# Add this key to SELVA GitHub account:
 # https://github.com/settings/keys
 ```
 
