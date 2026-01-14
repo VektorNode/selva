@@ -13,7 +13,7 @@
 	} from '@selva/shared';
 	import { Maximize, Minimize } from '@lucide/svelte';
 	import { hexToOklch } from '$lib/utilities/color';
-	import { initThree, updateScene } from '@selva/compute/visualization';
+	import { initThree, updateScene } from 'selva-compute/visualization';
 
 	let { data }: PageProps = $props();
 
@@ -45,7 +45,7 @@
 	let controls = $state<unknown | null>(null);
 
 	// Deferred imports
-	let rhinoCompute: typeof import('@selva/compute') | null = null;
+	let rhinoCompute: typeof import('selva-compute') | null = null;
 
 	// Manual solve mode
 	let pendingValues = $state<Record<string, unknown>>({});
@@ -93,7 +93,7 @@
 	// Rhino Compute utilities
 	// -----------------------------
 	async function ensureModulesLoaded() {
-		if (!rhinoCompute) rhinoCompute = await import('@selva/compute');
+		if (!rhinoCompute) rhinoCompute = await import('selva-compute');
 	}
 
 	// Check if viewer should be shown (either enableLocal or enableRemote)

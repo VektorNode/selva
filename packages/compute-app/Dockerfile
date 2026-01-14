@@ -24,7 +24,7 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm run build:compute
 
 # Deploy only the compute app to a clean folder
-RUN pnpm deploy --filter=@selva/compute-app --prod /app/deploy --legacy
+RUN pnpm deploy --filter=selva-compute-app --prod /app/deploy --legacy
 
 # 2. Runtime Stage
 FROM base

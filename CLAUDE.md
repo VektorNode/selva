@@ -16,7 +16,7 @@ This is a monorepo with two distinct stacks:
 
 ### TypeScript/JavaScript Workspace (`packages/`)
 
-- **`@selva/compute`** - Type-safe Rhino Compute client, Three.js helpers, file utilities (browser & Node.js)
+- [selva-compute](https://www.npmjs.com/package/selva-compute) - (External Node Dependency) Type-safe Rhino Compute client, Three.js helpers, file utilities
 - **`@selva/builder-app`** - Schema designer connected to Grasshopper via WebSocket (local dev mode)
 - **`@selva/compute-app`** - Standalone app for solving Grasshopper definitions via Rhino.Compute (cloud mode)
 - **`@selva/shared`** - Shared Svelte components, utilities, and theme styles (CSS + theme utilities)
@@ -155,7 +155,7 @@ Located in `Plugin/Selva.Grasshopper/Features/`:
 - **FileIO** - `DataToFile`, `BlockToFile` for geometry export
 - **ComputeIO** - `ValueListData`, `GetValueList` for interactive selections
 
-### Core Package Architecture (`@selva/compute`)
+### Core Package Architecture (`selva-compute`)
 
 Modular exports for tree-shaking:
 

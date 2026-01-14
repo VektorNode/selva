@@ -1,15 +1,15 @@
 # @selva/svelte-ui
 
-A Svelte 5 component library for building interactive UIs for Grasshopper definitions. Auto-generates form controls from `@selva/compute` parameters with built-in validation, type safety, and layout customization.
+A Svelte 5 component library for building interactive UIs for Grasshopper definitions. Auto-generates form controls from `selva-compute` parameters with built-in validation, type safety, and layout customization.
 
 ## Overview
 
-Production-ready components that integrate with `@selva/compute` to create dynamic interfaces. Handles input validation, type constraints, data tree management, and provides customizable UI controls.
+Production-ready components that integrate with `selva-compute` to create dynamic interfaces. Handles input validation, type constraints, data tree management, and provides customizable UI controls.
 
 ## Features
 
 - **Auto-Generated UI** — Create form controls from Grasshopper parameters automatically
-- **Type-Safe** — Full TypeScript with discriminated unions from `@selva/compute`
+- **Type-Safe** — Full TypeScript with discriminated unions from `selva-compute`
 - **Input Validation** — Built-in validation, clamping for numeric inputs
 - **Data Trees** — Native support for Grasshopper's hierarchical data structures
 - **Multiple Types** — Number, Integer, Text, Boolean, Point parameters
@@ -21,14 +21,14 @@ Production-ready components that integrate with `@selva/compute` to create dynam
 ## Installation
 
 ```bash
-npm install @selva/svelte-ui @selva/compute
+npm install @selva/svelte-ui selva-compute
 ```
 
 ## Quick Start
 
 ```svelte
 <script lang="ts">
-	import { GrasshopperClient } from '@selva/compute';
+	import { GrasshopperClient } from 'selva-compute';
 	import { InputHandler } from '@selva/svelte-ui';
 
 	const client = new GrasshopperClient({
@@ -104,7 +104,7 @@ Individual parameter components for custom layouts:
 - **NumberParam**, **TextParam**, **BoolParam**, **PointParam** — Single parameters
 - **Accordion** — Collapsible groups
 
-All components export TypeScript types from `@selva/compute` for full type safety.
+All components export TypeScript types from `selva-compute` for full type safety.
 
 ## Customization
 
@@ -133,12 +133,12 @@ All components export TypeScript types from `@selva/compute` for full type safet
 ## Requirements
 
 - Svelte 5.0+
-- `@selva/compute` (exports all types)
+- `selva-compute` (exports all types)
 - TypeScript 5.0+ (recommended)
 
 ## Related Packages
 
-- [`@selva/compute`](../compute) — Type-safe Rhino Compute client
+- [`selva-compute`](../compute) — Type-safe Rhino Compute client
 - [`@selva/frontend`](../builder) — Full UI builder application with WebSocket support
 
 ## License

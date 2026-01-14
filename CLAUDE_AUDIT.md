@@ -34,7 +34,7 @@ The Selva project is a **well-architected, mature monorepo** demonstrating stron
 
 **1.2 Clean Separation of Concerns**
 
-- **Core library** (`@selva/compute`): Standalone, reusable, published to npm
+- **Core library** (`selva-compute`): Standalone, reusable, published to npm
 - **Shared components** (`@selva/shared`): UI components isolated from app logic
 - **Apps**: Two deployment modes (local WebSocket, cloud Compute) from same codebase
 - **Plugin**: Feature-based organization (UIBuilder, Display, FileIO, ComputeIO)
@@ -500,7 +500,7 @@ The Selva project is a **well-architected, mature monorepo** demonstrating stron
 **6.5 Consolidate Validation Logic**
 
 - **Current:** Validation scattered (input-validators, input-parsers, components)
-- **Simplification:** Single validation module in `@selva/compute`
+- **Simplification:** Single validation module in `selva-compute`
 - **Impact:** Consistent validation, easier to test
 - **Effort:** Medium
 

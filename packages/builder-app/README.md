@@ -26,9 +26,9 @@ When used with `Selva.gha` plugin in Grasshopper:
 Standalone web app deployed independently (Vercel, Netlify, etc):
 
 - **Routes:**
-  - `/app` — Grasshopper solver interface using `@selva/compute`
+  - `/app` — Grasshopper solver interface using `selva-compute`
   - Uses generated schemas from `@selva/schemas`
-  - Calls Rhino Compute servers via `@selva/compute` client
+  - Calls Rhino Compute servers via `selva-compute` client
 
 - **How it works:**
   1. Generated schema embedded in build
@@ -52,7 +52,7 @@ pnpm run dev           # http://localhost:5173 (dev server)
 
 ## Related
 
-- [`@selva/compute`](../compute) — Rhino Compute client (used in cloud mode)
+- [`selva-compute`](../compute) — Rhino Compute client (used in cloud mode)
 - [`@selva/svelte-ui`](../svelte-ui) — Component library used in UI builder
 - [`@selva/schemas`](../schemas) — Schema generators (produces types for this app)
 - [Selva.gha Plugin](../../Plugin) — Grasshopper bridge (used in local mode)

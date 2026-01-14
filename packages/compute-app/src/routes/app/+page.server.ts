@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
-import { GrasshopperResponseProcessor, TreeBuilder, GrasshopperClient } from '@selva/compute/grasshopper';
+import { GrasshopperResponseProcessor, TreeBuilder, GrasshopperClient } from 'selva-compute/grasshopper';
 import type { UISchema } from '@selva/shared';
 import { getServerConfig } from '$lib/server/config.server';
 import { loadDefinitionsConfig, type Definition } from '$lib/server/definitions.server';
