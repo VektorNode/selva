@@ -5,7 +5,7 @@
 ### Patch Changes
 
 - Updated dependencies [cd6ad4b]
-  - @selva/core@1.2.0
+  - @selva/compute@1.2.0
   - @selva/shared@1.2.0
 
 ## 0.2.0
@@ -39,5 +39,5 @@
 
 - Updated dependencies
 - Updated dependencies
-  - @selva/core@1.1.0
+  - @selva/compute@1.1.0
   - @selva/shared@2.0.0

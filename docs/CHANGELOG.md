@@ -45,7 +45,7 @@ Changesets are automatically created in `.changeset/[id].md`:
 
 ```markdown
 ---
-'@selva/core': minor
+'@selva/compute': minor
 '@selva/shared': patch
 ---
 

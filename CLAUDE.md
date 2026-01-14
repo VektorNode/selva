@@ -16,7 +16,7 @@ This is a monorepo with two distinct stacks:
 
 ### TypeScript/JavaScript Workspace (`packages/`)
 
-- **`@selva/core`** - Type-safe Rhino Compute client, Three.js helpers, file utilities (browser & Node.js)
+- **`@selva/compute`** - Type-safe Rhino Compute client, Three.js helpers, file utilities (browser & Node.js)
 - **`@selva/builder-app`** - Schema designer connected to Grasshopper via WebSocket (local dev mode)
 - **`@selva/compute-app`** - Standalone app for solving Grasshopper definitions via Rhino.Compute (cloud mode)
 - **`@selva/shared`** - Shared Svelte components, utilities, and theme styles (CSS + theme utilities)
@@ -57,8 +57,8 @@ pnpm format                 # Format code with Prettier
 pnpm format:check           # Check formatting
 
 # Testing (core package)
-cd packages/core && pnpm test          # Run vitest
-cd packages/core && pnpm test:watch    # Run vitest in watch mode
+cd packages/compute && pnpm test          # Run vitest
+cd packages/compute && pnpm test:watch    # Run vitest in watch mode
 
 # Schema generation (run after modifying ui-schema.json)
 cd packages/schemas && pnpm run generate:all    # Generate both TS and C# types
@@ -155,7 +155,7 @@ Located in `Plugin/Selva.Grasshopper/Features/`:
 - **FileIO** - `DataToFile`, `BlockToFile` for geometry export
 - **ComputeIO** - `ValueListData`, `GetValueList` for interactive selections
 
-### Core Package Architecture (`@selva/core`)
+### Core Package Architecture (`@selva/compute`)
 
 Modular exports for tree-shaking:
 

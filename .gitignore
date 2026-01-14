@@ -53,3 +53,6 @@ ehthumbs.db
 **/node_modules/
 **/.svelte-kit/
 
+# Grasshopper definitions (except in example-definitions)
+*.gh
+!packages/compute-app/example-definitions/*.gh
