@@ -53,40 +53,49 @@ These scores are a synthesis of the audits and repo inspection.
 ### 4.1 Runtime contract mismatch (Node 16 vs actual requirements)
 
 Observed in code:
+
 - Global `fetch` usage in compute/server modules.
 - `btoa/atob` usage in Grasshopper solve path.
 - Browser-only API usage (`document.createElement`, `Blob`) in file download path.
 
 Impact:
+
 - Consumers can hit runtime crashes even when TypeScript compiles.
 
 ### 4.2 `three` is not reliably optional
 
 Observed in code:
+
 - `GrasshopperResponseProcessor` imports visualization helpers that import `three` at module load.
 
 Impact:
+
 - Some consumer bundles/builds may require `three` to be installed even if they don’t use visualization features.
 
 ### 4.3 Logging in shipped library code
 
 Observed in code:
+
 - Numerous `console.*` calls across compute fetch, server stats monitoring, input processing, and visualization.
 
 Impact:
+
 - Noisy logs in production apps; consumers can’t redirect logs to their own logger.
 
 ### 4.4 Inconsistent error types across public APIs
 
 Observed in code:
+
 - Some public-facing modules throw plain `Error` instead of `RhinoComputeError`.
 
 Impact:
+
 - Consumers can’t reliably branch on error codes; harder to build robust integrations.
 
 ### 4.5 Gaps in tests for visualization and file-handling
 
 Impact:
+
 - Higher regression risk in the most environment-sensitive code (browser vs Node, workers, compression).
 
 ---
@@ -97,16 +106,18 @@ Impact:
 
 Pick one strategy and reflect it consistently in code + docs + `package.json`:
 
-1) **Server-first (recommended):** Require Node **>= 18** and treat global `fetch` as available.
-2) **Portable SDK:** Support `fetch` injection in config (and avoid browser-only globals in shared paths).
-3) **Polyfill-based:** Add an explicit fetch implementation (e.g. `undici`) and never rely on globals.
+1. **Server-first (recommended):** Require Node **>= 18** and treat global `fetch` as available.
+2. **Portable SDK:** Support `fetch` injection in config (and avoid browser-only globals in shared paths).
+3. **Polyfill-based:** Add an explicit fetch implementation (e.g. `undici`) and never rely on globals.
 
 Also:
+
 - Replace `btoa/atob` usage with a Node/browser-safe base64 encoding approach.
 
 ### P0 — Make `three` truly optional
 
 Options:
+
 - Lazy-load visualization inside `GrasshopperResponseProcessor.extractMeshesFromResponse()` via `await import(...)`.
 - Or split the visualization-enabled processor into a separate explicit entrypoint.
 - Or invert the dependency: accept a visualization adapter provided by consumer.
@@ -160,4 +171,3 @@ A minimal checklist that, once satisfied, would justify calling the package prod
 - Optional dependency coupling:
   - `src/features/grasshopper/client/grasshopper-response-processor.ts`
   - `src/features/visualization/**`
-

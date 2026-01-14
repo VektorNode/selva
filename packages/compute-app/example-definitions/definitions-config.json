@@ -1,0 +1,18 @@
+{
+	"definitions": [
+		{
+			"id": "point-attractor",
+			"name": "Point Attractor",
+			"description": "Demonstrates point attraction and mesh deformation",
+			"file": "point-attractor.gh",
+			"category": "mesh-manipulation"
+		},
+		{
+			"id": "table-example",
+			"name": "Table Example",
+			"description": "Shows data table integration with Grasshopper",
+			"file": "table_example.gh",
+			"category": "data-handling"
+		}
+	]
+}
