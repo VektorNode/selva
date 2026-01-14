@@ -57,19 +57,19 @@
   **After:**
 
   ```typescript
-  import { initThree, updateScene, parseMeshBatchObject, SCALE_FACTORS } from '@selva/core/visualization';
+  import { initThree, updateScene, parseMeshBatchObject, SCALE_FACTORS } from '@selva/compute/visualization';
 
   const { scene, camera, controls } = initThree(canvas, options);
   updateScene(scene, meshes, camera, controls, initialized);
   const meshes = await parseMeshBatchObject(batch, options);
   ```
 
-  The core functions are still re-exported from `@selva/shared` for convenience, but calling them directly from `@selva/core/visualization` is recommended.
+  The core functions are still re-exported from `@selva/shared` for convenience, but calling them directly from `@selva/compute/visualization` is recommended.
 
 ### Patch Changes
 
 - Updated dependencies [cd6ad4b]
-  - @selva/core@1.2.0
+  - @selva/compute@1.2.0
 
 ## 0.2.0
 
@@ -103,4 +103,4 @@
 ### Patch Changes
 
 - Updated dependencies
-  - @selva/core@1.1.0
+  - @selva/compute@1.1.0

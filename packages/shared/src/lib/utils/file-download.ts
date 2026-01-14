@@ -3,7 +3,7 @@
  * Uses the core package implementation for file handling
  */
 
-import { downloadFileData, type FileData } from '@selva/core';
+import { downloadFileData, type FileData } from '@selva/compute/files';
 
 /**
  * Download file(s) from Grasshopper outputs

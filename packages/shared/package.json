@@ -37,7 +37,7 @@
 		"lint": "prettier --check . && eslint ."
 	},
 	"peerDependencies": {
-		"@selva/core": "workspace:*",
+		"@selva/compute": "workspace:*",
 		"@sveltejs/kit": "^2.0.0",
 		"svelte": "^5.0.0",
 		"three": ">=0.179.0"
@@ -48,7 +48,7 @@
 		}
 	},
 	"dependencies": {
-		"@selva/core": "workspace:*",
+		"@selva/compute": "workspace:*",
 		"@lucide/svelte": "^0.561.0",
 		"bits-ui": "^2.14.4",
 		"clsx": "^2.1.1",

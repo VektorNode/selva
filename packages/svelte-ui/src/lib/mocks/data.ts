@@ -1,4 +1,4 @@
-import type { InputParam } from '@selva/core';
+import type { InputParam } from '@selva/compute';
 
 export const exampleInputs: InputParam[] = [
 	{

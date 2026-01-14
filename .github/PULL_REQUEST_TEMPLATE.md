@@ -19,7 +19,7 @@
 - [ ] Frontend (Web UI - `@selva/frontend`)
 - [ ] Plugin (C# Grasshopper component)
 - [ ] Schema (JSON Schema / Type definitions)
-- [ ] Core (`@selva/core`)
+- [ ] Core (`@selva/compute`)
 - [ ] Svelte UI (`@selva/svelte-ui`)
 - [ ] Communication (WebSocket/HTTP)
 - [ ] Build System

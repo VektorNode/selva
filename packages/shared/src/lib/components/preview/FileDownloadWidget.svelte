@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { downloadFiles, formatFileSize, getBase64FileSize } from '$lib/utils/file-download';
-	import type { FileData } from '@selva/core';
+	import type { FileData } from '@selva/compute/files';
 	import { Button } from '../ui';
 
 	interface Props {

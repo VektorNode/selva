@@ -67,7 +67,7 @@ import {
 	updateScene,
 	parseMeshBatchObject,
 	SCALE_FACTORS
-} from '@selva/core/visualization';
+} from '@selva/compute/visualization';
 
 const { scene, camera, controls } = initThree(canvas, {
 	environment: { backgroundColor: '#ffffff' },
