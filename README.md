@@ -9,7 +9,7 @@ A full-stack toolkit for building Grasshopper-driven web applications. Provides 
 
 **Core Library**
 
-- **`@selva/compute`** — Type-safe Rhino Compute client with discriminated unions, error handling, Three.js helpers, and file/data utilities. Works in browsers and Node.js.
+- [selva-compute](https://www.npmjs.com/package/selva-compute) — Official NPM package. Type-safe Rhino Compute client with discriminated unions, error handling, Three.js helpers, and file/data utilities. Works in browsers and Node.js.
 
 **Web Application**
 
@@ -31,7 +31,7 @@ A full-stack toolkit for building Grasshopper-driven web applications. Provides 
 
 ## Architecture Overview
 
-1. **Core (`@selva/compute`)**
+1. **Core (`selva-compute`)**
    Lightweight, dependency-free Rhino Compute client used directly in custom web deployments.
 
 2. **Grasshopper Plugin (`Selva.gha`)**

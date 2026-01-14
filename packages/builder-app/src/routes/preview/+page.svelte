@@ -26,8 +26,8 @@
 		updateScene,
 		parseMeshBatchObject,
 		SCALE_FACTORS
-	} from '@selva/compute/visualization';
-	import type { MeshBatch } from '@selva/compute/visualization';
+	} from 'selva-compute/visualization';
+	import type { MeshBatch } from 'selva-compute/visualization';
 	import type * as THREE from 'three';
 
 	const sessionId = $derived(page.url.searchParams.get('session') || '');

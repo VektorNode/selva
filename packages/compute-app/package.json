@@ -1,5 +1,5 @@
 {
-	"name": "@selva/compute-app",
+	"name": "selva-compute-app",
 	"version": "0.3.0",
 	"description": "Selva Rhino Compute application for iframe embedding",
 	"private": true,
@@ -15,7 +15,7 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "^0.561.0",
-		"@selva/compute": "workspace:*",
+		"selva-compute": "^1.0.1",
 		"@selva/shared": "workspace:*",
 		"mode-watcher": "^1.1.0",
 		"three": "^0.179.1"

@@ -172,7 +172,7 @@ You must explicitly tell the build system to use the Node adapter by setting the
 ```bash
 # Run from the root of the monorepo or inside packages/compute-app
 export ADAPTER=node
-pnpm build --filter @selva/compute-app
+pnpm build --filter selva-compute-app
 ```
 
 ### Run

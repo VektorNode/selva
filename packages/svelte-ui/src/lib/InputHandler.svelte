@@ -5,7 +5,7 @@
 	import * as Select from '$lib/components/ui/select/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 
-	import { TreeBuilder, type DataTree, type InputParam } from '@selva/compute/grasshopper';
+	import { TreeBuilder, type DataTree, type InputParam } from 'selva-compute/grasshopper';
 	interface Props {
 		input: InputParam[];
 		onChange: (tree: DataTree[]) => void;

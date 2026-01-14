@@ -6,7 +6,7 @@ import {
 	type InputParam,
 	TreeBuilder,
 	GrasshopperClient
-} from '@selva/compute';
+} from 'selva-compute';
 import type { SchemaInput } from '@selva/shared';
 import { error, json } from '@sveltejs/kit';
 import { getServerConfig } from '$lib/server/config.server';
