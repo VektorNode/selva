@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { downloadFiles, formatFileSize, getBase64FileSize } from '$lib/utils/file-download';
-	import type { FileData } from 'selva-compute/files';
+	import type { FileData } from 'selva-compute';
 	import { Button } from '../ui';
 
 	interface Props {
@@ -12,52 +12,23 @@
 	let downloading = $state(false);
 	let error = $state<string | null>(null);
 
-	// Normalize file data to ensure it has proper structure
-	function normalizeFileData(data: any): FileData | null {
-		if (!data) return null;
-
-		// If it already has the proper FileData structure
-		if (data.FileName && data.Data && 'IsBase64Encoded' in data) {
-			return data as FileData;
-		}
-
-		// If it has fileName and data (from old format or different structure)
-		if (data.fileName || data.data) {
-			return {
-				FileName: data.fileName || data.FileName || 'file',
-				FileType: data.fileType || data.FileType || data.fileExtension || '',
-				Data: data.data || data.Data || '',
-				IsBase64Encoded: data.isBase64Encoded ?? data.IsBase64Encoded ?? true,
-				SubFolder: data.subFolder || data.SubFolder || undefined
-			};
-		}
-
-		// If it's just a string (base64 encoded data)
-		if (typeof data === 'string') {
-			return {
-				FileName: displayName || 'download',
-				FileType: '',
-				Data: data,
-				IsBase64Encoded: true,
-				SubFolder: ''
-			};
-		}
-
-		return null;
+	// Validate file data structure
+	function validateFileData(data: any): data is FileData {
+		return data && typeof data === 'object' && 'fileName' in data && 'data' in data;
 	}
 
 	const filesArray = $derived(
 		!fileData
 			? []
 			: Array.isArray(fileData)
-				? fileData.map(normalizeFileData).filter((f) => f !== null)
-				: [normalizeFileData(fileData)].filter((f) => f !== null)
+				? fileData.filter(validateFileData)
+				: validateFileData(fileData) ? [fileData] : []
 	);
 
 	const fileCount = $derived(filesArray.length);
 	const totalSize = $derived(
 		filesArray.reduce((sum, file) => {
-			return sum + getBase64FileSize(file.Data);
+			return sum + getBase64FileSize(file.data);
 		}, 0)
 	);
 
@@ -68,25 +39,13 @@
 		error = null;
 
 		try {
-			const normalizedData = Array.isArray(fileData)
-				? fileData.map(normalizeFileData).filter((f) => f !== null)
-				: normalizeFileData(fileData);
-
-			if (!normalizedData || (Array.isArray(normalizedData) && normalizedData.length === 0)) {
-				error = 'No valid file data to download';
-				return;
-			}
-
-			// For single file, use its actual filename with extension
-			// For multiple files, use the display name as a folder/prefix
-			const filesArray = Array.isArray(normalizedData) ? normalizedData : [normalizedData];
 			if (filesArray.length === 1) {
-				await downloadFiles(normalizedData, filesArray[0].FileName);
+				await downloadFiles(filesArray[0], filesArray[0].fileName);
 			} else {
 				const fileName = displayName
 					? displayName.replace(/[^a-z0-9]/gi, '_').toLowerCase()
 					: 'download';
-				await downloadFiles(normalizedData, fileName);
+				await downloadFiles(filesArray, fileName);
 			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to download files';
@@ -108,7 +67,7 @@
 				<div class="flex items-center justify-between">
 					<div class="text-sm font-medium text-foreground">
 						{#if fileCount === 1}
-							{filesArray[0].FileName}{filesArray[0].FileType}
+							{filesArray[0].fileName}{filesArray[0].fileType}
 						{:else}
 							{fileCount} files
 						{/if}
@@ -121,8 +80,8 @@
 					<div class="mt-2 gap-1 flex flex-col">
 						{#each filesArray as file}
 							<div class="text-xs flex items-center justify-between text-muted-foreground">
-								<span>{file.FileName}{file.FileType}</span>
-								<span>{formatFileSize(getBase64FileSize(file.Data))}</span>
+								<span>{file.fileName}{file.fileType}</span>
+								<span>{formatFileSize(getBase64FileSize(file.data))}</span>
 							</div>
 						{/each}
 					</div>

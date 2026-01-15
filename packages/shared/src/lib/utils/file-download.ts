@@ -3,7 +3,8 @@
  * Uses the core package implementation for file handling
  */
 
-import { downloadFileData, type FileData } from 'selva-compute/files';
+import { downloadFileData, type FileData } from "selva-compute";
+
 
 /**
  * Download file(s) from Grasshopper outputs
@@ -39,7 +40,7 @@ export async function downloadFiles(
  */
 async function downloadSingleFile(fileData: FileData): Promise<void> {
 	try {
-		await downloadFileData([fileData], fileData.FileName.replace(/\.[^.]*$/, ''));
+		await downloadFileData([fileData], fileData.fileName.replace(/\.[^.]*$/, ''));
 	} catch (error) {
 		console.error('[FileDownload] Error downloading single file:', error);
 		throw error;
@@ -53,9 +54,9 @@ export function isFileData(data: unknown): data is FileData {
 	return (
 		typeof data === 'object' &&
 		data !== null &&
-		'FileName' in data &&
-		'Data' in data &&
-		'IsBase64Encoded' in data
+		'fileName' in data &&
+		'data' in data &&
+		'isBase64Encoded' in data
 	);
 }
 
