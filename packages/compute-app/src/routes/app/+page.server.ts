@@ -132,14 +132,6 @@ export const load = (async ({ url, params: _params }) => {
 			JSON.stringify(errorDetails, null, 2)
 		);
 
-		// Development: include detailed error info
-		if (process.env.NODE_ENV === 'development') {
-			error(
-				503,
-				`Failed to connect to Rhino Compute server at ${config.computeServerUrl}: ${errorMessage}\n\nDebug info:\n${JSON.stringify(errorDetails, null, 2)}`
-			);
-		}
-
 		error(503, `Failed to connect to Rhino Compute server: ${errorMessage}`);
 	}
 

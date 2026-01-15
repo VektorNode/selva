@@ -17,16 +17,13 @@
 		updateParameterMetadata,
 		removeParametersFromValues,
 		formatParameterUpdateMessage,
-		formatMetadataUpdateMessage
+		formatMetadataUpdateMessage,
+		Viewer,
+		createSolvingIndicator,
+		SolvingIndicator
 	} from '@selva/shared';
-	import { Maximize, Minimize } from '@lucide/svelte';
 	import { initializeWebSocketSession, getWebSocketPortFromUrl } from '$lib/utils/session';
-	import {
-		initThree,
-		updateScene,
-		parseMeshBatchObject,
-		SCALE_FACTORS
-	} from 'selva-compute/visualization';
+	import { parseMeshBatchObject, SCALE_FACTORS } from 'selva-compute/visualization';
 	import type { MeshBatch } from 'selva-compute/visualization';
 	import type * as THREE from 'three';
 
@@ -35,7 +32,6 @@
 	let values = $state<Record<string, unknown>>({});
 	let loading = $state(true);
 	let error = $state('');
-	let canvas: HTMLCanvasElement | null = $state(null);
 
 	// Get WebSocket port from URL to ensure we connect to the correct instance
 	const wsPort = getWebSocketPortFromUrl();
@@ -48,33 +44,16 @@
 
 	let displayMeshes = $state<THREE.Mesh[]>([]);
 
-	// Non-reactive viewer state to avoid proxying Three.js objects
-	let viewerContext: {
-		scene: THREE.Scene | null;
-		camera: THREE.PerspectiveCamera | null;
-		controls: any | null;
-		renderer: THREE.WebGLRenderer | null;
-		dispose: (() => void) | null;
-		resize: (() => void) | null;
-		initialized?: boolean;
-	} = {
-		scene: null,
-		camera: null,
-		controls: null,
-		renderer: null,
-		dispose: null,
-		resize: null,
-		initialized: false
-	};
 	let modelUnits = $state<string>('Meters');
 	let shouldShowViewer = $state(false);
-
-	let rhinoCompute: any = null;
 
 	let isRemoteUpdate = $state(false);
 	let hasPendingChanges = $state(false);
 	let isViewerFullscreen = $state(false);
 	let initialSolveTriggered = false;
+
+	// UI state for debouncing the "Solving..." indicator
+	const solvingIndicator = createSolvingIndicator(() => wsState.isSolving);
 
 	function showNotification(message: string, duration: number = 3000) {
 		schemaUpdateNotification = message;
@@ -86,70 +65,6 @@
 			notificationTimer = null;
 		}, duration);
 	}
-
-	onDestroy(() => {
-		if (viewerContext.dispose) {
-			viewerContext.dispose();
-		}
-	});
-
-	// Make sure the compute-app behavior is the same as builder-app for viewer initialization
-	async function initializeViewer() {
-		if (!canvas || !schema || viewerContext.scene) return;
-
-		const result = initThree(canvas, {
-			environment: { backgroundColor: schema.viewerOptions?.backgroundColor || '#ffffff' },
-			events: {
-				selectionColor: '#ff0000', // Red selection by default, customize with any color like '#00ff00' for green,
-				enableEventHandlers: false // Disable default event handlers for the moment (will get a proper UI later for previewing metadata)
-			}
-		});
-
-		viewerContext.scene = result.scene;
-		viewerContext.camera = result.camera;
-		viewerContext.controls = result.controls;
-		viewerContext.renderer = result.renderer;
-		viewerContext.dispose = result.dispose;
-		viewerContext.resize = result.resize;
-		viewerContext.initialized = false;
-
-		// Force an initial resize to ensure dimensions are correct
-		result.resize();
-
-		if (displayMeshes.length > 0) {
-			updateScene(result.scene, displayMeshes, result.camera, result.controls, false);
-			viewerContext.initialized = true;
-		}
-	}
-
-	async function updateViewer() {
-		if (
-			!viewerContext.scene ||
-			!viewerContext.camera ||
-			!viewerContext.controls ||
-			displayMeshes.length === 0
-		)
-			return;
-
-		updateScene(
-			viewerContext.scene,
-			displayMeshes,
-			viewerContext.camera,
-			viewerContext.controls,
-			viewerContext.initialized ?? false
-		);
-	}
-
-	// Manage viewer lifecycle - initialize on first mesh, update on subsequent changes
-	$effect(() => {
-		if (shouldShowViewer && canvas && displayMeshes.length > 0) {
-			if (!viewerContext.scene) {
-				initializeViewer();
-			} else {
-				updateViewer();
-			}
-		}
-	});
 
 	/**
 	 * Strip file metadata from values before sending to Grasshopper
@@ -239,39 +154,6 @@
 		syncNeeded = false;
 		wsState.requestInitialData(sessionId);
 		showNotification('Syncing parameters...');
-	}
-
-	function toggleFullscreen() {
-		isViewerFullscreen = !isViewerFullscreen;
-
-		// Notify Three.js of size change after DOM updates
-		if (viewerContext.scene && canvas) {
-			requestAnimationFrame(() => {
-				const width = canvas!.clientWidth;
-				const height = canvas!.clientHeight;
-
-				// Update camera aspect ratio if it has the property
-				if (
-					viewerContext.camera &&
-					typeof viewerContext.camera === 'object' &&
-					'aspect' in viewerContext.camera
-				) {
-					(viewerContext.camera as any).aspect = width / height;
-					if ('updateProjectionMatrix' in viewerContext.camera) {
-						(viewerContext.camera as any).updateProjectionMatrix();
-					}
-				}
-
-				// Update controls if they have an update method
-				if (
-					viewerContext.controls &&
-					typeof viewerContext.controls === 'object' &&
-					'update' in viewerContext.controls
-				) {
-					(viewerContext.controls as any).update();
-				}
-			});
-		}
 	}
 
 	const badgeConfig = $derived(
@@ -523,11 +405,7 @@
 			</div>
 		{:else if schema}
 			{#key schema}
-				<div
-					class="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen
-						? 'fullscreen-container'
-						: ''}"
-				>
+				<div class="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden p-6 lg:flex-row">
 					<!-- Controls -->
 					<div
 						class="min-h-0 w-full overflow-y-auto {shouldShowViewer
@@ -591,41 +469,12 @@
 
 					<!-- 3D Viewer (conditional) -->
 					{#if shouldShowViewer}
-						<div
-							class="relative min-h-0 flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen
-								? 'fullscreen-viewer'
-								: ''}"
-						>
-							<div class="h-full w-full">
-								<canvas class="block h-full w-full rounded-lg" bind:this={canvas}></canvas>
-							</div>
-							<!-- Fullscreen Toggle Button -->
-							<button
-								class="absolute right-4 bottom-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg bg-white/90 shadow-lg transition-all hover:bg-white hover:shadow-xl active:scale-95"
-								onclick={toggleFullscreen}
-								title={isViewerFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-							>
-								{#if isViewerFullscreen}
-									<Minimize class="h-5 w-5 text-gray-700" />
-								{:else}
-									<Maximize class="h-5 w-5 text-gray-700" />
-								{/if}
-							</button>
-						</div>
+						<Viewer {schema} meshes={displayMeshes} bind:isFullscreen={isViewerFullscreen} />
 					{/if}
 				</div>
 			{/key}
 
-			{#if wsState.isSolving && schema.instanceSolve !== false}
-				<div
-					class="bg-primary text-primary-foreground fixed bottom-8 left-8 z-50 flex animate-[slideInLeft_0.3s_ease-out] items-center gap-3 rounded-lg px-4 py-3 shadow-lg"
-				>
-					<div
-						class="border-primary-foreground h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
-					></div>
-					<span class="text-sm font-medium">Solving...</span>
-				</div>
-			{/if}
+			<SolvingIndicator show={solvingIndicator.show && schema.instanceSolve !== false} />
 		{/if}
 	</div>
 
@@ -667,22 +516,5 @@
 			transform: translateX(0);
 			opacity: 1;
 		}
-	}
-
-	.fullscreen-container {
-		position: fixed;
-		inset: 0;
-		z-index: 9999;
-		padding: 0 !important;
-		background: white;
-	}
-
-	.fullscreen-viewer {
-		position: fixed;
-		inset: 0;
-		z-index: 10000;
-		border-radius: 0 !important;
-		min-height: 100vh;
-		width: 100vw;
 	}
 </style>

@@ -1,12 +1,13 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig, mergeConfig } from 'vite';
+import { mergeConfig } from 'vite';
 
+/** @param {import('vite').UserConfig} overrides */
 export function createViteConfig(overrides = {}) {
-  return mergeConfig(
-    defineConfig({
-      plugins: [tailwindcss(), sveltekit()]
-    }),
-    overrides
-  );
+	return mergeConfig(
+		{
+			plugins: [tailwindcss(), sveltekit()]
+		},
+		overrides
+	);
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
+	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
 	import type { PageProps } from './$types';
 	import {
 		TabLayout,
@@ -9,11 +9,14 @@
 		StateDisplay,
 		Button,
 		StateManager,
-		getDefaultValue
+		getDefaultValue,
+		type UISchema,
+		Viewer,
+		createSolvingIndicator,
+		SolvingIndicator
 	} from '@selva/shared';
-	import { Maximize, Minimize } from '@lucide/svelte';
 	import { hexToOklch } from '$lib/utilities/color';
-	import { initThree, updateScene } from 'selva-compute/visualization';
+	import { GrasshopperResponseProcessor } from 'selva-compute';
 
 	let { data }: PageProps = $props();
 
@@ -26,96 +29,59 @@
 	let currentDefinitionMetadata = $derived(
 		availableDefinitions.find((d) => d.filename === currentDefinition)
 	);
-	let pageTitle = $derived(currentDefinitionMetadata?.displayName || schema.name);
+	let pageTitle = $derived(schema?.description || schema.name);
 
-	function handleDefinitionChange(filename: string) {
-		goto(`/app?gh=${filename}`, { replaceState: false });
+	function createInitialValues(s: UISchema | undefined) {
+		if (!s) return {};
+		const v: Record<string, unknown> = {};
+
+		for (const input of s.inputs) {
+			v[input.id] = input.default ?? getDefaultValue(input.paramType);
+		}
+		for (const output of s.outputs) {
+			v[output.id] = null;
+		}
+		return v;
 	}
 
 	// Core state
-	let values = $state<Record<string, unknown>>({});
+	// values is initialized once per component instance.
+	// The {#key} block in markup ensures re-creation when definition changes.
+	let values = $state<Record<string, unknown>>(createInitialValues(data.schema));
 	let solving = $state(false);
 	let error = $state('');
-	let viewerInitialized = $state(false);
 
-	// Viewer refs
-	let canvas: HTMLCanvasElement | null = $state(null);
-	let scene = $state<unknown | null>(null);
-	let camera = $state<unknown | null>(null);
-	let controls = $state<unknown | null>(null);
+	// UI state for debouncing the "Solving..." indicator
+	const solvingIndicator = createSolvingIndicator(() => solving);
 
-	// Deferred imports
-	let rhinoCompute: typeof import('selva-compute') | null = null;
+	// Viewer state
+	let meshes = $state<any[]>([]);
 
 	// Manual solve mode
 	let pendingValues = $state<Record<string, unknown>>({});
 	let hasPendingChanges = $state(false);
 	let isViewerFullscreen = $state(false);
-	let initialSolveTriggered = $state(false);
 
-	// -----------------------------
-	// Initialization
-	// -----------------------------
-	function initializeValues() {
-		if (!schema) return;
-
-		const v: Record<string, unknown> = {};
-
-		for (const input of schema.inputs) {
-			v[input.id] = input.default ?? getDefaultValue(input.paramType);
-		}
-		for (const output of schema.outputs) {
-			v[output.id] = null;
-		}
-
-		values = v;
-	}
-
+	// Reset state when definition changes and trigger initial solve
 	$effect(() => {
-		initializeValues();
-		initialSolveTriggered = false;
-	});
+		const _ = currentDefinition;
 
-	// Trigger initial solve after values are initialized
-	$effect(() => {
-		if (schema && Object.keys(values).length > 0 && !initialSolveTriggered) {
-			// Use a small timeout to ensure state is settled
-			setTimeout(() => {
-				if (!initialSolveTriggered) {
-					initialSolveTriggered = true;
-					performSolve();
-				}
-			}, 300);
-		}
-	});
+		untrack(() => {
+			meshes = [];
+			values = createInitialValues(schema);
+			error = '';
+			solving = false;
 
-	// -----------------------------
-	// Rhino Compute utilities
-	// -----------------------------
-	async function ensureModulesLoaded() {
-		if (!rhinoCompute) rhinoCompute = await import('selva-compute');
-	}
+			if (schema && Object.keys(values).length > 0) {
+				performSolve();
+			}
+		});
+	});
 
 	// Check if viewer should be shown (either enableLocal or enableRemote)
 	const shouldShowViewer = $derived(
 		schema?.viewerOptions?.enableLocal || schema?.viewerOptions?.enableRemote
 	);
-
-	async function initializeViewer() {
-		if (!shouldShowViewer || !canvas || scene) return;
-
-		await ensureModulesLoaded();
-
-		const opts = {
-			environment: { backgroundColor: schema?.viewerOptions?.backgroundColor ?? '#E6E6E6' }
-		};
-
-		const { scene: s, camera: c, controls: ctl } = initThree(canvas, opts);
-
-		scene = s;
-		camera = c;
-		controls = ctl;
-	}
 
 	// -----------------------------
 	// Solve logic
@@ -124,8 +90,6 @@
 		try {
 			solving = true;
 			error = '';
-
-			await ensureModulesLoaded();
 
 			const payload = {
 				inputs: schema.inputs,
@@ -146,25 +110,10 @@
 
 			const solved = await res.json();
 
-			const processor = new rhinoCompute!.GrasshopperResponseProcessor(solved, false);
+			const processor = new GrasshopperResponseProcessor(solved, false);
 
 			if (shouldShowViewer) {
-				const meshes = await processor.extractMeshesFromResponse();
-
-				// Initialize viewer on first mesh render
-				if (!scene && meshes.length > 0) {
-					await initializeViewer();
-				}
-
-				// Update scene if viewer is initialized
-				if (scene && meshes.length > 0) {
-					updateScene(scene as any, meshes, camera as any, controls as any, viewerInitialized);
-
-					// Focus camera on meshes after first solve
-					if (!viewerInitialized) {
-						viewerInitialized = true;
-					}
-				}
+				meshes = await processor.extractMeshesFromResponse();
 			}
 
 			const outputs: Record<string, unknown> = {};
@@ -201,16 +150,12 @@
 		if (hasPendingChanges) performSolve();
 	}
 
-	function toggleFullscreen() {
-		isViewerFullscreen = !isViewerFullscreen;
-	}
-
 	const BADGES = {
 		solving: { label: 'Solving...', variant: 'solving' } as const,
 		compute: { label: 'Rhino Compute', variant: 'compute' } as const
 	};
 
-	const badgeConfig = $derived(solving ? BADGES.solving : BADGES.compute);
+	const badgeConfig = $derived(solvingIndicator.show ? BADGES.solving : BADGES.compute);
 
 	let isEmbedded = $derived(page.url.searchParams.get('embed') === 'true');
 	let customStyle = $derived.by(() => {
@@ -240,94 +185,80 @@
 					<StateDisplay type="loading" size="large" message="Loading schema..." />
 				</div>
 			{:else}
-				<div
-					class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen
-						? 'fullscreen-container'
-						: ''}"
-				>
-					<!-- Controls -->
-					<div
-						class="w-full shrink-0 overflow-y-auto lg:w-120 xl:w-130 {isViewerFullscreen
-							? 'hidden'
-							: ''}"
-					>
-						{#if schema.layout.type === 'tabbed'}
-							<TabLayout
-								{schema}
-								bind:values
-								onValueChange={handleValueChange}
-								debounceSliders={false}
-								environment="compute"
-							/>
-						{/if}
-
-						<!-- State Manager -->
-						<div class="mt-6">
-							<StateManager
-								{schema}
-								currentValues={values}
-								onLoadValues={async (loadedValues) => {
-									// Apply loaded values
-									values = { ...values, ...loadedValues };
-
-									// Trigger solve based on instanceSolve setting
-									if (schema?.instanceSolve !== false) {
-										await performSolve();
-									} else {
-										hasPendingChanges = true;
-									}
-								}}
-							/>
-						</div>
-
-						{#if schema.instanceSolve === false}
-							<div class="sticky bottom-0 mt-6 flex justify-center">
-								<Button
-									variant={hasPendingChanges ? 'default' : 'outline'}
-									size="lg"
-									onclick={handleCalculate}
-									disabled={!hasPendingChanges || solving}
-									class="shadow-lg"
-								>
-									{#if solving}
-										<div
-											class="border-background mr-2 h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
-										></div>
-										Solving...
-									{:else if hasPendingChanges}
-										Calculate
-									{:else}
-										No Changes
-									{/if}
-								</Button>
-							</div>
-						{/if}
-					</div>
-
-					<!-- Viewer -->
-					{#if shouldShowViewer}
+				<div style:display="contents">
+					{#key currentDefinition}
 						<div
-							class="relative min-h-125 flex-1 rounded-lg bg-white shadow-lg {isViewerFullscreen
-								? 'fullscreen-viewer'
+							class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen
+								? 'fullscreen-container'
 								: ''}"
 						>
-							<div class="absolute inset-0">
-								<canvas class="block h-full w-full rounded-lg" bind:this={canvas}></canvas>
-							</div>
-							<!-- Fullscreen Toggle Button -->
-							<button
-								class="absolute right-4 bottom-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg bg-white/90 shadow-lg transition-all hover:bg-white hover:shadow-xl active:scale-95"
-								onclick={toggleFullscreen}
-								title={isViewerFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+							<!-- Controls -->
+							<div
+								class="w-full shrink-0 overflow-y-auto lg:w-120 xl:w-130 {isViewerFullscreen
+									? 'hidden'
+									: ''}"
 							>
-								{#if isViewerFullscreen}
-									<Minimize class="h-5 w-5 text-gray-700" />
-								{:else}
-									<Maximize class="h-5 w-5 text-gray-700" />
+								{#if schema.layout.type === 'tabbed'}
+									<TabLayout
+										{schema}
+										bind:values
+										onValueChange={handleValueChange}
+										debounceSliders={false}
+										environment="compute"
+									/>
 								{/if}
-							</button>
+
+								<!-- State Manager -->
+								<div class="mt-6">
+									<StateManager
+										{schema}
+										currentValues={values}
+										onLoadValues={async (loadedValues) => {
+											// Apply loaded values
+											values = { ...values, ...loadedValues };
+
+											// Trigger solve based on instanceSolve setting
+											if (schema?.instanceSolve !== false) {
+												await performSolve();
+											} else {
+												hasPendingChanges = true;
+											}
+										}}
+									/>
+								</div>
+
+								{#if schema.instanceSolve === false}
+									<div class="sticky bottom-0 mt-6 flex justify-center">
+										<Button
+											variant={hasPendingChanges ? 'default' : 'outline'}
+											size="lg"
+											onclick={handleCalculate}
+											disabled={!hasPendingChanges || solving}
+											class="shadow-lg"
+										>
+											{#if solving}
+												<div
+													class="border-background mr-2 h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
+												></div>
+												Solving...
+											{:else if hasPendingChanges}
+												Calculate
+											{:else}
+												No Changes
+											{/if}
+										</Button>
+									</div>
+								{/if}
+							</div>
+
+							<!-- Viewer -->
+							{#if shouldShowViewer}
+								<Viewer {schema} {meshes} bind:isFullscreen={isViewerFullscreen} />
+							{/if}
 						</div>
-					{/if}
+					{/key}
+
+					<SolvingIndicator show={solvingIndicator.show && schema.instanceSolve !== false} />
 				</div>
 			{/if}
 		</div>
@@ -341,14 +272,5 @@
 		z-index: 9999;
 		padding: 0 !important;
 		background: white;
-	}
-
-	.fullscreen-viewer {
-		position: fixed;
-		inset: 0;
-		z-index: 10000;
-		border-radius: 0 !important;
-		min-height: 100vh;
-		width: 100vw;
 	}
 </style>

@@ -1,13 +1,13 @@
 {
 	"definitions": {
-		"point-attractor": {
+		"point_attractor": {
 			"displayName": "Advanced Solver",
 			"description": "Little point attractor example",
 			"coverImage": "",
 			"category": "Point Attractor",
 			"tags": ["optimization", "numerical", "solver"]
 		},
-		"table-example": {
+		"table_example": {
 			"displayName": "Parametric Form Generator",
 			"description": "Create a simple parametric table with ease",
 			"coverImage": "",

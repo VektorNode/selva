@@ -3,8 +3,9 @@
 	import { goto } from '$app/navigation';
 	import { Badge } from '$lib/components/ui/badge';
 	import { ModeToggle } from '$lib/components/ui/mode-toggle';
+
 	//Maybe in the future again
-	// import { ThemeSwitcher } from '$lib/components/ui/theme-switcher';
+	// import { ThemeSwitcher } from '../../ui/theme-switcher';
 
 	interface BadgeConfig {
 		label: string;

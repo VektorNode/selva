@@ -117,33 +117,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		return json(solvedDefinition);
 	} catch (err) {
-		const errorDetails = {
-			message: err instanceof Error ? err.message : 'Unknown error',
-			timestamp: new Date().toISOString(),
-			computeServerUrl: config.computeServerUrl,
-			definitionUrl,
-			stack: process.env.NODE_ENV === 'development' && err instanceof Error ? err.stack : undefined
-		};
+		const message = err instanceof Error ? err.message : 'Unknown error';
+		console.error('[API/Compute] Error:', message);
 
-		console.error('[API/Compute] Error:', JSON.stringify(errorDetails, null, 2));
-
-		// Return detailed error response in development mode
-		if (process.env.NODE_ENV === 'development') {
-			throw error(
-				500,
-				JSON.stringify({
-					error: 'Grasshopper computation failed',
-					details: errorDetails,
-					hint: 'Check /api/health/compute for server connectivity details'
-				})
-			);
-		}
-
-		// Production: generic error message
-		if (err instanceof Error) {
-			throw error(500, err.message);
-		}
-
-		throw error(500, 'Failed to solve Grasshopper definition');
+		throw error(500, message);
 	}
 };

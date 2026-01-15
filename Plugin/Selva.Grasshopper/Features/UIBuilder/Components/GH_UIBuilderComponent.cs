@@ -108,6 +108,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
 	protected override void SolveInstance(IGH_DataAccess DA)
 	{
+		// Check if running in headless/compute environment before any initialization
+		// If so, just output the embedded schema and stop - no services or background tasks
+		if (RhinoApp.IsRunningHeadless || RhinoDoc.ActiveDoc == null || RhinoDoc.ActiveDoc.IsHeadless)
+		{
+			DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
+			return;
+		}
+
 		var enable = false;
 		DA.GetData(0, ref enable);
 
