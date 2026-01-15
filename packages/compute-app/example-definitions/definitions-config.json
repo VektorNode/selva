@@ -3,14 +3,14 @@
 		"point_attractor": {
 			"displayName": "Advanced Solver",
 			"description": "Little point attractor example",
-			"coverImage": "",
+			"coverImage": "http://localhost:5173/images/point_attractor.png",
 			"category": "Point Attractor",
 			"tags": ["optimization", "numerical", "solver"]
 		},
 		"table_example": {
 			"displayName": "Parametric Form Generator",
 			"description": "Create a simple parametric table with ease",
-			"coverImage": "",
+			"coverImage": "http://localhost:5173/images/table_example.png",
 			"category": "Product",
 			"tags": ["parametric", "geometry", "forms"]
 		}
