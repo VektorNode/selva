@@ -396,12 +396,37 @@
         function initializeBaseUrl() {
             const baseUrl = getDefaultComputeAppUrl();
             const input = document.getElementById('baseUrl');
+            const defInput = document.getElementById('definition');
 
             input.value = baseUrl;
             updateUrlStatus();
 
             // Add event listener for real-time validation
             input.addEventListener('input', updateUrlStatus);
+            
+            // Smart paste handler
+            input.addEventListener('paste', function(e) {
+                // Short delay to let the value update
+                setTimeout(() => {
+                    try {
+                        const pasted = new URL(input.value.trim());
+                        const gh = pasted.searchParams.get('gh');
+                        
+                        // If we found a gh param and the field is empty or matches default, update it
+                        if (gh && (!defInput.value || defInput.value === '')) {
+                            defInput.value = gh;
+                        }
+                        
+                        // Clean the base URL input to just be the origin
+                        input.value = pasted.origin;
+                        updateUrlStatus();
+                        updateIframe();
+                    } catch (err) {
+                        // Not a full URL, ignore
+                    }
+                }, 10);
+            });
+
             input.addEventListener('blur', function() {
                 // Auto-update preview when URL changes
                 if (validateUrl(input.value.trim())) {
@@ -417,13 +442,34 @@
 
         // Update iframe and embed code
         function updateIframe() {
-            const baseUrl = document.getElementById('baseUrl').value.trim();
+            let baseUrlInput = document.getElementById('baseUrl').value.trim();
             const definition = document.getElementById('definition').value.trim();
             const primaryColor = document.getElementById('primaryColor').value;
             const height = getIframeHeight();
 
-            // Construct URL
-            let url = baseUrl.replace(/\/$/, '') + '/app';
+            if (!baseUrlInput) return;
+
+            let finalBase = baseUrlInput;
+
+            // Try to parse as URL to be robust
+            try {
+                if (baseUrlInput.startsWith('http')) {
+                    const parsed = new URL(baseUrlInput);
+                    finalBase = parsed.origin;
+                }
+            } catch (e) {
+                // Fallback to text manipulation
+                finalBase = baseUrlInput.split('?')[0].replace(/\/$/, '');
+                if (finalBase.endsWith('/app')) {
+                    finalBase = finalBase.substring(0, finalBase.length - 4);
+                }
+            }
+
+            // Ensure we don't have trailing slashes
+            finalBase = finalBase.replace(/\/$/, '');
+
+            // Construct URL - Go to root if no definition, otherwise go to /app
+            let url = definition ? (finalBase + '/app') : (finalBase + '/');
             const params = new URLSearchParams();
 
             // Add grasshopper definition if specified

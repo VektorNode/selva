@@ -23,17 +23,25 @@ sudo apt-get install caddy
 sudo nano /etc/caddy/Caddyfile
 ```
 
-Add:
+Add your configuration:
+
+**Option A: Using an IP Address (HTTP only)**
 
 ```caddy
 :80 {
-    reverse_proxy localhost:3000 {
-        header_up X-Forwarded-For {http.request.remote.host}
-        header_up X-Forwarded-Proto {http.request.proto}
-        header_up X-Forwarded-Host {http.request.host}
-    }
+    reverse_proxy localhost:3000
 }
 ```
+
+**Option B: Using a Domain (Automatic HTTPS)**
+
+```caddy
+example.com {
+    reverse_proxy localhost:3000
+}
+```
+
+> **Note:** HTTPS requires a domain. If you use a raw IP address, you will be limited to HTTP. Caddy automatically handles HTTPS certificates only when a valid domain name is used.
 
 **Use ecosystem.config.cjs** (note: `.cjs` for CommonJS in ES module projects):
 
@@ -52,7 +60,7 @@ module.exports = {
 			max_memory_restart: '1G',
 			env: {
 				PORT: 3000,
-				ORIGIN: 'http://your-public-ip',
+				ORIGIN: 'http://your-server-ip', // Replace with http://IP or https://domain
 				COMPUTE_SERVER_URL: 'http://your-compute-server:5000',
 				GH_DEFINITIONS_PATH: './definitions',
 				COMPUTE_API_KEY: 'your-api-key',
@@ -95,19 +103,19 @@ curl -v http://your-public-ip/api/health
 
 **Firewall (Google Cloud):**
 
-Create firewall rules to allow port 80 (and 443 if using HTTPS):
+Create firewall rules to allow port 80 and 443:
 
 ```bash
-# Allow HTTP traffic (create via Google Cloud Console)
-# Name: allow-http
+# Allow HTTP/HTTPS traffic
+# Name: allow-http-https
 # Direction: Ingress
 # Action: Allow
 # Source: 0.0.0.0/0
-# Protocol: tcp:80
-# Target tags: http-server
+# Protocol: tcp:80, tcp:443
+# Target tags: http-server, https-server
 ```
 
-Then add the `http-server` tag to your VM instance under network tags.
+Then add the `http-server` and `https-server` tags to your VM instance.
 
 ## Useful Commands
 
