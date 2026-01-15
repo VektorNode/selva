@@ -4,8 +4,6 @@ Deploy the Selva Compute App using Node.js and PM2 for direct process management
 
 **Prerequisites:** Complete [SERVER_SETUP.md](./SERVER_SETUP.md) and [PREREQUISITES.md](./PREREQUISITES.md) first.
 
-**Requirements:** Node.js 22.xx, pnpm 9.0+, 2GB RAM, 2 CPU cores
-
 ---
 
 ## Quick Start

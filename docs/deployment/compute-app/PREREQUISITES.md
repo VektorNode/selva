@@ -73,12 +73,9 @@ If port 3000 is already in use, you can change it via environment variables.
 
 ## 3. Environment Configuration
 
-The Compute App is configured via environment variables.
+The Compute App is configured via environment variables. You will apply these settings during the deployment phase (Step 3) using configuration files (like `.env` or `ecosystem.config.cjs`) found in the repository.
 
-- **Node.js (PM2)**: set variables in `packages/compute-app/ecosystem.config.cjs` under the `env` object.
-- **Docker**: use a `.env` file (typically `packages/compute-app/.env`) referenced by `docker-compose.yml`.
-
-The variable names and meanings are the same for both methods.
+Prepare the following values before starting the deployment:
 
 ### Required Variables
 
@@ -100,42 +97,13 @@ The variable names and meanings are the same for both methods.
 | `NODE_ENV`        | Environment mode                                             | `development` |
 | `ORIGIN`          | Public URL used for origin/CSRF checks (recommended in prod) | None          |
 
-### Example: Node.js (PM2 / ecosystem)
-
-Edit `packages/compute-app/ecosystem.config.cjs` and set values under `env`:
-
-```js
-env: {
-	PORT: 3000,
-	HOST: '0.0.0.0',
-	ORIGIN: 'https://your-public-domain.com',
-	COMPUTE_SERVER_URL: 'http://your-compute-server:5000',
-	GH_DEFINITIONS_PATH: './definitions',
-	// COMPUTE_API_KEY: 'your-secret-key',
-	NODE_ENV: 'production'
-}
-```
-
-### Example: Docker (.env)
-
-Use `packages/compute-app/.env.example` as a template and create `packages/compute-app/.env`:
-
-```bash
-COMPUTE_SERVER_URL=http://localhost:5000
-GH_DEFINITIONS_PATH=./definitions
-HOST=0.0.0.0
-PORT=3000
-NODE_ENV=production
-# ORIGIN=https://your-public-domain.com
-# COMPUTE_API_KEY=your-secret-key
-```
-
 ---
 
 ## Next Steps
 
-After completing these prerequisites, choose your deployment method:
+After reviewing the prerequisites, proceed to set up your server environment:
 
-- **[Server Setup](./SERVER_SETUP.md)** - Help to properly setup your server.
-- **[Node.js Deployment Guide](./NODE_DEPLOYMENT.md)** - Direct Node.js deployment with PM2
-- **[Docker Deployment Guide](./DOCKER_DEPLOYMENT.md)** - Container-based deployment
+1. **[Server Setup](./SERVER_SETUP.md)** - Install tools, clone the repository, and build the project.
+2. **Choose a Deployment Method:**
+   - **[Node.js Deployment Guide](./NODE_DEPLOYMENT.md)** - Direct Node.js deployment with PM2
+   - **[Docker Deployment Guide](./DOCKER_DEPLOYMENT.md)** - Container-based deployment
