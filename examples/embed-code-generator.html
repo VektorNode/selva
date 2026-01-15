@@ -403,7 +403,7 @@
 
             // Add event listener for real-time validation
             input.addEventListener('input', updateUrlStatus);
-            
+
             // Smart paste handler
             input.addEventListener('paste', function(e) {
                 // Short delay to let the value update
@@ -411,12 +411,12 @@
                     try {
                         const pasted = new URL(input.value.trim());
                         const gh = pasted.searchParams.get('gh');
-                        
+
                         // If we found a gh param and the field is empty or matches default, update it
                         if (gh && (!defInput.value || defInput.value === '')) {
                             defInput.value = gh;
                         }
-                        
+
                         // Clean the base URL input to just be the origin
                         input.value = pasted.origin;
                         updateUrlStatus();
