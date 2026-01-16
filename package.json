@@ -31,7 +31,6 @@
 		"clean:reinstall": "pnpm clean && pnpm install && pnpm build:all",
 		"clean": "node scripts/clean.js",
 		"changeset": "changeset",
-		"version-packages": "changeset version",
 		"release": "pnpm build:all && changeset publish"
 	},
 	"devDependencies": {

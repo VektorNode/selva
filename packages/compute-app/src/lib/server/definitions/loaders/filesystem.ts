@@ -68,8 +68,9 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 
 		const definitions: Definition[] = [];
 
-		for (const [filename, metadata] of Object.entries(config.definitions)) {
+		for (const [key, metadata] of Object.entries(config.definitions)) {
 			try {
+				const filename = this.sanitizeFilename(key);
 				const fileType = this.getFileType(filename);
 				definitions.push({
 					filename,
@@ -77,7 +78,7 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 					...metadata
 				});
 			} catch {
-				console.warn(`[FilesystemLoader] Skipping definition with unsupported file type: ${filename}`);
+				console.warn(`[FilesystemLoader] Skipping definition with unsupported file type: ${key}`);
 			}
 		}
 
@@ -90,7 +91,15 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 	async getMetadata(filename: string): Promise<DefinitionMetadata> {
 		const safeFilename = this.sanitizeFilename(filename);
 		const config = await this.loadConfigFile();
-		const metadata = config.definitions[safeFilename];
+
+		// Try exact match first
+		let metadata = config.definitions[safeFilename];
+
+		// Try match without extension if not found
+		if (!metadata) {
+			const basename = path.basename(safeFilename, path.extname(safeFilename));
+			metadata = config.definitions[basename];
+		}
 
 		if (!metadata) {
 			throw new Error(`Definition '${safeFilename}' not found in config`);
