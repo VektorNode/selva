@@ -89,7 +89,8 @@ export class DefinitionFactory {
 
 			case 'environment':
 				return new EnvironmentDefinitionLoader({
-					prefix: env.GH_DEF_PREFIX || 'GH_DEF_'
+					prefix: env.GH_DEF_PREFIX || 'GH_DEF_',
+					envVars: env as Record<string, string | undefined>
 				});
 
 			default:
@@ -131,7 +132,7 @@ export class DefinitionFactory {
 
 	private static detectSource(): DefinitionSource {
 		// Priority: explicit source > filesystem path > environment vars > default
-		if (env.DEFINITION_SOURCE === 'environment' && env.GH_DEF_PREFIX) {
+		if (env.DEFINITION_SOURCE === 'environment') {
 			return 'environment';
 		}
 

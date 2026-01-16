@@ -15,7 +15,8 @@ module.exports = {
 				PORT: 3000,
 				ORIGIN: 'http://your-public-ip',
 				COMPUTE_SERVER_URL: 'http://your-compute-server:5000',
-				GH_DEFINITIONS_PATH: './definitions',
+				// GH_DEFINITIONS_PATH: './definitions',
+				// DEFINITION_SOURCE="environment"
 				COMPUTE_API_KEY: 'your-api-key',
 				NODE_ENV: 'production'
 			}

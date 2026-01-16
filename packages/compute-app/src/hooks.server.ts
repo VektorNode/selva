@@ -6,8 +6,18 @@ import { env } from '$env/dynamic/private';
  * We check this at runtime (not build time) to allow for
  * "Build Once, Run Anywhere" Docker images.
  */
-const REQUIRED_KEYS = ['COMPUTE_SERVER_URL', 'GH_DEFINITIONS_PATH'];
-const missing = REQUIRED_KEYS.filter((key) => !env[key]);
+const definitionSource = env.DEFINITION_SOURCE || 'filesystem';
+const missing = [];
+
+// COMPUTE_SERVER_URL is always required
+if (!env.COMPUTE_SERVER_URL) {
+	missing.push('COMPUTE_SERVER_URL');
+}
+
+// GH_DEFINITIONS_PATH is only required for filesystem source
+if (definitionSource === 'filesystem' && !env.GH_DEFINITIONS_PATH) {
+	missing.push('GH_DEFINITIONS_PATH');
+}
 
 if (missing.length > 0) {
 	console.error('\n❌ CRITICAL CONFIGURATION ERROR');
