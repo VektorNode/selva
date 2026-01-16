@@ -6,12 +6,8 @@ import { env } from '$env/dynamic/private';
  * We check this at runtime (not build time) to allow for
  * "Build Once, Run Anywhere" Docker images.
  */
-const REQUIRED_KEYS = ['COMPUTE_SERVER_URL'];
+const REQUIRED_KEYS = ['COMPUTE_SERVER_URL', 'GH_DEFINITIONS_PATH'];
 const missing = REQUIRED_KEYS.filter((key) => !env[key]);
-
-if (!env.GH_DEFINITIONS_BASE_URL && !env.GH_DEFINITIONS_PATH) {
-	missing.push('GH_DEFINITIONS_BASE_URL or GH_DEFINITIONS_PATH');
-}
 
 if (missing.length > 0) {
 	console.error('\n❌ CRITICAL CONFIGURATION ERROR');

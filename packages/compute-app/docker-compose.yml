@@ -19,7 +19,7 @@ services:
       - ADAPTER=node
       # Fallbacks if not set in .env
       - COMPUTE_SERVER_URL=${COMPUTE_SERVER_URL:-http://host.docker.internal:8081}
-      - GH_DEFINITIONS_BASE_URL=${GH_DEFINITIONS_BASE_URL:-http://localhost:3000/definitions}
+      - GH_DEFINITIONS_PATH=${GH_DEFINITIONS_PATH:-./definitions}
 
     extra_hosts:
       - 'host.docker.internal:host-gateway'

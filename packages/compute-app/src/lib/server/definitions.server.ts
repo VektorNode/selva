@@ -1,62 +1,24 @@
-import { getServerConfig } from './config.server';
-import fs from 'node:fs/promises';
-import path from 'node:path';
+/**
+ * Public API for definitions - DI system
+ * This module provides the main entry point for definition loading
+ */
 
-export interface DefinitionMetadata {
-	displayName: string;
-	description?: string;
-	coverImage?: string;
-	category?: string;
-	tags?: string[];
-}
+export { DefinitionFactory } from './definitions/factory';
+export { DefinitionContainer } from './definitions/container';
+export type { DefinitionMetadata, Definition, IDefinitionLoader, DefinitionsConfig, DefinitionFileType } from './definitions/types';
 
-export interface Definition extends DefinitionMetadata {
-	filename: string;
-}
+import { DefinitionFactory } from './definitions/factory';
 
-export interface DefinitionsConfig {
-	definitions: Record<string, DefinitionMetadata>;
-}
+// Singleton instance - created once and reused
+let _definitionContainer: ReturnType<typeof DefinitionFactory.createContainer> | null = null;
 
 /**
- * Load definitions from config file
- * Expects: GH_DEFINITIONS_PATH/definitions-config.json
+ * Get the definition container (singleton)
+ * The container type is determined by environment variables at startup
  */
-export async function loadDefinitionsConfig(): Promise<Definition[]> {
-	const config = getServerConfig();
-
-	if (!config.ghDefinitionsPath) {
-		return [];
+export function getDefinitionContainer() {
+	if (!_definitionContainer) {
+		_definitionContainer = DefinitionFactory.createContainer();
 	}
-
-	const configPath = path.join(config.ghDefinitionsPath, 'definitions-config.json');
-
-	try {
-		const configFile = await fs.readFile(configPath, 'utf-8');
-		const parsed: DefinitionsConfig = JSON.parse(configFile);
-
-		if (!parsed.definitions || typeof parsed.definitions !== 'object') {
-			throw new Error('Invalid config format: missing "definitions" object');
-		}
-
-		const definitions: Definition[] = Object.entries(parsed.definitions).map(
-			([filename, metadata]) => ({
-				filename,
-				...metadata
-			})
-		);
-
-		// Sort by displayName
-		definitions.sort((a, b) => a.displayName.localeCompare(b.displayName));
-
-		return definitions;
-	} catch (err) {
-		if (err instanceof Error && 'code' in err && err.code === 'ENOENT') {
-			throw new Error(
-				`No definitions-config.json found at ${configPath}. ` +
-					`Please create this file with your definition metadata.`
-			);
-		}
-		throw err;
-	}
+	return _definitionContainer;
 }

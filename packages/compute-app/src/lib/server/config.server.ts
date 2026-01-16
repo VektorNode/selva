@@ -1,11 +1,27 @@
 import { env } from '$env/dynamic/private';
 
+/**
+ * Load and validate server configuration from environment variables
+ *
+ * Required variables:
+ * - COMPUTE_SERVER_URL: URL of the Rhino.Compute server
+ * - GH_DEFINITIONS_PATH: Local directory containing definitions
+ *
+ * Optional:
+ * - COMPUTE_API_KEY: API key for Rhino.Compute (if required by server)
+ *
+ * For remote definitions, use the environment loader:
+ * - Set DEFINITION_SOURCE="environment"
+ * - Define GH_DEF_* environment variables with definition URLs
+ *
+ * @throws {Error} If required variables are missing or invalid
+ * @returns Server configuration object
+ */
 export function getServerConfig() {
 	const computeServerUrl = env.COMPUTE_SERVER_URL;
-	const ghDefinitionsBaseUrl = env.GH_DEFINITIONS_BASE_URL;
 	const ghDefinitionsPath = env.GH_DEFINITIONS_PATH;
 
-	// Validate required environment variables
+	// Validate: COMPUTE_SERVER_URL is required
 	if (!computeServerUrl) {
 		const message = [
 			'❌ COMPUTE_SERVER_URL environment variable is missing!',
@@ -22,47 +38,47 @@ export function getServerConfig() {
 		throw new Error(message);
 	}
 
-	if (!ghDefinitionsBaseUrl && !ghDefinitionsPath) {
+	// Validate: Definition source is required
+	if (!ghDefinitionsPath) {
 		const message = [
-			'❌ Neither GH_DEFINITIONS_BASE_URL nor GH_DEFINITIONS_PATH is set!',
+			'❌ GH_DEFINITIONS_PATH is not set!',
 			'',
 			'You must configure where to load Grasshopper definitions from.',
-			'Set GH_DEFINITIONS_PATH for local files (recommended for safety)',
-			'OR set GH_DEFINITIONS_BASE_URL for remote URLs.',
+			'Set GH_DEFINITIONS_PATH to point to a local directory containing definitions.',
 			'',
 			'Examples:',
 			'  - GH_DEFINITIONS_PATH="./definitions"',
-			'  - GH_DEFINITIONS_BASE_URL="https://storage.mycompany.com/defs"',
+			'  - GH_DEFINITIONS_PATH="/opt/grasshopper-defs"',
 			'',
-			'The app appends ?gh=filename to find the specific definition.',
+			'For remote definitions via environment variables, use the environment loader:',
+			'  - Set GH_DEF_PREFIX="GH_DEF_" (optional, defaults to this)',
+			'  - Define definitions as GH_DEF_MYDEF="https://storage.mycompany.com/mydef.gh"',
+			'  - Set DEFINITION_SOURCE="environment" to use them',
 			'',
 			'See .env.example for more details.'
 		].join('\n');
 		throw new Error(message);
 	}
 
-	// Validate URL formats
+	// Validate: If COMPUTE_SERVER_URL is HTTP/HTTPS, check the protocol
 	if (isValidUrl(computeServerUrl)) {
 		const parsed = new URL(computeServerUrl);
 		if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
 			throw new Error(
 				`❌ COMPUTE_SERVER_URL has invalid protocol: ${parsed.protocol}\n` +
-					'Only http:// and https:// are supported.'
+				'Only http:// and https:// are supported.'
 			);
 		}
 	}
 
 	return {
 		computeServerUrl,
-		ghDefinitionsBaseUrl,
 		ghDefinitionsPath,
 		computeApiKey: env.COMPUTE_API_KEY
 	};
 }
 
-/**
- * Check if a string is a valid HTTP URL
- */
+
 function isValidUrl(url: string): boolean {
 	try {
 		// Only validate if it looks like a URL (starts with http)

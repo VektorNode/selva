@@ -70,13 +70,10 @@ export const GET: RequestHandler = async () => {
 		if (isProduction) {
 			response.warnings.push(
 				'Using local definitions with production compute server. ' +
-					'The server cannot access local files. Use GH_DEFINITIONS_BASE_URL instead.'
+					'The server cannot access local files. Use the environment loader with GH_DEF_* variables instead.'
 			);
 			response.status = 'warning';
 		}
-	} else if (config.ghDefinitionsBaseUrl) {
-		response.definitions.source = 'remote';
-		response.definitions.configured = true;
 	}
 
 	// Check API key for production
