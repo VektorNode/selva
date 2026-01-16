@@ -2,20 +2,22 @@ import type { IDefinitionLoader, Definition, DefinitionMetadata, DefinitionFileT
 
 export interface EnvironmentLoaderConfig {
 	prefix?: string;
+	envVars?: Record<string, string | undefined>;
 }
 
 export class EnvironmentDefinitionLoader implements IDefinitionLoader {
-	private config: Required<EnvironmentLoaderConfig>;
+	private prefix: string;
+	private envVars: Record<string, string | undefined>;
 
 	constructor(config: EnvironmentLoaderConfig = {}) {
-		this.config = {
-			prefix: 'GH_DEF_',
-			...config
-		};
+		this.prefix = config.prefix || 'GH_DEF_';
+		// Use provided envVars or fall back to process.env
+		this.envVars = config.envVars || process.env;
 	}
 
 	private getFileType(filename: string): DefinitionFileType {
-		const ext = filename.split('.').pop()?.toLowerCase() || 'gh';
+		const parts = filename.split('.');
+		const ext = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : 'gh';
 		if (ext === 'gh' || ext === 'ghx') {
 			return ext as DefinitionFileType;
 		}
@@ -33,13 +35,13 @@ export class EnvironmentDefinitionLoader implements IDefinitionLoader {
 	async listDefinitions(): Promise<Definition[]> {
 		const definitions: Definition[] = [];
 
-		for (const [key, value] of Object.entries(process.env)) {
-			if (!key.startsWith(this.config.prefix) || !value) {
+		for (const [key, value] of Object.entries(this.envVars)) {
+			if (!key.startsWith(this.prefix) || !value) {
 				continue;
 			}
 
 			try {
-				const filename = key.slice(this.config.prefix.length);
+				const filename = key.slice(this.prefix.length);
 				const { metadata } = this.parseDefinitionEnv(value);
 				const fileType = this.getFileType(filename);
 
@@ -60,8 +62,8 @@ export class EnvironmentDefinitionLoader implements IDefinitionLoader {
 	}
 
 	async getMetadata(filename: string): Promise<DefinitionMetadata> {
-		const envKey = `${this.config.prefix}${filename}`;
-		const value = process.env[envKey];
+		const envKey = `${this.prefix}${filename}`;
+		const value = this.envVars[envKey];
 
 		if (!value) {
 			throw new Error(`Definition '${filename}' not found in environment variables`);
@@ -86,8 +88,8 @@ export class EnvironmentDefinitionLoader implements IDefinitionLoader {
 	}
 
 	async getDefinitionUrl(filename: string): Promise<string> {
-		const envKey = `${this.config.prefix}${filename}`;
-		const value = process.env[envKey];
+		const envKey = `${this.prefix}${filename}`;
+		const value = this.envVars[envKey];
 
 		if (!value) {
 			throw new Error(`Definition '${filename}' not found in environment variables`);

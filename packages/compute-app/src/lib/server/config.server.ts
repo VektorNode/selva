@@ -20,6 +20,7 @@ import { env } from '$env/dynamic/private';
 export function getServerConfig() {
 	const computeServerUrl = env.COMPUTE_SERVER_URL;
 	const ghDefinitionsPath = env.GH_DEFINITIONS_PATH;
+	const definitionSource = env.DEFINITION_SOURCE || 'filesystem';
 
 	// Validate: COMPUTE_SERVER_URL is required
 	if (!computeServerUrl) {
@@ -38,8 +39,8 @@ export function getServerConfig() {
 		throw new Error(message);
 	}
 
-	// Validate: Definition source is required
-	if (!ghDefinitionsPath) {
+	// Validate: GH_DEFINITIONS_PATH is only required for filesystem source
+	if (definitionSource === 'filesystem' && !ghDefinitionsPath) {
 		const message = [
 			'❌ GH_DEFINITIONS_PATH is not set!',
 			'',
@@ -51,9 +52,9 @@ export function getServerConfig() {
 			'  - GH_DEFINITIONS_PATH="/opt/grasshopper-defs"',
 			'',
 			'For remote definitions via environment variables, use the environment loader:',
+			'  - Set DEFINITION_SOURCE="environment"',
 			'  - Set GH_DEF_PREFIX="GH_DEF_" (optional, defaults to this)',
 			'  - Define definitions as GH_DEF_MYDEF="https://storage.mycompany.com/mydef.gh"',
-			'  - Set DEFINITION_SOURCE="environment" to use them',
 			'',
 			'See .env.example for more details.'
 		].join('\n');

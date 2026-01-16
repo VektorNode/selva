@@ -19,14 +19,12 @@ export const load = (async ({ url, params: _params }) => {
 	// Load available definitions for switcher
 	let availableDefinitions: Definition[] = [];
 	let loadError: Error | null = null;
-	if (config.ghDefinitionsPath) {
-		try {
-			const container = getDefinitionContainer();
-			availableDefinitions = await container.listDefinitions();
-		} catch (err) {
-			loadError = err instanceof Error ? err : new Error(String(err));
-			console.warn('[App Load] Failed to load available definitions:', err);
-		}
+	try {
+		const container = getDefinitionContainer();
+		availableDefinitions = await container.listDefinitions();
+	} catch (err) {
+		loadError = err instanceof Error ? err : new Error(String(err));
+		console.warn('[App Load] Failed to load available definitions:', err);
 	}
 
 	// Strategy 1: Local File System (Preferred for safety)
@@ -78,9 +76,37 @@ export const load = (async ({ url, params: _params }) => {
 		}
 	}
 
+	// Strategy 2: Environment Variables (for cloud deployments)
+	if (!definitionSource && availableDefinitions.length > 0) {
+		// If no filename is provided, use the first available definition
+		if (!ghFilename) {
+			ghFilename = availableDefinitions[0].filename;
+		}
+
+		try {
+			const container = getDefinitionContainer();
+			const defUrl = await container.getDefinitionUrl(ghFilename);
+
+			// Load definition from URL
+			const response = await fetch(defUrl);
+			if (!response.ok) {
+				throw new Error(`Failed to fetch definition: ${response.statusText}`);
+			}
+			definitionSource = new Uint8Array(await response.arrayBuffer());
+			clientDefUrl = defUrl;
+		} catch (err) {
+			console.warn(
+				`[Strategy: Environment] Failed to load definition '${ghFilename}' from environment loader.`
+			);
+			console.warn(err);
+		}
+	}
+
 	// If no definition source was found, fail
 	if (!definitionSource) {
-		const msg = `No definition specified. Please add a .gh file to '${config.ghDefinitionsPath}' or use ?gh=filename`;
+		const msg = availableDefinitions.length > 0
+			? `Failed to load definition '${ghFilename || availableDefinitions[0].filename}'`
+			: `No definitions available. Please configure GH_DEFINITIONS_PATH or GH_DEF_* environment variables.`;
 		throw error(400, msg);
 	}
 
