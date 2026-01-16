@@ -133,12 +133,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
 		var transition = _service.StateManager.ProcessEnableInput(enable);
 
-		if (transition.IsHeadless)
-		{
-			HandleHeadlessMode(DA, document, transition);
-			return;
-		}
-
 		// Update document tracking and events
 		if (_currentDocument != document)
 		{
@@ -215,26 +209,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 		};
 	}
 
-
-	/// <summary>
-	///   Handle headless mode execution
-	/// </summary>
-	private void HandleHeadlessMode(IGH_DataAccess DA, GH_Document document, StateTransition transition)
-	{
-		if (_embeddedSchema != null)
-		{
-			// Synchronize nicknames with current Grasshopper state
-			_service.SchemaManager.SynchronizeSchemaMetadata(_embeddedSchema, document);
-			_embeddedSchema = _service.SchemaManager.ValidateSchema(_embeddedSchema, document);
-		}
-
-		if (_embeddedValues != null && _embeddedSchema != null)
-			_service.ValueApplicator.ApplyValuesAndSchedule(document, _embeddedSchema, _embeddedValues, AddRuntimeMessage);
-
-
-		DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
-		Message = ComponentMessageFormatter.CreateDisplayMessage(transition.IsEnabled, false, _embeddedSchema, _sessionId);
-	}
 
 	/// <summary>
 	///   Handle enabled state
@@ -523,6 +497,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 					AddRuntimeMessage(GH_RuntimeMessageLevel.Error, ex.InnerException.Message);
 					return false;
 				}
+
 				AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Could not load data: {ex.Message}");
 			}
 			catch (Exception ex)

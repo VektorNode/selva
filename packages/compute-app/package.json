@@ -23,7 +23,7 @@
 	"devDependencies": {
 		"@selva/config": "workspace:*",
 		"@sveltejs/adapter-auto": "catalog:",
-		"@sveltejs/adapter-node": "^5.5.0",
+		"@sveltejs/adapter-node": "^5.5.1",
 		"tw-animate-css": "catalog:"
 	}
 }

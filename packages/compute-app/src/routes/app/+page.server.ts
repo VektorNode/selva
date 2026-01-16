@@ -18,11 +18,13 @@ export const load = (async ({ url, params: _params }) => {
 
 	// Load available definitions for switcher
 	let availableDefinitions: Definition[] = [];
+	let loadError: Error | null = null;
 	if (config.ghDefinitionsPath) {
 		try {
 			const container = getDefinitionContainer();
 			availableDefinitions = await container.listDefinitions();
 		} catch (err) {
+			loadError = err instanceof Error ? err : new Error(String(err));
 			console.warn('[App Load] Failed to load available definitions:', err);
 		}
 	}
@@ -37,9 +39,10 @@ export const load = (async ({ url, params: _params }) => {
 		// If still no filename and no definitions configured, throw helpful error
 		if (!ghFilename && availableDefinitions.length === 0) {
 			const configPath = path.join(config.ghDefinitionsPath, 'definitions-config.json');
+			const detail = loadError ? `\n\nError details: ${loadError.message}` : '';
 			throw error(
 				400,
-				`No definitions configured.\n\nPlease create a definitions-config.json file at:\n${configPath}\n\nSee definitions-config.example.json for the format.`
+				`No definitions configured.\n\nPlease create a definitions-config.json file at:\n${configPath}\n\nSee definitions-config.example.json for the format.${detail}`
 			);
 		}
 
@@ -120,7 +123,8 @@ export const load = (async ({ url, params: _params }) => {
 
 			const solvedDefinition = await client.solve(definitionSource, tree);
 
-			const schema = new GrasshopperResponseProcessor(solvedDefinition).getValueByParamName(
+			const responseProcessor = new GrasshopperResponseProcessor(solvedDefinition);
+			const schema = responseProcessor.getValueByParamName(
 				'Schema',
 				{
 					parseValues: true
@@ -128,8 +132,9 @@ export const load = (async ({ url, params: _params }) => {
 			) as UISchema;
 
 			if (!schema || !schema.inputs) {
+				const availableParams = solvedDefinition.values?.map((v: any) => v.ParamName).join(', ') || 'none';
 				throw new Error(
-					`Failed to extract schema from computation response. Schema: ${JSON.stringify(schema)}`
+					`Failed to extract schema from computation response. \nAvailable outputs: ${availableParams}\nSchema value: ${JSON.stringify(schema)}`
 				);
 			}
 
