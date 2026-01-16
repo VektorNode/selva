@@ -3,7 +3,7 @@ import { error } from '@sveltejs/kit';
 import { GrasshopperResponseProcessor, TreeBuilder, GrasshopperClient } from 'selva-compute/grasshopper';
 import type { UISchema } from '@selva/shared';
 import { getServerConfig } from '$lib/server/config.server';
-import { loadDefinitionsConfig, type Definition } from '$lib/server/definitions.server';
+import { getDefinitionContainer, type Definition } from '$lib/server/definitions.server';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -20,7 +20,8 @@ export const load = (async ({ url, params: _params }) => {
 	let availableDefinitions: Definition[] = [];
 	if (config.ghDefinitionsPath) {
 		try {
-			availableDefinitions = await loadDefinitionsConfig();
+			const container = getDefinitionContainer();
+			availableDefinitions = await container.listDefinitions();
 		} catch (err) {
 			console.warn('[App Load] Failed to load available definitions:', err);
 		}
@@ -66,49 +67,18 @@ export const load = (async ({ url, params: _params }) => {
 				);
 				console.warn(` - If running in Docker, ensure volumes are mounted correctly.`);
 				console.warn(
-					` - If running in Vercel/Cloud, local file access is often restricted. Consider using GH_DEFINITIONS_BASE_URL instead.`
+					` - If running in Vercel/Cloud, local file access is often restricted. Use the environment loader with GH_DEF_* variables instead.`
 				);
 
-				// Fall through to URL strategy if text logic fails
+				// Unable to load definition
 			}
 		}
 	}
 
-	// Strategy 2: Remote URL (Fallback or Legacy)
+	// If no definition source was found, fail
 	if (!definitionSource) {
-		let fullGhUrl: string;
-
-		if (ghFilename) {
-			if (!ghFilename.endsWith('.gh')) ghFilename += '.gh';
-
-			// If we have a base URL, use it
-			let baseUrl = config.ghDefinitionsBaseUrl || '';
-
-			// If config URL looks like a file, strip the filename
-			if (baseUrl.endsWith('.gh')) {
-				baseUrl = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
-			}
-
-			if (baseUrl) {
-				if (!baseUrl.endsWith('/')) baseUrl += '/';
-				fullGhUrl = `${baseUrl}${ghFilename}`;
-			} else {
-				// No base URL configured, cant resolve
-				throw error(404, 'Definition not found locally and no base URL configured');
-			}
-		} else {
-			// Use the default from config
-			fullGhUrl = config.ghDefinitionsBaseUrl || '';
-			if (!fullGhUrl) {
-				const msg = config.ghDefinitionsPath
-					? `No definition specified. Please add a .gh file to '${config.ghDefinitionsPath}' or use ?gh=filename`
-					: 'No definition specified and no default configured';
-				throw error(400, msg);
-			}
-		}
-
-		definitionSource = fullGhUrl;
-		clientDefUrl = fullGhUrl;
+		const msg = `No definition specified. Please add a .gh file to '${config.ghDefinitionsPath}' or use ?gh=filename`;
+		throw error(400, msg);
 	}
 
 	let client;

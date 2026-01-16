@@ -55,4 +55,11 @@ ehthumbs.db
 
 # Grasshopper definitions (except in example-definitions)
 *.gh
+*.ghx
 !packages/compute-app/example-definitions/*.gh
+!packages/compute-app/example-definitions/*.ghx
+
+# Definitions config files (production, not checked in)
+definitions-config.json
+!packages/compute-app/example-definitions/definitions-config.json
+!packages/compute-app/definitions-config.example.json

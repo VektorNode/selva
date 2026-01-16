@@ -6,43 +6,47 @@ This application is built with [SvelteKit](https://kit.svelte.dev/) and is confi
 
 The compute-app uses **environment variables to configure where definitions are hosted**, and **query parameters to switch between definitions**.
 
-### Understanding GH_DEFINITIONS_BASE_URL
+### Understanding GH_DEFINITIONS_PATH
 
-This is the key to managing multiple Grasshopper scripts efficiently:
+This is the recommended approach for managing Grasshopper scripts securely:
 
 ```
-GH_DEFINITIONS_BASE_URL = /definitions      (base path)
-User visits:              ?gh=solver-1       (query parameter)
-App loads:                /definitions/solver-1.gh
+GH_DEFINITIONS_PATH = ./definitions    (local directory)
+User visits:          ?gh=solver-1     (query parameter)
+App loads:            ./definitions/solver-1.gh
 ```
 
 **You can have ONE container serve multiple definitions** by using query parameters:
 
 ```
-http://yourapp.com/app?gh=solver-1          → loads solver-1.gh
-http://yourapp.com/app?gh=parametric-design → loads parametric-design.gh
-http://yourapp.com/app?gh=analysis-tool     → loads analysis-tool.gh
+http://yourapp.com/app?gh=solver-1          → loads ./definitions/solver-1.gh
+http://yourapp.com/app?gh=parametric-design → loads ./definitions/parametric-design.gh
+http://yourapp.com/app?gh=analysis-tool     → loads ./definitions/analysis-tool.gh
 ```
 
 ### Environment Configuration Strategies
 
 Choose the strategy that matches your deployment target:
 
-#### Strategy A: Docker / VPS / Local (Safe & Easiest)
+#### Strategy A: Local Files (Recommended for Security)
 
-Use server-side file access. This keeps your scripts private and requires no external storage.
+Use server-side file access from a local directory. This keeps your scripts private and requires no external storage.
 
 1. Place `.gh` files in the `definitions/` folder.
 2. Set `GH_DEFINITIONS_PATH="./definitions"`.
 3. (Docker) Map the volume: `- ./definitions:/app/definitions`.
 
-#### Strategy B: Cloud / Vercel / Netlify (Scalable)
+#### Strategy B: Environment Variables (For Remote Definitions)
 
-Serverless environments can't easily read local files. Use a public URL.
+For cloud deployments or scenarios where you need to fetch definitions from remote servers without exposing URLs to users, use the environment loader.
 
-1. Host `.gh` files on S3, R2, or a public endpoint.
-2. Set `GH_DEFINITIONS_BASE_URL="https://storage.mycompany.com/definitions/"`.
-3. **Important**: This URL must be reachable by your Rhino Compute server.
+1. Define environment variables with your definition URLs and metadata (as JSON):
+   ```bash
+   GH_DEF_SOLVER='{"metadata":{"displayName":"Solver Algorithm","description":"Fast solver","category":"computation"},"url":"https://storage.mycompany.com/solver.gh"}'
+   GH_DEF_ANALYSIS='{"metadata":{"displayName":"Analysis Tool","description":"Data analysis","tags":["analysis","data"]},"url":"https://storage.mycompany.com/analysis.gh"}'
+   ```
+2. Set `DEFINITION_SOURCE="environment"` to use the environment loader
+3. **(Docker) Important**: These URLs must be reachable by your Rhino Compute server.
 
 ### Required Environment Variables
 
@@ -50,7 +54,8 @@ Serverless environments can't easily read local files. Use a public URL.
 | :------------------------ | :---------------------------------------------------------------------------- | :----------------------------------------------- |
 | `COMPUTE_SERVER_URL`      | The URL of your Rhino.Compute server where solving happens.                   | `http://host.docker.internal:8081`               |
 | `GH_DEFINITIONS_PATH`     | **(Strategy A)** Local path to definitions folder.                            | `./definitions`                                  |
-| `GH_DEFINITIONS_BASE_URL` | **(Strategy B)** Base URL where your Grasshopper definition files are hosted. | `https://s3.amazonaws.com/my-bucket/definitions` |
+| `DEFINITION_SOURCE`       | **(Strategy B)** Set to `"environment"` to use environment loader.            | `environment`                                    |
+| `GH_DEF_*`                | **(Strategy B)** Definition URLs (e.g., `GH_DEF_SOLVER`, `GH_DEF_ANALYSIS`). | `https://storage.mycompany.com/solver.gh`        |
 | `COMPUTE_API_KEY`         | (Optional) API Key if your Rhino.Compute server requires authentication.      | `abc-123-secret-key`                             |
 | `ORIGIN`                  | (Docker Only) The URL of this app. Prevents CSRF errors.                      | `http://localhost:3000`                          |
 
@@ -62,7 +67,7 @@ Simply create a `.env` file alongside `docker-compose.yml`:
 
 ```bash
 COMPUTE_SERVER_URL=http://host.docker.internal:8081
-GH_DEFINITIONS_BASE_URL=/definitions
+GH_DEFINITIONS_PATH=./definitions
 COMPUTE_API_KEY=your-secret-key
 ```
 
@@ -201,7 +206,7 @@ module.exports = {
       ADAPTER: "node",
       PORT: 3000,
       COMPUTE_SERVER_URL: "...",
-      GH_DEFINITIONS_BASE_URL: "..."
+      GH_DEFINITIONS_PATH: "./definitions"
     }
   }]
 }
@@ -217,7 +222,7 @@ We provide a production-ready setup using `docker-compose`.
 
 ### Usage
 
-1.  **Configure**: Edit `docker-compose.yml` in this folder to set your real `COMPUTE_SERVER_URL` and `GH_DEFINITIONS_BASE_URL`.
+1.  **Configure**: Create a `.env` file in this folder with your `COMPUTE_SERVER_URL` and `GH_DEFINITIONS_PATH`.
 2.  **Run**:
     ```bash
     # Run from the packages/compute-app directory
@@ -246,12 +251,13 @@ If the build fails, ensure you are not accidentally including large files. We us
 - **NEVER** store `.gh` files in the `static/` folder or any public directory
 - **NEVER** commit `.gh` files to public git repositories (see `.gitignore`)
 - Store definitions in **private, access-controlled locations** only:
+  - Local Docker volumes on secure infrastructure (recommended)
   - AWS S3 with authentication enabled
   - Private HTTP server behind authentication
-  - Docker volumes on secure infrastructure
-- Set `GH_DEFINITIONS_BASE_URL` in `.env` (never in version control)
+- Use `GH_DEFINITIONS_PATH` for local files (most secure, never exposed to users)
+- For remote definitions, use environment variables (`GH_DEF_*`) to keep URLs server-side
 - Review who has access to your deployment environment
 
 **See [SECURITY.md](./SECURITY.md) for complete definition file protection guide.**
 
-Current status: The app exposes definition URLs in network requests. This is acceptable for internal/trusted networks but requires careful environment setup for public deployments. Never rely on URL obscurity—use authentication and access controls.
+Current status: Local definitions are the most secure option—they're never exposed to the client. For remote definitions, the environment loader keeps URLs server-side and never sends them to the browser.

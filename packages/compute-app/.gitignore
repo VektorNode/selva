@@ -21,8 +21,8 @@ Thumbs.db
 # Grasshopper definitions (valuable, keep private)
 *.gh
 *.ghx
-definitions/
-!definitions/.gitkeep
+./definitions/
+!./definitions/.gitkeep
 
 # Exception: allow example definitions
 !example-definitions/*.gh
