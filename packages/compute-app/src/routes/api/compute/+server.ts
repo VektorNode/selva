@@ -10,8 +10,7 @@ import {
 import type { SchemaInput } from '@selva/shared';
 import { error, json } from '@sveltejs/kit';
 import { getServerConfig } from '$lib/server/config.server';
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import { getDefinitionContainer } from '$lib/server/definitions.server';
 
 interface ComputeRequest {
 	inputs: (SchemaInput & { minimum?: number; maximum?: number; stepSize?: number })[];
@@ -64,41 +63,41 @@ function transformInputParameter(
 }
 
 export const POST: RequestHandler = async ({ request }) => {
-	let definitionUrl: string = '';
-	const config = getServerConfig();
+	const container = getDefinitionContainer();
 
 	try {
 		const body: ComputeRequest = await request.json();
 
 		const { inputs, values } = body;
-		definitionUrl = body.definitionUrl;
+		const definitionUrl = body.definitionUrl;
 
 		if (!inputs || !values || !definitionUrl) {
 			throw error(400, 'Missing required fields: inputs, values, or definitionUrl');
 		}
 
 		// Determine definition source
-		let definitionSource: string | Uint8Array = definitionUrl;
+		let definitionSource: Uint8Array;
 
 		if (definitionUrl.startsWith('local:')) {
+			// Extract filename from local URL
 			const filename = definitionUrl.substring(6);
-			if (!config.ghDefinitionsPath) {
-				throw error(500, 'Local definitions not configured on server');
-			}
-
-			// Security validation
-			const safeFilename = path.basename(filename);
-			if (safeFilename !== filename || !/^[a-zA-Z0-9_\-.]+$/.test(safeFilename)) {
-				throw error(400, 'Invalid definition filename');
-			}
-
-			const filePath = path.join(config.ghDefinitionsPath, safeFilename);
 			try {
-				const fileData = await fs.readFile(filePath);
-				definitionSource = new Uint8Array(fileData);
+				definitionSource = await container.loadDefinition(filename);
 			} catch (err) {
-				console.error(`Failed to read local definition: ${filePath}`, err);
+				console.error(`Failed to load local definition: ${filename}`, err);
 				throw error(404, `Definition '${filename}' not found`);
+			}
+		} else {
+			// Fetch from remote URL
+			try {
+				const response = await fetch(definitionUrl);
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				}
+				definitionSource = new Uint8Array(await response.arrayBuffer());
+			} catch (err) {
+				console.error(`Failed to fetch definition from ${definitionUrl}:`, err);
+				throw error(400, `Failed to load definition: ${err instanceof Error ? err.message : String(err)}`);
 			}
 		}
 
@@ -109,6 +108,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		);
 
 		// Use server-side COMPUTE_SERVER_URL (not PUBLIC_)
+		const config = getServerConfig();
 		const client = await GrasshopperClient.create({
 			serverUrl: config.computeServerUrl,
 			apiKey: config.computeApiKey
