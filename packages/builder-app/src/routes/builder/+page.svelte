@@ -61,6 +61,8 @@
 		builderState?.state.availableOutputs.filter((o) => !placedInLayoutIds.has(o.id)) || []
 	);
 
+	const allAvailableInputs = $derived(builderState?.state.availableInputs || []);
+
 	function saveSchema() {
 		if (!builderState?.state.schema || !sessionId) return;
 		console.log($state.snapshot(builderState.state.schema));
@@ -197,6 +199,7 @@
 								onParameterDrop={actions.onParameterDrop}
 								onReorder={actions.onReorder}
 								onRemoveItem={actions.onRemoveItem}
+								availableInputs={allAvailableInputs}
 								{getParameterInfo}
 							/>
 						{/if}

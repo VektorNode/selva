@@ -47,6 +47,32 @@
 		}
 	});
 
+	// Apply default values when visibility conditions change
+	$effect(() => {
+		if (schema.layout.type === 'tabbed') {
+			schema.layout.tabs.forEach((tab) => {
+				tab.groups.forEach((group) => {
+					group.items.forEach((layoutItem) => {
+						const visibility = evaluateVisibility(layoutItem);
+
+						// Apply default value when item is hidden or disabled
+						if (visibility.defaultValue !== undefined && !visibility.visible) {
+							const input = getInputById(layoutItem.paramId);
+							if (input && values[input.id] !== visibility.defaultValue) {
+								values[input.id] = visibility.defaultValue;
+							}
+						} else if (visibility.defaultValue !== undefined && visibility.disabled) {
+							const input = getInputById(layoutItem.paramId);
+							if (input && values[input.id] !== visibility.defaultValue) {
+								values[input.id] = visibility.defaultValue;
+							}
+						}
+					});
+				});
+			});
+		}
+	});
+
 	function toggleGroup(groupId: string) {
 		collapsedGroups = {
 			...collapsedGroups,
@@ -67,6 +93,96 @@
 
 	function getOutputById(paramId: string): DiscoveredOutput | undefined {
 		return schema.outputs.find((o) => o.id === paramId);
+	}
+
+	// Evaluate a single visibility rule
+	function evaluateRule(rule: any, currentValues: Record<string, unknown>): boolean {
+		const ruleValue = currentValues[rule.paramId];
+		const compareValue = rule.value;
+
+		console.log('Evaluating rule:', {
+			paramId: rule.paramId,
+			operator: rule.operator,
+			ruleValue,
+			compareValue,
+			ruleValueType: typeof ruleValue,
+			compareValueType: typeof compareValue
+		});
+
+		switch (rule.operator) {
+			case 'equals':
+				return ruleValue === compareValue;
+			case 'notEquals':
+				return ruleValue !== compareValue;
+			case 'greaterThan':
+				return Number(ruleValue) > Number(compareValue);
+			case 'lessThan':
+				return Number(ruleValue) < Number(compareValue);
+			case 'greaterThanOrEqual':
+				return Number(ruleValue) >= Number(compareValue);
+			case 'lessThanOrEqual':
+				return Number(ruleValue) <= Number(compareValue);
+			case 'between':
+				if (rule.values && rule.values.length === 2) {
+					const numValue = Number(ruleValue);
+					return numValue >= Number(rule.values[0]) && numValue <= Number(rule.values[1]);
+				}
+				return false;
+			case 'in':
+				return rule.values ? rule.values.includes(String(ruleValue)) : false;
+			case 'notIn':
+				return rule.values ? !rule.values.includes(String(ruleValue)) : true;
+			default:
+				return false;
+		}
+	}
+
+	// Evaluate visibility condition for an item
+	function evaluateVisibility(item: any): {
+		visible: boolean;
+		disabled: boolean;
+		defaultValue?: unknown;
+	} {
+		if (!item.visibilityCondition || !item.visibilityCondition.rules) {
+			return { visible: true, disabled: false };
+		}
+
+		const condition = item.visibilityCondition;
+		const rules = condition.rules;
+
+		// Evaluate all rules
+		const ruleResults = rules.map((rule: any) => evaluateRule(rule, values));
+
+		// Apply mode (all = AND, any = OR)
+		const conditionMet =
+			condition.mode === 'any'
+				? ruleResults.some((result) => result)
+				: ruleResults.every((result) => result);
+
+		// Apply action
+		const action = condition.action || 'show';
+
+		console.log('Visibility evaluation:', {
+			itemParamId: item.paramId,
+			ruleResults,
+			conditionMet,
+			action,
+			defaultValue: condition.defaultValue
+		});
+
+		if (action === 'show') {
+			return { visible: conditionMet, disabled: false };
+		} else if (action === 'hide') {
+			return { visible: !conditionMet, disabled: false, defaultValue: condition.defaultValue };
+		} else if (action === 'disable') {
+			return {
+				visible: true,
+				disabled: conditionMet,
+				defaultValue: conditionMet ? condition.defaultValue : undefined
+			};
+		}
+
+		return { visible: true, disabled: false };
 	}
 </script>
 
@@ -130,29 +246,33 @@
 									style="grid-template-columns: repeat({group.columns}, minmax(0, 1fr));"
 								>
 									{#each group.items as layoutItem}
-										{#if layoutItem.type === 'input'}
-											{@const input = getInputById(layoutItem.paramId)}
-											{#if input}
-												<div class="min-w-0 overflow-hidden">
-													<InputControl
-														item={layoutItem}
-														bind:value={values[input.id]}
-														displayName={layoutItem.displayName}
-														onChange={onValueChange}
-														{environment}
-													/>
-												</div>
-											{/if}
-										{:else if layoutItem.type === 'output'}
-											{@const output = getOutputById(layoutItem.paramId)}
-											{#if output}
-												<div class="min-w-0 overflow-hidden">
-													<OutputDisplay
-														item={layoutItem}
-														value={values[layoutItem.paramId]}
-														displayName={layoutItem.displayName}
-													/>
-												</div>
+										{@const visibility = evaluateVisibility(layoutItem)}
+										{#if visibility.visible}
+											{#if layoutItem.type === 'input'}
+												{@const input = getInputById(layoutItem.paramId)}
+												{#if input}
+													<div class="min-w-0 overflow-hidden" class:opacity-50={visibility.disabled}>
+														<InputControl
+															item={layoutItem}
+															bind:value={values[input.id]}
+															displayName={layoutItem.displayName}
+															onChange={onValueChange}
+															{environment}
+															disabled={visibility.disabled}
+														/>
+													</div>
+												{/if}
+											{:else if layoutItem.type === 'output'}
+												{@const output = getOutputById(layoutItem.paramId)}
+												{#if output}
+													<div class="min-w-0 overflow-hidden">
+														<OutputDisplay
+															item={layoutItem}
+															value={values[layoutItem.paramId]}
+															displayName={layoutItem.displayName}
+														/>
+													</div>
+												{/if}
 											{/if}
 										{/if}
 									{/each}
