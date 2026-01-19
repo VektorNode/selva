@@ -5,14 +5,7 @@
  * and run `npm run generate:ts` in the schemas directory to regenerate this file.
  */
 
-export type GrasshopperParamType =
-	| 'number'
-	| 'integer'
-	| 'boolean'
-	| 'text'
-	| 'valueList'
-	| 'file'
-	| 'generic';
+export type GrasshopperParamType = 'number' | 'integer' | 'boolean' | 'text' | 'valueList' | 'file' | 'generic';
 export type InputNumberLayoutItem = LayoutItemBase & {
 	type: 'input';
 	widgetType: 'number';
@@ -85,15 +78,15 @@ export interface VisibilityRule {
 	 * Comparison operator
 	 */
 	operator:
-		| 'equals'
-		| 'notEquals'
-		| 'greaterThan'
-		| 'lessThan'
-		| 'greaterThanOrEqual'
-		| 'lessThanOrEqual'
-		| 'in'
-		| 'notIn'
-		| 'between';
+	| 'equals'
+	| 'notEquals'
+	| 'greaterThan'
+	| 'lessThan'
+	| 'greaterThanOrEqual'
+	| 'lessThanOrEqual'
+	| 'in'
+	| 'notIn'
+	| 'between';
 	/**
 	 * Value to compare against (used for equals, notEquals, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual)
 	 */
@@ -116,6 +109,16 @@ export interface VisibilityCondition {
 	 * @minItems 1
 	 */
 	rules: [VisibilityRule, ...VisibilityRule[]];
+	/**
+	 * Action to apply when condition is met: 'show' makes visible and enabled, 'hide' removes from view, 'disable' makes visible but greyed out and non-interactive
+	 */
+	action?: 'show' | 'hide' | 'disable';
+	/**
+	 * Default value to set for the parameter when condition is met. The value should be compatible with the parameter type (number, string, boolean, etc.)
+	 */
+	defaultValue?: {
+		[k: string]: unknown | undefined;
+	};
 }
 export interface NumberWidgetConfig {
 	minimum?: number;
@@ -149,7 +152,7 @@ export interface DropdownWidgetConfig {
 	};
 	required?: boolean;
 }
-export interface CheckboxWidgetConfig {}
+export interface CheckboxWidgetConfig { }
 export interface FileWidgetConfig {
 	buttonLabel?: string;
 	/**
@@ -184,23 +187,8 @@ export interface LayoutItemBase {
 	 * Base visibility (static). If false, item is always hidden regardless of conditions.
 	 */
 	visible?: boolean;
-	visibilityCondition?: VisibilityCondition1;
+	visibilityCondition?: VisibilityCondition;
 	[k: string]: unknown | undefined;
-}
-/**
- * Dynamic visibility rules based on other parameter values. Evaluated only if visible is not false.
- */
-export interface VisibilityCondition1 {
-	/**
-	 * Evaluation mode: 'all' = AND (all rules must pass), 'any' = OR (at least one rule must pass)
-	 */
-	mode?: 'all' | 'any';
-	/**
-	 * List of rules to evaluate
-	 *
-	 * @minItems 1
-	 */
-	rules: [VisibilityRule, ...VisibilityRule[]];
 }
 export interface GroupConfig {
 	id: string;
@@ -415,39 +403,31 @@ export interface ValidationIssueMessage {
 	};
 }
 
+
 // ============================================================================
 // CONSTANTS (from schema)
 // ============================================================================
 
 export const ACCEPTED_FILE_FORMATS = [
-	'.3dm',
-	'.stp',
-	'.step',
-	'.fbx',
-	'.obj',
-	'.dxf',
-	'.fbx',
-	'.stl'
+	".3dm",
+	".stp",
+	".step",
+	".fbx",
+	".obj",
+	".dxf",
+	".fbx",
+	".stl"
 ] as const;
 
 // ============================================================================
 // TYPE GUARDS
 // ============================================================================
 
-export function isInputLayoutItem(
-	item: LayoutItem
-): item is
-	| InputNumberLayoutItem
-	| InputTextLayoutItem
-	| InputDropdownLayoutItem
-	| InputCheckboxLayoutItem
-	| InputFileLayoutItem {
+export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem {
 	return item.type === 'input';
 }
 
-export function isOutputLayoutItem(
-	item: LayoutItem
-): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem {
+export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem {
 	return item.type === 'output';
 }
 
@@ -472,11 +452,6 @@ export function isFileWidget(item: LayoutItem): item is InputFileLayoutItem {
 }
 
 // Helper type aliases
-export type InputLayoutItem =
-	| InputNumberLayoutItem
-	| InputTextLayoutItem
-	| InputDropdownLayoutItem
-	| InputCheckboxLayoutItem
-	| InputFileLayoutItem;
+export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem;
 export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem;
 export type SupportedTypes = string | number | boolean;

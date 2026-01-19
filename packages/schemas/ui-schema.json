@@ -14,10 +14,10 @@
 			"description": "Grasshopper contextual parameter data types"
 		},
 
-		"//_COMMENT": "--- VISIBILITY RULES ---",
+		"//_COMMENT": "--- VISIBILITY RULES --- Visibility conditions define when to show/hide/disable parameters based on other parameter values. Ex1: action='disable'+defaultValue=2 when Leg Type='Square'. Ex2: action='hide' when Height>120. Ex3: mode='all'+action='hide'+defaultValue=5 when Width>100 AND Length<100",
 		"VisibilityRule": {
 			"type": "object",
-			"description": "Single rule for conditional visibility",
+			"description": "Single rule for conditional visibility/state",
 			"properties": {
 				"paramId": {
 					"type": "string",
@@ -51,7 +51,7 @@
 		},
 		"VisibilityCondition": {
 			"type": "object",
-			"description": "Defines conditional visibility based on other parameter values",
+			"description": "Defines conditional visibility/state and defaults based on other parameter values. When rules match, the specified action is applied and optional defaultValue is set.",
 			"properties": {
 				"mode": {
 					"type": "string",
@@ -64,6 +64,15 @@
 					"items": { "$ref": "#/definitions/VisibilityRule" },
 					"minItems": 1,
 					"description": "List of rules to evaluate"
+				},
+				"action": {
+					"type": "string",
+					"enum": ["show", "hide", "disable"],
+					"default": "show",
+					"description": "Action to apply when condition is met: 'show' makes visible and enabled, 'hide' removes from view, 'disable' makes visible but greyed out and non-interactive"
+				},
+				"defaultValue": {
+					"description": "Default value to set for the parameter when condition is met. The value should be compatible with the parameter type (number, string, boolean, etc.)"
 				}
 			},
 			"required": ["rules"],
@@ -180,8 +189,7 @@
 					"description": "Base visibility (static). If false, item is always hidden regardless of conditions."
 				},
 				"visibilityCondition": {
-					"$ref": "#/definitions/VisibilityCondition",
-					"description": "Dynamic visibility rules based on other parameter values. Evaluated only if visible is not false."
+					"$ref": "#/definitions/VisibilityCondition"
 				}
 			},
 			"required": ["id", "paramId"]
