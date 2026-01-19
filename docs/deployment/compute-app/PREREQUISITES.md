@@ -26,76 +26,55 @@ The Selva Compute App requires two critical external dependencies to function:
 
 ## 2. Network Configuration
 
-### Firewall Rules
+### Port Setup
 
-You need to allow inbound traffic on your application port (default: 3000).
+**Internal Application Port:**
 
-**On Linux (using UFW):**
+- Default: 3000 (configurable via `PORT` environment variable)
+- Compute Server: Typically 5000 (configured separately in Rhino.Compute)
+- Dev Mode WebSocket: 8765 (dev only, not needed in production)
 
-```bash
-# Allow application port
-sudo ufw allow 3000/tcp
+**External Access:**
 
-# Allow SSH (if not already enabled)
-sudo ufw allow 22/tcp
+The app is designed to run behind a **reverse proxy** (recommended for production):
 
-# Enable firewall
-sudo ufw enable
+| Scenario                     | Setup                                     | Firewall                                             |
+| ---------------------------- | ----------------------------------------- | ---------------------------------------------------- |
+| **Development**              | Direct: `http://localhost:3000`           | No changes needed                                    |
+| **Production (Recommended)** | Behind nginx/caddy on 80/443, app on 3000 | Allow 80/443 externally, restrict 3000 to proxy only |
+| **Direct Exposure**          | `http://yourip:3000` (not recommended)    | Allow 3000 externally (no SSL/DDoS protection)       |
 
-# Check status
-sudo ufw status
-```
-
-**On Linux (using iptables):**
-
-```bash
-sudo iptables -A INPUT -p tcp --dport 3000 -j ACCEPT
-sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
-```
-
-**On Cloud Providers (AWS, GCP, Azure):**
-
-Create a security group/firewall rule:
-
-- **Protocol**: TCP
-- **Port**: 3000 (or your custom port)
-- **Source**: `0.0.0.0/0` (public) or your specific IP range
-
-### Port Configuration
-
-- **Default Application Port**: 3000
-- **Compute Server Port**: Typically 5000 (varies by setup)
-- **WebSocket Port** (dev mode only): 8765
-
-If port 3000 is already in use, you can change it via environment variables.
-
----
+**If using a reverse proxy**, set the `ORIGIN` environment variable to your public URL (e.g., `ORIGIN=https://yourapp.com`).
 
 ## 3. Environment Configuration
 
-The Compute App is configured via environment variables. You will apply these settings during the deployment phase (Step 3) using configuration files (like `.env` or `ecosystem.config.cjs`) found in the repository.
-
-Prepare the following values before starting the deployment:
+The Compute App is configured via environment variables. Set these during deployment using `.env` files or deployment configs (e.g., `ecosystem.config.cjs`).
 
 ### Required Variables
 
-| Variable                  | Description                             | Example                   |
-| ------------------------- | --------------------------------------- | ------------------------- |
-| `COMPUTE_SERVER_URL`      | URL of your Rhino.Compute server        | `http://your-compute.com` |
-| `GH_DEFINITIONS_PATH`     | Local path to `.gh` files               | `./definitions`           |
-| `GH_DEFINITIONS_BASE_URL` | Alternative: Remote URL for `.gh` files | `https://example.com/gh/` |
+| Variable             | Description                      | Example                   |
+| -------------------- | -------------------------------- | ------------------------- |
+| `COMPUTE_SERVER_URL` | URL of your Rhino.Compute server | `http://your-compute.com` |
 
-**Note:** Use either `GH_DEFINITIONS_PATH` (recommended) OR `GH_DEFINITIONS_BASE_URL`, not both.
+### Definition Source (choose one)
+
+The app auto-detects the definition source. Configure via one of:
+
+- **Filesystem (default):** Set `GH_DEFINITIONS_PATH` to a local folder containing `definitions-config.json`
+- **Environment Variables:** Set `DEFINITION_SOURCE=environment` and define `GH_DEF_*` variables (for cloud/serverless)
+
+See [Definitions Setup](./DEFINITIONS_SETUP.md) for detailed configuration.
 
 ### Optional Variables
 
-| Variable          | Description                                                  | Default       |
-| ----------------- | ------------------------------------------------------------ | ------------- |
-| `COMPUTE_API_KEY` | API key for compute server (sent as RhinoComputeKey header)  | None          |
-| `PORT`            | Server port                                                  | `3000`        |
-| `HOST`            | Host binding                                                 | `localhost`   |
-| `NODE_ENV`        | Environment mode                                             | `development` |
-| `ORIGIN`          | Public URL used for origin/CSRF checks (recommended in prod) | None          |
+| Variable          | Description                                                   | Default       |
+| ----------------- | ------------------------------------------------------------- | ------------- |
+| `COMPUTE_API_KEY` | API key for compute server (sent as RhinoComputeKey header)   | None          |
+| `GH_DEF_PREFIX`   | Prefix for env var definitions (only if using env var source) | `GH_DEF_`     |
+| `PORT`            | Server port                                                   | `3000`        |
+| `HOST`            | Host binding                                                  | `localhost`   |
+| `NODE_ENV`        | Environment mode                                              | `development` |
+| `ORIGIN`          | Public URL used for origin/CSRF checks (recommended in prod)  | None          |
 
 ---
 
