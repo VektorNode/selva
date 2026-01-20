@@ -167,11 +167,13 @@
 					size={12}
 					class={`transition-transform ${showVisibilityRules ? 'rotate-180' : ''}`}
 				/>
-				Visibility Rules {hasVisibilityRules ? `(${group.visibilityCondition?.rules?.length ?? 0})` : ''}
+				Visibility Rules {hasVisibilityRules
+					? `(${group.visibilityCondition?.rules?.length ?? 0})`
+					: ''}
 			</button>
 
 			{#if showVisibilityRules}
-				<div class="mt-2 bg-card rounded p-2">
+				<div class="bg-card mt-2 rounded p-2">
 					<VisibilityRulesEditor
 						bind:visibilityCondition={group.visibilityCondition}
 						{availableInputs}

@@ -278,113 +278,113 @@
 						{#if showAdvanced}
 							<!-- Widget-Specific Options -->
 							{#if isNumberInput}
-									{@const config = item.config as NumberWidgetConfig}
-									<div class="mt-1 flex items-center justify-between text-[11px]">
-										<span class="text-muted-foreground">Slider</span>
-										<Switch
-											checked={config.renderAsSlider ?? true}
-											onCheckedChange={toggleSliderMode}
-											class="scale-75"
+								{@const config = item.config as NumberWidgetConfig}
+								<div class="mt-1 flex items-center justify-between text-[11px]">
+									<span class="text-muted-foreground">Slider</span>
+									<Switch
+										checked={config.renderAsSlider ?? true}
+										onCheckedChange={toggleSliderMode}
+										class="scale-75"
+									/>
+								</div>
+							{/if}
+
+							{#if isFileInput}
+								{@const config = item.config as FileInputWidgetConfig}
+								<div class="flex flex-col gap-2">
+									<!-- Input Type -->
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium">Input Type</span>
+										<div class="grid grid-cols-2 gap-1">
+											<button
+												onclick={() => setFileInputMode('upload')}
+												class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+													config?.defaultInputMode === 'upload'
+														? 'bg-primary text-primary-foreground border-primary'
+														: 'border-border/70 hover:border-border hover:bg-accent'
+												}`}
+											>
+												Upload
+											</button>
+											<button
+												onclick={() => setFileInputMode('url')}
+												class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+													config?.defaultInputMode === 'url'
+														? 'bg-primary text-primary-foreground border-primary'
+														: 'border-border/70 hover:border-border hover:bg-accent'
+												}`}
+											>
+												URL
+											</button>
+										</div>
+									</div>
+
+									<!-- File Formats -->
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium">File Formats</span>
+										<div class="grid max-h-24 grid-cols-3 gap-1 overflow-y-auto">
+											{#each ACCEPTED_FILE_FORMATS as format}
+												{@const isChecked = config?.acceptedFormats?.includes(format)}
+												<button
+													onclick={() => toggleAcceptedFormat(format)}
+													class={`rounded border px-1.5 py-0.5 text-[9px] whitespace-nowrap transition-colors ${
+														isChecked
+															? 'bg-primary text-primary-foreground border-primary'
+															: 'border-border/70 hover:border-border hover:bg-accent'
+													}`}
+												>
+													{format}
+												</button>
+											{/each}
+										</div>
+									</div>
+								</div>
+							{/if}
+
+							{#if isTextInput}
+								{@const config = item.config as TextWidgetConfig}
+								<div class="flex flex-col gap-2">
+									<!-- Max Length -->
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium">Max Length</span>
+										<input
+											type="number"
+											min="1"
+											bind:value={config.maxLength}
+											placeholder="No limit"
+											class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
 										/>
 									</div>
-								{/if}
 
-								{#if isFileInput}
-									{@const config = item.config as FileInputWidgetConfig}
-									<div class="flex flex-col gap-2">
-										<!-- Input Type -->
-										<div class="flex flex-col gap-1">
-											<span class="text-muted-foreground text-[10px] font-medium">Input Type</span>
-											<div class="grid grid-cols-2 gap-1">
-												<button
-													onclick={() => setFileInputMode('upload')}
-													class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-														config?.defaultInputMode === 'upload'
-															? 'bg-primary text-primary-foreground border-primary'
-															: 'border-border/70 hover:border-border hover:bg-accent'
-													}`}
-												>
-													Upload
-												</button>
-												<button
-													onclick={() => setFileInputMode('url')}
-													class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-														config?.defaultInputMode === 'url'
-															? 'bg-primary text-primary-foreground border-primary'
-															: 'border-border/70 hover:border-border hover:bg-accent'
-													}`}
-												>
-													URL
-												</button>
-											</div>
-										</div>
-
-										<!-- File Formats -->
-										<div class="flex flex-col gap-1">
-											<span class="text-muted-foreground text-[10px] font-medium">File Formats</span>
-											<div class="grid max-h-24 grid-cols-3 gap-1 overflow-y-auto">
-												{#each ACCEPTED_FILE_FORMATS as format}
-													{@const isChecked = config?.acceptedFormats?.includes(format)}
-													<button
-														onclick={() => toggleAcceptedFormat(format)}
-														class={`rounded border px-1.5 py-0.5 text-[9px] whitespace-nowrap transition-colors ${
-															isChecked
-																? 'bg-primary text-primary-foreground border-primary'
-																: 'border-border/70 hover:border-border hover:bg-accent'
-														}`}
-													>
-														{format}
-													</button>
-												{/each}
-											</div>
-										</div>
+									<!-- Pattern (Regex) -->
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium"
+											>Validation Pattern (Regex)</span
+										>
+										<input
+											type="text"
+											bind:value={config.pattern}
+											placeholder="e.g., ^[a-zA-Z0-9]+$"
+											class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 font-mono text-[10px] focus:outline-none"
+										/>
 									</div>
-								{/if}
 
-								{#if isTextInput}
-									{@const config = item.config as TextWidgetConfig}
-									<div class="flex flex-col gap-2">
-										<!-- Max Length -->
-										<div class="flex flex-col gap-1">
-											<span class="text-muted-foreground text-[10px] font-medium">Max Length</span>
-											<input
-												type="number"
-												min="1"
-												bind:value={config.maxLength}
-												placeholder="No limit"
-												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
-											/>
-										</div>
-
-										<!-- Pattern (Regex) -->
+									<!-- Custom Error Message -->
+									{#if config.pattern}
 										<div class="flex flex-col gap-1">
 											<span class="text-muted-foreground text-[10px] font-medium"
-												>Validation Pattern (Regex)</span
+												>Custom Error Message</span
 											>
 											<input
 												type="text"
-												bind:value={config.pattern}
-												placeholder="e.g., ^[a-zA-Z0-9]+$"
-												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 font-mono text-[10px] focus:outline-none"
+												bind:value={config.customErrorMessage}
+												placeholder="Invalid format"
+												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
 											/>
 										</div>
-
-										<!-- Custom Error Message -->
-										{#if config.pattern}
-											<div class="flex flex-col gap-1">
-												<span class="text-muted-foreground text-[10px] font-medium"
-													>Custom Error Message</span
-												>
-												<input
-													type="text"
-													bind:value={config.customErrorMessage}
-													placeholder="Invalid format"
-													class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
-												/>
-											</div>
-										{/if}
-									</div>
-								{/if}
+									{/if}
+								</div>
+							{/if}
 						{/if}
 					</div>
 				{/if}
@@ -400,7 +400,9 @@
 								size={12}
 								class={`transition-transform ${showVisibilityRules ? 'rotate-180' : ''}`}
 							/>
-							Visibility Rules {hasVisibilityRules ? `(${item.visibilityCondition?.rules?.length ?? 0})` : ''}
+							Visibility Rules {hasVisibilityRules
+								? `(${item.visibilityCondition?.rules?.length ?? 0})`
+								: ''}
 						</button>
 
 						{#if showVisibilityRules}

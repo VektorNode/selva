@@ -128,7 +128,7 @@
 			{#if onReorderTabs && editingTabId !== tab.id}
 				<div
 					use:dragHandleAction={tab.id}
-					class="text-muted-foreground hover:text-foreground absolute -left-2 top-1/2 -translate-y-1/2 cursor-grab p-1 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+					class="text-muted-foreground hover:text-foreground absolute top-1/2 -left-2 -translate-y-1/2 cursor-grab p-1 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
 					role="button"
 					tabindex="0"
 					aria-label="Drag to reorder tab"
