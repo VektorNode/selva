@@ -83,14 +83,14 @@
 	function getOptimalStepSize(min: number, max: number, requestedStep: number): number {
 		const range = max - min;
 		const totalSteps = range / requestedStep;
-
+		//TODO: FIX THIS
 		// If more than 1000 steps, adjust step size to keep it under 1000
-		if (totalSteps > 1000) {
-			console.warn(
-				`Adjusting step size from ${requestedStep} to ${range / 1000} for parameter ${item.paramId} to limit total steps to 1000.`
-			);
-			return range / 1000;
-		}
+		// if (totalSteps > 1000) {
+		// 	console.warn(
+		// 		`Adjusting step size from ${requestedStep} to ${range / 1000} for parameter ${item.paramId} to limit total steps to 1000.`
+		// 	);
+		// 	return range / 1000;
+		// }
 
 		return requestedStep;
 	}
