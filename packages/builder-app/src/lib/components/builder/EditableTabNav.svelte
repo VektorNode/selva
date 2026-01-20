@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import type { TabConfig } from '@selva/shared';
-	import { Pencil } from '@lucide/svelte';
+	import { GripVertical, Pencil } from '@lucide/svelte';
 
 	interface EditableTabNavProps {
 		tabs: TabConfig[];
@@ -22,6 +22,16 @@
 	// drag state
 	let draggedTabId: string | null = $state(null);
 	let dragOverTabId: string | null = $state(null);
+	let dragHandleRefs = new Map<string, HTMLDivElement | null>();
+
+	function dragHandleAction(node: HTMLDivElement, tabId: string) {
+		dragHandleRefs.set(tabId, node);
+		return {
+			destroy() {
+				dragHandleRefs.delete(tabId);
+			}
+		};
+	}
 
 	function startEdit(tab: TabConfig) {
 		editingTabId = tab.id;
@@ -51,6 +61,13 @@
 	}
 
 	function handleDragStart(e: DragEvent, tabId: string) {
+		// Only allow dragging if it started from the drag handle
+		const target = e.target as HTMLElement;
+		const dragHandle = dragHandleRefs.get(tabId);
+		if (!dragHandle?.contains(target)) {
+			e.preventDefault();
+			return;
+		}
 		draggedTabId = tabId;
 		if (e.dataTransfer) {
 			e.dataTransfer.effectAllowed = 'move';
@@ -97,9 +114,7 @@
 <div class="border-border mb-4 flex items-end gap-2 overflow-x-auto border-b">
 	{#each tabs as tab (tab.id)}
 		<div
-			class={`group relative flex items-center rounded-t-lg bg-transparent ${
-				onReorderTabs && editingTabId !== tab.id ? 'cursor-grab' : ''
-			}`}
+			class={`group relative flex items-center rounded-t-lg bg-transparent`}
 			draggable={onReorderTabs && editingTabId !== tab.id ? 'true' : 'false'}
 			ondragstart={(e) => handleDragStart(e, tab.id)}
 			ondragover={(e) => handleDragOver(e, tab.id)}
@@ -109,19 +124,32 @@
 			role="group"
 			tabindex="-1"
 		>
+			<!-- Drag Handle (only visible when reordering is enabled and not editing) -->
+			{#if onReorderTabs && editingTabId !== tab.id}
+				<div
+					use:dragHandleAction={tab.id}
+					class="text-muted-foreground hover:text-foreground absolute -left-2 top-1/2 -translate-y-1/2 cursor-grab p-1 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+					role="button"
+					tabindex="0"
+					aria-label="Drag to reorder tab"
+				>
+					<GripVertical size={12} />
+				</div>
+			{/if}
+
 			<!-- Main clickable area: switches tabs -->
 			<button
 				type="button"
 				class={`flex max-w-60 min-w-[110px] items-center gap-2 rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-all ${
 					editingTabId === tab.id ? 'select-text' : 'select-none'
-				} ${onReorderTabs && editingTabId !== tab.id ? 'cursor-grab' : ''} ${
+				} ${
 					activeTabId === tab.id
 						? 'border-primary bg-card text-primary shadow-sm'
 						: 'text-muted-foreground hover:bg-muted hover:text-foreground border-transparent'
 				} ${draggedTabId === tab.id ? 'opacity-50' : ''} ${dragOverTabId === tab.id ? 'border-l-primary border-l-4' : ''}`}
 				onclick={() => onTabChange(tab.id)}
 				aria-pressed={activeTabId === tab.id}
-				title={onReorderTabs ? 'Click to switch, drag to reorder' : 'Switch to tab'}
+				title="Switch to tab"
 			>
 				{#if tab.icon}
 					<span class="shrink-0 text-base">

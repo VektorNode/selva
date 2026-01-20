@@ -4,7 +4,7 @@
 	import type { GroupConfig, DiscoveredInput } from '@selva/shared';
 	import { Button, Card } from '@selva/shared';
 	import DropZone from './DropZone.svelte';
-	import { ChevronDown, Trash2 } from '@lucide/svelte';
+	import { ChevronDown, GripVertical, Trash2 } from '@lucide/svelte';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
 
 	interface EditableGroupProps {
@@ -36,6 +36,7 @@
 	let isDragOver = $state(false);
 	let showVisibilityRules = $state(false);
 	let hasVisibilityRules = $derived((group.visibilityCondition?.rules?.length ?? 0) > 0);
+	let dragHandleRef: HTMLDivElement | null = $state(null);
 
 	function toggleCollapsed() {
 		group.collapsed = !group.collapsed;
@@ -81,13 +82,28 @@
 	<Card.Header
 		class="border-border bg-card flex flex-row items-center justify-between gap-2 space-y-0 border-b px-3 py-2 {isDragging
 			? 'opacity-50'
-			: 'cursor-grab'} hover:bg-accent/50 transition-colors"
-		role="button"
-		tabindex={0}
+			: ''} hover:bg-accent/50 transition-colors"
 		draggable={true}
-		ondragstart={onDragStart}
+		ondragstart={(e) => {
+			const target = e.target as HTMLElement;
+			if (!dragHandleRef?.contains(target)) {
+				e.preventDefault();
+				return;
+			}
+			if (onDragStart) onDragStart(e);
+		}}
 		ondragend={onDragEnd}
 	>
+		<!-- Drag Handle -->
+		<div
+			bind:this={dragHandleRef}
+			class="text-muted-foreground hover:text-foreground flex cursor-grab items-center active:cursor-grabbing"
+			role="button"
+			tabindex="0"
+			aria-label="Drag to reorder"
+		>
+			<GripVertical size={16} />
+		</div>
 		<div class="flex flex-1 items-center gap-1.5">
 			<div class="flex flex-1 flex-col">
 				<div class="">
@@ -106,9 +122,6 @@
 						bind:value={group.label}
 						class="text-foreground hover:border-border focus:border-primary flex-1 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-sm font-medium focus:outline-none"
 						placeholder="Group name"
-						draggable="false"
-						onmousedown={(e) => e.stopPropagation()}
-						ondragstart={(e) => e.preventDefault()}
 					/>
 				</div>
 
@@ -117,9 +130,6 @@
 					bind:value={group.description}
 					class="text-muted-foreground hover:border-border focus:border-primary flex-1 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-xs focus:outline-none"
 					placeholder="Description"
-					draggable="false"
-					onmousedown={(e) => e.stopPropagation()}
-					ondragstart={(e) => e.preventDefault()}
 				/>
 			</div>
 		</div>
@@ -133,9 +143,6 @@
 						min="1"
 						max="4"
 						class="border-border bg-background text-foreground w-10 rounded border px-1 py-0.5 text-xs"
-						draggable="false"
-						onmousedown={(e) => e.stopPropagation()}
-						ondragstart={(e) => e.preventDefault()}
 					/>
 				</label>
 			{:else}

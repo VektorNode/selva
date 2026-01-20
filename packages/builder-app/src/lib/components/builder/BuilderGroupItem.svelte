@@ -8,7 +8,7 @@
 		TextWidgetConfig
 	} from '@selva/shared';
 	import { Badge, Button, Card, Switch } from '@selva/shared';
-	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown } from '@lucide/svelte';
+	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '$lib/features/builder/widget-config';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
 
@@ -44,7 +44,7 @@
 	let isDragging = $state(false);
 	let isDragOver = $state(false);
 	let dropPosition: 'before' | 'after' | null = $state(null);
-	let canDrag = $state(true);
+	let dragHandleRef: HTMLDivElement | null = $state(null);
 
 	function toggleSliderMode() {
 		if (!isNumberInput) return;
@@ -81,7 +81,12 @@
 	}
 
 	function handleDragStart(e: DragEvent) {
-		if (!canDrag) return e.preventDefault();
+		// Only allow dragging if it started from the drag handle
+		const target = e.target as HTMLElement;
+		if (!dragHandleRef?.contains(target)) {
+			e.preventDefault();
+			return;
+		}
 		isDragging = true;
 
 		dragStore.set({
@@ -179,9 +184,9 @@
 
 	<Card.Root
 		class={`
-			hover:border-primary cursor-grab py-1
+			hover:border-primary py-1
 			transition-all hover:shadow-sm
-			${isDragging ? 'cursor-grabbing opacity-50' : ''}
+			${isDragging ? 'opacity-50' : ''}
 			${isDragOver ? 'border-primary' : ''}
 			${item.type === 'input' ? 'bg-inputparam' : 'bg-outputparam'}
 		`}
@@ -192,7 +197,17 @@
 		ondragleave={handleDragLeave}
 		ondrop={handleDrop}
 	>
-		<div class="grid grid-cols-[20px_1fr] gap-3 p-2">
+		<div class="grid grid-cols-[auto_20px_1fr] gap-2 p-2">
+			<!-- Drag Handle -->
+			<div
+				bind:this={dragHandleRef}
+				class="text-muted-foreground hover:text-foreground flex cursor-grab items-start pt-0.5 active:cursor-grabbing"
+				role="button"
+				tabindex="0"
+				aria-label="Drag to reorder"
+			>
+				<GripVertical size={14} />
+			</div>
 			<div class="flex items-start pt-0.5">
 				{#if item.type === 'input'}
 					<ArrowUpFromLine size={14} class="text-muted-foreground" />
@@ -210,9 +225,6 @@
 						class="hover:border-border focus:border-primary flex-1 rounded-sm border border-transparent bg-transparent px-1 py-0.5
 							   text-xs font-medium focus:outline-none"
 						placeholder="Display Name"
-						onmousedown={() => (canDrag = false)}
-						onmouseup={() => (canDrag = true)}
-						onmouseleave={() => (canDrag = true)}
 					/>
 					<Button
 						variant="ghost"
@@ -229,9 +241,6 @@
 					class="text-muted-foreground hover:border-border focus:border-primary rounded-sm border border-transparent bg-transparent px-1
 						   py-0.5 text-[11px] focus:outline-none"
 					placeholder="Description"
-					onmousedown={() => (canDrag = false)}
-					onmouseup={() => (canDrag = true)}
-					onmouseleave={() => (canDrag = true)}
 				/>
 
 				<!-- Parameter Info / Type Badge -->
