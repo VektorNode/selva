@@ -65,12 +65,19 @@ pm2 start ecosystem.config.cjs      # Start
 pm2 status                          # Check status
 pm2 logs selva-compute              # View logs
 pm2 restart selva-compute           # Restart
+pm2 restart selva-compute --update-env  # Restart with updated environment variables
 pm2 stop selva-compute              # Stop
 pm2 delete selva-compute            # Remove
 
 # Auto-restart on reboot
 pm2 startup
 pm2 save
+```
+
+**Important:** When updating environment variables in `ecosystem.config.cjs`, use `--update-env` to reload them:
+
+```bash
+pm2 restart selva-compute --update-env
 ```
 
 ---
@@ -121,3 +128,19 @@ curl http://YOUR-COMPUTE-SERVER/health
 ls -la definitions/
 # Check filenames match query parameters
 ```
+
+**Request body size limit exceeded:**
+
+If you see errors like `Content-length of 1715807 exceeds limit of 524288 bytes`, increase the body size limit:
+
+```bash
+# Edit ecosystem.config.cjs and add/update:
+env: {
+  BODY_SIZE_LIMIT: "Infinity"  # or "50mb", "100MB", etc.
+}
+
+# Restart with updated environment
+pm2 restart selva-compute --update-env
+```
+
+This error occurs when uploading large geometry files that exceed the default 512KB limit.
