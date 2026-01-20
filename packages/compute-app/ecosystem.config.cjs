@@ -15,6 +15,8 @@ module.exports = {
 				PORT: 3000,
 				ORIGIN: 'http://your-public-ip',
 				COMPUTE_SERVER_URL: 'http://your-compute-server:5000',
+				// Increase body size limit for large geometry uploads (default 512kb)
+				BODY_SIZE_LIMIT: 'Infinity',
 				// GH_DEFINITIONS_PATH: './definitions',
 				// DEFINITION_SOURCE="environment"
 				COMPUTE_API_KEY: 'your-api-key',
