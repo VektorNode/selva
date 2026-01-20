@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import type { PageProps } from './$types';
 	import {
@@ -13,7 +13,8 @@
 		type UISchema,
 		Viewer,
 		createSolvingIndicator,
-		SolvingIndicator
+		SolvingIndicator,
+		createComputeThrottle
 	} from '@selva/shared';
 	import { hexToOklch } from '$lib/utilities/color';
 	import { GrasshopperResponseProcessor } from 'selva-compute';
@@ -48,11 +49,7 @@
 	// values is initialized once per component instance.
 	// The {#key} block in markup ensures re-creation when definition changes.
 	let values = $state<Record<string, unknown>>(createInitialValues(data.schema));
-	let solving = $state(false);
 	let error = $state('');
-
-	// UI state for debouncing the "Solving..." indicator
-	const solvingIndicator = createSolvingIndicator(() => solving);
 
 	// Viewer state
 	let meshes = $state<any[]>([]);
@@ -62,22 +59,6 @@
 	let hasPendingChanges = $state(false);
 	let isViewerFullscreen = $state(false);
 
-	// Reset state when definition changes and trigger initial solve
-	$effect(() => {
-		const _ = currentDefinition;
-
-		untrack(() => {
-			meshes = [];
-			values = createInitialValues(schema);
-			error = '';
-			solving = false;
-
-			if (schema && Object.keys(values).length > 0) {
-				performSolve();
-			}
-		});
-	});
-
 	// Check if viewer should be shown (either enableLocal or enableRemote)
 	const shouldShowViewer = $derived(
 		schema?.viewerOptions?.enableLocal || schema?.viewerOptions?.enableRemote
@@ -86,22 +67,28 @@
 	// -----------------------------
 	// Solve logic
 	// -----------------------------
-	async function performSolve() {
+
+	/** Internal solve function - called by the throttle with AbortSignal */
+	async function performSolveInternal(solveValues: Record<string, unknown>, signal: AbortSignal) {
 		try {
-			solving = true;
+			// Clear error on new attempt
 			error = '';
 
 			const payload = {
 				inputs: schema.inputs,
-				values: $state.snapshot(values),
+				values: solveValues,
 				definitionUrl: ghDefinition // Use server-provided URL
 			};
 
 			const res = await fetch('/api/compute', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload)
+				body: JSON.stringify(payload),
+				signal // Pass abort signal to fetch
 			});
+
+			// Check if aborted after fetch completes
+			if (signal.aborted) return;
 
 			if (!res.ok) {
 				const d = await res.json();
@@ -109,6 +96,9 @@
 			}
 
 			const solved = await res.json();
+
+			// Check if aborted before processing
+			if (signal.aborted) return;
 
 			const processor = new GrasshopperResponseProcessor(solved, false);
 
@@ -125,11 +115,45 @@
 			pendingValues = {};
 			hasPendingChanges = false;
 		} catch (err) {
+			// Don't show error for aborted requests (user cancelled or new request started)
+			if (err instanceof Error && err.name === 'AbortError') {
+				return;
+			}
 			error = err instanceof Error ? err.message : String(err);
-		} finally {
-			solving = false;
 		}
 	}
+
+	// Compute throttle - ensures only one request in-flight, queues latest values
+	// 60 second timeout by default
+	const computeThrottle = createComputeThrottle<Record<string, unknown>>(performSolveInternal, {
+		timeout: 60000
+	});
+
+	// Derive solving state from throttle
+	let solving = $derived(computeThrottle.isComputing);
+
+	// UI state for debouncing the "Solving..." indicator
+	const solvingIndicator = createSolvingIndicator(() => solving);
+
+	/** Trigger a solve with current values (throttled) */
+	function performSolve() {
+		computeThrottle.trigger($state.snapshot(values));
+	}
+
+	// Reset state when definition changes and trigger initial solve
+	$effect(() => {
+		const _ = currentDefinition;
+
+		untrack(() => {
+			meshes = [];
+			values = createInitialValues(schema);
+			error = '';
+
+			if (schema && Object.keys(values).length > 0) {
+				performSolve();
+			}
+		});
+	});
 
 	// -----------------------------
 	// Handlers
