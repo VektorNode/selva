@@ -21,8 +21,6 @@
 		isGroupCondition = false
 	}: VisibilityRulesEditorProps = $props();
 
-	// Don't initialize visibilityCondition here - it will be created when first rule is added
-
 	// Validation
 	let validationErrors = $derived.by(() => {
 		const errors: string[] = [];
@@ -33,8 +31,8 @@
 			if (error) errors.push(`Rule ${idx + 1}: ${error}`);
 		});
 
-		// Validate defaultValue
-		if (visibilityCondition?.defaultValue !== undefined) {
+		// Validate defaultValue (only for item conditions, not group conditions)
+		if (visibilityCondition && 'defaultValue' in visibilityCondition && visibilityCondition.defaultValue !== undefined) {
 			const error = validateDefaultValue(visibilityCondition.defaultValue, currentParamInfo);
 			if (error) errors.push(`Default value: ${error}`);
 		}
@@ -70,19 +68,12 @@
 
 		if (!visibilityCondition) {
 			// Initialize with first rule
-			if (isGroupCondition) {
-				(visibilityCondition as GroupVisibilityCondition) = {
-					mode: 'all',
-					rules: [newRule] as [VisibilityRule, ...VisibilityRule[]],
-					action: 'show'
-				};
-			} else {
-				(visibilityCondition as VisibilityCondition) = {
-					mode: 'all',
-					rules: [newRule] as [VisibilityRule, ...VisibilityRule[]],
-					action: 'show'
-				};
-			}
+			const newCondition: VisibilityCondition | GroupVisibilityCondition = {
+				mode: 'all',
+				rules: [newRule] as [VisibilityRule, ...VisibilityRule[]],
+				action: 'show'
+			};
+			visibilityCondition = newCondition;
 		} else {
 			visibilityCondition.rules = [...visibilityCondition.rules, newRule] as [
 				VisibilityRule,
@@ -179,11 +170,11 @@
 			</div>
 
 			<!-- Conditional Default Value Input (only for item conditions) -->
-			{#if !isGroupCondition && (visibilityCondition.action === 'disable' || visibilityCondition.action === 'hide')}
+			{#if !isGroupCondition && (visibilityCondition.action === 'disable' || visibilityCondition.action === 'hide') && visibilityCondition && 'defaultValue' in visibilityCondition}
 				<DefaultValueInput
 					paramType={currentParamInfo?.type}
 					paramConstraints={currentParamInfo}
-					bind:value={(visibilityCondition as VisibilityCondition).defaultValue}
+					bind:value={visibilityCondition.defaultValue}
 				/>
 			{/if}
 		</div>

@@ -55,6 +55,7 @@
 			| 'between'
 			| 'in'
 			| 'notIn'
+			| 'matches'
 	) {
 		rule.operator = newOperator;
 		// Clear value when operator changes (especially for between/in/notIn)
@@ -68,7 +69,7 @@
 	}
 </script>
 
-<div class="grid grid-cols-[1fr_120px_1fr_32px] gap-2 items-start">
+<div class="grid grid-cols-[1fr_120px_1fr_32px] items-start gap-2">
 	<!-- Input Select -->
 	<div class="flex flex-col gap-1">
 		<Select.Root
@@ -81,7 +82,7 @@
 				}
 			}}
 		>
-			<Select.Trigger class="text-[10px] h-6">
+			<Select.Trigger class="h-6 text-[10px]">
 				{selectedParamInfo?.nickname || 'Select input...'}
 			</Select.Trigger>
 			<Select.Content>
@@ -113,17 +114,18 @@
 						value === 'lessThanOrEqual' ||
 						value === 'between' ||
 						value === 'in' ||
-						value === 'notIn')
+						value === 'notIn' ||
+						value === 'matches')
 				) {
 					updateRuleOperator(value);
 				}
 			}}
 		>
-			<Select.Trigger class="text-[10px] h-6">
+			<Select.Trigger class="h-6 text-[10px]">
 				{rule.operator || 'Operator'}
 			</Select.Trigger>
 			<Select.Content>
-				{#each availableOperators as op}
+				{#each availableOperators as op (op.value)}
 					<Select.Item value={op.value} label={op.label} />
 				{/each}
 			</Select.Content>
@@ -143,7 +145,7 @@
 						rule.values = [Number(val), rule.values?.[1] || 0];
 						onUpdate(rule);
 					}}
-					class="border-border/70 bg-background focus:border-primary text-[10px] h-6 rounded border px-2 focus:outline-none"
+					class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
 					placeholder="Min"
 				/>
 				<Input
@@ -154,7 +156,7 @@
 						rule.values = [rule.values?.[0] || 0, Number(val)];
 						onUpdate(rule);
 					}}
-					class="border-border/70 bg-background focus:border-primary text-[10px] h-6 rounded border px-2 focus:outline-none"
+					class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
 					placeholder="Max"
 				/>
 			</div>
@@ -168,12 +170,35 @@
 					rule.values = val.split(',').map((v) => v.trim());
 					onUpdate(rule);
 				}}
-				class="border-border/70 bg-background focus:border-primary text-[10px] h-6 rounded border px-2 focus:outline-none"
+				class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
 				placeholder="value1,value2,..."
 			/>
 		{:else}
 			<!-- Single value input -->
-			{#if selectedParamInfo?.type === 'valueList' && selectedParamInfo?.options}
+			{#if selectedParamInfo?.type === 'boolean'}
+				<!-- Boolean: show dropdown with true/false -->
+				<Select.Root
+					type="single"
+					value={String(rule.value || '')}
+					onValueChange={(value) => {
+						if (value) updateRuleValue(value === 'true');
+					}}
+				>
+					<Select.Trigger
+						class="h-6 text-[10px] {validationError ? 'border-destructive' : 'border-border/70'}"
+					>
+						{#if rule.value !== undefined && rule.value !== null}
+							{String(rule.value)}
+						{:else}
+							Select value...
+						{/if}
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value="true" label="true" />
+						<Select.Item value="false" label="false" />
+					</Select.Content>
+				</Select.Root>
+			{:else if selectedParamInfo?.type === 'valueList' && selectedParamInfo?.options}
 				<!-- Value list: show dropdown with option names -->
 				<Select.Root
 					type="single"
@@ -183,9 +208,7 @@
 					}}
 				>
 					<Select.Trigger
-						class="text-[10px] h-6 {validationError
-							? 'border-destructive'
-							: 'border-border/70'}"
+						class="h-6 text-[10px] {validationError ? 'border-destructive' : 'border-border/70'}"
 					>
 						{#if rule.value}
 							{@const optionEntry = Object.entries(selectedParamInfo.options).find(
@@ -197,7 +220,7 @@
 						{/if}
 					</Select.Trigger>
 					<Select.Content>
-						{#each Object.entries(selectedParamInfo.options) as [name, val]}
+						{#each Object.entries(selectedParamInfo.options) as [name, val] ([name, val])}
 							<Select.Item value={val || ''} label={name} />
 						{/each}
 					</Select.Content>
@@ -217,7 +240,7 @@
 								: val
 						);
 					}}
-					class="text-[10px] h-6 rounded border px-2 focus:outline-none {validationError
+					class="h-6 rounded border px-2 text-[10px] focus:outline-none {validationError
 						? 'border-destructive'
 						: 'border-border/70 bg-background focus:border-primary'}"
 					placeholder="Value"

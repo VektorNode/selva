@@ -83,24 +83,17 @@
 		class="border-border bg-card flex flex-row items-center justify-between gap-2 space-y-0 border-b px-3 py-2 {isDragging
 			? 'opacity-50'
 			: ''} hover:bg-accent/50 transition-colors"
-		draggable={true}
-		ondragstart={(e) => {
-			const target = e.target as HTMLElement;
-			if (!dragHandleRef?.contains(target)) {
-				e.preventDefault();
-				return;
-			}
-			if (onDragStart) onDragStart(e);
-		}}
-		ondragend={onDragEnd}
 	>
 		<!-- Drag Handle -->
 		<div
 			bind:this={dragHandleRef}
-			class="text-muted-foreground hover:text-foreground flex cursor-grab items-center active:cursor-grabbing"
+			class="text-muted-foreground hover:text-foreground hover:bg-accent flex cursor-grab rounded p-1 active:cursor-grabbing"
 			role="button"
 			tabindex="0"
 			aria-label="Drag to reorder"
+			draggable="true"
+			ondragstart={onDragStart}
+			ondragend={onDragEnd}
 		>
 			<GripVertical size={16} />
 		</div>

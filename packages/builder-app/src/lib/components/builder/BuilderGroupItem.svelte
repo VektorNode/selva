@@ -81,12 +81,6 @@
 	}
 
 	function handleDragStart(e: DragEvent) {
-		// Only allow dragging if it started from the drag handle
-		const target = e.target as HTMLElement;
-		if (!dragHandleRef?.contains(target)) {
-			e.preventDefault();
-			return;
-		}
 		isDragging = true;
 
 		dragStore.set({
@@ -190,9 +184,6 @@
 			${isDragOver ? 'border-primary' : ''}
 			${item.type === 'input' ? 'bg-inputparam' : 'bg-outputparam'}
 		`}
-		draggable="true"
-		ondragstart={handleDragStart}
-		ondragend={handleDragEnd}
 		ondragover={handleDragOver}
 		ondragleave={handleDragLeave}
 		ondrop={handleDrop}
@@ -201,10 +192,13 @@
 			<!-- Drag Handle -->
 			<div
 				bind:this={dragHandleRef}
-				class="text-muted-foreground hover:text-foreground flex cursor-grab items-start pt-0.5 active:cursor-grabbing"
+				class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex cursor-grab self-start rounded p-0.5 active:cursor-grabbing"
 				role="button"
 				tabindex="0"
 				aria-label="Drag to reorder"
+				draggable="true"
+				ondragstart={handleDragStart}
+				ondragend={handleDragEnd}
 			>
 				<GripVertical size={14} />
 			</div>

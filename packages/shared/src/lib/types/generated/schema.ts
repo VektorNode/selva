@@ -86,7 +86,8 @@ export interface VisibilityRule {
     | 'lessThanOrEqual'
     | 'in'
     | 'notIn'
-    | 'between';
+    | 'between'
+    | 'matches';
   /**
    * Value to compare against (used for equals, notEquals, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual)
    */

@@ -132,6 +132,13 @@
 				return rule.values ? rule.values.includes(String(ruleValue)) : false;
 			case 'notIn':
 				return rule.values ? !rule.values.includes(String(ruleValue)) : true;
+			case 'matches':
+				try {
+					const regex = new RegExp(String(compareValue));
+					return regex.test(String(ruleValue));
+				} catch {
+					return false;
+				}
 			default:
 				return false;
 		}
@@ -156,8 +163,8 @@
 		// Apply mode (all = AND, any = OR)
 		const conditionMet =
 			condition.mode === 'any'
-				? ruleResults.some((result) => result)
-				: ruleResults.every((result) => result);
+				? ruleResults.some((result: boolean) => result)
+				: ruleResults.every((result: boolean) => result);
 
 		// Apply action
 		const action = condition.action || 'show';

@@ -34,7 +34,8 @@
 						"lessThanOrEqual",
 						"in",
 						"notIn",
-						"between"
+						"between",
+						"matches"
 					],
 					"description": "Comparison operator"
 				},

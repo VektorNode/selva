@@ -7,7 +7,73 @@ export function validateRuleValue(
 	rule: VisibilityRule,
 	paramInfo?: DiscoveredInput
 ): string | null {
-	if (!paramInfo || !rule.value) return null;
+	if (!paramInfo) return null;
+
+	// Validate 'in' and 'notIn' operators (which use rule.values array)
+	if ((rule.operator === 'in' || rule.operator === 'notIn') && rule.values) {
+		if (!Array.isArray(rule.values) || rule.values.length === 0) {
+			return 'At least one value is required';
+		}
+
+		// Validate each value in the array based on parameter type
+		for (let i = 0; i < rule.values.length; i++) {
+			const val = rule.values[i];
+
+			if (paramInfo.type === 'number' || paramInfo.type === 'integer') {
+				const numValue = Number(val);
+				if (isNaN(numValue)) {
+					return `Value ${i + 1} must be a valid number`;
+				}
+				if (paramInfo.minimum !== undefined && numValue < paramInfo.minimum) {
+					return `Value ${i + 1} must be >= ${paramInfo.minimum}`;
+				}
+				if (paramInfo.maximum !== undefined && numValue > paramInfo.maximum) {
+					return `Value ${i + 1} must be <= ${paramInfo.maximum}`;
+				}
+			}
+
+			if (paramInfo.type === 'valueList' && paramInfo.options) {
+				const validValues = Object.values(paramInfo.options);
+				if (!validValues.includes(String(val))) {
+					return `Value ${i + 1} must be one of: ${validValues.join(', ')}`;
+				}
+			}
+		}
+		return null;
+	}
+
+	// Validate 'between' operator (which uses rule.values as [min, max])
+	if (rule.operator === 'between' && rule.values) {
+		if (!Array.isArray(rule.values) || rule.values.length !== 2) {
+			return 'Between operator requires min and max values';
+		}
+
+		const minValue = Number(rule.values[0]);
+		const maxValue = Number(rule.values[1]);
+
+		if (isNaN(minValue) || isNaN(maxValue)) {
+			return 'Both min and max must be valid numbers';
+		}
+
+		if (minValue > maxValue) {
+			return 'Min value must be less than or equal to max value';
+		}
+
+		return null;
+	}
+
+	// Validate 'matches' operator (regex pattern)
+	if (rule.operator === 'matches' && rule.value) {
+		try {
+			new RegExp(String(rule.value));
+		} catch (err) {
+			return `Invalid regex pattern: ${err instanceof Error ? err.message : 'Unknown error'}`;
+		}
+		return null;
+	}
+
+	// Validate single value operators (which use rule.value)
+	if (!rule.value) return null;
 
 	// Number validation
 	if (paramInfo.type === 'number' || paramInfo.type === 'integer') {
@@ -115,7 +181,8 @@ export function getOperatorsForType(
 		return [
 			...baseOperators,
 			{ value: 'in', label: 'in' },
-			{ value: 'notIn', label: 'not in' }
+			{ value: 'notIn', label: 'not in' },
+			{ value: 'matches', label: 'matches (regex)' }
 		];
 	}
 
