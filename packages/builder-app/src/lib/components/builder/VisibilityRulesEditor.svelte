@@ -1,22 +1,24 @@
 <script lang="ts">
-	import type { VisibilityCondition, VisibilityRule, DiscoveredInput } from '@selva/shared';
+	import type { VisibilityCondition, VisibilityRule, DiscoveredInput, GroupVisibilityCondition } from '@selva/shared';
 	import { Button, Select } from '@selva/shared';
 	import RuleRow from './RuleRow.svelte';
 	import DefaultValueInput from './DefaultValueInput.svelte';
 	import { validateRuleValue, validateDefaultValue } from '$lib/utils/validation';
 
 	interface VisibilityRulesEditorProps {
-		visibilityCondition: VisibilityCondition | undefined;
+		visibilityCondition: VisibilityCondition | GroupVisibilityCondition | undefined;
 		availableInputs: DiscoveredInput[];
 		currentParamInfo?: DiscoveredInput;
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
+		isGroupCondition?: boolean;
 	}
 
 	let {
 		visibilityCondition = $bindable(),
 		availableInputs,
 		currentParamInfo,
-		getParameterInfo
+		getParameterInfo,
+		isGroupCondition = false
 	}: VisibilityRulesEditorProps = $props();
 
 	// Don't initialize visibilityCondition here - it will be created when first rule is added
@@ -68,11 +70,19 @@
 
 		if (!visibilityCondition) {
 			// Initialize with first rule
-			visibilityCondition = {
-				mode: 'all',
-				rules: [newRule] as [VisibilityRule, ...VisibilityRule[]],
-				action: 'show'
-			};
+			if (isGroupCondition) {
+				(visibilityCondition as GroupVisibilityCondition) = {
+					mode: 'all',
+					rules: [newRule] as [VisibilityRule, ...VisibilityRule[]],
+					action: 'show'
+				};
+			} else {
+				(visibilityCondition as VisibilityCondition) = {
+					mode: 'all',
+					rules: [newRule] as [VisibilityRule, ...VisibilityRule[]],
+					action: 'show'
+				};
+			}
 		} else {
 			visibilityCondition.rules = [...visibilityCondition.rules, newRule] as [
 				VisibilityRule,
@@ -146,12 +156,12 @@
 					type="single"
 					value={visibilityCondition.action || 'show'}
 					onValueChange={(value) => {
-						if (
-							visibilityCondition &&
-							value &&
-							(value === 'show' || value === 'hide' || value === 'disable')
-						) {
-							visibilityCondition.action = value;
+						if (visibilityCondition && value) {
+							if (isGroupCondition && (value === 'show' || value === 'hide')) {
+								visibilityCondition.action = value;
+							} else if (!isGroupCondition && (value === 'show' || value === 'hide' || value === 'disable')) {
+								visibilityCondition.action = value;
+							}
 						}
 					}}
 				>
@@ -161,17 +171,19 @@
 					<Select.Content>
 						<Select.Item value="show" label="Show" />
 						<Select.Item value="hide" label="Hide" />
-						<Select.Item value="disable" label="Disable" />
+						{#if !isGroupCondition}
+							<Select.Item value="disable" label="Disable" />
+						{/if}
 					</Select.Content>
 				</Select.Root>
 			</div>
 
-			<!-- Conditional Default Value Input -->
-			{#if visibilityCondition.action === 'disable' || visibilityCondition.action === 'hide'}
+			<!-- Conditional Default Value Input (only for item conditions) -->
+			{#if !isGroupCondition && (visibilityCondition.action === 'disable' || visibilityCondition.action === 'hide')}
 				<DefaultValueInput
 					paramType={currentParamInfo?.type}
 					paramConstraints={currentParamInfo}
-					bind:value={visibilityCondition.defaultValue}
+					bind:value={(visibilityCondition as VisibilityCondition).defaultValue}
 				/>
 			{/if}
 		</div>

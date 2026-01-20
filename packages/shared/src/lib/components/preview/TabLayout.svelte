@@ -184,6 +184,43 @@
 
 		return { visible: true, disabled: false };
 	}
+
+	// Evaluate visibility condition for a group
+	function evaluateGroupVisibility(group: any): { visible: boolean } {
+		if (!group.visibilityCondition || !group.visibilityCondition.rules) {
+			return { visible: true };
+		}
+
+		const condition = group.visibilityCondition;
+		const rules = condition.rules;
+
+		// Evaluate all rules
+		const ruleResults = rules.map((rule: any) => evaluateRule(rule, values));
+
+		// Apply mode (all = AND, any = OR)
+		const conditionMet =
+			condition.mode === 'any'
+				? ruleResults.some((result: boolean) => result)
+				: ruleResults.every((result: boolean) => result);
+
+		// Apply action (for groups, only show/hide)
+		const action = condition.action || 'show';
+
+		console.log('Group visibility evaluation:', {
+			groupId: group.id,
+			ruleResults,
+			conditionMet,
+			action
+		});
+
+		if (action === 'show') {
+			return { visible: conditionMet };
+		} else if (action === 'hide') {
+			return { visible: !conditionMet };
+		}
+
+		return { visible: true };
+	}
 </script>
 
 <Card.Root class="min-h-0 gap-0 py-0 shadow-sm flex w-full flex-col overflow-hidden">
@@ -212,73 +249,76 @@
 			{:else}
 				<div class="gap-8 flex flex-col">
 					{#each activeTab.groups as group}
-						<Card.Root class="gap-0 py-0 overflow-hidden">
-							<!-- Group Header -->
-							<button
-								class="px-6 py-2 flex w-full cursor-pointer items-center justify-between border-b border-border bg-muted transition-colors hover:bg-muted/80"
-								onclick={() => toggleGroup(group.id)}
-							>
-								<div class="text-left">
-									<h3 class="m-0 mb-1 text-lg font-semibold text-foreground">
-										{group.label}
-									</h3>
-									{#if group.description}
-										<p class="m-0 text-sm text-muted-foreground">
-											{group.description}
-										</p>
-									{/if}
-								</div>
-								<span
-									class="text-sm text-muted-foreground transition-transform duration-200 {collapsedGroups[
-										group.id
-									]
-										? ''
-										: 'rotate-180'}"
+						{@const groupVisibility = evaluateGroupVisibility(group)}
+						{#if groupVisibility.visible}
+							<Card.Root class="gap-0 py-0 overflow-hidden">
+								<!-- Group Header -->
+								<button
+									class="px-6 py-2 flex w-full cursor-pointer items-center justify-between border-b border-border bg-muted transition-colors hover:bg-muted/80"
+									onclick={() => toggleGroup(group.id)}
 								>
-									▼
-								</span>
-							</button>
+									<div class="text-left">
+										<h3 class="m-0 mb-1 text-lg font-semibold text-foreground">
+											{group.label}
+										</h3>
+										{#if group.description}
+											<p class="m-0 text-sm text-muted-foreground">
+												{group.description}
+											</p>
+										{/if}
+									</div>
+									<span
+										class="text-sm text-muted-foreground transition-transform duration-200 {collapsedGroups[
+											group.id
+										]
+											? ''
+											: 'rotate-180'}"
+									>
+										▼
+									</span>
+								</button>
 
-							<!-- Group Content -->
-							{#if !collapsedGroups[group.id]}
-								<Card.Content
-									class="gap-6 p-6 grid animate-[fadeIn_0.2s] overflow-x-auto"
-									style="grid-template-columns: repeat({group.columns}, minmax(0, 1fr));"
-								>
-									{#each group.items as layoutItem}
-										{@const visibility = evaluateVisibility(layoutItem)}
-										{#if visibility.visible}
-											{#if layoutItem.type === 'input'}
-												{@const input = getInputById(layoutItem.paramId)}
-												{#if input}
-													<div class="min-w-0 overflow-hidden" class:opacity-50={visibility.disabled}>
-														<InputControl
-															item={layoutItem}
-															bind:value={values[input.id]}
-															displayName={layoutItem.displayName}
-															onChange={onValueChange}
-															{environment}
-															disabled={visibility.disabled}
-														/>
-													</div>
-												{/if}
-											{:else if layoutItem.type === 'output'}
-												{@const output = getOutputById(layoutItem.paramId)}
-												{#if output}
-													<div class="min-w-0 overflow-hidden">
-														<OutputDisplay
-															item={layoutItem}
-															value={values[layoutItem.paramId]}
-															displayName={layoutItem.displayName}
-														/>
-													</div>
+								<!-- Group Content -->
+								{#if !collapsedGroups[group.id]}
+									<Card.Content
+										class="gap-6 p-6 grid animate-[fadeIn_0.2s] overflow-x-auto"
+										style="grid-template-columns: repeat({group.columns}, minmax(0, 1fr));"
+									>
+										{#each group.items as layoutItem}
+											{@const visibility = evaluateVisibility(layoutItem)}
+											{#if visibility.visible}
+												{#if layoutItem.type === 'input'}
+													{@const input = getInputById(layoutItem.paramId)}
+													{#if input}
+														<div class="min-w-0 overflow-hidden" class:opacity-50={visibility.disabled}>
+															<InputControl
+																item={layoutItem}
+																bind:value={values[input.id]}
+																displayName={layoutItem.displayName}
+																onChange={onValueChange}
+																{environment}
+																disabled={visibility.disabled}
+															/>
+														</div>
+													{/if}
+												{:else if layoutItem.type === 'output'}
+													{@const output = getOutputById(layoutItem.paramId)}
+													{#if output}
+														<div class="min-w-0 overflow-hidden">
+															<OutputDisplay
+																item={layoutItem}
+																value={values[layoutItem.paramId]}
+																displayName={layoutItem.displayName}
+															/>
+														</div>
+													{/if}
 												{/if}
 											{/if}
-										{/if}
-									{/each}
-								</Card.Content>
-							{/if}
-						</Card.Root>
+										{/each}
+									</Card.Content>
+								{/if}
+							</Card.Root>
+						{/if}
 					{/each}
 				</div>
 			{/if}

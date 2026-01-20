@@ -1,10 +1,11 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 
-	import type { GroupConfig } from '@selva/shared';
+	import type { GroupConfig, DiscoveredInput } from '@selva/shared';
 	import { Button, Card } from '@selva/shared';
 	import DropZone from './DropZone.svelte';
 	import { ChevronDown, Trash2 } from '@lucide/svelte';
+	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
 
 	interface EditableGroupProps {
 		group: GroupConfig;
@@ -14,6 +15,8 @@
 		onDragStart?: (event: DragEvent) => void;
 		onDragEnd?: (event: DragEvent) => void;
 		isDragging?: boolean;
+		availableInputs: DiscoveredInput[];
+		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
 		children: Snippet;
 	}
 
@@ -25,10 +28,14 @@
 		onDragStart,
 		onDragEnd,
 		isDragging = false,
+		availableInputs,
+		getParameterInfo,
 		children
 	}: EditableGroupProps = $props();
 
 	let isDragOver = $state(false);
+	let showVisibilityRules = $state(false);
+	let hasVisibilityRules = $derived((group.visibilityCondition?.rules?.length ?? 0) > 0);
 
 	function toggleCollapsed() {
 		group.collapsed = !group.collapsed;
@@ -141,6 +148,34 @@
 			</Button>
 		</div>
 	</Card.Header>
+
+	<!-- Visibility Rules Section -->
+	{#if !group.collapsed}
+		<div class="border-border bg-muted border-t px-3 py-2">
+			<button
+				onclick={() => (showVisibilityRules = !showVisibilityRules)}
+				class="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center gap-1 text-[11px]"
+			>
+				<ChevronDown
+					size={12}
+					class={`transition-transform ${showVisibilityRules ? 'rotate-180' : ''}`}
+				/>
+				Visibility Rules {hasVisibilityRules ? `(${group.visibilityCondition?.rules?.length ?? 0})` : ''}
+			</button>
+
+			{#if showVisibilityRules}
+				<div class="mt-2 bg-card rounded p-2">
+					<VisibilityRulesEditor
+						bind:visibilityCondition={group.visibilityCondition}
+						{availableInputs}
+						currentParamInfo={undefined}
+						{getParameterInfo}
+						isGroupCondition={true}
+					/>
+				</div>
+			{/if}
+		</div>
+	{/if}
 
 	{#if !group.collapsed}
 		<Card.Content class="bg-muted animate-[fadeIn_0.2s] p-4">

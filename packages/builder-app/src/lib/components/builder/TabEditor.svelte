@@ -190,6 +190,8 @@
 											onDragStart={(e) => handleGroupDragStart(e, group.id)}
 											onDragEnd={handleGroupDragEnd}
 											isDragging={draggedGroupId === group.id}
+											{availableInputs}
+											{getParameterInfo}
 										>
 											{#each group.items as item (item.id)}
 												{@const paramInfo = getParameterInfo(item.paramId)}
