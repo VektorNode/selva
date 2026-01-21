@@ -13,7 +13,8 @@
 		type UISchema,
 		Viewer,
 		createSolvingIndicator,
-		SolvingIndicator
+		SolvingIndicator,
+		ComputeMessages
 	} from '@selva/shared';
 	import { hexToOklch } from '$lib/utilities/color';
 	import { GrasshopperResponseProcessor } from 'selva-compute';
@@ -50,6 +51,8 @@
 	let values = $state<Record<string, unknown>>(createInitialValues(data.schema));
 	let solving = $state(false);
 	let error = $state('');
+	let computeErrors = $state<string[]>([]);
+	let computeWarnings = $state<string[]>([]);
 
 	// UI state for debouncing the "Solving..." indicator
 	const solvingIndicator = createSolvingIndicator(() => solving);
@@ -70,6 +73,8 @@
 			meshes = [];
 			values = createInitialValues(schema);
 			error = '';
+			computeErrors = [];
+			computeWarnings = [];
 			solving = false;
 
 			if (schema && Object.keys(values).length > 0) {
@@ -90,6 +95,8 @@
 		try {
 			solving = true;
 			error = '';
+			computeErrors = [];
+			computeWarnings = [];
 
 			const payload = {
 				inputs: schema.inputs,
@@ -109,6 +116,16 @@
 			}
 
 			const solved = await res.json();
+
+			console.log('Solve result:', solved);
+
+			// Extract errors and warnings from the solve result
+			if (solved.errors && Array.isArray(solved.errors)) {
+				computeErrors = solved.errors;
+			}
+			if (solved.warnings && Array.isArray(solved.warnings)) {
+				computeWarnings = solved.warnings;
+			}
 
 			const processor = new GrasshopperResponseProcessor(solved, false);
 
@@ -262,6 +279,9 @@
 				</div>
 			{/if}
 		</div>
+
+		<!-- Floating Compute Messages -->
+		<ComputeMessages errors={computeErrors} warnings={computeWarnings} />
 	</PageContainer>
 </div>
 
