@@ -14,7 +14,8 @@
 		Viewer,
 		createSolvingIndicator,
 		SolvingIndicator,
-		createComputeThrottle
+		createComputeThrottle,
+		ComputeMessages
 	} from '@selva/shared';
 	import { hexToOklch } from '$lib/utilities/color';
 	import { GrasshopperResponseProcessor } from 'selva-compute';
@@ -50,6 +51,8 @@
 	// The {#key} block in markup ensures re-creation when definition changes.
 	let values = $state<Record<string, unknown>>(createInitialValues(data.schema));
 	let error = $state('');
+	let computeErrors = $state<string[]>([]);
+	let computeWarnings = $state<string[]>([]);
 
 	// Viewer state
 	let meshes = $state<any[]>([]);
@@ -73,6 +76,8 @@
 		try {
 			// Clear error on new attempt
 			error = '';
+			computeErrors = [];
+			computeWarnings = [];
 
 			const payload = {
 				inputs: schema.inputs,
@@ -97,8 +102,15 @@
 
 			const solved = await res.json();
 
-			// Check if aborted before processing
-			if (signal.aborted) return;
+			console.log('Solve result:', solved);
+
+			// Extract errors and warnings from the solve result
+			if (solved.errors && Array.isArray(solved.errors)) {
+				computeErrors = solved.errors;
+			}
+			if (solved.warnings && Array.isArray(solved.warnings)) {
+				computeWarnings = solved.warnings;
+			}
 
 			const processor = new GrasshopperResponseProcessor(solved, false);
 
@@ -286,6 +298,9 @@
 				</div>
 			{/if}
 		</div>
+
+		<!-- Floating Compute Messages -->
+		<ComputeMessages errors={computeErrors} warnings={computeWarnings} />
 	</PageContainer>
 </div>
 
