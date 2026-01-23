@@ -10,13 +10,17 @@
 		acceptedFormats?: string[];
 		defaultInputMode?: 'upload' | 'url';
 		onChange: (value: string) => void;
+		disabled?: boolean;
 	}
+
+	//TODO: Support disabled prop in UI
 
 	let {
 		value = $bindable(),
 		acceptedFormats = [],
 		defaultInputMode = 'upload',
-		onChange
+		onChange,
+		disabled = false
 	}: Props = $props();
 
 	let fileInput: HTMLInputElement | null = $state(null);

@@ -17,6 +17,7 @@
 		onParameterDrop: (tabId: string, groupId: string, event: CustomEvent) => void;
 		onReorder: (event: CustomEvent) => void;
 		onRemoveItem: (tabId: string, groupId: string, itemId: string) => void;
+		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
 	}
 
@@ -33,6 +34,7 @@
 		onParameterDrop,
 		onReorder,
 		onRemoveItem,
+		availableInputs,
 		getParameterInfo
 	}: Props = $props();
 
@@ -188,6 +190,8 @@
 											onDragStart={(e) => handleGroupDragStart(e, group.id)}
 											onDragEnd={handleGroupDragEnd}
 											isDragging={draggedGroupId === group.id}
+											{availableInputs}
+											{getParameterInfo}
 										>
 											{#each group.items as item (item.id)}
 												{@const paramInfo = getParameterInfo(item.paramId)}
@@ -196,6 +200,8 @@
 													{paramInfo}
 													tabId={activeTab.id}
 													groupId={group.id}
+													{availableInputs}
+													{getParameterInfo}
 													onRemove={() => onRemoveItem(activeTab.id, group.id, item.id)}
 												/>
 											{/each}

@@ -30,9 +30,10 @@
 		displayName?: string;
 		onChange: (paramId: string, value: SupportedTypes) => void;
 		environment?: 'local' | 'compute';
+		disabled?: boolean;
 	}
 
-	let { item, value = $bindable(), displayName, onChange, environment }: Props = $props();
+	let { item, value = $bindable(), displayName, onChange, environment, disabled = false }: Props = $props();
 
 	const inputId = $derived(`input-${item.paramId}-${Math.random().toString(36).substring(2, 11)}`);
 
@@ -146,6 +147,7 @@
 					step={optimalStep}
 					class="flex-1"
 					onValueChange={handleSliderChange}
+					{disabled}
 				/>
 				<span class="min-w-12 text-sm text-right text-muted-foreground">
 					{typeof value === 'number'
@@ -162,6 +164,7 @@
 				max={config.maximum}
 				step={config.stepSize ?? 1}
 				placeholder={config.placeholder}
+				{disabled}
 				oninput={(e: any) => {
 					const target = e.currentTarget as HTMLInputElement;
 					const newValue = parseFloat(target.value);
@@ -185,6 +188,7 @@
 				id={inputId}
 				checked={typeof value === 'boolean' ? value : false}
 				onCheckedChange={(checked: boolean) => handleChange(checked === true)}
+				{disabled}
 			/>
 			<Label for={inputId} class="text-sm cursor-pointer text-muted-foreground">Enabled</Label>
 		</div>
@@ -198,6 +202,7 @@
 				placeholder={config.placeholder}
 				maxlength={config.maxLength}
 				class={validationError ? 'border-red-500' : ''}
+				{disabled}
 				oninput={(e: any) => {
 					const target = e.currentTarget as HTMLInputElement;
 					validationError = null; // Clear error while typing
@@ -220,8 +225,10 @@
 		</div>
 	{:else if isDropdownWidget(item)}
 		{@const config = item.config as DropdownWidgetConfig}
-		{@const optionKeys = Object.keys(config.options || {})}
-		{@const currentValue = typeof value === 'string' ? value : (optionKeys[0] ?? '')}
+		{@const options = config.options || {}}
+		{@const currentValue = typeof value === 'string' ? value : ''}
+		{@const currentLabel =
+			Object.entries(options).find(([_, val]) => val === currentValue)?.[0] || currentValue}
 		<Select.Root
 			type="single"
 			value={currentValue}
@@ -230,13 +237,14 @@
 					handleChange(selected);
 				}
 			}}
+			{disabled}
 		>
-			<Select.Trigger class="w-full">
-				{currentValue || 'Select an option...'}
+			<Select.Trigger class="w-full" {disabled}>
+				{currentLabel || 'Select an option...'}
 			</Select.Trigger>
 			<Select.Content>
-				{#each optionKeys as key (key)}
-					<Select.Item value={key} label={key} />
+				{#each Object.entries(options) as [name, val] (val)}
+					<Select.Item value={val || ''} label={name} />
 				{/each}
 			</Select.Content>
 		</Select.Root>
@@ -248,6 +256,7 @@
 			acceptedFormats={config?.acceptedFormats ?? []}
 			onChange={(newValue) => handleChange(newValue)}
 			defaultInputMode={config.defaultInputMode}
+			{disabled}
 		/>
 	{/if}
 </div>

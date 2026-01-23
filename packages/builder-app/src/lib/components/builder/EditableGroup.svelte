@@ -1,10 +1,11 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 
-	import type { GroupConfig } from '@selva/shared';
+	import type { GroupConfig, DiscoveredInput } from '@selva/shared';
 	import { Button, Card } from '@selva/shared';
 	import DropZone from './DropZone.svelte';
-	import { ChevronDown, Trash2 } from '@lucide/svelte';
+	import { ChevronDown, GripVertical, Trash2 } from '@lucide/svelte';
+	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
 
 	interface EditableGroupProps {
 		group: GroupConfig;
@@ -14,6 +15,8 @@
 		onDragStart?: (event: DragEvent) => void;
 		onDragEnd?: (event: DragEvent) => void;
 		isDragging?: boolean;
+		availableInputs: DiscoveredInput[];
+		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
 		children: Snippet;
 	}
 
@@ -25,10 +28,15 @@
 		onDragStart,
 		onDragEnd,
 		isDragging = false,
+		availableInputs,
+		getParameterInfo,
 		children
 	}: EditableGroupProps = $props();
 
 	let isDragOver = $state(false);
+	let showVisibilityRules = $state(false);
+	let hasVisibilityRules = $derived((group.visibilityCondition?.rules?.length ?? 0) > 0);
+	let dragHandleRef: HTMLDivElement | null = $state(null);
 
 	function toggleCollapsed() {
 		group.collapsed = !group.collapsed;
@@ -74,13 +82,21 @@
 	<Card.Header
 		class="border-border bg-card flex flex-row items-center justify-between gap-2 space-y-0 border-b px-3 py-2 {isDragging
 			? 'opacity-50'
-			: 'cursor-grab'} hover:bg-accent/50 transition-colors"
-		role="button"
-		tabindex={0}
-		draggable={true}
-		ondragstart={onDragStart}
-		ondragend={onDragEnd}
+			: ''} hover:bg-accent/50 transition-colors"
 	>
+		<!-- Drag Handle -->
+		<div
+			bind:this={dragHandleRef}
+			class="text-muted-foreground hover:text-foreground hover:bg-accent flex cursor-grab rounded p-1 active:cursor-grabbing"
+			role="button"
+			tabindex="0"
+			aria-label="Drag to reorder"
+			draggable="true"
+			ondragstart={onDragStart}
+			ondragend={onDragEnd}
+		>
+			<GripVertical size={16} />
+		</div>
 		<div class="flex flex-1 items-center gap-1.5">
 			<div class="flex flex-1 flex-col">
 				<div class="">
@@ -99,9 +115,6 @@
 						bind:value={group.label}
 						class="text-foreground hover:border-border focus:border-primary flex-1 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-sm font-medium focus:outline-none"
 						placeholder="Group name"
-						draggable="false"
-						onmousedown={(e) => e.stopPropagation()}
-						ondragstart={(e) => e.preventDefault()}
 					/>
 				</div>
 
@@ -110,9 +123,6 @@
 					bind:value={group.description}
 					class="text-muted-foreground hover:border-border focus:border-primary flex-1 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-xs focus:outline-none"
 					placeholder="Description"
-					draggable="false"
-					onmousedown={(e) => e.stopPropagation()}
-					ondragstart={(e) => e.preventDefault()}
 				/>
 			</div>
 		</div>
@@ -126,9 +136,6 @@
 						min="1"
 						max="4"
 						class="border-border bg-background text-foreground w-10 rounded border px-1 py-0.5 text-xs"
-						draggable="false"
-						onmousedown={(e) => e.stopPropagation()}
-						ondragstart={(e) => e.preventDefault()}
 					/>
 				</label>
 			{:else}
@@ -141,6 +148,36 @@
 			</Button>
 		</div>
 	</Card.Header>
+
+	<!-- Visibility Rules Section -->
+	{#if !group.collapsed}
+		<div class="border-border bg-muted border-t px-3 py-2">
+			<button
+				onclick={() => (showVisibilityRules = !showVisibilityRules)}
+				class="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center gap-1 text-[11px]"
+			>
+				<ChevronDown
+					size={12}
+					class={`transition-transform ${showVisibilityRules ? 'rotate-180' : ''}`}
+				/>
+				Visibility Rules {hasVisibilityRules
+					? `(${group.visibilityCondition?.rules?.length ?? 0})`
+					: ''}
+			</button>
+
+			{#if showVisibilityRules}
+				<div class="bg-card mt-2 rounded p-2">
+					<VisibilityRulesEditor
+						bind:visibilityCondition={group.visibilityCondition}
+						{availableInputs}
+						currentParamInfo={undefined}
+						{getParameterInfo}
+						isGroupCondition={true}
+					/>
+				</div>
+			{/if}
+		</div>
+	{/if}
 
 	{#if !group.collapsed}
 		<Card.Content class="bg-muted animate-[fadeIn_0.2s] p-4">
