@@ -29,6 +29,7 @@ export * from './utils/utils-shared';
 export * from './utils/file-download';
 export * from './utils/param-exporter';
 export * from './utils/solving.svelte';
+export * from './utils/computeThrottle.svelte';
 
 // Stores
 export { themeStore } from './stores/themeStore.svelte';
