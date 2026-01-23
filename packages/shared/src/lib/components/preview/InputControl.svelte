@@ -14,7 +14,7 @@
 		isCheckboxWidget,
 		isFileWidget
 	} from '$lib/types/generated';
-	import { throttle } from '$lib/utils/throttle';
+	import { debounce } from '$lib/utils/debounce';
 	import { Input } from '$lib/components/ui/input';
 	import { Slider } from '$lib/components/ui/slider';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -66,17 +66,27 @@
 		return null;
 	}
 
-	// Use throttle for sliders: immediate first update, then waits for user to pause/stop
-	// before sending next update. The WebSocket layer handles backpressure (queues latest
-	// value if Grasshopper is solving), so we can be more conservative here.
-	// 300ms = good balance between responsiveness and not spamming during rapid changes
-	const throttledOnChange = throttle((paramId: string, newValue: SupportedTypes) => {
+	// Debounced change for number inputs - waits for user to stop typing
+	// 400ms delay: user types "1000", we wait 400ms after last keystroke before sending
+	const debouncedOnChange = debounce((paramId: string, newValue: SupportedTypes) => {
 		onChange(paramId, newValue);
-	}, 300);
+	}, 400);
+
+	// Slider uses debounce: waits for user to pause/stop dragging before sending
+	// This prevents overwhelming the server during rapid slider movement
+	// 150ms = responsive enough to feel immediate, but batches rapid changes
+	const debouncedSliderChange = debounce((paramId: string, newValue: SupportedTypes) => {
+		onChange(paramId, newValue);
+	}, 150);
+
+	function handleNumberInputChange(newValue: number) {
+		value = newValue;
+		debouncedOnChange(item.paramId, newValue);
+	}
 
 	function handleSliderChange(newValue: number) {
-		value = newValue;
-		throttledOnChange(item.paramId, newValue);
+		value = newValue; // Update UI immediately for smooth visual feedback
+		debouncedSliderChange(item.paramId, newValue);
 	}
 
 	// Calculate optimal step size for slider performance
@@ -84,14 +94,14 @@
 	function getOptimalStepSize(min: number, max: number, requestedStep: number): number {
 		const range = max - min;
 		const totalSteps = range / requestedStep;
-
+		//TODO: FIX THIS
 		// If more than 1000 steps, adjust step size to keep it under 1000
-		if (totalSteps > 1000) {
-			console.warn(
-				`Adjusting step size from ${requestedStep} to ${range / 1000} for parameter ${item.paramId} to limit total steps to 1000.`
-			);
-			return range / 1000;
-		}
+		// if (totalSteps > 1000) {
+		// 	console.warn(
+		// 		`Adjusting step size from ${requestedStep} to ${range / 1000} for parameter ${item.paramId} to limit total steps to 1000.`
+		// 	);
+		// 	return range / 1000;
+		// }
 
 		return requestedStep;
 	}
@@ -156,6 +166,14 @@
 				placeholder={config.placeholder}
 				{disabled}
 				oninput={(e: any) => {
+					const target = e.currentTarget as HTMLInputElement;
+					const newValue = parseFloat(target.value);
+					if (!isNaN(newValue)) {
+						handleNumberInputChange(newValue);
+					}
+				}}
+				onblur={(e: any) => {
+					// Ensure final value is sent on blur (in case debounce hasn't fired yet)
 					const target = e.currentTarget as HTMLInputElement;
 					const newValue = parseFloat(target.value);
 					if (!isNaN(newValue)) {

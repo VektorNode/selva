@@ -18,6 +18,88 @@ interface ComputeRequest {
 	definitionUrl: string;
 }
 
+// -----------------------------
+// Caching infrastructure
+// -----------------------------
+
+/** Cache for remote definitions (URL -> bytes) */
+const definitionCache = new Map<string, { data: Uint8Array; fetchedAt: number }>();
+
+/** Cache TTL: 5 minutes */
+const DEFINITION_CACHE_TTL = 5 * 60 * 1000;
+
+/** Singleton GrasshopperClient instance */
+let cachedClient: GrasshopperClient | null = null;
+let cachedClientConfig: { serverUrl: string; apiKey?: string } | null = null;
+
+/**
+ * Get or create a GrasshopperClient instance.
+ * Reuses existing client if config hasn't changed.
+ */
+async function getClient(): Promise<GrasshopperClient> {
+	const config = getServerConfig();
+	const currentConfig = {
+		serverUrl: config.computeServerUrl,
+		apiKey: config.computeApiKey
+	};
+
+	// Check if we can reuse cached client
+	if (
+		cachedClient &&
+		cachedClientConfig &&
+		cachedClientConfig.serverUrl === currentConfig.serverUrl &&
+		cachedClientConfig.apiKey === currentConfig.apiKey
+	) {
+		return cachedClient;
+	}
+
+	// Create new client
+	cachedClient = await GrasshopperClient.create({
+		serverUrl: currentConfig.serverUrl,
+		apiKey: currentConfig.apiKey
+	});
+	cachedClientConfig = currentConfig;
+
+	return cachedClient;
+}
+
+/**
+ * Load definition from cache or fetch from remote URL.
+ * Local definitions bypass cache (handled by container).
+ */
+async function loadRemoteDefinition(url: string): Promise<Uint8Array> {
+	const now = Date.now();
+	const cached = definitionCache.get(url);
+
+	// Return cached if still fresh
+	if (cached && now - cached.fetchedAt < DEFINITION_CACHE_TTL) {
+		return cached.data;
+	}
+
+	// Fetch fresh copy
+	const response = await fetch(url);
+	if (!response.ok) {
+		throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+	}
+
+	const data = new Uint8Array(await response.arrayBuffer());
+
+	// Cache the result
+	definitionCache.set(url, { data, fetchedAt: now });
+
+	// Clean up old entries (simple LRU-ish cleanup)
+	if (definitionCache.size > 50) {
+		const entries = Array.from(definitionCache.entries());
+		entries.sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
+		// Remove oldest 10 entries
+		for (let i = 0; i < 10; i++) {
+			definitionCache.delete(entries[i][0]);
+		}
+	}
+
+	return data;
+}
+
 /**
  * Transform input parameter to Rhino Compute format
  */
@@ -88,16 +170,15 @@ export const POST: RequestHandler = async ({ request }) => {
 				throw error(404, `Definition '${filename}' not found`);
 			}
 		} else {
-			// Fetch from remote URL
+			// Fetch from remote URL (with caching)
 			try {
-				const response = await fetch(definitionUrl);
-				if (!response.ok) {
-					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-				}
-				definitionSource = new Uint8Array(await response.arrayBuffer());
+				definitionSource = await loadRemoteDefinition(definitionUrl);
 			} catch (err) {
 				console.error(`Failed to fetch definition from ${definitionUrl}:`, err);
-				throw error(400, `Failed to load definition: ${err instanceof Error ? err.message : String(err)}`);
+				throw error(
+					400,
+					`Failed to load definition: ${err instanceof Error ? err.message : String(err)}`
+				);
 			}
 		}
 
@@ -107,12 +188,8 @@ export const POST: RequestHandler = async ({ request }) => {
 				.map((input) => transformInputParameter(input, values[input.id]))
 		);
 
-		// Use server-side COMPUTE_SERVER_URL (not PUBLIC_)
-		const config = getServerConfig();
-		const client = await GrasshopperClient.create({
-			serverUrl: config.computeServerUrl,
-			apiKey: config.computeApiKey
-		});
+		// Use cached client
+		const client = await getClient();
 		const solvedDefinition = await client.solve(definitionSource, inputTree);
 
 		return json(solvedDefinition);

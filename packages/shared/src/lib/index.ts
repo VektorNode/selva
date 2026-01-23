@@ -18,6 +18,7 @@ export { default as StateDisplay } from './components/ui/StateDisplay.svelte';
 export { default as StateManager } from './components/StateManager.svelte';
 export { default as Viewer } from './components/Viewer.svelte';
 export { default as SolvingIndicator } from './components/ui/SolvingIndicator.svelte';
+export { default as ComputeMessages } from './components/ComputeMessages.svelte';
 
 // Features - Preview handlers
 export * from './features/preview/handlers';
@@ -29,6 +30,7 @@ export * from './utils/utils-shared';
 export * from './utils/file-download';
 export * from './utils/param-exporter';
 export * from './utils/solving.svelte';
+export * from './utils/computeThrottle.svelte';
 
 // Stores
 export { themeStore } from './stores/themeStore.svelte';
