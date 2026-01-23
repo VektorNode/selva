@@ -14,8 +14,8 @@
 		Viewer,
 		createSolvingIndicator,
 		SolvingIndicator,
-		createComputeThrottle,
-		ComputeMessages
+		ComputeMessages,
+		createComputeThrottle
 	} from '@selva/shared';
 	import { hexToOklch } from '$lib/utilities/color';
 	import { GrasshopperResponseProcessor } from 'selva-compute';
@@ -102,6 +102,9 @@
 
 			const solved = await res.json();
 
+			// Check if aborted before processing
+			if (signal.aborted) return;
+
 			console.log('Solve result:', solved);
 
 			// Extract errors and warnings from the solve result
@@ -160,6 +163,8 @@
 			meshes = [];
 			values = createInitialValues(schema);
 			error = '';
+			computeErrors = [];
+			computeWarnings = [];
 
 			if (schema && Object.keys(values).length > 0) {
 				performSolve();
