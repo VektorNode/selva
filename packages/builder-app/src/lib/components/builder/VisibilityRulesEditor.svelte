@@ -1,5 +1,10 @@
 <script lang="ts">
-	import type { VisibilityCondition, VisibilityRule, DiscoveredInput, GroupVisibilityCondition } from '@selva/shared';
+	import type {
+		VisibilityCondition,
+		VisibilityRule,
+		DiscoveredInput,
+		GroupVisibilityCondition
+	} from '@selva/shared';
 	import { Button, Select } from '@selva/shared';
 	import RuleRow from './RuleRow.svelte';
 	import DefaultValueInput from './DefaultValueInput.svelte';
@@ -11,6 +16,7 @@
 		currentParamInfo?: DiscoveredInput;
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
 		isGroupCondition?: boolean;
+		options?: Record<string, string | undefined>;
 	}
 
 	let {
@@ -18,7 +24,8 @@
 		availableInputs,
 		currentParamInfo,
 		getParameterInfo,
-		isGroupCondition = false
+		isGroupCondition = false,
+		options
 	}: VisibilityRulesEditorProps = $props();
 
 	// Validation
@@ -32,9 +39,15 @@
 		});
 
 		// Validate defaultValue (only for item conditions, not group conditions)
-		if (visibilityCondition && 'defaultValue' in visibilityCondition && visibilityCondition.defaultValue !== undefined) {
-			const error = validateDefaultValue(visibilityCondition.defaultValue, currentParamInfo);
-			if (error) errors.push(`Default value: ${error}`);
+		if (visibilityCondition && !isGroupCondition) {
+			const item = visibilityCondition as VisibilityCondition;
+			if (
+				(item.action === 'disable' || item.action === 'hide') &&
+				item.defaultValue !== undefined
+			) {
+				const error = validateDefaultValue(item.defaultValue, currentParamInfo);
+				if (error) errors.push(`Default value: ${error}`);
+			}
 		}
 
 		return errors;
@@ -51,10 +64,10 @@
 
 	function modeButtonClass(mode: 'all' | 'any') {
 		const isActive = visibilityCondition?.mode === mode;
-		return `rounded border px-2 py-0.5 text-[10px] transition-colors ${
+		return `px-2 py-0.5 text-[9px] rounded-sm transition-all ${
 			isActive
-				? 'bg-primary text-primary-foreground border-primary'
-				: 'border-border/70 hover:border-border hover:bg-accent'
+				? 'bg-background shadow-sm text-foreground font-medium'
+				: 'text-muted-foreground hover:text-foreground hover:bg-background/50'
 		}`;
 	}
 
@@ -103,86 +116,123 @@
 	}
 </script>
 
-<div class="flex flex-col gap-3 mt-2">
-	<!-- Mode Toggle (AND/OR) -->
-	{#if visibilityCondition && visibilityCondition.rules?.length > 1}
-		<div class="flex items-center justify-between">
-			<span class="text-[10px] text-muted-foreground">Logic Mode</span>
-			<div class="flex gap-1">
-				<button onclick={() => setMode('all')} class={modeButtonClass('all')}>AND</button>
-				<button onclick={() => setMode('any')} class={modeButtonClass('any')}>OR</button>
-			</div>
-		</div>
-	{/if}
+<div class="mt-2 flex flex-col gap-4">
+	<!-- Conditions Section -->
+	<div class="flex flex-col gap-2">
+		<div class="flex items-center justify-between px-1">
+			<span class="text-foreground text-[11px] font-semibold">When...</span>
 
-	<!-- Rules List -->
-	{#if visibilityCondition?.rules && visibilityCondition.rules.length > 0}
-		<div class="flex flex-col gap-2">
-			{#each visibilityCondition.rules as rule, index (index)}
-				<RuleRow
-					{rule}
-					{index}
-					{availableInputs}
-					{getParameterInfo}
-					{currentParamInfo}
-					onUpdate={(updatedRule) => updateRule(index, updatedRule)}
-					onRemove={() => removeRule(index)}
-				/>
-			{/each}
-		</div>
-	{/if}
-
-	<!-- Add Rule Button -->
-	<Button variant="outline" size="sm" onclick={addRule} class="w-full text-[10px] h-7">
-		+ Add Rule
-	</Button>
-
-	<!-- Action & Default Value -->
-	{#if visibilityCondition && visibilityCondition.rules?.length > 0}
-		<div class="border-border/70 mt-1 border-t pt-2 flex flex-col gap-2">
-			<!-- Action Select -->
-			<div class="flex flex-col gap-1">
-				<span class="text-muted-foreground text-[10px] font-medium">Action</span>
-				<Select.Root
-					type="single"
-					value={visibilityCondition.action || 'show'}
-					onValueChange={(value) => {
-						if (visibilityCondition && value) {
-							if (isGroupCondition && (value === 'show' || value === 'hide')) {
-								visibilityCondition.action = value;
-							} else if (!isGroupCondition && (value === 'show' || value === 'hide' || value === 'disable')) {
-								visibilityCondition.action = value;
-							}
-						}
-					}}
-				>
-					<Select.Trigger class="text-[10px] h-6">
-						{visibilityCondition.action || 'show'}
-					</Select.Trigger>
-					<Select.Content>
-						<Select.Item value="show" label="Show" />
-						<Select.Item value="hide" label="Hide" />
-						{#if !isGroupCondition}
-							<Select.Item value="disable" label="Disable" />
-						{/if}
-					</Select.Content>
-				</Select.Root>
-			</div>
-
-			<!-- Conditional Default Value Input (only for item conditions) -->
-			{#if !isGroupCondition && (visibilityCondition.action === 'disable' || visibilityCondition.action === 'hide') && visibilityCondition && 'defaultValue' in visibilityCondition}
-				<DefaultValueInput
-					paramType={currentParamInfo?.type}
-					paramConstraints={currentParamInfo}
-					bind:value={visibilityCondition.defaultValue}
-				/>
+			<!-- Logic Mode Toggle -->
+			{#if visibilityCondition && visibilityCondition.rules?.length > 1}
+				<div class="bg-muted flex h-6 items-center gap-0.5 rounded p-0.5">
+					<button onclick={() => setMode('all')} class={modeButtonClass('all')}>AND</button>
+					<button onclick={() => setMode('any')} class={modeButtonClass('any')}>OR</button>
+				</div>
 			{/if}
+		</div>
+
+		{#if visibilityCondition?.rules && visibilityCondition.rules.length > 0}
+			<div class="border-border/50 flex flex-col gap-2 border-l-2 pl-1">
+				{#each visibilityCondition.rules as rule, index (index)}
+					<RuleRow
+						{rule}
+						{index}
+						{availableInputs}
+						{getParameterInfo}
+						{currentParamInfo}
+						onUpdate={(updatedRule) => updateRule(index, updatedRule)}
+						onRemove={() => removeRule(index)}
+					/>
+				{/each}
+			</div>
+		{/if}
+
+		<Button
+			variant="ghost"
+			size="sm"
+			onclick={addRule}
+			class="border-border/60 text-muted-foreground hover:bg-muted/50 hover:text-foreground h-7 w-full border border-dashed text-[10px]"
+		>
+			+ Add Condition
+		</Button>
+	</div>
+
+	<!-- Effects Section -->
+	{#if visibilityCondition && visibilityCondition.rules?.length > 0}
+		<div class="border-border/60 bg-muted/20 flex flex-col gap-3 rounded-lg border p-3">
+			<span class="text-foreground text-[11px] font-semibold">Then...</span>
+
+			<div class="grid grid-cols-[1fr,1.5fr] items-start gap-3">
+				<!-- Action Select -->
+				<div class="flex flex-col gap-1.5">
+					<span class="text-muted-foreground text-[10px] font-medium tracking-wider uppercase"
+						>Action</span
+					>
+					<Select.Root
+						type="single"
+						value={visibilityCondition.action || 'show'}
+						onValueChange={(value) => {
+							if (visibilityCondition && value) {
+								if (isGroupCondition && (value === 'show' || value === 'hide')) {
+									visibilityCondition.action = value;
+								} else if (
+									!isGroupCondition &&
+									(value === 'show' || value === 'hide' || value === 'disable')
+								) {
+									visibilityCondition.action = value;
+								}
+							}
+						}}
+					>
+						<Select.Trigger class="bg-background h-8 text-[11px]">
+							{visibilityCondition.action?.toUpperCase() || 'SHOW'}
+						</Select.Trigger>
+						<Select.Content>
+							<Select.Item value="show" label="Show" />
+							<Select.Item value="hide" label="Hide" />
+							{#if !isGroupCondition}
+								<Select.Item value="disable" label="Disable" />
+							{/if}
+						</Select.Content>
+					</Select.Root>
+				</div>
+
+				<!-- Conditional Default Value Input -->
+				{#if !isGroupCondition && (visibilityCondition.action === 'disable' || visibilityCondition.action === 'hide')}
+					<div class="flex flex-col gap-1.5">
+						<span class="text-muted-foreground text-[10px] font-medium tracking-wider uppercase"
+							>Set Value To</span
+						>
+						<div class="h-8 [&_.flex-col]:gap-0 [&_span]:hidden">
+							<DefaultValueInput
+								paramType={currentParamInfo?.type}
+								paramConstraints={currentParamInfo}
+								{options}
+								bind:value={(visibilityCondition as VisibilityCondition).defaultValue}
+							/>
+						</div>
+					</div>
+				{:else}
+					<div class="flex flex-col gap-1.5">
+						<span class="text-muted-foreground/30 text-[10px] font-medium tracking-wider uppercase"
+							>Set Value To</span
+						>
+						<div
+							class="border-border/40 bg-muted/10 text-muted-foreground/40 flex h-8 items-center rounded border border-dashed px-3 text-[10px] italic"
+						>
+							Keep current value
+						</div>
+					</div>
+				{/if}
+			</div>
 		</div>
 	{/if}
 
 	<!-- Validation Errors -->
 	{#if hasErrors}
-		<div class="bg-destructive/10 border-destructive text-destructive rounded border p-2 text-[9px]">
+		<div
+			class="bg-destructive/10 border-destructive text-destructive rounded border p-2 text-[9px]"
+		>
 			{#each validationErrors as error}
 				<div>• {error}</div>
 			{/each}

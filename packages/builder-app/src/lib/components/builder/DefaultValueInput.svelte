@@ -7,11 +7,34 @@
 		paramType?: GrasshopperParamType;
 		paramConstraints?: DiscoveredInput;
 		value: unknown;
+		options?: Record<string, string | undefined>;
 	}
 
-	let { paramType, paramConstraints, value = $bindable() }: DefaultValueInputProps = $props();
+	let {
+		paramType,
+		paramConstraints,
+		value = $bindable(),
+		options
+	}: DefaultValueInputProps = $props();
 
 	let validationError = $derived(validateDefaultValue(value, paramConstraints));
+
+	function handleIntegerKeydown(e: KeyboardEvent) {
+		if (paramType === 'integer' && (e.key === '.' || e.key === ',')) {
+			e.preventDefault();
+		}
+	}
+
+	function handleNumberInput(e: Event & { currentTarget: HTMLInputElement }) {
+		if (e.currentTarget.value === '') {
+			value = undefined;
+			return;
+		}
+		const num = parseFloat(e.currentTarget.value);
+		if (!isNaN(num)) {
+			value = num;
+		}
+	}
 </script>
 
 <div class="flex flex-col gap-1">
@@ -21,10 +44,12 @@
 		<Input
 			type="number"
 			bind:value
+			onkeydown={handleIntegerKeydown}
+			oninput={handleNumberInput}
 			min={paramConstraints?.minimum}
 			max={paramConstraints?.maximum}
 			step={paramConstraints?.stepSize || (paramType === 'integer' ? 1 : 0.1)}
-			class="bg-background focus:border-primary text-[10px] h-6 rounded border px-2 focus:outline-none {validationError
+			class="bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none {validationError
 				? 'border-destructive'
 				: 'border-border/70'}"
 			placeholder="Enter default value"
@@ -38,7 +63,8 @@
 			/>
 			<span class="text-[10px]">{value ? 'True' : 'False'}</span>
 		</div>
-	{:else if paramType === 'valueList' && paramConstraints?.options}
+	{:else if paramType === 'valueList' && (options || paramConstraints?.options)}
+		{@const availableOptions = options || paramConstraints?.options || {}}
 		<Select.Root
 			type="single"
 			value={String(value || '')}
@@ -46,19 +72,19 @@
 				if (newValue) value = newValue;
 			}}
 		>
-			<Select.Trigger class="text-[10px] h-6">
+			<Select.Trigger class="h-6 text-[10px]">
 				{#if value}
-					{@const optionEntry = Object.entries(paramConstraints.options).find(
-						([_, val]) => val === value
-					)}
+					{@const optionEntry = Object.entries(availableOptions).find(([_, val]) => val === value)}
 					{optionEntry ? optionEntry[0] : value}
 				{:else}
 					Select default...
 				{/if}
 			</Select.Trigger>
 			<Select.Content>
-				{#each Object.entries(paramConstraints.options) as [key, val]}
-					<Select.Item value={val || ''} label={key} />
+				{#each Object.entries(availableOptions) as [key, val]}
+					{#if val !== undefined}
+						<Select.Item value={val} label={key} />
+					{/if}
 				{/each}
 			</Select.Content>
 		</Select.Root>
@@ -67,7 +93,7 @@
 		<Input
 			type="text"
 			bind:value
-			class="bg-background focus:border-primary text-[10px] h-6 rounded border px-2 focus:outline-none {validationError
+			class="bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none {validationError
 				? 'border-destructive'
 				: 'border-border/70'}"
 			placeholder="Enter default value"

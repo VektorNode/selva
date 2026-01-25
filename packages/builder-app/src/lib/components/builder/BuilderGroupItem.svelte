@@ -405,6 +405,9 @@
 								{availableInputs}
 								currentParamInfo={paramInfo}
 								{getParameterInfo}
+								options={item.type === 'input' && item.widgetType === 'dropdown'
+									? item.config.options
+									: undefined}
 							/>
 						{/if}
 					</div>
