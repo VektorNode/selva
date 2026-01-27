@@ -13,13 +13,6 @@
 			"coverImage": "http://localhost:5173/images/table_example.png",
 			"category": "Product",
 			"tags": ["parametric", "geometry", "forms"]
-		},
-		"table_exampleBW": {
-			"displayName": "Black & White Parametric Form Generator",
-			"description": "Create a simple parametric table with ease - B&W version",
-			"coverImage": "http://localhost:5173/images/table_exampleBW.png",
-			"category": "Product",
-			"tags": ["parametric", "geometry", "forms"]
 		}
 	}
 }
