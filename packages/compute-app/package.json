@@ -1,6 +1,6 @@
 {
 	"name": "selva-compute-app",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"description": "Selva Rhino Compute application for iframe embedding",
 	"private": true,
 	"type": "module",
@@ -11,7 +11,8 @@
 		"start": "node build/index.js",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"type-check": "tsc --noEmit"
+		"type-check": "tsc --noEmit",
+		"lint": "eslint . --ext .js,.ts,.svelte"
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",

@@ -302,7 +302,7 @@ public class BridgeCommunicationService : IDisposable
 			{
 				EnableLocal = false,
 				EnableRemote = false,
-				BackgroundColor = "#ffffff"
+				BackgroundColor = "#f3f3f3"
 			},
 			InstanceSolve = true
 		};

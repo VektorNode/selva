@@ -1,6 +1,10 @@
 import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
-import { GrasshopperResponseProcessor, TreeBuilder, GrasshopperClient } from 'selva-compute/grasshopper';
+import {
+	GrasshopperResponseProcessor,
+	TreeBuilder,
+	GrasshopperClient
+} from 'selva-compute/grasshopper';
 import type { UISchema } from '@selva/shared';
 import { getServerConfig } from '$lib/server/config.server';
 import { getDefinitionContainer, type Definition } from '$lib/server/definitions.server';
@@ -103,17 +107,18 @@ export const load = (async ({ url, params: _params }) => {
 			const solvedDefinition = await client.solve(definitionSource, tree);
 
 			const responseProcessor = new GrasshopperResponseProcessor(solvedDefinition);
-			const schema = responseProcessor.getValueByParamName(
-				'Schema',
-				{
-					parseValues: true
-				}
-			) as UISchema;
+			const schema = responseProcessor.getValueByParamName('Schema', {
+				parseValues: true
+			}) as UISchema;
 
 			if (!schema || !schema.inputs) {
-				const availableParams = solvedDefinition.values?.map((v: any) => v.ParamName).join(', ') || 'none';
+				const availableParams =
+					solvedDefinition.values?.map((v: any) => v.ParamName).join(', ') || 'none';
 				throw new Error(
-					`Failed to extract schema from computation response. \nAvailable outputs: ${availableParams}\nSchema value: ${JSON.stringify(schema)}`
+					`Failed to extract UI schema from computation response.\n` +
+					`Available outputs: ${availableParams}\n` +
+					`Schema value: ${JSON.stringify(schema)}\n\n` +
+					`In Grasshopper, verify a Context Bake component with the output name 'Schema' is present and wired to the solver.`
 				);
 			}
 

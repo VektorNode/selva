@@ -8,8 +8,9 @@
 		TextWidgetConfig
 	} from '@selva/shared';
 	import { Badge, Button, Card, Switch } from '@selva/shared';
-	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown } from '@lucide/svelte';
+	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '$lib/features/builder/widget-config';
+	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
 
 	interface BuilderGroupItemProps {
 		item: LayoutItem;
@@ -17,20 +18,33 @@
 		tabId: string;
 		groupId: string;
 		onRemove: () => void;
+		availableInputs: DiscoveredInput[];
+		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
 	}
 
-	let { item, paramInfo, tabId, groupId, onRemove }: BuilderGroupItemProps = $props();
+	let {
+		item = $bindable(),
+		paramInfo,
+		tabId,
+		groupId,
+		onRemove,
+		availableInputs,
+		getParameterInfo
+	}: BuilderGroupItemProps = $props();
 
 	let isNumberInput = $derived(item.type === 'input' && item.widgetType === 'number');
 	let isFileInput = $derived(item.type === 'input' && item.widgetType === 'file');
 	let isTextInput = $derived(item.type === 'input' && item.widgetType === 'text');
 	let showAdvanced = $state(false);
+	let showVisibilityRules = $state(false);
+	let hasVisibilityRules = $derived((item.visibilityCondition?.rules?.length ?? 0) > 0);
+	// Advanced section only for widget-specific options
 	let hasAdvancedOptions = $derived(isNumberInput || isFileInput || isTextInput);
 
 	let isDragging = $state(false);
 	let isDragOver = $state(false);
 	let dropPosition: 'before' | 'after' | null = $state(null);
-	let canDrag = $state(true);
+	let dragHandleRef: HTMLDivElement | null = $state(null);
 
 	function toggleSliderMode() {
 		if (!isNumberInput) return;
@@ -67,7 +81,6 @@
 	}
 
 	function handleDragStart(e: DragEvent) {
-		if (!canDrag) return e.preventDefault();
 		isDragging = true;
 
 		dragStore.set({
@@ -165,20 +178,30 @@
 
 	<Card.Root
 		class={`
-			hover:border-primary cursor-grab py-1
+			hover:border-primary py-1
 			transition-all hover:shadow-sm
-			${isDragging ? 'cursor-grabbing opacity-50' : ''}
+			${isDragging ? 'opacity-50' : ''}
 			${isDragOver ? 'border-primary' : ''}
 			${item.type === 'input' ? 'bg-inputparam' : 'bg-outputparam'}
 		`}
-		draggable="true"
-		ondragstart={handleDragStart}
-		ondragend={handleDragEnd}
 		ondragover={handleDragOver}
 		ondragleave={handleDragLeave}
 		ondrop={handleDrop}
 	>
-		<div class="grid grid-cols-[20px_1fr] gap-3 p-2">
+		<div class="grid grid-cols-[auto_20px_1fr] gap-2 p-2">
+			<!-- Drag Handle -->
+			<div
+				bind:this={dragHandleRef}
+				class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex cursor-grab self-start rounded p-0.5 active:cursor-grabbing"
+				role="button"
+				tabindex="0"
+				aria-label="Drag to reorder"
+				draggable="true"
+				ondragstart={handleDragStart}
+				ondragend={handleDragEnd}
+			>
+				<GripVertical size={14} />
+			</div>
 			<div class="flex items-start pt-0.5">
 				{#if item.type === 'input'}
 					<ArrowUpFromLine size={14} class="text-muted-foreground" />
@@ -196,9 +219,6 @@
 						class="hover:border-border focus:border-primary flex-1 rounded-sm border border-transparent bg-transparent px-1 py-0.5
 							   text-xs font-medium focus:outline-none"
 						placeholder="Display Name"
-						onmousedown={() => (canDrag = false)}
-						onmouseup={() => (canDrag = true)}
-						onmouseleave={() => (canDrag = true)}
 					/>
 					<Button
 						variant="ghost"
@@ -215,9 +235,6 @@
 					class="text-muted-foreground hover:border-border focus:border-primary rounded-sm border border-transparent bg-transparent px-1
 						   py-0.5 text-[11px] focus:outline-none"
 					placeholder="Description"
-					onmousedown={() => (canDrag = false)}
-					onmouseup={() => (canDrag = true)}
-					onmouseleave={() => (canDrag = true)}
 				/>
 
 				<!-- Parameter Info / Type Badge -->
@@ -252,113 +269,146 @@
 							Advanced
 						</button>
 
-						{#if showAdvanced && isNumberInput}
-							{@const config = item.config as NumberWidgetConfig}
-							<div class="mt-1 flex items-center justify-between text-[11px]">
-								<span class="text-muted-foreground">Slider</span>
-								<Switch
-									checked={config.renderAsSlider ?? true}
-									onCheckedChange={toggleSliderMode}
-									class="scale-75"
-								/>
-							</div>
-						{/if}
-
-						{#if showAdvanced && isFileInput}
-							{@const config = item.config as FileInputWidgetConfig}
-							<div class="flex flex-col gap-2">
-								<!-- Input Type -->
-								<div class="flex flex-col gap-1">
-									<span class="text-muted-foreground text-[10px] font-medium">Input Type</span>
-									<div class="grid grid-cols-2 gap-1">
-										<button
-											onclick={() => setFileInputMode('upload')}
-											class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-												config?.defaultInputMode === 'upload'
-													? 'bg-primary text-primary-foreground border-primary'
-													: 'border-border/70 hover:border-border hover:bg-accent'
-											}`}
-										>
-											Upload
-										</button>
-										<button
-											onclick={() => setFileInputMode('url')}
-											class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-												config?.defaultInputMode === 'url'
-													? 'bg-primary text-primary-foreground border-primary'
-													: 'border-border/70 hover:border-border hover:bg-accent'
-											}`}
-										>
-											URL
-										</button>
-									</div>
+						{#if showAdvanced}
+							<!-- Widget-Specific Options -->
+							{#if isNumberInput}
+								{@const config = item.config as NumberWidgetConfig}
+								<div class="mt-1 flex items-center justify-between text-[11px]">
+									<span class="text-muted-foreground">Slider</span>
+									<Switch
+										checked={config.renderAsSlider ?? true}
+										onCheckedChange={toggleSliderMode}
+										class="scale-75"
+									/>
 								</div>
+							{/if}
 
-								<!-- File Formats -->
-								<div class="flex flex-col gap-1">
-									<span class="text-muted-foreground text-[10px] font-medium">File Formats</span>
-									<div class="grid max-h-24 grid-cols-3 gap-1 overflow-y-auto">
-										{#each ACCEPTED_FILE_FORMATS as format}
-											{@const isChecked = config?.acceptedFormats?.includes(format)}
+							{#if isFileInput}
+								{@const config = item.config as FileInputWidgetConfig}
+								<div class="flex flex-col gap-2">
+									<!-- Input Type -->
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium">Input Type</span>
+										<div class="grid grid-cols-2 gap-1">
 											<button
-												onclick={() => toggleAcceptedFormat(format)}
-												class={`rounded border px-1.5 py-0.5 text-[9px] whitespace-nowrap transition-colors ${
-													isChecked
+												onclick={() => setFileInputMode('upload')}
+												class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+													config?.defaultInputMode === 'upload'
 														? 'bg-primary text-primary-foreground border-primary'
 														: 'border-border/70 hover:border-border hover:bg-accent'
 												}`}
 											>
-												{format}
+												Upload
 											</button>
-										{/each}
+											<button
+												onclick={() => setFileInputMode('url')}
+												class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+													config?.defaultInputMode === 'url'
+														? 'bg-primary text-primary-foreground border-primary'
+														: 'border-border/70 hover:border-border hover:bg-accent'
+												}`}
+											>
+												URL
+											</button>
+										</div>
+									</div>
+
+									<!-- File Formats -->
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium">File Formats</span>
+										<div class="grid max-h-24 grid-cols-3 gap-1 overflow-y-auto">
+											{#each ACCEPTED_FILE_FORMATS as format (format)}
+												{@const isChecked = config?.acceptedFormats?.includes(format)}
+												<button
+													onclick={() => toggleAcceptedFormat(format)}
+													class={`rounded border px-1.5 py-0.5 text-[9px] whitespace-nowrap transition-colors ${
+														isChecked
+															? 'bg-primary text-primary-foreground border-primary'
+															: 'border-border/70 hover:border-border hover:bg-accent'
+													}`}
+												>
+													{format}
+												</button>
+											{/each}
+										</div>
 									</div>
 								</div>
-							</div>
-						{/if}
+							{/if}
 
-						{#if showAdvanced && isTextInput}
-							{@const config = item.config as TextWidgetConfig}
-							<div class="flex flex-col gap-2">
-								<!-- Max Length -->
-								<div class="flex flex-col gap-1">
-									<span class="text-muted-foreground text-[10px] font-medium">Max Length</span>
-									<input
-										type="number"
-										min="1"
-										bind:value={config.maxLength}
-										placeholder="No limit"
-										class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
-									/>
-								</div>
-
-								<!-- Pattern (Regex) -->
-								<div class="flex flex-col gap-1">
-									<span class="text-muted-foreground text-[10px] font-medium"
-										>Validation Pattern (Regex)</span
-									>
-									<input
-										type="text"
-										bind:value={config.pattern}
-										placeholder="e.g., ^[a-zA-Z0-9]+$"
-										class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 font-mono text-[10px] focus:outline-none"
-									/>
-								</div>
-
-								<!-- Custom Error Message -->
-								{#if config.pattern}
+							{#if isTextInput}
+								{@const config = item.config as TextWidgetConfig}
+								<div class="flex flex-col gap-2">
+									<!-- Max Length -->
 									<div class="flex flex-col gap-1">
-										<span class="text-muted-foreground text-[10px] font-medium"
-											>Custom Error Message</span
-										>
+										<span class="text-muted-foreground text-[10px] font-medium">Max Length</span>
 										<input
-											type="text"
-											bind:value={config.customErrorMessage}
-											placeholder="Invalid format"
+											type="number"
+											min="1"
+											bind:value={config.maxLength}
+											placeholder="No limit"
 											class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
 										/>
 									</div>
-								{/if}
-							</div>
+
+									<!-- Pattern (Regex) -->
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium"
+											>Validation Pattern (Regex)</span
+										>
+										<input
+											type="text"
+											bind:value={config.pattern}
+											placeholder="e.g., ^[a-zA-Z0-9]+$"
+											class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 font-mono text-[10px] focus:outline-none"
+										/>
+									</div>
+
+									<!-- Custom Error Message -->
+									{#if config.pattern}
+										<div class="flex flex-col gap-1">
+											<span class="text-muted-foreground text-[10px] font-medium"
+												>Custom Error Message</span
+											>
+											<input
+												type="text"
+												bind:value={config.customErrorMessage}
+												placeholder="Invalid format"
+												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
+											/>
+										</div>
+									{/if}
+								</div>
+							{/if}
+						{/if}
+					</div>
+				{/if}
+
+				<!-- Visibility Rules Section (separate from Advanced) -->
+				{#if item.type === 'input'}
+					<div class="border-border/70 mt-1 border-t pt-1">
+						<button
+							onclick={() => (showVisibilityRules = !showVisibilityRules)}
+							class="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center gap-1 text-[11px]"
+						>
+							<ChevronDown
+								size={12}
+								class={`transition-transform ${showVisibilityRules ? 'rotate-180' : ''}`}
+							/>
+							Visibility Rules {hasVisibilityRules
+								? `(${item.visibilityCondition?.rules?.length ?? 0})`
+								: ''}
+						</button>
+
+						{#if showVisibilityRules}
+							<VisibilityRulesEditor
+								bind:visibilityCondition={item.visibilityCondition}
+								{availableInputs}
+								currentParamInfo={paramInfo}
+								{getParameterInfo}
+								options={item.type === 'input' && item.widgetType === 'dropdown'
+									? item.config.options
+									: undefined}
+							/>
 						{/if}
 					</div>
 				{/if}

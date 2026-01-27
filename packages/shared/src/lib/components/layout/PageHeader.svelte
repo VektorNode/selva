@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { Badge } from '$lib/components/ui/badge';
 	import { ModeToggle } from '$lib/components/ui/mode-toggle';
 
@@ -48,14 +47,14 @@
 		<!-- Left section -->
 		<div class="min-w-0 gap-3 flex flex-1 items-center">
 			{#if logo}
-				<button
-					type="button"
-					onclick={() => goto('/')}
+				<a
+					href="/"
 					class="cursor-pointer transition-opacity hover:opacity-75"
 					title="Go to home"
+					data-sveltekit-reload
 				>
 					<img src={logo} alt="Logo" class="h-8 w-8 shrink-0" />
-				</button>
+				</a>
 			{/if}
 			<h1 class="text-xl font-bold sm:text-2xl text-foreground">
 				{title}

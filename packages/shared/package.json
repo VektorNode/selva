@@ -1,6 +1,6 @@
 {
 	"name": "@selva/shared",
-	"version": "1.2.0",
+	"version": "1.3.0",
 	"description": "Shared UI components and utilities for Selva applications",
 	"private": true,
 	"type": "module",
@@ -49,16 +49,17 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",
-		"bits-ui": "catalog:",
 		"clsx": "catalog:",
 		"mode-watcher": "catalog:",
 		"selva-compute": "catalog:",
 		"svelte-sonner": "catalog:",
 		"tailwind-merge": "catalog:",
-		"tailwind-variants": "catalog:",
 		"tw-animate-css": "catalog:"
 	},
 	"devDependencies": {
-		"@selva/config": "workspace:*"
+		"@internationalized/date": "^3.10.1",
+		"@selva/config": "workspace:*",
+		"bits-ui": "^2.15.4",
+		"tailwind-variants": "catalog:"
 	}
 }

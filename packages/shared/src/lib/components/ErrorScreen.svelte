@@ -14,7 +14,7 @@
 </script>
 
 <div
-	class="from-slate-900 to-slate-800 p-4 flex min-h-screen items-center justify-center bg-gradient-to-br"
+	class="from-slate-900 to-slate-800 p-4 flex min-h-screen items-center justify-center bg-linear-to-br"
 >
 	<Card.Root class="max-w-md w-full">
 		<Card.Header class="text-center">
@@ -48,7 +48,7 @@
 		</Card.Content>
 		<Card.Footer class="gap-2 flex">
 			<Button variant="outline" class="flex-1">
-				<a href={homeLink} class="w-full">Go Home</a>
+				<a href={homeLink} class="w-full" rel="external">Go Home</a>
 			</Button>
 		</Card.Footer>
 	</Card.Root>

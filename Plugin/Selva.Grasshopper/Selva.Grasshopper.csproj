@@ -11,7 +11,7 @@
 
   <PropertyGroup>
     <!-- Specifies information for Assembly and Yak -->
-    <Version>0.3.1</Version>
+    <Version>0.4.0</Version>
     <Title>Selva</Title>
     <Company>VektorNode</Company>
     <Description>Web-based UI builder for Grasshopper with real-time parameter interaction</Description>

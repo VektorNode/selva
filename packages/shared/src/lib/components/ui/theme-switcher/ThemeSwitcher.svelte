@@ -27,7 +27,7 @@
 		<span>{triggerContent}</span>
 	</Select.Trigger>
 	<Select.Content>
-		{#each themes as theme}
+		{#each themes as theme (theme.value)}
 			<Select.Item value={theme.value} label={theme.label}>
 				<div class="flex flex-col items-start">
 					<span class="font-medium text-sm">{theme.label}</span>

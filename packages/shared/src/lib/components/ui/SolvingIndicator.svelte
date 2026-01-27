@@ -8,10 +8,10 @@
 
 {#if show}
 	<div
-		class="bg-primary text-primary-foreground fixed bottom-8 left-8 z-50 flex animate-[selva-slideInLeft_0.3s_ease-out] items-center gap-3 rounded-lg px-4 py-3 shadow-lg"
+		class="bottom-8 left-8 gap-3 px-4 py-3 shadow-lg fixed z-50 flex animate-[selva-slideInLeft_0.3s_ease-out] items-center rounded-lg bg-primary text-primary-foreground"
 	>
 		<div
-			class="border-primary-foreground h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
+			class="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent"
 		></div>
 		<span class="text-sm font-medium">Solving...</span>
 	</div>

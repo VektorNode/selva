@@ -22,7 +22,9 @@
 			? []
 			: Array.isArray(fileData)
 				? fileData.filter(validateFileData)
-				: validateFileData(fileData) ? [fileData] : []
+				: validateFileData(fileData)
+					? [fileData]
+					: []
 	);
 
 	const fileCount = $derived(filesArray.length);
@@ -78,7 +80,7 @@
 				</div>
 				{#if fileCount > 1}
 					<div class="mt-2 gap-1 flex flex-col">
-						{#each filesArray as file}
+						{#each filesArray as file (file.fileName)}
 							<div class="text-xs flex items-center justify-between text-muted-foreground">
 								<span>{file.fileName}{file.fileType}</span>
 								<span>{formatFileSize(getBase64FileSize(file.data))}</span>

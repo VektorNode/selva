@@ -3,15 +3,16 @@
 	import { goto } from '$app/navigation';
 	import { PageContainer, PageHeader, StateDisplay, Card } from '@selva/shared';
 	import { Wrench, Play } from '@lucide/svelte';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
 	var sessionId = page.url.searchParams.get('session');
 	var wsPort = page.url.searchParams.get('wsPort');
 
 	function navigateTo(path: string) {
-		const params = new URLSearchParams();
+		const params = new SvelteURLSearchParams();
 		if (sessionId) params.set('session', sessionId);
 		if (wsPort) params.set('wsPort', wsPort);
-		goto(`/${path}?${params.toString()}`);
+		goto(`/${path}?${params.toString()}`, { noScroll: true }).catch(() => {});
 	}
 </script>
 

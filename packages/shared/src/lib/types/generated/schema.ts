@@ -93,7 +93,8 @@ export interface VisibilityRule {
 		| 'lessThanOrEqual'
 		| 'in'
 		| 'notIn'
-		| 'between';
+		| 'between'
+		| 'matches';
 	/**
 	 * Value to compare against (used for equals, notEquals, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual)
 	 */
@@ -116,6 +117,32 @@ export interface VisibilityCondition {
 	 * @minItems 1
 	 */
 	rules: [VisibilityRule, ...VisibilityRule[]];
+	/**
+	 * Action to apply when condition is met: 'show' makes visible and enabled, 'hide' removes from view, 'disable' makes visible but greyed out and non-interactive
+	 */
+	action?: 'show' | 'hide' | 'disable';
+	/**
+	 * Default value to set for the parameter when condition is met. The value should be compatible with the parameter type (number, string, boolean, etc.)
+	 */
+	defaultValue?: {
+		[k: string]: unknown | undefined;
+	};
+}
+export interface GroupVisibilityCondition {
+	/**
+	 * Evaluation mode: 'all' = AND (all rules must pass), 'any' = OR (at least one rule must pass)
+	 */
+	mode?: 'all' | 'any';
+	/**
+	 * List of rules to evaluate
+	 *
+	 * @minItems 1
+	 */
+	rules: [VisibilityRule, ...VisibilityRule[]];
+	/**
+	 * Action to apply when condition is met: 'show' makes group visible, 'hide' removes group from view
+	 */
+	action?: 'show' | 'hide';
 }
 export interface NumberWidgetConfig {
 	minimum?: number;
@@ -184,23 +211,8 @@ export interface LayoutItemBase {
 	 * Base visibility (static). If false, item is always hidden regardless of conditions.
 	 */
 	visible?: boolean;
-	visibilityCondition?: VisibilityCondition1;
+	visibilityCondition?: VisibilityCondition;
 	[k: string]: unknown | undefined;
-}
-/**
- * Dynamic visibility rules based on other parameter values. Evaluated only if visible is not false.
- */
-export interface VisibilityCondition1 {
-	/**
-	 * Evaluation mode: 'all' = AND (all rules must pass), 'any' = OR (at least one rule must pass)
-	 */
-	mode?: 'all' | 'any';
-	/**
-	 * List of rules to evaluate
-	 *
-	 * @minItems 1
-	 */
-	rules: [VisibilityRule, ...VisibilityRule[]];
 }
 export interface GroupConfig {
 	id: string;
@@ -210,6 +222,7 @@ export interface GroupConfig {
 	collapsed?: boolean;
 	columns?: number;
 	items: LayoutItem[];
+	visibilityCondition?: GroupVisibilityCondition;
 }
 export interface TabConfig {
 	id: string;

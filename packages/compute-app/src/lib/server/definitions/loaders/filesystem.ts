@@ -1,6 +1,12 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { IDefinitionLoader, Definition, DefinitionMetadata, DefinitionsConfig, DefinitionFileType } from '../types';
+import type {
+	IDefinitionLoader,
+	Definition,
+	DefinitionMetadata,
+	DefinitionsConfig,
+	DefinitionFileType
+} from '../types';
 
 export interface FilesystemLoaderConfig {
 	definitionsPath: string;
@@ -43,7 +49,9 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 		if (ext === 'gh' || ext === 'ghx') {
 			return ext as DefinitionFileType;
 		}
-		throw new Error(`Unsupported file type: ${ext}. Supported: ${this.config.supportedExtensions.join(', ')}`);
+		throw new Error(
+			`Unsupported file type: ${ext}. Supported: ${this.config.supportedExtensions.join(', ')}`
+		);
 	}
 
 	private sanitizeFilename(filename: string): string {
@@ -117,9 +125,7 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 			const fileBuffer = await fs.readFile(filePath);
 			return new Uint8Array(fileBuffer);
 		} catch (err) {
-			throw new Error(
-				`Failed to read definition '${safeFilename}' at '${filePath}': ${err}`
-			);
+			throw new Error(`Failed to read definition '${safeFilename}' at '${filePath}': ${err}`);
 		}
 	}
 
