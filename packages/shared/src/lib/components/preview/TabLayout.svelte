@@ -42,7 +42,7 @@
 				});
 			});
 			if (Object.keys(initialCollapsed).length > 0) {
-				collapsedGroups = { ...collapsedGroups, ...initialCollapsed };
+				Object.assign(collapsedGroups, initialCollapsed);
 			}
 		}
 	});
@@ -82,10 +82,7 @@
 	});
 
 	function toggleGroup(groupId: string) {
-		collapsedGroups = {
-			...collapsedGroups,
-			[groupId]: !collapsedGroups[groupId]
-		};
+		collapsedGroups[groupId] = !collapsedGroups[groupId];
 	}
 
 	const activeTab = $derived(

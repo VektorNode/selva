@@ -37,9 +37,7 @@
 	}
 </script>
 
-<div class="flex flex-col gap-1">
-	<span class="text-muted-foreground text-[10px] font-medium">Default Value</span>
-
+<div class="flex flex-col gap-1.5">
 	{#if paramType === 'number' || paramType === 'integer'}
 		<Input
 			type="number"
@@ -49,9 +47,7 @@
 			min={paramConstraints?.minimum}
 			max={paramConstraints?.maximum}
 			step={paramConstraints?.stepSize || (paramType === 'integer' ? 1 : 0.1)}
-			class="bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none {validationError
-				? 'border-destructive'
-				: 'border-border/70'}"
+			class="h-9"
 			placeholder="Enter default value"
 		/>
 	{:else if paramType === 'boolean'}
@@ -59,9 +55,8 @@
 			<Switch
 				checked={Boolean(value)}
 				onCheckedChange={(checked) => (value = checked)}
-				class="scale-75"
 			/>
-			<span class="text-[10px]">{value ? 'True' : 'False'}</span>
+			<span class="text-sm">{value ? 'True' : 'False'}</span>
 		</div>
 	{:else if paramType === 'valueList' && (options || paramConstraints?.options)}
 		{@const availableOptions = options || paramConstraints?.options || {}}
@@ -72,7 +67,7 @@
 				if (newValue) value = newValue;
 			}}
 		>
-			<Select.Trigger class="h-6 text-[10px]">
+			<Select.Trigger class="h-9 text-sm">
 				{#if value}
 					{@const optionEntry = Object.entries(availableOptions).find(([_, val]) => val === value)}
 					{optionEntry ? optionEntry[0] : value}
@@ -93,9 +88,7 @@
 		<Input
 			type="text"
 			bind:value
-			class="bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none {validationError
-				? 'border-destructive'
-				: 'border-border/70'}"
+			class="h-9"
 			placeholder="Enter default value"
 		/>
 	{/if}

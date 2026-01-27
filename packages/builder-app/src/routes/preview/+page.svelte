@@ -203,7 +203,7 @@
 
 			if (Object.keys(allUpdates).length > 0) {
 				isRemoteUpdate = true;
-				values = { ...values, ...allUpdates };
+				Object.assign(values, allUpdates);
 				isRemoteUpdate = false;
 			}
 		}
@@ -268,7 +268,7 @@
 	function handleCurrentValues(message: any) {
 		if (message.sessionId === sessionId) {
 			isRemoteUpdate = true;
-			values = { ...values, ...message.values };
+			Object.assign(values, message.values);
 			isRemoteUpdate = false;
 		}
 	}
@@ -282,7 +282,7 @@
 
 			if (Object.keys(allUpdates).length > 0) {
 				isRemoteUpdate = true;
-				values = { ...values, ...allUpdates };
+				Object.assign(values, allUpdates);
 				isRemoteUpdate = false;
 			}
 		}
@@ -430,7 +430,7 @@
 								currentValues={values}
 								onLoadValues={(loadedValues) => {
 									// Apply loaded values
-									values = { ...values, ...loadedValues };
+									Object.assign(values, loadedValues);
 
 									// Send to Grasshopper
 									if (schema?.instanceSolve !== false) {

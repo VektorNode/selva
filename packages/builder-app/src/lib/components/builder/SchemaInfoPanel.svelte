@@ -18,14 +18,14 @@
 	let pendingImport: ExportedSchema | null = $state(null);
 
 	function updateSchema(updates: Partial<UISchema>) {
-		const updatedSchema = { ...schema, ...updates };
+		const updatedSchema = Object.assign({}, schema, updates);
 		onSchemaChange?.(updatedSchema);
 	}
 
 	function updateViewerOptions(updates: Partial<ViewerOptions>) {
 		const currentOptions = schema.viewerOptions ?? {};
 		updateSchema({
-			viewerOptions: { ...currentOptions, ...updates }
+			viewerOptions: Object.assign({}, currentOptions, updates)
 		});
 	}
 

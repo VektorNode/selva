@@ -126,7 +126,7 @@
 				outputs[o.id] = processor.getValueByParamId(o.id, { parseValues: true });
 			}
 
-			values = { ...values, ...outputs };
+			Object.assign(values, outputs);
 			pendingValues = {};
 			hasPendingChanges = false;
 		} catch (err) {
@@ -256,7 +256,7 @@
 										currentValues={values}
 										onLoadValues={async (loadedValues) => {
 											// Apply loaded values
-											values = { ...values, ...loadedValues };
+											Object.assign(values, loadedValues);
 
 											// Trigger solve based on instanceSolve setting
 											if (schema?.instanceSolve !== false) {

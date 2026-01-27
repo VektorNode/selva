@@ -69,9 +69,9 @@
 	}
 </script>
 
-<div class="grid grid-cols-[1fr_120px_1fr_32px] items-start gap-2">
+<div class="flex items-start gap-2">
 	<!-- Input Select -->
-	<div class="flex flex-col gap-1">
+	<div class="flex flex-1 flex-col gap-1">
 		<Select.Root
 			type="single"
 			value={rule.paramId}
@@ -81,8 +81,8 @@
 				}
 			}}
 		>
-			<Select.Trigger class="h-6 text-[10px]">
-				{selectedParamInfo?.nickname || 'Select input...'}
+			<Select.Trigger class="h-9 text-sm">
+				<span>{selectedParamInfo?.nickname || 'Select input...'}</span>
 			</Select.Trigger>
 			<Select.Content>
 				{#each filteredInputs as input (input.id)}
@@ -98,7 +98,7 @@
 	</div>
 
 	<!-- Operator Select -->
-	<div class="flex flex-col gap-1">
+	<div class="flex flex-none flex-col gap-1">
 		<Select.Root
 			type="single"
 			value={rule.operator}
@@ -120,8 +120,8 @@
 				}
 			}}
 		>
-			<Select.Trigger class="h-6 text-[10px]">
-				{rule.operator || 'Operator'}
+			<Select.Trigger class="h-9 w-24 text-sm">
+				<span class="truncate">{rule.operator || 'Op'}</span>
 			</Select.Trigger>
 			<Select.Content>
 				{#each availableOperators as op (op.value)}
@@ -132,12 +132,10 @@
 	</div>
 
 	<!-- Value Input (dynamic based on operator) -->
-	<div class="flex flex-col gap-1">
-		<!-- {console.log('Selected Param Info:', selectedParamInfo)} -->
-
+	<div class="flex flex-1 flex-col gap-1">
 		{#if rule.operator === 'between'}
 			<!-- Two inputs for min/max -->
-			<div class="flex gap-1">
+			<div class="flex gap-2">
 				<Input
 					type="number"
 					value={rule.values?.[0]}
@@ -145,7 +143,7 @@
 						const val = (e.target as HTMLInputElement).value;
 						onUpdate({ ...rule, values: [Number(val), rule.values?.[1] || 0] });
 					}}
-					class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
+					class="h-9"
 					placeholder="Min"
 				/>
 				<Input
@@ -155,7 +153,7 @@
 						const val = (e.target as HTMLInputElement).value;
 						onUpdate({ ...rule, values: [rule.values?.[0] || 0, Number(val)] });
 					}}
-					class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
+					class="h-9"
 					placeholder="Max"
 				/>
 			</div>
@@ -173,7 +171,7 @@
 					}}
 				>
 					<Select.Trigger
-						class="h-6 text-[10px] {validationError ? 'border-destructive' : 'border-border/70'}"
+						class="h-9 text-sm"
 					>
 						{#if rule.values && rule.values.length > 0}
 							{@const selectedNames = (rule.values as string[])
@@ -211,7 +209,7 @@
 						const val = (e.target as HTMLInputElement).value;
 						onUpdate({ ...rule, values: val.split(',').map((v) => v.trim()) });
 					}}
-					class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
+					class="h-9"
 					placeholder="value1,value2,..."
 				/>
 			{/if}
@@ -226,9 +224,7 @@
 						if (value) updateRuleValue(value === 'true');
 					}}
 				>
-					<Select.Trigger
-						class="h-6 text-[10px] {validationError ? 'border-destructive' : 'border-border/70'}"
-					>
+					<Select.Trigger class="h-9 text-sm">
 						{#if rule.value !== undefined && rule.value !== null}
 							{String(rule.value)}
 						{:else}
@@ -249,9 +245,7 @@
 						if (value) updateRuleValue(value);
 					}}
 				>
-					<Select.Trigger
-						class="h-6 text-[10px] {validationError ? 'border-destructive' : 'border-border/70'}"
-					>
+					<Select.Trigger class="h-9 text-sm">
 						{#if rule.value}
 							{@const optionEntry = Object.entries(selectedParamInfo.options).find(
 								([_, val]) => val === rule.value
@@ -282,9 +276,7 @@
 								: val
 						);
 					}}
-					class="h-6 rounded border px-2 text-[10px] focus:outline-none {validationError
-						? 'border-destructive'
-						: 'border-border/70 bg-background focus:border-primary'}"
+					class="h-9"
 					placeholder="Value"
 				/>
 			{/if}
@@ -299,10 +291,10 @@
 	<!-- Remove Button -->
 	<Button
 		variant="ghost"
-		size="icon-sm"
-		class="hover:bg-destructive hover:text-destructive-foreground h-6 w-6"
+		size="icon"
+		class="h-9 w-9 flex-none"
 		onclick={onRemove}
 	>
-		<X size={12} />
+		<X size={16} />
 	</Button>
 </div>
