@@ -141,7 +141,7 @@
 		<!-- Rules List -->
 		{#if visibilityCondition?.rules && visibilityCondition.rules.length > 0}
 			<div class="space-y-2">
-				{#each visibilityCondition.rules as rule, index (index)}
+				{#each visibilityCondition.rules as rule, index (rule.paramId + index)}
 					<RuleRow
 						{rule}
 						{index}
@@ -233,7 +233,7 @@
 				<span class="text-destructive text-[9px] font-semibold uppercase">Errors</span>
 			</div>
 			<div class="space-y-0.5">
-				{#each validationErrors as error}
+				{#each validationErrors as error (error)}
 					<div class="text-destructive/90 text-[9px]">• {error}</div>
 				{/each}
 			</div>

@@ -44,9 +44,9 @@ export class WebSocketState {
 
 				// Only log and process if state actually changed
 				if (newState !== this.isSolving) {
-					console.info(
-						`[WebSocket] Grasshopper solving state: ${newState} (was: ${this.isSolving})`
-					);
+					// console.info(
+					// 	`[WebSocket] Grasshopper solving state: ${newState} (was: ${this.isSolving})`
+					// );
 					this.isSolving = newState;
 
 					// Clear any pending timeout when we get an explicit solving state update
@@ -130,10 +130,9 @@ export class WebSocketState {
 						this.handleMessage(message);
 					} catch (error) {
 						// Log the raw message for debugging, but truncate if too long
-						const rawData = event.data?.toString() || '';
-						const preview = rawData.length > 100 ? rawData.substring(0, 100) + '...' : rawData;
+						// const rawData = event.data?.toString() || '';
 						console.error('[WebSocket] Failed to parse message:', error);
-						console.debug('[WebSocket] Raw message data:', preview);
+						// console.debug('[WebSocket] Raw message data:', preview);
 					}
 				};
 
@@ -144,7 +143,7 @@ export class WebSocketState {
 				};
 
 				this.socket.onclose = () => {
-					console.log('[WebSocket] Disconnected');
+					// console.log('[WebSocket] Disconnected');
 					this.isConnecting = false;
 					this.socket = null;
 					this.connected = false;
@@ -212,7 +211,6 @@ export class WebSocketState {
 	 * If Grasshopper is currently solving, the update will be queued and sent when solving completes
 	 */
 	sendValueUpdate(sessionId: string, values: Record<string, unknown>) {
-
 		if (this.isSolving) {
 			// Queue the update - only keep the latest one
 			this._pendingValueUpdate = { sessionId, values };
@@ -248,9 +246,9 @@ export class WebSocketState {
 		this.batchedValues = {};
 		this.batchTimer = null;
 
-		console.log(
-			`[WebSocket] Sending batched value update with ${Object.keys(values).length} values`
-		);
+		// console.log(
+		// 	`[WebSocket] Sending batched value update with ${Object.keys(values).length} values`
+		// );
 		this.send('valueUpdate', { sessionId, values });
 
 		// Set a single timeout to auto-clear solving state if no update received from server
@@ -271,7 +269,7 @@ export class WebSocketState {
 	 * Request current values from Grasshopper
 	 */
 	requestCurrentValues(sessionId: string) {
-		console.log('[WebSocket] Requesting current values from Grasshopper');
+		// console.log('[WebSocket] Requesting current values from Grasshopper');
 		this.send('requestCurrentValues', { sessionId });
 	}
 
@@ -279,7 +277,7 @@ export class WebSocketState {
 	 * Request initial data (schema, available params, current values) from Grasshopper
 	 */
 	requestInitialData(sessionId: string) {
-		console.log('[WebSocket] Requesting initial data from Grasshopper');
+		// console.log('[WebSocket] Requesting initial data from Grasshopper');
 		this.send('requestInitialData', { sessionId });
 	}
 
@@ -326,7 +324,7 @@ export class WebSocketState {
 					(msg.data as { reason?: string } | undefined)?.reason || 'No reason provided'
 				);
 
-				console.log(message);
+				// console.log(message);
 				// Mark as server-initiated disconnect - will reload page on reconnect
 				this._serverDisconnected = true;
 				this._shouldReloadOnReconnect = true;
@@ -349,7 +347,7 @@ export class WebSocketState {
 		// If server disconnected, keep trying with fixed interval (no max attempts)
 		if (this._serverDisconnected) {
 			const fixedDelay = 5000; // 5 seconds
-			console.log(`[WebSocket] Server disconnected, retrying in ${fixedDelay}ms`);
+			// console.log(`[WebSocket] Server disconnected, retrying in ${fixedDelay}ms`);
 
 			this.reconnectTimer = setTimeout(() => {
 				this.connect();
@@ -359,14 +357,14 @@ export class WebSocketState {
 
 		// Otherwise, use exponential backoff with max attempts
 		if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-			console.log('[WebSocket] Max reconnection attempts reached');
+			// console.log('[WebSocket] Max reconnection attempts reached');
 			return;
 		}
 
 		this.reconnectAttempts++;
 		const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
 
-		console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+		// console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
 
 		this.reconnectTimer = setTimeout(() => {
 			this.connect();
@@ -392,7 +390,7 @@ export function getWebSocketState(port?: number): WebSocketState {
 
 	// Create new WebSocket connection for this port
 	const url = `ws://localhost:${wsPort}`;
-	console.log(`[WebSocket] Initializing new connection with URL: ${url}`);
+	// console.log(`[WebSocket] Initializing new connection with URL: ${url}`);
 	const newWsState = new WebSocketState(url);
 	wsStateByPort.set(wsPort, newWsState);
 

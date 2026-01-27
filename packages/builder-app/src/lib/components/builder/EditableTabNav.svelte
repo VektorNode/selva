@@ -22,13 +22,13 @@
 	// drag state
 	let draggedTabId: string | null = $state(null);
 	let dragOverTabId: string | null = $state(null);
-	let dragHandleRefs = new Map<string, HTMLDivElement | null>();
+	let dragHandleRefs = $state<Record<string, HTMLDivElement | null>>({});
 
 	function dragHandleAction(node: HTMLDivElement, tabId: string) {
-		dragHandleRefs.set(tabId, node);
+		dragHandleRefs[tabId] = node;
 		return {
 			destroy() {
-				dragHandleRefs.delete(tabId);
+				delete dragHandleRefs[tabId];
 			}
 		};
 	}
@@ -107,7 +107,7 @@
 <div class="border-border mb-4 flex items-end gap-2 overflow-x-auto border-b">
 	{#each tabs as tab (tab.id)}
 		<div
-			class={`group relative flex items-center rounded-t-lg bg-transparent`}
+			class="group relative flex items-center rounded-t-lg bg-transparent"
 			ondragover={(e) => handleDragOver(e, tab.id)}
 			ondragleave={handleDragLeave}
 			ondrop={(e) => handleDrop(e, tab.id)}

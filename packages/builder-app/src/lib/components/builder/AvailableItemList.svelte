@@ -12,7 +12,7 @@
 	interface AvailableItemListProps {
 		items: (DiscoveredInput | DiscoveredOutput)[];
 		title: string;
-		placedIds?: Set<string>;
+		placedIds?: string[];
 		emptyMessage?: string;
 		tabs?: TabConfig[];
 		onAddToGroup?: (
@@ -26,7 +26,7 @@
 	let {
 		items,
 		title,
-		placedIds = new Set(),
+		placedIds = [],
 		emptyMessage = 'No items found.',
 		tabs = [],
 		onAddToGroup,
@@ -36,23 +36,9 @@
 	let searchQuery = $state('');
 	let selectedType = $state<GrasshopperParamType | 'all' | string>('all');
 
-	const isParameter = (item: DiscoveredInput | DiscoveredOutput): item is DiscoveredInput => {
-		return 'name' in item;
-	};
+	const availableTypes = $derived(Array.from(new Set(items.map((item) => item.type))).sort());
 
-	const availableTypes = $derived.by(() => {
-		const types = new Set<GrasshopperParamType | string>();
-		items.forEach((item) => {
-			if (isParameter(item)) {
-				types.add(item.type);
-			} else {
-				types.add(item.type);
-			}
-		});
-		return Array.from(types).sort();
-	});
-
-	const availableItems = $derived(items.filter((i) => !placedIds.has(i.id)));
+	const availableItems = $derived(items.filter((i) => !placedIds.includes(i.id)));
 
 	const filteredItems = $derived.by(() => {
 		let filtered = availableItems;

@@ -16,7 +16,7 @@
 
 	let {
 		rule,
-		index,
+		index: _index,
 		availableInputs,
 		getParameterInfo,
 		currentParamInfo,
@@ -120,7 +120,7 @@
 				}
 			}}
 		>
-			<Select.Trigger class="h-9 w-24 text-sm">
+			<Select.Trigger class="h-9 w-50 text-sm">
 				<span class="truncate">{rule.operator || 'Op'}</span>
 			</Select.Trigger>
 			<Select.Content>
@@ -170,9 +170,7 @@
 						}
 					}}
 				>
-					<Select.Trigger
-						class="h-9 text-sm"
-					>
+					<Select.Trigger class="h-9 text-sm">
 						{#if rule.values && rule.values.length > 0}
 							{@const selectedNames = (rule.values as string[])
 								.map((val) => {
@@ -289,12 +287,7 @@
 	</div>
 
 	<!-- Remove Button -->
-	<Button
-		variant="ghost"
-		size="icon"
-		class="h-9 w-9 flex-none"
-		onclick={onRemove}
-	>
+	<Button variant="ghost" size="icon" class="h-9 w-9 flex-none" onclick={onRemove}>
 		<X size={16} />
 	</Button>
 </div>

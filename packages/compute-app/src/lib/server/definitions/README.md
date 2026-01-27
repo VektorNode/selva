@@ -21,12 +21,14 @@ const definitions = await container.listDefinitions();
 ## Supported Sources
 
 ### Filesystem (Default)
+
 ```bash
 GH_DEFINITIONS_PATH=./definitions
 # Reads from ./definitions/ + definitions-config.json
 ```
 
 ### Environment Variables (Cloud-Ready)
+
 ```bash
 DEFINITION_SOURCE=environment
 GH_DEF_PREFIX=GH_DEF_
@@ -34,6 +36,7 @@ GH_DEF_solver.gh='{"metadata":{"displayName":"Solver"},"url":"https://..."}'
 ```
 
 ### Custom Sources (S3, Database, GraphQL, etc.)
+
 ```bash
 DEFINITION_SOURCE=yoursource
 # See "Creating a Custom Loader" section below
@@ -45,19 +48,19 @@ DEFINITION_SOURCE=yoursource
 const container = getDefinitionContainer();
 
 // Get all definitions
-await container.listDefinitions()           // Definition[]
+await container.listDefinitions(); // Definition[]
 
 // Get specific definition
-await container.getDefinition('solver.gh')  // Definition
+await container.getDefinition('solver.gh'); // Definition
 
 // Load binary data
-await container.loadDefinition('solver.gh') // Uint8Array
+await container.loadDefinition('solver.gh'); // Uint8Array
 
 // Get definition URL
-await container.getDefinitionUrl('solver.gh') // string
+await container.getDefinitionUrl('solver.gh'); // string
 
 // Get first available
-await container.getFirstDefinition()        // Definition | null
+await container.getFirstDefinition(); // Definition | null
 ```
 
 ## Configuration
@@ -66,16 +69,16 @@ await container.getFirstDefinition()        // Definition | null
 
 ```typescript
 interface DefinitionFactoryConfig {
-  // Which loader: 'filesystem' or 'environment' (auto-detects if omitted)
-  source?: 'filesystem' | 'environment';
+	// Which loader: 'filesystem' or 'environment' (auto-detects if omitted)
+	source?: 'filesystem' | 'environment';
 
-  // Path to definitions directory (filesystem only)
-  // Default: './definitions'
-  definitionsPath?: string;
+	// Path to definitions directory (filesystem only)
+	// Default: './definitions'
+	definitionsPath?: string;
 
-  // Allowed file types (filesystem only)
-  // Default: ['gh', 'ghx']
-  supportedExtensions?: ('gh' | 'ghx')[];
+	// Allowed file types (filesystem only)
+	// Default: ['gh', 'ghx']
+	supportedExtensions?: ('gh' | 'ghx')[];
 }
 ```
 
@@ -87,13 +90,13 @@ const container = getDefinitionContainer();
 
 // Custom filesystem path
 const container = getDefinitionContainer({
-  source: 'filesystem',
-  definitionsPath: '/opt/grasshopper-defs'
+	source: 'filesystem',
+	definitionsPath: '/opt/grasshopper-defs'
 });
 
 // Environment loader
 const container = getDefinitionContainer({
-  source: 'environment'
+	source: 'environment'
 });
 ```
 
@@ -114,31 +117,31 @@ const container = getDefinitionContainer({
 import type { IDefinitionLoader, Definition, DefinitionMetadata } from '../types';
 
 export class YourDefinitionLoader implements IDefinitionLoader {
-  constructor(private config: YourConfig) {}
+	constructor(private config: YourConfig) {}
 
-  async listDefinitions(): Promise<Definition[]> {
-    return [
-      {
-        filename: 'example.gh',
-        fileType: 'gh',
-        displayName: 'Example',
-        description: 'An example'
-      }
-    ];
-  }
+	async listDefinitions(): Promise<Definition[]> {
+		return [
+			{
+				filename: 'example.gh',
+				fileType: 'gh',
+				displayName: 'Example',
+				description: 'An example'
+			}
+		];
+	}
 
-  async getMetadata(filename: string): Promise<DefinitionMetadata> {
-    return { displayName: 'Example', description: 'An example' };
-  }
+	async getMetadata(filename: string): Promise<DefinitionMetadata> {
+		return { displayName: 'Example', description: 'An example' };
+	}
 
-  async loadDefinition(filename: string): Promise<Uint8Array> {
-    const response = await fetch(`https://storage.example.com/${filename}`);
-    return new Uint8Array(await response.arrayBuffer());
-  }
+	async loadDefinition(filename: string): Promise<Uint8Array> {
+		const response = await fetch(`https://storage.example.com/${filename}`);
+		return new Uint8Array(await response.arrayBuffer());
+	}
 
-  async getDefinitionUrl(filename: string): Promise<string> {
-    return `https://storage.example.com/${filename}`;
-  }
+	async getDefinitionUrl(filename: string): Promise<string> {
+		return `https://storage.example.com/${filename}`;
+	}
 }
 ```
 
@@ -187,7 +190,7 @@ Both supported by all loaders.
 import { FilesystemDefinitionLoader } from './loaders/filesystem';
 
 const loader = new FilesystemDefinitionLoader({
-  definitionsPath: './test-definitions'
+	definitionsPath: './test-definitions'
 });
 
 const definitions = await loader.listDefinitions();
@@ -196,11 +199,11 @@ expect(definitions.length).toBeGreaterThan(0);
 
 ## Environment Variables Reference
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `DEFINITION_SOURCE` | auto-detect | Source: `filesystem`, `environment`, or custom |
-| `GH_DEFINITIONS_PATH` | `./definitions` | Filesystem loader path |
-| `GH_DEF_PREFIX` | `GH_DEF_` | Prefix for env vars (environment loader) |
+| Variable              | Default         | Purpose                                        |
+| --------------------- | --------------- | ---------------------------------------------- |
+| `DEFINITION_SOURCE`   | auto-detect     | Source: `filesystem`, `environment`, or custom |
+| `GH_DEFINITIONS_PATH` | `./definitions` | Filesystem loader path                         |
+| `GH_DEF_PREFIX`       | `GH_DEF_`       | Prefix for env vars (environment loader)       |
 
 ## Architecture
 

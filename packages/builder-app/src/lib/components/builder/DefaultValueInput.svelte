@@ -52,10 +52,7 @@
 		/>
 	{:else if paramType === 'boolean'}
 		<div class="flex items-center gap-2">
-			<Switch
-				checked={Boolean(value)}
-				onCheckedChange={(checked) => (value = checked)}
-			/>
+			<Switch checked={Boolean(value)} onCheckedChange={(checked) => (value = checked)} />
 			<span class="text-sm">{value ? 'True' : 'False'}</span>
 		</div>
 	{:else if paramType === 'valueList' && (options || paramConstraints?.options)}
@@ -76,7 +73,7 @@
 				{/if}
 			</Select.Trigger>
 			<Select.Content>
-				{#each Object.entries(availableOptions) as [key, val]}
+				{#each Object.entries(availableOptions) as [key, val] ([key, val])}
 					{#if val !== undefined}
 						<Select.Item value={val} label={key} />
 					{/if}
@@ -85,12 +82,7 @@
 		</Select.Root>
 	{:else}
 		<!-- Text, file, or generic types -->
-		<Input
-			type="text"
-			bind:value
-			class="h-9"
-			placeholder="Enter default value"
-		/>
+		<Input type="text" bind:value class="h-9" placeholder="Enter default value" />
 	{/if}
 
 	{#if validationError}

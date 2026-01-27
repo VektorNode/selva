@@ -14,7 +14,6 @@
 		schema: UISchema;
 		values: Record<string, unknown>;
 		onValueChange: (paramId: string, value: SupportedTypes) => void;
-		debounceSliders?: boolean;
 		environment?: 'local' | 'compute';
 	}
 
@@ -201,12 +200,12 @@
 		// Apply action (for groups, only show/hide)
 		const action = condition.action || 'show';
 
-		console.log('Group visibility evaluation:', {
-			groupId: group.id,
-			ruleResults,
-			conditionMet,
-			action
-		});
+		// console.log('Group visibility evaluation:', {
+		// 	groupId: group.id,
+		// 	ruleResults,
+		// 	conditionMet,
+		// 	action
+		// });
 
 		if (action === 'show') {
 			return { visible: conditionMet };
@@ -221,7 +220,7 @@
 <Card.Root class="min-h-0 gap-0 py-0 shadow-sm flex w-full flex-col overflow-hidden">
 	<!-- Tab Navigation -->
 	<div class="flex shrink-0 overflow-x-auto border-b-2 border-border bg-muted">
-		{#each schema.layout.type === 'tabbed' ? schema.layout.tabs : [] as tab}
+		{#each schema.layout.type === 'tabbed' ? schema.layout.tabs : [] as tab (tab.id)}
 			<button
 				class={`gap-2 px-6 py-4 font-medium flex items-center border-b-4 whitespace-nowrap transition-all ${
 					activeTabId === tab.id
@@ -243,7 +242,7 @@
 				<StateDisplay type="empty" size="medium" message="This tab has no groups configured." />
 			{:else}
 				<div class="gap-8 flex flex-col">
-					{#each activeTab.groups as group}
+					{#each activeTab.groups as group (group.id)}
 						{@const groupVisibility = evaluateGroupVisibility(group)}
 						{#if groupVisibility.visible}
 							<Card.Root class="gap-0 py-0 overflow-hidden">
@@ -279,13 +278,16 @@
 										class="gap-6 p-6 grid animate-[fadeIn_0.2s] overflow-x-auto"
 										style="grid-template-columns: repeat({group.columns}, minmax(0, 1fr));"
 									>
-										{#each group.items as layoutItem}
+										{#each group.items as layoutItem (layoutItem.paramId)}
 											{@const visibility = evaluateVisibility(layoutItem)}
 											{#if visibility.visible}
 												{#if layoutItem.type === 'input'}
 													{@const input = getInputById(layoutItem.paramId)}
 													{#if input}
-														<div class="min-w-0 overflow-hidden" class:opacity-50={visibility.disabled}>
+														<div
+															class="min-w-0 overflow-hidden"
+															class:opacity-50={visibility.disabled}
+														>
 															<InputControl
 																item={layoutItem}
 																bind:value={values[input.id]}

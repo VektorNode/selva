@@ -1,4 +1,9 @@
-import type { IDefinitionLoader, Definition, DefinitionMetadata, DefinitionFileType } from '../types';
+import type {
+	IDefinitionLoader,
+	Definition,
+	DefinitionMetadata,
+	DefinitionFileType
+} from '../types';
 
 export interface EnvironmentLoaderConfig {
 	prefix?: string;

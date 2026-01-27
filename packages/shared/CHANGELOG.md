@@ -57,7 +57,12 @@
   **After:**
 
   ```typescript
-  import { initThree, updateScene, parseMeshBatchObject, SCALE_FACTORS } from 'selva-compute/visualization';
+  import {
+  	initThree,
+  	updateScene,
+  	parseMeshBatchObject,
+  	SCALE_FACTORS
+  } from 'selva-compute/visualization';
 
   const { scene, camera, controls } = initThree(canvas, options);
   updateScene(scene, meshes, camera, controls, initialized);

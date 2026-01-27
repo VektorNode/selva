@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { PageContainer, PageHeader, StateDisplay, Button, Dialog, toast } from '@selva/shared';
 	import { Save } from '@lucide/svelte';
+	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
 	import { DragDropContext, BuilderSidebar, TabEditor } from '$lib/components/builder';
 	import { initializeWebSocketSession } from '$lib/utils/session';
 	import { onMount } from 'svelte';
@@ -22,17 +23,17 @@
 			saveSchema();
 		}
 
-		const params = new URLSearchParams();
+		const params = new SvelteURLSearchParams();
 		if (sessionId) params.set('session', sessionId);
 		const wsPort = page.url.searchParams.get('wsPort');
 		if (wsPort) params.set('wsPort', wsPort);
 
 		const url = `${route}?${params.toString()}`;
-		goto(url);
+		goto(url, { noScroll: true }).catch(() => {});
 	}
 
 	const placedInLayoutIds = $derived.by(() => {
-		const ids = new Set<string>();
+		const ids = new SvelteSet<string>();
 		const layout = builderState?.state.schema?.layout;
 
 		if (layout?.type === 'tabbed') {
@@ -65,7 +66,6 @@
 
 	function saveSchema() {
 		if (!builderState?.state.schema || !sessionId) return;
-		console.log($state.snapshot(builderState.state.schema));
 
 		if (!builderState.wsState.connected) {
 			toast.error('Not connected to Grasshopper');

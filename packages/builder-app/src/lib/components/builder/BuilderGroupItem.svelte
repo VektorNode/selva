@@ -317,7 +317,7 @@
 									<div class="flex flex-col gap-1">
 										<span class="text-muted-foreground text-[10px] font-medium">File Formats</span>
 										<div class="grid max-h-24 grid-cols-3 gap-1 overflow-y-auto">
-											{#each ACCEPTED_FILE_FORMATS as format}
+											{#each ACCEPTED_FILE_FORMATS as format (format)}
 												{@const isChecked = config?.acceptedFormats?.includes(format)}
 												<button
 													onclick={() => toggleAcceptedFormat(format)}

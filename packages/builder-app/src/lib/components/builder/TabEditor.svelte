@@ -131,9 +131,6 @@
 		draggedGroupId = null;
 		dragOverGroupId = null;
 	}
-
-	// Computed flag to check if we're actually dragging a group (not an item)
-	const isDraggingGroup = $derived(!!draggedGroupId && !dragStore.current);
 </script>
 
 <Card.Root class="shadow-sm">

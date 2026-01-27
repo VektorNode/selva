@@ -58,7 +58,7 @@
 			<AvailableItemList
 				items={availableInputs}
 				title="Inputs"
-				{placedIds}
+				placedIds={Array.from(placedIds)}
 				tabs={schema?.layout?.type === 'tabbed' ? schema.layout.tabs : []}
 				{onAddToGroup}
 				{onAddToNewGroup}
@@ -67,7 +67,7 @@
 			<AvailableItemList
 				items={availableOutputs}
 				title="Outputs"
-				{placedIds}
+				placedIds={Array.from(placedIds)}
 				tabs={schema?.layout?.type === 'tabbed' ? schema.layout.tabs : []}
 				{onAddToGroup}
 				{onAddToNewGroup}

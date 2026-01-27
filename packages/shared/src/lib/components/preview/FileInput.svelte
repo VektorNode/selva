@@ -10,7 +10,6 @@
 		acceptedFormats?: string[];
 		defaultInputMode?: 'upload' | 'url';
 		onChange: (value: string) => void;
-		disabled?: boolean;
 	}
 
 	//TODO: Support disabled prop in UI
@@ -19,8 +18,7 @@
 		value = $bindable(),
 		acceptedFormats = [],
 		defaultInputMode = 'upload',
-		onChange,
-		disabled = false
+		onChange
 	}: Props = $props();
 
 	let fileInput: HTMLInputElement | null = $state(null);
@@ -169,7 +167,6 @@
 
 		const files = e.dataTransfer?.files;
 		if (files?.[0]) {
-			const file = files[0];
 			// Create a fake event to reuse handleFileUpload logic
 			const fakeEvent = new Event('change');
 			const fakeTarget = { files: files } as HTMLInputElement;

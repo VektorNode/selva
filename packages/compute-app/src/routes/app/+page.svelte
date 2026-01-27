@@ -27,10 +27,7 @@
 
 	// Definition switcher
 	let currentDefinition = $derived(data.currentDefinition);
-	let availableDefinitions = $derived(data.availableDefinitions);
-	let currentDefinitionMetadata = $derived(
-		availableDefinitions.find((d) => d.filename === currentDefinition)
-	);
+	let _availableDefinitions = $derived(data.availableDefinitions);
 	let pageTitle = $derived(schema?.description || schema.name);
 
 	function createInitialValues(s: UISchema | undefined) {
@@ -49,7 +46,8 @@
 	// Core state
 	// values is initialized once per component instance.
 	// The {#key} block in markup ensures re-creation when definition changes.
-	let values = $state<Record<string, unknown>>(createInitialValues(data.schema));
+	// svelte-ignore state_referenced_locally
+	let values = $state<Record<string, unknown>>(createInitialValues(schema));
 	let error = $state('');
 	let computeErrors = $state<string[]>([]);
 	let computeWarnings = $state<string[]>([]);
@@ -105,7 +103,7 @@
 			// Check if aborted before processing
 			if (signal.aborted) return;
 
-			console.log('Solve result:', solved);
+			// console.log('Solve result:', solved);
 
 			// Extract errors and warnings from the solve result
 			if (solved.errors && Array.isArray(solved.errors)) {
@@ -244,7 +242,6 @@
 										{schema}
 										bind:values
 										onValueChange={handleValueChange}
-										debounceSliders={false}
 										environment="compute"
 									/>
 								{/if}

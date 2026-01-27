@@ -114,10 +114,7 @@ export function validateRuleValue(
 /**
  * Validates a default value against parameter constraints
  */
-export function validateDefaultValue(
-	value: unknown,
-	paramInfo?: DiscoveredInput
-): string | null {
+export function validateDefaultValue(value: unknown, paramInfo?: DiscoveredInput): string | null {
 	if (!paramInfo || value === undefined || value === null) return null;
 
 	// Number validation
@@ -178,11 +175,7 @@ export function getOperatorsForType(
 	}
 
 	if (paramType === 'valueList') {
-		return [
-			...baseOperators,
-			{ value: 'in', label: 'in' },
-			{ value: 'notIn', label: 'not in' }
-		];
+		return [...baseOperators, { value: 'in', label: 'in' }, { value: 'notIn', label: 'not in' }];
 	}
 
 	if (paramType === 'text') {

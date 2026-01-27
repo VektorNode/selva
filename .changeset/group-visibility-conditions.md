@@ -28,17 +28,17 @@ Add group-level visibility conditions for conditional group show/hide
 
 ```json
 {
-  "visibilityCondition": {
-    "mode": "all",
-    "action": "hide",
-    "rules": [
-      {
-        "paramId": "mode-id",
-        "operator": "equals",
-        "value": "basic"
-      }
-    ]
-  }
+	"visibilityCondition": {
+		"mode": "all",
+		"action": "hide",
+		"rules": [
+			{
+				"paramId": "mode-id",
+				"operator": "equals",
+				"value": "basic"
+			}
+		]
+	}
 }
 ```
 

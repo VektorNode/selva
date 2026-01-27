@@ -33,7 +33,14 @@
 		disabled?: boolean;
 	}
 
-	let { item, value = $bindable(), displayName, onChange, environment, disabled = false }: Props = $props();
+	let {
+		item,
+		value = $bindable(),
+		displayName,
+		onChange,
+		environment: _environment = undefined,
+		disabled = false
+	}: Props = $props();
 
 	const inputId = $derived(`input-${item.paramId}-${Math.random().toString(36).substring(2, 11)}`);
 
@@ -42,6 +49,18 @@
 	function handleChange(newValue: SupportedTypes) {
 		value = newValue;
 		onChange(item.paramId, newValue);
+	}
+
+	function validateNumberInput(value: number, config: NumberWidgetConfig): string | null {
+		// Range validation
+		if (config.minimum !== undefined && value < config.minimum) {
+			return `Minimum value is ${config.minimum}`;
+		}
+		if (config.maximum !== undefined && value > config.maximum) {
+			return `Maximum value is ${config.maximum}`;
+		}
+
+		return null;
 	}
 
 	function validateTextInput(value: string, config: TextWidgetConfig): string | null {
@@ -57,7 +76,7 @@
 				if (!regex.test(value)) {
 					return config.customErrorMessage || 'Invalid format';
 				}
-			} catch (e) {
+			} catch {
 				console.error('Invalid regex pattern:', config.pattern);
 				return 'Invalid validation pattern configured';
 			}
@@ -79,9 +98,15 @@
 		onChange(paramId, newValue);
 	}, 150);
 
-	function handleNumberInputChange(newValue: number) {
+	function handleNumberInputChange(newValue: number, config: NumberWidgetConfig) {
 		value = newValue;
-		debouncedOnChange(item.paramId, newValue);
+		const error = validateNumberInput(newValue, config);
+		validationError = error;
+
+		// Only send to Grasshopper if validation passes
+		if (!error) {
+			debouncedOnChange(item.paramId, newValue);
+		}
 	}
 
 	function handleSliderChange(newValue: number) {
@@ -92,15 +117,15 @@
 	// Calculate optimal step size for slider performance
 	// If step size would create >1000 steps, adjust it automatically
 	function getOptimalStepSize(min: number, max: number, requestedStep: number): number {
-		const range = max - min;
-		const totalSteps = range / requestedStep;
+		const _range = max - min;
 		//TODO: FIX THIS
 		// If more than 1000 steps, adjust step size to keep it under 1000
+		// const totalSteps = _range / requestedStep;
 		// if (totalSteps > 1000) {
 		// 	console.warn(
-		// 		`Adjusting step size from ${requestedStep} to ${range / 1000} for parameter ${item.paramId} to limit total steps to 1000.`
+		// 		`Adjusting step size from ${requestedStep} to ${_range / 1000} for parameter ${item.paramId} to limit total steps to 1000.`
 		// 	);
-		// 	return range / 1000;
+		// 	return _range / 1000;
 		// }
 
 		return requestedStep;
@@ -156,31 +181,44 @@
 				</span>
 			</div>
 		{:else}
-			<Input
-				id={inputId}
-				type="number"
-				bind:value
-				min={config.minimum}
-				max={config.maximum}
-				step={config.stepSize ?? 1}
-				placeholder={config.placeholder}
-				{disabled}
-				oninput={(e: any) => {
-					const target = e.currentTarget as HTMLInputElement;
-					const newValue = parseFloat(target.value);
-					if (!isNaN(newValue)) {
-						handleNumberInputChange(newValue);
-					}
-				}}
-				onblur={(e: any) => {
-					// Ensure final value is sent on blur (in case debounce hasn't fired yet)
-					const target = e.currentTarget as HTMLInputElement;
-					const newValue = parseFloat(target.value);
-					if (!isNaN(newValue)) {
-						handleChange(newValue);
-					}
-				}}
-			/>
+			<div class="space-y-1">
+				<Input
+					id={inputId}
+					type="number"
+					bind:value
+					min={config.minimum}
+					max={config.maximum}
+					step={config.stepSize ?? 1}
+					placeholder={config.placeholder}
+					class={validationError ? 'border-red-500' : ''}
+					{disabled}
+					oninput={() => {
+						validationError = null; // Clear error while typing
+					}}
+					onchange={(e: any) => {
+						const target = e.currentTarget as HTMLInputElement;
+						const newValue = parseFloat(target.value);
+						if (!isNaN(newValue)) {
+							handleNumberInputChange(newValue, config);
+						}
+					}}
+					onblur={(e: any) => {
+						// Ensure final value is sent on blur (in case debounce hasn't fired yet)
+						const target = e.currentTarget as HTMLInputElement;
+						const newValue = parseFloat(target.value);
+						if (!isNaN(newValue)) {
+							const error = validateNumberInput(newValue, config);
+							validationError = error;
+							if (!error) {
+								handleChange(newValue);
+							}
+						}
+					}}
+				/>
+				{#if validationError}
+					<p class="text-xs text-red-500">{validationError}</p>
+				{/if}
+			</div>
 		{/if}
 	{:else if isCheckboxWidget(item)}
 		<div class="gap-3 flex items-center">
@@ -203,12 +241,11 @@
 				maxlength={config.maxLength}
 				class={validationError ? 'border-red-500' : ''}
 				{disabled}
-				oninput={(e: any) => {
-					const target = e.currentTarget as HTMLInputElement;
+				oninput={() => {
 					validationError = null; // Clear error while typing
 					// Don't send to Grasshopper on every keystroke - wait for blur
 				}}
-				onblur={(e: any) => {
+				onblur={(e: Event) => {
 					const target = e.currentTarget as HTMLInputElement;
 					const error = validateTextInput(target.value, config);
 					validationError = error;
@@ -256,7 +293,6 @@
 			acceptedFormats={config?.acceptedFormats ?? []}
 			onChange={(newValue) => handleChange(newValue)}
 			defaultInputMode={config.defaultInputMode}
-			{disabled}
 		/>
 	{/if}
 </div>

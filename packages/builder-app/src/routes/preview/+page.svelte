@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { getWebSocketState } from '$lib/websocket/websocket.svelte';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { UISchema, DiscoveredParameters, SupportedTypes } from '@selva/shared';
 	import {
 		TabLayout,
@@ -73,10 +74,6 @@
 		const prepared: Record<string, unknown> = {};
 
 		for (const [key, value] of Object.entries(values)) {
-			// Debug: log the value type and structure
-			const valueType = typeof value;
-			let isMetadata = false;
-
 			// Try to parse if it's a JSON string
 			let parsedValue = value;
 			if (typeof value === 'string' && value.trim().startsWith('{')) {
@@ -95,7 +92,6 @@
 				(parsedValue as any)._isMetadata === true
 			) {
 				// Skip sending metadata back - Grasshopper already has the file
-				isMetadata = true;
 				continue;
 			}
 
@@ -140,13 +136,13 @@
 	}
 
 	function navigateTo(route: '/' | '/builder') {
-		const params = new URLSearchParams();
+		const params = new SvelteURLSearchParams();
 		if (sessionId) params.set('session', sessionId);
 		const wsPort = page.url.searchParams.get('wsPort');
 		if (wsPort) params.set('wsPort', wsPort);
 
 		const url = `${route}?${params.toString()}`;
-		goto(url);
+		goto(url).catch(() => {});
 	}
 
 	function syncParameters() {
@@ -233,7 +229,7 @@
 				currentValues: message.currentValues
 			});
 
-			console.log('[Preview] Initialized values:', newValues);
+			// console.log('[Preview] Initialized values:', newValues);
 
 			isRemoteUpdate = true;
 			values = newValues;
@@ -418,7 +414,6 @@
 								{schema}
 								bind:values
 								onValueChange={handleValueChange}
-								debounceSliders={true}
 								environment="local"
 							/>
 						{/if}

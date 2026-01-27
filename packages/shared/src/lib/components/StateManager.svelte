@@ -280,7 +280,7 @@
 				{#if !validationResult.isValid}
 					<div class="space-y-2">
 						<h4 class="text-sm font-medium">Issues:</h4>
-						{#each validationResult.issues as issue}
+						{#each validationResult.issues as issue (issue.message)}
 							<div
 								class="p-3 rounded-lg border {issue.severity === 'error'
 									? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950'
