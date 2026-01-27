@@ -1,5 +1,95 @@
 # @selva/shared
 
+## 1.3.0
+
+### Minor Changes
+
+- 71fe8f7: Add ComputeMessages component with floating indicator for Grasshopper solve errors and warnings
+  - New `ComputeMessages` component with floating button indicator always visible in bottom-right
+  - Click to open modal dialog showing full error/warning dashboard
+  - Groups duplicate messages to reduce noise (e.g., "×247" for repeated warnings)
+  - Collapsible sections within dialog for errors (expanded by default) and warnings (collapsed)
+  - Errors displayed in red with destructive styling, warnings in yellow
+  - Badge shows count breakdown (e.g., "3 Errors • 247 Warnings")
+  - Integrated into compute-app solve flow to extract and display errors/warnings from Rhino Compute responses
+  - Uses shadcn-svelte Dialog, Collapsible, Button, and Badge components
+  - Updated to use new Lucide icon names (CircleAlert, TriangleAlert)
+
+- bc602c2: Add group-level visibility conditions for conditional group show/hide
+
+  **New Capabilities:**
+  - **GroupVisibilityCondition** schema type: apply visibility rules to entire groups
+    - Supports same rule evaluation as item conditions (AND/OR logic, all operators)
+    - Actions: `show` (default), `hide`
+    - No `defaultValue` support (defaults are applied at item level)
+    - Individual item rules remain independent from group visibility
+  - **Builder UI**: Group visibility editor in EditableGroup component
+    - Expandable visibility rules section in group header
+    - Same intuitive rule builder as item conditions
+    - Shows rule count when rules exist
+  - **Preview**: Runtime group visibility evaluation in TabLayout
+    - Groups are completely hidden when visibility condition hides them
+    - Item-level visibility and defaults still execute independently
+    - Maintains consistency with item-level visibility evaluation
+
+  **Example Usage:**
+
+  ```json
+  {
+  	"visibilityCondition": {
+  		"mode": "all",
+  		"action": "hide",
+  		"rules": [
+  			{
+  				"paramId": "mode-id",
+  				"operator": "equals",
+  				"value": "basic"
+  			}
+  		]
+  	}
+  }
+  ```
+
+  **Benefits:**
+  - Organize UI into collapsible sections with conditional visibility
+  - Hide entire "Advanced Options" groups based on user mode selection
+  - Cleaner schemas without repeated visibility rules for multiple items
+  - Individual items can still have their own conditions and default values
+
+- bc602c2: Add `action` and `defaultValue` to VisibilityCondition for enhanced parameter state management
+
+  **New Capabilities:**
+  - **action** enum: control parameter visibility state (`show`, `hide`, `disable`)
+    - `show` (default): parameter is visible and enabled
+    - `hide`: parameter is removed from view
+    - `disable`: parameter is visible but greyed out and non-interactive
+  - **defaultValue**: set parameter values when condition is met, eliminating repetition in conditional logic
+
+  **Example Usage:**
+
+  ```json
+  {
+  	"visibilityCondition": {
+  		"mode": "all",
+  		"action": "disable",
+  		"defaultValue": 2,
+  		"rules": [
+  			{
+  				"paramId": "leg-type-id",
+  				"operator": "equals",
+  				"value": "square"
+  			}
+  		]
+  	}
+  }
+  ```
+
+  **Benefits:**
+  - Zero repetition: single condition object handles visibility + default values
+  - DRY principle: no need to duplicate rules for multiple actions
+  - Backwards compatible: new fields are optional, existing schemas continue to work
+  - Extensible: action enum can support additional states in the future
+
 ## 1.2.0
 
 ### Minor Changes
