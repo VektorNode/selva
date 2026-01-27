@@ -45,7 +45,8 @@ export const config = [
 				{ argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
 			],
 			'@typescript-eslint/no-explicit-any': 'warn',
-			'svelte/no-at-html-tags': 'warn'
+			'svelte/no-at-html-tags': 'warn',
+			'svelte/no-navigation-without-resolve': 'warn'
 		}
 	}
 ];

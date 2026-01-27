@@ -5,7 +5,13 @@
 
 export { DefinitionFactory } from './definitions/factory';
 export { DefinitionContainer } from './definitions/container';
-export type { DefinitionMetadata, Definition, IDefinitionLoader, DefinitionsConfig, DefinitionFileType } from './definitions/types';
+export type {
+	DefinitionMetadata,
+	Definition,
+	IDefinitionLoader,
+	DefinitionsConfig,
+	DefinitionFileType
+} from './definitions/types';
 
 import { DefinitionFactory } from './definitions/factory';
 

@@ -11,9 +11,11 @@ The app auto-detects the definition source based on environment variables (see [
 Store definitions in a local directory with metadata config:
 
 **Environment variables:**
+
 - `GH_DEFINITIONS_PATH` - Path to definitions folder (default: `./definitions`)
 
 **Required file:**
+
 ```
 definitions/
 ├── definitions-config.json
@@ -22,6 +24,7 @@ definitions/
 ```
 
 **definitions-config.json:**
+
 ```json
 {
 	"definitions": {
@@ -45,10 +48,12 @@ definitions/
 For cloud/serverless deployments, define definitions as environment variables:
 
 **Environment variables:**
+
 - `DEFINITION_SOURCE=environment` - Explicitly use env var source
 - `GH_DEF_*` - Each variable contains JSON with metadata and remote URL
 
 **Example:**
+
 ```bash
 GH_DEF_SOLVER='{"metadata":{"displayName":"Fast Solver","description":"Optimized solver"},"url":"https://storage.example.com/solver.gh"}'
 GH_DEF_ANALYSIS='{"metadata":{"displayName":"Analysis Tool"},"url":"https://storage.example.com/analysis.gh"}'
@@ -60,13 +65,13 @@ Implement custom loaders (S3, databases, etc.) by extending `IDefinitionLoader`.
 
 ## Metadata Fields
 
-| Field         | Required | Notes                              |
-| ------------- | -------- | ---------------------------------- |
-| `displayName` | Yes      | User-friendly name shown in UI     |
-| `description` | No       | Short description (preview text)   |
-| `coverImage`  | No       | URL or base64 data URL             |
-| `tags`        | No       | Array of tags (up to 2 displayed)  |
-| `category`    | No       | For future use                     |
+| Field         | Required | Notes                             |
+| ------------- | -------- | --------------------------------- |
+| `displayName` | Yes      | User-friendly name shown in UI    |
+| `description` | No       | Short description (preview text)  |
+| `coverImage`  | No       | URL or base64 data URL            |
+| `tags`        | No       | Array of tags (up to 2 displayed) |
+| `category`    | No       | For future use                    |
 
 ## Behavior
 
@@ -77,9 +82,9 @@ Implement custom loaders (S3, databases, etc.) by extending `IDefinitionLoader`.
 
 ## Troubleshooting
 
-| Issue                              | Solution                                                         |
-| ---------------------------------- | ---------------------------------------------------------------- |
-| "No definitions found"             | Verify `GH_DEFINITIONS_PATH` exists or `GH_DEF_*` env vars are set |
-| "Invalid config format"            | Ensure `definitions-config.json` has top-level `definitions` object |
-| Definition not loading             | Verify filename in config matches `.gh`/`.ghx` file (without extension) |
-| "COMPUTE_SERVER_URL is required"   | Set `COMPUTE_SERVER_URL` environment variable                     |
+| Issue                            | Solution                                                                |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| "No definitions found"           | Verify `GH_DEFINITIONS_PATH` exists or `GH_DEF_*` env vars are set      |
+| "Invalid config format"          | Ensure `definitions-config.json` has top-level `definitions` object     |
+| Definition not loading           | Verify filename in config matches `.gh`/`.ghx` file (without extension) |
+| "COMPUTE_SERVER_URL is required" | Set `COMPUTE_SERVER_URL` environment variable                           |

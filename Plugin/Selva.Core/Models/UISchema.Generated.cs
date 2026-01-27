@@ -227,6 +227,28 @@ namespace Selva.Core.Models
 	// LAYOUT CONFIGURATION
 	// ============================================================================
 
+	public class GroupVisibilityCondition
+	{
+
+		/// <summary>
+		/// Evaluation mode: 'all' = AND (all rules must pass), 'any' = OR (at least one rule must pass)
+		/// </summary>
+		[JsonProperty("mode", DefaultValueHandling = DefaultValueHandling.Ignore)]
+		public string Mode { get; set; } = "all";
+
+		/// <summary>
+		/// List of rules to evaluate
+		/// </summary>
+		[JsonProperty("rules")]
+		public List<VisibilityRule> Rules { get; set; } = new List<VisibilityRule>();
+
+		/// <summary>
+		/// Action to apply when condition is met: 'show' makes group visible, 'hide' removes group from view
+		/// </summary>
+		[JsonProperty("action", DefaultValueHandling = DefaultValueHandling.Ignore)]
+		public string Action { get; set; } = "show";
+	}
+
 	public class GroupConfig
 	{
 
@@ -250,6 +272,9 @@ namespace Selva.Core.Models
 
 		[JsonProperty("items")]
 		public List<LayoutItemBase> Items { get; set; } = new List<LayoutItemBase>();
+
+		[JsonProperty("visibilityCondition", NullValueHandling = NullValueHandling.Ignore)]
+		public GroupVisibilityCondition VisibilityCondition { get; set; }
 	}
 
 	public class TabConfig
@@ -323,6 +348,18 @@ namespace Selva.Core.Models
 		/// </summary>
 		[JsonProperty("rules")]
 		public List<VisibilityRule> Rules { get; set; } = new List<VisibilityRule>();
+
+		/// <summary>
+		/// Action to apply when condition is met: 'show' makes visible and enabled, 'hide' removes from view, 'disable' makes visible but greyed out and non-interactive
+		/// </summary>
+		[JsonProperty("action", DefaultValueHandling = DefaultValueHandling.Ignore)]
+		public string Action { get; set; } = "show";
+
+		/// <summary>
+		/// Default value to set for the parameter when condition is met. The value should be compatible with the parameter type (number, string, boolean, etc.)
+		/// </summary>
+		[JsonProperty("defaultValue", NullValueHandling = NullValueHandling.Ignore)]
+		public object DefaultValue { get; set; }
 	}
 
 	public class DiscoveredInput
@@ -573,9 +610,6 @@ namespace Selva.Core.Models
 		[JsonProperty("visible", DefaultValueHandling = DefaultValueHandling.Ignore)]
 		public bool? Visible { get; set; } = true;
 
-		/// <summary>
-		/// Dynamic visibility rules based on other parameter values. Evaluated only if visible is not false.
-		/// </summary>
 		[JsonProperty("visibilityCondition", NullValueHandling = NullValueHandling.Ignore)]
 		public VisibilityCondition VisibilityCondition { get; set; }
 

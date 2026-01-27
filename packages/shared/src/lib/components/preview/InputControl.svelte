@@ -14,7 +14,7 @@
 		isCheckboxWidget,
 		isFileWidget
 	} from '$lib/types/generated';
-	import { throttle } from '$lib/utils/throttle';
+	import { debounce } from '$lib/utils/debounce';
 	import { Input } from '$lib/components/ui/input';
 	import { Slider } from '$lib/components/ui/slider';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -30,9 +30,17 @@
 		displayName?: string;
 		onChange: (paramId: string, value: SupportedTypes) => void;
 		environment?: 'local' | 'compute';
+		disabled?: boolean;
 	}
 
-	let { item, value = $bindable(), displayName, onChange, environment }: Props = $props();
+	let {
+		item,
+		value = $bindable(),
+		displayName,
+		onChange,
+		environment: _environment = undefined,
+		disabled = false
+	}: Props = $props();
 
 	const inputId = $derived(`input-${item.paramId}-${Math.random().toString(36).substring(2, 11)}`);
 
@@ -41,6 +49,18 @@
 	function handleChange(newValue: SupportedTypes) {
 		value = newValue;
 		onChange(item.paramId, newValue);
+	}
+
+	function validateNumberInput(value: number, config: NumberWidgetConfig): string | null {
+		// Range validation
+		if (config.minimum !== undefined && value < config.minimum) {
+			return `Minimum value is ${config.minimum}`;
+		}
+		if (config.maximum !== undefined && value > config.maximum) {
+			return `Maximum value is ${config.maximum}`;
+		}
+
+		return null;
 	}
 
 	function validateTextInput(value: string, config: TextWidgetConfig): string | null {
@@ -56,7 +76,7 @@
 				if (!regex.test(value)) {
 					return config.customErrorMessage || 'Invalid format';
 				}
-			} catch (e) {
+			} catch {
 				console.error('Invalid regex pattern:', config.pattern);
 				return 'Invalid validation pattern configured';
 			}
@@ -65,31 +85,47 @@
 		return null;
 	}
 
-	// Use throttle for sliders: immediate first update, then waits for user to pause/stop
-	// before sending next update. The WebSocket layer handles backpressure (queues latest
-	// value if Grasshopper is solving), so we can be more conservative here.
-	// 300ms = good balance between responsiveness and not spamming during rapid changes
-	const throttledOnChange = throttle((paramId: string, newValue: SupportedTypes) => {
+	// Debounced change for number inputs - waits for user to stop typing
+	// 400ms delay: user types "1000", we wait 400ms after last keystroke before sending
+	const debouncedOnChange = debounce((paramId: string, newValue: SupportedTypes) => {
 		onChange(paramId, newValue);
-	}, 300);
+	}, 400);
+
+	// Slider uses debounce: waits for user to pause/stop dragging before sending
+	// This prevents overwhelming the server during rapid slider movement
+	// 150ms = responsive enough to feel immediate, but batches rapid changes
+	const debouncedSliderChange = debounce((paramId: string, newValue: SupportedTypes) => {
+		onChange(paramId, newValue);
+	}, 150);
+
+	function handleNumberInputChange(newValue: number, config: NumberWidgetConfig) {
+		value = newValue;
+		const error = validateNumberInput(newValue, config);
+		validationError = error;
+
+		// Only send to Grasshopper if validation passes
+		if (!error) {
+			debouncedOnChange(item.paramId, newValue);
+		}
+	}
 
 	function handleSliderChange(newValue: number) {
-		value = newValue;
-		throttledOnChange(item.paramId, newValue);
+		value = newValue; // Update UI immediately for smooth visual feedback
+		debouncedSliderChange(item.paramId, newValue);
 	}
 
 	// Calculate optimal step size for slider performance
 	// If step size would create >1000 steps, adjust it automatically
 	function getOptimalStepSize(min: number, max: number, requestedStep: number): number {
-		const range = max - min;
-		const totalSteps = range / requestedStep;
+		const _range = max - min;
 		//TODO: FIX THIS
 		// If more than 1000 steps, adjust step size to keep it under 1000
+		// const totalSteps = _range / requestedStep;
 		// if (totalSteps > 1000) {
 		// 	console.warn(
-		// 		`Adjusting step size from ${requestedStep} to ${range / 1000} for parameter ${item.paramId} to limit total steps to 1000.`
+		// 		`Adjusting step size from ${requestedStep} to ${_range / 1000} for parameter ${item.paramId} to limit total steps to 1000.`
 		// 	);
-		// 	return range / 1000;
+		// 	return _range / 1000;
 		// }
 
 		return requestedStep;
@@ -136,6 +172,7 @@
 					step={optimalStep}
 					class="flex-1"
 					onValueChange={handleSliderChange}
+					{disabled}
 				/>
 				<span class="min-w-12 text-sm text-right text-muted-foreground">
 					{typeof value === 'number'
@@ -144,22 +181,44 @@
 				</span>
 			</div>
 		{:else}
-			<Input
-				id={inputId}
-				type="number"
-				bind:value
-				min={config.minimum}
-				max={config.maximum}
-				step={config.stepSize ?? 1}
-				placeholder={config.placeholder}
-				oninput={(e: any) => {
-					const target = e.currentTarget as HTMLInputElement;
-					const newValue = parseFloat(target.value);
-					if (!isNaN(newValue)) {
-						handleChange(newValue);
-					}
-				}}
-			/>
+			<div class="space-y-1">
+				<Input
+					id={inputId}
+					type="number"
+					bind:value
+					min={config.minimum}
+					max={config.maximum}
+					step={config.stepSize ?? 1}
+					placeholder={config.placeholder}
+					class={validationError ? 'border-red-500' : ''}
+					{disabled}
+					oninput={() => {
+						validationError = null; // Clear error while typing
+					}}
+					onchange={(e: any) => {
+						const target = e.currentTarget as HTMLInputElement;
+						const newValue = parseFloat(target.value);
+						if (!isNaN(newValue)) {
+							handleNumberInputChange(newValue, config);
+						}
+					}}
+					onblur={(e: any) => {
+						// Ensure final value is sent on blur (in case debounce hasn't fired yet)
+						const target = e.currentTarget as HTMLInputElement;
+						const newValue = parseFloat(target.value);
+						if (!isNaN(newValue)) {
+							const error = validateNumberInput(newValue, config);
+							validationError = error;
+							if (!error) {
+								handleChange(newValue);
+							}
+						}
+					}}
+				/>
+				{#if validationError}
+					<p class="text-xs text-red-500">{validationError}</p>
+				{/if}
+			</div>
 		{/if}
 	{:else if isCheckboxWidget(item)}
 		<div class="gap-3 flex items-center">
@@ -167,6 +226,7 @@
 				id={inputId}
 				checked={typeof value === 'boolean' ? value : false}
 				onCheckedChange={(checked: boolean) => handleChange(checked === true)}
+				{disabled}
 			/>
 			<Label for={inputId} class="text-sm cursor-pointer text-muted-foreground">Enabled</Label>
 		</div>
@@ -180,12 +240,12 @@
 				placeholder={config.placeholder}
 				maxlength={config.maxLength}
 				class={validationError ? 'border-red-500' : ''}
-				oninput={(e: any) => {
-					const target = e.currentTarget as HTMLInputElement;
+				{disabled}
+				oninput={() => {
 					validationError = null; // Clear error while typing
 					// Don't send to Grasshopper on every keystroke - wait for blur
 				}}
-				onblur={(e: any) => {
+				onblur={(e: Event) => {
 					const target = e.currentTarget as HTMLInputElement;
 					const error = validateTextInput(target.value, config);
 					validationError = error;
@@ -202,8 +262,10 @@
 		</div>
 	{:else if isDropdownWidget(item)}
 		{@const config = item.config as DropdownWidgetConfig}
-		{@const optionKeys = Object.keys(config.options || {})}
-		{@const currentValue = typeof value === 'string' ? value : (optionKeys[0] ?? '')}
+		{@const options = config.options || {}}
+		{@const currentValue = typeof value === 'string' ? value : ''}
+		{@const currentLabel =
+			Object.entries(options).find(([_, val]) => val === currentValue)?.[0] || currentValue}
 		<Select.Root
 			type="single"
 			value={currentValue}
@@ -212,13 +274,14 @@
 					handleChange(selected);
 				}
 			}}
+			{disabled}
 		>
-			<Select.Trigger class="w-full">
-				{currentValue || 'Select an option...'}
+			<Select.Trigger class="w-full" {disabled}>
+				{currentLabel || 'Select an option...'}
 			</Select.Trigger>
 			<Select.Content>
-				{#each optionKeys as key (key)}
-					<Select.Item value={key} label={key} />
+				{#each Object.entries(options) as [name, val] (val)}
+					<Select.Item value={val || ''} label={name} />
 				{/each}
 			</Select.Content>
 		</Select.Root>

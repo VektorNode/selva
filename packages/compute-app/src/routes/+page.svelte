@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
-	import { StateDisplay, Card, PageHeader } from '@selva/shared';
+	import { StateDisplay, PageHeader } from '@selva/shared';
 	import { ArrowRight } from '@lucide/svelte';
 
 	let { data }: { data: PageData } = $props();
@@ -10,7 +10,7 @@
 	$effect(() => {
 		if (!data.definitions || data.definitions.length <= 1) {
 			// Single definition or URL mode - redirect to app
-			goto('/app', { replaceState: true });
+			goto('/app').catch(() => {});
 		}
 	});
 </script>
@@ -41,7 +41,7 @@
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 					{#each data.definitions as definition (definition.filename)}
 						<button
-							onclick={() => goto(`/app?gh=${definition.filename}`)}
+							onclick={() => goto(`/app?gh=${definition.filename}`).catch(() => {})}
 							class="group border-border bg-card hover:border-muted-foreground flex h-full flex-col overflow-hidden rounded-lg border text-left transition-all hover:shadow-lg"
 						>
 							{#if definition.coverImage}
@@ -68,7 +68,7 @@
 								{/if}
 								{#if definition.tags && definition.tags.length > 0}
 									<div class="mb-3 flex flex-wrap gap-1.5">
-										{#each definition.tags.slice(0, 2) as tag}
+										{#each definition.tags.slice(0, 2) as tag (tag)}
 											<span
 												class="bg-muted text-muted-foreground inline-block rounded-full px-2 py-0.5 text-xs"
 											>

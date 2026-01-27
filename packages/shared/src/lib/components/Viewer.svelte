@@ -55,16 +55,16 @@
 </script>
 
 <div
-	class="relative min-h-125 h-full flex-1 rounded-lg bg-white shadow-lg {isFullscreen
+	class="min-h-125 bg-white shadow-lg relative h-full flex-1 rounded-lg {isFullscreen
 		? 'fullscreen-viewer'
 		: ''}"
 >
-	<div class="absolute inset-0">
+	<div class="inset-0 absolute">
 		<canvas class="block h-full w-full rounded-lg" bind:this={canvas}></canvas>
 	</div>
 	<!-- Fullscreen Toggle Button -->
 	<button
-		class="absolute right-4 bottom-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg bg-white/90 shadow-lg transition-all hover:bg-white hover:shadow-xl active:scale-95"
+		class="right-4 bottom-4 h-10 w-10 bg-white/90 shadow-lg hover:bg-white hover:shadow-xl absolute z-50 flex items-center justify-center rounded-lg transition-all active:scale-95"
 		onclick={toggleFullscreen}
 		title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
 		aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}

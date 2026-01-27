@@ -12,6 +12,8 @@
 		onChange: (value: string) => void;
 	}
 
+	//TODO: Support disabled prop in UI
+
 	let {
 		value = $bindable(),
 		acceptedFormats = [],
@@ -165,7 +167,6 @@
 
 		const files = e.dataTransfer?.files;
 		if (files?.[0]) {
-			const file = files[0];
 			// Create a fake event to reuse handleFileUpload logic
 			const fakeEvent = new Event('change');
 			const fakeTarget = { files: files } as HTMLInputElement;

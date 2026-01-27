@@ -17,6 +17,7 @@
 		onParameterDrop: (tabId: string, groupId: string, event: CustomEvent) => void;
 		onReorder: (event: CustomEvent) => void;
 		onRemoveItem: (tabId: string, groupId: string, itemId: string) => void;
+		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
 	}
 
@@ -33,6 +34,7 @@
 		onParameterDrop,
 		onReorder,
 		onRemoveItem,
+		availableInputs,
 		getParameterInfo
 	}: Props = $props();
 
@@ -129,9 +131,6 @@
 		draggedGroupId = null;
 		dragOverGroupId = null;
 	}
-
-	// Computed flag to check if we're actually dragging a group (not an item)
-	const isDraggingGroup = $derived(!!draggedGroupId && !dragStore.current);
 </script>
 
 <Card.Root class="shadow-sm">
@@ -188,14 +187,18 @@
 											onDragStart={(e) => handleGroupDragStart(e, group.id)}
 											onDragEnd={handleGroupDragEnd}
 											isDragging={draggedGroupId === group.id}
+											{availableInputs}
+											{getParameterInfo}
 										>
-											{#each group.items as item (item.id)}
+											{#each group.items as item, itemIndex (item.id)}
 												{@const paramInfo = getParameterInfo(item.paramId)}
 												<BuilderGroupItem
-													{item}
+													bind:item={group.items[itemIndex]}
 													{paramInfo}
 													tabId={activeTab.id}
 													groupId={group.id}
+													{availableInputs}
+													{getParameterInfo}
 													onRemove={() => onRemoveItem(activeTab.id, group.id, item.id)}
 												/>
 											{/each}

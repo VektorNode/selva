@@ -2,6 +2,7 @@
 	"name": "@selva/schemas",
 	"version": "1.1.0",
 	"description": "Schema definitions and code generators for Selva",
+	"private": true,
 	"type": "module",
 	"scripts": {
 		"generate:ts": "node generate-typescript.js",
