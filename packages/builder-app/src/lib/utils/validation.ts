@@ -24,6 +24,9 @@ export function validateRuleValue(
 				if (isNaN(numValue)) {
 					return `Value ${i + 1} must be a valid number`;
 				}
+				if (paramInfo.type === 'integer' && !Number.isInteger(numValue)) {
+					return `Value ${i + 1} must be a whole number`;
+				}
 				if (paramInfo.minimum !== undefined && numValue < paramInfo.minimum) {
 					return `Value ${i + 1} must be >= ${paramInfo.minimum}`;
 				}
@@ -55,6 +58,15 @@ export function validateRuleValue(
 			return 'Both min and max must be valid numbers';
 		}
 
+		if (paramInfo && paramInfo.type === 'integer') {
+			if (!Number.isInteger(minValue)) {
+				return 'Min value must be a whole number';
+			}
+			if (!Number.isInteger(maxValue)) {
+				return 'Max value must be a whole number';
+			}
+		}
+
 		if (minValue > maxValue) {
 			return 'Min value must be less than or equal to max value';
 		}
@@ -81,6 +93,10 @@ export function validateRuleValue(
 
 		if (isNaN(numValue)) {
 			return 'Value must be a valid number';
+		}
+
+		if (paramInfo.type === 'integer' && !Number.isInteger(numValue)) {
+			return 'Value must be a whole number';
 		}
 
 		if (paramInfo.minimum !== undefined && numValue < paramInfo.minimum) {
@@ -123,6 +139,10 @@ export function validateDefaultValue(value: unknown, paramInfo?: DiscoveredInput
 
 		if (isNaN(numValue)) {
 			return 'Default value must be a valid number';
+		}
+
+		if (paramInfo.type === 'integer' && !Number.isInteger(numValue)) {
+			return 'Default value must be a whole number';
 		}
 
 		if (paramInfo.minimum !== undefined && numValue < paramInfo.minimum) {

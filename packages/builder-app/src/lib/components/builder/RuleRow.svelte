@@ -138,6 +138,7 @@
 			<div class="flex gap-2">
 				<Input
 					type="number"
+					step={selectedParamInfo?.type === 'integer' ? '1' : 'any'}
 					value={rule.values?.[0]}
 					onchange={(e) => {
 						const val = (e.target as HTMLInputElement).value;
@@ -148,6 +149,7 @@
 				/>
 				<Input
 					type="number"
+					step={selectedParamInfo?.type === 'integer' ? '1' : 'any'}
 					value={rule.values?.[1]}
 					onchange={(e) => {
 						const val = (e.target as HTMLInputElement).value;
@@ -265,6 +267,7 @@
 					type={selectedParamInfo?.type === 'number' || selectedParamInfo?.type === 'integer'
 						? 'number'
 						: 'text'}
+					step={selectedParamInfo?.type === 'integer' ? '1' : 'any'}
 					value={rule.value}
 					onchange={(e) => {
 						const val = (e.target as HTMLInputElement).value;

@@ -112,7 +112,7 @@
 
 			<!-- Logic Mode Toggle -->
 			{#if visibilityCondition && visibilityCondition.rules?.length > 1}
-				<div class="bg-background/50 border-border/40 flex h-5 items-center gap-0 rounded border">
+				<div class=" border-border flex h-5 items-center gap-0 rounded border">
 					<button
 						onclick={() => setMode('all')}
 						class={`px-2 text-[9px] font-medium transition-colors ${
