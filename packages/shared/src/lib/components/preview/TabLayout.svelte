@@ -48,28 +48,36 @@
 	});
 
 	// Apply default values when visibility conditions change
+	// Runs on mount AND whenever values change
 	$effect(() => {
 		if (schema.layout.type === 'tabbed') {
+			// Track all value updates to apply them in batch
+			const updates: Record<string, unknown> = {};
+
 			schema.layout.tabs.forEach((tab) => {
 				tab.groups.forEach((group) => {
 					group.items.forEach((layoutItem) => {
 						const visibility = evaluateVisibility(layoutItem);
+						const input = getInputById(layoutItem.paramId);
 
-						// Apply default value when item is hidden or disabled
-						if (visibility.defaultValue !== undefined && !visibility.visible) {
-							const input = getInputById(layoutItem.paramId);
-							if (input && values[input.id] !== visibility.defaultValue) {
-								values[input.id] = visibility.defaultValue;
-							}
-						} else if (visibility.defaultValue !== undefined && visibility.disabled) {
-							const input = getInputById(layoutItem.paramId);
-							if (input && values[input.id] !== visibility.defaultValue) {
-								values[input.id] = visibility.defaultValue;
+						if (!input) return;
+
+						// Apply default value when conditions are met
+						if (visibility.defaultValue !== undefined) {
+							const shouldApplyDefault = !visibility.visible || visibility.disabled;
+
+							if (shouldApplyDefault && values[input.id] !== visibility.defaultValue) {
+								updates[input.id] = visibility.defaultValue;
 							}
 						}
 					});
 				});
 			});
+
+			// Apply all updates at once to minimize reactive triggers
+			if (Object.keys(updates).length > 0) {
+				Object.assign(values, updates);
+			}
 		}
 	});
 
@@ -99,15 +107,6 @@
 	function evaluateRule(rule: any, currentValues: Record<string, unknown>): boolean {
 		const ruleValue = currentValues[rule.paramId];
 		const compareValue = rule.value;
-
-		console.log('Evaluating rule:', {
-			paramId: rule.paramId,
-			operator: rule.operator,
-			ruleValue,
-			compareValue,
-			ruleValueType: typeof ruleValue,
-			compareValueType: typeof compareValue
-		});
 
 		switch (rule.operator) {
 			case 'equals':
@@ -168,14 +167,6 @@
 
 		// Apply action
 		const action = condition.action || 'show';
-
-		console.log('Visibility evaluation:', {
-			itemParamId: item.paramId,
-			ruleResults,
-			conditionMet,
-			action,
-			defaultValue: condition.defaultValue
-		});
 
 		if (action === 'show') {
 			return { visible: conditionMet, disabled: false };

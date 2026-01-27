@@ -40,8 +40,8 @@
 
 	// Handle value changes
 	function updateRuleValue(newValue: unknown) {
-		rule.value = newValue as { [k: string]: unknown } | undefined;
-		onUpdate(rule);
+		const updatedRule = { ...rule, value: newValue as { [k: string]: unknown } | undefined };
+		onUpdate(updatedRule);
 	}
 
 	function updateRuleOperator(
@@ -57,15 +57,15 @@
 			| 'notIn'
 			| 'matches'
 	) {
-		rule.operator = newOperator;
+		const updatedRule = { ...rule, operator: newOperator };
 		// Clear value when operator changes (especially for between/in/notIn)
 		if (newOperator === 'between' || newOperator === 'in' || newOperator === 'notIn') {
-			rule.value = undefined;
-			rule.values = [];
+			updatedRule.value = undefined;
+			updatedRule.values = [];
 		} else {
-			rule.values = undefined;
+			updatedRule.values = undefined;
 		}
-		onUpdate(rule);
+		onUpdate(updatedRule);
 	}
 </script>
 
@@ -77,8 +77,7 @@
 			value={rule.paramId}
 			onValueChange={(value) => {
 				if (value) {
-					rule.paramId = value;
-					onUpdate(rule);
+					onUpdate({ ...rule, paramId: value });
 				}
 			}}
 		>
@@ -134,6 +133,8 @@
 
 	<!-- Value Input (dynamic based on operator) -->
 	<div class="flex flex-col gap-1">
+		<!-- {console.log('Selected Param Info:', selectedParamInfo)} -->
+
 		{#if rule.operator === 'between'}
 			<!-- Two inputs for min/max -->
 			<div class="flex gap-1">
@@ -142,8 +143,7 @@
 					value={rule.values?.[0]}
 					onchange={(e) => {
 						const val = (e.target as HTMLInputElement).value;
-						rule.values = [Number(val), rule.values?.[1] || 0];
-						onUpdate(rule);
+						onUpdate({ ...rule, values: [Number(val), rule.values?.[1] || 0] });
 					}}
 					class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
 					placeholder="Min"
@@ -153,26 +153,68 @@
 					value={rule.values?.[1]}
 					onchange={(e) => {
 						const val = (e.target as HTMLInputElement).value;
-						rule.values = [rule.values?.[0] || 0, Number(val)];
-						onUpdate(rule);
+						onUpdate({ ...rule, values: [rule.values?.[0] || 0, Number(val)] });
 					}}
 					class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
 					placeholder="Max"
 				/>
 			</div>
 		{:else if rule.operator === 'in' || rule.operator === 'notIn'}
-			<!-- Textarea for multiple values (comma-separated) -->
-			<Input
-				type="text"
-				value={rule.values?.join(',') || ''}
-				onchange={(e) => {
-					const val = (e.target as HTMLInputElement).value;
-					rule.values = val.split(',').map((v) => v.trim());
-					onUpdate(rule);
-				}}
-				class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
-				placeholder="value1,value2,..."
-			/>
+			<!-- Multi-select for ValueList, comma-separated input for other types -->
+			<!-- Debug: type={selectedParamInfo?.type}, hasOptions={!!selectedParamInfo?.options} -->
+			{#if selectedParamInfo?.type === 'valueList' && selectedParamInfo?.options && Object.keys(selectedParamInfo.options).length > 0}
+				<Select.Root
+					type="multiple"
+					value={(rule.values || []) as string[]}
+					onValueChange={(value) => {
+						if (value && Array.isArray(value)) {
+							onUpdate({ ...rule, values: value as string[] });
+						}
+					}}
+				>
+					<Select.Trigger
+						class="h-6 text-[10px] {validationError ? 'border-destructive' : 'border-border/70'}"
+					>
+						{#if rule.values && rule.values.length > 0}
+							{@const selectedNames = (rule.values as string[])
+								.map((val) => {
+									const entry = Object.entries(selectedParamInfo.options || {}).find(
+										([_, v]) => v === val
+									);
+									return entry ? entry[0] : val;
+								})
+								.filter(Boolean)}
+							<span class="truncate">{selectedNames.join(', ')}</span>
+						{:else}
+							Select values...
+						{/if}
+					</Select.Trigger>
+					<Select.Content>
+						{#each Object.entries(selectedParamInfo.options) as [name, val] ([name, val])}
+							<Select.Item value={val || ''} label={name}>
+								{#snippet children({ selected })}
+									{name}
+									{#if selected}
+										<span class="ml-auto">✓</span>
+									{/if}
+								{/snippet}
+							</Select.Item>
+						{/each}
+					</Select.Content>
+				</Select.Root>
+			{:else}
+				<!-- Textarea for multiple values (comma-separated) -->
+				<Input
+					type="text"
+					value={rule.values?.join(',') || ''}
+					onchange={(e) => {
+						const val = (e.target as HTMLInputElement).value;
+						onUpdate({ ...rule, values: val.split(',').map((v) => v.trim()) });
+					}}
+					class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
+					placeholder="value1,value2,..."
+				/>
+			{/if}
 		{:else}
 			<!-- Single value input -->
 			{#if selectedParamInfo?.type === 'boolean'}

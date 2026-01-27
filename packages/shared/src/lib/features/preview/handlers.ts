@@ -7,9 +7,22 @@ export interface InitializeValuesOptions {
 	currentValues?: Record<string, unknown>;
 }
 
+/**
+ * Initialize parameter values for a schema with proper defaults and normalization.
+ *
+ * Priority order:
+ * 1. currentValues (existing values passed in)
+ * 2. availableParams.default (from Grasshopper parameter metadata)
+ * 3. Type-based defaults (0 for numbers, false for booleans, etc.)
+ *
+ * Special handling for valueList/dropdown parameters:
+ * - Converts label names (e.g., "Cylindrical") to their corresponding values (e.g., "1")
+ * - This fixes cases where Grasshopper sends the selected label instead of the index value
+ */
 export function initializeValues(options: InitializeValuesOptions): Record<string, unknown> {
 	const values: Record<string, unknown> = {};
 
+	// Initialize with type-based defaults or available parameter defaults
 	options.schema.inputs.forEach((input: any) => {
 		const availableParam = options.availableParams?.inputs?.find((p) => p.id === input.id);
 		const defaultValue =
@@ -20,15 +33,49 @@ export function initializeValues(options: InitializeValuesOptions): Record<strin
 		values[input.id] = defaultValue;
 	});
 
+	// Initialize outputs to null
 	options.schema.outputs.forEach((output: any) => {
 		values[output.id] = null;
 	});
 
+	// Override with current values if provided
 	if (options.currentValues && Object.keys(options.currentValues).length > 0) {
 		Object.assign(values, options.currentValues);
 	}
 
+	// Normalize valueList/dropdown values: convert labels to values if needed
+	options.schema.inputs.forEach((input: any) => {
+		if (input.paramType === 'valueList' && values[input.id] != null) {
+			const layoutItem = findLayoutItemForInput(options.schema, input.id);
+			if (layoutItem?.widgetType === 'dropdown' && layoutItem.config?.options) {
+				const currentValue = values[input.id];
+				const dropdownOptions = layoutItem.config.options;
+
+				// If currentValue matches a label (key), convert to the corresponding value
+				if (typeof currentValue === 'string' && currentValue in dropdownOptions) {
+					values[input.id] = dropdownOptions[currentValue];
+				}
+			}
+		}
+	});
+
 	return values;
+}
+
+/**
+ * Find a layout item by input parameter ID.
+ * Searches through tabbed layout structure to locate the item configuration.
+ */
+function findLayoutItemForInput(schema: UISchema, inputId: string): any {
+	if (schema.layout.type === 'tabbed') {
+		for (const tab of schema.layout.tabs) {
+			for (const group of tab.groups) {
+				const item = group.items.find((item: any) => item.paramId === inputId);
+				if (item) return item;
+			}
+		}
+	}
+	return null;
 }
 
 export interface OutputUpdateOptions {
@@ -37,17 +84,31 @@ export interface OutputUpdateOptions {
 	schema: UISchema | null;
 }
 
+/**
+ * Process output updates from Grasshopper solve results.
+ * Filters outputs to only include those defined in the schema and merges with file outputs.
+ */
 export function processOutputUpdate(options: OutputUpdateOptions): Record<string, unknown> {
+	// Only include outputs that exist in schema
 	const outputUpdates = Object.fromEntries(
 		Object.entries(options.outputs || {}).filter(([paramId]) =>
 			options.schema?.outputs.some((o) => o.id === paramId)
 		)
 	);
 
+	// File outputs are always included
 	const fileOutputUpdates = options.fileOutputs || {};
 	return { ...outputUpdates, ...fileOutputUpdates };
 }
 
+/**
+ * Update schema metadata (nicknames, descriptions, constraints) from Grasshopper parameter changes.
+ * Mutates the schema in place and returns count of updated parameters.
+ *
+ * Updates:
+ * - Input/output nicknames and descriptions
+ * - Widget config constraints (minimum, maximum, stepSize)
+ */
 export function updateParameterMetadata(
 	schema: UISchema,
 	changedParams: any[]
@@ -55,10 +116,37 @@ export function updateParameterMetadata(
 	let updatedCount = 0;
 	const updatedNames: string[] = [];
 
+	const processGroup = (group: any, updated: any) => {
+		group.items?.forEach((layoutItem: any) => {
+			if (layoutItem.paramId === updated.id && layoutItem.type === 'input') {
+				const config = layoutItem.config || {};
+				let configChanged = false;
+
+				// Update numeric constraints if present
+				if (updated.minimum !== undefined && config.minimum !== updated.minimum) {
+					config.minimum = updated.minimum;
+					configChanged = true;
+				}
+				if (updated.maximum !== undefined && config.maximum !== updated.maximum) {
+					config.maximum = updated.maximum;
+					configChanged = true;
+				}
+				if (updated.stepSize !== undefined && config.stepSize !== updated.stepSize) {
+					config.stepSize = updated.stepSize;
+					configChanged = true;
+				}
+
+				if (configChanged) {
+					layoutItem.config = config;
+				}
+			}
+		});
+	};
+
 	changedParams.forEach((updated: any) => {
-		const inputIndex = schema.inputs.findIndex((inp) => inp.id === updated.id);
-		if (inputIndex !== -1) {
-			const input = schema.inputs[inputIndex];
+		// Update input metadata
+		const input = schema.inputs.find((inp) => inp.id === updated.id);
+		if (input) {
 			let changed = false;
 
 			if (updated.nickname !== undefined && input.nickname !== updated.nickname) {
@@ -75,41 +163,17 @@ export function updateParameterMetadata(
 				updatedNames.push(input.nickname);
 			}
 
-			const processGroup = (group: any) => {
-				group.items?.forEach((layoutItem: any) => {
-					if (layoutItem.paramId === updated.id && layoutItem.type === 'input') {
-						const config = layoutItem.config || {};
-
-						if (updated.minimum !== undefined && config.minimum !== updated.minimum) {
-							config.minimum = updated.minimum;
-							changed = true;
-						}
-						if (updated.maximum !== undefined && config.maximum !== updated.maximum) {
-							config.maximum = updated.maximum;
-							changed = true;
-						}
-						if (updated.stepSize !== undefined && config.stepSize !== updated.stepSize) {
-							config.stepSize = updated.stepSize;
-							changed = true;
-						}
-
-						layoutItem.config = config;
-					}
-				});
-			};
-
+			// Update layout item configs
 			if (schema.layout.type === 'tabbed') {
-				schema.layout.tabs.forEach((tab) => {
-					tab.groups?.forEach(processGroup);
-				});
+				schema.layout.tabs.forEach((tab) => tab.groups?.forEach((g) => processGroup(g, updated)));
 			} else if (schema.layout.type === 'flat') {
-				schema.layout.groups.forEach(processGroup);
+				schema.layout.groups.forEach((g) => processGroup(g, updated));
 			}
 		}
 
-		const outputIndex = schema.outputs.findIndex((out) => out.id === updated.id);
-		if (outputIndex !== -1) {
-			const output = schema.outputs[outputIndex];
+		// Update output metadata
+		const output = schema.outputs.find((out) => out.id === updated.id);
+		if (output) {
 			let changed = false;
 
 			if (updated.nickname !== undefined && output.nickname !== updated.nickname) {
@@ -131,13 +195,15 @@ export function updateParameterMetadata(
 	return { updated: updatedCount, names: updatedNames };
 }
 
+/**
+ * Remove parameters from values object by their IDs.
+ * Returns a new object without mutating the original.
+ */
 export function removeParametersFromValues(
 	values: Record<string, unknown>,
 	removedIds: string[]
 ): Record<string, unknown> {
 	const newValues = { ...values };
-	removedIds.forEach((id) => {
-		delete newValues[id];
-	});
+	removedIds.forEach((id) => delete newValues[id]);
 	return newValues;
 }

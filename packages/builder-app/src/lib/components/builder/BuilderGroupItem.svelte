@@ -23,7 +23,7 @@
 	}
 
 	let {
-		item,
+		item = $bindable(),
 		paramInfo,
 		tabId,
 		groupId,

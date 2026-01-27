@@ -138,7 +138,7 @@
 				: emptyMessage}
 		/>
 	{:else}
-		<div class="flex max-h-[600px] flex-col gap-0 overflow-y-auto">
+		<div class="flex max-h-150 flex-col gap-0 overflow-y-auto">
 			{#each filteredItems as item (item.id)}
 				<DraggableItem {item} {tabs} {onAddToGroup} {onAddToNewGroup} />
 			{/each}

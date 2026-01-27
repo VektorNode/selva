@@ -177,7 +177,15 @@ export function getOperatorsForType(
 		];
 	}
 
-	if (paramType === 'valueList' || paramType === 'text') {
+	if (paramType === 'valueList') {
+		return [
+			...baseOperators,
+			{ value: 'in', label: 'in' },
+			{ value: 'notIn', label: 'not in' }
+		];
+	}
+
+	if (paramType === 'text') {
 		return [
 			...baseOperators,
 			{ value: 'in', label: 'in' },

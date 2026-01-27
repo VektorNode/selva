@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { onDestroy } from 'svelte';
 	import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 	import type { UISchema, DiscoveredParameters, SupportedTypes } from '@selva/shared';
 	import {
@@ -233,6 +232,8 @@
 				availableParams,
 				currentValues: message.currentValues
 			});
+
+			console.log('[Preview] Initialized values:', newValues);
 
 			isRemoteUpdate = true;
 			values = newValues;

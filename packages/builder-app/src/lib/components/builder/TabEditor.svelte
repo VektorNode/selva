@@ -193,10 +193,10 @@
 											{availableInputs}
 											{getParameterInfo}
 										>
-											{#each group.items as item (item.id)}
+											{#each group.items as item, itemIndex (item.id)}
 												{@const paramInfo = getParameterInfo(item.paramId)}
 												<BuilderGroupItem
-													{item}
+													bind:item={group.items[itemIndex]}
 													{paramInfo}
 													tabId={activeTab.id}
 													groupId={group.id}

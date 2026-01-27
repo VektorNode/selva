@@ -9,7 +9,8 @@
       "Bash(pnpm run check:*)",
       "Bash(pnpm run build:*)",
       "Bash(pnpm run generate:all:*)",
-      "Bash(npx shadcn-svelte@latest add:*)"
+      "Bash(npx shadcn-svelte@latest add:*)",
+      "mcp__svelte__svelte-autofixer"
     ],
     "deny": [],
     "ask": []
