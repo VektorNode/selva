@@ -125,9 +125,10 @@ print_success "Dependencies updated"
 ################################################################################
 print_header "Step 3: Building Application"
 
-print_step "Building all packages..."
-pnpm run build:all
-print_success "All packages built"
+print_step "Building shared package..."
+cd "$INSTALL_DIR"
+pnpm run build:shared
+print_success "Shared package built"
 
 print_step "Building compute-app for production..."
 cd "$INSTALL_DIR/packages/compute-app"
