@@ -11,6 +11,7 @@ bash scripts/setup.sh
 ```
 
 That's it! The script handles everything:
+
 - ✅ Checks/installs Node.js 18+
 - ✅ Checks/installs pnpm
 - ✅ Clones repository (if needed)
@@ -19,16 +20,6 @@ That's it! The script handles everything:
 - ✅ Builds application
 - ✅ Sets up PM2 for production
 - ✅ Auto-restart on reboot
-
-### Windows
-
-```cmd
-scripts\setup.bat
-```
-
-Same features as Linux version.
-
----
 
 ## Interactive Configuration
 
@@ -39,6 +30,7 @@ bash scripts/setup.sh --interactive
 ```
 
 Prompts for:
+
 - Definitions source (filesystem or environment)
 - Compute server URL
 - API key (optional)
@@ -55,6 +47,7 @@ bash scripts/update.sh
 ```
 
 Automatically:
+
 - Pulls latest changes
 - Installs updated dependencies
 - Rebuilds everything
@@ -279,6 +272,7 @@ pm2 logs selva-compute
 ```
 
 Common issues:
+
 - Port already in use: Change `PORT` in `.env`, restart with `pm2 restart selva-compute --update-env`
 - Missing definitions: Add `.gh` files to `packages/compute-app/definitions/`
 - Compute server unreachable: Check `COMPUTE_SERVER_URL` in `.env`
@@ -358,6 +352,7 @@ pm2 restart selva-compute --update-env
 ## Scripts Source Code
 
 Both scripts are fully transparent and safe:
+
 - `setup.sh` - ~450 lines, handles first-time setup
 - `update.sh` - ~150 lines, handles updates
 - `setup.bat` - ~400 lines, Windows equivalent
@@ -392,6 +387,7 @@ If scripts fail:
 4. Check GitHub issues: https://github.com/VektorNode/selva/issues
 
 Report issues with:
+
 - Output of failed script
 - Output of `node -v`, `pnpm -v`, `git --version`
 - Output of `pm2 logs selva-compute` (if PM2 started)

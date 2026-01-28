@@ -68,6 +68,15 @@ command_exists() {
   command -v "$1" >/dev/null 2>&1
 }
 
+# Get public IP address
+get_public_ip() {
+  # Try multiple services for redundancy
+  curl -s --max-time 5 https://ifconfig.me 2>/dev/null || \
+  curl -s --max-time 5 https://icanhazip.com 2>/dev/null || \
+  curl -s --max-time 5 https://checkip.amazonaws.com 2>/dev/null || \
+  echo "localhost"
+}
+
 ################################################################################
 # 1. SYSTEM CHECKS & REQUIREMENTS
 ################################################################################
@@ -173,6 +182,15 @@ fi
 if [ ! -f "$ENV_FILE" ] || ([ "$INTERACTIVE" = true ] && [[ $REPLY =~ ^[Yy]$ ]]); then
   print_step "Configuring environment variables..."
 
+  # Detect public IP address
+  print_step "Detecting public IP address..."
+  PUBLIC_IP=$(get_public_ip)
+  if [ "$PUBLIC_IP" != "localhost" ]; then
+    print_success "Public IP detected: $PUBLIC_IP"
+  else
+    print_warning "Could not detect public IP, will use localhost"
+  fi
+
   # Get user input with defaults
   if [ "$INTERACTIVE" = true ]; then
     read -p "Grasshopper Definitions Source [filesystem]: " DEFINITION_SOURCE
@@ -191,16 +209,17 @@ if [ ! -f "$ENV_FILE" ] || ([ "$INTERACTIVE" = true ] && [[ $REPLY =~ ^[Yy]$ ]])
     read -p "Application Port [3000]: " PORT
     PORT=${PORT:-3000}
 
-    read -p "Public Origin URL [http://localhost:$PORT]: " ORIGIN
-    ORIGIN=${ORIGIN:-http://localhost:$PORT}
+    DEFAULT_ORIGIN="http://$PUBLIC_IP:$PORT"
+    read -p "Public Origin URL [$DEFAULT_ORIGIN]: " ORIGIN
+    ORIGIN=${ORIGIN:-$DEFAULT_ORIGIN}
   else
     # Use defaults for non-interactive mode
     DEFINITION_SOURCE="filesystem"
-    GH_DEFINITIONS_PATH="./definitions"
+    GH_DEFINITIONS_PATH="./example-definitions"
     COMPUTE_SERVER_URL="http://localhost:5000"
     COMPUTE_API_KEY=""
     PORT="3000"
-    ORIGIN="http://localhost:$PORT"
+    ORIGIN="http://$PUBLIC_IP:$PORT"
   fi
 
   # Create .env file
@@ -237,6 +256,7 @@ EOF
 
 # Server Configuration
 PORT=${PORT}
+ORIGIN="${ORIGIN}"
 
 # Request body size limit for large geometry uploads
 BODY_SIZE_LIMIT="Infinity"
@@ -290,17 +310,20 @@ if [ "$SKIP_PM2" = false ]; then
     print_success "PM2 found: $(pm2 -v)"
   fi
 
-  # Create ecosystem config if it doesn't exist
+  # Create ecosystem config (update if exists to reflect .env changes)
+  print_step "Creating/updating ecosystem.config.cjs..."
+
+  # Extract values from .env
+  PORT=$(grep "^PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ')
+  ORIGIN=$(grep "^ORIGIN=" "$ENV_FILE" | cut -d'"' -f2)
+  COMPUTE_SERVER_URL=$(grep "COMPUTE_SERVER_URL=" "$ENV_FILE" | cut -d'"' -f2)
+  COMPUTE_API_KEY=$(grep "COMPUTE_API_KEY=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null)
+  GH_DEFINITIONS_PATH=$(grep "GH_DEFINITIONS_PATH=" "$ENV_FILE" | cut -d'"' -f2)
+
+  PORT=${PORT:-3000}
+  ORIGIN=${ORIGIN:-http://localhost:$PORT}
+
   if [ ! -f "$CONFIG_FILE" ]; then
-    print_step "Creating ecosystem.config.cjs..."
-
-    # Extract values from .env
-    PORT=$(grep "^PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ')
-    COMPUTE_SERVER_URL=$(grep "COMPUTE_SERVER_URL=" "$ENV_FILE" | cut -d'"' -f2)
-    COMPUTE_API_KEY=$(grep "COMPUTE_API_KEY=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null)
-    GH_DEFINITIONS_PATH=$(grep "GH_DEFINITIONS_PATH=" "$ENV_FILE" | cut -d'"' -f2)
-
-    PORT=${PORT:-3000}
 
     cat > "$CONFIG_FILE" << 'EOF'
 module.exports = {
@@ -316,7 +339,7 @@ module.exports = {
 			cwd: '__CWD__',
 			env: {
 				PORT: __PORT__,
-				ORIGIN: 'http://your-public-ip',
+				ORIGIN: '__ORIGIN__',
 				COMPUTE_SERVER_URL: '__COMPUTE_SERVER_URL__',
 				BODY_SIZE_LIMIT: 'Infinity',
 				__GH_DEFINITIONS__
@@ -331,6 +354,7 @@ EOF
     # Replace placeholders
     sed -i "s|__CWD__|$INSTALL_DIR/packages/compute-app|g" "$CONFIG_FILE"
     sed -i "s/__PORT__/$PORT/g" "$CONFIG_FILE"
+    sed -i "s|__ORIGIN__|$ORIGIN|g" "$CONFIG_FILE"
     sed -i "s|__COMPUTE_SERVER_URL__|$COMPUTE_SERVER_URL|g" "$CONFIG_FILE"
 
     if [ -n "$COMPUTE_API_KEY" ]; then
@@ -346,6 +370,8 @@ EOF
     fi
 
     print_success "ecosystem.config.cjs created: $CONFIG_FILE"
+  else
+    print_success "Updated ecosystem.config.cjs with current .env values"
   fi
 
   print_step "Starting application with PM2..."
@@ -380,12 +406,16 @@ print_header "Setup Complete!"
 PORT=$(grep "^PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ')
 PORT=${PORT:-3000}
 
+# Get the public IP used
+PUBLIC_IP=$(get_public_ip)
+
 echo -e "${GREEN}Selva Compute App is ready!${NC}"
 echo ""
 echo "📁 Installation directory: $INSTALL_DIR"
 echo "⚙️  Configuration file: $ENV_FILE"
-echo "🚀 Access application: http://localhost:$PORT/app?gh=definition-name"
-echo "💊 Health check: curl http://localhost:$PORT/api/health"
+echo "🌍 Server IP Address: $PUBLIC_IP"
+echo "🚀 Access application: http://$PUBLIC_IP:$PORT/app?gh=definition-name"
+echo "💊 Health check: curl http://$PUBLIC_IP:$PORT/api/health"
 echo ""
 
 if [ "$SKIP_PM2" = false ]; then
