@@ -83,6 +83,8 @@ public class BridgeCommunicationService : IDisposable
 		_communicationHandler.OnCurrentValuesRequested += HandleCurrentValuesRequest;
 		_communicationHandler.OnClientConnected += HandleClientConnected;
 		_communicationHandler.OnSchemaSaveRequested += HandleSchemaSave;
+		_communicationHandler.OnSyncPreviewRequested += HandleSyncPreviewRequest;
+		_communicationHandler.OnSyncChangesApply += HandleApplySyncChanges;
 	}
 
 	public void Dispose()
@@ -96,6 +98,8 @@ public class BridgeCommunicationService : IDisposable
 			_communicationHandler.OnCurrentValuesRequested -= HandleCurrentValuesRequest;
 			_communicationHandler.OnClientConnected -= HandleClientConnected;
 			_communicationHandler.OnSchemaSaveRequested -= HandleSchemaSave;
+			_communicationHandler.OnSyncPreviewRequested -= HandleSyncPreviewRequest;
+			_communicationHandler.OnSyncChangesApply -= HandleApplySyncChanges;
 		}
 
 		_disposed = true;
@@ -332,5 +336,96 @@ public class BridgeCommunicationService : IDisposable
 				Logger.Warn($"Failed to broadcast runtime message: {ex.Message}");
 			}
 		});
+	}
+
+	private void HandleSyncPreviewRequest(object sender, UISchema schema)
+	{
+		try
+		{
+			var document = _component.OnPingDocument();
+			if (document == null)
+			{
+				_ = _communicationHandler.BroadcastRuntimeMessage("error", "No document available");
+				return;
+			}
+
+			// Compute the diff between current GH state and schema state
+			var syncDiff = SchemaManager.ComputeSyncDiff(schema, document);
+
+			// Broadcast the diff to the frontend
+			_ = _communicationHandler.BroadcastSyncPreview(syncDiff);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error($"[BridgeCommunicationService] Error computing sync preview: {ex.Message}", ex);
+			_ = _communicationHandler.BroadcastRuntimeMessage("error", $"Error computing sync preview: {ex.Message}");
+		}
+	}
+
+	private void HandleApplySyncChanges(object sender, List<SyncChange> changes)
+	{
+		try
+		{
+			var document = _component.OnPingDocument();
+			if (document == null)
+			{
+				_ = _communicationHandler.BroadcastSyncApplied(false, "No document available");
+				return;
+			}
+
+			var currentSchema = _getSchema();
+			if (currentSchema == null)
+			{
+				_ = _communicationHandler.BroadcastSyncApplied(false, "No schema available");
+				return;
+			}
+
+			// Apply the changes to both Grasshopper document and schema
+			var updatedSchema = SchemaManager.ApplySyncChanges(changes, document, currentSchema);
+
+			// If schema was modified, update it and broadcast the changes
+			if (updatedSchema != null)
+			{
+				_setSchema(updatedSchema);
+
+				// Broadcast the updated schema to the frontend
+				_ = _communicationHandler.BroadcastSchemaUpdate(updatedSchema);
+			}
+
+			// Refresh the Grasshopper canvas to show updated nicknames
+			RhinoApp.InvokeOnUiThread((Action)(() =>
+			{
+				// Expire affected components/parameters to trigger visual update
+				foreach (var change in changes)
+				{
+					if (Guid.TryParse(change.ParamId, out var paramGuid))
+					{
+						var docObj = document.FindObject(paramGuid, false);
+						if (docObj is IGH_ActiveObject activeObj)
+						{
+							activeObj.ExpirePreview(true);
+						}
+					}
+				}
+
+				// Refresh the canvas to show nickname changes
+				document.NewSolution(false);
+			}));
+
+			// Schedule a solution to update the component (for toGH changes)
+			document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc =>
+			{
+				_component.ExpireSolution(true);
+			});
+
+			_ = _communicationHandler.BroadcastSyncApplied(true);
+			_component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Sync changes applied successfully");
+		}
+		catch (Exception ex)
+		{
+			Logger.Error($"[BridgeCommunicationService] Error applying sync changes: {ex.Message}", ex);
+			_ = _communicationHandler.BroadcastSyncApplied(false, ex.Message);
+			_component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error applying sync changes: {ex.Message}");
+		}
 	}
 }

@@ -9,3 +9,4 @@ export { default as DropZone } from './DropZone.svelte';
 export { default as DraggableItem } from './DraggableItem.svelte';
 export { default as BuilderSidebar } from './BuilderSidebar.svelte';
 export { default as TabEditor } from './TabEditor.svelte';
+export { default as SyncDialog } from './SyncDialog.svelte';

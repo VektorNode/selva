@@ -4,7 +4,7 @@
 	import { PageContainer, PageHeader, StateDisplay, Button, Dialog, toast } from '@selva/shared';
 	import { Save } from '@lucide/svelte';
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
-	import { DragDropContext, BuilderSidebar, TabEditor } from '$lib/components/builder';
+	import { DragDropContext, BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
 	import { initializeWebSocketSession } from '$lib/utils/session';
 	import { onMount } from 'svelte';
 	import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
@@ -150,6 +150,14 @@
 				<Button
 					variant="outline"
 					size="sm"
+					onclick={() => builderState?.requestSyncPreview()}
+					disabled={!builderState?.state.schema}
+				>
+					Sync with Grasshopper
+				</Button>
+				<Button
+					variant="outline"
+					size="sm"
 					onclick={() => (showBatchProcessor = !showBatchProcessor)}
 				>
 					Batch Processors
@@ -243,5 +251,17 @@
 				</Dialog.Footer>
 			</Dialog.Content>
 		</Dialog.Root>
+
+		{#if builderState}
+			<SyncDialog
+				open={builderState.state.syncDialogOpen}
+				syncDiff={builderState.state.syncDiff}
+				loading={builderState.state.syncLoading}
+				onOpenChange={(open) => {
+					if (builderState) builderState.state.syncDialogOpen = open;
+				}}
+				onApplyChanges={(changes) => builderState?.applySyncChanges(changes)}
+			/>
+		{/if}
 	</PageContainer>
 </DragDropContext>

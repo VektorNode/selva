@@ -6,6 +6,7 @@ using Grasshopper.Kernel;
 using Selva.Core.Models;
 using Selva.Grasshopper.Features.ComputeIO.Components;
 using Selva.Grasshopper.Features.UIBuilder.Helpers;
+using Selva.Grasshopper.Utilities.Helpers;
 
 namespace Selva.Grasshopper.Features.UIBuilder.Services.Schema;
 
@@ -49,12 +50,13 @@ public class SchemaManager
 			var ghParam = param as IGH_Param;
 			var paramType = GetParameterTypeName(param);
 
+			//Get prompt from IGH_ContextualParameter, but fall back to description if not set (some components don't set prompt)
 			var availableParam = new DiscoveredInput
 			{
 				Id = docObj.InstanceGuid,
 				Name = docObj.Name, // Keep for DiscoveredInput (used during builder phase)
 				Nickname = docObj.NickName,
-				Description = docObj.Description ?? "",
+				Description = param.Prompt ?? "",
 				Type = paramType,
 				Default = null, // Will be set below based on parameter type
 				AtLeast = param.AtLeast,
@@ -152,7 +154,7 @@ public class SchemaManager
 			{
 				Id = output.InstanceGuid,
 				Nickname = paramName,
-				Description = output.Description ?? "",
+				Description = "", // Component descriptions are informational only, not user-editable
 				Type = displayType
 			});
 		}
@@ -164,7 +166,7 @@ public class SchemaManager
 			{
 				Id = fileOutput.Id,
 				Nickname = fileOutput.Nickname,
-				Description = fileOutput.Description ?? "",
+				Description = "", // Component descriptions are informational only, not user-editable
 				Type = "file"
 			});
 
@@ -206,7 +208,6 @@ public class SchemaManager
 			.ToList();
 	}
 
-
 	/// <summary>
 	///   Validate schema against current document - removes references to missing parameters
 	///   Wrapper for ValidateSchemaAndTrackChanges without tracking
@@ -217,47 +218,16 @@ public class SchemaManager
 	}
 
 	/// <summary>
-	///   Synchronize schema input parameter nicknames with current Grasshopper document state.
-	///   CRITICAL: Ensures nicknames in schema match current parameter nicknames to prevent value application failures.
+	///   Synchronize schema metadata with current Grasshopper document state.
+	///   Currently disabled - all metadata updates are controlled explicitly via the Sync dialog.
 	///   Should be called before saving the schema and after loading it from file.
 	/// </summary>
 	public void SynchronizeSchemaMetadata(UISchema schema, GH_Document document)
 	{
 		if (schema == null || document == null) return;
 
-		// Update Nickname for all input parameters in schema
-		foreach (var input in schema.Inputs)
-		{
-			var docObj = document.FindObject(input.Id, false);
-			if (docObj != null)
-			{
-				input.Nickname = docObj.NickName;
-				input.Description = docObj.Description ?? "";
-			}
-		}
-
-		// Also update DisplayName in layout items to match current nickname
-		var allItems = Enumerable.Empty<LayoutItemBase>();
-
-		if (schema.Layout is TabbedLayoutConfig tabbedLayout)
-		{
-			if (tabbedLayout.Tabs != null) allItems = tabbedLayout.Tabs.SelectMany(t => t.Groups).SelectMany(g => g.Items);
-		}
-		else if (schema.Layout is FlatLayoutConfig flatLayout)
-		{
-			if (flatLayout.Groups != null) allItems = flatLayout.Groups.SelectMany(g => g.Items);
-		}
-
-		// Update DisplayName for each layout item based on current parameter nickname
-		foreach (var item in allItems)
-		{
-			var docObj = document.FindObject(item.ParamId, false);
-			if (docObj != null)
-			{
-				item.DisplayName = docObj.NickName;
-				item.Description = docObj.Description ?? "";
-			}
-		}
+		// IMPORTANT: Do NOT auto-sync nicknames or descriptions - user controls this explicitly via the Sync dialog
+		// All metadata changes should go through the Sync dialog for explicit user control
 	}
 
 	/// <summary>
@@ -282,8 +252,8 @@ public class SchemaManager
 		{
 			if (tabbed.Tabs != null)
 				foreach (var tab in tabbed.Tabs)
-				foreach (var group in tab.Groups)
-					allIds.UnionWith(group.Items.Select(item => item.ParamId));
+					foreach (var group in tab.Groups)
+						allIds.UnionWith(group.Items.Select(item => item.ParamId));
 		}
 		else if (schema.Layout is FlatLayoutConfig flat)
 		{
@@ -470,6 +440,7 @@ public class SchemaManager
 	/// <summary>
 	///   Apply detected metadata changes to the schema.
 	///   Updates layout item configs (min/max/stepSize for numbers, options for dropdowns).
+	///   Note: Does NOT update layout displayNames - those are user-controlled in the UI.
 	/// </summary>
 	public void ApplyMetadataChangesToSchema(UISchema schema, DiscoveredParameters changes)
 	{
@@ -510,7 +481,7 @@ public class SchemaManager
 						break;
 				}
 
-				item.DisplayName = change.Nickname;
+				// Update description but preserve displayName (user-controlled in UI)
 				item.Description = change.Description;
 			}
 
@@ -525,12 +496,11 @@ public class SchemaManager
 		// Process output changes
 		foreach (var change in changes.Outputs)
 		{
-			// Update displayName/description in layout items
+			// Update description in layout items but preserve displayName (user-controlled in UI)
 			foreach (var item in allItems)
 			{
 				if (item.ParamId != change.Id) continue;
 
-				item.DisplayName = change.Nickname;
 				item.Description = change.Description;
 			}
 
@@ -558,7 +528,7 @@ public class SchemaManager
 		{
 			Id = docObj.InstanceGuid,
 			Nickname = docObj.NickName,
-			Description = docObj.Description ?? ""
+			Description = param.Prompt ?? ""
 		};
 
 		// Extract numeric constraints if applicable
@@ -627,6 +597,272 @@ public class SchemaManager
 	{
 		_metadataCache.Clear();
 	}
+
+	/// <summary>
+	///   Compute a diff between current Grasshopper state and schema state
+	///   Returns changes that would go in each direction (GH→Schema, Schema→GH)
+	///   For inputs: Syncs nickname only (GH parameter ↔ schema)
+	///   For outputs: Syncs GH component's input parameter nickname ↔ layout displayName (also updates schema output nickname)
+	///   Note: Descriptions are not synced - they are user-controlled in the UI.
+	///   Note: Min/max/stepSize come from connected sliders and are not synced here.
+	/// </summary>
+	public static SyncDiff ComputeSyncDiff(UISchema schema, GH_Document document)
+	{
+		var diff = new SyncDiff();
+
+		if (schema == null || document == null)
+			return diff;
+
+		// Get all layout items to find displayNames
+		var allItems = Enumerable.Empty<LayoutItemBase>();
+		if (schema.Layout is TabbedLayoutConfig tabbedLayout)
+		{
+			if (tabbedLayout.Tabs != null) allItems = tabbedLayout.Tabs.SelectMany(t => t.Groups).SelectMany(g => g.Items);
+		}
+		else if (schema.Layout is FlatLayoutConfig flatLayout)
+		{
+			if (flatLayout.Groups != null) allItems = flatLayout.Groups.SelectMany(g => g.Items);
+		}
+
+		// Compare inputs - sync GH nickname with layout displayName (and schema input nickname)
+		if (schema.Inputs != null)
+		{
+			foreach (var input in schema.Inputs)
+			{
+				var docObj = document.FindObject(input.Id, false);
+				if (docObj == null) continue;
+
+				// Use current GH nickname for display purposes
+				var currentGHName = docObj.NickName;
+
+				// Find the layout item to get the displayName (user-controlled UI label)
+				var layoutItem = allItems.FirstOrDefault(item => item.ParamId == input.Id);
+				var layoutDisplayName = layoutItem?.DisplayName ?? input.Nickname;
+
+				// Compare GH nickname with layout displayName
+				if (currentGHName != layoutDisplayName)
+				{
+					// GH → Schema: Apply GH nickname to layout displayName (and schema nickname)
+					diff.FromGH.Add(new SyncChange
+					{
+						ParamId = input.Id.ToString(),
+						ParamNickname = currentGHName,
+						Field = "nickname",
+						GHValue = currentGHName,
+						SchemaValue = layoutDisplayName
+					});
+
+					// Schema → GH: Apply layout displayName to GH nickname (and schema nickname)
+					diff.ToGH.Add(new SyncChange
+					{
+						ParamId = input.Id.ToString(),
+						ParamNickname = currentGHName,
+						Field = "nickname",
+						SchemaValue = layoutDisplayName,
+						GHValue = currentGHName
+					});
+				}
+			}
+		}
+
+		// Compare outputs (nickname only - components don't typically have descriptions in GH)
+		// Note: For output components, we sync between GH input parameter nickname and layout displayName
+		if (schema.Outputs != null)
+		{
+			foreach (var output in schema.Outputs)
+			{
+				var docObj = document.FindObject(output.Id, false);
+				if (docObj == null) continue;
+
+				// For output components, get the first input parameter (that's what we sync)
+				var component = docObj as GH_Component;
+				if (component == null || component.Params.Input.Count == 0) continue;
+
+				var inputParam = component.Params.Input[0];
+				if (inputParam == null) continue;
+
+				// Find the layout item to get the displayName (user-controlled UI label)
+				var layoutItem = allItems.FirstOrDefault(item => item.ParamId == output.Id);
+				var layoutDisplayName = layoutItem?.DisplayName ?? output.Nickname;
+
+				// Use the input parameter's current nickname for display purposes
+				var currentGHName = inputParam.NickName;
+
+				// Compare GH parameter nickname with layout displayName
+				if (currentGHName != layoutDisplayName)
+				{
+					// GH → Schema: Apply GH nickname to layout displayName (and schema nickname)
+					diff.FromGH.Add(new SyncChange
+					{
+						ParamId = output.Id.ToString(),
+						ParamNickname = currentGHName,
+						Field = "nickname",
+						GHValue = currentGHName,
+						SchemaValue = layoutDisplayName
+					});
+
+					// Schema → GH: Apply layout displayName to GH nickname (and schema nickname)
+					diff.ToGH.Add(new SyncChange
+					{
+						ParamId = output.Id.ToString(),
+						ParamNickname = currentGHName,
+						Field = "nickname",
+						SchemaValue = layoutDisplayName,
+						GHValue = currentGHName
+					});
+				}
+			}
+		}
+
+		return diff;
+	}
+
+	/// <summary>
+	///   Apply selected sync changes to both Grasshopper document and schema
+	///   For inputs: Syncs GH nickname ↔ layout displayName (also updates schema input nickname)
+	///   For outputs: Syncs GH component's input parameter nickname ↔ layout displayName (also updates schema output nickname)
+	///   Returns the updated schema if any "fromGH" changes were applied
+	/// </summary>
+	public static UISchema ApplySyncChanges(List<SyncChange> changes, GH_Document document, UISchema schema)
+	{
+		if (changes == null || document == null || schema == null) return schema;
+
+		var schemaModified = false;
+
+		foreach (var change in changes)
+		{
+			if (!Guid.TryParse(change.ParamId, out var paramGuid)) continue;
+
+			try
+			{
+				if (change.Direction == "toGH")
+				{
+					// Apply Schema → Grasshopper
+					var docObj = document.FindObject(paramGuid, false);
+					if (docObj == null) continue;
+
+					// Check if this is an input parameter or output component
+					var isInput = schema.Inputs?.Any(i => i.Id == paramGuid) ?? false;
+					var isOutput = schema.Outputs?.Any(o => o.Id == paramGuid) ?? false;
+
+					if (isInput)
+					{
+						// For inputs: apply layout displayName to GH parameter nickname (and schema nickname)
+						if (change.Field == "nickname" && change.SchemaValue is string displayName)
+						{
+							// Update GH parameter nickname
+							docObj.NickName = displayName;
+
+							// Also update schema input nickname to match
+							var input = schema.Inputs?.FirstOrDefault(i => i.Id == paramGuid);
+							if (input != null)
+							{
+								input.Nickname = displayName;
+								schemaModified = true;
+							}
+						}
+					}
+					else if (isOutput)
+					{
+						// For outputs: apply layout displayName to GH component's input parameter
+						var component = docObj as GH_Component;
+						if (component != null && component.Params.Input.Count > 0)
+						{
+							var inputParam = component.Params.Input[0];
+							if (inputParam != null && change.Field == "nickname" && change.SchemaValue is string displayName)
+							{
+								inputParam.NickName = displayName;
+
+								// Also update the schema output nickname to match
+								var output = schema.Outputs?.FirstOrDefault(o => o.Id == paramGuid);
+								if (output != null)
+								{
+									output.Nickname = displayName;
+									schemaModified = true;
+								}
+							}
+						}
+					}
+				}
+				else if (change.Direction == "fromGH")
+				{
+					// Apply Grasshopper → Schema
+					var docObj = document.FindObject(paramGuid, false);
+					if (docObj == null) continue;
+
+					// Update schema inputs: apply GH nickname to both input nickname AND layout displayName
+					var input = schema.Inputs?.FirstOrDefault(i => i.Id == paramGuid);
+					if (input != null && change.Field == "nickname")
+					{
+						var ghNickname = docObj.NickName;
+
+						// Update schema input nickname
+						input.Nickname = ghNickname;
+						schemaModified = true;
+
+						// Also update layout displayName to match
+						var allItems = Enumerable.Empty<LayoutItemBase>();
+						if (schema.Layout is TabbedLayoutConfig tabbedLayout)
+						{
+							if (tabbedLayout.Tabs != null) allItems = tabbedLayout.Tabs.SelectMany(t => t.Groups).SelectMany(g => g.Items);
+						}
+						else if (schema.Layout is FlatLayoutConfig flatLayout)
+						{
+							if (flatLayout.Groups != null) allItems = flatLayout.Groups.SelectMany(g => g.Items);
+						}
+
+						var layoutItem = allItems.FirstOrDefault(item => item.ParamId == paramGuid);
+						if (layoutItem != null)
+						{
+							layoutItem.DisplayName = ghNickname;
+						}
+					}
+
+					// Update schema outputs: apply GH nickname to both output nickname AND layout displayName
+					var output = schema.Outputs?.FirstOrDefault(o => o.Id == paramGuid);
+					if (output != null)
+					{
+						var component = docObj as GH_Component;
+						if (component != null && component.Params.Input.Count > 0)
+						{
+							var inputParam = component.Params.Input[0];
+							if (inputParam != null && change.Field == "nickname")
+							{
+								var ghNickname = inputParam.NickName;
+
+								// Update schema output nickname
+								output.Nickname = ghNickname;
+								schemaModified = true;
+
+								// Also update layout displayName to match
+								var allItems = Enumerable.Empty<LayoutItemBase>();
+								if (schema.Layout is TabbedLayoutConfig tabbedLayout)
+								{
+									if (tabbedLayout.Tabs != null) allItems = tabbedLayout.Tabs.SelectMany(t => t.Groups).SelectMany(g => g.Items);
+								}
+								else if (schema.Layout is FlatLayoutConfig flatLayout)
+								{
+									if (flatLayout.Groups != null) allItems = flatLayout.Groups.SelectMany(g => g.Items);
+								}
+
+								var layoutItem = allItems.FirstOrDefault(item => item.ParamId == paramGuid);
+								if (layoutItem != null)
+								{
+									layoutItem.DisplayName = ghNickname;
+								}
+							}
+						}
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.Warn($"Error applying sync change to parameter {change.ParamNickname}: {ex.Message}");
+			}
+		}
+
+		return schemaModified ? schema : null;
+	}
 }
 
 /// <summary>
@@ -647,12 +883,12 @@ internal class ParameterMetadataSnapshot
 		if (!(obj is ParameterMetadataSnapshot other)) return false;
 
 		return Id == other.Id &&
-		       Nickname == other.Nickname &&
-		       Description == other.Description &&
-		       Minimum == other.Minimum &&
-		       Maximum == other.Maximum &&
-		       StepSize == other.StepSize &&
-		       OptionsEqual(Options, other.Options);
+					 Nickname == other.Nickname &&
+					 Description == other.Description &&
+					 Minimum == other.Minimum &&
+					 Maximum == other.Maximum &&
+					 StepSize == other.StepSize &&
+					 OptionsEqual(Options, other.Options);
 	}
 
 	private static bool OptionsEqual(Dictionary<string, string> a, Dictionary<string, string> b)
@@ -674,4 +910,28 @@ internal class ParameterMetadataSnapshot
 	{
 		return Id.GetHashCode();
 	}
+}
+
+/// <summary>
+///   Represents a single metadata difference between Grasshopper and schema
+/// </summary>
+public class SyncChange
+{
+	public string ParamId { get; set; }
+	/// <summary>Display name (current GH nickname) for UI identification</summary>
+	public string ParamNickname { get; set; }
+	public string Field { get; set; } // "nickname", "description"
+	public object SchemaValue { get; set; }
+	public object GHValue { get; set; }
+	/// <summary>"fromGH" = apply GHValue to schema; "toGH" = apply SchemaValue to GH</summary>
+	public string Direction { get; set; }
+}
+
+/// <summary>
+///   Complete sync diff showing what would change in each direction
+/// </summary>
+public class SyncDiff
+{
+	public List<SyncChange> FromGH { get; set; } = new();
+	public List<SyncChange> ToGH { get; set; } = new();
 }

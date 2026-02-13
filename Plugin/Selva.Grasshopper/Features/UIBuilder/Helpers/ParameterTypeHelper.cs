@@ -60,8 +60,8 @@ public static class ParameterTypeHelper
 		}
 
 		var needsAlternativeSource = !minimum.HasValue || !maximum.HasValue ||
-		                             IsExtreme(minimum.GetValueOrDefault()) ||
-		                             IsExtreme(maximum.GetValueOrDefault());
+																 IsExtreme(minimum.GetValueOrDefault()) ||
+																 IsExtreme(maximum.GetValueOrDefault());
 
 		if (needsAlternativeSource)
 		{
@@ -119,13 +119,13 @@ public static class ParameterTypeHelper
 
 		var type = obj.GetType();
 		const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic |
-		                           BindingFlags.FlattenHierarchy;
+															 BindingFlags.FlattenHierarchy;
 
 		var prop = type.GetProperty(propName, flags);
 		if (prop == null)
 			foreach (var p in type.GetProperties(flags))
 				if (string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase) ||
-				    p.Name.EndsWith("." + propName, StringComparison.Ordinal))
+						p.Name.EndsWith("." + propName, StringComparison.Ordinal))
 				{
 					prop = p;
 					break;

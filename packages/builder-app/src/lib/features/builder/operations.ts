@@ -48,6 +48,7 @@ export function createLayoutItem(
 	itemType: 'input' | 'output',
 	itemCount: number,
 	availableInputs: DiscoveredInput[],
+	availableOutputs: DiscoveredOutput[],
 	widgetType?: string,
 	paramType?: string
 ): LayoutItem {
@@ -64,39 +65,49 @@ export function createLayoutItem(
 
 	const fullParam =
 		itemType === 'input' ? availableInputs.find((p) => p.id === paramId) : undefined;
+	const fullOutput =
+		itemType === 'output' ? availableOutputs.find((o) => o.id === paramId) : undefined;
+
+	// Get description from discovered parameters
+	const description =
+		itemType === 'input'
+			? fullParam?.description ?? ''
+			: fullOutput?.description ?? '';
 
 	const config =
 		itemType === 'input' && paramType
 			? createDefaultWidgetConfig(
-					resolvedWidgetType as any,
-					fullParam || ({ type: paramType } as any),
-					'input'
-				)
+				resolvedWidgetType as any,
+				fullParam || ({ type: paramType } as any),
+				'input'
+			)
 			: itemType === 'output' && paramType
 				? createDefaultWidgetConfig(resolvedWidgetType as any, { type: paramType } as any, 'output')
 				: {};
 
 	return itemType === 'input'
 		? ({
-				id: crypto.randomUUID().substring(0, 8),
-				paramId,
-				type: 'input',
-				displayName,
-				widgetType: resolvedWidgetType as any,
-				order: itemCount,
-				span: 1,
-				config
-			} as InputLayoutItem)
+			id: crypto.randomUUID().substring(0, 8),
+			paramId,
+			type: 'input',
+			displayName,
+			description,
+			widgetType: resolvedWidgetType as any,
+			order: itemCount,
+			span: 1,
+			config
+		} as InputLayoutItem)
 		: ({
-				id: crypto.randomUUID().substring(0, 8),
-				paramId,
-				type: 'output',
-				displayName,
-				widgetType: resolvedWidgetType as any,
-				order: itemCount,
-				span: 1,
-				config: itemType === 'output' && resolvedWidgetType === 'file' ? {} : config
-			} as OutputLayoutItem);
+			id: crypto.randomUUID().substring(0, 8),
+			paramId,
+			type: 'output',
+			displayName,
+			description,
+			widgetType: resolvedWidgetType as any,
+			order: itemCount,
+			span: 1,
+			config: itemType === 'output' && resolvedWidgetType === 'file' ? {} : config
+		} as OutputLayoutItem);
 }
 
 export function insertLayoutItem(
@@ -131,7 +142,8 @@ export function handleItemDrop(
 	paramId: string,
 	displayName: string,
 	itemType: 'input' | 'output',
-	availableParams: DiscoveredInput[],
+	availableInputs: DiscoveredInput[],
+	availableOutputs: DiscoveredOutput[],
 	paramType?: string,
 	widgetType?: string,
 	targetItem?: LayoutItem,
@@ -180,7 +192,8 @@ export function handleItemDrop(
 		displayName,
 		itemType,
 		group.items.length,
-		availableParams,
+		availableInputs,
+		availableOutputs,
 		widgetType,
 		paramType
 	);

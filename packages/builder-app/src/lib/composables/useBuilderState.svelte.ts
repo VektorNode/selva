@@ -2,6 +2,7 @@ import { toast } from '@selva/shared';
 import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selva/shared';
 import { processInitialDataSchema, getWebSocketPortFromUrl } from '$lib/utils/session';
 import { getWebSocketState } from '$lib/websocket/websocket.svelte';
+import type { SyncDiff, SyncChange } from '$lib/websocket/websocket.svelte';
 
 interface BuilderWebSocketState {
 	availableInputs: DiscoveredInput[];
@@ -11,6 +12,9 @@ interface BuilderWebSocketState {
 	error: string;
 	syncNeeded: boolean;
 	activeTabId: string | null;
+	syncDialogOpen: boolean;
+	syncDiff: SyncDiff | null;
+	syncLoading: boolean;
 }
 
 export function useBuilderState(sessionId: string) {
@@ -25,7 +29,10 @@ export function useBuilderState(sessionId: string) {
 		loading: true,
 		error: '',
 		syncNeeded: false,
-		activeTabId: null
+		activeTabId: null,
+		syncDialogOpen: false,
+		syncDiff: null,
+		syncLoading: false
 	});
 
 	function handleInitialData(message: any) {
@@ -225,12 +232,52 @@ export function useBuilderState(sessionId: string) {
 		toast.info('Syncing parameters...');
 	}
 
+	function handleSyncPreview(message: any) {
+		if (message.sessionId !== sessionId) return;
+
+		// C# sends fromGH/toGH as camelCase (anonymous object properties)
+		// Each SyncChange has PascalCase properties (serialized from C# class)
+		state.syncDiff = {
+			fromGH: message.fromGH || [],
+			toGH: message.toGH || []
+		};
+		state.syncLoading = false;
+	}
+
+	function handleSyncApplied(message: any) {
+		if (message.sessionId !== sessionId) return;
+
+		state.syncLoading = false;
+		if (message.success) {
+			toast.success(message.message || 'Sync completed successfully');
+			state.syncDialogOpen = false;
+			// Refresh to get updated state
+			wsState.requestInitialData(sessionId);
+		} else {
+			toast.error(message.message || 'Sync failed');
+		}
+	}
+
+	function requestSyncPreview() {
+		if (!state.schema) return;
+		state.syncLoading = true;
+		state.syncDialogOpen = true;
+		wsState.requestSyncPreview(sessionId, state.schema);
+	}
+
+	function applySyncChanges(selectedChanges: SyncChange[]) {
+		state.syncLoading = true;
+		wsState.applySyncChanges(sessionId, selectedChanges);
+	}
+
 	function initialize() {
 		wsState.on('initialData', handleInitialData);
 		wsState.on('schemaSaved', handleSchemaSaved);
 		wsState.on('metadataUpdated', handleMetadataUpdated);
 		wsState.on('schemaUpdated', handleSchemaUpdated);
 		wsState.on('parametersAdded', handleParametersAdded);
+		wsState.on('syncPreview', handleSyncPreview);
+		wsState.on('syncApplied', handleSyncApplied);
 
 		wsState.requestInitialData(sessionId);
 	}
@@ -241,6 +288,8 @@ export function useBuilderState(sessionId: string) {
 		wsState.off('metadataUpdated', handleMetadataUpdated);
 		wsState.off('schemaUpdated', handleSchemaUpdated);
 		wsState.off('parametersAdded', handleParametersAdded);
+		wsState.off('syncPreview', handleSyncPreview);
+		wsState.off('syncApplied', handleSyncApplied);
 	}
 
 	return {
@@ -249,6 +298,8 @@ export function useBuilderState(sessionId: string) {
 		},
 		wsState,
 		syncParameters,
+		requestSyncPreview,
+		applySyncChanges,
 		initialize,
 		cleanup
 	};

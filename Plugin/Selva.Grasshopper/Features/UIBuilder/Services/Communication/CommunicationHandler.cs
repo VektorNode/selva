@@ -7,6 +7,7 @@ using Newtonsoft.Json.Linq;
 using Rhino;
 using Selva.Core.Models;
 using Selva.Grasshopper.Config;
+using Selva.Grasshopper.Features.UIBuilder.Services.Schema;
 using Selva.Grasshopper.Utilities.Helpers;
 
 namespace Selva.Grasshopper.Features.UIBuilder.Services.Communication;
@@ -99,6 +100,8 @@ public class CommunicationHandler : IDisposable
 	public event EventHandler OnCurrentValuesRequested;
 	public event EventHandler OnClientConnected;
 	public event EventHandler<UISchema> OnSchemaSaveRequested;
+	public event EventHandler<UISchema> OnSyncPreviewRequested;
+	public event EventHandler<List<SyncChange>> OnSyncChangesApply;
 
 	/// <summary>
 	///   Start WebSocket server
@@ -185,6 +188,24 @@ public class CommunicationHandler : IDisposable
 								{
 									logMessage?.Invoke("Web UI saving schema");
 									MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, schema));
+								}
+							}
+							else if (msgType == "requestSyncPreview")
+							{
+								var schema = jObj["schema"]?.ToObject<UISchema>(JsonSerializer.Create(SecureJsonSettings));
+								if (schema != null)
+								{
+									logMessage?.Invoke("Web UI requested sync preview");
+									MarshalToMainThread(() => OnSyncPreviewRequested?.Invoke(this, schema));
+								}
+							}
+							else if (msgType == "applySyncChanges")
+							{
+								var changes = jObj["changes"]?.ToObject<List<SyncChange>>(JsonSerializer.Create(SecureJsonSettings));
+								if (changes != null)
+								{
+									logMessage?.Invoke($"Web UI applying {changes.Count} sync changes");
+									MarshalToMainThread(() => OnSyncChangesApply?.Invoke(this, changes));
 								}
 							}
 						};
@@ -538,6 +559,42 @@ public class CommunicationHandler : IDisposable
 				timestamp = DateTime.UtcNow
 			};
 			await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+		}
+	}
+
+	/// <summary>
+	///   Broadcast sync diff (showing what would change in each direction)
+	/// </summary>
+	public async Task BroadcastSyncPreview(SyncDiff syncDiff)
+	{
+		if (_webSocketServer != null && _webSocketServer.IsRunning && syncDiff != null)
+		{
+			var message = new
+			{
+				type = "syncPreview",
+				sessionId = _sessionId,
+				fromGH = syncDiff.FromGH,
+				toGH = syncDiff.ToGH
+			};
+			await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
+		}
+	}
+
+	/// <summary>
+	///   Broadcast sync completion status
+	/// </summary>
+	public async Task BroadcastSyncApplied(bool success, string message = null)
+	{
+		if (_webSocketServer != null && _webSocketServer.IsRunning)
+		{
+			var msg = new
+			{
+				type = "syncApplied",
+				sessionId = _sessionId,
+				success,
+				message = message ?? (success ? "Sync completed successfully" : "Sync failed")
+			};
+			await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(msg));
 		}
 	}
 
