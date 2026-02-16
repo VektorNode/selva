@@ -13,8 +13,8 @@ using Selva.Grasshopper.Features.UIBuilder.Services.Persistence;
 using Selva.Grasshopper.Features.UIBuilder.Services.Schema;
 using Selva.Grasshopper.Features.UIBuilder.Services.State;
 using Selva.Grasshopper.Features.UIBuilder.Services.Values;
-using Selva.Grasshopper.Utilities.Guards;
 using Selva.Grasshopper.Utilities.Helpers;
+using Selva.Grasshopper.Utilities.Guards;
 
 namespace Selva.Grasshopper.Features.UIBuilder.Services;
 
@@ -211,11 +211,8 @@ public class BridgeCommunicationService : IDisposable
 			_setSchema(validatedSchema); // Update component's schema (single source of truth)
 			_ = _communicationHandler.BroadcastSchemaSaved(true);
 
-			// Schedule solution to update component
-			document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc =>
-			{
-				_component.ExpireSolution(true);
-			});
+		// Schedule solution to update component
+		GHDocumentMutator.ScheduleComponentExpire(document, _component, true);
 
 			_component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Schema saved successfully");
 		}
@@ -393,30 +390,22 @@ public class BridgeCommunicationService : IDisposable
 			}
 
 			// Refresh the Grasshopper canvas to show updated nicknames
-			RhinoApp.InvokeOnUiThread((Action)(() =>
+			var changedObjects = new List<IGH_ActiveObject>();
+			foreach (var change in changes)
 			{
-				// Expire affected components/parameters to trigger visual update
-				foreach (var change in changes)
+				if (Guid.TryParse(change.ParamId, out var paramGuid))
 				{
-					if (Guid.TryParse(change.ParamId, out var paramGuid))
+					var docObj = document.FindObject(paramGuid, false);
+					if (docObj is IGH_ActiveObject activeObj)
 					{
-						var docObj = document.FindObject(paramGuid, false);
-						if (docObj is IGH_ActiveObject activeObj)
-						{
-							activeObj.ExpirePreview(true);
-						}
+						changedObjects.Add(activeObj);
 					}
 				}
-
-				// Refresh the canvas to show nickname changes
-				document.NewSolution(false);
-			}));
+			}
+			GHDocumentMutator.RefreshObjectsOnCanvas(document, changedObjects);
 
 			// Schedule a solution to update the component (for toGH changes)
-			document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc =>
-			{
-				_component.ExpireSolution(true);
-			});
+			GHDocumentMutator.ScheduleComponentExpire(document, _component, true);
 
 			_ = _communicationHandler.BroadcastSyncApplied(true);
 			_component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Sync changes applied successfully");
@@ -429,3 +418,4 @@ public class BridgeCommunicationService : IDisposable
 		}
 	}
 }
+

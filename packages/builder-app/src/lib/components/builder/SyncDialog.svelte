@@ -27,18 +27,51 @@
 		return `${direction}__${change.ParamId}__${change.Field}`;
 	}
 
+	function getSelectedDirection(): 'fromGH' | 'toGH' | null {
+		const fromGHSelected = (syncDiff?.fromGH ?? []).some((c) => selectedKeys[changeKey(c, 'fromGH')]);
+		const toGHSelected = (syncDiff?.toGH ?? []).some((c) => selectedKeys[changeKey(c, 'toGH')]);
+		if (fromGHSelected) return 'fromGH';
+		if (toGHSelected) return 'toGH';
+		return null;
+	}
+
 	function toggleSelect(change: SyncChange, direction: 'fromGH' | 'toGH') {
 		const key = changeKey(change, direction);
-		selectedKeys = { ...selectedKeys, [key]: !selectedKeys[key] };
+		const isCurrentlySelected = selectedKeys[key];
+
+		// If deselecting, just deselect
+		if (isCurrentlySelected) {
+			selectedKeys = { ...selectedKeys, [key]: false };
+			return;
+		}
+
+		// If selecting, check if we need to clear the opposite direction
+		const currentDirection = getSelectedDirection();
+		if (currentDirection && currentDirection !== direction) {
+			// Clear the opposite direction
+			const next = { ...selectedKeys };
+			const oppositeDir = direction === 'fromGH' ? 'toGH' : 'fromGH';
+			const oppositeChanges = oppositeDir === 'fromGH' ? (syncDiff?.fromGH ?? []) : (syncDiff?.toGH ?? []);
+			oppositeChanges.forEach((c) => delete next[changeKey(c, oppositeDir)]);
+			selectedKeys = { ...next, [key]: true };
+		} else {
+			selectedKeys = { ...selectedKeys, [key]: true };
+		}
 	}
 
 	function toggleAll(direction: 'fromGH' | 'toGH') {
 		const changes = direction === 'fromGH' ? (syncDiff?.fromGH ?? []) : (syncDiff?.toGH ?? []);
 		const allSelected = changes.every((c) => selectedKeys[changeKey(c, direction)]);
 		const next = { ...selectedKeys };
+
 		if (allSelected) {
+			// Deselect all in this direction
 			changes.forEach((c) => delete next[changeKey(c, direction)]);
 		} else {
+			// Clear opposite direction first, then select all in this direction
+			const oppositeDir = direction === 'fromGH' ? 'toGH' : 'fromGH';
+			const oppositeChanges = oppositeDir === 'fromGH' ? (syncDiff?.fromGH ?? []) : (syncDiff?.toGH ?? []);
+			oppositeChanges.forEach((c) => delete next[changeKey(c, oppositeDir)]);
 			changes.forEach((c) => (next[changeKey(c, direction)] = true));
 		}
 		selectedKeys = next;
@@ -46,6 +79,11 @@
 
 	function isSelected(change: SyncChange, direction: 'fromGH' | 'toGH') {
 		return !!selectedKeys[changeKey(change, direction)];
+	}
+
+	function isDisabled(direction: 'fromGH' | 'toGH'): boolean {
+		const currentDirection = getSelectedDirection();
+		return currentDirection !== null && currentDirection !== direction;
 	}
 
 	function formatValue(value: unknown): string {
@@ -123,10 +161,11 @@
 									<input
 										type="checkbox"
 										class="rounded"
+										disabled={isDisabled('fromGH')}
 										checked={syncDiff.fromGH.every((c) => isSelected(c, 'fromGH'))}
 										onchange={() => toggleAll('fromGH')}
 									/>
-									<span class="text-sm font-medium">Select all</span>
+									<span class="text-sm font-medium" class:text-muted-foreground={isDisabled('fromGH')}>Select all</span>
 								</label>
 
 								<div class="overflow-x-auto">
@@ -142,11 +181,12 @@
 										</thead>
 										<tbody>
 											{#each syncDiff.fromGH as change (change.ParamId + change.Field)}
-												<tr class="border-b hover:bg-blue-100 dark:hover:bg-blue-900">
+												<tr class="border-b hover:bg-blue-100 dark:hover:bg-blue-900" class:opacity-50={isDisabled('fromGH')}>
 													<td class="px-3 py-2">
 														<input
 															type="checkbox"
 															class="rounded"
+															disabled={isDisabled('fromGH')}
 															checked={isSelected(change, 'fromGH')}
 															onchange={() => toggleSelect(change, 'fromGH')}
 														/>
@@ -191,10 +231,11 @@
 									<input
 										type="checkbox"
 										class="rounded"
+										disabled={isDisabled('toGH')}
 										checked={syncDiff.toGH.every((c) => isSelected(c, 'toGH'))}
 										onchange={() => toggleAll('toGH')}
 									/>
-									<span class="text-sm font-medium">Select all</span>
+									<span class="text-sm font-medium" class:text-muted-foreground={isDisabled('toGH')}>Select all</span>
 								</label>
 
 								<div class="overflow-x-auto">
@@ -210,11 +251,12 @@
 										</thead>
 										<tbody>
 											{#each syncDiff.toGH as change (change.ParamId + change.Field)}
-												<tr class="border-b hover:bg-green-100 dark:hover:bg-green-900">
+												<tr class="border-b hover:bg-green-100 dark:hover:bg-green-900" class:opacity-50={isDisabled('toGH')}>
 													<td class="px-3 py-2">
 														<input
 															type="checkbox"
 															class="rounded"
+															disabled={isDisabled('toGH')}
 															checked={isSelected(change, 'toGH')}
 															onchange={() => toggleSelect(change, 'toGH')}
 														/>

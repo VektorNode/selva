@@ -174,18 +174,9 @@ public class SchemaManager
 	}
 
 	/// <summary>
-	///   Get validation results (duplicate inputs and outputs)
-	/// </summary>
-	public (List<string> DuplicateInputs, List<string> DuplicateOutputs) GetValidationResults(
-		DiscoveredParameters availableParameters)
-	{
-		return (ValidateDuplicatesInputs(availableParameters), ValidateDuplicateOutputs(availableParameters));
-	}
-
-	/// <summary>
 	///   Validate no duplicate parameter names
 	/// </summary>
-	public List<string> ValidateDuplicatesInputs(DiscoveredParameters parameters)
+	public List<string> ValidateDuplicateInputs(DiscoveredParameters parameters)
 	{
 		return parameters.Inputs
 			.GroupBy(p => p.Nickname)
@@ -252,8 +243,8 @@ public class SchemaManager
 		{
 			if (tabbed.Tabs != null)
 				foreach (var tab in tabbed.Tabs)
-					foreach (var group in tab.Groups)
-						allIds.UnionWith(group.Items.Select(item => item.ParamId));
+				foreach (var group in tab.Groups)
+					allIds.UnionWith(group.Items.Select(item => item.ParamId));
 		}
 		else if (schema.Layout is FlatLayoutConfig flat)
 		{
@@ -448,16 +439,7 @@ public class SchemaManager
 
 		if (changes.Inputs.Count == 0 && changes.Outputs.Count == 0) return;
 
-		var allItems = Enumerable.Empty<LayoutItemBase>();
-
-		if (schema.Layout is TabbedLayoutConfig tabbedLayout)
-		{
-			if (tabbedLayout.Tabs != null) allItems = tabbedLayout.Tabs.SelectMany(t => t.Groups).SelectMany(g => g.Items);
-		}
-		else if (schema.Layout is FlatLayoutConfig flatLayout)
-		{
-			if (flatLayout.Groups != null) allItems = flatLayout.Groups.SelectMany(g => g.Items);
-		}
+		var allItems = GetAllLayoutItems(schema.Layout);
 
 		foreach (var change in changes.Inputs)
 		{
@@ -599,6 +581,21 @@ public class SchemaManager
 	}
 
 	/// <summary>
+	///   Returns all layout items from either a tabbed or flat layout.
+	///   Returns an empty sequence if the layout is null or has no groups.
+	/// </summary>
+	private static IEnumerable<LayoutItemBase> GetAllLayoutItems(LayoutConfigBase layout)
+	{
+		if (layout is TabbedLayoutConfig tabbedLayout && tabbedLayout.Tabs != null)
+			return tabbedLayout.Tabs.SelectMany(t => t.Groups).SelectMany(g => g.Items);
+
+		if (layout is FlatLayoutConfig flatLayout && flatLayout.Groups != null)
+			return flatLayout.Groups.SelectMany(g => g.Items);
+
+		return Enumerable.Empty<LayoutItemBase>();
+	}
+
+	/// <summary>
 	///   Compute a diff between current Grasshopper state and schema state
 	///   Returns changes that would go in each direction (GH→Schema, Schema→GH)
 	///   For inputs: Syncs nickname only (GH parameter ↔ schema)
@@ -614,15 +611,7 @@ public class SchemaManager
 			return diff;
 
 		// Get all layout items to find displayNames
-		var allItems = Enumerable.Empty<LayoutItemBase>();
-		if (schema.Layout is TabbedLayoutConfig tabbedLayout)
-		{
-			if (tabbedLayout.Tabs != null) allItems = tabbedLayout.Tabs.SelectMany(t => t.Groups).SelectMany(g => g.Items);
-		}
-		else if (schema.Layout is FlatLayoutConfig flatLayout)
-		{
-			if (flatLayout.Groups != null) allItems = flatLayout.Groups.SelectMany(g => g.Items);
-		}
+		var allItems = GetAllLayoutItems(schema.Layout);
 
 		// Compare inputs - sync GH nickname with layout displayName (and schema input nickname)
 		if (schema.Inputs != null)
@@ -649,7 +638,8 @@ public class SchemaManager
 						ParamNickname = currentGHName,
 						Field = "nickname",
 						GHValue = currentGHName,
-						SchemaValue = layoutDisplayName
+						SchemaValue = layoutDisplayName,
+						Direction = SyncDirection.FromGH
 					});
 
 					// Schema → GH: Apply layout displayName to GH nickname (and schema nickname)
@@ -659,7 +649,8 @@ public class SchemaManager
 						ParamNickname = currentGHName,
 						Field = "nickname",
 						SchemaValue = layoutDisplayName,
-						GHValue = currentGHName
+						GHValue = currentGHName,
+						Direction = SyncDirection.ToGH
 					});
 				}
 			}
@@ -698,7 +689,8 @@ public class SchemaManager
 						ParamNickname = currentGHName,
 						Field = "nickname",
 						GHValue = currentGHName,
-						SchemaValue = layoutDisplayName
+						SchemaValue = layoutDisplayName,
+						Direction = SyncDirection.FromGH
 					});
 
 					// Schema → GH: Apply layout displayName to GH nickname (and schema nickname)
@@ -708,7 +700,8 @@ public class SchemaManager
 						ParamNickname = currentGHName,
 						Field = "nickname",
 						SchemaValue = layoutDisplayName,
-						GHValue = currentGHName
+						GHValue = currentGHName,
+						Direction = SyncDirection.ToGH
 					});
 				}
 			}
@@ -728,6 +721,7 @@ public class SchemaManager
 		if (changes == null || document == null || schema == null) return schema;
 
 		var schemaModified = false;
+		var allLayoutItems = GetAllLayoutItems(schema.Layout);
 
 		foreach (var change in changes)
 		{
@@ -735,125 +729,13 @@ public class SchemaManager
 
 			try
 			{
-				if (change.Direction == "toGH")
-				{
-					// Apply Schema → Grasshopper
-					var docObj = document.FindObject(paramGuid, false);
-					if (docObj == null) continue;
+				var docObj = document.FindObject(paramGuid, false);
+				if (docObj == null) continue;
 
-					// Check if this is an input parameter or output component
-					var isInput = schema.Inputs?.Any(i => i.Id == paramGuid) ?? false;
-					var isOutput = schema.Outputs?.Any(o => o.Id == paramGuid) ?? false;
-
-					if (isInput)
-					{
-						// For inputs: apply layout displayName to GH parameter nickname (and schema nickname)
-						if (change.Field == "nickname" && change.SchemaValue is string displayName)
-						{
-							// Update GH parameter nickname
-							docObj.NickName = displayName;
-
-							// Also update schema input nickname to match
-							var input = schema.Inputs?.FirstOrDefault(i => i.Id == paramGuid);
-							if (input != null)
-							{
-								input.Nickname = displayName;
-								schemaModified = true;
-							}
-						}
-					}
-					else if (isOutput)
-					{
-						// For outputs: apply layout displayName to GH component's input parameter
-						var component = docObj as GH_Component;
-						if (component != null && component.Params.Input.Count > 0)
-						{
-							var inputParam = component.Params.Input[0];
-							if (inputParam != null && change.Field == "nickname" && change.SchemaValue is string displayName)
-							{
-								inputParam.NickName = displayName;
-
-								// Also update the schema output nickname to match
-								var output = schema.Outputs?.FirstOrDefault(o => o.Id == paramGuid);
-								if (output != null)
-								{
-									output.Nickname = displayName;
-									schemaModified = true;
-								}
-							}
-						}
-					}
-				}
-				else if (change.Direction == "fromGH")
-				{
-					// Apply Grasshopper → Schema
-					var docObj = document.FindObject(paramGuid, false);
-					if (docObj == null) continue;
-
-					// Update schema inputs: apply GH nickname to both input nickname AND layout displayName
-					var input = schema.Inputs?.FirstOrDefault(i => i.Id == paramGuid);
-					if (input != null && change.Field == "nickname")
-					{
-						var ghNickname = docObj.NickName;
-
-						// Update schema input nickname
-						input.Nickname = ghNickname;
-						schemaModified = true;
-
-						// Also update layout displayName to match
-						var allItems = Enumerable.Empty<LayoutItemBase>();
-						if (schema.Layout is TabbedLayoutConfig tabbedLayout)
-						{
-							if (tabbedLayout.Tabs != null) allItems = tabbedLayout.Tabs.SelectMany(t => t.Groups).SelectMany(g => g.Items);
-						}
-						else if (schema.Layout is FlatLayoutConfig flatLayout)
-						{
-							if (flatLayout.Groups != null) allItems = flatLayout.Groups.SelectMany(g => g.Items);
-						}
-
-						var layoutItem = allItems.FirstOrDefault(item => item.ParamId == paramGuid);
-						if (layoutItem != null)
-						{
-							layoutItem.DisplayName = ghNickname;
-						}
-					}
-
-					// Update schema outputs: apply GH nickname to both output nickname AND layout displayName
-					var output = schema.Outputs?.FirstOrDefault(o => o.Id == paramGuid);
-					if (output != null)
-					{
-						var component = docObj as GH_Component;
-						if (component != null && component.Params.Input.Count > 0)
-						{
-							var inputParam = component.Params.Input[0];
-							if (inputParam != null && change.Field == "nickname")
-							{
-								var ghNickname = inputParam.NickName;
-
-								// Update schema output nickname
-								output.Nickname = ghNickname;
-								schemaModified = true;
-
-								// Also update layout displayName to match
-								var allItems = Enumerable.Empty<LayoutItemBase>();
-								if (schema.Layout is TabbedLayoutConfig tabbedLayout)
-								{
-									if (tabbedLayout.Tabs != null) allItems = tabbedLayout.Tabs.SelectMany(t => t.Groups).SelectMany(g => g.Items);
-								}
-								else if (schema.Layout is FlatLayoutConfig flatLayout)
-								{
-									if (flatLayout.Groups != null) allItems = flatLayout.Groups.SelectMany(g => g.Items);
-								}
-
-								var layoutItem = allItems.FirstOrDefault(item => item.ParamId == paramGuid);
-								if (layoutItem != null)
-								{
-									layoutItem.DisplayName = ghNickname;
-								}
-							}
-						}
-					}
-				}
+				if (change.Direction == SyncDirection.ToGH)
+					schemaModified |= ApplyToGH(change, paramGuid, docObj, schema);
+				else if (change.Direction == SyncDirection.FromGH)
+					schemaModified |= ApplyFromGH(change, paramGuid, docObj, schema, allLayoutItems);
 			}
 			catch (Exception ex)
 			{
@@ -862,6 +744,96 @@ public class SchemaManager
 		}
 
 		return schemaModified ? schema : null;
+	}
+
+	/// <summary>
+	///   Apply a "toGH" sync change (schema value to Grasshopper)
+	/// </summary>
+	private static bool ApplyToGH(SyncChange change, Guid paramGuid, IGH_DocumentObject docObj, UISchema schema)
+	{
+		var isInput = schema.Inputs?.Any(i => i.Id == paramGuid) ?? false;
+		var isOutput = schema.Outputs?.Any(o => o.Id == paramGuid) ?? false;
+
+		if (isInput && change.Field == "nickname" && change.SchemaValue is string displayName)
+		{
+			docObj.NickName = displayName;
+			var input = schema.Inputs?.FirstOrDefault(i => i.Id == paramGuid);
+			if (input != null)
+			{
+				input.Nickname = displayName;
+				// After changing the nickname, we need to expire the solution to update the UI
+				docObj.ExpireSolution(true);
+				return true;
+			}
+		}
+
+		if (isOutput && change.Field == "nickname" && change.SchemaValue is string outDisplayName)
+		{
+			var component = docObj as GH_Component;
+			if (component != null && component.Params.Input.Count > 0)
+			{
+				var inputParam = component.Params.Input[0];
+				if (inputParam != null)
+				{
+					inputParam.NickName = outDisplayName;
+					var output = schema.Outputs?.FirstOrDefault(o => o.Id == paramGuid);
+					if (output != null)
+					{
+						output.Nickname = outDisplayName;
+						component.ExpireSolution(true);
+						return true;
+					}
+				}
+
+			}
+		}
+
+		return false;
+	}
+
+	/// <summary>
+	///   Apply a "fromGH" sync change (Grasshopper value to schema)
+	/// </summary>
+	private static bool ApplyFromGH(SyncChange change, Guid paramGuid, IGH_DocumentObject docObj, UISchema schema,
+		IEnumerable<LayoutItemBase> allLayoutItems)
+	{
+		if (change.Field != "nickname") return false;
+
+		var modified = false;
+
+		// Update schema inputs: apply GH nickname to both input nickname AND layout displayName
+		var input = schema.Inputs?.FirstOrDefault(i => i.Id == paramGuid);
+		if (input != null)
+		{
+			var ghNickname = docObj.NickName;
+			input.Nickname = ghNickname;
+			var layoutItem = allLayoutItems.FirstOrDefault(item => item.ParamId == paramGuid);
+			if (layoutItem != null)
+				layoutItem.DisplayName = ghNickname;
+			modified = true;
+		}
+
+		// Update schema outputs: apply GH component's input parameter nickname to both output nickname AND layout displayName
+		var output = schema.Outputs?.FirstOrDefault(o => o.Id == paramGuid);
+		if (output != null)
+		{
+			var component = docObj as GH_Component;
+			if (component != null && component.Params.Input.Count > 0)
+			{
+				var inputParam = component.Params.Input[0];
+				if (inputParam != null)
+				{
+					var ghNickname = inputParam.NickName;
+					output.Nickname = ghNickname;
+					var layoutItem = allLayoutItems.FirstOrDefault(item => item.ParamId == paramGuid);
+					if (layoutItem != null)
+						layoutItem.DisplayName = ghNickname;
+					modified = true;
+				}
+			}
+		}
+
+		return modified;
 	}
 }
 
@@ -883,12 +855,12 @@ internal class ParameterMetadataSnapshot
 		if (!(obj is ParameterMetadataSnapshot other)) return false;
 
 		return Id == other.Id &&
-					 Nickname == other.Nickname &&
-					 Description == other.Description &&
-					 Minimum == other.Minimum &&
-					 Maximum == other.Maximum &&
-					 StepSize == other.StepSize &&
-					 OptionsEqual(Options, other.Options);
+		       Nickname == other.Nickname &&
+		       Description == other.Description &&
+		       Minimum == other.Minimum &&
+		       Maximum == other.Maximum &&
+		       StepSize == other.StepSize &&
+		       OptionsEqual(Options, other.Options);
 	}
 
 	private static bool OptionsEqual(Dictionary<string, string> a, Dictionary<string, string> b)
@@ -910,28 +882,4 @@ internal class ParameterMetadataSnapshot
 	{
 		return Id.GetHashCode();
 	}
-}
-
-/// <summary>
-///   Represents a single metadata difference between Grasshopper and schema
-/// </summary>
-public class SyncChange
-{
-	public string ParamId { get; set; }
-	/// <summary>Display name (current GH nickname) for UI identification</summary>
-	public string ParamNickname { get; set; }
-	public string Field { get; set; } // "nickname", "description"
-	public object SchemaValue { get; set; }
-	public object GHValue { get; set; }
-	/// <summary>"fromGH" = apply GHValue to schema; "toGH" = apply SchemaValue to GH</summary>
-	public string Direction { get; set; }
-}
-
-/// <summary>
-///   Complete sync diff showing what would change in each direction
-/// </summary>
-public class SyncDiff
-{
-	public List<SyncChange> FromGH { get; set; } = new();
-	public List<SyncChange> ToGH { get; set; } = new();
 }

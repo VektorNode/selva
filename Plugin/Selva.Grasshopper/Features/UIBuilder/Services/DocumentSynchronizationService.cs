@@ -120,10 +120,7 @@ public class DocumentSynchronizationService : IDisposable
 				_setSchema(updatedSchema);
 				OnParameterDeletionRequired?.Invoke(removedIds, e.Document);
 
-				e.Document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc =>
-				{
-					_component?.ExpireSolution(false);
-				});
+				GHDocumentMutator.ScheduleComponentExpire(e.Document, _component, false);
 			}
 			else
 			{
@@ -197,3 +194,4 @@ public class DocumentSynchronizationService : IDisposable
 		return _schemaManager.ScanParameters(document, _component);
 	}
 }
+
