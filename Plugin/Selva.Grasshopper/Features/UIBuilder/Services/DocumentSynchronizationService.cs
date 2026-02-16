@@ -168,9 +168,18 @@ public class DocumentSynchronizationService : IDisposable
 
 				if (e.RequiresRecalculation)
 				{
+#if DEBUG
+					Logger.Log("[UIBuilder] MetadataChanged — triggering ExpireSolution (slider range or ValueList options changed)");
+#endif
 					_component?.ExpireSolution(false);
 					_component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Source parameter changed - recalculating");
 				}
+#if DEBUG
+				else
+				{
+					Logger.Log("[UIBuilder] MetadataChanged — document marked Modified, no recalculation needed");
+				}
+#endif
 			}
 		}
 		catch (Exception ex)
@@ -191,7 +200,7 @@ public class DocumentSynchronizationService : IDisposable
 			};
 		}
 
-		return _schemaManager.ScanParameters(document, _component);
+		return _schemaManager.ScanParameters(document);
 	}
 }
 

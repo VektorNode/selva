@@ -89,15 +89,14 @@
 		const initializeBuilder = async () => {
 			const result = await initializeWebSocketSession(urlSessionId);
 
+			builderState = useBuilderState(urlSessionId);
+
 			if (result.error) {
-				if (builderState) {
-					builderState.state.error = result.error;
-					builderState.state.loading = false;
-				}
+				builderState.state.error = result.error;
+				builderState.state.loading = false;
 				return;
 			}
 
-			builderState = useBuilderState(urlSessionId);
 			builderState.initialize();
 		};
 

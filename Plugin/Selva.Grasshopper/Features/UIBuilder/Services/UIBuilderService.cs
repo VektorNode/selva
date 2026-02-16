@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using Selva.Grasshopper.Features.UIBuilder.Services.Communication;
 using Selva.Grasshopper.Features.UIBuilder.Services.Events;
 using Selva.Grasshopper.Features.UIBuilder.Services.Persistence;
@@ -28,7 +27,6 @@ public class UIBuilderService : IDisposable
 	public SchemaCleanupService CleanupService { get; private set; }
 
 	// New services
-	public SessionManager SessionManager { get; private set; }
 	public SchemaPersistenceService PersistenceService { get; private set; }
 	public ServerLifecycleManager ServerManager { get; private set; }
 	public BridgeCommunicationService BridgeService { get; private set; }
@@ -60,7 +58,6 @@ public class UIBuilderService : IDisposable
 		CleanupService = new SchemaCleanupService();
 
 		// New services
-		SessionManager = new SessionManager();
 		PersistenceService = new SchemaPersistenceService(PluginVersion);
 		ServerManager = new ServerLifecycleManager(WebServer, CommunicationHandler);
 		BridgeService = new BridgeCommunicationService(
@@ -69,7 +66,6 @@ public class UIBuilderService : IDisposable
 			ValueApplicator,
 			ValueCollector,
 			StateManager,
-			CleanupService,
 			EventManager,
 			PluginVersion,
 			SessionId

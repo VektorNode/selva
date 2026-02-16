@@ -1,9 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
-using Rhino;
 using Selva.Grasshopper.Features.UIBuilder.Services.Communication;
 using Selva.Grasshopper.Utilities.Helpers;
 
@@ -59,10 +57,6 @@ public class ServerLifecycleManager : IDisposable
 			{
 #if DEBUG
 				Logger.Log($"[ServerLifecycleManager] {msg}");
-				RhinoApp.InvokeOnUiThread(new Action(() =>
-				{
-					RhinoApp.WriteLine($"[Selva] {msg}");
-				}));
 #endif
 			});
 
@@ -125,7 +119,7 @@ public class ServerLifecycleManager : IDisposable
 			try
 			{
 				await _communicationHandler.BroadcastMessage("disconnecting", new { reason = reason ?? "Server shutting down" });
-				Thread.Sleep(100); // Give clients time to receive the message
+				await Task.Delay(100); // Give clients time to receive the message
 			}
 			catch (Exception ex)
 			{
@@ -139,17 +133,12 @@ public class ServerLifecycleManager : IDisposable
 	public void Dispose()
 	{
 		if (_disposed) return;
-
-		try
-		{
-			StopServersAndNotifyAsync("Service disposed").Wait();
-		}
-		catch
-		{
-			// Best effort cleanup
-		}
-
 		_disposed = true;
+
+		// Synchronous cleanup only — avoid async/.Wait() which deadlocks on the main thread.
+		// Clients will detect the dropped connection on their own.
+		try { if (_communicationHandler.IsRunning) _communicationHandler.Stop(); } catch { }
+		try { if (_webServer.IsRunning) _webServer.Stop(); } catch { }
 	}
 
 	/// <summary>

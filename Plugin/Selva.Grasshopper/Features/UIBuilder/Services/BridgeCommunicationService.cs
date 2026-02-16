@@ -1,12 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Grasshopper.Kernel;
 using Rhino;
 using Selva.Core.Models;
-using Selva.Grasshopper.Config;
-using Selva.Grasshopper.Features.UIBuilder.Helpers;
 using Selva.Grasshopper.Features.UIBuilder.Services.Communication;
 using Selva.Grasshopper.Features.UIBuilder.Services.Events;
 using Selva.Grasshopper.Features.UIBuilder.Services.Persistence;
@@ -29,7 +26,6 @@ public class BridgeCommunicationService : IDisposable
 	private readonly ValueApplicator _valueApplicator;
 	private readonly ValueCollector _valueCollector;
 	private readonly ComponentStateManager _stateManager;
-	private readonly SchemaCleanupService _cleanupService;
 	private readonly DocumentEventManager _eventManager;
 	private readonly Version _pluginVersion;
 	private readonly string _sessionId;
@@ -39,7 +35,6 @@ public class BridgeCommunicationService : IDisposable
 
 	// Callbacks to access component's schema/values (single source of truth)
 	private Func<UISchema> _getSchema;
-	private Func<Dictionary<string, object>> _getValues;
 	private Action<UISchema> _setSchema;
 
 	public BridgeCommunicationService(
@@ -48,7 +43,6 @@ public class BridgeCommunicationService : IDisposable
 		ValueApplicator valueApplicator,
 		ValueCollector valueCollector,
 		ComponentStateManager stateManager,
-		SchemaCleanupService cleanupService,
 		DocumentEventManager eventManager,
 		Version pluginVersion,
 		string sessionId)
@@ -58,7 +52,6 @@ public class BridgeCommunicationService : IDisposable
 		_valueApplicator = valueApplicator ?? throw new ArgumentNullException(nameof(valueApplicator));
 		_valueCollector = valueCollector ?? throw new ArgumentNullException(nameof(valueCollector));
 		_stateManager = stateManager ?? throw new ArgumentNullException(nameof(stateManager));
-		_cleanupService = cleanupService ?? throw new ArgumentNullException(nameof(cleanupService));
 		_eventManager = eventManager ?? throw new ArgumentNullException(nameof(eventManager));
 		_pluginVersion = pluginVersion ?? throw new ArgumentNullException(nameof(pluginVersion));
 		_sessionId = sessionId ?? throw new ArgumentNullException(nameof(sessionId));
@@ -70,12 +63,10 @@ public class BridgeCommunicationService : IDisposable
 	public void Initialize(
 		GH_Component component,
 		Func<UISchema> getSchema,
-		Func<Dictionary<string, object>> getValues,
 		Action<UISchema> setSchema)
 	{
 		_component = component ?? throw new ArgumentNullException(nameof(component));
 		_getSchema = getSchema ?? throw new ArgumentNullException(nameof(getSchema));
-		_getValues = getValues ?? throw new ArgumentNullException(nameof(getValues));
 		_setSchema = setSchema ?? throw new ArgumentNullException(nameof(setSchema));
 
 		// Wire up WebSocket event handlers
@@ -154,30 +145,30 @@ public class BridgeCommunicationService : IDisposable
 			if (!DocumentGuards.IsValid(document, out var error)) return;
 
 			var schema = _getSchema();
+
+			// Validate without deletion tracking - deletions come from document events, not client connects
+			var validatedSchema = schema != null ? _schemaManager.ValidateSchema(schema, document) : null;
+			var schemaToSend = validatedSchema ?? CreateDefaultSchema(document);
+#if DEBUG
+			Logger.Log($"[UIBuilder] ClientConnected — schema={schemaToSend.Name}, inputs={schemaToSend.Inputs?.Count}, outputs={schemaToSend.Outputs?.Count}");
+#endif
+
+			// Scan parameters and collect current values against the validated schema
 			var currentParams = GetCurrentAvailableParameters(document);
-			var currentValues = _valueCollector.CollectInputValues(document, schema, _component.AddRuntimeMessage);
-
-			var (validatedSchema, removedIds) = GetValidatedSchema(document, schema);
-			if (removedIds.Count > 0)
-			{
-				HandleParameterDeletion(removedIds, document);
-			}
-
-			// Create default schema if none exists
-			var schemaToSend = validatedSchema ?? schema ?? CreateDefaultSchema(document);
+			var currentValues = _valueCollector.CollectInputValues(document, schemaToSend, _component.AddRuntimeMessage);
 
 			// Broadcast initial data
 			_ = _communicationHandler.BroadcastInitialData(schemaToSend, currentParams, currentValues);
 
-			// Trigger output broadcast after a small delay to ensure client processed initial data
-			Task.Run(async () =>
+			// Only spin up the output broadcast if there are outputs registered in the schema
+			if (schemaToSend.Outputs?.Count > 0)
 			{
-				await Task.Delay(100);
-				RhinoApp.InvokeOnUiThread(new Action(() =>
+				Task.Run(async () =>
 				{
-					_eventManager.CollectAndBroadcastOutputs(schemaToSend);
-				}));
-			});
+					await Task.Delay(100);
+					RhinoApp.InvokeOnUiThread(new Action(() => { _eventManager.CollectAndBroadcastOutputs(schemaToSend); }));
+				});
+			}
 		}
 		catch (Exception ex)
 		{
@@ -196,11 +187,9 @@ public class BridgeCommunicationService : IDisposable
 				return;
 			}
 
-			// Suppress solving state updates during schema save
-			_communicationHandler.SetSuppressSolvingStateUpdates(true, 1000);
-
-			// Synchronize nicknames BEFORE saving
-			_schemaManager.SynchronizeSchemaMetadata(schema, document);
+			// Suppress solving state updates and metadata broadcasts during schema save
+			// Extended to 2000ms to cover full solution cycle (multiple SolutionStart/End events)
+			_communicationHandler.SetSuppressSolvingStateUpdates(true, 2000);
 
 			// Enrich schema with document metadata
 			schema.ProjectFileName = document.Properties.ProjectFileName;
@@ -208,12 +197,21 @@ public class BridgeCommunicationService : IDisposable
 			schema.PluginVersion = _pluginVersion.ToString();
 
 			var validatedSchema = _schemaManager.ValidateSchema(schema, document);
+#if DEBUG
+			Logger.Log($"[UIBuilder] Save — inputs={validatedSchema.Inputs?.Count}, outputs={validatedSchema.Outputs?.Count}, layout={validatedSchema.Layout?.GetType().Name}");
+#endif
 			_setSchema(validatedSchema); // Update component's schema (single source of truth)
+
+			// Reset metadata cache so the post-save re-solve establishes a fresh baseline.
+			_schemaManager.ClearMetadataCache();
+
 			_ = _communicationHandler.BroadcastSchemaSaved(true);
 
-		// Schedule solution to update component
-		GHDocumentMutator.ScheduleComponentExpire(document, _component, true);
-
+			// Schedule solution to update component
+			GHDocumentMutator.ScheduleComponentExpire(document, _component, false);
+#if DEBUG
+			Logger.Log("[UIBuilder] Save complete — component expire scheduled");
+#endif
 			_component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Schema saved successfully");
 		}
 		catch (Exception ex)
@@ -241,30 +239,6 @@ public class BridgeCommunicationService : IDisposable
 		}
 	}
 
-	private void HandleParameterDeletion(List<Guid> removedIds, GH_Document document)
-	{
-		var schema = _getSchema();
-		var values = _getValues();
-		_cleanupService.CleanupDeletedParameters(
-			removedIds,
-			schema,
-			_valueApplicator,
-			values,
-			_communicationHandler,
-			document,
-			_component.AddRuntimeMessage
-		);
-	}
-
-	private (UISchema schema, List<Guid> removedIds) GetValidatedSchema(GH_Document document, UISchema schema)
-	{
-		if (document == null || schema == null || _schemaManager == null)
-		{
-			return (null, new List<Guid>());
-		}
-
-		return _schemaManager.ValidateSchemaAndTrackChanges(schema, document);
-	}
 
 	private DiscoveredParameters GetCurrentAvailableParameters(GH_Document document)
 	{
@@ -278,7 +252,7 @@ public class BridgeCommunicationService : IDisposable
 			};
 		}
 
-		return _schemaManager.ScanParameters(document, _component);
+		return _schemaManager.ScanParameters(document);
 	}
 
 	private UISchema CreateDefaultSchema(GH_Document document)
@@ -402,6 +376,7 @@ public class BridgeCommunicationService : IDisposable
 					}
 				}
 			}
+
 			GHDocumentMutator.RefreshObjectsOnCanvas(document, changedObjects);
 
 			// Schedule a solution to update the component (for toGH changes)
@@ -418,4 +393,3 @@ public class BridgeCommunicationService : IDisposable
 		}
 	}
 }
-

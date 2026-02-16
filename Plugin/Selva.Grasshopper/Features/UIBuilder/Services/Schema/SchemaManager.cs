@@ -15,6 +15,33 @@ namespace Selva.Grasshopper.Features.UIBuilder.Services.Schema;
 /// </summary>
 public class SchemaManager
 {
+	private static readonly Dictionary<string, string> ParameterTypeKeywords = new()
+	{
+		{ "GetNumberParameter", "number" },
+		{ "Slider", "number" },
+		{ "ValueList", "valueList" },
+		{ "GetFile", "file" },
+		{ "Integer", "integer" },
+		{ "Boolean", "boolean" },
+		{ "Toggle", "boolean" },
+		{ "String", "text" },
+		{ "Text", "text" },
+		{ "Panel", "text" },
+		{ "Point", "point" },
+		{ "Vector", "vector" },
+		{ "Plane", "plane" },
+		{ "Line", "line" },
+		{ "Circle", "circle" },
+		{ "Rectangle", "rectangle" },
+		{ "Box", "box" },
+		{ "Curve", "curve" },
+		{ "Surface", "surface" },
+		{ "Brep", "brep" },
+		{ "Mesh", "mesh" },
+		{ "SubD", "subd" },
+		{ "Geometry", "geometry" }
+	};
+
 	private readonly Dictionary<Guid, ParameterMetadataSnapshot> _metadataCache = new();
 
 	private readonly string _sessionId;
@@ -27,7 +54,7 @@ public class SchemaManager
 	/// <summary>
 	///   Scan document and return available parameters (inputs and outputs)
 	/// </summary>
-	public DiscoveredParameters ScanParameters(GH_Document document, GH_Component uiBridge)
+	public DiscoveredParameters ScanParameters(GH_Document document)
 	{
 		// Scan for all contextual parameters (inputs only)
 		var allParams = document.Objects
@@ -138,13 +165,9 @@ public class SchemaManager
 			var outputComponent = output as GH_Component;
 			if (outputComponent == null) continue;
 
-			// Determine output display type based on component content
-			// Try to parse if the content is numeric (for Print components)
 			var displayType = "text"; // Default for Print components
 
-			// For Print components, try to detect if output is numeric
 			if (output.Name.IndexOf("Print", StringComparison.OrdinalIgnoreCase) >= 0)
-				// Check if we can infer numeric output (simplified - in real scenario would need input analysis)
 				displayType = "text"; // Keep as text by default, can be enhanced based on actual output
 
 			var param = outputComponent.Params.Input[0];
@@ -154,49 +177,22 @@ public class SchemaManager
 			{
 				Id = output.InstanceGuid,
 				Nickname = paramName,
-				Description = "", // Component descriptions are informational only, not user-editable
+				Description = "",
 				Type = displayType
 			});
 		}
 
-		// Scan for ContextBake components that have FileData (file downloads)
 		var (_, fileOutputs) = ParameterTypeHelper.DetectDownloadableOutputs(document);
 		foreach (var fileOutput in fileOutputs)
 			outputs.Add(new DiscoveredOutput
 			{
 				Id = fileOutput.Id,
 				Nickname = fileOutput.Nickname,
-				Description = "", // Component descriptions are informational only, not user-editable
+				Description = "",
 				Type = "file"
 			});
 
 		return outputs;
-	}
-
-	/// <summary>
-	///   Validate no duplicate parameter names
-	/// </summary>
-	public List<string> ValidateDuplicateInputs(DiscoveredParameters parameters)
-	{
-		return parameters.Inputs
-			.GroupBy(p => p.Nickname)
-			.Where(g => g.Count() > 1)
-			.Select(g => g.Key)
-			.ToList();
-	}
-
-	/// <summary>
-	///   Validate for duplicate output names
-	/// </summary>
-	public List<string> ValidateDuplicateOutputs(DiscoveredParameters parameters)
-	{
-		if (parameters?.Outputs == null) return new List<string>();
-
-		return parameters.Outputs
-			.GroupBy(o => o.Nickname, StringComparer.OrdinalIgnoreCase)
-			.Where(g => g.Count() > 1)
-			.Select(g => g.Key)
-			.ToList();
 	}
 
 	/// <summary>
@@ -206,19 +202,6 @@ public class SchemaManager
 	public UISchema ValidateSchema(UISchema schema, GH_Document document)
 	{
 		return ValidateSchemaAndTrackChanges(schema, document, false).Schema;
-	}
-
-	/// <summary>
-	///   Synchronize schema metadata with current Grasshopper document state.
-	///   Currently disabled - all metadata updates are controlled explicitly via the Sync dialog.
-	///   Should be called before saving the schema and after loading it from file.
-	/// </summary>
-	public void SynchronizeSchemaMetadata(UISchema schema, GH_Document document)
-	{
-		if (schema == null || document == null) return;
-
-		// IMPORTANT: Do NOT auto-sync nicknames or descriptions - user controls this explicitly via the Sync dialog
-		// All metadata changes should go through the Sync dialog for explicit user control
 	}
 
 	/// <summary>
@@ -305,12 +288,11 @@ public class SchemaManager
 	private string GetParameterTypeName(IGH_ContextualParameter contextParam)
 	{
 		if (contextParam is IGH_Param param) return GetParameterTypeNameFromParam(param);
-
 		return "generic";
 	}
 
 	/// <summary>
-	///   Map Grasshopper parameter type to Compute-compatible type name using dictionary
+	///   Map Grasshopper parameter type to Compute-compatible type name using static dictionary
 	/// </summary>
 	private string GetParameterTypeNameFromParam(IGH_Param param)
 	{
@@ -318,35 +300,7 @@ public class SchemaManager
 
 		var typeName = param.GetType().Name;
 
-		//Will make proper use of this in the future
-		var typeKeywords = new Dictionary<string, string>
-		{
-			{ "GetNumberParameter", "number" },
-			{ "Slider", "number" },
-			{ "ValueList", "valueList" },
-			{ "GetFile", "file" },
-			{ "Integer", "integer" },
-			{ "Boolean", "boolean" },
-			{ "Toggle", "boolean" },
-			{ "String", "text" },
-			{ "Text", "text" },
-			{ "Panel", "text" },
-			{ "Point", "point" },
-			{ "Vector", "vector" },
-			{ "Plane", "plane" },
-			{ "Line", "line" },
-			{ "Circle", "circle" },
-			{ "Rectangle", "rectangle" },
-			{ "Box", "box" },
-			{ "Curve", "curve" },
-			{ "Surface", "surface" },
-			{ "Brep", "brep" },
-			{ "Mesh", "mesh" },
-			{ "SubD", "subd" },
-			{ "Geometry", "geometry" }
-		};
-
-		foreach (var kvp in typeKeywords)
+		foreach (var kvp in ParameterTypeKeywords)
 			if (typeName.Contains(kvp.Key))
 				return kvp.Value;
 
@@ -369,8 +323,20 @@ public class SchemaManager
 
 		if (schema == null) return changes;
 
-		// Check input parameters
-		foreach (var inputParam in schema.Inputs)
+		DetectInputChanges(document, schema.Inputs, changes.Inputs);
+		DetectOutputChanges(document, schema.Outputs, changes.Outputs);
+
+		if (changes.Inputs.Count > 0 || changes.Outputs.Count > 0) ApplyMetadataChangesToSchema(schema, changes);
+
+		return changes;
+	}
+
+	/// <summary>
+	///   Detect metadata changes for inputs
+	/// </summary>
+	private void DetectInputChanges(GH_Document document, List<SchemaInput> schemaInputs, List<DiscoveredInput> changes)
+	{
+		foreach (var inputParam in schemaInputs)
 		{
 			var docObj = document.FindObject(inputParam.Id, false);
 			if (docObj == null) continue;
@@ -378,26 +344,16 @@ public class SchemaManager
 			var currentSnapshot = CreateParameterSnapshot(docObj);
 			if (currentSnapshot == null) continue;
 
-			if (_metadataCache.TryGetValue(inputParam.Id, out var previousSnapshot))
-			{
-				if (!currentSnapshot.Equals(previousSnapshot))
-				{
-					// Metadata changed - create updated AvailableInput
-					var updatedParam = CreateAvailableInputFromSnapshot(currentSnapshot, inputParam.Id);
-					changes.Inputs.Add(updatedParam);
-
-					// Update cache only when changed
-					_metadataCache[inputParam.Id] = currentSnapshot;
-				}
-			}
-			else
-			{
-				// New parameter - add to cache
-				_metadataCache[inputParam.Id] = currentSnapshot;
-			}
+			UpdateCacheAndDetectChange(inputParam.Id, currentSnapshot, changes, CreateAvailableInputFromSnapshot);
 		}
+	}
 
-		foreach (var outputParam in schema.Outputs)
+	/// <summary>
+	///   Detect metadata changes for outputs
+	/// </summary>
+	private void DetectOutputChanges(GH_Document document, List<SchemaOutput> schemaOutputs, List<DiscoveredOutput> changes)
+	{
+		foreach (var outputParam in schemaOutputs)
 		{
 			var docObj = document.FindObject(outputParam.Id, false);
 			if (docObj == null) continue;
@@ -405,27 +361,31 @@ public class SchemaManager
 			var currentSnapshot = CreateParameterSnapshot(docObj);
 			if (currentSnapshot == null) continue;
 
-			if (_metadataCache.TryGetValue(outputParam.Id, out var previousSnapshot))
-			{
-				if (!currentSnapshot.Equals(previousSnapshot))
-				{
-					var updatedParam = CreateAvailableOutputFromSnapshot(currentSnapshot, outputParam.Id);
-					changes.Outputs.Add(updatedParam);
+			UpdateCacheAndDetectChange(outputParam.Id, currentSnapshot, changes, CreateAvailableOutputFromSnapshot);
+		}
+	}
 
-					// Update cache only when changed
-					_metadataCache[outputParam.Id] = currentSnapshot;
-				}
-			}
-			else
+	/// <summary>
+	///   Update cache and detect if metadata changed
+	/// </summary>
+	private void UpdateCacheAndDetectChange<T>(
+		Guid paramId,
+		ParameterMetadataSnapshot currentSnapshot,
+		ICollection<T> changes,
+		Func<ParameterMetadataSnapshot, Guid, T> createChangeFromSnapshot)
+	{
+		if (_metadataCache.TryGetValue(paramId, out var previousSnapshot))
+		{
+			if (!currentSnapshot.Equals(previousSnapshot))
 			{
-				// New output - add to cache
-				_metadataCache[outputParam.Id] = currentSnapshot;
+				changes.Add(createChangeFromSnapshot(currentSnapshot, paramId));
+				_metadataCache[paramId] = currentSnapshot;
 			}
 		}
-
-		if (changes.Inputs.Count > 0 || changes.Outputs.Count > 0) ApplyMetadataChangesToSchema(schema, changes);
-
-		return changes;
+		else
+		{
+			_metadataCache[paramId] = currentSnapshot;
+		}
 	}
 
 	/// <summary>
@@ -610,8 +570,9 @@ public class SchemaManager
 		if (schema == null || document == null)
 			return diff;
 
-		// Get all layout items to find displayNames
-		var allItems = GetAllLayoutItems(schema.Layout);
+		// Build layout item lookup for O(1) access instead of repeated FirstOrDefault calls
+		var layoutItemLookup = GetAllLayoutItems(schema.Layout)
+			.ToDictionary(item => item.ParamId);
 
 		// Compare inputs - sync GH nickname with layout displayName (and schema input nickname)
 		if (schema.Inputs != null)
@@ -621,93 +582,64 @@ public class SchemaManager
 				var docObj = document.FindObject(input.Id, false);
 				if (docObj == null) continue;
 
-				// Use current GH nickname for display purposes
 				var currentGHName = docObj.NickName;
+				var layoutDisplayName = layoutItemLookup.TryGetValue(input.Id, out var item)
+					? item.DisplayName
+					: input.Nickname;
 
-				// Find the layout item to get the displayName (user-controlled UI label)
-				var layoutItem = allItems.FirstOrDefault(item => item.ParamId == input.Id);
-				var layoutDisplayName = layoutItem?.DisplayName ?? input.Nickname;
-
-				// Compare GH nickname with layout displayName
 				if (currentGHName != layoutDisplayName)
-				{
-					// GH → Schema: Apply GH nickname to layout displayName (and schema nickname)
-					diff.FromGH.Add(new SyncChange
-					{
-						ParamId = input.Id.ToString(),
-						ParamNickname = currentGHName,
-						Field = "nickname",
-						GHValue = currentGHName,
-						SchemaValue = layoutDisplayName,
-						Direction = SyncDirection.FromGH
-					});
-
-					// Schema → GH: Apply layout displayName to GH nickname (and schema nickname)
-					diff.ToGH.Add(new SyncChange
-					{
-						ParamId = input.Id.ToString(),
-						ParamNickname = currentGHName,
-						Field = "nickname",
-						SchemaValue = layoutDisplayName,
-						GHValue = currentGHName,
-						Direction = SyncDirection.ToGH
-					});
-				}
+					AddSyncChanges(diff, input.Id, currentGHName, layoutDisplayName);
 			}
 		}
 
-		// Compare outputs (nickname only - components don't typically have descriptions in GH)
-		// Note: For output components, we sync between GH input parameter nickname and layout displayName
+		// Compare outputs - sync component's input parameter nickname with layout displayName
 		if (schema.Outputs != null)
 		{
 			foreach (var output in schema.Outputs)
 			{
 				var docObj = document.FindObject(output.Id, false);
-				if (docObj == null) continue;
-
-				// For output components, get the first input parameter (that's what we sync)
-				var component = docObj as GH_Component;
-				if (component == null || component.Params.Input.Count == 0) continue;
+				if (docObj is not GH_Component component || component.Params.Input.Count == 0) continue;
 
 				var inputParam = component.Params.Input[0];
 				if (inputParam == null) continue;
 
-				// Find the layout item to get the displayName (user-controlled UI label)
-				var layoutItem = allItems.FirstOrDefault(item => item.ParamId == output.Id);
-				var layoutDisplayName = layoutItem?.DisplayName ?? output.Nickname;
-
-				// Use the input parameter's current nickname for display purposes
 				var currentGHName = inputParam.NickName;
+				var layoutDisplayName = layoutItemLookup.TryGetValue(output.Id, out var item)
+					? item.DisplayName
+					: output.Nickname;
 
-				// Compare GH parameter nickname with layout displayName
 				if (currentGHName != layoutDisplayName)
-				{
-					// GH → Schema: Apply GH nickname to layout displayName (and schema nickname)
-					diff.FromGH.Add(new SyncChange
-					{
-						ParamId = output.Id.ToString(),
-						ParamNickname = currentGHName,
-						Field = "nickname",
-						GHValue = currentGHName,
-						SchemaValue = layoutDisplayName,
-						Direction = SyncDirection.FromGH
-					});
-
-					// Schema → GH: Apply layout displayName to GH nickname (and schema nickname)
-					diff.ToGH.Add(new SyncChange
-					{
-						ParamId = output.Id.ToString(),
-						ParamNickname = currentGHName,
-						Field = "nickname",
-						SchemaValue = layoutDisplayName,
-						GHValue = currentGHName,
-						Direction = SyncDirection.ToGH
-					});
-				}
+					AddSyncChanges(diff, output.Id, currentGHName, layoutDisplayName);
 			}
 		}
 
 		return diff;
+	}
+
+	/// <summary>
+	///   Add bidirectional sync changes (FromGH and ToGH)
+	/// </summary>
+	private static void AddSyncChanges(SyncDiff diff, Guid paramId, string ghValue, string schemaValue)
+	{
+		diff.FromGH.Add(new SyncChange
+		{
+			ParamId = paramId.ToString(),
+			ParamNickname = ghValue,
+			Field = "nickname",
+			GHValue = ghValue,
+			SchemaValue = schemaValue,
+			Direction = SyncDirection.FromGH
+		});
+
+		diff.ToGH.Add(new SyncChange
+		{
+			ParamId = paramId.ToString(),
+			ParamNickname = ghValue,
+			Field = "nickname",
+			SchemaValue = schemaValue,
+			GHValue = ghValue,
+			Direction = SyncDirection.ToGH
+		});
 	}
 
 	/// <summary>
@@ -865,17 +797,8 @@ internal class ParameterMetadataSnapshot
 
 	private static bool OptionsEqual(Dictionary<string, string> a, Dictionary<string, string> b)
 	{
-		if (a == null && b == null) return true;
-
-		if (a == null || b == null) return false;
-
-		if (a.Count != b.Count) return false;
-
-		foreach (var kvp in a)
-			if (!b.TryGetValue(kvp.Key, out var value) || value != kvp.Value)
-				return false;
-
-		return true;
+		return (a == null && b == null) ||
+		       (a != null && b != null && a.Count == b.Count && a.All(kvp => b.TryGetValue(kvp.Key, out var value) && value == kvp.Value));
 	}
 
 	public override int GetHashCode()

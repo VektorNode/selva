@@ -72,11 +72,10 @@ export function useBuilderState(sessionId: string) {
 		const changedParams = message.changedParams || [];
 		if (changedParams.length === 0) return;
 
-		let updateCount = 0;
 		const updatedNames: string[] = [];
 
 		changedParams.forEach((updated: any) => {
-			// Update input parameters
+			// Update input parameters in schema and available list together
 			const inputIndex = state.schema!.inputs.findIndex((inp) => inp.id === updated.id);
 			if (inputIndex !== -1) {
 				const input = state.schema!.inputs[inputIndex];
@@ -84,13 +83,12 @@ export function useBuilderState(sessionId: string) {
 				if (updated.nickname !== undefined && input.nickname !== updated.nickname) {
 					input.nickname = updated.nickname;
 					updatedNames.push(input.nickname);
-					updateCount++;
 				}
 				if (updated.description !== undefined) {
 					input.description = updated.description;
 				}
 
-				// Update available inputs list
+				// Keep availableInputs in sync (same data, different list)
 				const availIndex = state.availableInputs.findIndex((p) => p.id === updated.id);
 				if (availIndex !== -1) {
 					if (updated.nickname !== undefined)
@@ -106,7 +104,7 @@ export function useBuilderState(sessionId: string) {
 				}
 			}
 
-			// Update output parameters
+			// Update output parameters in schema and available list together
 			const outputIndex = state.schema!.outputs.findIndex((out) => out.id === updated.id);
 			if (outputIndex !== -1) {
 				const output = state.schema!.outputs[outputIndex];
@@ -114,13 +112,12 @@ export function useBuilderState(sessionId: string) {
 				if (updated.nickname !== undefined && output.nickname !== updated.nickname) {
 					output.nickname = updated.nickname;
 					updatedNames.push(output.nickname);
-					updateCount++;
 				}
 				if (updated.description !== undefined) {
 					output.description = updated.description;
 				}
 
-				// Update availableOutputs list
+				// Keep availableOutputs in sync
 				const availOutputIndex = state.availableOutputs.findIndex((o) => o.id === updated.id);
 				if (availOutputIndex !== -1) {
 					if (updated.nickname !== undefined)
@@ -131,14 +128,8 @@ export function useBuilderState(sessionId: string) {
 			}
 		});
 
-		// Trigger reactivity
-		if (updateCount > 0) {
-			toast.success(`Parameter${updateCount > 1 ? 's' : ''} updated: ${updatedNames.join(', ')}`);
-
-			// Auto-save schema
-			if (wsState.connected) {
-				wsState.saveSchema(sessionId, $state.snapshot(state.schema));
-			}
+		if (updatedNames.length > 0) {
+			toast.info(`Parameter${updatedNames.length > 1 ? 's' : ''} renamed in Grasshopper: ${updatedNames.join(', ')}`);
 		}
 	}
 

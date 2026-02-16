@@ -168,30 +168,13 @@ public class DocumentEventManager : IDisposable
 	}
 
 	/// <summary>
-	///   Handle undo/redo state changes - detects property modifications
+	///   Handle undo/redo state changes.
+	///   Metadata detection is handled by the SolutionEnded path, which fires after undo triggers a re-solve.
 	/// </summary>
 	private void OnUndoStateChanged(object sender, GH_DocUndoEventArgs e)
 	{
-		if (_currentDocument == null || !_communicationHandler.IsRunning) return;
-
-		try
-		{
-			var metadataChanges = new DiscoveredParameters
-			{
-				Inputs = new List<DiscoveredInput>(),
-				Outputs = new List<DiscoveredOutput>()
-			};
-			MetadataChanged?.Invoke(this, new MetadataChangedEventArgs { Changes = metadataChanges });
-
-			if (metadataChanges.Inputs.Count > 0 || metadataChanges.Outputs.Count > 0)
-			{
-				var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
-			}
-		}
-		catch
-		{
-			/* ignore */
-		}
+		// No direct action needed: undo/redo triggers a new GH solution,
+		// which fires SolutionEnded → DetectAndBroadcastMetadataChanges naturally.
 	}
 
 	/// <summary>
@@ -231,13 +214,22 @@ public class DocumentEventManager : IDisposable
 		try
 		{
 			var metadataChanges = _schemaManager.DetectMetadataChanges(_currentDocument, schema);
+#if DEBUG
+			Logger.Log($"[UIBuilder] MetadataDetect — changed inputs={metadataChanges.Inputs.Count}, outputs={metadataChanges.Outputs.Count}");
+#endif
 			if (metadataChanges.Inputs.Count > 0 || metadataChanges.Outputs.Count > 0)
 			{
+				var requiresRecalc = ShouldRecalculateAfterMetadataChange(metadataChanges);
+#if DEBUG
+				var names = metadataChanges.Inputs.Select(i => i.Nickname)
+					.Concat(metadataChanges.Outputs.Select(o => o.Nickname));
+				Logger.Log($"[UIBuilder] MetadataChanged — params=[{string.Join(", ", names)}], requiresRecalc={requiresRecalc}");
+#endif
 				var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
 				MetadataChanged?.Invoke(this, new MetadataChangedEventArgs
 				{
 					Changes = metadataChanges,
-					RequiresRecalculation = ShouldRecalculateAfterMetadataChange(metadataChanges)
+					RequiresRecalculation = requiresRecalc
 				});
 			}
 		}

@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using GH_IO.Serialization;
@@ -84,17 +83,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 		Dispose(false);
 	}
 
-	/// <summary>
-	///   Get current available outputs from document (single source of truth)
-	/// </summary>
-	private List<DiscoveredOutput> GetCurrentAvailableOutputs()
-	{
-		var document = OnPingDocument();
-		if (document == null || _service?.SchemaManager == null) return new List<DiscoveredOutput>();
-
-		return _service.SchemaManager.ScanOutputs(document);
-	}
-
 	protected override void RegisterInputParams(GH_InputParamManager pManager)
 	{
 		pManager.AddBooleanParameter("Enable", "Enable", "Enable UI Builder (opens web interface)",
@@ -159,19 +147,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 	{
 		if (_service != null) return;
 
-		// Create session FIRST before initializing services
-		// Services need the correct session ID during construction
-		var sessionManager = new SessionManager();
-		if (string.IsNullOrEmpty(_sessionId))
-		{
-			_sessionId = sessionManager.CreateNewSession();
-		}
-		else
-		{
-			// Always create a new session (don't restore from file)
-			sessionManager.ClearSession();
-			_sessionId = sessionManager.CreateNewSession();
-		}
+		// Always generate a new session ID on first initialization (don't restore from file)
+		_sessionId = new SessionManager().CreateNewSession();
 
 		// Now create UIBuilderService with the correct session ID
 		_service = new UIBuilderService(_sessionId, PluginVersion);
@@ -180,7 +157,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 		_service.BridgeService.Initialize(
 			this,
 			() => _embeddedSchema,
-			() => _embeddedValues,
 			schema => _embeddedSchema = schema
 		);
 		_service.DocumentSyncService.Initialize(
@@ -195,10 +171,19 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 		_service.DocumentSyncService.OnParameterDeletionRequired += HandleParameterDeletion;
 
 		// Wire up solution events
-		_service.EventManager.SolutionStarted += (s, e) => _service.StateManager.SetSolving(true);
+		_service.EventManager.SolutionStarted += (s, e) =>
+		{
+#if DEBUG
+			Logger.Log("[UIBuilder] SolutionStart");
+#endif
+			_service.StateManager.SetSolving(true);
+		};
 		_service.EventManager.SolutionEnded += (s, e) =>
 		{
 			var wasActuallySolving = _service.StateManager.SetSolving(false);
+#if DEBUG
+			Logger.Log($"[UIBuilder] SolutionEnd — wasActuallySolving={wasActuallySolving}");
+#endif
 			if (wasActuallySolving)
 			{
 				_service.EventManager.CollectAndBroadcastOutputs(_embeddedSchema);
@@ -253,9 +238,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
 		if (_embeddedSchema != null && transition.EnableRising)
 		{
-			// CRITICAL: Synchronize nicknames with current Grasshopper state BEFORE validating
-			// This ensures the schema has up-to-date parameter nicknames after loading from file
-			_service.SchemaManager.SynchronizeSchemaMetadata(_embeddedSchema, document);
+			// Validate schema on enable to remove any parameters deleted while component was off
 			_embeddedSchema = _service.SchemaManager.ValidateSchema(_embeddedSchema, document);
 		}
 
@@ -436,12 +419,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 	// Schema persistence - save/load with .gh file
 	public override bool Write(GH_IWriter writer)
 	{
-		// Save session ID
-		if (!string.IsNullOrEmpty(_sessionId))
-		{
-			writer.SetString("SessionId", _sessionId);
-		}
-
 		// Use persistence service to save schema and values
 		if (_service?.PersistenceService != null)
 		{
@@ -461,15 +438,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
 	public override bool Read(GH_IReader reader)
 	{
-		// Load session ID
-		if (reader.ItemExists("SessionId"))
-		{
-			_sessionId = reader.GetString("SessionId");
-		}
-
-		// Use persistence service to load schema and values
-		// Note: Service is not initialized yet during Read, so we need to do this manually
-		// or defer to lazy initialization. For now, keep the original logic but prepare for migration.
 		if (reader.ItemExists("Schema") || reader.ItemExists("Values"))
 		{
 			try
@@ -481,13 +449,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 				{
 					_embeddedSchema = result.Value.schema;
 					_embeddedValues = result.Value.values;
-
-					// Log migration if it occurred
-					if (_embeddedSchema != null)
-					{
-						// Migration message would have been generated inside the service
-						// For now we don't have access to it, but that's OK
-					}
 				}
 			}
 			catch (InvalidOperationException ex)

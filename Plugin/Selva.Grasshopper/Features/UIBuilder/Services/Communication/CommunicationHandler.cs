@@ -39,12 +39,15 @@ public class CommunicationHandler : IDisposable
 	private int _mainThreadId;
 	private CancellationTokenSource _suppressionCts; // Cancellation for suppression delay
 	private bool _suppressSolvingStateUpdates; // Suppress during schema operations
+	private int _initialDataInFlight; // Prevent concurrent requestInitialData handling
 	private WebSocketServer _webSocketServer;
 
 	public CommunicationHandler(string sessionId, int port = 8765)
 	{
 		_sessionId = sessionId;
 		_port = port;
+		// Capture the main/UI thread ID at construction time (constructor runs on main thread)
+		_mainThreadId = Thread.CurrentThread.ManagedThreadId;
 	}
 
 	public bool IsRunning => _webSocketServer?.IsRunning ?? false;
@@ -112,9 +115,6 @@ public class CommunicationHandler : IDisposable
 
 		try
 		{
-			// Capture the current thread ID (main/UI thread where Start is called)
-			_mainThreadId = Thread.CurrentThread.ManagedThreadId;
-
 			_webSocketServer = new WebSocketServer(_port);
 			_webSocketServer.OnClientConnected += (sender, webSocket) =>
 			{
@@ -176,10 +176,24 @@ public class CommunicationHandler : IDisposable
 							}
 							else if (msgType == "requestInitialData")
 							{
+								// Deduplicate: if a handler is already in-flight (e.g. rapid reconnects), skip
+								if (Interlocked.CompareExchange(ref _initialDataInFlight, 1, 0) != 0) return;
 #if DEBUG
 								logMessage?.Invoke("Web UI requested initial data");
 #endif
-								MarshalToMainThread(() => OnClientConnected?.Invoke(this, EventArgs.Empty));
+								try
+								{
+									MarshalToMainThread(() =>
+									{
+										try { OnClientConnected?.Invoke(this, EventArgs.Empty); }
+										finally { Interlocked.Exchange(ref _initialDataInFlight, 0); }
+									});
+								}
+								catch
+								{
+									// Marshal failed — release immediately so future requests aren't blocked
+									Interlocked.Exchange(ref _initialDataInFlight, 0);
+								}
 							}
 							else if (msgType == "saveSchema")
 							{
@@ -227,7 +241,6 @@ public class CommunicationHandler : IDisposable
 					$"WebSocket server startup timed out after {AppConfig.WebSocket.ServerStartupTimeoutMs}ms");
 
 			await startTask; // Propagate any exceptions
-			logMessage?.Invoke($"WebSocket server started on port {_webSocketServer.Port}");
 		}
 		catch (TimeoutException ex)
 		{
@@ -251,6 +264,14 @@ public class CommunicationHandler : IDisposable
 		_suppressionCts?.Dispose();
 		_suppressionCts = null;
 
+		// Clear per-type queues and semaphores so they don't accumulate across sessions
+		lock (_queueLock)
+		{
+			foreach (var kvp in _messageTypeLocks) kvp.Value?.Dispose();
+			_messageTypeLocks.Clear();
+			_messageTypeQueues.Clear();
+		}
+
 		if (_webSocketServer != null)
 			try
 			{
@@ -265,6 +286,7 @@ public class CommunicationHandler : IDisposable
 			{
 				_webSocketServer = null;
 				_lastBroadcastedSolvingState = null; // Reset for next session
+				Interlocked.Exchange(ref _initialDataInFlight, 0); // Reset for next session
 			}
 	}
 
@@ -369,25 +391,6 @@ public class CommunicationHandler : IDisposable
 				type = "outputs",
 				sessionId = _sessionId,
 				outputs
-			};
-			await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
-		}
-	}
-
-	/// <summary>
-	///   Broadcast output values and file data to all connected clients in a single message
-	/// </summary>
-	public async Task BroadcastOutputsWithFiles(Dictionary<string, object> outputs,
-		Dictionary<string, object> fileOutputs)
-	{
-		if (_webSocketServer != null && _webSocketServer.IsRunning)
-		{
-			var message = new
-			{
-				type = "outputs",
-				sessionId = _sessionId,
-				outputs,
-				fileOutputs
 			};
 			await _webSocketServer.BroadcastAsync(JsonConvert.SerializeObject(message));
 		}
@@ -530,6 +533,9 @@ public class CommunicationHandler : IDisposable
 	/// </summary>
 	public async Task BroadcastMetadataChanges(DiscoveredParameters changedParams)
 	{
+		// Skip during schema save window to avoid triggering a second save on the frontend
+		if (_suppressSolvingStateUpdates) return;
+
 		if (_webSocketServer != null && _webSocketServer.IsRunning && changedParams != null &&
 				(changedParams.Inputs?.Count > 0 || changedParams.Outputs?.Count > 0))
 		{
@@ -602,21 +608,7 @@ public class CommunicationHandler : IDisposable
 	{
 		if (_disposed) return;
 
-		if (disposing)
-		{
-			Stop();
-
-			// Dispose all message type locks
-			lock (_queueLock)
-			{
-				foreach (var kvp in _messageTypeLocks)
-				{
-					kvp.Value?.Dispose();
-				}
-				_messageTypeLocks.Clear();
-				_messageTypeQueues.Clear();
-			}
-		}
+		if (disposing) Stop();
 
 		_disposed = true;
 	}

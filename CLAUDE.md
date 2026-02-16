@@ -4,6 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
+##
+
+Use direct edditing insead of starting to build bash or pyton files to eddit files
+
 Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for building Grasshopper-driven web applications. It uses a dual-stack architecture:
 
 - **Backend**: C# (.NET multi-target: net48/net7.0) - Grasshopper plugin
