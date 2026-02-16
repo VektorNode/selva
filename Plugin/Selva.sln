@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.13.35931.197
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Selva.Grasshopper", "./Selva.Grasshopper/Selva.Grasshopper.csproj", "{0A846067-1A4F-4DCA-9BBB-1A5B0D767851}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Selva.GH", "Selva.GH\Selva.GH.csproj", "{0A846067-1A4F-4DCA-9BBB-1A5B0D767851}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Selva.Core", "Selva.Core\Selva.Core.csproj", "{91FE95E0-A9C8-4431-B21A-21A0355ED60E}"
 EndProject

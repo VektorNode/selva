@@ -22,7 +22,7 @@ console.log('');
 try {
 	// Step 1: Copy web assets to plugin directory
 	console.log('[1/3] Copying web assets to plugin...');
-	const webDir = join(projectRoot, 'Plugin/Selva.Grasshopper/EmbeddedAssets/web');
+	const webDir = join(projectRoot, 'Plugin/Selva.GH/EmbeddedAssets/web');
 	const buildDir = join(projectRoot, 'packages/builder-app/build');
 
 	mkdirSync(webDir, { recursive: true });

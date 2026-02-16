@@ -7,30 +7,33 @@
 		PageContainer,
 		PageHeader,
 		StateDisplay,
-		Button,
 		StateManager,
 		getDefaultValue,
 		type UISchema,
 		Viewer,
 		createSolvingIndicator,
 		SolvingIndicator,
+		CalculateButton,
 		ComputeMessages,
 		createComputeThrottle
 	} from '@selva/shared';
 	import { hexToOklch } from '$lib/utilities/color';
 	import { GrasshopperResponseProcessor } from 'selva-compute';
+	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
 
 	let { data }: PageProps = $props();
 
 	let schema = $derived(data.schema);
 	let ghDefinition = $derived(data.ghDefinition);
+	let initialOutputs = $derived(data.initialOutputs);
+	let initialSolveResponse = $derived(data.initialSolveResponse);
 
 	// Definition switcher
 	let currentDefinition = $derived(data.currentDefinition);
 	let _availableDefinitions = $derived(data.availableDefinitions);
 	let pageTitle = $derived(schema?.description || schema.name);
 
-	function createInitialValues(s: UISchema | undefined) {
+	function createInitialValues(s: UISchema | undefined, serverOutputs?: Record<string, unknown>) {
 		if (!s) return {};
 		const v: Record<string, unknown> = {};
 
@@ -38,7 +41,8 @@
 			v[input.id] = input.default ?? getDefaultValue(input.paramType);
 		}
 		for (const output of s.outputs) {
-			v[output.id] = null;
+			// Use server-provided initial outputs if available
+			v[output.id] = serverOutputs?.[output.id] ?? null;
 		}
 		return v;
 	}
@@ -47,7 +51,7 @@
 	// values is initialized once per component instance.
 	// The {#key} block in markup ensures re-creation when definition changes.
 	// svelte-ignore state_referenced_locally
-	let values = $state<Record<string, unknown>>(createInitialValues(schema));
+	let values = $state<Record<string, unknown>>(createInitialValues(schema, initialOutputs));
 	let error = $state('');
 	let computeErrors = $state<string[]>([]);
 	let computeWarnings = $state<string[]>([]);
@@ -148,24 +152,58 @@
 	// UI state for debouncing the "Solving..." indicator
 	const solvingIndicator = createSolvingIndicator(() => solving);
 
+	// Extract meshes from initial server response on first load (no re-solve)
+	$effect(() => {
+		if (initialSolveResponse && shouldShowViewer) {
+			(async () => {
+				try {
+					const processor = new GrasshopperResponseProcessor(initialSolveResponse, false);
+					meshes = await processor.extractMeshesFromResponse();
+				} catch (err) {
+					console.error('[InitialLoad] Failed to extract meshes:', err);
+				}
+			})();
+		}
+	});
+
+	// Check compute health periodically (every 5 seconds)
+	const computeHealth = useComputeHealth();
+	$effect(() => {
+		computeHealth.startPeriodicCheck(5000);
+		return () => computeHealth.stopPeriodicCheck();
+	});
+
 	/** Trigger a solve with current values (throttled) */
 	function performSolve() {
 		computeThrottle.trigger($state.snapshot(values));
 	}
 
-	// Reset state when definition changes and trigger initial solve
+	// Track if this is the initial load or a definition change
+	let previousDefinition = $state<string>('');
+	let isInitialLoad = $state<boolean>(true);
+
+	// Reset state when definition changes and trigger solve (skip on initial load)
 	$effect(() => {
 		const _ = currentDefinition;
 
 		untrack(() => {
-			meshes = [];
-			values = createInitialValues(schema);
-			error = '';
-			computeErrors = [];
-			computeWarnings = [];
+			if (isInitialLoad) {
+				// First load - use server-provided data, don't solve
+				isInitialLoad = false;
+				previousDefinition = currentDefinition;
+			} else if (previousDefinition !== currentDefinition) {
+				// Definition changed - reset and solve
+				meshes = [];
+				values = createInitialValues(schema);
+				error = '';
+				computeErrors = [];
+				computeWarnings = [];
 
-			if (schema && Object.keys(values).length > 0) {
-				performSolve();
+				if (schema && Object.keys(values).length > 0) {
+					performSolve();
+				}
+
+				previousDefinition = currentDefinition;
 			}
 		});
 	});
@@ -191,10 +229,24 @@
 
 	const BADGES = {
 		solving: { label: 'Solving...', variant: 'solving' } as const,
-		compute: { label: 'Rhino Compute', variant: 'compute' } as const
+		compute: { label: 'Rhino Compute', variant: 'compute' } as const,
+		computeOffline: { label: 'Compute Offline', variant: 'disconnected' } as const,
+		computeWarning: { label: 'Compute Warning', variant: 'solving' } as const,
+		computeOnline: { label: 'Compute Online', variant: 'connected' } as const
 	};
 
-	const badgeConfig = $derived(solvingIndicator.show ? BADGES.solving : BADGES.compute);
+	const badgeConfig = $derived.by(() => {
+		// Show solving status when actively solving
+		if (solvingIndicator.show) return BADGES.solving;
+
+		// Show compute health status when not solving
+		if (computeHealth.status.status === 'error') return BADGES.computeOffline;
+		if (computeHealth.status.status === 'warning') return BADGES.computeWarning;
+		if (computeHealth.status.status === 'ok') return BADGES.computeOnline;
+
+		// Default
+		return BADGES.compute;
+	});
 
 	let isEmbedded = $derived(page.url.searchParams.get('embed') === 'true');
 	let customStyle = $derived.by(() => {
@@ -252,7 +304,6 @@
 										{schema}
 										currentValues={values}
 										onLoadValues={async (loadedValues) => {
-											// Apply loaded values
 											Object.assign(values, loadedValues);
 
 											// Trigger solve based on instanceSolve setting
@@ -266,37 +317,32 @@
 								</div>
 
 								{#if schema.instanceSolve === false}
-									<div class="sticky bottom-0 mt-6 flex justify-center">
-										<Button
-											variant={hasPendingChanges ? 'default' : 'outline'}
-											size="lg"
-											onclick={handleCalculate}
-											disabled={!hasPendingChanges || solving}
-											class="shadow-lg"
-										>
-											{#if solving}
-												<div
-													class="border-background mr-2 h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
-												></div>
-												Solving...
-											{:else if hasPendingChanges}
-												Calculate
-											{:else}
-												No Changes
-											{/if}
-										</Button>
-									</div>
+									<CalculateButton
+										{hasPendingChanges}
+										isSolving={solving}
+										oncalculate={handleCalculate}
+									/>
 								{/if}
 							</div>
 
 							<!-- Viewer -->
 							{#if shouldShowViewer}
-								<Viewer {schema} {meshes} bind:isFullscreen={isViewerFullscreen} />
+								<Viewer
+									{schema}
+									{meshes}
+									bind:isFullscreen={isViewerFullscreen}
+									isSolving={solvingIndicator.show}
+								/>
 							{/if}
 						</div>
 					{/key}
 
-					<SolvingIndicator show={solvingIndicator.show && schema.instanceSolve !== false} />
+					<!-- Instant mode: adaptive (skip fast solves). Manual mode: show immediately -->
+					{#if schema.instanceSolve === false}
+						<SolvingIndicator show={solving} />
+					{:else}
+						<SolvingIndicator show={solvingIndicator.show} />
+					{/if}
 				</div>
 			{/if}
 		</div>

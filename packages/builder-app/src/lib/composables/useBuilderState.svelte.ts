@@ -2,6 +2,7 @@ import { toast } from '@selva/shared';
 import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selva/shared';
 import { processInitialDataSchema, getWebSocketPortFromUrl } from '$lib/utils/session';
 import { getWebSocketState } from '$lib/websocket/websocket.svelte';
+import type { SyncDiff, SyncChange } from '$lib/websocket/websocket.svelte';
 
 interface BuilderWebSocketState {
 	availableInputs: DiscoveredInput[];
@@ -11,6 +12,9 @@ interface BuilderWebSocketState {
 	error: string;
 	syncNeeded: boolean;
 	activeTabId: string | null;
+	syncDialogOpen: boolean;
+	syncDiff: SyncDiff | null;
+	syncLoading: boolean;
 }
 
 export function useBuilderState(sessionId: string) {
@@ -25,7 +29,10 @@ export function useBuilderState(sessionId: string) {
 		loading: true,
 		error: '',
 		syncNeeded: false,
-		activeTabId: null
+		activeTabId: null,
+		syncDialogOpen: false,
+		syncDiff: null,
+		syncLoading: false
 	});
 
 	function handleInitialData(message: any) {
@@ -65,11 +72,10 @@ export function useBuilderState(sessionId: string) {
 		const changedParams = message.changedParams || [];
 		if (changedParams.length === 0) return;
 
-		let updateCount = 0;
 		const updatedNames: string[] = [];
 
 		changedParams.forEach((updated: any) => {
-			// Update input parameters
+			// Update input parameters in schema and available list together
 			const inputIndex = state.schema!.inputs.findIndex((inp) => inp.id === updated.id);
 			if (inputIndex !== -1) {
 				const input = state.schema!.inputs[inputIndex];
@@ -77,13 +83,12 @@ export function useBuilderState(sessionId: string) {
 				if (updated.nickname !== undefined && input.nickname !== updated.nickname) {
 					input.nickname = updated.nickname;
 					updatedNames.push(input.nickname);
-					updateCount++;
 				}
 				if (updated.description !== undefined) {
 					input.description = updated.description;
 				}
 
-				// Update available inputs list
+				// Keep availableInputs in sync (same data, different list)
 				const availIndex = state.availableInputs.findIndex((p) => p.id === updated.id);
 				if (availIndex !== -1) {
 					if (updated.nickname !== undefined)
@@ -99,7 +104,7 @@ export function useBuilderState(sessionId: string) {
 				}
 			}
 
-			// Update output parameters
+			// Update output parameters in schema and available list together
 			const outputIndex = state.schema!.outputs.findIndex((out) => out.id === updated.id);
 			if (outputIndex !== -1) {
 				const output = state.schema!.outputs[outputIndex];
@@ -107,13 +112,12 @@ export function useBuilderState(sessionId: string) {
 				if (updated.nickname !== undefined && output.nickname !== updated.nickname) {
 					output.nickname = updated.nickname;
 					updatedNames.push(output.nickname);
-					updateCount++;
 				}
 				if (updated.description !== undefined) {
 					output.description = updated.description;
 				}
 
-				// Update availableOutputs list
+				// Keep availableOutputs in sync
 				const availOutputIndex = state.availableOutputs.findIndex((o) => o.id === updated.id);
 				if (availOutputIndex !== -1) {
 					if (updated.nickname !== undefined)
@@ -124,14 +128,8 @@ export function useBuilderState(sessionId: string) {
 			}
 		});
 
-		// Trigger reactivity
-		if (updateCount > 0) {
-			toast.success(`Parameter${updateCount > 1 ? 's' : ''} updated: ${updatedNames.join(', ')}`);
-
-			// Auto-save schema
-			if (wsState.connected) {
-				wsState.saveSchema(sessionId, $state.snapshot(state.schema));
-			}
+		if (updatedNames.length > 0) {
+			toast.info(`Parameter${updatedNames.length > 1 ? 's' : ''} renamed in Grasshopper: ${updatedNames.join(', ')}`);
 		}
 	}
 
@@ -225,12 +223,56 @@ export function useBuilderState(sessionId: string) {
 		toast.info('Syncing parameters...');
 	}
 
+	function handleSyncPreview(message: any) {
+		if (message.sessionId !== sessionId) return;
+
+		// C# sends fromGH/toGH as camelCase (anonymous object properties)
+		// Each SyncChange has PascalCase properties (serialized from C# class)
+		state.syncDiff = {
+			fromGH: message.fromGH || [],
+			toGH: message.toGH || []
+		};
+		state.syncLoading = false;
+	}
+
+	function handleSyncApplied(message: any) {
+		if (message.sessionId !== sessionId) return;
+
+		state.syncLoading = false;
+		if (message.success) {
+			toast.success(message.message || 'Sync completed successfully');
+			state.syncDialogOpen = false;
+			// Clear old sync diff data
+			state.syncDiff = null;
+			// Refresh to get updated state
+			wsState.requestInitialData(sessionId);
+		} else {
+			toast.error(message.message || 'Sync failed');
+		}
+	}
+
+	function requestSyncPreview() {
+		if (!state.schema) return;
+		// Clear old sync diff data before requesting new preview
+		state.syncDiff = null;
+		state.syncLoading = true;
+		state.syncDialogOpen = true;
+		wsState.requestSyncPreview(sessionId, state.schema);
+	}
+
+	function applySyncChanges(selectedChanges: SyncChange[]) {
+		state.syncLoading = true;
+		wsState.applySyncChanges(sessionId, selectedChanges);
+	}
+
 	function initialize() {
 		wsState.on('initialData', handleInitialData);
 		wsState.on('schemaSaved', handleSchemaSaved);
 		wsState.on('metadataUpdated', handleMetadataUpdated);
 		wsState.on('schemaUpdated', handleSchemaUpdated);
 		wsState.on('parametersAdded', handleParametersAdded);
+		wsState.on('syncPreview', handleSyncPreview);
+		wsState.on('syncApplied', handleSyncApplied);
 
 		wsState.requestInitialData(sessionId);
 	}
@@ -241,6 +283,8 @@ export function useBuilderState(sessionId: string) {
 		wsState.off('metadataUpdated', handleMetadataUpdated);
 		wsState.off('schemaUpdated', handleSchemaUpdated);
 		wsState.off('parametersAdded', handleParametersAdded);
+		wsState.off('syncPreview', handleSyncPreview);
+		wsState.off('syncApplied', handleSyncApplied);
 	}
 
 	return {
@@ -249,6 +293,8 @@ export function useBuilderState(sessionId: string) {
 		},
 		wsState,
 		syncParameters,
+		requestSyncPreview,
+		applySyncChanges,
 		initialize,
 		cleanup
 	};

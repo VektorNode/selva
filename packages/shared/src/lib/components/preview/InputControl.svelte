@@ -114,8 +114,6 @@
 		debouncedSliderChange(item.paramId, newValue);
 	}
 
-	// Calculate optimal step size for slider performance
-	// If step size would create >1000 steps, adjust it automatically
 	function getOptimalStepSize(min: number, max: number, requestedStep: number): number {
 		const _range = max - min;
 		//TODO: FIX THIS
@@ -203,7 +201,6 @@
 						}
 					}}
 					onblur={(e: any) => {
-						// Ensure final value is sent on blur (in case debounce hasn't fired yet)
 						const target = e.currentTarget as HTMLInputElement;
 						const newValue = parseFloat(target.value);
 						if (!isNaN(newValue)) {

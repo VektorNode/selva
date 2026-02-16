@@ -14,6 +14,28 @@ import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 export type MessageHandler = (data: unknown) => void;
 
 /**
+ * Represents a single metadata difference between Grasshopper and schema
+ * Note: property names match JSON.NET PascalCase serialization of C# classes
+ */
+export interface SyncChange {
+	ParamId: string;
+	ParamNickname: string;
+	Field: 'nickname' | 'description';
+	SchemaValue: unknown;
+	GHValue: unknown;
+	Direction: 'fromGH' | 'toGH';
+}
+
+/**
+ * Complete sync diff showing what would change in each direction
+ * Note: fromGH/toGH are camelCase because C# sends them as an anonymous object
+ */
+export interface SyncDiff {
+	fromGH: SyncChange[];
+	toGH: SyncChange[];
+}
+
+/**
  * WebSocket state class with reactive properties
  */
 export class WebSocketState {
@@ -286,6 +308,20 @@ export class WebSocketState {
 	 */
 	saveSchema(sessionId: string, schema: UISchema) {
 		this.send('saveSchema', { sessionId, schema });
+	}
+
+	/**
+	 * Request sync preview (diff between Grasshopper and schema state)
+	 */
+	requestSyncPreview(sessionId: string, schema: UISchema) {
+		this.send('requestSyncPreview', { sessionId, schema });
+	}
+
+	/**
+	 * Apply selected sync changes to Grasshopper
+	 */
+	applySyncChanges(sessionId: string, changes: SyncChange[]) {
+		this.send('applySyncChanges', { sessionId, changes });
 	}
 
 	/**
