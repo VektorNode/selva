@@ -18,7 +18,7 @@ export const load = (async ({ url, params: _params }) => {
 	let ghFilename = url.searchParams.get('gh');
 
 	let definitionSource: Uint8Array | null = null;
-	let clientDefUrl = ''; // Value passed to client for subsequent API calls
+	let clientDefUrl = '';
 
 	// Load available definitions for switcher
 	let availableDefinitions: Definition[] = [];
@@ -35,7 +35,6 @@ export const load = (async ({ url, params: _params }) => {
 		ghFilename = availableDefinitions[0].filename;
 	}
 
-	// If still no filename, fail with helpful error
 	if (!ghFilename) {
 		let msg = 'No definitions available.';
 		if (config.ghDefinitionsPath) {
@@ -48,7 +47,6 @@ export const load = (async ({ url, params: _params }) => {
 		throw error(400, msg);
 	}
 
-	// Load the definition using the container
 	try {
 		definitionSource = await container.loadDefinition(ghFilename);
 		clientDefUrl = await container.getDefinitionUrl(ghFilename);
@@ -56,7 +54,6 @@ export const load = (async ({ url, params: _params }) => {
 		const errMsg = err instanceof Error ? err.message : String(err);
 		console.warn(`[App Load] Failed to load definition '${ghFilename}':`, err);
 
-		// Provide helpful context
 		if (config.ghDefinitionsPath) {
 			console.warn(` - If running in Docker, ensure volumes are mounted correctly.`);
 			console.warn(
@@ -136,11 +133,22 @@ export const load = (async ({ url, params: _params }) => {
 				return schemaInput;
 			});
 
+			// Extract initial output values from the server-side solve
+			const initialOutputs: Record<string, unknown> = {};
+			for (const output of schema.outputs) {
+				const value = responseProcessor.getValueByParamName(output.nickname, {
+					parseValues: true
+				});
+				initialOutputs[output.id] = value;
+			}
+
 			return {
 				schema,
 				ghDefinition: clientDefUrl,
 				currentDefinition: ghFilename ? ghFilename.replace(/\.gh$/, '') : '',
-				availableDefinitions
+				availableDefinitions,
+				initialOutputs,
+				initialSolveResponse: solvedDefinition
 			};
 		} catch (innerErr) {
 			console.error('[PageLoad] Inner computation failed:', innerErr);
@@ -156,7 +164,6 @@ export const load = (async ({ url, params: _params }) => {
 
 		console.error('[PageLoad] Definition loading failed:', JSON.stringify(errorDetails, null, 2));
 
-		// Development: include detailed error info and hint
 		if (process.env.NODE_ENV === 'development') {
 			const hint = `\n\nTroubleshooting:\n1. Check /api/health/compute to diagnose server connectivity\n2. Check the browser console for more details\n3. Check the server logs above for full error stack`;
 			error(500, `Failed to load definition from ${clientDefUrl}: ${errorDetails.message}${hint}`);

@@ -10,9 +10,10 @@
 		schema: UISchema;
 		meshes: any[];
 		isFullscreen?: boolean;
+		isSolving?: boolean;
 	}
 
-	let { schema, meshes, isFullscreen = $bindable(false) }: Props = $props();
+	let { schema, meshes, isFullscreen = $bindable(false), isSolving = false }: Props = $props();
 
 	let canvas: HTMLCanvasElement;
 	let scene: THREE.Scene | null = null;
@@ -60,8 +61,29 @@
 		: ''}"
 >
 	<div class="inset-0 absolute">
-		<canvas class="block h-full w-full rounded-lg" bind:this={canvas}></canvas>
+		<canvas
+			class="block h-full w-full"
+			style={isFullscreen ? '' : 'border-radius: 0.625rem;'}
+			bind:this={canvas}
+		></canvas>
 	</div>
+
+	<!-- Solving overlay: blurs the canvas and shows a subtle indicator -->
+	{#if isSolving}
+		<div
+			class="inset-0 absolute z-10 animate-[selva-viewer-fade-in_0.2s_ease-out] rounded-lg backdrop-blur-[2px] transition-all duration-300"
+		>
+			<div
+				class="right-3 top-3 gap-2 bg-black/40 px-2.5 py-1.5 text-white backdrop-blur-sm absolute flex items-center rounded-md"
+			>
+				<div
+					class="h-2.5 w-2.5 animate-spin border-white rounded-full border-2 border-t-transparent"
+				></div>
+				<span class="text-xs font-medium tracking-wide">Updating</span>
+			</div>
+		</div>
+	{/if}
+
 	<!-- Fullscreen Toggle Button -->
 	<button
 		class="right-4 bottom-4 h-10 w-10 bg-white/90 shadow-lg hover:bg-white hover:shadow-xl absolute z-50 flex items-center justify-center rounded-lg transition-all active:scale-95"
@@ -85,5 +107,14 @@
 		border-radius: 0 !important;
 		min-height: 100vh;
 		width: 100vw;
+	}
+
+	@keyframes selva-viewer-fade-in {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
 	}
 </style>

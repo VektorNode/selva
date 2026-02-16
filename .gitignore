@@ -58,6 +58,11 @@ ehthumbs.db
 *.ghx
 !packages/compute-app/example-definitions/*.gh
 !packages/compute-app/example-definitions/*.ghx
+# Unignore the Selva.GH plugin directory (case-insensitive match on Windows)
+!Plugin/Selva.GH/
+!Plugin/Selva.GH/**
+Plugin/Selva.GH/bin/
+Plugin/Selva.GH/obj/
 
 # Definitions config files (production, not checked in)
 definitions-config.json
