@@ -7,22 +7,19 @@
 </script>
 
 {#if show}
-	<!-- Full-width top progress bar -->
-	<div class="pointer-events-none fixed inset-x-0 top-0 z-50">
-		<div class="h-1 w-full overflow-hidden bg-primary/20">
-			<div class="h-full bg-primary animate-[selva-sweep_1.2s_ease-in-out_infinite]"></div>
-		</div>
-	</div>
-
 	<!-- Prominent toast in bottom-left -->
 	<div
-		class="fixed bottom-6 left-6 z-50 flex animate-[selva-slideInLeft_0.2s_ease-out] items-center gap-3 rounded-lg border border-primary/20 bg-primary px-5 py-3 text-primary-foreground shadow-xl"
+		class="bottom-6 left-6 gap-3 px-5 py-3 shadow-xl fixed z-50 flex animate-[selva-slideInLeft_0.2s_ease-out] items-center rounded-lg border border-primary/20 bg-primary text-primary-foreground"
 	>
-		<div class="relative flex h-5 w-5 shrink-0 items-center justify-center">
-			<div class="absolute h-full w-full animate-ping rounded-full bg-primary-foreground opacity-30"></div>
-			<div class="h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent"></div>
+		<div class="h-5 w-5 relative flex shrink-0 items-center justify-center">
+			<div
+				class="animate-ping absolute h-full w-full rounded-full bg-primary-foreground opacity-30"
+			></div>
+			<div
+				class="h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent"
+			></div>
 		</div>
-		<div class="flex flex-col leading-tight">
+		<div class="leading-tight flex flex-col">
 			<span class="text-sm font-semibold">Solving</span>
 			<span class="text-xs opacity-70">Grasshopper is calculating...</span>
 		</div>

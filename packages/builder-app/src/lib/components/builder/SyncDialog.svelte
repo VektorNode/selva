@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Dialog, Button } from '@selva/shared';
+	import { Dialog, Button, Badge, Checkbox, Label } from '@selva/shared';
 	import type { SyncChange, SyncDiff } from '$lib/websocket/websocket.svelte';
-	import { ChevronDown, ChevronUp } from '@lucide/svelte';
+	import { ChevronDown, ChevronUp, ArrowRight } from '@lucide/svelte';
 
 	interface Props {
 		open: boolean;
@@ -19,16 +19,24 @@
 		onApplyChanges
 	}: Props = $props();
 
-	// Use a plain object for selection to avoid Set reactivity issues in Svelte 5
 	let selectedKeys = $state<Record<string, boolean>>({});
 	let expandedSections = $state({ fromGH: true, toGH: true });
+
+	// Clear selections when dialog closes or syncDiff changes
+	$effect(() => {
+		if (!open || !syncDiff) {
+			selectedKeys = {};
+		}
+	});
 
 	function changeKey(change: SyncChange, direction: 'fromGH' | 'toGH') {
 		return `${direction}__${change.ParamId}__${change.Field}`;
 	}
 
 	function getSelectedDirection(): 'fromGH' | 'toGH' | null {
-		const fromGHSelected = (syncDiff?.fromGH ?? []).some((c) => selectedKeys[changeKey(c, 'fromGH')]);
+		const fromGHSelected = (syncDiff?.fromGH ?? []).some(
+			(c) => selectedKeys[changeKey(c, 'fromGH')]
+		);
 		const toGHSelected = (syncDiff?.toGH ?? []).some((c) => selectedKeys[changeKey(c, 'toGH')]);
 		if (fromGHSelected) return 'fromGH';
 		if (toGHSelected) return 'toGH';
@@ -39,19 +47,17 @@
 		const key = changeKey(change, direction);
 		const isCurrentlySelected = selectedKeys[key];
 
-		// If deselecting, just deselect
 		if (isCurrentlySelected) {
 			selectedKeys = { ...selectedKeys, [key]: false };
 			return;
 		}
 
-		// If selecting, check if we need to clear the opposite direction
 		const currentDirection = getSelectedDirection();
 		if (currentDirection && currentDirection !== direction) {
-			// Clear the opposite direction
 			const next = { ...selectedKeys };
 			const oppositeDir = direction === 'fromGH' ? 'toGH' : 'fromGH';
-			const oppositeChanges = oppositeDir === 'fromGH' ? (syncDiff?.fromGH ?? []) : (syncDiff?.toGH ?? []);
+			const oppositeChanges =
+				oppositeDir === 'fromGH' ? (syncDiff?.fromGH ?? []) : (syncDiff?.toGH ?? []);
 			oppositeChanges.forEach((c) => delete next[changeKey(c, oppositeDir)]);
 			selectedKeys = { ...next, [key]: true };
 		} else {
@@ -65,12 +71,11 @@
 		const next = { ...selectedKeys };
 
 		if (allSelected) {
-			// Deselect all in this direction
 			changes.forEach((c) => delete next[changeKey(c, direction)]);
 		} else {
-			// Clear opposite direction first, then select all in this direction
 			const oppositeDir = direction === 'fromGH' ? 'toGH' : 'fromGH';
-			const oppositeChanges = oppositeDir === 'fromGH' ? (syncDiff?.fromGH ?? []) : (syncDiff?.toGH ?? []);
+			const oppositeChanges =
+				oppositeDir === 'fromGH' ? (syncDiff?.fromGH ?? []) : (syncDiff?.toGH ?? []);
 			oppositeChanges.forEach((c) => delete next[changeKey(c, oppositeDir)]);
 			changes.forEach((c) => (next[changeKey(c, direction)] = true));
 		}
@@ -88,6 +93,7 @@
 
 	function formatValue(value: unknown): string {
 		if (value === null || value === undefined) return '(empty)';
+		if (value === '') return '(empty)';
 		if (typeof value === 'number') return value.toFixed(2);
 		if (typeof value === 'boolean') return value ? 'true' : 'false';
 		return String(value);
@@ -121,7 +127,7 @@
 </script>
 
 <Dialog.Root {open} {onOpenChange}>
-	<Dialog.Content class="max-h-[80vh] max-w-3xl overflow-y-auto">
+	<Dialog.Content class="sm:max-w-6xl">
 		<Dialog.Header>
 			<Dialog.Title>Sync with Grasshopper</Dialog.Title>
 			<Dialog.Description>
@@ -141,13 +147,19 @@
 			{:else}
 				<!-- Grasshopper → Schema changes -->
 				{#if (syncDiff.fromGH?.length ?? 0) > 0}
-					<div class="border-l-4 border-blue-500 bg-blue-50 p-4 dark:bg-blue-950">
+					<div class="w-full rounded-lg border-2 border-blue-500 bg-blue-50 p-4 dark:bg-blue-950">
 						<button
 							type="button"
 							class="flex w-full items-center justify-between font-semibold text-blue-900 dark:text-blue-100"
 							onclick={() => (expandedSections.fromGH = !expandedSections.fromGH)}
 						>
-							<span>Grasshopper → Schema ({syncDiff.fromGH.length} changes)</span>
+							<div class="flex items-center gap-2">
+								<Badge class="bg-blue-600 text-white hover:bg-blue-600">GH → SCHEMA</Badge>
+								<span
+									>{syncDiff.fromGH.length}
+									{syncDiff.fromGH.length === 1 ? 'change' : 'changes'}</span
+								>
+							</div>
 							{#if expandedSections.fromGH}
 								<ChevronUp class="h-5 w-5" />
 							{:else}
@@ -156,47 +168,70 @@
 						</button>
 
 						{#if expandedSections.fromGH}
-							<div class="mt-4 space-y-2">
-								<label class="flex items-center gap-2">
-									<input
-										type="checkbox"
-										class="rounded"
-										disabled={isDisabled('fromGH')}
-										checked={syncDiff.fromGH.every((c) => isSelected(c, 'fromGH'))}
-										onchange={() => toggleAll('fromGH')}
-									/>
-									<span class="text-sm font-medium" class:text-muted-foreground={isDisabled('fromGH')}>Select all</span>
-								</label>
+							<div class="mt-4 space-y-3">
+								<div class="flex items-center justify-between">
+									<div class="flex items-center gap-2">
+										<Checkbox
+											disabled={isDisabled('fromGH')}
+											checked={syncDiff.fromGH.every((c) => isSelected(c, 'fromGH'))}
+											onCheckedChange={() => toggleAll('fromGH')}
+										/>
+										<Label
+											class={`cursor-pointer ${isDisabled('fromGH') ? 'text-muted-foreground' : ''}`}
+										>
+											Select all
+										</Label>
+									</div>
+									<div class="text-xs text-blue-700 dark:text-blue-300">
+										Update Schema with values from Grasshopper
+									</div>
+								</div>
 
-								<div class="overflow-x-auto">
+								<div class="overflow-x-auto rounded border bg-white dark:bg-gray-900">
 									<table class="w-full text-sm">
-										<thead>
-											<tr class="border-b text-left">
+										<thead class="bg-blue-100 dark:bg-blue-900">
+											<tr class="text-left">
 												<th class="w-8 px-3 py-2"></th>
-												<th class="px-3 py-2">Parameter</th>
-												<th class="px-3 py-2">Field</th>
-												<th class="px-3 py-2">GH Value</th>
-												<th class="px-3 py-2">Schema Value</th>
+												<th class="px-3 py-2 font-semibold">Parameter</th>
+												<th class="px-3 py-2 font-semibold">Field</th>
+												<th class="px-3 py-2 font-semibold">
+													<div class="flex items-center gap-1">
+														<Badge class="bg-blue-600 text-white hover:bg-blue-600">GH</Badge>
+														<span>New Value</span>
+													</div>
+												</th>
+												<th class="px-3 py-2"></th>
+												<th class="px-3 py-2 font-semibold">
+													<div class="flex items-center gap-1">
+														<Badge variant="secondary">Schema</Badge>
+														<span>Current Value</span>
+													</div>
+												</th>
 											</tr>
 										</thead>
 										<tbody>
 											{#each syncDiff.fromGH as change (change.ParamId + change.Field)}
-												<tr class="border-b hover:bg-blue-100 dark:hover:bg-blue-900" class:opacity-50={isDisabled('fromGH')}>
+												<tr
+													class="border-b last:border-0 hover:bg-blue-50 dark:hover:bg-blue-900/50"
+													class:opacity-50={isDisabled('fromGH')}
+												>
 													<td class="px-3 py-2">
-														<input
-															type="checkbox"
-															class="rounded"
+														<Checkbox
 															disabled={isDisabled('fromGH')}
 															checked={isSelected(change, 'fromGH')}
-															onchange={() => toggleSelect(change, 'fromGH')}
+															onCheckedChange={() => toggleSelect(change, 'fromGH')}
 														/>
 													</td>
 													<td class="px-3 py-2 font-medium">{change.ParamNickname}</td>
-													<td class="px-3 py-2">{change.Field}</td>
-													<td class="px-3 py-2 font-mono text-xs text-blue-700 dark:text-blue-300"
+													<td class="text-muted-foreground px-3 py-2">{change.Field}</td>
+													<td
+														class="px-3 py-2 font-mono text-xs font-semibold text-blue-700 dark:text-blue-300"
 														>{formatValue(change.GHValue)}</td
 													>
-													<td class="px-3 py-2 font-mono text-xs"
+													<td class="px-2">
+														<ArrowRight class="h-4 w-4 text-blue-500" />
+													</td>
+													<td class="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400"
 														>{formatValue(change.SchemaValue)}</td
 													>
 												</tr>
@@ -211,13 +246,18 @@
 
 				<!-- Schema → Grasshopper changes -->
 				{#if (syncDiff.toGH?.length ?? 0) > 0}
-					<div class="border-l-4 border-green-500 bg-green-50 p-4 dark:bg-green-950">
+					<div class="rounded-lg border-2 border-green-500 bg-green-50 p-4 dark:bg-green-950">
 						<button
 							type="button"
 							class="flex w-full items-center justify-between font-semibold text-green-900 dark:text-green-100"
 							onclick={() => (expandedSections.toGH = !expandedSections.toGH)}
 						>
-							<span>Schema → Grasshopper ({syncDiff.toGH.length} changes)</span>
+							<div class="flex items-center gap-2">
+								<Badge class="bg-green-600 text-white hover:bg-green-600">SCHEMA → GH</Badge>
+								<span
+									>{syncDiff.toGH.length} {syncDiff.toGH.length === 1 ? 'change' : 'changes'}</span
+								>
+							</div>
 							{#if expandedSections.toGH}
 								<ChevronUp class="h-5 w-5" />
 							{:else}
@@ -226,47 +266,72 @@
 						</button>
 
 						{#if expandedSections.toGH}
-							<div class="mt-4 space-y-2">
-								<label class="flex items-center gap-2">
-									<input
-										type="checkbox"
-										class="rounded"
-										disabled={isDisabled('toGH')}
-										checked={syncDiff.toGH.every((c) => isSelected(c, 'toGH'))}
-										onchange={() => toggleAll('toGH')}
-									/>
-									<span class="text-sm font-medium" class:text-muted-foreground={isDisabled('toGH')}>Select all</span>
-								</label>
+							<div class="mt-4 space-y-3">
+								<div class="flex items-center justify-between">
+									<div class="flex items-center gap-2">
+										<Checkbox
+											disabled={isDisabled('toGH')}
+											checked={syncDiff.toGH.every((c) => isSelected(c, 'toGH'))}
+											onCheckedChange={() => toggleAll('toGH')}
+										/>
+										<Label
+											class={`cursor-pointer ${isDisabled('toGH') ? 'text-muted-foreground' : ''}`}
+										>
+											Select all
+										</Label>
+									</div>
+									<div class="text-xs text-green-700 dark:text-green-300">
+										Update Grasshopper with values from Schema
+									</div>
+								</div>
 
-								<div class="overflow-x-auto">
+								<div class="overflow-x-auto rounded border bg-white dark:bg-gray-900">
 									<table class="w-full text-sm">
-										<thead>
-											<tr class="border-b text-left">
+										<thead class="bg-green-100 dark:bg-green-900">
+											<tr class="text-left">
 												<th class="w-8 px-3 py-2"></th>
-												<th class="px-3 py-2">Parameter</th>
-												<th class="px-3 py-2">Field</th>
-												<th class="px-3 py-2">Schema Value</th>
-												<th class="px-3 py-2">GH Value</th>
+												<th class="px-3 py-2 font-semibold">Parameter</th>
+												<th class="px-3 py-2 font-semibold">Field</th>
+												<th class="px-3 py-2 font-semibold">
+													<div class="flex items-center gap-1">
+														<Badge class="bg-green-600 text-white hover:bg-green-600">Schema</Badge>
+														<span>New Value</span>
+													</div>
+												</th>
+												<th class="px-3 py-2"></th>
+												<th class="px-3 py-2 font-semibold">
+													<div class="flex items-center gap-1">
+														<Badge variant="secondary">GH</Badge>
+														<span>Current Value</span>
+													</div>
+												</th>
 											</tr>
 										</thead>
 										<tbody>
 											{#each syncDiff.toGH as change (change.ParamId + change.Field)}
-												<tr class="border-b hover:bg-green-100 dark:hover:bg-green-900" class:opacity-50={isDisabled('toGH')}>
+												<tr
+													class="border-b last:border-0 hover:bg-green-50 dark:hover:bg-green-900/50"
+													class:opacity-50={isDisabled('toGH')}
+												>
 													<td class="px-3 py-2">
-														<input
-															type="checkbox"
-															class="rounded"
+														<Checkbox
 															disabled={isDisabled('toGH')}
 															checked={isSelected(change, 'toGH')}
-															onchange={() => toggleSelect(change, 'toGH')}
+															onCheckedChange={() => toggleSelect(change, 'toGH')}
 														/>
 													</td>
 													<td class="px-3 py-2 font-medium">{change.ParamNickname}</td>
-													<td class="px-3 py-2">{change.Field}</td>
-													<td class="px-3 py-2 font-mono text-xs text-green-700 dark:text-green-300"
+													<td class="text-muted-foreground px-3 py-2">{change.Field}</td>
+													<td
+														class="px-3 py-2 font-mono text-xs font-semibold text-green-700 dark:text-green-300"
 														>{formatValue(change.SchemaValue)}</td
 													>
-													<td class="px-3 py-2 font-mono text-xs">{formatValue(change.GHValue)}</td>
+													<td class="px-2">
+														<ArrowRight class="h-4 w-4 text-green-500" />
+													</td>
+													<td class="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400"
+														>{formatValue(change.GHValue)}</td
+													>
 												</tr>
 											{/each}
 										</tbody>

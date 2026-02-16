@@ -242,6 +242,8 @@ export function useBuilderState(sessionId: string) {
 		if (message.success) {
 			toast.success(message.message || 'Sync completed successfully');
 			state.syncDialogOpen = false;
+			// Clear old sync diff data
+			state.syncDiff = null;
 			// Refresh to get updated state
 			wsState.requestInitialData(sessionId);
 		} else {
@@ -251,6 +253,8 @@ export function useBuilderState(sessionId: string) {
 
 	function requestSyncPreview() {
 		if (!state.schema) return;
+		// Clear old sync diff data before requesting new preview
+		state.syncDiff = null;
 		state.syncLoading = true;
 		state.syncDialogOpen = true;
 		wsState.requestSyncPreview(sessionId, state.schema);
