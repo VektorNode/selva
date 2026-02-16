@@ -20,7 +20,8 @@
 		formatMetadataUpdateMessage,
 		Viewer,
 		createSolvingIndicator,
-		SolvingIndicator
+		SolvingIndicator,
+		CalculateButton
 	} from '@selva/shared';
 	import { initializeWebSocketSession, getWebSocketPortFromUrl } from '$lib/utils/session';
 	import { parseMeshBatchObject, SCALE_FACTORS } from 'selva-compute/visualization';
@@ -39,6 +40,7 @@
 
 	let schemaUpdateNotification = $state('');
 	let notificationTimer: ReturnType<typeof setTimeout> | null = null;
+	let solveTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	let syncNeeded = $state(false);
 
@@ -147,6 +149,7 @@
 
 	function syncParameters() {
 		syncNeeded = false;
+		initialSolveTriggered = false; // Reset to allow solve after sync
 		wsState.requestInitialData(sessionId);
 		showNotification('Syncing parameters...');
 	}
@@ -198,9 +201,12 @@
 			});
 
 			if (Object.keys(allUpdates).length > 0) {
-				isRemoteUpdate = true;
-				Object.assign(values, allUpdates);
-				isRemoteUpdate = false;
+				try {
+					isRemoteUpdate = true;
+					Object.assign(values, allUpdates);
+				} finally {
+					isRemoteUpdate = false;
+				}
 			}
 		}
 	}
@@ -231,9 +237,12 @@
 
 			// console.log('[Preview] Initialized values:', newValues);
 
-			isRemoteUpdate = true;
-			values = newValues;
-			isRemoteUpdate = false;
+			try {
+				isRemoteUpdate = true;
+				values = newValues;
+			} finally {
+				isRemoteUpdate = false;
+			}
 
 			schema = processedSchema;
 			loading = false;
@@ -243,29 +252,44 @@
 				shouldShowViewer = true;
 			}
 
-			// Check for initial outputs/display data
-			if (message.outputs || message.displayData) {
+			// Check for initial outputs/display data with proper empty checks
+			const hasOutputs = message.outputs && Object.keys(message.outputs).length > 0;
+			const hasDisplayData =
+				message.displayData &&
+				(Array.isArray(message.displayData) ? message.displayData.length > 0 : true);
+			const hasInitialOutputs = hasOutputs || hasDisplayData;
+
+			if (hasInitialOutputs) {
 				handleOutputs(message);
 			}
 
-			// Trigger initial solution with current values
-			// Use a small timeout to ensure state is settled and backend is ready
-			setTimeout(() => {
-				if (wsState.connected && !initialSolveTriggered) {
-					initialSolveTriggered = true;
-					// Bypass isSolving check to force initial solve
-					const preparedValues = prepareValuesForSend($state.snapshot(newValues));
-					wsState.send('valueUpdate', { sessionId, values: preparedValues });
-				}
-			}, 500);
+			// Check if a solution is already running (from backend state)
+			const isSolvingOnConnect = message.isSolving === true;
+
+			// Only trigger initial solution if no outputs exist AND no solution is running
+			if (!hasInitialOutputs && !isSolvingOnConnect) {
+				solveTimeout = setTimeout(() => {
+					if (wsState.connected && !initialSolveTriggered) {
+						initialSolveTriggered = true;
+						const preparedValues = prepareValuesForSend($state.snapshot(newValues));
+						wsState.send('valueUpdate', { sessionId, values: preparedValues });
+					}
+				}, 500);
+			} else if (isSolvingOnConnect) {
+				// Solve already running - mark to prevent duplicate triggers
+				initialSolveTriggered = true;
+			}
 		}
 	}
 
 	function handleCurrentValues(message: any) {
 		if (message.sessionId === sessionId) {
-			isRemoteUpdate = true;
-			Object.assign(values, message.values);
-			isRemoteUpdate = false;
+			try {
+				isRemoteUpdate = true;
+				Object.assign(values, message.values);
+			} finally {
+				isRemoteUpdate = false;
+			}
 		}
 	}
 
@@ -277,9 +301,12 @@
 			});
 
 			if (Object.keys(allUpdates).length > 0) {
-				isRemoteUpdate = true;
-				Object.assign(values, allUpdates);
-				isRemoteUpdate = false;
+				try {
+					isRemoteUpdate = true;
+					Object.assign(values, allUpdates);
+				} finally {
+					isRemoteUpdate = false;
+				}
 			}
 		}
 	}
@@ -287,7 +314,8 @@
 	function handleSchemaUpdated(message: any) {
 		if (message.sessionId === sessionId) {
 			const removedCount = message.removedIds?.length || 0;
-			const newSchema = ensureSchemaLayoutDefaults(JSON.parse(JSON.stringify(message.schema)));
+			// No need to clone - message.schema is already a new object
+			const newSchema = ensureSchemaLayoutDefaults(message.schema);
 
 			if (message.removedIds && message.removedIds.length > 0) {
 				values = removeParametersFromValues(values, message.removedIds);
@@ -353,6 +381,17 @@
 			initializeSchema(sessionId);
 
 			return () => {
+				// Cleanup timeouts
+				if (solveTimeout) {
+					clearTimeout(solveTimeout);
+					solveTimeout = null;
+				}
+				if (notificationTimer) {
+					clearTimeout(notificationTimer);
+					notificationTimer = null;
+				}
+
+				// Cleanup event handlers
 				wsState.off('initialData', handleInitialData);
 				wsState.off('currentValues', handleCurrentValues);
 				wsState.off('outputs', handleOutputs);
@@ -438,39 +477,32 @@
 						</div>
 
 						{#if schema.instanceSolve === false}
-							<div class="sticky bottom-0 mt-6 flex justify-center">
-								<Button
-									variant={hasPendingChanges ? 'default' : 'outline'}
-									size="lg"
-									onclick={handleCalculate}
-									disabled={!hasPendingChanges || wsState.isSolving}
-									class="shadow-lg"
-								>
-									{#if wsState.isSolving}
-										<div
-											class="mr-2 h-4 w-4 animate-spin rounded-full border-2 {hasPendingChanges
-												? 'border-primary-foreground'
-												: 'border-foreground'} border-t-transparent"
-										></div>
-										Solving...
-									{:else if hasPendingChanges}
-										Calculate
-									{:else}
-										No Changes
-									{/if}
-								</Button>
-							</div>
+							<CalculateButton
+								{hasPendingChanges}
+								isSolving={wsState.isSolving}
+								oncalculate={handleCalculate}
+							/>
 						{/if}
 					</div>
 
 					<!-- 3D Viewer (conditional) -->
 					{#if shouldShowViewer}
-						<Viewer {schema} meshes={displayMeshes} bind:isFullscreen={isViewerFullscreen} />
+						<Viewer
+							{schema}
+							meshes={displayMeshes}
+							bind:isFullscreen={isViewerFullscreen}
+							isSolving={solvingIndicator.show}
+						/>
 					{/if}
 				</div>
 			{/key}
 
-			<SolvingIndicator show={solvingIndicator.show && schema.instanceSolve !== false} />
+			<!-- Instant mode: adaptive (skip fast solves). Manual mode: show immediately (user clicked Calculate) -->
+			{#if schema.instanceSolve === false}
+				<SolvingIndicator show={wsState.isSolving} />
+			{:else}
+				<SolvingIndicator show={solvingIndicator.show} />
+			{/if}
 		{/if}
 	</div>
 

@@ -28,4 +28,5 @@ export { ThemeSwitcher } from './theme-switcher';
 
 // Custom components (not replaced by shadcn)
 export { default as StateDisplay } from './StateDisplay.svelte';
+export { default as CalculateButton } from './CalculateButton.svelte';
 export { ModeToggle } from './mode-toggle';

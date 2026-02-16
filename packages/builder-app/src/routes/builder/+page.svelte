@@ -184,7 +184,16 @@
 						placedIds={placedInLayoutIds}
 						syncNeeded={builderState.state.syncNeeded}
 						onSchemaChange={(updatedSchema) => {
-							if (builderState) builderState.state.schema = updatedSchema;
+							if (builderState) {
+								builderState.state.schema = updatedSchema;
+								// Auto-select first tab when schema is imported/changed
+								if (
+									updatedSchema.layout?.type === 'tabbed' &&
+									updatedSchema.layout.tabs.length > 0
+								) {
+									builderState.state.activeTabId = updatedSchema.layout.tabs[0].id;
+								}
+							}
 						}}
 						onSync={() => builderState?.syncParameters()}
 						onAddToGroup={actions.onAddToGroup}

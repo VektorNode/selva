@@ -7,13 +7,13 @@
 		PageContainer,
 		PageHeader,
 		StateDisplay,
-		Button,
 		StateManager,
 		getDefaultValue,
 		type UISchema,
 		Viewer,
 		createSolvingIndicator,
 		SolvingIndicator,
+		CalculateButton,
 		ComputeMessages,
 		createComputeThrottle
 	} from '@selva/shared';
@@ -266,37 +266,32 @@
 								</div>
 
 								{#if schema.instanceSolve === false}
-									<div class="sticky bottom-0 mt-6 flex justify-center">
-										<Button
-											variant={hasPendingChanges ? 'default' : 'outline'}
-											size="lg"
-											onclick={handleCalculate}
-											disabled={!hasPendingChanges || solving}
-											class="shadow-lg"
-										>
-											{#if solving}
-												<div
-													class="border-background mr-2 h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
-												></div>
-												Solving...
-											{:else if hasPendingChanges}
-												Calculate
-											{:else}
-												No Changes
-											{/if}
-										</Button>
-									</div>
+									<CalculateButton
+										{hasPendingChanges}
+										isSolving={solving}
+										oncalculate={handleCalculate}
+									/>
 								{/if}
 							</div>
 
 							<!-- Viewer -->
 							{#if shouldShowViewer}
-								<Viewer {schema} {meshes} bind:isFullscreen={isViewerFullscreen} />
+								<Viewer
+								{schema}
+								{meshes}
+								bind:isFullscreen={isViewerFullscreen}
+								isSolving={solvingIndicator.show}
+							/>
 							{/if}
 						</div>
 					{/key}
 
-					<SolvingIndicator show={solvingIndicator.show && schema.instanceSolve !== false} />
+					<!-- Instant mode: adaptive (skip fast solves). Manual mode: show immediately -->
+					{#if schema.instanceSolve === false}
+						<SolvingIndicator show={solving} />
+					{:else}
+						<SolvingIndicator show={solvingIndicator.show} />
+					{/if}
 				</div>
 			{/if}
 		</div>
