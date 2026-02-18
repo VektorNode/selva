@@ -10,7 +10,7 @@
 #        bash update.sh --no-restart   # Skip PM2 restart
 ################################################################################
 
-set -e
+set -eo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -71,9 +71,9 @@ cd "$INSTALL_DIR"
 
 # Get current branch and commit
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-CURRENT_COMMIT=$(git rev-parse --short HEAD)
+LOCAL_COMMIT=$(git rev-parse HEAD)
 print_success "Current branch: $CURRENT_BRANCH"
-print_success "Current commit: $CURRENT_COMMIT"
+print_success "Current commit: $(git rev-parse --short HEAD)"
 
 # Check if PM2 is managing the app
 PM2_RUNNING=false
@@ -93,7 +93,6 @@ print_step "Fetching from remote..."
 git fetch origin
 
 # Check if there are changes
-LOCAL_COMMIT=$(git rev-parse HEAD)
 REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH)
 
 if [ "$LOCAL_COMMIT" = "$REMOTE_COMMIT" ]; then
@@ -150,14 +149,14 @@ if [ "$NO_RESTART" = false ]; then
     sleep 2
 
     # Check status
-    PM2_STATUS=$(pm2 describe selva-compute | grep -oP "status\s+:\s+\K\w+" || echo "unknown")
+    PM2_STATUS=$(pm2 describe selva-compute | awk '/status/{print $4}' || echo "unknown")
     if [ "$PM2_STATUS" = "online" ]; then
       print_success "Application restarted successfully"
       pm2 status
     else
       print_error "Application failed to restart. Check logs:"
       echo ""
-      pm2 logs selva-compute --lines 20
+      pm2 logs selva-compute --lines 20 --nostream
       exit 1
     fi
   else
@@ -203,7 +202,7 @@ print_header "Update Complete!"
 echo -e "${GREEN}Selva Compute App has been updated.${NC}"
 echo ""
 echo "📝 Changelog:"
-git log --oneline origin/$CURRENT_BRANCH..$CURRENT_BRANCH..origin/$CURRENT_BRANCH | head -5 || echo "   (No changes from previous version)"
+git log --oneline "$LOCAL_COMMIT..HEAD" | head -5 || echo "   (No changes from previous version)"
 echo ""
 
 if [ "$PM2_RUNNING" = true ]; then
@@ -211,7 +210,7 @@ if [ "$PM2_RUNNING" = true ]; then
   pm2 status
   echo ""
   echo "📋 Recent Logs:"
-  pm2 logs selva-compute --lines 10
+  pm2 logs selva-compute --lines 10 --nostream
   echo ""
 fi
 
