@@ -1,134 +1,94 @@
 import { json, error } from '@sveltejs/kit';
-import { readdir, unlink, writeFile, readFile, mkdir } from 'fs/promises';
+import { writeFile, readFile, mkdir } from 'fs/promises';
 import { join, resolve } from 'path';
 import { env } from '$env/dynamic/private';
 import type { RequestHandler } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 
 const GH_EXTENSIONS = ['.gh', '.ghx'];
-const BACKUP_DIR = 'backups';
 
-// POST - Upload/Update a GH definition file with backup and GUID support
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+
+// POST - Create a new definition (metadata + GH file in one request)
 export const POST: RequestHandler = async ({ request }) => {
-  const envPath = env.GH_DEFINITIONS_PATH || './example-definitions';
-  const definitionsPath = resolve(process.cwd(), envPath);
-  const backupPath = join(definitionsPath, BACKUP_DIR);
+	const envPath = env.GH_DEFINITIONS_PATH || './example-definitions';
+	const definitionsPath = resolve(process.cwd(), envPath);
 
-  try {
-    const formData = await request.formData();
-    const file = formData.get('file');
-    const isUpdate = formData.get('isUpdate') === 'true';
-    const oldFilename = formData.get('oldFilename') as string | null;
-    const defGuid = formData.get('guid') as string | null;
+	try {
+		const formData = await request.formData();
+		const file = formData.get('file');
+		const displayName = formData.get('displayName') as string | null;
+		const description = (formData.get('description') as string) || '';
+		const category = (formData.get('category') as string) || '';
+		const tagsRaw = (formData.get('tags') as string) || '';
+		const coverImage = (formData.get('coverImage') as string) || '';
 
-    if (!file || !(file instanceof File)) {
-      throw error(400, 'No file provided');
-    }
+		if (!file || !(file instanceof File)) {
+			throw error(400, 'A Grasshopper (.gh or .ghx) file is required');
+		}
 
-    // Validate file extension
-    const extension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-    if (!GH_EXTENSIONS.includes(extension)) {
-      throw error(400, `File type not allowed. Allowed types: ${GH_EXTENSIONS.join(', ')}`);
-    }
+		if (!displayName?.trim()) {
+			throw error(400, 'Display name is required');
+		}
 
-    // Read file as buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+		const extension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+		if (!GH_EXTENSIONS.includes(extension)) {
+			throw error(400, `File type not allowed. Allowed: ${GH_EXTENSIONS.join(', ')}`);
+		}
 
-    const newFilePath = join(definitionsPath, file.name);
-    const guid = defGuid || randomUUID();
+		// Generate GUID and create folder
+		const guid = randomUUID();
+		const guidPath = join(definitionsPath, guid);
+		await mkdir(guidPath, { recursive: true });
 
-    // If updating and old file exists
-    if (isUpdate && oldFilename && oldFilename !== file.name) {
-      const oldFilePath = join(definitionsPath, oldFilename);
+		// Write the GH file
+		const arrayBuffer = await file.arrayBuffer();
+		await writeFile(join(guidPath, file.name), Buffer.from(arrayBuffer));
 
-      // Create backup directory if it doesn't exist
-      try {
-        await mkdir(backupPath, { recursive: true });
-      } catch (err) {
-        console.warn('[Backup] Could not create backup directory:', err);
-      }
+		// Optionally save a cover image uploaded in the same request
+		let resolvedCoverImage = coverImage;
+		const imageFile = formData.get('image');
+		if (imageFile instanceof File && imageFile.size > 0) {
+			const imageExt = imageFile.name.substring(imageFile.name.lastIndexOf('.')).toLowerCase();
+			if (IMAGE_EXTENSIONS.includes(imageExt)) {
+				const safeImageName = imageFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+				await writeFile(join(guidPath, safeImageName), Buffer.from(await imageFile.arrayBuffer()));
+				resolvedCoverImage = `/admin/api/definitions/${guid}/image/${safeImageName}`;
+			}
+		}
 
-      // Backup old file with timestamp
-      try {
-        const oldFileData = await readFile(oldFilePath);
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const backupFilename = `${oldFilename.replace(/\.[^.]+$/, '')}_${timestamp}${extension}`;
-        const backupFilePath = join(backupPath, backupFilename);
+		// Update config
+		const configPath = join(definitionsPath, 'definitions-config.json');
+		let config: { definitions: Record<string, unknown> } = { definitions: {} };
+		try {
+			const configData = await readFile(configPath, 'utf-8');
+			config = JSON.parse(configData);
+			if (!config.definitions) config.definitions = {};
+		} catch {
+			// config doesn't exist yet – start fresh
+		}
 
-        await writeFile(backupFilePath, oldFileData);
-        console.log(`[Backup] Created backup: ${backupFilename}`);
+		const tags = tagsRaw
+			.split(',')
+			.map((t) => t.trim())
+			.filter(Boolean);
 
-        // Delete the old file
-        await unlink(oldFilePath);
-        console.log(`[Backup] Deleted old file: ${oldFilename}`);
-      } catch (backupErr) {
-        console.warn('[Backup] Error during backup:', backupErr);
-        // Continue anyway - the new file will still be written
-      }
-    }
+		config.definitions[guid] = {
+			displayName: displayName.trim(),
+			description,
+			...(category ? { category } : {}),
+			...(tags.length > 0 ? { tags } : {}),
+			...(resolvedCoverImage ? { coverImage: resolvedCoverImage } : {}),
+			file: file.name
+		};
 
-    // Write the new file
-    await writeFile(newFilePath, buffer);
+		await writeFile(configPath, JSON.stringify(config, null, '\t'), 'utf-8');
 
-    // Update the config to assign GUID if this is a definition
-    try {
-      const configPath = join(definitionsPath, 'definitions-config.json');
-      const configData = await readFile(configPath, 'utf-8');
-      const config = JSON.parse(configData);
-
-      if (!config.definitions) {
-        config.definitions = {};
-      }
-
-      // Get the key for this definition (filename without extension)
-      const defKey = file.name;
-
-      // Update or create the definition entry with GUID
-      if (!config.definitions[defKey]) {
-        config.definitions[defKey] = {};
-      }
-
-      // Ensure it has a GUID
-      if (!config.definitions[defKey].guid) {
-        config.definitions[defKey].guid = guid;
-      }
-
-      // If old filename exists in config and it's different, copy config and remove old
-      if (isUpdate && oldFilename && oldFilename !== file.name && config.definitions[oldFilename]) {
-        // Transfer GUID to new file
-        config.definitions[defKey].guid = config.definitions[oldFilename].guid;
-        // Copy other metadata if it exists
-        const oldDef = config.definitions[oldFilename];
-        if (oldDef.displayName) config.definitions[defKey].displayName = oldDef.displayName;
-        if (oldDef.description) config.definitions[defKey].description = oldDef.description;
-        if (oldDef.category) config.definitions[defKey].category = oldDef.category;
-        if (oldDef.tags) config.definitions[defKey].tags = oldDef.tags;
-        if (oldDef.coverImage) config.definitions[defKey].coverImage = oldDef.coverImage;
-
-        // Remove old entry
-        delete config.definitions[oldFilename];
-        console.log(`[Config] Migrated definition from ${oldFilename} to ${defKey}`);
-      }
-
-      await writeFile(configPath, JSON.stringify(config, null, '\t'), 'utf-8');
-      console.log(`[Config] Updated definition config with GUID: ${config.definitions[defKey].guid}`);
-    } catch (configErr) {
-      console.warn('[Config] Could not update config:', configErr);
-      // Don't fail - the file was still written
-    }
-
-    return json({
-      success: true,
-      filename: file.name,
-      guid: guid,
-      isUpdate: isUpdate
-    });
-  } catch (err) {
-    if (err && typeof err === 'object' && 'status' in err) {
-      throw err;
-    }
-    console.error('Failed to upload definition:', err);
-    throw error(500, 'Failed to upload definition');
-  }
+		return json({ success: true, guid, filename: file.name });
+	} catch (err) {
+		if (err && typeof err === 'object' && 'status' in err) throw err;
+		console.error('[Definitions POST] Failed to create definition:', err);
+		throw error(500, 'Failed to create definition');
+	}
 };
+

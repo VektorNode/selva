@@ -6,7 +6,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 
 const GH_EXTENSIONS = ['.gh', '.ghx'];
 
-// POST - Upload definition file to GUID-based folder structure
+// POST - Replace the GH file for an existing definition (upload to GUID folder, archive old)
 export const POST: RequestHandler = async ({ request }) => {
 	const envPath = env.GH_DEFINITIONS_PATH || './example-definitions';
 	const definitionsPath = resolve(process.cwd(), envPath);
@@ -24,116 +24,72 @@ export const POST: RequestHandler = async ({ request }) => {
 			throw error(400, 'Definition GUID is required');
 		}
 
-		// Validate file extension
 		const extension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
 		if (!GH_EXTENSIONS.includes(extension)) {
-			throw error(400, `File type not allowed. Allowed types: ${GH_EXTENSIONS.join(', ')}`);
+			throw error(400, `File type not allowed. Allowed: ${GH_EXTENSIONS.join(', ')}`);
 		}
 
-		// Read file as buffer
 		const arrayBuffer = await file.arrayBuffer();
 		const buffer = Buffer.from(arrayBuffer);
 
-		// Create GUID-based folder structure
 		const guidFolderPath = join(definitionsPath, guid);
 		const oldFilesFolderPath = join(guidFolderPath, 'old_files');
 		const newFilePath = join(guidFolderPath, file.name);
 
-		// Create main GUID folder if it doesn't exist
-		try {
-			await mkdir(guidFolderPath, { recursive: true });
-			console.warn(`[Definition Upload] Created folder: ${guid}`);
-		} catch (err) {
-			console.warn('[Definition Upload] Could not create GUID folder:', err);
-		}
+		// Ensure GUID folder exists
+		await mkdir(guidFolderPath, { recursive: true });
 
-		// Check if a grasshopper file already exists in this folder (and is different from new file)
-		let oldFileInfo: { path: string; name: string } | null = null;
+		// Archive any existing GH file that differs from the new one
 		try {
 			const filesInFolder = await readdir(guidFolderPath);
 			for (const fileName of filesInFolder) {
-				if (fileName !== 'old_files' && GH_EXTENSIONS.includes(fileName.substring(fileName.lastIndexOf('.')))) {
-					const oldPath = join(guidFolderPath, fileName);
-					if (oldPath !== newFilePath) {
-						oldFileInfo = { path: oldPath, name: fileName };
-						break;
-					}
+				const fileExt = fileName.substring(fileName.lastIndexOf('.')).toLowerCase();
+				if (
+					fileName !== 'old_files' &&
+					GH_EXTENSIONS.includes(fileExt) &&
+					join(guidFolderPath, fileName) !== newFilePath
+				) {
+					// Back up old file: timestamp prefix + original name
+					await mkdir(oldFilesFolderPath, { recursive: true });
+					const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+					const backupFileName = `${timestamp}_${fileName}`;
+					const oldData = await readFile(join(guidFolderPath, fileName));
+					await writeFile(join(oldFilesFolderPath, backupFileName), oldData);
+					await unlink(join(guidFolderPath, fileName));
+					console.warn(`[Upload] Archived old file as: old_files/${backupFileName}`);
+					break;
 				}
 			}
-		} catch (err) {
-			console.warn('[Definition Upload] Could not check for existing files:', err);
+		} catch (archiveErr) {
+			console.warn('[Upload] Could not archive old file:', archiveErr);
+			// Continue – the new file will still be written
 		}
 
-		// If there's an old file, back it up with timestamp
-		if (oldFileInfo) {
-			try {
-				await mkdir(oldFilesFolderPath, { recursive: true });
-				const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-				const oldFileData = await readFile(oldFileInfo.path);
-				const oldFileNameNoExt = oldFileInfo.name.replace(/\.[^.]+$/, '');
-				const backupFileName = `${oldFileNameNoExt}_${timestamp}${extension}`;
-				const backupFilePath = join(oldFilesFolderPath, backupFileName);
-
-				await writeFile(backupFilePath, oldFileData);
-				console.warn(`[Definition Upload] Created backup: ${guid}/old_files/${backupFileName}`);
-
-				// Delete the old file
-				await unlink(oldFileInfo.path);
-				console.warn(`[Definition Upload] Deleted old file: ${oldFileInfo.name}`);
-			} catch (backupErr) {
-				console.warn('[Definition Upload] Error during backup:', backupErr);
-				// Continue anyway - the new file will still be written
-			}
-		}
-
-		// Write the new file
+		// Write new file
 		await writeFile(newFilePath, buffer);
-		console.warn(`[Definition Upload] Written new file: ${guid}/${file.name}`);
+
+		// Update config: GUID is the key directly, set `file` to just the filename
 		try {
 			const configPath = join(definitionsPath, 'definitions-config.json');
 			const configData = await readFile(configPath, 'utf-8');
 			const config = JSON.parse(configData);
 
-			if (!config.definitions) {
-				config.definitions = {};
+			if (!config.definitions?.[guid]) {
+				throw new Error(`Definition with GUID '${guid}' not found in config`);
 			}
 
-			// Find the definition with this GUID by searching through all definitions
-			let defKey: string | null = null;
-			for (const [key, def] of Object.entries(config.definitions)) {
-				if (typeof def === 'object' && def !== null && 'guid' in def && def.guid === guid) {
-					defKey = key;
-					break;
-				}
-			}
-
-			if (!defKey) {
-				throw new Error(`No definition found with GUID: ${guid}`);
-			}
-
-			// Store the relative path to the file (GUID/filename)
-			const relativeFilePath = `${guid}/${file.name}`;
-			const definition = config.definitions[defKey] as Record<string, unknown>;
-			definition.file = relativeFilePath;
-
+			config.definitions[guid].file = file.name;
 			await writeFile(configPath, JSON.stringify(config, null, '\t'), 'utf-8');
-			console.warn(`[Definition Upload] Updated config for ${defKey}, file path: ${relativeFilePath}`);
 		} catch (configErr) {
-			console.warn('[Definition Upload] Could not update config:', configErr);
-			// Don't fail - the file was still written
+			console.warn('[Upload] Could not update config file field:', configErr);
+			// Don't fail – the file was written successfully
 		}
 
-		return json({
-			success: true,
-			filename: file.name,
-			guid: guid,
-			relativePath: `${guid}/${file.name}`
-		});
+		return json({ success: true, filename: file.name, guid });
 	} catch (err) {
-		if (err && typeof err === 'object' && 'status' in err) {
-			throw err;
-		}
-		console.error('[Definition Upload] Failed to upload definition:', err);
-		throw error(500, 'Failed to upload definition');
+		if (err && typeof err === 'object' && 'status' in err) throw err;
+		console.error('[Upload] Failed:', err);
+		throw error(500, 'Failed to upload definition file');
 	}
 };
+

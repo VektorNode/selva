@@ -30,9 +30,9 @@ export const load = (async ({ url, params: _params }) => {
 		console.warn('[App Load] Failed to load available definitions:', err);
 	}
 
-	// If no filename provided, use first available
+	// If no identifier provided, use first available definition's GUID
 	if (!ghFilename && availableDefinitions.length > 0) {
-		ghFilename = availableDefinitions[0].filename;
+		ghFilename = availableDefinitions[0].guid ?? availableDefinitions[0].filename;
 	}
 
 	if (!ghFilename) {

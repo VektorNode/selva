@@ -10,9 +10,14 @@ export interface DefinitionMetadata {
 	coverImage?: string;
 	category?: string;
 	tags?: string[];
+	/** Filename of the active .gh/.ghx file inside the GUID folder */
+	file?: string;
 }
 
 export interface Definition extends DefinitionMetadata {
+	/** The GUID - config key and folder name */
+	guid: string;
+	/** Same as `file` field - the active filename */
 	filename: string;
 	fileType: DefinitionFileType;
 }
@@ -24,19 +29,22 @@ export interface IDefinitionLoader {
 	listDefinitions(): Promise<Definition[]>;
 
 	/**
-	 * Get metadata for a specific definition
+	 * Get metadata for a specific definition.
+	 * @param identifier - GUID or filename (e.g. "table_example.gh")
 	 */
-	getMetadata(filename: string): Promise<DefinitionMetadata>;
+	getMetadata(identifier: string): Promise<DefinitionMetadata>;
 
 	/**
-	 * Load a definition file as binary data
+	 * Load a definition file as binary data.
+	 * @param identifier - GUID or filename
 	 */
-	loadDefinition(filename: string): Promise<Uint8Array>;
+	loadDefinition(identifier: string): Promise<Uint8Array>;
 
 	/**
-	 * Get a URL for a definition (may be local path or remote URL)
+	 * Get a URL for a definition (may be local path or remote URL).
+	 * @param identifier - GUID or filename
 	 */
-	getDefinitionUrl(filename: string): Promise<string>;
+	getDefinitionUrl(identifier: string): Promise<string>;
 }
 
 export interface DefinitionsConfig {

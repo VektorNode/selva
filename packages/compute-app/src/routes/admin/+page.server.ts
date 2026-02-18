@@ -9,59 +9,45 @@ interface DefinitionConfig {
 	category?: string;
 	tags?: string[];
 	coverImage?: string;
+	file?: string;
 }
 
-interface DefinitionsConfig {
-	[key: string]: DefinitionConfig;
-}
-
-interface FileInfo {
-	name: string;
-	type: 'grasshopper' | 'image' | 'other';
+interface DefinitionsData {
+	[guid: string]: DefinitionConfig;
 }
 
 export const load: PageServerLoad = async () => {
-	// Resolve path relative to project root (where .env is)
 	const envPath = env.GH_DEFINITIONS_PATH || './example-definitions';
 	const definitionsPath = resolve(process.cwd(), envPath);
 
-	// Read all files in the definitions directory
-	let files: FileInfo[] = [];
-	try {
-		const dirEntries = await readdir(definitionsPath);
-		files = dirEntries.map((name) => {
-			let type: FileInfo['type'] = 'other';
-			if (name.endsWith('.gh') || name.endsWith('.ghx')) {
-				type = 'grasshopper';
-			} else if (
-				name.endsWith('.jpg') ||
-				name.endsWith('.jpeg') ||
-				name.endsWith('.png') ||
-				name.endsWith('.gif') ||
-				name.endsWith('.webp')
-			) {
-				type = 'image';
-			}
-			return { name, type };
-		});
-	} catch (error) {
-		console.error('Failed to read definitions directory:', error);
-	}
+	const config: DefinitionsData = {};
+	const history: Record<string, string[]> = {};
 
-	// Read definitions config
-	let config: DefinitionsConfig = {};
 	try {
 		const configPath = join(definitionsPath, 'definitions-config.json');
 		const configData = await readFile(configPath, 'utf-8');
 		const parsed = JSON.parse(configData);
-		// Handle both flat and nested structures
-		config = parsed.definitions || parsed;
+		const defs = parsed.definitions || parsed;
+
+		for (const [guid, def] of Object.entries(defs) as [string, DefinitionConfig][]) {
+			config[guid] = def;
+
+			// Read history from old_files/ subfolder inside the GUID folder
+			try {
+				const oldFilesPath = join(definitionsPath, guid, 'old_files');
+				const entries = await readdir(oldFilesPath);
+				history[guid] = entries
+					.filter((f) => f.endsWith('.gh') || f.endsWith('.ghx'))
+					.sort()
+					.reverse();
+			} catch {
+				history[guid] = [];
+			}
+		}
 	} catch (error) {
-		console.error('Failed to read definitions-config.json:', error);
+		console.error('Failed to read definitions config:', error);
 	}
 
-	return {
-		files,
-		config
-	};
+	return { config, history };
 };
+
