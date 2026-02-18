@@ -28,6 +28,7 @@ bld/
 
 # NuGet Packages
 *.nupkg
+**/ecosystem.config.cjs
 
 
 # ReSharper
