@@ -9,18 +9,21 @@ export type {
 	DefinitionMetadata,
 	Definition,
 	IDefinitionLoader,
+	IDefinitionStore,
 	DefinitionsConfig,
-	DefinitionFileType
+	DefinitionFileType,
+	FileInput,
+	CreateDefinitionInput
 } from './definitions/types';
 
 import { DefinitionFactory } from './definitions/factory';
 
-// Singleton instance - created once and reused
+// Singleton instances - created once and reused
 let _definitionContainer: ReturnType<typeof DefinitionFactory.createContainer> | null = null;
+let _definitionStore: ReturnType<typeof DefinitionFactory.createStore> | null = null;
 
 /**
- * Get the definition container (singleton)
- * The container type is determined by environment variables at startup
+ * Get the definition container (singleton) - read-only
  */
 export function getDefinitionContainer() {
 	if (!_definitionContainer) {
@@ -28,3 +31,14 @@ export function getDefinitionContainer() {
 	}
 	return _definitionContainer;
 }
+
+/**
+ * Get the definition store (singleton) - read + write
+ */
+export function getDefinitionStore() {
+	if (!_definitionStore) {
+		_definitionStore = DefinitionFactory.createStore();
+	}
+	return _definitionStore;
+}
+

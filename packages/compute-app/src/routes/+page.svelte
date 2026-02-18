@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
-	import { StateDisplay, PageHeader } from '@selva/shared';
+	import { StateDisplay, PageHeader, Badge, PageFooter } from '@selva/shared';
 	import { ArrowRight, AlertCircle } from '@lucide/svelte';
 	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
 
@@ -50,10 +50,10 @@
 
 {#if !data.definitions || data.definitions.length <= 1}
 	<!-- Auto-redirecting for single definition or URL mode -->
-	<div class="flex min-h-screen items-center justify-center">
+	<div class="bg-background flex min-h-screen items-center justify-center">
 		<div class="text-center">
-			<div class="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-gray-900"></div>
-			<p class="mt-4 text-gray-600">Loading...</p>
+			<div class="border-foreground mx-auto h-12 w-12 animate-spin rounded-full border-b-2"></div>
+			<p class="text-muted-foreground mt-4 text-sm">Loading...</p>
 		</div>
 	</div>
 {:else}
@@ -156,11 +156,7 @@
 								{#if definition.tags && definition.tags.length > 0}
 									<div class="mb-3 flex flex-wrap gap-1.5">
 										{#each definition.tags.slice(0, 2) as tag (tag)}
-											<span
-												class="bg-muted text-muted-foreground inline-block rounded-full px-2 py-0.5 text-xs"
-											>
-												{tag}
-											</span>
+											<Badge variant="secondary">{tag}</Badge>
 										{/each}
 										{#if definition.tags.length > 2}
 											<span class="text-muted-foreground text-xs"
@@ -185,8 +181,6 @@
 		</div>
 
 		<!-- Footer -->
-		<footer class="border-border text-muted-foreground border-t px-8 py-4 text-center text-sm">
-			<p><span class="text-foreground font-semibold">Selva</span></p>
-		</footer>
+		<PageFooter />
 	</div>
 {/if}

@@ -51,6 +51,7 @@ export class EnvironmentDefinitionLoader implements IDefinitionLoader {
 				const fileType = this.getFileType(filename);
 
 				definitions.push({
+					guid: filename, // env-based definitions use filename as identifier
 					filename,
 					fileType,
 					...metadata

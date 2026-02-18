@@ -23,16 +23,6 @@
 			],
 			"coverImage": "https://images.unsplash.com/photo-1565791380713-1756b9a05343?q=80&w=1160&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
 			"file": "table_example.gh"
-		},
-		"65e237ba-59e0-4b4d-8285-8ab4ac8d9307": {
-			"displayName": "Not Working File",
-			"description": "Test",
-			"category": "Main",
-			"tags": [
-				"BUBU"
-			],
-			"coverImage": "https://images.unsplash.com/photo-1770752609290-264c53dc54a3?q=80&w=774&auto=format&fit=crop",
-			"file": "option_test.gh"
 		}
 	}
 }

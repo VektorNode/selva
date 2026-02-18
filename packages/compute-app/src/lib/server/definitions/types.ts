@@ -50,3 +50,50 @@ export interface IDefinitionLoader {
 export interface DefinitionsConfig {
 	definitions: Record<string, DefinitionMetadata>;
 }
+
+export interface FileInput {
+	name: string;
+	data: ArrayBuffer;
+}
+
+export interface CreateDefinitionInput {
+	displayName: string;
+	description?: string;
+	coverImage?: string;
+	category?: string;
+	tags?: string[];
+	file: FileInput;
+}
+
+/**
+ * Write-capable extension of IDefinitionLoader.
+ * Implementations must handle all filesystem mutations so route files stay pure.
+ */
+export interface IDefinitionStore extends IDefinitionLoader {
+	/** Read the raw config file (useful for admin page load) */
+	readConfig(): Promise<DefinitionsConfig>;
+
+	/** Get archived file history for a GUID */
+	getFileHistory(guid: string): Promise<string[]>;
+
+	/** Create a new definition; returns { guid, filename, coverImage? } */
+	createDefinition(
+		input: CreateDefinitionInput,
+		imageFile?: FileInput | null
+	): Promise<{ guid: string; filename: string; coverImage?: string }>;
+
+	/** Merge a metadata patch into an existing definition */
+	updateMetadata(guid: string, patch: Partial<DefinitionMetadata>): Promise<void>;
+
+	/** Delete a definition's folder and config entry */
+	deleteDefinition(guid: string): Promise<void>;
+
+	/** Replace the active GH file, archiving the previous one */
+	replaceFile(guid: string, file: FileInput): Promise<string>;
+
+	/** Save a cover image into the GUID folder and update config */
+	saveImage(guid: string, image: FileInput): Promise<string>;
+
+	/** Read image bytes from the GUID folder (for serving) */
+	readImage(guid: string, filename: string): Promise<Buffer>;
+}

@@ -302,11 +302,6 @@
 </svelte:head>
 
 <div class="w-full space-y-6 p-6 lg:px-12 xl:px-16">
-	<div>
-		<h2 class="text-3xl font-bold tracking-tight">Dashboard</h2>
-		<p class="text-muted-foreground">Manage your Grasshopper definitions</p>
-	</div>
-
 	<!-- Definition Manager -->
 	<Card.Root>
 		<Card.Header>
@@ -343,7 +338,7 @@
 			{:else}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 					{#each filteredDefinitions as [guid, cfg]}
-						<Card.Root class="overflow-hidden">
+						<Card.Root class="overflow-hidden pt-0">
 							<!-- Cover image -->
 							<div class="bg-muted h-32">
 								{#if cfg.coverImage}
@@ -405,7 +400,12 @@
 	{#if editingDefinition && editableConfig[editingDefinition]}
 		{@const guid = editingDefinition}
 		{@const cfg = editableConfig[guid]}
-		<Dialog.Root open={true} onOpenChange={(o) => { if (!o) editingDefinition = null; }}>
+		<Dialog.Root
+			open={true}
+			onOpenChange={(o) => {
+				if (!o) editingDefinition = null;
+			}}
+		>
 			<Dialog.Content class="max-w-lg">
 				<Dialog.Header>
 					<Dialog.Title>Edit — {cfg.displayName || guid}</Dialog.Title>
@@ -434,7 +434,10 @@
 								value={cfg.tags?.join(', ') || ''}
 								oninput={(e: Event) => {
 									const t = e.currentTarget as HTMLInputElement;
-									cfg.tags = t.value.split(',').map((s: string) => s.trim()).filter(Boolean);
+									cfg.tags = t.value
+										.split(',')
+										.map((s: string) => s.trim())
+										.filter(Boolean);
 								}}
 								placeholder="comma, separated"
 							/>
@@ -447,13 +450,32 @@
 					<div class="space-y-1">
 						<Label>Cover Image</Label>
 						<div class="flex gap-1 rounded-md border p-0.5">
-							<Button size="sm" variant={editImageModes[guid] !== 'upload' ? 'default' : 'ghost'} onclick={() => (editImageModes[guid] = 'url')} class="h-7 flex-1 text-xs">URL</Button>
-							<Button size="sm" variant={editImageModes[guid] === 'upload' ? 'default' : 'ghost'} onclick={() => (editImageModes[guid] = 'upload')} class="h-7 flex-1 text-xs">Upload File</Button>
+							<Button
+								size="sm"
+								variant={editImageModes[guid] !== 'upload' ? 'default' : 'ghost'}
+								onclick={() => (editImageModes[guid] = 'url')}
+								class="h-7 flex-1 text-xs">URL</Button
+							>
+							<Button
+								size="sm"
+								variant={editImageModes[guid] === 'upload' ? 'default' : 'ghost'}
+								onclick={() => (editImageModes[guid] = 'upload')}
+								class="h-7 flex-1 text-xs">Upload File</Button
+							>
 						</div>
 						{#if editImageModes[guid] === 'upload'}
 							<div class="flex items-center gap-2">
-								<input type="file" bind:this={editModeImageInputs[guid]} accept="image/*" class="border-input bg-background focus-visible:ring-ring flex h-10 flex-1 rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50" />
-								<Button size="sm" onclick={() => handleDefinitionImageUpload(guid)} disabled={uploadingDefinitionImage[guid]}>
+								<input
+									type="file"
+									bind:this={editModeImageInputs[guid]}
+									accept="image/*"
+									class="border-input bg-background focus-visible:ring-ring flex h-10 flex-1 rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
+								/>
+								<Button
+									size="sm"
+									onclick={() => handleDefinitionImageUpload(guid)}
+									disabled={uploadingDefinitionImage[guid]}
+								>
 									<Upload class="mr-2 h-4 w-4" />
 									{uploadingDefinitionImage[guid] ? 'Uploading…' : 'Upload'}
 								</Button>
@@ -472,12 +494,25 @@
 					<div class="space-y-1">
 						<Label>Grasshopper File</Label>
 						{#if cfg.file}
-							<p class="text-muted-foreground text-xs">Current: <code class="font-mono">{cfg.file}</code></p>
+							<p class="text-muted-foreground text-xs">
+								Current: <code class="font-mono">{cfg.file}</code>
+							</p>
 						{/if}
-						<p class="text-muted-foreground text-xs">Upload to replace — old file archived with timestamp prefix.</p>
+						<p class="text-muted-foreground text-xs">
+							Upload to replace — old file archived with timestamp prefix.
+						</p>
 						<div class="flex items-center gap-2">
-							<input type="file" bind:this={editModeFileInputs[guid]} accept=".gh,.ghx" class="border-input bg-background focus-visible:ring-ring flex h-10 flex-1 rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50" />
-							<Button size="sm" onclick={() => handleDefinitionFileUpload(guid)} disabled={uploadingDefinitionFile[guid]}>
+							<input
+								type="file"
+								bind:this={editModeFileInputs[guid]}
+								accept=".gh,.ghx"
+								class="border-input bg-background focus-visible:ring-ring flex h-10 flex-1 rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
+							/>
+							<Button
+								size="sm"
+								onclick={() => handleDefinitionFileUpload(guid)}
+								disabled={uploadingDefinitionFile[guid]}
+							>
 								<Upload class="mr-2 h-4 w-4" />
 								{uploadingDefinitionFile[guid] ? 'Uploading…' : 'Upload'}
 							</Button>
@@ -572,39 +607,44 @@
 							type="text"
 							bind:value={newDefTags}
 							placeholder="parametric, tower"
-					/>
+						/>
+					</div>
 				</div>
-			</div>
 
-			<div class="space-y-2">
-				<Label>Cover Image</Label>
-				<!-- URL / Upload toggle -->
-				<div class="flex gap-1 rounded-md border p-0.5">
-					<Button
-						size="sm"
-						variant={newDefImageMode !== 'upload' ? 'default' : 'ghost'}
-						onclick={() => (newDefImageMode = 'url')}
-						class="h-7 flex-1 text-xs"
-					>URL</Button>
-					<Button
-						size="sm"
-						variant={newDefImageMode === 'upload' ? 'default' : 'ghost'}
-						onclick={() => (newDefImageMode = 'upload')}
-						class="h-7 flex-1 text-xs"
-					>Upload File</Button>
+				<div class="space-y-2">
+					<Label>Cover Image</Label>
+					<!-- URL / Upload toggle -->
+					<div class="flex gap-1 rounded-md border p-0.5">
+						<Button
+							size="sm"
+							variant={newDefImageMode !== 'upload' ? 'default' : 'ghost'}
+							onclick={() => (newDefImageMode = 'url')}
+							class="h-7 flex-1 text-xs">URL</Button
+						>
+						<Button
+							size="sm"
+							variant={newDefImageMode === 'upload' ? 'default' : 'ghost'}
+							onclick={() => (newDefImageMode = 'upload')}
+							class="h-7 flex-1 text-xs">Upload File</Button
+						>
+					</div>
+					{#if newDefImageMode === 'upload'}
+						<input
+							type="file"
+							bind:this={newDefImageInput}
+							accept="image/*"
+							class="border-input bg-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
+						/>
+					{:else}
+						<Input
+							id="new-img"
+							type="text"
+							bind:value={newDefCoverImage}
+							placeholder="https://..."
+						/>
+					{/if}
 				</div>
-				{#if newDefImageMode === 'upload'}
-					<input
-						type="file"
-						bind:this={newDefImageInput}
-						accept="image/*"
-						class="border-input bg-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
-					/>
-				{:else}
-					<Input id="new-img" type="text" bind:value={newDefCoverImage} placeholder="https://..." />
-				{/if}
 			</div>
-		</div>
 			<Dialog.Footer class="gap-2 sm:justify-end">
 				<Button variant="outline" onclick={() => (showAddModal = false)}>Cancel</Button>
 				<Button onclick={submitAddDefinition} disabled={addingDefinition}>
@@ -628,12 +668,12 @@
 				<div class="space-y-2">
 					<h4 class="text-sm font-medium">Update Logs</h4>
 					<pre
-						class="max-h-96 overflow-auto rounded-md bg-slate-950 p-4 text-xs text-slate-50">{updateLogs}</pre>
+						class="bg-muted text-foreground max-h-96 overflow-auto rounded-md p-4 font-mono text-xs">{updateLogs}</pre>
 					{#if updateExitCode !== null}
 						<p
-							class="text-sm {updateExitCode === 0
+							class="text-sm font-medium {updateExitCode === 0
 								? 'text-green-600 dark:text-green-400'
-								: 'text-red-600 dark:text-red-400'}"
+								: 'text-destructive'}"
 						>
 							Process exited with code: {updateExitCode}
 						</p>

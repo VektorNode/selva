@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/private';
-import type { IDefinitionLoader, DefinitionFileType } from './types';
+import type { IDefinitionLoader, IDefinitionStore, DefinitionFileType } from './types';
 import { FilesystemDefinitionLoader } from './loaders/filesystem';
+import { FilesystemDefinitionStore } from './stores/filesystem';
 import { EnvironmentDefinitionLoader } from './loaders/environment';
 import { DefinitionContainer } from './container';
 
@@ -130,6 +131,16 @@ export class DefinitionFactory {
 		return new DefinitionContainer(loader);
 	}
 
+	/**
+	 * Create a write-capable definition store.
+	 * Only supported for the 'filesystem' source.
+	 * Falls back to filesystem if source is 'environment'.
+	 */
+	static createStore(config: DefinitionFactoryConfig = {}): IDefinitionStore {
+		const definitionsPath = config.definitionsPath || env.GH_DEFINITIONS_PATH || './definitions';
+		return new FilesystemDefinitionStore(definitionsPath);
+	}
+
 	private static detectSource(): DefinitionSource {
 		// Priority: explicit source > filesystem path > environment vars > default
 		if (env.DEFINITION_SOURCE === 'environment') {
@@ -140,12 +151,10 @@ export class DefinitionFactory {
 			return 'filesystem';
 		}
 
-		// Check if any environment variables with the pattern exist
 		if (Object.keys(process.env).some((key) => key.startsWith(env.GH_DEF_PREFIX || 'GH_DEF_'))) {
 			return 'environment';
 		}
 
-		// Default to filesystem
 		return 'filesystem';
 	}
 }

@@ -48,6 +48,7 @@
 		}
 	},
 	"dependencies": {
+		"@floating-ui/dom": "catalog:",
 		"@lucide/svelte": "catalog:",
 		"clsx": "catalog:",
 		"mode-watcher": "catalog:",

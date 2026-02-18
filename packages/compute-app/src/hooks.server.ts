@@ -29,6 +29,6 @@ if (missing.length > 0) {
 	process.exit(1);
 }
 
-export const handle = async ({ event, resolve }) => {
+export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve }) => {
 	return resolve(event);
 };
