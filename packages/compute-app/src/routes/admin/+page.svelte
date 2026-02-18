@@ -520,7 +520,7 @@
 				<h4 class="text-sm font-medium">Current Files</h4>
 				<div class="space-y-2">
 					{#each filteredFilesList as file}
-					{@const isConfigured = file.type === 'grasshopper' && !!editableConfig[file.name]}
+						{@const isConfigured = file.type === 'grasshopper' && !!editableConfig[file.name]}
 						<div
 							class="flex items-center justify-between rounded-lg border p-3 {isConfigured
 								? 'border-green-200 bg-green-50'
