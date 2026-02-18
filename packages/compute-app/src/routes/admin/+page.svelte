@@ -102,7 +102,8 @@
 				await invalidateAll();
 			} else {
 				const err = await response.json();
-				toast.error(err.message || 'Save failed');
+				console.error('[saveDefinition] PUT failed', response.status, err);
+				toast.error(err.message || err.error?.message || `Save failed (${response.status})`);
 			}
 		} catch (err) {
 			toast.error('Save failed: ' + (err instanceof Error ? err.message : 'Unknown error'));

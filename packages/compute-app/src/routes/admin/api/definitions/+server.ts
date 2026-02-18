@@ -2,8 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getDefinitionStore } from '$lib/server/definitions.server';
 import { CreateDefinitionInputSchema } from '$lib/server/definitions/schemas';
-
-const GH_EXTENSIONS = ['.gh', '.ghx'];
+import { GH_EXTENSIONS, MAX_GH_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '$lib/server/admin-config';
 
 // POST - Create a new definition (metadata + GH file in one request)
 export const POST: RequestHandler = async ({ request }) => {
@@ -20,6 +19,10 @@ export const POST: RequestHandler = async ({ request }) => {
 		const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
 		if (!GH_EXTENSIONS.includes(ext)) {
 			throw error(400, `File type not allowed. Allowed: ${GH_EXTENSIONS.join(', ')}`);
+		}
+
+		if (file.size > MAX_GH_FILE_SIZE) {
+			throw error(400, `File too large. Max size: ${MAX_GH_FILE_SIZE / (1024 * 1024)} MB`);
 		}
 
 		const tagsRaw = (formData.get('tags') as string) || '';
@@ -42,6 +45,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Optional image upload in the same request
 		const imageFormFile = formData.get('image');
+		if (imageFormFile instanceof File && imageFormFile.size > MAX_IMAGE_FILE_SIZE) {
+			throw error(400, `Image too large. Max size: ${MAX_IMAGE_FILE_SIZE / (1024 * 1024)} MB`);
+		}
 		const imageFile =
 			imageFormFile instanceof File && imageFormFile.size > 0
 				? { name: imageFormFile.name, data: await imageFormFile.arrayBuffer() }

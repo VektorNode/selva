@@ -19,7 +19,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 export class FilesystemDefinitionLoader implements IDefinitionLoader {
 	private config: Required<FilesystemLoaderConfig>;
-	private configCache: DefinitionsConfig | undefined;
+	protected configCache: DefinitionsConfig | undefined;
 	private watcher: ReturnType<typeof watch> | null = null;
 
 	constructor(config: FilesystemLoaderConfig) {

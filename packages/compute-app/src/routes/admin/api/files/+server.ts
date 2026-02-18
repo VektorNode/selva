@@ -3,9 +3,12 @@ import { readdir, unlink, writeFile, readFile } from 'fs/promises';
 import { join, resolve } from 'path';
 import { env } from '$env/dynamic/private';
 import type { RequestHandler } from '@sveltejs/kit';
-
-const ALLOWED_EXTENSIONS = ['.gh', '.ghx', '.jpg', '.jpeg', '.png', '.gif', '.webp'];
-const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+import {
+	ALLOWED_UPLOAD_EXTENSIONS,
+	IMAGE_EXTENSIONS,
+	MAX_GH_FILE_SIZE,
+	MAX_IMAGE_FILE_SIZE
+} from '$lib/server/admin-config';
 
 // GET - List all files
 export const GET: RequestHandler = async () => {
@@ -36,16 +39,26 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Validate file extension
 		const extension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-		if (!ALLOWED_EXTENSIONS.includes(extension)) {
-			throw error(400, `File type not allowed. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}`);
+		if (!ALLOWED_UPLOAD_EXTENSIONS.includes(extension)) {
+			throw error(400, `File type not allowed. Allowed types: ${ALLOWED_UPLOAD_EXTENSIONS.join(', ')}`);
+		}
+
+		// Enforce file size limit
+		const isImage = IMAGE_EXTENSIONS.includes(extension);
+		const maxSize = isImage ? MAX_IMAGE_FILE_SIZE : MAX_GH_FILE_SIZE;
+		if (file.size > maxSize) {
+			throw error(400, `File too large. Max size: ${maxSize / (1024 * 1024)} MB`);
 		}
 
 		// Read file as buffer
 		const arrayBuffer = await file.arrayBuffer();
 		const buffer = Buffer.from(arrayBuffer);
 
-		// Write to definitions directory
-		const filePath = join(definitionsPath, file.name);
+		// Write to definitions directory — resolve to prevent path traversal
+		const filePath = resolve(definitionsPath, file.name);
+		if (!filePath.startsWith(definitionsPath + '/') && filePath !== definitionsPath) {
+			throw error(400, 'Invalid filename');
+		}
 		await writeFile(filePath, buffer);
 
 		return json({ success: true, filename: file.name });
@@ -68,13 +81,13 @@ export const DELETE: RequestHandler = async ({ url }) => {
 		throw error(400, 'Filename is required');
 	}
 
-	// Prevent directory traversal
-	if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
-		throw error(400, 'Invalid filename');
-	}
-
 	try {
-		const filePath = join(definitionsPath, filename);
+		const filePath = resolve(definitionsPath, filename);
+
+		// Prevent directory traversal: resolved path must stay inside definitionsPath
+		if (!filePath.startsWith(definitionsPath + '/') && filePath !== definitionsPath) {
+			throw error(400, 'Invalid filename');
+		}
 
 		// Check if it's an image file
 		const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();

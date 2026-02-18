@@ -6,11 +6,11 @@ export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 export const GuidSchema = z.string().regex(UUID_REGEX, 'Invalid GUID format');
 
 export const DefinitionMetadataSchema = z.object({
-	displayName: z.string().min(1, 'Display name is required'),
-	description: z.string().optional(),
-	coverImage: z.string().optional(),
-	category: z.string().optional(),
-	tags: z.array(z.string()).optional(),
+	displayName: z.string().min(1, 'Display name is required').max(256),
+	description: z.string().max(2000).optional(),
+	coverImage: z.string().max(2048).optional(),
+	category: z.string().max(128).optional(),
+	tags: z.array(z.string().max(64)).max(20).optional(),
 	file: z.string().optional()
 });
 

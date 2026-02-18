@@ -47,6 +47,8 @@ export class FilesystemDefinitionStore
 	private async writeConfig(config: DefinitionsConfig): Promise<void> {
 		const configPath = this.getConfigFilePath();
 		await fs.writeFile(configPath, JSON.stringify(config, null, '\t'), 'utf-8');
+		// Invalidate the loader cache immediately so subsequent reads see the new data
+		this.configCache = undefined;
 	}
 
 	private getConfigFilePath(): string {
@@ -210,6 +212,6 @@ export class FilesystemDefinitionStore
 		const safeFilename = image.name.replace(/[^a-zA-Z0-9._-]/g, '_');
 		const filePath = path.join(this.guidPath(guid), safeFilename);
 		await fs.writeFile(filePath, Buffer.from(image.data));
-		return `/admin/api/definitions/${guid}/image/${safeFilename}`;
+		return `/api/definitions/${guid}/image/${safeFilename}`;
 	}
 }

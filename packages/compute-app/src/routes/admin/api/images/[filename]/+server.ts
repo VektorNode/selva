@@ -1,16 +1,9 @@
 import { error } from '@sveltejs/kit';
 import { readFile } from 'fs/promises';
-import { join, resolve } from 'path';
+import { resolve } from 'path';
 import { env } from '$env/dynamic/private';
 import type { RequestHandler } from '@sveltejs/kit';
-
-const IMAGE_EXTENSIONS: Record<string, string> = {
-	'.jpg': 'image/jpeg',
-	'.jpeg': 'image/jpeg',
-	'.png': 'image/png',
-	'.gif': 'image/gif',
-	'.webp': 'image/webp'
-};
+import { IMAGE_CONTENT_TYPES } from '$lib/server/admin-config';
 
 export const GET: RequestHandler = async ({ params }) => {
 	const definitionsPath = resolve(process.cwd(), env.GH_DEFINITIONS_PATH || './definitions');
@@ -20,22 +13,21 @@ export const GET: RequestHandler = async ({ params }) => {
 		throw error(400, 'Filename is required');
 	}
 
-	// Prevent directory traversal
-	if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
-		throw error(400, 'Invalid filename');
-	}
-
 	// Validate it's an image file
 	const extension = filename.substring(filename.lastIndexOf('.')).toLowerCase();
-	const contentType = IMAGE_EXTENSIONS[extension];
+	const contentType = IMAGE_CONTENT_TYPES[extension];
 
 	if (!contentType) {
 		throw error(400, 'File is not a supported image type');
 	}
 
+	// Prevent directory traversal: resolved path must stay inside definitionsPath
+	const filePath = resolve(definitionsPath, filename);
+	if (!filePath.startsWith(definitionsPath + '/') && filePath !== definitionsPath) {
+		throw error(400, 'Invalid filename');
+	}
+
 	try {
-		const filePath = join(definitionsPath, filename);
-		console.log('Reading image from:', filePath);
 		const fileBuffer = await readFile(filePath);
 
 		return new Response(fileBuffer, {

@@ -2,14 +2,7 @@ import { error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getDefinitionStore } from '$lib/server/definitions.server';
 import { GuidSchema } from '$lib/server/definitions/schemas';
-
-const IMAGE_CONTENT_TYPES: Record<string, string> = {
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp'
-};
+import { IMAGE_CONTENT_TYPES } from '$lib/server/admin-config';
 
 // GET /admin/api/definitions/{guid}/image/{filename} — serve a stored cover image
 export const GET: RequestHandler = async ({ params }) => {

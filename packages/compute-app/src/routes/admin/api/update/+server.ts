@@ -1,11 +1,25 @@
 import { spawn } from 'child_process';
+import { join } from 'path';
 import { env } from '$env/dynamic/private';
 import type { RequestHandler } from '@sveltejs/kit';
 
+// Strip ANSI escape codes from terminal output
+function stripAnsi(str: string): string {
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/\x1B\[[0-9;]*[mGKHF]/g, '');
+}
+
 // POST - Run update script and stream output via Server-Sent Events
 export const POST: RequestHandler = async () => {
-  const installDir = env.INSTALL_DIR || process.cwd();
-  const updateScript = 'update.sh';
+  if (!env.INSTALL_DIR) {
+    return new Response(
+      JSON.stringify({ error: 'INSTALL_DIR environment variable is not set' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const installDir = env.INSTALL_DIR;
+  const updateScript = join(installDir, 'update.sh');
 
   const stream = new ReadableStream({
     start(controller) {
@@ -20,15 +34,16 @@ export const POST: RequestHandler = async () => {
         // Spawn the update script
         const child = spawn('bash', [updateScript], {
           cwd: installDir,
-          env: process.env
+          env: { PATH: process.env.PATH, HOME: process.env.HOME }
         });
 
         // Stream stdout
         child.stdout.on('data', (data) => {
           const lines = data.toString().split('\n');
           for (const line of lines) {
-            if (line.trim()) {
-              sendEvent('log', { data: line });
+            const clean = stripAnsi(line).trim();
+            if (clean) {
+              sendEvent('log', { data: clean });
             }
           }
         });
@@ -37,8 +52,9 @@ export const POST: RequestHandler = async () => {
         child.stderr.on('data', (data) => {
           const lines = data.toString().split('\n');
           for (const line of lines) {
-            if (line.trim()) {
-              sendEvent('log', { data: `[ERROR] ${line}` });
+            const clean = stripAnsi(line).trim();
+            if (clean) {
+              sendEvent('log', { data: `[ERROR] ${clean}` });
             }
           }
         });

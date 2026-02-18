@@ -120,10 +120,7 @@
 							{#if definition.coverImage}
 								<div class="bg-muted relative h-40 overflow-hidden">
 									<img
-										src={definition.coverImage.startsWith('http') ||
-										definition.coverImage.startsWith('/')
-											? definition.coverImage
-											: `/admin/api/images/${definition.coverImage}`}
+										src={definition.coverImage}
 										alt={definition.displayName}
 										class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
 									/>
