@@ -1,5 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { watch } from 'node:fs';
 import type {
 	IDefinitionLoader,
 	Definition,
@@ -16,12 +17,31 @@ export interface FilesystemLoaderConfig {
 export class FilesystemDefinitionLoader implements IDefinitionLoader {
 	private config: Required<FilesystemLoaderConfig>;
 	private configCache: DefinitionsConfig | undefined;
+	private watcher: ReturnType<typeof watch> | null = null;
 
 	constructor(config: FilesystemLoaderConfig) {
 		this.config = {
 			supportedExtensions: ['gh', 'ghx'],
 			...config
 		};
+		// Set up file watcher to invalidate cache on changes
+		this.setupFileWatcher();
+	}
+
+	private setupFileWatcher(): void {
+		try {
+			const configPath = this.getConfigPath();
+			// Watch the config file for changes
+			this.watcher = watch(configPath, (eventType, filename) => {
+				if (eventType === 'change' || eventType === 'rename') {
+					console.log(`[FileWatch] Detected change in ${filename}, invalidating cache`);
+					this.configCache = undefined;
+				}
+			});
+		} catch (err) {
+			// File watcher setup might fail if file doesn't exist yet - that's okay
+			console.debug('[FileWatch] Could not set up watcher:', err);
+		}
 	}
 
 	private getConfigPath(): string {

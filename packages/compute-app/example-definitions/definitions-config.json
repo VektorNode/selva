@@ -1,18 +1,37 @@
 {
 	"definitions": {
-		"point_attractor": {
-			"displayName": "Advanced Solver",
-			"description": "Little point attractor example",
-			"coverImage": "http://localhost:5173/images/point_attractor.png",
+		"point_attractor.gh": {
+			"displayName": "Point Attractor",
+			"description": "This is a point attractor.",
+			"coverImage": "Element 1@10x.png",
 			"category": "Point Attractor",
-			"tags": ["optimization", "numerical", "solver"]
+			"tags": [
+				"point attractor",
+				"main",
+				"test"
+			],
+			"guid": "16a74814-fa22-471b-a3d4-0942bec95bec",
+			"file": "16a74814-fa22-471b-a3d4-0942bec95bec/Simple_Cube_Example_rh7.gh"
 		},
-		"table_example": {
-			"displayName": "Parametric Form Generator",
+		"table_example.gh": {
+			"displayName": "Parametric Form",
 			"description": "Create a simple parametric table with ease",
-			"coverImage": "http://localhost:5173/images/table_example.png",
+			"coverImage": "desert_lake_2-wallpaper-2880x1800.jpg",
 			"category": "Product",
-			"tags": ["parametric", "geometry", "forms"]
+			"tags": [
+				"parametric",
+				"geometry",
+				"forms"
+			]
+		},
+		"option_test.gh": {
+			"displayName": "TEST DATA",
+			"description": "Test",
+			"category": "Main",
+			"tags": [
+				"BUBU"
+			],
+			"coverImage": "https://images.unsplash.com/photo-1770752609290-264c53dc54a3?q=80&w=774&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
 		}
 	}
 }
