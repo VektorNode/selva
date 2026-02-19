@@ -1,4 +1,4 @@
-﻿using System.Drawing;
+﻿﻿using System.Drawing;
 using System.Reflection;
 using Newtonsoft.Json;
 using Selva.GH.Utilities.Helpers;
@@ -14,6 +14,7 @@ public class ThreeMaterial
 	///   The color of the material.
 	/// </summary>
 	[JsonProperty("color")]
+	[JsonConverter(typeof(ColorJsonConverter))]
 	public Color Color { get; set; }
 
 	/// <summary>
