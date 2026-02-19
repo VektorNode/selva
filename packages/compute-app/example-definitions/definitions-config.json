@@ -1,37 +1,24 @@
 {
 	"definitions": {
-		"16a74814-fa22-471b-a3d4-0942bec95bec": {
+		"90265668-9777-4ea1-add6-49f126805ef4": {
 			"displayName": "Point Attractor",
-			"description": "This is a point attractor.",
-			"category": "Point Attractor",
+			"description": "Point Attractor example",
+			"category": "Example",
 			"tags": [
-				"point attractor",
-				"main",
-				"test"
+				"attractor"
 			],
 			"file": "point_attractor.gh",
-			"coverImage": "https://images.unsplash.com/photo-1567095761054-7a02e69e5c43?q=80&w=774&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+			"coverImage": "https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?q=80&w=774&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
 		},
-		"46bfba08-34da-48a5-b920-e62832dfd0ce": {
-			"displayName": "Parametric Table",
-			"description": "Create a simple parametric table with ease",
-			"category": "Product",
+		"de4a97f9-b003-42b3-a895-9678183a3770": {
+			"displayName": "Table Example",
+			"description": "This is a test table",
+			"category": "Example",
 			"tags": [
-				"parametric",
-				"geometry",
-				"forms"
+				"product"
 			],
-			"coverImage": "https://images.unsplash.com/photo-1565791380713-1756b9a05343?q=80&w=1160&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+			"coverImage": "/api/definitions/de4a97f9-b003-42b3-a895-9678183a3770/image/pawel-czerwinski-6lQDFGOB1iw-unsplash.jpg",
 			"file": "table_example.gh"
-		},
-		"f83c1b5a-6bff-49c6-8ca9-8b9d6a1a9c0b": {
-			"displayName": "Sheet Analyzer",
-			"file": "Sheet_Analyzer.gh",
-			"coverImage": "https://images.unsplash.com/photo-1771204474488-7dd5e434e6c0?q=80&w=774&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-		},
-		"470fdc2f-a1f0-4447-982e-a1a15d5f8d3c": {
-			"displayName": "Unroller Error   Aus Trichter Ird Nur Ein Dreieck",
-			"file": "Unroller Error - Aus Trichter ird nur ein Dreieck.gh"
 		}
 	}
 }

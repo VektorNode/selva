@@ -59,7 +59,25 @@
 	let newDefImageMode = $state<'url' | 'upload'>('url');
 	let newDefFileInput = $state<HTMLInputElement | undefined>(undefined);
 	let newDefImageInput = $state<HTMLInputElement | undefined>(undefined);
+	let newDefValidating = $state(false);
+	let newDefValidationError = $state<string | null>(null);
+	let newDefValidationSchema = $state<ValidatedSchema | null>(null);
 
+	// Validate section state
+	interface ValidatedSchema {
+		name: string;
+		description: string;
+		author: string;
+		inputCount: number;
+		outputCount: number;
+		tags: string[];
+	}
+	interface ValidationResult {
+		fileName: string;
+		valid: boolean;
+		error?: string;
+		schemas?: ValidatedSchema[];
+	}
 	// Search and update state
 	let searchQuery = $state('');
 	let updateRunning = $state(false);
@@ -242,16 +260,76 @@
 		newDefTags = '';
 		newDefCoverImage = '';
 		newDefImageMode = 'url';
+		newDefValidating = false;
+		newDefValidationError = null;
+		newDefValidationSchema = null;
+		if (newDefFileInput) newDefFileInput.value = '';
 		if (newDefImageInput) newDefImageInput.value = '';
 		showAddModal = true;
 	}
 
-	function onNewFileSelected() {
-		if (newDefFileInput?.files?.[0] && !newDefDisplayName) {
-			newDefDisplayName = newDefFileInput.files[0].name
-				.replace(/\.(gh|ghx)$/i, '')
-				.replace(/[_-]/g, ' ')
-				.replace(/\b\w/g, (l) => l.toUpperCase());
+	function nameFromFile(file: File): string {
+		return file.name
+			.replace(/\.(gh|ghx)$/i, '')
+			.replace(/[_-]/g, ' ')
+			.replace(/\b\w/g, (l) => l.toUpperCase());
+	}
+
+	async function onNewFileSelected() {
+		const file = newDefFileInput?.files?.[0];
+		if (!file) return;
+
+		// Reset form + validation state for fresh file
+		newDefDisplayName = '';
+		newDefDescription = '';
+		newDefTags = '';
+		newDefValidationError = null;
+		newDefValidationSchema = null;
+		newDefValidating = true;
+
+		const formData = new FormData();
+		formData.append('files', file);
+
+		try {
+			const response = await fetch('/api/validate-solution', { method: 'POST', body: formData });
+
+			if (response.status === 404) {
+				// Endpoint doesn't exist — backwards-compatible fallback
+				newDefDisplayName = nameFromFile(file);
+				return;
+			}
+
+			if (!response.ok) {
+				// Other server error — fall back silently
+				newDefDisplayName = nameFromFile(file);
+				return;
+			}
+
+			const results: ValidationResult[] = await response.json();
+			const result = results[0];
+
+			if (!result) {
+				newDefDisplayName = nameFromFile(file);
+				return;
+			}
+
+			if (!result.valid) {
+				newDefValidationError = result.error ?? 'Validation failed';
+				return;
+			}
+
+			// Valid — pre-fill from schema
+			const schema = result.schemas?.[0] ?? null;
+			newDefValidationSchema = schema;
+
+			newDefDisplayName = schema?.name || nameFromFile(file);
+			newDefDescription = schema?.description || '';
+			newDefTags = schema?.tags?.join(', ') || '';
+		} catch {
+			// Network error / endpoint unreachable — fall back silently
+			newDefDisplayName = nameFromFile(file);
+		} finally {
+			newDefValidating = false;
 		}
 	}
 
@@ -569,6 +647,31 @@
 						onchange={onNewFileSelected}
 						class="border-input bg-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
 					/>
+
+				{#if newDefValidating}
+					<p class="text-muted-foreground flex items-center gap-2 text-xs">
+						<svg class="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+						</svg>
+						Validating definition…
+					</p>
+				{:else if newDefValidationError}
+					<div class="border-destructive/40 bg-destructive/5 rounded-md border p-3">
+						<p class="text-destructive text-xs font-medium">Validation failed</p>
+						<p class="text-destructive/80 mt-0.5 text-xs">{newDefValidationError}</p>
+					</div>
+				{:else if newDefValidationSchema}
+					<div class="border-green-500/30 bg-green-500/5 flex items-center gap-3 rounded-md border p-3">
+						<div class="min-w-0 flex-1">
+							<p class="text-xs font-medium text-green-700 dark:text-green-400">Valid Selva definition</p>
+							<p class="text-muted-foreground mt-0.5 text-xs">
+								{newDefValidationSchema.inputCount} input{newDefValidationSchema.inputCount === 1 ? '' : 's'},
+								{newDefValidationSchema.outputCount} output{newDefValidationSchema.outputCount === 1 ? '' : 's'}
+							</p>
+						</div>
+					</div>
+				{/if}
 				</div>
 
 				<div class="space-y-2">
@@ -648,8 +751,11 @@
 			</div>
 			<Dialog.Footer class="gap-2 sm:justify-end">
 				<Button variant="outline" onclick={() => (showAddModal = false)}>Cancel</Button>
-				<Button onclick={submitAddDefinition} disabled={addingDefinition}>
-					{addingDefinition ? 'Creating…' : 'Create Definition'}
+				<Button
+					onclick={submitAddDefinition}
+					disabled={addingDefinition || newDefValidating || !!newDefValidationError}
+				>
+					{addingDefinition ? 'Creating…' : newDefValidating ? 'Validating…' : 'Create Definition'}
 				</Button>
 			</Dialog.Footer>
 		</Dialog.Content>

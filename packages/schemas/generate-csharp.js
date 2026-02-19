@@ -614,3 +614,35 @@ if (!fs.existsSync(outputDir)) {
 
 fs.writeFileSync(outputPath, output);
 console.log(`Generated C# types at: ${outputPath}`);
+
+// Update SchemaVersion.cs from the schemaVersion default in the JSON schema
+const schemaVersionDefault = schema.definitions?.UISchema?.properties?.schemaVersion?.default;
+if (schemaVersionDefault) {
+  const [major, minor, patch] = schemaVersionDefault.split('.').map(Number);
+  const schemaVersionPath = path.join(__dirname, '../../Plugin/Selva.Core/Constants/SchemaVersion.cs');
+  const schemaVersionContent = `using System;
+
+namespace Selva.Core.Constants;
+
+/// <summary>
+///   Central definition of schema version constants.
+///   This is the single source of truth for schema versioning.
+/// </summary>
+public static class SchemaVersion
+{
+\t/// <summary>
+\t///   Current version of the schema format (MAJOR.MINOR.PATCH).
+\t///   Update this when making breaking or non-breaking changes to the schema.
+\t/// </summary>
+\tpublic static readonly Version CURRENT = new(${major}, ${minor}, ${patch});
+
+\t/// <summary>
+\t///   Current version as a string (e.g., "${schemaVersionDefault}").
+\t///   Used for serialization and comparison.
+\t/// </summary>
+\tpublic static readonly string CURRENT_STRING = CURRENT.ToString();
+}
+`;
+  fs.writeFileSync(schemaVersionPath, schemaVersionContent);
+  console.log(`Updated SchemaVersion.cs to ${schemaVersionDefault} at: ${schemaVersionPath}`);
+}
