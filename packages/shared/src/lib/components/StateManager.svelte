@@ -126,7 +126,7 @@
 	}
 </script>
 
-<div class="gap-2 flex items-center">
+<div class="gap-2 flex items-center justify-center">
 	<Button variant="default" size="sm" onclick={openExportDialog}>
 		<Download class="mr-2 h-4 w-4" />
 		Save State

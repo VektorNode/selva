@@ -15,19 +15,38 @@
 		values: Record<string, unknown>;
 		onValueChange: (paramId: string, value: SupportedTypes) => void;
 		environment?: 'local' | 'compute';
+		/** Filter tabs by panel position. 'left' shows unpositioned + left tabs, 'right' shows right tabs only. Omit to show all. */
+		panelFilter?: 'left' | 'right';
+		/** Externally request a specific tab to be active (e.g. from collapsed strip click) */
+		requestedTabId?: string | null;
 	}
 
-	let { schema, values = $bindable(), onValueChange, environment }: Props = $props();
+	let { schema, values = $bindable(), onValueChange, environment, panelFilter, requestedTabId = null }: Props = $props();
 
 	let activeTabId: string | null = $state(null);
 
 	// Track collapsed state for each group (keyed by group id)
 	let collapsedGroups = $state<Record<string, boolean>>({});
 
+	// Filter tabs by panel position
+	const visibleTabs = $derived(
+		schema.layout.type === 'tabbed'
+			? schema.layout.tabs.filter((tab) => {
+					if (!panelFilter) return true;
+					if (panelFilter === 'right') return tab.position === 'right';
+					return tab.position !== 'right';
+				})
+			: []
+	);
+
+	const showTabBar = $derived(visibleTabs.length > 1);
+
 	// Initialize first tab as active and set initial collapsed states
 	$effect(() => {
-		if (schema.layout.type === 'tabbed' && schema.layout.tabs.length > 0 && !activeTabId) {
-			activeTabId = schema.layout.tabs[0].id;
+		if (requestedTabId && visibleTabs.some((t) => t.id === requestedTabId)) {
+			activeTabId = requestedTabId;
+		} else if (visibleTabs.length > 0 && !activeTabId) {
+			activeTabId = visibleTabs[0].id;
 		}
 
 		// Initialize collapsed states from schema
@@ -53,7 +72,7 @@
 			// Track all value updates to apply them in batch
 			const updates: Record<string, unknown> = {};
 
-			schema.layout.tabs.forEach((tab) => {
+			visibleTabs.forEach((tab) => {
 				tab.groups.forEach((group) => {
 					group.items.forEach((layoutItem) => {
 						const visibility = evaluateVisibility(layoutItem);
@@ -84,11 +103,7 @@
 		collapsedGroups[groupId] = !collapsedGroups[groupId];
 	}
 
-	const activeTab = $derived(
-		schema.layout.type === 'tabbed'
-			? schema.layout.tabs.find((t) => t.id === activeTabId)
-			: undefined
-	);
+	const activeTab = $derived(visibleTabs.find((t) => t.id === activeTabId));
 
 	// Lookup by paramId (GUID from LayoutItem)
 	function getInputById(paramId: string): SchemaInput | undefined {
@@ -218,22 +233,24 @@
 </script>
 
 <Card.Root class="min-h-0 gap-0 py-0 shadow-sm flex w-full flex-col overflow-hidden">
-	<!-- Tab Navigation -->
-	<div class="flex shrink-0 overflow-x-auto border-b-2 border-border bg-muted">
-		{#each schema.layout.type === 'tabbed' ? schema.layout.tabs : [] as tab (tab.id)}
-			<button
-				class={`gap-2 px-6 py-4 font-medium flex items-center border-b-4 whitespace-nowrap transition-all ${
-					activeTabId === tab.id
-						? 'border-primary bg-card text-primary'
-						: 'border-transparent text-muted-foreground hover:bg-muted/80 hover:text-foreground'
-				}`}
-				onclick={() => (activeTabId = tab.id)}
-			>
-				{#if tab.icon}<span class="text-lg">{tab.icon}</span>{/if}
-				{tab.label}
-			</button>
-		{/each}
-	</div>
+	<!-- Tab Navigation — hidden when only one tab -->
+	{#if showTabBar}
+		<div class="flex shrink-0 overflow-x-auto border-b-2 border-border bg-muted">
+			{#each visibleTabs as tab (tab.id)}
+				<button
+					class={`gap-2 px-6 py-4 font-medium flex items-center border-b-4 whitespace-nowrap transition-all ${
+						activeTabId === tab.id
+							? 'border-primary bg-card text-primary'
+							: 'border-transparent text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+					}`}
+					onclick={() => (activeTabId = tab.id)}
+				>
+					{#if tab.icon}<span class="text-lg">{tab.icon}</span>{/if}
+					{tab.label}
+				</button>
+			{/each}
+		</div>
+	{/if}
 
 	<!-- Tab Content -->
 	{#if activeTab}

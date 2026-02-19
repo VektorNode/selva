@@ -10,14 +10,7 @@
 	let { hasPendingChanges, isSolving, oncalculate }: Props = $props();
 </script>
 
-<div class="sticky bottom-0 mt-6 bg-background/80 pt-3 pb-2 backdrop-blur-sm">
-	<!-- Indeterminate progress bar while solving -->
-	{#if isSolving}
-		<div class="mb-3 h-1 overflow-hidden rounded-full bg-muted">
-			<div class="h-full rounded-full bg-primary animate-[selva-solve-sweep_1.4s_ease-in-out_infinite]"></div>
-		</div>
-	{/if}
-
+<div class="sticky bottom-0 mt-6 bg-background/80 pb-2 backdrop-blur-sm">
 	<div class="flex justify-center">
 		<Button
 			variant={hasPendingChanges ? 'default' : 'outline'}
@@ -69,18 +62,5 @@
 		}
 	}
 
-	@keyframes selva-solve-sweep {
-		0% {
-			width: 0%;
-			margin-left: 0%;
-		}
-		50% {
-			width: 60%;
-			margin-left: 20%;
-		}
-		100% {
-			width: 0%;
-			margin-left: 100%;
-		}
-	}
+
 </style>

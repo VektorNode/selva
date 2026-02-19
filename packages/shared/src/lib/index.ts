@@ -2,6 +2,7 @@
 export { default as PageContainer } from './components/layout/PageContainer.svelte';
 export { default as PageHeader } from './components/layout/PageHeader.svelte';
 export { default as PageFooter } from './components/layout/PageFooter.svelte';
+export { default as AppLayout } from './components/AppLayout.svelte';
 
 // Error components
 export { default as ErrorScreen } from './components/ErrorScreen.svelte';
