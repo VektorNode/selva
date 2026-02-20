@@ -61,10 +61,9 @@ export function verifySession(cookies: Cookies): boolean {
  */
 export function createSession(cookies: Cookies): void {
   const token = randomBytes(32).toString('hex');
-  const signature = signToken(token);
 
   const sessionData: SessionData = {
-    token: signature,
+    token: token,
     timestamp: Date.now()
   };
 
