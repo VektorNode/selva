@@ -210,7 +210,7 @@ if [ "$NO_RESTART" = false ]; then
     else
       print_error "Application failed to restart. Check logs:"
       echo ""
-      pm2 logs selva-compute --lines 20
+      timeout 5 pm2 logs selva-compute --lines 20 || true
       exit 1
     fi
   else
@@ -262,10 +262,6 @@ echo ""
 if [ "$PM2_RUNNING" = true ]; then
   echo "📊 Application Status:"
   pm2 status
-  echo ""
-  echo "📋 Recent Logs:"
-  pm2 logs selva-compute --lines 10
-  echo ""
 fi
 
 print_success "Update script completed successfully!"
