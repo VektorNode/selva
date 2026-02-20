@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
 	import { Button, Input, Label, Alert } from '@selva/shared';
 	import { AlertCircle } from '@lucide/svelte';
 
@@ -25,7 +24,7 @@
 			<p class="text-muted-foreground text-sm">Enter your admin password to continue</p>
 		</div>
 
-		<form method="POST" use:enhance class="space-y-4">
+		<form method="POST" class="space-y-4">
 			{#if form?.error}
 				<Alert.Root variant="destructive">
 					<AlertCircle />
