@@ -230,6 +230,11 @@
 		} else if (newDefCoverImage) {
 			formData.append('coverImage', newDefCoverImage);
 		}
+		console.log('[submitAddDefinition]', {
+			imageMode: newDefImageMode,
+			coverImage: newDefCoverImage,
+			hasImage: !!newDefImageInput?.files?.[0]
+		});
 		try {
 			const response = await fetch('/admin/api/definitions', {
 				method: 'POST',
