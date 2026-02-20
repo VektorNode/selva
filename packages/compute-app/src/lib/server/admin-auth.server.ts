@@ -50,10 +50,18 @@ export function verifySession(cookies: Cookies): boolean {
  * Creates a new session cookie after successful authentication
  */
 export function createSession(cookies: Cookies): void {
+  const adminSecret = env.ADMIN_SECRET;
+  if (!adminSecret) {
+    throw new Error('ADMIN_SECRET not configured');
+  }
+
   const token = randomBytes(32).toString('hex');
+  const tokenSignature = createHmac('sha256', adminSecret)
+    .update(token)
+    .digest('hex');
 
   const sessionData: SessionData = {
-    token: token,
+    token: tokenSignature,
     timestamp: Date.now()
   };
 

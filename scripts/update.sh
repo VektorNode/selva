@@ -256,7 +256,7 @@ print_header "Update Complete!"
 echo -e "${GREEN}Selva Compute App has been updated.${NC}"
 echo ""
 echo "📝 Changelog:"
-git log --oneline origin/$CURRENT_BRANCH..$CURRENT_BRANCH..origin/$CURRENT_BRANCH | head -5 || echo "   (No changes from previous version)"
+git log --oneline -5 || echo "   (No changes from previous version)"
 echo ""
 
 if [ "$PM2_RUNNING" = true ]; then
