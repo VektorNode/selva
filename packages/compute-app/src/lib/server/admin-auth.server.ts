@@ -6,8 +6,8 @@ const SESSION_COOKIE_NAME = 'admin_session';
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
 interface SessionData {
-  token: string;
-  timestamp: number;
+	token: string;
+	timestamp: number;
 }
 
 
@@ -15,61 +15,69 @@ interface SessionData {
  * Verifies the session cookie and returns true if valid
  */
 export function verifySession(cookies: Cookies): boolean {
-  const sessionValue = cookies.get(SESSION_COOKIE_NAME);
-  if (!sessionValue) {
-    return false;
-  }
+	const sessionValue = cookies.get(SESSION_COOKIE_NAME);
+	if (!sessionValue) {
+		return false;
+	}
 
-  try {
-    const sessionData: SessionData = JSON.parse(sessionValue);
+	try {
+		const sessionData: SessionData = JSON.parse(sessionValue);
 
-    // Check if session hasn't expired
-    const now = Date.now();
-    const age = (now - sessionData.timestamp) / 1000;
+		// Check if session hasn't expired
+		const now = Date.now();
+		const age = (now - sessionData.timestamp) / 1000;
 
-    return age < SESSION_MAX_AGE;
-  } catch {
-    return false;
-  }
+		return age < SESSION_MAX_AGE;
+	} catch {
+		return false;
+	}
 }
 
 /**
  * Creates a new session cookie after successful authentication
  */
 export function createSession(cookies: Cookies): void {
-  const token = randomBytes(32).toString('hex');
+	const token = randomBytes(32).toString('hex');
 
-  const sessionData: SessionData = {
-    token: token,
-    timestamp: Date.now()
-  };
+	const sessionData: SessionData = {
+		token: token,
+		timestamp: Date.now()
+	};
 
-  cookies.set(SESSION_COOKIE_NAME, JSON.stringify(sessionData), {
-    path: '/admin',
-    httpOnly: true,
-    sameSite: 'strict',
-    secure: process.env.NODE_ENV === 'production' && process.env.ALLOW_INSECURE_COOKIES !== 'true',
-    maxAge: SESSION_MAX_AGE
-  });
+	const isSecure = process.env.NODE_ENV === 'production' && process.env.ALLOW_INSECURE_COOKIES !== 'true';
+	console.error('Creating session cookie:', {
+		NODE_ENV: process.env.NODE_ENV,
+		ALLOW_INSECURE_COOKIES: process.env.ALLOW_INSECURE_COOKIES,
+		secure: isSecure
+	});
+
+	//TODO: !Important - In production, ensure cookies are secure and have appropriate flags set
+	cookies.set(SESSION_COOKIE_NAME, JSON.stringify(sessionData), {
+		path: '/admin',
+		httpOnly: true,
+		sameSite: 'strict',
+		secure: isSecure,
+		maxAge: SESSION_MAX_AGE
+	});
 }
 
 /**
  * Destroys the session cookie
  */
 export function destroySession(cookies: Cookies): void {
-  cookies.delete(SESSION_COOKIE_NAME, {
-    path: '/admin'
-  });
+	cookies.delete(SESSION_COOKIE_NAME, {
+		path: '/admin'
+	});
 }
 
 /**
  * Verifies the provided password against the environment variable
  */
 export function verifyPassword(password: string): boolean {
-  const adminPassword = env.ADMIN_PASSWORD;
-  if (!adminPassword) {
-    console.error('ADMIN_PASSWORD not set in environment');
-    return false;
-  }
-  return password === adminPassword;
+	const adminPassword = env.ADMIN_PASSWORD;
+	if (!adminPassword) {
+		console.error('ADMIN_PASSWORD not set in environment');
+		return false;
+	}
+	return password === adminPassword;
 }
