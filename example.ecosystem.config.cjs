@@ -5,7 +5,7 @@ module.exports = {
 	apps: [
 		{
 			name: 'selva-compute',
-			script: './build/index.js',
+			script: './packages/compute-app/build/index.js',
 			instances: 1,
 			exec_mode: 'fork',
 			autorestart: true,

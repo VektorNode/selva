@@ -47,7 +47,7 @@ export function createSession(cookies: Cookies): void {
 	const isSecure = process.env.NODE_ENV === 'production' && process.env.ALLOW_INSECURE_COOKIES !== 'true';
 
 	cookies.set(SESSION_COOKIE_NAME, JSON.stringify(sessionData), {
-		path: '/admin',
+		path: '/',
 		httpOnly: true,
 		sameSite: 'strict',
 		secure: isSecure,
@@ -60,7 +60,7 @@ export function createSession(cookies: Cookies): void {
  */
 export function destroySession(cookies: Cookies): void {
 	cookies.delete(SESSION_COOKIE_NAME, {
-		path: '/admin'
+		path: '/'
 	});
 }
 
