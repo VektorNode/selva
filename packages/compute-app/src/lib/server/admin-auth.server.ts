@@ -49,7 +49,7 @@ export function createSession(cookies: Cookies): void {
 	cookies.set(SESSION_COOKIE_NAME, JSON.stringify(sessionData), {
 		path: '/',
 		httpOnly: true,
-		sameSite: 'strict',
+		sameSite: 'lax',
 		secure: isSecure,
 		maxAge: SESSION_MAX_AGE
 	});
