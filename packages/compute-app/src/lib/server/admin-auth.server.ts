@@ -48,7 +48,7 @@ export function createSession(cookies: Cookies): void {
     path: '/admin',
     httpOnly: true,
     sameSite: 'strict',
-    secure: process.env.NODE_ENV === 'production' && !process.env.ALLOW_INSECURE_COOKIES,
+    secure: process.env.NODE_ENV === 'production' && process.env.ALLOW_INSECURE_COOKIES !== 'true',
     maxAge: SESSION_MAX_AGE
   });
 }
