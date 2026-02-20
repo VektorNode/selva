@@ -6,9 +6,10 @@
 # Automates pulling latest changes and rebuilding the application.
 # Uses PM2 for zero-downtime updates when available.
 #
-# Usage: bash update.sh [--no-restart] [--branch <branch>]
+# Usage: bash update.sh [--no-restart] [--branch <branch>] [--no-pull]
 #        bash update.sh --no-restart          # Skip PM2 restart
 #        bash update.sh --branch main         # Switch to and update a specific branch
+#        bash update.sh --no-pull             # Skip git pull, only build and restart
 ################################################################################
 
 set -e
@@ -23,12 +24,14 @@ NC='\033[0m' # No Color
 # Configuration
 INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
 NO_RESTART=false
+NO_PULL=false
 TARGET_BRANCH=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
     --no-restart) NO_RESTART=true; shift ;;
+    --no-pull) NO_PULL=true; shift ;;
     --branch) TARGET_BRANCH="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
@@ -104,29 +107,35 @@ fi
 ################################################################################
 # 2. PULL LATEST CHANGES
 ################################################################################
-print_header "Step 1: Pulling Latest Changes"
+if [ "$NO_PULL" = true ]; then
+  print_header "Step 1: Skipping Pull (--no-pull)"
+  print_warning "Skipping git pull — using current local state"
+  echo "Current commit: $(git log -1 --pretty=format:'%h - %s (%ar)')"
+else
+  print_header "Step 1: Pulling Latest Changes"
 
-print_step "Fetching from remote..."
-git fetch origin
+  print_step "Fetching from remote..."
+  git fetch origin
 
-# Check if there are changes
-LOCAL_COMMIT=$(git rev-parse HEAD)
-REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH)
+  # Check if there are changes
+  LOCAL_COMMIT=$(git rev-parse HEAD)
+  REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH)
 
-if [ "$LOCAL_COMMIT" = "$REMOTE_COMMIT" ]; then
-  print_warning "Already up to date!"
+  if [ "$LOCAL_COMMIT" = "$REMOTE_COMMIT" ]; then
+    print_warning "Already up to date!"
+    echo ""
+    echo "Latest commit: $(git log -1 --pretty=format:'%h - %s (%ar)')"
+    exit 0
+  fi
+
+  print_step "Pulling changes from origin/$CURRENT_BRANCH..."
+  git pull origin $CURRENT_BRANCH
+
+  NEW_COMMIT=$(git rev-parse --short HEAD)
+  print_success "Updated to: $NEW_COMMIT"
   echo ""
-  echo "Latest commit: $(git log -1 --pretty=format:'%h - %s (%ar)')"
-  exit 0
+  git log --oneline -5
 fi
-
-print_step "Pulling changes from origin/$CURRENT_BRANCH..."
-git pull origin $CURRENT_BRANCH
-
-NEW_COMMIT=$(git rev-parse --short HEAD)
-print_success "Updated to: $NEW_COMMIT"
-echo ""
-git log --oneline -5
 
 ################################################################################
 # 3. INSTALL DEPENDENCIES
