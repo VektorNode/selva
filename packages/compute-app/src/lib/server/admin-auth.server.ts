@@ -45,13 +45,7 @@ export function createSession(cookies: Cookies): void {
 	};
 
 	const isSecure = process.env.NODE_ENV === 'production' && process.env.ALLOW_INSECURE_COOKIES !== 'true';
-	console.error('Creating session cookie:', {
-		NODE_ENV: process.env.NODE_ENV,
-		ALLOW_INSECURE_COOKIES: process.env.ALLOW_INSECURE_COOKIES,
-		secure: isSecure
-	});
 
-	//TODO: !Important - In production, ensure cookies are secure and have appropriate flags set
 	cookies.set(SESSION_COOKIE_NAME, JSON.stringify(sessionData), {
 		path: '/admin',
 		httpOnly: true,
