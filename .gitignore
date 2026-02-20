@@ -28,7 +28,6 @@ bld/
 
 # NuGet Packages
 *.nupkg
-**/ecosystem.config.cjs
 
 
 # ReSharper
@@ -49,7 +48,7 @@ _ReSharper*/
 # Windows
 Thumbs.db
 ehthumbs.db
-
+**/ecosystem.config.cjs
 # Web
 **/node_modules/
 **/.svelte-kit/
@@ -59,8 +58,6 @@ ehthumbs.db
 *.ghx
 !packages/compute-app/example-definitions/*.gh
 !packages/compute-app/example-definitions/*.ghx
-!packages/compute-app/example-definitions/**/*.gh
-!packages/compute-app/example-definitions/**/*.ghx
 # Unignore the Selva.GH plugin directory (case-insensitive match on Windows)
 !Plugin/Selva.GH/
 !Plugin/Selva.GH/**

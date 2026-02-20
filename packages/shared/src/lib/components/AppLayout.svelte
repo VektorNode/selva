@@ -5,7 +5,8 @@
 	import SolvingIndicator from './ui/SolvingIndicator.svelte';
 	import StateManager from './StateManager.svelte';
 	import TabLayout from './preview/TabLayout.svelte';
-	import { ChevronRight, ChevronLeft } from '@lucide/svelte';
+	import PanelDragHandle from './PanelDragHandle.svelte';
+	import CollapsedPanelStrip from './CollapsedPanelStrip.svelte';
 
 	interface Props {
 		schema: UISchema;
@@ -51,7 +52,6 @@
 	);
 	const hasSidebar = $derived(hasViewer || hasRightPanel);
 
-	// Tab lists used for compact collapsed strip
 	const leftTabs = $derived(
 		schema.layout.type === 'tabbed' ? schema.layout.tabs.filter((t) => t.position !== 'right') : []
 	);
@@ -61,8 +61,8 @@
 
 	// ── Panel resize ────────────────────────────────────────────────────────────
 	const DEFAULT_WIDTH = 380;
-	const COLLAPSE_THRESHOLD = 300; // drag below this → snap to collapsed strip
-	const COLLAPSED_WIDTH = 48; // width of compact icon strip
+	const COLLAPSE_THRESHOLD = 300;
+	const COLLAPSED_WIDTH = 48;
 
 	let leftWidth = $state(DEFAULT_WIDTH);
 	let rightWidth = $state(DEFAULT_WIDTH);
@@ -89,9 +89,10 @@
 
 	function onDrag(e: MouseEvent) {
 		if (!_side) return;
+		const maxWidth = window.innerWidth / 4;
 		const delta = e.clientX - _startX;
 		const raw = _side === 'left' ? _startW + delta : _startW - delta;
-		const next = raw < COLLAPSE_THRESHOLD ? COLLAPSED_WIDTH : Math.max(COLLAPSE_THRESHOLD, raw);
+		const next = raw < COLLAPSE_THRESHOLD ? COLLAPSED_WIDTH : Math.min(maxWidth, Math.max(COLLAPSE_THRESHOLD, raw));
 		if (_side === 'left') leftWidth = next;
 		else rightWidth = next;
 	}
@@ -119,35 +120,17 @@
 	<!-- ── Left panel ──────────────────────────────────────────────────────────── -->
 	{#if hasLeftTabs || !hasSidebar}
 		{#if leftCollapsed && hasSidebar}
-			<!-- Compact collapsed strip — no side padding -->
-			<!-- svelte-ignore a11y_interactive_supports_focus -->
-			<div
-				class="lg:flex gap-2 py-4 hidden shrink-0 cursor-pointer flex-col items-center border-r-2 border-border bg-muted transition-colors hover:bg-muted/70"
-				style="width: {COLLAPSED_WIDTH}px"
-				role="button"
-				tabindex="0"
-				onclick={() => (leftWidth = DEFAULT_WIDTH)}
-				onkeydown={(e) => e.key === 'Enter' && (leftWidth = DEFAULT_WIDTH)}
-				title="Expand left panel"
-			>
-				{#each leftTabs as tab}
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
-					<div
-						class="w-8 h-8 rounded text-xs font-semibold shadow-sm flex shrink-0 items-center justify-center bg-background text-foreground transition-colors select-none hover:bg-accent"
-						title={tab.label}
-						role="button"
-						tabindex="-1"
-						onclick={(e) => { e.stopPropagation(); requestedLeftTabId = tab.id; leftWidth = DEFAULT_WIDTH; }}
-					>
-						{tab.icon || tab.label[0]?.toUpperCase() || '?'}
-					</div>
-				{/each}
-				<div class="mt-auto text-muted-foreground">
-					<ChevronRight size={14} />
-				</div>
-			</div>
+			<CollapsedPanelStrip
+				side="left"
+				tabs={leftTabs}
+				collapsedWidth={COLLAPSED_WIDTH}
+				onExpand={() => (leftWidth = DEFAULT_WIDTH)}
+				onTabClick={(id) => {
+					requestedLeftTabId = id;
+					leftWidth = DEFAULT_WIDTH;
+				}}
+			/>
 		{:else}
-			<!-- Expanded left panel — with side padding -->
 			<div
 				class="px-3 min-h-0 w-full shrink-0 overflow-y-auto {isViewerFullscreen
 					? 'hidden'
@@ -173,74 +156,44 @@
 			</div>
 		{/if}
 
-		<!-- Left drag handle (desktop only, shown when sidebar exists) -->
 		{#if hasSidebar}
-			<div
-				class="lg:flex group hidden shrink-0 cursor-ew-resize items-center justify-center transition-colors hover:bg-primary/10 active:bg-primary/20"
-				style="width: 6px"
-				onmousedown={(e) => startDrag('left', e)}
-				role="separator"
-				aria-orientation="vertical"
-			>
-				<div
-					class="h-8 w-px rounded-full bg-border transition-colors group-hover:bg-primary/50"
-				></div>
-			</div>
+			<PanelDragHandle
+				onDragStart={(e) => startDrag('left', e)}
+				ariaLabel="Resize left panel"
+			/>
 		{/if}
 	{/if}
 
 	<!-- ── Viewer ──────────────────────────────────────────────────────────────── -->
 	{#if hasViewer}
-		<Viewer {schema} {meshes} bind:isFullscreen={isViewerFullscreen} {isSolving} />
-	{/if}
-
-	<!-- ── Right drag handle ──────────────────────────────────────────────────── -->
-	{#if hasRightPanel}
 		<div
-			class="lg:flex group hidden shrink-0 cursor-ew-resize items-center justify-center transition-colors hover:bg-primary/10 active:bg-primary/20"
-			style="width: 6px"
-			onmousedown={(e) => startDrag('right', e)}
-			role="separator"
-			aria-orientation="vertical"
+			class="min-h-0 flex flex-1 flex-col"
+			class:pl-3={!hasLeftTabs && !leftCollapsed}
+			class:pr-3={!hasRightPanel}
 		>
-			<div
-				class="h-8 w-px rounded-full bg-border transition-colors group-hover:bg-primary/50"
-			></div>
+			<Viewer {schema} {meshes} bind:isFullscreen={isViewerFullscreen} {isSolving} />
 		</div>
 	{/if}
 
 	<!-- ── Right panel ────────────────────────────────────────────────────────── -->
 	{#if hasRightPanel}
+		<PanelDragHandle
+			onDragStart={(e) => startDrag('right', e)}
+			ariaLabel="Resize right panel"
+		/>
+
 		{#if rightCollapsed}
-			<!-- Compact collapsed strip — no side padding -->
-			<!-- svelte-ignore a11y_interactive_supports_focus -->
-			<div
-				class="lg:flex gap-2 py-4 hidden shrink-0 cursor-pointer flex-col items-center border-l-2 border-border bg-muted transition-colors hover:bg-muted/70"
-				style="width: {COLLAPSED_WIDTH}px"
-				role="button"
-				tabindex="0"
-				onclick={() => (rightWidth = DEFAULT_WIDTH)}
-				onkeydown={(e) => e.key === 'Enter' && (rightWidth = DEFAULT_WIDTH)}
-				title="Expand right panel"
-			>
-				<div class="mb-1 text-muted-foreground">
-					<ChevronLeft size={14} />
-				</div>
-				{#each rightTabs as tab}
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
-					<div
-						class="w-8 h-8 rounded text-xs font-semibold shadow-sm flex shrink-0 items-center justify-center bg-background text-foreground transition-colors select-none hover:bg-accent"
-						title={tab.label}
-						role="button"
-						tabindex="-1"
-						onclick={(e) => { e.stopPropagation(); requestedRightTabId = tab.id; rightWidth = DEFAULT_WIDTH; }}
-					>
-						{tab.icon || tab.label[0]?.toUpperCase() || '?'}
-					</div>
-				{/each}
-			</div>
+			<CollapsedPanelStrip
+				side="right"
+				tabs={rightTabs}
+				collapsedWidth={COLLAPSED_WIDTH}
+				onExpand={() => (rightWidth = DEFAULT_WIDTH)}
+				onTabClick={(id) => {
+					requestedRightTabId = id;
+					rightWidth = DEFAULT_WIDTH;
+				}}
+			/>
 		{:else}
-			<!-- Expanded right panel — with side padding -->
 			<div
 				class="px-3 min-h-0 w-full shrink-0 overflow-y-auto {isViewerFullscreen ? 'hidden' : ''}"
 				style="width: {rightWidth}px; max-width: 100%;"
@@ -253,7 +206,6 @@
 					panelFilter="right"
 					requestedTabId={requestedRightTabId}
 				/>
-				<!-- StateManager + CalculateButton follow the tabs: only here when no left tabs -->
 				{#if !hasLeftTabs}
 					<div class="mt-6">
 						<StateManager {schema} currentValues={values} onLoadValues={handleLoadValues} />

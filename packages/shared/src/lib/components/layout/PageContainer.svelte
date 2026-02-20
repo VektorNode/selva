@@ -17,13 +17,13 @@
 	};
 
 	const combinedClasses = $derived(
-		`flex flex-col h-screen overflow-hidden ${backgroundClasses[background]} ${className} `
+		`flex flex-col h-screen overflow-hidden ${backgroundClasses[background]} ${className}`
 	);
 </script>
 
 <div class={combinedClasses}>
 	{@render children()}
-	<div class="z-50 mt-auto shrink-0">
+	<div class="z-50 mt-auto shrink-0 bg-background">
 		<PageFooter />
 	</div>
 </div>

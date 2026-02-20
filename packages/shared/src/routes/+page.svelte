@@ -6,8 +6,28 @@
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import PageContainer from '$lib/components/layout/PageContainer.svelte';
 	import ComputeMessages from '$lib/components/ComputeMessages.svelte';
+	import * as THREE from 'three';
 
 	const schema = exampleSchema as UISchema;
+
+	const dummyErrors = [
+		'Error: Something went wrong with the calculation. Please check your input values and try again.',
+		'Error: Unable to connect to the server. Please check your internet connection and try again.'
+	];
+
+	const dummyWarnings = [
+		'Warning: The value for "Parameter X" is approaching the maximum limit. Consider adjusting it to avoid potential issues.',
+		'Warning: The calculation may take longer than expected due to the complexity of the input values.'
+	];
+
+	const cubeMesh = new THREE.Mesh(
+		new THREE.BoxGeometry(1, 1, 1, 4, 4, 4),
+		new THREE.MeshStandardMaterial({
+			color: 0x4a90d9,
+			metalness: 0.3,
+			roughness: 0.4
+		})
+	);
 
 	let values = $state<Record<string, unknown>>(initializeValues({ schema }));
 	let isSolving = $state(false);
@@ -24,17 +44,17 @@
 	function handleCalculate() {
 		isSolving = true;
 		hasPendingChanges = false;
-		setTimeout(() => (isSolving = false), 1500);
+		setTimeout(() => (isSolving = false), 3500);
 	}
 </script>
 
 <PageContainer>
-	<PageHeader title={schema.title ?? 'Preview'} showModeToggle={true} />
+	<PageHeader title={'Test'} showModeToggle={true} />
 
 	<div class="flex flex-1 flex-col overflow-hidden bg-background">
 		<AppLayout
 			{schema}
-			meshes={[]}
+			meshes={[cubeMesh]}
 			{isSolving}
 			showSolvingIndicator={schema.instanceSolve !== false}
 			{hasPendingChanges}
@@ -53,5 +73,5 @@
 		/>
 	</div>
 
-	<ComputeMessages errors={[]} warnings={[]} />
+	<ComputeMessages errors={dummyErrors} warnings={dummyWarnings} />
 </PageContainer>

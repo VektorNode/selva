@@ -19,7 +19,7 @@ catalogs:
     mode-watcher: ^1.1.0
     prettier: ^3.8.1
     selva-compute: ^1.1.2
-    svelte: ^5.51.3
+    svelte: 5.53.0
     svelte-check: ^4.4.0
     svelte-sonner: ^1.0.7
     tailwind-merge: ^3.4.0
