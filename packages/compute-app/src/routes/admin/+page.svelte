@@ -138,7 +138,6 @@
 			if (response.ok) {
 				toast.success(`"${name}" deleted`);
 				await invalidateAll();
-				location.reload();
 			} else {
 				const err = await response.json();
 				toast.error(err.message || 'Delete failed');
@@ -167,7 +166,6 @@
 				const result = await response.json();
 				toast.success(`"${result.filename}" uploaded – old version archived`);
 				await invalidateAll();
-				location.reload();
 			} else {
 				const err = await response.json();
 				toast.error(err.message || 'Upload failed');
@@ -241,7 +239,6 @@
 				toast.success(`"${newDefDisplayName}" created`);
 				showAddModal = false;
 				await invalidateAll();
-				location.reload();
 			} else {
 				const err = await response.json();
 				toast.error(err.message || 'Failed to create definition');
@@ -627,15 +624,21 @@
 	{/if}
 
 	<!-- Add Definition Dialog -->
-	<Dialog.Root bind:open={showAddModal}>
-		<Dialog.Content class="max-w-xl">
-			<Dialog.Header>
-				<Dialog.Title>Add New Definition</Dialog.Title>
-				<Dialog.Description>Upload a Grasshopper file and fill in the metadata.</Dialog.Description>
-			</Dialog.Header>
+	{#if showAddModal}
+		<Dialog.Root
+			open={true}
+			onOpenChange={(o) => {
+				if (!o) showAddModal = false;
+			}}
+		>
+			<Dialog.Content class="max-w-xl">
+				<Dialog.Header>
+					<Dialog.Title>Add New Definition</Dialog.Title>
+					<Dialog.Description>Upload a Grasshopper file and fill in the metadata.</Dialog.Description>
+				</Dialog.Header>
 
-			<div class="space-y-4">
-				<div class="space-y-2">
+				<div class="space-y-4">
+					<div class="space-y-2">
 					<Label for="new-file">
 						Grasshopper File <span class="text-destructive">*</span>
 					</Label>
@@ -747,19 +750,20 @@
 							placeholder="https://..."
 						/>
 					{/if}
+					</div>
 				</div>
-			</div>
-			<Dialog.Footer class="gap-2 sm:justify-end">
-				<Button variant="outline" onclick={() => (showAddModal = false)}>Cancel</Button>
-				<Button
-					onclick={submitAddDefinition}
-					disabled={addingDefinition || newDefValidating || !!newDefValidationError}
-				>
-					{addingDefinition ? 'Creating…' : newDefValidating ? 'Validating…' : 'Create Definition'}
-				</Button>
-			</Dialog.Footer>
-		</Dialog.Content>
-	</Dialog.Root>
+				<Dialog.Footer class="gap-2 sm:justify-end">
+					<Button variant="outline" onclick={() => (showAddModal = false)}>Cancel</Button>
+					<Button
+						onclick={submitAddDefinition}
+						disabled={addingDefinition || newDefValidating || !!newDefValidationError}
+					>
+						{addingDefinition ? 'Creating…' : newDefValidating ? 'Validating…' : 'Create Definition'}
+					</Button>
+				</Dialog.Footer>
+			</Dialog.Content>
+		</Dialog.Root>
+	{/if}
 
 	<!-- Application Update -->
 	<Card.Root>
