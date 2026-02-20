@@ -6,8 +6,9 @@
 # Automates pulling latest changes and rebuilding the application.
 # Uses PM2 for zero-downtime updates when available.
 #
-# Usage: bash update.sh [--no-restart]
-#        bash update.sh --no-restart   # Skip PM2 restart
+# Usage: bash update.sh [--no-restart] [--branch <branch>]
+#        bash update.sh --no-restart          # Skip PM2 restart
+#        bash update.sh --branch main         # Switch to and update a specific branch
 ################################################################################
 
 set -e
@@ -22,11 +23,13 @@ NC='\033[0m' # No Color
 # Configuration
 INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
 NO_RESTART=false
+TARGET_BRANCH=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
     --no-restart) NO_RESTART=true; shift ;;
+    --branch) TARGET_BRANCH="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -74,6 +77,20 @@ CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 CURRENT_COMMIT=$(git rev-parse --short HEAD)
 print_success "Current branch: $CURRENT_BRANCH"
 print_success "Current commit: $CURRENT_COMMIT"
+
+# Switch to target branch if specified
+if [ -n "$TARGET_BRANCH" ] && [ "$TARGET_BRANCH" != "$CURRENT_BRANCH" ]; then
+  print_step "Switching to branch: $TARGET_BRANCH..."
+  git fetch origin
+  if git checkout "$TARGET_BRANCH" 2>/dev/null || git checkout -b "$TARGET_BRANCH" --track "origin/$TARGET_BRANCH" 2>/dev/null; then
+    CURRENT_BRANCH="$TARGET_BRANCH"
+    CURRENT_COMMIT=$(git rev-parse --short HEAD)
+    print_success "Switched to branch: $CURRENT_BRANCH"
+  else
+    print_error "Failed to switch to branch: $TARGET_BRANCH"
+    exit 1
+  fi
+fi
 
 # Check if PM2 is managing the app
 PM2_RUNNING=false
