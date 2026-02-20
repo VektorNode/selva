@@ -416,7 +416,7 @@
 				</div>
 			{:else}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					{#each filteredDefinitions as [guid, cfg]}
+					{#each filteredDefinitions as [guid, cfg] (guid)}
 						<Card.Root class="overflow-hidden pt-0">
 							<!-- Cover image -->
 							<div class="bg-muted h-32">

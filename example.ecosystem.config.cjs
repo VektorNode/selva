@@ -14,13 +14,16 @@ module.exports = {
 			env: {
 				PORT: 3000,
 				ORIGIN: 'http://your-public-ip',
-				COMPUTE_SERVER_URL: 'http://your-compute-server:5000',
+				COMPUTE_SERVER_URL: 'https://your-compute-server',
 				// Increase body size limit for large geometry uploads (default 512kb)
 				BODY_SIZE_LIMIT: 'Infinity',
-				// GH_DEFINITIONS_PATH: './definitions',
-				// DEFINITION_SOURCE="environment"
+				// Path to Grasshopper definitions (use absolute path)
+				GH_DEFINITIONS_PATH: '/absolute/path/to/definitions',
 				COMPUTE_API_KEY: 'your-api-key',
-				NODE_ENV: 'production'
+				NODE_ENV: 'production',
+				ADMIN_PASSWORD: 'your-secure-password',
+				// For HTTP deployments (development only), allow insecure cookies
+				// ALLOW_INSECURE_COOKIES: 'true'
 			}
 		}
 	]

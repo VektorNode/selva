@@ -77,7 +77,7 @@ export class FilesystemDefinitionStore
 		input: CreateDefinitionInput,
 		imageFile?: FileInput | null
 	): Promise<{ guid: string; filename: string; coverImage?: string }> {
-		const { file: ghFile, displayName, description, category, tags } = input;
+		const { file: ghFile, displayName, description, category, tags, coverImage: coverImageUrl } = input;
 
 		const ext = path.extname(ghFile.name).toLowerCase();
 		if (!GH_EXTENSIONS.includes(ext)) {
@@ -95,6 +95,8 @@ export class FilesystemDefinitionStore
 		let coverImage: string | undefined;
 		if (imageFile && imageFile.data.byteLength > 0) {
 			coverImage = await this._writeImage(guid, imageFile);
+		} else if (coverImageUrl) {
+			coverImage = coverImageUrl;
 		}
 
 		// Update config

@@ -31,13 +31,8 @@ Replace the entire contents with:
 :80 {
     # Reverse proxy to the Node.js app
     reverse_proxy localhost:3000 {
-        # Forward the original request headers
-        header_up X-Forwarded-For {http.request.remote.host}
-        header_up X-Forwarded-Proto {http.request.proto}
-        header_up X-Forwarded-Host {http.request.host}
-
-        # Preserve cookies with proper SameSite policy
-        header_down Set-Cookie "(.*)" "$1; SameSite=Strict"
+        # Forward the protocol so the app knows to set secure cookie flag correctly
+        header_up X-Forwarded-Proto "http"
     }
 }
 ```
@@ -49,10 +44,7 @@ Once you have a proper domain, update the config:
 ```caddy
 example.com {
     reverse_proxy localhost:3000 {
-        header_up X-Forwarded-For {http.request.remote.host}
-        header_up X-Forwarded-Proto {http.request.proto}
-        header_up X-Forwarded-Host {http.request.host}
-        header_down Set-Cookie "(.*)" "$1; SameSite=Strict"
+        header_up X-Forwarded-Proto "https"
     }
 }
 ```
@@ -96,13 +88,32 @@ sudo journalctl -u caddy -f
 
 ## Troubleshooting
 
-### Cookies Not Being Set
+### Cookies Not Being Set / Admin Login Fails
 
-**Problem:** Admin login fails, cookies not persisting
+**Problem:** You can log in, but the session cookie isn't saved and you're redirected back to login.
 
-**Solution:** Make sure `X-Forwarded-Proto` header is being passed (see config above)
+**Root Cause:** The app sets the `Secure` flag on cookies in production mode, which requires HTTPS. If you're using HTTP, the browser won't save the cookie.
 
-Your app checks `process.env.NODE_ENV === 'production'` to set the `secure` cookie flag. This flag requires HTTPS. Without the correct headers, the app doesn't know it's receiving an HTTPS request.
+**Solutions:**
+
+1. **For HTTPS (recommended):**
+   - Use a proper domain with Caddy's auto-HTTPS
+   - Caddy handles SSL certificates automatically
+   - Cookies will have the correct `Secure` flag
+
+2. **For HTTP deployments (development only):**
+   - Set `ALLOW_INSECURE_COOKIES=true` in ecosystem.config.cjs:
+     ```javascript
+     env: {
+       ALLOW_INSECURE_COOKIES: 'true'
+     }
+     ```
+   - This tells the app to create non-secure cookies on HTTP
+   - Remember to restart PM2: `pm2 restart selva-compute --update-env`
+
+3. **Ensure `X-Forwarded-Proto` header is correct:**
+   - For HTTP: `header_up X-Forwarded-Proto "http"`
+   - For HTTPS: `header_up X-Forwarded-Proto "https"`
 
 ### Connection Refused
 
@@ -132,28 +143,30 @@ sudo lsof -i :443
 ```caddy
 # Your domain or IP address
 :80 {
-    # Path to serve static files (optional)
-    # root * /var/www/selva
-
     # Reverse proxy configuration
     reverse_proxy localhost:3000 {
-        # === CRITICAL FOR SESSION/COOKIES ===
-        # These headers tell the app what the original request looked like
-        header_up X-Forwarded-For {http.request.remote.host}
-        header_up X-Forwarded-Proto {http.request.proto}
-        header_up X-Forwarded-Host {http.request.host}
+        # CRITICAL: Tell the app the original protocol
+        # This is required for secure cookie handling
+        header_up X-Forwarded-Proto "http"
+    }
+}
+```
 
-        # Ensure cookies include SameSite attribute
-        header_down Set-Cookie "(.*)" "$1; SameSite=Strict"
+**For HTTPS:**
+
+```caddy
+example.com {
+    reverse_proxy localhost:3000 {
+        header_up X-Forwarded-Proto "https"
     }
 }
 ```
 
 ## Production Checklist
 
-- ✅ Set `X-Forwarded-Proto` header
-- ✅ Set `X-Forwarded-For` header
-- ✅ Use HTTPS (Caddy auto-handles with a proper domain)
-- ✅ Set `SameSite=Strict` on cookies
-- ✅ Node.js app has `ADMIN_SECRET` configured
-- ✅ PM2 ecosystem.config.js loads `.env` file
+- ✅ Set `X-Forwarded-Proto` header (either "http" or "https")
+- ✅ Use absolute paths for `GH_DEFINITIONS_PATH` in ecosystem.config.cjs
+- ✅ Set `ADMIN_PASSWORD` in ecosystem.config.cjs
+- ✅ For HTTPS: Use a proper domain and let Caddy handle SSL
+- ✅ For HTTP (dev only): Set `ALLOW_INSECURE_COOKIES=true` in ecosystem.config.cjs
+- ✅ Restart PM2 with `--update-env` after changing environment variables: `pm2 restart selva-compute --update-env`

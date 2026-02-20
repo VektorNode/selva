@@ -33,18 +33,23 @@ curl http://localhost:3000/api/health
 
 ## Configuration
 
-Edit `packages/compute-app/ecosystem.config.cjs`:
+Edit `ecosystem.config.cjs` in the repo root:
 
 ```javascript
 env: {
 	PORT: 3000,
-	ORIGIN: 'http://your-public-ip',              // Recommended (required for strict origin/CSRF setups)
-	COMPUTE_SERVER_URL: 'http://compute-server',
-	GH_DEFINITIONS_PATH: './definitions',
+	ORIGIN: 'http://your-public-ip',              // Public URL for CSRF checks
+	COMPUTE_SERVER_URL: 'https://your-compute-server',
+	BODY_SIZE_LIMIT: 'Infinity',                  // For large file uploads
+	GH_DEFINITIONS_PATH: '/absolute/path/to/definitions',  // Use absolute path
 	COMPUTE_API_KEY: 'your-key-if-needed',
-	NODE_ENV: 'production'
+	NODE_ENV: 'production',
+	ADMIN_PASSWORD: 'your-secure-password',
+	ALLOW_INSECURE_COOKIES: 'true'                // Only for HTTP deployments (dev/testing)
 }
 ```
+
+**Important:** Always use **absolute paths** for `GH_DEFINITIONS_PATH`. Relative paths are resolved from the working directory where PM2 starts, which may differ from your expectations.
 
 **Required variables:**
 

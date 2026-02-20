@@ -4,10 +4,7 @@
 # Development / Testing (HTTP only, IP address)
 :80 {
     reverse_proxy localhost:3000 {
-        header_up X-Forwarded-For {http.request.remote.host}
-        header_up X-Forwarded-Proto {http.request.proto}
-        header_up X-Forwarded-Host {http.request.host}
-        header_down Set-Cookie "(.*)" "$1; SameSite=Strict"
+        header_up X-Forwarded-Proto "http"
     }
 }
 
@@ -16,10 +13,7 @@
 #
 # example.com {
 #     reverse_proxy localhost:3000 {
-#         header_up X-Forwarded-For {http.request.remote.host}
-#         header_up X-Forwarded-Proto {http.request.proto}
-#         header_up X-Forwarded-Host {http.request.host}
-#         header_down Set-Cookie "(.*)" "$1; SameSite=Strict"
+#         header_up X-Forwarded-Proto "https"
 #     }
 # }
 #
