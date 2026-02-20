@@ -19,6 +19,18 @@
 			],
 			"coverImage": "/api/definitions/de4a97f9-b003-42b3-a895-9678183a3770/image/pawel-czerwinski-6lQDFGOB1iw-unsplash.jpg",
 			"file": "table_example.gh"
+		},
+		"f83c1b5a-6bff-49c6-8ca9-8b9d6a1a9c0b": {
+			"displayName": "Sheet Analyzer",
+			"description": "This is a test definition for analyzing sheets. (SheepMetal needs to be installed on the rhino.compute server for this definition to work)",
+			"category": "Example",
+			"tags": [
+				"sheet",
+				"analyze",
+				"sheepmetal"
+			],
+			"coverImage": "https://images.unsplash.com/photo-1562065540-efa93744ed71?q=80&w=1740&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+			"file": "Sheet_Analyzer.gh"
 		}
 	}
 }

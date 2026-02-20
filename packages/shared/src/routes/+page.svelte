@@ -3,6 +3,9 @@
 	import AppLayout from '$lib/components/AppLayout.svelte';
 	import { initializeValues } from '$lib/features/preview/handlers';
 	import exampleSchema from '$lib/example-schema.json';
+	import PageHeader from '$lib/components/layout/PageHeader.svelte';
+	import PageContainer from '$lib/components/layout/PageContainer.svelte';
+	import ComputeMessages from '$lib/components/ComputeMessages.svelte';
 
 	const schema = exampleSchema as UISchema;
 
@@ -25,21 +28,30 @@
 	}
 </script>
 
-<div class="flex h-screen flex-col overflow-hidden">
-	<div class="border-b px-4 py-1.5 flex items-center justify-between shrink-0">
-		<h1 class="text-sm font-semibold">{schema.name}</h1>
-		<span class="text-xs text-muted-foreground">Preview</span>
+<PageContainer>
+	<PageHeader title={schema.title ?? 'Preview'} showModeToggle={true} />
+
+	<div class="flex flex-1 flex-col overflow-hidden bg-background">
+		<AppLayout
+			{schema}
+			meshes={[]}
+			{isSolving}
+			showSolvingIndicator={schema.instanceSolve !== false}
+			{hasPendingChanges}
+			bind:isViewerFullscreen
+			bind:values
+			onValueChange={handleValueChange}
+			environment="compute"
+			oncalculate={handleCalculate}
+			onLoadValues={async () => {
+				if (schema?.instanceSolve !== false) {
+					console.log('Performing solve on load values...');
+				} else {
+					hasPendingChanges = true;
+				}
+			}}
+		/>
 	</div>
-	<AppLayout
-		{schema}
-		meshes={[]}
-		{isSolving}
-		showSolvingIndicator={schema.instanceSolve !== false && isSolving}
-		{hasPendingChanges}
-		bind:isViewerFullscreen
-		bind:values
-		onValueChange={handleValueChange}
-		oncalculate={handleCalculate}
-		environment="local"
-	/>
-</div>
+
+	<ComputeMessages errors={[]} warnings={[]} />
+</PageContainer>

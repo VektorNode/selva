@@ -11,6 +11,8 @@ export const DefinitionMetadataSchema = z.object({
 	coverImage: z.string().max(2048).optional(),
 	category: z.string().max(128).optional(),
 	tags: z.array(z.string().max(64)).max(20).optional(),
+	author: z.string().max(128).optional(),
+	lastUpdated: z.date().optional(),
 	file: z.string().optional()
 });
 
