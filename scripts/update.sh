@@ -6,10 +6,11 @@
 # Automates pulling latest changes and rebuilding the application.
 # Uses PM2 for zero-downtime updates when available.
 #
-# Usage: bash update.sh [--no-restart] [--branch <branch>] [--no-pull]
+# Usage: bash update.sh [--no-restart] [--branch <branch>] [--no-pull] [--restart-only]
 #        bash update.sh --no-restart          # Skip PM2 restart
 #        bash update.sh --branch main         # Switch to and update a specific branch
 #        bash update.sh --no-pull             # Skip git pull, only build and restart
+#        bash update.sh --restart-only        # Only restart the PM2 process, skip everything else
 ################################################################################
 
 set -e
@@ -25,6 +26,7 @@ NC='\033[0m' # No Color
 INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
 NO_RESTART=false
 NO_PULL=false
+RESTART_ONLY=false
 TARGET_BRANCH=""
 
 # Parse arguments
@@ -32,6 +34,7 @@ while [[ $# -gt 0 ]]; do
   case $1 in
     --no-restart) NO_RESTART=true; shift ;;
     --no-pull) NO_PULL=true; shift ;;
+    --restart-only) RESTART_ONLY=true; shift ;;
     --branch) TARGET_BRANCH="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
@@ -104,6 +107,10 @@ if command -v pm2 >/dev/null 2>&1; then
   fi
 fi
 
+if [ "$RESTART_ONLY" = true ]; then
+  print_warning "Restart-only mode — skipping pull, deps, and build"
+else
+
 ################################################################################
 # 2. PULL LATEST CHANGES
 ################################################################################
@@ -129,7 +136,25 @@ else
   fi
 
   print_step "Pulling changes from origin/$CURRENT_BRANCH..."
-  git pull origin $CURRENT_BRANCH
+  if ! git pull origin $CURRENT_BRANCH; then
+    # Check if the failure was due to merge conflicts
+    if git diff --name-only --diff-filter=U | grep -q .; then
+      print_error "Merge conflicts detected! Aborting merge..."
+      git merge --abort 2>/dev/null || true
+      echo ""
+      echo "Conflicting files:"
+      git diff --name-only --diff-filter=U
+      echo ""
+      echo "To resolve manually:"
+      echo "  1. cd $INSTALL_DIR"
+      echo "  2. git pull origin $CURRENT_BRANCH"
+      echo "  3. Resolve conflicts, then: git add . && git commit"
+      echo "  4. Re-run: bash update.sh --no-pull"
+    else
+      print_error "git pull failed. Check your network connection or repository access."
+    fi
+    exit 1
+  fi
 
   NEW_COMMIT=$(git rev-parse --short HEAD)
   print_success "Updated to: $NEW_COMMIT"
@@ -161,6 +186,8 @@ cd "$INSTALL_DIR/packages/compute-app"
 export ADAPTER=node
 pnpm build
 print_success "Compute-app built"
+
+fi # end of restart-only skip block
 
 ################################################################################
 # 5. RESTART APPLICATION
