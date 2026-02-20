@@ -29,7 +29,11 @@ Add your configuration:
 
 ```caddy
 :80 {
-    reverse_proxy localhost:3000
+	reverse_proxy localhost:3000 {
+		header_up X-Forwarded-For {http.request.remote.host}
+		header_up X-Forwarded-Proto {http.request.proto}
+		header_up X-Forwarded-Host {http.request.host}
+	}
 }
 ```
 
@@ -37,11 +41,15 @@ Add your configuration:
 
 ```caddy
 example.com {
-    reverse_proxy localhost:3000
+	reverse_proxy localhost:3000 {
+		header_up X-Forwarded-For {http.request.remote.host}
+		header_up X-Forwarded-Proto {http.request.proto}
+		header_up X-Forwarded-Host {http.request.host}
+	}
 }
 ```
 
-> **Note:** HTTPS requires a domain. If you use a raw IP address, you will be limited to HTTP. Caddy automatically handles HTTPS certificates only when a valid domain name is used.
+> **Note:** HTTPS requires a domain. If you use a raw IP address, you will be limited to HTTP. Caddy automatically handles HTTPS certificates only when a valid domain name is used. The `X-Forwarded-*` headers are important for the app to correctly detect the original client IP and protocol.
 
 **Use ecosystem.config.cjs** (note: `.cjs` for CommonJS in ES module projects):
 
@@ -60,10 +68,15 @@ module.exports = {
 			max_memory_restart: '1G',
 			env: {
 				PORT: 3000,
-				ORIGIN: 'http://your-server-ip', // Replace with http://IP or https://domain
+				// ORIGIN: Public URL where users access the app (no trailing slash)
+				// Important: This must match the URL users see in their browser
+				ORIGIN: 'http://your-server-ip', // or https://example.com
 				COMPUTE_SERVER_URL: 'http://your-compute-server:5000',
 				GH_DEFINITIONS_PATH: './definitions',
 				COMPUTE_API_KEY: 'your-api-key',
+				BODY_SIZE_LIMIT: 'Infinity',
+				ADMIN_PASSWORD: 'your-secure-password',
+				ADMIN_SECRET: 'your-32-plus-char-secret',
 				NODE_ENV: 'production'
 			}
 		}
@@ -117,6 +130,40 @@ Create firewall rules to allow port 80 and 443:
 
 Then add the `http-server` and `https-server` tags to your VM instance.
 
+## Troubleshooting
+
+### Double Slashes in Requests (`//admin`, `//favicon.svg`)
+
+**Symptom:** You see `[404] GET //admin` in PM2 logs
+
+**Cause:** Mismatch between Caddy routing and app's ORIGIN setting
+
+**Fix:** Ensure your Caddyfile includes proper headers and your ORIGIN matches the public URL:
+
+```caddy
+:80 {
+	reverse_proxy localhost:3000 {
+		header_up X-Forwarded-For {http.request.remote.host}
+		header_up X-Forwarded-Proto {http.request.proto}
+		header_up X-Forwarded-Host {http.request.host}
+	}
+}
+```
+
+Then verify `ecosystem.config.cjs` has correct ORIGIN (**NO trailing slash**):
+```javascript
+ORIGIN: 'http://34.52.176.223', // ✅ Correct
+ORIGIN: 'http://34.52.176.223/', // ❌ Wrong - trailing slash causes double slashes
+```
+
+> **Important:** The ORIGIN must NOT have a trailing slash. Even a single `/` at the end will cause all routes to be prefixed with an extra `/`, resulting in `//admin`, `//favicon.svg`, etc.
+
+After fixing, reload both services:
+```bash
+sudo caddy reload --config /etc/caddy/Caddyfile
+pm2 restart selva-compute
+```
+
 ## Useful Commands
 
 **Caddy:**
@@ -128,4 +175,6 @@ sudo pkill -f "caddy run"
 # View Caddy status
 ps aux | grep caddy
 
+# Reload config (apply changes without downtime)
+sudo caddy reload --config /etc/caddy/Caddyfile
 ```

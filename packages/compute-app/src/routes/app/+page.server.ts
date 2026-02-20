@@ -41,8 +41,6 @@ export const load = (async ({ url, params: _params }) => {
 			const configPath = path.join(config.ghDefinitionsPath, 'definitions-config.json');
 			msg = `No definitions configured.\n\nPlease create a definitions-config.json file at:\n${configPath}\n\nSee definitions-config.example.json for the format.`;
 			if (loadError) msg += `\n\nError details: ${loadError.message}`;
-		} else {
-			msg += ' Please configure GH_DEFINITIONS_PATH or GH_DEF_* environment variables.';
 		}
 		throw error(400, msg);
 	}
@@ -56,9 +54,6 @@ export const load = (async ({ url, params: _params }) => {
 
 		if (config.ghDefinitionsPath) {
 			console.warn(` - If running in Docker, ensure volumes are mounted correctly.`);
-			console.warn(
-				` - If running in Vercel/Cloud, local file access is often restricted. Use the environment loader with GH_DEF_* variables instead.`
-			);
 		}
 
 		throw error(400, `Failed to load definition '${ghFilename}': ${errMsg}`);

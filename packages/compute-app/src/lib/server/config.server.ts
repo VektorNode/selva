@@ -10,17 +10,12 @@ import { env } from '$env/dynamic/private';
  * Optional:
  * - COMPUTE_API_KEY: API key for Rhino.Compute (if required by server)
  *
- * For remote definitions, use the environment loader:
- * - Set DEFINITION_SOURCE="environment"
- * - Define GH_DEF_* environment variables with definition URLs
- *
  * @throws {Error} If required variables are missing or invalid
  * @returns Server configuration object
  */
 export function getServerConfig() {
 	const computeServerUrl = env.COMPUTE_SERVER_URL;
 	const ghDefinitionsPath = env.GH_DEFINITIONS_PATH;
-	const definitionSource = env.DEFINITION_SOURCE || 'filesystem';
 
 	// Validate: COMPUTE_SERVER_URL is required
 	if (!computeServerUrl) {
@@ -39,8 +34,8 @@ export function getServerConfig() {
 		throw new Error(message);
 	}
 
-	// Validate: GH_DEFINITIONS_PATH is only required for filesystem source
-	if (definitionSource === 'filesystem' && !ghDefinitionsPath) {
+	// Validate: GH_DEFINITIONS_PATH is required
+	if (!ghDefinitionsPath) {
 		const message = [
 			'❌ GH_DEFINITIONS_PATH is not set!',
 			'',
@@ -50,11 +45,6 @@ export function getServerConfig() {
 			'Examples:',
 			'  - GH_DEFINITIONS_PATH="./definitions"',
 			'  - GH_DEFINITIONS_PATH="/opt/grasshopper-defs"',
-			'',
-			'For remote definitions via environment variables, use the environment loader:',
-			'  - Set DEFINITION_SOURCE="environment"',
-			'  - Set GH_DEF_PREFIX="GH_DEF_" (optional, defaults to this)',
-			'  - Define definitions as GH_DEF_MYDEF="https://storage.mycompany.com/mydef.gh"',
 			'',
 			'See .env.example for more details.'
 		].join('\n');
