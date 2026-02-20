@@ -202,9 +202,8 @@ if [ "$NO_RESTART" = false ]; then
     # Wait for restart
     sleep 2
 
-    # Check status
-    PM2_STATUS=$(pm2 describe selva-compute | grep -oP "status\s+:\s+\K\w+" || echo "unknown")
-    if [ "$PM2_STATUS" = "online" ]; then
+    # Check status - just verify the process is running
+    if pm2 list | grep -q "selva-compute.*online"; then
       print_success "Application restarted successfully"
       pm2 status
     else

@@ -10,16 +10,6 @@ interface SessionData {
   timestamp: number;
 }
 
-/**
- * Creates an HMAC signature for the session token
- */
-function signToken(token: string): string {
-  const adminSecret = env.ADMIN_SECRET;
-  if (!adminSecret) {
-    throw new Error('ADMIN_SECRET not configured');
-  }
-  return createHmac('sha256', adminSecret).update(token).digest('hex');
-}
 
 /**
  * Verifies the session cookie and returns true if valid
@@ -32,17 +22,17 @@ export function verifySession(cookies: Cookies): boolean {
 
   try {
     const sessionData: SessionData = JSON.parse(sessionValue);
-    const expectedSignature = signToken(sessionData.token);
 
-    // Verify signature matches
+    // Verify the token signature is valid
     const adminSecret = env.ADMIN_SECRET;
     if (!adminSecret) return false;
 
-    const actualSignature = createHmac('sha256', adminSecret)
+    const computedSignature = createHmac('sha256', adminSecret)
       .update(sessionData.token)
       .digest('hex');
 
-    if (actualSignature !== expectedSignature) {
+    // The stored token should match the computed signature
+    if (sessionData.token !== computedSignature) {
       return false;
     }
 
