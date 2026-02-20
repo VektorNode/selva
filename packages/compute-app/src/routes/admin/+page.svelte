@@ -227,8 +227,8 @@
 		formData.append('tags', newDefTags);
 		if (newDefImageMode === 'upload' && newDefImageInput?.files?.[0]) {
 			formData.append('image', newDefImageInput.files[0]);
-		} else if (newDefCoverImage) {
-			formData.append('coverImage', newDefCoverImage);
+		} else if (newDefImageMode === 'url') {
+			formData.append('coverImage', newDefCoverImage || '');
 		}
 		console.log('[submitAddDefinition]', {
 			imageMode: newDefImageMode,
