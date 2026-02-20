@@ -99,16 +99,19 @@ export class FilesystemDefinitionStore
 			coverImage = coverImageUrl;
 		}
 
-		// Update config
+		// Update config - initialize all properties with proper defaults
 		const config = await this.readConfig();
-		config.definitions[guid] = {
+		const newEntry: DefinitionMetadata & { file: string } = {
 			displayName: displayName.trim(),
-			...(description ? { description } : {}),
-			...(category ? { category } : {}),
-			...(tags && tags.length > 0 ? { tags } : {}),
-			...(coverImage ? { coverImage } : {}),
 			file: ghFile.name
 		};
+
+		if (description) newEntry.description = description;
+		if (category) newEntry.category = category;
+		if (tags && tags.length > 0) newEntry.tags = tags;
+		if (coverImage) newEntry.coverImage = coverImage;
+
+		config.definitions[guid] = newEntry;
 		await this.writeConfig(config);
 
 		return { guid, filename: ghFile.name, coverImage };
@@ -119,15 +122,38 @@ export class FilesystemDefinitionStore
 		const existing = config.definitions[guid];
 		if (!existing) throw new Error(`Definition '${guid}' not found`);
 
-		// Preserve `file` field; merge everything else
-		config.definitions[guid] = {
-			...existing,
-			...(patch.displayName !== undefined ? { displayName: patch.displayName } : {}),
-			...(patch.description !== undefined ? { description: patch.description } : {}),
-			...(patch.category !== undefined ? { category: patch.category } : {}),
-			...(patch.tags !== undefined ? { tags: patch.tags } : {}),
-			...(patch.coverImage !== undefined ? { coverImage: patch.coverImage } : {})
-		};
+		// Merge patch into existing, preserving all properties including file
+		const updated = {
+			displayName: patch.displayName ?? existing.displayName,
+			file: existing.file || ''
+		} as DefinitionMetadata & { file: string };
+
+		// Only include optional properties if they have values
+		if (patch.description !== undefined) {
+			if (patch.description) updated.description = patch.description;
+		} else if (existing.description) {
+			updated.description = existing.description;
+		}
+
+		if (patch.category !== undefined) {
+			if (patch.category) updated.category = patch.category;
+		} else if (existing.category) {
+			updated.category = existing.category;
+		}
+
+		if (patch.tags !== undefined) {
+			if (patch.tags && patch.tags.length > 0) updated.tags = patch.tags;
+		} else if (existing.tags) {
+			updated.tags = existing.tags;
+		}
+
+		if (patch.coverImage !== undefined) {
+			if (patch.coverImage) updated.coverImage = patch.coverImage;
+		} else if (existing.coverImage) {
+			updated.coverImage = existing.coverImage;
+		}
+
+		config.definitions[guid] = updated;
 		await this.writeConfig(config);
 	}
 
