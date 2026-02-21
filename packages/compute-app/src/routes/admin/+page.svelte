@@ -243,7 +243,7 @@
 			if (response.ok) {
 				toast.success(`"${newDefDisplayName}" created`);
 				showAddModal = false;
-				// await invalidateAll(); // TEMP: disabled to inspect network request
+				await invalidateAll(); // TEMP: disabled to inspect network request
 			} else {
 				toast.error(await getErrorMessage(response, 'Failed to create definition'));
 			}
