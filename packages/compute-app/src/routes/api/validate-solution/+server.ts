@@ -37,13 +37,14 @@ export const POST: RequestHandler = async ({ request }) => {
 			body: formData
 		});
 
-	} catch (err) {
-		throw error(502, `Could not reach compute server: ${err instanceof Error ? err.message : String(err)}`);
+	} catch {
+		// Compute server unreachable — validation not available
+		throw error(404, 'Validation endpoint not available');
 	}
 
 	if (!response.ok) {
-		const body = await response.text().catch(() => response.statusText);
-		throw error(response.status, `Compute server error: ${body}`);
+		// Compute server doesn't support this endpoint or returned an error — treat as unavailable
+		throw error(404, 'Validation endpoint not available');
 	}
 
 	let raw: unknown;
