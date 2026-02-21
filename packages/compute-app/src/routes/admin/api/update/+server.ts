@@ -13,7 +13,7 @@ function stripAnsi(str: string): string {
 export const POST: RequestHandler = async () => {
   // Fall back to cwd — PM2 launches from the repo root so process.cwd() is the install dir
   const installDir = env.INSTALL_DIR || process.cwd();
-  const updateScript = join(installDir, 'update.sh');
+  const updateScript = join(installDir, 'scripts', 'update.sh');
 
   const stream = new ReadableStream({
     start(controller) {
