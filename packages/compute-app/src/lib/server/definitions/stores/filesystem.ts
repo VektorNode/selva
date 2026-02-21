@@ -150,7 +150,9 @@ export class FilesystemDefinitionStore
 		}
 
 		if (patch.coverImage !== undefined) {
+			// empty string = explicit clear; non-empty string = set new value
 			if (patch.coverImage) updated.coverImage = patch.coverImage;
+			// else: leave updated.coverImage unset (clears it)
 		} else if (existing.coverImage) {
 			updated.coverImage = existing.coverImage;
 		}
@@ -238,9 +240,23 @@ export class FilesystemDefinitionStore
 		if (!ALLOWED_IMAGE_EXTENSIONS.includes(ext)) {
 			throw new Error(`Unsupported image type. Allowed: ${ALLOWED_IMAGE_EXTENSIONS.join(', ')}`);
 		}
+
+		// Delete any existing image files in the GUID folder before writing the new one
+		const guidDir = this.guidPath(guid);
+		try {
+			const entries = await fs.readdir(guidDir);
+			for (const entry of entries) {
+				if (ALLOWED_IMAGE_EXTENSIONS.includes(path.extname(entry).toLowerCase())) {
+					await fs.rm(path.join(guidDir, entry), { force: true });
+				}
+			}
+		} catch {
+			// Directory may not exist yet for brand-new definitions — that's fine
+		}
+
 		const safeFilename = image.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-		const filePath = path.join(this.guidPath(guid), safeFilename);
+		const filePath = path.join(guidDir, safeFilename);
 		await fs.writeFile(filePath, Buffer.from(image.data));
-		return `/api/definitions/${guid}/image/${safeFilename}`;
+		return `/admin/api/definitions/${guid}/image/${safeFilename}`;
 	}
 }

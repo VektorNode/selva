@@ -109,10 +109,10 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					displayName: cfg.displayName,
-					description: cfg.description,
-					category: cfg.category,
-					tags: cfg.tags,
-					coverImage: cfg.coverImage
+					description: cfg.description?.trim() || undefined,
+					category: cfg.category?.trim() || undefined,
+					tags: cfg.tags && cfg.tags.length > 0 ? cfg.tags : undefined,
+					coverImage: cfg.coverImage ?? undefined
 				})
 			});
 			if (response.ok) {

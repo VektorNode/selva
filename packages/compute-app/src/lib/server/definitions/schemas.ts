@@ -21,8 +21,15 @@ export const CreateDefinitionInputSchema = DefinitionMetadataSchema.omit({ file:
 	displayName: z.string().min(1, 'Display name is required')
 });
 
-/** Partial patch for updating an existing definition */
-export const UpdateMetadataInputSchema = DefinitionMetadataSchema.omit({ file: true }).partial();
+/** Partial patch for updating an existing definition.
+ * Uses nullish() on string fields so null values (e.g. from manual config edits) are
+ * coerced to undefined instead of failing validation. */
+export const UpdateMetadataInputSchema = DefinitionMetadataSchema.omit({ file: true, lastUpdated: true }).extend({
+	description: z.string().max(2000).nullish().transform((v) => v ?? undefined),
+	coverImage: z.string().max(2048).nullish().transform((v) => v ?? undefined),
+	category: z.string().max(128).nullish().transform((v) => v ?? undefined),
+	author: z.string().max(128).nullish().transform((v) => v ?? undefined)
+}).partial();
 
 export type CreateDefinitionMetadata = z.infer<typeof CreateDefinitionInputSchema>;
 export type UpdateMetadataInput = z.infer<typeof UpdateMetadataInputSchema>;
