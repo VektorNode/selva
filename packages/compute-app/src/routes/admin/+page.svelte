@@ -224,7 +224,7 @@
 		}
 		addingDefinition = true;
 		const formData = new FormData();
-		formData.append('file', newDefFileInput.files[0]);
+		// Text fields first — large binary last to avoid proxy truncation dropping metadata
 		formData.append('displayName', newDefDisplayName.trim());
 		formData.append('description', newDefDescription);
 		formData.append('category', newDefCategory);
@@ -232,9 +232,9 @@
 		if (newDefImageMode === 'upload' && newDefImageInput?.files?.[0]) {
 			formData.append('image', newDefImageInput.files[0]);
 		} else if (newDefImageMode === 'url' && newDefCoverImage.trim()) {
-			// Only append coverImage URL if it's not empty
 			formData.append('coverImage', newDefCoverImage.trim());
 		}
+		formData.append('file', newDefFileInput.files[0]);
 		try {
 			const response = await fetch('/admin/api/definitions', {
 				method: 'POST',
