@@ -198,7 +198,7 @@ if [ "$NO_RESTART" = false ]; then
   if [ "$PM2_RUNNING" = true ]; then
     print_step "Restarting with PM2..."
     cd "$INSTALL_DIR"
-    pm2 start ecosystem.config.js --only selva-compute --update-env
+    pm2 start "$INSTALL_DIR/ecosystem.config.cjs" --only selva-compute --update-env
 
     # Wait for restart
     sleep 2

@@ -221,6 +221,25 @@ export class FilesystemDefinitionStore
 		return file.name;
 	}
 
+	async revertFile(guid: string, archivedFilename: string): Promise<string> {
+		const oldFilesDir = path.join(this.guidPath(guid), 'old_files');
+		const archivedPath = path.join(oldFilesDir, archivedFilename);
+
+		// Validate the archived file actually exists and is a GH file
+		const ext = path.extname(archivedFilename).toLowerCase();
+		if (!GH_EXTENSIONS.includes(ext)) {
+			throw new Error('Invalid archived file type');
+		}
+
+		const data = await fs.readFile(archivedPath);
+
+		// Strip timestamp prefix (format: "2024-01-01T00-00-00-000Z_originalname.gh")
+		const originalName = archivedFilename.replace(/^[^_]+_/, '');
+
+		// replaceFile archives the current file and writes the restored one
+		return this.replaceFile(guid, { name: originalName, data: data.buffer });
+	}
+
 	async saveImage(guid: string, image: FileInput): Promise<string> {
 		const coverImage = await this._writeImage(guid, image);
 

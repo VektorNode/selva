@@ -54,6 +54,9 @@
 	let editModeFileInputs = $state<{ [guid: string]: HTMLInputElement }>({});
 	let editModeImageInputs = $state<{ [guid: string]: HTMLInputElement }>({});
 	let editImageModes = $state<{ [guid: string]: 'url' | 'upload' }>({});
+	let revertingFile = $state<{ [guid: string]: string | null }>({});
+	let editModeFileHasFile = $state<{ [guid: string]: boolean }>({});
+	let editModeImageHasFile = $state<{ [guid: string]: boolean }>({});
 
 	// Add modal state
 	let showAddModal = $state(false);
@@ -126,7 +129,7 @@
 					displayName: cfg.displayName,
 					description: cfg.description?.trim() || undefined,
 					category: cfg.category?.trim() || undefined,
-					tags: cfg.tags && cfg.tags.length > 0 ? cfg.tags : undefined,
+					tags: cfg.tags && cfg.tags.length > 0 ? [...new Set(cfg.tags)] : undefined,
 					coverImage: cfg.coverImage ?? undefined
 				})
 			});
@@ -217,6 +220,28 @@
 		} finally {
 			uploadingDefinitionImage[guid] = false;
 			input.value = '';
+		}
+	}
+
+	async function revertDefinitionFile(guid: string, archivedFilename: string) {
+		revertingFile[guid] = archivedFilename;
+		try {
+			const response = await fetch(`/admin/api/definitions/${guid}/revert`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ filename: archivedFilename })
+			});
+			if (response.ok) {
+				const result = await response.json();
+				toast.success(`Reverted to "${result.filename}"`);
+				await invalidateAll();
+			} else {
+				toast.error(await getErrorMessage(response, 'Revert failed'));
+			}
+		} catch (err) {
+			toast.error('Revert failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+		} finally {
+			revertingFile[guid] = null;
 		}
 	}
 
@@ -525,10 +550,10 @@
 								value={cfg.tags?.join(', ') || ''}
 								oninput={(e: Event) => {
 									const t = e.currentTarget as HTMLInputElement;
-									cfg.tags = t.value
+									cfg.tags = [...new Set(t.value
 										.split(',')
 										.map((s: string) => s.trim())
-										.filter(Boolean);
+										.filter(Boolean))];
 								}}
 								placeholder="comma, separated"
 							/>
@@ -560,12 +585,13 @@
 									type="file"
 									bind:this={editModeImageInputs[guid]}
 									accept="image/*"
+									onchange={() => (editModeImageHasFile[guid] = !!editModeImageInputs[guid]?.files?.length)}
 									class="border-input bg-background focus-visible:ring-ring flex h-10 flex-1 rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
 								/>
 								<Button
 									size="sm"
 									onclick={() => handleDefinitionImageUpload(guid)}
-									disabled={uploadingDefinitionImage[guid]}
+									disabled={uploadingDefinitionImage[guid] || !editModeImageHasFile[guid]}
 								>
 									<Upload class="mr-2 h-4 w-4" />
 									{uploadingDefinitionImage[guid] ? 'Uploading…' : 'Upload'}
@@ -575,7 +601,12 @@
 								<p class="text-muted-foreground text-xs">✓ Image saved in definition folder</p>
 							{/if}
 						{:else}
-							<Input type="text" bind:value={cfg.coverImage} placeholder="https://..." />
+							<Input
+								type="text"
+								value={cfg.coverImage?.startsWith('/admin/') ? '' : (cfg.coverImage ?? '')}
+								oninput={(e: Event) => { cfg.coverImage = (e.currentTarget as HTMLInputElement).value; }}
+								placeholder="https://..."
+							/>
 						{/if}
 					</div>
 
@@ -597,12 +628,13 @@
 								type="file"
 								bind:this={editModeFileInputs[guid]}
 								accept=".gh,.ghx"
+								onchange={() => (editModeFileHasFile[guid] = !!editModeFileInputs[guid]?.files?.length)}
 								class="border-input bg-background focus-visible:ring-ring flex h-10 flex-1 rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
 							/>
 							<Button
 								size="sm"
 								onclick={() => handleDefinitionFileUpload(guid)}
-								disabled={uploadingDefinitionFile[guid]}
+								disabled={uploadingDefinitionFile[guid] || !editModeFileHasFile[guid]}
 							>
 								<Upload class="mr-2 h-4 w-4" />
 								{uploadingDefinitionFile[guid] ? 'Uploading…' : 'Upload'}
@@ -616,9 +648,20 @@
 							<p class="text-muted-foreground flex items-center gap-1 text-xs font-medium">
 								<History class="h-3 w-3" /> Archived versions
 							</p>
-							<ul class="space-y-0.5">
+							<ul class="space-y-1">
 								{#each data.history[guid] as old}
-									<li class="text-muted-foreground truncate font-mono text-xs">{old}</li>
+									<li class="flex items-center gap-2">
+										<span class="text-muted-foreground min-w-0 flex-1 truncate font-mono text-xs">{old}</span>
+										<Button
+											size="sm"
+											variant="outline"
+											class="h-6 shrink-0 px-2 text-xs"
+											disabled={revertingFile[guid] === old}
+											onclick={() => revertDefinitionFile(guid, old)}
+										>
+											{revertingFile[guid] === old ? 'Reverting…' : 'Revert'}
+										</Button>
+									</li>
 								{/each}
 							</ul>
 						</div>

@@ -91,6 +91,9 @@ export interface IDefinitionStore extends IDefinitionLoader {
 	/** Replace the active GH file, archiving the previous one */
 	replaceFile(guid: string, file: FileInput): Promise<string>;
 
+	/** Restore an archived file as the active file, archiving the current one */
+	revertFile(guid: string, archivedFilename: string): Promise<string>;
+
 	/** Save a cover image into the GUID folder and update config */
 	saveImage(guid: string, image: FileInput): Promise<string>;
 

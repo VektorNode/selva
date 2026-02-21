@@ -11,14 +11,8 @@ function stripAnsi(str: string): string {
 
 // POST - Run update script and stream output via Server-Sent Events
 export const POST: RequestHandler = async () => {
-  if (!env.INSTALL_DIR) {
-    return new Response(
-      JSON.stringify({ error: 'INSTALL_DIR environment variable is not set' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  const installDir = env.INSTALL_DIR;
+  // Fall back to cwd — PM2 launches from the repo root so process.cwd() is the install dir
+  const installDir = env.INSTALL_DIR || process.cwd();
   const updateScript = join(installDir, 'update.sh');
 
   const stream = new ReadableStream({
