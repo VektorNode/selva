@@ -91,7 +91,7 @@ export class FilesystemDefinitionStore
 		// Write GH file
 		await fs.writeFile(path.join(guidDir, ghFile.name), Buffer.from(ghFile.data));
 
-		// Optionally write image
+		// Handle image - either from file upload or URL
 		let coverImage: string | undefined;
 		if (imageFile && imageFile.data.byteLength > 0) {
 			coverImage = await this._writeImage(guid, imageFile);
@@ -99,17 +99,19 @@ export class FilesystemDefinitionStore
 			coverImage = coverImageUrl;
 		}
 
-		// Update config - initialize all properties with proper defaults
+		// Update config - initialize all properties consistently
 		const config = await this.readConfig();
 		const newEntry: DefinitionMetadata & { file: string } = {
 			displayName: displayName.trim(),
 			file: ghFile.name
 		};
 
+		// Always add optional properties if they have values (even if just a space)
 		if (description) newEntry.description = description;
 		if (category) newEntry.category = category;
 		if (tags && tags.length > 0) newEntry.tags = tags;
-		if (coverImage) newEntry.coverImage = coverImage;
+		// Always preserve coverImage if it exists (whether URL or file path)
+		if (coverImage !== undefined) newEntry.coverImage = coverImage;
 
 		config.definitions[guid] = newEntry;
 		await this.writeConfig(config);
