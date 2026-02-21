@@ -38,14 +38,19 @@ export class FilesystemDefinitionStore
 		try {
 			const content = await fs.readFile(configPath, 'utf-8');
 			return JSON.parse(content) as DefinitionsConfig;
-		} catch {
-			return { definitions: {} };
+		} catch (err) {
+			if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+				return { definitions: {} };
+			}
+			throw err;
 		}
 	}
 
 	private async writeConfig(config: DefinitionsConfig): Promise<void> {
 		const configPath = this.getConfigFilePath();
-		await fs.writeFile(configPath, JSON.stringify(config, null, '\t'), 'utf-8');
+		const tmpPath = `${configPath}.tmp`;
+		await fs.writeFile(tmpPath, JSON.stringify(config, null, '\t'), 'utf-8');
+		await fs.rename(tmpPath, configPath);
 		// Invalidate the loader cache immediately so subsequent reads see the new data
 		this.configCache = undefined;
 	}
@@ -241,22 +246,25 @@ export class FilesystemDefinitionStore
 			throw new Error(`Unsupported image type. Allowed: ${ALLOWED_IMAGE_EXTENSIONS.join(', ')}`);
 		}
 
-		// Delete any existing image files in the GUID folder before writing the new one
+		// Write new image first, then remove old ones — avoids data loss if write fails
 		const guidDir = this.guidPath(guid);
-		try {
-			const entries = await fs.readdir(guidDir);
-			for (const entry of entries) {
-				if (ALLOWED_IMAGE_EXTENSIONS.includes(path.extname(entry).toLowerCase())) {
-					await fs.rm(path.join(guidDir, entry), { force: true });
-				}
-			}
-		} catch {
-			// Directory may not exist yet for brand-new definitions — that's fine
-		}
+		await fs.mkdir(guidDir, { recursive: true });
 
 		const safeFilename = image.name.replace(/[^a-zA-Z0-9._-]/g, '_');
 		const filePath = path.join(guidDir, safeFilename);
 		await fs.writeFile(filePath, Buffer.from(image.data));
+
+		try {
+			const entries = await fs.readdir(guidDir);
+			for (const entry of entries) {
+				if (entry !== safeFilename && ALLOWED_IMAGE_EXTENSIONS.includes(path.extname(entry).toLowerCase())) {
+					await fs.rm(path.join(guidDir, entry), { force: true });
+				}
+			}
+		} catch {
+			// Non-fatal — old image cleanup is best-effort
+		}
+
 		return `/admin/api/definitions/${guid}/image/${safeFilename}`;
 	}
 }

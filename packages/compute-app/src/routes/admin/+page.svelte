@@ -96,6 +96,14 @@
 		})
 	);
 
+	async function getErrorMessage(response: Response, fallback: string): Promise<string> {
+		if (response.headers.get('content-type')?.includes('application/json')) {
+			const err = await response.json().catch(() => null);
+			return err?.message || err?.error?.message || `${fallback} (${response.status})`;
+		}
+		return `${fallback} (${response.status})`;
+	}
+
 	function toggleEditDefinition(guid: string) {
 		editingDefinition = editingDefinition === guid ? null : guid;
 	}
@@ -115,13 +123,12 @@
 					coverImage: cfg.coverImage ?? undefined
 				})
 			});
+
 			if (response.ok) {
 				toast.success('Definition saved');
 				await invalidateAll();
 			} else {
-				const err = await response.json();
-				console.error('[saveDefinition] PUT failed', response.status, err);
-				toast.error(err.message || err.error?.message || `Save failed (${response.status})`);
+				toast.error(await getErrorMessage(response, 'Save failed'));
 			}
 		} catch (err) {
 			toast.error('Save failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
@@ -139,8 +146,7 @@
 				toast.success(`"${name}" deleted`);
 				await invalidateAll();
 			} else {
-				const err = await response.json();
-				toast.error(err.message || 'Delete failed');
+				toast.error(await getErrorMessage(response, 'Delete failed'));
 			}
 		} catch (err) {
 			toast.error('Delete failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
@@ -167,8 +173,7 @@
 				toast.success(`"${result.filename}" uploaded – old version archived`);
 				await invalidateAll();
 			} else {
-				const err = await response.json();
-				toast.error(err.message || 'Upload failed');
+				toast.error(await getErrorMessage(response, 'Upload failed'));
 			}
 		} catch (err) {
 			toast.error('Upload failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
@@ -198,8 +203,7 @@
 				toast.success('Image uploaded');
 				await invalidateAll();
 			} else {
-				const err = await response.json();
-				toast.error(err.message || 'Image upload failed');
+				toast.error(await getErrorMessage(response, 'Image upload failed'));
 			}
 		} catch (err) {
 			toast.error('Upload failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
@@ -231,11 +235,6 @@
 			// Only append coverImage URL if it's not empty
 			formData.append('coverImage', newDefCoverImage.trim());
 		}
-		console.log('[submitAddDefinition]', {
-			imageMode: newDefImageMode,
-			coverImage: newDefCoverImage,
-			hasImage: !!newDefImageInput?.files?.[0]
-		});
 		try {
 			const response = await fetch('/admin/api/definitions', {
 				method: 'POST',
@@ -246,8 +245,7 @@
 				showAddModal = false;
 				await invalidateAll();
 			} else {
-				const err = await response.json();
-				toast.error(err.message || 'Failed to create definition');
+				toast.error(await getErrorMessage(response, 'Failed to create definition'));
 			}
 		} catch (err) {
 			toast.error('Failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
@@ -355,20 +353,24 @@
 				updateRunning = false;
 				return;
 			}
+			let buffer = '';
 			while (true) {
 				const { done, value } = await reader.read();
 				if (done) break;
-				for (const line of decoder.decode(value).split('\n\n')) {
-					if (!line.startsWith('data: ')) continue;
+				buffer += decoder.decode(value, { stream: true });
+				const parts = buffer.split('\n\n');
+				buffer = parts.pop()!; // keep incomplete trailing chunk
+				for (const part of parts) {
+					if (!part.startsWith('data: ')) continue;
 					try {
-						const event = JSON.parse(line.slice(6));
+						const event = JSON.parse(part.slice(6));
 						if (event.type === 'log') updateLogs += event.data + '\n';
 						else if (event.type === 'exit') {
 							updateExitCode = event.code;
 							updateRunning = false;
 						}
 					} catch {
-						// ignore
+						// ignore malformed events
 					}
 				}
 			}
@@ -534,7 +536,7 @@
 						<div class="flex gap-1 rounded-md border p-0.5">
 							<Button
 								size="sm"
-								variant={editImageModes[guid] !== 'upload' ? 'default' : 'ghost'}
+								variant={(editImageModes[guid] ?? 'url') !== 'upload' ? 'default' : 'ghost'}
 								onclick={() => (editImageModes[guid] = 'url')}
 								class="h-7 flex-1 text-xs">URL</Button
 							>
@@ -640,122 +642,141 @@
 			<Dialog.Content class="max-w-xl">
 				<Dialog.Header>
 					<Dialog.Title>Add New Definition</Dialog.Title>
-					<Dialog.Description>Upload a Grasshopper file and fill in the metadata.</Dialog.Description>
+					<Dialog.Description
+						>Upload a Grasshopper file and fill in the metadata.</Dialog.Description
+					>
 				</Dialog.Header>
 
 				<div class="space-y-4">
 					<div class="space-y-2">
-					<Label for="new-file">
-						Grasshopper File <span class="text-destructive">*</span>
-					</Label>
-					<input
-						id="new-file"
-						type="file"
-						accept=".gh,.ghx"
-						bind:this={newDefFileInput}
-						onchange={onNewFileSelected}
-						class="border-input bg-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
-					/>
-
-				{#if newDefValidating}
-					<p class="text-muted-foreground flex items-center gap-2 text-xs">
-						<svg class="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-						</svg>
-						Validating definition…
-					</p>
-				{:else if newDefValidationError}
-					<div class="border-destructive/40 bg-destructive/5 rounded-md border p-3">
-						<p class="text-destructive text-xs font-medium">Validation failed</p>
-						<p class="text-destructive/80 mt-0.5 text-xs">{newDefValidationError}</p>
-					</div>
-				{:else if newDefValidationSchema}
-					<div class="border-green-500/30 bg-green-500/5 flex items-center gap-3 rounded-md border p-3">
-						<div class="min-w-0 flex-1">
-							<p class="text-xs font-medium text-green-700 dark:text-green-400">Valid Selva definition</p>
-							<p class="text-muted-foreground mt-0.5 text-xs">
-								{newDefValidationSchema.inputCount} input{newDefValidationSchema.inputCount === 1 ? '' : 's'},
-								{newDefValidationSchema.outputCount} output{newDefValidationSchema.outputCount === 1 ? '' : 's'}
-							</p>
-						</div>
-					</div>
-				{/if}
-				</div>
-
-				<div class="space-y-2">
-					<Label for="new-dn">Display Name <span class="text-destructive">*</span></Label>
-					<Input
-						id="new-dn"
-						type="text"
-						bind:value={newDefDisplayName}
-						placeholder="e.g., Parametric Tower"
-					/>
-				</div>
-
-				<div class="space-y-2">
-					<Label for="new-desc">Description</Label>
-					<Textarea
-						id="new-desc"
-						bind:value={newDefDescription}
-						rows={3}
-						placeholder="Describe what this definition does…"
-					/>
-				</div>
-
-				<div class="grid grid-cols-2 gap-4">
-					<div class="space-y-2">
-						<Label for="new-cat">Category</Label>
-						<Input
-							id="new-cat"
-							type="text"
-							bind:value={newDefCategory}
-							placeholder="e.g., Architecture"
-						/>
-					</div>
-					<div class="space-y-2">
-						<Label for="new-tags">Tags</Label>
-						<Input
-							id="new-tags"
-							type="text"
-							bind:value={newDefTags}
-							placeholder="parametric, tower"
-						/>
-					</div>
-				</div>
-
-				<div class="space-y-2">
-					<Label>Cover Image</Label>
-					<!-- URL / Upload toggle -->
-					<div class="flex gap-1 rounded-md border p-0.5">
-						<Button
-							size="sm"
-							variant={newDefImageMode !== 'upload' ? 'default' : 'ghost'}
-							onclick={() => (newDefImageMode = 'url')}
-							class="h-7 flex-1 text-xs">URL</Button
-						>
-						<Button
-							size="sm"
-							variant={newDefImageMode === 'upload' ? 'default' : 'ghost'}
-							onclick={() => (newDefImageMode = 'upload')}
-							class="h-7 flex-1 text-xs">Upload File</Button
-						>
-					</div>
-					{#if newDefImageMode === 'upload'}
+						<Label for="new-file">
+							Grasshopper File <span class="text-destructive">*</span>
+						</Label>
 						<input
+							id="new-file"
 							type="file"
-							bind:this={newDefImageInput}
-							accept="image/*"
+							accept=".gh,.ghx"
+							bind:this={newDefFileInput}
+							onchange={onNewFileSelected}
 							class="border-input bg-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
 						/>
-					{:else}
+
+						{#if newDefValidating}
+							<p class="text-muted-foreground flex items-center gap-2 text-xs">
+								<svg class="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+									<circle
+										class="opacity-25"
+										cx="12"
+										cy="12"
+										r="10"
+										stroke="currentColor"
+										stroke-width="4"
+									/>
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+								</svg>
+								Validating definition…
+							</p>
+						{:else if newDefValidationError}
+							<div class="border-destructive/40 bg-destructive/5 rounded-md border p-3">
+								<p class="text-destructive text-xs font-medium">Validation failed</p>
+								<p class="text-destructive/80 mt-0.5 text-xs">{newDefValidationError}</p>
+							</div>
+						{:else if newDefValidationSchema}
+							<div
+								class="flex items-center gap-3 rounded-md border border-green-500/30 bg-green-500/5 p-3"
+							>
+								<div class="min-w-0 flex-1">
+									<p class="text-xs font-medium text-green-700 dark:text-green-400">
+										Valid Selva definition
+									</p>
+									<p class="text-muted-foreground mt-0.5 text-xs">
+										{newDefValidationSchema.inputCount} input{newDefValidationSchema.inputCount ===
+										1
+											? ''
+											: 's'},
+										{newDefValidationSchema.outputCount} output{newDefValidationSchema.outputCount ===
+										1
+											? ''
+											: 's'}
+									</p>
+								</div>
+							</div>
+						{/if}
+					</div>
+
+					<div class="space-y-2">
+						<Label for="new-dn">Display Name <span class="text-destructive">*</span></Label>
 						<Input
-							id="new-img"
+							id="new-dn"
 							type="text"
-							bind:value={newDefCoverImage}
-							placeholder="https://..."
+							bind:value={newDefDisplayName}
+							placeholder="e.g., Parametric Tower"
 						/>
-					{/if}
+					</div>
+
+					<div class="space-y-2">
+						<Label for="new-desc">Description</Label>
+						<Textarea
+							id="new-desc"
+							bind:value={newDefDescription}
+							rows={3}
+							placeholder="Describe what this definition does…"
+						/>
+					</div>
+
+					<div class="grid grid-cols-2 gap-4">
+						<div class="space-y-2">
+							<Label for="new-cat">Category</Label>
+							<Input
+								id="new-cat"
+								type="text"
+								bind:value={newDefCategory}
+								placeholder="e.g., Architecture"
+							/>
+						</div>
+						<div class="space-y-2">
+							<Label for="new-tags">Tags</Label>
+							<Input
+								id="new-tags"
+								type="text"
+								bind:value={newDefTags}
+								placeholder="parametric, tower"
+							/>
+						</div>
+					</div>
+
+					<div class="space-y-2">
+						<Label>Cover Image</Label>
+						<!-- URL / Upload toggle -->
+						<div class="flex gap-1 rounded-md border p-0.5">
+							<Button
+								size="sm"
+								variant={newDefImageMode !== 'upload' ? 'default' : 'ghost'}
+								onclick={() => (newDefImageMode = 'url')}
+								class="h-7 flex-1 text-xs">URL</Button
+							>
+							<Button
+								size="sm"
+								variant={newDefImageMode === 'upload' ? 'default' : 'ghost'}
+								onclick={() => (newDefImageMode = 'upload')}
+								class="h-7 flex-1 text-xs">Upload File</Button
+							>
+						</div>
+						{#if newDefImageMode === 'upload'}
+							<input
+								type="file"
+								bind:this={newDefImageInput}
+								accept="image/*"
+								class="border-input bg-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
+							/>
+						{:else}
+							<Input
+								id="new-img"
+								type="text"
+								bind:value={newDefCoverImage}
+								placeholder="https://..."
+							/>
+						{/if}
 					</div>
 				</div>
 				<Dialog.Footer class="gap-2 sm:justify-end">
@@ -764,7 +785,11 @@
 						onclick={submitAddDefinition}
 						disabled={addingDefinition || newDefValidating || !!newDefValidationError}
 					>
-						{addingDefinition ? 'Creating…' : newDefValidating ? 'Validating…' : 'Create Definition'}
+						{addingDefinition
+							? 'Creating…'
+							: newDefValidating
+								? 'Validating…'
+								: 'Create Definition'}
 					</Button>
 				</Dialog.Footer>
 			</Dialog.Content>
