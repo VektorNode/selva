@@ -36,7 +36,14 @@
 	// Local editable copy of config (GUID-keyed)
 	let editableConfig = $state<{ [guid: string]: DefinitionConfig }>({});
 	$effect(() => {
-		editableConfig = JSON.parse(JSON.stringify(data.config));
+		const raw = JSON.parse(JSON.stringify(data.config)) as typeof editableConfig;
+		// Normalize optional fields to empty strings so bind:value never receives undefined
+		for (const cfg of Object.values(raw)) {
+			cfg.description ??= '';
+			cfg.category ??= '';
+			cfg.coverImage ??= '';
+		}
+		editableConfig = raw;
 	});
 
 	// Per-definition state
