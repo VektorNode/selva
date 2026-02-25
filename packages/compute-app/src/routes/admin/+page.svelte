@@ -59,6 +59,7 @@
 	let updateRunning = $state(false);
 	let updateLogs = $state('');
 	let updateExitCode = $state<number | null>(null);
+	let updateRestarting = $state(false);
 
 	const filteredDefinitions = $derived(
 		Object.entries(editableConfig).filter(([_guid, cfg]) => {
@@ -123,18 +124,47 @@
 				showAddModal = false;
 				await invalidateAll();
 			} else {
-				toast.error(await getErrorMessage(response, 'Failed to create definition'));
+				const msg = await getErrorMessage(response, 'Failed to create definition');
+				toast.error(msg);
+				throw new Error(msg);
 			}
 		} catch (err) {
-			toast.error('Failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+			if (!(err instanceof Error && err.message)) {
+				toast.error('Failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+			}
+			throw err;
 		} finally {
 			addingDefinition = false;
 		}
 	}
 
+	async function waitForAppRestart() {
+		updateLogs += '\nWaiting for app to come back online…\n';
+		await new Promise((r) => setTimeout(r, 3000));
+		for (let i = 0; i < 30; i++) {
+			try {
+				const res = await fetch('/api/health', { cache: 'no-store' });
+				if (res.ok) {
+					updateLogs += '✓ App is back online!\n';
+					updateExitCode = 0;
+					updateRunning = false;
+					updateRestarting = false;
+					return;
+				}
+			} catch {
+				// still down, keep polling
+			}
+			await new Promise((r) => setTimeout(r, 2000));
+		}
+		updateLogs += '⚠ App did not come back within 60s — check PM2 logs.\n';
+		updateRunning = false;
+		updateRestarting = false;
+	}
+
 	async function runUpdate() {
 		if (!confirm('Run the update script? This will restart the application.')) return;
 		updateRunning = true;
+		updateRestarting = false;
 		updateLogs = '';
 		updateExitCode = null;
 		try {
@@ -152,6 +182,7 @@
 				return;
 			}
 			let buffer = '';
+			let gotExit = false;
 			while (true) {
 				const { done, value } = await reader.read();
 				if (done) break;
@@ -163,7 +194,11 @@
 					try {
 						const event = JSON.parse(part.slice(6));
 						if (event.type === 'log') updateLogs += event.data + '\n';
-						else if (event.type === 'exit') {
+						else if (event.type === 'restarting') {
+							updateLogs += event.data + '\n';
+							updateRestarting = true;
+						} else if (event.type === 'exit') {
+							gotExit = true;
 							updateExitCode = event.code;
 							updateRunning = false;
 						}
@@ -172,9 +207,18 @@
 					}
 				}
 			}
+			// Stream closed without an exit event — the process restarted itself
+			if (!gotExit) {
+				await waitForAppRestart();
+			}
 		} catch (err) {
-			updateLogs += '\nError: ' + (err instanceof Error ? err.message : 'Unknown error');
-			updateRunning = false;
+			if (updateRestarting) {
+				// Expected — the server killed itself during restart
+				await waitForAppRestart();
+			} else {
+				updateLogs += '\nError: ' + (err instanceof Error ? err.message : 'Unknown error');
+				updateRunning = false;
+			}
 		}
 	}
 </script>
@@ -262,6 +306,7 @@
 	<!-- Application Update -->
 	<UpdateSection
 		isRunning={updateRunning}
+		isRestarting={updateRestarting}
 		logs={updateLogs}
 		exitCode={updateExitCode}
 		onRun={runUpdate}

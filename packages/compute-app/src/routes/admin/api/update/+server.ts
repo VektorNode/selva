@@ -45,7 +45,12 @@ export const POST: RequestHandler = async () => {
           for (const line of lines) {
             const clean = stripAnsi(line).trim();
             if (clean) {
-              sendEvent('log', { data: clean });
+              // Detect PM2 restart line so we can warn the client the process will die
+              if (clean.includes('Applying action restartProcessId')) {
+                sendEvent('restarting', { data: clean });
+              } else {
+                sendEvent('log', { data: clean });
+              }
             }
           }
         });

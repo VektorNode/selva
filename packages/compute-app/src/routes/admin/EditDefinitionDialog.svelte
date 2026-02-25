@@ -51,9 +51,10 @@
 		onSave
 	}: Props = $props();
 
-	let editImageMode = $state<'url' | 'upload'>(
-		config.coverImage?.startsWith('/admin/') ? 'upload' : 'url'
-	);
+	let editImageMode = $state<'url' | 'upload'>('url');
+	$effect(() => {
+		editImageMode = config.coverImage?.startsWith('/admin/') ? 'upload' : 'url';
+	});
 	let editModeImageInput = $state<HTMLInputElement>();
 	let editModeFileInput = $state<HTMLInputElement>();
 	let editModeFileHasFile = $state(false);
