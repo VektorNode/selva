@@ -1,24 +1,6 @@
 <script lang="ts">
 	import { Button, Dialog, Input, Label, Textarea, toast } from '@selva/shared';
-	import { invalidateAll } from '$app/navigation';
-	import FileUploadField from './FileUploadField.svelte';
 	import ImageUploadField from './ImageUploadField.svelte';
-
-	interface ValidatedSchema {
-		name: string;
-		description: string;
-		author: string;
-		inputCount: number;
-		outputCount: number;
-		tags: string[];
-	}
-
-	interface ValidationResult {
-		fileName: string;
-		valid: boolean;
-		error?: string;
-		schemas?: ValidatedSchema[];
-	}
 
 	interface Props {
 		open: boolean;
@@ -40,11 +22,7 @@
 	// File inputs
 	let fileInput = $state<HTMLInputElement>();
 	let imageInput = $state<HTMLInputElement>();
-
-	// Validation state
-	let validating = $state(false);
-	let validationError = $state<string | null>(null);
-	let validationSchema = $state<ValidatedSchema | null>(null);
+	let hasFile = $state(false);
 
 	function nameFromFile(file: File): string {
 		return file.name
@@ -53,64 +31,11 @@
 			.replace(/\b\w/g, (l) => l.toUpperCase());
 	}
 
-	async function onFileSelected() {
+	function onFileSelected() {
 		const file = fileInput?.files?.[0];
+		hasFile = !!file;
 		if (!file) return;
-
-		// Reset form + validation state for fresh file
-		displayName = '';
-		description = '';
-		tags = '';
-		validationError = null;
-		validationSchema = null;
-		validating = true;
-
-		const formData = new FormData();
-		formData.append('files', file);
-
-		try {
-			const response = await fetch('/api/validate-solution', { method: 'POST', body: formData });
-
-			if (response.status === 404) {
-				displayName = nameFromFile(file);
-				return;
-			}
-
-			if (!response.ok) {
-				displayName = nameFromFile(file);
-				return;
-			}
-
-			const results: ValidationResult[] = await response.json();
-			const result = results[0];
-
-			if (!result) {
-				displayName = nameFromFile(file);
-				return;
-			}
-
-			if (!result.valid) {
-				// If the compute server itself errored, treat as unavailable — don't block the form
-				if (result.error?.startsWith('Compute server error')) {
-					displayName = nameFromFile(file);
-					return;
-				}
-				validationError = result.error ?? 'Validation failed';
-				return;
-			}
-
-			// Valid — pre-fill from schema
-			const schema = result.schemas?.[0] ?? null;
-			validationSchema = schema;
-
-			displayName = schema?.name || nameFromFile(file);
-			description = schema?.description || '';
-			tags = schema?.tags?.join(', ') || '';
-		} catch {
-			displayName = nameFromFile(file);
-		} finally {
-			validating = false;
-		}
+		displayName = nameFromFile(file);
 	}
 
 	async function handleSubmit() {
@@ -152,9 +77,7 @@
 		tags = '';
 		coverImage = '';
 		imageMode = 'url';
-		validating = false;
-		validationError = null;
-		validationSchema = null;
+		hasFile = false;
 		if (fileInput) fileInput.value = '';
 		if (imageInput) imageInput.value = '';
 	}
@@ -165,16 +88,11 @@
 	}
 </script>
 
-<Dialog.Root
-	{open}
-	onOpenChange={handleOpenChange}
->
+<Dialog.Root {open} onOpenChange={handleOpenChange}>
 	<Dialog.Content class="max-w-xl">
 		<Dialog.Header>
 			<Dialog.Title>Add New Definition</Dialog.Title>
-			<Dialog.Description>
-				Upload a Grasshopper file and fill in the metadata.
-			</Dialog.Description>
+			<Dialog.Description>Upload a Grasshopper file and fill in the metadata.</Dialog.Description>
 		</Dialog.Header>
 
 		<div class="space-y-4">
@@ -191,44 +109,6 @@
 					onchange={onFileSelected}
 					class="border-input bg-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
 				/>
-
-				<!-- Validation status -->
-				{#if validating}
-					<p class="text-muted-foreground flex items-center gap-2 text-xs">
-						<svg class="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-							<circle
-								class="opacity-25"
-								cx="12"
-								cy="12"
-								r="10"
-								stroke="currentColor"
-								stroke-width="4"
-							/>
-							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-						</svg>
-						Validating definition…
-					</p>
-				{:else if validationError}
-					<div class="border-yellow-500/40 bg-yellow-500/5 rounded-md border p-3">
-						<p class="text-yellow-700 dark:text-yellow-400 text-xs font-medium">Validation warning</p>
-						<p class="text-yellow-700/80 dark:text-yellow-400/80 mt-0.5 text-xs">{validationError}</p>
-						<p class="text-yellow-700/60 dark:text-yellow-400/60 mt-1 text-xs">You can still upload the file.</p>
-					</div>
-				{:else if validationSchema}
-					<div
-						class="flex items-center gap-3 rounded-md border border-green-500/30 bg-green-500/5 p-3"
-					>
-						<div class="min-w-0 flex-1">
-							<p class="text-xs font-medium text-green-700 dark:text-green-400">
-								Valid Selva definition
-							</p>
-							<p class="text-muted-foreground mt-0.5 text-xs">
-								{validationSchema.inputCount} input{validationSchema.inputCount === 1 ? '' : 's'},
-								{validationSchema.outputCount} output{validationSchema.outputCount === 1 ? '' : 's'}
-							</p>
-						</div>
-					</div>
-				{/if}
 			</div>
 
 			<!-- Display Name -->
@@ -292,15 +172,8 @@
 
 		<Dialog.Footer class="gap-2 sm:justify-end">
 			<Button variant="outline" onclick={() => onOpenChange?.(false)}>Cancel</Button>
-			<Button
-				onclick={handleSubmit}
-				disabled={isAdding || validating}
-			>
-				{isAdding
-					? 'Creating…'
-					: validating
-						? 'Validating…'
-						: 'Create Definition'}
+			<Button onclick={handleSubmit} disabled={isAdding}>
+				{isAdding ? 'Creating…' : 'Create Definition'}
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
