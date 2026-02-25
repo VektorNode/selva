@@ -25,7 +25,7 @@
 		onUpload,
 		onUrlChange,
 		onFileSelected,
-		inputRef
+		inputRef = $bindable()
 	}: Props = $props();
 </script>
 

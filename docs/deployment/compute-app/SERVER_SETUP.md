@@ -1,92 +1,52 @@
 # Server Setup for Selva Compute App
 
-Common setup steps for deployments that build the app from source.
+The [setup.sh](../../../scripts/setup.sh) script handles everything automatically: Node.js, pnpm, cloning, dependencies, building, and PM2.
 
-The easist way to get started is using the [setup.sh](/scripts/setup.sh) file. Upload it on your server and run it with `bash setup.sh` this will install all
+## Prerequisites
 
----
+The repository is private — you need a **GitHub Classic PAT** with `repo` scope:
+1. Go to GitHub → Settings → Developer settings → [Personal access tokens (classic)](https://github.com/settings/tokens)
+2. Generate new token → select **`repo`** scope → copy the token
 
-## 1. Install Node.js and pnpm
-
-These are required when building from source (Node.js deployment, or Docker “build on server”).
-
-### On Linux (Ubuntu/Debian)
+## Quick Start
 
 ```bash
-# Update system packages
-sudo apt-get update && sudo apt-get upgrade -y
+# Download scripts
+curl -fsSL https://raw.githubusercontent.com/VektorNode/selva/main/scripts/setup.sh -o setup.sh
+curl -fsSL https://raw.githubusercontent.com/VektorNode/selva/main/scripts/setup-caddy.sh -o setup-caddy.sh
 
-# Install Node.js 22 (LTS)
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs
+# Run — interactive by default, prompts for all values
+GITHUB_TOKEN=ghp_yourtoken bash setup.sh
 
-# Install pnpm globally
-sudo npm install -g pnpm
+# Non-interactive (CI/automation) — uses env vars / defaults
+GITHUB_TOKEN=ghp_yourtoken \
+COMPUTE_SERVER_URL=https://your-compute.com \
+ADMIN_PASSWORD=yourpassword \
+ADMIN_SECRET=yoursecret \
+bash setup.sh --no-interactive
 
-# Verify installations
-node --version  # Should show v22.x.x
-pnpm --version  # Should show 9.x.x
+# Set up Caddy reverse proxy (run after setup.sh)
+bash setup-caddy.sh                           # HTTP on port 80
+bash setup-caddy.sh --domain app.example.com  # HTTPS via Let's Encrypt
 ```
 
-## 2. Set Up SSH Key Authentication (Currently needed since repository is still private)
+## Configuration Variables
 
-If you don't have repository access yet, ask a maintainer to grant access.
-
-```bash
-# Generate SSH key
-ssh-keygen -t ed25519 -C "your-email@example.com"
-# Press Enter for all prompts (no passphrase needed)
-
-# Display public key
-cat ~/.ssh/id_ed25519.pub
-
-# Add this key to SELVA GitHub account:
-# https://github.com/settings/keys
-```
-
----
-
-## 3. Clone Repository
-
-```bash
-# Clone via SSH (requires SSH key setup)
-git clone git@github.com:your-username/selva.git
-cd selva
-
-# Or via HTTPS (requires credentials)
-git clone https://github.com/VektorNode/selva.git
-cd selva
-```
-
----
-
-## 4. Install Dependencies
-
-```bash
-# Install all workspace dependencies
-pnpm install
-
-# This installs dependencies for all packages in the monorepo
-```
-
----
-
-## 5. Build All Packages
-
-The compute-app depends on other workspace packages, so build everything in order:
-
-```bash
-# Build all packages (core, shared, schemas, etc.)
-pnpm run build:all
-
-# This ensures all dependencies are compiled before the compute-app
-```
+| Variable | Default | Description |
+|---|---|---|
+| `GITHUB_TOKEN` | — | Classic PAT with `repo` scope |
+| `COMPUTE_SERVER_URL` | `http://localhost:5000` | Rhino.Compute URL |
+| `GH_DEFINITIONS_PATH` | `./example-definitions` | Path to `.gh` files |
+| `COMPUTE_API_KEY` | — | Rhino.Compute API key |
+| `ADMIN_PASSWORD` | — | Admin panel password |
+| `ADMIN_SECRET` | — | Admin session secret |
+| `PORT` | `3000` | Internal app port |
+| `ORIGIN` | `http://your-server-ip` | Public-facing URL — no port suffix, no trailing slash |
+| `INSTALL_DIR` | `~/selva` | Install directory |
 
 ---
 
 ## Next Steps
 
-After completing these server setup steps:
-
-- **[Node.js Deployment](./NODE_DEPLOYMENT.md)** - Continue with configuring environment and running with PM2
-- **[Docker Deployment](./DOCKER_DEPLOYMENT.md)** - Continue with building and running Docker image
+- **[Node.js Deployment](./NODE_DEPLOYMENT.md)** — PM2 configuration and management
+- **[Docker Deployment](./DOCKER_DEPLOYMENT.md)** — Docker image setup

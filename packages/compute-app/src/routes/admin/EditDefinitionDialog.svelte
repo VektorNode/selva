@@ -234,7 +234,7 @@
 					onUpload={handleImageUpload}
 					onFileSelected={() => (editModeImageHasFile = !!editModeImageInput?.files?.length)}
 					onUrlChange={(url) => (config.coverImage = url)}
-					inputRef={editModeImageInput}
+					bind:inputRef={editModeImageInput}
 				/>
 				{#if config.coverImage?.startsWith('/admin/api/definitions/')}
 					<p class="text-muted-foreground text-xs">✓ Image saved in definition folder</p>
@@ -262,7 +262,7 @@
 					hasFile={editModeFileHasFile}
 					onFileSelected={() => (editModeFileHasFile = !!editModeFileInput?.files?.length)}
 					onUpload={handleFileUpload}
-					inputRef={editModeFileInput}
+					bind:inputRef={editModeFileInput}
 				/>
 			</div>
 

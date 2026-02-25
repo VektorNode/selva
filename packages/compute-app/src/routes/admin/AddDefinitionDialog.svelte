@@ -279,7 +279,7 @@
 					onUpload={() => {}}
 					onFileSelected={() => {}}
 					onUrlChange={(url) => (coverImage = url)}
-					inputRef={imageInput}
+					bind:inputRef={imageInput}
 				/>
 			</div>
 		</div>

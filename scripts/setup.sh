@@ -10,10 +10,14 @@
 # - Configures environment variables
 # - Builds everything
 # - Sets up PM2 for production
+# - Optionally sets up Caddy as a reverse proxy (with automatic HTTPS)
 #
-# Usage: bash setup.sh [--interactive] [--skip-pm2]
-#        bash setup.sh --interactive   # Prompts for all config values
-#        bash setup.sh --skip-pm2      # Skips PM2 setup
+# Usage: bash setup.sh [--no-interactive] [--skip-pm2]
+#        bash setup.sh                            # Interactive mode (default — prompts for all values)
+#        bash setup.sh --no-interactive           # Non-interactive, uses env vars / defaults
+#        bash setup.sh --skip-pm2                 # Skips PM2 setup
+#
+# For Caddy reverse proxy, run setup-caddy.sh separately after this script.
 ################################################################################
 
 set -e
@@ -25,16 +29,26 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration
-REPO_URL="${REPO_URL:-git@github.com:VektorNode/selva.git}"
+# Configuration (all overridable via environment variables)
+REPO_URL="${REPO_URL:-https://github.com/VektorNode/selva.git}"
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
-INTERACTIVE=false
+DEFINITION_SOURCE="${DEFINITION_SOURCE:-filesystem}"
+GH_DEFINITIONS_PATH="${GH_DEFINITIONS_PATH:-./example-definitions}"
+COMPUTE_SERVER_URL="${COMPUTE_SERVER_URL:-http://localhost:5000}"
+COMPUTE_API_KEY="${COMPUTE_API_KEY:-}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+ADMIN_SECRET="${ADMIN_SECRET:-}"
+ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES:-}"  # auto-detected: true for http, false for https
+PORT="${PORT:-3000}"
+ORIGIN="${ORIGIN:-}"  # auto-detected from public IP if not set
+INTERACTIVE=true
 SKIP_PM2=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --interactive) INTERACTIVE=true; shift ;;
+    --no-interactive) INTERACTIVE=false; shift ;;
     --skip-pm2) SKIP_PM2=true; shift ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
@@ -115,11 +129,11 @@ if command_exists pnpm; then
   PNPM_MAJOR=$(echo $PNPM_VERSION | cut -d'.' -f1)
   if [ "$PNPM_MAJOR" -lt 9 ]; then
     print_warning "pnpm 9.0.0+ recommended (found $PNPM_VERSION), upgrading..."
-    npm install -g pnpm@latest
+    sudo npm install -g pnpm@latest
   fi
 else
   print_step "Installing pnpm..."
-  npm install -g pnpm
+  sudo npm install -g pnpm
   print_success "pnpm installed: $(pnpm -v)"
 fi
 
@@ -135,15 +149,36 @@ print_success "git found: $(git --version)"
 ################################################################################
 print_header "Step 2: Repository Setup"
 
-if [ -d "$INSTALL_DIR" ]; then
+# Build authenticated URL if token is provided
+if [ -n "$GITHUB_TOKEN" ]; then
+  # Inject token into https:// URL using x-access-token format (works for classic + fine-grained PATs)
+  AUTH_REPO_URL=$(echo "$REPO_URL" | sed "s|https://|https://x-access-token:$GITHUB_TOKEN@|")
+else
+  AUTH_REPO_URL="$REPO_URL"
+  # Warn if repo is likely private and no token given
+  print_warning "No GITHUB_TOKEN set — clone will fail for private repos"
+  print_warning "Run with: GITHUB_TOKEN=your_token bash setup.sh"
+fi
+
+if [ -d "$INSTALL_DIR" ] && [ -d "$INSTALL_DIR/.git" ]; then
   print_warning "Directory already exists: $INSTALL_DIR"
   print_step "Pulling latest changes..."
   cd "$INSTALL_DIR"
   git pull origin main || print_warning "Could not pull (may be offline or no main branch)"
+elif [ -d "$INSTALL_DIR" ] && [ ! -d "$INSTALL_DIR/.git" ]; then
+  print_warning "Directory exists but is not a git repo (leftover from failed clone) — removing..."
+  rm -rf "$INSTALL_DIR"
+  print_step "Cloning repository..."
+  git clone "$AUTH_REPO_URL" "$INSTALL_DIR"
+  cd "$INSTALL_DIR"
+  git remote set-url origin "$REPO_URL"
+  print_success "Repository cloned to $INSTALL_DIR"
 else
   print_step "Cloning repository..."
-  git clone "$REPO_URL" "$INSTALL_DIR"
+  git clone "$AUTH_REPO_URL" "$INSTALL_DIR"
   cd "$INSTALL_DIR"
+  # Remove token from remote URL so it's not stored in .git/config
+  git remote set-url origin "$REPO_URL"
   print_success "Repository cloned to $INSTALL_DIR"
 fi
 
@@ -162,7 +197,7 @@ print_success "Dependencies installed"
 print_header "Step 4: Environment Configuration"
 
 ENV_FILE="$INSTALL_DIR/packages/compute-app/.env"
-CONFIG_FILE="$INSTALL_DIR/ecosystem.config.js"
+CONFIG_FILE="$INSTALL_DIR/ecosystem.config.cjs"
 
 # Check if .env already exists
 if [ -f "$ENV_FILE" ]; then
@@ -193,33 +228,40 @@ if [ ! -f "$ENV_FILE" ] || ([ "$INTERACTIVE" = true ] && [[ $REPLY =~ ^[Yy]$ ]])
 
   # Get user input with defaults
   if [ "$INTERACTIVE" = true ]; then
-    read -p "Grasshopper Definitions Source [filesystem]: " DEFINITION_SOURCE
-    DEFINITION_SOURCE=${DEFINITION_SOURCE:-filesystem}
+    read -p "Grasshopper Definitions Source [$DEFINITION_SOURCE]: " _INPUT
+    DEFINITION_SOURCE="${_INPUT:-$DEFINITION_SOURCE}"
 
     if [ "$DEFINITION_SOURCE" = "filesystem" ]; then
-      read -p "Path to definitions directory [./definitions]: " GH_DEFINITIONS_PATH
-      GH_DEFINITIONS_PATH=${GH_DEFINITIONS_PATH:-./definitions}
+      read -p "Path to definitions directory [$GH_DEFINITIONS_PATH]: " _INPUT
+      GH_DEFINITIONS_PATH="${_INPUT:-$GH_DEFINITIONS_PATH}"
     fi
 
-    read -p "Rhino.Compute Server URL [http://localhost:5000]: " COMPUTE_SERVER_URL
-    COMPUTE_SERVER_URL=${COMPUTE_SERVER_URL:-http://localhost:5000}
+    read -p "Rhino.Compute Server URL [$COMPUTE_SERVER_URL]: " _INPUT
+    COMPUTE_SERVER_URL="${_INPUT:-$COMPUTE_SERVER_URL}"
 
-    read -p "Rhino.Compute API Key (optional, press Enter to skip): " COMPUTE_API_KEY
+    while [ -z "$COMPUTE_API_KEY" ]; do
+      read -p "Rhino.Compute API Key (required): " _INPUT
+      COMPUTE_API_KEY="${_INPUT:-}"
+      [ -z "$COMPUTE_API_KEY" ] && print_warning "API key is required."
+    done
 
-    read -p "Application Port [3000]: " PORT
-    PORT=${PORT:-3000}
+    read -p "Admin Password (optional, press Enter to skip) [${ADMIN_PASSWORD:-none}]: " _INPUT
+    ADMIN_PASSWORD="${_INPUT:-$ADMIN_PASSWORD}"
 
-    DEFAULT_ORIGIN="http://$PUBLIC_IP:$PORT"
-    read -p "Public Origin URL [$DEFAULT_ORIGIN]: " ORIGIN
-    ORIGIN=${ORIGIN:-$DEFAULT_ORIGIN}
+    read -p "Admin Secret (optional, press Enter to skip) [${ADMIN_SECRET:-none}]: " _INPUT
+    ADMIN_SECRET="${_INPUT:-$ADMIN_SECRET}"
+
+    read -p "Application Port [$PORT]: " _INPUT
+    PORT="${_INPUT:-$PORT}"
+
+    DEFAULT_ORIGIN="${ORIGIN:-http://$PUBLIC_IP}"
+    read -p "Public Origin URL [$DEFAULT_ORIGIN]: " _INPUT
+    ORIGIN="${_INPUT:-$DEFAULT_ORIGIN}"
   else
-    # Use defaults for non-interactive mode
-    DEFINITION_SOURCE="filesystem"
-    GH_DEFINITIONS_PATH="./example-definitions"
-    COMPUTE_SERVER_URL="http://localhost:5000"
-    COMPUTE_API_KEY=""
-    PORT="3000"
-    ORIGIN="http://$PUBLIC_IP:$PORT"
+    # Non-interactive: compute ORIGIN if not set
+    if [ -z "$ORIGIN" ]; then
+      ORIGIN="http://$PUBLIC_IP"
+    fi
   fi
 
   # Create .env file
@@ -246,10 +288,33 @@ EOF
 COMPUTE_SERVER_URL="${COMPUTE_SERVER_URL}"
 EOF
 
-  if [ -n "$COMPUTE_API_KEY" ]; then
-    cat >> "$ENV_FILE" << EOF
+  if [ -z "$COMPUTE_API_KEY" ]; then
+    print_error "COMPUTE_API_KEY is required but not set."
+    exit 1
+  fi
+  cat >> "$ENV_FILE" << EOF
 COMPUTE_API_KEY="${COMPUTE_API_KEY}"
 EOF
+
+  if [ -n "$ADMIN_PASSWORD" ]; then
+    cat >> "$ENV_FILE" << EOF
+ADMIN_PASSWORD="${ADMIN_PASSWORD}"
+EOF
+  fi
+
+  if [ -n "$ADMIN_SECRET" ]; then
+    cat >> "$ENV_FILE" << EOF
+ADMIN_SECRET="${ADMIN_SECRET}"
+EOF
+  fi
+
+  # Auto-detect ALLOW_INSECURE_COOKIES based on protocol if not set
+  if [ -z "$ALLOW_INSECURE_COOKIES" ]; then
+    if [[ "$ORIGIN" == https://* ]]; then
+      ALLOW_INSECURE_COOKIES="false"
+    else
+      ALLOW_INSECURE_COOKIES="true"
+    fi
   fi
 
   cat >> "$ENV_FILE" << EOF
@@ -257,6 +322,7 @@ EOF
 # Server Configuration
 PORT=${PORT}
 ORIGIN="${ORIGIN}"
+ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES}"
 
 # Request body size limit for large geometry uploads
 BODY_SIZE_LIMIT="Infinity"
@@ -310,28 +376,45 @@ if [ "$SKIP_PM2" = false ]; then
     print_success "PM2 found: $(pm2 -v)"
   fi
 
-  # Create/copy ecosystem config (update if exists to reflect .env changes)
-  print_step "Setting up ecosystem.config.cjs..."
+  # Generate ecosystem.config.cjs
+  print_step "Writing ecosystem.config.cjs..."
 
-  # Extract values from .env
-  PORT=$(grep "^PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ')
-  ORIGIN=$(grep "^ORIGIN=" "$ENV_FILE" | cut -d'"' -f2)
-  COMPUTE_SERVER_URL=$(grep "COMPUTE_SERVER_URL=" "$ENV_FILE" | cut -d'"' -f2)
-  COMPUTE_API_KEY=$(grep "COMPUTE_API_KEY=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null)
-  GH_DEFINITIONS_PATH=$(grep "GH_DEFINITIONS_PATH=" "$ENV_FILE" | cut -d'"' -f2)
+  # Re-read vars from .env in case we skipped the config step (file already existed)
+  PORT=$(grep "^PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ' || echo "$PORT")
+  ORIGIN=$(grep "^ORIGIN=" "$ENV_FILE" | cut -d'"' -f2 || echo "$ORIGIN")
+  COMPUTE_SERVER_URL=$(grep "^COMPUTE_SERVER_URL=" "$ENV_FILE" | cut -d'"' -f2 || echo "$COMPUTE_SERVER_URL")
+  COMPUTE_API_KEY=$(grep "^COMPUTE_API_KEY=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$COMPUTE_API_KEY")
+  ADMIN_PASSWORD=$(grep "^ADMIN_PASSWORD=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$ADMIN_PASSWORD")
+  ADMIN_SECRET=$(grep "^ADMIN_SECRET=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$ADMIN_SECRET")
+  ALLOW_INSECURE_COOKIES=$(grep "^ALLOW_INSECURE_COOKIES=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$ALLOW_INSECURE_COOKIES")
+  GH_DEFINITIONS_PATH=$(grep "^GH_DEFINITIONS_PATH=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$GH_DEFINITIONS_PATH")
 
   PORT=${PORT:-3000}
-  ORIGIN=${ORIGIN:-http://localhost:$PORT}
+  ORIGIN=${ORIGIN:-http://localhost}
+  ALLOW_INSECURE_COOKIES=${ALLOW_INSECURE_COOKIES:-true}
 
-  if [ ! -f "$CONFIG_FILE" ]; then
-    # Try to copy from example file first
-    if [ -f "$INSTALL_DIR/example.ecosystem.config.cjs" ]; then
-      print_step "Copying example ecosystem config..."
-      cp "$INSTALL_DIR/example.ecosystem.config.cjs" "$CONFIG_FILE"
-      print_success "Copied example config to $CONFIG_FILE"
-    else
-      # Fallback: create a basic config if no example exists
-      cat > "$CONFIG_FILE" << 'EOF'
+  # Resolve GH_DEFINITIONS_PATH to absolute path (default to example-definitions if not set)
+  GH_DEFINITIONS_PATH="${GH_DEFINITIONS_PATH:-./example-definitions}"
+  if [[ "$GH_DEFINITIONS_PATH" != /* ]]; then
+    ABS_GH_PATH="$INSTALL_DIR/packages/compute-app/$GH_DEFINITIONS_PATH"
+  else
+    ABS_GH_PATH="$GH_DEFINITIONS_PATH"
+  fi
+
+  if [ -z "$COMPUTE_API_KEY" ]; then
+    print_error "COMPUTE_API_KEY is required but not set."
+    exit 1
+  fi
+
+  OPT_ADMIN_PASSWORD=""
+  [ -n "$ADMIN_PASSWORD" ] && OPT_ADMIN_PASSWORD="				ADMIN_PASSWORD: '$ADMIN_PASSWORD',"
+
+  OPT_ADMIN_SECRET=""
+  [ -n "$ADMIN_SECRET" ] && OPT_ADMIN_SECRET="				ADMIN_SECRET: '$ADMIN_SECRET',"
+
+  cat > "$CONFIG_FILE" << EOF
+// This file is used by PM2 to manage the compute app process.
+// IMPORTANT: Do not commit sensitive values (API keys, passwords) to version control.
 module.exports = {
 	apps: [
 		{
@@ -342,59 +425,25 @@ module.exports = {
 			autorestart: true,
 			watch: false,
 			max_memory_restart: '1G',
-			cwd: '__CWD__',
+			cwd: '$INSTALL_DIR',
 			env: {
-				PORT: __PORT__,
-				ORIGIN: '__ORIGIN__',
-				COMPUTE_SERVER_URL: '__COMPUTE_SERVER_URL__',
+				PORT: $PORT,
+				ORIGIN: '$ORIGIN',
+				COMPUTE_SERVER_URL: '$COMPUTE_SERVER_URL',
+				COMPUTE_API_KEY: '$COMPUTE_API_KEY',
 				BODY_SIZE_LIMIT: 'Infinity',
-				__GH_DEFINITIONS__
-				__COMPUTE_API_KEY__
+			GH_DEFINITIONS_PATH: '$ABS_GH_PATH',
+$OPT_ADMIN_PASSWORD
+$OPT_ADMIN_SECRET
+				ALLOW_INSECURE_COOKIES: '$ALLOW_INSECURE_COOKIES',
 				NODE_ENV: 'production'
 			}
 		}
 	]
 };
 EOF
-    fi
 
-    # Replace placeholders (only needed for fallback config)
-    if [ ! -f "$INSTALL_DIR/example.ecosystem.config.cjs" ]; then
-      sed -i "s|__CWD__|$INSTALL_DIR/packages/compute-app|g" "$CONFIG_FILE"
-      sed -i "s/__PORT__/$PORT/g" "$CONFIG_FILE"
-      sed -i "s|__ORIGIN__|$ORIGIN|g" "$CONFIG_FILE"
-      sed -i "s|__COMPUTE_SERVER_URL__|$COMPUTE_SERVER_URL|g" "$CONFIG_FILE"
-
-      if [ -n "$COMPUTE_API_KEY" ]; then
-        sed -i "s|__COMPUTE_API_KEY__|COMPUTE_API_KEY: '$COMPUTE_API_KEY',|g" "$CONFIG_FILE"
-      else
-        sed -i "s|__COMPUTE_API_KEY__|// No API key configured|g" "$CONFIG_FILE"
-      fi
-
-      if [ -n "$GH_DEFINITIONS_PATH" ]; then
-        sed -i "s|__GH_DEFINITIONS__|GH_DEFINITIONS_PATH: '$GH_DEFINITIONS_PATH',|g" "$CONFIG_FILE"
-      else
-        sed -i "s|__GH_DEFINITIONS__|// Using environment variable definitions|g" "$CONFIG_FILE"
-      fi
-    else
-      # Update example file with values from .env
-      sed -i "s/PORT: [0-9]*/PORT: $PORT/" "$CONFIG_FILE"
-      sed -i "s|ORIGIN: '[^']*'|ORIGIN: '$ORIGIN'|" "$CONFIG_FILE"
-      sed -i "s|COMPUTE_SERVER_URL: '[^']*'|COMPUTE_SERVER_URL: '$COMPUTE_SERVER_URL'|" "$CONFIG_FILE"
-
-      if [ -n "$GH_DEFINITIONS_PATH" ]; then
-        sed -i "s|GH_DEFINITIONS_PATH: '[^']*'|GH_DEFINITIONS_PATH: '$GH_DEFINITIONS_PATH'|" "$CONFIG_FILE"
-      fi
-
-      if [ -n "$COMPUTE_API_KEY" ]; then
-        sed -i "s|COMPUTE_API_KEY: '[^']*'|COMPUTE_API_KEY: '$COMPUTE_API_KEY'|" "$CONFIG_FILE"
-      fi
-    fi
-
-    print_success "ecosystem.config.cjs created: $CONFIG_FILE"
-  else
-    print_success "Updated ecosystem.config.cjs with current .env values"
-  fi
+  print_success "ecosystem.config.cjs written: $CONFIG_FILE"
 
   print_step "Starting application with PM2..."
   cd "$INSTALL_DIR/packages/compute-app"
@@ -430,14 +479,15 @@ PORT=${PORT:-3000}
 
 # Get the public IP used
 PUBLIC_IP=$(get_public_ip)
+ACCESS_URL="http://$PUBLIC_IP:$PORT"
 
 echo -e "${GREEN}Selva Compute App is ready!${NC}"
 echo ""
 echo "📁 Installation directory: $INSTALL_DIR"
 echo "⚙️  Configuration file: $ENV_FILE"
 echo "🌍 Server IP Address: $PUBLIC_IP"
-echo "🚀 Access application: http://$PUBLIC_IP:$PORT/app?gh=definition-name"
-echo "💊 Health check: curl http://$PUBLIC_IP:$PORT/api/health"
+echo "🚀 Access application: $ACCESS_URL/app?gh=definition-name"
+echo "💊 Health check: curl $ACCESS_URL/api/health"
 echo ""
 
 if [ "$SKIP_PM2" = false ]; then
@@ -451,6 +501,7 @@ fi
 echo "📝 Next steps:"
 echo "   1. Add your .gh files to: $INSTALL_DIR/packages/compute-app/definitions/"
 echo "   2. Update COMPUTE_SERVER_URL in $ENV_FILE if needed"
+echo "   3. (Optional) Set up Caddy reverse proxy: bash setup-caddy.sh [--domain app.example.com]"
 echo ""
 
 if [ "$SKIP_PM2" = false ]; then

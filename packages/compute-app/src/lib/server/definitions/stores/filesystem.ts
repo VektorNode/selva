@@ -2,6 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { FilesystemDefinitionLoader } from '../loaders/filesystem';
+import { GH_EXTENSIONS, IMAGE_EXTENSIONS as ALLOWED_IMAGE_EXTENSIONS } from '../../admin-config';
 import type {
 	IDefinitionStore,
 	DefinitionMetadata,
@@ -10,17 +11,6 @@ import type {
 	CreateDefinitionInput,
 	HistoryEntry
 } from '../types';
-
-const GH_EXTENSIONS = ['.gh', '.ghx'];
-
-const IMAGE_CONTENT_TYPES: Record<string, string> = {
-	'.jpg': 'image/jpeg',
-	'.jpeg': 'image/jpeg',
-	'.png': 'image/png',
-	'.webp': 'image/webp'
-};
-
-const ALLOWED_IMAGE_EXTENSIONS = Object.keys(IMAGE_CONTENT_TYPES);
 
 /** Regex for archived filenames: "2024-01-15T10-30-45-123Z_originalname.gh" */
 const ARCHIVE_FILENAME_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)_(.+)$/;
