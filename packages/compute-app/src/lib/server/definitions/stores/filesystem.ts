@@ -387,6 +387,6 @@ export class FilesystemDefinitionStore
 			// Non-fatal
 		}
 
-		return `/admin/api/definitions/${guid}/image/${safeFilename}`;
+		return `/api/definitions/${guid}/image/${safeFilename}`;
 	}
 }

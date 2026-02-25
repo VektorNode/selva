@@ -79,12 +79,12 @@ sudo journalctl -u caddy -f
 
 ## Important Headers Explained
 
-| Header | Purpose |
-|--------|---------|
-| `X-Forwarded-For` | Original client IP address |
+| Header              | Purpose                                                          |
+| ------------------- | ---------------------------------------------------------------- |
+| `X-Forwarded-For`   | Original client IP address                                       |
 | `X-Forwarded-Proto` | Original protocol (http/https) - **critical for secure cookies** |
-| `X-Forwarded-Host` | Original host header |
-| `Set-Cookie` | Ensures SameSite policy is enforced |
+| `X-Forwarded-Host`  | Original host header                                             |
+| `Set-Cookie`        | Ensures SameSite policy is enforced                              |
 
 ## Troubleshooting
 
@@ -105,7 +105,7 @@ sudo journalctl -u caddy -f
    - Set `ALLOW_INSECURE_COOKIES=true` in ecosystem.config.cjs:
      ```javascript
      env: {
-       ALLOW_INSECURE_COOKIES: 'true'
+     	ALLOW_INSECURE_COOKIES: 'true';
      }
      ```
    - This tells the app to create non-secure cookies on HTTP
