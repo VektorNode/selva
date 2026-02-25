@@ -20,7 +20,9 @@ module.exports = {
 				// GH_DEFINITIONS_PATH: './definitions',
 				// DEFINITION_SOURCE="environment"
 				COMPUTE_API_KEY: 'your-api-key',
-				NODE_ENV: 'production'
+				NODE_ENV: 'production',
+				// Path to the repo root — needed for the admin update script
+				INSTALL_DIR: '/home/your-user/selva'
 			}
 		}
 	]

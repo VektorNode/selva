@@ -53,7 +53,7 @@
 
 	let editImageMode = $state<'url' | 'upload'>('url');
 	$effect(() => {
-		editImageMode = config.coverImage?.startsWith('/admin/') ? 'upload' : 'url';
+		editImageMode = config.coverImage?.startsWith('/api/definitions/') ? 'upload' : 'url';
 	});
 	let editModeImageInput = $state<HTMLInputElement>();
 	let editModeFileInput = $state<HTMLInputElement>();
@@ -237,7 +237,7 @@
 					onUrlChange={(url) => (config.coverImage = url)}
 					bind:inputRef={editModeImageInput}
 				/>
-				{#if config.coverImage?.startsWith('/admin/api/definitions/')}
+				{#if config.coverImage?.startsWith('/api/definitions/')}
 					<p class="text-muted-foreground text-xs">✓ Image saved in definition folder</p>
 				{/if}
 			</div>
