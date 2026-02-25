@@ -175,10 +175,24 @@ print_success "Dependencies updated"
 ################################################################################
 print_header "Step 3: Building Application"
 
-print_step "Building shared package..."
+# Check if shared package has changed since the last build
+SHARED_CHANGED=false
+if [ "$NO_PULL" = true ]; then
+  # No pull means we can't compare commits — assume shared may have changed
+  SHARED_CHANGED=true
+elif git diff --name-only "$LOCAL_COMMIT" HEAD -- packages/shared | grep -q .; then
+  SHARED_CHANGED=true
+fi
+
 cd "$INSTALL_DIR"
-pnpm run build:shared
-print_success "Shared package built"
+
+if [ "$SHARED_CHANGED" = true ]; then
+  print_step "Changes detected in shared package — building shared..."
+  pnpm run build:shared
+  print_success "Shared package built"
+else
+  print_warning "No changes in packages/shared — skipping shared build"
+fi
 
 print_step "Building compute-app for production..."
 cd "$INSTALL_DIR/packages/compute-app"

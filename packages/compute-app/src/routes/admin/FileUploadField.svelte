@@ -14,7 +14,7 @@
 		inputRef?: HTMLInputElement;
 	}
 
-	let { id, label, accept = '', disabled = false, isUploading = false, hasFile = false, onFileSelected, onUpload, inputRef }: Props = $props();
+	let { id, label, accept = '', disabled = false, isUploading = false, hasFile = false, onFileSelected, onUpload, inputRef = $bindable() }: Props = $props();
 </script>
 
 <div class="flex items-center gap-2">
