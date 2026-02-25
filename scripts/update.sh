@@ -13,7 +13,7 @@
 #        bash update.sh --restart-only        # Only restart the PM2 process, skip everything else
 ################################################################################
 
-set -e
+set -eo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -80,9 +80,9 @@ cd "$INSTALL_DIR"
 
 # Get current branch and commit
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-CURRENT_COMMIT=$(git rev-parse --short HEAD)
+LOCAL_COMMIT=$(git rev-parse HEAD)
 print_success "Current branch: $CURRENT_BRANCH"
-print_success "Current commit: $CURRENT_COMMIT"
+print_success "Current commit: $(git rev-parse --short HEAD)"
 
 # Switch to target branch if specified
 if [ -n "$TARGET_BRANCH" ] && [ "$TARGET_BRANCH" != "$CURRENT_BRANCH" ]; then
@@ -124,9 +124,8 @@ else
   print_step "Fetching from remote..."
   git fetch origin
 
-  # Check if there are changes
-  LOCAL_COMMIT=$(git rev-parse HEAD)
-  REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH)
+# Check if there are changes
+REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH)
 
   if [ "$LOCAL_COMMIT" = "$REMOTE_COMMIT" ]; then
     print_warning "Already up to date!"
@@ -203,14 +202,15 @@ if [ "$NO_RESTART" = false ]; then
     # Wait for restart
     sleep 2
 
-    # Check status - just verify the process is running
-    if pm2 list | grep -q "selva-compute.*online"; then
+    # Check status
+    PM2_STATUS=$(pm2 describe selva-compute | awk '/status/{print $4}' || echo "unknown")
+    if [ "$PM2_STATUS" = "online" ]; then
       print_success "Application restarted successfully"
       pm2 status
     else
       print_error "Application failed to restart. Check logs:"
       echo ""
-      timeout 5 pm2 logs selva-compute --lines 20 || true
+      pm2 logs selva-compute --lines 20 --nostream
       exit 1
     fi
   else
@@ -256,12 +256,16 @@ print_header "Update Complete!"
 echo -e "${GREEN}Selva Compute App has been updated.${NC}"
 echo ""
 echo "📝 Changelog:"
-git log --oneline -5 || echo "   (No changes from previous version)"
+git log --oneline "$LOCAL_COMMIT..HEAD" | head -5 || echo "   (No changes from previous version)"
 echo ""
 
 if [ "$PM2_RUNNING" = true ]; then
   echo "📊 Application Status:"
   pm2 status
+  echo ""
+  echo "📋 Recent Logs:"
+  pm2 logs selva-compute --lines 10 --nostream
+  echo ""
 fi
 
 print_success "Update script completed successfully!"
