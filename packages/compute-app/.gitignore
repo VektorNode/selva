@@ -27,6 +27,8 @@ Thumbs.db
 # Exception: allow example definitions
 !example-definitions/*.gh
 !example-definitions/*.ghx
+!example-definitions/**/*.gh
+!example-definitions/**/*.ghx
 
 # Vite
 vite.config.js.timestamp-*

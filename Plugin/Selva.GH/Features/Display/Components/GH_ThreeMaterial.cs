@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Drawing;
 using Grasshopper.Kernel;
 using Selva.GH.Features.Display.Services;
@@ -30,7 +30,7 @@ public class GH_ThreeMaterial : GH_Component
 
 	protected override void RegisterOutputParams(GH_OutputParamManager pManager)
 	{
-		pManager.AddGenericParameter("T-Material", "TM", "Three Material object", GH_ParamAccess.item);
+		pManager.AddParameter(new Param_ThreeMaterial());
 	}
 
 	protected override void SolveInstance(IGH_DataAccess DA)

@@ -1,18 +1,36 @@
 {
 	"definitions": {
-		"point_attractor": {
-			"displayName": "Advanced Solver",
-			"description": "Little point attractor example",
-			"coverImage": "http://localhost:5173/images/point_attractor.png",
-			"category": "Point Attractor",
-			"tags": ["optimization", "numerical", "solver"]
+		"90265668-9777-4ea1-add6-49f126805ef4": {
+			"displayName": "Point Attractor",
+			"description": "Point Attractor example",
+			"category": "Example",
+			"tags": [
+				"attractor"
+			],
+			"file": "point_attractor.gh",
+			"coverImage": "https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?q=80&w=774&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
 		},
-		"table_example": {
-			"displayName": "Parametric Form Generator",
-			"description": "Create a simple parametric table with ease",
-			"coverImage": "http://localhost:5173/images/table_example.png",
-			"category": "Product",
-			"tags": ["parametric", "geometry", "forms"]
+		"de4a97f9-b003-42b3-a895-9678183a3770": {
+			"displayName": "Table Example",
+			"description": "This is a test table",
+			"category": "Example",
+			"tags": [
+				"product"
+			],
+			"coverImage": "/api/definitions/de4a97f9-b003-42b3-a895-9678183a3770/image/pawel-czerwinski-6lQDFGOB1iw-unsplash.jpg",
+			"file": "table_example.gh"
+		},
+		"f83c1b5a-6bff-49c6-8ca9-8b9d6a1a9c0b": {
+			"displayName": "Sheet Analyzer",
+			"description": "This is a test definition for analyzing sheets. (SheepMetal needs to be installed on the rhino.compute server for this definition to work)",
+			"category": "Example",
+			"tags": [
+				"sheet",
+				"analyze",
+				"sheepmetal"
+			],
+			"coverImage": "https://images.unsplash.com/photo-1562065540-efa93744ed71?q=80&w=1740&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+			"file": "Sheet_Analyzer.gh"
 		}
 	}
 }

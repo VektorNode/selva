@@ -2,7 +2,7 @@
 
 Common setup steps for deployments that build the app from source.
 
-If you deploy a prebuilt Docker image from a registry, you can skip the Node.js/pnpm steps and only install Docker + Docker Compose.
+The easist way to get started is using the [setup.sh](/scripts/setup.sh) file. Upload it on your server and run it with `bash setup.sh` this will install all
 
 ---
 

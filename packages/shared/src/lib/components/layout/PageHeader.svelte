@@ -18,6 +18,7 @@
 		showModeToggle?: boolean;
 		logo?: string;
 		children?: Snippet;
+		rightContent?: Snippet;
 		class?: string;
 	}
 
@@ -27,6 +28,7 @@
 		badge,
 		logo = '/favicon/favicon.svg',
 		children,
+		rightContent,
 		class: className = '',
 		showModeToggle = false
 	}: PageHeaderProps = $props();
@@ -90,10 +92,15 @@
 			{/if}
 		</div>
 
-		<!-- Right section (Theme & Mode Toggle) -->
-		{#if showModeToggle}
+		<!-- Right section (Theme & Mode Toggle + rightContent) -->
+		{#if showModeToggle || rightContent}
 			<div class="gap-2 sm:self-center flex items-center self-start">
-				<ModeToggle />
+				{#if rightContent}
+					{@render rightContent()}
+				{/if}
+				{#if showModeToggle}
+					<ModeToggle />
+				{/if}
 			</div>
 		{/if}
 	</div>

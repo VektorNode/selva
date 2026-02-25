@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import type { TabConfig } from '@selva/shared';
-	import { GripVertical, Pencil } from '@lucide/svelte';
+	import { GripVertical, Pencil, PanelLeft, PanelRight } from '@lucide/svelte';
 
 	interface EditableTabNavProps {
 		tabs: TabConfig[];
@@ -174,6 +174,23 @@
 				aria-label="Edit tab label"
 			>
 				<Pencil size={14} />
+			</button>
+
+			<!-- Panel position toggle -->
+			<button
+				type="button"
+				class="bg-muted text-muted-foreground hover:bg-accent focus:ring-ring ml-1 flex h-7 w-7 items-center justify-center rounded-full text-xs transition-colors focus:ring-2 focus:outline-none"
+				onclick={() => {
+					tab.position = tab.position === 'right' ? undefined : 'right';
+				}}
+				title={tab.position === 'right' ? 'Right panel — click to move to left' : 'Left panel — click to move to right'}
+				aria-label="Toggle panel position"
+			>
+				{#if tab.position === 'right'}
+					<PanelRight size={14} />
+				{:else}
+					<PanelLeft size={14} />
+				{/if}
 			</button>
 
 			<!-- Remove button -->

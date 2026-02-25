@@ -48,6 +48,7 @@
 		}
 	},
 	"dependencies": {
+		"@floating-ui/dom": "catalog:",
 		"@lucide/svelte": "catalog:",
 		"clsx": "catalog:",
 		"mode-watcher": "catalog:",
@@ -59,7 +60,9 @@
 	"devDependencies": {
 		"@internationalized/date": "^3.10.1",
 		"@selva/config": "workspace:*",
+		"@sveltejs/kit": "catalog:",
 		"bits-ui": "^2.15.4",
+		"svelte": "catalog:",
 		"tailwind-variants": "catalog:"
 	}
 }

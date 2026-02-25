@@ -19,7 +19,8 @@
 		"@selva/shared": "workspace:*",
 		"mode-watcher": "catalog:",
 		"selva-compute": "catalog:",
-		"three": "catalog:"
+		"three": "catalog:",
+		"zod": "^4.3.6"
 	},
 	"devDependencies": {
 		"@selva/config": "workspace:*",

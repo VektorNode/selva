@@ -567,6 +567,10 @@
 					"items": { "type": "string" },
 					"description": "User-defined tags for organizing schemas (e.g., ['architecture', 'facade'])"
 				},
+				"category": {
+					"type": "string",
+					"description": "Category for organizing schemas (e.g., 'architecture', 'structural', 'mechanical')"
+				},
 				"author": {
 					"type": "string",
 					"description": "User or organization who created the schema"
@@ -578,7 +582,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.0.0",
+					"default": "2.1.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

@@ -20,26 +20,11 @@ const definitions = await container.listDefinitions();
 
 ## Supported Sources
 
-### Filesystem (Default)
+### Filesystem
 
 ```bash
 GH_DEFINITIONS_PATH=./definitions
 # Reads from ./definitions/ + definitions-config.json
-```
-
-### Environment Variables (Cloud-Ready)
-
-```bash
-DEFINITION_SOURCE=environment
-GH_DEF_PREFIX=GH_DEF_
-GH_DEF_solver.gh='{"metadata":{"displayName":"Solver"},"url":"https://..."}'
-```
-
-### Custom Sources (S3, Database, GraphQL, etc.)
-
-```bash
-DEFINITION_SOURCE=yoursource
-# See "Creating a Custom Loader" section below
 ```
 
 ## Container API
@@ -69,14 +54,11 @@ await container.getFirstDefinition(); // Definition | null
 
 ```typescript
 interface DefinitionFactoryConfig {
-	// Which loader: 'filesystem' or 'environment' (auto-detects if omitted)
-	source?: 'filesystem' | 'environment';
-
-	// Path to definitions directory (filesystem only)
+	// Path to definitions directory
 	// Default: './definitions'
 	definitionsPath?: string;
 
-	// Allowed file types (filesystem only)
+	// Allowed file types
 	// Default: ['gh', 'ghx']
 	supportedExtensions?: ('gh' | 'ghx')[];
 }
@@ -85,90 +67,21 @@ interface DefinitionFactoryConfig {
 ### Examples
 
 ```typescript
-// Auto-detect (recommended)
+// Default path
 const container = getDefinitionContainer();
 
-// Custom filesystem path
+// Custom path
 const container = getDefinitionContainer({
-	source: 'filesystem',
 	definitionsPath: '/opt/grasshopper-defs'
 });
-
-// Environment loader
-const container = getDefinitionContainer({
-	source: 'environment'
-});
 ```
 
-## Auto-Detection Priority
+## Configuration Priority
 
-1. `DEFINITION_SOURCE=environment` + `GH_DEF_PREFIX` → EnvironmentLoader
-2. `GH_DEFINITIONS_PATH` set → FilesystemLoader
-3. `GH_DEF_*` environment variables exist → EnvironmentLoader
-4. Default → FilesystemLoader with `./definitions`
+1. Explicit `definitionsPath` in config → Use that path
+2. `GH_DEFINITIONS_PATH` environment variable → Use that path
+3. Default → `./definitions`
 
-## Creating a Custom Loader
-
-### 1. Create the Loader
-
-`loaders/yourname.ts`:
-
-```typescript
-import type { IDefinitionLoader, Definition, DefinitionMetadata } from '../types';
-
-export class YourDefinitionLoader implements IDefinitionLoader {
-	constructor(private config: YourConfig) {}
-
-	async listDefinitions(): Promise<Definition[]> {
-		return [
-			{
-				filename: 'example.gh',
-				fileType: 'gh',
-				displayName: 'Example',
-				description: 'An example'
-			}
-		];
-	}
-
-	async getMetadata(filename: string): Promise<DefinitionMetadata> {
-		return { displayName: 'Example', description: 'An example' };
-	}
-
-	async loadDefinition(filename: string): Promise<Uint8Array> {
-		const response = await fetch(`https://storage.example.com/${filename}`);
-		return new Uint8Array(await response.arrayBuffer());
-	}
-
-	async getDefinitionUrl(filename: string): Promise<string> {
-		return `https://storage.example.com/${filename}`;
-	}
-}
-```
-
-### 2. Register in Factory
-
-`factory.ts`:
-
-```typescript
-import { YourDefinitionLoader } from './loaders/yourname';
-
-// In createLoader() method, add:
-case 'yourname':
-  return new YourDefinitionLoader({ /* config */ });
-```
-
-### 3. Use It
-
-```bash
-DEFINITION_SOURCE=yourname
-```
-
-Routes work unchanged:
-
-```typescript
-const container = getDefinitionContainer();
-const defs = await container.listDefinitions();
-```
 
 ## File Types
 
@@ -199,11 +112,9 @@ expect(definitions.length).toBeGreaterThan(0);
 
 ## Environment Variables Reference
 
-| Variable              | Default         | Purpose                                        |
-| --------------------- | --------------- | ---------------------------------------------- |
-| `DEFINITION_SOURCE`   | auto-detect     | Source: `filesystem`, `environment`, or custom |
-| `GH_DEFINITIONS_PATH` | `./definitions` | Filesystem loader path                         |
-| `GH_DEF_PREFIX`       | `GH_DEF_`       | Prefix for env vars (environment loader)       |
+| Variable              | Default         | Purpose              |
+| --------------------- | --------------- | -------------------- |
+| `GH_DEFINITIONS_PATH` | `./definitions` | Definitions directory path |
 
 ## Architecture
 
@@ -229,31 +140,10 @@ Loaders (implementations)
 ✅ **Secure** - URLs and tokens server-side only
 ✅ **Simple** - Single API for all sources
 
-## Real-World Examples
-
-### S3 Loader
-
-See `loaders/EXAMPLE.md` for complete implementation.
-
-### Database Loader
-
-1. Implement `IDefinitionLoader` fetching from your DB
-2. Add case in factory
-3. Set `DEFINITION_SOURCE=database`
-
 ## Common Questions
 
 **Q: Do I use loaders or containers?**
 A: Containers in routes (99% of code). Loaders only for testing individual implementations.
 
-**Q: How do I switch definition sources?**
-A: Set `DEFINITION_SOURCE` env var. Routes work unchanged.
-
-**Q: Can I use multiple sources?**
-A: No, but you can switch between them via env vars at deployment time.
-
-**Q: What if my definitions are on the internet?**
-A: Use environment loader or create a custom loader that fetches from your endpoint.
-
-**Q: How do I add S3 support?**
-A: Create loader in `loaders/s3.ts`, implement `IDefinitionLoader`, register in factory.
+**Q: How do I customize the definitions path?**
+A: Set `GH_DEFINITIONS_PATH` environment variable or pass `definitionsPath` in config.

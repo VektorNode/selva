@@ -1,0 +1,200 @@
+{
+	"id": "e20b605f-a299-4c05-b8e4-359860a30d42",
+	"name": "Point Attractor",
+	"description": "Point Attractor example",
+	"projectFileName": "point_attractor.gh",
+	"documentId": "3716f09d-7b24-4053-9e9d-8abc2c99edd6",
+	"pluginVersion": "0.5.0.0",
+	"tags": [],
+	"category": null,
+	"author": null,
+	"organization": null,
+	"schemaVersion": "2.1.0",
+	"minPluginVersion": null,
+	"created": "2026-01-15T09:26:27.0674552Z",
+	"lastModified": "2026-02-19T12:54:05.6678446Z",
+	"viewerOptions": {
+		"enableLocal": true,
+		"enableRemote": true,
+		"backgroundColor": "#cfcece"
+	},
+	"instanceSolve": false,
+	"inputs": [
+		{
+			"id": "368c0d71-118a-4d2c-8b70-ce0b60ee274c",
+			"nickname": "U",
+			"paramType": "number",
+			"description": "Contextual numeric input."
+		},
+		{
+			"id": "2906adb3-0d13-4930-be91-6fdc2213016b",
+			"nickname": "V",
+			"paramType": "number",
+			"description": "Contextual numeric input."
+		},
+		{
+			"id": "19e7cdc2-cbe7-43b7-98b9-378d513ad5e9",
+			"nickname": "Density U",
+			"paramType": "integer",
+			"description": "Contextual integer input."
+		},
+		{
+			"id": "ec1f4dc9-14f1-4c25-af90-aeae3963374a",
+			"nickname": "Density V",
+			"paramType": "integer",
+			"description": "Contextual integer input."
+		},
+		{
+			"id": "32b164b3-f5a8-45b7-a512-37dcbadb97c9",
+			"nickname": "Max Height",
+			"paramType": "number",
+			"description": "Contextual numeric input."
+		},
+		{
+			"id": "f84e7ce9-e0d8-434b-81ca-35494e9f80f2",
+			"nickname": "Min Height",
+			"paramType": "number",
+			"description": "Contextual numeric input."
+		}
+	],
+	"outputs": [],
+	"layout": {
+		"type": "tabbed",
+		"tabs": [
+			{
+				"id": "b81dfbec",
+				"label": "Inputs",
+				"icon": "",
+				"order": 0,
+				"groups": [
+					{
+						"id": "9dec63d9",
+						"label": "Group 1",
+						"description": "",
+						"order": 0,
+						"collapsed": false,
+						"columns": 1,
+						"items": [
+							{
+								"type": "input",
+								"widgetType": "number",
+								"config": {
+									"minimum": 0.0,
+									"maximum": 1.0,
+									"stepSize": 0.001,
+									"placeholder": null,
+									"renderAsSlider": true
+								},
+								"id": "5ea21eb4",
+								"paramId": "368c0d71-118a-4d2c-8b70-ce0b60ee274c",
+								"displayName": "U",
+								"description": "Contextual numeric input.",
+								"order": 0,
+								"span": 1,
+								"visible": true,
+								"visibilityCondition": null
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"config": {
+									"minimum": 0.0,
+									"maximum": 1.0,
+									"stepSize": 0.001,
+									"placeholder": null,
+									"renderAsSlider": true
+								},
+								"id": "d5c89e12",
+								"paramId": "2906adb3-0d13-4930-be91-6fdc2213016b",
+								"displayName": "V",
+								"description": "Contextual numeric input.",
+								"order": 1,
+								"span": 1,
+								"visible": true,
+								"visibilityCondition": null
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"config": {
+									"minimum": 2.0,
+									"maximum": 20.0,
+									"stepSize": 1.0,
+									"placeholder": null,
+									"renderAsSlider": true
+								},
+								"id": "7cdc8a98",
+								"paramId": "19e7cdc2-cbe7-43b7-98b9-378d513ad5e9",
+								"displayName": "Density U",
+								"description": "Contextual integer input.",
+								"order": 2,
+								"span": 1,
+								"visible": true,
+								"visibilityCondition": null
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"config": {
+									"minimum": 2.0,
+									"maximum": 20.0,
+									"stepSize": 1.0,
+									"placeholder": null,
+									"renderAsSlider": true
+								},
+								"id": "41f171e4",
+								"paramId": "ec1f4dc9-14f1-4c25-af90-aeae3963374a",
+								"displayName": "Density V",
+								"description": "Contextual integer input.",
+								"order": 3,
+								"span": 1,
+								"visible": true,
+								"visibilityCondition": null
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"config": {
+									"minimum": 0.0,
+									"maximum": 10.0,
+									"stepSize": 0.01,
+									"placeholder": null,
+									"renderAsSlider": true
+								},
+								"id": "13a42cd5",
+								"paramId": "32b164b3-f5a8-45b7-a512-37dcbadb97c9",
+								"displayName": "Max Height",
+								"description": "Contextual numeric input.",
+								"order": 4,
+								"span": 1,
+								"visible": true,
+								"visibilityCondition": null
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"config": {
+									"minimum": 0.0,
+									"maximum": 10.0,
+									"stepSize": 0.01,
+									"placeholder": null,
+									"renderAsSlider": true
+								},
+								"id": "3912c09c",
+								"paramId": "f84e7ce9-e0d8-434b-81ca-35494e9f80f2",
+								"displayName": "Min Height",
+								"description": "Contextual numeric input.",
+								"order": 5,
+								"span": 1,
+								"visible": true,
+								"visibilityCondition": null
+							}
+						]
+					}
+				],
+				"position": "center"
+			}
+		],
+		"gap": 16
+	}
+}
