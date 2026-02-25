@@ -30,8 +30,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration (all overridable via environment variables)
-REPO_URL="${REPO_URL:-https://github.com/VektorNode/selva.git}"
-GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+REPO_URL="${REPO_URL:-git@github.com:VektorNode/selva.git}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
 DEFINITION_SOURCE="${DEFINITION_SOURCE:-filesystem}"
 GH_DEFINITIONS_PATH="${GH_DEFINITIONS_PATH:-./example-definitions}"
@@ -149,17 +148,6 @@ print_success "git found: $(git --version)"
 ################################################################################
 print_header "Step 2: Repository Setup"
 
-# Build authenticated URL if token is provided
-if [ -n "$GITHUB_TOKEN" ]; then
-  # Inject token into https:// URL using x-access-token format (works for classic + fine-grained PATs)
-  AUTH_REPO_URL=$(echo "$REPO_URL" | sed "s|https://|https://x-access-token:$GITHUB_TOKEN@|")
-else
-  AUTH_REPO_URL="$REPO_URL"
-  # Warn if repo is likely private and no token given
-  print_warning "No GITHUB_TOKEN set — clone will fail for private repos"
-  print_warning "Run with: GITHUB_TOKEN=your_token bash setup.sh"
-fi
-
 if [ -d "$INSTALL_DIR" ] && [ -d "$INSTALL_DIR/.git" ]; then
   print_warning "Directory already exists: $INSTALL_DIR"
   print_step "Pulling latest changes..."
@@ -169,16 +157,13 @@ elif [ -d "$INSTALL_DIR" ] && [ ! -d "$INSTALL_DIR/.git" ]; then
   print_warning "Directory exists but is not a git repo (leftover from failed clone) — removing..."
   rm -rf "$INSTALL_DIR"
   print_step "Cloning repository..."
-  git clone "$AUTH_REPO_URL" "$INSTALL_DIR"
+  git clone "$REPO_URL" "$INSTALL_DIR"
   cd "$INSTALL_DIR"
-  git remote set-url origin "$REPO_URL"
   print_success "Repository cloned to $INSTALL_DIR"
 else
   print_step "Cloning repository..."
-  git clone "$AUTH_REPO_URL" "$INSTALL_DIR"
+  git clone "$REPO_URL" "$INSTALL_DIR"
   cd "$INSTALL_DIR"
-  # Remove token from remote URL so it's not stored in .git/config
-  git remote set-url origin "$REPO_URL"
   print_success "Repository cloned to $INSTALL_DIR"
 fi
 
