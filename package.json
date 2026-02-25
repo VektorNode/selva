@@ -31,7 +31,9 @@
 		"clean:reinstall": "pnpm clean && pnpm install && pnpm build:all",
 		"clean": "node scripts/clean.js",
 		"changeset": "changeset",
-		"release": "pnpm build:all && changeset publish"
+		"release": "pnpm build:all && changeset publish",
+		"update-server": "node scripts/update-server.js",
+		"setup-server": "node scripts/setup-server.js"
 	},
 	"devDependencies": {
 		"@changesets/cli": "^2.29.8",
@@ -44,11 +46,11 @@
 		"@tailwindcss/vite": "catalog:",
 		"@types/node": "catalog:",
 		"@types/three": "catalog:",
-		"@typescript-eslint/eslint-plugin": "^8.53.1",
-		"@typescript-eslint/parser": "^8.53.1",
+		"@typescript-eslint/eslint-plugin": "^8.56.0",
+		"@typescript-eslint/parser": "^8.56.0",
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
-		"eslint-plugin-svelte": "^3.14.0",
+		"eslint-plugin-svelte": "^3.15.0",
 		"globals": "^16.5.0",
 		"prettier": "catalog:",
 		"prettier-plugin-svelte": "^3.4.1",
@@ -59,7 +61,7 @@
 		"tailwindcss": "catalog:",
 		"three": "catalog:",
 		"typescript": "catalog:",
-		"typescript-eslint": "^8.53.1",
+		"typescript-eslint": "^8.56.0",
 		"vite": "catalog:"
 	}
 }

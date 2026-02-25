@@ -41,27 +41,34 @@
 {#if hasMessages}
 	<!-- Floating Indicator Badge -->
 	<Dialog.Root bind:open>
-		<Dialog.Trigger
-			class="bottom-4 right-4 fixed z-50 transition-transform hover:scale-110 focus:outline-none"
-		>
-			<Badge
-				variant={errors.length > 0 ? 'destructive' : 'secondary'}
-				class="shadow-lg gap-1.5 px-2.5 py-1.5 text-xs cursor-pointer"
+		<Dialog.Trigger class="bottom-1 right-2 fixed z-100 focus:outline-none">
+			<div
+				class="shadow-lg text-xs font-medium hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 flex cursor-pointer items-stretch overflow-hidden rounded-full border transition-all duration-150
+					{errors.length > 0
+					? 'text-destructive-foreground border-destructive/30 bg-destructive'
+					: 'border-yellow-500/30 bg-yellow-50 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200'}"
 			>
 				{#if errors.length > 0}
-					<CircleAlert class="h-3.5 w-3.5" />
-				{:else}
-					<TriangleAlert class="h-3.5 w-3.5" />
-				{/if}
-				<span class="font-medium">
-					{#if errors.length > 0}
+					<span class="gap-1.5 px-3 py-1.5 flex items-center">
+						<CircleAlert class="h-3.5 w-3.5 shrink-0" />
 						{errors.length}
+					</span>
+				{/if}
+				{#if warnings.length > 0}
+					{#if errors.length > 0}
+						<span class="bg-destructive-foreground/20 w-px self-stretch"></span>
+						<span class="gap-1.5 px-3 py-1.5 flex items-center bg-destructive/80">
+							<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
+							{warnings.length}
+						</span>
+					{:else}
+						<span class="gap-1.5 px-3 py-1.5 flex items-center">
+							<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
+							{warnings.length}
+						</span>
 					{/if}
-					{#if warnings.length > 0}
-						{#if errors.length > 0}/{/if}{warnings.length}
-					{/if}
-				</span>
-			</Badge>
+				{/if}
+			</div>
 		</Dialog.Trigger>
 
 		<Dialog.Content class="max-w-2xl max-h-[80vh]">
@@ -106,7 +113,7 @@
 												<span class="flex-1">
 													{message}
 													{#if count > 1}
-														<span class="ml-1 font-medium text-destructive/70">×{count}</span>
+														<span class="ml-1 font-medium text-destructive/70">×{count} </span>
 													{/if}
 												</span>
 											</li>

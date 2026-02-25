@@ -1,5 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { watch } from 'node:fs';
 import type {
 	IDefinitionLoader,
 	Definition,
@@ -13,15 +14,33 @@ export interface FilesystemLoaderConfig {
 	supportedExtensions?: DefinitionFileType[];
 }
 
+/** UUID v4 pattern */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export class FilesystemDefinitionLoader implements IDefinitionLoader {
 	private config: Required<FilesystemLoaderConfig>;
-	private configCache: DefinitionsConfig | undefined;
+	protected configCache: DefinitionsConfig | undefined;
+	private watcher: ReturnType<typeof watch> | null = null;
 
 	constructor(config: FilesystemLoaderConfig) {
 		this.config = {
 			supportedExtensions: ['gh', 'ghx'],
 			...config
 		};
+		this.setupFileWatcher();
+	}
+
+	private setupFileWatcher(): void {
+		try {
+			const configPath = this.getConfigPath();
+			this.watcher = watch(configPath, (eventType) => {
+				if (eventType === 'change' || eventType === 'rename') {
+					this.configCache = undefined;
+				}
+			});
+		} catch {
+			// okay if file doesn't exist yet
+		}
 	}
 
 	private getConfigPath(): string {
@@ -29,9 +48,7 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 	}
 
 	private async loadConfigFile(): Promise<DefinitionsConfig> {
-		if (this.configCache !== undefined) {
-			return this.configCache;
-		}
+		if (this.configCache !== undefined) return this.configCache;
 
 		try {
 			const configPath = this.getConfigPath();
@@ -46,92 +63,91 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 
 	private getFileType(filename: string): DefinitionFileType {
 		const ext = path.extname(filename).toLowerCase().slice(1);
-		if (ext === 'gh' || ext === 'ghx') {
-			return ext as DefinitionFileType;
-		}
-		throw new Error(
-			`Unsupported file type: ${ext}. Supported: ${this.config.supportedExtensions.join(', ')}`
-		);
+		if (ext === 'gh' || ext === 'ghx') return ext as DefinitionFileType;
+		throw new Error(`Unsupported file type: .${ext}`);
 	}
 
-	private sanitizeFilename(filename: string): string {
-		// Add extension if missing
+	private ensureExtension(filename: string): string {
 		if (!filename.endsWith('.gh') && !filename.endsWith('.ghx')) {
-			filename += '.gh';
+			return filename + '.gh';
 		}
-		// Prevent directory traversal
-		const safe = path.basename(filename);
-		if (safe !== filename || !/^[a-zA-Z0-9_\-.]+$/.test(safe)) {
-			throw new Error('Invalid filename');
+		return filename;
+	}
+
+	/**
+	 * Resolve an identifier to { guid, filename }.
+	 * - UUID → direct GUID lookup in config
+	 * - filename → search all definitions by `file` field (backward compat)
+	 */
+	private async resolveIdentifier(identifier: string): Promise<{ guid: string; filename: string }> {
+		const config = await this.loadConfigFile();
+		const defs = config.definitions || {};
+
+		// Direct GUID lookup
+		if (UUID_REGEX.test(identifier)) {
+			const meta = defs[identifier];
+			if (!meta) throw new Error(`Definition with GUID '${identifier}' not found`);
+			if (!meta.file) throw new Error(`Definition '${identifier}' has no file associated`);
+			return { guid: identifier, filename: meta.file };
 		}
-		return safe;
+
+		// Filename lookup (with or without extension)
+		const filenameWithExt = this.ensureExtension(identifier);
+		for (const [guid, meta] of Object.entries(defs)) {
+			if (meta.file === identifier || meta.file === filenameWithExt) {
+				if (!meta.file) throw new Error(`Definition '${guid}' has no file associated`);
+				return { guid, filename: meta.file };
+			}
+		}
+
+		throw new Error(`Definition '${identifier}' not found`);
 	}
 
 	async listDefinitions(): Promise<Definition[]> {
 		const config = await this.loadConfigFile();
-
-		if (!config.definitions || typeof config.definitions !== 'object') {
-			throw new Error('Invalid config format: missing "definitions" object');
-		}
-
+		const defs = config.definitions || {};
 		const definitions: Definition[] = [];
 
-		for (const [key, metadata] of Object.entries(config.definitions)) {
+		for (const [guid, metadata] of Object.entries(defs)) {
+			if (!metadata.file) continue;
 			try {
-				const filename = this.sanitizeFilename(key);
-				const fileType = this.getFileType(filename);
+				const fileType = this.getFileType(metadata.file);
 				definitions.push({
-					filename,
+					guid,
+					filename: metadata.file,
 					fileType,
 					...metadata
 				});
 			} catch {
-				console.warn(`[FilesystemLoader] Skipping definition with unsupported file type: ${key}`);
+				console.warn(`[FilesystemLoader] Skipping '${guid}': unsupported file type`);
 			}
 		}
 
-		// Sort by displayName
 		definitions.sort((a, b) => a.displayName.localeCompare(b.displayName));
-
 		return definitions;
 	}
 
-	async getMetadata(filename: string): Promise<DefinitionMetadata> {
-		const safeFilename = this.sanitizeFilename(filename);
+	async getMetadata(identifier: string): Promise<DefinitionMetadata> {
+		const { guid } = await this.resolveIdentifier(identifier);
 		const config = await this.loadConfigFile();
-
-		// Try exact match first
-		let metadata = config.definitions[safeFilename];
-
-		// Try match without extension if not found
-		if (!metadata) {
-			const basename = path.basename(safeFilename, path.extname(safeFilename));
-			metadata = config.definitions[basename];
-		}
-
-		if (!metadata) {
-			throw new Error(`Definition '${safeFilename}' not found in config`);
-		}
-
-		return metadata;
+		return config.definitions[guid];
 	}
 
-	async loadDefinition(filename: string): Promise<Uint8Array> {
-		const safeFilename = this.sanitizeFilename(filename);
-		const filePath = path.join(this.config.definitionsPath, safeFilename);
-
+	async loadDefinition(identifier: string): Promise<Uint8Array> {
+		const { guid, filename } = await this.resolveIdentifier(identifier);
+		const filePath = path.join(this.config.definitionsPath, guid, filename);
 		try {
 			await fs.access(filePath);
 			const fileBuffer = await fs.readFile(filePath);
 			return new Uint8Array(fileBuffer);
 		} catch (err) {
-			throw new Error(`Failed to read definition '${safeFilename}' at '${filePath}': ${err}`);
+			throw new Error(`Failed to read definition at '${filePath}': ${err}`);
 		}
 	}
 
-	async getDefinitionUrl(filename: string): Promise<string> {
-		const safeFilename = this.sanitizeFilename(filename);
-		// For filesystem loader, return a special protocol URL
-		return `local:${safeFilename}`;
+	async getDefinitionUrl(identifier: string): Promise<string> {
+		const { guid } = await this.resolveIdentifier(identifier);
+		// Return GUID as the stable local identifier
+		return `local:${guid}`;
 	}
 }

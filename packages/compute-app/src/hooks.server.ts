@@ -1,4 +1,6 @@
 import { env } from '$env/dynamic/private';
+import { redirect } from '@sveltejs/kit';
+import { verifySession } from '$lib/server/admin-auth.server';
 
 /**
  * Validate Critical Environment Variables on Startup
@@ -29,6 +31,22 @@ if (missing.length > 0) {
 	process.exit(1);
 }
 
-export const handle = async ({ event, resolve }) => {
+export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve }) => {
+	const { pathname } = event.url;
+
+	// Guard all admin routes except the login page itself
+	if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
+		if (!verifySession(event.cookies)) {
+			// API requests get 401; page requests get redirected to login
+			if (pathname.startsWith('/admin/api/')) {
+				return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+					status: 401,
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+			redirect(303, '/admin/login');
+		}
+	}
+
 	return resolve(event);
 };

@@ -3,17 +3,13 @@
 	import { page } from '$app/state';
 	import type { PageProps } from './$types';
 	import {
-		TabLayout,
 		PageContainer,
 		PageHeader,
 		StateDisplay,
-		StateManager,
 		getDefaultValue,
 		type UISchema,
-		Viewer,
+		AppLayout,
 		createSolvingIndicator,
-		SolvingIndicator,
-		CalculateButton,
 		ComputeMessages,
 		createComputeThrottle
 	} from '@selva/shared';
@@ -236,8 +232,8 @@
 	};
 
 	const badgeConfig = $derived.by(() => {
-		// Show solving status when actively solving
-		if (solvingIndicator.show) return BADGES.solving;
+		// Only show solving in header for instant mode — manual mode uses CalculateButton
+		if (schema?.instanceSolve !== false && solvingIndicator.show) return BADGES.solving;
 
 		// Show compute health status when not solving
 		if (computeHealth.status.status === 'error') return BADGES.computeOffline;
@@ -266,7 +262,7 @@
 			<PageHeader title={pageTitle} badge={badgeConfig} showModeToggle={true} />
 		{/if}
 
-		<div class="bg-background flex-1 overflow-hidden">
+		<div class="bg-background flex flex-col flex-1 overflow-hidden">
 			{#if error}
 				<div class="flex min-h-100 items-center justify-center p-8">
 					<StateDisplay type="error" size="medium" message={error} />
@@ -276,74 +272,27 @@
 					<StateDisplay type="loading" size="large" message="Loading schema..." />
 				</div>
 			{:else}
-				<div style:display="contents">
-					{#key currentDefinition}
-						<div
-							class="flex h-full flex-col gap-6 overflow-hidden p-6 lg:flex-row {isViewerFullscreen
-								? 'fullscreen-container'
-								: ''}"
-						>
-							<!-- Controls -->
-							<div
-								class="w-full shrink-0 overflow-y-auto lg:w-120 xl:w-130 {isViewerFullscreen
-									? 'hidden'
-									: ''}"
-							>
-								{#if schema.layout.type === 'tabbed'}
-									<TabLayout
-										{schema}
-										bind:values
-										onValueChange={handleValueChange}
-										environment="compute"
-									/>
-								{/if}
-
-								<!-- State Manager -->
-								<div class="mt-6">
-									<StateManager
-										{schema}
-										currentValues={values}
-										onLoadValues={async (loadedValues) => {
-											Object.assign(values, loadedValues);
-
-											// Trigger solve based on instanceSolve setting
-											if (schema?.instanceSolve !== false) {
-												await performSolve();
-											} else {
-												hasPendingChanges = true;
-											}
-										}}
-									/>
-								</div>
-
-								{#if schema.instanceSolve === false}
-									<CalculateButton
-										{hasPendingChanges}
-										isSolving={solving}
-										oncalculate={handleCalculate}
-									/>
-								{/if}
-							</div>
-
-							<!-- Viewer -->
-							{#if shouldShowViewer}
-								<Viewer
-									{schema}
-									{meshes}
-									bind:isFullscreen={isViewerFullscreen}
-									isSolving={solvingIndicator.show}
-								/>
-							{/if}
-						</div>
-					{/key}
-
-					<!-- Instant mode: adaptive (skip fast solves). Manual mode: show immediately -->
-					{#if schema.instanceSolve === false}
-						<SolvingIndicator show={solving} />
-					{:else}
-						<SolvingIndicator show={solvingIndicator.show} />
-					{/if}
-				</div>
+				{#key currentDefinition}
+					<AppLayout
+						{schema}
+						{meshes}
+						isSolving={solving}
+						showSolvingIndicator={schema.instanceSolve !== false && solvingIndicator.show}
+						{hasPendingChanges}
+						bind:isViewerFullscreen
+						bind:values
+						onValueChange={handleValueChange}
+						environment="compute"
+						oncalculate={handleCalculate}
+						onLoadValues={async () => {
+							if (schema?.instanceSolve !== false) {
+								await performSolve();
+							} else {
+								hasPendingChanges = true;
+							}
+						}}
+					/>
+				{/key}
 			{/if}
 		</div>
 
@@ -352,12 +301,3 @@
 	</PageContainer>
 </div>
 
-<style>
-	.fullscreen-container {
-		position: fixed;
-		inset: 0;
-		z-index: 9999;
-		padding: 0 !important;
-		background: white;
-	}
-</style>

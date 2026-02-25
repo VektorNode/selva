@@ -1,2 +1,77 @@
-<h1>Welcome to SvelteKit</h1>
-<p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
+<script lang="ts">
+	import type { UISchema, SupportedTypes } from '$lib/types/generated';
+	import AppLayout from '$lib/components/AppLayout.svelte';
+	import { initializeValues } from '$lib/features/preview/handlers';
+	import exampleSchema from '$lib/example-schema.json';
+	import PageHeader from '$lib/components/layout/PageHeader.svelte';
+	import PageContainer from '$lib/components/layout/PageContainer.svelte';
+	import ComputeMessages from '$lib/components/ComputeMessages.svelte';
+	import * as THREE from 'three';
+
+	const schema = exampleSchema as UISchema;
+
+	const dummyErrors = [
+		'Error: Something went wrong with the calculation. Please check your input values and try again.',
+		'Error: Unable to connect to the server. Please check your internet connection and try again.'
+	];
+
+	const dummyWarnings = [
+		'Warning: The value for "Parameter X" is approaching the maximum limit. Consider adjusting it to avoid potential issues.',
+		'Warning: The calculation may take longer than expected due to the complexity of the input values.'
+	];
+
+	const cubeMesh = new THREE.Mesh(
+		new THREE.BoxGeometry(1, 1, 1, 4, 4, 4),
+		new THREE.MeshStandardMaterial({
+			color: 0x4a90d9,
+			metalness: 0.3,
+			roughness: 0.4
+		})
+	);
+
+	let values = $state<Record<string, unknown>>(initializeValues({ schema }));
+	let isSolving = $state(false);
+	let hasPendingChanges = $state(false);
+	let isViewerFullscreen = $state(false);
+
+	function handleValueChange(id: string, val: SupportedTypes) {
+		values[id] = val;
+		if (schema.instanceSolve === false) {
+			hasPendingChanges = true;
+		}
+	}
+
+	function handleCalculate() {
+		isSolving = true;
+		hasPendingChanges = false;
+		setTimeout(() => (isSolving = false), 3500);
+	}
+</script>
+
+<PageContainer>
+	<PageHeader title={'Test'} showModeToggle={true} />
+
+	<div class="flex flex-1 flex-col overflow-hidden bg-background">
+		<AppLayout
+			{schema}
+			meshes={[cubeMesh]}
+			{isSolving}
+			showSolvingIndicator={schema.instanceSolve !== false}
+			{hasPendingChanges}
+			bind:isViewerFullscreen
+			bind:values
+			onValueChange={handleValueChange}
+			environment="compute"
+			oncalculate={handleCalculate}
+			onLoadValues={async () => {
+				if (schema?.instanceSolve !== false) {
+					console.log('Performing solve on load values...');
+				} else {
+					hasPendingChanges = true;
+				}
+			}}
+		/>
+	</div>
+
+	<ComputeMessages errors={dummyErrors} warnings={dummyWarnings} />
+</PageContainer>

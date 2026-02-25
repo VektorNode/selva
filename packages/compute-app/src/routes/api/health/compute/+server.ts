@@ -70,7 +70,7 @@ export const GET: RequestHandler = async () => {
 		if (isProduction) {
 			response.warnings.push(
 				'Using local definitions with production compute server. ' +
-					'The server cannot access local files. Use the environment loader with GH_DEF_* variables instead.'
+					'Ensure the server can access the definitions path.'
 			);
 			response.status = 'warning';
 		}

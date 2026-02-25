@@ -5,12 +5,11 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { UISchema, DiscoveredParameters, SupportedTypes } from '@selva/shared';
 	import {
-		TabLayout,
 		PageContainer,
 		PageHeader,
 		StateDisplay,
 		Button,
-		StateManager,
+		AppLayout,
 		ensureSchemaLayoutDefaults,
 		initializeValues,
 		processOutputUpdate,
@@ -18,10 +17,7 @@
 		removeParametersFromValues,
 		formatParameterUpdateMessage,
 		formatMetadataUpdateMessage,
-		Viewer,
-		createSolvingIndicator,
-		SolvingIndicator,
-		CalculateButton
+		createSolvingIndicator
 	} from '@selva/shared';
 	import { initializeWebSocketSession, getWebSocketPortFromUrl } from '$lib/utils/session';
 	import { parseMeshBatchObject, SCALE_FACTORS } from 'selva-compute/visualization';
@@ -47,7 +43,6 @@
 	let displayMeshes = $state<THREE.Mesh[]>([]);
 
 	let modelUnits = $state<string>('Meters');
-	let shouldShowViewer = $state(false);
 
 	let isRemoteUpdate = $state(false);
 	let hasPendingChanges = $state(false);
@@ -247,11 +242,6 @@
 			schema = processedSchema;
 			loading = false;
 
-			// Show viewer immediately in local mode if allowed
-			if (processedSchema.viewerOptions?.enableLocal) {
-				shouldShowViewer = true;
-			}
-
 			// Check for initial outputs/display data with proper empty checks
 			const hasOutputs = message.outputs && Object.keys(message.outputs).length > 0;
 			const hasDisplayData =
@@ -441,68 +431,26 @@
 			</div>
 		{:else if schema}
 			{#key schema}
-				<div class="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden p-6 lg:flex-row">
-					<!-- Controls -->
-					<div
-						class="min-h-0 w-full overflow-y-auto {shouldShowViewer
-							? 'lg:w-120 xl:w-130'
-							: 'mx-auto max-w-6xl'} {isViewerFullscreen ? 'hidden' : ''}"
-					>
-						{#if schema.layout.type === 'tabbed' && schema.layout.tabs && schema.layout.tabs.length > 0}
-							<TabLayout
-								{schema}
-								bind:values
-								onValueChange={handleValueChange}
-								environment="local"
-							/>
-						{/if}
-
-						<!-- State Manager -->
-						<div class="mt-6">
-							<StateManager
-								{schema}
-								currentValues={values}
-								onLoadValues={(loadedValues) => {
-									// Apply loaded values
-									Object.assign(values, loadedValues);
-
-									// Send to Grasshopper
-									if (schema?.instanceSolve !== false) {
-										wsState.sendValueUpdate(sessionId, $state.snapshot(values));
-									} else {
-										hasPendingChanges = true;
-									}
-								}}
-							/>
-						</div>
-
-						{#if schema.instanceSolve === false}
-							<CalculateButton
-								{hasPendingChanges}
-								isSolving={wsState.isSolving}
-								oncalculate={handleCalculate}
-							/>
-						{/if}
-					</div>
-
-					<!-- 3D Viewer (conditional) -->
-					{#if shouldShowViewer}
-						<Viewer
-							{schema}
-							meshes={displayMeshes}
-							bind:isFullscreen={isViewerFullscreen}
-							isSolving={solvingIndicator.show}
-						/>
-					{/if}
-				</div>
+				<AppLayout
+					{schema}
+					meshes={displayMeshes}
+					isSolving={wsState.isSolving}
+					showSolvingIndicator={schema.instanceSolve !== false && solvingIndicator.show}
+					{hasPendingChanges}
+					bind:isViewerFullscreen
+					bind:values
+					onValueChange={handleValueChange}
+					environment="local"
+					oncalculate={handleCalculate}
+					onLoadValues={() => {
+						if (schema?.instanceSolve !== false) {
+							wsState.sendValueUpdate(sessionId, $state.snapshot(values));
+						} else {
+							hasPendingChanges = true;
+						}
+					}}
+				/>
 			{/key}
-
-			<!-- Instant mode: adaptive (skip fast solves). Manual mode: show immediately (user clicked Calculate) -->
-			{#if schema.instanceSolve === false}
-				<SolvingIndicator show={wsState.isSolving} />
-			{:else}
-				<SolvingIndicator show={solvingIndicator.show} />
-			{/if}
 		{/if}
 	</div>
 
@@ -527,17 +475,6 @@
 	@keyframes slideInRight {
 		from {
 			transform: translateX(100%);
-			opacity: 0;
-		}
-		to {
-			transform: translateX(0);
-			opacity: 1;
-		}
-	}
-
-	@keyframes slideInLeft {
-		from {
-			transform: translateX(-100%);
 			opacity: 0;
 		}
 		to {

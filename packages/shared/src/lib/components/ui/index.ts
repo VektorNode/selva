@@ -18,6 +18,7 @@ export * as Select from './select';
 export * as Card from './card';
 export * as Tabs from './tabs';
 export * as Dialog from './dialog';
+export * as Alert from './alert';
 export * as AlertDialog from './alert-dialog';
 export * as ContextMenu from './context-menu';
 

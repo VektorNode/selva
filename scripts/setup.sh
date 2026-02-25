@@ -162,7 +162,7 @@ print_success "Dependencies installed"
 print_header "Step 4: Environment Configuration"
 
 ENV_FILE="$INSTALL_DIR/packages/compute-app/.env"
-CONFIG_FILE="$INSTALL_DIR/packages/compute-app/ecosystem.config.cjs"
+CONFIG_FILE="$INSTALL_DIR/ecosystem.config.js"
 
 # Check if .env already exists
 if [ -f "$ENV_FILE" ]; then
@@ -310,8 +310,8 @@ if [ "$SKIP_PM2" = false ]; then
     print_success "PM2 found: $(pm2 -v)"
   fi
 
-  # Create ecosystem config (update if exists to reflect .env changes)
-  print_step "Creating/updating ecosystem.config.cjs..."
+  # Create/copy ecosystem config (update if exists to reflect .env changes)
+  print_step "Setting up ecosystem.config.cjs..."
 
   # Extract values from .env
   PORT=$(grep "^PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ')
@@ -324,13 +324,19 @@ if [ "$SKIP_PM2" = false ]; then
   ORIGIN=${ORIGIN:-http://localhost:$PORT}
 
   if [ ! -f "$CONFIG_FILE" ]; then
-
-    cat > "$CONFIG_FILE" << 'EOF'
+    # Try to copy from example file first
+    if [ -f "$INSTALL_DIR/example.ecosystem.config.cjs" ]; then
+      print_step "Copying example ecosystem config..."
+      cp "$INSTALL_DIR/example.ecosystem.config.cjs" "$CONFIG_FILE"
+      print_success "Copied example config to $CONFIG_FILE"
+    else
+      # Fallback: create a basic config if no example exists
+      cat > "$CONFIG_FILE" << 'EOF'
 module.exports = {
 	apps: [
 		{
 			name: 'selva-compute',
-			script: './build/index.js',
+			script: './packages/compute-app/build/index.js',
 			instances: 1,
 			exec_mode: 'fork',
 			autorestart: true,
@@ -350,23 +356,39 @@ module.exports = {
 	]
 };
 EOF
-
-    # Replace placeholders
-    sed -i "s|__CWD__|$INSTALL_DIR/packages/compute-app|g" "$CONFIG_FILE"
-    sed -i "s/__PORT__/$PORT/g" "$CONFIG_FILE"
-    sed -i "s|__ORIGIN__|$ORIGIN|g" "$CONFIG_FILE"
-    sed -i "s|__COMPUTE_SERVER_URL__|$COMPUTE_SERVER_URL|g" "$CONFIG_FILE"
-
-    if [ -n "$COMPUTE_API_KEY" ]; then
-      sed -i "s|__COMPUTE_API_KEY__|COMPUTE_API_KEY: '$COMPUTE_API_KEY',|g" "$CONFIG_FILE"
-    else
-      sed -i "s|__COMPUTE_API_KEY__|// No API key configured|g" "$CONFIG_FILE"
     fi
 
-    if [ -n "$GH_DEFINITIONS_PATH" ]; then
-      sed -i "s|__GH_DEFINITIONS__|GH_DEFINITIONS_PATH: '$GH_DEFINITIONS_PATH',|g" "$CONFIG_FILE"
+    # Replace placeholders (only needed for fallback config)
+    if [ ! -f "$INSTALL_DIR/example.ecosystem.config.cjs" ]; then
+      sed -i "s|__CWD__|$INSTALL_DIR/packages/compute-app|g" "$CONFIG_FILE"
+      sed -i "s/__PORT__/$PORT/g" "$CONFIG_FILE"
+      sed -i "s|__ORIGIN__|$ORIGIN|g" "$CONFIG_FILE"
+      sed -i "s|__COMPUTE_SERVER_URL__|$COMPUTE_SERVER_URL|g" "$CONFIG_FILE"
+
+      if [ -n "$COMPUTE_API_KEY" ]; then
+        sed -i "s|__COMPUTE_API_KEY__|COMPUTE_API_KEY: '$COMPUTE_API_KEY',|g" "$CONFIG_FILE"
+      else
+        sed -i "s|__COMPUTE_API_KEY__|// No API key configured|g" "$CONFIG_FILE"
+      fi
+
+      if [ -n "$GH_DEFINITIONS_PATH" ]; then
+        sed -i "s|__GH_DEFINITIONS__|GH_DEFINITIONS_PATH: '$GH_DEFINITIONS_PATH',|g" "$CONFIG_FILE"
+      else
+        sed -i "s|__GH_DEFINITIONS__|// Using environment variable definitions|g" "$CONFIG_FILE"
+      fi
     else
-      sed -i "s|__GH_DEFINITIONS__|// Using environment variable definitions|g" "$CONFIG_FILE"
+      # Update example file with values from .env
+      sed -i "s/PORT: [0-9]*/PORT: $PORT/" "$CONFIG_FILE"
+      sed -i "s|ORIGIN: '[^']*'|ORIGIN: '$ORIGIN'|" "$CONFIG_FILE"
+      sed -i "s|COMPUTE_SERVER_URL: '[^']*'|COMPUTE_SERVER_URL: '$COMPUTE_SERVER_URL'|" "$CONFIG_FILE"
+
+      if [ -n "$GH_DEFINITIONS_PATH" ]; then
+        sed -i "s|GH_DEFINITIONS_PATH: '[^']*'|GH_DEFINITIONS_PATH: '$GH_DEFINITIONS_PATH'|" "$CONFIG_FILE"
+      fi
+
+      if [ -n "$COMPUTE_API_KEY" ]; then
+        sed -i "s|COMPUTE_API_KEY: '[^']*'|COMPUTE_API_KEY: '$COMPUTE_API_KEY'|" "$CONFIG_FILE"
+      fi
     fi
 
     print_success "ecosystem.config.cjs created: $CONFIG_FILE"

@@ -68,20 +68,11 @@
 		></canvas>
 	</div>
 
-	<!-- Solving overlay: blurs the canvas and shows a subtle indicator -->
+	<!-- Solving overlay: blurs the canvas -->
 	{#if isSolving}
 		<div
 			class="inset-0 absolute z-10 animate-[selva-viewer-fade-in_0.2s_ease-out] rounded-lg backdrop-blur-[2px] transition-all duration-300"
-		>
-			<div
-				class="right-3 top-3 gap-2 bg-black/40 px-2.5 py-1.5 text-white backdrop-blur-sm absolute flex items-center rounded-md"
-			>
-				<div
-					class="h-2.5 w-2.5 animate-spin border-white rounded-full border-2 border-t-transparent"
-				></div>
-				<span class="text-xs font-medium tracking-wide">Updating</span>
-			</div>
-		</div>
+		></div>
 	{/if}
 
 	<!-- Fullscreen Toggle Button -->

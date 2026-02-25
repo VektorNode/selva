@@ -6,8 +6,11 @@
 # Automates pulling latest changes and rebuilding the application.
 # Uses PM2 for zero-downtime updates when available.
 #
-# Usage: bash update.sh [--no-restart]
-#        bash update.sh --no-restart   # Skip PM2 restart
+# Usage: bash update.sh [--no-restart] [--branch <branch>] [--no-pull] [--restart-only]
+#        bash update.sh --no-restart          # Skip PM2 restart
+#        bash update.sh --branch main         # Switch to and update a specific branch
+#        bash update.sh --no-pull             # Skip git pull, only build and restart
+#        bash update.sh --restart-only        # Only restart the PM2 process, skip everything else
 ################################################################################
 
 set -eo pipefail
@@ -22,11 +25,17 @@ NC='\033[0m' # No Color
 # Configuration
 INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
 NO_RESTART=false
+NO_PULL=false
+RESTART_ONLY=false
+TARGET_BRANCH=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
     --no-restart) NO_RESTART=true; shift ;;
+    --no-pull) NO_PULL=true; shift ;;
+    --restart-only) RESTART_ONLY=true; shift ;;
+    --branch) TARGET_BRANCH="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -75,6 +84,20 @@ LOCAL_COMMIT=$(git rev-parse HEAD)
 print_success "Current branch: $CURRENT_BRANCH"
 print_success "Current commit: $(git rev-parse --short HEAD)"
 
+# Switch to target branch if specified
+if [ -n "$TARGET_BRANCH" ] && [ "$TARGET_BRANCH" != "$CURRENT_BRANCH" ]; then
+  print_step "Switching to branch: $TARGET_BRANCH..."
+  git fetch origin
+  if git checkout "$TARGET_BRANCH" 2>/dev/null || git checkout -b "$TARGET_BRANCH" --track "origin/$TARGET_BRANCH" 2>/dev/null; then
+    CURRENT_BRANCH="$TARGET_BRANCH"
+    CURRENT_COMMIT=$(git rev-parse --short HEAD)
+    print_success "Switched to branch: $CURRENT_BRANCH"
+  else
+    print_error "Failed to switch to branch: $TARGET_BRANCH"
+    exit 1
+  fi
+fi
+
 # Check if PM2 is managing the app
 PM2_RUNNING=false
 if command -v pm2 >/dev/null 2>&1; then
@@ -84,31 +107,59 @@ if command -v pm2 >/dev/null 2>&1; then
   fi
 fi
 
+if [ "$RESTART_ONLY" = true ]; then
+  print_warning "Restart-only mode — skipping pull, deps, and build"
+else
+
 ################################################################################
 # 2. PULL LATEST CHANGES
 ################################################################################
-print_header "Step 1: Pulling Latest Changes"
+if [ "$NO_PULL" = true ]; then
+  print_header "Step 1: Skipping Pull (--no-pull)"
+  print_warning "Skipping git pull — using current local state"
+  echo "Current commit: $(git log -1 --pretty=format:'%h - %s (%ar)')"
+else
+  print_header "Step 1: Pulling Latest Changes"
 
-print_step "Fetching from remote..."
-git fetch origin
+  print_step "Fetching from remote..."
+  git fetch origin
 
 # Check if there are changes
 REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH)
 
-if [ "$LOCAL_COMMIT" = "$REMOTE_COMMIT" ]; then
-  print_warning "Already up to date!"
+  if [ "$LOCAL_COMMIT" = "$REMOTE_COMMIT" ]; then
+    print_warning "Already up to date!"
+    echo ""
+    echo "Latest commit: $(git log -1 --pretty=format:'%h - %s (%ar)')"
+    exit 0
+  fi
+
+  print_step "Pulling changes from origin/$CURRENT_BRANCH..."
+  if ! git pull origin $CURRENT_BRANCH; then
+    # Check if the failure was due to merge conflicts
+    if git diff --name-only --diff-filter=U | grep -q .; then
+      print_error "Merge conflicts detected! Aborting merge..."
+      git merge --abort 2>/dev/null || true
+      echo ""
+      echo "Conflicting files:"
+      git diff --name-only --diff-filter=U
+      echo ""
+      echo "To resolve manually:"
+      echo "  1. cd $INSTALL_DIR"
+      echo "  2. git pull origin $CURRENT_BRANCH"
+      echo "  3. Resolve conflicts, then: git add . && git commit"
+      echo "  4. Re-run: bash update.sh --no-pull"
+    else
+      print_error "git pull failed. Check your network connection or repository access."
+    fi
+    exit 1
+  fi
+
+  NEW_COMMIT=$(git rev-parse --short HEAD)
+  print_success "Updated to: $NEW_COMMIT"
   echo ""
-  echo "Latest commit: $(git log -1 --pretty=format:'%h - %s (%ar)')"
-  exit 0
+  git log --oneline -5
 fi
-
-print_step "Pulling changes from origin/$CURRENT_BRANCH..."
-git pull origin $CURRENT_BRANCH
-
-NEW_COMMIT=$(git rev-parse --short HEAD)
-print_success "Updated to: $NEW_COMMIT"
-echo ""
-git log --oneline -5
 
 ################################################################################
 # 3. INSTALL DEPENDENCIES
@@ -135,6 +186,8 @@ export ADAPTER=node
 pnpm build
 print_success "Compute-app built"
 
+fi # end of restart-only skip block
+
 ################################################################################
 # 5. RESTART APPLICATION
 ################################################################################
@@ -143,7 +196,8 @@ if [ "$NO_RESTART" = false ]; then
 
   if [ "$PM2_RUNNING" = true ]; then
     print_step "Restarting with PM2..."
-    pm2 restart selva-compute --update-env
+    cd "$INSTALL_DIR"
+    pm2 start "$INSTALL_DIR/ecosystem.config.cjs" --only selva-compute --update-env
 
     # Wait for restart
     sleep 2
