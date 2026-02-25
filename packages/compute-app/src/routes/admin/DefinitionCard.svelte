@@ -9,6 +9,7 @@
 		tags?: string[];
 		coverImage?: string;
 		file?: string;
+		originalFilename?: string;
 	}
 
 	interface Props {
@@ -37,7 +38,7 @@
 			<div class="min-w-0 flex-1">
 				<h4 class="line-clamp-1 text-sm font-semibold">{config.displayName || guid}</h4>
 				<p class="text-muted-foreground mt-0.5 truncate text-xs">
-					{config.file || 'No file'}
+					{config.originalFilename || config.file || 'No file'}
 				</p>
 			</div>
 			<Button
@@ -62,7 +63,7 @@
 
 		{#if config.tags && config.tags.length > 0}
 			<div class="flex flex-wrap gap-1">
-				{#each config.tags.slice(0, 3) as tag}
+				{#each config.tags.slice(0, 3) as tag (tag)}
 					<Badge variant="secondary">{tag}</Badge>
 				{/each}
 				{#if config.tags.length > 3}

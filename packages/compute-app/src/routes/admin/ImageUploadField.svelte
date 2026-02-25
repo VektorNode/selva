@@ -63,7 +63,7 @@
 			/>
 			<Button
 				size="sm"
-				{disabled}
+				disabled={disabled || !hasFile || isUploading}
 				onclick={onUpload}
 			>
 				<Upload class="mr-2 h-4 w-4" />

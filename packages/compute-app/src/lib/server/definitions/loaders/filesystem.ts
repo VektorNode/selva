@@ -17,10 +17,19 @@ export interface FilesystemLoaderConfig {
 /** UUID v4 pattern */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** A file is "stable" if it's already named definition.gh or definition.ghx */
+function isStableFilename(filename: string): boolean {
+	return filename === 'definition.gh' || filename === 'definition.ghx';
+}
+
+function stableFilename(ext: string): string {
+	return `definition${ext}`;
+}
+
 export class FilesystemDefinitionLoader implements IDefinitionLoader {
 	private config: Required<FilesystemLoaderConfig>;
 	protected configCache: DefinitionsConfig | undefined;
-	private watcher: ReturnType<typeof watch> | null = null;
+	private _watcher: ReturnType<typeof watch> | null = null;
 
 	constructor(config: FilesystemLoaderConfig) {
 		this.config = {
@@ -33,7 +42,7 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 	private setupFileWatcher(): void {
 		try {
 			const configPath = this.getConfigPath();
-			this.watcher = watch(configPath, (eventType) => {
+			this._watcher = watch(configPath, (eventType) => {
 				if (eventType === 'change' || eventType === 'rename') {
 					this.configCache = undefined;
 				}
@@ -67,17 +76,49 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 		throw new Error(`Unsupported file type: .${ext}`);
 	}
 
-	private ensureExtension(filename: string): string {
-		if (!filename.endsWith('.gh') && !filename.endsWith('.ghx')) {
-			return filename + '.gh';
+	/**
+	 * Migrate a legacy definition entry: rename the on-disk file from its original name
+	 * to "definition.gh" / "definition.ghx" and update the config entry in place.
+	 * Returns the stable filename.
+	 */
+	protected async migrateToStableFilename(
+		guid: string,
+		meta: DefinitionMetadata,
+		config: DefinitionsConfig
+	): Promise<string> {
+		if (!meta.file) return 'definition.gh';
+
+		const ext = path.extname(meta.file).toLowerCase();
+		const stable = stableFilename(ext);
+		const guidDir = path.join(this.config.definitionsPath, guid);
+		const oldPath = path.join(guidDir, meta.file);
+		const newPath = path.join(guidDir, stable);
+
+		try {
+			await fs.rename(oldPath, newPath);
+		} catch {
+			// File may already be gone or already renamed — proceed
 		}
-		return filename;
+
+		// Update config entry
+		meta.originalFilename = meta.originalFilename ?? meta.file;
+		meta.file = stable;
+		config.definitions[guid] = meta;
+
+		// Write config and bust cache
+		const configPath = this.getConfigPath();
+		const tmpPath = `${configPath}.tmp`;
+		await fs.writeFile(tmpPath, JSON.stringify(config, null, '\t'), 'utf-8');
+		await fs.rename(tmpPath, configPath);
+		this.configCache = undefined;
+
+		return stable;
 	}
 
 	/**
 	 * Resolve an identifier to { guid, filename }.
-	 * - UUID → direct GUID lookup in config
-	 * - filename → search all definitions by `file` field (backward compat)
+	 * - UUID → direct GUID lookup in config, migrating old-style entries on the fly
+	 * - filename → search all definitions by originalFilename or file field (backward compat)
 	 */
 	private async resolveIdentifier(identifier: string): Promise<{ guid: string; filename: string }> {
 		const config = await this.loadConfigFile();
@@ -88,14 +129,24 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 			const meta = defs[identifier];
 			if (!meta) throw new Error(`Definition with GUID '${identifier}' not found`);
 			if (!meta.file) throw new Error(`Definition '${identifier}' has no file associated`);
+
+			// Migrate old-style entry on first access
+			if (!isStableFilename(meta.file)) {
+				const stable = await this.migrateToStableFilename(identifier, meta, config);
+				return { guid: identifier, filename: stable };
+			}
+
 			return { guid: identifier, filename: meta.file };
 		}
 
-		// Filename lookup (with or without extension)
-		const filenameWithExt = this.ensureExtension(identifier);
+		// Filename / originalFilename lookup (backward compat)
 		for (const [guid, meta] of Object.entries(defs)) {
-			if (meta.file === identifier || meta.file === filenameWithExt) {
+			if (meta.originalFilename === identifier || meta.file === identifier) {
 				if (!meta.file) throw new Error(`Definition '${guid}' has no file associated`);
+				if (!isStableFilename(meta.file)) {
+					const stable = await this.migrateToStableFilename(guid, meta, config);
+					return { guid, filename: stable };
+				}
 				return { guid, filename: meta.file };
 			}
 		}
@@ -111,12 +162,18 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 		for (const [guid, metadata] of Object.entries(defs)) {
 			if (!metadata.file) continue;
 			try {
-				const fileType = this.getFileType(metadata.file);
+				// Migrate old-style entries lazily
+				let file = metadata.file;
+				if (!isStableFilename(file)) {
+					file = await this.migrateToStableFilename(guid, metadata, config);
+				}
+				const fileType = this.getFileType(file);
 				definitions.push({
 					guid,
-					filename: metadata.file,
+					filename: file,
 					fileType,
-					...metadata
+					...metadata,
+					file
 				});
 			} catch {
 				console.warn(`[FilesystemLoader] Skipping '${guid}': unsupported file type`);
@@ -147,7 +204,6 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 
 	async getDefinitionUrl(identifier: string): Promise<string> {
 		const { guid } = await this.resolveIdentifier(identifier);
-		// Return GUID as the stable local identifier
 		return `local:${guid}`;
 	}
 }

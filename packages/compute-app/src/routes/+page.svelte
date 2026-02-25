@@ -111,9 +111,9 @@
 				<StateDisplay type="empty" size="medium" message="No definitions found" />
 			{:else}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-					{#each data.definitions as definition (definition.filename)}
+					{#each data.definitions as definition (definition.guid)}
 						<button
-							onclick={() => handleDefinitionClick(definition.filename)}
+							onclick={() => handleDefinitionClick(definition.guid)}
 							disabled={loadingDefinition !== null}
 							class="group border-border bg-card hover:border-muted-foreground relative flex h-full flex-col overflow-hidden rounded-lg border text-left transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
 						>
@@ -165,7 +165,7 @@
 								<div
 									class="text-muted-foreground group-hover:text-foreground mt-auto flex items-center justify-between pt-2 text-xs"
 								>
-									<span class="truncate">{definition.filename}</span>
+									<span class="truncate">{definition.originalFilename || definition.filename}</span>
 									<ArrowRight
 										class="ml-2 h-3.5 w-3.5 shrink-0 transition-all group-hover:translate-x-0.5"
 									/>
