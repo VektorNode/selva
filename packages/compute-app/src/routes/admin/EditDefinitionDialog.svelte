@@ -41,7 +41,7 @@
 	let {
 		open = false,
 		guid,
-		config,
+		config = $bindable(),
 		history = [],
 		savingDefinition = false,
 		uploadingDefinitionFile = false,
@@ -292,7 +292,7 @@
 						<History class="h-3 w-3" /> Archived versions ({history.length})
 					</p>
 					<ul class="space-y-1.5">
-						{#each history as entry}
+						{#each history as entry (entry.filename)}
 							<li class="flex items-center gap-2">
 								<div class="min-w-0 flex-1">
 									<p class="truncate font-mono text-xs">{entry.originalName}</p>

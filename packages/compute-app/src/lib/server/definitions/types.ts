@@ -19,8 +19,10 @@ export interface DefinitionMetadata {
 	coverImage?: string;
 	category?: string;
 	tags?: string[];
-	/** Filename of the active .gh/.ghx file inside the GUID folder */
+	/** Stable filename on disk: always "definition.gh" or "definition.ghx" */
 	file?: string;
+	/** Original uploaded filename, kept for display purposes only */
+	originalFilename?: string;
 	/** Ordered list of archived versions, newest first */
 	history?: HistoryEntry[];
 	/** Maximum number of archived versions to keep. 0 or undefined = keep all */

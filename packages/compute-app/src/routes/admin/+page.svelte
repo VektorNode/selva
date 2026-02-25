@@ -20,6 +20,7 @@
 		tags?: string[];
 		coverImage?: string;
 		file?: string;
+		originalFilename?: string;
 		maxHistory?: number;
 	}
 
@@ -68,7 +69,7 @@
 			return (
 				cfg.displayName?.toLowerCase().includes(q) ||
 				cfg.description?.toLowerCase().includes(q) ||
-				cfg.file?.toLowerCase().includes(q)
+				cfg.originalFilename?.toLowerCase().includes(q)
 			);
 		})
 	);
@@ -263,10 +264,10 @@
 				</div>
 			{:else}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					{#each filteredDefinitions as [guid, cfg] (guid)}
+					{#each filteredDefinitions as entry (entry[0])}
 						<DefinitionCard
-							{guid}
-							config={cfg}
+							guid={entry[0]}
+							config={entry[1]}
 							onEdit={(g) => (editingDefinition = g)}
 						/>
 					{/each}

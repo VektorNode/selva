@@ -62,8 +62,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		);
 		return json({ success: true, ...result });
 	} catch (err) {
-		const message = err instanceof Error ? err.message : 'Failed to create definition';
-		if (message.includes('already exists')) throw error(409, message);
 		console.error('[Definitions POST] Failed to create definition:', err);
 		throw error(500, 'Failed to create definition');
 	}

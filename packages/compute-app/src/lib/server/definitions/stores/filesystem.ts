@@ -12,8 +12,17 @@ import type {
 	HistoryEntry
 } from '../types';
 
-/** Regex for archived filenames: "2024-01-15T10-30-45-123Z_originalname.gh" */
+/** Regex for archived filenames: "2024-01-15T10-30-45-123Z_definition.gh" */
 const ARCHIVE_FILENAME_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)_(.+)$/;
+
+/**
+ * Derive the stable on-disk filename from an extension.
+ * All definitions are stored as "definition.gh" or "definition.ghx" —
+ * the original upload name is kept in metadata.originalFilename only.
+ */
+function stableFilename(ext: string): string {
+	return `definition${ext}`;
+}
 
 export class FilesystemDefinitionStore
 	extends FilesystemDefinitionLoader
@@ -89,21 +98,13 @@ export class FilesystemDefinitionStore
 			throw new Error(`File type not allowed. Allowed: ${GH_EXTENSIONS.join(', ')}`);
 		}
 
-		// Reject if another definition already uses this filename
-		const existingConfig = await this.readConfig();
-		const duplicate = Object.entries(existingConfig.definitions).find(
-			([, def]) => def.file === ghFile.name
-		);
-		if (duplicate) {
-			throw new Error(`A definition with file "${ghFile.name}" already exists (${duplicate[1].displayName})`);
-		}
-
 		const guid = randomUUID();
 		const guidDir = this.guidPath(guid);
 		await fs.mkdir(guidDir, { recursive: true });
 
-		// Write GH file
-		await fs.writeFile(path.join(guidDir, ghFile.name), Buffer.from(ghFile.data));
+		// Store as stable "definition.gh" / "definition.ghx" — never the original name
+		const storedFilename = stableFilename(ext);
+		await fs.writeFile(path.join(guidDir, storedFilename), Buffer.from(ghFile.data));
 
 		// Handle image - either from file upload or URL
 		let coverImage: string | undefined;
@@ -113,25 +114,24 @@ export class FilesystemDefinitionStore
 			coverImage = coverImageUrl;
 		}
 
-		// Update config - initialize all properties consistently
+		// Update config
 		const config = await this.readConfig();
 		const newEntry: DefinitionMetadata & { file: string } = {
 			displayName: displayName.trim(),
-			file: ghFile.name,
+			file: storedFilename,
+			originalFilename: ghFile.name,
 			history: []
 		};
 
-		// Always add optional properties if they have values (even if just a space)
 		if (description) newEntry.description = description;
 		if (category) newEntry.category = category;
 		if (tags && tags.length > 0) newEntry.tags = tags;
-		// Always preserve coverImage if it exists (whether URL or file path)
 		if (coverImage !== undefined) newEntry.coverImage = coverImage;
 
 		config.definitions[guid] = newEntry;
 		await this.writeConfig(config);
 
-		return { guid, filename: ghFile.name, coverImage };
+		return { guid, filename: storedFilename, coverImage };
 	}
 
 	async updateMetadata(guid: string, patch: Partial<DefinitionMetadata>): Promise<void> {
@@ -139,13 +139,14 @@ export class FilesystemDefinitionStore
 		const existing = config.definitions[guid];
 		if (!existing) throw new Error(`Definition '${guid}' not found`);
 
-		// Merge patch into existing, preserving all properties including file and history
+		// Merge patch into existing, preserving file, originalFilename, and history
 		const updated = {
 			displayName: patch.displayName ?? existing.displayName,
 			file: existing.file || ''
 		} as DefinitionMetadata & { file: string };
 
-		// Only include optional properties if they have values
+		if (existing.originalFilename) updated.originalFilename = existing.originalFilename;
+
 		if (patch.description !== undefined) {
 			if (patch.description) updated.description = patch.description;
 		} else if (existing.description) {
@@ -165,22 +166,17 @@ export class FilesystemDefinitionStore
 		}
 
 		if (patch.coverImage !== undefined) {
-			// empty string = explicit clear; non-empty string = set new value
 			if (patch.coverImage) updated.coverImage = patch.coverImage;
-			// else: leave updated.coverImage unset (clears it)
 		} else if (existing.coverImage) {
 			updated.coverImage = existing.coverImage;
 		}
 
-		// Preserve history (never patched via metadata update)
 		if (existing.history !== undefined) {
 			updated.history = existing.history;
 		}
 
-		// maxHistory: 0 is a valid value (keep all), so check !== undefined
 		if (patch.maxHistory !== undefined) {
 			if (patch.maxHistory > 0) updated.maxHistory = patch.maxHistory;
-			// 0 = keep all = omit the field
 		} else if (existing.maxHistory) {
 			updated.maxHistory = existing.maxHistory;
 		}
@@ -206,11 +202,12 @@ export class FilesystemDefinitionStore
 
 		const guidDir = this.guidPath(guid);
 		const oldFilesDir = path.join(guidDir, 'old_files');
-		const newFilePath = path.join(guidDir, file.name);
+		const storedFilename = stableFilename(ext);
+		const newFilePath = path.join(guidDir, storedFilename);
 
 		await fs.mkdir(guidDir, { recursive: true });
 
-		// Archive any existing GH file (including same-named replacements)
+		// Archive any existing GH file
 		let archivedEntry: HistoryEntry | null = null;
 		try {
 			const entries = await fs.readdir(guidDir);
@@ -225,9 +222,14 @@ export class FilesystemDefinitionStore
 					const data = await fs.readFile(existingPath);
 					await fs.writeFile(path.join(oldFilesDir, backupName), data);
 					await fs.unlink(existingPath);
+
+					// Use originalFilename from config for the history display name
+					const config = await this.readConfig();
+					const originalName = config.definitions[guid]?.originalFilename ?? entry;
+
 					archivedEntry = {
 						filename: backupName,
-						originalName: entry,
+						originalName,
 						date: now.toISOString()
 					};
 					break;
@@ -239,21 +241,19 @@ export class FilesystemDefinitionStore
 
 		await fs.writeFile(newFilePath, Buffer.from(file.data));
 
-		// Update config: file pointer + history
+		// Update config: file pointer, originalFilename, and history
 		const config = await this.readConfig();
 		if (config.definitions[guid]) {
 			const def = config.definitions[guid];
-			def.file = file.name;
+			def.file = storedFilename;
+			def.originalFilename = file.name;
 
 			if (archivedEntry) {
-				// Ensure history is populated (migrate from filesystem if needed)
 				if (def.history === undefined) {
 					def.history = await this._buildHistoryFromFilesystem(guid);
-					// The file we just archived isn't on disk yet reflected, but we'll prepend below
 				}
 				def.history = [archivedEntry, ...def.history];
 
-				// Prune if maxHistory is set
 				if (def.maxHistory && def.maxHistory > 0) {
 					def.history = await this._pruneHistory(oldFilesDir, def.history, def.maxHistory);
 				}
@@ -262,14 +262,13 @@ export class FilesystemDefinitionStore
 			await this.writeConfig(config);
 		}
 
-		return file.name;
+		return storedFilename;
 	}
 
 	async revertFile(guid: string, archivedFilename: string): Promise<string> {
 		const oldFilesDir = path.join(this.guidPath(guid), 'old_files');
 		const archivedPath = path.join(oldFilesDir, archivedFilename);
 
-		// Validate the archived file actually exists and is a GH file
 		const ext = path.extname(archivedFilename).toLowerCase();
 		if (!GH_EXTENSIONS.includes(ext)) {
 			throw new Error('Invalid archived file type');
@@ -277,21 +276,21 @@ export class FilesystemDefinitionStore
 
 		const data = await fs.readFile(archivedPath);
 
-		// Remove the reverted entry from history before replaceFile adds the current file
+		// Read the original name from the history entry before removing it
 		const config = await this.readConfig();
 		const def = config.definitions[guid];
+		const historyEntry = def?.history?.find((e) => e.filename === archivedFilename);
+		const originalName = historyEntry?.originalName ?? archivedFilename.replace(/^[^_]+_/, '');
+
 		if (def?.history !== undefined) {
 			def.history = def.history.filter((e) => e.filename !== archivedFilename);
 			await this.writeConfig(config);
 		}
 
-		// Delete the archived file — replaceFile will archive the current active file
 		await fs.unlink(archivedPath);
 
-		// Strip timestamp prefix (format: "2024-01-15T10-30-45-123Z_originalname.gh")
-		const originalName = archivedFilename.replace(/^[^_]+_/, '');
-
-		// replaceFile archives the current file and writes the restored one
+		// replaceFile will archive the current active file and write the restored one
+		// Pass originalName so metadata.originalFilename is correctly restored
 		return this.replaceFile(guid, { name: originalName, data: data.buffer });
 	}
 
@@ -313,12 +312,10 @@ export class FilesystemDefinitionStore
 
 	// ── Private helpers ─────────────────────────────────────────────────────
 
-	/** Parse a timestamped archived filename into a HistoryEntry. Returns null if unparseable. */
 	private _parseHistoryEntry(filename: string): HistoryEntry | null {
 		const match = filename.match(ARCHIVE_FILENAME_RE);
 		if (!match) return null;
 		const [, tsStr, originalName] = match;
-		// Restore ISO format: "2024-01-15T10-30-45-123Z" → "2024-01-15T10:30:45.123Z"
 		const isoStr = tsStr.replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3}Z)$/, 'T$1:$2:$3.$4');
 		const date = new Date(isoStr);
 		return {
@@ -328,7 +325,6 @@ export class FilesystemDefinitionStore
 		};
 	}
 
-	/** Scan old_files/ on disk and build a HistoryEntry list (newest first). */
 	private async _buildHistoryFromFilesystem(guid: string): Promise<HistoryEntry[]> {
 		const oldFilesDir = path.join(this.guidPath(guid), 'old_files');
 		try {
@@ -345,10 +341,6 @@ export class FilesystemDefinitionStore
 		}
 	}
 
-	/**
-	 * Prune history to maxHistory entries, deleting excess files from disk.
-	 * Returns the kept entries (newest first).
-	 */
 	private async _pruneHistory(
 		oldFilesDir: string,
 		entries: HistoryEntry[],
@@ -364,21 +356,19 @@ export class FilesystemDefinitionStore
 			try {
 				await fs.unlink(path.join(oldFilesDir, entry.filename));
 			} catch {
-				// Non-fatal — file may already be gone
+				// Non-fatal
 			}
 		}
 
 		return keep;
 	}
 
-	/** Write image bytes to the GUID folder, return the admin serve URL */
 	private async _writeImage(guid: string, image: FileInput): Promise<string> {
 		const ext = path.extname(image.name).toLowerCase();
 		if (!ALLOWED_IMAGE_EXTENSIONS.includes(ext)) {
 			throw new Error(`Unsupported image type. Allowed: ${ALLOWED_IMAGE_EXTENSIONS.join(', ')}`);
 		}
 
-		// Write new image first, then remove old ones — avoids data loss if write fails
 		const guidDir = this.guidPath(guid);
 		await fs.mkdir(guidDir, { recursive: true });
 
@@ -394,7 +384,7 @@ export class FilesystemDefinitionStore
 				}
 			}
 		} catch {
-			// Non-fatal — old image cleanup is best-effort
+			// Non-fatal
 		}
 
 		return `/admin/api/definitions/${guid}/image/${safeFilename}`;
