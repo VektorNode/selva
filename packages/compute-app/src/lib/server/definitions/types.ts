@@ -4,6 +4,15 @@
 
 export type DefinitionFileType = 'gh' | 'ghx';
 
+export interface HistoryEntry {
+	/** Archived filename with timestamp prefix (used for revert API calls) */
+	filename: string;
+	/** Original file name without timestamp prefix */
+	originalName: string;
+	/** ISO 8601 date string of when the file was archived */
+	date: string;
+}
+
 export interface DefinitionMetadata {
 	displayName: string;
 	description?: string;
@@ -12,6 +21,10 @@ export interface DefinitionMetadata {
 	tags?: string[];
 	/** Filename of the active .gh/.ghx file inside the GUID folder */
 	file?: string;
+	/** Ordered list of archived versions, newest first */
+	history?: HistoryEntry[];
+	/** Maximum number of archived versions to keep. 0 or undefined = keep all */
+	maxHistory?: number;
 }
 
 export interface Definition extends DefinitionMetadata {
@@ -74,7 +87,7 @@ export interface IDefinitionStore extends IDefinitionLoader {
 	readConfig(): Promise<DefinitionsConfig>;
 
 	/** Get archived file history for a GUID */
-	getFileHistory(guid: string): Promise<string[]>;
+	getFileHistory(guid: string): Promise<HistoryEntry[]>;
 
 	/** Create a new definition; returns { guid, filename, coverImage? } */
 	createDefinition(

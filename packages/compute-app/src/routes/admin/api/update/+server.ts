@@ -31,6 +31,14 @@ export const POST: RequestHandler = async () => {
           env: { PATH: process.env.PATH, HOME: process.env.HOME }
         });
 
+        // Kill the process if it runs longer than 5 minutes
+        const timeout = setTimeout(() => {
+          child.kill('SIGTERM');
+          sendEvent('log', { data: '[FATAL] Update timed out after 5 minutes' });
+          sendEvent('exit', { code: -1 });
+          controller.close();
+        }, 5 * 60 * 1000);
+
         // Stream stdout
         child.stdout.on('data', (data) => {
           const lines = data.toString().split('\n');
@@ -55,12 +63,14 @@ export const POST: RequestHandler = async () => {
 
         // Handle process exit
         child.on('close', (code) => {
+          clearTimeout(timeout);
           sendEvent('exit', { code: code ?? -1 });
           controller.close();
         });
 
         // Handle errors
         child.on('error', (err) => {
+          clearTimeout(timeout);
           sendEvent('log', { data: `[FATAL] ${err.message}` });
           sendEvent('exit', { code: -1 });
           controller.close();

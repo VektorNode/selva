@@ -7,6 +7,12 @@
 	import AddDefinitionDialog from './AddDefinitionDialog.svelte';
 	import UpdateSection from './UpdateSection.svelte';
 
+	interface HistoryEntry {
+		filename: string;
+		originalName: string;
+		date: string;
+	}
+
 	interface DefinitionConfig {
 		displayName: string;
 		description: string;
@@ -14,11 +20,12 @@
 		tags?: string[];
 		coverImage?: string;
 		file?: string;
+		maxHistory?: number;
 	}
 
 	interface PageData {
 		config: { [guid: string]: DefinitionConfig };
-		history: { [guid: string]: string[] };
+		history: { [guid: string]: HistoryEntry[] };
 	}
 
 	interface Props {
@@ -84,7 +91,8 @@
 					description: config.description?.trim() || undefined,
 					category: config.category?.trim() || undefined,
 					tags: config.tags && config.tags.length > 0 ? [...new Set(config.tags)] : undefined,
-					coverImage: config.coverImage ?? undefined
+					coverImage: config.coverImage ?? undefined,
+					maxHistory: config.maxHistory !== undefined ? config.maxHistory : undefined
 				})
 			});
 

@@ -1,4 +1,5 @@
 import { getDefinitionStore } from '$lib/server/definitions.server';
+import type { HistoryEntry } from '$lib/server/definitions/types';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -9,7 +10,7 @@ export const load: PageServerLoad = async () => {
 		const defs = rawConfig.definitions || {};
 
 		const config: Record<string, (typeof defs)[string]> = {};
-		const history: Record<string, string[]> = {};
+		const history: Record<string, HistoryEntry[]> = {};
 
 		for (const [guid, def] of Object.entries(defs)) {
 			config[guid] = def;

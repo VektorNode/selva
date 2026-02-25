@@ -5,6 +5,12 @@
 	import FileUploadField from './FileUploadField.svelte';
 	import ImageUploadField from './ImageUploadField.svelte';
 
+	interface HistoryEntry {
+		filename: string;
+		originalName: string;
+		date: string;
+	}
+
 	interface DefinitionConfig {
 		displayName: string;
 		description: string;
@@ -12,13 +18,14 @@
 		tags?: string[];
 		coverImage?: string;
 		file?: string;
+		maxHistory?: number;
 	}
 
 	interface Props {
 		open: boolean;
 		guid: string;
 		config: DefinitionConfig;
-		history?: string[];
+		history?: HistoryEntry[];
 		savingDefinition?: boolean;
 		uploadingDefinitionFile?: boolean;
 		uploadingDefinitionImage?: boolean;
@@ -41,18 +48,30 @@
 		uploadingDefinitionImage = false,
 		revertingFile = null,
 		onOpenChange,
-		onSave,
-		onDelete,
-		onFileUpload,
-		onImageUpload,
-		onRevert
+		onSave
 	}: Props = $props();
 
-	let editImageMode = $state<'url' | 'upload'>(config.coverImage?.startsWith('/admin/') ? 'upload' : 'url');
+	let editImageMode = $state<'url' | 'upload'>(
+		config.coverImage?.startsWith('/admin/') ? 'upload' : 'url'
+	);
 	let editModeImageInput = $state<HTMLInputElement>();
 	let editModeFileInput = $state<HTMLInputElement>();
 	let editModeFileHasFile = $state(false);
 	let editModeImageHasFile = $state(false);
+
+	function formatDate(iso: string): string {
+		try {
+			return new Date(iso).toLocaleString(undefined, {
+				year: 'numeric',
+				month: 'short',
+				day: 'numeric',
+				hour: '2-digit',
+				minute: '2-digit'
+			});
+		} catch {
+			return iso;
+		}
+	}
 
 	async function getErrorMessage(response: Response, fallback: string): Promise<string> {
 		if (response.headers.get('content-type')?.includes('application/json')) {
@@ -153,10 +172,7 @@
 	}
 </script>
 
-<Dialog.Root
-	{open}
-	onOpenChange={(o) => onOpenChange?.(o)}
->
+<Dialog.Root {open} onOpenChange={(o) => onOpenChange?.(o)}>
 	<Dialog.Content class="max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>Edit — {config.displayName || guid}</Dialog.Title>
@@ -190,12 +206,14 @@
 						value={config.tags?.join(', ') || ''}
 						oninput={(e) => {
 							const t = e.currentTarget as HTMLInputElement;
-							config.tags = [...new Set(
-								t.value
-									.split(',')
-									.map((s) => s.trim())
-									.filter(Boolean)
-							)];
+							config.tags = [
+								...new Set(
+									t.value
+										.split(',')
+										.map((s) => s.trim())
+										.filter(Boolean)
+								)
+							];
 						}}
 						placeholder="comma, separated"
 					/>
@@ -248,24 +266,45 @@
 				/>
 			</div>
 
+			<!-- Version history limit -->
+			<div class="space-y-1">
+				<Label for="maxHistory-{guid}">Version history limit</Label>
+				<Input
+					id="maxHistory-{guid}"
+					type="number"
+					min="0"
+					step="1"
+					placeholder="0 (keep all)"
+					value={config.maxHistory ?? ''}
+					oninput={(e) => {
+						const val = parseInt((e.currentTarget as HTMLInputElement).value, 10);
+						config.maxHistory = isNaN(val) || val < 0 ? undefined : val;
+					}}
+				/>
+				<p class="text-muted-foreground text-xs">0 or empty = keep all archived versions</p>
+			</div>
+
 			<!-- File History -->
 			{#if history.length > 0}
 				<div class="space-y-1">
 					<p class="text-muted-foreground flex items-center gap-1 text-xs font-medium">
-						<History class="h-3 w-3" /> Archived versions
+						<History class="h-3 w-3" /> Archived versions ({history.length})
 					</p>
-					<ul class="space-y-1">
-						{#each history as old}
+					<ul class="space-y-1.5">
+						{#each history as entry}
 							<li class="flex items-center gap-2">
-								<span class="text-muted-foreground min-w-0 flex-1 truncate font-mono text-xs">{old}</span>
+								<div class="min-w-0 flex-1">
+									<p class="truncate font-mono text-xs">{entry.originalName}</p>
+									<p class="text-muted-foreground text-xs">{formatDate(entry.date)}</p>
+								</div>
 								<Button
 									size="sm"
 									variant="outline"
 									class="h-6 shrink-0 px-2 text-xs"
-									disabled={revertingFile === old}
-									onclick={() => handleRevert(old)}
+									disabled={revertingFile === entry.filename}
+									onclick={() => handleRevert(entry.filename)}
 								>
-									{revertingFile === old ? 'Reverting…' : 'Revert'}
+									{revertingFile === entry.filename ? 'Reverting…' : 'Revert'}
 								</Button>
 							</li>
 						{/each}
