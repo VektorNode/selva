@@ -21,7 +21,14 @@
 		requestedTabId?: string | null;
 	}
 
-	let { schema, values = $bindable(), onValueChange, environment, panelFilter, requestedTabId = null }: Props = $props();
+	let {
+		schema,
+		values = $bindable(),
+		onValueChange,
+		environment,
+		panelFilter,
+		requestedTabId = null
+	}: Props = $props();
 
 	let activeTabId: string | null = $state(null);
 
@@ -254,7 +261,7 @@
 
 	<!-- Tab Content -->
 	{#if activeTab}
-		<Card.Content class="min-h-0 p-8 animate-[fadeIn_0.3s] overflow-y-auto">
+		<Card.Content class="min-h-0 p-4 animate-[fadeIn_0.3s] overflow-y-auto">
 			{#if activeTab.groups.length === 0}
 				<StateDisplay type="empty" size="medium" message="This tab has no groups configured." />
 			{:else}

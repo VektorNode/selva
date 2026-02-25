@@ -209,9 +209,10 @@
 						Validating definition…
 					</p>
 				{:else if validationError}
-					<div class="border-destructive/40 bg-destructive/5 rounded-md border p-3">
-						<p class="text-destructive text-xs font-medium">Validation failed</p>
-						<p class="text-destructive/80 mt-0.5 text-xs">{validationError}</p>
+					<div class="border-yellow-500/40 bg-yellow-500/5 rounded-md border p-3">
+						<p class="text-yellow-700 dark:text-yellow-400 text-xs font-medium">Validation warning</p>
+						<p class="text-yellow-700/80 dark:text-yellow-400/80 mt-0.5 text-xs">{validationError}</p>
+						<p class="text-yellow-700/60 dark:text-yellow-400/60 mt-1 text-xs">You can still upload the file.</p>
 					</div>
 				{:else if validationSchema}
 					<div
@@ -293,7 +294,7 @@
 			<Button variant="outline" onclick={() => onOpenChange?.(false)}>Cancel</Button>
 			<Button
 				onclick={handleSubmit}
-				disabled={isAdding || validating || !!validationError}
+				disabled={isAdding || validating}
 			>
 				{isAdding
 					? 'Creating…'
