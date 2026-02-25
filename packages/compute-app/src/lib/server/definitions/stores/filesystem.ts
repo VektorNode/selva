@@ -89,6 +89,15 @@ export class FilesystemDefinitionStore
 			throw new Error(`File type not allowed. Allowed: ${GH_EXTENSIONS.join(', ')}`);
 		}
 
+		// Reject if another definition already uses this filename
+		const existingConfig = await this.readConfig();
+		const duplicate = Object.entries(existingConfig.definitions).find(
+			([, def]) => def.file === ghFile.name
+		);
+		if (duplicate) {
+			throw new Error(`A definition with file "${ghFile.name}" already exists (${duplicate[1].displayName})`);
+		}
+
 		const guid = randomUUID();
 		const guidDir = this.guidPath(guid);
 		await fs.mkdir(guidDir, { recursive: true });

@@ -42,7 +42,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		throw error(404, 'Validation endpoint not available');
 	}
 
-	if (response.status === 404 || response.status === 405) {
+	if (response.status === 404 || response.status === 405 || response.status === 500) {
 		// Compute server doesn't support this endpoint — treat as unavailable
 		throw error(404, 'Validation endpoint not available');
 	}

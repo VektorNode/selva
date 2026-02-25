@@ -38,8 +38,7 @@
 </div>
 
 <style>
-	/* svelte-ignore css_unused_selector */
-	.selva-pending-pulse {
+	:global(.selva-pending-pulse) {
 		animation: selva-pending-pulse 2s ease-in-out infinite;
 	}
 

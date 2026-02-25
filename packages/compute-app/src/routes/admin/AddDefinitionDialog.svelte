@@ -90,6 +90,11 @@
 			}
 
 			if (!result.valid) {
+				// If the compute server itself errored, treat as unavailable — don't block the form
+				if (result.error?.startsWith('Compute server error')) {
+					displayName = nameFromFile(file);
+					return;
+				}
 				validationError = result.error ?? 'Validation failed';
 				return;
 			}
@@ -134,9 +139,9 @@
 
 		try {
 			await onSubmit?.(formData);
-			onOpenChange?.(false);
-		} catch (err) {
-			toast.error('Failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+			// onSubmit closes the dialog on success; if it throws, stay open
+		} catch {
+			// error already toasted by onSubmit
 		}
 	}
 
