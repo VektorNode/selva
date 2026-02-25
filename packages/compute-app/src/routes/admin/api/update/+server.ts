@@ -40,14 +40,24 @@ export const POST: RequestHandler = async () => {
         }, 5 * 60 * 1000);
 
         // Stream stdout
+        let restarting = false;
         child.stdout.on('data', (data) => {
           const lines = data.toString().split('\n');
           for (const line of lines) {
             const clean = stripAnsi(line).trim();
             if (clean) {
-              // Detect PM2 restart line so we can warn the client the process will die
               if (clean.includes('Applying action restartProcessId')) {
+                // PM2 restart initiated — flag it but keep streaming
+                restarting = true;
                 sendEvent('restarting', { data: clean });
+              } else if (restarting && /\[selva-compute\]\(\d+\)\s*✓/.test(clean)) {
+                // PM2 confirmed the restart — close stream now before the process dies
+                sendEvent('log', { data: clean });
+                sendEvent('exit', { code: 0 });
+                clearTimeout(timeout);
+                child.kill();
+                controller.close();
+                return;
               } else {
                 sendEvent('log', { data: clean });
               }
