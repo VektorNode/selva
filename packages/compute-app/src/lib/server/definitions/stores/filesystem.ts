@@ -201,7 +201,7 @@ export class FilesystemDefinitionStore
 
 		await fs.mkdir(guidDir, { recursive: true });
 
-		// Archive any existing GH file that differs from the incoming one
+		// Archive any existing GH file (including same-named replacements)
 		let archivedEntry: HistoryEntry | null = null;
 		try {
 			const entries = await fs.readdir(guidDir);
@@ -209,21 +209,19 @@ export class FilesystemDefinitionStore
 				const entryExt = path.extname(entry).toLowerCase();
 				if (entry !== 'old_files' && GH_EXTENSIONS.includes(entryExt)) {
 					const existingPath = path.join(guidDir, entry);
-					if (existingPath !== newFilePath) {
-						await fs.mkdir(oldFilesDir, { recursive: true });
-						const now = new Date();
-						const timestamp = now.toISOString().replace(/[:.]/g, '-');
-						const backupName = `${timestamp}_${entry}`;
-						const data = await fs.readFile(existingPath);
-						await fs.writeFile(path.join(oldFilesDir, backupName), data);
-						await fs.unlink(existingPath);
-						archivedEntry = {
-							filename: backupName,
-							originalName: entry,
-							date: now.toISOString()
-						};
-						break;
-					}
+					await fs.mkdir(oldFilesDir, { recursive: true });
+					const now = new Date();
+					const timestamp = now.toISOString().replace(/[:.]/g, '-');
+					const backupName = `${timestamp}_${entry}`;
+					const data = await fs.readFile(existingPath);
+					await fs.writeFile(path.join(oldFilesDir, backupName), data);
+					await fs.unlink(existingPath);
+					archivedEntry = {
+						filename: backupName,
+						originalName: entry,
+						date: now.toISOString()
+					};
+					break;
 				}
 			}
 		} catch {

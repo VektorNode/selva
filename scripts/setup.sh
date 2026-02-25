@@ -12,6 +12,10 @@
 # - Sets up PM2 for production
 # - Optionally sets up Caddy as a reverse proxy (with automatic HTTPS)
 #
+# Prerequisites: SSH key added to GitHub (repo is private — SSH is used for cloning).
+#   ssh-keygen -t ed25519 -C "you@example.com"
+#   cat ~/.ssh/id_ed25519.pub  # add to https://github.com/settings/keys
+#
 # Usage: bash setup.sh [--no-interactive] [--skip-pm2]
 #        bash setup.sh                            # Interactive mode (default — prompts for all values)
 #        bash setup.sh --no-interactive           # Non-interactive, uses env vars / defaults

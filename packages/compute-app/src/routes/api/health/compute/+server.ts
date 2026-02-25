@@ -61,21 +61,6 @@ export const GET: RequestHandler = async () => {
 		response.status = 'error';
 	}
 
-	// Check definition source configuration
-	if (config.ghDefinitionsPath) {
-		response.definitions.source = 'local';
-		response.definitions.configured = true;
-
-		// Warn if using local definitions with production compute server
-		if (isProduction) {
-			response.warnings.push(
-				'Using local definitions with production compute server. ' +
-					'Ensure the server can access the definitions path.'
-			);
-			response.status = 'warning';
-		}
-	}
-
 	// Check API key for production
 	if (isProduction && !config.computeApiKey) {
 		response.warnings.push('Using production compute server without API key');

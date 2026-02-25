@@ -42,9 +42,21 @@ export const POST: RequestHandler = async ({ request }) => {
 		throw error(404, 'Validation endpoint not available');
 	}
 
-	if (!response.ok) {
-		// Compute server doesn't support this endpoint or returned an error — treat as unavailable
+	if (response.status === 404 || response.status === 405) {
+		// Compute server doesn't support this endpoint — treat as unavailable
 		throw error(404, 'Validation endpoint not available');
+	}
+
+	if (!response.ok) {
+		// Compute server returned an error — surface it as a validation failure
+		let errorMessage = `Compute server error (${response.status})`;
+		try {
+			const text = await response.text();
+			if (text) errorMessage = text;
+		} catch {
+			// ignore
+		}
+		return json([{ fileName: '', valid: false, error: errorMessage }]);
 	}
 
 	let raw: unknown;
