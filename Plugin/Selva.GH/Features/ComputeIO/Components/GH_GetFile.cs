@@ -193,6 +193,14 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 		};
 	}
 
+	protected override void CollectVolatileData_Custom()
+	{
+		m_data.Clear();
+
+		if (_contextualFileData != null && _isFromContextual)
+			ImportAndOutputGeometry(_contextualFileData);
+	}
+
 	protected override void CollectVolatileData_FromSources()
 	{
 		m_data.Clear();
