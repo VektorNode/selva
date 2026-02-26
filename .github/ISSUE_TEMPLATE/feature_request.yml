@@ -26,15 +26,6 @@ body:
     validations:
       required: true
 
-  - type: textarea
-    id: why-needed
-    attributes:
-      label: Why is this needed?
-      description: Explain the problem this feature would solve
-      placeholder: What use case does this enable? What workflow would this improve?
-    validations:
-      required: true
-
   - type: checkboxes
     id: affected-areas
     attributes:
