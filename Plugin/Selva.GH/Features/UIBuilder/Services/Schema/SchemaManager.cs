@@ -292,26 +292,9 @@ public class SchemaManager
 
 	/// <summary>
 	///   Get parameter type name from contextual parameter.
-	///   Handles both GH_Param-based and GH_Component-based contextual parameters.
 	/// </summary>
 	private static string GetParameterTypeName(IGH_ContextualParameter contextParam)
 	{
-		// Component-based contextual params (e.g. GetFileParameter) expose type via GetContextualJson
-		if (contextParam is GH_Component component)
-		{
-			try
-			{
-				var method = component.GetType().GetMethod("GetContextualJson");
-				if (method?.Invoke(component, null) is Newtonsoft.Json.Linq.JObject json)
-				{
-					var pt = json["paramType"]?.ToString();
-					if (!string.IsNullOrEmpty(pt)) return pt.ToLowerInvariant();
-				}
-			}
-			catch { }
-			return "generic";
-		}
-
 		if (contextParam is IGH_Param param) return GetParameterTypeNameFromParam(param);
 		return "generic";
 	}

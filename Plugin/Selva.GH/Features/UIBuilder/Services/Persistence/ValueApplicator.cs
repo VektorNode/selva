@@ -377,12 +377,9 @@ public class ValueApplicator
 	{
 		try
 		{
-			// Accept IGH_Param or IGH_ContextualParameter (e.g. GH_Component-based file params)
-			var param = paramObject as IGH_Param;
-			if (param == null && !(paramObject is IGH_ContextualParameter))
+			if (paramObject is not IGH_Param param)
 			{
-				addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-					$"File parameter is not an IGH_Param or IGH_ContextualParameter");
+				addMessage?.Invoke(GH_RuntimeMessageLevel.Warning, "File parameter is not an IGH_Param");
 				return false;
 			}
 
