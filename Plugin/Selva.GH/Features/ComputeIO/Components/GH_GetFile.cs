@@ -7,6 +7,7 @@ using GH_IO.Serialization;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
+using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -21,38 +22,31 @@ using Point = Rhino.Geometry.Point;
 namespace Selva.GH.Features.ComputeIO.Components;
 
 /// <summary>
-///   A contextual component that imports geometry from files (local path, URL, or base64).
-///   Outputs geometry on output 0 and the source filename (with extension) on output 1.
+///   A contextual parameter that imports geometry from files (local path, URL, or base64).
 ///   Supported formats are defined in AcceptedFileFormats.Values (schema-driven).
 /// </summary>
-public class GetFileParameter : GH_Component, IGH_ContextualParameter
+public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParameter
 {
-	// Constants for validation and limits
 	private const int MaxContextualDataItems = 100;
 	private const int MaxFileDataSize = AppConfig.ValueLimits.MaxBase64StringLength;
 	private const int MaxJsonDepth = AppConfig.JsonSerialization.MaxJsonDepth;
 	private const int MaxPathLength = 32767; // Windows MAX_PATH
 
-	// Reused across every solve — avoids per-call array allocations
 	private static readonly HashSet<string> ValidTypes =
 		new(StringComparer.OrdinalIgnoreCase) { "path", "url", "base64" };
 
 	private FileInputData _contextualFileData;
 
-	// Cached solve results — set during SolveInstance, read by output params
-	private List<IGH_GeometricGoo> _solvedGeometry = new();
-	private string _solvedFileName = "";
-
 	public GetFileParameter()
-		: base("Get File", "Get File",
-			"Import geometry from file (path, URL, or upload)",
-			"Params", "Util")
+		: base("Get File", "Get File", "Import geometry from file (path, URL, or upload)", "Params", "Util",
+			GH_ParamAccess.list)
 	{
 	}
 
 	public override GH_Exposure Exposure => GH_Exposure.quinary;
+	public override string TypeName => "File";
 	public override Guid ComponentGuid => new("F6F335A4-70C8-41BD-964C-3CD0BDD58118");
-	protected override Bitmap Icon => ContextualiseIcon(Resources.DataToFile);
+	protected override Bitmap Internal_Icon_24x24 => ContextualiseIcon(Resources.DataToFile);
 
 	// ── IGH_ContextualParameter ────────────────────────────────────────────────
 	public string Prompt { get; set; } = "Select a file to import";
@@ -178,98 +172,76 @@ public class GetFileParameter : GH_Component, IGH_ContextualParameter
 			{ "description", Description ?? "" },
 			{ "name", Name },
 			{ "nickname", NickName },
-			{ "treeAccess", TreeAccess },
-			{ "paramType", "File" },
+			{ "treeAccess", Access == GH_ParamAccess.tree },
+			{ "paramType", TypeName },
 			{ "acceptedFormats", new JArray(AcceptedFileFormats.Values) }
 		};
 	}
 
-	// ── GH_Component ──────────────────────────────────────────────────────────
+	// ── GH_Param ──────────────────────────────────────────────────────────────
 
-	protected override void RegisterInputParams(GH_InputParamManager pManager)
+	protected override void CollectVolatileData_Custom()
 	{
-		// Optional manual source: a file path or JSON string wired in from GH
-		pManager.AddTextParameter("File", "F",
-			"Optional: wire a file path or JSON string. Leave disconnected to use the web UI upload.",
-			GH_ParamAccess.item);
-		pManager[0].Optional = true;
+		m_data.Clear();
+
+		if (_contextualFileData != null)
+			ImportAndOutputGeometry(_contextualFileData);
 	}
 
-	protected override void RegisterOutputParams(GH_OutputParamManager pManager)
+	protected override void CollectVolatileData_FromSources()
 	{
-		pManager.AddGeometryParameter("Geometry", "G", "Imported geometry", GH_ParamAccess.list);
-		pManager.AddTextParameter("File Name", "N", "File name with extension (e.g. model.3dm)", GH_ParamAccess.item);
-	}
-
-	protected override void SolveInstance(IGH_DataAccess DA)
-	{
-		_solvedGeometry = new List<IGH_GeometricGoo>();
-		_solvedFileName = "";
-
-		FileInputData fileData = null;
+		m_data.Clear();
 
 		// Priority 1: contextual data from web UI
 		if (_contextualFileData != null)
 		{
-			fileData = _contextualFileData;
-		}
-		else
-		{
-			// Priority 2: manual wire input
-			var inputStr = "";
-			if (DA.GetData(0, ref inputStr) && !string.IsNullOrEmpty(inputStr))
-				fileData = ExtractFileInputData(new GH_String(inputStr));
-		}
-
-		if (fileData == null)
-		{
-			DA.SetDataList(0, _solvedGeometry);
-			DA.SetData(1, _solvedFileName);
+			ImportAndOutputGeometry(_contextualFileData);
 			return;
 		}
 
-		_solvedFileName = ResolveFileName(fileData);
-
-		var result = FileImporter.ImportFromFileInputData(fileData);
-		if (!result.Success)
+		// Priority 2: manual wire input
+		foreach (var source in Sources)
 		{
-			AddRuntimeMessage(GH_RuntimeMessageLevel.Error, result.ErrorMessage);
-			DA.SetDataList(0, _solvedGeometry);
-			DA.SetData(1, _solvedFileName);
-			return;
-		}
+			if (source == null) continue;
 
-		if (result.Geometry.Count == 0)
-		{
-			AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No geometry found in file");
-			DA.SetDataList(0, _solvedGeometry);
-			DA.SetData(1, _solvedFileName);
-			return;
-		}
-
-		foreach (var item in result.Geometry)
-		{
-			var geo = item.Geometry;
-			if (geo == null) continue;
-
-			IGH_GeometricGoo goo = geo switch
+			try
 			{
-				Curve curve => new GH_Curve(curve),
-				Brep brep => new GH_Brep(brep),
-				Mesh mesh => new GH_Mesh(mesh),
-				Surface surface => new GH_Surface(surface),
-				Point point => new GH_Point(point.Location),
-				_ => null
-			};
+				IGH_Goo firstItem = null;
 
-			if (goo != null) _solvedGeometry.Add(goo);
+				if (source is Param_FilePath filePathParam)
+				{
+					var persistentData = filePathParam.PersistentData;
+					if (persistentData != null && !persistentData.IsEmpty)
+						firstItem = persistentData.AllData(true).FirstOrDefault();
+				}
+				else if (source is Param_String stringParam)
+				{
+					var persistentData = stringParam.PersistentData;
+					if (persistentData != null && !persistentData.IsEmpty)
+						firstItem = persistentData.AllData(true).FirstOrDefault();
+					else
+					{
+						var volatileData = stringParam.VolatileData;
+						if (volatileData != null && !volatileData.IsEmpty)
+							firstItem = volatileData.AllData(true).FirstOrDefault();
+					}
+				}
+
+				if (firstItem == null) continue;
+
+				var fileData = ExtractFileInputData(firstItem);
+				if (fileData != null)
+				{
+					ImportAndOutputGeometry(fileData);
+					return;
+				}
+			}
+			catch (Exception ex)
+			{
+				AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+					$"Error reading from source '{source.NickName}': {ex.Message}");
+			}
 		}
-
-		DA.SetDataList(0, _solvedGeometry);
-		DA.SetData(1, _solvedFileName);
-
-		AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-			$"Imported {_solvedGeometry.Count} objects from {result.DetectedFormat}");
 	}
 
 	// ── Serialization ──────────────────────────────────────────────────────────
@@ -312,47 +284,52 @@ public class GetFileParameter : GH_Component, IGH_ContextualParameter
 
 	// ── Private helpers ────────────────────────────────────────────────────────
 
-	/// <summary>
-	///   Derives a display filename from FileInputData.
-	///   - path: last segment of the path (e.g. "model.3dm")
-	///   - url:  last segment of the URL path, stripped of query strings
-	///   - base64: synthetic name using the file ending (e.g. "upload.step")
-	/// </summary>
-	private static string ResolveFileName(FileInputData fileData)
+	private void ImportAndOutputGeometry(FileInputData fileData)
 	{
-		if (fileData == null) return "";
-
-		try
+		if (fileData == null)
 		{
-			switch (fileData.Type?.ToLowerInvariant())
+			AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No file data provided");
+			return;
+		}
+
+		var result = FileImporter.ImportFromFileInputData(fileData);
+
+		if (!result.Success)
+		{
+			AddRuntimeMessage(GH_RuntimeMessageLevel.Error, result.ErrorMessage);
+			return;
+		}
+
+		if (result.Geometry.Count == 0)
+		{
+			AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No geometry found in file");
+			return;
+		}
+
+		var ghGeometry = new List<IGH_GeometricGoo>();
+		foreach (var item in result.Geometry)
+		{
+			var geo = item.Geometry;
+			if (geo == null) continue;
+
+			IGH_GeometricGoo goo = geo switch
 			{
-				case "path":
-					return System.IO.Path.GetFileName(fileData.File) ?? "";
+				Curve curve => new GH_Curve(curve),
+				Brep brep => new GH_Brep(brep),
+				Mesh mesh => new GH_Mesh(mesh),
+				Surface surface => new GH_Surface(surface),
+				Point point => new GH_Point(point.Location),
+				_ => null
+			};
 
-				case "url":
-					var path = new Uri(fileData.File).AbsolutePath;
-					// Strip query string already handled by AbsolutePath
-					return System.IO.Path.GetFileName(path) ?? "";
-
-				case "base64":
-					var ext = fileData.FileEnding ?? "";
-					if (!ext.StartsWith(".")) ext = "." + ext;
-					return "upload" + ext;
-
-				default:
-					// Unknown type — try path extraction as fallback
-					return System.IO.Path.GetFileName(fileData.File) ?? "";
-			}
+			if (goo != null) ghGeometry.Add(goo);
 		}
-		catch
-		{
-			return fileData.FileEnding ?? "";
-		}
+
+		m_data.AppendRange(ghGeometry, new GH_Path(0));
+		AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+			$"Imported {ghGeometry.Count} objects from {result.DetectedFormat}");
 	}
 
-	/// <summary>
-	///   Extracts FileInputData from various input types.
-	/// </summary>
 	private static FileInputData ExtractFileInputData(object item)
 	{
 		return item switch
@@ -367,17 +344,11 @@ public class GetFileParameter : GH_Component, IGH_ContextualParameter
 		};
 	}
 
-	/// <summary>
-	///   Attempts to parse a string as FileInputData JSON, URL, or absolute local path.
-	///   Returns null for relative paths, invalid strings, and oversized strings.
-	/// </summary>
 	private static FileInputData TryParseFileInputDataFromString(string str)
 	{
 		if (string.IsNullOrEmpty(str)) return null;
-
 		if (str.Length > MaxFileDataSize) return null;
 
-		// Try JSON first
 		try
 		{
 			var settings = new JsonSerializerSettings
@@ -418,21 +389,14 @@ public class GetFileParameter : GH_Component, IGH_ContextualParameter
 		}
 	}
 
-	/// <summary>
-	///   Validates FileInputData for security and format constraints.
-	/// </summary>
 	private static bool ValidateFileInputData(FileInputData fileData)
 	{
 		if (fileData == null || string.IsNullOrWhiteSpace(fileData.File)) return false;
-
 		if (fileData.File.Length > MaxFileDataSize) return false;
-
 		if (fileData.Type != null && !ValidTypes.Contains(fileData.Type)) return false;
-
 		if (fileData.FileEnding != null &&
-				!AcceptedFileFormats.Values.Contains(fileData.FileEnding.ToLowerInvariant()))
+		    !AcceptedFileFormats.Values.Contains(fileData.FileEnding.ToLowerInvariant()))
 			return false;
-
 		return true;
 	}
 }
