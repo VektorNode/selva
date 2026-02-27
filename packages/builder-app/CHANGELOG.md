@@ -1,5 +1,13 @@
 # @selva/builder-app
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [b9d05f8]
+- Updated dependencies
+  - @selva/shared@1.4.0
+
 ## 0.4.0
 
 ### Patch Changes

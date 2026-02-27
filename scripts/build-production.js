@@ -21,7 +21,7 @@ console.log('');
 
 try {
 	// Step 1: Copy web assets to plugin directory
-	console.log('[1/3] Copying web assets to plugin...');
+	console.log('[1/4] Copying web assets to plugin...');
 	const webDir = join(projectRoot, 'Plugin/Selva.GH/EmbeddedAssets/web');
 	const buildDir = join(projectRoot, 'packages/builder-app/build');
 
@@ -36,7 +36,7 @@ try {
 	console.log('');
 
 	// Step 3: Build C# plugin with embedded assets
-	console.log('[2/3] Building C# plugin...');
+	console.log('[2/4] Building C# plugin...');
 	execSync('dotnet build --configuration Release', {
 		cwd: join(projectRoot, 'Plugin'),
 		stdio: 'inherit'
@@ -44,8 +44,18 @@ try {
 	console.log('✓ Plugin build complete');
 	console.log('');
 
+	// Step 3: Run yak build in the release folder
+	console.log('[3/4] Running yak build...');
+	const releaseDir = join(projectRoot, 'Plugin/Selva.GH/bin/Release');
+	execSync('yak build', {
+		cwd: releaseDir,
+		stdio: 'inherit'
+	});
+	console.log('✓ Yak package built');
+	console.log('');
+
 	// Step 4: Display output information
-	console.log('[3/3] Build summary:');
+	console.log('[4/4] Build summary:');
 	console.log('');
 	console.log('Output files:');
 	const pluginDir = join(projectRoot, 'Plugin');
