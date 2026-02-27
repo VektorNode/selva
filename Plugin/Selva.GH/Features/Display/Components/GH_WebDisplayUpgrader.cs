@@ -1,7 +1,7 @@
 using System;
 using Grasshopper.Kernel;
 using Selva.GH.Utilities;
-using SheepMetal.Plugin_Grasshopper.Upgraders;
+using SheepMetal.PluginGrasshopper.Upgraders;
 
 namespace Selva.GH.Features.Display.Components;
 

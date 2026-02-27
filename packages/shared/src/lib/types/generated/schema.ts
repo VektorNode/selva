@@ -183,9 +183,13 @@ export interface FileInputWidgetConfig {
    */
   acceptedFormats?: string[];
   /**
-   * Default input mode for file input (upload or url)
+   * Which mode is active by default when both are allowed
    */
   defaultInputMode?: 'upload' | 'url';
+  /**
+   * Which input modes the end user can choose from. If omitted, both are allowed.
+   */
+  allowedInputModes?: ('upload' | 'url')[];
 }
 export interface LayoutItemBase {
   /**
@@ -437,7 +441,6 @@ export const ACCEPTED_FILE_FORMATS = [
   ".fbx",
   ".obj",
   ".dxf",
-  ".fbx",
   ".stl"
 ] as const;
 

@@ -289,7 +289,8 @@
 			value={fileValue}
 			acceptedFormats={config?.acceptedFormats ?? []}
 			onChange={(newValue) => handleChange(newValue)}
-			defaultInputMode={config.defaultInputMode}
+			defaultInputMode={config?.defaultInputMode}
+			allowedInputModes={config?.allowedInputModes}
 		/>
 	{/if}
 </div>

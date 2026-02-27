@@ -4,7 +4,7 @@
 	"title": "Selva UI Schema",
 	"description": "Schema definitions for Selva UI configuration",
 	"constants": {
-		"acceptedFileFormats": [".3dm", ".stp", ".step", ".fbx", ".obj", ".dxf", ".fbx", ".stl"]
+		"acceptedFileFormats": [".3dm", ".stp", ".step", ".fbx", ".obj", ".dxf", ".stl"]
 	},
 	"definitions": {
 		"//_COMMENT": "--- PRIMITIVES ---",
@@ -181,7 +181,12 @@
 				"defaultInputMode": {
 					"type": "string",
 					"enum": ["upload", "url"],
-					"description": "Default input mode for file input (upload or url)"
+					"description": "Which mode is active by default when both are allowed"
+				},
+				"allowedInputModes": {
+					"type": "array",
+					"items": { "type": "string", "enum": ["upload", "url"] },
+					"description": "Which input modes the end user can choose from. If omitted, both are allowed."
 				}
 			},
 			"additionalProperties": false
@@ -582,7 +587,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.1.0",
+					"default": "2.1.1",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

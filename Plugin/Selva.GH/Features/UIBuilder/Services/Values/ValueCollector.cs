@@ -38,6 +38,12 @@ public class ValueCollector
 					var value = ExtractParameterValue(ghParam, input);
 					if (value != null) currentValues[input.Id.ToString()] = value;
 				}
+				else if (paramObject is IGH_Component ghComponent && paramObject is IGH_ContextualParameter)
+				{
+					// Component-based contextual params (e.g. GetFileParameter)
+					var value = ExtractComponentContextualValue(ghComponent);
+					if (value != null) currentValues[input.Id.ToString()] = value;
+				}
 			}
 			catch (Exception ex)
 			{
@@ -163,6 +169,17 @@ public class ValueCollector
 		if (ghParam.SourceCount == 1) return ExtractDataFromVolatileData(ghParam.Sources[0].VolatileData);
 
 		return null;
+	}
+
+	/// <summary>
+	///   Extract current value from a component-based contextual parameter (e.g. GetFileParameter).
+	///   Returns file metadata from the component's first output, not the raw payload.
+	/// </summary>
+	private object ExtractComponentContextualValue(IGH_Component component)
+	{
+		var outputParam = component.Params.Output.Count > 0 ? component.Params.Output[0] : null;
+		if (outputParam?.VolatileData == null || outputParam.VolatileData.IsEmpty) return null;
+		return ExtractDataFromVolatileData(outputParam.VolatileData);
 	}
 
 	/// <summary>
