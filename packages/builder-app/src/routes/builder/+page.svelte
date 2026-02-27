@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { PageContainer, PageHeader, StateDisplay, Button, Dialog, toast } from '@selva/shared';
 	import { Save } from '@lucide/svelte';
-	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { DragDropContext, BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
 	import { initializeWebSocketSession } from '$lib/utils/session';
 	import { onMount } from 'svelte';
@@ -33,7 +33,7 @@
 	}
 
 	const placedInLayoutIds = $derived.by(() => {
-		const ids = new SvelteSet<string>();
+		const ids = new Set<string>();
 		const layout = builderState?.state.schema?.layout;
 
 		if (layout?.type === 'tabbed') {

@@ -18,7 +18,7 @@ namespace Selva.Core.Models
 
     public static class AcceptedFileFormats
     {
-        public static readonly string[] Values = new string[] { ".3dm", ".stp", ".step", ".fbx", ".obj", ".dxf", ".fbx", ".stl" };
+        public static readonly string[] Values = new string[] { ".3dm", ".stp", ".step", ".fbx", ".obj", ".dxf", ".stl" };
     }
 
 // ============================================================================
@@ -223,10 +223,16 @@ namespace Selva.Core.Models
         public List<string> AcceptedFormats { get; set; } = new List<string>();
 
 /// <summary>
-/// Default input mode for file input (upload or url)
+/// Which mode is active by default when both are allowed
 /// </summary>
         [JsonProperty("defaultInputMode")]
         public string DefaultInputMode { get; set; }
+
+/// <summary>
+/// Which input modes the end user can choose from. If omitted, both are allowed.
+/// </summary>
+        [JsonProperty("allowedInputModes")]
+        public List<string> AllowedInputModes { get; set; } = new List<string>();
     }
 
 // ============================================================================

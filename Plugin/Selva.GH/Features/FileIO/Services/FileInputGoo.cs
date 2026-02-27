@@ -99,12 +99,20 @@ public class FileInputGoo : GH_Goo<FileInputData>
 		return false;
 	}
 
+	private static readonly JsonSerializerSettings SecureSettings = new()
+	{
+		TypeNameHandling = TypeNameHandling.None,
+		MaxDepth = 8
+	};
+
 	/// <summary>
 	///   Serializes to JSON string for web transmission.
+	///   NOTE: when Type is "base64" this embeds the full file payload in the output string.
+	///   Do not pass base64 Goos to downstream panels or persist them in the .gh file.
 	/// </summary>
 	public string ToJson()
 	{
-		return JsonConvert.SerializeObject(Value);
+		return JsonConvert.SerializeObject(Value, SecureSettings);
 	}
 
 	/// <summary>
@@ -114,7 +122,7 @@ public class FileInputGoo : GH_Goo<FileInputData>
 	{
 		try
 		{
-			var data = JsonConvert.DeserializeObject<FileInputData>(json);
+			var data = JsonConvert.DeserializeObject<FileInputData>(json, SecureSettings);
 			return new FileInputGoo(data);
 		}
 		catch

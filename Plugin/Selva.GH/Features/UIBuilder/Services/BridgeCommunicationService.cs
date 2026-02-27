@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Grasshopper.Kernel;
 using Rhino;
@@ -196,6 +197,9 @@ public class BridgeCommunicationService : IDisposable
 			schema.DocumentId = document.DocumentID;
 			schema.PluginVersion = _pluginVersion.ToString();
 
+			// Sanitize schema before validation (e.g. deduplicate file format lists)
+			SanitizeSchema(schema);
+
 			var validatedSchema = _schemaManager.ValidateSchema(schema, document);
 #if DEBUG
 			Logger.Log($"[UIBuilder] Save — inputs={validatedSchema.Inputs?.Count}, outputs={validatedSchema.Outputs?.Count}, layout={validatedSchema.Layout?.GetType().Name}");
@@ -219,6 +223,27 @@ public class BridgeCommunicationService : IDisposable
 			_communicationHandler.SuppressSolvingCycles(0); // Clear suppression on error
 			_ = _communicationHandler.BroadcastSchemaSaved(false, ex.Message);
 			_component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error saving schema: {ex.Message}");
+		}
+	}
+
+	/// <summary>
+	/// Sanitizes a schema before saving — deduplicates AcceptedFormats on all file inputs.
+	/// </summary>
+	private static void SanitizeSchema(UISchema schema)
+	{
+		if (schema?.Layout == null) return;
+
+		IEnumerable<GroupConfig> groups = schema.Layout switch
+		{
+			TabbedLayoutConfig tabbed => tabbed.Tabs.SelectMany(t => t.Groups),
+			FlatLayoutConfig flat => flat.Groups,
+			_ => Enumerable.Empty<GroupConfig>()
+		};
+
+		foreach (var item in groups.SelectMany(g => g.Items).OfType<InputFileLayoutItem>())
+		{
+			if (item.Config?.AcceptedFormats is { Count: > 0 } formats)
+				item.Config.AcceptedFormats = formats.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 		}
 	}
 

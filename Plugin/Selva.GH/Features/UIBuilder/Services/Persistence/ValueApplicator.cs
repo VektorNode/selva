@@ -73,7 +73,10 @@ public class ValueApplicator
 					continue;
 				}
 
-				if (!HasValueChanged(inputKey, value)) continue;
+				// Skip dedup check for file params: the same file can be re-submitted after
+				// the user clears the GH parameter (ClearContextualData doesn't touch
+				// _lastAppliedValues, so HasValueChanged would wrongly return false).
+				if (input.ParamType != "file" && !HasValueChanged(inputKey, value)) continue;
 
 				// Validate value before applying (security check)
 				if (!ValidateValue(input, value, addMessage)) continue; // Skip invalid values
@@ -374,11 +377,12 @@ public class ValueApplicator
 	{
 		try
 		{
-			// Only handle IGH_Param instances for file assignment
-			if (!(paramObject is IGH_Param param))
+			// Accept IGH_Param or IGH_ContextualParameter (e.g. GH_Component-based file params)
+			var param = paramObject as IGH_Param;
+			if (param == null && !(paramObject is IGH_ContextualParameter))
 			{
 				addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-					$"File parameter is not an IGH_Param");
+					$"File parameter is not an IGH_Param or IGH_ContextualParameter");
 				return false;
 			}
 
@@ -422,7 +426,14 @@ public class ValueApplicator
 					}
 					else if (!string.IsNullOrEmpty(strValue))
 					{
-						// It's a file path - auto-create FileInputData
+						// Validate path before accepting — blocks UNC/SMB relay and traversal
+						// Commened out for now since i want to test if with loading local rhino.compute files which have file paths in the data, but this should be re-enabled before allowing arbitrary file paths from the web UI
+						// if (!IsSafeLocalPath(strValue))
+						// {
+						// 	addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
+						// 		"File path rejected: UNC paths, path traversal, and non-local paths are not allowed");
+						// 	return false;
+						// }
 						fileData = FileInputData.FromPath(strValue);
 					}
 					else
@@ -450,24 +461,20 @@ public class ValueApplicator
 			// Create a FileInputGoo and add it to the parameter's VolatileData
 			var fileGoo = new FileInputGoo(fileData);
 
-			// Try AssignContextualData first (for GetFileParameter and similar contextual file parameters)
-			if (param is IGH_ContextualParameter contextualParam)
+			// Try AssignContextualData first — works for both IGH_Param and GH_Component contextual params
+			if (paramObject is IGH_ContextualParameter)
 			{
-				var assignContextualDataMethod = param.GetType().GetMethod("AssignContextualData",
+				var assignContextualDataMethod = paramObject.GetType().GetMethod("AssignContextualData",
 					new[] { typeof(IEnumerable) });
 				if (assignContextualDataMethod != null)
 				{
 					try
 					{
-						// Create a list with the FileInputGoo
 						var dataList = new List<object> { fileGoo };
-						assignContextualDataMethod.Invoke(param, new object[] { dataList });
+						assignContextualDataMethod.Invoke(paramObject, new object[] { dataList });
 
-						// Mark parameter as modified so it updates downstream
 						if (paramObject is IGH_ActiveObject activeObj)
-						{
 							pendingExpirations.Add(activeObj);
-						}
 
 						return true;
 					}
@@ -543,6 +550,37 @@ public class ValueApplicator
 		{
 			addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
 				$"Error applying file value: {ex.Message}");
+			return false;
+		}
+	}
+
+	/// <summary>
+	///   Validates that a file path received over WebSocket is a safe local path.
+	///   Blocks UNC paths (\\server\share), path traversal (..), and non-rooted relative paths.
+	/// </summary>
+	private static bool IsSafeLocalPath(string path)
+	{
+		if (string.IsNullOrWhiteSpace(path)) return false;
+
+		// Block UNC paths — these can trigger NTLM credential leaks to remote SMB servers
+		if (path.StartsWith("\\\\") || path.StartsWith("//")) return false;
+
+		// Block path traversal sequences
+		if (path.Contains("..")) return false;
+
+		// Block common URI/device path prefixes that aren't plain local paths
+		if (path.StartsWith("file://", StringComparison.OrdinalIgnoreCase)) return false;
+
+		// Enforce Windows MAX_PATH
+		if (path.Length > 32767) return false;
+
+		// Require an absolute local path — reject relative paths that could escape CWD
+		try
+		{
+			return System.IO.Path.IsPathRooted(path);
+		}
+		catch
+		{
 			return false;
 		}
 	}
