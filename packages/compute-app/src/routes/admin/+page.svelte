@@ -163,7 +163,6 @@
 	}
 
 	async function runUpdate() {
-		if (!confirm('Run the update script? This will restart the application.')) return;
 		updateRunning = true;
 		updateRestarting = false;
 		updateLogs = '';
