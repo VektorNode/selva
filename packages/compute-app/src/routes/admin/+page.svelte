@@ -247,7 +247,8 @@
 				</Button>
 			</div>
 			<p class="text-muted-foreground mt-2 text-xs md:hidden">
-				💡 Uploading definitions is not available on mobile. Use a desktop or tablet to add new definitions.
+				💡 Uploading definitions is not available on mobile. Use a desktop or tablet to add new
+				definitions.
 			</p>
 		</Card.Header>
 
