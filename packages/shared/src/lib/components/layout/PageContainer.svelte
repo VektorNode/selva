@@ -5,13 +5,16 @@
 	interface PageContainerProps {
 		background?: 'default' | 'white' | 'gray';
 		class?: string;
+		errors?: string[];
+		warnings?: string[];
 		children: Snippet;
+		footerChildren?: Snippet;
 	}
 
-	let { background = 'default', class: className = '', children }: PageContainerProps = $props();
+	let { background = 'default', class: className = '', errors = [], warnings = [], children, footerChildren }: PageContainerProps = $props();
 
 	const backgroundClasses = {
-		default: 'bg-muted',
+		default: 'bg-background',
 		white: 'bg-background',
 		gray: 'bg-muted'
 	};
@@ -23,7 +26,11 @@
 
 <div class={combinedClasses}>
 	{@render children()}
-	<div class="z-50 mt-auto shrink-0 bg-background">
-		<PageFooter />
+	<div class="shrink-0">
+		<PageFooter {errors} {warnings}>
+			{#if footerChildren}
+				{@render footerChildren()}
+			{/if}
+		</PageFooter>
 	</div>
 </div>

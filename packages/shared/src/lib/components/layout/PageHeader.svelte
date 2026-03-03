@@ -43,7 +43,7 @@
 </script>
 
 <header
-	class={`px-4 py-3 backdrop-blur-sm sm:px-6 border-b border-border bg-linear-to-b from-background to-muted/50 transition-all duration-200 ${className}`}
+	class={`px-4 py-3 backdrop-blur-sm sm:px-6 mb-0 sm:mb-4 border-b border-border bg-linear-to-b from-background to-card transition-all duration-200 ${className}`}
 >
 	<div class="gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4 flex flex-col">
 		<!-- Left section -->
@@ -112,7 +112,7 @@
 	</div>
 
 	<!-- Mobile badge section -->
-	{#if (sessionId || badge || children) && (sessionId || badge)}
+	{#if (sessionId || badge || children || rightContent) && (sessionId || badge)}
 		<div class="mt-2 gap-2 text-xs sm:hidden flex flex-wrap items-center text-muted-foreground">
 			{#if children}
 				{@render children()}
@@ -137,6 +137,12 @@
 				<Badge class={badgeStyles[badge.variant]}>
 					{badge.label}
 				</Badge>
+			{/if}
+
+			{#if rightContent}
+				<div class="gap-2 ml-auto flex items-center">
+					{@render rightContent()}
+				</div>
 			{/if}
 		</div>
 	{/if}

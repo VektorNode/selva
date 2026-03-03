@@ -63,11 +63,7 @@
 					bind:this={logEl}
 					class="bg-muted text-foreground max-h-96 overflow-auto rounded-md p-4 font-mono text-xs">{logs}</pre>
 				{#if exitCode !== null}
-					<p
-						class="text-sm font-medium {exitCode === 0
-							? 'text-success'
-							: 'text-destructive'}"
-					>
+					<p class="text-sm font-medium {exitCode === 0 ? 'text-success' : 'text-destructive'}">
 						{exitCode === 0
 							? '✓ Update completed successfully'
 							: `Process exited with code: ${exitCode}`}
