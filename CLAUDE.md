@@ -222,3 +222,7 @@ Create `.env` in `packages/builder-app/` (required for build):
 ```
 VITE_API_BASE=http://localhost:8765
 ```
+
+## Issues
+
+If gnerating issues use the templates in the [](/.github/ISSUE_TEMPLATE/)
