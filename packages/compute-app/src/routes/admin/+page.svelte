@@ -241,11 +241,14 @@
 							: 's'} configured
 					</Card.Description>
 				</div>
-				<Button onclick={() => (showAddModal = true)}>
+				<Button onclick={() => (showAddModal = true)} class="hidden md:inline-flex">
 					<Plus class="mr-2 h-4 w-4" />
 					Add Definition
 				</Button>
 			</div>
+			<p class="text-muted-foreground mt-2 text-xs md:hidden">
+				💡 Uploading definitions is not available on mobile. Use a desktop or tablet to add new definitions.
+			</p>
 		</Card.Header>
 
 		<Card.Content class="space-y-4">

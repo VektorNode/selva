@@ -14,10 +14,20 @@
 		inputRef?: HTMLInputElement;
 	}
 
-	let { id, label, accept = '', disabled = false, isUploading = false, hasFile = false, onFileSelected, onUpload, inputRef = $bindable() }: Props = $props();
+	let {
+		id,
+		label,
+		accept = '',
+		disabled = false,
+		isUploading = false,
+		hasFile = false,
+		onFileSelected,
+		onUpload,
+		inputRef = $bindable()
+	}: Props = $props();
 </script>
 
-<div class="flex items-center gap-2">
+<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
 	<input
 		{id}
 		type="file"
@@ -31,8 +41,9 @@
 		size="sm"
 		disabled={disabled || !hasFile || isUploading}
 		onclick={onUpload}
+		class="shrink-0"
 	>
 		<Upload class="mr-2 h-4 w-4" />
-		{isUploading ? 'Uploading…' : 'Upload'}
+		<span class="hidden sm:inline">{isUploading ? 'Uploading…' : 'Upload'}</span>
 	</Button>
 </div>

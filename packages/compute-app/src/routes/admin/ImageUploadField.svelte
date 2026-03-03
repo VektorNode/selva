@@ -52,7 +52,7 @@
 
 	<!-- Content -->
 	{#if mode === 'upload'}
-		<div class="flex items-center gap-2">
+		<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
 			<input
 				type="file"
 				bind:this={inputRef}
@@ -65,9 +65,10 @@
 				size="sm"
 				disabled={disabled || !hasFile || isUploading}
 				onclick={onUpload}
+				class="shrink-0"
 			>
 				<Upload class="mr-2 h-4 w-4" />
-				{isUploading ? 'Uploading…' : 'Upload'}
+				<span class="hidden sm:inline">{isUploading ? 'Uploading…' : 'Upload'}</span>
 			</Button>
 		</div>
 	{:else}
