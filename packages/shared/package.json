@@ -63,6 +63,6 @@
 		"@sveltejs/kit": "catalog:",
 		"bits-ui": "^2.15.4",
 		"svelte": "catalog:",
-		"tailwind-variants": "catalog:"
+		"tailwind-variants": "^3.2.2"
 	}
 }

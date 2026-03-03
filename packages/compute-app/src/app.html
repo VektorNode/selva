@@ -11,6 +11,17 @@
     <link rel="manifest" href="/favicon/site.webmanifest" />
     %sveltekit.head%
   </head>
+  <script>
+    (function() {
+      try {
+        var mode = localStorage.getItem('mode-watcher-mode') ?? 'system';
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var isDark = mode === 'dark' || (mode === 'system' && prefersDark);
+        document.documentElement.classList.toggle('dark', isDark);
+        document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+      } catch (e) {}
+    })();
+  </script>
   <body data-sveltekit-preload-data="hover">
     <div style="display: contents">%sveltekit.body%</div>
   </body>

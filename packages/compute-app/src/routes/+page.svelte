@@ -1,14 +1,16 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
-	import { StateDisplay, PageHeader, Badge, PageFooter } from '@selva/shared';
-	import { ArrowRight, AlertCircle } from '@lucide/svelte';
+	import { StateDisplay, PageHeader, Badge, PageFooter, Input } from '@selva/shared';
+	import { ArrowRight, AlertCircle, Search, X } from '@lucide/svelte';
 	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
+	import DefinitionCard from '$lib/components/DefinitionCard.svelte';
 
 	let { data }: { data: PageData } = $props();
 
 	// Track which definition is being loaded
 	let loadingDefinition = $state<string | null>(null);
+	let searchQuery = $state('');
 
 	// Check compute health periodically (every 5 seconds)
 	const computeHealth = useComputeHealth();
@@ -29,6 +31,25 @@
 			return { label: 'Compute Warning', variant: 'solving' as const };
 		}
 		return { label: 'Compute Offline', variant: 'disconnected' as const };
+	});
+
+	// Filter definitions based on search query
+	const filteredDefinitions = $derived.by(() => {
+		if (!searchQuery.trim() || !data.definitions) {
+			return data.definitions || [];
+		}
+
+		const query = searchQuery.toLowerCase();
+		return data.definitions.filter((def) => {
+			const displayNameMatch = def.displayName.toLowerCase().includes(query);
+			const descriptionMatch = def.description?.toLowerCase().includes(query);
+			const filenameMatch =
+				def.filename.toLowerCase().includes(query) ||
+				def.originalFilename?.toLowerCase().includes(query);
+			const tagsMatch = def.tags?.some((tag) => tag.toLowerCase().includes(query));
+
+			return displayNameMatch || descriptionMatch || filenameMatch || tagsMatch;
+		});
 	});
 
 	// Auto-redirect to app if only one definition or using URL mode
@@ -103,75 +124,48 @@
 			Select a Grasshopper definition to get started
 		</p>
 
+		<!-- Search Bar -->
+		<div class="border-border border-b px-8 py-4">
+			<div class="relative">
+				<Search
+					class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+				/>
+				<Input
+					type="text"
+					placeholder="Search definitions by name, description, tags..."
+					bind:value={searchQuery}
+					class="pr-10 pl-10"
+				/>
+				{#if searchQuery}
+					<button
+						onclick={() => (searchQuery = '')}
+						class="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
+						aria-label="Clear search"
+					>
+						<X class="h-4 w-4" />
+					</button>
+				{/if}
+			</div>
+		</div>
+
 		<!-- Definitions Grid -->
 		<div class="flex flex-1 flex-col overflow-y-auto px-8 py-6">
 			{#if data.error}
 				<StateDisplay type="error" size="medium" message={data.error} />
-			{:else if data.definitions.length === 0}
-				<StateDisplay type="empty" size="medium" message="No definitions found" />
+			{:else if filteredDefinitions.length === 0}
+				<StateDisplay
+					type="empty"
+					size="medium"
+					message={searchQuery ? 'No definitions match your search' : 'No definitions found'}
+				/>
 			{:else}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-					{#each data.definitions as definition (definition.guid)}
-						<button
-							onclick={() => handleDefinitionClick(definition.guid)}
-							disabled={loadingDefinition !== null}
-							class="group border-border bg-card hover:border-muted-foreground relative flex h-full flex-col overflow-hidden rounded-lg border text-left transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
-						>
-							{#if definition.coverImage}
-								<div class="bg-muted relative h-40 overflow-hidden">
-									<img
-										src={definition.coverImage}
-										alt={definition.displayName}
-										class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-									/>
-									{#if loadingDefinition === definition.filename}
-										<div class="absolute inset-0 flex items-center justify-center bg-black/50">
-											<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-white"></div>
-										</div>
-									{/if}
-								</div>
-							{:else}
-								<div class="from-muted to-muted/70 relative h-40 bg-linear-to-br">
-									{#if loadingDefinition === definition.filename}
-										<div class="absolute inset-0 flex items-center justify-center bg-black/50">
-											<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-white"></div>
-										</div>
-									{/if}
-								</div>
-							{/if}
-							<div class="flex flex-1 flex-col p-4">
-								<h3
-									class="text-foreground group-hover:text-primary mb-1.5 line-clamp-2 text-sm font-semibold"
-								>
-									{definition.displayName}
-								</h3>
-								{#if definition.description}
-									<p class="text-muted-foreground mb-3 line-clamp-2 text-xs">
-										{definition.description}
-									</p>
-								{/if}
-								{#if definition.tags && definition.tags.length > 0}
-									<div class="mb-3 flex flex-wrap gap-1.5">
-										{#each definition.tags.slice(0, 2) as tag (tag)}
-											<Badge variant="secondary">{tag}</Badge>
-										{/each}
-										{#if definition.tags.length > 2}
-											<span class="text-muted-foreground text-xs"
-												>+{definition.tags.length - 2}</span
-											>
-										{/if}
-									</div>
-								{/if}
-								<div
-									class="text-muted-foreground group-hover:text-foreground mt-auto flex items-center justify-between pt-2 text-xs"
-								>
-									<span class="truncate">{definition.originalFilename || definition.filename}</span>
-									<ArrowRight
-										class="ml-2 h-3.5 w-3.5 shrink-0 transition-all group-hover:translate-x-0.5"
-									/>
-								</div>
-							</div>
-						</button>
+					{#each filteredDefinitions as definition (definition.guid)}
+						<DefinitionCard
+							{definition}
+							isLoading={loadingDefinition === definition.filename}
+							onSelect={() => handleDefinitionClick(definition.guid)}
+						/>
 					{/each}
 				</div>
 			{/if}
