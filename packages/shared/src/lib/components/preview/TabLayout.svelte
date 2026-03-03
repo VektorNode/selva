@@ -299,8 +299,8 @@
 								<!-- Group Content -->
 								{#if !collapsedGroups[group.id]}
 									<Card.Content
-										class="gap-6 p-6 grid animate-[fadeIn_0.2s] overflow-x-auto"
-										style="grid-template-columns: repeat({group.columns}, minmax(0, 1fr));"
+										class="gap-6 p-6 grid animate-[fadeIn_0.2s] overflow-x-auto schema-grid"
+										style="--schema-cols: {group.columns};"
 									>
 										{#each group.items as layoutItem (layoutItem.paramId)}
 											{@const visibility = evaluateVisibility(layoutItem)}
@@ -356,6 +356,22 @@
 		to {
 			opacity: 1;
 			transform: translateY(0);
+		}
+	}
+
+	.schema-grid {
+		grid-template-columns: repeat(var(--schema-cols), minmax(0, 1fr));
+	}
+
+	@media (max-width: 639px) {
+		.schema-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	@media (min-width: 640px) and (max-width: 1023px) {
+		.schema-grid {
+			grid-template-columns: repeat(min(2, var(--schema-cols)), minmax(0, 1fr));
 		}
 	}
 </style>

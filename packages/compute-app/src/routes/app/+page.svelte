@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { untrack, onMount, onDestroy } from 'svelte';
 	import { page } from '$app/state';
 	import type { PageProps } from './$types';
 	import {
@@ -10,12 +10,13 @@
 		type UISchema,
 		AppLayout,
 		createSolvingIndicator,
-		ComputeMessages,
-		createComputeThrottle
+		createComputeThrottle,
+		useFooterItem
 	} from '@selva/shared';
 	import { hexToOklch } from '$lib/utilities/color';
 	import { GrasshopperResponseProcessor } from 'selva-compute';
 	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
+	import ComputeHealthFooter from '$lib/components/ComputeHealthFooter.svelte';
 
 	let { data }: PageProps = $props();
 
@@ -162,12 +163,18 @@
 		}
 	});
 
-	// Check compute health periodically (every 5 seconds)
 	const computeHealth = useComputeHealth();
-	$effect(() => {
-		computeHealth.startPeriodicCheck(5000);
-		return () => computeHealth.stopPeriodicCheck();
-	});
+	onMount(() => computeHealth.startPeriodicCheck(5000));
+	onDestroy(() => computeHealth.stopPeriodicCheck());
+
+	// Register compute health status in footer (reactive via getter)
+	useFooterItem(
+		'compute-health',
+		ComputeHealthFooter,
+		() => ({ status: computeHealth.status.status, message: computeHealth.status.message }),
+		'left',
+		20
+	);
 
 	/** Trigger a solve with current values (throttled) */
 	function performSolve() {
@@ -223,26 +230,12 @@
 		if (hasPendingChanges) performSolve();
 	}
 
-	const BADGES = {
-		solving: { label: 'Solving...', variant: 'solving' } as const,
-		compute: { label: 'Rhino Compute', variant: 'compute' } as const,
-		computeOffline: { label: 'Compute Offline', variant: 'disconnected' } as const,
-		computeWarning: { label: 'Compute Warning', variant: 'solving' } as const,
-		computeOnline: { label: 'Compute Online', variant: 'connected' } as const
-	};
-
-	const badgeConfig = $derived.by(() => {
-		// Only show solving in header for instant mode — manual mode uses CalculateButton
-		if (schema?.instanceSolve !== false && solvingIndicator.show) return BADGES.solving;
-
-		// Show compute health status when not solving
-		if (computeHealth.status.status === 'error') return BADGES.computeOffline;
-		if (computeHealth.status.status === 'warning') return BADGES.computeWarning;
-		if (computeHealth.status.status === 'ok') return BADGES.computeOnline;
-
-		// Default
-		return BADGES.compute;
-	});
+	// Solving badge (shown in header for instant mode only)
+	const solvingBadge = $derived(
+		schema?.instanceSolve !== false && solvingIndicator.show
+			? { label: 'Solving...', variant: 'solving' as const }
+			: undefined
+	);
 
 	let isEmbedded = $derived(page.url.searchParams.get('embed') === 'true');
 	let customStyle = $derived.by(() => {
@@ -257,9 +250,9 @@
 </script>
 
 <div style={customStyle} style:display="contents">
-	<PageContainer>
+	<PageContainer errors={computeErrors} warnings={computeWarnings}>
 		{#if !isEmbedded}
-			<PageHeader title={pageTitle} badge={badgeConfig} showModeToggle={true} />
+			<PageHeader title={pageTitle} badge={solvingBadge} showModeToggle={true} />
 		{/if}
 
 		<div class="bg-background flex flex-col flex-1 overflow-hidden">
@@ -295,9 +288,6 @@
 				{/key}
 			{/if}
 		</div>
-
-		<!-- Floating Compute Messages -->
-		<ComputeMessages errors={computeErrors} warnings={computeWarnings} />
 	</PageContainer>
 </div>
 

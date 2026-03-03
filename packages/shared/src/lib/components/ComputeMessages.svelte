@@ -39,9 +39,9 @@
 </script>
 
 {#if hasMessages}
-	<!-- Floating Indicator Badge -->
+	<!-- Floating Indicator Badge (hidden on mobile) -->
 	<Dialog.Root bind:open>
-		<Dialog.Trigger class="bottom-1 right-2 fixed z-100 focus:outline-none">
+		<Dialog.Trigger class="bottom-12 right-2 sm:bottom-4 sm:right-4 hidden sm:block fixed z-100 focus:outline-none">
 			<div
 				class="shadow-lg text-xs font-medium hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 flex cursor-pointer items-stretch overflow-hidden rounded-full border transition-all duration-150
 					{errors.length > 0
