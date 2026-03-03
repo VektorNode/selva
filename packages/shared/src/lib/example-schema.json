@@ -14,9 +14,9 @@
 	"created": "2026-01-15T09:26:27.0674552Z",
 	"lastModified": "2026-02-19T12:54:05.6678446Z",
 	"viewerOptions": {
-		"enableLocal": true,
+		"enableLocal": false,
 		"enableRemote": true,
-		"backgroundColor": "#cfcece"
+		"backgroundColor": "#fffff"
 	},
 	"instanceSolve": false,
 	"inputs": [
@@ -192,7 +192,7 @@
 						]
 					}
 				],
-				"position": "center"
+				"position": "left"
 			}
 		],
 		"gap": 16

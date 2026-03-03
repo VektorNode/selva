@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { TabConfig } from '../types/generated';
-	import { ChevronRight, ChevronLeft } from '@lucide/svelte';
+	import { ChevronRight, ChevronLeft, ChevronDown } from '@lucide/svelte';
 
 	interface Props {
 		side: 'left' | 'right';
@@ -14,19 +14,27 @@
 </script>
 
 <div
-	class="lg:flex gap-2 py-4 hidden shrink-0 cursor-pointer flex-col items-center bg-muted transition-colors hover:bg-muted/70 {side ===
+	class="flex gap-2 py-3 lg:py-4 shrink-0 cursor-pointer flex-row lg:flex-col items-center bg-muted transition-colors hover:bg-muted/70 w-full lg:w-auto px-3 lg:px-0 {side ===
 	'left'
-		? 'rounded-r-md border-r-2'
-		: 'rounded-l-md border-l-2'} border-border"
-	style="width: {collapsedWidth}px"
+		? 'border-b-2 lg:border-b-0 lg:border-r-2 rounded-b-md lg:rounded-b-none lg:rounded-r-md'
+		: 'border-b-2 lg:border-b-0 lg:border-l-2 rounded-b-md lg:rounded-b-none lg:rounded-l-md'} border-border"
+	style="lg:width: {collapsedWidth}px"
 	role="button"
 	tabindex="0"
 	onclick={onExpand}
 	onkeydown={(e) => e.key === 'Enter' && onExpand()}
 	title="Expand {side} panel"
 >
+	<!-- Mobile chevron (top of row) -->
+	{#if side === 'left'}
+		<div class="lg:hidden text-muted-foreground">
+			<ChevronDown size={14} />
+		</div>
+	{/if}
+
+	<!-- Desktop chevrons (start/end of column) -->
 	{#if side === 'right'}
-		<div class="mb-1 text-muted-foreground">
+		<div class="hidden lg:block mb-1 text-muted-foreground">
 			<ChevronLeft size={14} />
 		</div>
 	{/if}
@@ -46,7 +54,7 @@
 	{/each}
 
 	{#if side === 'left'}
-		<div class="mt-auto text-muted-foreground">
+		<div class="hidden lg:block mt-auto text-muted-foreground">
 			<ChevronRight size={14} />
 		</div>
 	{/if}

@@ -1,6 +1,7 @@
 /**
  * Composable for checking Rhino.Compute server health
  */
+import { browser } from '$app/environment';
 
 export interface ComputeHealthStatus {
 	status: 'ok' | 'error' | 'warning' | 'checking';
@@ -57,16 +58,10 @@ export function useComputeHealth() {
 	}
 
 	function startPeriodicCheck(intervalMs: number = 5000) {
-		// Clear any existing interval
+		if (!browser) return;
 		stopPeriodicCheck();
-
-		// Initial check
 		checkHealth();
-
-		// Set up periodic checking
-		intervalId = setInterval(() => {
-			checkHealth();
-		}, intervalMs);
+		intervalId = setInterval(checkHealth, intervalMs);
 	}
 
 	function stopPeriodicCheck() {

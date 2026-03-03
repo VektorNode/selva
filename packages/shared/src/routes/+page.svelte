@@ -5,7 +5,6 @@
 	import exampleSchema from '$lib/example-schema.json';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import PageContainer from '$lib/components/layout/PageContainer.svelte';
-	import ComputeMessages from '$lib/components/ComputeMessages.svelte';
 	import * as THREE from 'three';
 
 	const schema = exampleSchema as UISchema;
@@ -48,8 +47,12 @@
 	}
 </script>
 
-<PageContainer>
-	<PageHeader title={'Test'} showModeToggle={true} />
+<PageContainer errors={dummyErrors} warnings={dummyWarnings}>
+	<PageHeader
+		title={'Test'}
+		showModeToggle={true}
+		logo="https://static.food4rhino.com/cdn/farfuture/-8kBLLz1EsmzigoTR71h78u38ce2X1pkplK7Xhz-nXg/mtime:1766995049/sites/default/files/public/styles/thumbnail/public/users-files/thevessen/app/asset2.png?itok=Om5jrCuE"
+	/>
 
 	<div class="flex flex-1 flex-col overflow-hidden bg-background">
 		<AppLayout
@@ -72,6 +75,4 @@
 			}}
 		/>
 	</div>
-
-	<ComputeMessages errors={dummyErrors} warnings={dummyWarnings} />
 </PageContainer>
