@@ -168,11 +168,21 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 					file = await this.migrateToStableFilename(guid, metadata, config);
 				}
 				const fileType = this.getFileType(file);
+
+				// Normalize coverImage URLs: convert admin URLs to public URLs for compatibility
+				const normalizedMetadata = { ...metadata };
+				if (normalizedMetadata.coverImage?.startsWith('/admin/api/definitions/')) {
+					const match = normalizedMetadata.coverImage.match(/\/admin\/api\/definitions\/(.+?)\/(image\/.+)/);
+					if (match) {
+						normalizedMetadata.coverImage = `/api/definitions/${match[1]}/${match[2]}`;
+					}
+				}
+
 				definitions.push({
 					guid,
 					filename: file,
 					fileType,
-					...metadata,
+					...normalizedMetadata,
 					file
 				});
 			} catch {
@@ -187,7 +197,20 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 	async getMetadata(identifier: string): Promise<DefinitionMetadata> {
 		const { guid } = await this.resolveIdentifier(identifier);
 		const config = await this.loadConfigFile();
-		return config.definitions[guid];
+		const metadata = config.definitions[guid];
+
+		// Normalize coverImage URLs: convert admin URLs to public URLs for compatibility
+		if (metadata && metadata.coverImage?.startsWith('/admin/api/definitions/')) {
+			const match = metadata.coverImage.match(/\/admin\/api\/definitions\/(.+?)\/(image\/.+)/);
+			if (match) {
+				return {
+					...metadata,
+					coverImage: `/api/definitions/${match[1]}/${match[2]}`
+				};
+			}
+		}
+
+		return metadata;
 	}
 
 	async loadDefinition(identifier: string): Promise<Uint8Array> {
