@@ -304,7 +304,7 @@
 
 			<!-- Success state -->
 			{#if urlSuccess}
-				<div class="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+				<div class="flex items-center gap-1.5 text-xs text-success">
 					<CircleCheck size={13} />
 					{urlSuccess}
 				</div>

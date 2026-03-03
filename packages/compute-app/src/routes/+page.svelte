@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
-	import { StateDisplay, PageHeader, Badge, PageFooter, Input } from '@selva/shared';
-	import { ArrowRight, AlertCircle, Search, X } from '@lucide/svelte';
+	import { StateDisplay, PageHeader, PageFooter, Input } from '@selva/shared';
+	import { AlertCircle, Search, X } from '@lucide/svelte';
 	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
 	import DefinitionCard from '$lib/components/DefinitionCard.svelte';
 
@@ -52,15 +52,6 @@
 		});
 	});
 
-	// Auto-redirect to app if only one definition or using URL mode
-	$effect(() => {
-		if (!data.definitions || data.definitions.length <= 1) {
-			// Single definition or URL mode - redirect to app
-			loadingDefinition = 'auto-redirect';
-			goto('/app').catch(() => {});
-		}
-	});
-
 	function handleDefinitionClick(filename: string) {
 		loadingDefinition = filename;
 		goto(`/app?gh=${filename}`).catch(() => {
@@ -69,16 +60,7 @@
 	}
 </script>
 
-{#if !data.definitions || data.definitions.length <= 1}
-	<!-- Auto-redirecting for single definition or URL mode -->
-	<div class="bg-background flex min-h-screen items-center justify-center">
-		<div class="text-center">
-			<div class="border-foreground mx-auto h-12 w-12 animate-spin rounded-full border-b-2"></div>
-			<p class="text-muted-foreground mt-4 text-sm">Loading...</p>
-		</div>
-	</div>
-{:else}
-	<div class="bg-background flex h-screen flex-col">
+<div class="bg-background flex h-screen flex-col">
 		<!-- Header -->
 		<PageHeader title="Definitions" badge={badgeConfig} showModeToggle={true} />
 
@@ -86,20 +68,20 @@
 		{#if computeHealth.status.status === 'error' || computeHealth.status.status === 'warning'}
 			<div
 				class="border-b px-8 py-3 {computeHealth.status.status === 'error'
-					? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950'
-					: 'border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950'}"
+					? 'border-destructive/30 bg-destructive/5'
+					: 'border-warning/30 bg-warning/5'}"
 			>
 				<div class="flex items-start gap-2">
 					<AlertCircle
 						class="mt-0.5 h-4 w-4 shrink-0 {computeHealth.status.status === 'error'
-							? 'text-red-600 dark:text-red-400'
-							: 'text-yellow-600 dark:text-yellow-400'}"
+							? 'text-destructive'
+							: 'text-warning'}"
 					/>
 					<div class="flex-1">
 						<p
 							class="text-sm font-medium {computeHealth.status.status === 'error'
-								? 'text-red-900 dark:text-red-100'
-								: 'text-yellow-900 dark:text-yellow-100'}"
+								? 'text-destructive'
+								: 'text-warning-foreground'}"
 						>
 							{computeHealth.status.status === 'error'
 								? 'Rhino.Compute Server Offline'
@@ -107,8 +89,8 @@
 						</p>
 						<p
 							class="mt-1 text-xs {computeHealth.status.status === 'error'
-								? 'text-red-700 dark:text-red-300'
-								: 'text-yellow-700 dark:text-yellow-300'}"
+								? 'text-destructive/80'
+								: 'text-warning-foreground/80'}"
 						>
 							{computeHealth.status.message}
 							{#if computeHealth.status.url}
@@ -120,6 +102,7 @@
 			</div>
 		{/if}
 
+	{#if data.definitions && data.definitions.length > 0}
 		<p class="border-border text-muted-foreground border-b px-8 py-3 text-sm">
 			Select a Grasshopper definition to get started
 		</p>
@@ -147,17 +130,23 @@
 				{/if}
 			</div>
 		</div>
+	{/if}
 
 		<!-- Definitions Grid -->
 		<div class="flex flex-1 flex-col overflow-y-auto px-8 py-6">
 			{#if data.error}
 				<StateDisplay type="error" size="medium" message={data.error} />
 			{:else if filteredDefinitions.length === 0}
-				<StateDisplay
-					type="empty"
-					size="medium"
-					message={searchQuery ? 'No definitions match your search' : 'No definitions found'}
-				/>
+				{#if searchQuery}
+					<StateDisplay type="empty" size="medium" message="No definitions match your search" />
+				{:else}
+					<div class="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+						<StateDisplay type="empty" size="medium" message="No definitions uploaded yet" />
+						<p class="text-muted-foreground text-sm">
+							Go to the <a href="/admin" class="text-foreground underline underline-offset-4 hover:opacity-75">admin panel</a> to upload a Grasshopper definition.
+						</p>
+					</div>
+				{/if}
 			{:else}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 					{#each filteredDefinitions as definition (definition.guid)}
@@ -174,4 +163,3 @@
 		<!-- Footer -->
 		<PageFooter />
 	</div>
-{/if}

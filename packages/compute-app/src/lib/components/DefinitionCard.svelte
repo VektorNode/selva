@@ -26,9 +26,9 @@
 	disabled={isLoading}
 	class="group h-full overflow-hidden rounded-lg text-left transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
 >
-	<Card.Root class="flex h-full flex-col pt-0">
+	<Card.Root class="flex h-full flex-col overflow-hidden pt-0">
 		{#if definition.coverImage?.trim() && !imageError}
-			<div class="bg-muted relative h-40 overflow-hidden">
+			<div class="bg-muted relative h-40 overflow-hidden rounded-t-lg">
 				<img
 					src={definition.coverImage}
 					alt={definition.displayName}
@@ -54,29 +54,30 @@
 				{/if}
 			</div>
 		{/if}
-		<Card.Header>
+		<Card.Header class="pb-2">
 			<div class="flex items-start justify-between gap-2">
-				<div class="flex-1">
-					<Card.Title>
+				<div class="min-h-10 flex-1">
+					<Card.Title class="line-clamp-2">
 						{definition.displayName}
 					</Card.Title>
 					{#if definition.description}
-						<Card.Description class="mt-1">{definition.description}</Card.Description>
+						<Card.Description class="mt-0.5 line-clamp-2">{definition.description}</Card.Description
+						>
 					{/if}
 				</div>
 				{#if definition.category}
-					<Badge variant="secondary">
+					<Badge variant="secondary" class="shrink-0">
 						{definition.category}
 					</Badge>
 				{/if}
 			</div>
 		</Card.Header>
 		<div class="border-border border-t"></div>
-		<Card.Content class="flex flex-col gap-3 pt-3">
+		<Card.Content class="flex grow flex-col gap-2 pt-2 pb-0">
 			{#if definition.tags && definition.tags.length > 0}
-				<div class="flex flex-col gap-1">
+				<div class="flex flex-col gap-0.5">
 					<p class="text-foreground text-xs font-semibold tracking-wider uppercase">Tags</p>
-					<div class="flex flex-wrap gap-1.5">
+					<div class="flex flex-wrap gap-1">
 						{#each definition.tags.slice(0, 4) as tag (tag)}
 							<Badge variant="secondary" class="text-xs">{tag}</Badge>
 						{/each}
@@ -85,9 +86,11 @@
 						{/if}
 					</div>
 				</div>
+			{:else}
+				<div class="h-5"></div>
 			{/if}
 
-			<div class="flex flex-col gap-1">
+			<div class="mt-auto flex flex-col gap-0.5">
 				<p class="text-muted-foreground text-xs font-semibold tracking-wider uppercase">File</p>
 				<p class="text-foreground truncate text-xs font-medium">
 					{definition.originalFilename || definition.filename}

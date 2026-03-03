@@ -46,7 +46,7 @@
 				class="shadow-lg text-xs font-medium hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 flex cursor-pointer items-stretch overflow-hidden rounded-full border transition-all duration-150
 					{errors.length > 0
 					? 'text-destructive-foreground border-destructive/30 bg-destructive'
-					: 'border-yellow-500/30 bg-yellow-50 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200'}"
+					: 'border-warning/30 bg-warning/5 text-warning-foreground'}"
 			>
 				{#if errors.length > 0}
 					<span class="gap-1.5 px-3 py-1.5 flex items-center">
@@ -128,18 +128,18 @@
 				<!-- Warnings Section -->
 				{#if warnings.length > 0}
 					<Collapsible.Root bind:open={showWarnings}>
-						<div class="border-yellow-500/50 overflow-hidden rounded-lg border bg-card">
+						<div class="border-warning/50 overflow-hidden rounded-lg border bg-card">
 							<div class="px-4 py-3 flex items-center">
 								<Collapsible.Trigger
-									class="hover:bg-yellow-500/5 -mx-4 -my-3 gap-3 px-4 py-3 flex flex-1 items-center text-left transition-colors"
+									class="hover:bg-warning/5 -mx-4 -my-3 gap-3 px-4 py-3 flex flex-1 items-center text-left transition-colors"
 								>
 									{#if showWarnings}
-										<ChevronDown class="h-4 w-4 text-yellow-600 dark:text-yellow-500 shrink-0" />
+										<ChevronDown class="h-4 w-4 text-warning shrink-0" />
 									{:else}
-										<ChevronRight class="h-4 w-4 text-yellow-600 dark:text-yellow-500 shrink-0" />
+										<ChevronRight class="h-4 w-4 text-warning shrink-0" />
 									{/if}
-									<TriangleAlert class="h-4 w-4 text-yellow-600 dark:text-yellow-500 shrink-0" />
-									<span class="text-sm font-medium text-yellow-600 dark:text-yellow-500">
+									<TriangleAlert class="h-4 w-4 text-warning shrink-0" />
+									<span class="text-sm font-medium text-warning">
 										{warnings.length === 1 ? '1 Warning' : `${warnings.length} Warnings`}
 									</span>
 								</Collapsible.Trigger>
@@ -147,7 +147,7 @@
 
 							<Collapsible.Content class="space-y-0">
 								<div
-									class="max-h-60 border-yellow-500/50 px-4 py-3 overflow-y-auto border-t bg-card"
+									class="max-h-60 border-warning/50 px-4 py-3 overflow-y-auto border-t bg-card"
 								>
 									<ul class="space-y-2">
 										{#each groupedWarnings as { message, count } (message)}
@@ -157,7 +157,7 @@
 													{message}
 													{#if count > 1}
 														<span
-															class="ml-1 font-medium text-yellow-600/70 dark:text-yellow-500/70"
+															class="ml-1 font-medium text-warning/70"
 															>×{count}</span
 														>
 													{/if}
