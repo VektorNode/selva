@@ -35,44 +35,50 @@
 
 	// Map custom variants to colors
 	const badgeStyles: Record<string, string> = {
-		connected: 'bg-green-500 text-white border-transparent',
-		disconnected: 'bg-red-500 text-white border-transparent',
-		solving: 'bg-orange-500 text-white border-transparent',
-		compute: 'bg-blue-500 text-white border-transparent'
+		connected: 'bg-success text-success-foreground border-transparent',
+		disconnected: 'bg-background text-destructive border border-destructive',
+		solving: 'bg-warning text-warning-foreground border-transparent',
+		compute: 'bg-info text-info-foreground border-transparent'
 	};
 </script>
 
 <header
-	class={`px-6 py-3 backdrop-blur-sm border-b border-border bg-linear-to-b from-background to-muted/50 transition-all duration-200 ${className}`}
+	class={`px-4 py-3 backdrop-blur-sm sm:px-6 border-b border-border bg-linear-to-b from-background to-muted/50 transition-all duration-200 ${className}`}
 >
-	<div class="gap-3 sm:flex-row sm:items-center sm:justify-between flex flex-col">
+	<div class="gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4 flex flex-col">
 		<!-- Left section -->
-		<div class="min-w-0 gap-3 flex flex-1 items-center">
+		<div class="gap-2 min-w-0 sm:gap-3 flex flex-1 items-center">
 			{#if logo}
 				<a
 					href="/"
-					class="cursor-pointer transition-opacity hover:opacity-75"
+					class="shrink-0 cursor-pointer transition-opacity hover:opacity-75"
 					title="Go to home"
 					data-sveltekit-reload
 				>
-					<img src={logo} alt="Logo" class="h-8 w-8 shrink-0" />
+					<img src={logo} alt="Logo" class="h-8 w-8" />
 				</a>
 			{/if}
-			<h1 class="text-xl font-bold sm:text-2xl text-foreground">
+			<h1 class="text-lg font-bold sm:text-2xl truncate text-foreground">
 				{title}
 			</h1>
 
+			{#if showModeToggle && !rightContent}
+				<div class="sm:hidden ml-auto">
+					<ModeToggle />
+				</div>
+			{/if}
+
 			{#if sessionId || badge || children}
-				<div class="mt-1 gap-2 text-xs flex flex-wrap items-center text-muted-foreground">
+				<div class="gap-2 text-xs sm:flex hidden flex-wrap items-center text-muted-foreground">
 					{#if children}
 						{@render children()}
 					{/if}
 
 					{#if sessionId}
 						<span class="gap-1.5 flex max-w-full items-center">
-							<span>Session:</span>
+							<span class="shrink-0">Session:</span>
 							<code
-								class="rounded px-2 py-0.5 font-mono text-xs font-medium sm:max-w-none max-w-[60vw] truncate bg-muted text-foreground"
+								class="rounded px-2 py-0.5 font-mono text-xs font-medium truncate bg-muted text-foreground"
 							>
 								{sessionId}
 							</code>
@@ -92,9 +98,9 @@
 			{/if}
 		</div>
 
-		<!-- Right section (Theme & Mode Toggle + rightContent) -->
-		{#if showModeToggle || rightContent}
-			<div class="gap-2 sm:self-center flex items-center self-start">
+		<!-- Right section (rightContent + ModeToggle) -->
+		{#if rightContent || showModeToggle}
+			<div class="sm:flex gap-2 hidden items-center">
 				{#if rightContent}
 					{@render rightContent()}
 				{/if}
@@ -104,6 +110,36 @@
 			</div>
 		{/if}
 	</div>
+
+	<!-- Mobile badge section -->
+	{#if (sessionId || badge || children) && (sessionId || badge)}
+		<div class="mt-2 gap-2 text-xs sm:hidden flex flex-wrap items-center text-muted-foreground">
+			{#if children}
+				{@render children()}
+			{/if}
+
+			{#if sessionId}
+				<span class="gap-1.5 min-w-0 flex items-center">
+					<span class="shrink-0">Session:</span>
+					<code
+						class="rounded px-1.5 py-0.5 font-mono text-xs font-medium truncate bg-muted text-foreground"
+					>
+						{sessionId}
+					</code>
+				</span>
+			{/if}
+
+			{#if sessionId && badge}
+				<div class="h-3 w-px bg-border"></div>
+			{/if}
+
+			{#if badge}
+				<Badge class={badgeStyles[badge.variant]}>
+					{badge.label}
+				</Badge>
+			{/if}
+		</div>
+	{/if}
 </header>
 
 <style>

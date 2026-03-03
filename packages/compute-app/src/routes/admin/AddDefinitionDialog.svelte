@@ -172,15 +172,15 @@
 						Validating definition…
 					</p>
 				{:else if validationError}
-					<div class="border-yellow-500/40 bg-yellow-500/5 rounded-md border p-3">
-						<p class="text-yellow-700 dark:text-yellow-400 text-xs font-medium">Validation warning</p>
-						<p class="text-yellow-700/80 dark:text-yellow-400/80 mt-0.5 text-xs">{validationError}</p>
-						<p class="text-yellow-700/60 dark:text-yellow-400/60 mt-1 text-xs">You can still upload the file.</p>
+					<div class="border-warning/40 bg-warning/5 rounded-md border p-3">
+						<p class="text-warning-foreground text-xs font-medium">Validation warning</p>
+						<p class="text-warning-foreground/80 mt-0.5 text-xs">{validationError}</p>
+						<p class="text-warning-foreground/60 mt-1 text-xs">You can still upload the file.</p>
 					</div>
 				{:else if validationSchema}
-					<div class="flex items-center gap-3 rounded-md border border-green-500/30 bg-green-500/5 p-3">
+					<div class="flex items-center gap-3 rounded-md border border-success/30 bg-success/5 p-3">
 						<div class="min-w-0 flex-1">
-							<p class="text-xs font-medium text-green-700 dark:text-green-400">Valid Selva definition</p>
+							<p class="text-xs font-medium text-success-foreground">Valid Selva definition</p>
 							<p class="text-muted-foreground mt-0.5 text-xs">
 								{validationSchema.inputCount} input{validationSchema.inputCount === 1 ? '' : 's'},
 								{validationSchema.outputCount} output{validationSchema.outputCount === 1 ? '' : 's'}

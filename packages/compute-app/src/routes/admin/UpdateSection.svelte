@@ -65,7 +65,7 @@
 				{#if exitCode !== null}
 					<p
 						class="text-sm font-medium {exitCode === 0
-							? 'text-green-600 dark:text-green-400'
+							? 'text-success'
 							: 'text-destructive'}"
 					>
 						{exitCode === 0

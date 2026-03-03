@@ -230,15 +230,15 @@
 				<!-- Summary Alert -->
 				{#if validationResult.isValid}
 					<Card.Root
-						class="border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950"
+						class="border-success/30 bg-success/5 p-4"
 					>
 						<div class="gap-3 flex items-start">
-							<CheckCircle class="h-5 w-5 text-green-600 dark:text-green-400" />
+							<CheckCircle class="h-5 w-5 text-success" />
 							<div>
-								<h4 class="text-sm font-semibold text-green-900 dark:text-green-100">
+								<h4 class="text-sm font-semibold text-success-foreground">
 									No Issues Found
 								</h4>
-								<p class="text-sm text-green-700 mt-1 dark:text-green-300">
+								<p class="text-sm text-success-foreground/80 mt-1">
 									This state can be loaded safely.
 								</p>
 							</div>
@@ -246,29 +246,29 @@
 					</Card.Root>
 				{:else if validationResult.canLoad}
 					<Card.Root
-						class="border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-900 dark:bg-yellow-950"
+						class="border-warning/30 bg-warning/5 p-4"
 					>
 						<div class="gap-3 flex items-start">
-							<AlertTriangle class="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+							<AlertTriangle class="h-5 w-5 text-warning" />
 							<div>
-								<h4 class="text-sm font-semibold text-yellow-900 dark:text-yellow-100">
+								<h4 class="text-sm font-semibold text-warning-foreground">
 									Warnings Detected
 								</h4>
-								<p class="text-sm text-yellow-700 mt-1 dark:text-yellow-300">
+								<p class="text-sm text-warning-foreground/80 mt-1">
 									{validationResult.issues.length} warning(s) found, but state can still be loaded.
 								</p>
 							</div>
 						</div>
 					</Card.Root>
 				{:else}
-					<Card.Root class="border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
+					<Card.Root class="border-destructive/30 bg-destructive/5 p-4">
 						<div class="gap-3 flex items-start">
-							<AlertTriangle class="h-5 w-5 text-red-600 dark:text-red-400" />
+							<AlertTriangle class="h-5 w-5 text-destructive" />
 							<div>
-								<h4 class="text-sm font-semibold text-red-900 dark:text-red-100">
+								<h4 class="text-sm font-semibold text-destructive">
 									Critical Errors
 								</h4>
-								<p class="text-sm text-red-700 mt-1 dark:text-red-300">
+								<p class="text-sm text-destructive/80 mt-1">
 									Cannot load this state due to critical incompatibilities.
 								</p>
 							</div>
@@ -283,14 +283,14 @@
 						{#each validationResult.issues as issue (issue.message)}
 							<div
 								class="p-3 rounded-lg border {issue.severity === 'error'
-									? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950'
-									: 'border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950'}"
+									? 'border-destructive/30 bg-destructive/5'
+									: 'border-warning/30 bg-warning/5'}"
 							>
 								<div class="gap-2 flex items-start">
 									<AlertTriangle
 										class="h-4 w-4 mt-0.5 {issue.severity === 'error'
-											? 'text-red-600 dark:text-red-400'
-											: 'text-yellow-600 dark:text-yellow-400'}"
+											? 'text-destructive'
+											: 'text-warning'}"
 									/>
 									<div class="flex-1">
 										<p class="text-sm font-medium">{issue.message}</p>

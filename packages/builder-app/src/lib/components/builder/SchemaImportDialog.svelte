@@ -43,7 +43,7 @@
 	}
 
 	function getIssueColorClass(severity: 'error' | 'warning') {
-		return severity === 'error' ? 'text-destructive' : 'text-yellow-600';
+		return severity === 'error' ? 'text-destructive' : 'text-warning';
 	}
 </script>
 
@@ -116,7 +116,7 @@
 			<!-- Validation Status -->
 			{#if validation.isValid}
 				<Alert.Root>
-					<CheckCircle2 class="h-4 w-4 text-green-600" />
+					<CheckCircle2 class="h-4 w-4 text-success" />
 					<Alert.Title>Schema Valid</Alert.Title>
 					<Alert.Description>
 						This schema is compatible with your current document and can be safely imported.
@@ -124,7 +124,7 @@
 				</Alert.Root>
 			{:else if validation.canLoad}
 				<Alert.Root>
-					<AlertTriangle class="h-4 w-4 text-yellow-600" />
+					<AlertTriangle class="h-4 w-4 text-warning" />
 					<Alert.Title>Warnings Found</Alert.Title>
 					<Alert.Description>
 						The schema can be imported but has some warnings. Review them below.

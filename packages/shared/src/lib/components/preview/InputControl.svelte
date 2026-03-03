@@ -188,7 +188,7 @@
 					max={config.maximum}
 					step={config.stepSize ?? 1}
 					placeholder={config.placeholder}
-					class={validationError ? 'border-red-500' : ''}
+					class={validationError ? 'border-destructive' : ''}
 					{disabled}
 					oninput={() => {
 						validationError = null; // Clear error while typing
@@ -213,7 +213,7 @@
 					}}
 				/>
 				{#if validationError}
-					<p class="text-xs text-red-500">{validationError}</p>
+					<p class="text-xs text-destructive">{validationError}</p>
 				{/if}
 			</div>
 		{/if}
@@ -236,7 +236,7 @@
 				bind:value
 				placeholder={config.placeholder}
 				maxlength={config.maxLength}
-				class={validationError ? 'border-red-500' : ''}
+				class={validationError ? 'border-destructive' : ''}
 				{disabled}
 				oninput={() => {
 					validationError = null; // Clear error while typing
@@ -254,7 +254,7 @@
 				}}
 			/>
 			{#if validationError}
-				<p class="text-xs text-red-500">{validationError}</p>
+				<p class="text-xs text-destructive">{validationError}</p>
 			{/if}
 		</div>
 	{:else if isDropdownWidget(item)}

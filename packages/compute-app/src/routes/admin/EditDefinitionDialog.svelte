@@ -285,10 +285,10 @@
 				<Separator />
 
 				<!-- Cover Image -->
-				<div class="space-y-2 rounded-lg border border-blue-300 bg-blue-50/30 p-4">
+				<div class="border-ring/60 bg-ring/20 space-y-2 rounded-lg border p-4">
 					<div class="flex items-center gap-2">
-						<Image class="h-4 w-4 text-blue-600" />
-						<Label class="font-semibold text-blue-900">Cover Image</Label>
+						<Image class="text-ring h-4 w-4" />
+						<Label class="font-semibold">Cover Image</Label>
 					</div>
 					<div class="min-w-0 space-y-2">
 						<div class="overflow-x-auto">
@@ -305,18 +305,18 @@
 							/>
 						</div>
 						{#if imageJustUploaded}
-							<p class="text-xs font-medium text-green-700">✓ Image saved in definition folder</p>
+							<p class="text-xs font-medium text-success">✓ Image saved in definition folder</p>
 						{/if}
 					</div>
 				</div>
 
 				<!-- Grasshopper File -->
 				<div
-					class="hidden space-y-2 rounded-lg border border-amber-300 bg-amber-50/30 p-4 md:block"
+					class="border-muted-foreground/40 bg-muted/40 hidden space-y-2 rounded-lg border p-4 md:block"
 				>
 					<div class="flex items-center gap-2">
-						<Upload class="h-4 w-4 text-amber-700" />
-						<Label class="font-semibold text-amber-900">Grasshopper File</Label>
+						<Upload class="text-muted-foreground h-4 w-4" />
+						<Label class="font-semibold">Grasshopper File</Label>
 					</div>
 					<div class="min-w-0 space-y-2">
 						{#if config.file}

@@ -56,7 +56,7 @@ async function getClient(): Promise<GrasshopperClient> {
 	// Create new client
 	cachedClient = await GrasshopperClient.create({
 		serverUrl: currentConfig.serverUrl,
-		apiKey: currentConfig.apiKey
+		apiKey: currentConfig.apiKey,
 	});
 	cachedClientConfig = currentConfig;
 
