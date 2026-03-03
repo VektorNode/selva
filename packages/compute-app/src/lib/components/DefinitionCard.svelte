@@ -72,23 +72,22 @@
 			</div>
 		</Card.Header>
 		<div class="border-border border-t"></div>
-		<Card.Content class="flex flex-col gap-4 pt-4">
+		<Card.Content class="flex flex-col gap-3 pt-3">
 			{#if definition.tags && definition.tags.length > 0}
-				<div class="flex flex-col gap-2">
+				<div class="flex flex-col gap-1">
 					<p class="text-foreground text-xs font-semibold tracking-wider uppercase">Tags</p>
-					<div class="flex flex-wrap gap-2">
+					<div class="flex flex-wrap gap-1.5">
 						{#each definition.tags.slice(0, 4) as tag (tag)}
 							<Badge variant="secondary" class="text-xs">{tag}</Badge>
 						{/each}
 						{#if definition.tags.length > 4}
-							<Badge variant="outline" class="text-xs">+{definition.tags.length - 4} more</Badge>
+							<Badge variant="outline" class="text-xs">+{definition.tags.length - 4}</Badge>
 						{/if}
 					</div>
 				</div>
-				<div class="border-border border-t"></div>
 			{/if}
 
-			<div class="flex flex-col gap-1.5">
+			<div class="flex flex-col gap-1">
 				<p class="text-muted-foreground text-xs font-semibold tracking-wider uppercase">File</p>
 				<p class="text-foreground truncate text-xs font-medium">
 					{definition.originalFilename || definition.filename}
