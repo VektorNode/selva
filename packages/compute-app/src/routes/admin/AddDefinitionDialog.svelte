@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Button, Dialog, Input, Label, Textarea, toast } from '@selva/shared';
+	import { Button, Dialog, Input, Label, Textarea, toast, Badge } from '@selva/shared';
+	import { X } from '@lucide/svelte';
 	import ImageUploadField from './ImageUploadField.svelte';
 
 	interface ValidatedSchema {
@@ -23,7 +24,7 @@
 	let displayName = $state('');
 	let description = $state('');
 	let category = $state('');
-	let tags = $state('');
+	let tags = $state<string[]>([]);
 	let coverImage = $state('');
 	let imageMode = $state<'url' | 'upload'>('url');
 
@@ -80,7 +81,7 @@
 			validationSchema = schema;
 			if (schema?.name) displayName = schema.name;
 			if (schema?.description) description = schema.description;
-			if (schema?.tags?.length) tags = schema.tags.join(', ');
+			if (schema?.tags?.length) tags = schema.tags;
 		} catch {
 			// Network error — skip silently
 		} finally {
@@ -102,7 +103,7 @@
 		formData.append('displayName', displayName.trim());
 		formData.append('description', description);
 		formData.append('category', category);
-		formData.append('tags', tags);
+		formData.append('tags', JSON.stringify(tags));
 
 		if (imageMode === 'upload' && imageInput?.files?.[0]) {
 			formData.append('image', imageInput.files[0]);
@@ -123,7 +124,7 @@
 		displayName = '';
 		description = '';
 		category = '';
-		tags = '';
+		tags = [];
 		coverImage = '';
 		imageMode = 'url';
 		hasFile = false;
@@ -203,14 +204,56 @@
 			</div>
 
 			<!-- Category & Tags -->
-			<div class="grid grid-cols-2 gap-4">
-				<div class="space-y-2">
+			<div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+				<div class="space-y-1">
 					<Label for="new-cat">Category</Label>
 					<Input id="new-cat" type="text" bind:value={category} placeholder="e.g., Architecture" />
 				</div>
-				<div class="space-y-2">
-					<Label for="new-tags">Tags</Label>
-					<Input id="new-tags" type="text" bind:value={tags} placeholder="parametric, tower" />
+				<div class="space-y-1">
+					<div class="flex items-center justify-between">
+						<Label for="new-tags">Tags</Label>
+						<p class="text-muted-foreground text-xs">{tags.length}/5</p>
+					</div>
+					{#if tags.length > 0}
+						<div class="mb-2 flex flex-wrap gap-2">
+							{#each tags as tag (tag)}
+								<Badge variant="outline" class="cursor-pointer gap-1">
+									{tag}
+									<button
+										type="button"
+										class="ml-0.5 inline-flex items-center justify-center transition-opacity hover:opacity-70"
+										onclick={() => {
+											tags = tags.filter((t) => t !== tag);
+										}}
+										title="Remove tag"
+									>
+										<X class="h-3 w-3" />
+									</button>
+								</Badge>
+							{/each}
+						</div>
+					{/if}
+					<Input
+						id="new-tags"
+						type="text"
+						placeholder="Add tag and press Enter"
+						disabled={tags.length >= 5}
+						onkeydown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								const input = e.currentTarget as HTMLInputElement;
+								const tag = input.value.trim();
+								if (
+									tag &&
+									!tags.includes(tag) &&
+									tags.length < 5
+								) {
+									tags = [...tags, tag];
+									input.value = '';
+								}
+							}
+						}}
+					/>
 				</div>
 			</div>
 
