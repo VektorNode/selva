@@ -33,6 +33,10 @@ export * from './utils/param-exporter';
 export * from './utils/solving.svelte';
 export * from './utils/computeThrottle.svelte';
 
+// Contexts & Composables
+export * from './contexts/footerContext.svelte';
+export * from './composables/useFooterItem.svelte';
+
 // Stores
 export { themeStore } from './stores/themeStore.svelte';
 

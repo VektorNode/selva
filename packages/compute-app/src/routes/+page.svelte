@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { onMount, onDestroy } from 'svelte';
 	import type { PageData } from './$types';
-	import { StateDisplay, PageHeader, PageFooter, Input } from '@selva/shared';
-	import { AlertCircle, Search, X } from '@lucide/svelte';
+	import { StateDisplay, PageHeader, PageContainer, Input, useFooterItem } from '@selva/shared';
+	import { Search, X } from '@lucide/svelte';
 	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
+	import ComputeHealthFooter from '$lib/components/ComputeHealthFooter.svelte';
 	import DefinitionCard from '$lib/components/DefinitionCard.svelte';
 
 	let { data }: { data: PageData } = $props();
@@ -12,26 +14,18 @@
 	let loadingDefinition = $state<string | null>(null);
 	let searchQuery = $state('');
 
-	// Check compute health periodically (every 5 seconds)
 	const computeHealth = useComputeHealth();
-	$effect(() => {
-		computeHealth.startPeriodicCheck(5000);
-		return () => computeHealth.stopPeriodicCheck();
-	});
+	onMount(() => computeHealth.startPeriodicCheck(10000));
+	onDestroy(() => computeHealth.stopPeriodicCheck());
 
-	// Compute badge configuration based on health status
-	const badgeConfig = $derived.by(() => {
-		if (computeHealth.status.status === 'checking') {
-			return { label: 'Checking...', variant: 'compute' as const };
-		}
-		if (computeHealth.status.status === 'ok') {
-			return { label: 'Compute Online', variant: 'connected' as const };
-		}
-		if (computeHealth.status.status === 'warning') {
-			return { label: 'Compute Warning', variant: 'solving' as const };
-		}
-		return { label: 'Compute Offline', variant: 'disconnected' as const };
-	});
+	// Register compute health in footer
+	useFooterItem(
+		'compute-health',
+		ComputeHealthFooter,
+		() => ({ status: computeHealth.status.status, message: computeHealth.status.message }),
+		'left',
+		20
+	);
 
 	// Filter definitions based on search query
 	const filteredDefinitions = $derived.by(() => {
@@ -60,55 +54,17 @@
 	}
 </script>
 
-<div class="bg-background flex h-screen flex-col">
-		<!-- Header -->
-		<PageHeader title="Definitions" badge={badgeConfig} showModeToggle={true} />
-
-		<!-- Compute Status Warning -->
-		{#if computeHealth.status.status === 'error' || computeHealth.status.status === 'warning'}
-			<div
-				class="border-b px-8 py-3 {computeHealth.status.status === 'error'
-					? 'border-destructive/30 bg-destructive/5'
-					: 'border-warning/30 bg-warning/5'}"
-			>
-				<div class="flex items-start gap-2">
-					<AlertCircle
-						class="mt-0.5 h-4 w-4 shrink-0 {computeHealth.status.status === 'error'
-							? 'text-destructive'
-							: 'text-warning'}"
-					/>
-					<div class="flex-1">
-						<p
-							class="text-sm font-medium {computeHealth.status.status === 'error'
-								? 'text-destructive'
-								: 'text-warning-foreground'}"
-						>
-							{computeHealth.status.status === 'error'
-								? 'Rhino.Compute Server Offline'
-								: 'Rhino.Compute Server Warning'}
-						</p>
-						<p
-							class="mt-1 text-xs {computeHealth.status.status === 'error'
-								? 'text-destructive/80'
-								: 'text-warning-foreground/80'}"
-						>
-							{computeHealth.status.message}
-							{#if computeHealth.status.url}
-								<span class="font-mono">({computeHealth.status.url})</span>
-							{/if}
-						</p>
-					</div>
-				</div>
-			</div>
-		{/if}
+<PageContainer>
+	<!-- Header -->
+	<PageHeader title="Definitions" showModeToggle={true} />
 
 	{#if data.definitions && data.definitions.length > 0}
-		<p class="border-border text-muted-foreground border-b px-8 py-3 text-sm">
+		<p class="border-border text-muted-foreground border-b px-4 py-3 text-sm sm:px-8">
 			Select a Grasshopper definition to get started
 		</p>
 
 		<!-- Search Bar -->
-		<div class="border-border border-b px-8 py-4">
+		<div class="border-border border-b px-4 py-4 sm:px-8">
 			<div class="relative">
 				<Search
 					class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
@@ -132,34 +88,34 @@
 		</div>
 	{/if}
 
-		<!-- Definitions Grid -->
-		<div class="flex flex-1 flex-col overflow-y-auto px-8 py-6">
-			{#if data.error}
-				<StateDisplay type="error" size="medium" message={data.error} />
-			{:else if filteredDefinitions.length === 0}
-				{#if searchQuery}
-					<StateDisplay type="empty" size="medium" message="No definitions match your search" />
-				{:else}
-					<div class="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-						<StateDisplay type="empty" size="medium" message="No definitions uploaded yet" />
-						<p class="text-muted-foreground text-sm">
-							Go to the <a href="/admin" class="text-foreground underline underline-offset-4 hover:opacity-75">admin panel</a> to upload a Grasshopper definition.
-						</p>
-					</div>
-				{/if}
+	<!-- Definitions Grid -->
+	<div class="flex flex-1 flex-col overflow-y-auto px-4 py-6 sm:px-8">
+		{#if data.error}
+			<StateDisplay type="error" size="medium" message={data.error} />
+		{:else if filteredDefinitions.length === 0}
+			{#if searchQuery}
+				<StateDisplay type="empty" size="medium" message="No definitions match your search" />
 			{:else}
-				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-					{#each filteredDefinitions as definition (definition.guid)}
-						<DefinitionCard
-							{definition}
-							isLoading={loadingDefinition === definition.filename}
-							onSelect={() => handleDefinitionClick(definition.guid)}
-						/>
-					{/each}
+				<div class="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+					<StateDisplay type="empty" size="medium" message="No definitions uploaded yet" />
+					<p class="text-muted-foreground text-sm">
+						Go to the <a
+							href="/admin"
+							class="text-foreground underline underline-offset-4 hover:opacity-75">admin panel</a
+						> to upload a Grasshopper definition.
+					</p>
 				</div>
 			{/if}
-		</div>
-
-		<!-- Footer -->
-		<PageFooter />
+		{:else}
+			<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+				{#each filteredDefinitions as definition (definition.guid)}
+					<DefinitionCard
+						{definition}
+						isLoading={loadingDefinition === definition.filename}
+						onSelect={() => handleDefinitionClick(definition.guid)}
+					/>
+				{/each}
+			</div>
+		{/if}
 	</div>
+</PageContainer>
