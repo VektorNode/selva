@@ -176,13 +176,18 @@
 	</div>
 {/snippet}
 
-{#snippet gridItem(layoutItem: any)}
+{#snippet gridItem(layoutItem: any, columns: number)}
 	{@const visibility = evaluateVisibility(layoutItem)}
+	{@const span = Math.min(Math.max(1, layoutItem.span ?? 1), columns)}
 	{#if visibility.visible}
 		{#if layoutItem.type === 'input'}
 			{@const input = getInputById(layoutItem.paramId)}
 			{#if input}
-				<div class="min-w-0 overflow-hidden" class:opacity-50={visibility.disabled}>
+				<div
+					class="min-w-0 overflow-hidden"
+					class:opacity-50={visibility.disabled}
+					style="grid-column: span {span} / span {span}"
+				>
 					<InputControl
 						item={layoutItem}
 						bind:value={values[input.id]}
@@ -196,7 +201,10 @@
 		{:else if layoutItem.type === 'output'}
 			{@const output = getOutputById(layoutItem.paramId)}
 			{#if output}
-				<div class="min-w-0 overflow-hidden">
+				<div
+					class="min-w-0 overflow-hidden"
+					style="grid-column: span {span} / span {span}"
+				>
 					<OutputDisplay
 						item={layoutItem}
 						value={values[layoutItem.paramId]}
@@ -243,13 +251,15 @@
 									</Card.Action>
 								</Card.Header>
 								{#if !collapsedGroups[group.id]}
-									<Card.Content
-										class="gap-6 p-6 schema-grid grid animate-[fadeIn_0.2s] overflow-x-auto"
-										style="--schema-cols: {group.columns};"
-									>
-										{#each group.items as layoutItem (layoutItem.paramId)}
-											{@render gridItem(layoutItem)}
-										{/each}
+									<Card.Content class="p-6">
+										<div
+											class="schema-grid grid gap-6 animate-[fadeIn_0.2s] overflow-x-auto"
+											style="--schema-cols: {group.columns};"
+										>
+											{#each group.items as layoutItem (layoutItem.paramId)}
+											{@render gridItem(layoutItem, group.columns ?? 1)}
+											{/each}
+										</div>
 									</Card.Content>
 								{/if}
 							</Card.Root>
