@@ -167,7 +167,14 @@
 				{#if validating}
 					<p class="text-muted-foreground flex items-center gap-2 text-xs">
 						<svg class="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+							<circle
+								class="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								stroke-width="4"
+							/>
 							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
 						</svg>
 						Validating definition…
@@ -179,9 +186,9 @@
 						<p class="text-warning-foreground/60 mt-1 text-xs">You can still upload the file.</p>
 					</div>
 				{:else if validationSchema}
-					<div class="flex items-center gap-3 rounded-md border border-success/30 bg-success/5 p-3">
+					<div class="border-success/30 bg-success/5 flex items-center gap-3 rounded-md border p-3">
 						<div class="min-w-0 flex-1">
-							<p class="text-xs font-medium text-success-foreground">Valid Selva definition</p>
+							<p class="text-success-foreground text-xs font-medium">Valid Selva definition</p>
 							<p class="text-muted-foreground mt-0.5 text-xs">
 								{validationSchema.inputCount} input{validationSchema.inputCount === 1 ? '' : 's'},
 								{validationSchema.outputCount} output{validationSchema.outputCount === 1 ? '' : 's'}
@@ -194,20 +201,39 @@
 			<!-- Display Name -->
 			<div class="space-y-2">
 				<Label for="new-dn">Display Name <span class="text-destructive">*</span></Label>
-				<Input id="new-dn" type="text" bind:value={displayName} placeholder="e.g., Parametric Tower" />
+				<Input
+					id="new-dn"
+					type="text"
+					bind:value={displayName}
+					placeholder="e.g., Parametric Tower"
+				/>
 			</div>
 
 			<!-- Description -->
 			<div class="space-y-2">
 				<Label for="new-desc">Description</Label>
-				<Textarea id="new-desc" bind:value={description} rows={3} placeholder="Describe what this definition does…" />
+				<Textarea
+					id="new-desc"
+					bind:value={description}
+					rows={3}
+					placeholder="Describe what this definition does…"
+				/>
 			</div>
 
 			<!-- Category & Tags -->
 			<div class="grid grid-cols-1 gap-3 md:grid-cols-2">
 				<div class="space-y-1">
-					<Label for="new-cat">Category</Label>
-					<Input id="new-cat" type="text" bind:value={category} placeholder="e.g., Architecture" />
+					<div class="flex items-center justify-between">
+						<Label for="new-cat">Category</Label>
+						<p class="text-muted-foreground text-xs">{category?.length ?? 0}/40</p>
+					</div>
+					<Input
+						id="new-cat"
+						type="text"
+						maxlength={40}
+						bind:value={category}
+						placeholder="e.g., Architecture"
+					/>
 				</div>
 				<div class="space-y-1">
 					<div class="flex items-center justify-between">
@@ -243,11 +269,7 @@
 								e.preventDefault();
 								const input = e.currentTarget as HTMLInputElement;
 								const tag = input.value.trim();
-								if (
-									tag &&
-									!tags.includes(tag) &&
-									tags.length < 5
-								) {
+								if (tag && !tags.includes(tag) && tags.length < 5) {
 									tags = [...tags, tag];
 									input.value = '';
 								}
