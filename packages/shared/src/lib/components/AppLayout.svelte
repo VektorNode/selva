@@ -361,6 +361,41 @@
 			>
 				<Viewer {schema} {meshes} bind:isFullscreen={isViewerFullscreen} {isSolving} />
 			</div>
+
+			{#if rightCollapsed}
+				<CollapsedPanelStrip
+					side="right"
+					tabs={rightTabs}
+					collapsedWidth={COLLAPSED_WIDTH}
+					onExpand={() => (rightWidth = RESTORE_WIDTH)}
+					onTabClick={(id) => {
+						requestedRightTabId = id;
+						rightWidth = RESTORE_WIDTH;
+					}}
+				/>
+			{:else}
+				<div
+					class="px-3 min-h-0 w-full shrink-0 overflow-y-auto {isViewerFullscreen ? 'hidden' : ''}"
+					style="width: {rightWidth}px; max-width: 100%;"
+				>
+					<TabLayout
+						{schema}
+						bind:values
+						{onValueChange}
+						{environment}
+						panelFilter="right"
+						requestedTabId={requestedRightTabId}
+					/>
+					{#if !hasLeftTabs}
+						<div class="mt-6">
+							<StateManager {schema} currentValues={values} onLoadValues={handleLoadValues} />
+						</div>
+						{#if schema.instanceSolve === false}
+							<CalculateButton {hasPendingChanges} {isSolving} {oncalculate} />
+						{/if}
+					{/if}
+				</div>
+			{/if}
 		{/if}
 
 		<!-- Two-panel drag handle: sits between left and right flex panels -->
@@ -483,5 +518,68 @@
 
 	.left-panel-content {
 		direction: ltr;
+	}
+
+	/* Mobile bottom drawer */
+
+	.drawer-container {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		z-index: 100;
+		display: flex;
+		flex-direction: column;
+		border-radius: 1rem 1rem 0 0;
+		background: var(--background);
+		border-top: 1px solid var(--border);
+		box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
+		transition: height 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+		overflow: hidden;
+	}
+
+	.drawer-closed {
+		height: 60px;
+	}
+
+	.drawer-open {
+		height: 60svh;
+	}
+
+	.drawer-handle-bar {
+		position: relative;
+		height: 60px;
+		padding: 20px 1rem 0;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		cursor: pointer;
+		background: transparent;
+		border: none;
+		width: 100%;
+		flex-shrink: 0;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.drawer-handle-bar:active {
+		background: var(--muted);
+	}
+
+	.drawer-pill {
+		position: absolute;
+		top: 8px;
+		left: 50%;
+		transform: translateX(-50%);
+		width: 2.5rem;
+		height: 4px;
+		border-radius: 9999px;
+		background: var(--muted-foreground);
+		opacity: 0.4;
+	}
+
+	.drawer-content {
+		flex: 1;
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
 	}
 </style>
