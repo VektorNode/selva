@@ -70,6 +70,21 @@ if [ ! -d "$INSTALL_DIR" ]; then
   exit 1
 fi
 
+# Prevent concurrent runs
+LOCK_FILE="/tmp/selva-update.lock"
+if [ -f "$LOCK_FILE" ]; then
+  LOCK_PID=$(cat "$LOCK_FILE")
+  if kill -0 "$LOCK_PID" 2>/dev/null; then
+    print_error "Update already in progress (PID $LOCK_PID). Exiting."
+    exit 1
+  else
+    print_warning "Stale lock file found — removing."
+    rm -f "$LOCK_FILE"
+  fi
+fi
+echo $$ > "$LOCK_FILE"
+trap 'rm -f "$LOCK_FILE"' EXIT
+
 ################################################################################
 # 1. CHECK STATUS
 ################################################################################
@@ -90,7 +105,7 @@ if [ -n "$TARGET_BRANCH" ] && [ "$TARGET_BRANCH" != "$CURRENT_BRANCH" ]; then
   git fetch origin
   if git checkout "$TARGET_BRANCH" 2>/dev/null || git checkout -b "$TARGET_BRANCH" --track "origin/$TARGET_BRANCH" 2>/dev/null; then
     CURRENT_BRANCH="$TARGET_BRANCH"
-    CURRENT_COMMIT=$(git rev-parse --short HEAD)
+    LOCAL_COMMIT=$(git rev-parse HEAD)
     print_success "Switched to branch: $CURRENT_BRANCH"
   else
     print_error "Failed to switch to branch: $TARGET_BRANCH"
@@ -124,6 +139,14 @@ else
   print_step "Fetching from remote..."
   git fetch origin
 
+  # Stash any local changes to avoid pull conflicts
+  STASHED=false
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    print_warning "Local changes detected — stashing before pull..."
+    git stash push -m "update.sh auto-stash $(date +%Y-%m-%d_%H:%M:%S)"
+    STASHED=true
+  fi
+
 # Check if there are changes
 REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH)
 
@@ -131,6 +154,10 @@ REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH)
     print_warning "Already up to date!"
     echo ""
     echo "Latest commit: $(git log -1 --pretty=format:'%h - %s (%ar)')"
+    # Restore stash if we stashed before the up-to-date check
+    if [ "$STASHED" = true ]; then
+      git stash pop || print_warning "Could not restore stash automatically. Run: git stash pop"
+    fi
     exit 0
   fi
 
@@ -152,7 +179,23 @@ REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH)
     else
       print_error "git pull failed. Check your network connection or repository access."
     fi
+    # Restore stashed changes before exiting
+    if [ "$STASHED" = true ]; then
+      print_step "Restoring stashed changes..."
+      git stash pop || print_warning "Could not restore stash automatically. Run: git stash pop"
+    fi
     exit 1
+  fi
+
+  # Restore stashed changes after successful pull
+  if [ "$STASHED" = true ]; then
+    print_step "Restoring stashed changes..."
+    if git stash pop; then
+      print_success "Local changes restored"
+    else
+      print_warning "Stash restore had conflicts — your changes are still in: git stash list"
+      print_warning "Resolve manually with: git stash pop"
+    fi
   fi
 
   NEW_COMMIT=$(git rev-parse --short HEAD)
@@ -167,7 +210,7 @@ fi
 print_header "Step 2: Installing Dependencies"
 
 print_step "Running pnpm install..."
-pnpm install
+pnpm install --frozen-lockfile
 print_success "Dependencies updated"
 
 ################################################################################
@@ -213,16 +256,18 @@ if [ "$NO_RESTART" = false ]; then
     cd "$INSTALL_DIR"
     pm2 start "$INSTALL_DIR/ecosystem.config.cjs" --only selva-compute --update-env
 
-    # Wait for restart
-    sleep 2
-
-    # Check status
-    PM2_STATUS=$(pm2 describe selva-compute | awk '/status/{print $4}' || echo "unknown")
+    # Wait for restart and check status via JSON to avoid awk parsing fragility
+    sleep 3
+    PM2_STATUS=$(pm2 jlist 2>/dev/null | node -e "
+      const list = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+      const app = list.find(p => p.name === 'selva-compute');
+      process.stdout.write(app ? app.pm2_env.status : 'not-found');
+    " 2>/dev/null || echo "unknown")
     if [ "$PM2_STATUS" = "online" ]; then
       print_success "Application restarted successfully"
       pm2 status
     else
-      print_error "Application failed to restart. Check logs:"
+      print_error "Application failed to restart (status: $PM2_STATUS). Check logs:"
       echo ""
       pm2 logs selva-compute --lines 20 --nostream
       exit 1
@@ -250,14 +295,21 @@ if [ "$PM2_RUNNING" = true ]; then
   PORT=$(grep "^PORT=" "$INSTALL_DIR/packages/compute-app/.env" | cut -d'=' -f2 | tr -d ' ')
   PORT=${PORT:-3000}
 
-  # Wait a moment for server to be ready
-  sleep 1
+  # Retry health check for up to 30 seconds
+  HEALTH_OK=false
+  for i in $(seq 1 10); do
+    if curl -s "http://localhost:$PORT/api/health" > /dev/null; then
+      HEALTH_OK=true
+      break
+    fi
+    sleep 3
+  done
 
-  if curl -s http://localhost:$PORT/api/health > /dev/null; then
+  if [ "$HEALTH_OK" = true ]; then
     print_success "Health check passed"
     echo "Server is running and responding to requests"
   else
-    print_warning "Health check failed - server may still be starting"
+    print_warning "Health check failed after 30s — server may still be starting"
     print_step "Check logs with: pm2 logs selva-compute"
   fi
 fi
