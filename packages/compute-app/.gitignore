@@ -7,7 +7,6 @@ node_modules
 .wrangler
 /.svelte-kit
 /build
-/definitions
 
 # OS
 .DS_Store
@@ -19,11 +18,14 @@ Thumbs.db
 !.env.example
 !.env.test
 
-# Grasshopper definitions (valuable, keep private)
+# Grasshopper definitions (keep private, not tracked)
 *.gh
 *.ghx
-./definitions/
-!./definitions/.gitkeep
+/definitions/
+
+# Deployment-specific thumbnails
+static/images/*_Thumbnail.png
+static/images/*_Thumbnail.jpg
 
 # Exception: allow example definitions
 !example-definitions/*.gh
