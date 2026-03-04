@@ -11,9 +11,7 @@
 	let { hasPendingChanges, isSolving, oncalculate }: Props = $props();
 </script>
 
-<div
-	class="bottom-0 mt-6 pb-3 pt-2 backdrop-blur-sm sticky border-t border-border/50 bg-background/90"
->
+<div class="bottom-0 mt-3 pb-3 pt-2 backdrop-blur-sm sticky border-t border-border/50">
 	<Button
 		variant={hasPendingChanges ? 'default' : 'ghost'}
 		size="lg"

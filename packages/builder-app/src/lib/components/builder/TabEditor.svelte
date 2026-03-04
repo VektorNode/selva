@@ -192,15 +192,18 @@
 										>
 											{#each group.items as item, itemIndex (item.id)}
 												{@const paramInfo = getParameterInfo(item.paramId)}
-												<BuilderGroupItem
-													bind:item={group.items[itemIndex]}
-													{paramInfo}
-													tabId={activeTab.id}
-													groupId={group.id}
-													{availableInputs}
-													{getParameterInfo}
-													onRemove={() => onRemoveItem(activeTab.id, group.id, item.id)}
-												/>
+												<div style="grid-column: span {item.span ?? 1}">
+													<BuilderGroupItem
+														bind:item={group.items[itemIndex]}
+														{paramInfo}
+														tabId={activeTab.id}
+														groupId={group.id}
+														columns={group.columns}
+														{availableInputs}
+														{getParameterInfo}
+														onRemove={() => onRemoveItem(activeTab.id, group.id, item.id)}
+													/>
+												</div>
 											{/each}
 										</EditableGroup>
 									</div>

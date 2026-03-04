@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { TabConfig } from '../types/generated';
 	import { ChevronRight, ChevronLeft, ChevronDown } from '@lucide/svelte';
+	import Icon from '@iconify/svelte';
 
 	interface Props {
 		side: 'left' | 'right';
@@ -14,10 +15,10 @@
 </script>
 
 <div
-	class="flex gap-2 py-3 lg:py-4 shrink-0 cursor-pointer flex-row lg:flex-col items-center bg-muted transition-colors hover:bg-muted/70 w-full lg:w-auto px-3 lg:px-0 {side ===
+	class="gap-2 py-3 lg:py-4 lg:flex-col lg:w-auto px-3 lg:px-0 lg:border-0 flex w-full shrink-0 cursor-pointer flex-row items-center border-2 bg-muted transition-colors hover:bg-muted/70 {side ===
 	'left'
-		? 'border-b-2 lg:border-b-0 lg:border-r-2 rounded-b-md lg:rounded-b-none lg:rounded-r-md'
-		: 'border-b-2 lg:border-b-0 lg:border-l-2 rounded-b-md lg:rounded-b-none lg:rounded-l-md'} border-border"
+		? 'lg:border-r-2 lg:rounded-r-md'
+		: 'lg:border-l-2 lg:rounded-l-md'} border-border"
 	style="lg:width: {collapsedWidth}px"
 	role="button"
 	tabindex="0"
@@ -32,30 +33,35 @@
 		</div>
 	{/if}
 
-	<!-- Desktop chevrons (start/end of column) -->
-	{#if side === 'right'}
-		<div class="hidden lg:block mb-1 text-muted-foreground">
-			<ChevronLeft size={14} />
-		</div>
-	{/if}
-
 	{#each tabs as tab (tab.id)}
 		<button
 			type="button"
-			class="w-8 h-8 rounded text-xs font-semibold shadow-sm flex shrink-0 items-center justify-center bg-background text-foreground transition-colors select-none hover:bg-accent"
+			class="w-8 h-8 m-1 rounded text-xs font-semibold shadow-sm flex shrink-0 items-center justify-center bg-background text-foreground transition-colors select-none hover:bg-accent/80"
 			title={tab.label}
 			onclick={(e) => {
 				e.stopPropagation();
 				onTabClick(tab.id);
 			}}
 		>
-			{tab.icon || tab.label[0]?.toUpperCase() || '?'}
+			{#if tab.icon}
+				{#if tab.icon.includes(':')}
+					<Icon icon={tab.icon} class="h-4 w-4" />
+				{:else}
+					<span>{tab.icon}</span>
+				{/if}
+			{:else}
+				<span>{tab.label[0]?.toUpperCase() ?? '?'}</span>
+			{/if}
 		</button>
 	{/each}
 
 	{#if side === 'left'}
-		<div class="hidden lg:block mt-auto text-muted-foreground">
+		<div class="lg:block mt-auto hidden text-muted-foreground">
 			<ChevronRight size={14} />
+		</div>
+	{:else if side === 'right'}
+		<div class="lg:block mt-auto hidden text-muted-foreground">
+			<ChevronLeft size={14} />
 		</div>
 	{/if}
 </div>

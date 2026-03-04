@@ -2,6 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { ModeToggle } from '$lib/components/ui/mode-toggle';
+	import { page } from '$app/state';
 
 	//Maybe in the future again
 	// import { ThemeSwitcher } from '../../ui/theme-switcher';
@@ -40,6 +41,17 @@
 		solving: 'bg-warning text-warning-foreground border-transparent',
 		compute: 'bg-info text-info-foreground border-transparent'
 	};
+
+	// Build home URL preserving current session/wsPort query params
+	const homeUrl = $derived.by(() => {
+		const params = new URLSearchParams();
+		const session = page.url.searchParams.get('session');
+		const wsPort = page.url.searchParams.get('wsPort');
+		if (session) params.set('session', session);
+		if (wsPort) params.set('wsPort', wsPort);
+		const query = params.toString();
+		return query ? `/?${query}` : '/';
+	});
 </script>
 
 <header
@@ -50,10 +62,9 @@
 		<div class="gap-2 min-w-0 sm:gap-3 flex flex-1 items-center">
 			{#if logo}
 				<a
-					href="/"
+					href={homeUrl}
 					class="shrink-0 cursor-pointer transition-opacity hover:opacity-75"
 					title="Go to home"
-					data-sveltekit-reload
 				>
 					<img src={logo} alt="Logo" class="h-8 w-8" />
 				</a>

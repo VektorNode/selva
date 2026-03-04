@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { PageContainer, PageHeader, StateDisplay, Button, Dialog, toast } from '@selva/shared';
+	import { PageContainer, PageHeader, StateDisplay, Button, Dialog, toast, useFooterItem } from '@selva/shared';
 	import { Save } from '@lucide/svelte';
+	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { DragDropContext, BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
 	import { initializeWebSocketSession } from '$lib/utils/session';
@@ -119,16 +120,21 @@
 		}
 	}
 
-	const badgeConfig = $derived(
-		builderState?.wsState.connected
-			? { label: 'Connected', variant: 'connected' as const }
-			: { label: 'Disconnected', variant: 'disconnected' as const }
+	useFooterItem(
+		'ws-status',
+		WsStatusFooter,
+		() => ({
+			connected: builderState?.wsState.connected ?? false,
+			sessionId
+		}),
+		'left',
+		10
 	);
 </script>
 
 <DragDropContext>
 	<PageContainer background="white">
-		<PageHeader title="Schema Builder" {sessionId} showModeToggle={true} badge={badgeConfig}>
+		<PageHeader title="Schema Builder" showModeToggle={true}>
 			<nav class="flex items-center gap-2">
 				{#if builderState?.state.syncNeeded}
 					<Button
