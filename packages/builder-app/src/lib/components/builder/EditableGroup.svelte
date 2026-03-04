@@ -82,7 +82,7 @@
 	<Card.Header
 		class="border-border bg-card flex flex-row items-center justify-between gap-2 space-y-0 border-b px-3 py-2 {isDragging
 			? 'opacity-50'
-			: ''} hover:bg-accent/50 transition-colors"
+			: ''}  transition-colors"
 	>
 		<!-- Drag Handle -->
 		<div

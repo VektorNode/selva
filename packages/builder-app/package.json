@@ -22,6 +22,7 @@
 	},
 	"dependencies": {
 		"selva-compute": "catalog:",
+		"@iconify/svelte": "^5.2.1",
 		"@selva/shared": "workspace:*",
 		"mode-watcher": "catalog:",
 		"three": "catalog:"

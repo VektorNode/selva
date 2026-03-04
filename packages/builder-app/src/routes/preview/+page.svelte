@@ -17,9 +17,11 @@
 		removeParametersFromValues,
 		formatParameterUpdateMessage,
 		formatMetadataUpdateMessage,
-		createSolvingIndicator
+		createSolvingIndicator,
+		useFooterItem
 	} from '@selva/shared';
 	import { initializeWebSocketSession, getWebSocketPortFromUrl } from '$lib/utils/session';
+	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import { parseMeshBatchObject, SCALE_FACTORS } from 'selva-compute/visualization';
 	import type { MeshBatch } from 'selva-compute/visualization';
 	import type * as THREE from 'three';
@@ -149,13 +151,15 @@
 		showNotification('Syncing parameters...');
 	}
 
-	const badgeConfig = $derived(
-		wsState.connected
-			? { label: 'Connected', variant: 'connected' as const }
-			: {
-					label: 'Disconnected',
-					variant: 'disconnected' as const
-				}
+	useFooterItem(
+		'ws-status',
+		WsStatusFooter,
+		() => ({
+			connected: wsState.connected,
+			sessionId
+		}),
+		'left',
+		10
 	);
 
 	async function handleOutputs(message: any) {
@@ -397,9 +401,7 @@
 <PageContainer background="white">
 	<PageHeader
 		title={schema?.name || 'Interactive Preview'}
-		badge={badgeConfig}
 		showModeToggle={true}
-		{sessionId}
 	>
 		<nav class="flex items-center gap-2">
 			{#if syncNeeded}
