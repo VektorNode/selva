@@ -209,11 +209,11 @@ export function exportStateAsJson(savedState: ParameterPreset): void {
 	const link = document.createElement('a');
 	link.href = url;
 	link.download = `${savedState.name.replace(/[^a-z0-9]/gi, '_')}_${savedState.timestamp.split('T')[0].replace(/-/g, '_')}.sps`;
-	
+
 	// Ensure visibility for older browsers
 	link.style.display = 'none';
 	document.body.appendChild(link);
-	
+
 	// Use setTimeout to ensure DOM is ready
 	setTimeout(() => {
 		link.click();
