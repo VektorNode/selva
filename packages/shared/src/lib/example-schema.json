@@ -16,11 +16,7 @@
 	"viewerOptions": {
 		"enableLocal": false,
 		"enableRemote": true,
-<<<<<<< HEAD
 		"backgroundColor": "#f5f5f5"
-=======
-		"backgroundColor": "#fffff"
->>>>>>> origin/main
 	},
 	"instanceSolve": false,
 	"inputs": [
@@ -371,7 +367,6 @@
 							}
 						]
 					}
-<<<<<<< HEAD
 				]
 			},
 			{
@@ -705,10 +700,6 @@
 						}
 					}
 				]
-=======
-				],
-				"position": "left"
->>>>>>> origin/main
 			}
 		]
 	}
