@@ -105,7 +105,7 @@
 	<div class="inset-0 absolute">
 		<canvas
 			class="block h-full w-full"
-			style={isFullscreen ? '' : 'border-radius: 0.625rem;'}
+			style="touch-action: none;{isFullscreen ? '' : ' border-radius: 0.625rem;'}"
 			bind:this={canvas}
 		></canvas>
 	</div>
@@ -133,25 +133,25 @@
 	>
 		<!-- Screenshot Button -->
 		<button
-			class="h-10 w-10 bg-white/90 shadow-lg hover:bg-white hover:shadow-xl flex items-center justify-center rounded-lg border border-border transition-all active:scale-95"
+			class="h-10 w-10 shadow-lg hover:shadow-xl flex items-center justify-center rounded-lg border border-border bg-card/90 transition-all hover:bg-card active:scale-95"
 			onclick={downloadScreenshot}
 			title="Download screenshot"
 			aria-label="Download screenshot"
 		>
-			<Camera class="h-5 w-5 text-gray-700" />
+			<Camera class="h-5 w-5 text-card-foreground" />
 		</button>
 
 		<!-- Fullscreen Toggle Button -->
 		<button
-			class="h-10 w-10 bg-white/90 shadow-lg hover:bg-white hover:shadow-xl flex items-center justify-center rounded-lg border border-border transition-all active:scale-95"
+			class="h-10 w-10 shadow-lg hover:shadow-xl flex items-center justify-center rounded-lg border border-border bg-card/90 transition-all hover:bg-card active:scale-95"
 			onclick={toggleFullscreen}
 			title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
 			aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
 		>
 			{#if isFullscreen}
-				<Minimize class="h-5 w-5 text-gray-700" />
+				<Minimize class="h-5 w-5 text-card-foreground" />
 			{:else}
-				<Maximize class="h-5 w-5 text-gray-700" />
+				<Maximize class="h-5 w-5 text-card-foreground" />
 			{/if}
 		</button>
 	</div>

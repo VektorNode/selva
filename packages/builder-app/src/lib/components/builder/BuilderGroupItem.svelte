@@ -17,6 +17,7 @@
 		paramInfo?: DiscoveredInput;
 		tabId: string;
 		groupId: string;
+		columns?: number;
 		onRemove: () => void;
 		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
@@ -27,6 +28,7 @@
 		paramInfo,
 		tabId,
 		groupId,
+		columns = 1,
 		onRemove,
 		availableInputs,
 		getParameterInfo
@@ -202,7 +204,8 @@
 
 	<Card.Root
 		class={`
-			hover:border-primary py-1
+		hover:border-primary
+			 py-1
 			transition-all hover:shadow-sm
 			${isDragging ? 'opacity-50' : ''}
 			${isDragOver ? 'border-primary' : ''}
@@ -234,7 +237,7 @@
 			</div>
 
 			<div class="flex flex-col gap-2">
-				<!-- Display Name + Remove -->
+				<!-- Display Name + Span + Remove -->
 				<div class="flex items-center gap-2">
 					<input
 						type="text"
@@ -243,6 +246,18 @@
 							   text-xs font-medium focus:outline-none"
 						placeholder="Display Name"
 					/>
+					{#if columns > 1}
+						<label class="text-muted-foreground flex shrink-0 items-center gap-1 text-[10px]">
+							Span:
+							<input
+								type="number"
+								bind:value={item.span}
+								min="1"
+								max={columns}
+								class="border-border bg-background text-foreground w-8 rounded border px-1 py-0.5 text-[10px]"
+							/>
+						</label>
+					{/if}
 					<Button
 						variant="ghost"
 						size="icon-sm"
@@ -310,10 +325,13 @@
 								<div class="flex flex-col gap-2">
 									<!-- Allowed Input Modes -->
 									<div class="flex flex-col gap-1">
-										<span class="text-muted-foreground text-[10px] font-medium">Allowed Input Modes</span>
+										<span class="text-muted-foreground text-[10px] font-medium"
+											>Allowed Input Modes</span
+										>
 										<div class="grid grid-cols-2 gap-1">
-											{#each (['upload', 'url'] as const) as mode (mode)}
-												{@const isAllowed = fileInputConfig.allowedInputModes?.includes(mode) ?? true}
+											{#each ['upload', 'url'] as const as mode (mode)}
+												{@const isAllowed =
+													fileInputConfig.allowedInputModes?.includes(mode) ?? true}
 												<button
 													onclick={() => toggleAllowedMode(mode)}
 													class={`rounded border px-2 py-1 text-[10px] transition-colors ${
@@ -326,13 +344,16 @@
 												</button>
 											{/each}
 										</div>
-										<span class="text-muted-foreground text-[9px]">At least one must be enabled</span>
+										<span class="text-muted-foreground text-[9px]"
+											>At least one must be enabled</span
+										>
 									</div>
 
 									<!-- Default Mode (only relevant when both are allowed) -->
 									{#if (fileInputConfig.allowedInputModes?.length ?? 2) > 1}
 										<div class="flex flex-col gap-1">
-											<span class="text-muted-foreground text-[10px] font-medium">Default Mode</span>
+											<span class="text-muted-foreground text-[10px] font-medium">Default Mode</span
+											>
 											<div class="grid grid-cols-2 gap-1">
 												<button
 													onclick={() => setFileInputMode('upload')}

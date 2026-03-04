@@ -19,7 +19,7 @@
 <PageContainer background="white">
 	<PageHeader title="Selva" showModeToggle={true} />
 	{#if !sessionId}
-		<div class="flex min-h-screen items-center justify-center">
+		<div class="flex flex-1 items-center justify-center">
 			<StateDisplay
 				type="error"
 				size="large"
@@ -28,7 +28,7 @@
 			/>
 		</div>
 	{:else}
-		<div class="mx-auto w-full max-w-4xl p-12">
+		<div class="mx-auto w-full max-w-4xl flex-1 p-12">
 			<h2 class="text-foreground mb-4 text-4xl font-bold">Welcome to Selva</h2>
 			<p class="text-muted-foreground mb-8 text-lg">Choose a mode to get started:</p>
 

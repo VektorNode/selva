@@ -1,200 +1,706 @@
 {
-	"id": "e20b605f-a299-4c05-b8e4-359860a30d42",
-	"name": "Point Attractor",
-	"description": "Point Attractor example",
-	"projectFileName": "point_attractor.gh",
-	"documentId": "3716f09d-7b24-4053-9e9d-8abc2c99edd6",
-	"pluginVersion": "0.5.0.0",
-	"tags": [],
-	"category": null,
-	"author": null,
-	"organization": null,
+	"id": "c8f7a6e9-3c5b-4a2d-9e1f-7b2a8c9d0e3f",
+	"name": "Complex Test Schema",
+	"description": "Comprehensive test schema exercising all UI widget types and layout features",
+	"projectFileName": "complex_test.gh",
+	"documentId": "a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6",
+	"pluginVersion": "0.6.0.0",
+	"tags": ["test", "schema", "comprehensive", "validation", "visibility"],
+	"category": "Testing",
+	"author": "Test Suite",
+	"organization": "Selva",
 	"schemaVersion": "2.1.0",
-	"minPluginVersion": null,
-	"created": "2026-01-15T09:26:27.0674552Z",
-	"lastModified": "2026-02-19T12:54:05.6678446Z",
+	"minPluginVersion": "0.5.0.0",
+	"created": "2026-03-04T10:00:00.0000000Z",
+	"lastModified": "2026-03-04T10:00:00.0000000Z",
 	"viewerOptions": {
 		"enableLocal": false,
 		"enableRemote": true,
-		"backgroundColor": "#fffff"
+		"backgroundColor": "#f5f5f5"
 	},
 	"instanceSolve": false,
 	"inputs": [
 		{
-			"id": "368c0d71-118a-4d2c-8b70-ce0b60ee274c",
-			"nickname": "U",
+			"id": "input-001",
+			"nickname": "Basic Slider",
 			"paramType": "number",
-			"description": "Contextual numeric input."
+			"description": "A simple number slider with min/max and step"
 		},
 		{
-			"id": "2906adb3-0d13-4930-be91-6fdc2213016b",
-			"nickname": "V",
-			"paramType": "number",
-			"description": "Contextual numeric input."
+			"id": "input-002",
+			"nickname": "Project Name",
+			"paramType": "text",
+			"description": "Text input with max length validation"
 		},
 		{
-			"id": "19e7cdc2-cbe7-43b7-98b9-378d513ad5e9",
-			"nickname": "Density U",
+			"id": "input-003",
+			"nickname": "Design Type",
+			"paramType": "generic",
+			"description": "Dropdown selection for design type"
+		},
+		{
+			"id": "input-004",
+			"nickname": "Apply Symmetry",
+			"paramType": "boolean",
+			"description": "Toggle to enable/disable symmetry"
+		},
+		{
+			"id": "input-005",
+			"nickname": "Symmetry Axis",
+			"paramType": "generic",
+			"description": "Dropdown for symmetry axis - conditional visibility"
+		},
+		{
+			"id": "input-006",
+			"nickname": "Scale Factor",
+			"paramType": "number",
+			"description": "Scale with range 0.1 to 5.0"
+		},
+		{
+			"id": "input-007",
+			"nickname": "Quality Level",
 			"paramType": "integer",
-			"description": "Contextual integer input."
+			"description": "Quality from 1 to 10"
 		},
 		{
-			"id": "ec1f4dc9-14f1-4c25-af90-aeae3963374a",
-			"nickname": "Density V",
+			"id": "input-008",
+			"nickname": "Email",
+			"paramType": "text",
+			"description": "Email input with pattern validation"
+		},
+		{
+			"id": "input-009",
+			"nickname": "Export Format",
+			"paramType": "generic",
+			"description": "Choose export format"
+		},
+		{
+			"id": "input-010",
+			"nickname": "Geometry File",
+			"paramType": "file",
+			"description": "Upload geometry file"
+		},
+		{
+			"id": "input-011",
+			"nickname": "Resolution",
 			"paramType": "integer",
-			"description": "Contextual integer input."
+			"description": "Output resolution in pixels"
 		},
 		{
-			"id": "32b164b3-f5a8-45b7-a512-37dcbadb97c9",
-			"nickname": "Max Height",
-			"paramType": "number",
-			"description": "Contextual numeric input."
-		},
-		{
-			"id": "f84e7ce9-e0d8-434b-81ca-35494e9f80f2",
-			"nickname": "Min Height",
-			"paramType": "number",
-			"description": "Contextual numeric input."
+			"id": "input-012",
+			"nickname": "Auto Calculate",
+			"paramType": "boolean",
+			"description": "Auto-calculate based on inputs"
 		}
 	],
-	"outputs": [],
+	"outputs": [
+		{
+			"id": "output-001",
+			"nickname": "Status",
+			"description": "Processing status text",
+			"type": "text"
+		},
+		{
+			"id": "output-002",
+			"nickname": "Metrics",
+			"description": "Numerical metrics",
+			"type": "number"
+		},
+		{
+			"id": "output-003",
+			"nickname": "Result File",
+			"description": "Downloadable result geometry",
+			"type": "file"
+		}
+	],
 	"layout": {
 		"type": "tabbed",
+		"gap": 24,
 		"tabs": [
 			{
-				"id": "b81dfbec",
-				"label": "Inputs",
-				"icon": "",
+				"id": "tab-basic",
+				"label": "Basic Inputs",
+				"icon": "mingcute:linkedin-fill",
 				"order": 0,
+				"position": "left",
 				"groups": [
 					{
-						"id": "9dec63d9",
-						"label": "Group 1",
-						"description": "",
+						"id": "group-numbers",
+						"label": "Number Inputs",
+						"description": "Test various number widget configurations",
+						"order": 0,
+						"collapsed": false,
+						"columns": 2,
+						"items": [
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-001",
+								"paramId": "input-001",
+								"displayName": "Slider with Range",
+								"description": "A slider with minimum and maximum bounds",
+								"order": 0,
+								"span": 2,
+								"visible": true,
+								"config": {
+									"minimum": 0.0,
+									"maximum": 100.0,
+									"stepSize": 5.0,
+									"placeholder": "Enter value 0-100",
+									"renderAsSlider": true
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-002",
+								"paramId": "input-006",
+								"displayName": "Scale Factor",
+								"description": "Fine-grained control between 0.1 and 5.0",
+								"order": 1,
+								"span": 2,
+								"visible": true,
+								"config": {
+									"minimum": 0.1,
+									"maximum": 5.0,
+									"stepSize": 0.1,
+									"renderAsSlider": false
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-003",
+								"paramId": "input-007",
+								"displayName": "Quality Level",
+								"description": "Integer slider from 1 to 10",
+								"order": 2,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"minimum": 1.0,
+									"maximum": 10.0,
+									"stepSize": 1.0,
+									"renderAsSlider": true
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-004",
+								"paramId": "input-011",
+								"displayName": "Resolution",
+								"description": "Output resolution (512-4096)",
+								"order": 3,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"minimum": 512.0,
+									"maximum": 4096.0,
+									"stepSize": 256.0,
+									"renderAsSlider": true
+								}
+							}
+						]
+					},
+					{
+						"id": "group-multi-col",
+						"label": "4-Column Layout Demo",
+						"description": "Items arranged in 4 columns with varied spans",
+						"order": 1,
+						"collapsed": false,
+						"columns": 4,
+						"items": [
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-mc-001",
+								"paramId": "input-002",
+								"displayName": "Col 1",
+								"description": "Single column item",
+								"order": 0,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"minimum": 0.0,
+									"maximum": 10.0,
+									"stepSize": 0.1,
+									"renderAsSlider": true
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-mc-002",
+								"paramId": "input-008",
+								"displayName": "Col 2",
+								"description": "Single column item",
+								"order": 1,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"minimum": 0.0,
+									"maximum": 10.0,
+									"stepSize": 0.1,
+									"renderAsSlider": true
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-mc-003",
+								"paramId": "input-009",
+								"displayName": "Col 3",
+								"description": "Single column item",
+								"order": 2,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"minimum": 0.0,
+									"maximum": 10.0,
+									"stepSize": 0.1,
+									"renderAsSlider": true
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-mc-004",
+								"paramId": "input-010",
+								"displayName": "Col 4",
+								"description": "Single column item",
+								"order": 3,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"minimum": 0.0,
+									"maximum": 10.0,
+									"stepSize": 0.1,
+									"renderAsSlider": true
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-mc-005",
+								"paramId": "input-003",
+								"displayName": "Span 2",
+								"description": "Spans 2 columns",
+								"order": 4,
+								"span": 4,
+								"visible": true,
+								"config": {
+									"minimum": 0.0,
+									"maximum": 100.0,
+									"stepSize": 5.0,
+									"renderAsSlider": true
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-mc-006",
+								"paramId": "input-012",
+								"displayName": "Full Width",
+								"description": "Spans all 4 columns",
+								"order": 5,
+								"span": 4,
+								"visible": true,
+								"config": {
+									"minimum": 0.0,
+									"maximum": 1000.0,
+									"stepSize": 50.0,
+									"renderAsSlider": true
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"id": "tab-text",
+				"label": "Text & Validation",
+				"icon": "solar:export-bold",
+				"order": 1,
+				"position": "center",
+				"groups": [
+					{
+						"id": "group-text",
+						"label": "Text Inputs with Validation",
+						"description": "Test text input types and patterns",
 						"order": 0,
 						"collapsed": false,
 						"columns": 1,
 						"items": [
 							{
 								"type": "input",
-								"widgetType": "number",
-								"config": {
-									"minimum": 0.0,
-									"maximum": 1.0,
-									"stepSize": 0.001,
-									"placeholder": null,
-									"renderAsSlider": true
-								},
-								"id": "5ea21eb4",
-								"paramId": "368c0d71-118a-4d2c-8b70-ce0b60ee274c",
-								"displayName": "U",
-								"description": "Contextual numeric input.",
+								"widgetType": "text",
+								"id": "item-005",
+								"paramId": "input-002",
+								"displayName": "Project Name",
+								"description": "Name your project (max 50 characters)",
 								"order": 0,
 								"span": 1,
 								"visible": true,
-								"visibilityCondition": null
+								"config": {
+									"placeholder": "e.g., My Awesome Project",
+									"required": true,
+									"maxLength": 50
+								}
 							},
 							{
 								"type": "input",
-								"widgetType": "number",
-								"config": {
-									"minimum": 0.0,
-									"maximum": 1.0,
-									"stepSize": 0.001,
-									"placeholder": null,
-									"renderAsSlider": true
-								},
-								"id": "d5c89e12",
-								"paramId": "2906adb3-0d13-4930-be91-6fdc2213016b",
-								"displayName": "V",
-								"description": "Contextual numeric input.",
+								"widgetType": "text",
+								"id": "item-006",
+								"paramId": "input-008",
+								"displayName": "Email Address",
+								"description": "Enter a valid email for notifications",
 								"order": 1,
 								"span": 1,
 								"visible": true,
-								"visibilityCondition": null
-							},
-							{
-								"type": "input",
-								"widgetType": "number",
 								"config": {
-									"minimum": 2.0,
-									"maximum": 20.0,
-									"stepSize": 1.0,
-									"placeholder": null,
-									"renderAsSlider": true
-								},
-								"id": "7cdc8a98",
-								"paramId": "19e7cdc2-cbe7-43b7-98b9-378d513ad5e9",
-								"displayName": "Density U",
-								"description": "Contextual integer input.",
-								"order": 2,
-								"span": 1,
-								"visible": true,
-								"visibilityCondition": null
-							},
-							{
-								"type": "input",
-								"widgetType": "number",
-								"config": {
-									"minimum": 2.0,
-									"maximum": 20.0,
-									"stepSize": 1.0,
-									"placeholder": null,
-									"renderAsSlider": true
-								},
-								"id": "41f171e4",
-								"paramId": "ec1f4dc9-14f1-4c25-af90-aeae3963374a",
-								"displayName": "Density V",
-								"description": "Contextual integer input.",
-								"order": 3,
-								"span": 1,
-								"visible": true,
-								"visibilityCondition": null
-							},
-							{
-								"type": "input",
-								"widgetType": "number",
-								"config": {
-									"minimum": 0.0,
-									"maximum": 10.0,
-									"stepSize": 0.01,
-									"placeholder": null,
-									"renderAsSlider": true
-								},
-								"id": "13a42cd5",
-								"paramId": "32b164b3-f5a8-45b7-a512-37dcbadb97c9",
-								"displayName": "Max Height",
-								"description": "Contextual numeric input.",
-								"order": 4,
-								"span": 1,
-								"visible": true,
-								"visibilityCondition": null
-							},
-							{
-								"type": "input",
-								"widgetType": "number",
-								"config": {
-									"minimum": 0.0,
-									"maximum": 10.0,
-									"stepSize": 0.01,
-									"placeholder": null,
-									"renderAsSlider": true
-								},
-								"id": "3912c09c",
-								"paramId": "f84e7ce9-e0d8-434b-81ca-35494e9f80f2",
-								"displayName": "Min Height",
-								"description": "Contextual numeric input.",
-								"order": 5,
-								"span": 1,
-								"visible": true,
-								"visibilityCondition": null
+									"placeholder": "you@example.com",
+									"required": true,
+									"pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
+									"customErrorMessage": "Please enter a valid email address"
+								}
 							}
 						]
 					}
-				],
-				"position": "left"
+				]
+			},
+			{
+				"id": "tab-controls",
+				"label": "Controls & Conditionals",
+				"icon": "mdi:import",
+				"order": 2,
+				"position": "right",
+				"groups": [
+					{
+						"id": "group-toggles",
+						"label": "Checkboxes & Toggles",
+						"description": "Boolean inputs and conditional visibility",
+						"order": 0,
+						"collapsed": false,
+						"columns": 1,
+						"items": [
+							{
+								"type": "input",
+								"widgetType": "checkbox",
+								"id": "item-007",
+								"paramId": "input-004",
+								"displayName": "Enable Symmetry",
+								"description": "Toggle symmetry for the design",
+								"order": 0,
+								"span": 1,
+								"visible": true
+							},
+							{
+								"type": "input",
+								"widgetType": "dropdown",
+								"id": "item-008",
+								"paramId": "input-005",
+								"displayName": "Symmetry Axis",
+								"description": "Select axis when symmetry is enabled",
+								"order": 1,
+								"span": 1,
+								"visible": true,
+								"visibilityCondition": {
+									"mode": "all",
+									"rules": [
+										{
+											"paramId": "input-004",
+											"operator": "equals",
+											"value": true
+										}
+									],
+									"action": "show"
+								},
+								"config": {
+									"options": {
+										"x": "X Axis",
+										"y": "Y Axis",
+										"z": "Z Axis",
+										"xy": "XY Plane",
+										"xz": "XZ Plane",
+										"yz": "YZ Plane"
+									},
+									"required": true
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "checkbox",
+								"id": "item-009",
+								"paramId": "input-012",
+								"displayName": "Auto Calculate",
+								"description": "Automatically calculate results",
+								"order": 2,
+								"span": 1,
+								"visible": true
+							}
+						]
+					},
+					{
+						"id": "group-dropdown",
+						"label": "Selections",
+						"description": "Dropdown menus",
+						"order": 1,
+						"collapsed": false,
+						"columns": 2,
+						"items": [
+							{
+								"type": "input",
+								"widgetType": "dropdown",
+								"id": "item-010",
+								"paramId": "input-003",
+								"displayName": "Design Type",
+								"description": "Choose your design approach",
+								"order": 0,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"options": {
+										"parametric": "Parametric",
+										"algorithmic": "Algorithmic",
+										"generative": "Generative",
+										"hybrid": "Hybrid",
+										"manual": "Manual"
+									},
+									"required": true
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "dropdown",
+								"id": "item-011",
+								"paramId": "input-009",
+								"displayName": "Export Format",
+								"description": "Choose output format",
+								"order": 1,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"options": {
+										"3dm": "3DM (Rhino)",
+										"step": "STEP",
+										"fbx": "FBX",
+										"obj": "OBJ",
+										"stl": "STL",
+										"dxf": "DXF"
+									}
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"id": "tab-files",
+				"label": "Files & Outputs",
+				"icon": "majesticons:battery-full-line",
+				"order": 3,
+				"position": "right",
+				"groups": [
+					{
+						"id": "group-uploads",
+						"label": "File Inputs",
+						"description": "Upload and file operations",
+						"order": 0,
+						"collapsed": false,
+						"columns": 1,
+						"items": [
+							{
+								"type": "input",
+								"widgetType": "file",
+								"id": "item-012",
+								"paramId": "input-010",
+								"displayName": "Geometry File",
+								"description": "Upload a 3D geometry file to process",
+								"order": 0,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"acceptedFormats": [".3dm", ".stp", ".step", ".obj"],
+									"defaultInputMode": "upload",
+									"allowedInputModes": ["upload", "url"]
+								}
+							}
+						]
+					},
+					{
+						"id": "group-outputs",
+						"label": "Results",
+						"description": "Processing results and outputs",
+						"order": 1,
+						"collapsed": false,
+						"columns": 1,
+						"items": [
+							{
+								"type": "output",
+								"widgetType": "text",
+								"id": "item-013",
+								"paramId": "output-001",
+								"displayName": "Status",
+								"description": "Current operation status",
+								"order": 0,
+								"span": 1,
+								"visible": true
+							},
+							{
+								"type": "output",
+								"widgetType": "number",
+								"id": "item-014",
+								"paramId": "output-002",
+								"displayName": "Computed Metrics",
+								"description": "Numerical results from computation",
+								"order": 1,
+								"span": 1,
+								"visible": true
+							},
+							{
+								"type": "output",
+								"widgetType": "file",
+								"id": "item-015",
+								"paramId": "output-003",
+								"displayName": "Download Result",
+								"description": "Download the computed geometry",
+								"order": 2,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"buttonLabel": "Download",
+									"fileFormat": "3dm"
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"id": "tab-advanced",
+				"label": "Advanced Visibility",
+				"icon": "majesticons:image-circle-line",
+				"order": 4,
+				"position": "left",
+				"groups": [
+					{
+						"id": "group-visibility",
+						"label": "Conditional Groups",
+						"description": "Groups with visibility conditions",
+						"order": 0,
+						"collapsed": false,
+						"columns": 1,
+						"items": [
+							{
+								"type": "input",
+								"widgetType": "dropdown",
+								"id": "item-016",
+								"paramId": "input-003",
+								"displayName": "Design Type (for conditions)",
+								"description": "This controls other visibility conditions below",
+								"order": 0,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"options": {
+										"parametric": "Parametric",
+										"algorithmic": "Algorithmic",
+										"generative": "Generative"
+									}
+								}
+							}
+						],
+						"visibilityCondition": {
+							"mode": "any",
+							"rules": [
+								{
+									"paramId": "input-003",
+									"operator": "in",
+									"values": ["parametric", "algorithmic", "generative"]
+								}
+							],
+							"action": "show"
+						}
+					},
+					{
+						"id": "group-conditional-1",
+						"label": "Parametric Controls",
+						"description": "Shown only for parametric designs",
+						"order": 1,
+						"collapsed": true,
+						"columns": 1,
+						"items": [
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-017",
+								"paramId": "input-006",
+								"displayName": "Parameter A",
+								"description": "Parametric adjustment",
+								"order": 0,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"minimum": 0.0,
+									"maximum": 1.0,
+									"stepSize": 0.01,
+									"renderAsSlider": true
+								}
+							}
+						],
+						"visibilityCondition": {
+							"mode": "all",
+							"rules": [
+								{
+									"paramId": "input-003",
+									"operator": "equals",
+									"value": "parametric"
+								}
+							],
+							"action": "show"
+						}
+					},
+					{
+						"id": "group-conditional-2",
+						"label": "Algorithmic Settings",
+						"description": "Shown only for algorithmic designs",
+						"order": 2,
+						"collapsed": true,
+						"columns": 1,
+						"items": [
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-018",
+								"paramId": "input-007",
+								"displayName": "Iteration Count",
+								"description": "Number of algorithm iterations",
+								"order": 0,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"minimum": 1.0,
+									"maximum": 100.0,
+									"stepSize": 1.0,
+									"renderAsSlider": true
+								}
+							}
+						],
+						"visibilityCondition": {
+							"mode": "all",
+							"rules": [
+								{
+									"paramId": "input-003",
+									"operator": "equals",
+									"value": "algorithmic"
+								}
+							],
+							"action": "show"
+						}
+					}
+				]
 			}
-		],
-		"gap": 16
+		]
 	}
 }

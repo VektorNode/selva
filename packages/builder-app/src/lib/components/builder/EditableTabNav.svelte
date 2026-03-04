@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import type { TabConfig } from '@selva/shared';
-	import { GripVertical, Pencil, PanelLeft, PanelRight } from '@lucide/svelte';
+	import { GripVertical, Pencil, PanelLeft, PanelRight, ImageIcon } from '@lucide/svelte';
+	import Icon from '@iconify/svelte';
+
 
 	interface EditableTabNavProps {
 		tabs: TabConfig[];
@@ -18,6 +20,11 @@
 	let editingTabId: string | null = $state(null);
 	let editValue = $state('');
 	let editInputEl: HTMLInputElement | null = $state(null);
+
+	// icon editing state
+	let editingIconTabId: string | null = $state(null);
+	let editIconValue = $state('');
+	let editIconInputEl: HTMLInputElement | null = $state(null);
 
 	// drag state
 	let draggedTabId: string | null = $state(null);
@@ -57,6 +64,32 @@
 			saveEdit(tab);
 		} else if (e.key === 'Escape') {
 			cancelEdit();
+		}
+	}
+
+	function startIconEdit(tab: TabConfig) {
+		editingIconTabId = tab.id;
+		editIconValue = tab.icon ?? '';
+		tick().then(() => editIconInputEl?.focus());
+	}
+
+	function saveIconEdit(tab: TabConfig) {
+		if (editingIconTabId !== tab.id) return;
+		tab.icon = editIconValue.trim();
+		editingIconTabId = null;
+		editIconValue = '';
+	}
+
+	function cancelIconEdit() {
+		editingIconTabId = null;
+		editIconValue = '';
+	}
+
+	function onIconEditKeydown(e: KeyboardEvent, tab: TabConfig) {
+		if (e.key === 'Enter') {
+			saveIconEdit(tab);
+		} else if (e.key === 'Escape') {
+			cancelIconEdit();
 		}
 	}
 
@@ -107,7 +140,12 @@
 <div class="border-border mb-4 flex items-end gap-2 overflow-x-auto border-b">
 	{#each tabs as tab (tab.id)}
 		<div
-			class="group relative flex items-center rounded-t-lg bg-transparent"
+			class="group relative flex items-center rounded-t-lg border-b-2 transition-all
+				{activeTabId === tab.id
+					? 'border-primary bg-card shadow-sm'
+					: 'border-transparent hover:bg-muted'}
+				{draggedTabId === tab.id ? 'opacity-50' : ''}
+				{dragOverTabId === tab.id ? 'border-l-primary border-l-4' : ''}"
 			ondragover={(e) => handleDragOver(e, tab.id)}
 			ondragleave={handleDragLeave}
 			ondrop={(e) => handleDrop(e, tab.id)}
@@ -133,21 +171,21 @@
 			<!-- Main clickable area: switches tabs -->
 			<button
 				type="button"
-				class={`flex max-w-60 min-w-27.5 items-center gap-2 rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-all ${
-					editingTabId === tab.id ? 'select-text' : 'select-none'
-				} ${
-					activeTabId === tab.id
-						? 'border-primary bg-card text-primary shadow-sm'
-						: 'text-muted-foreground hover:bg-muted hover:text-foreground border-transparent'
-				} ${draggedTabId === tab.id ? 'opacity-50' : ''} ${dragOverTabId === tab.id ? 'border-l-primary border-l-4' : ''}`}
+				class="flex max-w-60 min-w-27.5 items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
+					{editingTabId === tab.id ? 'select-text' : 'select-none'}
+					{activeTabId === tab.id
+						? 'text-primary'
+						: 'text-muted-foreground hover:text-foreground'}"
 				onclick={() => onTabChange(tab.id)}
 				aria-pressed={activeTabId === tab.id}
 				title="Switch to tab"
 			>
 				{#if tab.icon}
-					<span class="shrink-0 text-base">
-						{tab.icon}
-					</span>
+					{#if tab.icon.includes(':')}
+						<Icon icon={tab.icon} class="h-4 w-4 shrink-0" />
+					{:else}
+						<span class="shrink-0 text-sm leading-none font-medium">{tab.icon.slice(0, 2)}</span>
+					{/if}
 				{/if}
 
 				<!-- Show label or input if editing -->
@@ -165,44 +203,131 @@
 				{/if}
 			</button>
 
-			<!-- Edit button (separate from the main button) -->
-			<button
-				type="button"
-				class="bg-muted text-muted-foreground hover:bg-accent focus:ring-ring ml-2 flex h-7 w-7 items-center justify-center rounded-full text-xs transition-colors focus:ring-2 focus:outline-none"
-				onclick={() => startEdit(tab)}
-				title="Edit tab label"
-				aria-label="Edit tab label"
+			<!-- Action buttons — visible on hover or when this tab is active -->
+			<div
+				class="ml-1 flex items-center gap-0.5 transition-opacity duration-150 {activeTabId === tab.id || editingIconTabId === tab.id
+					? 'opacity-100'
+					: 'opacity-0 group-hover:opacity-100'}"
 			>
-				<Pencil size={14} />
-			</button>
+				<!-- Edit label -->
+				<button
+					type="button"
+					class="text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-ring flex h-6 w-6 items-center justify-center rounded text-xs transition-colors focus:ring-2 focus:outline-none"
+					onclick={() => startEdit(tab)}
+					title="Edit label"
+					aria-label="Edit tab label"
+				>
+					<Pencil size={12} />
+				</button>
 
-			<!-- Panel position toggle -->
-			<button
-				type="button"
-				class="bg-muted text-muted-foreground hover:bg-accent focus:ring-ring ml-1 flex h-7 w-7 items-center justify-center rounded-full text-xs transition-colors focus:ring-2 focus:outline-none"
-				onclick={() => {
-					tab.position = tab.position === 'right' ? undefined : 'right';
-				}}
-				title={tab.position === 'right' ? 'Right panel — click to move to left' : 'Left panel — click to move to right'}
-				aria-label="Toggle panel position"
-			>
-				{#if tab.position === 'right'}
-					<PanelRight size={14} />
-				{:else}
-					<PanelLeft size={14} />
-				{/if}
-			</button>
+				<!-- Edit icon -->
+				<button
+					type="button"
+					class="text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-ring flex h-6 w-6 items-center justify-center rounded text-xs transition-colors focus:ring-2 focus:outline-none {editingIconTabId === tab.id
+						? 'bg-accent text-foreground'
+						: ''}"
+					onclick={() => (editingIconTabId === tab.id ? cancelIconEdit() : startIconEdit(tab))}
+					title="Edit icon"
+					aria-label="Edit tab icon"
+				>
+					<ImageIcon size={12} />
+				</button>
 
-			<!-- Remove button -->
-			<button
-				type="button"
-				class="bg-muted text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus:ring-ring ml-1 flex h-7 w-7 items-center justify-center rounded-full text-xs transition-colors focus:ring-2 focus:outline-none"
-				onclick={() => onRemoveTab(tab.id)}
-				title="Remove tab"
-				aria-label="Remove tab"
-			>
-				×
-			</button>
+				<!-- Panel position toggle -->
+				<button
+					type="button"
+					class="text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-ring flex h-6 w-6 items-center justify-center rounded text-xs transition-colors focus:ring-2 focus:outline-none"
+					onclick={() => {
+						tab.position = tab.position === 'right' ? undefined : 'right';
+					}}
+					title={tab.position === 'right'
+						? 'Right panel — click to move to left'
+						: 'Left panel — click to move to right'}
+					aria-label="Toggle panel position"
+				>
+					{#if tab.position === 'right'}
+						<PanelRight size={12} />
+					{:else}
+						<PanelLeft size={12} />
+					{/if}
+				</button>
+
+				<!-- Divider -->
+				<div class="bg-border mx-0.5 h-4 w-px"></div>
+
+				<!-- Remove -->
+				<button
+					type="button"
+					class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus:ring-ring flex h-6 w-6 items-center justify-center rounded text-xs transition-colors focus:ring-2 focus:outline-none"
+					onclick={() => onRemoveTab(tab.id)}
+					title="Remove tab"
+					aria-label="Remove tab"
+				>
+					×
+				</button>
+			</div>
 		</div>
 	{/each}
 </div>
+{#if editingIconTabId}
+	{@const editingTab = tabs.find((t) => t.id === editingIconTabId)}
+	{#if editingTab}
+		<div class="bg-muted/50 border-border mb-4 rounded-md border p-3">
+			<div class="mb-2 flex items-center gap-2">
+				<span class="text-foreground text-sm font-medium">Icon for "{editingTab.label}"</span>
+				{#if editingTab.icon}
+					<span
+						class="bg-background border-border flex h-6 w-6 items-center justify-center rounded border text-sm"
+					>
+						{#if editingTab.icon.includes(':')}
+							<Icon icon={editingTab.icon} class="h-4 w-4" />
+						{:else}
+							<span class="text-xs font-medium">{editingTab.icon.slice(0, 2)}</span>
+						{/if}
+					</span>
+				{/if}
+			</div>
+			<div class="flex items-center gap-2">
+				<input
+					bind:this={editIconInputEl}
+					class="border-border bg-background text-foreground focus:ring-ring w-48 rounded border px-2 py-1 text-sm focus:ring-2 focus:outline-none"
+					bind:value={editIconValue}
+					onkeydown={(e) => onIconEditKeydown(e, editingTab)}
+					placeholder="e.g. AB or mdi:home"
+					aria-label="Icon value"
+				/>
+				<button
+					type="button"
+					class="bg-primary text-primary-foreground hover:bg-primary/90 rounded px-3 py-1 text-sm transition-colors"
+					onclick={() => saveIconEdit(editingTab)}
+				>
+					Apply
+				</button>
+				{#if editingTab.icon}
+					<button
+						type="button"
+						class="text-muted-foreground hover:text-destructive text-sm transition-colors"
+						onclick={() => {
+							editingTab.icon = '';
+							cancelIconEdit();
+						}}
+					>
+						Clear
+					</button>
+				{/if}
+			</div>
+			<p class="text-muted-foreground mt-2 text-xs">
+				Use <strong>1–2 letters</strong> (e.g. <code class="bg-muted rounded px-0.5">AB</code>) or
+				an
+				<a
+					href="https://icon-sets.iconify.design/"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="text-primary underline">Iconify</a
+				>
+				icon ID (e.g. <code class="bg-muted rounded px-0.5">mdi:home</code> or
+				<code class="bg-muted rounded px-0.5">solar:star-bold</code>).
+			</p>
+		</div>
+	{/if}
+{/if}

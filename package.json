@@ -17,6 +17,7 @@
 	"scripts": {
 		"dev:builder": "pnpm --filter @selva/builder-app dev",
 		"dev:compute": "pnpm --filter selva-compute-app dev",
+		"dev:shared": "pnpm --filter @selva/shared dev",
 		"build:shared": "pnpm --filter @selva/shared build",
 		"build:builder": "pnpm --filter @selva/builder-app build",
 		"build:compute": "pnpm --filter selva-compute-app build",
@@ -36,9 +37,9 @@
 		"setup-server": "node scripts/setup-server.js"
 	},
 	"devDependencies": {
-		"@changesets/cli": "^2.29.8",
+		"@changesets/cli": "^2.30.0",
 		"@eslint/compat": "^1.4.1",
-		"@eslint/js": "^9.39.2",
+		"@eslint/js": "^9.39.3",
 		"@sveltejs/adapter-auto": "catalog:",
 		"@sveltejs/kit": "catalog:",
 		"@sveltejs/package": "^2.5.7",
@@ -46,22 +47,22 @@
 		"@tailwindcss/vite": "catalog:",
 		"@types/node": "catalog:",
 		"@types/three": "catalog:",
-		"@typescript-eslint/eslint-plugin": "^8.56.0",
-		"@typescript-eslint/parser": "^8.56.0",
+		"@typescript-eslint/eslint-plugin": "^8.56.1",
+		"@typescript-eslint/parser": "^8.56.1",
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.15.0",
 		"globals": "^16.5.0",
 		"prettier": "catalog:",
-		"prettier-plugin-svelte": "^3.4.1",
+		"prettier-plugin-svelte": "^3.5.1",
 		"prettier-plugin-tailwindcss": "^0.7.2",
-		"publint": "^0.3.17",
+		"publint": "^0.3.18",
 		"svelte": "catalog:",
 		"svelte-check": "catalog:",
 		"tailwindcss": "catalog:",
 		"three": "catalog:",
 		"typescript": "catalog:",
-		"typescript-eslint": "^8.56.0",
+		"typescript-eslint": "^8.56.1",
 		"vite": "catalog:"
 	}
 }

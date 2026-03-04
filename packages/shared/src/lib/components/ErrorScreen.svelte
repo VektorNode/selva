@@ -14,7 +14,7 @@
 </script>
 
 <div
-	class="from-slate-900 to-slate-800 p-4 flex min-h-screen items-center justify-center bg-linear-to-br"
+	class="p-4 flex min-h-screen items-center justify-center bg-background"
 >
 	<Card.Root class="max-w-md w-full">
 		<Card.Header class="text-center">
@@ -39,8 +39,8 @@
 			</div>
 
 			{#if details}
-				<div class="bg-slate-100 p-4 dark:bg-slate-800 rounded-lg">
-					<p class="font-mono text-sm text-slate-600 dark:text-slate-400 break-all">
+				<div class="bg-muted p-4 rounded-lg">
+					<p class="font-mono text-sm text-muted-foreground break-all">
 						{details}
 					</p>
 				</div>
