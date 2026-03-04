@@ -254,12 +254,14 @@
 
 				<div class="drawer-content">
 					<div class="px-3 pb-6">
-						{@render panelContent(
-							hasRightPanel ? 'left' : undefined,
-							requestedLeftTabId,
-							!hasRightPanel,
-							false
-						)}
+						{#if hasLeftPanel}
+							{@render panelContent(
+								hasRightPanel ? 'left' : undefined,
+								requestedLeftTabId,
+								!hasRightPanel,
+								false
+							)}
+						{/if}
 						{#if hasRightPanel}
 							<div class="my-4 gap-2 flex items-center">
 								<div class="h-px flex-1 bg-border"></div>
@@ -282,12 +284,14 @@
 		{:else}
 			<div class="flex flex-1 flex-col overflow-hidden">
 				<div class="px-3 pt-3 flex-1 overflow-y-auto">
-					{@render panelContent(
-						hasRightPanel ? 'left' : undefined,
-						requestedLeftTabId,
-						!hasRightPanel,
-						false
-					)}
+					{#if hasLeftPanel}
+						{@render panelContent(
+							hasRightPanel ? 'left' : undefined,
+							requestedLeftTabId,
+							!hasRightPanel,
+							false
+						)}
+					{/if}
 					{#if hasRightPanel}
 						<div class="my-4 gap-2 flex items-center">
 							<div class="h-px flex-1 bg-border"></div>

@@ -57,6 +57,7 @@
 		controls = init.controls;
 	});
 
+
 	// React to meshes changes
 	// We need to manually handle cleanup of Lines and Points because selva-compute's updateScene
 	// might only clean up Meshes.
@@ -105,7 +106,7 @@
 	<div class="inset-0 absolute">
 		<canvas
 			class="block h-full w-full"
-			style={isFullscreen ? '' : 'border-radius: 0.625rem;'}
+			style="touch-action: none;{isFullscreen ? '' : ' border-radius: 0.625rem;'}"
 			bind:this={canvas}
 		></canvas>
 	</div>
