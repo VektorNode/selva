@@ -366,7 +366,7 @@
 
 		<!-- Right panel -->
 		{#if hasRightPanel}
-			{#if hasViewer && hasLeftPanel}
+			{#if hasViewer || hasLeftPanel}
 				{@render dragHandle('right', 'Resize right panel')}
 			{/if}
 
