@@ -49,6 +49,7 @@
 	},
 	"dependencies": {
 		"@floating-ui/dom": "catalog:",
+		"@iconify/svelte": "^5.2.1",
 		"@lucide/svelte": "catalog:",
 		"clsx": "catalog:",
 		"mode-watcher": "catalog:",

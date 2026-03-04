@@ -9,7 +9,7 @@
 	import CollapsedPanelStrip from './CollapsedPanelStrip.svelte';
 
 	// ── Constants ────────────────────────────────────────────────────────────────
-	const DEFAULT_WIDTH = 380;
+	const DEFAULT_WIDTH = 420;
 	const COLLAPSE_THRESHOLD = 300;
 	const COLLAPSED_WIDTH = 48;
 
@@ -154,6 +154,21 @@
 		Object.assign(values, loadedValues);
 		await onLoadValues?.();
 	}
+
+	// ── Swipe gesture (mobile drawer) ────────────────────────────────────────────
+	let _touchStartY = 0;
+
+	function onDrawerTouchStart(e: TouchEvent) {
+		_touchStartY = e.touches[0].clientY;
+	}
+
+	function onDrawerTouchEnd(e: TouchEvent) {
+		const deltaY = e.changedTouches[0].clientY - _touchStartY;
+		const SWIPE_THRESHOLD = 40;
+		if (Math.abs(deltaY) > SWIPE_THRESHOLD) {
+			drawerOpen = deltaY < 0; // swipe up → open, swipe down → close
+		}
+	}
 </script>
 
 <!-- ── Snippets ───────────────────────────────────────────────────────────────── -->
@@ -222,6 +237,8 @@
 				<button
 					class="drawer-handle-bar"
 					onclick={() => (drawerOpen = !drawerOpen)}
+					ontouchstart={onDrawerTouchStart}
+					ontouchend={onDrawerTouchEnd}
 					aria-label={drawerOpen ? 'Collapse panel' : 'Expand panel'}
 					aria-expanded={drawerOpen}
 				>
@@ -313,13 +330,16 @@
 					class:lg:mx-auto={!hasSidebar && !hasRightPanel}
 					class:lg:max-w-6xl={!hasSidebar && !hasRightPanel}
 					class:w-full={!hasSidebar && !hasRightPanel}
+					class:left-panel-scroll={hasSidebar || hasRightPanel || isTwoPanelMode}
 					style={isTwoPanelMode
 						? `flex: ${splitRatio} 1 0%; min-width: 0;`
 						: hasSidebar || hasRightPanel
 							? `width: ${leftWidth}px; max-width: 100%;`
 							: undefined}
 				>
-					{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId)}
+					<div class="left-panel-content">
+						{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId)}
+					</div>
 				</div>
 			{/if}
 
@@ -385,7 +405,6 @@
 		inset: 0;
 		z-index: 9999;
 		padding: 0 !important;
-		background: white;
 	}
 
 	.drawer-container {
@@ -450,8 +469,15 @@
 
 	.drawer-footer {
 		flex-shrink: 0;
-		padding: 0.75rem 1rem;
+		padding: 0rem 1rem;
 		border-top: 1px solid var(--border);
-		background: var(--background);
+	}
+
+	.left-panel-scroll {
+		direction: rtl;
+	}
+
+	.left-panel-content {
+		direction: ltr;
 	}
 </style>

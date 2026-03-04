@@ -120,7 +120,7 @@
 			{
 				"id": "tab-basic",
 				"label": "Basic Inputs",
-				"icon": "S",
+				"icon": "mingcute:linkedin-fill",
 				"order": 0,
 				"position": "left",
 				"groups": [
@@ -320,7 +320,7 @@
 			{
 				"id": "tab-text",
 				"label": "Text & Validation",
-				"icon": "T",
+				"icon": "solar:export-bold",
 				"order": 1,
 				"position": "center",
 				"groups": [
@@ -372,7 +372,7 @@
 			{
 				"id": "tab-controls",
 				"label": "Controls & Conditionals",
-				"icon": "C",
+				"icon": "mdi:import",
 				"order": 2,
 				"position": "right",
 				"groups": [
@@ -498,7 +498,7 @@
 			{
 				"id": "tab-files",
 				"label": "Files & Outputs",
-				"icon": "F",
+				"icon": "majesticons:battery-full-line",
 				"order": 3,
 				"position": "right",
 				"groups": [
@@ -580,7 +580,7 @@
 			{
 				"id": "tab-advanced",
 				"label": "Advanced Visibility",
-				"icon": "E",
+				"icon": "majesticons:image-circle-line",
 				"order": 4,
 				"position": "left",
 				"groups": [
