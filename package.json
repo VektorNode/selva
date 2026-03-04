@@ -17,6 +17,7 @@
 	"scripts": {
 		"dev:builder": "pnpm --filter @selva/builder-app dev",
 		"dev:compute": "pnpm --filter selva-compute-app dev",
+		"dev:shared": "pnpm --filter @selva/shared dev",
 		"build:shared": "pnpm --filter @selva/shared build",
 		"build:builder": "pnpm --filter @selva/builder-app build",
 		"build:compute": "pnpm --filter selva-compute-app build",

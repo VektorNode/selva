@@ -8,20 +8,22 @@
 	import TabLayout from './preview/TabLayout.svelte';
 	import CollapsedPanelStrip from './CollapsedPanelStrip.svelte';
 
+	// ── Constants ────────────────────────────────────────────────────────────────
+	const DEFAULT_WIDTH = 380;
+	const COLLAPSE_THRESHOLD = 300;
+	const COLLAPSED_WIDTH = 48;
+
+	// ── Props ────────────────────────────────────────────────────────────────────
 	interface Props {
 		schema: UISchema;
 		meshes?: any[];
-		/** Raw solving state — drives viewer blur and CalculateButton spinner */
 		isSolving: boolean;
-		/** Debounced/gated value — drives the floating SolvingIndicator toast */
 		showSolvingIndicator?: boolean;
 		hasPendingChanges?: boolean;
 		isViewerFullscreen?: boolean;
 		oncalculate?: () => void;
-		/** Current parameter values — two-way bound */
 		values: Record<string, unknown>;
 		onValueChange: (id: string, val: SupportedTypes) => void | Promise<void>;
-		/** Called after values are loaded from StateManager — use for triggering a solve */
 		onLoadValues?: () => void | Promise<void>;
 		environment?: 'local' | 'compute';
 	}
@@ -40,55 +42,30 @@
 		environment
 	}: Props = $props();
 
-	// Layout flags derived entirely from schema
+	// ── Layout flags ─────────────────────────────────────────────────────────────
 	const hasViewer = $derived(
 		!!(schema?.viewerOptions?.enableLocal || schema?.viewerOptions?.enableRemote)
 	);
-	const hasRightPanel = $derived(
-		schema.layout.type === 'tabbed' && schema.layout.tabs.some((t) => t.position === 'right')
-	);
-	const hasLeftTabs = $derived(
-		schema.layout.type === 'tabbed' && schema.layout.tabs.some((t) => t.position !== 'right')
-	);
-	const hasSidebar = $derived(hasViewer || hasRightPanel);
-
 	const leftTabs = $derived(
 		schema.layout.type === 'tabbed' ? schema.layout.tabs.filter((t) => t.position !== 'right') : []
 	);
 	const rightTabs = $derived(
 		schema.layout.type === 'tabbed' ? schema.layout.tabs.filter((t) => t.position === 'right') : []
 	);
+	const hasLeftPanel = $derived(leftTabs.length > 0);
+	const hasRightPanel = $derived(rightTabs.length > 0);
+	const hasSidebar = $derived(hasViewer || hasRightPanel);
+	// Two-panel mode: left + right, no viewer — both panels grow to fill full width
+	const isTwoPanelMode = $derived(!hasViewer && hasLeftPanel && hasRightPanel);
 
-	// ── Panel resize ────────────────────────────────────────────────────────────
-	const DEFAULT_WIDTH = 380;
-	const COLLAPSE_THRESHOLD = 300;
-	const COLLAPSED_WIDTH = 48;
-
-	let leftWidth = $state(DEFAULT_WIDTH);
-	let rightWidth = $state(DEFAULT_WIDTH);
-	let isDragging = $state(false);
-	let requestedLeftTabId = $state<string | null>(null);
-	let requestedRightTabId = $state<string | null>(null);
-
-	const leftCollapsed = $derived(leftWidth <= COLLAPSED_WIDTH);
-	const rightCollapsed = $derived(rightWidth <= COLLAPSED_WIDTH);
-
-	// ── Breakpoint detection ─────────────────────────────────────────────────────────
-	let isMobile = $state(false); // < 640px
-	let isTablet = $state(false); // 640–1023px
-
-	// ── Mobile drawer ────────────────────────────────────────────────────────────────
+	// ── Responsive state ─────────────────────────────────────────────────────────
+	let isMobile = $state(false);
+	let isTablet = $state(false);
 	let drawerOpen = $state(false);
 
-	// Restore width is breakpoint-sensitive
-	const RESTORE_WIDTH = $derived(isTablet ? 280 : DEFAULT_WIDTH);
+	const restoreWidth = $derived(isTablet ? 280 : DEFAULT_WIDTH);
+	const activeLeftTabLabel = $derived(leftTabs[0]?.label ?? 'Parameters');
 
-	// Label shown in drawer handle bar
-	const activeLeftTabLabel = $derived(
-		leftTabs.length > 0 ? (leftTabs[0].label ?? 'Parameters') : 'Parameters'
-	);
-
-	// Breakpoint watcher — runs on mount, cleans up on destroy
 	$effect(() => {
 		const mqMobile = window.matchMedia('(max-width: 639px)');
 		const mqTablet = window.matchMedia('(min-width: 640px) and (max-width: 1023px)');
@@ -114,14 +91,37 @@
 		};
 	});
 
-	let _side: 'left' | 'right' | null = null;
+	// ── Panel resize ─────────────────────────────────────────────────────────────
+	let leftWidth = $state(DEFAULT_WIDTH);
+	let rightWidth = $state(DEFAULT_WIDTH);
+	// Two-panel split ratio: left takes splitRatio of width, right takes (1 - splitRatio)
+	let splitRatio = $state(0.5);
+	let isDragging = $state(false);
+	let requestedLeftTabId = $state<string | null>(null);
+	let requestedRightTabId = $state<string | null>(null);
+
+	const leftCollapsed = $derived(leftWidth <= COLLAPSED_WIDTH);
+	const rightCollapsed = $derived(rightWidth <= COLLAPSED_WIDTH);
+
+	let _side: 'left' | 'right' | 'middle' | null = null;
 	let _startX = 0;
 	let _startW = 0;
+	let _startRatio = 0;
+	let _containerEl: HTMLElement | null = null;
 
-	function startDrag(side: 'left' | 'right', e: MouseEvent) {
+	function clampWidth(raw: number): number {
+		const max = window.innerWidth / 4;
+		return raw < COLLAPSE_THRESHOLD
+			? COLLAPSED_WIDTH
+			: Math.min(max, Math.max(COLLAPSE_THRESHOLD, raw));
+	}
+
+	function startDrag(side: 'left' | 'right' | 'middle', e: MouseEvent) {
 		_side = side;
 		_startX = e.clientX;
-		_startW = side === 'left' ? leftWidth : rightWidth;
+		_startW = side === 'left' ? leftWidth : side === 'right' ? rightWidth : leftWidth;
+		_startRatio = splitRatio;
+		_containerEl = (e.currentTarget as HTMLElement).closest('[data-layout-root]') as HTMLElement;
 		isDragging = true;
 		window.addEventListener('mousemove', onDrag);
 		window.addEventListener('mouseup', stopDrag);
@@ -130,19 +130,21 @@
 
 	function onDrag(e: MouseEvent) {
 		if (!_side) return;
-		const maxWidth = window.innerWidth / 4;
 		const delta = e.clientX - _startX;
-		const raw = _side === 'left' ? _startW + delta : _startW - delta;
-		const next =
-			raw < COLLAPSE_THRESHOLD
-				? COLLAPSED_WIDTH
-				: Math.min(maxWidth, Math.max(COLLAPSE_THRESHOLD, raw));
-		if (_side === 'left') leftWidth = next;
-		else rightWidth = next;
+
+		if (_side === 'middle') {
+			const containerW = _containerEl?.clientWidth ?? window.innerWidth;
+			splitRatio = Math.min(0.85, Math.max(0.15, _startRatio + delta / containerW));
+		} else {
+			const raw = _side === 'left' ? _startW + delta : _startW - delta;
+			if (_side === 'left') leftWidth = clampWidth(raw);
+			else rightWidth = clampWidth(raw);
+		}
 	}
 
 	function stopDrag() {
 		_side = null;
+		_containerEl = null;
 		isDragging = false;
 		window.removeEventListener('mousemove', onDrag);
 		window.removeEventListener('mouseup', stopDrag);
@@ -154,21 +156,52 @@
 	}
 </script>
 
+<!-- ── Snippets ───────────────────────────────────────────────────────────────── -->
+
+{#snippet dragHandle(side: 'left' | 'right' | 'middle', label: string)}
+	<div
+		class="sm:flex group hidden shrink-0 cursor-ew-resize items-center justify-center transition-colors hover:bg-primary/10 active:bg-primary/20"
+		style="width: 6px"
+		onmousedown={(e) => startDrag(side, e)}
+		role="button"
+		tabindex="0"
+		aria-label={label}
+	>
+		<div class="h-8 w-px rounded-full bg-border transition-colors group-hover:bg-primary/50"></div>
+	</div>
+{/snippet}
+
+{#snippet panelContent(
+	panelFilter: 'left' | 'right' | undefined,
+	requestedTabId: string | null,
+	showStateManager = true,
+	showCalculateButton = true
+)}
+	{#if schema.layout.type === 'tabbed'}
+		<TabLayout {schema} bind:values {onValueChange} {environment} {panelFilter} {requestedTabId} />
+	{/if}
+	{#if showStateManager}
+		<div class="mt-6">
+			<StateManager {schema} currentValues={values} onLoadValues={handleLoadValues} />
+		</div>
+	{/if}
+	{#if !isMobile && showCalculateButton && schema.instanceSolve === false}
+		<CalculateButton {hasPendingChanges} {isSolving} {oncalculate} />
+	{/if}
+{/snippet}
+
+<!-- ── Root container ─────────────────────────────────────────────────────────── -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-	class="min-h-0 sm:flex-row flex flex-1 flex-col overflow-hidden {isViewerFullscreen
-		? 'fullscreen-layout'
-		: ''}"
+	data-layout-root
+	class="min-h-0 sm:flex-row flex flex-1 flex-col overflow-hidden"
+	class:fullscreen-layout={isViewerFullscreen}
 	class:relative={isMobile}
 	class:cursor-ew-resize={isDragging}
 >
 	{#if isMobile}
-		<!-- ═══════════════════════════════════════════════════════════════════════════════════
-		     MOBILE LAYOUT: Viewer first, bottom drawer for inputs
-		     ═════════════════════════════════════════════════════════════════════════════════ -->
-
+		<!-- ═══ MOBILE LAYOUT ══════════════════════════════════════════════════════ -->
 		{#if hasViewer}
-			<!-- Viewer fills full height -->
 			<div class="min-h-0 flex flex-1 flex-col">
 				<Viewer
 					{schema}
@@ -180,12 +213,12 @@
 				/>
 			</div>
 
-			<!-- Bottom drawer -->
 			<div
-				class="drawer-container {drawerOpen ? 'drawer-open' : 'drawer-closed'}"
+				class="drawer-container"
+				class:drawer-open={drawerOpen}
+				class:drawer-closed={!drawerOpen}
 				style="z-index: 40;"
 			>
-				<!-- Drawer handle bar -->
 				<button
 					class="drawer-handle-bar"
 					onclick={() => (drawerOpen = !drawerOpen)}
@@ -202,174 +235,142 @@
 					/>
 				</button>
 
-				<!-- Drawer scrollable content -->
 				<div class="drawer-content">
 					<div class="px-3 pb-6">
-						{#if schema.layout.type === 'tabbed' && hasLeftTabs}
-							<TabLayout
-								{schema}
-								bind:values
-								{onValueChange}
-								{environment}
-								panelFilter={hasRightPanel ? 'left' : undefined}
-								requestedTabId={requestedLeftTabId}
-							/>
-						{/if}
+						{@render panelContent(
+							hasRightPanel ? 'left' : undefined,
+							requestedLeftTabId,
+							!hasRightPanel,
+							false
+						)}
 						{#if hasRightPanel}
-							<TabLayout
-								{schema}
-								bind:values
-								{onValueChange}
-								{environment}
-								panelFilter="right"
-								requestedTabId={requestedRightTabId}
-							/>
-						{/if}
-						<div class="mt-6">
-							<StateManager {schema} currentValues={values} onLoadValues={handleLoadValues} />
-						</div>
-						{#if schema.instanceSolve === false}
-							<CalculateButton {hasPendingChanges} {isSolving} {oncalculate} />
+							<div class="my-4 gap-2 flex items-center">
+								<div class="h-px flex-1 bg-border"></div>
+								<span class="text-xs font-medium px-1 text-muted-foreground">
+									{rightTabs[0]?.label ?? 'More'}
+								</span>
+								<div class="h-px flex-1 bg-border"></div>
+							</div>
+							{@render panelContent('right', requestedRightTabId, true, false)}
 						{/if}
 					</div>
 				</div>
+
+				{#if schema.instanceSolve === false}
+					<div class="drawer-footer">
+						<CalculateButton {hasPendingChanges} {isSolving} {oncalculate} />
+					</div>
+				{/if}
 			</div>
 		{:else}
-			<!-- No viewer: full-height scrollable column, no drawer -->
-			<div class="px-3 flex-1 overflow-y-auto {!hasSidebar ? 'lg:mx-auto lg:max-w-6xl' : ''}">
-				{#if schema.layout.type === 'tabbed' && hasLeftTabs}
-					<TabLayout
-						{schema}
-						bind:values
-						{onValueChange}
-						{environment}
-						panelFilter={hasRightPanel ? 'left' : undefined}
-						requestedTabId={requestedLeftTabId}
-					/>
-				{/if}
-				<div class="mt-6">
-					<StateManager {schema} currentValues={values} onLoadValues={handleLoadValues} />
+			<div class="flex flex-1 flex-col overflow-hidden">
+				<div class="px-3 pt-3 flex-1 overflow-y-auto">
+					{@render panelContent(
+						hasRightPanel ? 'left' : undefined,
+						requestedLeftTabId,
+						!hasRightPanel,
+						false
+					)}
+					{#if hasRightPanel}
+						<div class="my-4 gap-2 flex items-center">
+							<div class="h-px flex-1 bg-border"></div>
+							<span class="text-xs font-medium px-1 text-muted-foreground">
+								{rightTabs[0]?.label ?? 'More'}
+							</span>
+							<div class="h-px flex-1 bg-border"></div>
+						</div>
+						{@render panelContent('right', requestedRightTabId, true, false)}
+					{/if}
 				</div>
 				{#if schema.instanceSolve === false}
-					<CalculateButton {hasPendingChanges} {isSolving} {oncalculate} />
+					<div class="drawer-footer">
+						<CalculateButton {hasPendingChanges} {isSolving} {oncalculate} />
+					</div>
 				{/if}
 			</div>
 		{/if}
 	{:else}
-		{#if hasLeftTabs || !hasSidebar}
+		<!-- ═══ DESKTOP LAYOUT ═════════════════════════════════════════════════════ -->
+
+		<!-- Left panel -->
+		{#if hasLeftPanel || !hasSidebar}
 			{#if leftCollapsed && hasSidebar}
 				<CollapsedPanelStrip
 					side="left"
 					tabs={leftTabs}
 					collapsedWidth={COLLAPSED_WIDTH}
-					onExpand={() => (leftWidth = RESTORE_WIDTH)}
+					onExpand={() => (leftWidth = restoreWidth)}
 					onTabClick={(id) => {
 						requestedLeftTabId = id;
-						leftWidth = RESTORE_WIDTH;
+						leftWidth = restoreWidth;
 					}}
 				/>
 			{:else}
 				<div
-					class="px-3 min-h-0 w-full shrink-0 overflow-y-auto {isViewerFullscreen
-						? 'hidden'
-						: ''} {!hasSidebar ? 'lg:mx-auto lg:max-w-6xl' : ''}"
-					style={hasSidebar ? `width: ${leftWidth}px; max-width: 100%;` : undefined}
+					class="px-3 min-h-0 overflow-y-auto"
+					class:hidden={isViewerFullscreen}
+					class:shrink-0={!isTwoPanelMode}
+					class:lg:mx-auto={!hasSidebar && !hasRightPanel}
+					class:lg:max-w-6xl={!hasSidebar && !hasRightPanel}
+					class:w-full={!hasSidebar && !hasRightPanel}
+					style={isTwoPanelMode
+						? `flex: ${splitRatio} 1 0%; min-width: 0;`
+						: hasSidebar || hasRightPanel
+							? `width: ${leftWidth}px; max-width: 100%;`
+							: undefined}
 				>
-					{#if schema.layout.type === 'tabbed' && hasLeftTabs}
-						<TabLayout
-							{schema}
-							bind:values
-							{onValueChange}
-							{environment}
-							panelFilter={hasRightPanel ? 'left' : undefined}
-							requestedTabId={requestedLeftTabId}
-						/>
-					{/if}
-					<div class="mt-6">
-						<StateManager {schema} currentValues={values} onLoadValues={handleLoadValues} />
-					</div>
-					{#if schema.instanceSolve === false}
-						<CalculateButton {hasPendingChanges} {isSolving} {oncalculate} />
-					{/if}
+					{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId)}
 				</div>
 			{/if}
 
-			<!-- Inline drag handle, visible at sm+ breakpoints -->
-			{#if hasSidebar}
-				<div
-					class="sm:flex group hidden shrink-0 cursor-ew-resize items-center justify-center transition-colors hover:bg-primary/10 active:bg-primary/20"
-					style="width: 6px"
-					onmousedown={(e) => startDrag('left', e)}
-					role="button"
-					tabindex="0"
-					aria-label="Resize left panel"
-				>
-					<div
-						class="h-8 w-px rounded-full bg-border transition-colors group-hover:bg-primary/50"
-					></div>
-				</div>
+			{#if !isTwoPanelMode && hasSidebar && hasLeftPanel}
+				{@render dragHandle('left', 'Resize left panel')}
 			{/if}
 		{/if}
 
-		<!-- ── Viewer ──────────────────────────────────────────────────────────────── -->
+		<!-- Viewer -->
 		{#if hasViewer}
 			<div
 				class="min-h-0 flex flex-1 flex-col"
-				class:pl-3={!hasLeftTabs && !leftCollapsed}
+				class:pl-3={!hasLeftPanel && !leftCollapsed}
 				class:pr-3={!hasRightPanel}
 			>
 				<Viewer {schema} {meshes} bind:isFullscreen={isViewerFullscreen} {isSolving} />
 			</div>
 		{/if}
 
-		<!-- ── Right panel ────────────────────────────────────────────────────────── -->
+		<!-- Two-panel drag handle: sits between left and right flex panels -->
+		{#if isTwoPanelMode}
+			{@render dragHandle('middle', 'Resize panels')}
+		{/if}
+
+		<!-- Right panel -->
 		{#if hasRightPanel}
-			<!-- Inline drag handle, visible at sm+ breakpoints -->
-			<div
-				class="sm:flex group hidden shrink-0 cursor-ew-resize items-center justify-center transition-colors hover:bg-primary/10 active:bg-primary/20"
-				style="width: 6px"
-				onmousedown={(e) => startDrag('right', e)}
-				role="button"
-				tabindex="0"
-				aria-label="Resize right panel"
-			>
-				<div
-					class="h-8 w-px rounded-full bg-border transition-colors group-hover:bg-primary/50"
-				></div>
-			</div>
+			{#if hasViewer && hasLeftPanel}
+				{@render dragHandle('right', 'Resize right panel')}
+			{/if}
 
 			{#if rightCollapsed}
 				<CollapsedPanelStrip
 					side="right"
 					tabs={rightTabs}
 					collapsedWidth={COLLAPSED_WIDTH}
-					onExpand={() => (rightWidth = RESTORE_WIDTH)}
+					onExpand={() => (rightWidth = restoreWidth)}
 					onTabClick={(id) => {
 						requestedRightTabId = id;
-						rightWidth = RESTORE_WIDTH;
+						rightWidth = restoreWidth;
 					}}
 				/>
 			{:else}
 				<div
-					class="px-3 min-h-0 w-full shrink-0 overflow-y-auto {isViewerFullscreen ? 'hidden' : ''}"
-					style="width: {rightWidth}px; max-width: 100%;"
+					class="px-3 min-h-0 overflow-y-auto"
+					class:hidden={isViewerFullscreen}
+					class:shrink-0={!isTwoPanelMode}
+					style={isTwoPanelMode
+						? `flex: ${1 - splitRatio} 1 0%; min-width: 0;`
+						: `width: ${rightWidth}px; max-width: 100%;`}
 				>
-					<TabLayout
-						{schema}
-						bind:values
-						{onValueChange}
-						{environment}
-						panelFilter="right"
-						requestedTabId={requestedRightTabId}
-					/>
-					{#if !hasLeftTabs}
-						<div class="mt-6">
-							<StateManager {schema} currentValues={values} onLoadValues={handleLoadValues} />
-						</div>
-						{#if schema.instanceSolve === false}
-							<CalculateButton {hasPendingChanges} {isSolving} {oncalculate} />
-						{/if}
-					{/if}
+					{@render panelContent('right', requestedRightTabId, !hasLeftPanel, !hasLeftPanel)}
 				</div>
 			{/if}
 		{/if}
@@ -386,8 +387,6 @@
 		padding: 0 !important;
 		background: white;
 	}
-
-	/* Mobile bottom drawer */
 
 	.drawer-container {
 		position: absolute;
@@ -408,7 +407,6 @@
 	.drawer-closed {
 		height: 60px;
 	}
-
 	.drawer-open {
 		height: 60svh;
 	}
@@ -448,5 +446,12 @@
 		flex: 1;
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
+	}
+
+	.drawer-footer {
+		flex-shrink: 0;
+		padding: 0.75rem 1rem;
+		border-top: 1px solid var(--border);
+		background: var(--background);
 	}
 </style>
