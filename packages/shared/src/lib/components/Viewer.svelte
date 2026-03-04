@@ -57,7 +57,6 @@
 		controls = init.controls;
 	});
 
-
 	// React to meshes changes
 	// We need to manually handle cleanup of Lines and Points because selva-compute's updateScene
 	// might only clean up Meshes.
