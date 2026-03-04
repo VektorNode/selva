@@ -6,6 +6,21 @@ import type {
 } from '../types/generated';
 
 /**
+ * Generate a UUID v4 (with fallback for older environments)
+ */
+function generateUUID(): string {
+	if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+		return crypto.randomUUID();
+	}
+	// Fallback for older browsers/environments
+	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+		const r = (Math.random() * 16) | 0;
+		const v = c === 'x' ? r : (r & 0x3) | 0x8;
+		return v.toString(16);
+	});
+}
+
+/**
  * Create a saved state from current schema and values
  */
 export function createSavedState(
@@ -58,7 +73,7 @@ export function createSavedState(
 	}
 
 	return {
-		id: crypto.randomUUID(),
+		id: generateUUID(),
 		name: metadata.name,
 		description: metadata.description,
 		timestamp: new Date().toISOString(),
@@ -190,13 +205,24 @@ export function exportStateAsJson(savedState: ParameterPreset): void {
 	const blob = new Blob([json], { type: 'application/json' });
 	const url = URL.createObjectURL(blob);
 
-	const a = document.createElement('a');
-	a.href = url;
-	a.download = `${savedState.name.replace(/[^a-z0-9]/gi, '_')}_${savedState.timestamp.split('T')[0].replace(/-/g, '_')}.sps`;
-	document.body.appendChild(a);
-	a.click();
-	document.body.removeChild(a);
-	URL.revokeObjectURL(url);
+	// Use a more reliable method: add to DOM, trigger, then remove
+	const link = document.createElement('a');
+	link.href = url;
+	link.download = `${savedState.name.replace(/[^a-z0-9]/gi, '_')}_${savedState.timestamp.split('T')[0].replace(/-/g, '_')}.sps`;
+	
+	// Ensure visibility for older browsers
+	link.style.display = 'none';
+	document.body.appendChild(link);
+	
+	// Use setTimeout to ensure DOM is ready
+	setTimeout(() => {
+		link.click();
+		// Clean up after click
+		setTimeout(() => {
+			document.body.removeChild(link);
+			URL.revokeObjectURL(url);
+		}, 100);
+	}, 0);
 }
 
 /**
