@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { UISchema, SupportedTypes } from '../types/generated';
 	import { ChevronUp } from '@lucide/svelte';
+	import { ChevronUp } from '@lucide/svelte';
 	import Viewer from './Viewer.svelte';
 	import CalculateButton from './ui/CalculateButton.svelte';
 	import SolvingIndicator from './ui/SolvingIndicator.svelte';

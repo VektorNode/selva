@@ -201,10 +201,7 @@
 		{:else if layoutItem.type === 'output'}
 			{@const output = getOutputById(layoutItem.paramId)}
 			{#if output}
-				<div
-					class="min-w-0 overflow-hidden"
-					style="grid-column: span {span} / span {span}"
-				>
+				<div class="min-w-0 overflow-hidden" style="grid-column: span {span} / span {span}">
 					<OutputDisplay
 						item={layoutItem}
 						value={values[layoutItem.paramId]}
@@ -253,11 +250,11 @@
 								{#if !collapsedGroups[group.id]}
 									<Card.Content class="p-6">
 										<div
-											class="schema-grid grid gap-6 animate-[fadeIn_0.2s] overflow-x-auto"
+											class="schema-grid gap-6 grid animate-[fadeIn_0.2s] overflow-x-auto"
 											style="--schema-cols: {group.columns};"
 										>
 											{#each group.items as layoutItem (layoutItem.paramId)}
-											{@render gridItem(layoutItem, group.columns ?? 1)}
+												{@render gridItem(layoutItem, group.columns ?? 1)}
 											{/each}
 										</div>
 									</Card.Content>

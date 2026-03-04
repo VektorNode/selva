@@ -14,7 +14,7 @@
 	"created": "2026-03-04T10:00:00.0000000Z",
 	"lastModified": "2026-03-04T10:00:00.0000000Z",
 	"viewerOptions": {
-		"enableLocal": true,
+		"enableLocal": false,
 		"enableRemote": true,
 		"backgroundColor": "#f5f5f5"
 	},
