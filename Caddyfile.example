@@ -1,20 +1,86 @@
 # Selva Compute App - Caddy Configuration Example
 # Copy this file to /etc/caddy/Caddyfile and customize for your setup
+# Reload config: sudo caddy reload
 
-# Development / Testing (HTTP only, IP address)
+# ============================================================================
+# DEVELOPMENT / TESTING (HTTP only, local IP address)
+# ============================================================================
 :80 {
-    reverse_proxy localhost:3000 {
-        header_up X-Forwarded-Proto "http"
-    }
+	# Reverse proxy to local compute app
+	reverse_proxy localhost:3000 {
+		header_up X-Forwarded-Proto "http"
+		header_up X-Forwarded-Host {http.request.host}
+		header_up X-Real-IP {http.request.remote.host}
+	}
+
+	# Enable gzip compression
+	encode gzip
+
+	# Security headers
+	header / X-Content-Type-Options nosniff
+	header / X-Frame-Options DENY
+	header / X-XSS-Protection "1; mode=block"
+
+	# Logging (optional, comment out to reduce disk usage)
+	# log {
+	#     output stdout
+	#     format json
+	# }
 }
 
-# Production (HTTPS with custom domain)
+# ============================================================================
+# PRODUCTION (HTTPS with custom domain)
+# ============================================================================
 # Uncomment and customize for your domain:
 #
 # example.com {
-#     reverse_proxy localhost:3000 {
-#         header_up X-Forwarded-Proto "https"
-#     }
+# 	# Reverse proxy to compute app
+# 	reverse_proxy localhost:3000 {
+# 		header_up X-Forwarded-Proto "https"
+# 		header_up X-Forwarded-Host {http.request.host}
+# 		header_up X-Real-IP {http.request.remote.host}
+# 	}
+#
+# 	# Enable gzip compression
+# 	encode gzip
+#
+# 	# Security headers
+# 	header / Strict-Transport-Security "max-age=31536000; includeSubDomains"
+# 	header / X-Content-Type-Options nosniff
+# 	header / X-Frame-Options DENY //If iframe embedding is needed, consider SAMEORIGIN or ALLOW-FROM
+# 	header / X-XSS-Protection "1; mode=block"
+# 	header / Referrer-Policy "strict-origin-when-cross-origin"
+# 	header / Permissions-Policy "geolocation=(), microphone=(), camera=()"
+#
+# 	# Cache control for static assets (if served)
+# 	@static {
+# 		path /assets/*
+# 	}
+# 	header @static Cache-Control "public, max-age=31536000, immutable"
+#
+# 	# Disable caching for API responses
+# 	@api {
+# 		path /api/*
+# 	}
+# 	header @api Cache-Control "no-cache, no-store, must-revalidate"
+#
+# 	# Request size limit (adjust as needed for your use case)
+# 	request_body {
+# 		max_size 100mb
+# 	}
+#
+# 	# Logging (production: write to file instead of stdout)
+# 	log {
+# 		output file /var/log/caddy/compute.log
+# 		format json
+# 	}
 # }
 #
-# Caddy will automatically obtain and renew SSL certificates via Let's Encrypt
+# www.example.com {
+# 	redir https://example.com{uri}
+# }
+#
+# Caddy will automatically:
+# - Obtain SSL certificates from Let's Encrypt
+# - Renew certificates before expiration
+# - Redirect HTTP to HTTPS
