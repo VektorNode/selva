@@ -32,9 +32,7 @@
 		"clean:reinstall": "pnpm clean && pnpm install && pnpm build:all",
 		"clean": "node scripts/clean.js",
 		"changeset": "changeset",
-		"release": "pnpm build:all && changeset publish",
-		"update-server": "node scripts/update-server.js",
-		"setup-server": "node scripts/setup-server.js"
+		"release": "pnpm build:all && changeset publish"
 	},
 	"devDependencies": {
 		"@changesets/cli": "^2.30.0",
