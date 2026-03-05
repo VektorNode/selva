@@ -6,24 +6,21 @@ module.exports = {
 		{
 			name: 'selva-compute',
 			script: './packages/compute-app/build/index.js',
-			instances: 1,
-			exec_mode: 'fork',
+			instances: 'max',
+			exec_mode: 'cluster',
 			autorestart: true,
 			watch: false,
-			max_memory_restart: '1G',
+			max_memory_restart: '500m',
 			env: {
 				PORT: 3000,
 				ORIGIN: 'http://your-public-ip',
 				COMPUTE_SERVER_URL: 'https://your-compute-server',
-				// Increase body size limit for large geometry uploads (default 512kb)
 				BODY_SIZE_LIMIT: 'Infinity',
 				// Path to Grasshopper definitions (use absolute path)
 				GH_DEFINITIONS_PATH: '/absolute/path/to/definitions',
 				COMPUTE_API_KEY: 'your-api-key',
 				NODE_ENV: 'production',
-				ADMIN_PASSWORD: 'your-secure-password',
-				// For HTTP deployments (development only), allow insecure cookies
-				// ALLOW_INSECURE_COOKIES: 'true'
+				ADMIN_PASSWORD: 'your-secure-password'
 			}
 		}
 	]

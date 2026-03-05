@@ -4,10 +4,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-##
-
-Use direct edditing insead of starting to build bash or pyton files to eddit files
-
 Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for building Grasshopper-driven web applications. It uses a dual-stack architecture:
 
 - **Backend**: C# (.NET multi-target: net48/net7.0) - Grasshopper plugin
@@ -20,17 +16,17 @@ This is a monorepo with two distinct stacks:
 
 ### TypeScript/JavaScript Workspace (`packages/`)
 
-- [selva-compute](https://www.npmjs.com/package/selva-compute) - (External Node Dependency) Type-safe Rhino Compute client, Three.js helpers, file utilities
+- [selva-compute](https://www.npmjs.com/package/selva-compute) - (External npm package) Type-safe Rhino Compute client, Three.js helpers, file utilities
+- **`@selva/config`** - Shared ESLint, Vite, and Prettier configuration
 - **`@selva/builder-app`** - Schema designer connected to Grasshopper via WebSocket (local dev mode)
 - **`@selva/compute-app`** - Standalone app for solving Grasshopper definitions via Rhino.Compute (cloud mode)
 - **`@selva/shared`** - Shared Svelte components, utilities, and theme styles (CSS + theme utilities)
-- **`@selva/svelte-ui`** - Legacy UI components (being phased out)
 - **`@selva/schemas`** - Schema definitions and code generators (TypeScript + C#)
 
 ### .NET Workspace (`Plugin/`)
 
 - **`Selva.Core`** - Shared models and services (netstandard2.0)
-- **`Selva.Grasshopper`** - Main plugin with components (net48/net7.0, outputs `.gha`)
+- **`Selva.GH`** - Main plugin with components (net48/net7.0, outputs `.gha`)
 - **`Selva.Tests`** - xUnit tests (net7.0)
 
 ## Common Development Commands
@@ -71,6 +67,10 @@ cd packages/schemas && pnpm run generate:cs     # Generate C# only
 
 # Clean and reinstall
 pnpm clean:reinstall        # Remove all node_modules and reinstall
+
+# Testing (selva-compute external package)
+# Run tests for the selva-compute npm package (development only)
+# pnpm test                  # (When selva-compute is developed locally)
 ```
 
 ### .NET (Plugin)
@@ -119,7 +119,7 @@ The web application supports two runtime modes:
 The production build creates a **fully self-contained** `.gha` file:
 
 1. Builds `@selva/builder-app` web assets
-2. Copies built assets to `Plugin/Selva.Grasshopper/EmbeddedAssets/web/`
+2. Copies built assets to `Plugin/Selva.GH/EmbeddedAssets/web/`
 3. Embeds all web assets as `EmbeddedResource` in the plugin
 4. Builds multi-targeted plugin (net48 for Rhino 7, net7.0 for Rhino 8)
 
@@ -152,7 +152,7 @@ Benefits: Hot reload on web changes, debug plugin in IDE, fast iteration.
 
 ### Grasshopper Plugin Components
 
-Located in `Plugin/Selva.Grasshopper/Features/`:
+Located in `Plugin/Selva.GH/Features/`:
 
 - **UIBuilder** - `UIBuilderComponent` for schema linking and WebSocket communication
 - **Display** - `ThreeMaterial` for 3D web visualization configuration
@@ -217,12 +217,15 @@ Restart Rhino completely after installation.
 
 ## Environment Variables
 
-Create `.env` in `packages/builder-app/` (required for build):
+### Builder App (`packages/builder-app/`)
+No environment variables required for development. Uses WebSocket at port 8765 by default.
 
-```
-VITE_API_BASE=http://localhost:8765
-```
+### Compute App (`packages/compute-app/`)
+Required for production deployment (see `example.ecosystem.config.cjs`):
+- `COMPUTE_SERVER_URL` - Rhino.Compute server URL
+- `PORT` - Application port (default: 3000)
+- `GH_DEFINITIONS_PATH` - Path to Grasshopper definition files
 
 ## Issues
 
-If gnerating issues use the templates in the [](/.github/ISSUE_TEMPLATE/)
+When creating issues, use the templates in [.github/ISSUE_TEMPLATE/](/.github/ISSUE_TEMPLATE/):

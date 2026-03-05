@@ -4,7 +4,13 @@ Thanks for your interest in contributing! This guide covers the essentials to ge
 
 ## Getting Started
 
-For setup and environment configuration, see [docs/quickstart](./docs/quickstart).
+```bash
+pnpm install
+pnpm dev              # Terminal 1: web app at http://localhost:5173
+cd Plugin && dotnet build  # Terminal 2: plugin dev
+```
+
+See [CLAUDE.md](./CLAUDE.md) for full setup details.
 
 ## Code Style
 
@@ -41,8 +47,8 @@ For setup and environment configuration, see [docs/quickstart](./docs/quickstart
 **Important:** Never edit generated files directly
 
 - Modify `packages/schemas/ui-schema.json`
-- Run `./generate-schemas.sh` to regenerate C# and TypeScript
-- Generated files: `packages/builder/src/lib/types/generated/schema.ts` and `Plugin/Models/Generated/UISchema.Generated.cs`
+- Run `cd packages/schemas && pnpm run generate:all`
+- Generated files: `packages/shared/src/lib/types/generated/schema.ts` and `Plugin/Selva.Core/Models/UISchema.Generated.cs`
 
 ## Before You Submit
 
@@ -64,10 +70,26 @@ pnpm test
 
 - Write tests that add value - focus on workflows and integration, not trivial cases
 - Use tests to document expected behavior and edge cases
-- Run `pnpm test:watch` during development
+
+## Testing Plugin Changes
+
+After modifying the plugin, rebuild and test:
+
+```bash
+cd Plugin && dotnet build
+# Then build the .gha file for distribution
+pnpm run build:plugin
+# Copy to Grasshopper Libraries folder (see CLAUDE.md for path)
+```
+
+## Branch Naming
+
+- `feature/description` - new features
+- `fix/description` - bug fixes
+- `docs/description` - documentation
 
 ## Issues & PRs
 
-- Keep issue descriptions concise - what needs to be solved and why
+- Keep descriptions concise - what needs to be solved and why
 - PRs should reference related issues
-- Aim for small, focused changes over large refactors
+- Aim for small, focused changes
