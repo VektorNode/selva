@@ -2,25 +2,69 @@
 
 ## 1. Project Overview
 
-Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI. The backend is in C# (.NET multi-target: net48 and net7.0). The frontend is SvelteKit with TypeScript and Tailwind CSS. Copilot should use this context when generating code, explanations, review comments, or test scaffolding.
+Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for building interactive Grasshopper definitions.
+
+**Architecture:**
+- **Monorepo:** Two main stacks managed in a single repository
+  - Backend: C# plugin (`Plugin/`) targeting .NET net48 (Rhino 7) and net7.0 (Rhino 8)
+  - Frontend: TypeScript/SvelteKit apps in `packages/` for two deployment modes
+- **Local Mode** (`@selva/builder-app`): Schema designer with WebSocket connection to Grasshopper
+- **Cloud Mode** (`@selva/compute-app`): Standalone app using Rhino.Compute for cloud solving
+- **Shared** (`@selva/shared`): Components, utilities, and theme system
+
+Copilot should use this context when generating code, explanations, review comments, or test scaffolding.
 
 ## 2. Tech Stack and Tooling
 
-- C# (.NET 7.0 and .NET Framework 4.8) for backend logic and plugin hooks.
-- SvelteKit + TypeScript + Tailwind CSS for frontend UI.
-- Build and package using .NET CLI for backend and npm (or pnpm) for frontend.
-- Testing: use existing test frameworks for C# (e.g., xUnit) and frontend tests (e.g., Playwright or Vitest) where defined.
+- **Backend:** C# (.NET 7.0 and .NET Framework 4.8) for plugin logic
+- **Frontend:** SvelteKit 5 + TypeScript + Tailwind CSS
+- **Package Manager:** pnpm >= 9.0.0 (not npm)
+- **Schema:** JSON Schema (`ui-schema.json`) auto-generates C# and TypeScript types
+- **Testing:** xUnit for C#, Vitest for TypeScript
+- **Production:** PM2 for process management, graceful reload for zero-downtime updates
+- **Icons:** @lucide/svelte (all icons, no duplication)
 
 ## 3. Build, Test, Run, and Validate
 
-Include how to build and validate changes so Copilot doesn’t need to search for commands:
+**Setup (required first):**
+```bash
+pnpm install
+```
 
-- Backend build: `dotnet build -c Release` at solution root.
-- Backend tests: `dotnet test --no-build`.
-- Frontend build: `npm install` then `npm run build`.
-- Frontend tests: `npm test`.
-- Typical validation steps: build both backend and frontend, confirm plugin loads in Rhino and UI works in supported browsers.
-  Prompt Copilot to use explicit commands and versions if available.
+**Backend (C#):**
+```bash
+cd Plugin
+dotnet build                           # Debug build
+dotnet build --configuration Release   # Release build
+dotnet test                            # Run tests
+```
+
+**Frontend (TypeScript/Svelte):**
+```bash
+pnpm dev                    # Dev server (http://localhost:5173)
+pnpm type-check             # TypeScript check
+pnpm lint                   # Lint all files
+pnpm format                 # Format with Prettier
+pnpm run build:all          # Build all packages
+```
+
+**Schema workflow (when modifying ui-schema.json):**
+```bash
+cd packages/schemas && pnpm run generate:all
+# Updates: packages/shared/src/lib/types/generated/schema.ts
+#          Plugin/Selva.Core/Models/UISchema.Generated.cs
+```
+
+**Production build:**
+```bash
+pnpm run build:plugin  # Builds plugin with embedded web assets
+```
+
+**Deployment:**
+```bash
+pm2 start ecosystem.config.cjs              # Start with PM2
+pm2 reload selva-compute --update-env       # Graceful reload (zero-downtime)
+```
 
 ## 4. Code Style and Conventions
 
@@ -46,19 +90,34 @@ When asked to help generate commit messages:
 - If relevant, reference issue number.
 - Use bullet points for multiple changes.
 
-## 7. Do Not
+## 7. Schema and Type Safety
+
+- **Single source of truth:** `packages/schemas/ui-schema.json` generates both C# and TypeScript
+- When adding new types or properties, always update the schema and run `generate:all`
+- Never manually edit generated files:
+  - `packages/shared/src/lib/types/generated/schema.ts`
+  - `Plugin/Selva.Core/Models/UISchema.Generated.cs`
+- Type mappings: string → string, number → double?, integer → int?, boolean → bool?, array → List<T>
+
+## 8. Do Not
 
 - Do not generate code that assumes unspecified new frameworks or tooling not in this repo.
-- Do not bypass documented build/test steps.
+- Do not bypass documented build/test steps or the schema generation workflow.
 - Do not assume configurations or conventions not defined in existing config files or docs.
+- Do not use npm; always use pnpm.
+- Do not manually edit generated schema files; regenerate from source.
+- Do not add npm packages without checking lock file updates.
 
-## 8. When Writing Tests or Validation Scripts
+## 9. When Writing Tests or Validation Scripts
 
-- Use existing test frameworks already in the repository.
+- Use existing test frameworks already in the repository (xUnit for C#, Vitest for TS).
 - Follow the project’s style for tests.
 - Provide clear descriptions and intent in test names.
+- Include both positive and edge-case scenarios.
 
-## 9. When Reviewing Code or Explaining Behavior
+## 10. When Reviewing Code or Explaining Behavior
 
 - Reference the tech stack and conventions above.
-- Provide actionable suggestions and code examples that integrate seamlessly.
+- Provide actionable suggestions with code examples that integrate seamlessly.
+- Explain architectural decisions (e.g., why types are generated vs manual).
+- Reference CLAUDE.md and README files for project context.
