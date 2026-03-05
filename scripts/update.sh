@@ -4,7 +4,7 @@
 # Selva Compute App - Update Script
 ################################################################################
 # Automates pulling latest changes and rebuilding the application.
-# Uses PM2 for zero-downtime updates when available.
+# Uses PM2 graceful reload for zero-downtime updates when available.
 #
 # Usage: bash update.sh [--no-restart] [--branch <branch>] [--no-pull] [--restart-only]
 #        bash update.sh --no-restart          # Skip PM2 restart
@@ -252,9 +252,9 @@ if [ "$NO_RESTART" = false ]; then
   print_header "Step 4: Restarting Application"
 
   if [ "$PM2_RUNNING" = true ]; then
-    print_step "Restarting with PM2..."
+    print_step "Gracefully reloading with PM2..."
     cd "$INSTALL_DIR"
-    pm2 start "$INSTALL_DIR/ecosystem.config.cjs" --only selva-compute --update-env
+    pm2 reload selva-compute --update-env
 
     # Wait for restart and check status via JSON to avoid awk parsing fragility
     sleep 3
@@ -279,8 +279,8 @@ if [ "$NO_RESTART" = false ]; then
   fi
 else
   print_warning "Application restart skipped (--no-restart flag set)"
-  print_step "Restart manually with:"
-  echo "pm2 restart selva-compute --update-env"
+  print_step "Reload manually with:"
+  echo "pm2 reload selva-compute --update-env"
 fi
 
 ################################################################################
