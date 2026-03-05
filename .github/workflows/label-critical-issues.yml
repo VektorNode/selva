@@ -1,0 +1,28 @@
+name: Label Critical Issues
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  label-critical:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Check if critical and add label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.issue.body;
+            const isCriticalFeature = body?.includes('### Priority\n\nCritical');
+            const isCriticalBug = body?.includes('### Severity\n\n- [x] Critical');
+
+            if (isCriticalFeature || isCriticalBug) {
+              github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['critical']
+              });
+            }
