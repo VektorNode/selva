@@ -7,10 +7,10 @@
 	import StateManager from './StateManager.svelte';
 	import TabLayout from './preview/TabLayout.svelte';
 	import CollapsedPanelStrip from './CollapsedPanelStrip.svelte';
+	import * as Resizable from '$lib/components/ui/resizable';
+	import { ScrollArea } from './ui/scroll-area';
 
 	// ── Constants ────────────────────────────────────────────────────────────────
-	const DEFAULT_WIDTH = 420;
-	const COLLAPSE_THRESHOLD = 300;
 	const COLLAPSED_WIDTH = 48;
 
 	// ── Props ────────────────────────────────────────────────────────────────────
@@ -60,95 +60,31 @@
 
 	// ── Responsive state ─────────────────────────────────────────────────────────
 	let isMobile = $state(false);
-	let isTablet = $state(false);
 	let drawerOpen = $state(false);
 
-	const restoreWidth = $derived(isTablet ? 280 : DEFAULT_WIDTH);
 	const activeLeftTabLabel = $derived(leftTabs[0]?.label ?? 'Parameters');
 
 	$effect(() => {
 		const mqMobile = window.matchMedia('(max-width: 639px)');
-		const mqTablet = window.matchMedia('(min-width: 640px) and (max-width: 1023px)');
-
 		function update() {
 			isMobile = mqMobile.matches;
-			isTablet = mqTablet.matches;
-			if (mqTablet.matches) {
-				leftWidth = 280;
-				rightWidth = 280;
-			} else if (!mqMobile.matches) {
-				leftWidth = DEFAULT_WIDTH;
-				rightWidth = DEFAULT_WIDTH;
-			}
 		}
-
 		update();
 		mqMobile.addEventListener('change', update);
-		mqTablet.addEventListener('change', update);
-		return () => {
-			mqMobile.removeEventListener('change', update);
-			mqTablet.removeEventListener('change', update);
-		};
+		return () => mqMobile.removeEventListener('change', update);
 	});
 
-	// ── Panel resize ─────────────────────────────────────────────────────────────
-	let leftWidth = $state(DEFAULT_WIDTH);
-	let rightWidth = $state(DEFAULT_WIDTH);
-	// Two-panel split ratio: left takes splitRatio of width, right takes (1 - splitRatio)
-	let splitRatio = $state(0.5);
-	let isDragging = $state(false);
+	// ── Panel collapse state ──────────────────────────────────────────────────────
+	let leftCollapsed = $state(false);
+	let rightCollapsed = $state(false);
+	let leftPaneRef = $state<{ expand: () => void } | null>(null);
+	let rightPaneRef = $state<{ expand: () => void } | null>(null);
 	let requestedLeftTabId = $state<string | null>(null);
 	let requestedRightTabId = $state<string | null>(null);
 
-	const leftCollapsed = $derived(leftWidth <= COLLAPSED_WIDTH);
-	const rightCollapsed = $derived(rightWidth <= COLLAPSED_WIDTH);
-
-	let _side: 'left' | 'right' | 'middle' | null = null;
-	let _startX = 0;
-	let _startW = 0;
-	let _startRatio = 0;
-	let _containerEl: HTMLElement | null = null;
-
-	function clampWidth(raw: number): number {
-		const max = window.innerWidth / 4;
-		return raw < COLLAPSE_THRESHOLD
-			? COLLAPSED_WIDTH
-			: Math.min(max, Math.max(COLLAPSE_THRESHOLD, raw));
-	}
-
-	function startDrag(side: 'left' | 'right' | 'middle', e: MouseEvent) {
-		_side = side;
-		_startX = e.clientX;
-		_startW = side === 'left' ? leftWidth : side === 'right' ? rightWidth : leftWidth;
-		_startRatio = splitRatio;
-		_containerEl = (e.currentTarget as HTMLElement).closest('[data-layout-root]') as HTMLElement;
-		isDragging = true;
-		window.addEventListener('mousemove', onDrag);
-		window.addEventListener('mouseup', stopDrag);
-		e.preventDefault();
-	}
-
-	function onDrag(e: MouseEvent) {
-		if (!_side) return;
-		const delta = e.clientX - _startX;
-
-		if (_side === 'middle') {
-			const containerW = _containerEl?.clientWidth ?? window.innerWidth;
-			splitRatio = Math.min(0.85, Math.max(0.15, _startRatio + delta / containerW));
-		} else {
-			const raw = _side === 'left' ? _startW + delta : _startW - delta;
-			if (_side === 'left') leftWidth = clampWidth(raw);
-			else rightWidth = clampWidth(raw);
-		}
-	}
-
-	function stopDrag() {
-		_side = null;
-		_containerEl = null;
-		isDragging = false;
-		window.removeEventListener('mousemove', onDrag);
-		window.removeEventListener('mouseup', stopDrag);
-	}
+	const layoutKey = $derived(
+		`${hasLeftPanel ? 'L' : ''}${hasViewer ? 'V' : ''}${hasRightPanel ? 'R' : ''}`
+	);
 
 	async function handleLoadValues(loadedValues: Record<string, unknown>) {
 		Object.assign(values, loadedValues);
@@ -173,19 +109,6 @@
 
 <!-- ── Snippets ───────────────────────────────────────────────────────────────── -->
 
-{#snippet dragHandle(side: 'left' | 'right' | 'middle', label: string)}
-	<div
-		class="sm:flex group hidden shrink-0 cursor-ew-resize items-center justify-center transition-colors hover:bg-primary/10 active:bg-primary/20"
-		style="width: 6px"
-		onmousedown={(e) => startDrag(side, e)}
-		role="button"
-		tabindex="0"
-		aria-label={label}
-	>
-		<div class="h-8 w-px rounded-full bg-border transition-colors group-hover:bg-primary/50"></div>
-	</div>
-{/snippet}
-
 {#snippet panelContent(
 	panelFilter: 'left' | 'right' | undefined,
 	requestedTabId: string | null,
@@ -206,13 +129,11 @@
 {/snippet}
 
 <!-- ── Root container ─────────────────────────────────────────────────────────── -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	data-layout-root
 	class="min-h-0 sm:flex-row flex flex-1 flex-col overflow-hidden"
 	class:fullscreen-layout={isViewerFullscreen}
 	class:relative={isMobile}
-	class:cursor-ew-resize={isDragging}
 >
 	{#if isMobile}
 		<!-- ═══ MOBILE LAYOUT ══════════════════════════════════════════════════════ -->
@@ -313,90 +234,107 @@
 	{:else}
 		<!-- ═══ DESKTOP LAYOUT ═════════════════════════════════════════════════════ -->
 
-		<!-- Left panel -->
-		{#if hasLeftPanel || !hasSidebar}
-			{#if leftCollapsed && hasSidebar}
-				<CollapsedPanelStrip
-					side="left"
-					tabs={leftTabs}
-					collapsedWidth={COLLAPSED_WIDTH}
-					onExpand={() => (leftWidth = restoreWidth)}
-					onTabClick={(id) => {
-						requestedLeftTabId = id;
-						leftWidth = restoreWidth;
-					}}
-				/>
-			{:else}
-				<div
-					class="px-3 min-h-0 overflow-y-auto"
-					class:hidden={isViewerFullscreen}
-					class:shrink-0={!isTwoPanelMode}
-					class:lg:mx-auto={!hasSidebar && !hasRightPanel}
-					class:lg:max-w-6xl={!hasSidebar && !hasRightPanel}
-					class:w-full={!hasSidebar && !hasRightPanel}
-					class:left-panel-scroll={hasSidebar || hasRightPanel || isTwoPanelMode}
-					style={isTwoPanelMode
-						? `flex: ${splitRatio} 1 0%; min-width: 0;`
-						: hasSidebar || hasRightPanel
-							? `width: ${leftWidth}px; max-width: 100%;`
-							: undefined}
-				>
-					<div class="left-panel-content">
-						{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId)}
-					</div>
+		{#if !hasSidebar && !hasRightPanel}
+			<!-- Single centered left panel, no resize needed -->
+			<ScrollArea class="px-3 h-full overflow-y-auto">
+				<div class="left-panel-content">
+					{@render panelContent(undefined, requestedLeftTabId)}
 				</div>
-			{/if}
+			</ScrollArea>
+		{:else}
+			<div class="min-h-0 flex flex-1">
+				<!-- Left collapsed strip (outside PaneGroup so it has fixed width) -->
+				{#if leftCollapsed && hasSidebar && hasLeftPanel}
+					<CollapsedPanelStrip
+						side="left"
+						tabs={leftTabs}
+						collapsedWidth={COLLAPSED_WIDTH}
+						onExpand={() => leftPaneRef?.expand()}
+						onTabClick={(id) => {
+							requestedLeftTabId = id;
+							leftPaneRef?.expand();
+						}}
+					/>
+				{/if}
 
-			{#if !isTwoPanelMode && hasSidebar && hasLeftPanel}
-				{@render dragHandle('left', 'Resize left panel')}
-			{/if}
-		{/if}
+				<Resizable.PaneGroup
+					direction="horizontal"
+					autoSaveId="selva-layout-{layoutKey}"
+					class="min-h-0 flex-1"
+				>
+					<!-- Left pane -->
+					{#if hasLeftPanel}
+						<Resizable.Pane
+							bind:this={leftPaneRef}
+							order={1}
+							defaultSize={isTwoPanelMode ? 50 : hasViewer && hasRightPanel ? 22 : 30}
+							minSize={15}
+							maxSize={45}
+							collapsible
+							collapsedSize={0}
+							onCollapse={() => (leftCollapsed = true)}
+							onExpand={() => (leftCollapsed = false)}
+						>
+							<ScrollArea
+								class="px-3 left-panel-scroll h-full overflow-y-auto {isViewerFullscreen ||
+								leftCollapsed
+									? 'hidden'
+									: ''}"
+							>
+								<div class="left-panel-content">
+									{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId)}
+								</div>
+							</ScrollArea>
+						</Resizable.Pane>
+						<Resizable.Handle class={leftCollapsed ? 'pointer-events-none hidden' : ''} />
+					{/if}
 
-		<!-- Viewer -->
-		{#if hasViewer}
-			<div
-				class="min-h-0 flex flex-1 flex-col"
-				class:pl-3={!hasLeftPanel && !leftCollapsed}
-				class:pr-3={!hasRightPanel}
-			>
-				<Viewer {schema} {meshes} bind:isFullscreen={isViewerFullscreen} {isSolving} />
+					<!-- Viewer pane -->
+					{#if hasViewer}
+						<Resizable.Pane order={2} minSize={20} class="min-h-0 flex flex-col">
+							<Viewer {schema} {meshes} bind:isFullscreen={isViewerFullscreen} {isSolving} />
+						</Resizable.Pane>
+					{/if}
+
+					<!-- Right pane -->
+					{#if hasRightPanel}
+						<Resizable.Handle class={rightCollapsed ? 'pointer-events-none hidden' : ''} />
+						<Resizable.Pane
+							bind:this={rightPaneRef}
+							order={3}
+							defaultSize={isTwoPanelMode ? 50 : 25}
+							minSize={15}
+							maxSize={45}
+							collapsible
+							collapsedSize={0}
+							onCollapse={() => (rightCollapsed = true)}
+							onExpand={() => (rightCollapsed = false)}
+						>
+							<ScrollArea
+								class="px-3 h-full overflow-y-auto {isViewerFullscreen || rightCollapsed
+									? 'hidden'
+									: ''}"
+							>
+								{@render panelContent('right', requestedRightTabId, !hasLeftPanel, !hasLeftPanel)}
+							</ScrollArea>
+						</Resizable.Pane>
+					{/if}
+				</Resizable.PaneGroup>
+
+				<!-- Right collapsed strip -->
+				{#if rightCollapsed && hasRightPanel}
+					<CollapsedPanelStrip
+						side="right"
+						tabs={rightTabs}
+						collapsedWidth={COLLAPSED_WIDTH}
+						onExpand={() => rightPaneRef?.expand()}
+						onTabClick={(id) => {
+							requestedRightTabId = id;
+							rightPaneRef?.expand();
+						}}
+					/>
+				{/if}
 			</div>
-		{/if}
-
-		<!-- Two-panel drag handle: sits between left and right flex panels -->
-		{#if isTwoPanelMode}
-			{@render dragHandle('middle', 'Resize panels')}
-		{/if}
-
-		<!-- Right panel -->
-		{#if hasRightPanel}
-			{#if hasViewer || hasLeftPanel}
-				{@render dragHandle('right', 'Resize right panel')}
-			{/if}
-
-			{#if rightCollapsed}
-				<CollapsedPanelStrip
-					side="right"
-					tabs={rightTabs}
-					collapsedWidth={COLLAPSED_WIDTH}
-					onExpand={() => (rightWidth = restoreWidth)}
-					onTabClick={(id) => {
-						requestedRightTabId = id;
-						rightWidth = restoreWidth;
-					}}
-				/>
-			{:else}
-				<div
-					class="px-3 min-h-0 overflow-y-auto"
-					class:hidden={isViewerFullscreen}
-					class:shrink-0={!isTwoPanelMode}
-					style={isTwoPanelMode
-						? `flex: ${1 - splitRatio} 1 0%; min-width: 0;`
-						: `width: ${rightWidth}px; max-width: 100%;`}
-				>
-					{@render panelContent('right', requestedRightTabId, !hasLeftPanel, !hasLeftPanel)}
-				</div>
-			{/if}
 		{/if}
 	{/if}
 </div>
@@ -475,13 +413,5 @@
 		flex-shrink: 0;
 		padding: 0rem 1rem;
 		border-top: 1px solid var(--border);
-	}
-
-	.left-panel-scroll {
-		direction: rtl;
-	}
-
-	.left-panel-content {
-		direction: ltr;
 	}
 </style>

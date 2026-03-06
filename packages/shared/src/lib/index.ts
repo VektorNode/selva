@@ -11,7 +11,6 @@ export { default as ErrorScreen } from './components/ErrorScreen.svelte';
 export { default as TabLayout } from './components/preview/TabLayout.svelte';
 export { default as InputControl } from './components/preview/InputControl.svelte';
 export { default as OutputDisplay } from './components/preview/OutputDisplay.svelte';
-export { default as FileDownloadWidget } from './components/preview/FileDownloadWidget.svelte';
 
 // UI components
 export * from './components/ui';
