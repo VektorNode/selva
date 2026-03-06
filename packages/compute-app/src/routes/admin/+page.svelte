@@ -212,8 +212,8 @@
 				await waitForAppRestart();
 			}
 		} catch (err) {
-			if (updateRestarting) {
-				// Expected — the server killed itself during restart
+			if (updateRunning) {
+				// Stream died while still running — expected when pm2 restart kills all workers at once
 				await waitForAppRestart();
 			} else {
 				updateLogs += '\nError: ' + (err instanceof Error ? err.message : 'Unknown error');
