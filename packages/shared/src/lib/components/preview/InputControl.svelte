@@ -98,6 +98,14 @@
 		commitSliderDebounced(newValue);
 	}
 
+	let sliderEditing = $state(false);
+	let sliderInputValue = $state('');
+
+	function focusSliderInput(node: HTMLInputElement) {
+		node.focus();
+		node.select();
+	}
+
 	function decimalPlaces(step: number): number {
 		return Math.max(0, -Math.floor(Math.log10(step)));
 	}
@@ -129,6 +137,7 @@
 		{@const numValue = typeof value === 'number' ? value : min}
 
 		{#if config.renderAsSlider}
+			{@const dp = decimalPlaces(step)}
 			<div class="gap-4 flex items-center">
 				<Slider
 					type="single"
@@ -140,9 +149,48 @@
 					onValueChange={handleSliderChange}
 					{disabled}
 				/>
-				<span class="min-w-12 text-sm text-right text-muted-foreground">
-					{numValue.toFixed(decimalPlaces(step))}
-				</span>
+				{#if sliderEditing}
+					<input
+						use:focusSliderInput
+						type="number"
+						{step}
+						class="min-w-12 w-16 text-sm border-b border-border bg-transparent text-right outline-none focus:border-foreground"
+						bind:value={sliderInputValue}
+						onblur={() => {
+							const parsed = parseFloat(sliderInputValue);
+							if (!isNaN(parsed)) handleSliderChange(Math.min(max, Math.max(min, parsed)));
+							sliderEditing = false;
+						}}
+						onkeydown={(e) => {
+							if (e.key === 'Enter') {
+								const parsed = parseFloat(sliderInputValue);
+								if (!isNaN(parsed)) handleSliderChange(Math.min(max, Math.max(min, parsed)));
+								sliderEditing = false;
+							} else if (e.key === 'Escape') {
+								sliderEditing = false;
+							}
+						}}
+					/>
+				{:else}
+					<span
+						role="button"
+						tabindex="0"
+						class="min-w-12 text-sm cursor-text text-right text-muted-foreground select-none"
+						title="Double-click to edit"
+						ondblclick={() => {
+							sliderInputValue = numValue.toFixed(dp);
+							sliderEditing = true;
+						}}
+						onkeydown={(e) => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								sliderInputValue = numValue.toFixed(dp);
+								sliderEditing = true;
+							}
+						}}
+					>
+						{numValue.toFixed(dp)}
+					</span>
+				{/if}
 			</div>
 		{:else}
 			<Input
