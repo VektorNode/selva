@@ -31,13 +31,13 @@ export const POST: RequestHandler = async () => {
 					env: { PATH: process.env.PATH, HOME: process.env.HOME }
 				});
 
-				// Kill the process if it runs longer than 5 minutes
+				// Kill the process if it runs longer than 15 minutes
 				const timeout = setTimeout(() => {
 					child.kill('SIGTERM');
-					sendEvent('log', { data: '[FATAL] Update timed out after 5 minutes' });
+					sendEvent('log', { data: '[FATAL] Update timed out after 15 minutes' });
 					sendEvent('exit', { code: -1 });
 					controller.close();
-				}, 5 * 60 * 1000);
+				}, 15 * 60 * 1000);
 
 				// Stream stdout
 				let restarting = false;
