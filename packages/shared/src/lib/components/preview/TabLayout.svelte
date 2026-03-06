@@ -166,7 +166,7 @@
 			{@const input = getInputById(layoutItem.paramId)}
 			{#if input}
 				<div
-					class="min-w-0 overflow-hidden"
+					class="min-w-0 flex items-center"
 					class:opacity-50={visibility.disabled}
 					style="grid-column: span {span} / span {span}"
 				>
@@ -183,7 +183,7 @@
 		{:else if layoutItem.type === 'output'}
 			{@const output = getOutputById(layoutItem.paramId)}
 			{#if output}
-				<div class="min-w-0 overflow-hidden" style="grid-column: span {span} / span {span}">
+				<div class="min-w-0" style="grid-column: span {span} / span {span}">
 					<OutputDisplay
 						item={layoutItem}
 						value={values[layoutItem.paramId]}
@@ -195,7 +195,7 @@
 	{/if}
 {/snippet}
 
-<Card.Root class="pt-1 overflow-hidden">
+<Card.Root class="pt-1 overflow-hidden ">
 	<Tabs.Root bind:value={activeTabId} class="gap-0">
 		{#if showTabBar}
 			<ScrollArea class="w-full border-b border-border" orientation="horizontal">
@@ -254,10 +254,7 @@
 									<div class="content-wrapper" class:collapsed={collapsedGroups[group.id]}>
 										<div class="content-inner">
 											<Card.Content class="p-6">
-												<div
-													class="schema-grid gap-6 grid overflow-x-auto"
-													style="--schema-cols: {group.columns};"
-												>
+												<div class="schema-grid gap-6 grid" style="--schema-cols: {group.columns};">
 													{#each group.items as layoutItem (layoutItem.paramId)}
 														{@render gridItem(layoutItem, group.columns ?? 1)}
 													{/each}
@@ -291,7 +288,6 @@
 	}
 
 	.content-inner {
-		overflow: hidden;
 		min-height: 0;
 	}
 
