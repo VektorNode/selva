@@ -20,10 +20,10 @@ module.exports = {
 				GH_DEFINITIONS_PATH: '/absolute/path/to/definitions',
 				COMPUTE_API_KEY: 'your-api-key',
 				NODE_ENV: 'production',
-			ADMIN_PASSWORD: 'your-secure-password',
-			// Used to sign admin session cookies — must be stable across restarts.
-			// Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-			SESSION_SECRET: 'your-random-32-byte-hex-secret'
+				ADMIN_PASSWORD: 'your-secure-password',
+				// Used to sign admin session cookies — must be stable across restarts.
+				// Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+				SESSION_SECRET: 'your-random-32-byte-hex-secret'
 			}
 		}
 	]
