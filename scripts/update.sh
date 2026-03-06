@@ -252,9 +252,11 @@ if [ "$NO_RESTART" = false ]; then
   print_header "Step 4: Restarting Application"
 
   if [ "$PM2_RUNNING" = true ]; then
-    print_step "Gracefully reloading with PM2..."
+    print_step "Restarting with PM2..."
     cd "$INSTALL_DIR"
-    pm2 reload selva-compute --update-env
+    # Use restart (not reload) — graceful rolling reload causes ERR_MODULE_NOT_FOUND
+    # because old workers try to lazy-import chunks that the new build replaced.
+    pm2 restart selva-compute --update-env
 
     # Wait for restart and check status via JSON to avoid awk parsing fragility
     sleep 3
