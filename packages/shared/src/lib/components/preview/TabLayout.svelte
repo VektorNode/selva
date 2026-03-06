@@ -213,7 +213,7 @@
 	{/if}
 {/snippet}
 
-<Card.Root class="pt-1 overflow-hidden ">
+<Card.Root class="pt-1  overflow-hidden ">
 	{#if showTabBar}
 		{@render tabBar()}
 	{/if}
