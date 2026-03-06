@@ -1,24 +1,41 @@
-import { randomBytes, timingSafeEqual } from 'crypto';
+import { timingSafeEqual, createHmac } from 'crypto';
 import type { Cookies } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 
 const SESSION_COOKIE_NAME = 'admin_session';
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
 
-// ── Server-side session store ────────────────────────────────────────────────
-// Maps token → expiry timestamp (ms). Only tokens present here are valid.
-// When adding OAuth (Google, etc.): the OAuth callback just calls createSession()
-// after verifying the provider token. verifySession/destroySession/hooks.server.ts
-// remain unchanged.
-const sessionStore = new Map<string, number>();
+// ── HMAC-signed stateless sessions ───────────────────────────────────────────
+// Sessions are self-verifying: token = base64(expiry) + '.' + hmac(base64(expiry))
+// This survives PM2 restarts and cluster worker recycling because there is no
+// in-memory store that gets wiped. The SESSION_SECRET must be stable across restarts
+// (set it in your ecosystem.config.cjs / .env).
+function getSecret(): string {
+	const secret = env.SESSION_SECRET || env.ADMIN_PASSWORD;
+	if (!secret) throw new Error('SESSION_SECRET or ADMIN_PASSWORD must be set');
+	return secret;
+}
 
-// Periodically clean up expired sessions
-setInterval(() => {
-	const now = Date.now();
-	for (const [token, expiresAt] of sessionStore) {
-		if (now > expiresAt) sessionStore.delete(token);
-	}
-}, 60_000).unref(); // unref so this doesn't prevent process exit
+function signToken(expiry: number): string {
+	const payload = Buffer.from(String(expiry)).toString('base64url');
+	const sig = createHmac('sha256', getSecret()).update(payload).digest('base64url');
+	return `${payload}.${sig}`;
+}
+
+function verifyToken(token: string): boolean {
+	const dot = token.lastIndexOf('.');
+	if (dot === -1) return false;
+	const payload = token.slice(0, dot);
+	const sig = token.slice(dot + 1);
+	const expectedSig = createHmac('sha256', getSecret()).update(payload).digest('base64url');
+	// Timing-safe comparison
+	const a = Buffer.from(sig);
+	const b = Buffer.from(expectedSig);
+	if (a.length !== b.length) return false;
+	if (!timingSafeEqual(a, b)) return false;
+	const expiry = parseInt(Buffer.from(payload, 'base64url').toString(), 10);
+	return Date.now() < expiry;
+}
 
 // ── Rate limiter ─────────────────────────────────────────────────────────────
 const RATE_LIMIT_MAX = 5;
@@ -67,23 +84,16 @@ export function clearRateLimit(ip: string): void {
 export function verifySession(cookies: Cookies): boolean {
 	const token = cookies.get(SESSION_COOKIE_NAME);
 	if (!token) return false;
-
-	const expiresAt = sessionStore.get(token);
-	if (expiresAt === undefined) return false;
-
-	if (Date.now() > expiresAt) {
-		sessionStore.delete(token);
+	try {
+		return verifyToken(token);
+	} catch {
 		return false;
 	}
-
-	return true;
 }
 
 export function createSession(cookies: Cookies): void {
-	const token = randomBytes(32).toString('hex');
-	const expiresAt = Date.now() + SESSION_MAX_AGE_MS;
-
-	sessionStore.set(token, expiresAt);
+	const expiry = Date.now() + SESSION_MAX_AGE_MS;
+	const token = signToken(expiry);
 
 	const isSecure =
 		process.env.NODE_ENV === 'production' && process.env.ALLOW_INSECURE_COOKIES !== 'true';
@@ -98,8 +108,6 @@ export function createSession(cookies: Cookies): void {
 }
 
 export function destroySession(cookies: Cookies): void {
-	const token = cookies.get(SESSION_COOKIE_NAME);
-	if (token) sessionStore.delete(token);
 	cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
 }
 
