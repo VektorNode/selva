@@ -3,11 +3,15 @@
 	import AppLayout from '$lib/components/AppLayout.svelte';
 	import { initializeValues } from '$lib/features/preview/handlers';
 	import exampleSchema from '$lib/example-schema.json';
+	import exampleSchemaLeftOnly from '$lib/example-schema-left-only.json';
+	import exampleSchemaRightOnly from '$lib/example-schema-right-only.json';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import PageContainer from '$lib/components/layout/PageContainer.svelte';
 	import * as THREE from 'three';
 
-	const schema = exampleSchema as UISchema;
+	let schema = exampleSchema as UISchema;
+	const schemaLeft = exampleSchemaLeftOnly as UISchema;
+	const schemaRight = exampleSchemaRightOnly as UISchema;
 
 	const dummyErrors = [
 		'Error: Something went wrong with the calculation. Please check your input values and try again.',

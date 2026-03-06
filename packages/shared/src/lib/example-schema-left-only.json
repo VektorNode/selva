@@ -1,0 +1,367 @@
+{
+	"id": "left-only-schema-001",
+	"name": "Left Panel Only",
+	"description": "Test schema with all tabs positioned on the left panel",
+	"projectFileName": "left_only_test.gh",
+	"documentId": "b1c2d3e4-f5a6-7b8c-9d0e-f1a2b3c4d5e6",
+	"pluginVersion": "0.7.0.0",
+	"tags": ["test", "left-only"],
+	"category": "Testing",
+	"author": "Test Suite",
+	"organization": "Selva",
+	"schemaVersion": "2.1.0",
+	"minPluginVersion": "0.5.0.0",
+	"created": "2026-03-06T10:00:00.0000000Z",
+	"lastModified": "2026-03-06T10:00:00.0000000Z",
+	"viewerOptions": {
+		"enableLocal": true,
+		"enableRemote": true,
+		"backgroundColor": "#f5f5f5"
+	},
+	"instanceSolve": false,
+	"inputs": [
+		{
+			"id": "input-001",
+			"nickname": "Width",
+			"paramType": "number",
+			"description": "Width parameter"
+		},
+		{
+			"id": "input-002",
+			"nickname": "Height",
+			"paramType": "number",
+			"description": "Height parameter"
+		},
+		{
+			"id": "input-003",
+			"nickname": "Depth",
+			"paramType": "number",
+			"description": "Depth parameter"
+		},
+		{
+			"id": "input-004",
+			"nickname": "Project Name",
+			"paramType": "text",
+			"description": "Name of the project"
+		},
+		{
+			"id": "input-005",
+			"nickname": "Notes",
+			"paramType": "text",
+			"description": "Additional notes"
+		},
+		{
+			"id": "input-006",
+			"nickname": "Material",
+			"paramType": "generic",
+			"description": "Material selection"
+		},
+		{
+			"id": "input-007",
+			"nickname": "Enable Mirror",
+			"paramType": "boolean",
+			"description": "Toggle mirror mode"
+		},
+		{
+			"id": "input-008",
+			"nickname": "Mirror Axis",
+			"paramType": "generic",
+			"description": "Axis for mirroring"
+		},
+		{
+			"id": "input-009",
+			"nickname": "Quality",
+			"paramType": "integer",
+			"description": "Quality level"
+		},
+		{
+			"id": "input-010",
+			"nickname": "Rotation",
+			"paramType": "number",
+			"description": "Rotation angle"
+		}
+	],
+	"outputs": [
+		{
+			"id": "output-001",
+			"nickname": "Status",
+			"description": "Processing status",
+			"type": "text"
+		},
+		{
+			"id": "output-002",
+			"nickname": "Volume",
+			"description": "Calculated volume",
+			"type": "number"
+		}
+	],
+	"layout": {
+		"type": "tabbed",
+		"gap": 16,
+		"tabs": [
+			{
+				"id": "tab-geometry",
+				"label": "Geometry",
+				"icon": "solar:box-bold",
+				"order": 0,
+				"position": "left",
+				"groups": [
+					{
+						"id": "group-dimensions",
+						"label": "Dimensions",
+						"description": "Basic geometry dimensions",
+						"order": 0,
+						"collapsed": false,
+						"columns": 1,
+						"items": [
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-001",
+								"paramId": "input-001",
+								"displayName": "Width",
+								"description": "Object width",
+								"order": 0,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"minimum": 0.1,
+									"maximum": 100.0,
+									"stepSize": 0.5,
+									"renderAsSlider": true
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-002",
+								"paramId": "input-002",
+								"displayName": "Height",
+								"description": "Object height",
+								"order": 1,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"minimum": 0.1,
+									"maximum": 100.0,
+									"stepSize": 0.5,
+									"renderAsSlider": true
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-003",
+								"paramId": "input-003",
+								"displayName": "Depth",
+								"description": "Object depth",
+								"order": 2,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"minimum": 0.1,
+									"maximum": 100.0,
+									"stepSize": 0.5,
+									"renderAsSlider": true
+								}
+							}
+						]
+					},
+					{
+						"id": "group-transform",
+						"label": "Transform",
+						"description": "Transformation options",
+						"order": 1,
+						"collapsed": false,
+						"columns": 2,
+						"items": [
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-010",
+								"paramId": "input-010",
+								"displayName": "Rotation",
+								"description": "Rotation in degrees",
+								"order": 0,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"minimum": 0.0,
+									"maximum": 360.0,
+									"stepSize": 5.0,
+									"renderAsSlider": true
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"id": "item-009",
+								"paramId": "input-009",
+								"displayName": "Quality",
+								"description": "Mesh quality 1-10",
+								"order": 1,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"minimum": 1.0,
+									"maximum": 10.0,
+									"stepSize": 1.0,
+									"renderAsSlider": true
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "checkbox",
+								"id": "item-007",
+								"paramId": "input-007",
+								"displayName": "Enable Mirror",
+								"description": "Toggle mirroring",
+								"order": 2,
+								"span": 1,
+								"visible": true
+							},
+							{
+								"type": "input",
+								"widgetType": "dropdown",
+								"id": "item-008",
+								"paramId": "input-008",
+								"displayName": "Mirror Axis",
+								"description": "Shown when mirror enabled",
+								"order": 3,
+								"span": 1,
+								"visible": true,
+								"visibilityCondition": {
+									"mode": "all",
+									"rules": [
+										{
+											"paramId": "input-007",
+											"operator": "equals",
+											"value": true
+										}
+									],
+									"action": "show"
+								},
+								"config": {
+									"options": {
+										"x": "X Axis",
+										"y": "Y Axis",
+										"z": "Z Axis"
+									}
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"id": "tab-settings",
+				"label": "Settings",
+				"icon": "solar:settings-bold",
+				"order": 1,
+				"position": "left",
+				"groups": [
+					{
+						"id": "group-project",
+						"label": "Project Info",
+						"description": "Project metadata",
+						"order": 0,
+						"collapsed": false,
+						"columns": 1,
+						"items": [
+							{
+								"type": "input",
+								"widgetType": "text",
+								"id": "item-004",
+								"paramId": "input-004",
+								"displayName": "Project Name",
+								"description": "Name of the project",
+								"order": 0,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"placeholder": "Enter project name",
+									"required": true,
+									"maxLength": 100
+								}
+							},
+							{
+								"type": "input",
+								"widgetType": "text",
+								"id": "item-005",
+								"paramId": "input-005",
+								"displayName": "Notes",
+								"description": "Additional notes",
+								"order": 1,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"placeholder": "Optional notes",
+									"maxLength": 500
+								}
+							}
+						]
+					},
+					{
+						"id": "group-material",
+						"label": "Material",
+						"description": "Material selection",
+						"order": 1,
+						"collapsed": false,
+						"columns": 1,
+						"items": [
+							{
+								"type": "input",
+								"widgetType": "dropdown",
+								"id": "item-006",
+								"paramId": "input-006",
+								"displayName": "Material",
+								"description": "Choose material",
+								"order": 0,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"options": {
+										"wood": "Wood",
+										"steel": "Steel",
+										"concrete": "Concrete",
+										"glass": "Glass"
+									}
+								}
+							}
+						]
+					},
+					{
+						"id": "group-outputs",
+						"label": "Results",
+						"description": "Output values",
+						"order": 2,
+						"collapsed": false,
+						"columns": 1,
+						"items": [
+							{
+								"type": "output",
+								"widgetType": "text",
+								"id": "item-out-001",
+								"paramId": "output-001",
+								"displayName": "Status",
+								"order": 0,
+								"span": 1,
+								"visible": true
+							},
+							{
+								"type": "output",
+								"widgetType": "number",
+								"id": "item-out-002",
+								"paramId": "output-002",
+								"displayName": "Volume",
+								"order": 1,
+								"span": 1,
+								"visible": true
+							}
+						]
+					}
+				]
+			}
+		]
+	}
+}
