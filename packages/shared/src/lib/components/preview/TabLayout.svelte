@@ -6,8 +6,8 @@
 		SupportedTypes
 	} from '$lib/types/generated';
 	import * as Card from '$lib/components/ui/card';
-	import * as ButtonGroup from '$lib/components/ui/button-group';
-	import { Button } from '$lib/components/ui/button';
+	import * as Tabs from '$lib/components/ui/tabs';
+	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { ChevronDown } from '@lucide/svelte';
 	import StateDisplay from '../ui/StateDisplay.svelte';
 	import InputControl from './InputControl.svelte';
@@ -34,7 +34,7 @@
 		requestedTabId = null
 	}: Props = $props();
 
-	let activeTabId: string | null = $state(null);
+	let activeTabId = $state('');
 	let collapsedGroups = $state<Record<string, boolean>>({});
 
 	const visibleTabs = $derived(
@@ -47,7 +47,6 @@
 	);
 
 	const showTabBar = $derived(visibleTabs.length > 1);
-	const activeTab = $derived(visibleTabs.find((t) => t.id === activeTabId));
 
 	$effect(() => {
 		if (requestedTabId && visibleTabs.some((t) => t.id === requestedTabId)) {
@@ -89,6 +88,13 @@
 
 	function toggleGroup(groupId: string) {
 		collapsedGroups[groupId] = !collapsedGroups[groupId];
+	}
+
+	function handleGroupKeydown(e: KeyboardEvent, groupId: string) {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			toggleGroup(groupId);
+		}
 	}
 
 	function getInputById(paramId: string): SchemaInput | undefined {
@@ -152,30 +158,6 @@
 	}
 </script>
 
-{#snippet tabBar()}
-	<div class="px-2 py-2 flex shrink-0 overflow-x-auto border-b border-border">
-		<ButtonGroup.Root>
-			{#each visibleTabs as tab (tab.id)}
-				<Button
-					variant={activeTabId === tab.id ? 'default' : 'ghost'}
-					size="sm"
-					class="not-last:border-r not-last:border-border"
-					onclick={() => (activeTabId = tab.id)}
-				>
-					{#if tab.icon}
-						{#if tab.icon.includes(':')}
-							<Icon icon={tab.icon} class="h-4 w-4" />
-						{:else}
-							<span>{tab.icon}</span>
-						{/if}
-					{/if}
-					{tab.label}
-				</Button>
-			{/each}
-		</ButtonGroup.Root>
-	</div>
-{/snippet}
-
 {#snippet gridItem(layoutItem: any, columns: number)}
 	{@const visibility = evaluateVisibility(layoutItem)}
 	{@const span = Math.min(Math.max(1, layoutItem.span ?? 1), columns)}
@@ -213,75 +195,104 @@
 	{/if}
 {/snippet}
 
-<Card.Root class="pt-1  overflow-hidden ">
-	{#if showTabBar}
-		{@render tabBar()}
-	{/if}
-
-	{#if activeTab}
-		<Card.Content class="min-h-0 p-4 animate-[fadeIn_0.3s] overflow-y-auto">
-			{#if activeTab.groups.length === 0}
-				<StateDisplay type="empty" size="medium" message="This tab has no groups configured." />
-			{:else}
-				<div class="gap-8 flex flex-col">
-					{#each activeTab.groups as group (group.id)}
-						{#if evaluateGroupVisibility(group)}
-							<Card.Root class="gap-0 py-0  overflow-hidden">
-								<Card.Header
-									class="mt-4 pb-4! cursor-pointer border-b border-border select-none"
-									role="button"
-									onclick={() => toggleGroup(group.id)}
-									onkeydown={(e) => e.key === 'Enter' && toggleGroup(group.id)}
-								>
-									<Card.Title>{group.label}</Card.Title>
-									{#if group.description}
-										<Card.Description class="">{group.description}</Card.Description>
-									{/if}
-									<Card.Action>
-										<ChevronDown
-											class="h-4 w-4 text-muted-foreground transition-transform duration-200 {collapsedGroups[
-												group.id
-											]
-												? ''
-												: 'rotate-180'}"
-										/>
-									</Card.Action>
-								</Card.Header>
-								{#if !collapsedGroups[group.id]}
-									<Card.Content class="p-6">
-										<div
-											class="schema-grid gap-6 grid animate-[fadeIn_0.2s] overflow-x-auto"
-											style="--schema-cols: {group.columns};"
-										>
-											{#each group.items as layoutItem (layoutItem.paramId)}
-												{@render gridItem(layoutItem, group.columns ?? 1)}
-											{/each}
-										</div>
-									</Card.Content>
+<Card.Root class="pt-1 overflow-hidden">
+	<Tabs.Root bind:value={activeTabId} class="gap-0">
+		{#if showTabBar}
+			<ScrollArea class="w-full border-b border-border" orientation="horizontal">
+				<Tabs.List
+					class="px-2 py-2 gap-0 inline-flex h-auto w-max justify-start rounded-none bg-transparent"
+				>
+					{#each visibleTabs as tab (tab.id)}
+						<Tabs.Trigger
+							value={tab.id}
+							class="group/tab gap-1.5 px-3 py-1 text-sm font-medium relative h-auto flex-none shrink-0 rounded-none border-0 transition-colors not-last:border-r not-last:border-border hover:bg-accent data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-transparent"
+						>
+							{#if tab.icon}
+								{#if tab.icon.includes(':')}
+									<Icon icon={tab.icon} class="h-4 w-4" />
+								{:else}
+									<span>{tab.icon}</span>
 								{/if}
-							</Card.Root>
-						{/if}
+							{/if}
+							{tab.label}
+						</Tabs.Trigger>
 					{/each}
-				</div>
-			{/if}
-		</Card.Content>
-	{/if}
+				</Tabs.List>
+			</ScrollArea>
+		{/if}
+		{#each visibleTabs as tab (tab.id)}
+			<Tabs.Content value={tab.id} class="min-h-0 p-4">
+				{#if tab.groups.length === 0}
+					<StateDisplay type="empty" size="medium" message="This tab has no groups configured." />
+				{:else}
+					<div class="gap-8 flex flex-col">
+						{#each tab.groups as group (group.id)}
+							{#if evaluateGroupVisibility(group)}
+								<Card.Root class="gap-0 py-0 pt-0 overflow-hidden">
+									<Card.Header
+										class="pt-4 pb-4! cursor-pointer border-b border-border bg-muted transition-colors select-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+										role="button"
+										tabindex="0"
+										aria-expanded={!collapsedGroups[group.id]}
+										onclick={() => toggleGroup(group.id)}
+										onkeydown={(e) => handleGroupKeydown(e, group.id)}
+									>
+										<Card.Title>{group.label}</Card.Title>
+										{#if group.description}
+											<Card.Description>{group.description}</Card.Description>
+										{/if}
+										<Card.Action>
+											<ChevronDown
+												class="h-4 w-4 text-muted-foreground transition-transform duration-200 {collapsedGroups[
+													group.id
+												]
+													? ''
+													: 'rotate-180'}"
+											/>
+										</Card.Action>
+									</Card.Header>
+									<div class="content-wrapper" class:collapsed={collapsedGroups[group.id]}>
+										<div class="content-inner">
+											<Card.Content class="p-6">
+												<div
+													class="schema-grid gap-6 grid overflow-x-auto"
+													style="--schema-cols: {group.columns};"
+												>
+													{#each group.items as layoutItem (layoutItem.paramId)}
+														{@render gridItem(layoutItem, group.columns ?? 1)}
+													{/each}
+												</div>
+											</Card.Content>
+										</div>
+									</div>
+								</Card.Root>
+							{/if}
+						{/each}
+					</div>
+				{/if}
+			</Tabs.Content>
+		{/each}
+	</Tabs.Root>
 </Card.Root>
 
 <style>
-	@keyframes fadeIn {
-		from {
-			opacity: 0;
-			transform: translateY(-10px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-
 	.schema-grid {
 		grid-template-columns: repeat(var(--schema-cols), minmax(0, 1fr));
+	}
+
+	.content-wrapper {
+		display: grid;
+		grid-template-rows: 1fr;
+		transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+
+	.content-wrapper.collapsed {
+		grid-template-rows: 0fr;
+	}
+
+	.content-inner {
+		overflow: hidden;
+		min-height: 0;
 	}
 
 	@media (max-width: 639px) {

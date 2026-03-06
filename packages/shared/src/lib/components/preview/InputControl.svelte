@@ -18,7 +18,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Slider } from '$lib/components/ui/slider';
 	import { Checkbox } from '$lib/components/ui/checkbox';
-	import { Label } from '$lib/components/ui/label';
+	import * as Field from '$lib/components/ui/field';
 	import * as Select from '$lib/components/ui/select';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { HelpCircle } from '@lucide/svelte';
@@ -26,250 +26,201 @@
 
 	interface Props {
 		item: InputLayoutItem;
-		value?: unknown;
+		value?: SupportedTypes;
 		displayName?: string;
 		onChange: (paramId: string, value: SupportedTypes) => void;
-		environment?: 'local' | 'compute';
 		disabled?: boolean;
 	}
 
 	let {
 		item,
-		value = $bindable(),
+		value = $bindable(undefined),
 		displayName,
 		onChange,
-		environment: _environment = undefined,
 		disabled = false
 	}: Props = $props();
 
-	const inputId = $derived(`input-${item.paramId}-${Math.random().toString(36).substring(2, 11)}`);
+	// Stable ID — not reactive, computed once at component creation
+	const inputId = `input-${item.paramId}`;
+	const label = $derived(displayName || item.displayName || item.paramId);
 
 	let validationError = $state<string | null>(null);
 
-	function handleChange(newValue: SupportedTypes) {
+	// Immediately commits a value (used on blur / checkbox / dropdown)
+	function commit(newValue: SupportedTypes) {
 		value = newValue;
 		onChange(item.paramId, newValue);
 	}
 
-	function validateNumberInput(value: number, config: NumberWidgetConfig): string | null {
-		// Range validation
-		if (config.minimum !== undefined && value < config.minimum) {
-			return `Minimum value is ${config.minimum}`;
-		}
-		if (config.maximum !== undefined && value > config.maximum) {
-			return `Maximum value is ${config.maximum}`;
-		}
+	// Debounced variants — used during active typing/dragging
+	const commitDebounced = debounce(
+		(newValue: SupportedTypes) => onChange(item.paramId, newValue),
+		400
+	);
+	const commitSliderDebounced = debounce(
+		(newValue: SupportedTypes) => onChange(item.paramId, newValue),
+		150
+	);
 
+	function validateNumber(val: number, config: NumberWidgetConfig): string | null {
+		if (config.minimum !== undefined && val < config.minimum)
+			return `Minimum value is ${config.minimum}`;
+		if (config.maximum !== undefined && val > config.maximum)
+			return `Maximum value is ${config.maximum}`;
 		return null;
 	}
 
-	function validateTextInput(value: string, config: TextWidgetConfig): string | null {
-		// Max length validation
-		if (config.maxLength && value.length > config.maxLength) {
+	function validateText(val: string, config: TextWidgetConfig): string | null {
+		if (config.maxLength && val.length > config.maxLength)
 			return `Maximum ${config.maxLength} characters allowed`;
-		}
-
-		// Pattern validation
 		if (config.pattern) {
 			try {
-				const regex = new RegExp(config.pattern);
-				if (!regex.test(value)) {
+				if (!new RegExp(config.pattern).test(val))
 					return config.customErrorMessage || 'Invalid format';
-				}
 			} catch {
-				console.error('Invalid regex pattern:', config.pattern);
 				return 'Invalid validation pattern configured';
 			}
 		}
-
 		return null;
 	}
 
-	// Debounced change for number inputs - waits for user to stop typing
-	// 400ms delay: user types "1000", we wait 400ms after last keystroke before sending
-	const debouncedOnChange = debounce((paramId: string, newValue: SupportedTypes) => {
-		onChange(paramId, newValue);
-	}, 400);
-
-	// Slider uses debounce: waits for user to pause/stop dragging before sending
-	// This prevents overwhelming the server during rapid slider movement
-	// 150ms = responsive enough to feel immediate, but batches rapid changes
-	const debouncedSliderChange = debounce((paramId: string, newValue: SupportedTypes) => {
-		onChange(paramId, newValue);
-	}, 150);
-
-	function handleNumberInputChange(newValue: number, config: NumberWidgetConfig) {
-		value = newValue;
-		const error = validateNumberInput(newValue, config);
+	function handleNumberInput(newValue: number, config: NumberWidgetConfig) {
+		const error = validateNumber(newValue, config);
 		validationError = error;
-
-		// Only send to Grasshopper if validation passes
 		if (!error) {
-			debouncedOnChange(item.paramId, newValue);
+			value = newValue; // only propagate through binding when valid
+			commitDebounced(newValue);
 		}
 	}
 
 	function handleSliderChange(newValue: number) {
-		value = newValue; // Update UI immediately for smooth visual feedback
-		debouncedSliderChange(item.paramId, newValue);
+		value = newValue;
+		commitSliderDebounced(newValue);
 	}
 
-	function getOptimalStepSize(min: number, max: number, requestedStep: number): number {
-		const _range = max - min;
-		//TODO: FIX THIS
-		// If more than 1000 steps, adjust step size to keep it under 1000
-		// const totalSteps = _range / requestedStep;
-		// if (totalSteps > 1000) {
-		// 	console.warn(
-		// 		`Adjusting step size from ${requestedStep} to ${_range / 1000} for parameter ${item.paramId} to limit total steps to 1000.`
-		// 	);
-		// 	return _range / 1000;
-		// }
-
-		return requestedStep;
+	function decimalPlaces(step: number): number {
+		return Math.max(0, -Math.floor(Math.log10(step)));
 	}
 </script>
 
-<div class="gap-2 flex flex-col">
-	<div class="gap-2 flex items-center">
-		<Label for={inputId}>
-			{displayName || item.displayName || item.paramId}
-		</Label>
+<Field.Field>
+	<Field.Label for={inputId} class="gap-2 flex items-center">
+		{label}
 		{#if item.description}
 			<Dialog.Root>
-				<Dialog.Trigger class="cursor-help opacity-60 transition-opacity hover:opacity-100">
-					<button class="p-1">
-						<HelpCircle size={16} />
-					</button>
+				<Dialog.Trigger class="p-1 cursor-help opacity-60 transition-opacity hover:opacity-100">
+					<HelpCircle size={16} />
 				</Dialog.Trigger>
 				<Dialog.Content class="sm:max-w-md">
 					<Dialog.Header>
-						<Dialog.Title>{displayName || item.displayName || item.paramId}</Dialog.Title>
-						<Dialog.Description>
-							{item.description}
-						</Dialog.Description>
+						<Dialog.Title>{label}</Dialog.Title>
+						<Dialog.Description>{item.description}</Dialog.Description>
 					</Dialog.Header>
 				</Dialog.Content>
 			</Dialog.Root>
 		{/if}
-	</div>
+	</Field.Label>
 
 	{#if isNumberWidget(item)}
 		{@const config = item.config as NumberWidgetConfig}
+		{@const min = config.minimum ?? 0}
+		{@const max = config.maximum ?? 100}
+		{@const step = config.stepSize ?? 1}
+		{@const numValue = typeof value === 'number' ? value : min}
+
 		{#if config.renderAsSlider}
-			{@const minVal = config.minimum ?? 0}
-			{@const maxVal = config.maximum ?? 100}
-			{@const requestedStep = config.stepSize ?? 1}
-			{@const optimalStep = getOptimalStepSize(minVal, maxVal, requestedStep)}
 			<div class="gap-4 flex items-center">
 				<Slider
 					type="single"
-					value={typeof value === 'number' ? value : minVal}
-					min={minVal}
-					max={maxVal}
-					step={optimalStep}
+					value={numValue}
+					{min}
+					{max}
+					{step}
 					class="flex-1"
 					onValueChange={handleSliderChange}
 					{disabled}
 				/>
 				<span class="min-w-12 text-sm text-right text-muted-foreground">
-					{typeof value === 'number'
-						? value.toFixed(Math.max(0, -Math.floor(Math.log10(requestedStep))))
-						: minVal}
+					{numValue.toFixed(decimalPlaces(step))}
 				</span>
 			</div>
 		{:else}
-			<div class="space-y-1">
-				<Input
-					id={inputId}
-					type="number"
-					bind:value
-					min={config.minimum}
-					max={config.maximum}
-					step={config.stepSize ?? 1}
-					placeholder={config.placeholder}
-					class={validationError ? 'border-destructive' : ''}
-					{disabled}
-					oninput={() => {
-						validationError = null; // Clear error while typing
-					}}
-					onchange={(e: any) => {
-						const target = e.currentTarget as HTMLInputElement;
-						const newValue = parseFloat(target.value);
-						if (!isNaN(newValue)) {
-							handleNumberInputChange(newValue, config);
-						}
-					}}
-					onblur={(e: any) => {
-						const target = e.currentTarget as HTMLInputElement;
-						const newValue = parseFloat(target.value);
-						if (!isNaN(newValue)) {
-							const error = validateNumberInput(newValue, config);
-							validationError = error;
-							if (!error) {
-								handleChange(newValue);
-							}
-						}
-					}}
-				/>
-				{#if validationError}
-					<p class="text-xs text-destructive">{validationError}</p>
-				{/if}
-			</div>
-		{/if}
-	{:else if isCheckboxWidget(item)}
-		<div class="gap-3 flex items-center">
-			<Checkbox
-				id={inputId}
-				checked={typeof value === 'boolean' ? value : false}
-				onCheckedChange={(checked: boolean) => handleChange(checked === true)}
-				{disabled}
-			/>
-			<Label for={inputId} class="text-sm cursor-pointer text-muted-foreground">Enabled</Label>
-		</div>
-	{:else if isTextWidget(item)}
-		{@const config = item.config as TextWidgetConfig}
-		<div class="space-y-1">
 			<Input
 				id={inputId}
-				type="text"
-				bind:value
+				type="number"
+				value={numValue}
+				min={config.minimum}
+				max={config.maximum}
+				{step}
 				placeholder={config.placeholder}
-				maxlength={config.maxLength}
+				data-invalid={validationError ? true : undefined}
+				aria-invalid={validationError ? true : undefined}
 				class={validationError ? 'border-destructive' : ''}
 				{disabled}
-				oninput={() => {
-					validationError = null; // Clear error while typing
-					// Don't send to Grasshopper on every keystroke - wait for blur
+				oninput={() => (validationError = null)}
+				onchange={(e) => {
+					const newValue = parseFloat((e.currentTarget as HTMLInputElement).value);
+					if (!isNaN(newValue)) handleNumberInput(newValue, config);
 				}}
-				onblur={(e: Event) => {
-					const target = e.currentTarget as HTMLInputElement;
-					const error = validateTextInput(target.value, config);
-					validationError = error;
-
-					// Only send to Grasshopper if validation passes
-					if (!error) {
-						handleChange(target.value);
+				onblur={(e) => {
+					const newValue = parseFloat((e.currentTarget as HTMLInputElement).value);
+					if (!isNaN(newValue)) {
+						const error = validateNumber(newValue, config);
+						validationError = error;
+						if (!error) commit(newValue);
 					}
 				}}
 			/>
-			{#if validationError}
-				<p class="text-xs text-destructive">{validationError}</p>
-			{/if}
-		</div>
+		{/if}
+		{#if validationError}
+			<Field.Error>{validationError}</Field.Error>
+		{/if}
+	{:else if isCheckboxWidget(item)}
+		<Field.Field orientation="horizontal">
+			<Checkbox
+				id={inputId}
+				checked={typeof value === 'boolean' ? value : false}
+				onCheckedChange={(checked) => commit(checked === true)}
+				{disabled}
+			/>
+			<Field.Label for={inputId} class="font-normal cursor-pointer text-muted-foreground">
+				Enabled
+			</Field.Label>
+		</Field.Field>
+	{:else if isTextWidget(item)}
+		{@const config = item.config as TextWidgetConfig}
+		<Input
+			id={inputId}
+			type="text"
+			bind:value
+			placeholder={config.placeholder}
+			maxlength={config.maxLength}
+			data-invalid={validationError ? true : undefined}
+			aria-invalid={validationError ? true : undefined}
+			class={validationError ? 'border-destructive' : ''}
+			{disabled}
+			oninput={() => (validationError = null)}
+			onblur={(e) => {
+				const val = (e.currentTarget as HTMLInputElement).value;
+				const error = validateText(val, config);
+				validationError = error;
+				if (!error) commit(val);
+			}}
+		/>
+		{#if validationError}
+			<Field.Error>{validationError}</Field.Error>
+		{/if}
 	{:else if isDropdownWidget(item)}
 		{@const config = item.config as DropdownWidgetConfig}
 		{@const options = config.options || {}}
 		{@const currentValue = typeof value === 'string' ? value : ''}
 		{@const currentLabel =
-			Object.entries(options).find(([_, val]) => val === currentValue)?.[0] || currentValue}
+			Object.entries(options).find(([_, v]) => v === currentValue)?.[0] ?? currentValue}
 		<Select.Root
 			type="single"
 			value={currentValue}
-			onValueChange={(selected: string) => {
-				if (selected) {
-					handleChange(selected);
-				}
+			onValueChange={(selected) => {
+				if (selected) commit(selected);
 			}}
 			{disabled}
 		>
@@ -284,13 +235,12 @@
 		</Select.Root>
 	{:else if isFileWidget(item)}
 		{@const config = item.config as FileInputWidgetConfig}
-		{@const fileValue = typeof value === 'string' ? value : ''}
 		<FileInput
-			value={fileValue}
+			value={typeof value === 'string' ? value : ''}
 			acceptedFormats={config?.acceptedFormats ?? []}
-			onChange={(newValue) => handleChange(newValue)}
+			onChange={(newValue) => commit(newValue)}
 			defaultInputMode={config?.defaultInputMode}
 			allowedInputModes={config?.allowedInputModes}
 		/>
 	{/if}
-</div>
+</Field.Field>

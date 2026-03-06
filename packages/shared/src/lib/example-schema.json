@@ -930,7 +930,7 @@
 				"id": "tab-files",
 				"label": "Files & Outputs",
 				"icon": "majesticons:battery-full-line",
-				"order": 4,
+				"order": 2,
 				"position": "right",
 				"groups": [
 					{
@@ -1005,7 +1005,7 @@
 						"description": "Output displays and downloads",
 						"order": 1,
 						"collapsed": false,
-						"columns": 2,
+						"columns": 1,
 						"items": [
 							{
 								"type": "output",
