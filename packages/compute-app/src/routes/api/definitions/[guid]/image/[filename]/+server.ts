@@ -24,7 +24,7 @@ export const GET: RequestHandler = async ({ params }) => {
 		return new Response(new Uint8Array(buffer), {
 			headers: {
 				'Content-Type': contentType,
-				'Cache-Control': 'public, max-age=3600'
+				'Cache-Control': 'public, max-age=31536000, immutable'
 			}
 		});
 	} catch {
