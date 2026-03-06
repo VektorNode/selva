@@ -192,7 +192,12 @@
 										>
 											{#each group.items as item, itemIndex (item.id)}
 												{@const paramInfo = getParameterInfo(item.paramId)}
-											<div style="grid-column: span {Math.min(Math.max(1, item.span ?? 1), group.columns ?? 1)}">
+												<div
+													style="grid-column: span {Math.min(
+														Math.max(1, item.span ?? 1),
+														group.columns ?? 1
+													)}"
+												>
 													<BuilderGroupItem
 														bind:item={group.items[itemIndex]}
 														{paramInfo}
