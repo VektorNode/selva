@@ -9,6 +9,7 @@
 </script>
 
 <svelte:head>
+	<title>Selva Compute</title>
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 </svelte:head>
 

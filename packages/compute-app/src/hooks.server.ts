@@ -48,5 +48,21 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		}
 	}
 
-	return resolve(event);
+	const response = await resolve(event);
+
+	// Hashed build assets (immutable — filename changes on content change)
+	if (pathname.startsWith('/_app/')) {
+		response.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+	}
+
+	// Static assets (favicon, robots.txt, etc.)
+	if (
+		pathname.startsWith('/favicon/') ||
+		pathname === '/favicon.svg' ||
+		pathname === '/robots.txt'
+	) {
+		response.headers.set('Cache-Control', 'public, max-age=604800');
+	}
+
+	return response;
 };
