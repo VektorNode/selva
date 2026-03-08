@@ -37,7 +37,8 @@ public class ValueApplicator
 				} catch {
 					return new FileInputGoo();
 				}
-			}) }
+			}) },
+			{ "color", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) }
 		};
 
 

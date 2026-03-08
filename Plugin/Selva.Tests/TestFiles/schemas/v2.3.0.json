@@ -1,0 +1,67 @@
+{
+	"_comment": "Schema fixture for v2.3.0 — introduced inputStructure. Tests that all three values survive round-trip and omitted fields default to 'item'.",
+	"schemaVersion": "2.3.0",
+	"id": "fixture-v230",
+	"name": "Fixture v2.3.0",
+	"inputs": [
+		{
+			"id": "aaaaaaaa-0000-0000-0000-000000000001",
+			"nickname": "Width",
+			"paramType": "number",
+			"inputStructure": "item"
+		},
+		{
+			"id": "aaaaaaaa-0000-0000-0000-000000000002",
+			"nickname": "Points",
+			"paramType": "generic",
+			"inputStructure": "list"
+		},
+		{
+			"id": "aaaaaaaa-0000-0000-0000-000000000003",
+			"nickname": "DataTree",
+			"paramType": "generic",
+			"inputStructure": "tree"
+		},
+		{
+			"id": "aaaaaaaa-0000-0000-0000-000000000004",
+			"nickname": "OmittedDefaultsToItem",
+			"paramType": "text"
+		}
+	],
+	"outputs": [],
+	"layout": {
+		"type": "flat",
+		"groups": [
+			{
+				"id": "g1",
+				"label": "Inputs",
+				"items": [
+					{
+						"id": "item1",
+						"paramId": "aaaaaaaa-0000-0000-0000-000000000001",
+						"type": "input",
+						"widgetType": "number"
+					},
+					{
+						"id": "item2",
+						"paramId": "aaaaaaaa-0000-0000-0000-000000000002",
+						"type": "input",
+						"widgetType": "text"
+					},
+					{
+						"id": "item3",
+						"paramId": "aaaaaaaa-0000-0000-0000-000000000003",
+						"type": "input",
+						"widgetType": "text"
+					},
+					{
+						"id": "item4",
+						"paramId": "aaaaaaaa-0000-0000-0000-000000000004",
+						"type": "input",
+						"widgetType": "text"
+					}
+				]
+			}
+		]
+	}
+}

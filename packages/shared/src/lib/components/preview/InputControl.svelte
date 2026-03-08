@@ -12,7 +12,8 @@
 		isTextWidget,
 		isDropdownWidget,
 		isCheckboxWidget,
-		isFileWidget
+		isFileWidget,
+		isColorWidget
 	} from '$lib/types/generated';
 	import { debounce } from '$lib/utils/debounce';
 	import { Input } from '$lib/components/ui/input';
@@ -23,6 +24,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { HelpCircle } from '@lucide/svelte';
 	import FileInput from '$lib/components/preview/FileInput.svelte';
+	import ColorInput from '$lib/components/preview/ColorInput.svelte';
 
 	interface Props {
 		item: InputLayoutItem;
@@ -289,6 +291,11 @@
 			onChange={(newValue) => commit(newValue)}
 			defaultInputMode={config?.defaultInputMode}
 			allowedInputModes={config?.allowedInputModes}
+		/>
+	{:else if isColorWidget(item)}
+		<ColorInput
+			value={typeof value === 'string' ? value : '#000000'}
+			onChange={(newValue) => commit(newValue)}
 		/>
 	{/if}
 </Field.Field>
