@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -10,6 +11,71 @@ const outputPath = path.join(__dirname, '../../Plugin/Selva.Core/Models/UISchema
 
 const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 const definitions = schema.definitions;
+
+// ============================================================================
+// VERSION GUARD
+// Compares definitions against the last committed version.
+// Errors if definitions changed but schemaVersion was not bumped.
+// ============================================================================
+checkSchemaVersionBumped();
+
+function checkSchemaVersionBumped() {
+  // Canonicalise definitions for comparison: strip comment keys and the
+  // schemaVersion default (which is the field being bumped) so we don't
+  // false-positive on the version bump itself.
+  function canonicalise(schemaObj) {
+    const defs = { ...schemaObj.definitions };
+    // Strip comment pseudo-keys
+    for (const key of Object.keys(defs)) {
+      if (key.startsWith('//_')) delete defs[key];
+    }
+    // Exclude the schemaVersion default from the comparison so bumping the
+    // version alone does not count as a definitions change.
+    if (defs.UISchema?.properties?.schemaVersion) {
+      defs.UISchema = JSON.parse(JSON.stringify(defs.UISchema));
+      delete defs.UISchema.properties.schemaVersion.default;
+    }
+    return JSON.stringify(defs, Object.keys(defs).sort());
+  }
+
+  let committedSchemaStr;
+  try {
+    committedSchemaStr = execSync('git show HEAD:packages/schemas/ui-schema.json', {
+      cwd: path.join(__dirname, '../..'),
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch {
+    // Not a git repo or no commits yet — skip the check
+    return;
+  }
+
+  const committedSchema = JSON.parse(committedSchemaStr);
+  const committedVersion = committedSchema.definitions?.UISchema?.properties?.schemaVersion?.default ?? '0.0.0';
+  const workingVersion = schema.definitions?.UISchema?.properties?.schemaVersion?.default ?? '0.0.0';
+
+  const committedDefs = canonicalise(committedSchema);
+  const workingDefs = canonicalise(schema);
+
+  if (committedDefs !== workingDefs && committedVersion === workingVersion) {
+    console.error('');
+    console.error('  ERROR: Schema definitions changed but schemaVersion was not bumped.');
+    console.error(`  Current version: ${workingVersion}`);
+    console.error('');
+    console.error('  Update "schemaVersion" default in UISchema (e.g. 2.3.0 → 2.4.0),');
+    console.error('  add a migration entry in SchemaMigrator.cs, and update SCHEMA_CHANGELOG.md.');
+    console.error('');
+    process.exit(1);
+  }
+
+  if (committedDefs !== workingDefs) {
+    console.log(`  Version bumped: ${committedVersion} → ${workingVersion}`);
+  }
+}
+
+// String-enum types that are represented as plain 'string' in C# for compatibility.
+// Add new string-enum definition names here when they are introduced in the schema.
+const STRING_ALIAS_TYPES = new Set(['GrasshopperParamType', 'GrasshopperInputStructure']);
 
 // Helper to resolve properties from allOf inheritance
 function resolveDefinition(def) {
@@ -54,9 +120,8 @@ function jsonTypeToCSharp(prop, propName, required) {
 
   if (prop.$ref) {
     const refName = prop.$ref.replace('#/definitions/', '');
-    // GrasshopperParamType is defined as a string enum in the schema
-    // but we use 'string' in C# for compatibility
-    if (refName === 'GrasshopperParamType') {
+    // String-enum types are represented as 'string' in C# for compatibility
+    if (STRING_ALIAS_TYPES.has(refName)) {
       return 'string';
     }
     // LayoutItem is a discriminated union - use the base class
@@ -299,8 +364,9 @@ output += `// ==================================================================
     // TYPE ALIASES
     // ============================================================================
 
-    // GrasshopperParamType is a string for compatibility
-    // Valid values: ${definitions.GrasshopperParamType?.enum?.map((v) => `"${v}"`).join(', ') || 'N/A'}
+    // String-enum types are represented as 'string' in C# for compatibility
+    // GrasshopperParamType valid values: ${definitions.GrasshopperParamType?.enum?.map((v) => `"${v}"`).join(', ') || 'N/A'}
+    // GrasshopperInputStructure valid values: ${definitions.GrasshopperInputStructure?.enum?.map((v) => `"${v}"`).join(', ') || 'N/A'}
 
 `;
 
@@ -341,7 +407,7 @@ function classifySections() {
       unionNames.includes(name) ||
       allUnionVariants.has(name) ||
       def.enum ||
-      name === 'GrasshopperParamType'
+      STRING_ALIAS_TYPES.has(name)
     ) {
       continue;
     }
@@ -379,7 +445,7 @@ const regularClasses = Object.entries(definitions)
   .filter(
     ([name]) =>
       !Object.keys(discriminatedUnions).includes(name) &&
-      name !== 'GrasshopperParamType' &&
+      !STRING_ALIAS_TYPES.has(name) &&
       !allUnionVariants.has(name) &&
       !unionBaseClasses.includes(name)
   )

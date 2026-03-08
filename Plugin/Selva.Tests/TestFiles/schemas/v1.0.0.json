@@ -1,0 +1,54 @@
+{
+	"_comment": "Schema fixture for v1.0.0 — oldest supported version. Tests that structural migration (flat tabs→groups) and all defaults are applied correctly.",
+	"schemaVersion": "1.0.0",
+	"id": "fixture-v1",
+	"name": "Fixture v1",
+	"inputs": [
+		{
+			"id": "aaaaaaaa-0000-0000-0000-000000000001",
+			"nickname": "Width",
+			"paramType": "number"
+		},
+		{
+			"id": "aaaaaaaa-0000-0000-0000-000000000002",
+			"nickname": "Height",
+			"paramType": "number"
+		}
+	],
+	"outputs": [
+		{
+			"id": "bbbbbbbb-0000-0000-0000-000000000001",
+			"nickname": "Result",
+			"type": "text"
+		}
+	],
+	"layout": {
+		"type": "tabbed",
+		"tabs": [
+			{
+				"id": "tab1",
+				"label": "Parameters",
+				"groups": [
+					{
+						"id": "g1",
+						"label": "Dimensions",
+						"items": [
+							{
+								"id": "item1",
+								"paramId": "aaaaaaaa-0000-0000-0000-000000000001",
+								"type": "input",
+								"widgetType": "number"
+							},
+							{
+								"id": "item2",
+								"paramId": "aaaaaaaa-0000-0000-0000-000000000002",
+								"type": "input",
+								"widgetType": "number"
+							}
+						]
+					}
+				]
+			}
+		]
+	}
+}

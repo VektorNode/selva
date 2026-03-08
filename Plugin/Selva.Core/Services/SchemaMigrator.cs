@@ -23,7 +23,8 @@ public static class SchemaMigrator
 	private static readonly Dictionary<Version, Func<UISchema, UISchema>> _migrations =
 		new()
 		{
-			{ SchemaVersion.CURRENT, MigrateTo_2_0_0 }
+			{ new Version(2, 0, 0), MigrateTo_2_0_0 },
+			{ SchemaVersion.CURRENT, MigrateTo_2_3_0 }
 		};
 
 	/// <summary>
@@ -91,9 +92,19 @@ public static class SchemaMigrator
 
 	private static UISchema MigrateTo_2_0_0(UISchema schema)
 	{
-		schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+		schema.SchemaVersion = "2.0.0";
 
 		// Name field removed in 2.0.0 - now only using nickname
+
+		return schema;
+	}
+
+	private static UISchema MigrateTo_2_3_0(UISchema schema)
+	{
+		schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+		// inputStructure added in 2.3.0 - defaults to "item" for all existing inputs
+		// No explicit migration needed; the C# model defaults to "item" on deserialization.
 
 		return schema;
 	}

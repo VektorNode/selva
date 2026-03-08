@@ -33,16 +33,12 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 	private const int MaxJsonDepth = AppConfig.JsonSerialization.MaxJsonDepth;
 	private const int MaxPathLength = 32767; // Windows MAX_PATH - maximum length for file paths
 
-	private static readonly string[] ValidInputTypes = ["path", "url", "base64"];
-
 
 	private FileInputData _contextualFileData;
 	private bool _isFromContextual;
 
 	public GetFileParameter()
-		: base("Get File", "Get File",
-			"Import geometry from file (local path, URL, or upload). Supported formats: " + string.Join(", ", AcceptedFileFormats.Values),
-			"Params", "Util",
+		: base("Get File", "Get File", "Import geometry from file (path, URL, or upload)", "Params", "Util",
 			GH_ParamAccess.list)
 	{
 	}
@@ -52,7 +48,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 	public override string TypeName => "File";
 	public override Guid ComponentGuid => new("B4F6E8D2-9A3C-4E7B-8D1F-5A9C7E2B4D6F");
 
-	protected override Bitmap Internal_Icon_24x24 => ContextualiseIcon(Resources.DataToFile);
+	protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.DataToFile);
 
 	// IGH_ContextualParameter properties
 	public string Prompt { get; set; } = "Select a file to import";
@@ -72,7 +68,6 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 	public void AssignContextualData(IEnumerable data)
 	{
 		_contextualFileData = null;
-		_isFromContextual = false;
 
 		if (data == null)
 		{
@@ -126,7 +121,6 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 	public void AssignContextualDataTree(DataTree<GH_String> data)
 	{
 		_contextualFileData = null;
-		_isFromContextual = false;
 
 		if (data == null || data.BranchCount == 0)
 		{
@@ -226,44 +220,28 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 			try
 			{
 				IGH_Goo firstItem = null;
-				IEnumerable<IGH_Goo> allItems = null;
 
-				// Support Param_FilePath, Param_String, and generic volatile sources
+
+				// Support both Param_FilePath and Param_String
 				if (source is Param_FilePath filePathParam)
 				{
 					var persistentData = filePathParam.PersistentData;
 					if (persistentData != null && !persistentData.IsEmpty)
-						allItems = persistentData.AllData(true);
+						firstItem = persistentData.AllData(true).FirstOrDefault();
 				}
 				else if (source is Param_String stringParam)
 				{
 					var persistentData = stringParam.PersistentData;
 					if (persistentData != null && !persistentData.IsEmpty)
 					{
-						allItems = persistentData.AllData(true);
+						firstItem = persistentData.AllData(true).FirstOrDefault();
 					}
 					else
 					{
 						var volatileData = stringParam.VolatileData;
 						if (volatileData != null && !volatileData.IsEmpty)
-							allItems = volatileData.AllData(true);
+							firstItem = volatileData.AllData(true).FirstOrDefault();
 					}
-				}
-				else
-				{
-					// Generic fallback: read volatile data from any other source type
-					var volatileData = source.VolatileData;
-					if (volatileData != null && !volatileData.IsEmpty)
-						allItems = volatileData.AllData(true);
-				}
-
-				if (allItems != null)
-				{
-					var itemList = allItems.ToList();
-					if (itemList.Count > 1)
-						AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-							$"Source '{source.NickName}' has {itemList.Count} items; only the first will be used.");
-					firstItem = itemList.FirstOrDefault();
 				}
 
 				if (firstItem == null)
@@ -383,7 +361,8 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 				// Sanitize the Type field
 				if (data.Type != null)
 				{
-					if (!ValidInputTypes.Contains(data.Type.ToLowerInvariant()))
+					var validTypes = new[] { "path", "url", "base64" };
+					if (!validTypes.Contains(data.Type.ToLowerInvariant()))
 						return null;
 				}
 
@@ -431,7 +410,8 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 		// Validate type
 		if (fileData.Type != null)
 		{
-			if (!ValidInputTypes.Contains(fileData.Type.ToLowerInvariant()))
+			var validTypes = new[] { "path", "url", "base64" };
+			if (!validTypes.Contains(fileData.Type.ToLowerInvariant()))
 				return false;
 		}
 

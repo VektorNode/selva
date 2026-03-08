@@ -200,7 +200,7 @@ public class DocumentSynchronizationService : IDisposable
 			};
 		}
 
-		return _schemaManager.ScanParameters(document);
+		return _schemaManager.ScanParameters(document, _component);
 	}
 }
 

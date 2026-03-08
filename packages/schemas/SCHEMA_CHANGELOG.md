@@ -11,19 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MINOR** version (e.g., 1.0.x → 1.1.0): Backward-compatible additions
 - **PATCH** version (e.g., 1.0.0 → 1.0.1): Bug fixes and documentation
 
-## [Unreleased]
+## [2.3.0] - 2026-03-08
 
 ### Added
 
-### Changed
-
-### Deprecated
-
-### Removed
-
-### Fixed
+- `GrasshopperInputStructure` - New string enum type with values `"item"`, `"list"`, `"tree"` mirroring Grasshopper's data access modes (Item Access, List Access, Tree Access)
+- `SchemaInput.inputStructure` (GrasshopperInputStructure, optional, default: `"item"`) - Declares the intended data access mode for the input parameter. Currently stored for future use by the value applicator and compute pipeline; does not change runtime behaviour in this release.
 
 ### Migration Notes
+
+- Fully backward-compatible. Existing schemas without `inputStructure` will deserialize with the default value `"item"` (Item Access), matching the previous implicit behaviour.
+- Migration function `MigrateTo_2_3_0` registered in `SchemaMigrator`; no data transformation is performed — the C# model default handles it transparently.
+
+---
+
+## [2.2.0] - 2026-03-08
+
+### Added
+
+- `GrasshopperParamType` - Added `"color"` variant for Grasshopper `Param_Colour` parameters
+- `ColorWidgetConfig` (object, optional, no properties) - Configuration type for color input widget (reserved for future options)
+- `InputColorLayoutItem` - New input layout item with `widgetType: "color"` for rendering a native browser color picker
+- `LayoutItem` union - Added `InputColorLayoutItem` to the discriminated union
+
+### Migration Notes
+
+- Fully backward-compatible addition. Existing schemas without color widgets load without changes.
+- Old plugin versions that do not know `widgetType: "color"` will fall back to their default unknown-widget handling.
 
 ---
 
