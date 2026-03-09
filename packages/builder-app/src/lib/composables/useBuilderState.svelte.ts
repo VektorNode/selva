@@ -57,13 +57,9 @@ export function useBuilderState(sessionId: string) {
 	}
 
 	function handleSchemaSaved(message: any) {
+		// Toast is now handled by the page component's saveSchema() function
+		// This handler is kept for backwards compatibility if needed
 		if (message.sessionId !== sessionId) return;
-
-		if (message.success) {
-			toast.success('Schema saved successfully!');
-		} else {
-			toast.error(`Failed to save schema: ${message.message || 'Unknown error'}`);
-		}
 	}
 
 	function handleMetadataUpdated(message: any) {
