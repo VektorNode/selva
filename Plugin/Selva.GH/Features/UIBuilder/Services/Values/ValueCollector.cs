@@ -255,18 +255,12 @@ public class ValueCollector
         {
             if (outputParam?.VolatileData == null || outputParam.VolatileData.IsEmpty) continue;
 
-            // Only collect display data when the output is wired into a ContextBakeComponent.
-            var connectedToContextBake = outputParam.Recipients
-                .Any(r => ParameterTypeHelper.IsContextBakeComponent(r?.Attributes?.GetTopLevel?.DocObject));
-
-            if (!connectedToContextBake) continue;
-
             var allData = outputParam.VolatileData.AllData(true);
             foreach (var gooObj in allData)
                 if (gooObj is WebDisplayGoo webDisplayGoo && webDisplayGoo.IsValid)
                     try
                     {
-                        return webDisplayGoo.Value;
+                        return webDisplayGoo.Value; // one WebDisplay component = one batch
                     }
                     catch (Exception ex)
                     {
