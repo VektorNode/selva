@@ -153,25 +153,32 @@ public class BridgeCommunicationService : IDisposable
 
             if (schema == null)
             {
-                // No ContextBake with "Schema" input is wired — refuse to send data to prevent
-                // the user from accidentally building/saving a schema over a missing connection.
-                _ = _communicationHandler.BroadcastRuntimeMessage("error",
-                    "UIBridge Schema output is not connected to a Context Bake component with a 'Schema' input. Wire it up in Grasshopper first.");
-                _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                    "Web UI connected but Schema output is not wired to a Context Bake 'Schema' input.");
-                return;
+                if (!IsContextBakeWired())
+                {
+                    // No ContextBake wired at all — refuse and tell the user to wire it up.
+                    _ = _communicationHandler.BroadcastRuntimeMessage("error",
+                        "UIBridge Schema output is not connected to a Context Bake component with param name \"Schema\". Wire it up in Grasshopper first.");
+                    _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                        "Web UI connected but Schema output is not wired to a Context Bake component with param name \"Schema\".");
+                    return;
+                }
+
+                // ContextBake is wired but no schema saved yet — first-time use, send a default schema.
+                schema = CreateDefaultSchema(document);
             }
 
             // Validate without deletion tracking - deletions come from document events, not client connects
             var validatedSchema = _schemaManager.ValidateSchema(schema, document);
             var schemaToSend = validatedSchema;
 #if DEBUG
-            Logger.Log($"[UIBuilder] ClientConnected — schema={schemaToSend.Name}, inputs={schemaToSend.Inputs?.Count}, outputs={schemaToSend.Outputs?.Count}");
+            Logger.Log(
+                $"[UIBuilder] ClientConnected — schema={schemaToSend.Name}, inputs={schemaToSend.Inputs?.Count}, outputs={schemaToSend.Outputs?.Count}");
 #endif
 
             // Scan parameters and collect current values against the validated schema
             var currentParams = GetCurrentAvailableParameters(document);
-            var currentValues = _valueCollector.CollectInputValues(document, schemaToSend, _component.AddRuntimeMessage);
+            var currentValues =
+                _valueCollector.CollectInputValues(document, schemaToSend, _component.AddRuntimeMessage);
 
             // Broadcast initial data
             _ = _communicationHandler.BroadcastInitialData(schemaToSend, currentParams, currentValues);
@@ -182,7 +189,10 @@ public class BridgeCommunicationService : IDisposable
                 Task.Run(async () =>
                 {
                     await Task.Delay(100);
-                    RhinoApp.InvokeOnUiThread(new Action(() => { _eventManager.CollectAndBroadcastOutputs(schemaToSend); }));
+                    RhinoApp.InvokeOnUiThread(new Action(() =>
+                    {
+                        _eventManager.CollectAndBroadcastOutputs(schemaToSend);
+                    }));
                 });
             }
         }
@@ -205,12 +215,12 @@ public class BridgeCommunicationService : IDisposable
 
             // Reject saves when the Schema output is not connected to a ContextBake — prevents
             // the user from overwriting a real schema with one built on an unwired UIBridge.
-            if (GetSchemaFromContextBake() == null)
+            if (!IsContextBakeWired())
             {
                 _ = _communicationHandler.BroadcastSchemaSaved(false,
-                    "Cannot save: UIBridge Schema output is not connected to a Context Bake component with a 'Schema' input.");
+                    "Cannot save: UIBridge Schema output is not connected to a Context Bake component.");
                 _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
-                    "Schema save rejected: Schema output is not wired to a Context Bake 'Schema' input.");
+                    "Schema save rejected: Schema output is not wired to a Context Bake component.");
                 return;
             }
 
@@ -228,7 +238,8 @@ public class BridgeCommunicationService : IDisposable
 
             var validatedSchema = _schemaManager.ValidateSchema(schema, document);
 #if DEBUG
-            Logger.Log($"[UIBuilder] Save — inputs={validatedSchema.Inputs?.Count}, outputs={validatedSchema.Outputs?.Count}, layout={validatedSchema.Layout?.GetType().Name}");
+            Logger.Log(
+                $"[UIBuilder] Save — inputs={validatedSchema.Inputs?.Count}, outputs={validatedSchema.Outputs?.Count}, layout={validatedSchema.Layout?.GetType().Name}");
 #endif
             _setSchema(validatedSchema); // Update component's schema (single source of truth)
 
@@ -291,10 +302,30 @@ public class BridgeCommunicationService : IDisposable
     }
 
     /// <summary>
+    /// Returns true if at least one ContextBakeComponent is wired to the UIBridge's Schema output.
+    /// </summary>
+    private bool IsContextBakeWired()
+    {
+        if (_component == null) return false;
+
+        var schemaOutputParam = _component.Params.Output.FirstOrDefault(p => p.Name == "Schema");
+        if (schemaOutputParam == null) return false;
+
+        foreach (var recipient in schemaOutputParam.Recipients)
+        {
+            var parentComp = recipient?.Attributes?.GetTopLevel?.DocObject as GH_Component;
+            if (parentComp == null) continue;
+            if (parentComp.Params.Input[0].NickName != "Schema") continue; // Quick check to avoid false positives on non-ContextBake components
+            if (ParameterTypeHelper.IsContextBakeComponent(parentComp)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Reads the UISchema from the ContextBakeComponent that is wired to the UIBridge's
-    /// "Schema" output and has an input param named "Schema". Returns null if no such
-    /// component is connected, preventing the web UI from receiving a schema without
-    /// explicit wiring — matching the Rhino.Compute 1:1 rule.
+    /// Schema output. Returns null if no schema data is present yet (first-time use)
+    /// or if no ContextBake is wired at all.
     /// </summary>
     private UISchema GetSchemaFromContextBake()
     {
@@ -309,10 +340,6 @@ public class BridgeCommunicationService : IDisposable
             if (parentComp == null) continue;
             if (!ParameterTypeHelper.IsContextBakeComponent(parentComp)) continue;
 
-            if (!string.Equals(recipient.NickName, "Schema", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(recipient.Name, "Schema", StringComparison.OrdinalIgnoreCase))
-                continue;
-
             var data = recipient.VolatileData?.AllData(true).FirstOrDefault();
             if (data is UISchemaGoo schemaGoo && schemaGoo.Value != null)
                 return schemaGoo.Value;
@@ -320,6 +347,7 @@ public class BridgeCommunicationService : IDisposable
 
         return null;
     }
+
     private DiscoveredParameters GetCurrentAvailableParameters(GH_Document document)
     {
         if (document == null || _schemaManager == null || _component == null)
