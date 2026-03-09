@@ -224,10 +224,6 @@ public class BridgeCommunicationService : IDisposable
                 return;
             }
 
-            // Suppress the next solution cycle triggered by component expire
-            // This prevents UI flicker from the schema save re-solve
-            _communicationHandler.SuppressSolvingCycles(1);
-
             // Enrich schema with document metadata
             schema.ProjectFileName = document.Properties.ProjectFileName;
             schema.DocumentId = document.DocumentID;
@@ -241,14 +237,24 @@ public class BridgeCommunicationService : IDisposable
             Logger.Log(
                 $"[UIBuilder] Save — inputs={validatedSchema.Inputs?.Count}, outputs={validatedSchema.Outputs?.Count}, layout={validatedSchema.Layout?.GetType().Name}");
 #endif
+
+            // Record undo event before modifying the schema
+            var docObject = _component.Attributes?.DocObject;
+            if (docObject != null)
+                docObject.RecordUndoEvent("Update Schema");
+
             _setSchema(validatedSchema); // Update component's schema (single source of truth)
 
-            // Reset metadata cache so the post-save re-solve establishes a fresh baseline.
+            // Reset metadata cache so future resolves use fresh baseline
             _schemaManager.ClearMetadataCache();
+
+            // Suppress the next solution cycle triggered by component expire
+            // This prevents UI flicker from the schema save re-solve
+            _communicationHandler.SuppressSolvingCycles(1);
 
             _ = _communicationHandler.BroadcastSchemaSaved(true);
 
-            // Schedule solution to update component
+            // Schedule solution to update component and persist schema to .gh file
             GHDocumentMutator.ScheduleComponentExpire(document, _component, false);
 #if DEBUG
             Logger.Log("[UIBuilder] Save complete — component expire scheduled");

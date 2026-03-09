@@ -18,10 +18,14 @@
 	const actions = useBuilderActions(() => builderState);
 
 	// Navigate to specific routes with session and wsPort preservation
-	function navigateTo(route: '/' | '/preview') {
+	async function navigateTo(route: '/' | '/preview') {
 		// Auto-save schema when switching to interactive mode
 		if (route === '/preview') {
-			saveSchema();
+			const saved = await saveSchema();
+			if (!saved) {
+				// Don't navigate if save failed
+				return;
+			}
 		}
 
 		const params = new SvelteURLSearchParams();
@@ -65,21 +69,73 @@
 
 	const allAvailableInputs = $derived(builderState?.state.availableInputs || []);
 
-	function saveSchema() {
-		if (!builderState?.state.schema || !sessionId) return;
+	function saveSchema(): Promise<boolean> {
+		return new Promise((resolve) => {
+			// Validation checks
+			if (!builderState?.state.schema) {
+				toast.error('Schema not initialized');
+				resolve(false);
+				return;
+			}
 
-		if (!builderState.wsState.connected) {
-			toast.error('Not connected to Grasshopper');
-			return;
-		}
+			if (!sessionId) {
+				toast.error('Session not initialized');
+				resolve(false);
+				return;
+			}
 
-		builderState.wsState.saveSchema(sessionId, $state.snapshot(builderState.state.schema));
+			if (!builderState.wsState.connected) {
+				toast.error('Not connected to Grasshopper');
+				resolve(false);
+				return;
+			}
+
+			let handled = false;
+
+			// Set up one-time listener for save response
+			const handleSaveResponse = (data: unknown) => {
+				if (handled) return;
+
+				const message = data as { sessionId: string; success: boolean; message?: string };
+				if (message.sessionId !== sessionId) return;
+
+				handled = true;
+				clearTimeout(timeoutId);
+				builderState?.wsState.off('schemaSaved', handleSaveResponse);
+
+				if (message.success) {
+					toast.success('Schema saved successfully');
+					resolve(true);
+				} else {
+					const errorMsg = message.message || 'Unknown error';
+					toast.error(`Failed to save schema: ${errorMsg}`);
+					resolve(false);
+				}
+			};
+
+			// Timeout after 10 seconds if no response
+			const timeoutId = setTimeout(() => {
+				if (handled) return;
+				handled = true;
+				builderState?.wsState.off('schemaSaved', handleSaveResponse);
+				toast.error('Save timeout: no response from Grasshopper');
+				resolve(false);
+			}, 10000);
+
+			// Listen for save response (runs before composable handlers due to registration order)
+			builderState.wsState.on('schemaSaved', handleSaveResponse);
+
+			// Send save request
+			builderState.wsState.saveSchema(sessionId, $state.snapshot(builderState.state.schema));
+		});
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
 		if ((e.ctrlKey || e.metaKey) && e.key === 's') {
 			e.preventDefault();
-			saveSchema();
+			saveSchema().catch(() => {
+				// Error already shown via toast in saveSchema
+			});
 		}
 	}
 
@@ -227,7 +283,7 @@
 						{/if}
 
 						<div class="mb-20 flex justify-end gap-4">
-							<Button onclick={saveSchema}><Save class="mr-2 h-4 w-4" />Save Schema</Button>
+							<Button onclick={() => saveSchema().catch(() => {})}><Save class="mr-2 h-4 w-4" />Save Schema</Button>
 						</div>
 					</main>
 				</div>

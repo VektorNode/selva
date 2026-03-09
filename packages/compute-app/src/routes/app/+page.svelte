@@ -27,7 +27,6 @@
 
 	// Definition switcher
 	let currentDefinition = $derived(data.currentDefinition);
-	let _availableDefinitions = $derived(data.availableDefinitions);
 	let pageTitle = $derived(schema?.description || schema.name);
 
 	function createInitialValues(s: UISchema | undefined, serverOutputs?: Record<string, unknown>) {
@@ -255,7 +254,7 @@
 			<PageHeader title={pageTitle} badge={solvingBadge} showModeToggle={true} />
 		{/if}
 
-		<div class="bg-background flex flex-col flex-1 overflow-hidden">
+		<div class="bg-background flex flex-1 flex-col overflow-hidden">
 			{#if error}
 				<div class="flex min-h-100 items-center justify-center p-8">
 					<StateDisplay type="error" size="medium" message={error} />
@@ -290,4 +289,3 @@
 		</div>
 	</PageContainer>
 </div>
-
