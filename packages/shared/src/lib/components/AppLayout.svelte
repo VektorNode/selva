@@ -237,7 +237,7 @@
 
 		{#if !hasSidebar && !hasRightPanel}
 			<!-- Single centered left panel, no resize needed -->
-			<div class="h-full flex flex-col min-h-0">
+			<div class="min-h-0 flex h-full flex-col">
 				{@render panelContent(undefined, requestedLeftTabId)}
 			</div>
 		{:else}
@@ -275,14 +275,16 @@
 							onExpand={() => (leftCollapsed = false)}
 						>
 							<div
-								class="h-full flex flex-col min-h-0 {isViewerFullscreen || leftCollapsed
+								class="min-h-0 flex h-full flex-col {isViewerFullscreen || leftCollapsed
 									? 'hidden'
 									: ''}"
 							>
 								{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId)}
 							</div>
 						</Resizable.Pane>
-						<Resizable.Handle class={leftCollapsed ? 'pointer-events-none hidden' : ''} />
+						<Resizable.Handle
+							class={leftCollapsed ? 'pointer-events-none hidden' : 'bg-transparent'}
+						/>
 					{/if}
 
 					<!-- Viewer pane -->
@@ -294,7 +296,9 @@
 
 					<!-- Right pane -->
 					{#if hasRightPanel}
-						<Resizable.Handle class={rightCollapsed ? 'pointer-events-none hidden' : ''} />
+						<Resizable.Handle
+							class={rightCollapsed ? ' pointer-events-none hidden' : 'bg-transparent'}
+						/>
 						<Resizable.Pane
 							bind:this={rightPaneRef}
 							order={3}
@@ -307,7 +311,7 @@
 							onExpand={() => (rightCollapsed = false)}
 						>
 							<div
-								class="h-full flex flex-col min-h-0 {isViewerFullscreen || rightCollapsed
+								class="min-h-0 flex h-full flex-col {isViewerFullscreen || rightCollapsed
 									? 'hidden'
 									: ''}"
 							>
