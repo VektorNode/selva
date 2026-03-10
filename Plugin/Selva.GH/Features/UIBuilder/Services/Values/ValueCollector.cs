@@ -128,11 +128,15 @@ public class ValueCollector
 
         if (document == null) return displayDataList;
 
+        var contextBakeCount = 0;
         // Find all ContextBakeComponents and extract their input data
         foreach (var docObject in document.Objects)
         {
             if (!(docObject is IGH_Component component)) continue;
             if (!IsContextBakeComponent(component)) continue;
+
+            contextBakeCount++;
+            Debug.WriteLine($"[ValueCollector] Found ContextBake '{component.NickName}' ({contextBakeCount})");
 
             try
             {
@@ -140,24 +144,39 @@ public class ValueCollector
                 if (displayData != null)
                 {
                     Debug.WriteLine($"[ValueCollector] Found display data from ContextBake '{component.NickName}'");
-                    displayDataList.Add(displayData);
+                    // If displayData is a list, flatten it into displayDataList
+                    if (displayData is List<object> dataList)
+                    {
+                        displayDataList.AddRange(dataList);
+                        Debug.WriteLine($"[ValueCollector] Added {dataList.Count} batches to display list");
+                    }
+                    else
+                    {
+                        displayDataList.Add(displayData);
+                        Debug.WriteLine($"[ValueCollector] Added 1 batch to display list");
+                    }
+                }
+                else
+                {
+                    Debug.WriteLine($"[ValueCollector] ContextBake '{component.NickName}' has no display data");
                 }
             }
             catch (Exception ex)
             {
                 addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
                     $"Error collecting display data from ContextBake '{component.NickName}': {ex.Message}");
+                Debug.WriteLine($"[ValueCollector] Exception in ContextBake: {ex}");
             }
         }
 
         Debug.WriteLine(
-            $"[ValueCollector] CollectDisplayData: found {displayDataList.Count} display data items from ContextBake components");
+            $"[ValueCollector] CollectDisplayData: scanned {contextBakeCount} ContextBakes, found {displayDataList.Count} display data items");
         return displayDataList;
     }
 
     /// <summary>
     ///   Extract display data from a ContextBakeComponent's input parameters.
-    ///   Returns a single batch if one item, a list if multiple, or null if none.
+    ///   Flattens all WebDisplayGoo objects from all inputs into a single list.
     /// </summary>
     private object ExtractDisplayDataFromContextBake(IGH_Component component,
         Action<GH_RuntimeMessageLevel, string> addMessage)
@@ -171,20 +190,27 @@ public class ValueCollector
             if (inputParam?.VolatileData == null || inputParam.VolatileData.IsEmpty) continue;
 
             var allData = inputParam.VolatileData.AllData(true);
+            Debug.WriteLine($"[ValueCollector] Input '{inputParam.NickName}': {allData.Count()} items");
+
             foreach (var gooObj in allData)
                 if (gooObj is WebDisplayGoo webDisplayGoo && webDisplayGoo.IsValid)
                     try
                     {
                         displayBatches.Add(webDisplayGoo.Value);
+                        Debug.WriteLine($"[ValueCollector] Added WebDisplayGoo batch (total: {displayBatches.Count})");
                     }
                     catch (Exception ex)
                     {
                         addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
                             $"Error extracting WebDisplayGoo data from ContextBake: {ex.Message}");
+                        Debug.WriteLine($"[ValueCollector] Error extracting batch: {ex}");
                     }
         }
 
+        Debug.WriteLine($"[ValueCollector] ContextBake extracted {displayBatches.Count} total batches");
+
         if (displayBatches.Count == 0) return null;
+        // Always return as list when multiple, single object when one
         return displayBatches.Count == 1 ? displayBatches[0] : displayBatches;
     }
 
