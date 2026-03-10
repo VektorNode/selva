@@ -144,10 +144,10 @@
 	{/if}
 {/snippet}
 
-<Card.Root class="pt-1 overflow-hidden">
-	<Tabs.Root bind:value={activeTabId} class="gap-0">
+<Card.Root class="pt-1 min-h-0 mx-1 flex flex-1 flex-col overflow-hidden">
+	<Tabs.Root bind:value={activeTabId} class="gap-0 min-h-0 flex flex-1 flex-col">
 		{#if showTabBar}
-			<ScrollArea class="w-full border-b border-border" orientation="horizontal">
+			<ScrollArea class="w-full shrink-0 border-b border-border " orientation="horizontal">
 				<Tabs.List
 					class="px-2 py-2 gap-0 inline-flex h-auto w-max justify-start rounded-none bg-transparent"
 				>
@@ -170,52 +170,59 @@
 			</ScrollArea>
 		{/if}
 		{#each visibleTabs as tab (tab.id)}
-			<Tabs.Content value={tab.id} class="min-h-0 p-4">
-				{#if tab.groups.length === 0}
-					<StateDisplay type="empty" size="medium" message="This tab has no groups configured." />
-				{:else}
-					<div class="gap-8 flex flex-col">
-						{#each tab.groups as group (group.id)}
-							{#if evaluateGroupVisibility(group, values)}
-								<Card.Root class="gap-0 py-0 pt-0 overflow-hidden">
-									<Card.Header
-										class="pt-4 pb-4! cursor-pointer border-b border-border bg-muted transition-colors select-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-										role="button"
-										tabindex={0}
-										aria-expanded={!collapsedGroups[group.id]}
-										onclick={() => toggleGroup(group.id)}
-										onkeydown={(e) => handleGroupKeydown(e, group.id)}
-									>
-										<Card.Title>{group.label}</Card.Title>
-										{#if group.description}
-											<Card.Description>{group.description}</Card.Description>
-										{/if}
-										<Card.Action>
-											<ChevronDown
-												class="h-4 w-4 text-muted-foreground transition-transform duration-200 {collapsedGroups[
-													group.id
-												]
-													? ''
-													: 'rotate-180'}"
-											/>
-										</Card.Action>
-									</Card.Header>
-									<div class="content-wrapper" class:collapsed={collapsedGroups[group.id]}>
-										<div class="content-inner">
-											<Card.Content class="p-6">
-												<div class="schema-grid gap-6 grid" style="--schema-cols: {group.columns};">
-													{#each group.items as layoutItem (layoutItem.paramId)}
-														{@render gridItem(layoutItem, group.columns ?? 1)}
-													{/each}
-												</div>
-											</Card.Content>
+			<Tabs.Content value={tab.id} class="min-h-0 p-0 flex-1">
+				<ScrollArea class="h-full" orientation="vertical">
+					<div class="p-4">
+					{#if tab.groups.length === 0}
+						<StateDisplay type="empty" size="medium" message="This tab has no groups configured." />
+					{:else}
+						<div class="gap-8 flex flex-col">
+							{#each tab.groups as group (group.id)}
+								{#if evaluateGroupVisibility(group, values)}
+									<Card.Root class="gap-0 py-0 pt-0 overflow-hidden">
+										<Card.Header
+											class="pt-4 pb-4! cursor-pointer border-b border-border bg-muted transition-colors select-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+											role="button"
+											tabindex={0}
+											aria-expanded={!collapsedGroups[group.id]}
+											onclick={() => toggleGroup(group.id)}
+											onkeydown={(e) => handleGroupKeydown(e, group.id)}
+										>
+											<Card.Title>{group.label}</Card.Title>
+											{#if group.description}
+												<Card.Description>{group.description}</Card.Description>
+											{/if}
+											<Card.Action>
+												<ChevronDown
+													class="h-4 w-4 text-muted-foreground transition-transform duration-200 {collapsedGroups[
+														group.id
+													]
+														? ''
+														: 'rotate-180'}"
+												/>
+											</Card.Action>
+										</Card.Header>
+										<div class="content-wrapper" class:collapsed={collapsedGroups[group.id]}>
+											<div class="content-inner">
+												<Card.Content class="p-6">
+													<div
+														class="schema-grid gap-6 grid"
+														style="--schema-cols: {group.columns};"
+													>
+														{#each group.items as layoutItem (layoutItem.paramId)}
+															{@render gridItem(layoutItem, group.columns ?? 1)}
+														{/each}
+													</div>
+												</Card.Content>
+											</div>
 										</div>
-									</div>
-								</Card.Root>
-							{/if}
-						{/each}
+									</Card.Root>
+								{/if}
+							{/each}
+						</div>
+					{/if}
 					</div>
-				{/if}
+				</ScrollArea>
 			</Tabs.Content>
 		{/each}
 	</Tabs.Root>

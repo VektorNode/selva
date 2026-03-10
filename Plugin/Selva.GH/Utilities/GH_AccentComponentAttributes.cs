@@ -176,7 +176,7 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
 
 	private static Color MuteColor(Color color)
 	{
-		const float blend = 0.55f;
+		const float blend = 0.45f;
 		const int grey = 180;
 		var r = (int)(color.R + (grey - color.R) * blend);
 		var g = (int)(color.G + (grey - color.G) * blend);
