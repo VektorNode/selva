@@ -1,7 +1,22 @@
-import type { UISchema, DiscoveredParameters } from '$lib/types/generated';
+import type {
+	UISchema,
+	DiscoveredParameters,
+	LayoutItem,
+	InputLayoutItem,
+	InputNumberLayoutItem,
+	NumberWidgetConfig
+} from '$lib/types/generated';
 import { getDefaultValue } from '$lib/utils/utils-shared';
 
-export interface InitializeValuesOptions {
+function isInputLayoutItem(item: LayoutItem): item is InputLayoutItem {
+	return item.type === 'input';
+}
+
+function isNumberInputLayoutItem(item: InputLayoutItem): item is InputNumberLayoutItem {
+	return item.widgetType === 'number';
+}
+
+interface InitializeValuesOptions {
 	schema: UISchema;
 	availableParams?: DiscoveredParameters;
 	currentValues?: Record<string, unknown>;
@@ -23,7 +38,7 @@ export function initializeValues(options: InitializeValuesOptions): Record<strin
 	const values: Record<string, unknown> = {};
 
 	// Initialize with type-based defaults or available parameter defaults
-	options.schema.inputs.forEach((input: any) => {
+	options.schema.inputs.forEach((input) => {
 		const availableParam = options.availableParams?.inputs?.find((p) => p.id === input.id);
 		const defaultValue =
 			availableParam?.default !== null && availableParam?.default !== undefined
@@ -34,7 +49,7 @@ export function initializeValues(options: InitializeValuesOptions): Record<strin
 	});
 
 	// Initialize outputs to null
-	options.schema.outputs.forEach((output: any) => {
+	options.schema.outputs.forEach((output) => {
 		values[output.id] = null;
 	});
 
@@ -44,10 +59,15 @@ export function initializeValues(options: InitializeValuesOptions): Record<strin
 	}
 
 	// Normalize valueList/dropdown values: convert labels to values if needed
-	options.schema.inputs.forEach((input: any) => {
+	options.schema.inputs.forEach((input) => {
 		if (input.paramType === 'valueList' && values[input.id] != null) {
 			const layoutItem = findLayoutItemForInput(options.schema, input.id);
-			if (layoutItem?.widgetType === 'dropdown' && layoutItem.config?.options) {
+			if (
+				layoutItem &&
+				isInputLayoutItem(layoutItem) &&
+				layoutItem.widgetType === 'dropdown' &&
+				layoutItem.config?.options
+			) {
 				const currentValue = values[input.id];
 				const dropdownOptions = layoutItem.config.options;
 
@@ -66,11 +86,11 @@ export function initializeValues(options: InitializeValuesOptions): Record<strin
  * Find a layout item by input parameter ID.
  * Searches through tabbed layout structure to locate the item configuration.
  */
-function findLayoutItemForInput(schema: UISchema, inputId: string): any {
+function findLayoutItemForInput(schema: UISchema, inputId: string): LayoutItem | null {
 	if (schema.layout.type === 'tabbed') {
 		for (const tab of schema.layout.tabs) {
 			for (const group of tab.groups) {
-				const item = group.items.find((item: any) => item.paramId === inputId);
+				const item = group.items.find((item) => item.paramId === inputId);
 				if (item) return item;
 			}
 		}
@@ -101,6 +121,15 @@ export function processOutputUpdate(options: OutputUpdateOptions): Record<string
 	return { ...outputUpdates, ...fileOutputUpdates };
 }
 
+interface ParameterUpdate {
+	id: string;
+	nickname?: string;
+	description?: string;
+	minimum?: number;
+	maximum?: number;
+	stepSize?: number;
+}
+
 /**
  * Update schema metadata (nicknames, descriptions, constraints) from Grasshopper parameter changes.
  * Mutates the schema in place and returns count of updated parameters.
@@ -111,15 +140,19 @@ export function processOutputUpdate(options: OutputUpdateOptions): Record<string
  */
 export function updateParameterMetadata(
 	schema: UISchema,
-	changedParams: any[]
+	changedParams: ParameterUpdate[]
 ): { updated: number; names: string[] } {
 	let updatedCount = 0;
 	const updatedNames: string[] = [];
 
-	const processGroup = (group: any, updated: any) => {
-		group.items?.forEach((layoutItem: any) => {
-			if (layoutItem.paramId === updated.id && layoutItem.type === 'input') {
-				const config = layoutItem.config || {};
+	const processGroup = (group: { items: LayoutItem[] }, updated: ParameterUpdate) => {
+		group.items?.forEach((layoutItem) => {
+			if (
+				layoutItem.paramId === updated.id &&
+				isInputLayoutItem(layoutItem) &&
+				isNumberInputLayoutItem(layoutItem)
+			) {
+				const config = layoutItem.config as NumberWidgetConfig;
 				let configChanged = false;
 
 				// Update numeric constraints if present
@@ -143,7 +176,7 @@ export function updateParameterMetadata(
 		});
 	};
 
-	changedParams.forEach((updated: any) => {
+	changedParams.forEach((updated) => {
 		// Update input metadata
 		const input = schema.inputs.find((inp) => inp.id === updated.id);
 		if (input) {

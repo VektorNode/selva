@@ -247,6 +247,12 @@
 			"nickname": "Repeat Mode",
 			"paramType": "generic",
 			"description": "Texture repeat mode"
+		},
+		{
+			"id": "input-039",
+			"nickname": "Repeat Mode",
+			"paramType": "color",
+			"description": "Texture repeat mode"
 		}
 	],
 	"outputs": [
@@ -357,6 +363,17 @@
 									"stepSize": 1000.0,
 									"renderAsSlider": false
 								}
+							},
+							{
+								"type": "input",
+								"widgetType": "color",
+								"id": "item-003",
+								"paramId": "input-039",
+								"displayName": "Color 0",
+								"description": "Basic color picker",
+								"order": 0,
+								"span": 2,
+								"visible": true
 							}
 						]
 					},
