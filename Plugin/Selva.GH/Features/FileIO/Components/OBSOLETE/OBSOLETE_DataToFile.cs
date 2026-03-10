@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.IO;
 using System.Linq;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
@@ -18,7 +17,7 @@ using Point = Rhino.Geometry.Point;
 
 namespace Selva.GH.Features.FileIO.Components;
 
-public class GH_DataToFile : GH_Component, ISelvaFileOutput
+public class OBSOLETE_GH_DataToFile_Till_0_6_2 : GH_Component, ISelvaFileOutput
 {
     private const string DefaultLayerName = "Default";
     private const string DefaultFileEnding = ".3dm";
@@ -27,11 +26,12 @@ public class GH_DataToFile : GH_Component, ISelvaFileOutput
     // Singleton converter instance (reused across all solve instances)
     private static RhinoDocumentConverter _converter;
     private static readonly object _converterLock = new();
+    public override GH_Exposure Exposure => GH_Exposure.hidden;
 
     /// <summary>
-    ///   Initializes a new instance of the DataToFile class.
+    ///   Initializes a new instance of the OBSOLETE_GH_DataToFile_Till_0_6_2 class.
     /// </summary>
-    public GH_DataToFile()
+    public OBSOLETE_GH_DataToFile_Till_0_6_2()
         : base("Geometry To File", "GTF",
             "Exports geometry to file format(s) with layer organization. Supports both single file (list input) and multiple files (tree input).",
             "Selva", "IO")
@@ -47,7 +47,7 @@ public class GH_DataToFile : GH_Component, ISelvaFileOutput
     /// <summary>
     ///   Gets the unique ID for this component. Do not change this ID after release.
     /// </summary>
-    public override Guid ComponentGuid => new("8D0ECB14-7318-4400-8AA2-588E6424ACC4");
+    public override Guid ComponentGuid => new("A51C8F6A-D422-4387-8170-F9F34D8E5351");
 
     /// <summary>
     ///   Creates custom component attributes
@@ -95,14 +95,10 @@ public class GH_DataToFile : GH_Component, ISelvaFileOutput
         pManager.AddTextParameter("File Ending", "E",
             "File ending of the geometry",
             GH_ParamAccess.item, DefaultFileEnding);
-        pManager.AddTextParameter("Sub Folder", "Folder",
-            "Optional subfolder path for storage",
-            GH_ParamAccess.item, "");
 
         pManager[1].Optional = true;
         pManager[2].Optional = true;
         pManager[4].Optional = true;
-        pManager[5].Optional = true;
     }
 
     /// <summary>
@@ -139,9 +135,6 @@ public class GH_DataToFile : GH_Component, ISelvaFileOutput
         var fileEnding = DefaultFileEnding;
         DA.GetData(4, ref fileEnding);
 
-        var subFolder = "";
-        DA.GetData(5, ref subFolder);
-
         // Validate file ending
         if (string.IsNullOrWhiteSpace(fileEnding) || !fileEnding.StartsWith("."))
         {
@@ -157,11 +150,11 @@ public class GH_DataToFile : GH_Component, ISelvaFileOutput
             // Determine if we're in single file mode (simple list) or multiple file mode (tree structure)
             if (IsSingleFileMode(geometryTree))
                 // Single file mode - all geometry in one file
-                results = ProcessSingleFile(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree, fileEnding, subFolder);
+                results = ProcessSingleFile(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree, fileEnding);
             else
                 // Multiple files mode - one file per branch
                 results = ProcessMultipleFiles(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree,
-                    fileEnding, subFolder);
+                    fileEnding);
 
             if (results.Count == 0)
             {
@@ -194,8 +187,7 @@ public class GH_DataToFile : GH_Component, ISelvaFileOutput
         GH_Structure<GH_String> layerNamesTree,
         GH_Structure<GH_Colour> layerColorsTree,
         GH_Structure<GH_String> fileNamesTree,
-        string fileEnding,
-        string subFolder)
+        string fileEnding)
     {
         var results = new List<FileDataGoo>();
 
@@ -218,7 +210,7 @@ public class GH_DataToFile : GH_Component, ISelvaFileOutput
             return results;
         }
 
-        var fileName = Path.GetFileNameWithoutExtension(allFileNames.FirstOrDefault() ?? "export");
+        var fileName = allFileNames.FirstOrDefault() ?? "export";
 
         var validGeometries = ExtractValidGeometries(allGeometry);
 
@@ -249,8 +241,7 @@ public class GH_DataToFile : GH_Component, ISelvaFileOutput
                     FileName = fileName,
                     Data = base64String,
                     FileType = fileEnding,
-                    IsBase64Encoded = true,
-                    SubFolder = subFolder ?? ""
+                    IsBase64Encoded = true
                 };
                 results.Add(new FileDataGoo(fileData));
             }
@@ -275,8 +266,7 @@ public class GH_DataToFile : GH_Component, ISelvaFileOutput
         GH_Structure<GH_String> layerNamesTree,
         GH_Structure<GH_Colour> layerColorsTree,
         GH_Structure<GH_String> fileNamesTree,
-        string fileEnding,
-        string subFolder)
+        string fileEnding)
     {
         var results = new List<FileDataGoo>();
         var paths = geometryTree.Paths.ToList();
@@ -309,7 +299,7 @@ public class GH_DataToFile : GH_Component, ISelvaFileOutput
                     .Where(s => !string.IsNullOrWhiteSpace(s))
                     .ToList();
 
-                var fileName = Path.GetFileNameWithoutExtension(branchFileNames.FirstOrDefault() ?? $"export_{pathIndex}");
+                var fileName = branchFileNames.FirstOrDefault() ?? $"export_{pathIndex}";
                 var validGeometries = ExtractValidGeometries(branchGeometry);
 
                 if (validGeometries.Count == 0)
@@ -341,8 +331,7 @@ public class GH_DataToFile : GH_Component, ISelvaFileOutput
                             FileName = fileName,
                             Data = base64String,
                             FileType = fileEnding,
-                            IsBase64Encoded = true,
-                            SubFolder = subFolder ?? ""
+                            IsBase64Encoded = true
                         };
                         results.Add(new FileDataGoo(fileData));
                     }

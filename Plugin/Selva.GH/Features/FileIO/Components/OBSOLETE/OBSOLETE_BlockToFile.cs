@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.IO;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using Grasshopper.Rhinoceros.Model;
@@ -10,7 +9,6 @@ using Rhino;
 using Rhino.DocObjects;
 using Rhino.Geometry;
 using Selva.GH.Config;
-using Selva.GH.Features.FileIO;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
@@ -21,14 +19,14 @@ namespace Selva.GH.Features.FileIO.Components;
 ///   Exports Rhino block instances to base64-encoded .3dm files.
 ///   Supports recursive block hierarchies by automatically including nested block definitions.
 /// </summary>
-public class GH_Block_To_File : GH_Component, ISelvaFileOutput
+public class OBSOLETE_GH_Block_To_File_Till_0_6_2 : GH_Component, ISelvaFileOutput
 {
     private static RhinoDocumentConverter _converter;
     private static readonly object _converterLock = new();
 
     private readonly Dictionary<string, int> _copiedBlockIndices;
 
-    public GH_Block_To_File()
+    public OBSOLETE_GH_Block_To_File_Till_0_6_2()
         : base(
             "Block to File",
             "Block2File",
@@ -40,11 +38,11 @@ public class GH_Block_To_File : GH_Component, ISelvaFileOutput
         EnsureConverterInitialized();
     }
 
-    public override Guid ComponentGuid => new("BC984091-9444-4757-B781-486DDC31BDC4");
+    public override Guid ComponentGuid => new("06308887-AADB-40EE-A6A8-9CC8E05900EB");
 
     protected override Bitmap Icon => Resources.BlockToFile;
 
-    public override GH_Exposure Exposure => GH_Exposure.primary;
+    public override GH_Exposure Exposure => GH_Exposure.hidden;
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
@@ -55,10 +53,6 @@ public class GH_Block_To_File : GH_Component, ISelvaFileOutput
             "Block instance to export",
             GH_ParamAccess.item);
         pManager.AddTextParameter("File Name", "FN", "Optional name for the exported file", GH_ParamAccess.item);
-        pManager.AddTextParameter("Format", "F", "File format extension: .3dm (default) or .stp", GH_ParamAccess.item);
-        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item, "");
-        pManager[2].Optional = true;
-        pManager[3].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -82,22 +76,7 @@ public class GH_Block_To_File : GH_Component, ISelvaFileOutput
                 return;
             }
 
-            string format = ".3dm";
-            DA.GetData(2, ref format);
-            format = NormalizeFormat(format);
-
-            string subFolder = "";
-            DA.GetData(3, ref subFolder);
-
-            if (!IsSupportedFormat(format))
-            {
-                AddRuntimeMessage(
-                    GH_RuntimeMessageLevel.Error,
-                    $"Unsupported format '{format}'. Use .3dm or .stp");
-                return;
-            }
-
-            var exportedFile = ExportBlockToFile(blockObj, fileName, format, subFolder ?? "");
+            var exportedFile = ExportBlockToFile(blockObj, fileName);
 
             if (exportedFile != null)
                 DA.SetData(0, new FileDataGoo(exportedFile));
@@ -137,7 +116,7 @@ public class GH_Block_To_File : GH_Component, ISelvaFileOutput
         return true;
     }
 
-    private FileData ExportBlockToFile(ModelObject blockObj, string fileName, string format, string subFolder)
+    private FileData ExportBlockToFile(ModelObject blockObj, string fileName)
     {
         using var headlessDoc = RhinoDoc.CreateHeadless(null);
         _copiedBlockIndices.Clear();
@@ -145,10 +124,10 @@ public class GH_Block_To_File : GH_Component, ISelvaFileOutput
 
         if (!TryProcessBlockObject(blockObj, headlessDoc, out var blockName)) return null;
 
-        var base64String = ConvertDocumentToBase64(headlessDoc, format);
+        var base64String = ConvertDocumentToBase64(headlessDoc);
         if (string.IsNullOrEmpty(base64String)) return null;
 
-        return CreateFileData(fileName, base64String, format, subFolder);
+        return CreateFileData(fileName, base64String);
     }
 
     private bool TryProcessBlockObject(ModelObject blockObj, RhinoDoc targetDoc, out string blockName)
@@ -228,35 +207,21 @@ public class GH_Block_To_File : GH_Component, ISelvaFileOutput
         }
     }
 
-    private string ConvertDocumentToBase64(RhinoDoc doc, string format)
+    private string ConvertDocumentToBase64(RhinoDoc doc)
     {
-        return format == ".3dm"
-            ? _converter.DocToRhinoFile(doc)
-            : _converter.DocToBase64(doc, format);
+        return _converter.DocToRhinoFile(doc);
     }
 
-    private FileData CreateFileData(string fileName, string base64String, string format, string subFolder)
+    private FileData CreateFileData(string fileName, string base64String)
     {
         return new FileData
         {
-            FileName = Path.GetFileNameWithoutExtension(fileName ?? string.Empty),
+            FileName = fileName,
             Data = base64String,
-            FileType = format,
-            IsBase64Encoded = true,
-            SubFolder = subFolder ?? ""
+            FileType = ".3dm",
+            IsBase64Encoded = true
         };
     }
-
-    private static string NormalizeFormat(string format)
-    {
-        if (string.IsNullOrWhiteSpace(format)) return ".3dm";
-        format = format.Trim().ToLowerInvariant();
-        if (!format.StartsWith(".")) format = "." + format;
-        return format;
-    }
-
-    private static bool IsSupportedFormat(string format) =>
-        format is ".3dm" or ".stp" or ".step";
 
     private void EnsureConverterInitialized()
     {

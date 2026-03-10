@@ -4,6 +4,7 @@ using System.Reflection;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
 using Selva.Core.Models;
+using Selva.GH.Features.FileIO;
 
 namespace Selva.GH.Features.UIBuilder.Helpers;
 
@@ -33,6 +34,44 @@ public static class ParameterTypeHelper
 		return string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal);
 	}
 
+	/// <summary>
+	///   Returns true if any source wired into <paramref name="inputParam"/> is an ISelvaFileOutput component.
+	/// </summary>
+	public static bool IsSourcedFromFileOutput(IGH_Param inputParam)
+	{
+		if (inputParam == null) return false;
+		foreach (var source in inputParam.Sources)
+			if (source?.Attributes?.GetTopLevel?.DocObject is ISelvaFileOutput)
+				return true;
+		return false;
+	}
+
+	/// <summary>
+	///   Returns true if the component is a ContextBakeComponent whose inputs are sourced
+	///   from an ISelvaFileOutput component (i.e. it is a file download output).
+	/// </summary>
+	public static bool IsFileOutputBakeComponent(GH_Component component)
+	{
+		if (component == null || !IsContextBakeComponent(component)) return false;
+		if (component.Params.Input == null) return false;
+		foreach (var inputParam in component.Params.Input)
+			if (IsSourcedFromFileOutput(inputParam)) return true;
+		return false;
+	}
+
+	/// <summary>
+	///   Returns true if the object is a ContextBakeComponent wired to a UIBuilder component
+	///   (i.e. one of its input sources has the given ownerGuid).
+	/// </summary>
+	public static bool IsWiredToOwner(GH_Component component, Guid ownerGuid)
+	{
+		if (component?.Params.Input == null) return false;
+		foreach (var inputParam in component.Params.Input)
+			foreach (var source in inputParam.Sources)
+				if ((source?.Attributes?.GetTopLevel?.DocObject as IGH_DocumentObject)?.InstanceGuid == ownerGuid)
+					return true;
+		return false;
+	}
 
 	/// <summary>
 	///   Extract minimum, maximum, and step size from a contextual parameter
@@ -255,58 +294,30 @@ public static class ParameterTypeHelper
 
 		try
 		{
-			// Find all ContextBake components in the document
 			foreach (var obj in document.Objects)
 			{
-				if (!IsContextBakeComponent(obj)) continue;
-
-				var contextBakeComponent = obj as IGH_Component;
-				if (contextBakeComponent?.Params.Input == null) continue;
-
-				// Check if any of the input parameters have FileData
-				var hasFileData = false;
-				foreach (var inputParam in contextBakeComponent.Params.Input)
+				// Standalone file param (e.g. Param_FileData)
+				if (obj is IGH_Param fp && obj is ISelvaFileOutput)
 				{
-					if (inputParam == null || inputParam.SourceCount == 0) continue;
-
-					// Check the data from the input sources
-					try
-					{
-						var data = inputParam.VolatileData;
-						if (data == null || data.IsEmpty) continue;
-
-						// Iterate through all data in the param
-						var allData = data.AllData(true);
-						foreach (var item in allData)
-							// Check if this item is FileDataGoo
-							if (item?.GetType().Name == "FileDataGoo")
-							{
-								hasFileData = true;
-								break;
-							}
-					}
-					catch
-					{
-						// Silently skip on error
-					}
-
-					if (hasFileData) break;
-				}
-
-				// If this ContextBake has FileData, record it as an AvailableOutput with outputType="file"
-				if (hasFileData)
-				{
-					var docObj = obj;
-					var nickname = contextBakeComponent.Params.Input[0].NickName;
-					var instanceGuid = docObj.InstanceGuid;
-
 					downloadableComponents.Add(new DiscoveredOutput
 					{
-						Id = instanceGuid,
-						Nickname = nickname,
+						Id = fp.InstanceGuid,
+						Nickname = fp.NickName,
 						Type = "file"
 					});
+					continue;
 				}
+
+				// ContextBake fed by a file output component
+				if (!(obj is GH_Component c)) continue;
+				if (!IsFileOutputBakeComponent(c)) continue;
+
+				downloadableComponents.Add(new DiscoveredOutput
+				{
+					Id = c.InstanceGuid,
+					Nickname = c.Params.Input[0].NickName,
+					Type = "file"
+				});
 			}
 		}
 		catch (Exception ex)

@@ -15,7 +15,8 @@ public class FileData
 	public Guid Id { get; set; } = Guid.NewGuid();
 
 	/// <summary>
-	///   Gets or sets the name of the file, including its extension.
+	///   Gets or sets the base name of the file, WITHOUT extension.
+	///   The full filename is constructed as FileName + FileType by the client.
 	/// </summary>
 	[JsonProperty("fileName")]
 	public string FileName { get; set; }
