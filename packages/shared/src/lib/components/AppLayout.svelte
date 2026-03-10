@@ -25,7 +25,6 @@
 		values: Record<string, unknown>;
 		onValueChange: (id: string, val: SupportedTypes) => void | Promise<void>;
 		onLoadValues?: () => void | Promise<void>;
-		environment?: 'local' | 'compute';
 	}
 
 	let {
@@ -38,8 +37,7 @@
 		oncalculate = () => {},
 		values = $bindable({}),
 		onValueChange,
-		onLoadValues,
-		environment
+		onLoadValues
 	}: Props = $props();
 
 	// ── Layout flags ─────────────────────────────────────────────────────────────
@@ -116,7 +114,7 @@
 	showCalculateButton = true
 )}
 	{#if schema.layout.type === 'tabbed'}
-		<TabLayout {schema} bind:values {onValueChange} {environment} {panelFilter} {requestedTabId} />
+		<TabLayout {schema} bind:values {onValueChange} {panelFilter} {requestedTabId} />
 	{/if}
 	{#if showStateManager}
 		<div class="mt-6">

@@ -1,10 +1,18 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { PageContainer, PageHeader, StateDisplay, Button, Dialog, toast, useFooterItem } from '@selva/shared';
+	import {
+		PageContainer,
+		PageHeader,
+		StateDisplay,
+		Button,
+		Dialog,
+		toast,
+		useFooterItem
+	} from '@selva/shared';
 	import { Save } from '@lucide/svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
 	import { DragDropContext, BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
 	import { initializeWebSocketSession } from '$lib/utils/session';
 	import { onMount } from 'svelte';
@@ -38,7 +46,7 @@
 	}
 
 	const placedInLayoutIds = $derived.by(() => {
-		const ids = new Set<string>();
+		const ids = new SvelteSet<string>();
 		const layout = builderState?.state.schema?.layout;
 
 		if (layout?.type === 'tabbed') {
@@ -283,7 +291,9 @@
 						{/if}
 
 						<div class="mb-20 flex justify-end gap-4">
-							<Button onclick={() => saveSchema().catch(() => {})}><Save class="mr-2 h-4 w-4" />Save Schema</Button>
+							<Button onclick={() => saveSchema().catch(() => {})}
+								><Save class="mr-2 h-4 w-4" />Save Schema</Button
+							>
 						</div>
 					</main>
 				</div>

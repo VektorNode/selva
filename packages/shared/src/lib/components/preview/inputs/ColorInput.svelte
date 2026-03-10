@@ -7,11 +7,11 @@
 	let { value = '#000000', onChange }: Props = $props();
 </script>
 
-<div class="flex items-center gap-2">
+<div class="gap-2 flex items-center">
 	<input
 		type="color"
 		value={value || '#000000'}
-		class="h-9 w-12 cursor-pointer rounded border border-input bg-background p-1"
+		class="h-9 w-12 rounded p-1 cursor-pointer border border-input bg-background"
 		onchange={(e) => {
 			const newValue = (e.currentTarget as HTMLInputElement).value;
 			onChange(newValue);

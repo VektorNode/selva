@@ -152,6 +152,7 @@ export function createDefaultWidgetConfig(
 
 			case 'dropdown':
 			case 'checkbox':
+			case 'color':
 				throw new Error(`Widget type '${widgetType}' is not valid for output parameters`);
 
 			default: {

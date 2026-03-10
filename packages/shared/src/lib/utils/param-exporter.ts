@@ -2,7 +2,8 @@ import type {
 	UISchema,
 	ParameterPreset,
 	ParameterState,
-	ValidationIssueMessage
+	ValidationIssueMessage,
+	GroupConfig
 } from '../types/generated';
 
 /**
@@ -36,7 +37,7 @@ export function createSavedState(
 	// Collect parameter states from schema
 	const parameters: ParameterState[] = [];
 
-	const processGroup = (group: any) => {
+	const processGroup = (group: GroupConfig) => {
 		for (const item of group.items || []) {
 			if (item.type === 'input') {
 				const value = currentValues[item.paramId];

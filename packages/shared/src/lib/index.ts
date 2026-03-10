@@ -30,7 +30,7 @@ export * from './utils/utils-shared';
 export * from './utils/file-download';
 export * from './utils/param-exporter';
 export * from './utils/solving.svelte';
-export * from './utils/computeThrottle.svelte';
+export * from '../../../compute-app/src/lib/utilities/computeThrottle.svelte';
 
 // Contexts & Composables
 export * from './contexts/footerContext.svelte';

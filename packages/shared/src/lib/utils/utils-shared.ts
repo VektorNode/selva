@@ -31,7 +31,10 @@ export function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | 
 		};
 	}
 
-	// Migration for v1 schemas (missing layout.type)
+	/**
+	 * @deprecated v1 schema migration
+	 * TODO(v2.0.0): Remove this block - all schemas should have layout.type
+	 */
 	if (schema.layout && !schema.layout.type) {
 		if ('tabs' in schema.layout) {
 			(schema.layout as any).type = 'tabbed';
