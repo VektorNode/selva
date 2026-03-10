@@ -5,7 +5,7 @@ using SheepMetal.PluginGrasshopper.Upgraders;
 namespace Selva.GH.Features.FileIO.Components;
 
 /// <summary>
-///   Upgrades OBSOLETE_GH_Block_To_File_Till_0_6_2 (06308887) to GH_Block_To_File (BC984091).
+///   Upgrades OBSOLETE_BlockToFile_UntilV0_6_2 (06308887) to GH_BlockToFile (BC984091).
 ///   Added: Format input (index 2) and Sub Folder input (index 3). Previous inputs map 1:1.
 /// </summary>
 public class GH_BlockToFileUpgrader : IGH_UpgradeObject

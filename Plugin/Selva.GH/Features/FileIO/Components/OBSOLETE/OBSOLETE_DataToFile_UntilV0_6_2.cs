@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -17,7 +17,7 @@ using Point = Rhino.Geometry.Point;
 
 namespace Selva.GH.Features.FileIO.Components;
 
-public class OBSOLETE_GH_DataToFile_Till_0_6_2 : GH_Component, ISelvaFileOutput
+public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
 {
     private const string DefaultLayerName = "Default";
     private const string DefaultFileEnding = ".3dm";
@@ -29,9 +29,9 @@ public class OBSOLETE_GH_DataToFile_Till_0_6_2 : GH_Component, ISelvaFileOutput
     public override GH_Exposure Exposure => GH_Exposure.hidden;
 
     /// <summary>
-    ///   Initializes a new instance of the OBSOLETE_GH_DataToFile_Till_0_6_2 class.
+    ///   Initializes a new instance of the OBSOLETE_DataToFile_UntilV0_6_2 class.
     /// </summary>
-    public OBSOLETE_GH_DataToFile_Till_0_6_2()
+    public OBSOLETE_DataToFile_UntilV0_6_2()
         : base("Geometry To File", "GTF",
             "Exports geometry to file format(s) with layer organization. Supports both single file (list input) and multiple files (tree input).",
             "Selva", "IO")

@@ -6,7 +6,7 @@ using SheepMetal.PluginGrasshopper.Upgraders;
 namespace Selva.GH.Features.FileIO.Components;
 
 /// <summary>
-///   Upgrades OBSOLETE_GH_DataToFile_Till_0_6_2 (A51C8F6A) to GH_DataToFile (8D0ECB14).
+///   Upgrades OBSOLETE_DataToFile_UntilV0_6_2 (A51C8F6A) to GH_DataToFile (8D0ECB14).
 ///   Added: Sub Folder input (index 5). All previous inputs map 1:1.
 /// </summary>
 public class GH_DataToFileUpgrader : IGH_UpgradeObject

@@ -117,9 +117,9 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Collect display data from all WebDisplay components in the document.
+    ///   Collect display data from ContextBakeComponent inputs.
     ///   Returns an array of MeshBatch objects (as JSON-serializable objects).
-    ///   This is not tied to specific output schema items - it collects from ALL WebDisplay components.
+    ///   This mirrors Rhino.Compute behavior where baking is explicit.
     /// </summary>
     public List<object> CollectDisplayData(GH_Document document,
         Action<GH_RuntimeMessageLevel, string> addMessage = null)
@@ -128,30 +128,74 @@ public class ValueCollector
 
         if (document == null) return displayDataList;
 
-        var componentCount = 0;
+        // Find all ContextBakeComponents and extract their input data
         foreach (var docObject in document.Objects)
-            if (docObject is IGH_Component component)
+        {
+            if (!(docObject is IGH_Component component)) continue;
+            if (!IsContextBakeComponent(component)) continue;
+
+            try
             {
-                componentCount++;
-                try
+                var displayData = ExtractDisplayDataFromContextBake(component, addMessage);
+                if (displayData != null)
                 {
-                    var displayData = ExtractWebDisplayDataFromComponent(component, addMessage);
-                    if (displayData != null)
-                    {
-                        Debug.WriteLine($"[ValueCollector] Found display data from component '{component.NickName}'");
-                        displayDataList.Add(displayData);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-                        $"Error collecting display data from component '{component.NickName}': {ex.Message}");
+                    Debug.WriteLine($"[ValueCollector] Found display data from ContextBake '{component.NickName}'");
+                    displayDataList.Add(displayData);
                 }
             }
+            catch (Exception ex)
+            {
+                addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+                    $"Error collecting display data from ContextBake '{component.NickName}': {ex.Message}");
+            }
+        }
 
         Debug.WriteLine(
-            $"[ValueCollector] CollectDisplayData: scanned {componentCount} components, found {displayDataList.Count} display data items");
+            $"[ValueCollector] CollectDisplayData: found {displayDataList.Count} display data items from ContextBake components");
         return displayDataList;
+    }
+
+    /// <summary>
+    ///   Extract display data from a ContextBakeComponent's input parameters.
+    ///   Returns a single batch if one item, a list if multiple, or null if none.
+    /// </summary>
+    private object ExtractDisplayDataFromContextBake(IGH_Component component,
+        Action<GH_RuntimeMessageLevel, string> addMessage)
+    {
+        if (component?.Params?.Input == null || component.Params.Input.Count == 0) return null;
+
+        var displayBatches = new List<object>();
+
+        foreach (var inputParam in component.Params.Input)
+        {
+            if (inputParam?.VolatileData == null || inputParam.VolatileData.IsEmpty) continue;
+
+            var allData = inputParam.VolatileData.AllData(true);
+            foreach (var gooObj in allData)
+                if (gooObj is WebDisplayGoo webDisplayGoo && webDisplayGoo.IsValid)
+                    try
+                    {
+                        displayBatches.Add(webDisplayGoo.Value);
+                    }
+                    catch (Exception ex)
+                    {
+                        addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+                            $"Error extracting WebDisplayGoo data from ContextBake: {ex.Message}");
+                    }
+        }
+
+        if (displayBatches.Count == 0) return null;
+        return displayBatches.Count == 1 ? displayBatches[0] : displayBatches;
+    }
+
+    /// <summary>
+    ///   Check if component is a ContextBakeComponent
+    /// </summary>
+    private static bool IsContextBakeComponent(IGH_Component component)
+    {
+        if (component == null) return false;
+        var typeName = component.GetType()?.Name;
+        return string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal);
     }
 
     /// <summary>
