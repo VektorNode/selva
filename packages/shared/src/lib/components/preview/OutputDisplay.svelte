@@ -204,13 +204,13 @@
 	{:else}
 		<div class="gap-2 flex flex-col">
 			<div class="rounded px-3 py-2 border border-border bg-muted">
-				<div class="flex items-center justify-between">
-					<span class="text-sm font-medium text-foreground">
+				<div class="gap-2 flex items-center justify-between">
+					<span class="min-w-0 text-sm font-medium truncate text-foreground">
 						{fileCount === 1
 							? `${filesArray[0].fileName}${filesArray[0].fileType}`
 							: `${fileCount} files`}
 					</span>
-					<span class="text-xs text-muted-foreground">{formatFileSize(totalSize)}</span>
+					<span class="text-xs shrink-0 text-muted-foreground">{formatFileSize(totalSize)}</span>
 				</div>
 				{#if fileCount > 1}
 					<div class="mt-2">
@@ -219,9 +219,11 @@
 						{:else}
 							<div class="gap-1 flex flex-col">
 								{#each filesArray as file (file.fileName)}
-									<div class="text-xs flex items-center justify-between text-muted-foreground">
-										<span>{file.fileName}{file.fileType}</span>
-										<span>{formatFileSize(getBase64FileSize(file.data))}</span>
+									<div
+										class="gap-2 text-xs flex items-center justify-between text-muted-foreground"
+									>
+										<span class="min-w-0 truncate">{file.fileName}{file.fileType}</span>
+										<span class="shrink-0">{formatFileSize(getBase64FileSize(file.data))}</span>
 									</div>
 								{/each}
 							</div>
