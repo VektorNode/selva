@@ -289,7 +289,7 @@
 
 					<!-- Viewer pane -->
 					{#if hasViewer}
-						<Resizable.Pane order={2} minSize={20} class="min-h-0 flex flex-col">
+						<Resizable.Pane order={2} minSize={20} class="min-h-0 mx-1 flex flex-col">
 							<Viewer {schema} {meshes} bind:isFullscreen={isViewerFullscreen} {isSolving} />
 						</Resizable.Pane>
 					{/if}

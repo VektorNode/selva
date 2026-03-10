@@ -32,7 +32,55 @@
 		})
 	);
 
-	let values = $state<Record<string, unknown>>(initializeValues({ schema }));
+	const dummyOutputValues: Record<string, unknown> = {
+		'output-001': 'Computation completed successfully. All 12 parameters are within bounds.',
+		'output-002': 4827.63,
+		'output-003': [
+			{
+				fileName: 'result_geometry_SZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ',
+				fileType: '.obj',
+				data: btoa('# Wavefront OBJ\nv 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.0 1.0 0.0\nf 1 2 3'),
+				isBase64Encoded: true
+			}
+		],
+		'output-004':
+			'[INFO]  Step 1: Parameter validation ............. OK\n[INFO]  Step 2: Mesh generation .................. OK\n[INFO]  Step 3: Geometry export .................. OK\n[WARN]  High vertex count detected (12 480 faces).',
+		'output-005': 892,
+		'output-006': [
+			{
+				fileName: 'panel_A',
+				fileType: '.3dm',
+				subFolder: 'panels',
+				data: btoa('3dm-binary-content-panel-A'),
+				isBase64Encoded: true
+			},
+			{
+				fileName: 'panel_B',
+				fileType: '.3dm',
+				subFolder: 'panels',
+				data: btoa('3dm-binary-content-panel-B'),
+				isBase64Encoded: true
+			},
+			{
+				fileName: 'main_frame',
+				fileType: '.3dm',
+				subFolder: 'structure',
+				data: btoa('3dm-binary-content-frame'),
+				isBase64Encoded: true
+			},
+			{
+				fileName: 'metadata',
+				fileType: '.json',
+				data: btoa(JSON.stringify({ version: '1.0', panelCount: 2, generatedAt: '2026-03-10' })),
+				isBase64Encoded: true
+			}
+		]
+	};
+
+	let values = $state<Record<string, unknown>>({
+		...initializeValues({ schema }),
+		...dummyOutputValues
+	});
 	let isSolving = $state(false);
 	let hasPendingChanges = $state(false);
 	let isViewerFullscreen = $state(false);
