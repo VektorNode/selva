@@ -16,7 +16,7 @@
 	import { GrasshopperResponseProcessor } from 'selva-compute';
 	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
 	import ComputeHealthFooter from '$lib/components/ComputeHealthFooter.svelte';
-	import { createComputeThrottle } from '$lib/utilities/computeThrottle.svelte';
+	import { createComputeThrottle } from '@selva/shared';
 
 	let { data }: PageProps = $props();
 

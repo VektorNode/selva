@@ -53,7 +53,7 @@
 
 <PageContainer errors={dummyErrors} warnings={dummyWarnings}>
 	<PageHeader
-		title={'Test'}
+		title="Test"
 		showModeToggle={true}
 		logo="https://static.food4rhino.com/cdn/farfuture/-8kBLLz1EsmzigoTR71h78u38ce2X1pkplK7Xhz-nXg/mtime:1766995049/sites/default/files/public/styles/thumbnail/public/users-files/thevessen/app/asset2.png?itok=Om5jrCuE"
 	/>
@@ -68,7 +68,6 @@
 			bind:isViewerFullscreen
 			bind:values
 			onValueChange={handleValueChange}
-			environment="compute"
 			oncalculate={handleCalculate}
 			onLoadValues={async () => {
 				if (schema?.instanceSolve !== false) {
