@@ -77,6 +77,13 @@
 
 	const allAvailableInputs = $derived(builderState?.state.availableInputs || []);
 
+	// Persist current schema to localStorage whenever it changes
+	$effect(() => {
+		if (builderState?.state.schema && sessionId) {
+			builderState.history.persistCurrentSchema(builderState.state.schema);
+		}
+	});
+
 	function saveSchema(): Promise<boolean> {
 		return new Promise((resolve) => {
 			// Validation checks
@@ -139,7 +146,25 @@
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+		if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+			e.preventDefault();
+			if (builderState?.history.canUndo() && builderState.state.schema) {
+				const prev = builderState.history.undo($state.snapshot(builderState.state.schema));
+				if (prev) {
+					builderState.state.schema = prev;
+					toast.success('Undo');
+				}
+			}
+		} else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+			e.preventDefault();
+			if (builderState?.history.canRedo() && builderState.state.schema) {
+				const next = builderState.history.redo($state.snapshot(builderState.state.schema));
+				if (next) {
+					builderState.state.schema = next;
+					toast.success('Redo');
+				}
+			}
+		} else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
 			e.preventDefault();
 			saveSchema().catch(() => {
 				// Error already shown via toast in saveSchema
@@ -254,7 +279,9 @@
 						placedIds={placedInLayoutIds}
 						syncNeeded={builderState.state.syncNeeded}
 						onSchemaChange={(updatedSchema) => {
-							if (builderState) {
+							if (builderState && builderState.state.schema) {
+								// Save snapshot before import
+								builderState.history.push($state.snapshot(builderState.state.schema));
 								builderState.state.schema = updatedSchema;
 								// Auto-select first tab when schema is imported/changed
 								if (
