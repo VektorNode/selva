@@ -1,19 +1,18 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
-using Selva.GH.Utilities;
 
 namespace Selva.GH.Features.FileIO.Components;
 
 /// <summary>
-///   Standalone canvas parameter that holds FileDataGoo values.
-///   Implements ISelvaFileOutput so the schema scanner detects it as a file output
-///   without needing a ContextBakeComponent in between.
-///
-///   Usage: wire from GH_DataToFile / GH_Block_To_File (or any ISelvaFileOutput component),
-///   or from external sources. The Selva UI picks this up as a downloadable file output.
+///     Standalone canvas parameter that holds FileDataGoo values.
+///     Implements ISelvaFileOutput so the schema scanner detects it as a file output
+///     without needing a ContextBakeComponent in between.
+///     Usage: wire from GH_DataToFile / GH_Block_To_File (or any ISelvaFileOutput component),
+///     or from external sources. The Selva UI picks this up as a downloadable file output.
 /// </summary>
 public class Param_FileData : GH_PersistentParam<FileDataGoo>, ISelvaFileOutput
 {
@@ -39,7 +38,7 @@ public class Param_FileData : GH_PersistentParam<FileDataGoo>, ISelvaFileOutput
         return GH_GetterResult.cancel;
     }
 
-    protected override GH_GetterResult Prompt_Plural(ref System.Collections.Generic.List<FileDataGoo> values)
+    protected override GH_GetterResult Prompt_Plural(ref List<FileDataGoo> values)
     {
         return GH_GetterResult.cancel;
     }

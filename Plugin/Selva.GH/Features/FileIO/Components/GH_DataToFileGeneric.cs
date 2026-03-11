@@ -1,7 +1,6 @@
 using System;
 using System.Drawing;
 using Grasshopper.Kernel;
-using Grasshopper.Kernel.Types;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
@@ -30,9 +29,12 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
     {
         pManager.AddTextParameter("Data", "D", "File content as text or base64 string", GH_ParamAccess.item);
         pManager.AddTextParameter("Name", "N", "File name without extension", GH_ParamAccess.item, "file");
-        pManager.AddTextParameter("Extension", "Ext", "File extension including dot, e.g. .txt, .csv, .json", GH_ParamAccess.item, ".txt");
-        pManager.AddBooleanParameter("Is Base64", "B64", "Set to true if Data is already base64-encoded", GH_ParamAccess.item, false);
-        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item, "");
+        pManager.AddTextParameter("Extension", "Ext", "File extension including dot, e.g. .txt, .csv, .json",
+            GH_ParamAccess.item, ".txt");
+        pManager.AddBooleanParameter("Is Base64", "B64", "Set to true if Data is already base64-encoded",
+            GH_ParamAccess.item, false);
+        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item,
+            "");
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -43,10 +45,10 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
     protected override void SolveInstance(IGH_DataAccess DA)
     {
         string data = null;
-        string name = "file";
-        string extension = ".txt";
-        bool isBase64 = false;
-        string subFolder = "";
+        var name = "file";
+        var extension = ".txt";
+        var isBase64 = false;
+        var subFolder = "";
 
         if (!DA.GetData(0, ref data)) return;
         DA.GetData(1, ref name);

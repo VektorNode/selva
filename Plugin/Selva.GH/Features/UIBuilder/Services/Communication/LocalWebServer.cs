@@ -13,8 +13,8 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services.Communication;
 
 /// <summary>
-///   Embedded HTTP server that serves static web assets from assembly resources.
-///   Used in production to serve the web UI without external dependencies.
+///     Embedded HTTP server that serves static web assets from assembly resources.
+///     Used in production to serve the web UI without external dependencies.
 /// </summary>
 public class LocalWebServer : IDisposable
 {
@@ -27,26 +27,26 @@ public class LocalWebServer : IDisposable
     private readonly Dictionary<string, string> _mimeTypes = new()
     {
         { ".html", "text/html; charset=utf-8" },
-        { ".css",  "text/css; charset=utf-8" },
-        { ".js",   "application/javascript; charset=utf-8" },
+        { ".css", "text/css; charset=utf-8" },
+        { ".js", "application/javascript; charset=utf-8" },
         { ".json", "application/json; charset=utf-8" },
-        { ".png",  "image/png" },
-        { ".jpg",  "image/jpeg" },
+        { ".png", "image/png" },
+        { ".jpg", "image/jpeg" },
         { ".jpeg", "image/jpeg" },
-        { ".svg",  "image/svg+xml" },
-        { ".ico",  "image/x-icon" },
+        { ".svg", "image/svg+xml" },
+        { ".ico", "image/x-icon" },
         { ".woff", "font/woff" },
-        { ".woff2","font/woff2" },
-        { ".ttf",  "font/ttf" },
-        { ".eot",  "application/vnd.ms-fontobject" },
-        { ".txt",  "text/plain; charset=utf-8" }
+        { ".woff2", "font/woff2" },
+        { ".ttf", "font/ttf" },
+        { ".eot", "application/vnd.ms-fontobject" },
+        { ".txt", "text/plain; charset=utf-8" }
     };
 
     private readonly HashSet<string> _resourceNames;
 
     private CancellationTokenSource _cancellationTokenSource;
-    private HttpListener _httpListener;
     private bool _disposed;
+    private HttpListener _httpListener;
 
     public LocalWebServer(int port = 0)
     {
@@ -59,12 +59,22 @@ public class LocalWebServer : IDisposable
     public int Port { get; private set; }
     public string BaseUrl => $"http://localhost:{Port}";
 
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        Stop();
+        _cancellationTokenSource?.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
     // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------
 
     /// <summary>
-    ///   Start the HTTP server. If port was 0 the OS assigns a free port.
+    ///     Start the HTTP server. If port was 0 the OS assigns a free port.
     /// </summary>
     public void Start()
     {
@@ -103,7 +113,7 @@ public class LocalWebServer : IDisposable
     }
 
     /// <summary>
-    ///   Stop the HTTP server and wait for the accept loop to exit.
+    ///     Stop the HTTP server and wait for the accept loop to exit.
     /// </summary>
     public void Stop()
     {
@@ -134,17 +144,10 @@ public class LocalWebServer : IDisposable
         }
     }
 
-    public void Dispose()
+    ~LocalWebServer()
     {
-        if (_disposed) return;
-        _disposed = true;
-
-        Stop();
-        _cancellationTokenSource?.Dispose();
-        GC.SuppressFinalize(this);
+        Dispose();
     }
-
-    ~LocalWebServer() => Dispose();
 
     // -------------------------------------------------------------------------
     // Request handling
@@ -153,7 +156,6 @@ public class LocalWebServer : IDisposable
     private async Task AcceptRequestsAsync(CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested && IsRunning)
-        {
             try
             {
                 var context = await _httpListener.GetContextAsync().ConfigureAwait(false);
@@ -171,7 +173,6 @@ public class LocalWebServer : IDisposable
             {
                 Logger.Error($"Error accepting HTTP request: {ex.Message}");
             }
-        }
     }
 
     private async Task ProcessRequestAsync(HttpListenerContext context, CancellationToken cancellationToken)
@@ -211,9 +212,7 @@ public class LocalWebServer : IDisposable
             if (!_mimeTypes.TryGetValue(
                     Path.GetExtension(path).ToLowerInvariant(),
                     out var mimeType))
-            {
                 mimeType = "application/octet-stream";
-            }
 
             // index.html must never be cached; hashed assets can be cached forever.
             var isImmutableAsset = path != "index.html" && path.Contains(".");
@@ -242,21 +241,33 @@ public class LocalWebServer : IDisposable
             // HEAD: headers only, no body.
             if (request.HttpMethod != "HEAD")
                 await stream.CopyToAsync(response.OutputStream, BUFFER_SIZE, cancellationToken)
-                            .ConfigureAwait(false);
+                    .ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             Logger.Error(
                 $"Error processing HTTP request for {context.Request.Url?.AbsolutePath}: {ex.Message}");
 
-            try { response.StatusCode = 500; }
-            catch { /* headers already sent */ }
+            try
+            {
+                response.StatusCode = 500;
+            }
+            catch
+            {
+                /* headers already sent */
+            }
         }
         finally
         {
             // Always close the response, whether success, 4xx, or 5xx.
-            try { response.Close(); }
-            catch { /* ignore */ }
+            try
+            {
+                response.Close();
+            }
+            catch
+            {
+                /* ignore */
+            }
         }
     }
 
@@ -273,16 +284,22 @@ public class LocalWebServer : IDisposable
         response.ContentLength64 = message.Length;
 
         await response.OutputStream
-                      .WriteAsync(message, 0, message.Length, cancellationToken)
-                      .ConfigureAwait(false);
+            .WriteAsync(message, 0, message.Length, cancellationToken)
+            .ConfigureAwait(false);
     }
 
-    private string GetResourcePath(string urlPath) => EMBEDDED_RESOURCE_PREFIX + urlPath;
+    private string GetResourcePath(string urlPath)
+    {
+        return EMBEDDED_RESOURCE_PREFIX + urlPath;
+    }
 
-    private bool ResourceExists(string resourcePath) => _resourceNames.Contains(resourcePath);
+    private bool ResourceExists(string resourcePath)
+    {
+        return _resourceNames.Contains(resourcePath);
+    }
 
     /// <summary>
-    ///   Ask the OS for a free port by binding to port 0 — no TOCTOU race.
+    ///     Ask the OS for a free port by binding to port 0 — no TOCTOU race.
     /// </summary>
     private static int FindAvailablePort()
     {

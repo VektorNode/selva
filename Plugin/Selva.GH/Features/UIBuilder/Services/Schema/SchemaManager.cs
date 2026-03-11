@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Grasshopper;
 using Grasshopper.Kernel;
 using Selva.Core.Models;
 using Selva.GH.Features.ComputeIO.Components;
@@ -11,15 +12,15 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services.Schema;
 
 /// <summary>
-///   Manages parameter scanning, schema validation, and synchronization between
-///   Grasshopper documents and UI schemas.
+///     Manages parameter scanning, schema validation, and synchronization between
+///     Grasshopper documents and UI schemas.
 /// </summary>
 public class SchemaManager
 {
     #region Static Configuration
 
     /// <summary>
-    ///   Keyword → type name mapping. Entries are checked via string.Contains against the GH type name.
+    ///     Keyword → type name mapping. Entries are checked via string.Contains against the GH type name.
     /// </summary>
     private static readonly Dictionary<string, string> ParameterTypeKeywords = new()
     {
@@ -51,9 +52,9 @@ public class SchemaManager
     };
 
     /// <summary>
-    ///   Cache resolved type names by exact CLR type to avoid repeated substring scans.
-    ///   Note: Not thread-safe. If GH ever processes documents on multiple threads,
-    ///   consider switching to ConcurrentDictionary.
+    ///     Cache resolved type names by exact CLR type to avoid repeated substring scans.
+    ///     Note: Not thread-safe. If GH ever processes documents on multiple threads,
+    ///     consider switching to ConcurrentDictionary.
     /// </summary>
     private static readonly Dictionary<Type, string> TypeNameCache = new();
 
@@ -78,9 +79,9 @@ public class SchemaManager
     #region Parameter Scanning
 
     /// <summary>
-    ///   Scan the document and return all discoverable inputs and outputs in a single pass.
-    ///   When <paramref name="ownerComponent"/> is provided, only ContextBake/ContextPrint
-    ///   components wired to its "Schema" output are included.
+    ///     Scan the document and return all discoverable inputs and outputs in a single pass.
+    ///     When <paramref name="ownerComponent" /> is provided, only ContextBake/ContextPrint
+    ///     components wired to its "Schema" output are included.
     /// </summary>
     public DiscoveredParameters ScanParameters(GH_Document document, GH_Component ownerComponent = null)
     {
@@ -103,8 +104,8 @@ public class SchemaManager
     }
 
     /// <summary>
-    ///   Determines which context components are "in scope" for the given owner.
-    ///   Returns null when no owner is specified (all components are in scope).
+    ///     Determines which context components are "in scope" for the given owner.
+    ///     Returns null when no owner is specified (all components are in scope).
     /// </summary>
     private static HashSet<Guid> BuildScopeFilter(GH_Document document, GH_Component ownerComponent)
     {
@@ -125,16 +126,14 @@ public class SchemaManager
 
             if (ParameterTypeHelper.IsWiredToOwner(c, ownerComponent.InstanceGuid) ||
                 ParameterTypeHelper.IsFileOutputBakeComponent(c))
-            {
                 inScope.Add(c.InstanceGuid);
-            }
         }
 
         return inScope;
     }
 
     /// <summary>
-    ///   Single pass over document objects — classify into inputs, print outputs, and bake outputs.
+    ///     Single pass over document objects — classify into inputs, print outputs, and bake outputs.
     /// </summary>
     private static (List<IGH_ContextualParameter> Inputs, List<GH_Component> Prints, List<GH_Component> Bakes)
         ClassifyDocumentObjects(GH_Document document, HashSet<Guid> scopeFilter)
@@ -230,7 +229,7 @@ public class SchemaManager
     }
 
     /// <summary>
-    ///   Populate the default value, handling ValueList parameters specially.
+    ///     Populate the default value, handling ValueList parameters specially.
     /// </summary>
     private static void PopulateInputDefault(IGH_ContextualParameter param, IGH_Param ghParam, DiscoveredInput input)
     {
@@ -296,15 +295,15 @@ public class SchemaManager
     #region Schema Validation
 
     /// <summary>
-    ///   Validate schema against the current document — removes references to missing parameters.
+    ///     Validate schema against the current document — removes references to missing parameters.
     /// </summary>
     public UISchema ValidateSchema(UISchema schema, GH_Document document)
     {
-        return ValidateSchemaAndTrackChanges(schema, document, trackChanges: false).Schema;
+        return ValidateSchemaAndTrackChanges(schema, document, false).Schema;
     }
 
     /// <summary>
-    ///   Validate schema and optionally track which parameter IDs were removed.
+    ///     Validate schema and optionally track which parameter IDs were removed.
     /// </summary>
     public (UISchema Schema, List<Guid> RemovedIds) ValidateSchemaAndTrackChanges(
         UISchema schema, GH_Document document, bool trackChanges = true)
@@ -323,7 +322,7 @@ public class SchemaManager
     }
 
     /// <summary>
-    ///   Gather every parameter ID referenced anywhere in the schema.
+    ///     Gather every parameter ID referenced anywhere in the schema.
     /// </summary>
     private static HashSet<Guid> CollectAllReferencedIds(UISchema schema)
     {
@@ -337,22 +336,20 @@ public class SchemaManager
     }
 
     /// <summary>
-    ///   Check which of the given IDs actually exist in the document.
+    ///     Check which of the given IDs actually exist in the document.
     /// </summary>
     private static HashSet<Guid> ResolveExistingIds(HashSet<Guid> candidates, GH_Document document)
     {
         var existing = new HashSet<Guid>();
         foreach (var id in candidates)
-        {
             if (document.FindObject(id, false) != null)
                 existing.Add(id);
-        }
 
         return existing;
     }
 
     /// <summary>
-    ///   Remove stale inputs, outputs, and layout items. Returns list of removed IDs.
+    ///     Remove stale inputs, outputs, and layout items. Returns list of removed IDs.
     /// </summary>
     private static List<Guid> PurgeStaleReferences(UISchema schema, HashSet<Guid> existingIds)
     {
@@ -372,7 +369,7 @@ public class SchemaManager
     }
 
     /// <summary>
-    ///   Remove stale references without tracking (avoids allocating tracking collections).
+    ///     Remove stale references without tracking (avoids allocating tracking collections).
     /// </summary>
     private static List<Guid> PurgeStaleReferencesUntracked(UISchema schema, HashSet<Guid> existingIds)
     {
@@ -383,9 +380,9 @@ public class SchemaManager
     }
 
     /// <summary>
-    ///   Remove layout items whose parameters no longer exist, cleaning up empty groups and tabs.
-    ///   Note: This method must access the concrete layout types directly because it mutates
-    ///   the group/tab collections (RemoveAll), which requires references to the actual lists.
+    ///     Remove layout items whose parameters no longer exist, cleaning up empty groups and tabs.
+    ///     Note: This method must access the concrete layout types directly because it mutates
+    ///     the group/tab collections (RemoveAll), which requires references to the actual lists.
     /// </summary>
     private static void PurgeStaleLayoutItems(LayoutConfigBase layout, HashSet<Guid> existingIds)
     {
@@ -417,8 +414,8 @@ public class SchemaManager
     #region Metadata Change Detection
 
     /// <summary>
-    ///   Detect metadata changes in parameters since last scan.
-    ///   Returns changed parameters and applies changes to the schema.
+    ///     Detect metadata changes in parameters since last scan.
+    ///     Returns changed parameters and applies changes to the schema.
     /// </summary>
     public DiscoveredParameters DetectMetadataChanges(GH_Document document, UISchema schema)
     {
@@ -443,7 +440,7 @@ public class SchemaManager
     }
 
     /// <summary>
-    ///   Generic change detection for any schema parameter collection.
+    ///     Generic change detection for any schema parameter collection.
     /// </summary>
     private void DetectChanges<TSchema, TDiscovered>(
         GH_Document document,
@@ -479,9 +476,12 @@ public class SchemaManager
     }
 
     /// <summary>
-    ///   Clear the metadata cache (e.g. when the schema is disabled).
+    ///     Clear the metadata cache (e.g. when the schema is disabled).
     /// </summary>
-    public void ClearMetadataCache() => _metadataCache.Clear();
+    public void ClearMetadataCache()
+    {
+        _metadataCache.Clear();
+    }
 
     private ParameterMetadataSnapshot CreateParameterSnapshot(IGH_DocumentObject docObj)
     {
@@ -551,9 +551,9 @@ public class SchemaManager
     #region Apply Metadata Changes
 
     /// <summary>
-    ///   Apply detected metadata changes to the schema.
-    ///   Updates layout item configs (min/max/stepSize, dropdown options).
-    ///   Does NOT update layout displayNames — those are user-controlled in the UI.
+    ///     Apply detected metadata changes to the schema.
+    ///     Updates layout item configs (min/max/stepSize, dropdown options).
+    ///     Does NOT update layout displayNames — those are user-controlled in the UI.
     /// </summary>
     public void ApplyMetadataChangesToSchema(UISchema schema, DiscoveredParameters changes)
     {
@@ -622,10 +622,10 @@ public class SchemaManager
     #region Sync
 
     /// <summary>
-    ///   Compute a diff between current Grasshopper state and schema state.
-    ///   For inputs: syncs GH nickname ↔ layout displayName.
-    ///   For outputs: syncs GH component input-parameter nickname ↔ layout displayName.
-    ///   Descriptions and min/max/stepSize are not synced here.
+    ///     Compute a diff between current Grasshopper state and schema state.
+    ///     For inputs: syncs GH nickname ↔ layout displayName.
+    ///     For outputs: syncs GH component input-parameter nickname ↔ layout displayName.
+    ///     Descriptions and min/max/stepSize are not synced here.
     /// </summary>
     public static SyncDiff ComputeSyncDiff(UISchema schema, GH_Document document)
     {
@@ -636,7 +636,6 @@ public class SchemaManager
         var layoutLookup = GetAllLayoutItems(schema.Layout).ToDictionary(item => item.ParamId);
 
         if (schema.Inputs != null)
-        {
             foreach (var input in schema.Inputs)
             {
                 var docObj = document.FindObject(input.Id, false);
@@ -650,10 +649,8 @@ public class SchemaManager
                 if (docObj.NickName != displayName)
                     AddBidirectionalChange(diff, input.Id, docObj.NickName, displayName);
             }
-        }
 
         if (schema.Outputs != null)
-        {
             foreach (var output in schema.Outputs)
             {
                 if (document.FindObject(output.Id, false) is not GH_Component component)
@@ -672,7 +669,6 @@ public class SchemaManager
                 if (inputParam.NickName != displayName)
                     AddBidirectionalChange(diff, output.Id, inputParam.NickName, displayName);
             }
-        }
 
         return diff;
     }
@@ -703,8 +699,8 @@ public class SchemaManager
     }
 
     /// <summary>
-    ///   Apply selected sync changes to both Grasshopper document and schema.
-    ///   Returns the updated schema if any "fromGH" changes were applied, null otherwise.
+    ///     Apply selected sync changes to both Grasshopper document and schema.
+    ///     Returns the updated schema if any "fromGH" changes were applied, null otherwise.
     /// </summary>
     public static UISchema ApplySyncChanges(List<SyncChange> changes, GH_Document document, UISchema schema)
     {
@@ -737,7 +733,7 @@ public class SchemaManager
             }
         }
 
-        Grasshopper.Instances.ActiveCanvas?.Refresh();
+        Instances.ActiveCanvas?.Refresh();
         return schemaModified ? schema : null;
     }
 
@@ -824,7 +820,7 @@ public class SchemaManager
     #region Helpers
 
     /// <summary>
-    ///   Map a contextual parameter to its Compute-compatible type name.
+    ///     Map a contextual parameter to its Compute-compatible type name.
     /// </summary>
     private static string ResolveParameterTypeName(IGH_ContextualParameter contextParam)
     {
@@ -838,20 +834,18 @@ public class SchemaManager
         var typeName = clrType.Name;
         var resolved = "generic";
         foreach (var kvp in ParameterTypeKeywords)
-        {
             if (typeName.Contains(kvp.Key))
             {
                 resolved = kvp.Value;
                 break;
             }
-        }
 
         TypeNameCache[clrType] = resolved;
         return resolved;
     }
 
     /// <summary>
-    ///   Returns all layout items from either a tabbed or flat layout.
+    ///     Returns all layout items from either a tabbed or flat layout.
     /// </summary>
     private static IEnumerable<LayoutItemBase> GetAllLayoutItems(LayoutConfigBase layout)
     {
@@ -868,7 +862,7 @@ public class SchemaManager
 }
 
 /// <summary>
-///   Snapshot of parameter metadata for change detection.
+///     Snapshot of parameter metadata for change detection.
 /// </summary>
 internal sealed class ParameterMetadataSnapshot : IEquatable<ParameterMetadataSnapshot>
 {
@@ -894,7 +888,10 @@ internal sealed class ParameterMetadataSnapshot : IEquatable<ParameterMetadataSn
                && OptionsEqual(Options, other.Options);
     }
 
-    public override bool Equals(object obj) => Equals(obj as ParameterMetadataSnapshot);
+    public override bool Equals(object obj)
+    {
+        return Equals(obj as ParameterMetadataSnapshot);
+    }
 
     public override int GetHashCode()
     {
@@ -902,11 +899,11 @@ internal sealed class ParameterMetadataSnapshot : IEquatable<ParameterMetadataSn
         unchecked
         {
             var hash = Id.GetHashCode();
-            hash = hash * 397 ^ (Nickname?.GetHashCode() ?? 0);
-            hash = hash * 397 ^ (Description?.GetHashCode() ?? 0);
-            hash = hash * 397 ^ Minimum.GetHashCode();
-            hash = hash * 397 ^ Maximum.GetHashCode();
-            hash = hash * 397 ^ StepSize.GetHashCode();
+            hash = (hash * 397) ^ (Nickname?.GetHashCode() ?? 0);
+            hash = (hash * 397) ^ (Description?.GetHashCode() ?? 0);
+            hash = (hash * 397) ^ Minimum.GetHashCode();
+            hash = (hash * 397) ^ Maximum.GetHashCode();
+            hash = (hash * 397) ^ StepSize.GetHashCode();
             return hash;
         }
     }
@@ -918,10 +915,8 @@ internal sealed class ParameterMetadataSnapshot : IEquatable<ParameterMetadataSn
         if (a.Count != b.Count) return false;
 
         foreach (var kvp in a)
-        {
             if (!b.TryGetValue(kvp.Key, out var value) || value != kvp.Value)
                 return false;
-        }
 
         return true;
     }

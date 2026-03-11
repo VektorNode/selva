@@ -6,22 +6,22 @@ using Grasshopper.Kernel;
 using Rhino;
 using Selva.Core.Models;
 using Selva.GH.Config;
+using Selva.GH.Features.UIBuilder.Helpers;
+using Selva.GH.Features.UIBuilder.Models;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Features.UIBuilder.Services.Events;
 using Selva.GH.Features.UIBuilder.Services.Persistence;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.GH.Features.UIBuilder.Services.State;
 using Selva.GH.Features.UIBuilder.Services.Values;
-using Selva.GH.Features.UIBuilder.Helpers;
-using Selva.GH.Features.UIBuilder.Models;
 using Selva.GH.Utilities.Guards;
 using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
-///   Orchestrates communication between the web UI and Grasshopper component.
-///   Handles WebSocket event routing, message processing, and response broadcasting.
+///     Orchestrates communication between the web UI and Grasshopper component.
+///     Handles WebSocket event routing, message processing, and response broadcasting.
 /// </summary>
 public class BridgeCommunicationService : IDisposable
 {
@@ -30,18 +30,18 @@ public class BridgeCommunicationService : IDisposable
     private const int InitialOutputBroadcastDelayMs = AppConfig.UIBuilder.InitialOutputBroadcastDelayMs;
 
     private readonly CommunicationHandler _communicationHandler;
-    private readonly SchemaManager _schemaManager;
-    private readonly ValueApplicator _valueApplicator;
-    private readonly ValueCollector _valueCollector;
-    private readonly ComponentStateManager _stateManager;
     private readonly DocumentEventManager _eventManager;
     private readonly Version _pluginVersion;
+    private readonly SchemaManager _schemaManager;
     private readonly string _sessionId;
+    private readonly ComponentStateManager _stateManager;
+    private readonly ValueApplicator _valueApplicator;
+    private readonly ValueCollector _valueCollector;
 
     private GH_Component _component;
+    private bool _disposed;
     private Func<UISchema> _getSchema;
     private Action<UISchema> _setSchema;
-    private bool _disposed;
 
     public BridgeCommunicationService(
         CommunicationHandler communicationHandler,
@@ -63,12 +63,25 @@ public class BridgeCommunicationService : IDisposable
         _sessionId = sessionId ?? throw new ArgumentNullException(nameof(sessionId));
     }
 
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        _communicationHandler.OnValuesReceived -= HandleWebSocketValueUpdate;
+        _communicationHandler.OnCurrentValuesRequested -= HandleCurrentValuesRequest;
+        _communicationHandler.OnClientConnected -= HandleClientConnected;
+        _communicationHandler.OnSchemaSaveRequested -= HandleSchemaSave;
+        _communicationHandler.OnSyncPreviewRequested -= HandleSyncPreviewRequest;
+        _communicationHandler.OnSyncChangesApply -= HandleApplySyncChanges;
+    }
+
     // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------
 
     /// <summary>
-    ///   Initialize the service and wire up WebSocket event handlers.
+    ///     Initialize the service and wire up WebSocket event handlers.
     /// </summary>
     public void Initialize(
         GH_Component component,
@@ -87,19 +100,6 @@ public class BridgeCommunicationService : IDisposable
         _communicationHandler.OnSyncChangesApply += HandleApplySyncChanges;
     }
 
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-
-        _communicationHandler.OnValuesReceived -= HandleWebSocketValueUpdate;
-        _communicationHandler.OnCurrentValuesRequested -= HandleCurrentValuesRequest;
-        _communicationHandler.OnClientConnected -= HandleClientConnected;
-        _communicationHandler.OnSchemaSaveRequested -= HandleSchemaSave;
-        _communicationHandler.OnSyncPreviewRequested -= HandleSyncPreviewRequest;
-        _communicationHandler.OnSyncChangesApply -= HandleApplySyncChanges;
-    }
-
     // -------------------------------------------------------------------------
     // WebSocket event handlers
     // -------------------------------------------------------------------------
@@ -111,7 +111,8 @@ public class BridgeCommunicationService : IDisposable
             if (_stateManager.IsSolving)
             {
                 Logger.Log("[BridgeCommunicationService] Skipping value update — currently solving.");
-                _ = _communicationHandler.BroadcastRuntimeMessage("warning", "Skipping value update — currently solving.");
+                _ = _communicationHandler.BroadcastRuntimeMessage("warning",
+                    "Skipping value update — currently solving.");
                 return;
             }
 
@@ -236,7 +237,7 @@ public class BridgeCommunicationService : IDisposable
 
             _ = _communicationHandler.BroadcastSchemaSaved(true);
 
-            GHDocumentMutator.ScheduleComponentExpire(document, _component, false);
+            GHDocumentMutator.ScheduleComponentExpire(document, _component);
 #if DEBUG
             Logger.Log("[UIBuilder] Save complete — component expire scheduled.");
 #endif
@@ -341,8 +342,8 @@ public class BridgeCommunicationService : IDisposable
     // -------------------------------------------------------------------------
 
     /// <summary>
-    ///   Returns the first ContextBakeComponent wired to the UIBridge's Schema output,
-    ///   or null if none is connected.
+    ///     Returns the first ContextBakeComponent wired to the UIBridge's Schema output,
+    ///     or null if none is connected.
     /// </summary>
     private GH_Component FindWiredContextBake()
     {
@@ -361,8 +362,8 @@ public class BridgeCommunicationService : IDisposable
     }
 
     /// <summary>
-    ///   Reads the UISchema from a ContextBakeComponent's volatile data.
-    ///   Returns null if no schema is stored yet (first-time use).
+    ///     Reads the UISchema from a ContextBakeComponent's volatile data.
+    ///     Returns null if no schema is stored yet (first-time use).
     /// </summary>
     private static UISchema ReadSchemaFromContextBake(GH_Component contextBake)
     {
@@ -379,8 +380,8 @@ public class BridgeCommunicationService : IDisposable
     // -------------------------------------------------------------------------
 
     /// <summary>
-    ///   Defers output broadcasting by <see cref="InitialOutputBroadcastDelayMs"/> to allow
-    ///   Grasshopper to finish its current solution before we read output data.
+    ///     Defers output broadcasting by <see cref="InitialOutputBroadcastDelayMs" /> to allow
+    ///     Grasshopper to finish its current solution before we read output data.
     /// </summary>
     private void ScheduleOutputBroadcast(UISchema schema)
     {
@@ -405,30 +406,33 @@ public class BridgeCommunicationService : IDisposable
         return _schemaManager.ScanParameters(document, _component);
     }
 
-    private UISchema CreateDefaultSchema(GH_Document document) => new()
+    private UISchema CreateDefaultSchema(GH_Document document)
     {
-        Id = Guid.NewGuid().ToString(),
-        Name = "New Schema",
-        Description = "Configure your Grasshopper UI",
-        ProjectFileName = document.Properties.ProjectFileName,
-        DocumentId = document.DocumentID,
-        PluginVersion = _pluginVersion.ToString(),
-        Tags = [],
-        Created = DateTime.UtcNow,
-        Inputs = [],
-        Outputs = [],
-        Layout = new TabbedLayoutConfig { Tabs = [] },
-        ViewerOptions = new ViewerOptions
+        return new UISchema
         {
-            EnableLocal = false,
-            EnableRemote = false,
-            BackgroundColor = "#f3f3f3"
-        },
-        InstanceSolve = true
-    };
+            Id = Guid.NewGuid().ToString(),
+            Name = "New Schema",
+            Description = "Configure your Grasshopper UI",
+            ProjectFileName = document.Properties.ProjectFileName,
+            DocumentId = document.DocumentID,
+            PluginVersion = _pluginVersion.ToString(),
+            Tags = [],
+            Created = DateTime.UtcNow,
+            Inputs = [],
+            Outputs = [],
+            Layout = new TabbedLayoutConfig { Tabs = [] },
+            ViewerOptions = new ViewerOptions
+            {
+                EnableLocal = false,
+                EnableRemote = false,
+                BackgroundColor = "#f3f3f3"
+            },
+            InstanceSolve = true
+        };
+    }
 
     /// <summary>
-    ///   Deduplicates AcceptedFormats on all file inputs before saving.
+    ///     Deduplicates AcceptedFormats on all file inputs before saving.
     /// </summary>
     private static void SanitizeSchema(UISchema schema)
     {
@@ -442,19 +446,20 @@ public class BridgeCommunicationService : IDisposable
         };
 
         foreach (var item in groups.SelectMany(g => g.Items).OfType<InputFileLayoutItem>())
-        {
             if (item.Config?.AcceptedFormats is { Count: > 0 } formats)
                 item.Config.AcceptedFormats = formats
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
-        }
     }
 
-    private static string ConvertMessageLevel(GH_RuntimeMessageLevel level) => level switch
+    private static string ConvertMessageLevel(GH_RuntimeMessageLevel level)
     {
-        GH_RuntimeMessageLevel.Error => "error",
-        GH_RuntimeMessageLevel.Warning => "warning",
-        GH_RuntimeMessageLevel.Remark => "info",
-        _ => "info"
-    };
+        return level switch
+        {
+            GH_RuntimeMessageLevel.Error => "error",
+            GH_RuntimeMessageLevel.Warning => "warning",
+            GH_RuntimeMessageLevel.Remark => "info",
+            _ => "info"
+        };
+    }
 }

@@ -5,12 +5,12 @@ using SheepMetal.PluginGrasshopper.Upgraders;
 namespace Selva.GH.Features.FileIO.Components;
 
 /// <summary>
-///   Upgrades OBSOLETE_BlockToFile_UntilV0_6_2 (06308887) to GH_BlockToFile (BC984091).
-///   Added: Format input (index 2) and Sub Folder input (index 3). Previous inputs map 1:1.
+///     Upgrades OBSOLETE_BlockToFile_UntilV0_6_2 (06308887) to GH_BlockToFile (BC984091).
+///     Added: Format input (index 2) and Sub Folder input (index 3). Previous inputs map 1:1.
 /// </summary>
 public class GH_BlockToFileUpgrader : IGH_UpgradeObject
 {
-    public DateTime Version => new DateTime(2026, 3, 10);
+    public DateTime Version => new(2026, 3, 10);
     public Guid UpgradeFrom => new("06308887-AADB-40EE-A6A8-9CC8E05900EB");
     public Guid UpgradeTo => new("BC984091-9444-4757-B781-486DDC31BDC4");
 
@@ -20,8 +20,8 @@ public class GH_BlockToFileUpgrader : IGH_UpgradeObject
 
         var helper = new GH_ComponentUpgradeHelper(oldComponent, UpgradeTo);
         var newComponent = helper
-            .MapInput(0, 0)  // Block
-            .MapInput(1, 1)  // File Name
+            .MapInput(0, 0) // Block
+            .MapInput(1, 1) // File Name
             .MapOutput(0, 0) // File
             .Execute();
 

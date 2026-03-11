@@ -9,17 +9,16 @@ using Selva.Core.Models;
 using Selva.GH.Features.ComputeIO.Components;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.FileIO.Services;
-using Selva.GH.Features.UIBuilder.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services.Values;
 
 /// <summary>
-///   Handles collection and extraction of values from Grasshopper parameters and components
+///     Handles collection and extraction of values from Grasshopper parameters and components
 /// </summary>
 public class ValueCollector
 {
     /// <summary>
-    ///   Collect current input values from all parameters in the schema
+    ///     Collect current input values from all parameters in the schema
     /// </summary>
     public Dictionary<string, object> CollectInputValues(GH_Document document, UISchema schema,
         Action<GH_RuntimeMessageLevel, string> addMessage = null)
@@ -50,7 +49,7 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Collect output values from all output components in the schema
+    ///     Collect output values from all output components in the schema
     /// </summary>
     public Dictionary<string, object> CollectOutputValues(GH_Document document, UISchema schema,
         Action<GH_RuntimeMessageLevel, string> addMessage = null)
@@ -81,7 +80,7 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Collect file outputs from components that output FileData
+    ///     Collect file outputs from components that output FileData
     /// </summary>
     public Dictionary<string, object> CollectFileOutputs(GH_Document document, UISchema schema,
         Action<GH_RuntimeMessageLevel, string> addMessage = null)
@@ -117,9 +116,9 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Collect display data from ContextBakeComponent inputs.
-    ///   Returns an array of MeshBatch objects (as JSON-serializable objects).
-    ///   This mirrors Rhino.Compute behavior where baking is explicit.
+    ///     Collect display data from ContextBakeComponent inputs.
+    ///     Returns an array of MeshBatch objects (as JSON-serializable objects).
+    ///     This mirrors Rhino.Compute behavior where baking is explicit.
     /// </summary>
     public List<object> CollectDisplayData(GH_Document document,
         Action<GH_RuntimeMessageLevel, string> addMessage = null)
@@ -153,7 +152,7 @@ public class ValueCollector
                     else
                     {
                         displayDataList.Add(displayData);
-                        Debug.WriteLine($"[ValueCollector] Added 1 batch to display list");
+                        Debug.WriteLine("[ValueCollector] Added 1 batch to display list");
                     }
                 }
                 else
@@ -175,8 +174,8 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Extract display data from a ContextBakeComponent's input parameters.
-    ///   Flattens all WebDisplayGoo objects from all inputs into a single list.
+    ///     Extract display data from a ContextBakeComponent's input parameters.
+    ///     Flattens all WebDisplayGoo objects from all inputs into a single list.
     /// </summary>
     private object ExtractDisplayDataFromContextBake(IGH_Component component,
         Action<GH_RuntimeMessageLevel, string> addMessage)
@@ -215,7 +214,7 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Check if component is a ContextBakeComponent
+    ///     Check if component is a ContextBakeComponent
     /// </summary>
     private static bool IsContextBakeComponent(IGH_Component component)
     {
@@ -225,7 +224,7 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Extract value from a parameter, handling ValueList parameters specially
+    ///     Extract value from a parameter, handling ValueList parameters specially
     /// </summary>
     private object ExtractParameterValue(IGH_Param ghParam, SchemaInput input)
     {
@@ -237,7 +236,7 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Extract value from ValueList parameter
+    ///     Extract value from ValueList parameter
     /// </summary>
     private object ExtractValueListValue(GetValueListParameter valueListParam)
     {
@@ -254,7 +253,7 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Extract output value from a component's input parameters
+    ///     Extract output value from a component's input parameters
     /// </summary>
     private object ExtractComponentOutput(IGH_Component component)
     {
@@ -266,7 +265,7 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Extract data from IGH_Structure (handles single values and lists)
+    ///     Extract data from IGH_Structure (handles single values and lists)
     /// </summary>
     private object ExtractDataFromVolatileData(IGH_Structure volatileData)
     {
@@ -281,7 +280,7 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Extract FileData from all inputs of a component
+    ///     Extract FileData from all inputs of a component
     /// </summary>
     private List<object> ExtractFileDataFromComponent(IGH_Component component,
         Action<GH_RuntimeMessageLevel, string> addMessage)
@@ -295,7 +294,7 @@ public class ValueCollector
             var allData = inputParam.VolatileData.AllData(true);
             foreach (var gooObj in allData)
                 if (gooObj?.GetType().FullName != null &&
-                        gooObj.GetType().FullName.IndexOf("FileDataGoo", StringComparison.OrdinalIgnoreCase) >= 0)
+                    gooObj.GetType().FullName.IndexOf("FileDataGoo", StringComparison.OrdinalIgnoreCase) >= 0)
                     try
                     {
                         var extractedFileData = ExtractFileDataFromGoo(gooObj);
@@ -312,9 +311,9 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Extract WebDisplayGoo data from a component's output parameters.
-    ///   Returns the MeshBatch object only if the output is wired into a ContextBakeComponent,
-    ///   mirroring the Rhino.Compute behaviour where baking is explicit.
+    ///     Extract WebDisplayGoo data from a component's output parameters.
+    ///     Returns the MeshBatch object only if the output is wired into a ContextBakeComponent,
+    ///     mirroring the Rhino.Compute behaviour where baking is explicit.
     /// </summary>
     private object ExtractWebDisplayDataFromComponent(IGH_Component component,
         Action<GH_RuntimeMessageLevel, string> addMessage)
@@ -343,7 +342,7 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Extract the key/name from ValueList data (not the expression value)
+    ///     Extract the key/name from ValueList data (not the expression value)
     /// </summary>
     private object ExtractKeyFromValueListData(IGH_Goo data)
     {
@@ -353,7 +352,7 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Extract value from IGH_Goo wrapper
+    ///     Extract value from IGH_Goo wrapper
     /// </summary>
     private object ExtractValue(IGH_Goo data)
     {
@@ -367,7 +366,6 @@ public class ValueCollector
 
         // Handle FileInputGoo - return metadata only (not the full base64 file content!)
         if (data?.GetType().FullName?.IndexOf("FileInputGoo", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
             try
             {
                 var fileInputGooType = data.GetType();
@@ -392,7 +390,7 @@ public class ValueCollector
                         var metadata = new
                         {
                             type = fileType,
-                            fileEnding = fileEnding,
+                            fileEnding,
                             file = fileContent.Length > 100 ? fileContent.Substring(0, 100) + "..." : fileContent,
                             _fileSize = fileContent.Length,
                             _isMetadata = true // Flag to indicate this is metadata only
@@ -406,7 +404,6 @@ public class ValueCollector
             {
                 // Fall through to default behavior
             }
-        }
 
         if (data.CastTo(out string strValue)) return strValue;
 
@@ -414,7 +411,7 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///   Extract FileData object from FileDataGoo using direct casting
+    ///     Extract FileData object from FileDataGoo using direct casting
     /// </summary>
     private object ExtractFileDataFromGoo(IGH_Goo gooObj)
     {

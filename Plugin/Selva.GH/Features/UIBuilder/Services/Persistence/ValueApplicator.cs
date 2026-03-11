@@ -2,20 +2,24 @@ using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq.Expressions;
 using System.Reflection;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Selva.Core.Models;
 using Selva.GH.Config;
 using Selva.GH.Features.FileIO.Services;
+using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services.Persistence;
 
 /// <summary>
-///   Handles applying values from web UI to Grasshopper parameters
+///     Handles applying values from web UI to Grasshopper parameters
 /// </summary>
 public class ValueApplicator
 {
@@ -29,15 +33,21 @@ public class ValueApplicator
             { "text", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) },
             { "boolean", (typeof(GH_Boolean), val => new GH_Boolean(Convert.ToBoolean(val))) },
             { "valueList", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) },
-            { "file", (typeof(FileInputGoo), val => {
-                var json = val?.ToString() ?? "";
-                try {
-                    var fileData = Newtonsoft.Json.JsonConvert.DeserializeObject<FileInputData>(json);
-                    return new FileInputGoo(fileData);
-                } catch {
-                    return new FileInputGoo();
-                }
-            }) },
+            {
+                "file", (typeof(FileInputGoo), val =>
+                {
+                    var json = val?.ToString() ?? "";
+                    try
+                    {
+                        var fileData = JsonConvert.DeserializeObject<FileInputData>(json);
+                        return new FileInputGoo(fileData);
+                    }
+                    catch
+                    {
+                        return new FileInputGoo();
+                    }
+                })
+            },
             { "color", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) }
         };
 
@@ -47,8 +57,8 @@ public class ValueApplicator
     private ConcurrentDictionary<string, object> _lastAppliedValues = new();
 
     /// <summary>
-    ///   Apply values from web UI to Grasshopper parameters and schedule a solution
-    ///   Uses the ScheduleSolution pattern for clean, predictable behavior
+    ///     Apply values from web UI to Grasshopper parameters and schedule a solution
+    ///     Uses the ScheduleSolution pattern for clean, predictable behavior
     /// </summary>
     /// <returns>Number of parameters updated</returns>
     public int ApplyValuesAndSchedule(GH_Document document, UISchema schema, Dictionary<string, object> values,
@@ -85,7 +95,8 @@ public class ValueApplicator
                 if (paramObject is IGH_ContextualParameter contextParam)
                 {
                     var success =
-                        ApplyToContextualParameter(contextParam, input.ParamType, value, addMessage, pendingExpirations);
+                        ApplyToContextualParameter(contextParam, input.ParamType, value, addMessage,
+                            pendingExpirations);
                     if (success)
                     {
                         updateCount++;
@@ -127,17 +138,18 @@ public class ValueApplicator
     }
 
     /// <summary>
-    ///   Check if value has changed since last application
+    ///     Check if value has changed since last application
     /// </summary>
     public bool HasValueChanged(string key, object newValue)
     {
-        if (_lastAppliedValues.TryGetValue(key, out var lastValue)) return newValue?.ToString() != lastValue?.ToString();
+        if (_lastAppliedValues.TryGetValue(key, out var lastValue))
+            return newValue?.ToString() != lastValue?.ToString();
 
         return true;
     }
 
     /// <summary>
-    ///   Get or create cached reflection results for a given type
+    ///     Get or create cached reflection results for a given type
     /// </summary>
     private ReflectionCache GetOrCreateCache(Type ghType)
     {
@@ -158,7 +170,7 @@ public class ValueApplicator
     }
 
     /// <summary>
-    ///   Get the last applied values dictionary
+    ///     Get the last applied values dictionary
     /// </summary>
     public Dictionary<string, object> GetLastAppliedValues()
     {
@@ -166,7 +178,7 @@ public class ValueApplicator
     }
 
     /// <summary>
-    ///   Set the last applied values (used when loading from embedded data)
+    ///     Set the last applied values (used when loading from embedded data)
     /// </summary>
     public void SetLastAppliedValues(Dictionary<string, object> values)
     {
@@ -174,8 +186,8 @@ public class ValueApplicator
     }
 
     /// <summary>
-    ///   Remove specific values by keys (thread-safe)
-    ///   Used when parameters are deleted from the document
+    ///     Remove specific values by keys (thread-safe)
+    ///     Used when parameters are deleted from the document
     /// </summary>
     public void RemoveValues(IEnumerable<string> keys)
     {
@@ -185,7 +197,7 @@ public class ValueApplicator
     }
 
     /// <summary>
-    ///   Clear all tracked values
+    ///     Clear all tracked values
     /// </summary>
     public void Clear()
     {
@@ -193,8 +205,8 @@ public class ValueApplicator
     }
 
     /// <summary>
-    ///   Validate input value against security constraints
-    ///   Note: Parameter range constraints (min/max) are enforced at UI level and not redundantly checked here
+    ///     Validate input value against security constraints
+    ///     Note: Parameter range constraints (min/max) are enforced at UI level and not redundantly checked here
     /// </summary>
     private bool ValidateValue(SchemaInput input, object value,
         Action<GH_RuntimeMessageLevel, string> addMessage)
@@ -260,8 +272,8 @@ public class ValueApplicator
     }
 
     /// <summary>
-    ///   Apply a value to a contextual parameter using reflection and type handlers
-    ///   Uses cached reflection to eliminate overhead
+    ///     Apply a value to a contextual parameter using reflection and type handlers
+    ///     Uses cached reflection to eliminate overhead
     /// </summary>
     private bool ApplyToContextualParameter(IGH_ContextualParameter contextParam, string paramTypeName,
         object value, Action<GH_RuntimeMessageLevel, string> addMessage, HashSet<IGH_ActiveObject> pendingExpirations)
@@ -269,13 +281,12 @@ public class ValueApplicator
         try
         {
             // Special handling for ValueList - use the parameter's native type
-            if (paramTypeName == "valueList") return ApplyToValueList(contextParam, value, addMessage, pendingExpirations);
+            if (paramTypeName == "valueList")
+                return ApplyToValueList(contextParam, value, addMessage, pendingExpirations);
 
             // Special handling for file parameters - don't use AssignContextualDataTree
             if (paramTypeName == "file")
-            {
-                return ApplyToFileParameter((object)contextParam, value, addMessage, pendingExpirations);
-            }
+                return ApplyToFileParameter(contextParam, value, addMessage, pendingExpirations);
 
             if (!TypeHandlers.TryGetValue(paramTypeName, out var handler))
             {
@@ -319,8 +330,8 @@ public class ValueApplicator
     }
 
     /// <summary>
-    ///   Apply a value to a ValueList parameter by selecting the item by name
-    ///   Also adds the connected GH_ValueList to pending expirations
+    ///     Apply a value to a ValueList parameter by selecting the item by name
+    ///     Also adds the connected GH_ValueList to pending expirations
     /// </summary>
     private bool ApplyToValueList(IGH_ContextualParameter contextParam, object value,
         Action<GH_RuntimeMessageLevel, string> addMessage, HashSet<IGH_ActiveObject> pendingExpirations)
@@ -369,9 +380,9 @@ public class ValueApplicator
     }
 
     /// <summary>
-    ///   Apply a file value to a regular (non-contextual) parameter
-    ///   Handles parameters like File_Selector or generic input parameters
-    ///   File value can be: JSON string, JObject, or FileInputData instance
+    ///     Apply a file value to a regular (non-contextual) parameter
+    ///     Handles parameters like File_Selector or generic input parameters
+    ///     File value can be: JSON string, JObject, or FileInputData instance
     /// </summary>
     private bool ApplyToFileParameter(object paramObject, object value,
         Action<GH_RuntimeMessageLevel, string> addMessage, HashSet<IGH_ActiveObject> pendingExpirations)
@@ -395,7 +406,7 @@ public class ValueApplicator
                     // Already deserialized
                     fileData = existingData;
                 }
-                else if (value is Newtonsoft.Json.Linq.JObject jObject)
+                else if (value is JObject jObject)
                 {
                     // Convert JObject to FileInputData
                     fileData = jObject.ToObject<FileInputData>();
@@ -403,8 +414,8 @@ public class ValueApplicator
                 else if (value is Dictionary<string, object> dict)
                 {
                     // Convert dictionary to FileInputData
-                    fileData = Newtonsoft.Json.JsonConvert.DeserializeObject<FileInputData>(
-                        Newtonsoft.Json.JsonConvert.SerializeObject(dict));
+                    fileData = JsonConvert.DeserializeObject<FileInputData>(
+                        JsonConvert.SerializeObject(dict));
                 }
                 else
                 {
@@ -415,7 +426,7 @@ public class ValueApplicator
                     if (strValue.TrimStart().StartsWith("{"))
                     {
                         // Parse as JSON
-                        fileData = Newtonsoft.Json.JsonConvert.DeserializeObject<FileInputData>(strValue);
+                        fileData = JsonConvert.DeserializeObject<FileInputData>(strValue);
                     }
                     else if (strValue.StartsWith("http://") || strValue.StartsWith("https://"))
                     {
@@ -429,7 +440,7 @@ public class ValueApplicator
                     else
                     {
                         addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
-                            $"File data is empty");
+                            "File data is empty");
                         return false;
                     }
                 }
@@ -457,7 +468,6 @@ public class ValueApplicator
                 var assignContextualDataMethod = paramObject.GetType().GetMethod("AssignContextualData",
                     new[] { typeof(IEnumerable) });
                 if (assignContextualDataMethod != null)
-                {
                     try
                     {
                         var dataList = new List<object> { fileGoo };
@@ -470,9 +480,8 @@ public class ValueApplicator
                     }
                     catch (Exception ex)
                     {
-                        Utilities.Helpers.Logger.Log($"[ValueApplicator] AssignContextualData failed: {ex.Message}");
+                        Logger.Log($"[ValueApplicator] AssignContextualData failed: {ex.Message}");
                     }
-                }
             }
 
             // Fallback: Try standard data tree methods
@@ -483,56 +492,46 @@ public class ValueApplicator
             var addVolatileMethod = param.GetType().GetMethod("AddVolatileDataTree",
                 new[] { typeof(IGH_DataTree) });
             if (addVolatileMethod != null)
-            {
                 try
                 {
                     addVolatileMethod.Invoke(param, new object[] { dataTree });
 
-                    if (paramObject is IGH_ActiveObject activeObj)
-                    {
-                        pendingExpirations.Add(activeObj);
-                    }
+                    if (paramObject is IGH_ActiveObject activeObj) pendingExpirations.Add(activeObj);
 
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    Utilities.Helpers.Logger.Log($"[ValueApplicator] AddVolatileDataTree failed: {ex.Message}");
+                    Logger.Log($"[ValueApplicator] AddVolatileDataTree failed: {ex.Message}");
                 }
-            }
 
             // Attempt 2: AddVolatileData with IGH_Goo
             param.ClearData();
             var addMethod = param.GetType().GetMethod("AddVolatileData",
                 new[] { typeof(IGH_Goo) });
             if (addMethod != null)
-            {
                 try
                 {
                     addMethod.Invoke(param, new object[] { fileGoo });
 
-                    if (paramObject is IGH_ActiveObject activeObj)
-                    {
-                        pendingExpirations.Add(activeObj);
-                    }
+                    if (paramObject is IGH_ActiveObject activeObj) pendingExpirations.Add(activeObj);
 
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    Utilities.Helpers.Logger.Log($"[ValueApplicator] AddVolatileData failed: {ex.Message}");
+                    Logger.Log($"[ValueApplicator] AddVolatileData failed: {ex.Message}");
                 }
-            }
 
             addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
-                $"Could not find any method to assign file data to parameter (tried: AssignContextualData, AddVolatileDataTree, AddVolatileData)");
+                "Could not find any method to assign file data to parameter (tried: AssignContextualData, AddVolatileDataTree, AddVolatileData)");
             return false;
 
             // Mark parameter as modified so it updates downstream (unreachable, but kept for structure)
             /*if (paramObject is IGH_ActiveObject activeObj)
-			{
-				pendingExpirations.Add(activeObj);
-			}*/
+            {
+                pendingExpirations.Add(activeObj);
+            }*/
 
             /*return true;*/
         }
@@ -545,8 +544,8 @@ public class ValueApplicator
     }
 
     /// <summary>
-    ///   Validates that a file path received over WebSocket is a safe local path.
-    ///   Blocks UNC paths (\\server\share), path traversal (..), and non-rooted relative paths.
+    ///     Validates that a file path received over WebSocket is a safe local path.
+    ///     Blocks UNC paths (\\server\share), path traversal (..), and non-rooted relative paths.
     /// </summary>
     private static bool IsSafeLocalPath(string path)
     {
@@ -567,7 +566,7 @@ public class ValueApplicator
         // Require an absolute local path — reject relative paths that could escape CWD
         try
         {
-            return System.IO.Path.IsPathRooted(path);
+            return Path.IsPathRooted(path);
         }
         catch
         {
@@ -576,7 +575,7 @@ public class ValueApplicator
     }
 
     /// <summary>
-    ///   Cache for reflection results per type - eliminates overhead per parameter update
+    ///     Cache for reflection results per type - eliminates overhead per parameter update
     /// </summary>
     private class ReflectionCache
     {
