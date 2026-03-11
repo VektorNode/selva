@@ -11,15 +11,15 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
-/// Handles synchronization between Grasshopper document changes and UI schema state.
-/// Subscribes to document events and coordinates schema validation, parameter updates, and broadcasts.
+///     Handles synchronization between Grasshopper document changes and UI schema state.
+///     Subscribes to document events and coordinates schema validation, parameter updates, and broadcasts.
 /// </summary>
 public class DocumentSynchronizationService : IDisposable
 {
+    private readonly SchemaCleanupService _cleanupService;
+    private readonly CommunicationHandler _communicationHandler;
     private readonly DocumentEventManager _eventManager;
     private readonly SchemaManager _schemaManager;
-    private readonly CommunicationHandler _communicationHandler;
-    private readonly SchemaCleanupService _cleanupService;
 
     private GH_Component _component;
     private GH_Document _currentDocument;
@@ -29,9 +29,6 @@ public class DocumentSynchronizationService : IDisposable
     private Func<UISchema> _getSchema;
     private Func<Dictionary<string, object>> _getValues;
     private Action<UISchema> _setSchema;
-
-    // Delegate for parameter deletion handling
-    public event Action<List<Guid>, GH_Document> OnParameterDeletionRequired;
 
     public DocumentSynchronizationService(
         DocumentEventManager eventManager,
@@ -45,8 +42,25 @@ public class DocumentSynchronizationService : IDisposable
         _cleanupService = cleanupService ?? throw new ArgumentNullException(nameof(cleanupService));
     }
 
+    public void Dispose()
+    {
+        if (_disposed) return;
+
+        // Unwire event handlers
+        if (_eventManager != null)
+        {
+            _eventManager.ParametersChanged -= HandleParametersChanged;
+            _eventManager.MetadataChanged -= HandleMetadataChanged;
+        }
+
+        _disposed = true;
+    }
+
+    // Delegate for parameter deletion handling
+    public event Action<List<Guid>, GH_Document> OnParameterDeletionRequired;
+
     /// <summary>
-    /// Initialize the service and wire up document event handlers.
+    ///     Initialize the service and wire up document event handlers.
     /// </summary>
     public void Initialize(
         GH_Component component,
@@ -66,20 +80,6 @@ public class DocumentSynchronizationService : IDisposable
         _eventManager.MetadataChanged += HandleMetadataChanged;
     }
 
-    public void Dispose()
-    {
-        if (_disposed) return;
-
-        // Unwire event handlers
-        if (_eventManager != null)
-        {
-            _eventManager.ParametersChanged -= HandleParametersChanged;
-            _eventManager.MetadataChanged -= HandleMetadataChanged;
-        }
-
-        _disposed = true;
-    }
-
     private void HandleParametersChanged(object sender, ParametersChangedEventArgs e)
     {
         try
@@ -92,13 +92,15 @@ public class DocumentSynchronizationService : IDisposable
             {
                 if (currentParams.Inputs.Count > 0 || currentParams.Outputs.Count > 0)
                 {
-                    _ = _communicationHandler.BroadcastMessage("parametersAdded", new { availableParams = currentParams })
+                    _ = _communicationHandler
+                        .BroadcastMessage("parametersAdded", new { availableParams = currentParams })
                         .ContinueWith(t =>
                         {
                             if (t.IsFaulted)
                             {
                                 Logger.Error("Failed to broadcast parametersAdded", t.Exception);
-                                _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Failed to broadcast parametersAdded");
+                                _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                                    "Failed to broadcast parametersAdded");
                             }
                         });
 
@@ -117,7 +119,7 @@ public class DocumentSynchronizationService : IDisposable
                 _setSchema(updatedSchema);
                 OnParameterDeletionRequired?.Invoke(removedIds, e.Document);
 
-                GHDocumentMutator.ScheduleComponentExpire(e.Document, _component, false);
+                GHDocumentMutator.ScheduleComponentExpire(e.Document, _component);
             }
             else
             {
@@ -134,13 +136,15 @@ public class DocumentSynchronizationService : IDisposable
 
                 if (newParamIds.Count > 0 || newOutputIds.Count > 0)
                 {
-                    _ = _communicationHandler.BroadcastMessage("parametersAdded", new { availableParams = currentParams })
+                    _ = _communicationHandler
+                        .BroadcastMessage("parametersAdded", new { availableParams = currentParams })
                         .ContinueWith(t =>
                         {
                             if (t.IsFaulted)
                             {
                                 Logger.Error("Failed to broadcast parametersAdded", t.Exception);
-                                _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Failed to broadcast parametersAdded");
+                                _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                                    "Failed to broadcast parametersAdded");
                             }
                         });
 
@@ -169,7 +173,8 @@ public class DocumentSynchronizationService : IDisposable
                     Logger.Log("[UIBuilder] MetadataChanged — triggering ExpireSolution (slider range or ValueList options changed)");
 #endif
                     _component?.ExpireSolution(false);
-                    _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Source parameter changed - recalculating");
+                    _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                        "Source parameter changed - recalculating");
                 }
 #if DEBUG
                 else
@@ -181,23 +186,21 @@ public class DocumentSynchronizationService : IDisposable
         }
         catch (Exception ex)
         {
-            _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Error handling metadata changes: {ex.Message}");
+            _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                $"Error handling metadata changes: {ex.Message}");
         }
     }
 
     private DiscoveredParameters GetCurrentAvailableParameters(GH_Document document)
     {
         if (document == null || _schemaManager == null || _component == null)
-        {
             return new DiscoveredParameters
             {
                 SessionId = "",
                 Inputs = [],
                 Outputs = []
             };
-        }
 
         return _schemaManager.ScanParameters(document, _component);
     }
 }
-

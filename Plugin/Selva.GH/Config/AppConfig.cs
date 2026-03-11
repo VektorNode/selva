@@ -1,5 +1,4 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 
 namespace Selva.GH.Config;
 
@@ -16,9 +15,9 @@ public static class AppConfig
         public const int MaxConcurrentClients = 10;
         public const int HeartbeatIntervalMs = 30_000; // 30 s
         public const int BroadcastTimeoutMs = 30_000; // 30 s — covers large file uploads
-        public const int ClientCloseTimeoutMs = 1_000;  //  1 s
-        public const int PingTimeoutMs = 5_000;  //  5 s
-        public const int ServerStartupTimeoutMs = 5_000;  //  5 s
+        public const int ClientCloseTimeoutMs = 1_000; //  1 s
+        public const int PingTimeoutMs = 5_000; //  5 s
+        public const int ServerStartupTimeoutMs = 5_000; //  5 s
         public const int ReceiveTimeoutMs = 120_000; // 2 min — covers large file uploads
     }
 
@@ -46,8 +45,8 @@ public static class AppConfig
     public static class UIBuilder
     {
         /// <summary>
-        ///   Delay before broadcasting initial outputs after a client connects.
-        ///   Gives Grasshopper time to finish its current solution before output data is read.
+        ///     Delay before broadcasting initial outputs after a client connects.
+        ///     Gives Grasshopper time to finish its current solution before output data is read.
         /// </summary>
         public const int InitialOutputBroadcastDelayMs = 100;
     }
@@ -57,13 +56,13 @@ public static class AppConfig
     // -------------------------------------------------------------------------
     public static class ValueLimits
     {
-        public const int MaxStringLength = 100_000;        // 100 KB for regular strings
+        public const int MaxStringLength = 100_000; // 100 KB for regular strings
         public const int MaxFileSizeMB = 150;
         public const int MaxFileSizeBytes = MaxFileSizeMB * 1024 * 1024;
 
         // Base64 adds ~33 % overhead; 1.5x gives headroom for JSON wrapping and headers.
         // Scales automatically when MaxFileSizeMB changes.
-        public const int MaxBase64StringLength = MaxFileSizeBytes + (MaxFileSizeBytes / 2);
+        public const int MaxBase64StringLength = MaxFileSizeBytes + MaxFileSizeBytes / 2;
 
         public const int StreamingThresholdBytes = 10 * 1024 * 1024; // 10 MB
     }

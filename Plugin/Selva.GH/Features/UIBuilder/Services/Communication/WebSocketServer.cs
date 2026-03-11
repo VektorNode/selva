@@ -13,8 +13,8 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services.Communication;
 
 /// <summary>
-///   Simple WebSocket server for real-time communication with the web UI.
-///   Only used for local interactive mode.
+///     Simple WebSocket server for real-time communication with the web UI.
+///     Only used for local interactive mode.
 /// </summary>
 public class WebSocketServer : IDisposable
 {
@@ -24,15 +24,15 @@ public class WebSocketServer : IDisposable
     private const int HEARTBEAT_INTERVAL = AppConfig.WebSocket.HeartbeatIntervalMs;
     private const int BROADCAST_TIMEOUT = AppConfig.WebSocket.BroadcastTimeoutMs;
     private const int MAX_SEND_QUEUE = 10;
+    private readonly Dictionary<WebSocket, int> _clientPendingMessages = new();
 
     private readonly object _clientsLock = new();
     private readonly List<WebSocket> _connectedClients = new();
-    private readonly Dictionary<WebSocket, int> _clientPendingMessages = new();
 
     private CancellationTokenSource _cancellationTokenSource;
+    private bool _disposed;
     private Timer _heartbeatTimer;
     private HttpListener _httpListener;
-    private bool _disposed;
 
     public WebSocketServer(int port = AppConfig.WebSocket.DefaultPort)
     {
@@ -42,6 +42,17 @@ public class WebSocketServer : IDisposable
     public bool IsRunning { get; private set; }
     public int Port { get; private set; }
 
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        Stop();
+        _heartbeatTimer?.Dispose();
+        _cancellationTokenSource?.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
     public event EventHandler<string> OnMessageReceived;
     public event EventHandler<WebSocket> OnClientConnected;
 
@@ -50,8 +61,8 @@ public class WebSocketServer : IDisposable
     // -------------------------------------------------------------------------
 
     /// <summary>
-    ///   Start the WebSocket server. Tries the preferred port first; if it's already in
-    ///   use, falls back to a random free port automatically.
+    ///     Start the WebSocket server. Tries the preferred port first; if it's already in
+    ///     use, falls back to a random free port automatically.
     /// </summary>
     public Task StartAsync()
     {
@@ -88,8 +99,8 @@ public class WebSocketServer : IDisposable
     }
 
     /// <summary>
-    ///   Attempts to bind an HttpListener to the given port.
-    ///   Returns true and sets <paramref name="boundPort"/> on success; returns false on failure.
+    ///     Attempts to bind an HttpListener to the given port.
+    ///     Returns true and sets <paramref name="boundPort" /> on success; returns false on failure.
     /// </summary>
     private bool TryBindHttpListener(int port, out int boundPort)
     {
@@ -104,14 +115,21 @@ public class WebSocketServer : IDisposable
         }
         catch
         {
-            try { listener.Close(); } catch { }
+            try
+            {
+                listener.Close();
+            }
+            catch
+            {
+            }
+
             boundPort = 0;
             return false;
         }
     }
 
     /// <summary>
-    ///   Stop the WebSocket server and close all client connections.
+    ///     Stop the WebSocket server and close all client connections.
     /// </summary>
     public void Stop()
     {
@@ -133,9 +151,9 @@ public class WebSocketServer : IDisposable
                 try
                 {
                     client.CloseAsync(
-                        WebSocketCloseStatus.NormalClosure,
-                        "Server shutting down",
-                        CancellationToken.None)
+                            WebSocketCloseStatus.NormalClosure,
+                            "Server shutting down",
+                            CancellationToken.None)
                         .Wait(AppConfig.WebSocket.ClientCloseTimeoutMs);
 
                     client.Dispose();
@@ -164,25 +182,17 @@ public class WebSocketServer : IDisposable
         }
     }
 
-    public void Dispose()
+    ~WebSocketServer()
     {
-        if (_disposed) return;
-        _disposed = true;
-
-        Stop();
-        _heartbeatTimer?.Dispose();
-        _cancellationTokenSource?.Dispose();
-        GC.SuppressFinalize(this);
+        Dispose();
     }
-
-    ~WebSocketServer() => Dispose();
 
     // -------------------------------------------------------------------------
     // Broadcast
     // -------------------------------------------------------------------------
 
     /// <summary>
-    ///   Send a message to all connected clients with backpressure handling.
+    ///     Send a message to all connected clients with backpressure handling.
     /// </summary>
     public async Task BroadcastAsync(string message)
     {
@@ -217,6 +227,7 @@ public class WebSocketServer : IDisposable
                     Logger.Warn($"Client send queue full ({pending} pending), dropping message.");
                     continue;
                 }
+
                 _clientPendingMessages[client] = pending + 1;
             }
 
@@ -230,7 +241,7 @@ public class WebSocketServer : IDisposable
     }
 
     /// <summary>
-    ///   Send to a single client. Returns false if the send failed.
+    ///     Send to a single client. Returns false if the send failed.
     /// </summary>
     private async Task SendToClientAsync(
         WebSocket client,
@@ -241,7 +252,7 @@ public class WebSocketServer : IDisposable
         {
             using var cts = new CancellationTokenSource(BROADCAST_TIMEOUT);
             await client.SendAsync(segment, WebSocketMessageType.Text, true, cts.Token)
-                        .ConfigureAwait(false);
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -270,7 +281,6 @@ public class WebSocketServer : IDisposable
     private async Task AcceptConnectionsAsync(CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested && IsRunning)
-        {
             try
             {
                 var context = await _httpListener.GetContextAsync().ConfigureAwait(false);
@@ -297,11 +307,10 @@ public class WebSocketServer : IDisposable
             {
                 Logger.Error($"Error accepting WebSocket connection: {ex.Message}");
             }
-        }
     }
 
     /// <summary>
-    ///   Upgraded from async void — exceptions are now observable via the Task.
+    ///     Upgraded from async void — exceptions are now observable via the Task.
     /// </summary>
     private async Task ProcessWebSocketRequestAsync(
         HttpListenerContext context,
@@ -317,17 +326,15 @@ public class WebSocketServer : IDisposable
             lock (_clientsLock)
             {
                 if (_connectedClients.Count >= MAX_CLIENTS)
-                {
                     // Reject outside the lock to avoid holding it during async work.
                     goto reject;
-                }
 
                 _connectedClients.Add(webSocket);
                 _clientPendingMessages[webSocket] = 0;
                 goto accepted;
             }
 
-        reject:
+            reject:
             await webSocket.CloseAsync(
                 WebSocketCloseStatus.PolicyViolation,
                 "Maximum client connections reached",
@@ -335,7 +342,7 @@ public class WebSocketServer : IDisposable
             webSocket.Dispose();
             return;
 
-        accepted:
+            accepted:
             OnClientConnected?.Invoke(this, webSocket);
             await ReceiveMessagesAsync(webSocket, cancellationToken).ConfigureAwait(false);
         }
@@ -379,7 +386,6 @@ public class WebSocketServer : IDisposable
         using var messageBuffer = new MemoryStream();
 
         while (webSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
-        {
             try
             {
                 messageBuffer.SetLength(0);
@@ -394,7 +400,6 @@ public class WebSocketServer : IDisposable
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
                         if (webSocket.State == WebSocketState.Open)
-                        {
                             try
                             {
                                 await webSocket.CloseOutputAsync(
@@ -402,8 +407,11 @@ public class WebSocketServer : IDisposable
                                     "Closing",
                                     CancellationToken.None).ConfigureAwait(false);
                             }
-                            catch { /* already closed */ }
-                        }
+                            catch
+                            {
+                                /* already closed */
+                            }
+
                         return;
                     }
 
@@ -413,7 +421,6 @@ public class WebSocketServer : IDisposable
                     {
                         Logger.Warn($"[WebSocket] Message size {messageBuffer.Length} exceeds max {MAX_MESSAGE_SIZE}.");
                         if (webSocket.State == WebSocketState.Open)
-                        {
                             try
                             {
                                 await webSocket.CloseOutputAsync(
@@ -421,12 +428,14 @@ public class WebSocketServer : IDisposable
                                     $"Message exceeds maximum size of {MAX_MESSAGE_SIZE} bytes",
                                     CancellationToken.None).ConfigureAwait(false);
                             }
-                            catch { /* already closed */ }
-                        }
+                            catch
+                            {
+                                /* already closed */
+                            }
+
                         return;
                     }
-                }
-                while (!result.EndOfMessage);
+                } while (!result.EndOfMessage);
 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
@@ -447,7 +456,6 @@ public class WebSocketServer : IDisposable
                 Logger.Log("WebSocket receive cancelled.");
                 break;
             }
-        }
     }
 
     // -------------------------------------------------------------------------
@@ -475,14 +483,12 @@ public class WebSocketServer : IDisposable
 
         var dead = new List<WebSocket>();
         foreach (var client in snapshot)
-        {
             if (client.State != WebSocketState.Open &&
                 client.State != WebSocketState.Connecting)
             {
                 Logger.Log($"Heartbeat: dead connection detected (state={client.State}).");
                 dead.Add(client);
             }
-        }
 
         if (dead.Count > 0)
         {
@@ -514,7 +520,10 @@ public class WebSocketServer : IDisposable
             {
                 _connectedClients.Remove(client);
                 _clientPendingMessages.Remove(client);
-                try { client.Dispose(); }
+                try
+                {
+                    client.Dispose();
+                }
                 catch (Exception ex)
                 {
                     Logger.Warn($"Error disposing WebSocket client: {ex.Message}");
@@ -524,7 +533,7 @@ public class WebSocketServer : IDisposable
     }
 
     /// <summary>
-    ///   Ask the OS for a free port by binding to port 0 — no TOCTOU race.
+    ///     Ask the OS for a free port by binding to port 0 — no TOCTOU race.
     /// </summary>
     private static int FindAvailablePort()
     {

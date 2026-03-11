@@ -10,7 +10,6 @@ using Rhino;
 using Rhino.DocObjects;
 using Rhino.Geometry;
 using Selva.GH.Config;
-using Selva.GH.Features.FileIO;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
@@ -18,8 +17,8 @@ using Selva.GH.Utilities;
 namespace Selva.GH.Features.FileIO.Components;
 
 /// <summary>
-///   Exports Rhino block instances to base64-encoded .3dm files.
-///   Supports recursive block hierarchies by automatically including nested block definitions.
+///     Exports Rhino block instances to base64-encoded .3dm files.
+///     Supports recursive block hierarchies by automatically including nested block definitions.
 /// </summary>
 public class GH_Block_To_File : GH_Component, ISelvaFileOutput
 {
@@ -56,7 +55,8 @@ public class GH_Block_To_File : GH_Component, ISelvaFileOutput
             GH_ParamAccess.item);
         pManager.AddTextParameter("File Name", "FN", "Optional name for the exported file", GH_ParamAccess.item);
         pManager.AddTextParameter("Format", "F", "File format extension: .3dm (default) or .stp", GH_ParamAccess.item);
-        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item, "");
+        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item,
+            "");
         pManager[2].Optional = true;
         pManager[3].Optional = true;
     }
@@ -77,16 +77,13 @@ public class GH_Block_To_File : GH_Component, ISelvaFileOutput
             if (!TryGetBlockInput(DA, out var blockObj)) return;
 
             string fileName = null;
-            if (!DA.GetData(1, ref fileName))
-            {
-                return;
-            }
+            if (!DA.GetData(1, ref fileName)) return;
 
-            string format = ".3dm";
+            var format = ".3dm";
             DA.GetData(2, ref format);
             format = NormalizeFormat(format);
 
-            string subFolder = "";
+            var subFolder = "";
             DA.GetData(3, ref subFolder);
 
             if (!IsSupportedFormat(format))
@@ -115,7 +112,7 @@ public class GH_Block_To_File : GH_Component, ISelvaFileOutput
     }
 
     /// <summary>
-    ///   Creates custom component attributes
+    ///     Creates custom component attributes
     /// </summary>
     public override void CreateAttributes()
     {
@@ -164,7 +161,7 @@ public class GH_Block_To_File : GH_Component, ISelvaFileOutput
         CopyBlockRecursive(modelIdef, targetDoc);
 
         if (_copiedBlockIndices.TryGetValue(blockName, out var idefIndex) &&
-                instanceRef.Value != null)
+            instanceRef.Value != null)
         {
             var xform = instanceRef.Value.Xform;
             targetDoc.Objects.AddInstanceObject(idefIndex, xform);
@@ -219,7 +216,7 @@ public class GH_Block_To_File : GH_Component, ISelvaFileOutput
         CopyBlockRecursive(nestedModelIdef, targetDoc);
 
         if (_copiedBlockIndices.TryGetValue(nestedModelIdef.Name, out var nestedIdefIndex) &&
-                nestedInstanceRef.Value != null)
+            nestedInstanceRef.Value != null)
         {
             var nestedIdef = targetDoc.InstanceDefinitions[nestedIdefIndex];
             var xform = nestedInstanceRef.Value.Xform;
@@ -255,8 +252,10 @@ public class GH_Block_To_File : GH_Component, ISelvaFileOutput
         return format;
     }
 
-    private static bool IsSupportedFormat(string format) =>
-        format is ".3dm" or ".stp" or ".step";
+    private static bool IsSupportedFormat(string format)
+    {
+        return format is ".3dm" or ".stp" or ".step";
+    }
 
     private void EnsureConverterInitialized()
     {

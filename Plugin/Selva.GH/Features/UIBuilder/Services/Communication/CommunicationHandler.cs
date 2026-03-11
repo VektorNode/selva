@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -13,12 +14,12 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services.Communication;
 
 /// <summary>
-///   Handles WebSocket communication with the web UI.
+///     Handles WebSocket communication with the web UI.
 /// </summary>
 public class CommunicationHandler : IDisposable
 {
     /// <summary>
-    ///   Secure JSON serializer — prevents type confusion attacks, created once and reused.
+    ///     Secure JSON serializer — prevents type confusion attacks, created once and reused.
     /// </summary>
     private static readonly JsonSerializerSettings SecureSerializerSettings = new()
     {
@@ -36,11 +37,11 @@ public class CommunicationHandler : IDisposable
     // All mutable state that can be touched from multiple threads is guarded by _stateLock.
     private readonly object _stateLock = new();
     private bool _disposed;
-    private bool? _lastBroadcastedSolvingState;
-    private int _suppressSolvingCyclesRemaining;
 
     // Interlocked is sufficient for a single int flag.
     private int _initialDataInFlight;
+    private bool? _lastBroadcastedSolvingState;
+    private int _suppressSolvingCyclesRemaining;
 
     private WebSocketServer _webSocketServer;
 
@@ -54,6 +55,16 @@ public class CommunicationHandler : IDisposable
     public int WebSocketPort => _webSocketServer?.Port ?? _port;
 
     // -------------------------------------------------------------------------
+    // Lifecycle
+    // -------------------------------------------------------------------------
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    // -------------------------------------------------------------------------
     // Events
     // -------------------------------------------------------------------------
 
@@ -64,16 +75,6 @@ public class CommunicationHandler : IDisposable
     public event EventHandler<UISchema> OnSyncPreviewRequested;
     public event EventHandler<List<SyncChange>> OnSyncChangesApply;
 
-    // -------------------------------------------------------------------------
-    // Lifecycle
-    // -------------------------------------------------------------------------
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed) return;
@@ -82,7 +83,7 @@ public class CommunicationHandler : IDisposable
     }
 
     /// <summary>
-    ///   Start the WebSocket server.
+    ///     Start the WebSocket server.
     /// </summary>
     public async Task StartAsync(Action<string> logMessage)
     {
@@ -97,10 +98,8 @@ public class CommunicationHandler : IDisposable
             var startTask = _webSocketServer.StartAsync();
             if (await Task.WhenAny(startTask, Task.Delay(AppConfig.WebSocket.ServerStartupTimeoutMs))
                 != startTask)
-            {
                 throw new TimeoutException(
                     $"WebSocket server startup timed out after {AppConfig.WebSocket.ServerStartupTimeoutMs}ms");
-            }
 
             await startTask; // propagate any startup exceptions
         }
@@ -114,7 +113,7 @@ public class CommunicationHandler : IDisposable
     }
 
     /// <summary>
-    ///   Stop the WebSocket server and reset all session state.
+    ///     Stop the WebSocket server and reset all session state.
     /// </summary>
     public void Stop()
     {
@@ -148,7 +147,7 @@ public class CommunicationHandler : IDisposable
     // -------------------------------------------------------------------------
 
     /// <summary>
-    ///   Suppress the next N solution cycles (used during schema saves).
+    ///     Suppress the next N solution cycles (used during schema saves).
     /// </summary>
     public void SuppressSolvingCycles(int cycles)
     {
@@ -156,6 +155,7 @@ public class CommunicationHandler : IDisposable
         {
             _suppressSolvingCyclesRemaining = Math.Max(0, cycles);
         }
+
         Logger.Log($"[CommunicationHandler] Suppressing next {cycles} solving cycle(s).");
     }
 
@@ -163,8 +163,10 @@ public class CommunicationHandler : IDisposable
     // Broadcast helpers
     // -------------------------------------------------------------------------
 
-    public Task BroadcastMessage(string messageType, object data) =>
-        BroadcastAsync(new { type = messageType, sessionId = _sessionId, data });
+    public Task BroadcastMessage(string messageType, object data)
+    {
+        return BroadcastAsync(new { type = messageType, sessionId = _sessionId, data });
+    }
 
     public Task BroadcastOutputsWithFilesAndDisplay(
         Dictionary<string, object> outputs,
@@ -186,17 +188,21 @@ public class CommunicationHandler : IDisposable
         });
     }
 
-    public Task BroadcastCurrentValues(Dictionary<string, object> values) =>
-        BroadcastAsync(new { type = "currentValues", sessionId = _sessionId, values });
+    public Task BroadcastCurrentValues(Dictionary<string, object> values)
+    {
+        return BroadcastAsync(new { type = "currentValues", sessionId = _sessionId, values });
+    }
 
-    public Task BroadcastSchemaUpdate(UISchema schema, List<Guid> removedIds = null) =>
-        BroadcastAsync(new
+    public Task BroadcastSchemaUpdate(UISchema schema, List<Guid> removedIds = null)
+    {
+        return BroadcastAsync(new
         {
             type = "schemaUpdated",
             sessionId = _sessionId,
             schema,
             removedIds = removedIds ?? new List<Guid>()
         });
+    }
 
     public Task BroadcastInitialData(
         UISchema schema,
@@ -204,7 +210,10 @@ public class CommunicationHandler : IDisposable
         Dictionary<string, object> currentValues)
     {
         bool? solvingState;
-        lock (_stateLock) { solvingState = _lastBroadcastedSolvingState; }
+        lock (_stateLock)
+        {
+            solvingState = _lastBroadcastedSolvingState;
+        }
 
         return BroadcastAsync(new
         {
@@ -217,12 +226,14 @@ public class CommunicationHandler : IDisposable
         });
     }
 
-    public Task BroadcastSchemaSaved(bool success, string message = null) =>
-        BroadcastAsync(new { type = "schemaSaved", sessionId = _sessionId, success, message });
+    public Task BroadcastSchemaSaved(bool success, string message = null)
+    {
+        return BroadcastAsync(new { type = "schemaSaved", sessionId = _sessionId, success, message });
+    }
 
     /// <summary>
-    ///   Broadcast solving state with deduplication and cycle-based suppression.
-    ///   Thread-safe: may be called from any thread.
+    ///     Broadcast solving state with deduplication and cycle-based suppression.
+    ///     Thread-safe: may be called from any thread.
     /// </summary>
     public Task BroadcastSolvingState(bool isSolving)
     {
@@ -233,12 +244,14 @@ public class CommunicationHandler : IDisposable
                 if (!isSolving)
                 {
                     _suppressSolvingCyclesRemaining--;
-                    Logger.Log($"[CommunicationHandler] Cycle suppressed ({_suppressSolvingCyclesRemaining} remaining).");
+                    Logger.Log(
+                        $"[CommunicationHandler] Cycle suppressed ({_suppressSolvingCyclesRemaining} remaining).");
                 }
                 else
                 {
                     Logger.Log($"[CommunicationHandler] Skipping solving state (suppressed): {isSolving}.");
                 }
+
                 return Task.CompletedTask;
             }
 
@@ -256,7 +269,7 @@ public class CommunicationHandler : IDisposable
     }
 
     /// <summary>
-    ///   Broadcast parameter metadata changes. Suppressed during schema saves.
+    ///     Broadcast parameter metadata changes. Suppressed during schema saves.
     /// </summary>
     public Task BroadcastMetadataChanges(DiscoveredParameters changedParams)
     {
@@ -277,8 +290,9 @@ public class CommunicationHandler : IDisposable
         });
     }
 
-    public Task BroadcastRuntimeMessage(string level, string messageText) =>
-        BroadcastAsync(new
+    public Task BroadcastRuntimeMessage(string level, string messageText)
+    {
+        return BroadcastAsync(new
         {
             type = "runtimeMessage",
             sessionId = _sessionId,
@@ -286,6 +300,7 @@ public class CommunicationHandler : IDisposable
             message = messageText,
             timestamp = DateTime.UtcNow
         });
+    }
 
     public Task BroadcastSyncPreview(SyncDiff syncDiff)
     {
@@ -299,22 +314,24 @@ public class CommunicationHandler : IDisposable
         });
     }
 
-    public Task BroadcastSyncApplied(bool success, string message = null) =>
-        BroadcastAsync(new
+    public Task BroadcastSyncApplied(bool success, string message = null)
+    {
+        return BroadcastAsync(new
         {
             type = "syncApplied",
             sessionId = _sessionId,
             success,
             message = message ?? (success ? "Sync completed successfully" : "Sync failed")
         });
+    }
 
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
 
     /// <summary>
-    ///   Single broadcast entry point — serializes with secure settings and guards
-    ///   against a null/stopped server.
+    ///     Single broadcast entry point — serializes with secure settings and guards
+    ///     against a null/stopped server.
     /// </summary>
     private Task BroadcastAsync(object payload)
     {
@@ -326,7 +343,7 @@ public class CommunicationHandler : IDisposable
         return _webSocketServer.BroadcastAsync(json);
     }
 
-    private void HandleClientConnected(object sender, System.Net.WebSockets.WebSocket _)
+    private void HandleClientConnected(object sender, WebSocket _)
     {
 #if DEBUG
         Logger.Log("[CommunicationHandler] WebSocket client connected (waiting for requestInitialData).");
@@ -354,14 +371,14 @@ public class CommunicationHandler : IDisposable
                 switch (msgType)
                 {
                     case "valueUpdate":
-                        {
-                            var values = jObj["values"]?.ToObject<Dictionary<string, object>>(SecureSerializer);
-                            if (values != null)
-                                MarshalToMainThread(() => OnValuesReceived?.Invoke(this, values));
-                            else
-                                Logger.Warn("[CommunicationHandler] valueUpdate missing 'values'.");
-                            break;
-                        }
+                    {
+                        var values = jObj["values"]?.ToObject<Dictionary<string, object>>(SecureSerializer);
+                        if (values != null)
+                            MarshalToMainThread(() => OnValuesReceived?.Invoke(this, values));
+                        else
+                            Logger.Warn("[CommunicationHandler] valueUpdate missing 'values'.");
+                        break;
+                    }
 
                     case "requestCurrentValues":
                         MarshalToMainThread(() => OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty));
@@ -373,34 +390,40 @@ public class CommunicationHandler : IDisposable
 
                         MarshalToMainThread(() =>
                         {
-                            try { OnClientConnected?.Invoke(this, EventArgs.Empty); }
-                            finally { Interlocked.Exchange(ref _initialDataInFlight, 0); }
+                            try
+                            {
+                                OnClientConnected?.Invoke(this, EventArgs.Empty);
+                            }
+                            finally
+                            {
+                                Interlocked.Exchange(ref _initialDataInFlight, 0);
+                            }
                         });
                         break;
 
                     case "saveSchema":
-                        {
-                            var schema = jObj["schema"]?.ToObject<UISchema>(SecureSerializer);
-                            if (schema != null)
-                                MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, schema));
-                            break;
-                        }
+                    {
+                        var schema = jObj["schema"]?.ToObject<UISchema>(SecureSerializer);
+                        if (schema != null)
+                            MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, schema));
+                        break;
+                    }
 
                     case "requestSyncPreview":
-                        {
-                            var schema = jObj["schema"]?.ToObject<UISchema>(SecureSerializer);
-                            if (schema != null)
-                                MarshalToMainThread(() => OnSyncPreviewRequested?.Invoke(this, schema));
-                            break;
-                        }
+                    {
+                        var schema = jObj["schema"]?.ToObject<UISchema>(SecureSerializer);
+                        if (schema != null)
+                            MarshalToMainThread(() => OnSyncPreviewRequested?.Invoke(this, schema));
+                        break;
+                    }
 
                     case "applySyncChanges":
-                        {
-                            var changes = jObj["changes"]?.ToObject<List<SyncChange>>(SecureSerializer);
-                            if (changes != null)
-                                MarshalToMainThread(() => OnSyncChangesApply?.Invoke(this, changes));
-                            break;
-                        }
+                    {
+                        var changes = jObj["changes"]?.ToObject<List<SyncChange>>(SecureSerializer);
+                        if (changes != null)
+                            MarshalToMainThread(() => OnSyncChangesApply?.Invoke(this, changes));
+                        break;
+                    }
 
                     default:
                         Logger.Warn($"[CommunicationHandler] Unknown message type: '{msgType}'.");
@@ -415,8 +438,8 @@ public class CommunicationHandler : IDisposable
     }
 
     /// <summary>
-    ///   Marshals a callback to Rhino's UI thread.
-    ///   RhinoApp.InvokeOnUiThread is always safe to call — no thread-ID check needed.
+    ///     Marshals a callback to Rhino's UI thread.
+    ///     RhinoApp.InvokeOnUiThread is always safe to call — no thread-ID check needed.
     /// </summary>
     private static void MarshalToMainThread(Action callback)
     {

@@ -14,8 +14,8 @@ using Selva.GH.Properties;
 namespace Selva.GH.Features.ComputeIO.Components;
 
 /// <summary>
-///   A contextual parameter that accepts a color from the web UI.
-///   Colors are transferred as hex strings (e.g. "#FF5733") and converted to GH_Colour.
+///     A contextual parameter that accepts a color from the web UI.
+///     Colors are transferred as hex strings (e.g. "#FF5733") and converted to GH_Colour.
 /// </summary>
 public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
 {
@@ -34,13 +34,13 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
     public override Guid ComponentGuid => new("C3A7F1D4-8E2B-4F6A-9C5D-1B3E7A4F8D2C");
 
     protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.ColorInput);
+    public bool TreeAccess { get; set; }
 
     // IGH_ContextualParameter properties
     public string Prompt { get; set; } = "Select a color";
     public int AtLeast { get; set; } = 1;
     public int AtMost { get; set; } = 1;
     public bool Immediate { get; set; } = true;
-    public bool TreeAccess { get; set; }
 
     public IEnumerable<object> ContextualData
     {
@@ -82,8 +82,13 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
         ExpireSolution(false);
     }
 
+    public bool AutoAssignContextualData(GH_ParameterContext context)
+    {
+        return _contextualColor != null;
+    }
+
     /// <summary>
-    ///   Assigns contextual data as a tree - called by Rhino.Compute via reflection.
+    ///     Assigns contextual data as a tree - called by Rhino.Compute via reflection.
     /// </summary>
     public void AssignContextualDataTree(DataTree<GH_String> data)
     {
@@ -121,11 +126,6 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
         ExpireSolution(false);
     }
 
-    public bool AutoAssignContextualData(GH_ParameterContext context)
-    {
-        return _contextualColor != null;
-    }
-
     public void ClearContextualData()
     {
         _contextualColor = null;
@@ -133,7 +133,7 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
     }
 
     /// <summary>
-    ///   Returns contextual JSON for web UI schema discovery.
+    ///     Returns contextual JSON for web UI schema discovery.
     /// </summary>
     public JObject GetContextualJson()
     {
@@ -170,8 +170,8 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
     }
 
     /// <summary>
-    ///   Extracts a GH_Colour from various input types.
-    ///   Accepts hex strings like "#FF5733" or GH_Colour directly.
+    ///     Extracts a GH_Colour from various input types.
+    ///     Accepts hex strings like "#FF5733" or GH_Colour directly.
     /// </summary>
     private static GH_Colour ExtractColor(object item)
     {
@@ -187,7 +187,7 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
     }
 
     /// <summary>
-    ///   Parses a hex color string (e.g. "#FF5733") into a GH_Colour.
+    ///     Parses a hex color string (e.g. "#FF5733") into a GH_Colour.
     /// </summary>
     private static GH_Colour ParseHexToColor(string hex)
     {
@@ -241,5 +241,4 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
 
         return base.Read(reader);
     }
-
 }

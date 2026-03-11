@@ -11,14 +11,14 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services.Schema;
 
 /// <summary>
-///   Handles cleanup operations when parameters are deleted from the schema
-///   Ensures transactional cleanup across multiple systems
+///     Handles cleanup operations when parameters are deleted from the schema
+///     Ensures transactional cleanup across multiple systems
 /// </summary>
 public class SchemaCleanupService
 {
     /// <summary>
-    ///   Perform transactional cleanup of deleted parameters
-    ///   Updates all related state atomically
+    ///     Perform transactional cleanup of deleted parameters
+    ///     Updates all related state atomically
     /// </summary>
     public void CleanupDeletedParameters(
         List<Guid> removedIds,

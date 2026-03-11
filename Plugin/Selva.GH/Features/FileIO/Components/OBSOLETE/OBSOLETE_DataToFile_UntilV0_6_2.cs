@@ -9,7 +9,6 @@ using Rhino;
 using Rhino.DocObjects;
 using Rhino.Geometry;
 using Selva.GH.Config;
-using Selva.GH.Features.FileIO;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
@@ -26,10 +25,9 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     // Singleton converter instance (reused across all solve instances)
     private static RhinoDocumentConverter _converter;
     private static readonly object _converterLock = new();
-    public override GH_Exposure Exposure => GH_Exposure.hidden;
 
     /// <summary>
-    ///   Initializes a new instance of the OBSOLETE_DataToFile_UntilV0_6_2 class.
+    ///     Initializes a new instance of the OBSOLETE_DataToFile_UntilV0_6_2 class.
     /// </summary>
     public OBSOLETE_DataToFile_UntilV0_6_2()
         : base("Geometry To File", "GTF",
@@ -39,18 +37,20 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         EnsureConverterInitialized();
     }
 
+    public override GH_Exposure Exposure => GH_Exposure.hidden;
+
     /// <summary>
-    ///   Provides an Icon for the component.
+    ///     Provides an Icon for the component.
     /// </summary>
     protected override Bitmap Icon => Resources.GeometryToFile;
 
     /// <summary>
-    ///   Gets the unique ID for this component. Do not change this ID after release.
+    ///     Gets the unique ID for this component. Do not change this ID after release.
     /// </summary>
     public override Guid ComponentGuid => new("A51C8F6A-D422-4387-8170-F9F34D8E5351");
 
     /// <summary>
-    ///   Creates custom component attributes
+    ///     Creates custom component attributes
     /// </summary>
     public override void CreateAttributes()
     {
@@ -58,7 +58,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     }
 
     /// <summary>
-    ///   Ensures the converter is initialized (singleton pattern)
+    ///     Ensures the converter is initialized (singleton pattern)
     /// </summary>
     private void EnsureConverterInitialized()
     {
@@ -76,7 +76,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     }
 
     /// <summary>
-    ///   Registers all the input parameters for this component.
+    ///     Registers all the input parameters for this component.
     /// </summary>
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
@@ -102,7 +102,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     }
 
     /// <summary>
-    ///   Registers all the output parameters for this component.
+    ///     Registers all the output parameters for this component.
     /// </summary>
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
@@ -112,7 +112,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     }
 
     /// <summary>
-    ///   This is the method that actually does the work.
+    ///     This is the method that actually does the work.
     /// </summary>
     protected override void SolveInstance(IGH_DataAccess DA)
     {
@@ -171,7 +171,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     }
 
     /// <summary>
-    ///   Determines if the component should operate in single file mode based on tree structure.
+    ///     Determines if the component should operate in single file mode based on tree structure.
     /// </summary>
     private bool IsSingleFileMode(GH_Structure<IGH_GeometricGoo> geometryTree)
     {
@@ -180,7 +180,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     }
 
     /// <summary>
-    ///   Processes all geometry into a single file.
+    ///     Processes all geometry into a single file.
     /// </summary>
     private List<FileDataGoo> ProcessSingleFile(
         GH_Structure<IGH_GeometricGoo> geometryTree,
@@ -259,7 +259,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     }
 
     /// <summary>
-    ///   Processes geometry into multiple files, one per branch.
+    ///     Processes geometry into multiple files, one per branch.
     /// </summary>
     private List<FileDataGoo> ProcessMultipleFiles(
         GH_Structure<IGH_GeometricGoo> geometryTree,
@@ -357,7 +357,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     }
 
     /// <summary>
-    ///   Extracts valid GeometryBase objects from IGH_GeometricGoo list with detailed error handling.
+    ///     Extracts valid GeometryBase objects from IGH_GeometricGoo list with detailed error handling.
     /// </summary>
     private List<(GeometryBase Geometry, int OriginalIndex)> ExtractValidGeometries(List<IGH_GeometricGoo> gooList)
     {
@@ -407,7 +407,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     }
 
     /// <summary>
-    ///   Adds geometries to the Rhino document with proper layer management.
+    ///     Adds geometries to the Rhino document with proper layer management.
     /// </summary>
     private void AddGeometriesToDocument(RhinoDoc doc,
         List<(GeometryBase Geometry, int OriginalIndex)> geometries,
@@ -470,7 +470,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     }
 
     /// <summary>
-    ///   Gets the layer name for a specific index with fallback to default.
+    ///     Gets the layer name for a specific index with fallback to default.
     /// </summary>
     private string GetLayerName(List<string> layerNames, int index)
     {
@@ -483,7 +483,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     }
 
     /// <summary>
-    ///   Gets the layer color for a specific index with fallback to default.
+    ///     Gets the layer color for a specific index with fallback to default.
     /// </summary>
     private Color GetLayerColor(List<Color> layerColors, int index)
     {
@@ -495,7 +495,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     }
 
     /// <summary>
-    ///   Exports the document to the specified file format using the new converter.
+    ///     Exports the document to the specified file format using the new converter.
     /// </summary>
     private string ExportDocument(RhinoDoc doc, string fileEnding)
     {
