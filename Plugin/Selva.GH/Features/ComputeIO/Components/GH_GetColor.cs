@@ -33,7 +33,7 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
     public override string TypeName => "Color";
     public override Guid ComponentGuid => new("C3A7F1D4-8E2B-4F6A-9C5D-1B3E7A4F8D2C");
 
-    protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.DataToFile);
+    protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.ColorInput);
 
     // IGH_ContextualParameter properties
     public string Prompt { get; set; } = "Select a color";

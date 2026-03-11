@@ -235,10 +235,17 @@
 	{:else}
 		<!-- ═══ DESKTOP LAYOUT ═════════════════════════════════════════════════════ -->
 
-		{#if !hasSidebar && !hasRightPanel}
-			<!-- Single centered left panel, no resize needed -->
-			<div class="min-h-0 flex h-full flex-col">
-				{@render panelContent(undefined, requestedLeftTabId)}
+		{#if !hasViewer && !isTwoPanelMode && (hasLeftPanel !== hasRightPanel)}
+			<!-- Single centered panel (left-only or right-only), no viewer -->
+			<div class="min-h-0 flex h-full flex-1 justify-center">
+				<div class="min-h-0 flex h-full flex-col w-1/2">
+					{@render panelContent(
+						hasRightPanel ? 'right' : undefined,
+						hasRightPanel ? requestedRightTabId : requestedLeftTabId,
+						!hasRightPanel,
+						!hasRightPanel
+					)}
+				</div>
 			</div>
 		{:else}
 			<div class="min-h-0 flex flex-1">

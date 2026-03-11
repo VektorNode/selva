@@ -15,7 +15,7 @@ public class Param_ThreeMaterial : GH_Param<ThreeMaterialGoo>
 {
 	public Param_ThreeMaterial()
 		: base(
-			"T-Material", "TM",
+			"Param Material", "PM",
 			"A Three.js-compatible material (color, metalness, roughness, opacity)",
 			"Selva", "Display",
 			GH_ParamAccess.item)

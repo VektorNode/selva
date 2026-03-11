@@ -18,7 +18,7 @@ using Point = Rhino.Geometry.Point;
 
 namespace Selva.GH.Features.FileIO.Components;
 
-public class GH_DataToFile : GH_Component, ISelvaFileOutput
+public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
 {
     private const string DefaultLayerName = "Default";
     private const string DefaultFileEnding = ".3dm";
@@ -31,7 +31,7 @@ public class GH_DataToFile : GH_Component, ISelvaFileOutput
     /// <summary>
     ///   Initializes a new instance of the DataToFile class.
     /// </summary>
-    public GH_DataToFile()
+    public GH_GeometryToFile()
         : base("Geometry To File", "GTF",
             "Exports geometry to file format(s) with layer organization. Supports both single file (list input) and multiple files (tree input).",
             "Selva", "IO")
@@ -42,7 +42,7 @@ public class GH_DataToFile : GH_Component, ISelvaFileOutput
     /// <summary>
     ///   Provides an Icon for the component.
     /// </summary>
-    protected override Bitmap Icon => Resources.DataToFile;
+    protected override Bitmap Icon => Resources.GeometryToFile;
 
     /// <summary>
     ///   Gets the unique ID for this component. Do not change this ID after release.
