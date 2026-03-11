@@ -63,6 +63,39 @@ print_step() {
   echo -e "\n${BLUE}→ $1${NC}"
 }
 
+# Run a command silently; on failure dump the captured output and exit
+run_quiet() {
+  local logfile
+  logfile=$(mktemp /tmp/selva-XXXX.log)
+  if "$@" > "$logfile" 2>&1; then
+    rm -f "$logfile"
+  else
+    local code=$?
+    echo "--- Output ---"
+    cat "$logfile"
+    echo "--------------"
+    rm -f "$logfile"
+    return $code
+  fi
+}
+
+# Run a Vite build command; show only the summary (sizes, timing, warnings) — full output on failure
+run_build() {
+  local logfile
+  logfile=$(mktemp /tmp/selva-XXXX.log)
+  if "$@" > "$logfile" 2>&1; then
+    grep -E "(^\s*\.?svelte-kit/|^\s*dist/|✓|warn(ing)?|error)" "$logfile" | head -30 || true
+    rm -f "$logfile"
+  else
+    local code=$?
+    echo "--- Build Output ---"
+    cat "$logfile"
+    echo "--------------------"
+    rm -f "$logfile"
+    return $code
+  fi
+}
+
 # Check if directory exists
 if [ ! -d "$INSTALL_DIR" ]; then
   print_error "Installation directory not found: $INSTALL_DIR"
@@ -137,7 +170,7 @@ else
   print_header "Step 1: Pulling Latest Changes"
 
   print_step "Fetching from remote..."
-  git fetch origin
+  git fetch origin 2>&1
 
   # Stash any local changes to avoid pull conflicts
   STASHED=false
@@ -162,7 +195,7 @@ REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH)
   fi
 
   print_step "Pulling changes from origin/$CURRENT_BRANCH..."
-  if ! git pull origin $CURRENT_BRANCH; then
+  if ! git pull origin $CURRENT_BRANCH 2>&1; then
     # Check if the failure was due to merge conflicts
     if git diff --name-only --diff-filter=U | grep -q .; then
       print_error "Merge conflicts detected! Aborting merge..."
@@ -199,9 +232,14 @@ REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH)
   fi
 
   NEW_COMMIT=$(git rev-parse --short HEAD)
-  print_success "Updated to: $NEW_COMMIT"
+  COMMIT_COUNT=$(git rev-list --count "$LOCAL_COMMIT..HEAD")
+  print_success "Updated: $(git rev-parse --short "$LOCAL_COMMIT") → $NEW_COMMIT ($COMMIT_COUNT new commit(s))"
   echo ""
-  git log --oneline -5
+  echo "  Commits pulled:"
+  git log --pretty=format:"    %h  %s  (%an, %ar)" "$LOCAL_COMMIT..HEAD"
+  echo ""
+  DIFF_STAT=$(git diff --shortstat "$LOCAL_COMMIT" HEAD)
+  echo "  Changes: $DIFF_STAT"
 fi
 
 ################################################################################
@@ -210,7 +248,7 @@ fi
 print_header "Step 2: Installing Dependencies"
 
 print_step "Running pnpm install..."
-pnpm install --frozen-lockfile
+run_quiet pnpm install --frozen-lockfile
 print_success "Dependencies updated"
 
 ################################################################################
@@ -231,7 +269,7 @@ cd "$INSTALL_DIR"
 
 if [ "$SHARED_CHANGED" = true ]; then
   print_step "Changes detected in shared package — building shared..."
-  pnpm run build:shared
+  run_build pnpm run build:shared
   print_success "Shared package built"
 else
   print_warning "No changes in packages/shared — skipping shared build"
@@ -240,7 +278,7 @@ fi
 print_step "Building compute-app for production..."
 cd "$INSTALL_DIR/packages/compute-app"
 export ADAPTER=node
-pnpm build
+run_build pnpm build
 print_success "Compute-app built"
 
 fi # end of restart-only skip block
@@ -323,8 +361,10 @@ print_header "Update Complete!"
 
 echo -e "${GREEN}Selva Compute App has been updated.${NC}"
 echo ""
-echo "📝 Changelog:"
-git log --oneline "$LOCAL_COMMIT..HEAD" | head -5 || echo "   (No changes from previous version)"
+LOCAL_SHORT=$(git rev-parse --short "$LOCAL_COMMIT" 2>/dev/null || echo "${LOCAL_COMMIT:0:7}")
+CURRENT_SHORT=$(git rev-parse --short HEAD)
+echo "📝 Changelog ($LOCAL_SHORT → $CURRENT_SHORT):"
+git log --pretty=format:"   %h  %s  (%an)" "$LOCAL_COMMIT..HEAD" 2>/dev/null | head -10 || echo "   (No changes from previous version)"
 echo ""
 
 if [ "$PM2_RUNNING" = true ]; then
