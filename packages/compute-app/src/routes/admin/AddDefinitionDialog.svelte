@@ -103,7 +103,7 @@
 		formData.append('displayName', displayName.trim());
 		formData.append('description', description);
 		formData.append('category', category);
-		formData.append('tags', JSON.stringify(tags));
+		formData.append('tags', tags.join(','));
 
 		if (imageMode === 'upload' && imageInput?.files?.[0]) {
 			formData.append('image', imageInput.files[0]);
