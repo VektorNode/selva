@@ -21,7 +21,7 @@ export function createSolvingIndicator(isSolving: () => boolean) {
 	let timeout: ReturnType<typeof setTimeout> | null = null;
 
 	// Solve duration history
-	let solveHistory: number[] = [];
+	const solveHistory: number[] = [];
 	let solveStartTime: number | null = null;
 	let hasHistory = false;
 

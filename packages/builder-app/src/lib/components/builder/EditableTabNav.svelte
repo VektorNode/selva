@@ -4,7 +4,6 @@
 	import { GripVertical, Pencil, PanelLeft, PanelRight, ImageIcon } from '@lucide/svelte';
 	import Icon from '@iconify/svelte';
 
-
 	interface EditableTabNavProps {
 		tabs: TabConfig[];
 		activeTabId: string | null;
@@ -140,12 +139,10 @@
 <div class="border-border mb-4 flex items-end gap-2 overflow-x-auto border-b">
 	{#each tabs as tab (tab.id)}
 		<div
-			class="group relative flex items-center rounded-t-lg border-b-2 transition-all
-				{activeTabId === tab.id
-					? 'border-primary bg-card shadow-sm'
-					: 'border-transparent hover:bg-muted'}
+			class="group relative flex items-center rounded-t-lg transition-all
+				{activeTabId === tab.id ? 'bg-primary/20 shadow-md' : 'bg-muted/70 hover:bg-muted/50'}
 				{draggedTabId === tab.id ? 'opacity-50' : ''}
-				{dragOverTabId === tab.id ? 'border-l-primary border-l-4' : ''}"
+				{dragOverTabId === tab.id ? 'ring-primary ring-2' : ''}"
 			ondragover={(e) => handleDragOver(e, tab.id)}
 			ondragleave={handleDragLeave}
 			ondrop={(e) => handleDrop(e, tab.id)}
@@ -171,11 +168,11 @@
 			<!-- Main clickable area: switches tabs -->
 			<button
 				type="button"
-				class="flex max-w-60 min-w-27.5 items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
+				class=" flex max-w-60 min-w-27.5 items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
 					{editingTabId === tab.id ? 'select-text' : 'select-none'}
 					{activeTabId === tab.id
-						? 'text-primary'
-						: 'text-muted-foreground hover:text-foreground'}"
+					? 'text-foreground'
+					: 'text-muted-foreground hover:text-muted-foreground/80'}"
 				onclick={() => onTabChange(tab.id)}
 				aria-pressed={activeTabId === tab.id}
 				title="Switch to tab"
@@ -205,7 +202,8 @@
 
 			<!-- Action buttons — visible on hover or when this tab is active -->
 			<div
-				class="ml-1 flex items-center gap-0.5 transition-opacity duration-150 {activeTabId === tab.id || editingIconTabId === tab.id
+				class="ml-1 flex items-center gap-0.5 transition-opacity duration-150 {activeTabId ===
+					tab.id || editingIconTabId === tab.id
 					? 'opacity-100'
 					: 'opacity-0 group-hover:opacity-100'}"
 			>
@@ -223,7 +221,8 @@
 				<!-- Edit icon -->
 				<button
 					type="button"
-					class="text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-ring flex h-6 w-6 items-center justify-center rounded text-xs transition-colors focus:ring-2 focus:outline-none {editingIconTabId === tab.id
+					class="text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-ring flex h-6 w-6 items-center justify-center rounded text-xs transition-colors focus:ring-2 focus:outline-none {editingIconTabId ===
+					tab.id
 						? 'bg-accent text-foreground'
 						: ''}"
 					onclick={() => (editingIconTabId === tab.id ? cancelIconEdit() : startIconEdit(tab))}

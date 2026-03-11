@@ -3,6 +3,7 @@
 import { compile } from 'json-schema-to-typescript';
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -119,7 +120,7 @@ ${constantsCode}
 // TYPE GUARDS
 // ============================================================================
 
-export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem {
+export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem | InputColorLayoutItem {
   return item.type === 'input';
 }
 
@@ -147,8 +148,12 @@ export function isFileWidget(item: LayoutItem): item is InputFileLayoutItem {
   return item.type === 'input' && item.widgetType === 'file';
 }
 
+export function isColorWidget(item: LayoutItem): item is InputColorLayoutItem {
+  return item.type === 'input' && item.widgetType === 'color';
+}
+
 // Helper type aliases
-export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem;
+export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem | InputColorLayoutItem;
 export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem;
 export type SupportedTypes = string | number | boolean;
 `,
@@ -158,4 +163,48 @@ export type SupportedTypes = string | number | boolean;
   await generateSchema('preset-schema.json', 'preset.ts', 'ParameterPresetRoot');
 }
 
+checkSchemaVersionBumped();
 main();
+
+function checkSchemaVersionBumped() {
+  const schemaPath = path.join(__dirname, 'ui-schema.json');
+  const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
+
+  function canonicalise(schemaObj) {
+    const defs = { ...schemaObj.definitions };
+    for (const key of Object.keys(defs)) {
+      if (key.startsWith('//_')) delete defs[key];
+    }
+    if (defs.UISchema?.properties?.schemaVersion) {
+      defs.UISchema = JSON.parse(JSON.stringify(defs.UISchema));
+      delete defs.UISchema.properties.schemaVersion.default;
+    }
+    return JSON.stringify(defs, Object.keys(defs).sort());
+  }
+
+  let committedSchemaStr;
+  try {
+    committedSchemaStr = execSync('git show HEAD:packages/schemas/ui-schema.json', {
+      cwd: path.join(__dirname, '../..'),
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch {
+    return;
+  }
+
+  const committedSchema = JSON.parse(committedSchemaStr);
+  const committedVersion = committedSchema.definitions?.UISchema?.properties?.schemaVersion?.default ?? '0.0.0';
+  const workingVersion = schema.definitions?.UISchema?.properties?.schemaVersion?.default ?? '0.0.0';
+
+  if (canonicalise(committedSchema) !== canonicalise(schema) && committedVersion === workingVersion) {
+    console.error('');
+    console.error('  ERROR: Schema definitions changed but schemaVersion was not bumped.');
+    console.error(`  Current version: ${workingVersion}`);
+    console.error('');
+    console.error('  Update "schemaVersion" default in UISchema (e.g. 2.3.0 → 2.4.0),');
+    console.error('  add a migration entry in SchemaMigrator.cs, and update SCHEMA_CHANGELOG.md.');
+    console.error('');
+    process.exit(1);
+  }
+}

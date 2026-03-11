@@ -1,10 +1,18 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { PageContainer, PageHeader, StateDisplay, Button, Dialog, toast, useFooterItem } from '@selva/shared';
+	import {
+		PageContainer,
+		PageHeader,
+		StateDisplay,
+		Button,
+		Dialog,
+		toast,
+		useFooterItem
+	} from '@selva/shared';
 	import { Save } from '@lucide/svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
 	import { DragDropContext, BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
 	import { initializeWebSocketSession } from '$lib/utils/session';
 	import { onMount } from 'svelte';
@@ -18,10 +26,14 @@
 	const actions = useBuilderActions(() => builderState);
 
 	// Navigate to specific routes with session and wsPort preservation
-	function navigateTo(route: '/' | '/preview') {
+	async function navigateTo(route: '/' | '/preview') {
 		// Auto-save schema when switching to interactive mode
 		if (route === '/preview') {
-			saveSchema();
+			const saved = await saveSchema();
+			if (!saved) {
+				// Don't navigate if save failed
+				return;
+			}
 		}
 
 		const params = new SvelteURLSearchParams();
@@ -34,7 +46,7 @@
 	}
 
 	const placedInLayoutIds = $derived.by(() => {
-		const ids = new Set<string>();
+		const ids = new SvelteSet<string>();
 		const layout = builderState?.state.schema?.layout;
 
 		if (layout?.type === 'tabbed') {
@@ -65,21 +77,98 @@
 
 	const allAvailableInputs = $derived(builderState?.state.availableInputs || []);
 
-	function saveSchema() {
-		if (!builderState?.state.schema || !sessionId) return;
-
-		if (!builderState.wsState.connected) {
-			toast.error('Not connected to Grasshopper');
-			return;
+	// Persist current schema to localStorage whenever it changes
+	$effect(() => {
+		if (builderState?.state.schema && sessionId) {
+			builderState.history.persistCurrentSchema(builderState.state.schema);
 		}
+	});
 
-		builderState.wsState.saveSchema(sessionId, $state.snapshot(builderState.state.schema));
+	function saveSchema(): Promise<boolean> {
+		return new Promise((resolve) => {
+			// Validation checks
+			if (!builderState?.state.schema) {
+				toast.error('Schema not initialized');
+				resolve(false);
+				return;
+			}
+
+			if (!sessionId) {
+				toast.error('Session not initialized');
+				resolve(false);
+				return;
+			}
+
+			if (!builderState.wsState.connected) {
+				toast.error('Not connected to Grasshopper');
+				resolve(false);
+				return;
+			}
+
+			let handled = false;
+
+			// Set up one-time listener for save response
+			const handleSaveResponse = (data: unknown) => {
+				if (handled) return;
+
+				const message = data as { sessionId: string; success: boolean; message?: string };
+				if (message.sessionId !== sessionId) return;
+
+				handled = true;
+				clearTimeout(timeoutId);
+				builderState?.wsState.off('schemaSaved', handleSaveResponse);
+
+				if (message.success) {
+					toast.success('Schema saved successfully');
+					resolve(true);
+				} else {
+					const errorMsg = message.message || 'Unknown error';
+					toast.error(`Failed to save schema: ${errorMsg}`);
+					resolve(false);
+				}
+			};
+
+			// Timeout after 10 seconds if no response
+			const timeoutId = setTimeout(() => {
+				if (handled) return;
+				handled = true;
+				builderState?.wsState.off('schemaSaved', handleSaveResponse);
+				toast.error('Save timeout: no response from Grasshopper');
+				resolve(false);
+			}, 10000);
+
+			// Listen for save response (runs before composable handlers due to registration order)
+			builderState.wsState.on('schemaSaved', handleSaveResponse);
+
+			// Send save request
+			builderState.wsState.saveSchema(sessionId, $state.snapshot(builderState.state.schema));
+		});
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+		if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
 			e.preventDefault();
-			saveSchema();
+			if (builderState?.history.canUndo() && builderState.state.schema) {
+				const prev = builderState.history.undo($state.snapshot(builderState.state.schema));
+				if (prev) {
+					builderState.state.schema = prev;
+					toast.success('Undo');
+				}
+			}
+		} else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+			e.preventDefault();
+			if (builderState?.history.canRedo() && builderState.state.schema) {
+				const next = builderState.history.redo($state.snapshot(builderState.state.schema));
+				if (next) {
+					builderState.state.schema = next;
+					toast.success('Redo');
+				}
+			}
+		} else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+			e.preventDefault();
+			saveSchema().catch(() => {
+				// Error already shown via toast in saveSchema
+			});
 		}
 	}
 
@@ -190,7 +279,9 @@
 						placedIds={placedInLayoutIds}
 						syncNeeded={builderState.state.syncNeeded}
 						onSchemaChange={(updatedSchema) => {
-							if (builderState) {
+							if (builderState && builderState.state.schema) {
+								// Save snapshot before import
+								builderState.history.push($state.snapshot(builderState.state.schema));
 								builderState.state.schema = updatedSchema;
 								// Auto-select first tab when schema is imported/changed
 								if (
@@ -227,7 +318,9 @@
 						{/if}
 
 						<div class="mb-20 flex justify-end gap-4">
-							<Button onclick={saveSchema}><Save class="mr-2 h-4 w-4" />Save Schema</Button>
+							<Button onclick={() => saveSchema().catch(() => {})}
+								><Save class="mr-2 h-4 w-4" />Save Schema</Button
+							>
 						</div>
 					</main>
 				</div>

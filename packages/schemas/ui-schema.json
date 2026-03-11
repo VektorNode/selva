@@ -10,7 +10,7 @@
 		"//_COMMENT": "--- PRIMITIVES ---",
 		"GrasshopperParamType": {
 			"type": "string",
-			"enum": ["number", "integer", "boolean", "text", "valueList", "file", "generic"],
+			"enum": ["number", "integer", "boolean", "text", "valueList", "file", "color", "generic"],
 			"description": "Grasshopper contextual parameter data types"
 		},
 
@@ -192,6 +192,12 @@
 			"additionalProperties": false
 		},
 
+		"ColorWidgetConfig": {
+			"type": "object",
+			"properties": {},
+			"additionalProperties": false
+		},
+
 		"//_COMMENT": "--- LAYOUT DEFINITIONS ---",
 		"LayoutItemBase": {
 			"type": "object",
@@ -296,6 +302,20 @@
 				}
 			]
 		},
+		"InputColorLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "input" },
+						"widgetType": { "const": "color" },
+						"config": { "$ref": "#/definitions/ColorWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
 		"OutputTextLayoutItem": {
 			"allOf": [
 				{ "$ref": "#/definitions/LayoutItemBase" },
@@ -343,6 +363,7 @@
 				{ "$ref": "#/definitions/InputDropdownLayoutItem" },
 				{ "$ref": "#/definitions/InputCheckboxLayoutItem" },
 				{ "$ref": "#/definitions/InputFileLayoutItem" },
+				{ "$ref": "#/definitions/InputColorLayoutItem" },
 				{ "$ref": "#/definitions/OutputTextLayoutItem" },
 				{ "$ref": "#/definitions/OutputNumberLayoutItem" },
 				{ "$ref": "#/definitions/OutputFileLayoutItem" }
@@ -493,6 +514,11 @@
 		},
 
 		"//_COMMENT": "--- SCHEMA MODELS (Persisted) ---",
+		"GrasshopperInputStructure": {
+			"type": "string",
+			"enum": ["item", "list", "tree"],
+			"description": "Grasshopper data access mode for the input parameter: 'item' = Item Access, 'list' = List Access, 'tree' = Tree Access"
+		},
 		"SchemaInput": {
 			"type": "object",
 			"properties": {
@@ -503,7 +529,12 @@
 				"nickname": { "type": "string" },
 				"paramType": { "$ref": "#/definitions/GrasshopperParamType" },
 				"description": { "type": "string" },
-				"default": {}
+				"default": {},
+				"inputStructure": {
+					"$ref": "#/definitions/GrasshopperInputStructure",
+					"default": "item",
+					"description": "Grasshopper data access mode: 'item' = Item Access, 'list' = List Access, 'tree' = Tree Access. Defaults to 'item'."
+				}
 			},
 			"required": ["id", "nickname", "paramType"],
 			"additionalProperties": false
@@ -587,7 +618,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.1.1",
+					"default": "2.3.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

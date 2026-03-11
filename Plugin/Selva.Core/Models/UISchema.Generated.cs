@@ -25,8 +25,9 @@ namespace Selva.Core.Models
     // TYPE ALIASES
     // ============================================================================
 
-    // GrasshopperParamType is a string for compatibility
-    // Valid values: "number", "integer", "boolean", "text", "valueList", "file", "generic"
+    // String-enum types are represented as 'string' in C# for compatibility
+    // GrasshopperParamType valid values: "number", "integer", "boolean", "text", "valueList", "file", "color", "generic"
+    // GrasshopperInputStructure valid values: "item", "list", "tree"
 
 // ============================================================================
     // UISchema
@@ -233,6 +234,10 @@ namespace Selva.Core.Models
 /// </summary>
         [JsonProperty("allowedInputModes")]
         public List<string> AllowedInputModes { get; set; } = new List<string>();
+    }
+
+    public class ColorWidgetConfig
+    {
     }
 
 // ============================================================================
@@ -465,6 +470,12 @@ namespace Selva.Core.Models
 
         [JsonProperty("default", NullValueHandling = NullValueHandling.Ignore)]
         public object Default { get; set; }
+
+/// <summary>
+/// Grasshopper data access mode: 'item' = Item Access, 'list' = List Access, 'tree' = Tree Access. Defaults to 'item'.
+/// </summary>
+        [JsonProperty("inputStructure", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string InputStructure { get; set; } = "item";
     }
 
     public class SchemaOutput
@@ -678,6 +689,15 @@ public override string WidgetType => "file";
         public FileInputWidgetConfig Config { get; set; }
     }
 
+public class InputColorLayoutItem : LayoutItemBase
+    {
+public override string Type => "input";
+public override string WidgetType => "color";
+
+        [JsonProperty("config", NullValueHandling = NullValueHandling.Ignore)]
+        public ColorWidgetConfig Config { get; set; }
+    }
+
 public class OutputTextLayoutItem : LayoutItemBase
     {
 public override string Type => "output";
@@ -767,6 +787,8 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
                 item = new InputCheckboxLayoutItem();
             else if (type == "input" && widgetType == "file")
                 item = new InputFileLayoutItem();
+            else if (type == "input" && widgetType == "color")
+                item = new InputColorLayoutItem();
             else if (type == "output" && widgetType == "text")
                 item = new OutputTextLayoutItem();
             else if (type == "output" && widgetType == "number")

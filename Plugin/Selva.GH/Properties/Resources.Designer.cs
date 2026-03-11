@@ -73,9 +73,9 @@ namespace Selva.GH.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap DataToFile {
+        internal static System.Drawing.Bitmap GeometryToFile {
             get {
-                object obj = ResourceManager.GetObject("DataToFile", resourceCulture);
+                object obj = ResourceManager.GetObject("GeometryToFile", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
         }
@@ -138,6 +138,36 @@ namespace Selva.GH.Properties {
 		        object obj = ResourceManager.GetObject("Environment", resourceCulture);
 		        return ((System.Drawing.Bitmap)(obj));
 	        }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap ColorInput {
+            get {
+                object obj = ResourceManager.GetObject("ColorInput", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap CreateFile {
+            get {
+                object obj = ResourceManager.GetObject("CreateFile", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap PathToFile {
+            get {
+                object obj = ResourceManager.GetObject("PathToFile", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
         }
     }
 }

@@ -3,6 +3,7 @@ import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selva/shared'
 import { processInitialDataSchema, getWebSocketPortFromUrl } from '$lib/utils/session';
 import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 import type { SyncDiff, SyncChange } from '$lib/websocket/websocket.svelte';
+import { useSchemaHistory } from './useSchemaHistory.svelte';
 
 interface BuilderWebSocketState {
 	availableInputs: DiscoveredInput[];
@@ -21,6 +22,7 @@ export function useBuilderState(sessionId: string) {
 	// Get WebSocket port from URL to ensure we connect to the correct instance
 	const wsPort = getWebSocketPortFromUrl();
 	const wsState = getWebSocketState(wsPort);
+	const history = useSchemaHistory(sessionId);
 
 	const state = $state<BuilderWebSocketState>({
 		availableInputs: [],
@@ -42,7 +44,16 @@ export function useBuilderState(sessionId: string) {
 
 		state.availableInputs = result.availableInputs;
 		state.availableOutputs = result.availableOutputs;
-		state.schema = result.schema;
+
+		// Check if there's a saved schema in localStorage that's newer
+		const savedSchema = history.loadCurrentSchema();
+		if (savedSchema) {
+			state.schema = savedSchema;
+			// Restore history stacks from localStorage
+			history.restoreFromStorage();
+		} else {
+			state.schema = result.schema;
+		}
 
 		if (state.availableInputs.length === 0 && state.availableOutputs.length === 0) {
 			state.error =
@@ -57,13 +68,9 @@ export function useBuilderState(sessionId: string) {
 	}
 
 	function handleSchemaSaved(message: any) {
+		// Toast is now handled by the page component's saveSchema() function
+		// This handler is kept for backwards compatibility if needed
 		if (message.sessionId !== sessionId) return;
-
-		if (message.success) {
-			toast.success('Schema saved successfully!');
-		} else {
-			toast.error(`Failed to save schema: ${message.message || 'Unknown error'}`);
-		}
 	}
 
 	function handleMetadataUpdated(message: any) {
@@ -292,6 +299,7 @@ export function useBuilderState(sessionId: string) {
 			return state;
 		},
 		wsState,
+		history,
 		syncParameters,
 		requestSyncPreview,
 		applySyncChanges,

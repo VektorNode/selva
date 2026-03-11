@@ -188,7 +188,7 @@
 						{/if}
 					</Select.Trigger>
 					<Select.Content>
-						{#each Object.entries(selectedParamInfo.options) as [name, val] ([name, val])}
+						{#each Object.entries(selectedParamInfo.options) as [name, val] (name)}
 							<Select.Item value={val || ''} label={name}>
 								{#snippet children({ selected })}
 									{name}
@@ -256,7 +256,7 @@
 						{/if}
 					</Select.Trigger>
 					<Select.Content>
-						{#each Object.entries(selectedParamInfo.options) as [name, val] ([name, val])}
+						{#each Object.entries(selectedParamInfo.options) as [name, val] (name)}
 							<Select.Item value={val || ''} label={name} />
 						{/each}
 					</Select.Content>

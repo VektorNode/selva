@@ -6,11 +6,13 @@ import type {
 	DropdownWidgetConfig,
 	CheckboxWidgetConfig,
 	FileInputWidgetConfig,
+	ColorWidgetConfig,
 	InputNumberLayoutItem,
 	InputTextLayoutItem,
 	InputDropdownLayoutItem,
 	InputCheckboxLayoutItem,
 	InputFileLayoutItem,
+	InputColorLayoutItem,
 	OutputTextLayoutItem,
 	OutputNumberLayoutItem,
 	OutputFileLayoutItem
@@ -29,7 +31,8 @@ export type InputWidgetType =
 	| InputTextLayoutItem['widgetType']
 	| InputDropdownLayoutItem['widgetType']
 	| InputCheckboxLayoutItem['widgetType']
-	| InputFileLayoutItem['widgetType'];
+	| InputFileLayoutItem['widgetType']
+	| InputColorLayoutItem['widgetType'];
 
 export type OutputWidgetType =
 	| OutputTextLayoutItem['widgetType']
@@ -43,7 +46,8 @@ export type InputWidgetConfig =
 	| TextWidgetConfig
 	| DropdownWidgetConfig
 	| CheckboxWidgetConfig
-	| FileInputWidgetConfig;
+	| FileInputWidgetConfig
+	| ColorWidgetConfig;
 
 export type OutputWidgetConfig = Record<string, never>;
 
@@ -74,6 +78,8 @@ export function mapParamTypeToWidgetType(
 				return 'dropdown';
 			case 'file':
 				return 'file';
+			case 'color':
+				return 'color';
 			default:
 				return 'text';
 		}
@@ -127,6 +133,11 @@ export function createDefaultWidgetConfig(
 				return config;
 			}
 
+			case 'color': {
+				const config: ColorWidgetConfig = {};
+				return config;
+			}
+
 			default: {
 				const _exhaustive: never = widgetType as never;
 				throw new Error(`Unsupported input widget type: ${_exhaustive}`);
@@ -141,6 +152,7 @@ export function createDefaultWidgetConfig(
 
 			case 'dropdown':
 			case 'checkbox':
+			case 'color':
 				throw new Error(`Widget type '${widgetType}' is not valid for output parameters`);
 
 			default: {

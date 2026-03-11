@@ -151,7 +151,7 @@
 					</h3>
 
 					<div class="max-h-60 space-y-2 overflow-y-auto rounded-lg border p-3">
-						{#each validation.issues as issue (issue.message)}
+						{#each validation.issues as issue, i (i)}
 							{@const Icon = getIssueIcon(issue.severity)}
 							<div class="flex gap-2 text-sm">
 								<Icon class="mt-0.5 h-4 w-4 shrink-0 {getIssueColorClass(issue.severity)}" />
@@ -161,7 +161,7 @@
 									</p>
 									{#if issue.details}
 										<dl class="text-muted-foreground mt-1 space-y-0.5 text-xs">
-											{#each Object.entries(issue.details) as [key, value] ([key, value])}
+											{#each Object.entries(issue.details) as [key, value] (key)}
 												{#if value !== undefined}
 													<div class="flex gap-2">
 														<dt class="font-medium">{key}:</dt>

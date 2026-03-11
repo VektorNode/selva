@@ -3,7 +3,6 @@
 	import { SvelteMap } from 'svelte/reactivity';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { Badge } from '$lib/components/ui/badge';
 
 	interface Props {
 		errors?: string[];
@@ -41,7 +40,9 @@
 {#if hasMessages}
 	<!-- Floating Indicator Badge (hidden on mobile) -->
 	<Dialog.Root bind:open>
-		<Dialog.Trigger class="bottom-12 right-2 sm:bottom-4 sm:right-4 hidden sm:block fixed z-100 focus:outline-none">
+		<Dialog.Trigger
+			class="bottom-12 right-2 sm:bottom-4 sm:right-4 sm:block fixed z-100 hidden focus:outline-none"
+		>
 			<div
 				class="shadow-lg text-xs font-medium hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 flex cursor-pointer items-stretch overflow-hidden rounded-full border transition-all duration-150
 					{errors.length > 0
@@ -128,17 +129,17 @@
 				<!-- Warnings Section -->
 				{#if warnings.length > 0}
 					<Collapsible.Root bind:open={showWarnings}>
-						<div class="border-warning/50 overflow-hidden rounded-lg border bg-card">
+						<div class="overflow-hidden rounded-lg border border-warning/50 bg-card">
 							<div class="px-4 py-3 flex items-center">
 								<Collapsible.Trigger
-									class="hover:bg-warning/5 -mx-4 -my-3 gap-3 px-4 py-3 flex flex-1 items-center text-left transition-colors"
+									class="-mx-4 -my-3 gap-3 px-4 py-3 flex flex-1 items-center text-left transition-colors hover:bg-warning/5"
 								>
 									{#if showWarnings}
-										<ChevronDown class="h-4 w-4 text-warning shrink-0" />
+										<ChevronDown class="h-4 w-4 shrink-0 text-warning" />
 									{:else}
-										<ChevronRight class="h-4 w-4 text-warning shrink-0" />
+										<ChevronRight class="h-4 w-4 shrink-0 text-warning" />
 									{/if}
-									<TriangleAlert class="h-4 w-4 text-warning shrink-0" />
+									<TriangleAlert class="h-4 w-4 shrink-0 text-warning" />
 									<span class="text-sm font-medium text-warning">
 										{warnings.length === 1 ? '1 Warning' : `${warnings.length} Warnings`}
 									</span>
@@ -146,9 +147,7 @@
 							</div>
 
 							<Collapsible.Content class="space-y-0">
-								<div
-									class="max-h-60 border-warning/50 px-4 py-3 overflow-y-auto border-t bg-card"
-								>
+								<div class="max-h-60 px-4 py-3 overflow-y-auto border-t border-warning/50 bg-card">
 									<ul class="space-y-2">
 										{#each groupedWarnings as { message, count } (message)}
 											<li class="gap-2 text-sm flex text-muted-foreground">
@@ -156,10 +155,7 @@
 												<span class="flex-1">
 													{message}
 													{#if count > 1}
-														<span
-															class="ml-1 font-medium text-warning/70"
-															>×{count}</span
-														>
+														<span class="ml-1 font-medium text-warning/70">×{count}</span>
 													{/if}
 												</span>
 											</li>

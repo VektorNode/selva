@@ -36,11 +36,11 @@ export function validateImportedSchema(
 				'Imported schema has no document ID. This may be from an older version or different workflow.'
 		});
 	}
-	// Check document ID match (critical validation)
+	// Check document ID match (warning only - schema can still be imported if inputs are compatible)
 	else if (importedSchema.documentId !== currentDocumentId) {
 		issues.push({
 			paramId: '__document__',
-			severity: 'error',
+			severity: 'warning',
 			message:
 				'Document ID mismatch - this schema was created for a different Grasshopper document',
 			details: {
