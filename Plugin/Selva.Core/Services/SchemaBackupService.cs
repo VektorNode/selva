@@ -1,91 +1,150 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Selva.Core.Models;
 
 namespace Selva.Core.Services;
 
 /// <summary>
-///   Handles automatic backups of schemas before migration
+///   Handles automatic backups of schemas before migration, and a save-triggered history log.
 /// </summary>
 public static class SchemaBackupService
 {
+	private const int MaxHistoryEntries = 10;
+	private const int MaxMigrationBackupsPerSchema = 10;
+
 	private static readonly JsonSerializerSettings BackupSerializationSettings = new()
 	{
 		Formatting = Formatting.Indented,
 		NullValueHandling = NullValueHandling.Ignore
 	};
 
-	/// <summary>
-	///   Creates a backup of the schema in the plugin folder before migration.
-	///   Backup filename format: schema_backup_v{version}_{timestamp}.json
-	/// </summary>
-	/// <param name="schema">The schema to backup</param>
-	/// <param name="backupDirectory">Directory to save the backup (defaults to user's plugin folder)</param>
-	/// <returns>Path to the created backup file, or null if backup failed</returns>
-	public static string CreateBackup(UISchema schema, string backupDirectory = null)
+	private static string GetBackupDirectory()
 	{
-		if (schema == null) return null;
+		var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+		return Path.Combine(appData, "Grasshopper", "Selva", "SchemaBackups");
+	}
+
+	// ─────────────────────────────────────────────────────────────
+	//  1. Pre-migration backup (called before migration on load)
+	// ─────────────────────────────────────────────────────────────
+
+	/// <summary>
+	///   Creates a backup of the raw pre-migration JSON before any deserialization/migration occurs.
+	///   <paramref name="rawJson"/> is the original schema JSON string as stored in the .gh file.
+	///   <paramref name="onWarning"/> receives a warning message if the backup fails (never throws).
+	/// </summary>
+	public static string CreateMigrationBackup(string rawJson, string schemaName, string schemaVersion,
+		Action<string> onWarning = null, string backupDirectory = null)
+	{
+		if (string.IsNullOrEmpty(rawJson)) return null;
 
 		try
 		{
-			// Default to plugin backups folder in user's AppData
-			if (string.IsNullOrEmpty(backupDirectory))
-			{
-				var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-				backupDirectory = Path.Combine(appData, "Grasshopper", "Selva", "SchemaBackups");
-			}
-
-			// Ensure directory exists
+			backupDirectory ??= GetBackupDirectory();
 			Directory.CreateDirectory(backupDirectory);
 
-			// Generate backup filename
-			var version = schema.SchemaVersion ?? "unknown";
+			var version = SanitizeFilename(schemaVersion ?? "unknown");
 			var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
-			var name = SanitizeFilename(schema.Name ?? schema.Id ?? "untitled");
-			var filename = $"schema_backup_{name}_v{version}_{timestamp}.json";
+			var name = SanitizeFilename(schemaName ?? "untitled");
+			var filename = $"migration_backup_{name}_v{version}_{timestamp}.json";
 			var backupPath = Path.Combine(backupDirectory, filename);
 
-			// Serialize and save
-			var json = JsonConvert.SerializeObject(schema, BackupSerializationSettings);
-			File.WriteAllText(backupPath, json);
+			File.WriteAllText(backupPath, rawJson);
 
-			// Clean up old backups (keep last 10 per schema)
-			CleanupOldBackups(backupDirectory, name, maxBackups: 10);
+			CleanupOldFiles(backupDirectory, $"migration_backup_{name}_", MaxMigrationBackupsPerSchema);
 
 			return backupPath;
 		}
 		catch (Exception ex)
 		{
-			// Don't fail migration if backup fails - just log the error
-			Console.Error.WriteLine($"Failed to create schema backup: {ex.Message}");
+			onWarning?.Invoke($"Failed to create migration backup: {ex.Message}");
 			return null;
 		}
 	}
 
+	// ─────────────────────────────────────────────────────────────
+	//  2. Save-triggered history (called every time user saves .gh)
+	// ─────────────────────────────────────────────────────────────
+
 	/// <summary>
-	///   Removes old backup files, keeping only the most recent N backups for a given schema
+	///   Appends a history entry to the schema history file for this document.
+	///   History is stored as a JSON array (newest first), capped at <see cref="MaxHistoryEntries"/> entries.
+	///   <paramref name="documentId"/> ties the history to a specific .gh file.
+	///   <paramref name="onWarning"/> receives a warning message if saving fails (never throws).
 	/// </summary>
-	private static void CleanupOldBackups(string directory, string schemaName, int maxBackups)
+	public static void AppendHistory(UISchema schema, Guid documentId, Action<string> onWarning = null,
+		string backupDirectory = null)
+	{
+		if (schema == null) return;
+
+		try
+		{
+			backupDirectory ??= GetBackupDirectory();
+			Directory.CreateDirectory(backupDirectory);
+
+			var historyPath = Path.Combine(backupDirectory, $"history_{documentId:N}.json");
+
+			// Load existing history
+			var history = new JArray();
+			if (File.Exists(historyPath))
+			{
+				try { history = JArray.Parse(File.ReadAllText(historyPath)); }
+				catch { history = new JArray(); }
+			}
+
+			// Build new entry
+			var entry = new JObject
+			{
+				["savedAt"] = DateTime.UtcNow.ToString("O"),
+				["schemaVersion"] = schema.SchemaVersion,
+				["schemaName"] = schema.Name,
+				["schemaId"] = schema.Id,
+				["documentId"] = documentId.ToString("D"),
+				["schema"] = JObject.FromObject(schema, JsonSerializer.Create(BackupSerializationSettings))
+			};
+
+			// Prepend (newest first) and cap
+			history.Insert(0, entry);
+			while (history.Count > MaxHistoryEntries)
+				history.RemoveAt(history.Count - 1);
+
+			File.WriteAllText(historyPath, history.ToString(Formatting.Indented));
+		}
+		catch (Exception ex)
+		{
+			onWarning?.Invoke($"Failed to save schema history: {ex.Message}");
+		}
+	}
+
+	/// <summary>
+	///   Returns the path to the history file for a given document, or null if it doesn't exist.
+	/// </summary>
+	public static string GetHistoryFilePath(Guid documentId, string backupDirectory = null)
+	{
+		backupDirectory ??= GetBackupDirectory();
+		var path = Path.Combine(backupDirectory, $"history_{documentId:N}.json");
+		return File.Exists(path) ? path : null;
+	}
+
+	// ─────────────────────────────────────────────────────────────
+	//  Helpers
+	// ─────────────────────────────────────────────────────────────
+
+	private static void CleanupOldFiles(string directory, string prefix, int maxFiles)
 	{
 		try
 		{
-			var searchPattern = $"schema_backup_{schemaName}_*.json";
-			var backupFiles = Directory.GetFiles(directory, searchPattern);
+			var files = Directory.GetFiles(directory, $"{prefix}*.json");
+			if (files.Length <= maxFiles) return;
 
-			if (backupFiles.Length <= maxBackups) return;
-
-			// Sort by creation time, oldest first
-			Array.Sort(backupFiles, (a, b) =>
-				File.GetCreationTimeUtc(a).CompareTo(File.GetCreationTimeUtc(b))
-			);
-
-			// Delete oldest files, keeping the most recent maxBackups
-			var filesToDelete = backupFiles.Length - maxBackups;
-			for (var i = 0; i < filesToDelete; i++)
-			{
-				File.Delete(backupFiles[i]);
-			}
+			// Sort oldest first by creation time, delete the excess
+			var sorted = files.OrderBy(f => File.GetCreationTimeUtc(f)).ToArray();
+			for (var i = 0; i < sorted.Length - maxFiles; i++)
+				File.Delete(sorted[i]);
 		}
 		catch
 		{
@@ -93,16 +152,11 @@ public static class SchemaBackupService
 		}
 	}
 
-	/// <summary>
-	///   Sanitizes a string to be safe for use as a filename
-	/// </summary>
 	private static string SanitizeFilename(string filename)
 	{
 		var invalidChars = Path.GetInvalidFileNameChars();
 		foreach (var c in invalidChars)
-		{
 			filename = filename.Replace(c, '_');
-		}
 		return filename.Length > 50 ? filename.Substring(0, 50) : filename;
 	}
 }

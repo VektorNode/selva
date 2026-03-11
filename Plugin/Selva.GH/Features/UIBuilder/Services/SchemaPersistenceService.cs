@@ -6,6 +6,7 @@ using Newtonsoft.Json.Linq;
 using Selva.Core.Constants;
 using Selva.Core.Models;
 using Selva.Core.Services;
+using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services;
 
@@ -86,28 +87,25 @@ public class SchemaPersistenceService
 					bool needsBackup = string.IsNullOrEmpty(originalVersion) ||
 					                   Version.Parse(originalVersion ?? "1.0.0") < SchemaVersion.CURRENT;
 
+					// CREATE BACKUP from raw JSON before any migration or deserialization
+					if (needsBackup)
+					{
+						var schemaName = jObject["name"]?.Value<string>() ?? jObject["id"]?.Value<string>();
+						var backupPath = SchemaBackupService.CreateMigrationBackup(
+							schemaJson,
+							schemaName,
+							originalVersion,
+							onWarning: Logger.Warn
+						);
+						if (!string.IsNullOrEmpty(backupPath))
+							migrationMessage = $"Backup created at: {backupPath}\n";
+					}
+
 					// Run JSON-level migration (structural changes)
 					jObject = SchemaMigrator.MigrateJson(jObject);
 
 					// Deserialize the migrated JSON
 					var rawSchema = jObject.ToObject<UISchema>();
-
-					// CREATE BACKUP BEFORE OBJECT-LEVEL MIGRATION (if migration is needed)
-					if (needsBackup)
-					{
-						// Temporarily restore original version for backup
-						var backupSchema = rawSchema;
-						backupSchema.SchemaVersion = originalVersion;
-
-						var backupPath = SchemaBackupService.CreateBackup(backupSchema);
-						if (!string.IsNullOrEmpty(backupPath))
-						{
-							migrationMessage = $"Backup created at: {backupPath}\n";
-						}
-
-						// Restore the migrated version
-						backupSchema.SchemaVersion = rawSchema.SchemaVersion;
-					}
 
 					// MIGRATE TO CURRENT VERSION (Logic/Defaults)
 					schema = SchemaMigrator.MigrateToCurrentVersion(rawSchema, _pluginVersion);

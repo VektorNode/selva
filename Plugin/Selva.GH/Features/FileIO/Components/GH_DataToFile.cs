@@ -68,7 +68,7 @@ public class GH_DataToFile : GH_Component, ISelvaFileOutput
                 if (_converter == null)
                 {
                     // Configure options for Grasshopper usage
-                    var options = new AppConfig.RhinoConverterOptions();
+                    var options = new RhinoConverterOptions();
 
                     _converter = new RhinoDocumentConverter(options);
                 }

@@ -15,15 +15,15 @@ public class RhinoDocumentConverter : IDisposable
 	private const int MaxRhinoVersion = 8;
 	private const int DefaultRhinoVersion = 7;
 
-	private readonly AppConfig.RhinoConverterOptions _options;
+	private readonly RhinoConverterOptions _options;
 	private readonly SemaphoreSlim _rateLimiter;
 	private readonly string _tempDirectory;
 	private bool _disposed;
 
 	public RhinoDocumentConverter(
-		AppConfig.RhinoConverterOptions options = null)
+		RhinoConverterOptions options = null)
 	{
-		_options = options ?? new AppConfig.RhinoConverterOptions();
+		_options = options ?? new RhinoConverterOptions();
 		_rateLimiter = new SemaphoreSlim(_options.MaxConcurrentConversions, _options.MaxConcurrentConversions);
 		_tempDirectory = Path.Combine(AppConfig.FileIO.TempDirectory, Guid.NewGuid().ToString());
 		Directory.CreateDirectory(_tempDirectory);

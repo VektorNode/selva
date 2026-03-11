@@ -40,7 +40,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 	private UIBuilderService _service;
 	private string _sessionId;
 
-
 	public GH_UIBuilderComponent()
 		: base("UI Bridge", "UIBridge",
 			"Build and interact with your UI - WebSocket-only communication",
@@ -65,8 +64,12 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 		get => base.Locked;
 		set
 		{
-			// If component is being locked (disabled), cleanup communication
-			if (value && !base.Locked) CleanupCommunication();
+			// If component is being locked (disabled), cleanup communication and events
+			if (value && !base.Locked)
+			{
+				CleanupCommunication();
+				_service?.EventManager?.UnregisterEvents();
+			}
 
 			base.Locked = value;
 		}
@@ -121,14 +124,16 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
 		var transition = _service.StateManager.ProcessEnableInput(enable);
 
-		// Update document tracking and events
-		if (_currentDocument != document)
+		if (transition.EnableFalling) HandleDisablingState(document);
+
+		// Register document events only when enabled
+		if (enable)
 		{
-			_currentDocument = document;
+			if (_currentDocument != document)
+				_currentDocument = document;
+
 			_service.EventManager.RegisterEvents(document);
 		}
-
-		if (transition.EnableFalling) HandleDisablingState(document);
 
 		// Handle current state
 		if (enable)
@@ -252,6 +257,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 	private void HandleDisablingState(GH_Document document)
 	{
 		CleanupCommunication();
+		_service?.EventManager?.UnregisterEvents();
 
 		var contextualParams = document.Objects.OfType<IGH_ContextualParameter>().ToList();
 		ParameterTypeHelper.ClearContextualParameters(contextualParams, this);
@@ -431,6 +437,26 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 			catch (Exception ex)
 			{
 				AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Could not save schema/values: {ex.Message}");
+			}
+		}
+
+		// Append to schema history on every GH file save
+		if (_embeddedSchema != null)
+		{
+			try
+			{
+				var doc = OnPingDocument();
+				var documentId = doc?.DocumentID ?? Guid.Empty;
+				if (documentId != Guid.Empty)
+					SchemaBackupService.AppendHistory(
+						_embeddedSchema,
+						documentId,
+						onWarning: Logger.Warn
+					);
+			}
+			catch (Exception ex)
+			{
+				Logger.Warn($"Could not write schema history: {ex.Message}");
 			}
 		}
 
