@@ -10,13 +10,13 @@
 		type UISchema,
 		AppLayout,
 		createSolvingIndicator,
-		createComputeThrottle,
 		useFooterItem
 	} from '@selva/shared';
 	import { hexToOklch } from '$lib/utilities/color';
 	import { GrasshopperResponseProcessor } from 'selva-compute';
 	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
 	import ComputeHealthFooter from '$lib/components/ComputeHealthFooter.svelte';
+	import { createComputeThrottle } from '@selva/shared';
 
 	let { data }: PageProps = $props();
 
@@ -27,7 +27,6 @@
 
 	// Definition switcher
 	let currentDefinition = $derived(data.currentDefinition);
-	let _availableDefinitions = $derived(data.availableDefinitions);
 	let pageTitle = $derived(schema?.description || schema.name);
 
 	function createInitialValues(s: UISchema | undefined, serverOutputs?: Record<string, unknown>) {
@@ -230,13 +229,6 @@
 		if (hasPendingChanges) performSolve();
 	}
 
-	// Solving badge (shown in header for instant mode only)
-	const solvingBadge = $derived(
-		schema?.instanceSolve !== false && solvingIndicator.show
-			? { label: 'Solving...', variant: 'solving' as const }
-			: undefined
-	);
-
 	let isEmbedded = $derived(page.url.searchParams.get('embed') === 'true');
 	let customStyle = $derived.by(() => {
 		const p = page.url.searchParams;
@@ -252,10 +244,10 @@
 <div style={customStyle} style:display="contents">
 	<PageContainer errors={computeErrors} warnings={computeWarnings}>
 		{#if !isEmbedded}
-			<PageHeader title={pageTitle} badge={solvingBadge} showModeToggle={true} />
+			<PageHeader title={pageTitle} showModeToggle={true} />
 		{/if}
 
-		<div class="bg-background flex flex-col flex-1 overflow-hidden">
+		<div class="bg-background flex flex-1 flex-col overflow-hidden">
 			{#if error}
 				<div class="flex min-h-100 items-center justify-center p-8">
 					<StateDisplay type="error" size="medium" message={error} />
@@ -275,7 +267,6 @@
 						bind:isViewerFullscreen
 						bind:values
 						onValueChange={handleValueChange}
-						environment="compute"
 						oncalculate={handleCalculate}
 						onLoadValues={async () => {
 							if (schema?.instanceSolve !== false) {
@@ -290,4 +281,3 @@
 		</div>
 	</PageContainer>
 </div>
-

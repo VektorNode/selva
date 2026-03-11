@@ -7,42 +7,23 @@ import {
 } from 'selva-compute/grasshopper';
 import type { UISchema } from '@selva/shared';
 import { getServerConfig } from '$lib/server/config.server';
-import { getDefinitionContainer, type Definition } from '$lib/server/definitions.server';
-import path from 'node:path';
+import { getDefinitionContainer } from '$lib/server/definitions.server';
 
 export const load = (async ({ url, params: _params }) => {
 	const config = getServerConfig();
 	const container = getDefinitionContainer();
 
 	// Get filename from URL param (only filename, not full URL)
-	let ghFilename = url.searchParams.get('gh');
+	const ghFilename = url.searchParams.get('gh');
 
 	let definitionSource: Uint8Array | null = null;
 	let clientDefUrl = '';
 
-	// Load available definitions for switcher
-	let availableDefinitions: Definition[] = [];
-	let loadError: Error | null = null;
-	try {
-		availableDefinitions = await container.listDefinitions();
-	} catch (err) {
-		loadError = err instanceof Error ? err : new Error(String(err));
-		console.warn('[App Load] Failed to load available definitions:', err);
-	}
-
-	// If no identifier provided, use first available definition's GUID
-	if (!ghFilename && availableDefinitions.length > 0) {
-		ghFilename = availableDefinitions[0].guid ?? availableDefinitions[0].filename;
-	}
-
 	if (!ghFilename) {
-		let msg = 'No definitions available.';
-		if (config.ghDefinitionsPath) {
-			const configPath = path.join(config.ghDefinitionsPath, 'definitions-config.json');
-			msg = `No definitions configured.\n\nPlease create a definitions-config.json file at:\n${configPath}\n\nSee definitions-config.example.json for the format.`;
-			if (loadError) msg += `\n\nError details: ${loadError.message}`;
-		}
-		throw error(400, msg);
+		throw error(
+			400,
+			`Missing 'gh' query parameter specifying the definition filename. Example usage: /app?gh=example.gh`
+		);
 	}
 
 	try {
@@ -108,9 +89,9 @@ export const load = (async ({ url, params: _params }) => {
 					solvedDefinition.values?.map((v: any) => v.ParamName).join(', ') || 'none';
 				throw new Error(
 					`Failed to extract UI schema from computation response.\n` +
-					`Available outputs: ${availableParams}\n` +
-					`Schema value: ${JSON.stringify(schema)}\n\n` +
-					`In Grasshopper, verify a Context Bake component with the output name 'Schema' is present and wired to the solver.`
+						`Available outputs: ${availableParams}\n` +
+						`Schema value: ${JSON.stringify(schema)}\n\n` +
+						`In Grasshopper, verify a Context Bake component with the output name 'Schema' is present and wired to the solver.`
 				);
 			}
 
@@ -119,6 +100,23 @@ export const load = (async ({ url, params: _params }) => {
 
 			schema.inputs = schema.inputs.map((schemaInput) => {
 				const computeInput = computeInputsByParamId.get(schemaInput.id);
+
+				// Special handling for Color parameters to convert default RGB/RGBA values to hex format
+				if (computeInput?.paramType == 'Color' && computeInput.default !== undefined) {
+					const toHex = (value: number) => value.toString(16).padStart(2, '0');
+					const parts = String(computeInput.default)
+						.split(',')
+						.map((s) => parseInt(s.trim(), 10));
+
+					if (parts.length === 3) {
+						// RGB format
+						computeInput.default = `#${toHex(parts[0])}${toHex(parts[1])}${toHex(parts[2])}`;
+					} else if (parts.length === 4) {
+						// ARGB format - skip alpha
+						computeInput.default = `#${toHex(parts[1])}${toHex(parts[2])}${toHex(parts[3])}`;
+					}
+				}
+
 				if (computeInput && computeInput.default !== undefined) {
 					return {
 						...schemaInput,
@@ -141,7 +139,6 @@ export const load = (async ({ url, params: _params }) => {
 				schema,
 				ghDefinition: clientDefUrl,
 				currentDefinition: ghFilename ? ghFilename.replace(/\.gh$/, '') : '',
-				availableDefinitions,
 				initialOutputs,
 				initialSolveResponse: solvedDefinition
 			};

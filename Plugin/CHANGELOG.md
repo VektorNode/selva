@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-03-08
+
+### Added
+
+**Color Input Component**
+
+- New `GH_GetColor` contextual parameter (`Params > Util`) that accepts a color from the web UI
+- Colors are transferred as hex strings (e.g. `#FF5733`) and converted to `GH_Colour`; supports `GH_Colour`, `GH_String`, and raw string inputs
+- Full `IGH_ContextualParameter` implementation with `AssignContextualData` and `AssignContextualDataTree` (for Rhino.Compute via reflection)
+- Read/Write serialization for Grasshopper file persistence
+
+**Schema System (v2.3.0)**
+
+- Schema version bumped to `2.3.0`
+- `GrasshopperParamType` extended with `"color"` variant for `Param_Colour` parameters
+- `SchemaInput.inputStructure` field added (`"item"` | `"list"` | `"tree"`) to declare Grasshopper data access mode — stored for future use by the value applicator and compute pipeline; defaults to `"item"` (backward-compatible)
+- Migration function `MigrateTo_2_3_0` registered in `SchemaMigrator`; no data transformation required — the C# model default handles it transparently
+
+**Testing**
+
+- Added `SchemaFixtureTests` — fixture-driven round-trip tests that load every `TestFiles/schemas/v*.json` file, migrate it, and assert no validation errors
+- Expanded `SchemaValidatorTests` with full coverage of all validation rules: `BasicStructureRule`, `ParameterValidationRule`, `LayoutValidationRule`, `WidgetConfigRule`, `VersioningRule`, and `ConstraintsRule`
+- Refactored `SchemaMigratorTests` with clearer test names and added `MigrateJson` inference tests (flat vs. tabbed layout type detection)
+- Added sample schema fixture files under `Plugin/Selva.Tests/TestFiles/schemas/`
+
+### Changed
+
+**Code Quality & Refactoring**
+
+- Extracted `ContextualiseIcon` helper into a shared `Utils` class (`ComputeIO/Components/Utils.cs`) — previously duplicated in `GH_Contextual_Value_List` and referenced in the new `GH_GetColor`; both `GetValueListParameter` and `GetFileParameter` now call `Utils.ContextualiseIcon`
+- `BridgeCommunicationService`: added `GetSchemaFromContextBake` private method; standardized indentation across the file
+- `SchemaManager`, `ValueCollector`, `BridgeCommunicationService`: reformatted from tab to space indentation for consistency with `.editorconfig`
+- `FileDataGoo`: reformatted indentation (tabs → spaces), no logic changes
+- `SchemaMigrator`: fixed migration dictionary to register `MigrateTo_2_0_0` under version `2.0.0` (not `CURRENT`) and added `MigrateTo_2_3_0` under the new current version
+- `DocumentSynchronizationService`, `ValueApplicator`: minor cleanup
+
+### Fixed
+
+- `SchemaMigrator` migration dictionary previously registered the `2.0.0` migration under the `CURRENT` key — migrations after `2.0.0` would never be applied; now each migration is keyed to its own target version
+- `GetFileParameter`: removed stale `_isFromContextual = false` resets in `AssignContextualData` / `AssignContextualDataTree` that were immediately overwritten; removed generic volatile data fallback for non-`Param_FilePath`/`Param_String` sources to prevent unintended data capture
+
 ## [0.3.0] - 2026-01-13
 
 ### Added
@@ -187,6 +228,8 @@ for (const batch of batches) {
 - Embedded web assets server
 - WebSocket server for builder-app integration
 
-[Unreleased]: https://github.com/vektornode/selva/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/vektornode/selva/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/vektornode/selva/compare/v0.3.0...v0.7.0
+[0.3.0]: https://github.com/vektornode/selva/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/vektornode/selva/compare/v1.0.0...v0.2.0
 [1.0.0]: https://github.com/vektornode/selva/releases/tag/v1.0.0

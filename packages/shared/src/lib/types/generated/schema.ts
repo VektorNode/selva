@@ -5,7 +5,15 @@
  * and run `npm run generate:ts` in the schemas directory to regenerate this file.
  */
 
-export type GrasshopperParamType = 'number' | 'integer' | 'boolean' | 'text' | 'valueList' | 'file' | 'generic';
+export type GrasshopperParamType =
+  | 'number'
+  | 'integer'
+  | 'boolean'
+  | 'text'
+  | 'valueList'
+  | 'file'
+  | 'color'
+  | 'generic';
 export type InputNumberLayoutItem = LayoutItemBase & {
   type: 'input';
   widgetType: 'number';
@@ -36,6 +44,12 @@ export type InputFileLayoutItem = LayoutItemBase & {
   config?: FileInputWidgetConfig;
   [k: string]: unknown | undefined;
 };
+export type InputColorLayoutItem = LayoutItemBase & {
+  type: 'input';
+  widgetType: 'color';
+  config?: ColorWidgetConfig;
+  [k: string]: unknown | undefined;
+};
 export type OutputTextLayoutItem = LayoutItemBase & {
   type: 'output';
   widgetType: 'text';
@@ -58,10 +72,12 @@ export type LayoutItem =
   | InputDropdownLayoutItem
   | InputCheckboxLayoutItem
   | InputFileLayoutItem
+  | InputColorLayoutItem
   | OutputTextLayoutItem
   | OutputNumberLayoutItem
   | OutputFileLayoutItem;
 export type LayoutConfig = TabbedLayoutConfig | FlatLayoutConfig;
+export type GrasshopperInputStructure = 'item' | 'list' | 'tree';
 
 /**
  * Schema definitions for Selva UI configuration
@@ -191,6 +207,7 @@ export interface FileInputWidgetConfig {
    */
   allowedInputModes?: ('upload' | 'url')[];
 }
+export interface ColorWidgetConfig {}
 export interface LayoutItemBase {
   /**
    * Unique identifier for this layout item in the UI tree (not the parameter ID)
@@ -300,6 +317,10 @@ export interface SchemaInput {
   paramType: GrasshopperParamType;
   description?: string;
   default?: unknown;
+  /**
+   * Grasshopper data access mode: 'item' = Item Access, 'list' = List Access, 'tree' = Tree Access. Defaults to 'item'.
+   */
+  inputStructure?: 'item' | 'list' | 'tree';
 }
 export interface SchemaOutput {
   /**
@@ -448,7 +469,7 @@ export const ACCEPTED_FILE_FORMATS = [
 // TYPE GUARDS
 // ============================================================================
 
-export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem {
+export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem | InputColorLayoutItem {
   return item.type === 'input';
 }
 
@@ -476,7 +497,11 @@ export function isFileWidget(item: LayoutItem): item is InputFileLayoutItem {
   return item.type === 'input' && item.widgetType === 'file';
 }
 
+export function isColorWidget(item: LayoutItem): item is InputColorLayoutItem {
+  return item.type === 'input' && item.widgetType === 'color';
+}
+
 // Helper type aliases
-export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem;
+export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem | InputColorLayoutItem;
 export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem;
 export type SupportedTypes = string | number | boolean;

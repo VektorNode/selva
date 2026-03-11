@@ -8,7 +8,6 @@
 	import TabLayout from './preview/TabLayout.svelte';
 	import CollapsedPanelStrip from './CollapsedPanelStrip.svelte';
 	import * as Resizable from '$lib/components/ui/resizable';
-	import { ScrollArea } from './ui/scroll-area';
 
 	// ── Constants ────────────────────────────────────────────────────────────────
 	const COLLAPSED_WIDTH = 48;
@@ -25,7 +24,6 @@
 		values: Record<string, unknown>;
 		onValueChange: (id: string, val: SupportedTypes) => void | Promise<void>;
 		onLoadValues?: () => void | Promise<void>;
-		environment?: 'local' | 'compute';
 	}
 
 	let {
@@ -38,8 +36,7 @@
 		oncalculate = () => {},
 		values = $bindable({}),
 		onValueChange,
-		onLoadValues,
-		environment
+		onLoadValues
 	}: Props = $props();
 
 	// ── Layout flags ─────────────────────────────────────────────────────────────
@@ -115,17 +112,21 @@
 	showStateManager = true,
 	showCalculateButton = true
 )}
-	{#if schema.layout.type === 'tabbed'}
-		<TabLayout {schema} bind:values {onValueChange} {environment} {panelFilter} {requestedTabId} />
-	{/if}
-	{#if showStateManager}
-		<div class="mt-6">
-			<StateManager {schema} currentValues={values} onLoadValues={handleLoadValues} />
-		</div>
-	{/if}
-	{#if !isMobile && showCalculateButton && schema.instanceSolve === false}
-		<CalculateButton {hasPendingChanges} {isSolving} {oncalculate} />
-	{/if}
+	<div class="panel-content-wrapper">
+		{#if schema.layout.type === 'tabbed'}
+			<TabLayout {schema} bind:values {onValueChange} {panelFilter} {requestedTabId} />
+		{/if}
+		{#if showStateManager || (!isMobile && showCalculateButton && schema.instanceSolve === false)}
+			<div class="panel-footer px-3">
+				{#if showStateManager}
+					<StateManager {schema} currentValues={values} onLoadValues={handleLoadValues} />
+				{/if}
+				{#if !isMobile && showCalculateButton && schema.instanceSolve === false}
+					<CalculateButton {hasPendingChanges} {isSolving} {oncalculate} />
+				{/if}
+			</div>
+		{/if}
+	</div>
 {/snippet}
 
 <!-- ── Root container ─────────────────────────────────────────────────────────── -->
@@ -234,13 +235,18 @@
 	{:else}
 		<!-- ═══ DESKTOP LAYOUT ═════════════════════════════════════════════════════ -->
 
-		{#if !hasSidebar && !hasRightPanel}
-			<!-- Single centered left panel, no resize needed -->
-			<ScrollArea class="px-3 h-full overflow-y-auto">
-				<div class="left-panel-content">
-					{@render panelContent(undefined, requestedLeftTabId)}
+		{#if !hasViewer && !isTwoPanelMode && (hasLeftPanel !== hasRightPanel)}
+			<!-- Single centered panel (left-only or right-only), no viewer -->
+			<div class="min-h-0 flex h-full flex-1 justify-center">
+				<div class="min-h-0 flex h-full flex-col w-1/2">
+					{@render panelContent(
+						hasRightPanel ? 'right' : undefined,
+						hasRightPanel ? requestedRightTabId : requestedLeftTabId,
+						!hasRightPanel,
+						!hasRightPanel
+					)}
 				</div>
-			</ScrollArea>
+			</div>
 		{:else}
 			<div class="min-h-0 flex flex-1">
 				<!-- Left collapsed strip (outside PaneGroup so it has fixed width) -->
@@ -275,30 +281,31 @@
 							onCollapse={() => (leftCollapsed = true)}
 							onExpand={() => (leftCollapsed = false)}
 						>
-							<ScrollArea
-								class="px-3 left-panel-scroll h-full overflow-y-auto {isViewerFullscreen ||
-								leftCollapsed
+							<div
+								class="min-h-0 flex h-full flex-col {isViewerFullscreen || leftCollapsed
 									? 'hidden'
 									: ''}"
 							>
-								<div class="left-panel-content">
-									{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId)}
-								</div>
-							</ScrollArea>
+								{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId)}
+							</div>
 						</Resizable.Pane>
-						<Resizable.Handle class={leftCollapsed ? 'pointer-events-none hidden' : ''} />
+						<Resizable.Handle
+							class={leftCollapsed ? 'pointer-events-none hidden' : 'bg-transparent'}
+						/>
 					{/if}
 
 					<!-- Viewer pane -->
 					{#if hasViewer}
-						<Resizable.Pane order={2} minSize={20} class="min-h-0 flex flex-col">
+						<Resizable.Pane order={2} minSize={20} class="min-h-0 mx-1 flex flex-col">
 							<Viewer {schema} {meshes} bind:isFullscreen={isViewerFullscreen} {isSolving} />
 						</Resizable.Pane>
 					{/if}
 
 					<!-- Right pane -->
 					{#if hasRightPanel}
-						<Resizable.Handle class={rightCollapsed ? 'pointer-events-none hidden' : ''} />
+						<Resizable.Handle
+							class={rightCollapsed ? ' pointer-events-none hidden' : 'bg-transparent'}
+						/>
 						<Resizable.Pane
 							bind:this={rightPaneRef}
 							order={3}
@@ -310,13 +317,13 @@
 							onCollapse={() => (rightCollapsed = true)}
 							onExpand={() => (rightCollapsed = false)}
 						>
-							<ScrollArea
-								class="px-3 h-full overflow-y-auto {isViewerFullscreen || rightCollapsed
+							<div
+								class="min-h-0 flex h-full flex-col {isViewerFullscreen || rightCollapsed
 									? 'hidden'
 									: ''}"
 							>
 								{@render panelContent('right', requestedRightTabId, !hasLeftPanel, !hasLeftPanel)}
-							</ScrollArea>
+							</div>
 						</Resizable.Pane>
 					{/if}
 				</Resizable.PaneGroup>
@@ -347,6 +354,19 @@
 		inset: 0;
 		z-index: 9999;
 		padding: 0 !important;
+	}
+
+	.panel-content-wrapper {
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		min-height: 0;
+	}
+
+	.panel-footer {
+		flex-shrink: 0;
+		padding-top: 1.5rem;
+		padding-bottom: 1rem;
 	}
 
 	.drawer-container {

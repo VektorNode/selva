@@ -1,6 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
+using System.Threading.Tasks;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Components;
 using Grasshopper.Kernel.Data;
@@ -15,298 +17,325 @@ using Selva.GH.Utilities;
 
 namespace Selva.GH.Features.Display.Components;
 
-// Per-item result passed back from the background task.
+// Result of the single background task: all items batched together.
 public sealed class SolveResult
 {
-	public SolveResult(Mesh mesh, string name, Dictionary<string, string> metadata, ThreeMaterial material)
-	{
-		Mesh = mesh;
-		Name = name;
-		Metadata = metadata;
-		Material = material;
-	}
+    public SolveResult(List<Mesh> meshes, List<string> names, List<Dictionary<string, string>> metadata,
+        List<ThreeMaterial> materials, int skipped = 0)
+    {
+        Meshes = meshes;
+        Names = names;
+        Metadata = metadata;
+        Materials = materials;
+        Skipped = skipped;
+    }
 
-	public Mesh Mesh { get; }
-	public string Name { get; }
-	public Dictionary<string, string> Metadata { get; }
-	public ThreeMaterial Material { get; }
+    public List<Mesh> Meshes { get; }
+    public List<string> Names { get; }
+    public List<Dictionary<string, string>> Metadata { get; }
+    public List<ThreeMaterial> Materials { get; }
+    public int Skipped { get; }
 }
 
 /// <summary>
-///   Component that converts geometry to displayable format for web viewing.
-///   Uses GH_TaskCapableComponent for background meshing while following the
-///   BeforeSolveInstance / SolveInstance / AfterSolveInstance pattern of
-///   GH_CustomPreviewComponent so GH handles tree iteration and material matching.
+///     Component that converts geometry to a single batched WebDisplay output.
+///     Reads all inputs as trees so SolveInstance is called exactly once,
+///     queuing a single background task. Viewport preview is built in AfterSolveInstance.
 /// </summary>
 public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 {
-	private List<GH_CustomPreviewItem> _previewItems;
-	private BoundingBox _previewBB;
-	private List<Mesh> _meshes;
-	private List<string> _names;
-	private List<Dictionary<string, string>> _metadata;
-	private List<ThreeMaterial> _materials;
-	private Dictionary<uint, (RenderMaterial RenderMat, DisplayMaterial DisplayMat)> _matCache;
-	private MeshingParameters _meshSettings;
+    private BoundingBox _previewBB;
+    private List<GH_CustomPreviewItem> _previewItems;
 
-	public WebDisplay()
-		: base("Display", "D", "Converts geometry to display file", "Selva", "Display")
-	{
-	}
+    public WebDisplay()
+        : base("Display", "D", "Converts geometry to display file", "Selva", "Display")
+    {
+    }
 
-	protected override Bitmap Icon => Resources.WebDisplay;
-	public override Guid ComponentGuid => new("9B5515B2-861A-4840-B884-82B725203ABB");
-	public override BoundingBox ClippingBox => _previewBB;
-	public override bool IsPreviewCapable => true;
+    protected override Bitmap Icon => Resources.WebDisplay;
+    public override Guid ComponentGuid => new("9B5515B2-861A-4840-B884-82B725203ABB");
+    public override BoundingBox ClippingBox => _previewBB;
+    public override bool IsPreviewCapable => true;
 
-	public override void ClearData()
-	{
-		base.ClearData();
-		_previewItems = null;
-		_previewBB = BoundingBox.Empty;
-	}
+    public override void ClearData()
+    {
+        base.ClearData();
+        _previewItems = null;
+        _previewBB = BoundingBox.Empty;
+    }
 
-	protected override void RegisterInputParams(GH_InputParamManager pManager)
-	{
-		// Item access — GH iterates trees and calls SolveInstance once per item,
-		// applying longest-list matching automatically across all inputs.
-		pManager.AddGeometryParameter("Geo", "G", "Geometry to display", GH_ParamAccess.item);
-		pManager.AddTextParameter("Mesh Name", "N", "Name of the mesh", GH_ParamAccess.item, "");
-		pManager.AddTextParameter("Metadata", "D", "Metadata for the mesh (Format: 'Key=Value')", GH_ParamAccess.item);
-		pManager.AddParameter(new Param_ThreeMaterial("T-Material", "TM", "ThreeMaterial for display", "Selva", "Display", GH_ParamAccess.item));
-		pManager.AddParameter(new Param_MeshParameters(), "Meshing Settings", "MS",
-			"Meshing settings to use. Default is FastRenderMesh.", GH_ParamAccess.item);
+    protected override void RegisterInputParams(GH_InputParamManager pManager)
+    {
+        pManager.AddGeometryParameter("Geo", "G", "Geometry to display", GH_ParamAccess.tree);
+        pManager.AddTextParameter("Mesh Name", "N", "Name of the mesh", GH_ParamAccess.tree, "");
+        pManager.AddTextParameter("Metadata", "D", "Metadata for the mesh (Format: 'Key=Value')", GH_ParamAccess.tree);
+        pManager.AddParameter(new Param_ThreeMaterial("T-Material", "TM", "ThreeMaterial for display", "Selva",
+            "Display", GH_ParamAccess.tree));
+        pManager.AddParameter(new Param_MeshParameters(), "Meshing Settings", "MS",
+            "Meshing settings to use. Default is FastRenderMesh.", GH_ParamAccess.item);
 
-		pManager[2].Optional = true;
-		pManager[3].Optional = true;
-		pManager[4].Optional = true;
-	}
+        pManager[2].Optional = true;
+        pManager[3].Optional = true;
+        pManager[4].Optional = true;
+    }
 
-	public override void CreateAttributes()
-	{
-		m_attributes = new GH_ContextBakeOutputAttributes(this);
-	}
+    public override void CreateAttributes()
+    {
+        m_attributes = new GH_ContextBakeOutputAttributes(this);
+    }
 
-	protected override void RegisterOutputParams(GH_OutputParamManager pManager)
-	{
-		pManager.AddGenericParameter("Web Display", "WD", "Geometry data for web display", GH_ParamAccess.item);
-	}
+    protected override void RegisterOutputParams(GH_OutputParamManager pManager)
+    {
+        pManager.AddGenericParameter("Web Display", "WD", "Geometry data for web display", GH_ParamAccess.item);
+    }
 
+    protected override void SolveInstance(IGH_DataAccess DA)
+    {
+        GH_Structure<IGH_GeometricGoo> geoTree;
+        if (!DA.GetDataTree(0, out geoTree) || geoTree.IsEmpty)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No geometry provided");
+            return;
+        }
 
+        DA.GetDataTree(1, out GH_Structure<GH_String> nameTree);
+        DA.GetDataTree(2, out GH_Structure<GH_String> metaTree);
+        DA.GetDataTree(3, out GH_Structure<ThreeMaterialGoo> matTree);
+        GH_MeshingParameters ghMeshParams = null;
+        DA.GetData(4, ref ghMeshParams);
 
-	protected override void BeforeSolveInstance()
-	{
-		_previewItems = new List<GH_CustomPreviewItem>();
-		_previewBB = BoundingBox.Empty;
-		_meshes = new List<Mesh>();
-		_names = new List<string>();
-		_metadata = new List<Dictionary<string, string>>();
-		_materials = new List<ThreeMaterial>();
-		_matCache = new Dictionary<uint, (RenderMaterial, DisplayMaterial)>();
-		_meshSettings = MeshingParameters.FastRenderMesh;
-	}
+        var meshSettings = ghMeshParams?.Value ?? MeshingParameters.FastRenderMesh;
 
-	protected override void SolveInstance(IGH_DataAccess DA)
-	{
-		// Read inputs (safe on any thread for value types / immutable strings).
-		GH_MeshingParameters ghMeshParams = null;
-		DA.GetData(4, ref ghMeshParams);
-		if (ghMeshParams?.Value != null)
-			_meshSettings = ghMeshParams.Value;
+        if (InPreSolve)
+        {
+            TaskList.Add(Task.Run(() =>
+                    ComputeBatch(geoTree, nameTree, metaTree, matTree, meshSettings),
+                CancelToken));
+            return;
+        }
 
-		IGH_GeometricGoo geoGoo = null;
-		if (!DA.GetData(0, ref geoGoo) || geoGoo == null) return;
+        if (!GetSolveResults(DA, out var result))
+            result = ComputeBatch(geoTree, nameTree, metaTree, matTree, meshSettings);
 
-		var nameStr = "";
-		DA.GetData(1, ref nameStr);
+        if (result == null || result.Meshes.Count == 0)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No valid geometry could be meshed");
+            return;
+        }
 
-		var metaStr = "";
-		DA.GetData(2, ref metaStr);
+        if (result.Skipped > 0)
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                $"{result.Skipped} item(s) could not be meshed and were skipped");
 
-		ThreeMaterialGoo matGoo = null;
-		DA.GetData(3, ref matGoo);
-		var mat = matGoo?.Value ?? ThreeMaterial.Default();
+        var batch = MeshBatchProcessor.CreateBatch(result.Meshes, result.Names, result.Materials, result.Metadata);
+        DA.SetData(0, new WebDisplayGoo(batch));
 
-		// Capture loop variables for the closure.
-		var capturedSettings = _meshSettings;
-		var capturedName = nameStr;
-		var capturedMeta = metaStr;
-		var capturedMat = mat;
+        // Build preview items on main thread (Rhino display API requirement).
+        _previewItems = new List<GH_CustomPreviewItem>(result.Meshes.Count);
+        _previewBB = BoundingBox.Empty;
+        var matCache = new Dictionary<uint, DisplayMaterial>();
 
-		if (InPreSolve)
-		{
-			// Queue the heavy meshing work on a background thread.
-			TaskList.Add(System.Threading.Tasks.Task.Run(() =>
-			{
-				var geom = TryExtractGeometry(geoGoo);
-				if (geom == null || !geom.IsValid) return null;
+        for (var i = 0; i < result.Meshes.Count; i++)
+        {
+            var mesh = result.Meshes[i];
+            var mat = result.Materials[i];
 
-				var mesh = ConvertSingleGeometry(geom, capturedSettings);
-				if (mesh == null || !mesh.IsValid) return null;
-				mesh.Normals.ComputeNormals();
-				mesh.Compact();
+            var ghMat = new GH_Material(mat.Color);
+            var renderMat = ghMat.MaterialBestGuess();
+            var renderHash = renderMat.RenderHash;
 
-				return new SolveResult(mesh, capturedName, ParseMetadataString(capturedMeta), capturedMat);
-			}, CancelToken));
-			return;
-		}
+            if (!matCache.TryGetValue(renderHash, out var dispMat))
+            {
+                var rhinoMat = renderMat.ToMaterial(RenderTexture.TextureGeneration.Disallow);
+                dispMat = new DisplayMaterial(rhinoMat)
+                {
+                    Transparency = 1.0 - mat.Opacity,
+                    IsTwoSided = true
+                };
+                matCache[renderHash] = dispMat;
+            }
 
-		// Result-collection pass: GetSolveResults retrieves the completed task result.
-		if (!GetSolveResults(DA, out var result) || result == null)
-		{
-			// Fallback: solve synchronously if no cached result.
-			var geom = TryExtractGeometry(geoGoo);
-			if (geom == null || !geom.IsValid) return;
-			var mesh = ConvertSingleGeometry(geom, capturedSettings);
-			if (mesh == null || !mesh.IsValid) return;
-			mesh.Normals.ComputeNormals();
-			mesh.Compact();
-			result = new SolveResult(mesh, capturedName, ParseMetadataString(capturedMeta), capturedMat);
-		}
+            _previewItems.Add(new GH_CustomPreviewItem
+            {
+                Geometry = new GH_Mesh(mesh),
+                Shader = dispMat,
+                Colour = dispMat.Diffuse
+            });
+            _previewBB.Union(mesh.GetBoundingBox(false));
+        }
+    }
 
-		// Build DisplayMaterial on the main thread (Rhino display API requirement).
-		// Exact same pipeline as GH_CustomPreviewComponent:
-		// GH_Material → MaterialBestGuess() → cache by RenderHash → ToMaterial() → DisplayMaterial
-		var ghMat = new GH_Material(result.Material.Color);
-		var renderMat = ghMat.MaterialBestGuess();
-		var renderHash = renderMat.RenderHash;
+    private static List<T> ResolveBranch<T>(IGH_Structure tree, GH_Path path) where T : class
+    {
+        if (tree == null) return new List<T>();
+        var branch = tree.get_Branch(path)?.Cast<T>().ToList();
+        if (branch != null && branch.Count > 0) return branch;
+        var fallback = tree.get_Branch(new GH_Path(0))?.Cast<T>().ToList();
+        return fallback ?? new List<T>();
+    }
 
-		if (!_matCache.TryGetValue(renderHash, out var cached))
-		{
-			var rhinoMat = renderMat.ToMaterial(RenderTexture.TextureGeneration.Disallow);
-			cached = (renderMat, new DisplayMaterial(rhinoMat)
-			{
-				Transparency = 1.0 - result.Material.Opacity,
-				IsTwoSided = true,
-			});
-			_matCache[renderHash] = cached;
-		}
+    private static SolveResult ComputeBatch(
+        GH_Structure<IGH_GeometricGoo> geoTree,
+        GH_Structure<GH_String> nameTree,
+        GH_Structure<GH_String> metaTree,
+        GH_Structure<ThreeMaterialGoo> matTree,
+        MeshingParameters meshSettings)
+    {
+        var meshes = new List<Mesh>();
+        var names = new List<string>();
+        var metadata = new List<Dictionary<string, string>>();
+        var materials = new List<ThreeMaterial>();
+        var skipped = 0;
 
-		_previewItems.Add(new GH_CustomPreviewItem
-		{
-			Geometry = new GH_Mesh(result.Mesh),
-			Shader = cached.DisplayMat,
-			Colour = cached.DisplayMat.Diffuse,
-		});
-		_previewBB.Union(result.Mesh.GetBoundingBox(false));
+        // Iterate geometry paths in order. For each path, match name/meta/material by index
+        // within that branch (longest-list per branch — standard GH behaviour).
+        foreach (var path in geoTree.Paths)
+        {
+            var geoItems = geoTree.get_Branch(path)?.Cast<IGH_GeometricGoo>().ToList();
+            if (geoItems == null || geoItems.Count == 0) continue;
 
-		var itemIndex = _meshes.Count;
-		_meshes.Add(result.Mesh);
-		_names.Add(!string.IsNullOrWhiteSpace(result.Name) ? result.Name : itemIndex.ToString());
-		_metadata.Add(result.Metadata);
-		_materials.Add(result.Material);
-	}
+            // Resolve the corresponding branch for each companion tree, falling back to path {0} then empty.
+            var nameItems = ResolveBranch<GH_String>(nameTree, path);
+            var metaItems = ResolveBranch<GH_String>(metaTree, path);
+            var matItems = ResolveBranch<ThreeMaterialGoo>(matTree, path);
 
-	protected override void AfterSolveInstance()
-	{
-		if (_meshes != null && _meshes.Count > 0)
-		{
-			try
-			{
-				var batch = MeshBatchProcessor.CreateBatch(_meshes, _names, _materials, _metadata);
-				var tree = new GH_Structure<WebDisplayGoo>();
-				tree.Append(new WebDisplayGoo(batch), new GH_Path(0));
-				Params.Output[0].AddVolatileDataTree(tree);
-			}
-			catch (Exception ex)
-			{
-				AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Failed to build batch: {ex.Message}");
-			}
-		}
+            var lastName = nameItems.Count > 0 ? nameItems[nameItems.Count - 1]?.Value ?? "" : "";
+            var lastMeta = metaItems.Count > 0 ? metaItems[metaItems.Count - 1]?.Value ?? "" : "";
+            var lastMat = matItems.Count > 0
+                ? matItems[matItems.Count - 1]?.Value ?? ThreeMaterial.Default()
+                : ThreeMaterial.Default();
 
-		base.AfterSolveInstance();
-	}
+            for (var i = 0; i < geoItems.Count; i++)
+            {
+                var geom = TryExtractGeometry(geoItems[i]);
+                if (geom == null || !geom.IsValid)
+                {
+                    skipped++;
+                    continue;
+                }
 
-	// ── Viewport drawing ─────────────────────────────────────────────────────────
+                var mesh = ConvertSingleGeometry(geom, meshSettings);
+                if (mesh == null || !mesh.IsValid)
+                {
+                    skipped++;
+                    continue;
+                }
 
-	public override void DrawViewportMeshes(IGH_PreviewArgs args)
-	{
-		if (Locked || _previewItems == null) return;
+                mesh.Normals.ComputeNormals();
+                mesh.Compact();
 
-		if (Attributes.Selected)
-		{
-			var sel = new GH_PreviewMeshArgs(args.Viewport, args.Display,
-				args.ShadeMaterial_Selected, args.MeshingParameters);
-			foreach (var item in _previewItems)
-				item.Geometry.DrawViewportMeshes(sel);
-		}
-		else
-		{
-			foreach (var item in _previewItems)
-				item.Geometry.DrawViewportMeshes(new GH_PreviewMeshArgs(
-					args.Viewport, args.Display, item.Shader, args.MeshingParameters));
-		}
-	}
+                var nameStr = i < nameItems.Count ? nameItems[i]?.Value ?? lastName : lastName;
+                var metaStr = i < metaItems.Count ? metaItems[i]?.Value ?? lastMeta : lastMeta;
+                var mat = i < matItems.Count ? matItems[i]?.Value ?? lastMat : lastMat;
 
-	public override void DrawViewportWires(IGH_PreviewArgs args)
-	{
-		if (Locked || _previewItems == null) return;
-		foreach (var item in _previewItems)
-			item.Geometry.DrawViewportWires(new GH_PreviewWireArgs(
-				args.Viewport, args.Display,
-				Attributes.Selected ? args.WireColour_Selected : args.WireColour,
-				args.DefaultCurveThickness));
-	}
+                meshes.Add(mesh);
+                names.Add(!string.IsNullOrWhiteSpace(nameStr) ? nameStr : meshes.Count.ToString());
+                metadata.Add(ParseMetadataString(metaStr));
+                materials.Add(mat);
+            }
+        }
 
-	// ── Geometry helpers ─────────────────────────────────────────────────────────
+        return meshes.Count > 0 ? new SolveResult(meshes, names, metadata, materials, skipped) : null;
+    }
 
-	private static GeometryBase TryExtractGeometry(IGH_Goo goo)
-	{
-		if (goo == null) return null;
-		if (goo.ScriptVariable() is GeometryBase g) return g;
-		return goo switch
-		{
-			GH_GeometricGoo<GeometryBase> x => x.Value,
-			GH_Mesh x => x.Value,
-			GH_Brep x => x.Value,
-			GH_Surface x => x.Value,
-			GH_Curve x => x.Value,
-			GH_Box x when x.Value.IsValid => x.Value.ToBrep(),
-			_ => null
-		};
-	}
+    // ── Viewport drawing ─────────────────────────────────────────────────────────
 
-	private static Mesh ConvertSingleGeometry(GeometryBase geom, MeshingParameters mParams)
-	{
-		if (geom == null || !geom.IsValid) return null;
-		try
-		{
-			var mesh = geom switch
-			{
-				Mesh m => m.DuplicateMesh(),
-				Brep b => CreateMeshFromBrep(b, mParams),
-				Surface s => Mesh.CreateFromSurface(s, mParams),
-				_ => null
-			};
-			return mesh != null && mesh.IsValid ? mesh : null;
-		}
-		catch { return null; }
-	}
+    public override void DrawViewportMeshes(IGH_PreviewArgs args)
+    {
+        if (Locked || _previewItems == null) return;
 
-	private static Mesh CreateMeshFromBrep(Brep brep, MeshingParameters mParams)
-	{
-		if (brep == null || !brep.IsValid) return null;
-		try
-		{
-			var meshArray = Mesh.CreateFromBrep(brep, mParams);
-			if (meshArray == null || meshArray.Length == 0) return null;
-			var mesh = new Mesh();
-			foreach (var m in meshArray)
-				if (m != null && m.IsValid) mesh.Append(m);
-			return mesh.Faces.Count > 0 ? mesh : null;
-		}
-		catch { return null; }
-	}
+        if (Attributes.Selected)
+        {
+            var sel = new GH_PreviewMeshArgs(args.Viewport, args.Display,
+                args.ShadeMaterial_Selected, args.MeshingParameters);
+            foreach (var item in _previewItems)
+                item.Geometry.DrawViewportMeshes(sel);
+        }
+        else
+        {
+            foreach (var item in _previewItems)
+                item.Geometry.DrawViewportMeshes(new GH_PreviewMeshArgs(
+                    args.Viewport, args.Display, item.Shader, args.MeshingParameters));
+        }
+    }
 
-	private static Dictionary<string, string> ParseMetadataString(string s)
-	{
-		var d = new Dictionary<string, string>();
-		if (string.IsNullOrWhiteSpace(s)) return d;
-		foreach (var pair in s.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
-		{
-			var parts = pair.Split(new[] { '=' }, 2);
-			if (parts.Length == 2) d[parts[0].Trim()] = parts[1].Trim();
-		}
-		return d;
-	}
+    public override void DrawViewportWires(IGH_PreviewArgs args)
+    {
+        if (Locked || _previewItems == null) return;
+        foreach (var item in _previewItems)
+            item.Geometry.DrawViewportWires(new GH_PreviewWireArgs(
+                args.Viewport, args.Display,
+                Attributes.Selected ? args.WireColour_Selected : args.WireColour,
+                args.DefaultCurveThickness));
+    }
+
+    // ── Geometry helpers ─────────────────────────────────────────────────────────
+
+    private static GeometryBase TryExtractGeometry(IGH_Goo goo)
+    {
+        if (goo == null) return null;
+        if (goo.ScriptVariable() is GeometryBase g) return g;
+        return goo switch
+        {
+            GH_GeometricGoo<GeometryBase> x => x.Value,
+            GH_Mesh x => x.Value,
+            GH_Brep x => x.Value,
+            GH_Surface x => x.Value,
+            GH_Curve x => x.Value,
+            GH_Box x when x.Value.IsValid => x.Value.ToBrep(),
+            _ => null
+        };
+    }
+
+    private static Mesh ConvertSingleGeometry(GeometryBase geom, MeshingParameters mParams)
+    {
+        if (geom == null || !geom.IsValid) return null;
+        try
+        {
+            var mesh = geom switch
+            {
+                Mesh m => m.DuplicateMesh(),
+                Brep b => CreateMeshFromBrep(b, mParams),
+                Surface s => Mesh.CreateFromSurface(s, mParams),
+                _ => null
+            };
+            return mesh != null && mesh.IsValid ? mesh : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static Mesh CreateMeshFromBrep(Brep brep, MeshingParameters mParams)
+    {
+        if (brep == null || !brep.IsValid) return null;
+        try
+        {
+            var meshArray = Mesh.CreateFromBrep(brep, mParams);
+            if (meshArray == null || meshArray.Length == 0) return null;
+            var mesh = new Mesh();
+            foreach (var m in meshArray)
+                if (m != null && m.IsValid)
+                    mesh.Append(m);
+            return mesh.Faces.Count > 0 ? mesh : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static Dictionary<string, string> ParseMetadataString(string s)
+    {
+        var d = new Dictionary<string, string>();
+        if (string.IsNullOrWhiteSpace(s)) return d;
+        foreach (var pair in s.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = pair.Split(new[] { '=' }, 2);
+            if (parts.Length == 2) d[parts[0].Trim()] = parts[1].Trim();
+        }
+
+        return d;
+    }
 }

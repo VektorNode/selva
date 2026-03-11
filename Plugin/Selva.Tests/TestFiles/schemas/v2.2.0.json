@@ -1,0 +1,42 @@
+{
+	"_comment": "Schema fixture for v2.2.0 — introduced color widget. Tests that color inputs survive round-trip and inputStructure defaults to 'item' after migration.",
+	"schemaVersion": "2.2.0",
+	"id": "fixture-v220",
+	"name": "Fixture v2.2.0",
+	"inputs": [
+		{
+			"id": "aaaaaaaa-0000-0000-0000-000000000001",
+			"nickname": "Width",
+			"paramType": "number"
+		},
+		{
+			"id": "aaaaaaaa-0000-0000-0000-000000000002",
+			"nickname": "Material Color",
+			"paramType": "color"
+		}
+	],
+	"outputs": [],
+	"layout": {
+		"type": "flat",
+		"groups": [
+			{
+				"id": "g1",
+				"label": "Settings",
+				"items": [
+					{
+						"id": "item1",
+						"paramId": "aaaaaaaa-0000-0000-0000-000000000001",
+						"type": "input",
+						"widgetType": "number"
+					},
+					{
+						"id": "item2",
+						"paramId": "aaaaaaaa-0000-0000-0000-000000000002",
+						"type": "input",
+						"widgetType": "color"
+					}
+				]
+			}
+		]
+	}
+}

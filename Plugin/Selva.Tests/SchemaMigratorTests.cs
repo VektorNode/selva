@@ -5,45 +5,77 @@ using Selva.Core.Services;
 
 namespace Selva.Tests;
 
+/// <summary>
+/// Unit tests for specific SchemaMigrator behaviours that are NOT covered by SchemaFixtureTests.
+/// Round-trip / golden-fixture coverage lives in SchemaFixtureTests instead.
+/// </summary>
 public class SchemaMigratorTests
 {
+	// -------------------------------------------------------------------------
+	// MigrateJson — structural (JObject-level) migrations
+	// -------------------------------------------------------------------------
+
 	[Fact]
-	public void MigrateJson_LegacyFlatLayout_TransformsStructure()
+	public void MigrateJson_LegacyFlatLayout_CollapsesTabsIntoGroups()
 	{
-		// Legacy flat layout: layout.type="flat", layout.tabs=[{groups:[...]}]
-		var json = JObject.Parse(@"
-    {
-      'schemaVersion': '1.0.0',
-      'layout': {
-        'type': 'flat',
-        'tabs': [
-          {
-            'groups': [
-              { 'id': 'g1', 'label': 'Group 1', 'items': [] }
-            ]
-          },
-          {
-            'groups': [
-              { 'id': 'g2', 'label': 'Group 2', 'items': [] }
-            ]
-          }
-        ]
-      }
-    }");
+		// v1 flat layout stored groups inside a tabs array; migration must flatten it
+		var json = JObject.Parse("""
+			{
+				"schemaVersion": "1.0.0",
+				"layout": {
+					"type": "flat",
+					"tabs": [
+						{ "groups": [ { "id": "g1", "label": "Group 1", "items": [] } ] },
+						{ "groups": [ { "id": "g2", "label": "Group 2", "items": [] } ] }
+					]
+				}
+			}
+			""");
 
 		var migrated = SchemaMigrator.MigrateJson(json);
 
 		Assert.Equal(SchemaVersion.CURRENT_STRING, migrated["schemaVersion"]?.ToString());
-
-		var layout = migrated["layout"];
-		Assert.Null(layout["tabs"]); // Tabs should be removed
-
-		var groups = layout["groups"] as JArray;
+		Assert.Null(migrated["layout"]?["tabs"]);
+		var groups = migrated["layout"]?["groups"] as JArray;
 		Assert.NotNull(groups);
 		Assert.Equal(2, groups.Count);
 		Assert.Equal("g1", groups[0]["id"]?.ToString());
 		Assert.Equal("g2", groups[1]["id"]?.ToString());
 	}
+
+	[Fact]
+	public void MigrateJson_MissingLayoutType_InfersTabbedFromTabs()
+	{
+		var json = JObject.Parse("""
+			{
+				"schemaVersion": "1.0.0",
+				"layout": { "tabs": [] }
+			}
+			""");
+
+		var migrated = SchemaMigrator.MigrateJson(json);
+
+		Assert.Equal("tabbed", migrated["layout"]?["type"]?.ToString());
+	}
+
+	[Fact]
+	public void MigrateJson_MissingLayoutType_InfersFlatFromGroups()
+	{
+		var json = JObject.Parse("""
+			{
+				"schemaVersion": "1.0.0",
+				"layout": { "groups": [] }
+			}
+			""");
+
+		var migrated = SchemaMigrator.MigrateJson(json);
+
+		Assert.Equal("flat", migrated["layout"]?["type"]?.ToString());
+	}
+
+	// -------------------------------------------------------------------------
+	// MigrateWithTracking — object-level migrations and version handling
+	// -------------------------------------------------------------------------
 
 	[Fact]
 	public void MigrateWithTracking_NullSchema_ThrowsArgumentNullException()
@@ -53,46 +85,9 @@ public class SchemaMigratorTests
 	}
 
 	[Fact]
-	public void MigrateWithTracking_LegacySchema_SetsVersionTo100_AndMigratesToCurrent()
+	public void MigrateWithTracking_CurrentVersion_ReturnsUnchanged()
 	{
-		var schema = new UISchema
-		{
-			Id = "legacy-schema",
-			SchemaVersion = null // Legacy
-		};
-
-		var (migratedSchema, changes) = SchemaMigrator.MigrateWithTracking(schema, new Version(1, 0, 0));
-
-		// It first sets to 1.0.0, then migrates to 2.0.0
-		Assert.Equal(SchemaVersion.CURRENT_STRING, migratedSchema.SchemaVersion);
-		Assert.Contains(changes, c => c.Contains("legacy schema detected"));
-		Assert.Contains(changes, c => c.Contains($"Applied migration from 1.0.0 to {SchemaVersion.CURRENT}"));
-	}
-
-	[Fact]
-	public void MigrateWithTracking_IncompatiblePluginVersion_ThrowsException()
-	{
-		var schema = new UISchema
-		{
-			Id = "future-schema",
-			SchemaVersion = "1.0.0",
-			MinPluginVersion = "2.0.0"
-		};
-
-		var currentVersion = new Version(1, 0, 0);
-
-		Assert.Throws<IncompatibleSchemaException>(() =>
-			SchemaMigrator.MigrateWithTracking(schema, currentVersion));
-	}
-
-	[Fact]
-	public void MigrateWithTracking_CurrentVersion_NoChanges()
-	{
-		var schema = new UISchema
-		{
-			Id = "current-schema",
-			SchemaVersion = SchemaVersion.CURRENT_STRING
-		};
+		var schema = new UISchema { Id = "s", SchemaVersion = SchemaVersion.CURRENT_STRING };
 
 		var (migratedSchema, changes) = SchemaMigrator.MigrateWithTracking(schema, new Version(1, 0, 0));
 
@@ -101,45 +96,40 @@ public class SchemaMigratorTests
 	}
 
 	[Fact]
-	public void MigrateWithTracking_V1toV2_PopulatesNames()
+	public void MigrateWithTracking_LegacySchema_SetsVersion100ThenMigratesToCurrent()
 	{
-		var schema = new UISchema
-		{
-			Id = "v1-schema",
-			SchemaVersion = "1.0.0",
-			Inputs = new List<SchemaInput>
-			{
-				new() { Id = Guid.NewGuid(), Nickname = "Input1" }
-			},
-			Outputs = new List<SchemaOutput>
-			{
-				new() { Id = Guid.NewGuid(), Nickname = "Output1" }
-			}
-		};
+		var schema = new UISchema { Id = "s", SchemaVersion = null };
 
-		var (migratedSchema, changes) = SchemaMigrator.MigrateWithTracking(schema, new Version(2, 0, 0));
+		var (migratedSchema, changes) = SchemaMigrator.MigrateWithTracking(schema, new Version(99, 0, 0));
 
 		Assert.Equal(SchemaVersion.CURRENT_STRING, migratedSchema.SchemaVersion);
-		Assert.Equal("Input1", migratedSchema.Inputs[0].Nickname);
-		Assert.Equal("Output1", migratedSchema.Outputs[0].Nickname);
-		Assert.Contains(changes, c => c.Contains($"Applied migration from 1.0.0 to {SchemaVersion.CURRENT}"));
+		Assert.Contains(changes, c => c.Contains("legacy schema detected"));
+		Assert.Contains(changes, c => c.Contains("Applied migration from 1.0.0 to 2.0.0"));
 	}
 
 	[Fact]
-	public void MigrateJson_LegacyMissingType_InfersTabbed()
+	public void MigrateWithTracking_IncompatibleMinPluginVersion_Throws()
 	{
-		// Legacy schema without 'type' but with 'tabs'
-		var json = JObject.Parse(@"
-    {
-      'schemaVersion': '1.0.0',
-      'layout': {
-        'tabs': []
-      }
-    }");
+		var schema = new UISchema { Id = "s", SchemaVersion = "1.0.0", MinPluginVersion = "5.0.0" };
 
-		var migrated = SchemaMigrator.MigrateJson(json);
+		Assert.Throws<IncompatibleSchemaException>(() =>
+			SchemaMigrator.MigrateWithTracking(schema, new Version(1, 0, 0)));
+	}
 
-		Assert.Equal(SchemaVersion.CURRENT_STRING, migrated["schemaVersion"]?.ToString());
-		Assert.Equal("tabbed", migrated["layout"]?["type"]?.ToString());
+	[Fact]
+	public void MigrateWithTracking_V100_RecordsEachMigrationStep()
+	{
+		var schema = new UISchema
+		{
+			Id = "s",
+			SchemaVersion = "1.0.0",
+			Inputs = new List<SchemaInput> { new() { Id = Guid.NewGuid(), Nickname = "W" } },
+			Outputs = new List<SchemaOutput> { new() { Id = Guid.NewGuid(), Nickname = "R" } }
+		};
+
+		var (migratedSchema, changes) = SchemaMigrator.MigrateWithTracking(schema, new Version(99, 0, 0));
+
+		Assert.Equal(SchemaVersion.CURRENT_STRING, migratedSchema.SchemaVersion);
+		Assert.Contains(changes, c => c.Contains("Applied migration from 1.0.0 to 2.0.0"));
 	}
 }

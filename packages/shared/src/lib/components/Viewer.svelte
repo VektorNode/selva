@@ -98,7 +98,7 @@
 </script>
 
 <div
-	class="min-h-64 sm:min-h-96 lg:min-h-125 shadow-lg relative h-full flex-1 {isFullscreen
+	class="min-h-64 sm:min-h-96 lg:min-h-125 relative h-full flex-1 {isFullscreen
 		? 'fullscreen-viewer'
 		: ''}"
 >
