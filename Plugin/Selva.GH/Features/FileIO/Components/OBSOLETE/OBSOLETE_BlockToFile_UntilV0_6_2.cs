@@ -231,7 +231,7 @@ public class OBSOLETE_BlockToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         {
             if (_converter != null) return;
 
-            var options = new AppConfig.RhinoConverterOptions();
+            var options = new RhinoConverterOptions();
 
             _converter = new RhinoDocumentConverter(options);
         }

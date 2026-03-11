@@ -266,7 +266,7 @@ public class GH_Block_To_File : GH_Component, ISelvaFileOutput
         {
             if (_converter != null) return;
 
-            var options = new AppConfig.RhinoConverterOptions();
+            var options = new RhinoConverterOptions();
 
             _converter = new RhinoDocumentConverter(options);
         }

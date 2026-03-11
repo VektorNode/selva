@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Grasshopper.Kernel;
 using Rhino;
 using Selva.Core.Models;
+using Selva.GH.Config;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Features.UIBuilder.Services.Events;
 using Selva.GH.Features.UIBuilder.Services.Persistence;
@@ -19,11 +20,15 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
-/// Orchestrates communication between the web UI and Grasshopper component.
-/// Handles WebSocket event routing, message processing, and response broadcasting.
+///   Orchestrates communication between the web UI and Grasshopper component.
+///   Handles WebSocket event routing, message processing, and response broadcasting.
 /// </summary>
 public class BridgeCommunicationService : IDisposable
 {
+    // Delay before broadcasting initial outputs after client connects.
+    // Gives Grasshopper time to finish its current solution before we read output data.
+    private const int InitialOutputBroadcastDelayMs = AppConfig.UIBuilder.InitialOutputBroadcastDelayMs;
+
     private readonly CommunicationHandler _communicationHandler;
     private readonly SchemaManager _schemaManager;
     private readonly ValueApplicator _valueApplicator;
@@ -34,11 +39,9 @@ public class BridgeCommunicationService : IDisposable
     private readonly string _sessionId;
 
     private GH_Component _component;
-    private bool _disposed;
-
-    // Callbacks to access component's schema/values (single source of truth)
     private Func<UISchema> _getSchema;
     private Action<UISchema> _setSchema;
+    private bool _disposed;
 
     public BridgeCommunicationService(
         CommunicationHandler communicationHandler,
@@ -60,8 +63,12 @@ public class BridgeCommunicationService : IDisposable
         _sessionId = sessionId ?? throw new ArgumentNullException(nameof(sessionId));
     }
 
+    // -------------------------------------------------------------------------
+    // Lifecycle
+    // -------------------------------------------------------------------------
+
     /// <summary>
-    /// Initialize the service and wire up event handlers.
+    ///   Initialize the service and wire up WebSocket event handlers.
     /// </summary>
     public void Initialize(
         GH_Component component,
@@ -72,7 +79,6 @@ public class BridgeCommunicationService : IDisposable
         _getSchema = getSchema ?? throw new ArgumentNullException(nameof(getSchema));
         _setSchema = setSchema ?? throw new ArgumentNullException(nameof(setSchema));
 
-        // Wire up WebSocket event handlers
         _communicationHandler.OnValuesReceived += HandleWebSocketValueUpdate;
         _communicationHandler.OnCurrentValuesRequested += HandleCurrentValuesRequest;
         _communicationHandler.OnClientConnected += HandleClientConnected;
@@ -84,20 +90,19 @@ public class BridgeCommunicationService : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
-
-        // Unwire event handlers
-        if (_communicationHandler != null)
-        {
-            _communicationHandler.OnValuesReceived -= HandleWebSocketValueUpdate;
-            _communicationHandler.OnCurrentValuesRequested -= HandleCurrentValuesRequest;
-            _communicationHandler.OnClientConnected -= HandleClientConnected;
-            _communicationHandler.OnSchemaSaveRequested -= HandleSchemaSave;
-            _communicationHandler.OnSyncPreviewRequested -= HandleSyncPreviewRequest;
-            _communicationHandler.OnSyncChangesApply -= HandleApplySyncChanges;
-        }
-
         _disposed = true;
+
+        _communicationHandler.OnValuesReceived -= HandleWebSocketValueUpdate;
+        _communicationHandler.OnCurrentValuesRequested -= HandleCurrentValuesRequest;
+        _communicationHandler.OnClientConnected -= HandleClientConnected;
+        _communicationHandler.OnSchemaSaveRequested -= HandleSchemaSave;
+        _communicationHandler.OnSyncPreviewRequested -= HandleSyncPreviewRequest;
+        _communicationHandler.OnSyncChangesApply -= HandleApplySyncChanges;
     }
+
+    // -------------------------------------------------------------------------
+    // WebSocket event handlers
+    // -------------------------------------------------------------------------
 
     private void HandleWebSocketValueUpdate(object sender, Dictionary<string, object> values)
     {
@@ -105,38 +110,34 @@ public class BridgeCommunicationService : IDisposable
         {
             if (_stateManager.IsSolving)
             {
-                Logger.Log("[BridgeCommunicationService] Skipping value update - currently solving");
-                BroadcastRuntimeMessageAsync("warning", "Skipping value update - currently solving");
+                Logger.Log("[BridgeCommunicationService] Skipping value update — currently solving.");
+                _ = _communicationHandler.BroadcastRuntimeMessage("warning", "Skipping value update — currently solving.");
                 return;
             }
 
             var document = _component.OnPingDocument();
             var schema = _getSchema();
+
             if (!DocumentGuards.DocumentAndSchemaValid(document, schema, out _))
             {
-                Logger.Warn("[BridgeCommunicationService] Document or schema invalid, skipping value update");
-                BroadcastRuntimeMessageAsync("error", "Document or schema invalid");
+                Logger.Warn("[BridgeCommunicationService] Document or schema invalid, skipping value update.");
+                _ = _communicationHandler.BroadcastRuntimeMessage("error", "Document or schema invalid.");
                 return;
             }
 
-            var updated = _valueApplicator.ApplyValuesAndSchedule(document, schema, values,
-                (level, msg) =>
-                {
-                    _component.AddRuntimeMessage(level, msg);
-                    // Only broadcast errors and warnings, not info messages
-                    if (level == GH_RuntimeMessageLevel.Error || level == GH_RuntimeMessageLevel.Warning)
-                    {
-                        BroadcastRuntimeMessageAsync(ConvertMessageLevel(level), msg);
-                    }
-                });
+            _valueApplicator.ApplyValuesAndSchedule(document, schema, values, (level, msg) =>
+            {
+                _component.AddRuntimeMessage(level, msg);
 
-            // Values are updated in the component directly via ValueApplicator
+                if (level == GH_RuntimeMessageLevel.Error || level == GH_RuntimeMessageLevel.Warning)
+                    _ = _communicationHandler.BroadcastRuntimeMessage(ConvertMessageLevel(level), msg);
+            });
         }
         catch (Exception ex)
         {
             Logger.Error($"[BridgeCommunicationService] Error handling value update: {ex.Message}", ex);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
-            BroadcastRuntimeMessageAsync("error", $"Error handling value update: {ex.Message}");
+            _ = _communicationHandler.BroadcastRuntimeMessage("error", $"Error handling value update: {ex.Message}");
         }
     }
 
@@ -145,59 +146,49 @@ public class BridgeCommunicationService : IDisposable
         try
         {
             var document = _component.OnPingDocument();
-            if (!DocumentGuards.IsValid(document, out var error)) return;
+            if (!DocumentGuards.IsValid(document, out _)) return;
 
-            // Schema must come from a ContextBakeComponent wired to the UIBridge's Schema output
-            // with an input parameter named "Schema". This mirrors the Rhino.Compute 1:1 rule.
-            var schema = GetSchemaFromContextBake();
+            // Try to read the schema from the wired ContextBake component.
+            var contextBake = FindWiredContextBake();
+            var schema = ReadSchemaFromContextBake(contextBake);
 
             if (schema == null)
             {
-                if (!IsContextBakeWired())
+                if (contextBake == null)
                 {
-                    // No ContextBake wired at all — refuse and tell the user to wire it up.
+                    // No ContextBake wired at all — refuse and tell the user.
                     _ = _communicationHandler.BroadcastRuntimeMessage("error",
-                        "UIBridge Schema output is not connected to a Context Bake component with param name \"Schema\". Wire it up in Grasshopper first.");
+                        "UIBridge Schema output is not connected to a Context Bake component " +
+                        "with param name \"Schema\". Wire it up in Grasshopper first.");
                     _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                        "Web UI connected but Schema output is not wired to a Context Bake component with param name \"Schema\".");
+                        "Web UI connected but Schema output is not wired to a Context Bake component " +
+                        "with param name \"Schema\".");
                     return;
                 }
 
-                // ContextBake is wired but no schema saved yet — first-time use, send a default schema.
+                // ContextBake is wired but no schema saved yet — first-time use.
                 schema = CreateDefaultSchema(document);
             }
 
-            // Validate without deletion tracking - deletions come from document events, not client connects
             var validatedSchema = _schemaManager.ValidateSchema(schema, document);
-            var schemaToSend = validatedSchema;
 #if DEBUG
-            Logger.Log(
-                $"[UIBuilder] ClientConnected — schema={schemaToSend.Name}, inputs={schemaToSend.Inputs?.Count}, outputs={schemaToSend.Outputs?.Count}");
+            Logger.Log($"[UIBuilder] ClientConnected — schema={validatedSchema.Name}, " +
+                       $"inputs={validatedSchema.Inputs?.Count}, outputs={validatedSchema.Outputs?.Count}");
 #endif
 
-            // Scan parameters and collect current values against the validated schema
             var currentParams = GetCurrentAvailableParameters(document);
-            var currentValues =
-                _valueCollector.CollectInputValues(document, schemaToSend, _component.AddRuntimeMessage);
+            var currentValues = _valueCollector.CollectInputValues(
+                document, validatedSchema, _component.AddRuntimeMessage);
 
-            // Broadcast initial data
-            _ = _communicationHandler.BroadcastInitialData(schemaToSend, currentParams, currentValues);
+            _ = _communicationHandler.BroadcastInitialData(validatedSchema, currentParams, currentValues);
 
-            // Only spin up the output broadcast if there are outputs registered in the schema
-            if (schemaToSend.Outputs?.Count > 0)
-            {
-                Task.Run(async () =>
-                {
-                    await Task.Delay(100);
-                    RhinoApp.InvokeOnUiThread(new Action(() =>
-                    {
-                        _eventManager.CollectAndBroadcastOutputs(schemaToSend);
-                    }));
-                });
-            }
+            if (validatedSchema.Outputs?.Count > 0)
+                ScheduleOutputBroadcast(validatedSchema);
         }
         catch (Exception ex)
         {
+            // Always log — silent swallowing made failures invisible.
+            Logger.Error($"[BridgeCommunicationService] Error sending initial data: {ex.Message}", ex);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error sending initial data: {ex.Message}");
         }
     }
@@ -209,13 +200,11 @@ public class BridgeCommunicationService : IDisposable
             var document = _component.OnPingDocument();
             if (document == null)
             {
-                _ = _communicationHandler.BroadcastSchemaSaved(false, "No document available");
+                _ = _communicationHandler.BroadcastSchemaSaved(false, "No document available.");
                 return;
             }
 
-            // Reject saves when the Schema output is not connected to a ContextBake — prevents
-            // the user from overwriting a real schema with one built on an unwired UIBridge.
-            if (!IsContextBakeWired())
+            if (FindWiredContextBake() == null)
             {
                 _ = _communicationHandler.BroadcastSchemaSaved(false,
                     "Cannot save: UIBridge Schema output is not connected to a Context Bake component.");
@@ -224,69 +213,41 @@ public class BridgeCommunicationService : IDisposable
                 return;
             }
 
-            // Enrich schema with document metadata
             schema.ProjectFileName = document.Properties.ProjectFileName;
             schema.DocumentId = document.DocumentID;
             schema.PluginVersion = _pluginVersion.ToString();
 
-            // Sanitize schema before validation (e.g. deduplicate file format lists)
             SanitizeSchema(schema);
 
             var validatedSchema = _schemaManager.ValidateSchema(schema, document);
 #if DEBUG
-            Logger.Log(
-                $"[UIBuilder] Save — inputs={validatedSchema.Inputs?.Count}, outputs={validatedSchema.Outputs?.Count}, layout={validatedSchema.Layout?.GetType().Name}");
+            Logger.Log($"[UIBuilder] Save — inputs={validatedSchema.Inputs?.Count}, " +
+                       $"outputs={validatedSchema.Outputs?.Count}, " +
+                       $"layout={validatedSchema.Layout?.GetType().Name}");
 #endif
 
-            // Record undo event before modifying the schema
-            var docObject = _component.Attributes?.DocObject;
-            if (docObject != null)
-                docObject.RecordUndoEvent("Update Schema");
-
-            _setSchema(validatedSchema); // Update component's schema (single source of truth)
-
-            // Reset metadata cache so future resolves use fresh baseline
+            _component.Attributes?.DocObject?.RecordUndoEvent("Update Schema");
+            _setSchema(validatedSchema);
             _schemaManager.ClearMetadataCache();
 
-            // Suppress the next solution cycle triggered by component expire
-            // This prevents UI flicker from the schema save re-solve
+            // Suppress the re-solve triggered by the component expire below so the
+            // frontend does not see a spurious solving-state flash.
             _communicationHandler.SuppressSolvingCycles(1);
 
             _ = _communicationHandler.BroadcastSchemaSaved(true);
 
-            // Schedule solution to update component and persist schema to .gh file
             GHDocumentMutator.ScheduleComponentExpire(document, _component, false);
 #if DEBUG
-            Logger.Log("[UIBuilder] Save complete — component expire scheduled");
+            Logger.Log("[UIBuilder] Save complete — component expire scheduled.");
 #endif
-            _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Schema saved successfully");
+            _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Schema saved successfully.");
         }
         catch (Exception ex)
         {
-            _communicationHandler.SuppressSolvingCycles(0); // Clear suppression on error
+            // Clear suppression so the next solve is not accidentally hidden.
+            _communicationHandler.SuppressSolvingCycles(0);
             _ = _communicationHandler.BroadcastSchemaSaved(false, ex.Message);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error saving schema: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Sanitizes a schema before saving — deduplicates AcceptedFormats on all file inputs.
-    /// </summary>
-    private static void SanitizeSchema(UISchema schema)
-    {
-        if (schema?.Layout == null) return;
-
-        IEnumerable<GroupConfig> groups = schema.Layout switch
-        {
-            TabbedLayoutConfig tabbed => tabbed.Tabs.SelectMany(t => t.Groups),
-            FlatLayoutConfig flat => flat.Groups,
-            _ => Enumerable.Empty<GroupConfig>()
-        };
-
-        foreach (var item in groups.SelectMany(g => g.Items).OfType<InputFileLayoutItem>())
-        {
-            if (item.Config?.AcceptedFormats is { Count: > 0 } formats)
-                item.Config.AcceptedFormats = formats.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         }
     }
 
@@ -297,130 +258,15 @@ public class BridgeCommunicationService : IDisposable
             var document = _component.OnPingDocument();
             if (document == null) return;
 
-            var schema = _getSchema();
-            var currentValues = _valueCollector.CollectInputValues(document, schema, _component.AddRuntimeMessage);
+            var currentValues = _valueCollector.CollectInputValues(
+                document, _getSchema(), _component.AddRuntimeMessage);
+
             _ = _communicationHandler.BroadcastCurrentValues(currentValues);
         }
         catch (Exception ex)
         {
             Logger.Error($"[BridgeCommunicationService] Error handling current values request: {ex.Message}", ex);
         }
-    }
-
-    /// <summary>
-    /// Returns true if at least one ContextBakeComponent is wired to the UIBridge's Schema output.
-    /// </summary>
-    private bool IsContextBakeWired()
-    {
-        if (_component == null) return false;
-
-        var schemaOutputParam = _component.Params.Output.FirstOrDefault(p => p.Name == "Schema");
-        if (schemaOutputParam == null) return false;
-
-        foreach (var recipient in schemaOutputParam.Recipients)
-        {
-            var parentComp = recipient?.Attributes?.GetTopLevel?.DocObject as GH_Component;
-            if (parentComp == null) continue;
-            if (parentComp.Params.Input[0].NickName != "Schema") continue; // Quick check to avoid false positives on non-ContextBake components
-            if (ParameterTypeHelper.IsContextBakeComponent(parentComp)) return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Reads the UISchema from the ContextBakeComponent that is wired to the UIBridge's
-    /// Schema output. Returns null if no schema data is present yet (first-time use)
-    /// or if no ContextBake is wired at all.
-    /// </summary>
-    private UISchema GetSchemaFromContextBake()
-    {
-        if (_component == null) return null;
-
-        var schemaOutputParam = _component.Params.Output.FirstOrDefault(p => p.Name == "Schema");
-        if (schemaOutputParam == null) return null;
-
-        foreach (var recipient in schemaOutputParam.Recipients)
-        {
-            var parentComp = recipient?.Attributes?.GetTopLevel?.DocObject as GH_Component;
-            if (parentComp == null) continue;
-            if (!ParameterTypeHelper.IsContextBakeComponent(parentComp)) continue;
-
-            var data = recipient.VolatileData?.AllData(true).FirstOrDefault();
-            if (data is UISchemaGoo schemaGoo && schemaGoo.Value != null)
-                return schemaGoo.Value;
-        }
-
-        return null;
-    }
-
-    private DiscoveredParameters GetCurrentAvailableParameters(GH_Document document)
-    {
-        if (document == null || _schemaManager == null || _component == null)
-        {
-            return new DiscoveredParameters
-            {
-                SessionId = _sessionId,
-                Inputs = new List<DiscoveredInput>(),
-                Outputs = new List<DiscoveredOutput>()
-            };
-        }
-
-        return _schemaManager.ScanParameters(document, _component);
-    }
-
-    private UISchema CreateDefaultSchema(GH_Document document)
-    {
-        return new UISchema
-        {
-            Id = Guid.NewGuid().ToString(),
-            Name = "New Schema",
-            Description = "Configure your Grasshopper UI",
-            ProjectFileName = document?.Properties.ProjectFileName ?? "untitled.gh",
-            DocumentId = document?.DocumentID ?? Guid.Empty,
-            PluginVersion = _pluginVersion.ToString(),
-            Tags = [],
-            Created = DateTime.UtcNow,
-            Inputs = [],
-            Outputs = [],
-            Layout = new TabbedLayoutConfig
-            {
-                Tabs = []
-            },
-            ViewerOptions = new ViewerOptions
-            {
-                EnableLocal = false,
-                EnableRemote = false,
-                BackgroundColor = "#f3f3f3"
-            },
-            InstanceSolve = true
-        };
-    }
-
-    private string ConvertMessageLevel(GH_RuntimeMessageLevel level)
-    {
-        return level switch
-        {
-            GH_RuntimeMessageLevel.Error => "error",
-            GH_RuntimeMessageLevel.Warning => "warning",
-            GH_RuntimeMessageLevel.Remark => "info",
-            _ => "info"
-        };
-    }
-
-    private void BroadcastRuntimeMessageAsync(string level, string message)
-    {
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await _communicationHandler.BroadcastRuntimeMessage(level, message);
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn($"Failed to broadcast runtime message: {ex.Message}");
-            }
-        });
     }
 
     private void HandleSyncPreviewRequest(object sender, UISchema schema)
@@ -430,15 +276,12 @@ public class BridgeCommunicationService : IDisposable
             var document = _component.OnPingDocument();
             if (document == null)
             {
-                _ = _communicationHandler.BroadcastRuntimeMessage("error", "No document available");
+                _ = _communicationHandler.BroadcastRuntimeMessage("error", "No document available.");
                 return;
             }
 
-            // Compute the diff between current GH state and schema state
-            var syncDiff = SchemaManager.ComputeSyncDiff(schema, document);
-
-            // Broadcast the diff to the frontend
-            _ = _communicationHandler.BroadcastSyncPreview(syncDiff);
+            _ = _communicationHandler.BroadcastSyncPreview(
+                SchemaManager.ComputeSyncDiff(schema, document));
         }
         catch (Exception ex)
         {
@@ -454,50 +297,36 @@ public class BridgeCommunicationService : IDisposable
             var document = _component.OnPingDocument();
             if (document == null)
             {
-                _ = _communicationHandler.BroadcastSyncApplied(false, "No document available");
+                _ = _communicationHandler.BroadcastSyncApplied(false, "No document available.");
                 return;
             }
 
             var currentSchema = _getSchema();
             if (currentSchema == null)
             {
-                _ = _communicationHandler.BroadcastSyncApplied(false, "No schema available");
+                _ = _communicationHandler.BroadcastSyncApplied(false, "No schema available.");
                 return;
             }
 
-            // Apply the changes to both Grasshopper document and schema
             var updatedSchema = SchemaManager.ApplySyncChanges(changes, document, currentSchema);
-
-            // If schema was modified, update it and broadcast the changes
             if (updatedSchema != null)
             {
                 _setSchema(updatedSchema);
-
-                // Broadcast the updated schema to the frontend
                 _ = _communicationHandler.BroadcastSchemaUpdate(updatedSchema);
             }
 
-            // Refresh the Grasshopper canvas to show updated nicknames
-            var changedObjects = new List<IGH_ActiveObject>();
-            foreach (var change in changes)
-            {
-                if (Guid.TryParse(change.ParamId, out var paramGuid))
-                {
-                    var docObj = document.FindObject(paramGuid, false);
-                    if (docObj is IGH_ActiveObject activeObj)
-                    {
-                        changedObjects.Add(activeObj);
-                    }
-                }
-            }
+            // Refresh nicknames on the canvas for all changed objects.
+            var changedObjects = changes
+                .Where(c => Guid.TryParse(c.ParamId, out _))
+                .Select(c => document.FindObject(Guid.Parse(c.ParamId), false) as IGH_ActiveObject)
+                .Where(o => o != null)
+                .ToList();
 
             GHDocumentMutator.RefreshObjectsOnCanvas(document, changedObjects);
-
-            // Schedule a solution to update the component (for toGH changes)
             GHDocumentMutator.ScheduleComponentExpire(document, _component, true);
 
             _ = _communicationHandler.BroadcastSyncApplied(true);
-            _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Sync changes applied successfully");
+            _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Sync changes applied successfully.");
         }
         catch (Exception ex)
         {
@@ -506,4 +335,126 @@ public class BridgeCommunicationService : IDisposable
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error applying sync changes: {ex.Message}");
         }
     }
+
+    // -------------------------------------------------------------------------
+    // ContextBake helpers — single traversal, used by both connect and save
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    ///   Returns the first ContextBakeComponent wired to the UIBridge's Schema output,
+    ///   or null if none is connected.
+    /// </summary>
+    private GH_Component FindWiredContextBake()
+    {
+        var schemaOutput = _component?.Params.Output.FirstOrDefault(p => p.Name == "Schema");
+        if (schemaOutput == null) return null;
+
+        foreach (var recipient in schemaOutput.Recipients)
+        {
+            var comp = recipient?.Attributes?.GetTopLevel?.DocObject as GH_Component;
+            if (comp == null) continue;
+            if (comp.Params.Input.Count == 0 || comp.Params.Input[0].NickName != "Schema") continue;
+            if (ParameterTypeHelper.IsContextBakeComponent(comp)) return comp;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///   Reads the UISchema from a ContextBakeComponent's volatile data.
+    ///   Returns null if no schema is stored yet (first-time use).
+    /// </summary>
+    private static UISchema ReadSchemaFromContextBake(GH_Component contextBake)
+    {
+        if (contextBake == null) return null;
+
+        var schemaInput = contextBake.Params.Input.FirstOrDefault(p => p.NickName == "Schema");
+        var data = schemaInput?.VolatileData?.AllData(true).FirstOrDefault();
+
+        return data is UISchemaGoo goo ? goo.Value : null;
+    }
+
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    ///   Defers output broadcasting by <see cref="InitialOutputBroadcastDelayMs"/> to allow
+    ///   Grasshopper to finish its current solution before we read output data.
+    /// </summary>
+    private void ScheduleOutputBroadcast(UISchema schema)
+    {
+        Task.Run(async () =>
+        {
+            await Task.Delay(InitialOutputBroadcastDelayMs).ConfigureAwait(false);
+            RhinoApp.InvokeOnUiThread(new Action(() =>
+                _eventManager.CollectAndBroadcastOutputs(schema)));
+        });
+    }
+
+    private DiscoveredParameters GetCurrentAvailableParameters(GH_Document document)
+    {
+        if (document == null)
+            return new DiscoveredParameters
+            {
+                SessionId = _sessionId,
+                Inputs = new List<DiscoveredInput>(),
+                Outputs = new List<DiscoveredOutput>()
+            };
+
+        return _schemaManager.ScanParameters(document, _component);
+    }
+
+    private UISchema CreateDefaultSchema(GH_Document document) => new()
+    {
+        Id = Guid.NewGuid().ToString(),
+        Name = "New Schema",
+        Description = "Configure your Grasshopper UI",
+        ProjectFileName = document.Properties.ProjectFileName,
+        DocumentId = document.DocumentID,
+        PluginVersion = _pluginVersion.ToString(),
+        Tags = [],
+        Created = DateTime.UtcNow,
+        Inputs = [],
+        Outputs = [],
+        Layout = new TabbedLayoutConfig { Tabs = [] },
+        ViewerOptions = new ViewerOptions
+        {
+            EnableLocal = false,
+            EnableRemote = false,
+            BackgroundColor = "#f3f3f3"
+        },
+        InstanceSolve = true
+    };
+
+    /// <summary>
+    ///   Deduplicates AcceptedFormats on all file inputs before saving.
+    /// </summary>
+    private static void SanitizeSchema(UISchema schema)
+    {
+        if (schema?.Layout == null) return;
+
+        var groups = schema.Layout switch
+        {
+            TabbedLayoutConfig tabbed => tabbed.Tabs.SelectMany(t => t.Groups),
+            FlatLayoutConfig flat => flat.Groups,
+            _ => Enumerable.Empty<GroupConfig>()
+        };
+
+        foreach (var item in groups.SelectMany(g => g.Items).OfType<InputFileLayoutItem>())
+        {
+            if (item.Config?.AcceptedFormats is { Count: > 0 } formats)
+                item.Config.AcceptedFormats = formats
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+        }
+    }
+
+    private static string ConvertMessageLevel(GH_RuntimeMessageLevel level) => level switch
+    {
+        GH_RuntimeMessageLevel.Error => "error",
+        GH_RuntimeMessageLevel.Warning => "warning",
+        GH_RuntimeMessageLevel.Remark => "info",
+        _ => "info"
+    };
 }
