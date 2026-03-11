@@ -31,7 +31,7 @@ public class Param_FileData : GH_PersistentParam<FileDataGoo>, ISelvaFileOutput
 
     public override GH_Exposure Exposure => GH_Exposure.secondary;
 
-    protected override Bitmap Icon => Resources.DataToFile;
+    protected override Bitmap Icon => Resources.CreateFile;
 
     protected override GH_GetterResult Prompt_Singular(ref FileDataGoo value)
     {

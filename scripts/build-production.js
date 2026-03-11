@@ -52,7 +52,9 @@ function logWarning(message) {
 /** @param {string} command */
 function commandExists(command) {
   try {
-    execSync(`command -v ${command}`, { stdio: 'ignore', shell: '/bin/bash' });
+    const isWindows = process.platform === 'win32';
+    const check = isWindows ? `where ${command}` : `command -v ${command}`;
+    execSync(check, { stdio: 'ignore' });
     return true;
   } catch {
     return false;
@@ -93,7 +95,7 @@ async function build() {
     checkPrerequisites();
 
     // Step 1: Copy web assets to plugin directory
-    log('[1/4] Copying web assets to plugin...');
+    log('[1/5] Copying web assets to plugin...');
     const webDir = join(projectRoot, 'Plugin/Selva.GH/EmbeddedAssets/web');
     const buildDir = join(projectRoot, 'packages/builder-app/build');
 
@@ -124,7 +126,7 @@ async function build() {
     log('');
 
     // Step 2: Build C# plugin with embedded assets
-    log('[2/4] Building C# plugin...');
+    log('[2/5] Building C# plugin...');
     try {
       execSync('dotnet build --configuration Release', {
         cwd: join(projectRoot, 'Plugin'),
@@ -137,9 +139,26 @@ async function build() {
     }
     log('');
 
-    // Step 3: Run yak build in the release folder
-    log('[3/4] Running yak build...');
+    // Step 3: Copy manifest.yml and icon.png to release folder if present
+    log('[3/5] Preparing yak package assets...');
+    const resourcesDir = join(projectRoot, 'Plugin/Selva.GH/Resources');
     const releaseDir = join(projectRoot, 'Plugin/Selva.GH/bin/Release');
+    for (const asset of ['manifest.yml', 'icon.png']) {
+      const src = join(resourcesDir, asset);
+      const dest = join(releaseDir, asset);
+      try {
+        statSync(src);
+        cpSync(src, dest);
+        logSuccess(`Copied ${asset} to release folder`);
+      } catch {
+        logWarning(`${asset} not found in Resources, skipping`);
+      }
+    }
+    log('');
+
+    // Step 4: Run yak build in the release folder
+    log('[4/5] Running yak build...');
+
     try {
       execSync('yak build', {
         cwd: releaseDir,
@@ -152,8 +171,8 @@ async function build() {
     }
     log('');
 
-    // Step 4: Display output information
-    log('[4/4] Build summary:');
+    // Step 5: Display output information
+    log('[5/5] Build summary:');
     log('');
     log('Output files:');
     const pluginDir = join(projectRoot, 'Plugin');

@@ -42,7 +42,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     /// <summary>
     ///   Provides an Icon for the component.
     /// </summary>
-    protected override Bitmap Icon => Resources.DataToFile;
+    protected override Bitmap Icon => Resources.GeometryToFile;
 
     /// <summary>
     ///   Gets the unique ID for this component. Do not change this ID after release.

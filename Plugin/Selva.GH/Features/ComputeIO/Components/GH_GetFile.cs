@@ -48,7 +48,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 	public override string TypeName => "File";
 	public override Guid ComponentGuid => new("B4F6E8D2-9A3C-4E7B-8D1F-5A9C7E2B4D6F");
 
-	protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.DataToFile);
+	protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.CreateFile);
 
 	// IGH_ContextualParameter properties
 	public string Prompt { get; set; } = "Select a file to import";

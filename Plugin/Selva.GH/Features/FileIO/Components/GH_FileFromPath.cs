@@ -17,7 +17,7 @@ public class GH_FileFromPath : GH_Component, ISelvaFileOutput
 	{
 	}
 
-	protected override Bitmap Icon => Resources.DataToFile;
+	protected override Bitmap Icon => Resources.PathToFile;
 
 	public override Guid ComponentGuid => new("F2B8D4A6-C3E7-4B1F-9D5A-8E2C6F4A1B3D");
 

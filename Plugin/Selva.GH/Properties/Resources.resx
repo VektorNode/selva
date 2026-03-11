@@ -129,8 +129,8 @@
       PublicKeyToken=b03f5f7f11d50a3a
     </value>
   </data>
-  <data name="DataToFile" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>..\Resources\Icons\DataToFile.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+  <data name="GeometryToFile" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\GeometryToFile.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
       PublicKeyToken=b03f5f7f11d50a3a
     </value>
   </data>
@@ -161,6 +161,21 @@
   </data>
 	<data name="Environment" type="System.Resources.ResXFileRef, System.Windows.Forms">
 		<value>..\Resources\Icons\Environment.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="ColorInput" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\ColorInput.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="CreateFile" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\CreateFile.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="PathToFile" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\PathToFile.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
 			PublicKeyToken=b03f5f7f11d50a3a
 		</value>
 	</data>
