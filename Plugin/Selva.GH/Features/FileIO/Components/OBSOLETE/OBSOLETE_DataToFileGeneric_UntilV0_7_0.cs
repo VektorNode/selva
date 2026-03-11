@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
 using Selva.GH.Features.FileIO.Services;
@@ -8,9 +7,9 @@ using Selva.GH.Utilities;
 
 namespace Selva.GH.Features.FileIO.Components;
 
-public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
+public class OBSOLETE_DataToFileGeneric_UntilV0_7_0 : GH_Component, ISelvaFileOutput
 {
-    public GH_DataToFileGeneric()
+    public OBSOLETE_DataToFileGeneric_UntilV0_7_0()
         : base("Create File", "MkFile",
             "Creates a file from text or base64 data.",
             "Selva", "IO")
@@ -19,16 +18,19 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
 
     protected override Bitmap Icon => Resources.CreateFile;
 
-    public override Guid ComponentGuid => new("1c858ac3-41cd-4e00-93ec-1918765bc4ea");
+    public override Guid ComponentGuid => new("D7A3E1C5-B248-4F9A-8C6D-2E5F1A3B7D9E");
 
     public override void CreateAttributes()
     {
         m_attributes = new GH_ContextBakeOutputAttributes(this);
     }
 
+
+    public override GH_Exposure Exposure => GH_Exposure.hidden;
+
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        pManager.AddTextParameter("Data", "D", "File content as text or base64 string", GH_ParamAccess.list);
+        pManager.AddTextParameter("Data", "D", "File content as text or base64 string", GH_ParamAccess.item);
         pManager.AddTextParameter("Name", "N", "File name without extension", GH_ParamAccess.item, "file");
         pManager.AddTextParameter("Extension", "Ext", "File extension including dot, e.g. .txt, .csv, .json",
             GH_ParamAccess.item, ".txt");
@@ -45,13 +47,13 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-        List<String> data = new List<string>();
+        string data = null;
         var name = "file";
         var extension = ".txt";
         var isBase64 = false;
         var subFolder = "";
 
-        if (!DA.GetDataList(0, data)) return;
+        if (!DA.GetData(0, ref data)) return;
         DA.GetData(1, ref name);
         DA.GetData(2, ref extension);
         DA.GetData(3, ref isBase64);
@@ -61,12 +63,10 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
         if (!string.IsNullOrEmpty(extension) && !extension.StartsWith("."))
             extension = "." + extension;
 
-        var combinedData = string.Join(Environment.NewLine, data);
-
         var fileData = new FileData
         {
             FileName = name ?? "file",
-            Data = combinedData,
+            Data = data,
             FileType = extension,
             IsBase64Encoded = isBase64,
             SubFolder = subFolder ?? ""
