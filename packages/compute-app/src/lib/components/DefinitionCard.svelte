@@ -2,7 +2,6 @@
 	import { Badge, Card } from '@selva/shared';
 
 	interface Definition {
-		guid: string;
 		filename: string;
 		displayName: string;
 		description?: string;
@@ -21,81 +20,63 @@
 	let imageError = $state(false);
 </script>
 
+{#snippet loadingOverlay()}
+	{#if isLoading}
+		<div class="absolute inset-0 flex items-center justify-center bg-black/50">
+			<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-white"></div>
+		</div>
+	{/if}
+{/snippet}
+
 <button
 	onclick={onSelect}
 	disabled={isLoading}
-	class="group h-full overflow-hidden rounded-lg text-left transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+	class="group h-full w-full overflow-hidden rounded-lg text-left transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
 >
 	<Card.Root class="flex h-full flex-col overflow-hidden pt-0">
-		{#if definition.coverImage?.trim() && !imageError}
-			<div class="bg-muted relative h-40 overflow-hidden rounded-t-lg">
+		<div class="relative h-40 overflow-hidden rounded-t-lg">
+			{#if definition.coverImage?.trim() && !imageError}
 				<img
 					src={definition.coverImage}
 					alt={definition.displayName}
 					class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
 					onerror={() => (imageError = true)}
 				/>
-				{#if isLoading}
-					<div class="absolute inset-0 flex items-center justify-center bg-black/50">
-						<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-white"></div>
-					</div>
-				{/if}
-			</div>
-		{:else}
-			<div
-				class="relative flex h-40 items-center justify-center bg-linear-to-br from-cyan-200 via-blue-200 to-indigo-300"
-			>
-				{#if isLoading}
-					<div class="absolute inset-0 flex items-center justify-center bg-black/50">
-						<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-white"></div>
-					</div>
-				{:else}
-					<div class="text-muted-foreground text-sm font-medium opacity-40">No preview</div>
-				{/if}
-			</div>
-		{/if}
-		<Card.Header class="pb-2">
-			<div class="flex items-start justify-between gap-2">
-				<div class="min-h-10 flex-1">
-					<Card.Title class="line-clamp-2">
-						{definition.displayName}
-					</Card.Title>
-					{#if definition.description}
-						<Card.Description class="mt-0.5 line-clamp-2">{definition.description}</Card.Description
-						>
+			{:else}
+				<div class="bg-muted flex h-full items-center justify-center">
+					<span class="text-muted-foreground text-sm">No preview</span>
+				</div>
+			{/if}
+			{@render loadingOverlay()}
+		</div>
+
+		<Card.Header>
+			<Card.Title class="line-clamp-2">{definition.displayName}</Card.Title>
+			<Card.Description class="line-clamp-2">
+				{definition.description ?? ''}
+			</Card.Description>
+			{#if definition.category}
+				<Card.Action>
+					<Badge variant="secondary">{definition.category}</Badge>
+				</Card.Action>
+			{/if}
+		</Card.Header>
+
+		<Card.Content class="flex grow flex-col justify-between gap-3">
+			{#if definition.tags?.length}
+				<div class="flex flex-wrap gap-1">
+					{#each definition.tags.slice(0, 4) as tag (tag)}
+						<Badge variant="secondary" class="text-xs">{tag}</Badge>
+					{/each}
+					{#if definition.tags.length > 4}
+						<Badge variant="secondary" class="text-xs">+{definition.tags.length - 4}</Badge>
 					{/if}
 				</div>
-				{#if definition.category}
-					<Badge variant="secondary" class="shrink-0">
-						{definition.category}
-					</Badge>
-				{/if}
-			</div>
-		</Card.Header>
-		<div class="border-border border-t"></div>
-		<Card.Content class="flex grow flex-col gap-2 pt-2 pb-0">
-			{#if definition.tags && definition.tags.length > 0}
-				<div class="flex flex-col gap-0.5">
-					<p class="text-foreground text-xs font-semibold tracking-wider uppercase">Tags</p>
-					<div class="flex flex-wrap gap-1">
-						{#each definition.tags.slice(0, 4) as tag (tag)}
-							<Badge variant="secondary" class="text-xs">{tag}</Badge>
-						{/each}
-						{#if definition.tags.length > 4}
-							<Badge variant="outline" class="text-xs">+{definition.tags.length - 4}</Badge>
-						{/if}
-					</div>
-				</div>
-			{:else}
-				<div class="h-5"></div>
 			{/if}
 
-			<div class="mt-auto flex flex-col gap-0.5">
-				<p class="text-muted-foreground text-xs font-semibold tracking-wider uppercase">File</p>
-				<p class="text-foreground truncate text-xs font-medium">
-					{definition.originalFilename || definition.filename}
-				</p>
-			</div>
+			<p class="text-muted-foreground truncate text-xs">
+				{definition.originalFilename ?? definition.filename}
+			</p>
 		</Card.Content>
 	</Card.Root>
 </button>
