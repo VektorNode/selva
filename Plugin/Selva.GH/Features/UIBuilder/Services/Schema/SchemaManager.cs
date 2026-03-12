@@ -124,7 +124,9 @@ public class SchemaManager
             if (!isBake && !isPrint)
                 continue;
 
-            if (ParameterTypeHelper.IsWiredToOwner(c, ownerComponent.InstanceGuid) ||
+            // Context Print components use GH's contextual mechanism (not wires) so they are always in scope
+            if (isPrint ||
+                ParameterTypeHelper.IsWiredToOwner(c, ownerComponent.InstanceGuid) ||
                 ParameterTypeHelper.IsFileOutputBakeComponent(c))
                 inScope.Add(c.InstanceGuid);
         }
