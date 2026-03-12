@@ -19,7 +19,7 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
 
     protected override Bitmap Icon => Resources.CreateFile;
 
-    public override Guid ComponentGuid => new("1c858ac3-41cd-4e00-93ec-1918765bc4ea");
+    public override Guid ComponentGuid => new("F9B3F862-611E-4E67-9DE4-67129CC0EF24");
 
     public override void CreateAttributes()
     {
