@@ -170,7 +170,10 @@
 	useFooterItem(
 		'compute-health',
 		ComputeHealthFooter,
-		() => ({ status: computeHealth.status.status, message: computeHealth.status.message }),
+		() => ({
+			health: computeHealth.health,
+			compute: computeHealth.compute
+		}),
 		'left',
 		20
 	);

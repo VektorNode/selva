@@ -9,7 +9,7 @@ import {
 } from 'selva-compute';
 import type { SchemaInput } from '@selva/shared';
 import { error, json } from '@sveltejs/kit';
-import { getServerConfig } from '$lib/server/config.server';
+import { getServerConfig } from '$lib/server/compute/config.server';
 import { getDefinitionContainer } from '$lib/server/definitions.server';
 
 interface ComputeRequest {
@@ -56,7 +56,7 @@ async function getClient(): Promise<GrasshopperClient> {
 	// Create new client
 	cachedClient = await GrasshopperClient.create({
 		serverUrl: currentConfig.serverUrl,
-		apiKey: currentConfig.apiKey,
+		apiKey: currentConfig.apiKey
 	});
 	cachedClientConfig = currentConfig;
 

@@ -6,7 +6,7 @@ import {
 	GrasshopperClient
 } from 'selva-compute/grasshopper';
 import type { UISchema } from '@selva/shared';
-import { getServerConfig } from '$lib/server/config.server';
+import { getServerConfig } from '$lib/server/compute/config.server';
 import { getDefinitionContainer } from '$lib/server/definitions.server';
 
 export const load = (async ({ url, params: _params }) => {
