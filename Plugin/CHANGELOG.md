@@ -11,7 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fix
 
-Changed data input of [](Selva.GH/Features/FileIO/Components/GH_DataToFileGeneric.cs) from item to list to allow input strings like csv
+- `RhinoDocumentConverter`: added `GC.SuppressFinalize(this)` to `Dispose()`, fixed secure wipe to regenerate random bytes per chunk (was reusing a single buffer), removed redundant variable declaration in `DocToBase64`
+- `FileImporter`: replaced hardcoded `MAX_FILE_SIZE_BYTES` constant with `AppConfig.ValueLimits.MaxFileSizeBytes` to stay in sync with global config, wrapped `FileReadOptions` in `using` in `ImportObj`, guarded `doc.Layers[layerIndex]` with bounds check to prevent `IndexOutOfRangeException` on objects with invalid layer indices, disposed duplicated geometry on transform failure to prevent resource leak
+
+Changed data input of [GH_DataToFileGeneric](Selva.GH/Features/FileIO/Components/GH_DataToFileGeneric.cs) from item to list to allow input strings like csv
 
 ## [0.7.0] - 2026-03-08
 

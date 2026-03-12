@@ -57,6 +57,7 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
         DA.GetData(3, ref isBase64);
         DA.GetData(4, ref subFolder);
 
+
         // Ensure extension starts with a dot
         if (!string.IsNullOrEmpty(extension) && !extension.StartsWith("."))
             extension = "." + extension;

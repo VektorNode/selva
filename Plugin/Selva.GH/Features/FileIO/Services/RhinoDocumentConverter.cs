@@ -44,6 +44,7 @@ public class RhinoDocumentConverter : IDisposable
         }
 
         _disposed = true;
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -70,9 +71,8 @@ public class RhinoDocumentConverter : IDisposable
                 throw new InvalidOperationException(
                     $"Exported file size ({fileInfo.Length:N0} bytes) exceeds maximum allowed ({AppConfig.ValueLimits.MaxFileSizeBytes:N0} bytes)");
 
-            string base64Result;
             var fileBytes = File.ReadAllBytes(tempPath);
-            base64Result = Convert.ToBase64String(fileBytes);
+            var base64Result = Convert.ToBase64String(fileBytes);
 
             return base64Result;
         }
@@ -152,15 +152,14 @@ public class RhinoDocumentConverter : IDisposable
                 {
                     var fileInfo = new FileInfo(path);
                     using (var stream = fileInfo.Open(FileMode.Open, FileAccess.Write))
+                    using (var rng = RandomNumberGenerator.Create())
                     {
                         var buffer = new byte[AppConfig.FileIO.FileCopyBufferSizeBytes]; // 1MB chunks
-                        using (var rng = RandomNumberGenerator.Create())
+                        for (long i = 0; i < fileInfo.Length; i += buffer.Length)
                         {
                             rng.GetBytes(buffer);
-                        }
-
-                        for (long i = 0; i < fileInfo.Length; i += buffer.Length)
                             stream.Write(buffer, 0, (int)Math.Min(buffer.Length, fileInfo.Length - i));
+                        }
                     }
                 }
 

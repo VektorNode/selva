@@ -7,6 +7,7 @@ using Rhino.DocObjects;
 using Rhino.FileIO;
 using Rhino.Geometry;
 using Selva.Core.Models;
+using Selva.GH.Config;
 
 namespace Selva.GH.Features.FileIO.Services;
 
@@ -15,7 +16,7 @@ namespace Selva.GH.Features.FileIO.Services;
 /// </summary>
 public static class FileImporter
 {
-    private const int MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100MB
+    private static readonly int MAX_FILE_SIZE_BYTES = AppConfig.ValueLimits.MaxFileSizeBytes;
 
     /// <summary>
     ///     Imports a file from path or base64 data.
@@ -254,9 +255,11 @@ public static class FileImporter
     {
         try
         {
-            var fileReadOptions = new FileReadOptions();
-            var options = new FileObjReadOptions(fileReadOptions);
-            return FileObj.Read(filePath, doc, options);
+            using (var fileReadOptions = new FileReadOptions())
+            {
+                var options = new FileObjReadOptions(fileReadOptions);
+                return FileObj.Read(filePath, doc, options);
+            }
         }
         catch
         {
@@ -288,7 +291,10 @@ public static class FileImporter
 
         foreach (var obj in doc.Objects)
         {
-            var layer = doc.Layers[obj.Attributes.LayerIndex];
+            var layerIndex = obj.Attributes.LayerIndex;
+            var layerName = layerIndex >= 0 && layerIndex < doc.Layers.Count
+                ? doc.Layers[layerIndex].Name
+                : "";
 
             if (obj.Geometry.ObjectType == ObjectType.InstanceReference)
             {
@@ -305,7 +311,7 @@ public static class FileImporter
             else
             {
                 var geo = obj.Geometry.Duplicate();
-                if (geo != null) geometryList.Add(new GeometryWithName(geo, "No Block", layer.Name));
+                if (geo != null) geometryList.Add(new GeometryWithName(geo, "No Block", layerName));
             }
         }
 
@@ -336,12 +342,9 @@ public static class FileImporter
         {
             if (obj == null) continue;
 
-            var layer = doc.Layers[obj.Attributes.LayerIndex];
-
             if (obj.Geometry.ObjectType == ObjectType.InstanceReference)
             {
-                var nestedInstanceGeo = obj.Geometry as InstanceReferenceGeometry;
-                if (nestedInstanceGeo != null)
+                if (obj.Geometry is InstanceReferenceGeometry nestedInstanceGeo)
                 {
                     var nestedGeometry =
                         ExplodeInstanceRecursive(doc, nestedInstanceGeo, combinedTransform, currentBlockName);
@@ -350,6 +353,10 @@ public static class FileImporter
             }
             else
             {
+                var layerIndex = obj.Attributes.LayerIndex;
+                var layerName = layerIndex >= 0 && layerIndex < doc.Layers.Count
+                    ? doc.Layers[layerIndex].Name
+                    : "";
                 var geo = obj.Geometry.Duplicate();
 
                 if (geo != null)
@@ -362,7 +369,11 @@ public static class FileImporter
                                     geo = crv.ToNurbsCurve();
 
                         var transformSuccess = geo.Transform(combinedTransform);
-                        if (!transformSuccess) continue;
+                        if (!transformSuccess)
+                        {
+                            geo.Dispose();
+                            continue;
+                        }
 
                         if (combinedTransform.SimilarityType == TransformSimilarityType.OrientationReversing)
                         {
@@ -372,7 +383,7 @@ public static class FileImporter
                         }
                     }
 
-                    geometryList.Add(new GeometryWithName(geo, currentBlockName, layer.Name));
+                    geometryList.Add(new GeometryWithName(geo, currentBlockName, layerName));
                 }
             }
         }
