@@ -46,6 +46,14 @@ public class GH_ComponentUpgradeHelper
         return this;
     }
 
+    public GH_ComponentUpgradeHelper MapAllInputs()
+    {
+        var oldInputs = _oldComponent.Params.Input;
+        for (var i = 0; i < oldInputs.Count; i++) _inputMappings[i] = i;
+
+        return this;
+    }
+
     public GH_ComponentUpgradeHelper MapAllOuputs()
     {
         var oldOutputs = _oldComponent.Params.Output;
