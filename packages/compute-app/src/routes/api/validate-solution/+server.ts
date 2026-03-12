@@ -1,6 +1,6 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getServerConfig } from '$lib/server/config.server';
+import { getServerConfig } from '$lib/server/compute/config.server';
 
 interface ValidatedSchema {
 	name: string;
@@ -36,7 +36,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			headers,
 			body: formData
 		});
-
 	} catch {
 		// Compute server unreachable — validation not available
 		throw error(404, 'Validation endpoint not available');
@@ -91,7 +90,6 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		return result;
 	});
-
 
 	return json(results);
 };
