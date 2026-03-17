@@ -22,14 +22,12 @@
 
 	let schema = $derived(data.schema);
 	let ghDefinition = $derived(data.ghDefinition);
-	let initialOutputs = $derived(data.initialOutputs);
-	let initialSolveResponse = $derived(data.initialSolveResponse);
 
 	// Definition switcher
 	let currentDefinition = $derived(data.currentDefinition);
 	let pageTitle = $derived(schema?.description || schema.name);
 
-	function createInitialValues(s: UISchema | undefined, serverOutputs?: Record<string, unknown>) {
+	function createInitialValues(s: UISchema | undefined) {
 		if (!s) return {};
 		const v: Record<string, unknown> = {};
 
@@ -37,8 +35,7 @@
 			v[input.id] = input.default ?? getDefaultValue(input.paramType);
 		}
 		for (const output of s.outputs) {
-			// Use server-provided initial outputs if available
-			v[output.id] = serverOutputs?.[output.id] ?? null;
+			v[output.id] = null;
 		}
 		return v;
 	}
@@ -47,7 +44,7 @@
 	// values is initialized once per component instance.
 	// The {#key} block in markup ensures re-creation when definition changes.
 	// svelte-ignore state_referenced_locally
-	let values = $state<Record<string, unknown>>(createInitialValues(schema, initialOutputs));
+	let values = $state<Record<string, unknown>>(createInitialValues(schema));
 	let error = $state('');
 	let computeErrors = $state<string[]>([]);
 	let computeWarnings = $state<string[]>([]);
@@ -103,8 +100,6 @@
 			// Check if aborted before processing
 			if (signal.aborted) return;
 
-			// console.log('Solve result:', solved);
-
 			// Extract errors and warnings from the solve result
 			if (solved.errors && Array.isArray(solved.errors)) {
 				computeErrors = solved.errors;
@@ -148,20 +143,6 @@
 	// UI state for debouncing the "Solving..." indicator
 	const solvingIndicator = createSolvingIndicator(() => solving);
 
-	// Extract meshes from initial server response on first load (no re-solve)
-	$effect(() => {
-		if (initialSolveResponse && shouldShowViewer) {
-			(async () => {
-				try {
-					const processor = new GrasshopperResponseProcessor(initialSolveResponse, false);
-					meshes = await processor.extractMeshesFromResponse();
-				} catch (err) {
-					console.error('[InitialLoad] Failed to extract meshes:', err);
-				}
-			})();
-		}
-	});
-
 	const computeHealth = useComputeHealth();
 	onMount(() => computeHealth.startPeriodicCheck(5000));
 	onDestroy(() => computeHealth.stopPeriodicCheck());
@@ -187,15 +168,19 @@
 	let previousDefinition = $state<string>('');
 	let isInitialLoad = $state<boolean>(true);
 
-	// Reset state when definition changes and trigger solve (skip on initial load)
+	// Reset state when definition changes and trigger solve
 	$effect(() => {
 		const _ = currentDefinition;
 
 		untrack(() => {
 			if (isInitialLoad) {
-				// First load - use server-provided data, don't solve
 				isInitialLoad = false;
 				previousDefinition = currentDefinition;
+
+				// Trigger initial solve client-side (unless manual mode)
+				if (schema?.instanceSolve !== false) {
+					performSolve();
+				}
 			} else if (previousDefinition !== currentDefinition) {
 				// Definition changed - reset and solve
 				meshes = [];
