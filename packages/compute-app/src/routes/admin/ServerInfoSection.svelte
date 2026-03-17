@@ -17,6 +17,13 @@
 
 	const sc = $derived(statusConfig[computeHealth.health.state]);
 	const pluginEntries = $derived(Object.entries(computeHealth.plugins));
+
+	const build = {
+		hash: __GIT_SHORT_HASH__,
+		fullHash: __GIT_HASH__,
+		message: __GIT_MESSAGE__,
+		date: __GIT_DATE__
+	};
 </script>
 
 <!-- Compute Server Status -->
@@ -35,6 +42,17 @@
 	</Card.Header>
 	<Card.Content>
 		<p class="text-muted-foreground mb-4 text-sm">{computeHealth.health.message}</p>
+
+		<!-- Web App Build Info -->
+		<div class="bg-muted/40 mb-4 rounded-md px-3 py-2.5">
+			<p class="text-muted-foreground mb-1 text-xs">Web App Build</p>
+			<div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+				<code class="text-foreground font-mono text-xs" title={build.fullHash}>{build.hash}</code>
+				<span class="text-muted-foreground text-xs">{build.message}</span>
+				<span class="text-muted-foreground text-xs">{build.date}</span>
+			</div>
+		</div>
+
 		<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
 			<div class="bg-muted/40 rounded-md p-3">
 				<p class="text-muted-foreground text-xs">Rhino</p>
