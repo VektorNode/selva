@@ -13,6 +13,8 @@ export interface ComputeInfo {
 	selvaInstalled: boolean;
 }
 
+export type PluginMap = Record<string, string>;
+
 export interface UpdateInfo {
 	checked: boolean;
 	updateAvailable: boolean;
@@ -42,6 +44,8 @@ export function useComputeHealth() {
 		selvaInstalled: false
 	});
 
+	let plugins = $state<PluginMap>({});
+
 	let intervalId: ReturnType<typeof setInterval> | null = null;
 	let initialFetchDone = false;
 	let wasOffline = false;
@@ -58,9 +62,11 @@ export function useComputeHealth() {
 			if (!versionRes.ok) throw new Error(`Version endpoint returned ${versionRes.status}`);
 
 			const versionData = await versionRes.json();
-			const plugins = pluginsRes.ok ? await pluginsRes.json() : {};
+			const pluginData: PluginMap = pluginsRes.ok ? await pluginsRes.json() : {};
 
-			const selvaVersion: string | null = plugins['Selva'] ?? null;
+			plugins = pluginData;
+
+			const selvaVersion: string | null = pluginData['Selva'] ?? null;
 
 			compute = {
 				rhinoVersion: versionData.rhino ?? null,
@@ -84,6 +90,7 @@ export function useComputeHealth() {
 				selvaVersion: null,
 				selvaInstalled: false
 			};
+			plugins = {};
 		}
 	}
 
@@ -159,7 +166,9 @@ export function useComputeHealth() {
 		get compute() {
 			return compute;
 		},
-
+		get plugins() {
+			return plugins;
+		},
 		startPeriodicCheck,
 		stopPeriodicCheck
 	};
