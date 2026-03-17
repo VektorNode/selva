@@ -43,8 +43,8 @@ catalogs:
       specifier: ^3.8.1
       version: 3.8.1
     selva-compute:
-      specifier: 1.2.0
-      version: 1.2.0
+      specifier: 1.3.0
+      version: 1.3.0
     svelte:
       specifier: 5.53.7
       version: 5.53.7
@@ -172,7 +172,7 @@ importers:
         version: 1.1.0(svelte@5.53.7)
       selva-compute:
         specifier: 'catalog:'
-        version: 1.2.0(three@0.183.2)
+        version: 1.3.0(three@0.183.2)
       three:
         specifier: 'catalog:'
         version: 0.183.2
@@ -203,7 +203,7 @@ importers:
         version: 1.1.0(svelte@5.53.7)
       selva-compute:
         specifier: 'catalog:'
-        version: 1.2.0(three@0.183.2)
+        version: 1.3.0(three@0.183.2)
       three:
         specifier: 'catalog:'
         version: 0.183.2
@@ -261,7 +261,7 @@ importers:
         version: 1.1.0(svelte@5.53.7)
       selva-compute:
         specifier: 'catalog:'
-        version: 1.2.0(three@0.183.2)
+        version: 1.3.0(three@0.183.2)
       svelte-sonner:
         specifier: 'catalog:'
         version: 1.0.8(svelte@5.53.7)
@@ -1972,8 +1972,8 @@ packages:
   scule@1.3.0:
     resolution: {integrity: sha512-6FtHJEvt+pVMIB9IBY+IcCJ6Z5f1iQnytgyfKMhDKgmzYG+TeH/wx1y3l27rshSbLiSanrR9ffZDrEsmjlQF2g==}
 
-  selva-compute@1.2.0:
-    resolution: {integrity: sha512-mLwwxFieFOPOzxGg1ns13jdKA26XzwYGMBvX3yv1IpSeHwB7f5+RNxDlIk5dd+sNwYM0/Pbo1HSXhNlgqxq6ZQ==}
+  selva-compute@1.3.0:
+    resolution: {integrity: sha512-HW/nyRfDO3bj6Eg4DEABHniV3h1Cisy4pCgmmNiF4pKPriNAapT9vFYe93Y09f9r+IFh+C17Z/3VF0B1S2Bs1Q==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       three: '>=0.179.0'
@@ -3805,7 +3805,7 @@ snapshots:
 
   scule@1.3.0: {}
 
-  selva-compute@1.2.0(three@0.183.2):
+  selva-compute@1.3.0(three@0.183.2):
     dependencies:
       fflate: 0.8.2
       rhino3dm: 8.9.0

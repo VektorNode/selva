@@ -94,6 +94,9 @@ async function main() {
   const schemaPath = path.join(__dirname, 'ui-schema.json');
   const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 
+  // Generate normalizer for compute server PascalCase → camelCase
+  const normalizerCode = generateComputeNormalizer(schema);
+
   // Generate constants code
   let constantsCode = '';
   if (schema.constants) {
