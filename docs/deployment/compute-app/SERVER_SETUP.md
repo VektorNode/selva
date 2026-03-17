@@ -2,6 +2,8 @@
 
 The [setup.sh](../../../scripts/setup.sh) script handles everything automatically: Node.js, pnpm, cloning, dependencies, building, and PM2.
 
+⚠️ **Note:** The setup script requires `sudo` privileges for installing Node.js, pnpm, PM2, and configuring auto-restart on reboot. Run the script with `sudo` or ensure your user has passwordless sudo access for npm/package manager commands.
+
 ## Prerequisites
 
 The repository is private — you need **SSH access** to the GitHub repository:

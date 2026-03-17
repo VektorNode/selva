@@ -1,15 +1,9 @@
-# Deployment Prerequisites for Selva Compute App
+# Deployment Prerequisites
 
-This document covers the common prerequisites and setup requirements needed before deploying the Selva Compute App, whether using Node.js directly or Docker.
+The Selva Compute App requires two external dependencies:
 
----
-
-## Overview
-
-The Selva Compute App requires two critical external dependencies to function:
-
-1. **Rhino.Compute Server** - Performs the actual Grasshopper definition solving. See [Compute Guide](../../RHINO_COMPUTE.md).
-2. **Grasshopper Definition Files (.gh)** - Define your application logic. See [Definition Setup](./DEFINITIONS_SETUP.md).
+1. **Rhino.Compute Server** — See [Rhino Compute Setup](../../RHINO_COMPUTE.md)
+2. **Grasshopper Definition Files (.gh)** — See [Definitions Setup](./DEFINITIONS_SETUP.md)
 
 ## 1. System Requirements
 
@@ -56,33 +50,19 @@ The Compute App is configured via environment variables. Set these during deploy
 | -------------------- | -------------------------------- | ------------------------- |
 | `COMPUTE_SERVER_URL` | URL of your Rhino.Compute server | `http://your-compute.com` |
 
-### Definition Source (choose one)
+### Definition Source
 
-The app auto-detects the definition source. Configure via one of:
+Set `GH_DEFINITIONS_PATH` to a local folder containing your `.gh` files and `definitions-config.json`.
 
-- **Filesystem (default):** Set `GH_DEFINITIONS_PATH` to a local folder containing `definitions-config.json`
-- **Environment Variables:** Set `DEFINITION_SOURCE=environment` and define `GH_DEF_*` variables (for cloud/serverless)
-
-See [Definitions Setup](./DEFINITIONS_SETUP.md) for detailed configuration.
+See [Definitions Setup](./DEFINITIONS_SETUP.md) for details.
 
 ### Optional Variables
 
-| Variable          | Description                                                   | Default       |
-| ----------------- | ------------------------------------------------------------- | ------------- |
-| `COMPUTE_API_KEY` | API key for compute server (sent as RhinoComputeKey header)   | None          |
-| `GH_DEF_PREFIX`   | Prefix for env var definitions (only if using env var source) | `GH_DEF_`     |
-| `PORT`            | Server port                                                   | `3000`        |
-| `HOST`            | Host binding                                                  | `localhost`   |
-| `NODE_ENV`        | Environment mode                                              | `development` |
-| `ORIGIN`          | Public URL used for origin/CSRF checks (recommended in prod)  | None          |
+| Variable          | Description                                                  | Default       |
+| ----------------- | ------------------------------------------------------------ | ------------- |
+| `COMPUTE_API_KEY` | API key for compute server (sent as RhinoComputeKey header)  | None          |
+| `PORT`            | Server port                                                  | `3000`        |
+| `HOST`            | Host binding                                                 | `localhost`   |
+| `NODE_ENV`        | Environment mode                                             | `development` |
+| `ORIGIN`          | Public URL for origin/CSRF checks (recommended in prod)      | None          |
 
----
-
-## Next Steps
-
-After reviewing the prerequisites, proceed to set up your server environment:
-
-1. **[Server Setup](./SERVER_SETUP.md)** - Install tools, clone the repository, and build the project.
-2. **Choose a Deployment Method:**
-   - **[Node.js Deployment Guide](./NODE_DEPLOYMENT.md)** - Direct Node.js deployment with PM2
-   - **[Docker Deployment Guide](./DOCKER_DEPLOYMENT.md)** - Container-based deployment
