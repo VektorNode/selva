@@ -54,7 +54,10 @@
 
 	// Manual solve mode
 	let pendingValues = $state<Record<string, unknown>>({});
-	let hasPendingChanges = $state(false);
+	// svelte-ignore state_referenced_locally
+	let hasPendingChanges = $state(schema?.instanceSolve === false);
+	// svelte-ignore state_referenced_locally
+	let hasNeverSolved = $state(schema?.instanceSolve === false);
 	let isViewerFullscreen = $state(false);
 
 	// Check if viewer should be shown (either enableLocal or enableRemote)
@@ -122,6 +125,7 @@
 			Object.assign(values, outputs);
 			pendingValues = {};
 			hasPendingChanges = false;
+			hasNeverSolved = false;
 		} catch (err) {
 			// Don't show error for aborted requests (user cancelled or new request started)
 			if (err instanceof Error && err.name === 'AbortError') {
@@ -214,7 +218,7 @@
 	}
 
 	function handleCalculate() {
-		if (hasPendingChanges) performSolve();
+		performSolve();
 	}
 
 	let isEmbedded = $derived(page.url.searchParams.get('embed') === 'true');
@@ -252,6 +256,7 @@
 						isSolving={solving}
 						showSolvingIndicator={schema.instanceSolve !== false && solvingIndicator.show}
 						{hasPendingChanges}
+						{hasNeverSolved}
 						bind:isViewerFullscreen
 						bind:values
 						onValueChange={handleValueChange}

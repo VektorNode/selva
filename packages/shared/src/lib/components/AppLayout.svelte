@@ -19,6 +19,7 @@
 		isSolving: boolean;
 		showSolvingIndicator?: boolean;
 		hasPendingChanges?: boolean;
+		hasNeverSolved?: boolean;
 		isViewerFullscreen?: boolean;
 		oncalculate?: () => void;
 		values: Record<string, unknown>;
@@ -32,6 +33,7 @@
 		isSolving,
 		showSolvingIndicator = false,
 		hasPendingChanges = false,
+		hasNeverSolved = false,
 		isViewerFullscreen = $bindable(false),
 		oncalculate = () => {},
 		values = $bindable({}),
@@ -122,7 +124,7 @@
 					<StateManager {schema} currentValues={values} onLoadValues={handleLoadValues} />
 				{/if}
 				{#if !isMobile && showCalculateButton && schema.instanceSolve === false}
-					<CalculateButton {hasPendingChanges} {isSolving} {oncalculate} />
+					<CalculateButton {hasPendingChanges} {hasNeverSolved} {isSolving} {oncalculate} />
 				{/if}
 			</div>
 		{/if}
@@ -199,7 +201,7 @@
 
 				{#if schema.instanceSolve === false}
 					<div class="drawer-footer">
-						<CalculateButton {hasPendingChanges} {isSolving} {oncalculate} />
+						<CalculateButton {hasPendingChanges} {hasNeverSolved} {isSolving} {oncalculate} />
 					</div>
 				{/if}
 			</div>
@@ -227,7 +229,7 @@
 				</div>
 				{#if schema.instanceSolve === false}
 					<div class="drawer-footer">
-						<CalculateButton {hasPendingChanges} {isSolving} {oncalculate} />
+						<CalculateButton {hasPendingChanges} {hasNeverSolved} {isSolving} {oncalculate} />
 					</div>
 				{/if}
 			</div>

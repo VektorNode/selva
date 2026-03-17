@@ -19,7 +19,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	try {
 		response = await fetch(schemaUrl, { method: 'POST', headers, body: formData });
 	} catch {
-		throw error(404, 'Validation endpoint not available');
+		throw error(503, 'Compute server is unreachable');
 	}
 
 	if (!response.ok) {

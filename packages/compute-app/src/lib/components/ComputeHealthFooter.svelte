@@ -21,12 +21,14 @@
 	const tooltip = $derived(() => {
 		const parts: string[] = [];
 		parts.push(health.message);
-		if (compute.rhinoVersion) parts.push(`Rhino v${compute.rhinoVersion}`);
-		if (compute.computeVersion) parts.push(`Compute v${compute.computeVersion}`);
-		if (compute.selvaInstalled && compute.selvaVersion) {
-			parts.push(`Selva v${compute.selvaVersion}`);
-		} else if (!compute.selvaInstalled) {
-			parts.push('Selva plugin not installed');
+		if (health.reachable) {
+			if (compute.rhinoVersion) parts.push(`Rhino v${compute.rhinoVersion}`);
+			if (compute.computeVersion) parts.push(`Compute v${compute.computeVersion}`);
+			if (compute.selvaInstalled && compute.selvaVersion) {
+				parts.push(`Selva v${compute.selvaVersion}`);
+			} else if (!compute.selvaInstalled) {
+				parts.push('Selva plugin not installed');
+			}
 		}
 
 		return parts.join(' · ');
@@ -56,15 +58,19 @@
 			</div>
 		{/if}
 
-		<!-- Selva plugin status -->
-		<div class="border-border border-l pl-3">
-			{#if compute.selvaInstalled}
-				<span class="text-muted-foreground text-xs">
-					Selva {compute.selvaVersion}
-				</span>
-			{:else}
-				<span class="text-xs font-medium text-red-600 dark:text-red-400"> Selva missing </span>
-			{/if}
-		</div>
+		<!-- Selva plugin status (only show when server is reachable) -->
+		{#if health.reachable}
+			<div class="border-border border-l pl-3">
+				{#if compute.selvaInstalled}
+					<span class="text-muted-foreground text-xs">
+						Selva {compute.selvaVersion}
+					</span>
+				{:else}
+					<span class="text-xs font-medium text-red-600 dark:text-red-400">
+						Selva missing
+					</span>
+				{/if}
+			</div>
+		{/if}
 	</div>
 </div>
