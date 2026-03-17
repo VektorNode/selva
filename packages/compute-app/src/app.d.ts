@@ -13,4 +13,9 @@ declare global {
 	}
 }
 
+declare const __GIT_HASH__: string;
+declare const __GIT_SHORT_HASH__: string;
+declare const __GIT_MESSAGE__: string;
+declare const __GIT_DATE__: string;
+
 export {};
