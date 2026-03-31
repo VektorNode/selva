@@ -1,6 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import sharp from 'sharp';
 import { FilesystemDefinitionLoader } from '../loaders/filesystem';
 import { GH_EXTENSIONS, IMAGE_EXTENSIONS as ALLOWED_IMAGE_EXTENSIONS } from '../../admin-config';
 import type {
@@ -372,14 +373,22 @@ export class FilesystemDefinitionStore
 		const guidDir = this.guidPath(guid);
 		await fs.mkdir(guidDir, { recursive: true });
 
-		const safeFilename = image.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-		const filePath = path.join(guidDir, safeFilename);
-		await fs.writeFile(filePath, Buffer.from(image.data));
+		// Always store as WebP — strip original extension and replace with .webp
+		const baseName = path.basename(image.name, ext).replace(/[^a-zA-Z0-9._-]/g, '_');
+		const filename = `${baseName}.webp`;
+		const filePath = path.join(guidDir, filename);
+
+		const compressed = await sharp(Buffer.from(image.data))
+			.resize({ width: 1200, withoutEnlargement: true })
+			.webp({ quality: 85 })
+			.toBuffer();
+
+		await fs.writeFile(filePath, compressed);
 
 		try {
 			const entries = await fs.readdir(guidDir);
 			for (const entry of entries) {
-				if (entry !== safeFilename && ALLOWED_IMAGE_EXTENSIONS.includes(path.extname(entry).toLowerCase())) {
+				if (entry !== filename && ALLOWED_IMAGE_EXTENSIONS.includes(path.extname(entry).toLowerCase())) {
 					await fs.rm(path.join(guidDir, entry), { force: true });
 				}
 			}
@@ -387,6 +396,6 @@ export class FilesystemDefinitionStore
 			// Non-fatal
 		}
 
-		return `/api/definitions/${guid}/image/${safeFilename}`;
+		return `/api/definitions/${guid}/image/${filename}`;
 	}
 }

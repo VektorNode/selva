@@ -26,16 +26,11 @@ definitions-config.json
 *.gh
 *.ghx
 /definitions/
+/example-definitions/
 
 # Deployment-specific thumbnails
 static/images/*_Thumbnail.png
 static/images/*_Thumbnail.jpg
-
-# Exception: allow example definitions
-!example-definitions/*.gh
-!example-definitions/*.ghx
-!example-definitions/**/*.gh
-!example-definitions/**/*.ghx
 
 # Vite
 vite.config.js.timestamp-*

@@ -8,8 +8,8 @@ import {
 	GrasshopperClient
 } from 'selva-compute';
 import type { SchemaInput } from '@selva/shared';
-import { error, json } from '@sveltejs/kit';
-import { getServerConfig } from '$lib/server/config.server';
+import { error, json, isHttpError } from '@sveltejs/kit';
+import { getServerConfig } from '$lib/server/compute/config.server';
 import { getDefinitionContainer } from '$lib/server/definitions.server';
 
 interface ComputeRequest {
@@ -56,7 +56,7 @@ async function getClient(): Promise<GrasshopperClient> {
 	// Create new client
 	cachedClient = await GrasshopperClient.create({
 		serverUrl: currentConfig.serverUrl,
-		apiKey: currentConfig.apiKey,
+		apiKey: currentConfig.apiKey
 	});
 	cachedClientConfig = currentConfig;
 
@@ -194,8 +194,16 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		return json(solvedDefinition);
 	} catch (err) {
+		// Re-throw SvelteKit errors (400, 404, etc.) as-is
+		if (isHttpError(err)) throw err;
+
 		const message = err instanceof Error ? err.message : 'Unknown error';
 		console.error('[API/Compute] Error:', message);
+
+		// Distinguish connectivity errors from other failures
+		if (err instanceof TypeError && message === 'fetch failed') {
+			throw error(503, 'Compute server is unreachable');
+		}
 
 		throw error(500, message);
 	}
