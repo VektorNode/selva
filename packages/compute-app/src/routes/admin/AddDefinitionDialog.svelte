@@ -3,14 +3,6 @@
 	import { X } from '@lucide/svelte';
 	import ImageUploadField from './ImageUploadField.svelte';
 
-	interface ValidatedSchema {
-		name: string;
-		description: string;
-		inputCount: number;
-		outputCount: number;
-		tags: string[];
-	}
-
 	interface Props {
 		open: boolean;
 		isAdding?: boolean;
@@ -31,12 +23,11 @@
 	// File inputs
 	let fileInput = $state<HTMLInputElement>();
 	let imageInput = $state<HTMLInputElement>();
-	let hasFile = $state(false);
 
 	// Validation state
 	let validating = $state(false);
 	let validationError = $state<string | null>(null);
-	let validationSchema = $state<ValidatedSchema | null>(null);
+	let validationSchema = $state<{ name: string; description?: string; tags?: string[]; inputs: unknown[]; outputs: unknown[] } | null>(null);
 
 	function nameFromFile(file: File): string {
 		return file.name
@@ -47,7 +38,6 @@
 
 	async function onFileSelected() {
 		const file = fileInput?.files?.[0];
-		hasFile = !!file;
 		validationError = null;
 		validationSchema = null;
 		displayName = '';
@@ -60,28 +50,26 @@
 		try {
 			const formData = new FormData();
 			formData.append('files', file);
-			const response = await fetch('/api/validate-solution', { method: 'POST', body: formData });
+			const response = await fetch('/api/compute/schema', { method: 'POST', body: formData });
 
-			// Endpoint unavailable — skip silently, name already set
-			if (!response.ok) return;
+			// Compute unreachable — skip silently, name already set from filename
+			if (response.status === 404) return;
 
-			const results = await response.json();
-			const result = results?.[0];
-			if (!result) return;
+			const body = await response.json();
 
-			if (!result.valid) {
-				// Compute server error — treat as unavailable, don't block
-				if (result.error?.startsWith('Compute server error')) return;
-				validationError = result.error ?? 'Validation failed';
+			if (!response.ok) {
+				validationError = body?.message ?? 'Validation failed';
 				return;
 			}
 
-			// Valid — pre-fill from schema
-			const schema: ValidatedSchema | null = result.schemas?.[0] ?? null;
+			const schema = body?.[0];
+			if (!schema) return;
+
+			// Pre-fill from UISchema
 			validationSchema = schema;
-			if (schema?.name) displayName = schema.name;
-			if (schema?.description) description = schema.description;
-			if (schema?.tags?.length) tags = schema.tags;
+			if (schema.name) displayName = schema.name;
+			if (schema.description) description = schema.description;
+			if (schema.tags?.length) tags = schema.tags;
 		} catch {
 			// Network error — skip silently
 		} finally {
@@ -127,7 +115,6 @@
 		tags = [];
 		coverImage = '';
 		imageMode = 'url';
-		hasFile = false;
 		validating = false;
 		validationError = null;
 		validationSchema = null;
@@ -181,17 +168,17 @@
 					</p>
 				{:else if validationError}
 					<div class="border-warning/40 bg-warning/5 rounded-md border p-3">
-						<p class="text-warning-foreground text-xs font-medium">Validation warning</p>
-						<p class="text-warning-foreground/80 mt-0.5 text-xs">{validationError}</p>
-						<p class="text-warning-foreground/60 mt-1 text-xs">You can still upload the file.</p>
+						<p class="text-warning text-xs font-medium">Validation warning</p>
+						<p class="text-warning/80 mt-0.5 text-xs">{validationError}</p>
+						<p class="text-warning/60 mt-1 text-xs">You can still upload the file.</p>
 					</div>
 				{:else if validationSchema}
 					<div class="border-success/30 bg-success/5 flex items-center gap-3 rounded-md border p-3">
 						<div class="min-w-0 flex-1">
-							<p class="text-success-foreground text-xs font-medium">Valid Selva definition</p>
+							<p class="text-success text-xs font-medium">Valid Selva definition</p>
 							<p class="text-muted-foreground mt-0.5 text-xs">
-								{validationSchema.inputCount} input{validationSchema.inputCount === 1 ? '' : 's'},
-								{validationSchema.outputCount} output{validationSchema.outputCount === 1 ? '' : 's'}
+								{validationSchema.inputs.length} input{validationSchema.inputs.length === 1 ? '' : 's'},
+								{validationSchema.outputs.length} output{validationSchema.outputs.length === 1 ? '' : 's'}
 							</p>
 						</div>
 					</div>

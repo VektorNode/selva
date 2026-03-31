@@ -1,12 +1,12 @@
 {
 	"name": "selva-compute-app",
-	"version": "0.4.1",
+	"version": "0.7.0",
 	"description": "Selva Rhino Compute application for iframe embedding",
 	"private": true,
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build",
+		"build": "rm -rf build && vite build",
 		"preview": "vite preview",
 		"start": "node build/index.js",
 		"prepare": "svelte-kit sync || echo ''",
@@ -19,6 +19,7 @@
 		"@selva/shared": "workspace:*",
 		"mode-watcher": "catalog:",
 		"selva-compute": "catalog:",
+		"sharp": "^0.34.5",
 		"three": "catalog:",
 		"zod": "^4.3.6"
 	},
@@ -26,6 +27,7 @@
 		"@selva/config": "workspace:*",
 		"@sveltejs/adapter-auto": "catalog:",
 		"@sveltejs/adapter-node": "^5.5.1",
+		"@types/sharp": "^0.32.0",
 		"tw-animate-css": "catalog:"
 	}
 }

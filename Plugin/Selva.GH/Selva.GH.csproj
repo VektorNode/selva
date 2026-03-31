@@ -7,6 +7,7 @@
 		<NoWarn>NU1701</NoWarn>
 		<LangVersion>latest</LangVersion>
 		<GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
+		<AssemblyName>Selva</AssemblyName>
 	</PropertyGroup>
 
 	<PropertyGroup>

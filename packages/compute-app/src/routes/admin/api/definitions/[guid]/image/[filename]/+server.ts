@@ -19,16 +19,28 @@ export const GET: RequestHandler = async ({ params }) => {
   const contentType = IMAGE_CONTENT_TYPES[ext];
   if (!contentType) throw error(400, 'Unsupported image type');
 
-  try {
-    const buffer = await getDefinitionStore().readImage(guidParsed.data, filename);
-    return new Response(new Uint8Array(buffer), {
-      headers: {
-        'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=3600'
-      }
-    });
-  } catch {
-    throw error(404, 'Image not found');
+  const store = getDefinitionStore();
+
+  // Try requested filename first, then fall back to .webp variant (post-compression migration)
+  const webpFilename = filename.replace(/\.[^.]+$/, '.webp');
+  const candidates = filename === webpFilename ? [filename] : [filename, webpFilename];
+
+  for (const candidate of candidates) {
+    try {
+      const candidateExt = candidate.substring(candidate.lastIndexOf('.')).toLowerCase();
+      const candidateContentType = IMAGE_CONTENT_TYPES[candidateExt] ?? contentType;
+      const buffer = await store.readImage(guidParsed.data, candidate);
+      return new Response(new Uint8Array(buffer), {
+        headers: {
+          'Content-Type': candidateContentType,
+          'Cache-Control': 'public, max-age=3600'
+        }
+      });
+    } catch {
+      // try next candidate
+    }
   }
+
+  throw error(404, 'Image not found');
 };
 

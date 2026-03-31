@@ -11,6 +11,11 @@ declare global {
 		// interface PageState {}
 		// interface Platform {}
 	}
+
+	const __GIT_HASH__: string;
+	const __GIT_SHORT_HASH__: string;
+	const __GIT_MESSAGE__: string;
+	const __GIT_DATE__: string;
 }
 
 export {};
