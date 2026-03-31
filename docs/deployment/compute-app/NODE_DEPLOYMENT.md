@@ -1,8 +1,6 @@
-# Node.js Deployment Guide for Selva Compute App
+# Node.js Deployment with PM2
 
-Deploy the Selva Compute App using Node.js and PM2 for direct process management.
-
-**Prerequisites:** Complete [SERVER_SETUP.md](./SERVER_SETUP.md) and [PREREQUISITES.md](./PREREQUISITES.md) first.
+**Prerequisites:** Complete [SERVER_SETUP.md](./SERVER_SETUP.md) first.
 
 ---
 
@@ -11,141 +9,72 @@ Deploy the Selva Compute App using Node.js and PM2 for direct process management
 ```bash
 # 1. Configure environment
 cd packages/compute-app
-nano ecosystem.config.cjs  # Update ORIGIN, COMPUTE_SERVER_URL, etc.
+nano ecosystem.config.cjs
 
-# 2. Add Grasshopper definitions
-mkdir -p definitions
-cp /path/to/your/*.gh definitions/
+# 2. Build for production
+export ADAPTER=node && pnpm build
 
-# 3. Build for production
-export ADAPTER=node
-pnpm build
-
-# 4. Install and start PM2
+# 3. Install PM2 and start
 sudo npm install -g pm2
 pm2 start ecosystem.config.cjs
-
-# 5. Test
-curl http://localhost:3000/api/health
+pm2 startup && pm2 save  # auto-restart on reboot
 ```
+
+Test: `curl http://localhost:3000/api/health`
 
 ---
 
-## Configuration
-
-Edit `ecosystem.config.cjs` in the repo root:
+## ecosystem.config.cjs
 
 ```javascript
 env: {
-	PORT: 3000,
-	ORIGIN: 'http://your-public-ip',              // Public URL for CSRF checks
-	COMPUTE_SERVER_URL: 'https://your-compute-server',
-	BODY_SIZE_LIMIT: 'Infinity',                  // For large file uploads
-	GH_DEFINITIONS_PATH: '/absolute/path/to/definitions',  // Use absolute path
-	COMPUTE_API_KEY: 'your-key-if-needed',
-	NODE_ENV: 'production',
-	ADMIN_PASSWORD: 'your-secure-password',
-	ALLOW_INSECURE_COOKIES: 'true'                // Only for HTTP deployments (dev/testing)
+    PORT: 3000,
+    ORIGIN: 'http://your-public-ip',          // No trailing slash
+    COMPUTE_SERVER_URL: 'https://your-compute-server',
+    GH_DEFINITIONS_PATH: '/absolute/path/to/definitions',  // Always use absolute path
+    COMPUTE_API_KEY: 'your-key-if-needed',
+    BODY_SIZE_LIMIT: 'Infinity',              // Needed for large file uploads
+    ADMIN_PASSWORD: 'your-secure-password',
+    ADMIN_SECRET: 'your-32-plus-char-secret',
+    NODE_ENV: 'production',
+    ALLOW_INSECURE_COOKIES: 'true'            // HTTP deployments only
 }
 ```
-
-**Important:** Always use **absolute paths** for `GH_DEFINITIONS_PATH`. Relative paths are resolved from the working directory where PM2 starts, which may differ from your expectations.
-
-**Required variables:**
-
-- `COMPUTE_SERVER_URL` - Rhino.Compute server address
-- `COMPUTE_API_KEY` - API key for your compute server
-- Use either `GH_DEFINITIONS_PATH` (local) or `GH_DEFINITIONS_BASE_URL` (remote), not both
-
-**Recommended for production:**
-
-- `ORIGIN` - Public URL for origin/CSRF checks
 
 ---
 
 ## PM2 Commands
 
 ```bash
-pm2 start ecosystem.config.cjs      # Start
-pm2 status                          # Check status
-pm2 logs selva-compute              # View logs
-pm2 restart selva-compute           # Restart
-pm2 restart selva-compute --update-env  # Restart with updated environment variables
-pm2 stop selva-compute              # Stop
-pm2 delete selva-compute            # Remove
-
-# Auto-restart on reboot
-pm2 startup
-pm2 save
+pm2 start ecosystem.config.cjs
+pm2 status
+pm2 logs selva-compute
+pm2 restart selva-compute --update-env   # use --update-env when env vars change
+pm2 stop selva-compute
+pm2 delete selva-compute
 ```
-
-**Important:** When updating environment variables in `ecosystem.config.cjs`, use `--update-env` to reload them:
-
-```bash
-pm2 restart selva-compute --update-env
-```
-
----
-
-## Access the Application
-
-```
-http://YOUR-SERVER-IP:3000/app?gh=definition-name
-```
-
-Test health: `curl http://YOUR-SERVER-IP:3000/api/health`
 
 ---
 
 ## Updating
 
 ```bash
-cd ~/selva
-git pull
-pnpm install
-pnpm run build:all
-cd packages/compute-app
-export ADAPTER=node && pnpm build
-pm2 restart selva-compute
+# Automated
+bash ~/selva/scripts/update.sh
+
+# Manual
+cd ~/selva && git pull && pnpm install && pnpm run build:all
+cd packages/compute-app && export ADAPTER=node && pnpm build
+pm2 restart selva-compute --update-env
 ```
 
 ---
 
-## Common Issues
+## Troubleshooting
 
-**Port already in use:**
-
-```bash
-lsof -i :3000
-# Change PORT in ecosystem.config.cjs and restart
-```
-
-**Can't reach Compute server:**
-
-```bash
-curl http://YOUR-COMPUTE-SERVER/health
-# Verify COMPUTE_SERVER_URL and firewall rules
-```
-
-**Definitions not loading:**
-
-```bash
-ls -la definitions/
-# Check filenames match query parameters
-```
-
-**Request body size limit exceeded:**
-
-If you see errors like `Content-length of 1715807 exceeds limit of 524288 bytes`, increase the body size limit:
-
-```bash
-# Edit ecosystem.config.cjs and add/update:
-env: {
-  BODY_SIZE_LIMIT: "Infinity"  # or "50mb", "100MB", etc.
-}
-
-# Restart with updated environment
-pm2 restart selva-compute --update-env
-```
-
-This error occurs when uploading large geometry files that exceed the default 512KB limit.
+| Issue | Fix |
+|---|---|
+| Port in use | `lsof -i :3000` → change `PORT` in config |
+| Can't reach Compute | `curl http://YOUR-COMPUTE/health` → check `COMPUTE_SERVER_URL` and firewall |
+| Definitions not loading | `ls definitions/` → verify filenames match `?gh=` param |
+| Body size limit exceeded | Set `BODY_SIZE_LIMIT: 'Infinity'` and restart with `--update-env` |
