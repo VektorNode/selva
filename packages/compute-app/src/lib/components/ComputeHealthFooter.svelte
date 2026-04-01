@@ -13,7 +13,8 @@
 		ok: { label: 'Online', color: 'text-green-600 dark:text-green-400' },
 		warning: { label: 'Warning', color: 'text-yellow-600 dark:text-yellow-400' },
 		error: { label: 'Offline', color: 'text-red-600 dark:text-red-400' },
-		checking: { label: 'Checking', color: 'text-blue-600 dark:text-blue-400' }
+		checking: { label: 'Checking', color: 'text-blue-600 dark:text-blue-400' },
+		starting: { label: 'Starting', color: 'text-yellow-600 dark:text-yellow-400' }
 	};
 
 	const config = $derived(statusConfig[health.state]);

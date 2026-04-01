@@ -1,6 +1,8 @@
 /**
- * Composable for checking Rhino.Compute server health
- * Usage: const compute = useComputeHealth();
+ * Singleton store for Rhino.Compute server health.
+ * - Checks on load until healthy, then stops.
+ * - Re-checks when notifyFailure() is called (e.g. a solve request fails).
+ * - Exponential backoff during recovery.
  */
 import { browser } from '$app/environment';
 
@@ -15,148 +17,174 @@ export interface ComputeInfo {
 
 export type PluginMap = Record<string, string>;
 
-export interface UpdateInfo {
-	checked: boolean;
-	updateAvailable: boolean;
-	installedVersion: string | null;
-	latestVersion: string | null;
-}
-
 export interface HealthStatus {
-	state: 'checking' | 'ok' | 'warning' | 'error';
+	state: 'checking' | 'starting' | 'ok' | 'warning' | 'error';
 	reachable: boolean;
 	message: string;
 }
 
-// --- Composable ---
+// --- Singleton state ---
 
-export function useComputeHealth() {
-	let health = $state<HealthStatus>({
-		state: 'checking',
-		reachable: false,
-		message: 'Checking Rhino.Compute server…'
-	});
+let health = $state<HealthStatus>({
+	state: 'checking',
+	reachable: false,
+	message: 'Checking Rhino.Compute server…'
+});
 
-	let compute = $state<ComputeInfo>({
-		rhinoVersion: null,
-		computeVersion: null,
-		selvaVersion: null,
-		selvaInstalled: false
-	});
+let compute = $state<ComputeInfo>({
+	rhinoVersion: null,
+	computeVersion: null,
+	selvaVersion: null,
+	selvaInstalled: false
+});
 
-	let plugins = $state<PluginMap>({});
+let plugins = $state<PluginMap>({});
 
-	let intervalId: ReturnType<typeof setInterval> | null = null;
-	let initialFetchDone = false;
-	let wasOffline = false;
+// --- Internal state ---
 
-	// --- One-time: fetch versions + plugins ---
+let timeoutId: ReturnType<typeof setTimeout> | null = null;
+let infoFetched = false;
+let consecutiveFailures = 0;
+let isRecovering = false;
 
-	async function fetchComputeInfo() {
-		try {
-			const [versionRes, pluginsRes] = await Promise.all([
-				fetch('/api/compute/version-compute'),
-				fetch('/api/compute/get-all-plugins')
-			]);
+const STARTING_THRESHOLD = 3;
+const REQUEST_TIMEOUT_MS = 8000;
+const BASE_INTERVAL_MS = 5000;
+const MAX_INTERVAL_MS = 30000;
 
-			if (!versionRes.ok) throw new Error(`Version endpoint returned ${versionRes.status}`);
+// --- Helpers ---
 
-			const versionData = await versionRes.json();
-			const pluginData: PluginMap = pluginsRes.ok ? await pluginsRes.json() : {};
+function fetchWithTimeout(url: string): Promise<Response> {
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+	return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+}
 
-			plugins = pluginData;
+async function fetchComputeInfo() {
+	try {
+		const [versionRes, pluginsRes] = await Promise.all([
+			fetchWithTimeout('/api/compute/version-compute'),
+			fetchWithTimeout('/api/compute/get-all-plugins')
+		]);
 
-			const selvaVersion: string | null = pluginData['Selva'] ?? null;
+		if (!versionRes.ok) throw new Error(`Version endpoint returned ${versionRes.status}`);
 
-			compute = {
-				rhinoVersion: versionData.rhino ?? null,
-				computeVersion: versionData.compute ?? null,
-				selvaVersion,
-				selvaInstalled: selvaVersion !== null
+		const versionData = await versionRes.json();
+		const pluginData: PluginMap = pluginsRes.ok ? await pluginsRes.json() : {};
+
+		plugins = pluginData;
+
+		const selvaVersion: string | null = pluginData['Selva'] ?? null;
+		compute = {
+			rhinoVersion: versionData.rhino ?? null,
+			computeVersion: versionData.compute ?? null,
+			selvaVersion,
+			selvaInstalled: selvaVersion !== null
+		};
+
+		if (!compute.selvaInstalled) {
+			health = {
+				state: 'warning',
+				reachable: true,
+				message: 'Selva plugin is not installed on the Compute server.'
 			};
-
-			if (!compute.selvaInstalled) {
-				health = {
-					state: 'warning',
-					reachable: true,
-					message: 'Selva plugin is not installed on the Compute server.'
-				};
-			}
-		} catch (error) {
-			console.error('Failed to fetch compute info:', error);
-			compute = {
-				rhinoVersion: null,
-				computeVersion: null,
-				selvaVersion: null,
-				selvaInstalled: false
-			};
-			plugins = {};
 		}
+	} catch {
+		compute = { rhinoVersion: null, computeVersion: null, selvaVersion: null, selvaInstalled: false };
+		plugins = {};
 	}
+}
 
-	// --- Repeated: health poll ---
+function backoffMs(): number {
+	return Math.min(BASE_INTERVAL_MS * Math.pow(2, consecutiveFailures - 1), MAX_INTERVAL_MS);
+}
 
-	async function checkHealth() {
-		// Run the one-time fetches on the first health tick
-		if (!initialFetchDone) {
-			initialFetchDone = true;
+function cancelScheduled() {
+	if (timeoutId !== null) {
+		clearTimeout(timeoutId);
+		timeoutId = null;
+	}
+}
+
+async function checkHealth() {
+	try {
+		const res = await fetchWithTimeout('/api/compute/health');
+
+		if (!res.ok) {
+			consecutiveFailures++;
+			health = {
+				state: consecutiveFailures <= STARTING_THRESHOLD ? 'starting' : 'error',
+				reachable: false,
+				message:
+					consecutiveFailures <= STARTING_THRESHOLD
+						? 'Rhino.Compute is starting up…'
+						: `Health endpoint returned ${res.status}`
+			};
+			scheduleRetry();
+			return;
+		}
+
+		// Fetch version/plugin info once (or after a reconnect)
+		if (!infoFetched || consecutiveFailures > 0) {
+			infoFetched = true;
 			await fetchComputeInfo();
 		}
 
-		try {
-			const res = await fetch('/api/compute/health');
+		consecutiveFailures = 0;
+		isRecovering = false;
 
-			if (!res.ok) {
-				health = {
-					state: 'error',
-					reachable: false,
-					message: `Health endpoint returned ${res.status}`
-				};
-				wasOffline = true;
-				return;
-			}
-
-			// Server came back online - refetch all info
-			if (wasOffline) {
-				wasOffline = false;
-				await fetchComputeInfo();
-			}
-
-			// If we already flagged a warning (e.g. missing plugin), keep it
-			if (health.state !== 'warning') {
-				health = {
-					state: 'ok',
-					reachable: true,
-					message: 'Rhino.Compute server is running.'
-				};
-			} else {
-				// Server is reachable but warning persists
-				health = { ...health, reachable: true };
-			}
-		} catch (error) {
-			health = {
-				state: 'error',
-				reachable: false,
-				message: error instanceof Error ? error.message : 'Failed to reach Compute server'
-			};
-			wasOffline = true;
+		if (health.state !== 'warning') {
+			health = { state: 'ok', reachable: true, message: 'Rhino.Compute server is running.' };
+		} else {
+			health = { ...health, reachable: true };
 		}
+
+		// Healthy — stop polling until notifyFailure() is called
+		cancelScheduled();
+	} catch {
+		consecutiveFailures++;
+		health = {
+			state: consecutiveFailures <= STARTING_THRESHOLD ? 'starting' : 'error',
+			reachable: false,
+			message:
+				consecutiveFailures <= STARTING_THRESHOLD
+					? 'Rhino.Compute is starting up…'
+					: 'Failed to reach Compute server'
+		};
+		scheduleRetry();
 	}
+}
 
-	// --- Lifecycle ---
-
-	function startPeriodicCheck(intervalMs: number = 5000) {
-		if (!browser) return;
-		stopPeriodicCheck();
+function scheduleRetry() {
+	cancelScheduled();
+	timeoutId = setTimeout(() => {
+		timeoutId = null;
 		checkHealth();
-		intervalId = setInterval(checkHealth, intervalMs);
+	}, backoffMs());
+}
+
+// --- Public API ---
+
+export function useComputeHealth() {
+	function start() {
+		if (!browser) return;
+		cancelScheduled();
+		consecutiveFailures = 0;
+		isRecovering = false;
+		checkHealth();
 	}
 
-	function stopPeriodicCheck() {
-		if (intervalId !== null) {
-			clearInterval(intervalId);
-			intervalId = null;
-		}
+	/**
+	 * Call this when a compute solve request fails (e.g. 503).
+	 * Triggers a health re-check with backoff if not already recovering.
+	 */
+	function notifyFailure() {
+		if (!browser) return;
+		if (isRecovering) return; // already re-checking
+		isRecovering = true;
+		consecutiveFailures++;
+		health = { state: 'error', reachable: false, message: 'Failed to reach Compute server' };
+		scheduleRetry();
 	}
 
 	return {
@@ -169,7 +197,7 @@ export function useComputeHealth() {
 		get plugins() {
 			return plugins;
 		},
-		startPeriodicCheck,
-		stopPeriodicCheck
+		start,
+		notifyFailure
 	};
 }
