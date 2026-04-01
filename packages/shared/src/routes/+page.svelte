@@ -7,12 +7,12 @@
 	import exampleSchemaRightOnly from '$lib/example-schema-right-only.json';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import PageContainer from '$lib/components/layout/PageContainer.svelte';
-	import * as THREE from 'three';
+	import { cubeMesh, dummyOutputValues } from '$lib/dummy-output-values';
 
 	let schema = exampleSchema as UISchema;
-	const schemaLeft = exampleSchemaLeftOnly as UISchema;
-	const schemaRight = exampleSchemaRightOnly as UISchema;
-	// schema = schemaRight; // Switch between left-only, right-only and full schema to test different layouts
+	const _schemaLeft = exampleSchemaLeftOnly as UISchema;
+	const _schemaRight = exampleSchemaRightOnly as UISchema;
+	// schema = _schemaRight; // Switch between left-only, right-only and full schema
 
 	const dummyErrors = [
 		'Error: Something went wrong with the calculation. Please check your input values and try again.',
@@ -23,60 +23,6 @@
 		'Warning: The value for "Parameter X" is approaching the maximum limit. Consider adjusting it to avoid potential issues.',
 		'Warning: The calculation may take longer than expected due to the complexity of the input values.'
 	];
-
-	const cubeMesh = new THREE.Mesh(
-		new THREE.BoxGeometry(1, 1, 1, 4, 4, 4),
-		new THREE.MeshStandardMaterial({
-			color: 0x4a90d9,
-			metalness: 0.3,
-			roughness: 0.4
-		})
-	);
-
-	const dummyOutputValues: Record<string, unknown> = {
-		'output-001': 'Computation completed successfully. All 12 parameters are within bounds.',
-		'output-002': 4827.63,
-		'output-003': [
-			{
-				fileName: 'result_geometry_SZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ',
-				fileType: '.obj',
-				data: btoa('# Wavefront OBJ\nv 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.0 1.0 0.0\nf 1 2 3'),
-				isBase64Encoded: true
-			}
-		],
-		'output-004':
-			'[INFO]  Step 1: Parameter validation ............. OK\n[INFO]  Step 2: Mesh generation .................. OK\n[INFO]  Step 3: Geometry export .................. OK\n[WARN]  High vertex count detected (12 480 faces).',
-		'output-005': 892,
-		'output-006': [
-			{
-				fileName: 'panel_A',
-				fileType: '.3dm',
-				subFolder: 'panels',
-				data: btoa('3dm-binary-content-panel-A'),
-				isBase64Encoded: true
-			},
-			{
-				fileName: 'panel_B',
-				fileType: '.3dm',
-				subFolder: 'panels',
-				data: btoa('3dm-binary-content-panel-B'),
-				isBase64Encoded: true
-			},
-			{
-				fileName: 'main_frame',
-				fileType: '.3dm',
-				subFolder: 'structure',
-				data: btoa('3dm-binary-content-frame'),
-				isBase64Encoded: true
-			},
-			{
-				fileName: 'metadata',
-				fileType: '.json',
-				data: btoa(JSON.stringify({ version: '1.0', panelCount: 2, generatedAt: '2026-03-10' })),
-				isBase64Encoded: true
-			}
-		]
-	};
 
 	let values = $state<Record<string, unknown>>({
 		...initializeValues({ schema }),

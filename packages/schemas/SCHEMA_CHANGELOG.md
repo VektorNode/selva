@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MINOR** version (e.g., 1.0.x → 1.1.0): Backward-compatible additions
 - **PATCH** version (e.g., 1.0.0 → 1.0.1): Bug fixes and documentation
 
+## [2.4.0] - 2026-04-01
+
+### Added
+
+- `ChartWidgetConfig` - Optional config with `allowedTypes` array to restrict which chart types the user can switch between (`scatter`, `bar`, `pie`, `histogram`)
+- `OutputChartLayoutItem` - New output layout item with `widgetType: "chart"` for rendering Plotly figures from `fig.to_json()` output with a client-side chart type switcher
+- `LayoutItem` union - Added `OutputChartLayoutItem`
+- `DiscoveredOutput.type` and `SchemaOutput.type` - Added `"chart"` variant
+
+### Migration Notes
+
+- Fully backward-compatible addition. Existing schemas load unchanged.
+- Migration function `MigrateTo_2_4_0` registered in `SchemaMigrator`; no data transformation needed.
+
+---
+
 ## [2.3.0] - 2026-03-08
 
 ### Added

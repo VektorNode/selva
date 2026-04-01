@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { OutputLayoutItem } from '$lib/types/generated';
 	import type { FileData } from 'selva-compute';
+	import ChartOutput from './ChartOutput.svelte';
 	import { downloadFiles, formatFileSize, getBase64FileSize } from '$lib/utils/file-download';
 	import { Button } from '../ui';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -248,9 +249,13 @@
 {/snippet}
 
 <div class="gap-2 flex flex-col">
-	{@render fieldHeader()}
+	{#if item.widgetType !== 'chart'}
+		{@render fieldHeader()}
+	{/if}
 
-	{#if item.widgetType === 'file'}
+	{#if item.widgetType === 'chart'}
+		<ChartOutput {item} value={String(value ?? '')} />
+	{:else if item.widgetType === 'file'}
 		{@render fileDisplay()}
 	{:else if item.widgetType === 'number'}
 		<div class="{boxClass} bg-muted/50 wrap-break-word flex items-center">

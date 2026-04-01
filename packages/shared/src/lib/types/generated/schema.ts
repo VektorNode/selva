@@ -66,6 +66,12 @@ export type OutputFileLayoutItem = LayoutItemBase & {
   config?: FileWidgetConfig;
   [k: string]: unknown | undefined;
 };
+export type OutputChartLayoutItem = LayoutItemBase & {
+  type: 'output';
+  widgetType: 'chart';
+  config?: ChartWidgetConfig;
+  [k: string]: unknown | undefined;
+};
 export type LayoutItem =
   | InputNumberLayoutItem
   | InputTextLayoutItem
@@ -75,7 +81,8 @@ export type LayoutItem =
   | InputColorLayoutItem
   | OutputTextLayoutItem
   | OutputNumberLayoutItem
-  | OutputFileLayoutItem;
+  | OutputFileLayoutItem
+  | OutputChartLayoutItem;
 export type LayoutConfig = TabbedLayoutConfig | FlatLayoutConfig;
 export type GrasshopperInputStructure = 'item' | 'list' | 'tree';
 
@@ -228,6 +235,16 @@ export interface LayoutItemBase {
   visibilityCondition?: VisibilityCondition;
   [k: string]: unknown | undefined;
 }
+export interface ChartWidgetConfig {
+  /**
+   * Chart types the user can switch between. Defaults to all if omitted.
+   */
+  allowedTypes?: ('scatter' | 'bar' | 'pie' | 'histogram')[];
+  /**
+   * If true, overrides paper_bgcolor and plot_bgcolor with transparent so the chart blends with the panel background.
+   */
+  transparentBackground?: boolean;
+}
 export interface GroupConfig {
   id: string;
   label: string;
@@ -291,9 +308,9 @@ export interface DiscoveredOutput {
   nickname: string;
   description?: string;
   /**
-   * Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files
+   * Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files, 'html' for rendered HTML (e.g. Plotly charts)
    */
-  type: 'text' | 'number' | 'file';
+  type: 'text' | 'number' | 'file' | 'chart';
 }
 export interface DiscoveredParameters {
   sessionId: string;
@@ -332,7 +349,7 @@ export interface SchemaOutput {
   /**
    * Output display type
    */
-  type: 'text' | 'number' | 'file';
+  type: 'text' | 'number' | 'file' | 'chart';
 }
 export interface ViewerOptions {
   /**
@@ -473,7 +490,7 @@ export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutIt
   return item.type === 'input';
 }
 
-export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem {
+export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem {
   return item.type === 'output';
 }
 
@@ -503,5 +520,5 @@ export function isColorWidget(item: LayoutItem): item is InputColorLayoutItem {
 
 // Helper type aliases
 export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem | InputColorLayoutItem;
-export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem;
+export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem;
 export type SupportedTypes = string | number | boolean;
