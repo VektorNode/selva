@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack, onMount, onDestroy } from 'svelte';
+	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import type { PageProps } from './$types';
 	import {
@@ -148,10 +148,9 @@
 	const solvingIndicator = createSolvingIndicator(() => solving);
 
 	const computeHealth = useComputeHealth();
-	onMount(() => computeHealth.startPeriodicCheck(5000));
-	onDestroy(() => computeHealth.stopPeriodicCheck());
 
 	// Register compute health status in footer (reactive via getter)
+	// Health checking is handled globally in +layout.svelte
 	useFooterItem(
 		'compute-health',
 		ComputeHealthFooter,
