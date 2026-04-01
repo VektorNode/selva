@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { onMount, onDestroy } from 'svelte';
 	import type { PageData } from './$types';
 	import { StateDisplay, PageHeader, PageContainer, Input, useFooterItem } from '@selva/shared';
 	import { Search, X } from '@lucide/svelte';
@@ -15,10 +14,9 @@
 	let searchQuery = $state('');
 
 	const computeHealth = useComputeHealth();
-	onMount(() => computeHealth.startPeriodicCheck(10000));
-	onDestroy(() => computeHealth.stopPeriodicCheck());
 
 	// Register compute health in footer
+	// Health checking is handled globally in +layout.svelte
 	useFooterItem(
 		'compute-health',
 		ComputeHealthFooter,
