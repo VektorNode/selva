@@ -5,6 +5,7 @@ using Selva.GH.Features.UIBuilder.Services.Persistence;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.GH.Features.UIBuilder.Services.State;
 using Selva.GH.Features.UIBuilder.Services.Values;
+using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services;
 
@@ -53,7 +54,19 @@ public class UIBuilderService : IDisposable
         ValueCollector = new ValueCollector();
         StateManager = new ComponentStateManager();
         CommunicationHandler = new CommunicationHandler(SessionId);
-        WebServer = new LocalWebServer();
+
+        // Only create LocalWebServer on Windows (HttpListener doesn't work on Linux)
+        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+            System.Runtime.InteropServices.OSPlatform.Windows))
+        {
+            WebServer = new LocalWebServer();
+        }
+        else
+        {
+            WebServer = null;
+            Logger.Warn("[UIBuilderService] LocalWebServer skipped on non-Windows platform");
+        }
+
         EventManager = new DocumentEventManager(SchemaManager, ValueCollector, CommunicationHandler);
         CleanupService = new SchemaCleanupService();
 

@@ -21,7 +21,7 @@ public class ServerLifecycleManager : IDisposable
 
     public ServerLifecycleManager(LocalWebServer webServer, CommunicationHandler communicationHandler)
     {
-        _webServer = webServer ?? throw new ArgumentNullException(nameof(webServer));
+        _webServer = webServer; // Can be null on non-Windows platforms
         _communicationHandler = communicationHandler ?? throw new ArgumentNullException(nameof(communicationHandler));
     }
 
@@ -29,7 +29,7 @@ public class ServerLifecycleManager : IDisposable
 
     public int? WebSocketPort => _communicationHandler.IsRunning ? _communicationHandler.WebSocketPort : null;
 
-    public int? HttpPort => _webServer.IsRunning ? _webServer.Port : null;
+    public int? HttpPort => _webServer != null && _webServer.IsRunning ? _webServer.Port : null;
 
     public void Dispose()
     {
@@ -48,7 +48,7 @@ public class ServerLifecycleManager : IDisposable
 
         try
         {
-            if (_webServer.IsRunning) _webServer.Stop();
+            if (_webServer != null && _webServer.IsRunning) _webServer.Stop();
         }
         catch
         {
@@ -70,7 +70,7 @@ public class ServerLifecycleManager : IDisposable
         {
             // Start embedded web server first (production mode only - check if resources exist)
             var hasEmbeddedAssets = HasEmbeddedWebAssets();
-            if (!_webServer.IsRunning && hasEmbeddedAssets)
+            if (_webServer != null && !_webServer.IsRunning && hasEmbeddedAssets)
             {
                 _webServer.Start();
                 Logger.Log($"[ServerLifecycleManager] HTTP server started on port {_webServer.Port}");
@@ -124,7 +124,7 @@ public class ServerLifecycleManager : IDisposable
 
             try
             {
-                if (_webServer.IsRunning)
+                if (_webServer != null && _webServer.IsRunning)
                 {
                     _webServer.Stop();
                     Logger.Log("[ServerLifecycleManager] HTTP server stopped");
