@@ -4,7 +4,8 @@
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { CircleAlert, TriangleAlert, ChevronDown, ChevronRight } from '@lucide/svelte';
 	import { SvelteMap } from 'svelte/reactivity';
-	import { useFooter } from '$lib/contexts/footerContext.svelte';
+	import { useFooter, type FooterItem } from '$lib/contexts/footerContext.svelte';
+	import FooterItemRenderer from './FooterItemRenderer.svelte';
 
 	interface Props {
 		errors?: string[];
@@ -72,19 +73,7 @@
 	<div class="gap-4 flex items-center">
 		<!-- Custom left items from context -->
 		{#each leftItems as item (item.id)}
-			{@const Component = item.component}
-			{#if item.onClick}
-				<button
-					onclick={item.onClick}
-					class="flex items-center gap-1.5 px-2 py-0.5 rounded transition-colors hover:bg-muted cursor-pointer"
-				>
-					<Component {...item.getProps()} />
-				</button>
-			{:else}
-				<div class="flex items-center">
-					<Component {...item.getProps()} />
-				</div>
-			{/if}
+			<FooterItemRenderer {item} />
 		{/each}
 
 		{#if hasMessages}
@@ -226,19 +215,7 @@
 	<div class="gap-4 ml-auto flex items-center">
 		<!-- Custom right items from context -->
 		{#each rightItems as item (item.id)}
-			{@const Component = item.component}
-			{#if item.onClick}
-				<button
-					onclick={item.onClick}
-					class="flex items-center gap-1.5 px-2 py-0.5 rounded transition-colors hover:bg-muted cursor-pointer"
-				>
-					<Component {...item.getProps()} />
-				</button>
-			{:else}
-				<div class="flex items-center">
-					<Component {...item.getProps()} />
-				</div>
-			{/if}
+			<FooterItemRenderer {item} />
 		{/each}
 
 		<p>by Selva &copy; {_currentYear}</p>
