@@ -2,17 +2,15 @@
 	import { Card } from '@selva/shared';
 	import { Circle } from '@lucide/svelte';
 	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
-	import { onMount, onDestroy } from 'svelte';
 
 	const computeHealth = useComputeHealth();
-	onMount(() => computeHealth.startPeriodicCheck(30000));
-	onDestroy(() => computeHealth.stopPeriodicCheck());
 
 	const statusConfig = {
 		ok: { label: 'Online', color: 'text-green-600 dark:text-green-400' },
 		warning: { label: 'Warning', color: 'text-yellow-600 dark:text-yellow-400' },
 		error: { label: 'Offline', color: 'text-red-600 dark:text-red-400' },
-		checking: { label: 'Checking', color: 'text-blue-600 dark:text-blue-400' }
+		checking: { label: 'Checking', color: 'text-blue-600 dark:text-blue-400' },
+		starting: { label: 'Starting', color: 'text-yellow-600 dark:text-yellow-400' }
 	};
 
 	const sc = $derived(statusConfig[computeHealth.health.state]);

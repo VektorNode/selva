@@ -2,17 +2,15 @@
 	import { ModeWatcher } from 'mode-watcher';
 	import '../app.css';
 	import { initializeFooterContext } from '@selva/shared';
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
 
 	let { children } = $props();
 
 	initializeFooterContext();
 
-	// Initialize health check once for entire app (persists across page navigations)
 	const computeHealth = useComputeHealth();
-	onMount(() => computeHealth.startPeriodicCheck(10000));
-	onDestroy(() => computeHealth.stopPeriodicCheck());
+	onMount(() => computeHealth.start());
 </script>
 
 <svelte:head>

@@ -94,6 +94,7 @@
 			if (signal.aborted) return;
 
 			if (!res.ok) {
+				if (res.status === 503) computeHealth.notifyFailure();
 				const d = await res.json();
 				throw new Error(d.message || 'Compute error');
 			}
