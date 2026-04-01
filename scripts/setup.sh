@@ -447,9 +447,15 @@ EOF
   # Set up auto-restart on reboot
   print_step "Setting up auto-restart on reboot..."
   if command_exists sudo; then
-    sudo pm2 startup systemd -u $USER --hp $HOME
-    sudo pm2 save
-    print_success "Auto-restart configured"
+    # pm2 startup prints the exact command to run with sudo — capture both stdout and stderr
+    STARTUP_CMD=$(pm2 startup systemd -u $USER --hp $HOME 2>&1 | grep "sudo env")
+    if [ -n "$STARTUP_CMD" ]; then
+      eval "$STARTUP_CMD"
+      pm2 save
+      print_success "Auto-restart configured"
+    else
+      print_warning "Could not parse PM2 startup command — run 'pm2 startup' manually and execute the printed command"
+    fi
   else
     print_warning "Could not configure auto-restart (requires sudo)"
   fi
