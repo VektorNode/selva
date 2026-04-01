@@ -14,5 +14,3 @@ keywords:
   - three-js
 
 icon: icon.png
-targetframeworks:
-  - "net7.0"
