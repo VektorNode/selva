@@ -68,3 +68,10 @@ Plugin/Selva.GH/obj/
 definitions-config.json
 !packages/compute-app/example-definitions/definitions-config.json
 !packages/compute-app/definitions-config.example.json
+
+# Terraform
+infra/terraform.tfvars
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.backup
+infra/.terraform.lock.hcl

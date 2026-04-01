@@ -1,7 +1,9 @@
 using System;
+#if !NETCOREAPP
 using System.Drawing;
-using Grasshopper.Kernel;
 using Selva.GH.Properties;
+#endif
+using Grasshopper.Kernel;
 
 namespace Selva.GH;
 
@@ -9,8 +11,7 @@ public class SelvaInfo : GH_AssemblyInfo
 {
     public override string Name => "Selva";
 
-    //Return a 24x24 pixel bitmap to represent this GHA library.
-    public override Bitmap Icon => Resources.Icon;
+    public override System.Drawing.Bitmap Icon => null;
 
     //Return a short string describing the purpose of this GHA library.
     public override string Description => "";
