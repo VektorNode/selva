@@ -61,6 +61,55 @@ public static class ParameterTypeHelper
     }
 
     /// <summary>
+    ///     Returns true if the component is a ContextBakeComponent whose inputs are sourced
+    ///     from a component that outputs PlotlyFigure goo (detected by TypeName convention).
+    ///     Uses duck-typing so Selva.GH has no hard dependency on external chart assemblies.
+    /// </summary>
+    public static bool IsChartOutputBakeComponent(GH_Component component)
+    {
+        if (component == null || !IsContextBakeComponent(component)) return false;
+        if (component.Params.Input == null) return false;
+        foreach (var inputParam in component.Params.Input)
+            if (IsSourcedFromChartOutput(inputParam))
+                return true;
+        return false;
+    }
+
+    /// <summary>
+    ///     Returns true if any source wired into <paramref name="inputParam" /> carries PlotlyFigure goo,
+    ///     detected by checking the goo TypeName from the upstream output param's volatile data,
+    ///     or from the ContextBake input param's own volatile data as a fallback.
+    /// </summary>
+    public static bool IsSourcedFromChartOutput(IGH_Param inputParam)
+    {
+        if (inputParam == null) return false;
+
+        // Check the ContextBake input param's own volatile data (populated after solve)
+        if (inputParam.VolatileData != null && !inputParam.VolatileData.IsEmpty)
+            foreach (var goo in inputParam.VolatileData.AllData(true))
+                if (goo != null && string.Equals(goo.TypeName, "Plotly Figure", StringComparison.Ordinal))
+                    return true;
+
+        // Check upstream source params' volatile data and TypeName
+        foreach (var source in inputParam.Sources)
+        {
+            if (source == null) continue;
+
+            // TypeName on the param itself (works for strongly-typed params)
+            if (string.Equals(source.TypeName, "Plotly Figure", StringComparison.Ordinal))
+                return true;
+
+            // Volatile data on the upstream output param
+            if (source.VolatileData != null && !source.VolatileData.IsEmpty)
+                foreach (var goo in source.VolatileData.AllData(true))
+                    if (goo != null && string.Equals(goo.TypeName, "Plotly Figure", StringComparison.Ordinal))
+                        return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     ///     Returns true if the object is a ContextBakeComponent wired to a UIBuilder component
     ///     (i.e. one of its input sources has the given ownerGuid).
     /// </summary>

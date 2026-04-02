@@ -79,7 +79,7 @@ export function useBuilderActions(
 			);
 		} else if (dropType === 'output') {
 			const output = data as DiscoveredOutput;
-			const widgetType = output.type === 'file' ? 'file' : 'text';
+			const widgetType = output.type === 'file' ? 'file' : output.type === 'chart' ? 'chart' : 'text';
 			handleItemDrop(
 				schema,
 				group,

@@ -66,7 +66,9 @@ public class ValueCollector
 
                 if (paramObject is IGH_Component ghComponent)
                 {
-                    var value = ExtractComponentOutput(ghComponent);
+                    var value = output.Type == "chart"
+                        ? ExtractChartOutput(ghComponent)
+                        : ExtractComponentOutput(ghComponent);
                     if (value != null) outputValues[output.Id.ToString()] = value;
                 }
             }
@@ -260,6 +262,31 @@ public class ValueCollector
         var inputParam = component.Params.Input.FirstOrDefault();
         if (inputParam?.VolatileData != null && !inputParam.VolatileData.IsEmpty)
             return ExtractDataFromVolatileData(inputParam.VolatileData);
+
+        return null;
+    }
+
+    /// <summary>
+    ///     Extract a PlotlyFigure JSON string from the first input of a ContextBake component.
+    ///     Uses duck-typing (TypeName + CastTo string) to avoid a hard dependency on the chart assembly.
+    /// </summary>
+    private static object ExtractChartOutput(IGH_Component component)
+    {
+        var inputParam = component.Params.Input.FirstOrDefault();
+        if (inputParam?.VolatileData == null || inputParam.VolatileData.IsEmpty) return null;
+
+        foreach (var goo in inputParam.VolatileData.AllData(true))
+        {
+            if (goo == null) continue;
+
+            // Custom goo from external assemblies arrives wrapped in GH_ObjectWrapper on generic inputs
+            var inner = goo is GH_ObjectWrapper wrapper ? wrapper.Value as IGH_Goo ?? goo : goo;
+
+            if (!string.Equals(inner.TypeName, "Plotly Figure", StringComparison.Ordinal)) continue;
+            var json = inner.GetType().GetMethod("ToJson")?.Invoke(inner, null) as string;
+            if (!string.IsNullOrEmpty(json))
+                return json;
+        }
 
         return null;
     }

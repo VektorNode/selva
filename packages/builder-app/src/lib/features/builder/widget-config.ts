@@ -150,6 +150,9 @@ export function createDefaultWidgetConfig(
 			case 'file':
 				return {};
 
+			case 'chart':
+				return { transparentBackground: true };
+
 			case 'dropdown':
 			case 'checkbox':
 			case 'color':
