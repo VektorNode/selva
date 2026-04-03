@@ -261,7 +261,7 @@
 	{:else if item.widgetType === 'file'}
 		{@render fileDisplay()}
 	{:else if item.widgetType === 'number'}
-		<div class="{boxClass} bg-muted/50 wrap-break-word flex items-center">
+		<div class="{boxClass} flex items-center bg-muted/50 wrap-break-word">
 			{#if hasValue}
 				<span class="font-bold text-primary">{formattedValue}</span>
 			{:else}
