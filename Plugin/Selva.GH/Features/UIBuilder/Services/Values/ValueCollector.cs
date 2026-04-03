@@ -269,6 +269,7 @@ public class ValueCollector
     /// <summary>
     ///     Extract a PlotlyFigure JSON string from the first input of a ContextBake component.
     ///     Uses duck-typing (TypeName + CastTo string) to avoid a hard dependency on the chart assembly.
+    ///     https://github.com/TheVessen/selva-canopy/blob/main/src/PlotlyFigure.cs
     /// </summary>
     private static object ExtractChartOutput(IGH_Component component)
     {

@@ -367,6 +367,19 @@
 					},
 					"description": "Chart types the user can switch between. Defaults to all if omitted."
 				},
+				"allowedModes": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"enum": ["markers", "lines", "lines+markers"]
+					},
+					"description": "Scatter/line modes available for switching when the active chart type is scatter. If omitted, all modes are available."
+				},
+				"defaultMode": {
+					"type": "string",
+					"enum": ["markers", "lines", "lines+markers"],
+					"description": "Default scatter mode override. If omitted, the mode from the incoming trace data is used."
+				},
 				"transparentBackground": {
 					"type": "boolean",
 					"default": true,

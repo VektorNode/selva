@@ -9,7 +9,10 @@
 		Globe,
 		Loader,
 		Maximize,
-		Minimize
+		Minimize,
+		Dot,
+		TrendingUp,
+		Activity
 	} from '@lucide/svelte';
 	import { Label } from '$lib/components/ui/label';
 	import type { Component } from 'svelte';
@@ -27,13 +30,22 @@
 	const MAP_TYPES = ['scattermap', 'scattermapbox', 'choropleth', 'scattergeo'] as const;
 	type ChartType = (typeof CHART_TYPES)[number];
 	type SwitchableType = ChartType | 'map';
+	type ScatterMode = 'markers' | 'lines' | 'lines+markers';
+
+	const ALL_SCATTER_MODES: ScatterMode[] = ['markers', 'lines', 'lines+markers'];
 
 	const TYPE_META: Record<SwitchableType, { label: string; icon: Component }> = {
-		scatter: { label: 'Line', icon: ChartLine },
+		scatter: { label: 'Scatter', icon: ChartLine },
 		bar: { label: 'Bar', icon: ChartColumn },
 		pie: { label: 'Pie', icon: ChartPie },
 		histogram: { label: 'Histogram', icon: ChartBar },
 		map: { label: 'Map', icon: Globe }
+	};
+
+	const MODE_META: Record<ScatterMode, { label: string; icon: Component }> = {
+		markers: { label: 'Scatter', icon: Dot },
+		lines: { label: 'Line', icon: TrendingUp },
+		'lines+markers': { label: 'Line+Points', icon: Activity }
 	};
 
 	const XY_TYPES = new Set(['scatter', 'bar', 'pie', 'histogram', 'scattergl']);
@@ -41,6 +53,10 @@
 
 	const allowedTypes = $derived(
 		(item.config?.allowedTypes as ChartType[] | undefined) ?? [...CHART_TYPES]
+	);
+
+	const allowedModes = $derived<ScatterMode[]>(
+		(item.config?.allowedModes as ScatterMode[] | undefined) ?? ALL_SCATTER_MODES
 	);
 
 	// ── Figure parsing ──────────────────────────────────────────────────
@@ -63,7 +79,16 @@
 	const allTracesXY = $derived(
 		figData?.data?.every((t) => XY_TYPES.has(t.type as string)) ?? false
 	);
-	const showSwitcher = $derived(allowedTypes.length > 1 && allTracesXY && !isMapFigure);
+	// Whether the active type supports scatter modes (markers/lines)
+	const showTypeSwitcher = $derived(allowedTypes.length > 1 && allTracesXY && !isMapFigure);
+
+	// Detect the mode from the first trace's data for smart defaulting
+	const figDataMode = $derived.by<ScatterMode>(() => {
+		const m = figData?.data?.[0]?.mode as string | undefined;
+		if (m === 'lines' || m === 'lines+markers' || m === 'markers') return m;
+		// If no mode set but it's a scatter, infer from markers presence
+		return 'markers';
+	});
 
 	const figTitle = $derived.by(() => {
 		if (!figData) return null;
@@ -79,6 +104,7 @@
 	let containerEl = $state<HTMLDivElement | null>(null);
 	let wrapperEl = $state<HTMLDivElement | null>(null);
 	let activeType = $state<SwitchableType>('scatter');
+	let activeMode = $state<ScatterMode>('markers');
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	let isFullscreen = $state(false);
@@ -147,7 +173,7 @@
 
 	// ── Render ──────────────────────────────────────────────────────────
 
-	async function renderChart(type: SwitchableType) {
+	async function renderChart(type: SwitchableType, mode: ScatterMode = activeMode) {
 		if (!containerEl || !figData) return;
 		error = null;
 		loading = true;
@@ -192,7 +218,12 @@
 					}));
 				}
 			} else {
-				traces = figData.data.map((t) => ({ ...t, type }));
+				// For scatter, apply the active mode override
+				traces = figData.data.map((t) => ({
+					...t,
+					type,
+					...(type === 'scatter' ? { mode } : {})
+				}));
 			}
 
 			const transparent = item.config?.transparentBackground !== false;
@@ -258,7 +289,12 @@
 
 	function switchType(type: SwitchableType) {
 		activeType = type;
-		renderChart(type);
+		renderChart(type, activeMode);
+	}
+
+	function switchMode(mode: ScatterMode) {
+		activeMode = mode;
+		renderChart(activeType, mode);
 	}
 
 	// ── Lifecycle ───────────────────────────────────────────────────────
@@ -274,6 +310,16 @@
 			} else if (allowedTypes.length > 0) {
 				activeType = allowedTypes[0];
 			}
+		}
+
+		// Determine initial mode: config override → data mode → first allowed mode
+		const configDefault = item.config?.defaultMode as ScatterMode | undefined;
+		if (configDefault && allowedModes.includes(configDefault)) {
+			activeMode = configDefault;
+		} else if (allowedModes.includes(figDataMode)) {
+			activeMode = figDataMode;
+		} else if (allowedModes.length > 0) {
+			activeMode = allowedModes[0];
 		}
 
 		mounted = true;
@@ -306,7 +352,7 @@
 		// Track `value` to trigger reactivity
 		if (!value || !mounted || !containerEl) return;
 		clearTimeout(renderTimeout);
-		renderTimeout = setTimeout(() => renderChart(activeType), 150);
+		renderTimeout = setTimeout(() => renderChart(activeType, activeMode), 150);
 		return () => clearTimeout(renderTimeout);
 	});
 </script>
@@ -336,7 +382,7 @@
 		</button>
 
 		<div class="gap-1 ml-auto flex items-center">
-			{#if showSwitcher}
+			{#if showTypeSwitcher}
 				<div class="gap-0.5 flex items-center">
 					{#each allowedTypes as type (type)}
 						{@const meta = TYPE_META[type]}
@@ -345,6 +391,26 @@
 							title={meta.label}
 							class="gap-1 rounded px-2 py-1 text-xs font-medium flex items-center transition-colors
 								{activeType === type
+								? 'shadow-sm bg-background text-foreground'
+								: 'text-muted-foreground hover:bg-background/60 hover:text-foreground'}"
+						>
+							<meta.icon size={12} />
+							{meta.label}
+						</button>
+					{/each}
+				</div>
+			{/if}
+
+			{#if activeType === 'scatter' && allowedModes.length > 1 && allTracesXY && !isMapFigure}
+				<div class="ml-1 h-4 w-px bg-border"></div>
+				<div class="gap-0.5 flex items-center">
+					{#each allowedModes as mode (mode)}
+						{@const meta = MODE_META[mode]}
+						<button
+							onclick={() => switchMode(mode)}
+							title={meta.label}
+							class="gap-1 rounded px-2 py-1 text-xs font-medium flex items-center transition-colors
+								{activeMode === mode
 								? 'shadow-sm bg-background text-foreground'
 								: 'text-muted-foreground hover:bg-background/60 hover:text-foreground'}"
 						>

@@ -241,6 +241,14 @@ export interface ChartWidgetConfig {
    */
   allowedTypes?: ('scatter' | 'bar' | 'pie' | 'histogram')[];
   /**
+   * Scatter/line modes available for switching when the active chart type is scatter. If omitted, all modes are available.
+   */
+  allowedModes?: ('markers' | 'lines' | 'lines+markers')[];
+  /**
+   * Default scatter mode override. If omitted, the mode from the incoming trace data is used.
+   */
+  defaultMode?: 'markers' | 'lines' | 'lines+markers';
+  /**
    * If true, overrides paper_bgcolor and plot_bgcolor with transparent so the chart blends with the panel background.
    */
   transparentBackground?: boolean;

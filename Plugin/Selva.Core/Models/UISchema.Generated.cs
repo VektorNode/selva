@@ -250,6 +250,18 @@ namespace Selva.Core.Models
         public List<string> AllowedTypes { get; set; } = new List<string>();
 
 /// <summary>
+/// Scatter/line modes available for switching when the active chart type is scatter. If omitted, all modes are available.
+/// </summary>
+        [JsonProperty("allowedModes")]
+        public List<string> AllowedModes { get; set; } = new List<string>();
+
+/// <summary>
+/// Default scatter mode override. If omitted, the mode from the incoming trace data is used.
+/// </summary>
+        [JsonProperty("defaultMode")]
+        public string DefaultMode { get; set; }
+
+/// <summary>
 /// If true, overrides paper_bgcolor and plot_bgcolor with transparent so the chart blends with the panel background.
 /// </summary>
         [JsonProperty("transparentBackground", DefaultValueHandling = DefaultValueHandling.Ignore)]
