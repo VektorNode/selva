@@ -254,7 +254,10 @@
 	{/if}
 
 	{#if item.widgetType === 'chart'}
-		<ChartOutput {item} value={String(value ?? '')} />
+		<ChartOutput
+			{item}
+			value={typeof value === 'string' ? value : value != null ? JSON.stringify(value) : ''}
+		/>
 	{:else if item.widgetType === 'file'}
 		{@render fileDisplay()}
 	{:else if item.widgetType === 'number'}

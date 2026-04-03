@@ -44,6 +44,13 @@
 			"originalFilename": "point_attractor.gh",
 			"history": [],
 			"description": "Configure your Grasshopper UI"
+		},
+		"526280bd-e14f-47ff-a488-0096e7eca309": {
+			"displayName": "Canope Test",
+			"file": "definition.gh",
+			"originalFilename": "canope_test.gh",
+			"history": [],
+			"description": "Configure your Grasshopper UI"
 		}
 	}
 }
