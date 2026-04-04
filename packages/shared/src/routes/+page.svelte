@@ -9,10 +9,10 @@
 	import PageContainer from '$lib/components/layout/PageContainer.svelte';
 	import { cubeMesh, dummyOutputValues } from '$lib/dummy-output-values';
 
-	let schema = exampleSchema as UISchema;
+	// Switch between left-only, right-only and full schema
+	let schema = $state(exampleSchemaRightOnly as UISchema);
 	const _schemaLeft = exampleSchemaLeftOnly as UISchema;
-	const _schemaRight = exampleSchemaRightOnly as UISchema;
-	schema = _schemaRight; // Switch between left-only, right-only and full schema
+	const _schemaFull = exampleSchema as UISchema;
 
 	const dummyErrors = [
 		'Error: Something went wrong with the calculation. Please check your input values and try again.',
