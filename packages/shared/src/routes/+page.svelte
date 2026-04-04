@@ -12,7 +12,7 @@
 	let schema = exampleSchema as UISchema;
 	const _schemaLeft = exampleSchemaLeftOnly as UISchema;
 	const _schemaRight = exampleSchemaRightOnly as UISchema;
-	// schema = _schemaRight; // Switch between left-only, right-only and full schema
+	schema = _schemaRight; // Switch between left-only, right-only and full schema
 
 	const dummyErrors = [
 		'Error: Something went wrong with the calculation. Please check your input values and try again.',

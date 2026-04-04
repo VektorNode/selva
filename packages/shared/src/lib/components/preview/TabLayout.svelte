@@ -172,7 +172,7 @@
 		{#each visibleTabs as tab (tab.id)}
 			<Tabs.Content value={tab.id} class="min-h-0 p-0 flex-1">
 				<ScrollArea class="h-full" orientation="vertical">
-					<div class="p-4">
+					<div class="p-4 tab-content-container">
 					{#if tab.groups.length === 0}
 						<StateDisplay type="empty" size="medium" message="This tab has no groups configured." />
 					{:else}
@@ -247,14 +247,33 @@
 		min-height: 0;
 	}
 
-	@media (max-width: 639px) {
+	/* Container queries: adapt grid columns to actual panel width, not viewport width */
+	.tab-content-container {
+		container-type: inline-size;
+	}
+
+	@container (max-width: 320px) {
 		.schema-grid {
 			grid-template-columns: 1fr;
 		}
 	}
-	@media (min-width: 640px) and (max-width: 1023px) {
+	@container (min-width: 321px) and (max-width: 560px) {
 		.schema-grid {
 			grid-template-columns: repeat(min(2, var(--schema-cols)), minmax(0, 1fr));
+		}
+	}
+
+	/* Fallback for browsers without container query support */
+	@supports not (container-type: inline-size) {
+		@media (max-width: 639px) {
+			.schema-grid {
+				grid-template-columns: 1fr;
+			}
+		}
+		@media (min-width: 640px) and (max-width: 1023px) {
+			.schema-grid {
+				grid-template-columns: repeat(min(2, var(--schema-cols)), minmax(0, 1fr));
+			}
 		}
 	}
 </style>

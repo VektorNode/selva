@@ -237,10 +237,10 @@
 	{:else}
 		<!-- ═══ DESKTOP LAYOUT ═════════════════════════════════════════════════════ -->
 
-		{#if !hasViewer && !isTwoPanelMode && (hasLeftPanel !== hasRightPanel)}
+		{#if !hasViewer && !isTwoPanelMode && hasLeftPanel !== hasRightPanel}
 			<!-- Single centered panel (left-only or right-only), no viewer -->
 			<div class="min-h-0 flex h-full flex-1 justify-center">
-				<div class="min-h-0 flex h-full flex-col w-1/2">
+				<div class="min-h-0 flex h-full w-4/5 flex-col">
 					{@render panelContent(
 						hasRightPanel ? 'right' : undefined,
 						hasRightPanel ? requestedRightTabId : requestedLeftTabId,
@@ -250,7 +250,7 @@
 				</div>
 			</div>
 		{:else}
-			<div class="min-h-0 flex flex-1">
+			<div class="min-h-0 flex h-full flex-1">
 				<!-- Left collapsed strip (outside PaneGroup so it has fixed width) -->
 				{#if leftCollapsed && hasSidebar && hasLeftPanel}
 					<CollapsedPanelStrip

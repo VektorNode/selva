@@ -5,8 +5,7 @@
 		DiscoveredInput,
 		NumberWidgetConfig,
 		FileInputWidgetConfig,
-		TextWidgetConfig,
-		ChartWidgetConfig
+		TextWidgetConfig
 	} from '@selva/shared';
 	import { Badge, Button, Card, Switch } from '@selva/shared';
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
@@ -38,14 +37,12 @@
 	let isNumberInput = $derived(item.type === 'input' && item.widgetType === 'number');
 	let isFileInput = $derived(item.type === 'input' && item.widgetType === 'file');
 	let isTextInput = $derived(item.type === 'input' && item.widgetType === 'text');
-	let isChartOutput = $derived(item.type === 'output' && item.widgetType === 'chart');
 	let fileInputConfig = $derived(isFileInput ? (item.config as FileInputWidgetConfig) : null);
-	let chartConfig = $derived(isChartOutput ? ((item.config ?? {}) as ChartWidgetConfig) : null);
 	let showAdvanced = $state(false);
 	let showVisibilityRules = $state(false);
 	let hasVisibilityRules = $derived((item.visibilityCondition?.rules?.length ?? 0) > 0);
 	// Advanced section only for widget-specific options
-	let hasAdvancedOptions = $derived(isNumberInput || isFileInput || isTextInput || isChartOutput);
+	let hasAdvancedOptions = $derived(isNumberInput || isFileInput || isTextInput);
 
 	let isDragging = $state(false);
 	let isDragOver = $state(false);
@@ -106,40 +103,6 @@
 		// Ensure at least one format is selected
 		if (config.acceptedFormats.length === 0) {
 			config.acceptedFormats = [format];
-		}
-	}
-
-	function toggleAllowedType(chartType: 'scatter' | 'bar' | 'pie' | 'histogram') {
-		if (!isChartOutput) return;
-		if (!item.config) (item as { config: ChartWidgetConfig }).config = {};
-		const config = item.config as ChartWidgetConfig;
-		const all: ('scatter' | 'bar' | 'pie' | 'histogram')[] = ['scatter', 'bar', 'pie', 'histogram'];
-		if (!config.allowedTypes) config.allowedTypes = [...all];
-		const idx = config.allowedTypes.indexOf(chartType);
-		if (idx > -1) {
-			if (config.allowedTypes.length <= 1) return;
-			config.allowedTypes.splice(idx, 1);
-		} else {
-			config.allowedTypes.push(chartType);
-		}
-	}
-
-	function toggleAllowedScatterMode(mode: 'markers' | 'lines' | 'lines+markers') {
-		if (!isChartOutput) return;
-		if (!item.config) (item as { config: ChartWidgetConfig }).config = {};
-		const config = item.config as ChartWidgetConfig;
-		const allModes: ('markers' | 'lines' | 'lines+markers')[] = [
-			'markers',
-			'lines',
-			'lines+markers'
-		];
-		if (!config.allowedModes) config.allowedModes = [...allModes];
-		const idx = config.allowedModes.indexOf(mode);
-		if (idx > -1) {
-			if (config.allowedModes.length <= 1) return;
-			config.allowedModes.splice(idx, 1);
-		} else {
-			config.allowedModes.push(mode);
 		}
 	}
 
@@ -483,94 +446,6 @@
 								</div>
 							{/if}
 
-							{#if isChartOutput && chartConfig}
-								{@const allChartTypes = ['scatter', 'bar', 'pie', 'histogram'] as const}
-								{@const allScatterModes = ['markers', 'lines', 'lines+markers'] as const}
-								{@const effectiveTypes = chartConfig.allowedTypes ?? [...allChartTypes]}
-								{@const effectiveModes = chartConfig.allowedModes ?? [...allScatterModes]}
-								<div class="flex flex-col gap-2">
-									<!-- Allowed Chart Types -->
-									<div class="flex flex-col gap-1">
-										<span class="text-muted-foreground text-[10px] font-medium"
-											>Allowed Chart Types</span
-										>
-										<div class="grid grid-cols-2 gap-1">
-											{#each allChartTypes as t (t)}
-												{@const isOn = effectiveTypes.includes(t)}
-												<button
-													onclick={() => toggleAllowedType(t)}
-													class={`rounded border px-2 py-1 text-[10px] capitalize transition-colors ${
-														isOn
-															? 'bg-primary text-primary-foreground border-primary'
-															: 'border-border/70 hover:border-border hover:bg-accent'
-													}`}
-												>
-													{t}
-												</button>
-											{/each}
-										</div>
-									</div>
-
-									<!-- Scatter Modes (only relevant when scatter is allowed) -->
-									{#if effectiveTypes.includes('scatter')}
-										<div class="flex flex-col gap-1">
-											<span class="text-muted-foreground text-[10px] font-medium"
-												>Scatter Modes</span
-											>
-											<div class="flex flex-col gap-1">
-												{#each allScatterModes as mode (mode)}
-													{@const isOn = effectiveModes.includes(mode)}
-													<button
-														onclick={() => toggleAllowedScatterMode(mode)}
-														class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-															isOn
-																? 'bg-primary text-primary-foreground border-primary'
-																: 'border-border/70 hover:border-border hover:bg-accent'
-														}`}
-													>
-														{mode === 'markers'
-															? 'Scatter (markers)'
-															: mode === 'lines'
-																? 'Line'
-																: 'Line + Points'}
-													</button>
-												{/each}
-											</div>
-											<span class="text-muted-foreground text-[9px]"
-												>At least one must be enabled</span
-											>
-										</div>
-
-										<!-- Default Mode -->
-										<div class="flex flex-col gap-1">
-											<span class="text-muted-foreground text-[10px] font-medium">Default Mode</span
-											>
-											<div class="flex flex-col gap-1">
-												{#each effectiveModes as mode (mode)}
-													<button
-														onclick={() => {
-															if (!item.config) (item as { config: ChartWidgetConfig }).config = {};
-															const cfg = item.config as ChartWidgetConfig;
-															cfg.defaultMode = mode;
-														}}
-														class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-															(chartConfig.defaultMode ?? 'markers') === mode
-																? 'bg-primary text-primary-foreground border-primary'
-																: 'border-border/70 hover:border-border hover:bg-accent'
-														}`}
-													>
-														{mode === 'markers'
-															? 'Scatter (markers)'
-															: mode === 'lines'
-																? 'Line'
-																: 'Line + Points'}
-													</button>
-												{/each}
-											</div>
-										</div>
-									{/if}
-								</div>
-							{/if}
 						{/if}
 					</div>
 				{/if}

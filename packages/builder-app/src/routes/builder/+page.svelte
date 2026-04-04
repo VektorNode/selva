@@ -265,7 +265,7 @@
 					<StateDisplay type="loading" size="large" message="Loading schema..." />
 				</div>
 			{:else if builderState?.state.schema}
-				<div class="mx-auto grid h-full max-w-500 grid-cols-1 gap-6 p-6 xl:grid-cols-[400px_1fr]">
+				<div class="mx-auto grid h-full max-w-500 grid-cols-1 gap-6 p-6 lg:grid-cols-[360px_1fr]">
 					{#if builderState.state.error}
 						<div class="col-span-2">
 							<StateDisplay type="warning" size="medium" message={builderState.state.error} />
