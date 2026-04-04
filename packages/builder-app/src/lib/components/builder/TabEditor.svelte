@@ -19,6 +19,7 @@
 		onRemoveItem: (tabId: string, groupId: string, itemId: string) => void;
 		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
+		outputValues?: Record<string, unknown>;
 	}
 
 	let {
@@ -35,7 +36,8 @@
 		onReorder,
 		onRemoveItem,
 		availableInputs,
-		getParameterInfo
+		getParameterInfo,
+		outputValues = {}
 	}: Props = $props();
 
 	const activeTab = $derived(tabs.find((t) => t.id === activeTabId));
@@ -206,6 +208,7 @@
 														columns={group.columns}
 														{availableInputs}
 														{getParameterInfo}
+														currentValue={outputValues[item.paramId]}
 														onRemove={() => onRemoveItem(activeTab.id, group.id, item.id)}
 													/>
 												</div>

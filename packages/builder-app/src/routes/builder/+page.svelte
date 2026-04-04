@@ -314,6 +314,7 @@
 								onRemoveItem={actions.onRemoveItem}
 								availableInputs={allAvailableInputs}
 								{getParameterInfo}
+								outputValues={builderState.state.outputValues}
 							/>
 						{/if}
 
