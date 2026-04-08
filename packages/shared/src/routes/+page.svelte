@@ -10,7 +10,7 @@
 	import { cubeMesh, dummyOutputValues } from '$lib/dummy-output-values';
 
 	// Switch between left-only, right-only and full schema
-	let schema = $state(exampleSchemaRightOnly as UISchema);
+	let schema = $state(exampleSchema as UISchema);
 	const _schemaLeft = exampleSchemaLeftOnly as UISchema;
 	const _schemaFull = exampleSchema as UISchema;
 

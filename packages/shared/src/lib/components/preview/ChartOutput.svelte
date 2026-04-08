@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import { Loader, Maximize, Minimize } from '@lucide/svelte';
 	import { Label } from '$lib/components/ui/label';
+	import { loadScript } from '$lib/utils/loadScript';
 
 	interface Props {
 		item: OutputChartLayoutItem;
@@ -49,28 +50,15 @@
 	let isFullscreen = $state(false);
 	let mounted = false;
 
-	// ── Plotly loader (deduplicated) ────────────────────────────────────
-
-	let plotlyPromise: Promise<any> | null = null;
+	// ── Plotly loader ──────────────────────────────────────────────────
 
 	async function loadPlotly(): Promise<any> {
 		// @ts-expect-error — Plotly is loaded dynamically onto window
 		if (window.Plotly) return window.Plotly;
-		if (!plotlyPromise) {
-			plotlyPromise = new Promise<void>((resolve, reject) => {
-				const script = document.createElement('script');
-				script.src = 'https://cdn.plot.ly/plotly-3.4.0.min.js';
-				script.crossOrigin = 'anonymous';
-				script.onload = () => resolve();
-				script.onerror = () => {
-					plotlyPromise = null;
-					reject(new Error('Failed to load Plotly'));
-				};
-				document.head.appendChild(script);
-				// @ts-expect-error — Plotly is loaded dynamically onto window
-			}).then(() => window.Plotly);
-		}
-		return plotlyPromise;
+
+		await loadScript('https://cdn.plot.ly/plotly-3.4.0.min.js', { crossOrigin: 'anonymous' });
+		// @ts-expect-error — Plotly is loaded dynamically onto window
+		return window.Plotly;
 	}
 
 	// ── Fullscreen ──────────────────────────────────────────────────────
@@ -78,19 +66,27 @@
 	function toggleFullscreen() {
 		if (!wrapperEl) return;
 		if (!document.fullscreenElement) {
-			wrapperEl.requestFullscreen();
+			wrapperEl.requestFullscreen().catch((err) => {
+				error = `Fullscreen unavailable: ${err.message}`;
+			});
 		} else {
-			document.exitFullscreen();
+			document.exitFullscreen().catch((err) => {
+				error = `Exit fullscreen failed: ${err.message}`;
+			});
 		}
 	}
 
 	$effect(() => {
 		function onFullscreenChange() {
 			isFullscreen = !!document.fullscreenElement;
-			setTimeout(() => {
+			// Resize immediately after state updates, then once more to catch layout
+			Promise.resolve().then(() => {
 				// @ts-expect-error — Plotly is loaded dynamically onto window
-				if (containerEl && window.Plotly) window.Plotly.Plots.resize(containerEl);
-			}, 100);
+				if (containerEl && window.Plotly) {
+					// @ts-expect-error — Plotly is loaded dynamically onto window
+					window.Plotly.Plots.resize(containerEl);
+				}
+			});
 		}
 		document.addEventListener('fullscreenchange', onFullscreenChange);
 		return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
@@ -168,19 +164,24 @@
 	onMount(() => {
 		mounted = true;
 
-		let resizeTimer: ReturnType<typeof setTimeout>;
+		let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 		const ro = new ResizeObserver(() => {
-			clearTimeout(resizeTimer);
+			if (resizeTimer) clearTimeout(resizeTimer);
 			resizeTimer = setTimeout(() => {
 				// @ts-expect-error — Plotly is loaded dynamically onto window
-				if (containerEl && window.Plotly) window.Plotly.Plots.resize(containerEl);
+				if (containerEl && window.Plotly) {
+					// @ts-expect-error — Plotly is loaded dynamically onto window
+					window.Plotly.Plots.resize(containerEl);
+				}
+				resizeTimer = null;
 			}, 150);
 		});
-		if (containerEl) ro.observe(containerEl);
+		// Observe the wrapper (parent) so we catch sidebar resizes affecting the container's available space
+		if (wrapperEl) ro.observe(wrapperEl);
 
 		return () => {
 			ro.disconnect();
-			clearTimeout(resizeTimer);
+			if (resizeTimer) clearTimeout(resizeTimer);
 			// @ts-expect-error — Plotly is loaded dynamically onto window
 			if (containerEl && window.Plotly) window.Plotly.purge(containerEl);
 		};
@@ -188,13 +189,18 @@
 
 	// ── Debounced re-render on value change ─────────────────────────────
 
-	let renderTimeout: ReturnType<typeof setTimeout>;
+	let renderTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	$effect(() => {
 		if (!value || !mounted || !containerEl) return;
-		clearTimeout(renderTimeout);
-		renderTimeout = setTimeout(() => renderChart(), 150);
-		return () => clearTimeout(renderTimeout);
+		if (renderTimeout) clearTimeout(renderTimeout);
+		renderTimeout = setTimeout(() => {
+			renderChart();
+			renderTimeout = null;
+		}, 150);
+		return () => {
+			if (renderTimeout) clearTimeout(renderTimeout);
+		};
 	});
 </script>
 
@@ -206,7 +212,10 @@
 >
 	<!-- Header: title + controls -->
 	<div class="gap-2 px-3 py-1.5 relative z-10 flex items-center border-b border-border bg-muted/40">
-		<Label class="text-xs font-medium truncate text-foreground">
+		<Label
+			class="text-xs font-medium truncate text-foreground"
+			title={figTitle ?? item.displayName ?? item.paramId}
+		>
 			{figTitle ?? item.displayName ?? item.paramId}
 		</Label>
 
@@ -219,8 +228,9 @@
 
 			<button
 				onclick={toggleFullscreen}
+				disabled={loading}
 				title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-				class="rounded p-1 flex items-center text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
+				class="rounded p-1 flex items-center text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
 			>
 				{#if isFullscreen}
 					<Minimize size={14} />
