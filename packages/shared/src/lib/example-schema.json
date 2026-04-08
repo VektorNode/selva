@@ -291,6 +291,18 @@
 			"nickname": "Export Geometry",
 			"description": "Exported geometry file",
 			"type": "file"
+		},
+		{
+			"id": "output-007",
+			"nickname": "Plot",
+			"description": "Plotly chart output",
+			"type": "chart"
+		},
+		{
+			"id": "output-008",
+			"nickname": "Contour Plot",
+			"description": "Plotly contour chart output",
+			"type": "chart"
 		}
 	],
 	"layout": {
@@ -1077,6 +1089,26 @@
 									"buttonLabel": "Download",
 									"fileFormat": "3dm"
 								}
+							},
+							{
+								"type": "output",
+								"widgetType": "chart",
+								"id": "item-out-007",
+								"paramId": "output-007",
+								"displayName": "Plot",
+								"order": 6,
+								"span": 1,
+								"visible": true
+							},
+							{
+								"type": "output",
+								"widgetType": "chart",
+								"id": "item-out-008",
+								"paramId": "output-008",
+								"displayName": "Contour Plot",
+								"order": 7,
+								"span": 1,
+								"visible": true
 							},
 							{
 								"type": "output",

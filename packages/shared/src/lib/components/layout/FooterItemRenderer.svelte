@@ -3,7 +3,7 @@
 
 	let { item }: { item: FooterItem } = $props();
 
-	const props = $derived(item.getProps());
+	const itemProps = $derived(item.getProps());
 </script>
 
 {#if item.onClick}
@@ -11,10 +11,10 @@
 		onclick={item.onClick}
 		class="flex items-center gap-1.5 px-2 py-0.5 rounded transition-colors hover:bg-muted cursor-pointer"
 	>
-		<item.component {...props} />
+		<item.component {...itemProps} />
 	</button>
 {:else}
 	<div class="flex items-center">
-		<item.component {...props} />
+		<item.component {...itemProps} />
 	</div>
 {/if}

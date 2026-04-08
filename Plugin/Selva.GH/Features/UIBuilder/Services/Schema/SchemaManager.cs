@@ -98,6 +98,7 @@ public class SchemaManager
 
         CollectPrintOutputs(printComponents, result.Outputs);
         CollectFileOutputs(bakeComponents, result.Outputs);
+        CollectChartOutputs(bakeComponents, result.Outputs);
         CollectInputs(contextParams, result.Inputs);
 
         return result;
@@ -127,7 +128,8 @@ public class SchemaManager
             // Context Print components use GH's contextual mechanism (not wires) so they are always in scope
             if (isPrint ||
                 ParameterTypeHelper.IsWiredToOwner(c, ownerComponent.InstanceGuid) ||
-                ParameterTypeHelper.IsFileOutputBakeComponent(c))
+                ParameterTypeHelper.IsFileOutputBakeComponent(c) ||
+                ParameterTypeHelper.IsChartOutputBakeComponent(c))
                 inScope.Add(c.InstanceGuid);
         }
 
@@ -198,6 +200,23 @@ public class SchemaManager
                 Nickname = c.Params.Input[0].NickName,
                 Description = "",
                 Type = "file"
+            });
+        }
+    }
+
+    private static void CollectChartOutputs(List<GH_Component> bakeComponents, List<DiscoveredOutput> outputs)
+    {
+        foreach (var c in bakeComponents)
+        {
+            if (!ParameterTypeHelper.IsChartOutputBakeComponent(c))
+                continue;
+
+            outputs.Add(new DiscoveredOutput
+            {
+                Id = c.InstanceGuid,
+                Nickname = c.Params.Input[0].NickName,
+                Description = "",
+                Type = "chart"
             });
         }
     }

@@ -94,9 +94,6 @@ async function main() {
   const schemaPath = path.join(__dirname, 'ui-schema.json');
   const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 
-  // Generate normalizer for compute server PascalCase → camelCase
-  const normalizerCode = generateComputeNormalizer(schema);
-
   // Generate constants code
   let constantsCode = '';
   if (schema.constants) {
@@ -127,7 +124,7 @@ export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutIt
   return item.type === 'input';
 }
 
-export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem {
+export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem {
   return item.type === 'output';
 }
 
@@ -157,7 +154,7 @@ export function isColorWidget(item: LayoutItem): item is InputColorLayoutItem {
 
 // Helper type aliases
 export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem | InputColorLayoutItem;
-export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem;
+export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem;
 export type SupportedTypes = string | number | boolean;
 `,
   });

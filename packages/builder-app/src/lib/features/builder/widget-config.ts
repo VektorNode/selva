@@ -7,6 +7,7 @@ import type {
 	CheckboxWidgetConfig,
 	FileInputWidgetConfig,
 	ColorWidgetConfig,
+	ChartWidgetConfig,
 	InputNumberLayoutItem,
 	InputTextLayoutItem,
 	InputDropdownLayoutItem,
@@ -15,7 +16,8 @@ import type {
 	InputColorLayoutItem,
 	OutputTextLayoutItem,
 	OutputNumberLayoutItem,
-	OutputFileLayoutItem
+	OutputFileLayoutItem,
+	OutputChartLayoutItem
 } from '@selva/shared';
 import { ACCEPTED_FILE_FORMATS } from '@selva/shared';
 
@@ -37,7 +39,8 @@ export type InputWidgetType =
 export type OutputWidgetType =
 	| OutputTextLayoutItem['widgetType']
 	| OutputNumberLayoutItem['widgetType']
-	| OutputFileLayoutItem['widgetType'];
+	| OutputFileLayoutItem['widgetType']
+	| OutputChartLayoutItem['widgetType'];
 
 export type WidgetType = InputWidgetType | OutputWidgetType;
 
@@ -49,12 +52,12 @@ export type InputWidgetConfig =
 	| FileInputWidgetConfig
 	| ColorWidgetConfig;
 
-export type OutputWidgetConfig = Record<string, never>;
+export type OutputWidgetConfig = ChartWidgetConfig | Record<string, never>;
 
 export type WidgetConfig = InputWidgetConfig | OutputWidgetConfig;
 
 export function mapParamTypeToWidgetType(
-	paramType: GrasshopperParamType,
+	paramType: GrasshopperParamType | 'chart' | 'file',
 	category: 'input' | 'output'
 ): WidgetType {
 	if (category === 'output') {
@@ -62,6 +65,8 @@ export function mapParamTypeToWidgetType(
 			case 'number':
 			case 'integer':
 				return 'number';
+			case 'chart':
+				return 'chart';
 			default:
 				return 'text';
 		}
@@ -149,6 +154,11 @@ export function createDefaultWidgetConfig(
 			case 'number':
 			case 'file':
 				return {};
+
+			case 'chart': {
+				const config: ChartWidgetConfig = {};
+				return config;
+			}
 
 			case 'dropdown':
 			case 'checkbox':
