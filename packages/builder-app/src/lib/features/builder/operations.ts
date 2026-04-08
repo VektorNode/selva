@@ -70,44 +70,42 @@ export function createLayoutItem(
 
 	// Get description from discovered parameters
 	const description =
-		itemType === 'input'
-			? fullParam?.description ?? ''
-			: fullOutput?.description ?? '';
+		itemType === 'input' ? (fullParam?.description ?? '') : (fullOutput?.description ?? '');
 
 	const config =
 		itemType === 'input' && paramType
 			? createDefaultWidgetConfig(
-				resolvedWidgetType as any,
-				fullParam || ({ type: paramType } as any),
-				'input'
-			)
+					resolvedWidgetType as any,
+					fullParam || ({ type: paramType } as any),
+					'input'
+				)
 			: itemType === 'output' && paramType
 				? createDefaultWidgetConfig(resolvedWidgetType as any, { type: paramType } as any, 'output')
 				: {};
 
 	return itemType === 'input'
 		? ({
-			id: crypto.randomUUID().substring(0, 8),
-			paramId,
-			type: 'input',
-			displayName,
-			description,
-			widgetType: resolvedWidgetType as any,
-			order: itemCount,
-			span: 1,
-			config
-		} as InputLayoutItem)
+				id: crypto.randomUUID().substring(0, 8),
+				paramId,
+				type: 'input',
+				displayName,
+				description,
+				widgetType: resolvedWidgetType as any,
+				order: itemCount,
+				span: 1,
+				config
+			} as InputLayoutItem)
 		: ({
-			id: crypto.randomUUID().substring(0, 8),
-			paramId,
-			type: 'output',
-			displayName,
-			description,
-			widgetType: resolvedWidgetType as any,
-			order: itemCount,
-			span: 1,
-			config: itemType === 'output' && resolvedWidgetType === 'file' ? {} : config
-		} as OutputLayoutItem);
+				id: crypto.randomUUID().substring(0, 8),
+				paramId,
+				type: 'output',
+				displayName,
+				description,
+				widgetType: resolvedWidgetType as any,
+				order: itemCount,
+				span: 1,
+				config: itemType === 'output' && resolvedWidgetType === 'file' ? {} : config
+			} as OutputLayoutItem);
 }
 
 export function insertLayoutItem(
@@ -148,7 +146,7 @@ export function handleItemDrop(
 	widgetType?: string,
 	targetItem?: LayoutItem,
 	dropPosition?: 'before' | 'after',
-	outputType?: 'text' | 'number' | 'file'
+	outputType?: 'text' | 'number' | 'file' | 'chart'
 ) {
 	if (group.items.some((i) => i.paramId === paramId)) {
 		const itemTypeLabel =

@@ -16,6 +16,7 @@ interface BuilderWebSocketState {
 	syncDialogOpen: boolean;
 	syncDiff: SyncDiff | null;
 	syncLoading: boolean;
+	outputValues: Record<string, unknown>;
 }
 
 export function useBuilderState(sessionId: string) {
@@ -34,11 +35,19 @@ export function useBuilderState(sessionId: string) {
 		activeTabId: null,
 		syncDialogOpen: false,
 		syncDiff: null,
-		syncLoading: false
+		syncLoading: false,
+		outputValues: {}
 	});
+
+	function handleOutputs(message: any) {
+		if (message.sessionId !== sessionId) return;
+		if (message.outputs) Object.assign(state.outputValues, message.outputs);
+	}
 
 	function handleInitialData(message: any) {
 		if (message.sessionId !== sessionId) return;
+
+		if (message.outputs) Object.assign(state.outputValues, message.outputs);
 
 		const result = processInitialDataSchema(message);
 
@@ -273,6 +282,7 @@ export function useBuilderState(sessionId: string) {
 	}
 
 	function initialize() {
+		wsState.on('outputs', handleOutputs);
 		wsState.on('initialData', handleInitialData);
 		wsState.on('schemaSaved', handleSchemaSaved);
 		wsState.on('metadataUpdated', handleMetadataUpdated);
@@ -285,6 +295,7 @@ export function useBuilderState(sessionId: string) {
 	}
 
 	function cleanup() {
+		wsState.off('outputs', handleOutputs);
 		wsState.off('initialData', handleInitialData);
 		wsState.off('schemaSaved', handleSchemaSaved);
 		wsState.off('metadataUpdated', handleMetadataUpdated);

@@ -356,6 +356,25 @@
 				}
 			]
 		},
+		"ChartWidgetConfig": {
+			"type": "object",
+			"properties": {},
+			"additionalProperties": false
+		},
+		"OutputChartLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "output" },
+						"widgetType": { "const": "chart" },
+						"config": { "$ref": "#/definitions/ChartWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
 		"LayoutItem": {
 			"oneOf": [
 				{ "$ref": "#/definitions/InputNumberLayoutItem" },
@@ -366,7 +385,8 @@
 				{ "$ref": "#/definitions/InputColorLayoutItem" },
 				{ "$ref": "#/definitions/OutputTextLayoutItem" },
 				{ "$ref": "#/definitions/OutputNumberLayoutItem" },
-				{ "$ref": "#/definitions/OutputFileLayoutItem" }
+				{ "$ref": "#/definitions/OutputFileLayoutItem" },
+				{ "$ref": "#/definitions/OutputChartLayoutItem" }
 			]
 		},
 		"GroupConfig": {
@@ -486,8 +506,8 @@
 				"description": { "type": "string" },
 				"type": {
 					"type": "string",
-					"enum": ["text", "number", "file"],
-					"description": "Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files"
+					"enum": ["text", "number", "file", "chart"],
+					"description": "Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files, 'html' for rendered HTML (e.g. Plotly charts)"
 				}
 			},
 			"required": ["id", "nickname", "type"],
@@ -550,7 +570,7 @@
 				"description": { "type": "string" },
 				"type": {
 					"type": "string",
-					"enum": ["text", "number", "file"],
+					"enum": ["text", "number", "file", "chart"],
 					"description": "Output display type"
 				}
 			},
@@ -618,7 +638,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.3.0",
+					"default": "2.4.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

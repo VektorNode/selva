@@ -21,6 +21,7 @@
 		onRemove: () => void;
 		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
+		currentValue?: unknown;
 	}
 
 	let {
@@ -31,8 +32,21 @@
 		columns = 1,
 		onRemove,
 		availableInputs,
-		getParameterInfo
+		getParameterInfo,
+		currentValue = undefined
 	}: BuilderGroupItemProps = $props();
+
+	// For chart outputs: parse the live Plotly JSON to show the detected chart type
+	const detectedChartType = $derived.by(() => {
+		if (item.type !== 'output' || item.widgetType !== 'chart') return null;
+		if (!currentValue || typeof currentValue !== 'string') return null;
+		try {
+			const fig = JSON.parse(currentValue);
+			return (fig?.data?.[0]?.type as string) ?? null;
+		} catch {
+			return null;
+		}
+	});
 
 	let isNumberInput = $derived(item.type === 'input' && item.widgetType === 'number');
 	let isFileInput = $derived(item.type === 'input' && item.widgetType === 'file');
@@ -290,6 +304,11 @@
 						<Badge variant="default" class="rounded-xs px-1 py-0 text-[9px]">
 							{item.widgetType}
 						</Badge>
+						{#if detectedChartType}
+							<Badge variant="outline" class="rounded-xs px-1 py-0 text-[9px] capitalize">
+								{detectedChartType}
+							</Badge>
+						{/if}
 					</div>
 				{/if}
 
@@ -445,6 +464,7 @@
 									{/if}
 								</div>
 							{/if}
+
 						{/if}
 					</div>
 				{/if}

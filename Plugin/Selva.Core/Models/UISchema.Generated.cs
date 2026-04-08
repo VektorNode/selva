@@ -240,6 +240,10 @@ namespace Selva.Core.Models
     {
     }
 
+    public class ChartWidgetConfig
+    {
+    }
+
 // ============================================================================
     // LAYOUT CONFIGURATION
     // ============================================================================
@@ -444,7 +448,7 @@ namespace Selva.Core.Models
         public string Description { get; set; }
 
 /// <summary>
-/// Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files
+/// Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files, 'html' for rendered HTML (e.g. Plotly charts)
 /// </summary>
         [JsonProperty("type")]
         public string Type { get; set; }
@@ -719,6 +723,15 @@ public override string WidgetType => "file";
         public FileWidgetConfig Config { get; set; }
     }
 
+public class OutputChartLayoutItem : LayoutItemBase
+    {
+public override string Type => "output";
+public override string WidgetType => "chart";
+
+        [JsonProperty("config", NullValueHandling = NullValueHandling.Ignore)]
+        public ChartWidgetConfig Config { get; set; }
+    }
+
 // ============================================================================
     // LAYOUTCONFIG (Discriminated Union)
     // ============================================================================
@@ -795,6 +808,8 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
                 item = new OutputNumberLayoutItem();
             else if (type == "output" && widgetType == "file")
                 item = new OutputFileLayoutItem();
+            else if (type == "output" && widgetType == "chart")
+                item = new OutputChartLayoutItem();
             else
                 throw new JsonSerializationException($"Unknown LayoutItem variant: {type}/{widgetType}. JSON: {jsonObject.ToString()}");
 
