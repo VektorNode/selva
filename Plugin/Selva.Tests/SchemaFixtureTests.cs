@@ -88,6 +88,15 @@ public class SchemaFixtureTests
                 ["OmittedDefaultsToItem"] = new() { InputStructure = "item" },
             }
         },
+        ["v2.4.0.json"] = new()
+        {
+            InputCount = 1,
+            OutputCount = 2,
+            Inputs = new()
+            {
+                ["DataInput"] = new() { ParamType = "generic", InputStructure = "list" },
+            }
+        },
     };
 
     // -------------------------------------------------------------------------
