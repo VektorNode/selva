@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { dragStore } from '$lib/stores/dragStore.svelte';
 	import type {
-		LayoutItem,
+		InputLayoutItem,
+		OutputLayoutItem,
 		DiscoveredInput,
 		NumberWidgetConfig,
 		FileInputWidgetConfig,
 		TextWidgetConfig
 	} from '@selva/shared';
+
+	type LayoutItem = InputLayoutItem | OutputLayoutItem;
 	import { Badge, Button, Card, Switch } from '@selva/shared';
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '$lib/features/builder/widget-config';

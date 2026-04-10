@@ -170,7 +170,7 @@ export function useBuilderState(sessionId: string) {
 					if (state.schema.layout.type === 'tabbed') {
 						state.schema.layout.tabs.forEach((tab) => {
 							tab.groups.forEach((group) => {
-								group.items = group.items.filter((item) => !removedIds.includes(item.paramId));
+								group.items = group.items.filter((item) => item.type === 'linebreak' || !removedIds.includes(item.paramId));
 							});
 							tab.groups = tab.groups.filter((g) => g.items.length > 0);
 						});
@@ -188,7 +188,7 @@ export function useBuilderState(sessionId: string) {
 						}
 					} else if (state.schema.layout.type === 'flat') {
 						state.schema.layout.groups.forEach((group) => {
-							group.items = group.items.filter((item) => !removedIds.includes(item.paramId));
+							group.items = group.items.filter((item) => item.type === 'linebreak' || !removedIds.includes(item.paramId));
 						});
 						state.schema.layout.groups = state.schema.layout.groups.filter(
 							(g) => g.items.length > 0

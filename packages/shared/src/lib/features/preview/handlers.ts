@@ -90,7 +90,7 @@ function findLayoutItemForInput(schema: UISchema, inputId: string): LayoutItem |
 	if (schema.layout.type === 'tabbed') {
 		for (const tab of schema.layout.tabs) {
 			for (const group of tab.groups) {
-				const item = group.items.find((item) => item.paramId === inputId);
+				const item = group.items.find((item) => item.type !== 'linebreak' && item.paramId === inputId);
 				if (item) return item;
 			}
 		}
@@ -148,6 +148,7 @@ export function updateParameterMetadata(
 	const processGroup = (group: { items: LayoutItem[] }, updated: ParameterUpdate) => {
 		group.items?.forEach((layoutItem) => {
 			if (
+				layoutItem.type !== 'linebreak' &&
 				layoutItem.paramId === updated.id &&
 				isInputLayoutItem(layoutItem) &&
 				isNumberInputLayoutItem(layoutItem)

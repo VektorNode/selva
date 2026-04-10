@@ -375,6 +375,19 @@
 				}
 			]
 		},
+		"LineBreakLayoutItem": {
+			"type": "object",
+			"description": "A full-width line break that forces subsequent items onto a new grid row",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Unique identifier for this layout item in the UI tree"
+				},
+				"type": { "const": "linebreak" }
+			},
+			"required": ["id", "type"],
+			"additionalProperties": false
+		},
 		"LayoutItem": {
 			"oneOf": [
 				{ "$ref": "#/definitions/InputNumberLayoutItem" },
@@ -386,7 +399,8 @@
 				{ "$ref": "#/definitions/OutputTextLayoutItem" },
 				{ "$ref": "#/definitions/OutputNumberLayoutItem" },
 				{ "$ref": "#/definitions/OutputFileLayoutItem" },
-				{ "$ref": "#/definitions/OutputChartLayoutItem" }
+				{ "$ref": "#/definitions/OutputChartLayoutItem" },
+				{ "$ref": "#/definitions/LineBreakLayoutItem" }
 			]
 		},
 		"GroupConfig": {
@@ -638,7 +652,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.4.0",
+					"default": "2.5.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

@@ -12,6 +12,7 @@
 		onDrop?: (event: CustomEvent) => void;
 		onReorder?: (event: CustomEvent) => void;
 		onRemove: () => void;
+		onAddLineBreak: () => void;
 		onDragStart?: (event: DragEvent) => void;
 		onDragEnd?: (event: DragEvent) => void;
 		isDragging?: boolean;
@@ -25,6 +26,7 @@
 		onDrop,
 		onReorder,
 		onRemove,
+		onAddLineBreak,
 		onDragStart,
 		onDragEnd,
 		isDragging = false,
@@ -138,6 +140,9 @@
 						class="border-border bg-background text-foreground w-10 rounded border px-1 py-0.5 text-xs"
 					/>
 				</label>
+				<Button variant="ghost" size="sm" class="text-muted-foreground h-6 px-2 text-[10px]" onclick={onAddLineBreak}>
+					+ Line Break
+				</Button>
 			{:else}
 				<span class="text-muted-foreground text-[10px]">
 					{group.items.length}

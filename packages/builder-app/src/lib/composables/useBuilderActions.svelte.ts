@@ -409,6 +409,24 @@ export function useBuilderActions(
 		removeItem(context.schema, tabId, groupId, itemId);
 	}
 
+	function onAddLineBreak(tabId: string, groupId: string) {
+		const context = ensureSchema();
+		if (!context) return;
+		const { builderState, schema } = context;
+
+		builderState.history.push($state.snapshot(schema));
+
+		let group: GroupConfig | undefined;
+		if (schema.layout.type === 'tabbed') {
+			group = schema.layout.tabs.find((t) => t.id === tabId)?.groups.find((g) => g.id === groupId);
+		} else if (schema.layout.type === 'flat') {
+			group = schema.layout.groups.find((g) => g.id === groupId);
+		}
+		if (!group) return;
+
+		group.items.push({ id: crypto.randomUUID().substring(0, 8), type: 'linebreak' });
+	}
+
 	function onBatchConvertToSliders(onSuccess: () => void) {
 		const context = ensureSchema();
 		if (!context) return;
@@ -455,6 +473,7 @@ export function useBuilderActions(
 		onAddGroup,
 		onRemoveGroup,
 		onRemoveItem,
+		onAddLineBreak,
 		onBatchConvertToSliders,
 		onBatchConvertToNumberInputs
 	};

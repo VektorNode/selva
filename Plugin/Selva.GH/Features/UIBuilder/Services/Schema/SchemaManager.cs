@@ -351,7 +351,7 @@ public class SchemaManager
 
         ids.UnionWith(schema.Inputs.Select(i => i.Id));
         ids.UnionWith(schema.Outputs.Select(o => o.Id));
-        ids.UnionWith(GetAllLayoutItems(schema.Layout).Select(item => item.ParamId));
+        ids.UnionWith(GetAllLayoutItems(schema.Layout).Where(item => item.Type != "linebreak").Select(item => item.ParamId));
 
         return ids;
     }
@@ -412,7 +412,7 @@ public class SchemaManager
             foreach (var tab in tabbed.Tabs)
             {
                 foreach (var group in tab.Groups)
-                    group.Items.RemoveAll(item => !existingIds.Contains(item.ParamId));
+                    group.Items.RemoveAll(item => item.Type != "linebreak" && !existingIds.Contains(item.ParamId));
                 tab.Groups.RemoveAll(g => g.Items.Count == 0);
             }
 
@@ -421,7 +421,7 @@ public class SchemaManager
         else if (layout is FlatLayoutConfig flat && flat.Groups != null)
         {
             foreach (var group in flat.Groups)
-                group.Items.RemoveAll(item => !existingIds.Contains(item.ParamId));
+                group.Items.RemoveAll(item => item.Type != "linebreak" && !existingIds.Contains(item.ParamId));
             flat.Groups.RemoveAll(g => g.Items.Count == 0);
         }
     }

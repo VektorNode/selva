@@ -17,6 +17,7 @@
 		onParameterDrop: (tabId: string, groupId: string, event: CustomEvent) => void;
 		onReorder: (event: CustomEvent) => void;
 		onRemoveItem: (tabId: string, groupId: string, itemId: string) => void;
+		onAddLineBreak: (tabId: string, groupId: string) => void;
 		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
 		outputValues?: Record<string, unknown>;
@@ -35,6 +36,7 @@
 		onParameterDrop,
 		onReorder,
 		onRemoveItem,
+		onAddLineBreak,
 		availableInputs,
 		getParameterInfo,
 		outputValues = {}
@@ -186,32 +188,46 @@
 											onDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
 											{onReorder}
 											onRemove={() => onRemoveGroup(activeTab.id, group.id)}
+											onAddLineBreak={() => onAddLineBreak(activeTab.id, group.id)}
 											onDragStart={(e) => handleGroupDragStart(e, group.id)}
 											onDragEnd={handleGroupDragEnd}
 											isDragging={draggedGroupId === group.id}
 											{availableInputs}
 											{getParameterInfo}
 										>
-											{#each group.items as item, itemIndex (item.id)}
-												{@const paramInfo = getParameterInfo(item.paramId)}
-												<div
-													style="grid-column: span {Math.min(
-														Math.max(1, item.span ?? 1),
-														group.columns ?? 1
-													)}"
-												>
-													<BuilderGroupItem
-														bind:item={group.items[itemIndex]}
-														{paramInfo}
-														tabId={activeTab.id}
-														groupId={group.id}
-														columns={group.columns}
-														{availableInputs}
-														{getParameterInfo}
-														currentValue={outputValues[item.paramId]}
-														onRemove={() => onRemoveItem(activeTab.id, group.id, item.id)}
-													/>
-												</div>
+											{#each group.items as item, itemIndex (item.type === 'linebreak' ? item.id : item.paramId)}
+												{#if item.type === 'linebreak'}
+													<div style="grid-column: 1 / -1" class="flex items-center gap-2 py-0.5">
+														<div class="bg-border h-px flex-1"></div>
+														<span class="text-muted-foreground text-[10px]">line break</span>
+														<div class="bg-border h-px flex-1"></div>
+														<button
+															class="text-muted-foreground hover:text-destructive text-xs leading-none"
+															onclick={() => onRemoveItem(activeTab.id, group.id, item.id)}
+															aria-label="Remove line break"
+														>×</button>
+													</div>
+												{:else}
+													{@const paramInfo = getParameterInfo(item.paramId)}
+													<div
+														style="grid-column: span {Math.min(
+															Math.max(1, item.span ?? 1),
+															group.columns ?? 1
+														)}"
+													>
+														<BuilderGroupItem
+															bind:item={group.items[itemIndex] as import('@selva/shared').InputLayoutItem | import('@selva/shared').OutputLayoutItem}
+															{paramInfo}
+															tabId={activeTab.id}
+															groupId={group.id}
+															columns={group.columns}
+															{availableInputs}
+															{getParameterInfo}
+															currentValue={outputValues[item.paramId]}
+															onRemove={() => onRemoveItem(activeTab.id, group.id, item.id)}
+														/>
+													</div>
+												{/if}
 											{/each}
 										</EditableGroup>
 									</div>

@@ -128,6 +128,10 @@ export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutIt
   return item.type === 'output';
 }
 
+export function isLineBreakLayoutItem(item: LayoutItem): item is LineBreakLayoutItem {
+  return item.type === 'linebreak';
+}
+
 export function isNumberWidget(item: LayoutItem): item is InputNumberLayoutItem {
   return item.type === 'input' && item.widgetType === 'number';
 }
