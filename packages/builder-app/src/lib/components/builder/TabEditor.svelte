@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { Card, Button, StateDisplay } from '@selva/shared';
 	import { EditableTabNav, EditableGroup, BuilderGroupItem } from '$lib/components/builder';
-	import type { TabConfig, DiscoveredInput } from '@selva/shared';
+	import type { TabConfig, DiscoveredInput, LineBreakLayoutItem } from '@selva/shared';
 	import { dragStore } from '$lib/stores/dragStore.svelte';
+	import { GripVertical } from '@lucide/svelte';
 
 	interface Props {
 		tabs: TabConfig[];
@@ -197,7 +198,43 @@
 										>
 											{#each group.items as item, itemIndex (item.type === 'linebreak' ? item.id : item.paramId)}
 												{#if item.type === 'linebreak'}
-													<div style="grid-column: 1 / -1" class="flex items-center gap-2 py-0.5">
+													{@const lb = item as LineBreakLayoutItem}
+													<div
+														style="grid-column: 1 / -1"
+														class="group/lb relative flex items-center gap-2 py-0.5"
+														draggable="true"
+														ondragstart={(e) => {
+															dragStore.set({ dropType: 'group-item', data: { item: lb, tabId: activeTab.id, groupId: group.id } });
+															e.dataTransfer?.setData('text/plain', lb.id);
+															e.dataTransfer!.effectAllowed = 'move';
+														}}
+														ondragend={() => dragStore.clear()}
+														ondragover={(e) => {
+															const drag = dragStore.current;
+															if (!drag || !['group-item', 'input', 'output'].includes(drag.dropType)) return;
+															e.preventDefault();
+															e.stopPropagation();
+															e.dataTransfer!.dropEffect = 'move';
+														}}
+														ondrop={(e) => {
+															e.preventDefault();
+															e.stopPropagation();
+															const drag = dragStore.current;
+															if (!drag) return;
+															const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+															const dropPosition = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+															const detail = drag.dropType === 'group-item'
+																? { sourceItem: drag.data.item, sourceTabId: drag.data.tabId, sourceGroupId: drag.data.groupId, targetItem: lb, targetTabId: activeTab.id, targetGroupId: group.id, dropPosition }
+																: { dropType: drag.dropType, data: drag.data, targetItem: lb, targetTabId: activeTab.id, targetGroupId: group.id, dropPosition };
+															const eventName = drag.dropType === 'group-item' ? 'reorder' : 'parameterdrop';
+															(e.currentTarget as HTMLElement).dispatchEvent(new CustomEvent(eventName, { detail, bubbles: true, composed: true }));
+														}}
+														role="separator"
+														aria-label="Line break — drag to reorder"
+													>
+														<div class="text-muted-foreground cursor-grab opacity-0 transition-opacity group-hover/lb:opacity-100 active:cursor-grabbing">
+															<GripVertical size={12} />
+														</div>
 														<div class="bg-border h-px flex-1"></div>
 														<span class="text-muted-foreground text-[10px]">line break</span>
 														<div class="bg-border h-px flex-1"></div>
