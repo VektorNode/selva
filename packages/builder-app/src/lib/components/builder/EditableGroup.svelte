@@ -1,80 +1,98 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
-
-	import type { GroupConfig, DiscoveredInput } from '@selva/shared';
+	import type { LayoutItem, GroupConfig, DiscoveredInput, InputLayoutItem, OutputLayoutItem, LineBreakLayoutItem } from '@selva/shared';
 	import { Button, Card } from '@selva/shared';
 	import DropZone from './DropZone.svelte';
+	import BuilderGroupItem from './BuilderGroupItem.svelte';
+	import LineBreakItem from './LineBreakItem.svelte';
 	import { ChevronDown, GripVertical, Trash2 } from '@lucide/svelte';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
+	import { dndzone } from 'svelte-dnd-action';
+	import type { DndEvent } from 'svelte-dnd-action';
+	import { dragStore } from '$lib/stores/dragStore.svelte';
+
+	type DndLayoutItem = LayoutItem & { isDndShadowItem?: true };
 
 	interface EditableGroupProps {
 		group: GroupConfig;
-		onDrop?: (event: CustomEvent) => void;
-		onReorder?: (event: CustomEvent) => void;
+		onFinalize: (items: LayoutItem[]) => void;
+		onParameterDrop?: (event: CustomEvent) => void;
 		onRemove: () => void;
 		onAddLineBreak: () => void;
+		onRemoveItem: (itemId: string) => void;
 		onDragStart?: (event: DragEvent) => void;
 		onDragEnd?: (event: DragEvent) => void;
 		isDragging?: boolean;
 		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
-		children: Snippet;
+		outputValues?: Record<string, unknown>;
 	}
 
 	let {
 		group = $bindable(),
-		onDrop,
-		onReorder,
+		onFinalize,
+		onParameterDrop,
 		onRemove,
 		onAddLineBreak,
+		onRemoveItem,
 		onDragStart,
 		onDragEnd,
 		isDragging = false,
 		availableInputs,
 		getParameterInfo,
-		children
+		outputValues = {}
 	}: EditableGroupProps = $props();
 
 	let isDragOver = $state(false);
 	let showVisibilityRules = $state(false);
 	let hasVisibilityRules = $derived((group.visibilityCondition?.rules?.length ?? 0) > 0);
-	let dragHandleRef: HTMLDivElement | null = $state(null);
 
-	function toggleCollapsed() {
-		group.collapsed = !group.collapsed;
+	// Local items for dnd preview — synced from group.items when not dragging
+	let localItems = $state<DndLayoutItem[]>([]);
+	let isItemDragging = $state(false);
+	let draggedSpan = $state(1);
+
+	$effect(() => {
+		if (!isItemDragging) {
+			localItems = [...(group.items as DndLayoutItem[])];
+		}
+	});
+
+	// Disable dndzone when dragging from the sidebar (native HTML5 drag)
+	const isSidebarDragging = $derived(
+		dragStore.current?.dropType === 'input' || dragStore.current?.dropType === 'output'
+	);
+
+	function handleConsider(e: CustomEvent<DndEvent<DndLayoutItem>>) {
+		isItemDragging = true;
+		const draggedId = e.detail.info?.id;
+		if (draggedId) {
+			// Look up span from current items (before shadow replaces the slot)
+			const all = [...localItems, ...(group.items as DndLayoutItem[])];
+			const dragged = all.find((i) => i.id === draggedId && !i.isDndShadowItem);
+			if (dragged?.type === 'linebreak') {
+				draggedSpan = group.columns ?? 1;
+			} else {
+				draggedSpan = (dragged as InputLayoutItem | OutputLayoutItem | undefined)?.span ?? 1;
+			}
+		}
+		localItems = e.detail.items;
 	}
 
-	function handleReorderEvent(e: Event) {
-		if (onReorder && e instanceof CustomEvent) {
-			onReorder(e);
-		}
+	function handleFinalize(e: CustomEvent<DndEvent<DndLayoutItem>>) {
+		isItemDragging = false;
+		const committed = e.detail.items.filter((i) => !i.isDndShadowItem) as LayoutItem[];
+		localItems = committed as DndLayoutItem[];
+		onFinalize(committed);
 	}
 
 	function handleDropEvent(e: Event | CustomEvent) {
-		if (onDrop && e instanceof CustomEvent) {
-			onDrop(e);
+		if (onParameterDrop && e instanceof CustomEvent) {
+			onParameterDrop(e);
 		}
 	}
 
-	function setupGridRef(node: HTMLDivElement) {
-		if (onReorder) {
-			node.addEventListener('reorder', handleReorderEvent);
-		}
-
-		if (onDrop) {
-			node.addEventListener('parameterdrop', handleDropEvent);
-		}
-
-		return {
-			destroy() {
-				if (onReorder) {
-					node.removeEventListener('reorder', handleReorderEvent);
-				}
-				if (onDrop) {
-					node.removeEventListener('parameterdrop', handleDropEvent);
-				}
-			}
-		};
+	function toggleCollapsed() {
+		group.collapsed = !group.collapsed;
 	}
 </script>
 
@@ -86,9 +104,8 @@
 			? 'opacity-50'
 			: ''}  transition-colors"
 	>
-		<!-- Drag Handle -->
+		<!-- Drag Handle (group-level, native HTML5) -->
 		<div
-			bind:this={dragHandleRef}
 			class="text-muted-foreground hover:text-foreground hover:bg-accent flex cursor-grab rounded p-1 active:cursor-grabbing"
 			role="button"
 			tabindex="0"
@@ -192,11 +209,40 @@
 				ondrop={handleDropEvent}
 			>
 				<div
-					use:setupGridRef
-					class="grid gap-3"
+					use:dndzone={{ items: localItems, type: 'group-item', flipDurationMs: 200, dragDisabled: isSidebarDragging, dropTargetStyle: { outline: 'var(--primary) solid 2px' } }}
+					onconsider={handleConsider}
+					onfinalize={handleFinalize}
+					class="grid items-start gap-3"
 					style="grid-template-columns: repeat({group.columns}, 1fr);"
 				>
-					{@render children()}
+					{#each localItems as item (item.id)}
+						{#if item.isDndShadowItem}
+							<!-- Placeholder: outer div gets visibility:hidden from dndzone; inner overrides with visibility:visible -->
+							<div style="grid-column: {draggedSpan >= (group.columns ?? 1) ? '1 / -1' : `span ${draggedSpan}`}">
+								<div style="visibility: visible; min-height: 3rem;" class="pointer-events-none rounded border-2 border-dashed border-primary/30 bg-primary/5"></div>
+							</div>
+						{:else if item.type === 'linebreak'}
+							<div style="grid-column: 1 / -1;">
+								<LineBreakItem
+									item={item as LineBreakLayoutItem}
+									onRemove={() => onRemoveItem(item.id)}
+								/>
+							</div>
+						{:else}
+							{@const idx = localItems.indexOf(item)}
+							<div style="grid-column: span {Math.min(Math.max(1, item.span ?? 1), group.columns ?? 1)}">
+								<BuilderGroupItem
+									bind:item={localItems[idx] as InputLayoutItem | OutputLayoutItem}
+									paramInfo={getParameterInfo(item.paramId)}
+									columns={group.columns}
+									{availableInputs}
+									{getParameterInfo}
+									currentValue={outputValues[item.paramId]}
+									onRemove={() => onRemoveItem(item.id)}
+								/>
+							</div>
+						{/if}
+					{/each}
 				</div>
 			</DropZone>
 		</Card.Content>

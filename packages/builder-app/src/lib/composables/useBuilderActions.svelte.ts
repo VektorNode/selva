@@ -1,5 +1,5 @@
 import { toast } from '@selva/shared';
-import type { DiscoveredInput, DiscoveredOutput, GroupConfig } from '@selva/shared';
+import type { DiscoveredInput, DiscoveredOutput, GroupConfig, LayoutItem } from '@selva/shared';
 import {
 	handleItemDrop,
 	handleGroupItemDrop,
@@ -46,21 +46,6 @@ export function useBuilderActions(
 
 		if (!group) return;
 
-		// Handle moving items within layout
-		if (dropType === 'group-item') {
-			handleGroupItemDrop(
-				schema,
-				tabId,
-				groupId,
-				sourceTabId,
-				sourceGroupId,
-				sourceItem,
-				targetItem,
-				dropPosition
-			);
-			return;
-		}
-
 		// Handle dropping inputs or outputs
 		if (dropType === 'input') {
 			const param = data as DiscoveredInput;
@@ -97,72 +82,21 @@ export function useBuilderActions(
 		}
 	}
 
-	function onReorder(event: CustomEvent) {
+	function onReorder(newItems: LayoutItem[], tabId: string, groupId: string) {
 		const context = ensureSchema();
 		if (!context) return;
 		const { builderState, schema } = context;
 
-		// Save snapshot before mutation
 		builderState.history.push($state.snapshot(schema));
 
-		const {
-			sourceItem,
-			sourceTabId,
-			sourceGroupId,
-			targetItem,
-			targetTabId,
-			targetGroupId,
-			dropPosition
-		} = event.detail;
-
-		if (sourceItem.id === targetItem.id) return;
-
-		let sourceGroup: GroupConfig | undefined;
-		let targetGroup: GroupConfig | undefined;
-
+		let group: GroupConfig | undefined;
 		if (schema.layout.type === 'tabbed') {
-			const sourceTab = schema.layout.tabs.find((t) => t.id === sourceTabId);
-			const targetTab = schema.layout.tabs.find((t) => t.id === targetTabId);
-			if (!sourceTab || !targetTab) return;
-
-			sourceGroup = sourceTab.groups.find((g) => g.id === sourceGroupId);
-			targetGroup = targetTab.groups.find((g) => g.id === targetGroupId);
+			group = schema.layout.tabs.find((t) => t.id === tabId)?.groups.find((g) => g.id === groupId);
 		} else if (schema.layout.type === 'flat') {
-			sourceGroup = schema.layout.groups.find((g) => g.id === sourceGroupId);
-			targetGroup = schema.layout.groups.find((g) => g.id === targetGroupId);
+			group = schema.layout.groups.find((g) => g.id === groupId);
 		}
 
-		if (!sourceGroup || !targetGroup) return;
-
-		const sourceIndex = sourceGroup.items.findIndex((i) => i.id === sourceItem.id);
-		if (sourceIndex < 0) return;
-
-		// Store the target index BEFORE removing the source item
-		let targetIndex = targetGroup.items.findIndex((i) => i.id === targetItem.id);
-
-		const [movedItem] = sourceGroup.items.splice(sourceIndex, 1);
-
-		if (targetIndex < 0) {
-			targetGroup.items.push(movedItem);
-		} else {
-			// When moving within the same group, we need to account for the removed item
-			const isSameGroup = sourceGroup === targetGroup;
-
-			if (dropPosition === 'before') {
-				// Adjust target index if we removed an item before it
-				if (isSameGroup && sourceIndex < targetIndex) {
-					targetIndex--;
-				}
-				targetGroup.items.splice(targetIndex, 0, movedItem);
-			} else {
-				// dropPosition === 'after'
-				// Adjust target index only if we removed an item BEFORE the target
-				if (isSameGroup && sourceIndex < targetIndex) {
-					targetIndex--;
-				}
-				targetGroup.items.splice(targetIndex + 1, 0, movedItem);
-			}
-		}
+		if (group) group.items = newItems;
 	}
 
 	function onAddToGroup(tabId: string, groupId: string, item: DiscoveredInput | DiscoveredOutput) {
