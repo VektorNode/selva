@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Card, Button, StateDisplay } from '@selva/shared';
-	import { EditableTabNav, EditableGroup, BuilderGroupItem } from '$lib/components/builder';
-	import type { TabConfig, DiscoveredInput } from '@selva/shared';
+	import { EditableTabNav, EditableGroup } from '$lib/components/builder';
+	import type { TabConfig, DiscoveredInput, LayoutItem } from '@selva/shared';
 	import { dragStore } from '$lib/stores/dragStore.svelte';
 
 	interface Props {
@@ -15,8 +15,9 @@
 		onRemoveGroup: (tabId: string, groupId: string) => void;
 		onReorderGroups: (tabId: string, fromIndex: number, toIndex: number) => void;
 		onParameterDrop: (tabId: string, groupId: string, event: CustomEvent) => void;
-		onReorder: (event: CustomEvent) => void;
+		onReorder: (items: LayoutItem[], tabId: string, groupId: string) => void;
 		onRemoveItem: (tabId: string, groupId: string, itemId: string) => void;
+		onAddLineBreak: (tabId: string, groupId: string) => void;
 		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
 		outputValues?: Record<string, unknown>;
@@ -35,6 +36,7 @@
 		onParameterDrop,
 		onReorder,
 		onRemoveItem,
+		onAddLineBreak,
 		availableInputs,
 		getParameterInfo,
 		outputValues = {}
@@ -42,11 +44,11 @@
 
 	const activeTab = $derived(tabs.find((t) => t.id === activeTabId));
 
-	// Drag state for group reordering
+	// Drag state for group reordering (native HTML5 DnD — untouched)
 	let draggedGroupId: string | null = $state(null);
 	let dragOverGroupId: string | null = $state(null);
 
-	// Clear group drag state when items are being dragged
+	// Clear group drag state when sidebar items are being dragged
 	$effect(() => {
 		if (dragStore.current) {
 			draggedGroupId = null;
@@ -55,10 +57,7 @@
 	});
 
 	function handleGroupDragStart(e: DragEvent, groupId: string) {
-		// Prevent drag if initiated from an input element or any interactive element
 		const target = e.target as HTMLElement;
-
-		// Check if the target itself or any of its parents up to the draggable container is an input/button
 		let element: HTMLElement | null = target;
 		while (element && element !== e.currentTarget) {
 			if (
@@ -76,19 +75,13 @@
 		draggedGroupId = groupId;
 		if (e.dataTransfer) {
 			e.dataTransfer.effectAllowed = 'move';
-			e.dataTransfer.setData('application/x-group', groupId); // Use custom MIME type to distinguish from parameter drops
+			e.dataTransfer.setData('application/x-group', groupId);
 		}
 	}
 
 	function handleGroupDragOver(e: DragEvent, groupId: string) {
-		// Only handle group drag over if we're actually dragging a group
 		if (!draggedGroupId || draggedGroupId === groupId) return;
-
-		// Check if we're dragging a group (not an item)
-		// If dragStore has data, it means we're dragging an item, not a group
 		if (dragStore.current) return;
-
-		// Check if we're dragging a group via MIME type
 		if (!e.dataTransfer?.types.includes('application/x-group')) return;
 
 		e.preventDefault();
@@ -99,10 +92,7 @@
 	}
 
 	function handleGroupDragLeave(e: DragEvent, groupId: string) {
-		// Only handle if we're actually highlighting this group
 		if (dragOverGroupId !== groupId) return;
-
-		// Only clear highlight if actually leaving the group wrapper (not child elements)
 		const relatedTarget = e.relatedTarget as Node | null;
 		const currentTarget = e.currentTarget as Node;
 		if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
@@ -123,13 +113,11 @@
 			onReorderGroups(activeTab.id, fromIndex, toIndex);
 		}
 
-		// Always clear states after drop
 		draggedGroupId = null;
 		dragOverGroupId = null;
 	}
 
 	function handleGroupDragEnd() {
-		// Always clear states when drag ends (whether dropped or cancelled)
 		draggedGroupId = null;
 		dragOverGroupId = null;
 	}
@@ -183,37 +171,18 @@
 									>
 										<EditableGroup
 											bind:group={activeTab.groups[groupIndex]}
-											onDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
-											{onReorder}
+											onFinalize={(items) => onReorder(items, activeTab.id, group.id)}
+											onParameterDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
 											onRemove={() => onRemoveGroup(activeTab.id, group.id)}
+											onAddLineBreak={() => onAddLineBreak(activeTab.id, group.id)}
+											onRemoveItem={(itemId) => onRemoveItem(activeTab.id, group.id, itemId)}
 											onDragStart={(e) => handleGroupDragStart(e, group.id)}
 											onDragEnd={handleGroupDragEnd}
 											isDragging={draggedGroupId === group.id}
 											{availableInputs}
 											{getParameterInfo}
-										>
-											{#each group.items as item, itemIndex (item.id)}
-												{@const paramInfo = getParameterInfo(item.paramId)}
-												<div
-													style="grid-column: span {Math.min(
-														Math.max(1, item.span ?? 1),
-														group.columns ?? 1
-													)}"
-												>
-													<BuilderGroupItem
-														bind:item={group.items[itemIndex]}
-														{paramInfo}
-														tabId={activeTab.id}
-														groupId={group.id}
-														columns={group.columns}
-														{availableInputs}
-														{getParameterInfo}
-														currentValue={outputValues[item.paramId]}
-														onRemove={() => onRemoveItem(activeTab.id, group.id, item.id)}
-													/>
-												</div>
-											{/each}
-										</EditableGroup>
+											{outputValues}
+										/>
 									</div>
 								{/each}
 							</div>

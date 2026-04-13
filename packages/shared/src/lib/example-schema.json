@@ -432,6 +432,10 @@
 								}
 							},
 							{
+								"type": "linebreak",
+								"id": "lb-adv-001"
+							},
+							{
 								"type": "input",
 								"widgetType": "number",
 								"id": "item-006",
@@ -508,6 +512,10 @@
 									"stepSize": 0.00001,
 									"renderAsSlider": false
 								}
+							},
+							{
+								"type": "linebreak",
+								"id": "lb-solver-001"
 							},
 							{
 								"type": "input",
@@ -1449,6 +1457,10 @@
 								"config": { "minimum": 0, "maximum": 100, "stepSize": 1 }
 							},
 							{
+								"type": "linebreak",
+								"id": "lb-three-001"
+							},
+							{
 								"type": "input",
 								"widgetType": "number",
 								"id": "item-layout-009",
@@ -1523,6 +1535,10 @@
 								"span": 1,
 								"visible": true,
 								"config": { "minimum": 0, "maximum": 100, "stepSize": 1 }
+							},
+							{
+								"type": "linebreak",
+								"id": "lb-four-001"
 							},
 							{
 								"type": "input",

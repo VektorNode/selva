@@ -21,10 +21,11 @@
 		"tw-animate-css": "catalog:"
 	},
 	"dependencies": {
-		"selva-compute": "catalog:",
 		"@iconify/svelte": "^5.2.1",
 		"@selva/shared": "workspace:*",
 		"mode-watcher": "catalog:",
+		"selva-compute": "catalog:",
+		"svelte-dnd-action": "^0.9.69",
 		"three": "catalog:"
 	}
 }

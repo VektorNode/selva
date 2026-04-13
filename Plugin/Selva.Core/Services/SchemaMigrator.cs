@@ -25,7 +25,8 @@ public static class SchemaMigrator
 		{
 			{ new Version(2, 0, 0), MigrateTo_2_0_0 },
 			{ new Version(2, 3, 0), MigrateTo_2_3_0 },
-			{ SchemaVersion.CURRENT, MigrateTo_2_4_0 }
+			{ new Version(2, 4, 0), MigrateTo_2_4_0 },
+			{ SchemaVersion.CURRENT, MigrateTo_2_5_0 }
 		};
 
 	/// <summary>
@@ -112,10 +113,20 @@ public static class SchemaMigrator
 
 	private static UISchema MigrateTo_2_4_0(UISchema schema)
 	{
-		schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+		schema.SchemaVersion = "2.4.0";
 
 		// OutputChartLayoutItem added in 2.4.0 - fully backward-compatible addition.
 		// No data transformation needed; existing schemas without chart outputs load unchanged.
+
+		return schema;
+	}
+
+	private static UISchema MigrateTo_2_5_0(UISchema schema)
+	{
+		schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+		// LineBreakLayoutItem added in 2.5.0 - fully backward-compatible addition.
+		// No data transformation needed; existing schemas load unchanged.
 
 		return schema;
 	}

@@ -1,12 +1,13 @@
 <script lang="ts">
-	import { dragStore } from '$lib/stores/dragStore.svelte';
 	import type {
-		LayoutItem,
+		InputLayoutItem,
+		OutputLayoutItem,
 		DiscoveredInput,
 		NumberWidgetConfig,
 		FileInputWidgetConfig,
 		TextWidgetConfig
 	} from '@selva/shared';
+	type LayoutItem = InputLayoutItem | OutputLayoutItem;
 	import { Badge, Button, Card, Switch } from '@selva/shared';
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '$lib/features/builder/widget-config';
@@ -15,8 +16,6 @@
 	interface BuilderGroupItemProps {
 		item: LayoutItem;
 		paramInfo?: DiscoveredInput;
-		tabId: string;
-		groupId: string;
 		columns?: number;
 		onRemove: () => void;
 		availableInputs: DiscoveredInput[];
@@ -27,8 +26,6 @@
 	let {
 		item = $bindable(),
 		paramInfo,
-		tabId,
-		groupId,
 		columns = 1,
 		onRemove,
 		availableInputs,
@@ -57,10 +54,6 @@
 	let hasVisibilityRules = $derived((item.visibilityCondition?.rules?.length ?? 0) > 0);
 	// Advanced section only for widget-specific options
 	let hasAdvancedOptions = $derived(isNumberInput || isFileInput || isTextInput);
-
-	let isDragging = $state(false);
-	let isDragOver = $state(false);
-	let dropPosition: 'before' | 'after' | null = $state(null);
 
 	function toggleSliderMode() {
 		if (!isNumberInput) return;
@@ -120,125 +113,20 @@
 		}
 	}
 
-	function handleDragStart(e: DragEvent) {
-		isDragging = true;
-
-		dragStore.set({
-			dropType: 'group-item',
-			data: { item, tabId, groupId }
-		});
-
-		e.dataTransfer?.setData('text/plain', item.id);
-		e.dataTransfer!.effectAllowed = 'move';
-	}
-
-	function handleDragEnd() {
-		isDragging = false;
-		dragStore.clear();
-	}
-
-	function handleDragOver(e: DragEvent) {
-		const dragData = dragStore.current;
-
-		// Only show indicators for item/input/output drags (not group drags)
-		// Group drags don't set dragStore, so this naturally filters them out
-		if (!dragData || !['group-item', 'input', 'output'].includes(dragData.dropType)) return;
-
-		e.preventDefault();
-		e.stopPropagation();
-		isDragOver = true;
-
-		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-		const midpoint = rect.top + rect.height / 2;
-		dropPosition = e.clientY < midpoint ? 'before' : 'after';
-
-		e.dataTransfer!.dropEffect = dragData.dropType === 'group-item' ? 'move' : 'copy';
-	}
-
-	function handleDragLeave(e: DragEvent) {
-		// Only clear if leaving the card itself, not child elements
-		const relatedTarget = e.relatedTarget as Node | null;
-		const currentTarget = e.currentTarget as Node;
-		if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
-			isDragOver = false;
-			dropPosition = null;
-		}
-	}
-
-	function handleDrop(e: DragEvent) {
-		e.preventDefault();
-		e.stopPropagation();
-		isDragOver = false;
-
-		const dragData = dragStore.current;
-		if (!dragData) return;
-
-		const detail =
-			dragData.dropType === 'group-item'
-				? {
-						sourceItem: dragData.data.item,
-						sourceTabId: dragData.data.tabId,
-						sourceGroupId: dragData.data.groupId,
-						targetItem: item,
-						targetTabId: tabId,
-						targetGroupId: groupId,
-						dropPosition: dropPosition || 'after'
-					}
-				: {
-						dropType: dragData.dropType,
-						data: dragData.data,
-						targetItem: item,
-						targetTabId: tabId,
-						targetGroupId: groupId,
-						dropPosition: dropPosition || 'after'
-					};
-
-		const event = new CustomEvent(
-			dragData.dropType === 'group-item' ? 'reorder' : 'parameterdrop',
-			{
-				detail,
-				bubbles: true,
-				composed: true
-			}
-		);
-
-		(e.currentTarget as HTMLElement).dispatchEvent(event);
-		dropPosition = null;
-	}
 </script>
 
 <div class="relative">
-	{#if isDragOver && dropPosition === 'before'}
-		<div class="bg-primary absolute -top-0.5 right-0 left-0 h-0.5 rounded"></div>
-	{/if}
-
-	{#if isDragOver && dropPosition === 'after'}
-		<div class="bg-primary absolute right-0 -bottom-0.5 left-0 h-0.5 rounded"></div>
-	{/if}
-
 	<Card.Root
-		class={`
-		hover:border-primary
-			 py-1
-			transition-all hover:shadow-sm
-			${isDragging ? 'opacity-50' : ''}
-			${isDragOver ? 'border-primary' : ''}
-			${item.type === 'input' ? 'bg-inputparam' : 'bg-outputparam'}
-		`}
-		ondragover={handleDragOver}
-		ondragleave={handleDragLeave}
-		ondrop={handleDrop}
+		class="hover:border-primary py-1 transition-all hover:shadow-sm
+			{item.type === 'input' ? 'bg-inputparam' : 'bg-outputparam'}"
 	>
 		<div class="grid grid-cols-[auto_20px_1fr] gap-2 p-2">
-			<!-- Drag Handle -->
+			<!-- Drag Handle (visual affordance only — dndzone handles drag initiation) -->
 			<div
 				class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex cursor-grab self-start rounded p-0.5 active:cursor-grabbing"
 				role="button"
 				tabindex="0"
 				aria-label="Drag to reorder"
-				draggable="true"
-				ondragstart={handleDragStart}
-				ondragend={handleDragEnd}
 			>
 				<GripVertical size={14} />
 			</div>

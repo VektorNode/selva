@@ -82,7 +82,8 @@ export type LayoutItem =
   | OutputTextLayoutItem
   | OutputNumberLayoutItem
   | OutputFileLayoutItem
-  | OutputChartLayoutItem;
+  | OutputChartLayoutItem
+  | LineBreakLayoutItem;
 export type LayoutConfig = TabbedLayoutConfig | FlatLayoutConfig;
 export type GrasshopperInputStructure = 'item' | 'list' | 'tree';
 
@@ -236,6 +237,13 @@ export interface LayoutItemBase {
   [k: string]: unknown | undefined;
 }
 export interface ChartWidgetConfig {}
+export interface LineBreakLayoutItem {
+  /**
+   * Unique identifier for this layout item in the UI tree
+   */
+  id: string;
+  type: 'linebreak';
+}
 export interface GroupConfig {
   id: string;
   label: string;
@@ -483,6 +491,10 @@ export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutIt
 
 export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem {
   return item.type === 'output';
+}
+
+export function isLineBreakLayoutItem(item: LayoutItem): item is LineBreakLayoutItem {
+  return item.type === 'linebreak';
 }
 
 export function isNumberWidget(item: LayoutItem): item is InputNumberLayoutItem {
