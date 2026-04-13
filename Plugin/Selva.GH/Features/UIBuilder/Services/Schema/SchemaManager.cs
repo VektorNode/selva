@@ -339,6 +339,8 @@ public class SchemaManager
             ? PurgeStaleReferences(schema, existingIds)
             : PurgeStaleReferencesUntracked(schema, existingIds);
 
+        MergeDiscoveredInputs(schema, document);
+
         return (schema, removedIds);
     }
 
@@ -433,6 +435,36 @@ public class SchemaManager
     // ──────────────────────────────────────────────────────────────
 
     #region Metadata Change Detection
+
+    /// <summary>
+    ///     Ensures every contextual parameter in the document is tracked in schema.Inputs,
+    ///     even if it has no layout item. Inputs already in the schema are left untouched;
+    ///     only genuinely new parameters are appended.
+    /// </summary>
+    private static void MergeDiscoveredInputs(UISchema schema, GH_Document document)
+    {
+        if (document == null) return;
+
+        var existingIds = new HashSet<Guid>(schema.Inputs.Select(i => i.Id));
+
+        foreach (var obj in document.Objects)
+        {
+            if (obj is not IGH_ContextualParameter param) continue;
+            if (obj is not IGH_DocumentObject docObj) continue;
+            if (existingIds.Contains(docObj.InstanceGuid)) continue;
+
+            schema.Inputs.Add(new SchemaInput
+            {
+                Id = docObj.InstanceGuid,
+                Nickname = docObj.NickName,
+                ParamType = ResolveParameterTypeName(param),
+                Description = param.Prompt ?? "",
+                InputStructure = "item"
+            });
+
+            existingIds.Add(docObj.InstanceGuid);
+        }
+    }
 
     /// <summary>
     ///     Detect metadata changes in parameters since last scan.
