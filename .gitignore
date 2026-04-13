@@ -48,6 +48,15 @@ _ReSharper*/
 # Windows
 Thumbs.db
 ehthumbs.db
+
+# Local environment & config files
+.env
+.env.local
+*.local.json
+
+# Compute app local definitions (user-specific)
+packages/compute-app/example-definitions/definitions-config.json
+packages/compute-app/definitions/**/*.json
 **/ecosystem.config.cjs
 # Web
 **/node_modules/
