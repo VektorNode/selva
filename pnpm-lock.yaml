@@ -9,6 +9,9 @@ catalogs:
     '@floating-ui/dom':
       specifier: ^1.6.13
       version: 1.7.6
+    '@iconify/svelte':
+      specifier: ^5.2.1
+      version: 5.2.1
     '@lucide/svelte':
       specifier: ^0.577.0
       version: 0.577.0
@@ -162,7 +165,7 @@ importers:
   packages/builder-app:
     dependencies:
       '@iconify/svelte':
-        specifier: ^5.2.1
+        specifier: 'catalog:'
         version: 5.2.1(svelte@5.53.7)
       bits-ui:
         specifier: ^2.15.4
@@ -278,7 +281,7 @@ importers:
         specifier: 'catalog:'
         version: 1.7.6
       '@iconify/svelte':
-        specifier: ^5.2.1
+        specifier: 'catalog:'
         version: 5.2.1(svelte@5.53.7)
       clsx:
         specifier: 'catalog:'
@@ -306,8 +309,8 @@ importers:
         specifier: ^3.10.1
         version: 3.12.0
       '@lucide/svelte':
-        specifier: ^0.561.0
-        version: 0.561.0(svelte@5.53.7)
+        specifier: 'catalog:'
+        version: 0.577.0(svelte@5.53.7)
       '@selva/config':
         specifier: workspace:*
         version: link:../config
@@ -820,11 +823,6 @@ packages:
 
   '@jsdevtools/ono@7.1.3':
     resolution: {integrity: sha512-4JQNk+3mVzK3xh2rqd6RB4J46qUR19azEHBneZyTZM+c456qOrbbM/5xcR8huNCCcbVt7+UmizG6GuUvPvKUYg==}
-
-  '@lucide/svelte@0.561.0':
-    resolution: {integrity: sha512-vofKV2UFVrKE6I4ewKJ3dfCXSV6iP6nWVmiM83MLjsU91EeJcEg7LoWUABLp/aOTxj1HQNbJD1f3g3L0JQgH9A==}
-    peerDependencies:
-      svelte: ^5
 
   '@lucide/svelte@0.577.0':
     resolution: {integrity: sha512-0P6mkySd2MapIEgq08tADPmcN4DHndC/02PWwaLkOerXlx5Sv9aT4BxyXLIY+eccr0g/nEyCYiJesqS61YdBZQ==}
@@ -2912,10 +2910,6 @@ snapshots:
       '@jridgewell/sourcemap-codec': 1.5.5
 
   '@jsdevtools/ono@7.1.3': {}
-
-  '@lucide/svelte@0.561.0(svelte@5.53.7)':
-    dependencies:
-      svelte: 5.53.7
 
   '@lucide/svelte@0.577.0(svelte@5.53.7)':
     dependencies:
