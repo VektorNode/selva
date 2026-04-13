@@ -37,7 +37,7 @@ NC='\033[0m' # No Color
 REPO_URL="${REPO_URL:-git@github.com:VektorNode/selva.git}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
 DEFINITION_SOURCE="${DEFINITION_SOURCE:-filesystem}"
-GH_DEFINITIONS_PATH="${GH_DEFINITIONS_PATH:-./example-definitions}"
+GH_DEFINITIONS_PATH="${GH_DEFINITIONS_PATH:-./definitions}"
 COMPUTE_SERVER_URL="${COMPUTE_SERVER_URL:-http://localhost:5000}"
 COMPUTE_API_KEY="${COMPUTE_API_KEY:-}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
@@ -382,8 +382,8 @@ if [ "$SKIP_PM2" = false ]; then
   ORIGIN=${ORIGIN:-http://localhost}
   ALLOW_INSECURE_COOKIES=${ALLOW_INSECURE_COOKIES:-true}
 
-  # Resolve GH_DEFINITIONS_PATH to absolute path (default to example-definitions if not set)
-  GH_DEFINITIONS_PATH="${GH_DEFINITIONS_PATH:-./example-definitions}"
+  # Resolve GH_DEFINITIONS_PATH to absolute path (default to definitions if not set)
+  GH_DEFINITIONS_PATH="${GH_DEFINITIONS_PATH:-./definitions}"
   if [[ "$GH_DEFINITIONS_PATH" != /* ]]; then
     ABS_GH_PATH="$INSTALL_DIR/packages/compute-app/$GH_DEFINITIONS_PATH"
   else
