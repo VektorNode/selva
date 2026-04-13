@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { UISchema, SupportedTypes } from '../types/generated';
+	import type { ActionButton } from '../types/actionButton';
 	import { ChevronUp } from '@lucide/svelte';
 	import Viewer from './Viewer.svelte';
 	import CalculateButton from './ui/CalculateButton.svelte';
@@ -25,6 +26,9 @@
 		values: Record<string, unknown>;
 		onValueChange: (id: string, val: SupportedTypes) => void | Promise<void>;
 		onLoadValues?: () => void | Promise<void>;
+		stateManagerActions?: ActionButton[];
+		showSaveButton?: boolean;
+		showLoadButton?: boolean;
 	}
 
 	let {
@@ -38,7 +42,10 @@
 		oncalculate = () => {},
 		values = $bindable({}),
 		onValueChange,
-		onLoadValues
+		onLoadValues,
+		stateManagerActions = [],
+		showSaveButton = true,
+		showLoadButton = true
 	}: Props = $props();
 
 	// ── Layout flags ─────────────────────────────────────────────────────────────
@@ -121,7 +128,7 @@
 		{#if showStateManager || (!isMobile && showCalculateButton && schema.instanceSolve === false)}
 			<div class="panel-footer px-3">
 				{#if showStateManager}
-					<StateManager {schema} currentValues={values} onLoadValues={handleLoadValues} />
+					<StateManager {schema} currentValues={values} onLoadValues={handleLoadValues} actions={stateManagerActions} {showSaveButton} {showLoadButton} />
 				{/if}
 				{#if !isMobile && showCalculateButton && schema.instanceSolve === false}
 					<CalculateButton {hasPendingChanges} {hasNeverSolved} {isSolving} {oncalculate} />

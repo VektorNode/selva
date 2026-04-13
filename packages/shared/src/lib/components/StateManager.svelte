@@ -10,13 +10,25 @@
 	} from '../utils/param-exporter';
 	import { Button, Input, Label, Textarea, Dialog, Card } from '../components/ui';
 
+	import type { ActionButton } from '../types/actionButton';
+
 	interface Props {
 		schema: UISchema;
 		currentValues: Record<string, unknown>;
 		onLoadValues: (values: Record<string, unknown>) => void;
+		showSaveButton?: boolean;
+		showLoadButton?: boolean;
+		actions?: ActionButton[];
 	}
 
-	let { schema, currentValues, onLoadValues }: Props = $props();
+	let {
+		schema,
+		currentValues,
+		onLoadValues,
+		showSaveButton = true,
+		showLoadButton = true,
+		actions = []
+	}: Props = $props();
 
 	// Save dialog state
 	let showExportDialog = $state(false);
@@ -127,15 +139,33 @@
 </script>
 
 <div class="gap-2 mb-2 flex items-center justify-center">
-	<Button variant="default" size="sm" onclick={openExportDialog}>
-		<Download class="mr-2 h-4 w-4" />
-		Save State
-	</Button>
+	{#if showSaveButton}
+		<Button variant="default" size="sm" onclick={openExportDialog}>
+			<Download class="mr-2 h-4 w-4" />
+			Save State
+		</Button>
+	{/if}
 
-	<Button variant="outline" size="sm" onclick={openLoadDialog}>
-		<Upload class="mr-2 h-4 w-4" />
-		Load State
-	</Button>
+	{#if showLoadButton}
+		<Button variant="outline" size="sm" onclick={openLoadDialog}>
+			<Upload class="mr-2 h-4 w-4" />
+			Load State
+		</Button>
+	{/if}
+
+	{#each actions as action (action.id)}
+		<Button
+			variant={action.variant ?? 'outline'}
+			size={action.size ?? 'sm'}
+			onclick={action.onclick}
+		>
+			{#if action.icon}
+				{@const IconComponent = action.icon}
+				<IconComponent class="mr-2 h-4 w-4" />
+			{/if}
+			{action.label}
+		</Button>
+	{/each}
 
 	<input
 		bind:this={fileInputRef}

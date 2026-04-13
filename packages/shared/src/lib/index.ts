@@ -3,6 +3,7 @@ export { default as PageContainer } from './components/layout/PageContainer.svel
 export { default as PageHeader } from './components/layout/PageHeader.svelte';
 export { default as PageFooter } from './components/layout/PageFooter.svelte';
 export { default as AppLayout } from './components/AppLayout.svelte';
+export { default as ComputeApp } from './components/ComputeApp.svelte';
 
 // Error components
 export { default as ErrorScreen } from './components/ErrorScreen.svelte';
@@ -25,6 +26,7 @@ export * from './features/preview/handlers';
 export * from './features/preview/notifications';
 
 // Utilities
+export * from './utils/color';
 export * from './utils/debounce';
 export * from './utils/utils-shared';
 export * from './utils/file-download';
@@ -44,6 +46,8 @@ export * from './utils';
 
 // Re-export types from generated schema
 export type * from './types/generated';
+export type { ActionButton } from './types/actionButton';
+export type { SolveFn, SolveResult } from './types/solveFn';
 
 // Re-export constants from generated schema
 export { ACCEPTED_FILE_FORMATS } from './types/generated/schema';

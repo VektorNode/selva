@@ -24,7 +24,7 @@ export interface FooterStore {
 	unregister(id: string): void;
 }
 
-const FOOTER_CONTEXT_KEY = Symbol('footer-context');
+export const FOOTER_CONTEXT_KEY = Symbol('footer-context');
 
 export function initializeFooterContext(): FooterStore {
 	const items = new SvelteMap<string, FooterItem>();

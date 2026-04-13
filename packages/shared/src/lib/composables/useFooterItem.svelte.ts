@@ -1,5 +1,5 @@
-import { onMount, onDestroy } from 'svelte';
-import { useFooter } from '$lib/contexts/footerContext.svelte';
+import { getContext, onMount, onDestroy } from 'svelte';
+import { type FooterStore, FOOTER_CONTEXT_KEY } from '$lib/contexts/footerContext.svelte';
 
 /**
  * Register a footer item component that reactively updates its props.
@@ -24,14 +24,15 @@ export function useFooterItem(
 	onClick?: () => void
 ) {
 	onMount(() => {
-		const footer = useFooter();
-		footer.register(id, component, getProps, position, priority, onClick);
+		const store = getContext<FooterStore | undefined>(FOOTER_CONTEXT_KEY);
+		if (!store || !component) return;
+		store.register(id, component, getProps, position, priority, onClick);
 	});
 
 	onDestroy(() => {
 		try {
-			const footer = useFooter();
-			footer.unregister(id);
+			const store = getContext<FooterStore | undefined>(FOOTER_CONTEXT_KEY);
+			store?.unregister(id);
 		} catch {
 			// Context may not exist during SSR cleanup — safe to ignore
 		}
