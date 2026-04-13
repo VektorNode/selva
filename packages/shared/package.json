@@ -1,6 +1,6 @@
 {
 	"name": "selva-shared",
-	"version": "0.8.2",
+	"version": "0.8.3",
 	"description": "Shared UI components and utilities for Selva applications",
 	"license": "MIT",
 	"publishConfig": {
@@ -55,20 +55,20 @@
 	"dependencies": {
 		"@floating-ui/dom": "catalog:",
 		"@iconify/svelte": "catalog:",
+		"@lucide/svelte": "catalog:",
 		"clsx": "catalog:",
 		"mode-watcher": "catalog:",
+		"paneforge": "^1.0.2",
 		"svelte-sonner": "catalog:",
 		"tailwind-merge": "catalog:",
 		"tw-animate-css": "catalog:"
 	},
 	"devDependencies": {
 		"@internationalized/date": "^3.10.1",
-		"@lucide/svelte": "catalog:",
 		"@selva/config": "workspace:*",
 		"@sveltejs/kit": "catalog:",
 		"@types/three": "catalog:",
 		"bits-ui": "^2.15.4",
-		"paneforge": "^1.0.2",
 		"svelte": "catalog:",
 		"tailwind-variants": "^3.2.2"
 	}

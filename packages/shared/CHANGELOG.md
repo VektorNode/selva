@@ -1,5 +1,11 @@
 # @selva/shared
 
+## 0.8.3
+
+### Minor Changes
+
+- Updated dev dependecies since they dont properly get resolved in external projects
+
 ## 1.4.0
 
 ### Minor Changes
