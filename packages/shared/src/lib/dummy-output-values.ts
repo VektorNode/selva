@@ -7,9 +7,16 @@ export const cubeMesh = new THREE.Mesh(
 	new THREE.MeshStandardMaterial({ color: 0x4a90d9, metalness: 0.3, roughness: 0.4 })
 );
 
+cubeMesh.userData = {
+	fileName: 'cube_mesh',
+	category: 'demo',
+	timestamp: Date.now()
+} as Record<string, any>;
+
+cubeMesh.name = 'cube_mesh';
+
 // ─── Plotly figures — add/edit charts here ──────────────────────────────────
 // Paste fig.to_json() output directly as a template literal — no cleanup needed.
-
 
 const contourPlot = `{"data":[{"z":[[10,10.625,12.5,15.625,20],[5.625,6.25,8.125,11.25,15.625],[2.5,3.125,5.0,8.125,12.5],[0.625,1.25,3.125,6.25,10.625],[0,0.625,2.5,5.625,10]],"type":"contour","colorscale":"Viridis","contours":{"coloring":"heatmap"},"showscale":true}],"layout":{"title":{"text":"Basic Contour Plot"}}}`;
 
