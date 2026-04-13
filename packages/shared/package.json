@@ -1,6 +1,6 @@
 {
 	"name": "selva-shared",
-	"version": "0.8.1",
+	"version": "0.8.2",
 	"description": "Shared UI components and utilities for Selva applications",
 	"license": "MIT",
 	"publishConfig": {
