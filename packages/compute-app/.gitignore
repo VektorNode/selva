@@ -28,6 +28,7 @@ definitions-config.json
 /definitions/
 /example-definitions/
 
+
 # Deployment-specific thumbnails
 static/images/*_Thumbnail.png
 static/images/*_Thumbnail.jpg

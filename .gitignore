@@ -55,18 +55,15 @@ ehthumbs.db
 *.local.json
 
 # Compute app local definitions (user-specific)
-packages/compute-app/example-definitions/definitions-config.json
 packages/compute-app/definitions/**/*.json
 **/ecosystem.config.cjs
 # Web
 **/node_modules/
 **/.svelte-kit/
 
-# Grasshopper definitions (except in example-definitions)
+# Grasshopper definitions
 *.gh
 *.ghx
-!packages/compute-app/example-definitions/*.gh
-!packages/compute-app/example-definitions/*.ghx
 # Unignore the Selva.GH plugin directory (case-insensitive match on Windows)
 !Plugin/Selva.GH/
 !Plugin/Selva.GH/**
@@ -75,7 +72,6 @@ Plugin/Selva.GH/obj/
 
 # Definitions config files (production, not checked in)
 definitions-config.json
-!packages/compute-app/example-definitions/definitions-config.json
 !packages/compute-app/definitions-config.example.json
 
 
