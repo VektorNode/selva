@@ -18,8 +18,8 @@ import type {
 	OutputNumberLayoutItem,
 	OutputFileLayoutItem,
 	OutputChartLayoutItem
-} from '@selva/shared';
-import { ACCEPTED_FILE_FORMATS } from '@selva/shared';
+} from 'selva-shared';
+import { ACCEPTED_FILE_FORMATS } from 'selva-shared';
 
 // File input configuration constants
 export const FILE_INPUT_MODES = ['upload', 'url'] as const;

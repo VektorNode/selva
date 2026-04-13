@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Label } from '@selva/shared';
+	import { Button, Label } from 'selva-shared';
 	import { Upload } from '@lucide/svelte';
 
 	interface Props {

@@ -1,8 +1,11 @@
 {
-	"name": "@selva/shared",
+	"name": "selva-shared",
 	"version": "0.8.1",
 	"description": "Shared UI components and utilities for Selva applications",
-	"private": true,
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
 	"type": "module",
 	"svelte": "./dist/index.js",
 	"types": "./dist/index.d.ts",
@@ -37,9 +40,11 @@
 		"lint": "prettier --check . && eslint ."
 	},
 	"peerDependencies": {
-		"@sveltejs/kit": "catalog:",
-		"selva-compute": "catalog:",
-		"svelte": "catalog:",
+		"@sveltejs/kit": "^2",
+		"bits-ui": "^2.15.4",
+		"selva-compute": "^1",
+		"svelte": "^5",
+		"tailwind-variants": "^3.2.2",
 		"three": "catalog:"
 	},
 	"peerDependenciesMeta": {
@@ -49,19 +54,19 @@
 	},
 	"dependencies": {
 		"@floating-ui/dom": "catalog:",
-		"@iconify/svelte": "^5.2.1",
+		"@iconify/svelte": "catalog:",
 		"clsx": "catalog:",
 		"mode-watcher": "catalog:",
-		"selva-compute": "catalog:",
 		"svelte-sonner": "catalog:",
 		"tailwind-merge": "catalog:",
 		"tw-animate-css": "catalog:"
 	},
 	"devDependencies": {
 		"@internationalized/date": "^3.10.1",
-		"@lucide/svelte": "^0.561.0",
+		"@lucide/svelte": "catalog:",
 		"@selva/config": "workspace:*",
 		"@sveltejs/kit": "catalog:",
+		"@types/three": "catalog:",
 		"bits-ui": "^2.15.4",
 		"paneforge": "^1.0.2",
 		"svelte": "catalog:",

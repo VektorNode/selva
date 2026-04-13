@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { UISchema, ViewerOptions } from '@selva/shared';
-	import { Card, Input, Textarea, Label, Checkbox, Button, toast } from '@selva/shared';
+	import type { UISchema, ViewerOptions } from 'selva-shared';
+	import { Card, Input, Textarea, Label, Checkbox, Button, toast } from 'selva-shared';
 	import { Download, Upload } from '@lucide/svelte';
 	import { exportSchemaAsFile, importSchemaFromFile } from '$lib/utils/schema-exporter';
 	import SchemaImportDialog from './SchemaImportDialog.svelte';

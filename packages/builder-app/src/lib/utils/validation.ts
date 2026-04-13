@@ -1,4 +1,4 @@
-import type { VisibilityRule, DiscoveredInput, GrasshopperParamType } from '@selva/shared';
+import type { VisibilityRule, DiscoveredInput, GrasshopperParamType } from 'selva-shared';
 
 /**
  * Validates a visibility rule value against parameter constraints

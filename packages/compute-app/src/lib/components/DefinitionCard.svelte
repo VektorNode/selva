@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Badge, Card } from '@selva/shared';
+	import { Badge, Card } from 'selva-shared';
 
 	interface Definition {
 		filename: string;

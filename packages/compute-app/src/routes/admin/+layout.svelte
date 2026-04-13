@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { enhance } from '$app/forms';
-	import { Button, PageHeader } from '@selva/shared';
+	import { Button, PageHeader } from 'selva-shared';
 
 	interface LayoutProps {
 		children?: import('svelte').Snippet;

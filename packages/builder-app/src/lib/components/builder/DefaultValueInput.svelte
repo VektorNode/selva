@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { GrasshopperParamType, DiscoveredInput } from '@selva/shared';
-	import { Input, Select, Switch } from '@selva/shared';
+	import type { GrasshopperParamType, DiscoveredInput } from 'selva-shared';
+	import { Input, Select, Switch } from 'selva-shared';
 	import { validateDefaultValue } from '$lib/utils/validation';
 
 	interface DefaultValueInputProps {

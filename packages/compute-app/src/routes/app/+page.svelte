@@ -11,12 +11,12 @@
 		AppLayout,
 		createSolvingIndicator,
 		useFooterItem
-	} from '@selva/shared';
+	} from 'selva-shared';
 	import { hexToOklch } from '$lib/utilities/color';
 	import { GrasshopperResponseProcessor } from 'selva-compute';
 	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
 	import ComputeHealthFooter from '$lib/components/ComputeHealthFooter.svelte';
-	import { createComputeThrottle } from '@selva/shared';
+	import { createComputeThrottle } from 'selva-shared';
 
 	let { data }: PageProps = $props();
 

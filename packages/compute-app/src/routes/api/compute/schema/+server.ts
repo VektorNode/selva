@@ -2,7 +2,7 @@ import { getServerConfig } from '$lib/server/compute/config.server';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { camelcaseKeys } from 'selva-compute/core';
-import type { UISchema } from '@selva/shared';
+import type { UISchema } from 'selva-shared';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const config = getServerConfig();

@@ -2,5 +2,5 @@
 @import 'tw-animate-css';
 @source '../../shared/dist';
 
-/* Import base theme styles from @selva/shared */
-@import '@selva/shared/styles/base.css';
+/* Import base theme styles from selva-shared */
+@import './lib/styles/base.css';

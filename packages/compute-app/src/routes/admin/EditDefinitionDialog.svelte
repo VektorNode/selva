@@ -9,7 +9,7 @@
 		toast,
 		Badge,
 		AlertDialog
-	} from '@selva/shared';
+	} from 'selva-shared';
 	import { Trash2, History, Image, Upload, X } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import FileUploadField from './FileUploadField.svelte';

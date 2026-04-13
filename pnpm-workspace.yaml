@@ -6,6 +6,7 @@ packages:
 catalogs:
   default:
     '@floating-ui/dom': ^1.6.13
+    '@iconify/svelte': ^5.2.1
     '@lucide/svelte': ^0.577.0
     '@sveltejs/adapter-auto': ^7.0.1
     '@sveltejs/kit': 2.53.4

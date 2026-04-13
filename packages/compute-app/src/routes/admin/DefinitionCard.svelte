@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Card, Badge } from '@selva/shared';
+	import { Button, Card, Badge } from 'selva-shared';
 	import { Pencil } from '@lucide/svelte';
 
 	interface DefinitionConfig {
