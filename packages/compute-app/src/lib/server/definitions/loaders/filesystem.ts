@@ -66,6 +66,11 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 			this.configCache = parsed;
 			return parsed;
 		} catch (err) {
+			if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
+				const empty: DefinitionsConfig = { definitions: {} };
+				this.configCache = empty;
+				return empty;
+			}
 			throw new Error(`Failed to load definitions config: ${err}`);
 		}
 	}

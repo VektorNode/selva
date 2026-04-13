@@ -194,26 +194,26 @@ if [ -f ".git/rebase-merge/applying" ] || [ -f ".git/rebase-apply/applying" ]; t
   exit 1
 fi
 
-# Ensure local-only files are never synced (regardless of .gitignore)
-print_step "Protecting local-only files from sync..."
-LOCAL_ONLY_FILES=(
-  "packages/compute-app/example-definitions/definitions-config.json"
+# Ensure definitions folder is never touched by git
+# .gitignore already covers untracked files; handle the edge case where
+# it was accidentally committed/tracked.
+print_step "Protecting definitions folder from git..."
+DEFINITIONS_PATHS=(
   "packages/compute-app/definitions"
 )
 
-for FILE in "${LOCAL_ONLY_FILES[@]}"; do
-  if git ls-files --error-unmatch "$FILE" 2>/dev/null; then
-    print_warning "Removing tracked file from git index: $FILE"
-    git rm --cached -r -f "$FILE" 2>/dev/null || true
+for DEF_PATH in "${DEFINITIONS_PATHS[@]}"; do
+  if git ls-files --error-unmatch "$DEF_PATH" >/dev/null 2>&1; then
+    print_warning "Removing '$DEF_PATH' from git index..."
+    git rm --cached -r -f "$DEF_PATH" 2>/dev/null || true
   fi
+  # skip-worktree prevents git from overwriting the path even during checkout/reset
+  for tracked_file in $(git ls-files "$DEF_PATH" 2>/dev/null); do
+    git update-index --skip-worktree "$tracked_file" 2>/dev/null || true
+  done
 done
 
-# If definitions-config.json has local changes, show warning
-if [ -f "packages/compute-app/example-definitions/definitions-config.json" ]; then
-  if git diff HEAD -- "packages/compute-app/example-definitions/definitions-config.json" 2>/dev/null | grep -q .; then
-    print_warning "Local definitions config will be preserved (not synced)"
-  fi
-fi
+print_success "Definitions folder protected"
 
 ################################################################################
 # 1. CHECK STATUS
