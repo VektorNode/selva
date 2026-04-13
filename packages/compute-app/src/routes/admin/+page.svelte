@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Input, Card, toast } from '@selva/shared';
+	import { Button, Input, Card, toast } from 'selva-shared';
 	import { Plus } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import DefinitionCard from './DefinitionCard.svelte';

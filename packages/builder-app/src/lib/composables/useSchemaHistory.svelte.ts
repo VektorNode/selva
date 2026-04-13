@@ -1,4 +1,4 @@
-import type { UISchema } from '@selva/shared';
+import type { UISchema } from 'selva-shared';
 
 export function useSchemaHistory(sessionId: string) {
 	const past: UISchema[] = $state([]);

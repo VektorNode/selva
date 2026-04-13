@@ -2,7 +2,7 @@ import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
 import { GrasshopperClient } from 'selva-compute/grasshopper';
 import { camelcaseKeys } from 'selva-compute/core';
-import type { UISchema } from '@selva/shared';
+import type { UISchema } from 'selva-shared';
 import { getServerConfig } from '$lib/server/compute/config.server';
 import { getDefinitionContainer } from '$lib/server/definitions.server';
 

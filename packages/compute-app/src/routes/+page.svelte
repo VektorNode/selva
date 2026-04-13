@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
-	import { StateDisplay, PageHeader, PageContainer, Input, useFooterItem } from '@selva/shared';
+	import { StateDisplay, PageHeader, PageContainer, Input, useFooterItem } from 'selva-shared';
 	import { Search, X } from '@lucide/svelte';
 	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
 	import ComputeHealthFooter from '$lib/components/ComputeHealthFooter.svelte';

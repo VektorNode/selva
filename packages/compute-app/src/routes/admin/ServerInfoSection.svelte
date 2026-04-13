@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Card } from '@selva/shared';
+	import { Card } from 'selva-shared';
 	import { Circle } from '@lucide/svelte';
 	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
 

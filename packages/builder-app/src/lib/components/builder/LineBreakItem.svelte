@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { LineBreakLayoutItem } from '@selva/shared';
+	import type { LineBreakLayoutItem } from 'selva-shared';
 	import { GripVertical } from '@lucide/svelte';
 
 	interface Props {

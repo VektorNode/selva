@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { LayoutItem, GroupConfig, DiscoveredInput, InputLayoutItem, OutputLayoutItem, LineBreakLayoutItem } from '@selva/shared';
-	import { Button, Card } from '@selva/shared';
+	import type { LayoutItem, GroupConfig, DiscoveredInput, InputLayoutItem, OutputLayoutItem, LineBreakLayoutItem } from 'selva-shared';
+	import { Button, Card } from 'selva-shared';
 	import DropZone from './DropZone.svelte';
 	import BuilderGroupItem from './BuilderGroupItem.svelte';
 	import LineBreakItem from './LineBreakItem.svelte';

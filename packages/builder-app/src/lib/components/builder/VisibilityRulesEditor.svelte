@@ -4,8 +4,8 @@
 		VisibilityRule,
 		DiscoveredInput,
 		GroupVisibilityCondition
-	} from '@selva/shared';
-	import { Button, Select } from '@selva/shared';
+	} from 'selva-shared';
+	import { Button, Select } from 'selva-shared';
 	import RuleRow from './RuleRow.svelte';
 	import DefaultValueInput from './DefaultValueInput.svelte';
 	import { validateRuleValue, validateDefaultValue } from '$lib/utils/validation';

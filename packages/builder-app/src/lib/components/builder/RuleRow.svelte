@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { VisibilityRule, DiscoveredInput } from '@selva/shared';
-	import { Button, Badge, Input, Select } from '@selva/shared';
+	import type { VisibilityRule, DiscoveredInput } from 'selva-shared';
+	import { Button, Badge, Input, Select } from 'selva-shared';
 	import { X } from '@lucide/svelte';
 	import { validateRuleValue, getOperatorsForType } from '$lib/utils/validation';
 

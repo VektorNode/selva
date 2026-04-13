@@ -7,7 +7,7 @@ import {
 	TreeBuilder,
 	GrasshopperClient
 } from 'selva-compute';
-import type { SchemaInput } from '@selva/shared';
+import type { SchemaInput } from 'selva-shared';
 import { error, json, isHttpError } from '@sveltejs/kit';
 import { getServerConfig } from '$lib/server/compute/config.server';
 import { getDefinitionContainer } from '$lib/server/definitions.server';

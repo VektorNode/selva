@@ -18,14 +18,17 @@
 		"@lucide/svelte": "catalog:",
 		"@selva/config": "workspace:*",
 		"@sveltejs/adapter-static": "^3.0.10",
+		"@types/three": "catalog:",
 		"tw-animate-css": "catalog:"
 	},
 	"dependencies": {
-		"@iconify/svelte": "^5.2.1",
-		"@selva/shared": "workspace:*",
+		"@iconify/svelte": "catalog:",
+		"bits-ui": "^2.15.4",
+		"selva-shared": "workspace:*",
 		"mode-watcher": "catalog:",
 		"selva-compute": "catalog:",
 		"svelte-dnd-action": "^0.9.69",
+		"tailwind-variants": "^3.2.2",
 		"three": "catalog:"
 	}
 }
