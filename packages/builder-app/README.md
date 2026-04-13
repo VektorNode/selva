@@ -21,6 +21,10 @@ When used with `Selva.gha` plugin in Grasshopper:
   5. Schema persists to `.gh` file
   6. `/preview` shows live UI with real-time updates
 
+### Release
+
+`cd packages/shared && pnpm publish --no-git-checks`
+
 ### Cloud Deployment Mode
 
 Standalone web app deployed independently (Vercel, Netlify, etc):
