@@ -76,6 +76,7 @@
 		visibleTabs.forEach((tab) =>
 			tab.groups.forEach((group) =>
 				group.items.forEach((layoutItem) => {
+					if (layoutItem.type === 'linebreak') return;
 					const { visible, disabled, defaultValue } = evaluateVisibility(layoutItem, values);
 					const input = getInputById(layoutItem.paramId);
 					if (!input || defaultValue === undefined) return;
@@ -109,36 +110,40 @@
 </script>
 
 {#snippet gridItem(layoutItem: LayoutItem, columns: number)}
-	{@const visibility = evaluateVisibility(layoutItem, values)}
-	{@const span = Math.min(Math.max(1, layoutItem.span ?? 1), columns)}
-	{#if visibility.visible}
-		{#if layoutItem.type === 'input'}
-			{@const input = getInputById(layoutItem.paramId)}
-			{#if input}
-				<div
-					class="min-w-0 flex items-center"
-					class:opacity-50={visibility.disabled}
-					style="grid-column: span {span} / span {span}"
-				>
-					<InputControl
-						item={layoutItem}
-						value={values[input.id] as SupportedTypes | undefined}
-						displayName={layoutItem.displayName}
-						onChange={onValueChange}
-						disabled={visibility.disabled}
-					/>
-				</div>
-			{/if}
-		{:else if layoutItem.type === 'output'}
-			{@const output = getOutputById(layoutItem.paramId)}
-			{#if output}
-				<div class="min-w-0" style="grid-column: span {span} / span {span}">
-					<OutputDisplay
-						item={layoutItem}
-						value={values[layoutItem.paramId]}
-						displayName={layoutItem.displayName}
-					/>
-				</div>
+	{#if layoutItem.type === 'linebreak'}
+		<div style="grid-column: 1 / -1" class="h-px bg-border" aria-hidden="true"></div>
+	{:else}
+		{@const visibility = evaluateVisibility(layoutItem, values)}
+		{@const span = Math.min(Math.max(1, layoutItem.span ?? 1), columns)}
+		{#if visibility.visible}
+			{#if layoutItem.type === 'input'}
+				{@const input = getInputById(layoutItem.paramId)}
+				{#if input}
+					<div
+						class="min-w-0 flex items-center"
+						class:opacity-50={visibility.disabled}
+						style="grid-column: span {span} / span {span}"
+					>
+						<InputControl
+							item={layoutItem}
+							value={values[input.id] as SupportedTypes | undefined}
+							displayName={layoutItem.displayName}
+							onChange={onValueChange}
+							disabled={visibility.disabled}
+						/>
+					</div>
+				{/if}
+			{:else if layoutItem.type === 'output'}
+				{@const output = getOutputById(layoutItem.paramId)}
+				{#if output}
+					<div class="min-w-0" style="grid-column: span {span} / span {span}">
+						<OutputDisplay
+							item={layoutItem}
+							value={values[layoutItem.paramId]}
+							displayName={layoutItem.displayName}
+						/>
+					</div>
+				{/if}
 			{/if}
 		{/if}
 	{/if}
@@ -209,7 +214,7 @@
 														class="schema-grid gap-6 grid"
 														style="--schema-cols: {group.columns};"
 													>
-														{#each group.items as layoutItem (layoutItem.paramId)}
+														{#each group.items as layoutItem (layoutItem.type === 'linebreak' ? layoutItem.id : layoutItem.paramId)}
 															{@render gridItem(layoutItem, group.columns ?? 1)}
 														{/each}
 													</div>

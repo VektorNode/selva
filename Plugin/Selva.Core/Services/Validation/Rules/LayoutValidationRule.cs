@@ -39,7 +39,7 @@ public class LayoutValidationRule : IValidationRule
 			yield return issue;
 
 		// Check for orphaned parameters
-		var usedParamIds = new HashSet<Guid>(allItems.Select(i => i.ParamId));
+		var usedParamIds = new HashSet<Guid>(allItems.Where(i => i.Type != "linebreak").Select(i => i.ParamId));
 		var unusedInputs = inputParamIds.Except(usedParamIds).ToList();
 		var unusedOutputs = outputParamIds.Except(usedParamIds).ToList();
 
@@ -180,6 +180,10 @@ public class LayoutValidationRule : IValidationRule
 				item.ParamId.ToString(),
 				$"Duplicate layout item ID: {item.Id}",
 				"Each layout item must have a unique ID");
+
+		// Line break items have no parameter reference — skip param validation
+		if (item.Type == "linebreak")
+			yield break;
 
 		if (item.ParamId == Guid.Empty)
 		{

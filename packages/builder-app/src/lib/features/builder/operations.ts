@@ -18,11 +18,11 @@ export function isItemUsedInLayout(schema: UISchema | null, paramId: string): bo
 	if (schema.layout.type === 'tabbed') {
 		return (
 			schema.layout.tabs.some((t) =>
-				t.groups.some((g) => g.items.some((i) => i.paramId === paramId))
+				t.groups.some((g) => g.items.some((i) => i.type !== 'linebreak' && i.paramId === paramId))
 			) ?? false
 		);
 	} else if (schema.layout.type === 'flat') {
-		return schema.layout.groups.some((g) => g.items.some((i) => i.paramId === paramId)) ?? false;
+		return schema.layout.groups.some((g) => g.items.some((i) => i.type !== 'linebreak' && i.paramId === paramId)) ?? false;
 	}
 	return false;
 }
@@ -148,7 +148,7 @@ export function handleItemDrop(
 	dropPosition?: 'before' | 'after',
 	outputType?: 'text' | 'number' | 'file' | 'chart'
 ) {
-	if (group.items.some((i) => i.paramId === paramId)) {
+	if (group.items.some((i) => i.type !== 'linebreak' && i.paramId === paramId)) {
 		const itemTypeLabel =
 			widgetType === 'file' ? 'file component' : itemType === 'input' ? 'parameter' : 'output';
 		toast.warning(`This ${itemTypeLabel} is already in this group`);
@@ -257,7 +257,7 @@ export function removeTab(schema: UISchema, tabId: string) {
 
 	tab.groups.forEach((group) => {
 		group.items.forEach((item) => {
-			removeItemIfOrphaned(schema, item.paramId, item.type);
+			if (item.type !== 'linebreak') removeItemIfOrphaned(schema, item.paramId, item.type);
 		});
 	});
 
@@ -329,7 +329,7 @@ export function removeItem(schema: UISchema, tabId: string, groupId: string, ite
 	const item = group.items.find((i) => i.id === itemId);
 	group.items = group.items.filter((i) => i.id !== itemId);
 
-	if (item) {
+	if (item && item.type !== 'linebreak') {
 		removeItemIfOrphaned(schema, item.paramId, item.type);
 	}
 }

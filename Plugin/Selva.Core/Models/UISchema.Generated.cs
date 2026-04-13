@@ -732,6 +732,15 @@ public override string WidgetType => "chart";
         public ChartWidgetConfig Config { get; set; }
     }
 
+/// <summary>
+/// A full-width line break that forces subsequent items onto a new grid row
+/// </summary>
+public class LineBreakLayoutItem : LayoutItemBase
+    {
+public override string Type => "linebreak";
+public override string WidgetType => null;
+    }
+
 // ============================================================================
     // LAYOUTCONFIG (Discriminated Union)
     // ============================================================================
@@ -782,15 +791,15 @@ public override string Type => "flat";
 var type = jsonObject["type"]?.Value<string>();
 var widgetType = jsonObject["widgetType"]?.Value<string>();
 
-            // Check if all discriminators are null or empty
-            var allEmpty = string.IsNullOrEmpty(type) && string.IsNullOrEmpty(widgetType);
-            if (allEmpty)
+            if (string.IsNullOrEmpty(type))
             {
-                throw new JsonSerializationException($"LayoutItem discriminator fields are missing or empty. JSON: {jsonObject.ToString()}");
+                throw new JsonSerializationException($"LayoutItem discriminator 'type' is missing or empty. JSON: {jsonObject.ToString()}");
             }
 
             LayoutItemBase item;
-            if (type == "input" && widgetType == "number")
+            if (type == "linebreak")
+                item = new LineBreakLayoutItem();
+            else if (type == "input" && widgetType == "number")
                 item = new InputNumberLayoutItem();
             else if (type == "input" && widgetType == "text")
                 item = new InputTextLayoutItem();
@@ -819,8 +828,18 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
 
         public override void WriteJson(JsonWriter writer, LayoutItemBase value, JsonSerializer serializer)
         {
-            // Serialize by writing properties directly to avoid converter recursion
             writer.WriteStartObject();
+
+            // LineBreak items only need id and type
+            if (value is LineBreakLayoutItem)
+            {
+                writer.WritePropertyName("id");
+                serializer.Serialize(writer, value.Id);
+                writer.WritePropertyName("type");
+                serializer.Serialize(writer, value.Type);
+                writer.WriteEndObject();
+                return;
+            }
 
             // Use reflection to get all properties from the concrete type
             var properties = value.GetType().GetProperties();

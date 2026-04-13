@@ -53,14 +53,16 @@
 			layout.tabs.forEach((tab) => {
 				tab.groups.forEach((group) => {
 					group.items.forEach((item) => {
-						ids.add(item.paramId);
+						const paramId = (item as { paramId?: string }).paramId;
+						if (paramId) ids.add(paramId);
 					});
 				});
 			});
 		} else if (layout?.type === 'flat') {
 			layout.groups.forEach((group) => {
 				group.items.forEach((item) => {
-					ids.add(item.paramId);
+					const paramId = (item as { paramId?: string }).paramId;
+					if (paramId) ids.add(paramId);
 				});
 			});
 		}
@@ -312,6 +314,7 @@
 								onParameterDrop={actions.onParameterDrop}
 								onReorder={actions.onReorder}
 								onRemoveItem={actions.onRemoveItem}
+								onAddLineBreak={actions.onAddLineBreak}
 								availableInputs={allAvailableInputs}
 								{getParameterInfo}
 								outputValues={builderState.state.outputValues}
