@@ -5,11 +5,13 @@
 
 	interface Props {
 		scene: THREE.Scene;
+		sceneVersion?: number;
 	}
 
-	let { scene = $bindable() }: Props = $props();
+	let { scene = $bindable(), sceneVersion = 0 }: Props = $props();
 
 	const getSceneObjects = () => {
+		void sceneVersion; // reactive dependency — re-runs when scene changes
 		return scene.children.filter(
 			(obj) => !(obj instanceof THREE.Camera) && !(obj instanceof THREE.Light)
 		);

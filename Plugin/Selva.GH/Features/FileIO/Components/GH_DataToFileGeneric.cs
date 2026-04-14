@@ -62,7 +62,9 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
         if (!string.IsNullOrEmpty(extension) && !extension.StartsWith("."))
             extension = "." + extension;
 
-        var combinedData = string.Join(Environment.NewLine, data);
+        var combinedData = isBase64
+            ? string.Concat(data)
+            : string.Join(Environment.NewLine, data);
 
         var fileData = new FileData
         {

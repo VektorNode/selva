@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import {
 		initThree,
 		updateScene,
@@ -53,6 +53,7 @@
 	let camera: THREE.PerspectiveCamera | null = null;
 	let controls: OrbitControls | null = null;
 	let viewerInitialized = false;
+	let sceneVersion = $state(0);
 	let hideButton = $state(false);
 	let sceneManagerOpen = $state(false);
 	let selectedMeshMetadata: Record<string, any> | null = $state(null);
@@ -108,6 +109,7 @@
 			// Manual cleanup of types that updateScene might miss (Lines, Points)
 
 			updateScene(scene, meshes, camera, controls, viewerInitialized);
+			untrack(() => sceneVersion++);
 
 			if (!viewerInitialized && meshes.length > 0) {
 				viewerInitialized = true;
@@ -247,7 +249,7 @@
 		{#if sceneManagerOpen && scene}
 			<Resizable.Handle withHandle />
 			<Resizable.Pane defaultSize={15} minSize={8} maxSize={30}>
-				<SceneManager {scene} />
+				<SceneManager {scene} {sceneVersion} />
 			</Resizable.Pane>
 		{/if}
 	</Resizable.PaneGroup>

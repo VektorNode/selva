@@ -19,7 +19,7 @@ catalogs:
     eslint: ^9.39.4
     mode-watcher: ^1.1.0
     prettier: ^3.8.2
-    selva-compute: 1.4.0
+    selva-compute: 1.4.1
     svelte: 5.53.7
     svelte-check: ^4.4.6
     svelte-sonner: ^1.0.7
