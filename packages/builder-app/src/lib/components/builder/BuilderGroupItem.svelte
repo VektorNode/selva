@@ -358,34 +358,33 @@
 				{/if}
 
 				<!-- Visibility Rules Section (separate from Advanced) -->
-				{#if item.type === 'input'}
-					<div class="border-border/70 mt-1 border-t pt-1">
-						<button
-							onclick={() => (showVisibilityRules = !showVisibilityRules)}
-							class="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center gap-1 text-[11px]"
-						>
-							<ChevronDown
-								size={12}
-								class={`transition-transform ${showVisibilityRules ? 'rotate-180' : ''}`}
-							/>
-							Visibility Rules {hasVisibilityRules
-								? `(${item.visibilityCondition?.rules?.length ?? 0})`
-								: ''}
-						</button>
+				<div class="border-border/70 mt-1 border-t pt-1">
+					<button
+						onclick={() => (showVisibilityRules = !showVisibilityRules)}
+						class="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center gap-1 text-[11px]"
+					>
+						<ChevronDown
+							size={12}
+							class={`transition-transform ${showVisibilityRules ? 'rotate-180' : ''}`}
+						/>
+						Visibility Rules {hasVisibilityRules
+							? `(${item.visibilityCondition?.rules?.length ?? 0})`
+							: ''}
+					</button>
 
-						{#if showVisibilityRules}
-							<VisibilityRulesEditor
-								bind:visibilityCondition={item.visibilityCondition}
-								{availableInputs}
-								currentParamInfo={paramInfo}
-								{getParameterInfo}
-								options={item.type === 'input' && item.widgetType === 'dropdown'
-									? item.config.options
-									: undefined}
-							/>
-						{/if}
-					</div>
-				{/if}
+					{#if showVisibilityRules}
+						<VisibilityRulesEditor
+							bind:visibilityCondition={item.visibilityCondition}
+							{availableInputs}
+							currentParamInfo={paramInfo}
+							{getParameterInfo}
+							isGroupCondition={item.type === 'output'}
+							options={item.type === 'input' && item.widgetType === 'dropdown'
+								? item.config.options
+								: undefined}
+						/>
+					{/if}
+				</div>
 			</div>
 		</div>
 	</Card.Root>

@@ -11,21 +11,21 @@ using Grasshopper.Kernel.Types;
 using Rhino.Display;
 using Rhino.Geometry;
 using Rhino.Render;
+using Selva.GH.Features.Display.Components;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
 
-namespace Selva.GH.Features.Display.Components;
+namespace Selva.GH.Features.Display.OBSOLETE;
 
 // Result of the single background task: all items batched together.
-public sealed class SolveResult
+public sealed class SolveResult_V0_8_3
 {
-    public SolveResult(List<Mesh> meshes, List<string> names, List<string> layers,
-        List<Dictionary<string, string>> metadata, List<ThreeMaterial> materials, int skipped = 0)
+    public SolveResult_V0_8_3(List<Mesh> meshes, List<string> names, List<Dictionary<string, string>> metadata,
+        List<ThreeMaterial> materials, int skipped = 0)
     {
         Meshes = meshes;
         Names = names;
-        Layers = layers;
         Metadata = metadata;
         Materials = materials;
         Skipped = skipped;
@@ -33,29 +33,27 @@ public sealed class SolveResult
 
     public List<Mesh> Meshes { get; }
     public List<string> Names { get; }
-    public List<string> Layers { get; }
     public List<Dictionary<string, string>> Metadata { get; }
     public List<ThreeMaterial> Materials { get; }
     public int Skipped { get; }
 }
 
 /// <summary>
-///     Component that converts geometry to a single batched WebDisplay output.
-///     Reads all inputs as trees so SolveInstance is called exactly once,
-///     queuing a single background task. Viewport preview is built in AfterSolveInstance.
+///     Obsolete WebDisplay component (until v0.8.3). Replaced by the version with Layer input.
 /// </summary>
-public class WebDisplay : GH_TaskCapableComponent<SolveResult>
+public class OBSOLETE_WebDisplay_UntilV0_8_3 : GH_TaskCapableComponent<SolveResult_V0_8_3>
 {
     private BoundingBox _previewBB;
     private List<GH_CustomPreviewItem> _previewItems;
 
-    public WebDisplay()
+    public OBSOLETE_WebDisplay_UntilV0_8_3()
         : base("Display", "D", "Converts geometry to display file", "Selva", "Display")
     {
     }
 
     protected override Bitmap Icon => Resources.WebDisplay;
-    public override Guid ComponentGuid => new("4F7A9C2E-1B3D-4E8F-A6C0-9D2E5B7F1A4C");
+    public override Guid ComponentGuid => new("9B5515B2-861A-4840-B884-82B725203ABB");
+    public override GH_Exposure Exposure => GH_Exposure.hidden;
     public override BoundingBox ClippingBox => _previewBB;
     public override bool IsPreviewCapable => true;
 
@@ -69,8 +67,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
         pManager.AddGeometryParameter("Geo", "G", "Geometry to display", GH_ParamAccess.tree);
-        pManager.AddTextParameter("Name", "N", "Name of the mesh", GH_ParamAccess.tree, "");
-        pManager.AddTextParameter("Layer", "L", "Layer for grouping in scene manager (e.g. 'Structure/Walls')", GH_ParamAccess.tree, "");
+        pManager.AddTextParameter("Mesh Name", "N", "Name of the mesh", GH_ParamAccess.tree, "");
         pManager.AddTextParameter("Metadata", "D", "Metadata for the mesh (Format: 'Key=Value')", GH_ParamAccess.tree);
         pManager.AddParameter(new Param_ThreeMaterial("T-Material", "TM", "ThreeMaterial for display", "Selva",
             "Display", GH_ParamAccess.tree));
@@ -80,7 +77,6 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         pManager[2].Optional = true;
         pManager[3].Optional = true;
         pManager[4].Optional = true;
-        pManager[5].Optional = true;
     }
 
     public override void CreateAttributes()
@@ -103,25 +99,23 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         }
 
         DA.GetDataTree(1, out GH_Structure<GH_String> nameTree);
-        DA.GetDataTree(2, out GH_Structure<GH_String> layerTree);
-        DA.GetDataTree(3, out GH_Structure<GH_String> metaTree);
-        DA.GetDataTree(4, out GH_Structure<ThreeMaterialGoo> matTree);
+        DA.GetDataTree(2, out GH_Structure<GH_String> metaTree);
+        DA.GetDataTree(3, out GH_Structure<ThreeMaterialGoo> matTree);
         GH_MeshingParameters ghMeshParams = null;
-        DA.GetData(5, ref ghMeshParams);
+        DA.GetData(4, ref ghMeshParams);
 
         var meshSettings = ghMeshParams?.Value ?? MeshingParameters.FastRenderMesh;
-        var componentId = InstanceGuid.ToString();
 
         if (InPreSolve)
         {
             TaskList.Add(Task.Run(() =>
-                    ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings),
+                    ComputeBatch(geoTree, nameTree, metaTree, matTree, meshSettings),
                 CancelToken));
             return;
         }
 
         if (!GetSolveResults(DA, out var result))
-            result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings);
+            result = ComputeBatch(geoTree, nameTree, metaTree, matTree, meshSettings);
 
         if (result == null || result.Meshes.Count == 0)
         {
@@ -133,12 +127,9 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
                 $"{result.Skipped} item(s) could not be meshed and were skipped");
 
-        var batch = MeshBatchProcessor.CreateBatch(
-            result.Meshes, result.Names, result.Materials, result.Metadata,
-            result.Layers, componentId);
+        var batch = MeshBatchProcessor.CreateBatch(result.Meshes, result.Names, result.Materials, result.Metadata);
         DA.SetData(0, new WebDisplayGoo(batch));
 
-        // Build preview items on main thread (Rhino display API requirement).
         _previewItems = new List<GH_CustomPreviewItem>(result.Meshes.Count);
         _previewBB = BoundingBox.Empty;
         var matCache = new Dictionary<uint, DisplayMaterial>();
@@ -182,17 +173,15 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         return fallback ?? new List<T>();
     }
 
-    private static SolveResult ComputeBatch(
+    private static SolveResult_V0_8_3 ComputeBatch(
         GH_Structure<IGH_GeometricGoo> geoTree,
         GH_Structure<GH_String> nameTree,
-        GH_Structure<GH_String> layerTree,
         GH_Structure<GH_String> metaTree,
         GH_Structure<ThreeMaterialGoo> matTree,
         MeshingParameters meshSettings)
     {
         var meshes = new List<Mesh>();
         var names = new List<string>();
-        var layers = new List<string>();
         var metadata = new List<Dictionary<string, string>>();
         var materials = new List<ThreeMaterial>();
         var skipped = 0;
@@ -203,12 +192,10 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             if (geoItems == null || geoItems.Count == 0) continue;
 
             var nameItems = ResolveBranch<GH_String>(nameTree, path);
-            var layerItems = ResolveBranch<GH_String>(layerTree, path);
             var metaItems = ResolveBranch<GH_String>(metaTree, path);
             var matItems = ResolveBranch<ThreeMaterialGoo>(matTree, path);
 
             var lastName = nameItems.Count > 0 ? nameItems[nameItems.Count - 1]?.Value ?? "" : "";
-            var lastLayer = layerItems.Count > 0 ? layerItems[layerItems.Count - 1]?.Value ?? "" : "";
             var lastMeta = metaItems.Count > 0 ? metaItems[metaItems.Count - 1]?.Value ?? "" : "";
             var lastMat = matItems.Count > 0
                 ? matItems[matItems.Count - 1]?.Value ?? ThreeMaterial.Default()
@@ -226,37 +213,18 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 mesh.Compact();
 
                 var nameStr = i < nameItems.Count ? nameItems[i]?.Value ?? lastName : lastName;
-                var layerStr = i < layerItems.Count ? layerItems[i]?.Value ?? lastLayer : lastLayer;
+                var metaStr = i < metaItems.Count ? metaItems[i]?.Value ?? lastMeta : lastMeta;
                 var mat = i < matItems.Count ? matItems[i]?.Value ?? lastMat : lastMat;
-
-                // If there are more metadata items than geo items, merge all extras into this mesh.
-                // This handles the case where one branch has one mesh but multiple metadata strings.
-                var mergedMeta = new Dictionary<string, string>();
-                if (metaItems.Count > geoItems.Count)
-                {
-                    foreach (var m in metaItems)
-                        if (m?.Value != null)
-                            foreach (var kv in ParseMetadataString(m.Value))
-                                mergedMeta[kv.Key] = kv.Value;
-                }
-                else
-                {
-                    var metaStr = i < metaItems.Count ? metaItems[i]?.Value ?? lastMeta : lastMeta;
-                    mergedMeta = ParseMetadataString(metaStr);
-                }
 
                 meshes.Add(mesh);
                 names.Add(!string.IsNullOrWhiteSpace(nameStr) ? nameStr : meshes.Count.ToString());
-                layers.Add(layerStr ?? "");
-                metadata.Add(mergedMeta);
+                metadata.Add(ParseMetadataString(metaStr));
                 materials.Add(mat);
             }
         }
 
-        return meshes.Count > 0 ? new SolveResult(meshes, names, layers, metadata, materials, skipped) : null;
+        return meshes.Count > 0 ? new SolveResult_V0_8_3(meshes, names, metadata, materials, skipped) : null;
     }
-
-    // ── Viewport drawing ─────────────────────────────────────────────────────────
 
     public override void DrawViewportMeshes(IGH_PreviewArgs args)
     {
@@ -286,8 +254,6 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 Attributes.Selected ? args.WireColour_Selected : args.WireColour,
                 args.DefaultCurveThickness));
     }
-
-    // ── Geometry helpers ─────────────────────────────────────────────────────────
 
     private static GeometryBase TryExtractGeometry(IGH_Goo goo)
     {

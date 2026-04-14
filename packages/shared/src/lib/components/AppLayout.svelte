@@ -2,7 +2,7 @@
 	import type { UISchema, SupportedTypes } from '../types/generated';
 	import type { ActionButton } from '../types/actionButton';
 	import { ChevronUp } from '@lucide/svelte';
-	import Viewer from './Viewer.svelte';
+	import Viewer from './viewer/Viewer.svelte';
 	import CalculateButton from './ui/CalculateButton.svelte';
 	import SolvingIndicator from './ui/SolvingIndicator.svelte';
 	import StateManager from './StateManager.svelte';
@@ -128,7 +128,14 @@
 		{#if showStateManager || (!isMobile && showCalculateButton && schema.instanceSolve === false)}
 			<div class="panel-footer px-3">
 				{#if showStateManager}
-					<StateManager {schema} currentValues={values} onLoadValues={handleLoadValues} actions={stateManagerActions} {showSaveButton} {showLoadButton} />
+					<StateManager
+						{schema}
+						currentValues={values}
+						onLoadValues={handleLoadValues}
+						actions={stateManagerActions}
+						{showSaveButton}
+						{showLoadButton}
+					/>
 				{/if}
 				{#if !isMobile && showCalculateButton && schema.instanceSolve === false}
 					<CalculateButton {hasPendingChanges} {hasNeverSolved} {isSolving} {oncalculate} />
@@ -150,12 +157,15 @@
 		{#if hasViewer}
 			<div class="min-h-0 flex flex-1 flex-col">
 				<Viewer
-					{schema}
 					{meshes}
 					bind:isFullscreen={isViewerFullscreen}
 					{isSolving}
 					isBlurred={drawerOpen}
 					{drawerOpen}
+					viewerConfig={{
+						backgroundColor: schema?.viewerOptions?.backgroundColor,
+						showSceneManager: false
+					}}
 				/>
 			</div>
 
@@ -306,7 +316,14 @@
 					<!-- Viewer pane -->
 					{#if hasViewer}
 						<Resizable.Pane order={2} minSize={20} class="min-h-0 mx-1 flex flex-col">
-							<Viewer {schema} {meshes} bind:isFullscreen={isViewerFullscreen} {isSolving} />
+							<Viewer
+								{meshes}
+								bind:isFullscreen={isViewerFullscreen}
+								{isSolving}
+								viewerConfig={{
+									backgroundColor: schema?.viewerOptions?.backgroundColor
+								}}
+							/>
 						</Resizable.Pane>
 					{/if}
 

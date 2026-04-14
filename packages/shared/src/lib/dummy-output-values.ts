@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import chart from '$lib/dummy-surface-chart.json';
+import meshData from '$lib/example-mesh.json';
+import { parseMeshBatchObject } from 'selva-compute/visualization';
 
 // ─── 3D mesh ────────────────────────────────────────────────────────────────
+// Create a fallback cube mesh for sync use cases
 export const cubeMesh = new THREE.Mesh(
 	new THREE.BoxGeometry(1, 1, 1, 4, 4, 4),
-	new THREE.MeshStandardMaterial({ color: 0x4a90d9, metalness: 0.3, roughness: 0.4 })
+	new THREE.MeshStandardMaterial({ color: 0x4a00d9, metalness: 0.3, roughness: 0.4 })
 );
 
 cubeMesh.userData = {
@@ -14,6 +17,18 @@ cubeMesh.userData = {
 } as Record<string, any>;
 
 cubeMesh.name = 'cube_mesh';
+
+// Helper function to parse and get the example meshes
+// Returns an array of THREE.Mesh objects like the real handler does
+export async function getParsedMeshes() {
+	const meshes = await parseMeshBatchObject(meshData, {
+		mergeByMaterial: false,
+		applyTransforms: true,
+		scaleFactor: 1,
+		debug: false
+	});
+	return meshes;
+}
 
 // ─── Plotly figures — add/edit charts here ──────────────────────────────────
 // Paste fig.to_json() output directly as a template literal — no cleanup needed.

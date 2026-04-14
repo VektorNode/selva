@@ -17,7 +17,7 @@ export { default as OutputDisplay } from './components/preview/OutputDisplay.sve
 export * from './components/ui';
 export { default as StateDisplay } from './components/ui/StateDisplay.svelte';
 export { default as StateManager } from './components/StateManager.svelte';
-export { default as Viewer } from './components/Viewer.svelte';
+export { default as Viewer } from './components/viewer/Viewer.svelte';
 export { default as SolvingIndicator } from './components/ui/SolvingIndicator.svelte';
 export { default as ComputeMessages } from './components/ComputeMessages.svelte';
 

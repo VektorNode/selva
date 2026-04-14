@@ -1,5 +1,12 @@
 # selva-compute-app
 
+## 0.9.0
+
+### Patch Changes
+
+- Updated dependencies
+  - selva-shared@0.9.0
+
 ## 0.8.4
 
 ### Patch Changes
