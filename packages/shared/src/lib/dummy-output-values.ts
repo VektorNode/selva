@@ -26,7 +26,7 @@ export const dummyOutputValues: Record<string, unknown> = {
 	'output-002': 4827.63,
 	'output-003': [
 		{
-			fileName: 'result_geometry_SZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ',
+			fileName: 'result',
 			fileType: '.obj',
 			data: btoa('# Wavefront OBJ\nv 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.0 1.0 0.0\nf 1 2 3'),
 			isBase64Encoded: true
