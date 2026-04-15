@@ -397,7 +397,7 @@ if [ "$NO_RESTART" = false ]; then
     cd "$INSTALL_DIR"
     # Use restart (not reload) — graceful rolling reload causes ERR_MODULE_NOT_FOUND
     # because old workers try to lazy-import chunks that the new build replaced.
-    pm2 startOrRestart "$INSTALL_DIR/ecosystem.config.cjs" --update-env
+    pm2 restart "$INSTALL_DIR/ecosystem.config.cjs" --update-env
 
     # Wait for restart and check status via JSON to avoid awk parsing fragility
     sleep 3
