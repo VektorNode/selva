@@ -59,6 +59,9 @@ public class DocumentSynchronizationService : IDisposable
     // Delegate for parameter deletion handling
     public event Action<List<Guid>, GH_Document> OnParameterDeletionRequired;
 
+    // Delegate to register newly discovered IDs into the watched set
+    public event Action<IEnumerable<Guid>> OnNewIdsDiscovered;
+
     /// <summary>
     ///     Initialize the service and wire up document event handlers.
     /// </summary>
@@ -85,73 +88,64 @@ public class DocumentSynchronizationService : IDisposable
         try
         {
             var schema = _getSchema();
-            var currentParams = GetCurrentAvailableParameters(e.Document);
 
-            // If no schema exists, broadcast available parameters
             if (schema == null)
             {
-                if (currentParams.Inputs.Count > 0 || currentParams.Outputs.Count > 0)
+                // No schema yet — broadcast available params as a hint so the UI can show them
+                var available = GetCurrentAvailableParameters(e.Document);
+                if (available.Inputs.Count > 0 || available.Outputs.Count > 0)
                 {
                     _ = _communicationHandler
-                        .BroadcastMessage("parametersAdded", new { availableParams = currentParams })
+                        .BroadcastMessage("parametersAdded", new { availableParams = available })
                         .ContinueWith(t =>
                         {
-                            if (t.IsFaulted)
-                            {
-                                Logger.Error("Failed to broadcast parametersAdded", t.Exception);
-                                _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                                    "Failed to broadcast parametersAdded");
-                            }
+                            if (t.IsFaulted) Logger.Error("Failed to broadcast parametersAdded", t.Exception);
                         });
-
                     _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                        $"Parameter(s)/Output(s) detected: {currentParams.Inputs.Count} params, {currentParams.Outputs.Count} outputs. Check web UI.");
+                        $"Parameter(s)/Output(s) detected: {available.Inputs.Count} params, {available.Outputs.Count} outputs. Check web UI.");
                 }
-
                 return;
             }
 
-            // Validate schema and track changes
-            var (updatedSchema, removedIds) = _schemaManager.ValidateSchemaAndTrackChanges(schema, e.Document);
+            // Snapshot IDs before validation so we can detect what was added vs removed
+            var inputIdsBefore = new HashSet<Guid>(schema.Inputs.Select(i => i.Id));
+            var outputIdsBefore = new HashSet<Guid>(schema.Outputs.Select(o => o.Id));
+
+            // ValidateSchemaAndTrackChanges: purges deleted params AND merges new ones into schema.Inputs
+            List<Guid> removedIds;
+            (schema, removedIds) = _schemaManager.ValidateSchemaAndTrackChanges(schema, e.Document);
+            _setSchema(schema);
 
             if (removedIds.Count > 0)
             {
-                _setSchema(updatedSchema);
+                // Parameters deleted — cleanup, expire, done. New adds can't coexist with deletes in one event.
                 OnParameterDeletionRequired?.Invoke(removedIds, e.Document);
-
                 GHDocumentMutator.ScheduleComponentExpire(e.Document, _component);
+                return;
             }
-            else
-            {
-                // Check for new parameters
-                var newParamIds = currentParams.Inputs
-                    .Where(p => !schema.Inputs.Any(i => i.Id == p.Id))
-                    .Select(p => p.Id)
-                    .ToList();
 
-                var newOutputIds = currentParams.Outputs
-                    .Where(o => !schema.Outputs.Any(so => so.Id == o.Id))
-                    .Select(o => o.Id)
-                    .ToList();
+            // Check if MergeDiscoveredInputs added anything new
+            var addedInputs = schema.Inputs.Where(i => !inputIdsBefore.Contains(i.Id)).ToList();
+            var addedOutputs = schema.Outputs.Where(o => !outputIdsBefore.Contains(o.Id)).ToList();
 
-                if (newParamIds.Count > 0 || newOutputIds.Count > 0)
+            if (addedInputs.Count == 0 && addedOutputs.Count == 0) return;
+
+            // Register the new IDs in the watched set immediately
+            OnNewIdsDiscovered?.Invoke(addedInputs.Select(i => i.Id).Concat(addedOutputs.Select(o => o.Id)));
+
+            // Broadcast the full updated schema — web UI updates without reload
+            _ = _communicationHandler
+                .BroadcastSchemaUpdate(schema)
+                .ContinueWith(t =>
                 {
-                    _ = _communicationHandler
-                        .BroadcastMessage("parametersAdded", new { availableParams = currentParams })
-                        .ContinueWith(t =>
-                        {
-                            if (t.IsFaulted)
-                            {
-                                Logger.Error("Failed to broadcast parametersAdded", t.Exception);
-                                _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                                    "Failed to broadcast parametersAdded");
-                            }
-                        });
+                    if (t.IsFaulted) Logger.Error("Failed to broadcast schema update after param add", t.Exception);
+                });
 
-                    _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                        $"New items added: {newParamIds.Count} param(s), {newOutputIds.Count} output(s). Check web UI.");
-                }
-            }
+            // Expire UIBridge so downstream GH components (EvaluateSchema etc.) re-solve with updated schema
+            GHDocumentMutator.ScheduleComponentExpire(e.Document, _component);
+
+            _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                $"New items added: {addedInputs.Count} param(s), {addedOutputs.Count} output(s).");
         }
         catch (Exception ex)
         {
@@ -163,26 +157,20 @@ public class DocumentSynchronizationService : IDisposable
     {
         try
         {
-            if ((e.Changes.Inputs.Count > 0 || e.Changes.Outputs.Count > 0) && _currentDocument != null)
-            {
-                _currentDocument.Modified();
+            if (e.Changes.Inputs.Count == 0 && e.Changes.Outputs.Count == 0) return;
 
-                if (e.RequiresRecalculation)
-                {
+            var document = _currentDocument ?? _component?.OnPingDocument();
+            if (document == null) return;
+
+            _currentDocument ??= document;
+            document.Modified();
+
+            // Schema already updated in memory — schedule a full expire so UIBridge re-solves
+            // and downstream components (EvaluateSchema etc.) receive the updated schema.
+            GHDocumentMutator.ScheduleComponentExpire(document, _component, immediate: true);
 #if DEBUG
-                    Logger.Log("[UIBuilder] MetadataChanged — triggering ExpireSolution (slider range or ValueList options changed)");
+            Logger.Log($"[UIBuilder] MetadataChanged — scheduling full expire");
 #endif
-                    _component?.ExpireSolution(false);
-                    _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                        "Source parameter changed - recalculating");
-                }
-#if DEBUG
-                else
-                {
-                    Logger.Log("[UIBuilder] MetadataChanged — document marked Modified, no recalculation needed");
-                }
-#endif
-            }
         }
         catch (Exception ex)
         {
@@ -193,13 +181,8 @@ public class DocumentSynchronizationService : IDisposable
 
     private DiscoveredParameters GetCurrentAvailableParameters(GH_Document document)
     {
-        if (document == null || _schemaManager == null || _component == null)
-            return new DiscoveredParameters
-            {
-                SessionId = "",
-                Inputs = [],
-                Outputs = []
-            };
+        if (document == null || _component == null)
+            return new DiscoveredParameters { SessionId = "", Inputs = [], Outputs = [] };
 
         return _schemaManager.ScanParameters(document, _component);
     }

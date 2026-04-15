@@ -38,6 +38,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     private UIBuilderService _service;
     private string _sessionId;
 
+    // Named event handler references so they can be unsubscribed on Dispose
+    private EventHandler _onSolutionStarted;
+    private EventHandler _onSolutionEnded;
+    private EventHandler _onDocumentModified;
+
     public GH_UIBuilderComponent()
         : base("UI Bridge", "UIBridge",
             "Build and interact with your UI - WebSocket-only communication",
@@ -170,15 +175,19 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         // Wire up parameter deletion handler
         _service.DocumentSyncService.OnParameterDeletionRequired += HandleParameterDeletion;
 
-        // Wire up solution events
-        _service.EventManager.SolutionStarted += (s, e) =>
+        // Keep watched set in sync when new params are merged into the schema
+        _service.DocumentSyncService.OnNewIdsDiscovered += ids =>
+            _service.EventManager.RegisterWatchedIds(ids);
+
+        // Wire up solution events — stored as named fields so they can be unsubscribed on Dispose
+        _onSolutionStarted = (s, e) =>
         {
 #if DEBUG
 			Logger.Log("[UIBuilder] SolutionStart");
 #endif
             _service.StateManager.SetSolving(true);
         };
-        _service.EventManager.SolutionEnded += (s, e) =>
+        _onSolutionEnded = (s, e) =>
         {
             var wasActuallySolving = _service.StateManager.SetSolving(false);
 #if DEBUG
@@ -188,17 +197,39 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             {
                 _service.EventManager.CollectAndBroadcastOutputs(_embeddedSchema);
                 _service.EventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
+
+                // Sync ContextBake outputs: add newly-qualifying, remove unwired ones
+                if (_embeddedSchema != null)
+                {
+                    var document = OnPingDocument();
+                    var (addedIds, removedIds) = _service.SchemaManager.MergePostSolveBakeOutputs(_embeddedSchema, document);
+                    if (addedIds.Count > 0 || removedIds.Count > 0)
+                    {
+                        if (addedIds.Count > 0)
+                            _service.EventManager.RegisterWatchedIds(addedIds);
+                        _ = _service.CommunicationHandler
+                            .BroadcastSchemaUpdate(_embeddedSchema, removedIds.Count > 0 ? removedIds : null)
+                            .ContinueWith(t =>
+                            {
+                                if (t.IsFaulted)
+                                    Logger.Error("Failed to broadcast schema update after bake output sync", t.Exception);
+                            });
+                        GHDocumentMutator.ScheduleComponentExpire(document, this, immediate: true);
+                    }
+                }
             }
 
             ClearAllContextualParameters();
         };
-
-        // Detect nickname/metadata changes that don't trigger a new solution (e.g. renaming a parameter)
-        _service.EventManager.DocumentModified += (s, e) =>
+        _onDocumentModified = (s, e) =>
         {
             if (_embeddedSchema != null)
                 _service.EventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
         };
+
+        _service.EventManager.SolutionStarted += _onSolutionStarted;
+        _service.EventManager.SolutionEnded += _onSolutionEnded;
+        _service.EventManager.DocumentModified += _onDocumentModified;
     }
 
 
@@ -247,6 +278,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             _embeddedSchema = _service.SchemaManager.ValidateSchema(_embeddedSchema, document);
             // Reconcile nicknames renamed while component was off (or Rhino was closed)
             _service.SchemaManager.SyncNicknamesFromDocument(_embeddedSchema, document);
+            // Seed the watched set so UndoStateChanged can short-circuit correctly
+            _service.EventManager.RegisterWatchedObjects(_embeddedSchema);
         }
 
         DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
@@ -403,7 +436,15 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     private void Cleanup()
     {
         CleanupCommunication();
-        _service?.EventManager?.UnregisterEvents();
+
+        if (_service?.EventManager != null)
+        {
+            _service.EventManager.SolutionStarted -= _onSolutionStarted;
+            _service.EventManager.SolutionEnded -= _onSolutionEnded;
+            _service.EventManager.DocumentModified -= _onDocumentModified;
+            _service.EventManager.UnregisterEvents();
+        }
+
         _service?.ValueApplicator?.Clear();
         _service?.SchemaManager?.ClearMetadataCache();
         _service?.StateManager?.Reset();

@@ -230,6 +230,7 @@ public class BridgeCommunicationService : IDisposable
             _component.Attributes?.DocObject?.RecordUndoEvent("Update Schema");
             _setSchema(validatedSchema);
             _schemaManager.ClearMetadataCache();
+            document.Modified();
 
             // Suppress the re-solve triggered by the component expire below so the
             // frontend does not see a spurious solving-state flash.
@@ -313,6 +314,7 @@ public class BridgeCommunicationService : IDisposable
             if (updatedSchema != null)
             {
                 _setSchema(updatedSchema);
+                document.Modified();
                 _ = _communicationHandler.BroadcastSchemaUpdate(updatedSchema);
             }
 

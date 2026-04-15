@@ -320,7 +320,8 @@ public class SchemaManager
     /// </summary>
     public UISchema ValidateSchema(UISchema schema, GH_Document document)
     {
-        return ValidateSchemaAndTrackChanges(schema, document, false).Schema;
+        ValidateSchemaAndTrackChanges(schema, document, out _);
+        return schema;
     }
 
     /// <summary>
@@ -370,24 +371,24 @@ public class SchemaManager
     }
 
     /// <summary>
-    ///     Validate schema and optionally track which parameter IDs were removed.
+    ///     Validate schema and track which parameter IDs were removed.
     /// </summary>
     public (UISchema Schema, List<Guid> RemovedIds) ValidateSchemaAndTrackChanges(
-        UISchema schema, GH_Document document, bool trackChanges = true)
+        UISchema schema, GH_Document document)
     {
-        if (schema == null)
-            return (null, new List<Guid>());
+        ValidateSchemaAndTrackChanges(schema, document, out var removedIds);
+        return (schema, removedIds);
+    }
+
+    private void ValidateSchemaAndTrackChanges(UISchema schema, GH_Document document, out List<Guid> removedIds)
+    {
+        if (schema == null) { removedIds = []; return; }
 
         var referencedIds = CollectAllReferencedIds(schema);
         var existingIds = ResolveExistingIds(referencedIds, document);
-
-        var removedIds = trackChanges
-            ? PurgeStaleReferences(schema, existingIds)
-            : PurgeStaleReferencesUntracked(schema, existingIds);
-
+        removedIds = PurgeStaleReferences(schema, existingIds);
         MergeDiscoveredInputs(schema, document);
-
-        return (schema, removedIds);
+        MergeDiscoveredPrintOutputs(schema, document);
     }
 
     /// <summary>
@@ -435,17 +436,6 @@ public class SchemaManager
         PurgeStaleLayoutItems(schema.Layout, existingIds);
 
         return removed;
-    }
-
-    /// <summary>
-    ///     Remove stale references without tracking (avoids allocating tracking collections).
-    /// </summary>
-    private static List<Guid> PurgeStaleReferencesUntracked(UISchema schema, HashSet<Guid> existingIds)
-    {
-        schema.Inputs.RemoveAll(i => !existingIds.Contains(i.Id));
-        schema.Outputs.RemoveAll(o => !existingIds.Contains(o.Id));
-        PurgeStaleLayoutItems(schema.Layout, existingIds);
-        return new List<Guid>();
     }
 
     /// <summary>
@@ -509,6 +499,99 @@ public class SchemaManager
             });
 
             existingIds.Add(docObj.InstanceGuid);
+        }
+    }
+
+    /// <summary>
+    ///     After a solve, sync ContextBake outputs in the schema:
+    ///     - Adds newly-qualifying bakes (file/chart now wired correctly)
+    ///     - Removes bakes that are still on the canvas but no longer qualify (unwired)
+    ///     Returns (addedIds, removedIds) so the caller can broadcast accordingly.
+    /// </summary>
+    public (List<Guid> Added, List<Guid> Removed) MergePostSolveBakeOutputs(UISchema schema, GH_Document document)
+    {
+        var added = new List<Guid>();
+        var removed = new List<Guid>();
+        if (schema == null || document == null) return (added, removed);
+
+        // Build a map of all ContextBake components currently on the canvas
+        var bakeComponents = new Dictionary<Guid, GH_Component>();
+        foreach (var obj in document.Objects)
+        {
+            if (ParameterTypeHelper.IsContextBakeComponent(obj) && obj is GH_Component c)
+                bakeComponents[c.InstanceGuid] = c;
+        }
+
+        // Remove existing schema outputs that are ContextBake but no longer qualify
+        var toRemove = schema.Outputs
+            .Where(o => bakeComponents.TryGetValue(o.Id, out var c)
+                        && !ParameterTypeHelper.IsFileOutputBakeComponent(c)
+                        && !ParameterTypeHelper.IsChartOutputBakeComponent(c))
+            .Select(o => o.Id)
+            .ToList();
+
+        if (toRemove.Count > 0)
+        {
+            schema.Outputs.RemoveAll(o => toRemove.Contains(o.Id));
+            removed.AddRange(toRemove);
+        }
+
+        // Add newly-qualifying bakes not yet in the schema
+        var existingIds = new HashSet<Guid>(schema.Outputs.Select(o => o.Id));
+        foreach (var kvp in bakeComponents)
+        {
+            if (existingIds.Contains(kvp.Key)) continue;
+            if (kvp.Value.Params.Input.Count == 0) continue;
+
+            string type;
+            if (ParameterTypeHelper.IsFileOutputBakeComponent(kvp.Value))
+                type = "file";
+            else if (ParameterTypeHelper.IsChartOutputBakeComponent(kvp.Value))
+                type = "chart";
+            else
+                continue;
+
+            schema.Outputs.Add(new SchemaOutput
+            {
+                Id = kvp.Key,
+                Nickname = kvp.Value.Params.Input[0].NickName,
+                Description = "",
+                Type = type
+            });
+
+            existingIds.Add(kvp.Key);
+            added.Add(kvp.Key);
+        }
+
+        return (added, removed);
+    }
+
+    /// <summary>
+    ///     Auto-merge ContextPrint components into schema.Outputs (same as MergeDiscoveredInputs for inputs).
+    ///     ContextBake is excluded — it needs a solve to determine what it's connected to.
+    /// </summary>
+    private static void MergeDiscoveredPrintOutputs(UISchema schema, GH_Document document)
+    {
+        if (document == null) return;
+
+        var existingIds = new HashSet<Guid>(schema.Outputs.Select(o => o.Id));
+
+        foreach (var obj in document.Objects)
+        {
+            if (!ParameterTypeHelper.IsContextOutputComponent(obj)) continue;
+            if (obj is not GH_Component c) continue;
+            if (existingIds.Contains(c.InstanceGuid)) continue;
+
+            var nickname = c.Params.Input.Count > 0 ? c.Params.Input[0].NickName : c.NickName;
+            schema.Outputs.Add(new SchemaOutput
+            {
+                Id = c.InstanceGuid,
+                Nickname = nickname,
+                Description = "",
+                Type = "text"
+            });
+
+            existingIds.Add(c.InstanceGuid);
         }
     }
 
@@ -590,10 +673,16 @@ public class SchemaManager
         var contextParam = docObj as IGH_ContextualParameter;
         var ghParam = docObj as IGH_Param;
 
+        // Output components (ContextPrint/ContextBake) use their first input param's NickName
+        // as the user-facing label — match the same source as SyncNicknamesFromDocument.
+        string nickname = docObj.NickName;
+        if (docObj is GH_Component comp && contextParam == null && comp.Params.Input.Count > 0)
+            nickname = comp.Params.Input[0].NickName;
+
         var snapshot = new ParameterMetadataSnapshot
         {
             Id = docObj.InstanceGuid,
-            Nickname = docObj.NickName,
+            Nickname = nickname,
             Description = contextParam?.Prompt ?? ""
         };
 
