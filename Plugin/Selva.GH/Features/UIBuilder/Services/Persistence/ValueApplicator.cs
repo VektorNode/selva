@@ -527,49 +527,11 @@ public class ValueApplicator
                 "Could not find any method to assign file data to parameter (tried: AssignContextualData, AddVolatileDataTree, AddVolatileData)");
             return false;
 
-            // Mark parameter as modified so it updates downstream (unreachable, but kept for structure)
-            /*if (paramObject is IGH_ActiveObject activeObj)
-            {
-                pendingExpirations.Add(activeObj);
-            }*/
-
-            /*return true;*/
         }
         catch (Exception ex)
         {
             addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
                 $"Error applying file value: {ex.Message}");
-            return false;
-        }
-    }
-
-    /// <summary>
-    ///     Validates that a file path received over WebSocket is a safe local path.
-    ///     Blocks UNC paths (\\server\share), path traversal (..), and non-rooted relative paths.
-    /// </summary>
-    private static bool IsSafeLocalPath(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path)) return false;
-
-        // Block UNC paths — these can trigger NTLM credential leaks to remote SMB servers
-        if (path.StartsWith("\\\\") || path.StartsWith("//")) return false;
-
-        // Block path traversal sequences
-        if (path.Contains("..")) return false;
-
-        // Block common URI/device path prefixes that aren't plain local paths
-        if (path.StartsWith("file://", StringComparison.OrdinalIgnoreCase)) return false;
-
-        // Enforce Windows MAX_PATH
-        if (path.Length > 32767) return false;
-
-        // Require an absolute local path — reject relative paths that could escape CWD
-        try
-        {
-            return Path.IsPathRooted(path);
-        }
-        catch
-        {
             return false;
         }
     }

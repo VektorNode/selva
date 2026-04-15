@@ -69,9 +69,7 @@ public class GH_ValueListDataGoo : GH_Goo<string>
 
     public override string ToString()
     {
-        // Return the name (key) for display, not the expression value
-        // This makes ValueList outputs more readable and aligns with Grasshopper UI conventions
-        return SelectedName ?? Value ?? "null";
+        return Value ?? "null";
     }
 
     public override IGH_GooProxy EmitProxy()
@@ -227,10 +225,10 @@ public class GH_ValueListDataGoo : GH_Goo<string>
 
     public override bool CastTo<T>(ref T target)
     {
-        // Cast to string - return the name (key), not the expression value
+        // Cast to string - return the expression value (consistent with number cast)
         if (typeof(T) == typeof(GH_String))
         {
-            object obj = new GH_String(SelectedName ?? Value ?? string.Empty);
+            object obj = new GH_String(Value ?? string.Empty);
             target = (T)obj;
             return true;
         }

@@ -19,7 +19,6 @@ namespace Selva.GH.Features.UIBuilder.Services.Events;
 /// </summary>
 public class DocumentEventManager : IDisposable
 {
-    private const int OUTPUT_BROADCAST_DEBOUNCE_MS = 100;
     private readonly CommunicationHandler _communicationHandler;
     private readonly SchemaManager _schemaManager;
     private readonly ValueCollector _valueCollector;
@@ -27,9 +26,6 @@ public class DocumentEventManager : IDisposable
     private GH_Document _currentDocument;
     private bool _disposed;
     private bool _eventsRegistered;
-
-    // Debounce output broadcasts to prevent duplicate sends
-    private DateTime _lastOutputBroadcast = DateTime.MinValue;
 
     public DocumentEventManager(SchemaManager schemaManager, ValueCollector valueCollector,
         CommunicationHandler communicationHandler)
@@ -53,6 +49,7 @@ public class DocumentEventManager : IDisposable
     public event EventHandler SolutionEnded;
     public event EventHandler<ParametersChangedEventArgs> ParametersChanged;
     public event EventHandler<MetadataChangedEventArgs> MetadataChanged;
+    public event EventHandler DocumentModified;
 
     /// <summary>
     ///     Register events for a document
@@ -169,12 +166,13 @@ public class DocumentEventManager : IDisposable
 
     /// <summary>
     ///     Handle undo/redo state changes.
-    ///     Metadata detection is handled by the SolutionEnded path, which fires after undo triggers a re-solve.
+    ///     Fires DocumentModified so the component can detect nickname/metadata changes
+    ///     that don't trigger a new GH solution (e.g. renaming a parameter NickName).
     /// </summary>
     private void OnUndoStateChanged(object sender, GH_DocUndoEventArgs e)
     {
-        // No direct action needed: undo/redo triggers a new GH solution,
-        // which fires SolutionEnded → DetectAndBroadcastMetadataChanges naturally.
+        if (_currentDocument == null || !_communicationHandler.IsRunning) return;
+        DocumentModified?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -215,15 +213,15 @@ public class DocumentEventManager : IDisposable
         {
             var metadataChanges = _schemaManager.DetectMetadataChanges(_currentDocument, schema);
 #if DEBUG
-			Logger.Log($"[UIBuilder] MetadataDetect — changed inputs={metadataChanges.Inputs.Count}, outputs={metadataChanges.Outputs.Count}");
+            Logger.Log($"[UIBuilder] MetadataDetect — changed inputs={metadataChanges.Inputs.Count}, outputs={metadataChanges.Outputs.Count}");
 #endif
             if (metadataChanges.Inputs.Count > 0 || metadataChanges.Outputs.Count > 0)
             {
                 var requiresRecalc = ShouldRecalculateAfterMetadataChange(metadataChanges);
 #if DEBUG
-				var names = metadataChanges.Inputs.Select(i => i.Nickname)
-					.Concat(metadataChanges.Outputs.Select(o => o.Nickname));
-				Logger.Log($"[UIBuilder] MetadataChanged — params=[{string.Join(", ", names)}], requiresRecalc={requiresRecalc}");
+                var names = metadataChanges.Inputs.Select(i => i.Nickname)
+                    .Concat(metadataChanges.Outputs.Select(o => o.Nickname));
+                Logger.Log($"[UIBuilder] MetadataChanged — params=[{string.Join(", ", names)}], requiresRecalc={requiresRecalc}");
 #endif
                 var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
                 MetadataChanged?.Invoke(this, new MetadataChangedEventArgs

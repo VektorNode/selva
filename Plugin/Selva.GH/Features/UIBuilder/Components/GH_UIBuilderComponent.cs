@@ -192,6 +192,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
             ClearAllContextualParameters();
         };
+
+        // Detect nickname/metadata changes that don't trigger a new solution (e.g. renaming a parameter)
+        _service.EventManager.DocumentModified += (s, e) =>
+        {
+            if (_embeddedSchema != null)
+                _service.EventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
+        };
     }
 
 
@@ -235,8 +242,12 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
 
         if (_embeddedSchema != null && transition.EnableRising)
-            // Validate schema on enable to remove any parameters deleted while component was off
+        {
+            // Remove any parameters deleted while component was off
             _embeddedSchema = _service.SchemaManager.ValidateSchema(_embeddedSchema, document);
+            // Reconcile nicknames renamed while component was off (or Rhino was closed)
+            _service.SchemaManager.SyncNicknamesFromDocument(_embeddedSchema, document);
+        }
 
         DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
     }

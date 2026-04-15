@@ -84,8 +84,6 @@ public class LocalWebServer : IDisposable
         {
             if (IsRunning) return;
 
-            // Resolve port before touching HttpListener so we never have a
-            // TOCTOU window between "check free" and "bind".
             if (Port == 0)
                 Port = FindAvailablePort();
 

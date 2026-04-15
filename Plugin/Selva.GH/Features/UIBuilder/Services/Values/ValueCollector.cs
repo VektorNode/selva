@@ -246,9 +246,9 @@ public class ValueCollector
         if (valueData != null && !valueData.IsEmpty)
         {
             var allData = valueData.AllData(true).ToList();
-            if (allData.Count == 1) return ExtractKeyFromValueListData(allData[0]);
+            if (allData.Count == 1) return ExtractValue(allData[0]);
 
-            if (allData.Count > 1) return allData.Select(d => ExtractKeyFromValueListData(d)).ToList();
+            if (allData.Count > 1) return allData.Select(d => ExtractValue(d)).ToList();
         }
 
         return null;
@@ -367,16 +367,6 @@ public class ValueCollector
         }
 
         return null;
-    }
-
-    /// <summary>
-    ///     Extract the key/name from ValueList data (not the expression value)
-    /// </summary>
-    private object ExtractKeyFromValueListData(IGH_Goo data)
-    {
-        if (data is GH_ValueListDataGoo valueListData) return valueListData.SelectedName;
-
-        return ExtractValue(data);
     }
 
     /// <summary>

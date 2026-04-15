@@ -324,6 +324,52 @@ public class SchemaManager
     }
 
     /// <summary>
+    ///     Reconcile schema nicknames directly against the current document state.
+    ///     Used on startup/enable to fix any drift that occurred while Rhino was closed.
+    ///     Unlike DetectMetadataChanges, this bypasses the snapshot cache and always reflects current GH state.
+    ///     Returns true if any nicknames were updated.
+    /// </summary>
+    public bool SyncNicknamesFromDocument(UISchema schema, GH_Document document)
+    {
+        if (schema == null || document == null) return false;
+
+        var changed = false;
+
+        foreach (var input in schema.Inputs)
+        {
+            var docObj = document.FindObject(input.Id, false);
+            if (docObj == null) continue;
+
+            if (input.Nickname != docObj.NickName)
+            {
+                input.Nickname = docObj.NickName;
+                changed = true;
+            }
+        }
+
+        foreach (var output in schema.Outputs)
+        {
+            if (document.FindObject(output.Id, false) is not GH_Component component) continue;
+            if (component.Params.Input.Count == 0) continue;
+
+            var inputParam = component.Params.Input[0];
+            if (inputParam == null) continue;
+
+            if (output.Nickname != inputParam.NickName)
+            {
+                output.Nickname = inputParam.NickName;
+                changed = true;
+            }
+        }
+
+        // Also seed the metadata cache so the first UndoStateChanged after startup
+        // has a baseline and doesn't incorrectly report everything as changed.
+        if (changed) ClearMetadataCache();
+
+        return changed;
+    }
+
+    /// <summary>
     ///     Validate schema and optionally track which parameter IDs were removed.
     /// </summary>
     public (UISchema Schema, List<Guid> RemovedIds) ValidateSchemaAndTrackChanges(

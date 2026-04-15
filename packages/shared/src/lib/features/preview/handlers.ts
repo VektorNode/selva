@@ -58,45 +58,10 @@ export function initializeValues(options: InitializeValuesOptions): Record<strin
 		Object.assign(values, options.currentValues);
 	}
 
-	// Normalize valueList/dropdown values: convert labels to values if needed
-	options.schema.inputs.forEach((input) => {
-		if (input.paramType === 'valueList' && values[input.id] != null) {
-			const layoutItem = findLayoutItemForInput(options.schema, input.id);
-			if (
-				layoutItem &&
-				isInputLayoutItem(layoutItem) &&
-				layoutItem.widgetType === 'dropdown' &&
-				layoutItem.config?.options
-			) {
-				const currentValue = values[input.id];
-				const dropdownOptions = layoutItem.config.options;
-
-				// If currentValue matches a label (key), convert to the corresponding value
-				if (typeof currentValue === 'string' && currentValue in dropdownOptions) {
-					values[input.id] = dropdownOptions[currentValue];
-				}
-			}
-		}
-	});
 
 	return values;
 }
 
-/**
- * Find a layout item by input parameter ID.
- * Searches through tabbed layout structure to locate the item configuration.
- */
-function findLayoutItemForInput(schema: UISchema, inputId: string): LayoutItem | null {
-	if (schema.layout.type === 'tabbed') {
-		for (const tab of schema.layout.tabs) {
-			for (const group of tab.groups) {
-				const item = group.items.find((item) => item.type !== 'linebreak' && item.paramId === inputId);
-				if (item) return item;
-			}
-		}
-	}
-	return null;
-}
 
 export interface OutputUpdateOptions {
 	outputs?: Record<string, unknown>;

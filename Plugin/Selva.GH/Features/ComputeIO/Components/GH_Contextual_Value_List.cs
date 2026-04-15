@@ -181,20 +181,13 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     /// </summary>
     public string GetDefaultValue()
     {
-        // Get the selected item's expression first
         var vl = ConnectedValueList;
         if (vl != null && vl.SelectedItems.Count > 0)
-        {
-            var selectedExpression = vl.SelectedItems[0].Expression;
-            // Return the name/key, not the expression
-            return vl.SelectedItems[0].Name;
-        }
+            return vl.SelectedItems[0].Expression;
 
-        // Fall back to stored items if ValueList not connected
         var items = GetItemTuples();
         if (items.Count > 0)
-            // Return first item's name
-            return items[0].Name;
+            return items[0].Expression;
 
         return string.Empty;
     }
@@ -284,6 +277,15 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
 
         _contextual = list.ToArray();
         ExpireSolution(false);
+    }
+
+    /// <summary>
+    ///     Populates the stored items from a name→expression dictionary.
+    ///     Call this before SetValues in Rhino Compute where no GH_ValueList is connected.
+    /// </summary>
+    public void LoadItems(Dictionary<string, string> options)
+    {
+        _storedItems = options.Select(kvp => (kvp.Key, kvp.Value)).ToList();
     }
 
     /// <summary>
@@ -393,13 +395,11 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
 
     private int FindMatchingIndex(string value)
     {
-        var items = ListItems;
+        // Always prefer live ValueList items — also refreshes _storedItems as a side effect
+        var items = GetItemTuples();
         for (var i = 0; i < items.Count; i++)
-            if (items[i].Expression == value || items[i].Name == value)
-                return i;
-
-        for (var i = 0; i < _storedItems.Count; i++)
-            if (_storedItems[i].Expression == value || _storedItems[i].Name == value)
+            if (string.Equals(items[i].Expression, value, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(items[i].Name, value, StringComparison.OrdinalIgnoreCase))
                 return i;
 
         return -1;
