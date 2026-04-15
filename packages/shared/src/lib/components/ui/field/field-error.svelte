@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { cn, type WithElementRef } from "$lib/utils.js";
-	import type { HTMLAttributes } from "svelte/elements";
-	import type { Snippet } from "svelte";
+	import { cn, type WithElementRef } from '$lib/utils.js';
+	import type { HTMLAttributes } from 'svelte/elements';
+	import type { Snippet } from 'svelte';
 
 	let {
 		ref = $bindable(null),
@@ -38,7 +38,7 @@
 		bind:this={ref}
 		role="alert"
 		data-slot="field-error"
-		class={cn("text-destructive text-sm font-normal", className)}
+		class={cn('text-sm font-normal text-destructive', className)}
 		{...restProps}
 	>
 		{#if children}
@@ -46,7 +46,7 @@
 		{:else if singleErrorMessage}
 			{singleErrorMessage}
 		{:else if isMultipleErrors}
-			<ul class="ms-4 flex list-disc flex-col gap-1">
+			<ul class="ms-4 gap-1 flex list-disc flex-col">
 				{#each errors ?? [] as error, index (index)}
 					{#if error?.message}
 						<li>{error.message}</li>

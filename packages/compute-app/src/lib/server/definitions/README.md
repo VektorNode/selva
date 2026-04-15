@@ -82,7 +82,6 @@ const container = getDefinitionContainer({
 2. `GH_DEFINITIONS_PATH` environment variable → Use that path
 3. Default → `./definitions`
 
-
 ## File Types
 
 - `.gh` - Grasshopper 7
@@ -112,8 +111,8 @@ expect(definitions.length).toBeGreaterThan(0);
 
 ## Environment Variables Reference
 
-| Variable              | Default         | Purpose              |
-| --------------------- | --------------- | -------------------- |
+| Variable              | Default         | Purpose                    |
+| --------------------- | --------------- | -------------------------- |
 | `GH_DEFINITIONS_PATH` | `./definitions` | Definitions directory path |
 
 ## Architecture

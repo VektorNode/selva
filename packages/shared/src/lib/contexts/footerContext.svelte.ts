@@ -46,7 +46,9 @@ export function initializeFooterContext(): FooterStore {
 export function useFooter(): FooterStore {
 	const store = getContext<FooterStore | undefined>(FOOTER_CONTEXT_KEY);
 	if (!store) {
-		throw new Error('useFooter must be called within a component that is a descendant of the root layout');
+		throw new Error(
+			'useFooter must be called within a component that is a descendant of the root layout'
+		);
 	}
 	return store;
 }

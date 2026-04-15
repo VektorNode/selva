@@ -1,10 +1,9 @@
 <script lang="ts">
-	import { Button, Label } from 'selva-shared';
+	import { Button } from 'selva-shared';
 	import { Upload } from '@lucide/svelte';
 
 	interface Props {
 		id: string;
-		label: string;
 		accept?: string;
 		disabled?: boolean;
 		isUploading?: boolean;
@@ -16,7 +15,6 @@
 
 	let {
 		id,
-		label,
 		accept = '',
 		disabled = false,
 		isUploading = false,

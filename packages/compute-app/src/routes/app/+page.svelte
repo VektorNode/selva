@@ -68,7 +68,7 @@
 			id: 'reset',
 			label: 'Reset',
 			onclick: () => {
-				console.log('Resetting app state');
+				console.warn('Resetting app state');
 			}
 		}
 	]}

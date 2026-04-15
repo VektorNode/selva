@@ -215,13 +215,13 @@
 				<PageHeader title={pageTitle} {showModeToggle} />
 			{/if}
 
-			<div class="bg-background flex flex-1 flex-col overflow-hidden">
+			<div class="flex flex-1 flex-col overflow-hidden bg-background">
 				{#if error}
-					<div class="flex min-h-100 items-center justify-center p-8">
+					<div class="min-h-100 p-8 flex items-center justify-center">
 						<StateDisplay type="error" size="medium" message={error} />
 					</div>
 				{:else if !schema}
-					<div class="flex min-h-100 items-center justify-center">
+					<div class="min-h-100 flex items-center justify-center">
 						<StateDisplay type="loading" size="large" message="Loading schema..." />
 					</div>
 				{:else}
@@ -236,8 +236,8 @@
 							bind:isViewerFullscreen
 							bind:values
 							{stateManagerActions}
-						{showSaveButton}
-						{showLoadButton}
+							{showSaveButton}
+							{showLoadButton}
 							onValueChange={handleValueChange}
 							oncalculate={handleCalculate}
 							onLoadValues={() => {

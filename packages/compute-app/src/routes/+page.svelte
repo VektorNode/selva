@@ -25,7 +25,8 @@
 			compute: computeHealth.compute
 		}),
 		'left',
-		20
+		20,
+		undefined
 	);
 
 	// Filter definitions based on search query

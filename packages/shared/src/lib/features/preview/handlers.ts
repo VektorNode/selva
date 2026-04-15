@@ -58,10 +58,8 @@ export function initializeValues(options: InitializeValuesOptions): Record<strin
 		Object.assign(values, options.currentValues);
 	}
 
-
 	return values;
 }
-
 
 export interface OutputUpdateOptions {
 	outputs?: Record<string, unknown>;

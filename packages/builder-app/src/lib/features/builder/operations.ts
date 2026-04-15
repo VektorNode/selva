@@ -22,7 +22,11 @@ export function isItemUsedInLayout(schema: UISchema | null, paramId: string): bo
 			) ?? false
 		);
 	} else if (schema.layout.type === 'flat') {
-		return schema.layout.groups.some((g) => g.items.some((i) => i.type !== 'linebreak' && i.paramId === paramId)) ?? false;
+		return (
+			schema.layout.groups.some((g) =>
+				g.items.some((i) => i.type !== 'linebreak' && i.paramId === paramId)
+			) ?? false
+		);
 	}
 	return false;
 }

@@ -58,11 +58,10 @@ See [Definitions Setup](./DEFINITIONS_SETUP.md) for details.
 
 ### Optional Variables
 
-| Variable          | Description                                                  | Default       |
-| ----------------- | ------------------------------------------------------------ | ------------- |
-| `COMPUTE_API_KEY` | API key for compute server (sent as RhinoComputeKey header)  | None          |
-| `PORT`            | Server port                                                  | `3000`        |
-| `HOST`            | Host binding                                                 | `localhost`   |
-| `NODE_ENV`        | Environment mode                                             | `development` |
-| `ORIGIN`          | Public URL for origin/CSRF checks (recommended in prod)      | None          |
-
+| Variable          | Description                                                 | Default       |
+| ----------------- | ----------------------------------------------------------- | ------------- |
+| `COMPUTE_API_KEY` | API key for compute server (sent as RhinoComputeKey header) | None          |
+| `PORT`            | Server port                                                 | `3000`        |
+| `HOST`            | Host binding                                                | `localhost`   |
+| `NODE_ENV`        | Environment mode                                            | `development` |
+| `ORIGIN`          | Public URL for origin/CSRF checks (recommended in prod)     | None          |

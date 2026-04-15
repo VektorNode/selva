@@ -3,8 +3,8 @@ import type { Actions } from './$types';
 import { destroySession } from '$lib/server/admin-auth.server';
 
 export const actions = {
-  default: async ({ cookies }) => {
-    destroySession(cookies);
-    throw redirect(303, '/admin/login');
-  }
+	default: async ({ cookies }) => {
+		destroySession(cookies);
+		throw redirect(303, '/admin/login');
+	}
 } satisfies Actions;

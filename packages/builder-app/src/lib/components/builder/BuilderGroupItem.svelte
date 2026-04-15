@@ -112,7 +112,6 @@
 			config.acceptedFormats = [format];
 		}
 	}
-
 </script>
 
 <div class="relative">
@@ -352,7 +351,6 @@
 									{/if}
 								</div>
 							{/if}
-
 						{/if}
 					</div>
 				{/if}

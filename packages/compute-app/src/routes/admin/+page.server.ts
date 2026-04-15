@@ -37,5 +37,3 @@ export const load: PageServerLoad = async () => {
 		return { config: {}, history: {} };
 	}
 };
-
-

@@ -31,7 +31,7 @@ cd packages/schemas && pnpm run generate:cs
 - [SchemaValidator.cs](Services/Validation/SchemaValidator.cs) - Composable validation engine
 - [IValidationRule.cs](Services/Validation/IValidationRule.cs) - Interface for custom rules
 - [Rules/](Services/Validation/Rules/) - Built-in validation rules (structure, parameters, layout, versioning,
-	constraints, widget config)
+  constraints, widget config)
 
 **Schema Migration** - Version upgrade handling:
 

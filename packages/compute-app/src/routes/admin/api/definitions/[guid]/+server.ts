@@ -5,34 +5,34 @@ import { GuidSchema, UpdateMetadataInputSchema } from '$lib/server/definitions/s
 
 // DELETE - Remove a definition: deletes the entire GUID folder and config entry
 export const DELETE: RequestHandler = async ({ params }) => {
-  const guidParsed = GuidSchema.safeParse(params.guid);
-  if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
+	const guidParsed = GuidSchema.safeParse(params.guid);
+	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
 
-  try {
-    await getDefinitionStore().deleteDefinition(guidParsed.data);
-    return json({ success: true });
-  } catch (err) {
-    if (err && typeof err === 'object' && 'status' in err) throw err;
-    console.error('[Definition DELETE] Failed:', err);
-    throw error(500, 'Failed to delete definition');
-  }
+	try {
+		await getDefinitionStore().deleteDefinition(guidParsed.data);
+		return json({ success: true });
+	} catch (err) {
+		if (err && typeof err === 'object' && 'status' in err) throw err;
+		console.error('[Definition DELETE] Failed:', err);
+		throw error(500, 'Failed to delete definition');
+	}
 };
 
 // PUT - Update metadata only (not the file)
 export const PUT: RequestHandler = async ({ params, request }) => {
-  const guidParsed = GuidSchema.safeParse(params.guid);
-  if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
+	const guidParsed = GuidSchema.safeParse(params.guid);
+	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
 
-  try {
-    const body = await request.json();
-    const parsed = UpdateMetadataInputSchema.safeParse(body);
-    if (!parsed.success) throw error(400, parsed.error.issues[0].message);
+	try {
+		const body = await request.json();
+		const parsed = UpdateMetadataInputSchema.safeParse(body);
+		if (!parsed.success) throw error(400, parsed.error.issues[0].message);
 
-    await getDefinitionStore().updateMetadata(guidParsed.data, parsed.data);
-    return json({ success: true });
-  } catch (err) {
-    if (err && typeof err === 'object' && 'status' in err) throw err;
-    console.error('[Definition PUT] Failed:', err);
-    throw error(500, 'Failed to update definition');
-  }
+		await getDefinitionStore().updateMetadata(guidParsed.data, parsed.data);
+		return json({ success: true });
+	} catch (err) {
+		if (err && typeof err === 'object' && 'status' in err) throw err;
+		console.error('[Definition PUT] Failed:', err);
+		throw error(500, 'Failed to update definition');
+	}
 };

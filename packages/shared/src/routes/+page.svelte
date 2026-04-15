@@ -4,7 +4,6 @@
 	import { initializeValues } from '$lib/features/preview/handlers';
 	import exampleSchema from '$lib/example-schema.json';
 	import exampleSchemaLeftOnly from '$lib/example-schema-left-only.json';
-	import exampleSchemaRightOnly from '$lib/example-schema-right-only.json';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import PageContainer from '$lib/components/layout/PageContainer.svelte';
 	import { cubeMesh, getParsedMeshes, dummyOutputValues } from '$lib/dummy-output-values';
@@ -94,7 +93,7 @@
 			]}
 			onLoadValues={async () => {
 				if (schema?.instanceSolve !== false) {
-					console.log('Performing solve on load values...');
+					console.error('Performing solve on load values...');
 				} else {
 					hasPendingChanges = true;
 				}

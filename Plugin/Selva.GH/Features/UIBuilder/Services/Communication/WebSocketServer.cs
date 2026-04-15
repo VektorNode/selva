@@ -24,9 +24,14 @@ public class WebSocketServer : IDisposable
     private const int HEARTBEAT_INTERVAL = AppConfig.WebSocket.HeartbeatIntervalMs;
     private const int BROADCAST_TIMEOUT = AppConfig.WebSocket.BroadcastTimeoutMs;
     private const int MAX_SEND_QUEUE = 10;
-    private readonly Dictionary<WebSocket, int> _clientPendingMessages = new Dictionary<WebSocket, int>();
 
     private readonly object _clientsLock = new object();
+
+    // Tracks per-client pending message count (for backpressure) and a semaphore (to serialize sends).
+    // WebSocket.SendAsync is NOT concurrent-safe: only one send may be in-flight at a time per socket.
+    private readonly Dictionary<WebSocket, ClientSendState> _clientState =
+        new Dictionary<WebSocket, ClientSendState>();
+
     private readonly List<WebSocket> _connectedClients = new List<WebSocket>();
 
     private CancellationTokenSource _cancellationTokenSource;
@@ -177,7 +182,12 @@ public class WebSocketServer : IDisposable
             }
 
             _connectedClients.Clear();
-            _clientPendingMessages.Clear();
+            foreach (var state in _clientState.Values)
+            {
+                state.Dispose();
+            }
+
+            _clientState.Clear();
         }
 
         try
@@ -237,14 +247,18 @@ public class WebSocketServer : IDisposable
             // Single lock acquisition for the backpressure check + increment.
             lock (_clientsLock)
             {
-                _clientPendingMessages.TryGetValue(client, out var pending);
-                if (pending >= MAX_SEND_QUEUE)
+                if (!_clientState.TryGetValue(client, out var state))
                 {
-                    Logger.Warn($"Client send queue full ({pending} pending), dropping message.");
                     continue;
                 }
 
-                _clientPendingMessages[client] = pending + 1;
+                if (state.PendingCount >= MAX_SEND_QUEUE)
+                {
+                    Logger.Warn($"Client send queue full ({state.PendingCount} pending), dropping message.");
+                    continue;
+                }
+
+                state.PendingCount++;
             }
 
             tasks.Add(SendToClientAsync(client, segment, clientsToRemove));
@@ -266,8 +280,28 @@ public class WebSocketServer : IDisposable
         ArraySegment<byte> segment,
         List<WebSocket> clientsToRemove)
     {
+        // Acquire per-client send lock so concurrent BroadcastAsync calls never overlap
+        // on the same WebSocket (SendAsync is not concurrent-safe).
+        ClientSendState state;
+        lock (_clientsLock)
+        {
+            _clientState.TryGetValue(client, out state);
+        }
+
+        if (state == null)
+        {
+            return;
+        }
+
+        await state.SendLock.WaitAsync().ConfigureAwait(false);
         try
         {
+            if (client.State != WebSocketState.Open)
+            {
+                MarkForRemoval(client, clientsToRemove);
+                return;
+            }
+
             using var cts = new CancellationTokenSource(BROADCAST_TIMEOUT);
             await client.SendAsync(segment, WebSocketMessageType.Text, true, cts.Token)
                 .ConfigureAwait(false);
@@ -284,11 +318,13 @@ public class WebSocketServer : IDisposable
         }
         finally
         {
+            state.SendLock.Release();
+
             lock (_clientsLock)
             {
-                if (_clientPendingMessages.TryGetValue(client, out var count))
+                if (_clientState.TryGetValue(client, out var s))
                 {
-                    _clientPendingMessages[client] = Math.Max(0, count - 1);
+                    s.PendingCount = Math.Max(0, s.PendingCount - 1);
                 }
             }
         }
@@ -354,7 +390,7 @@ public class WebSocketServer : IDisposable
                 }
 
                 _connectedClients.Add(webSocket);
-                _clientPendingMessages[webSocket] = 0;
+                _clientState[webSocket] = new ClientSendState();
                 goto accepted;
             }
 
@@ -381,7 +417,11 @@ public class WebSocketServer : IDisposable
                 lock (_clientsLock)
                 {
                     _connectedClients.Remove(webSocket);
-                    _clientPendingMessages.Remove(webSocket);
+                    if (_clientState.TryGetValue(webSocket, out var s))
+                    {
+                        _clientState.Remove(webSocket);
+                        s.Dispose();
+                    }
                 }
 
                 try
@@ -561,7 +601,12 @@ public class WebSocketServer : IDisposable
             foreach (var client in clients)
             {
                 _connectedClients.Remove(client);
-                _clientPendingMessages.Remove(client);
+                if (_clientState.TryGetValue(client, out var s))
+                {
+                    _clientState.Remove(client);
+                    s.Dispose();
+                }
+
                 try
                 {
                     client.Dispose();
@@ -588,6 +633,21 @@ public class WebSocketServer : IDisposable
         finally
         {
             listener.Stop();
+        }
+    }
+
+    /// <summary>
+    ///     Per-client state: pending message count (backpressure) + send semaphore (serialization).
+    ///     WebSocket.SendAsync must never be called concurrently on the same socket.
+    /// </summary>
+    private sealed class ClientSendState : IDisposable
+    {
+        public readonly SemaphoreSlim SendLock = new SemaphoreSlim(1, 1);
+        public int PendingCount;
+
+        public void Dispose()
+        {
+            SendLock.Dispose();
         }
     }
 }
