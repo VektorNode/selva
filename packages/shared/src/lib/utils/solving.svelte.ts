@@ -1,11 +1,7 @@
 import { untrack } from 'svelte';
+import { APP_DEFAULTS } from '../constants';
 
-// How many solves to keep in history for averaging
-const HISTORY_SIZE = 3;
-// If expected solve time is below this, skip the indicator entirely
-const FAST_THRESHOLD_MS = 200;
-// If expected solve time is above this, show indicator immediately (no delay)
-const SLOW_THRESHOLD_MS = 600;
+// Using centralized thresholds from APP_DEFAULTS
 
 /**
  * Creates an adaptive solving indicator that measures actual solve durations
@@ -16,7 +12,7 @@ const SLOW_THRESHOLD_MS = 600;
  * - In between: indicator shown after a proportional delay
  * - First solve: shows immediately (no history yet)
  */
-export function createSolvingIndicator(isSolving: () => boolean) {
+export function createSolvingIndicator(isSolving: () => boolean): { readonly show: boolean } {
 	let show = $state(false);
 	let timeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -34,7 +30,7 @@ export function createSolvingIndicator(isSolving: () => boolean) {
 		if (solveStartTime !== null) {
 			const duration = performance.now() - solveStartTime;
 			solveHistory.push(duration);
-			if (solveHistory.length > HISTORY_SIZE) {
+			if (solveHistory.length > APP_DEFAULTS.SOLVING_INDICATOR.HISTORY_SIZE) {
 				solveHistory.shift();
 			}
 			solveStartTime = null;
@@ -51,16 +47,17 @@ export function createSolvingIndicator(isSolving: () => boolean) {
 
 				const expected = getExpectedDuration();
 
-				if (hasHistory && expected < FAST_THRESHOLD_MS) {
+				if (hasHistory && expected < APP_DEFAULTS.SOLVING_INDICATOR.FAST_THRESHOLD_MS) {
 					return;
 				}
 
 				const delay =
-					expected === Infinity || expected >= SLOW_THRESHOLD_MS
+					expected === Infinity || expected >= APP_DEFAULTS.SOLVING_INDICATOR.SLOW_THRESHOLD_MS
 						? 0
-						: Math.round(
-								((expected - FAST_THRESHOLD_MS) / (SLOW_THRESHOLD_MS - FAST_THRESHOLD_MS)) * 300
-							);
+						: ((expected - APP_DEFAULTS.SOLVING_INDICATOR.FAST_THRESHOLD_MS) /
+								(APP_DEFAULTS.SOLVING_INDICATOR.SLOW_THRESHOLD_MS -
+									APP_DEFAULTS.SOLVING_INDICATOR.FAST_THRESHOLD_MS)) *
+							APP_DEFAULTS.SOLVING_INDICATOR.ANIMATION_DELAY;
 
 				if (!timeout) {
 					if (delay === 0) {
@@ -90,9 +87,11 @@ export function createSolvingIndicator(isSolving: () => boolean) {
 		};
 	});
 
-	return {
+	const indicator: { readonly show: boolean } = {
 		get show() {
 			return show;
 		}
 	};
+
+	return indicator;
 }

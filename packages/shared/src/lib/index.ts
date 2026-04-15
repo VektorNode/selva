@@ -5,6 +5,9 @@ export { default as PageFooter } from './components/layout/PageFooter.svelte';
 export { default as AppLayout } from './components/AppLayout.svelte';
 export { default as ComputeApp } from './components/ComputeApp.svelte';
 
+// Constants
+export { APP_DEFAULTS } from './constants';
+
 // Error components
 export { default as ErrorScreen } from './components/ErrorScreen.svelte';
 

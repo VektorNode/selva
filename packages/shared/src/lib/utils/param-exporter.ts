@@ -1,3 +1,4 @@
+import { APP_DEFAULTS } from '../constants';
 import type {
 	UISchema,
 	ParameterPreset,
@@ -220,7 +221,7 @@ export function exportStateAsJson(savedState: ParameterPreset): void {
 		setTimeout(() => {
 			document.body.removeChild(link);
 			URL.revokeObjectURL(url);
-		}, 100);
+		}, APP_DEFAULTS.TIMEOUTS.PARAM_EXPORT_DELAY);
 	}, 0);
 }
 
