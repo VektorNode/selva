@@ -109,10 +109,10 @@ docker-compose pull && docker-compose up -d
 
 ## Troubleshooting
 
-| Issue | Fix |
-|---|---|
-| Container won't start | `docker-compose logs web` |
-| Can't reach Compute | `curl -H "RhinoComputeKey: key" http://COMPUTE:5000/version` |
-| Definitions not loading | Check `definitions/` folder and `?gh=` spelling |
-| Port in use | Change host port in `docker-compose.yml`: `'3001:3000'` |
-| Node.js too old | Install Node.js 20.19+: `curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
+| Issue                   | Fix                                                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Container won't start   | `docker-compose logs web`                                                                                                      |
+| Can't reach Compute     | `curl -H "RhinoComputeKey: key" http://COMPUTE:5000/version`                                                                   |
+| Definitions not loading | Check `definitions/` folder and `?gh=` spelling                                                                                |
+| Port in use             | Change host port in `docker-compose.yml`: `'3001:3000'`                                                                        |
+| Node.js too old         | Install Node.js 20.19+: `curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |

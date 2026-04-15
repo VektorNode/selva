@@ -49,7 +49,10 @@ public class GH_ComponentUpgradeHelper
     public GH_ComponentUpgradeHelper MapAllInputs()
     {
         var oldInputs = _oldComponent.Params.Input;
-        for (var i = 0; i < oldInputs.Count; i++) _inputMappings[i] = i;
+        for (var i = 0; i < oldInputs.Count; i++)
+        {
+            _inputMappings[i] = i;
+        }
 
         return this;
     }
@@ -57,7 +60,10 @@ public class GH_ComponentUpgradeHelper
     public GH_ComponentUpgradeHelper MapAllOuputs()
     {
         var oldOutputs = _oldComponent.Params.Output;
-        for (var i = 0; i < oldOutputs.Count; i++) _outputMappings[i] = i;
+        for (var i = 0; i < oldOutputs.Count; i++)
+        {
+            _outputMappings[i] = i;
+        }
 
         return this;
     }
@@ -104,7 +110,10 @@ public class GH_ComponentUpgradeHelper
         {
             var (oldParam, newParam) = sourceMapping.Key;
             var sources = sourceMapping.Value;
-            if (newParam >= newComponent.Params.Input.Count) continue;
+            if (newParam >= newComponent.Params.Input.Count)
+            {
+                continue;
+            }
 
             var newParamObj = newComponent.Params.Input[newParam];
 
@@ -117,13 +126,19 @@ public class GH_ComponentUpgradeHelper
             var (oldParam, newParam) = sourceMapping.Key;
             var sources = sourceMapping.Value;
 
-            if (newParam >= newComponent.Params.Input.Count) continue;
+            if (newParam >= newComponent.Params.Input.Count)
+            {
+                continue;
+            }
 
             var newParamObj = newComponent.Params.Input[newParam];
 
             MigrateParamMetadata(oldParam, newParamObj);
 
-            if (sources.Length == 0) MigrateInternalizedData(oldParam, newParamObj);
+            if (sources.Length == 0)
+            {
+                MigrateInternalizedData(oldParam, newParamObj);
+            }
         }
 
         // Then migrate all recipients
@@ -132,7 +147,10 @@ public class GH_ComponentUpgradeHelper
             var (oldOutput, newOutput) = recipientMapping.Key;
             var recipients = recipientMapping.Value;
 
-            if (newOutput >= newComponent.Params.Output.Count) continue;
+            if (newOutput >= newComponent.Params.Output.Count)
+            {
+                continue;
+            }
 
             var newOutputObj = newComponent.Params.Output[newOutput];
 
@@ -154,7 +172,9 @@ public class GH_ComponentUpgradeHelper
         newParam.NickName = oldParam.NickName;
 
         if (oldParam is GH_ExpressionParam<IGH_Goo> oldExpr && newParam is GH_ExpressionParam<IGH_Goo> newExpr)
+        {
             newExpr.Expression = oldExpr.Expression;
+        }
 
         if (oldParam is Param_Number oldNum && newParam is Param_Number newNum)
         {
@@ -163,7 +183,10 @@ public class GH_ComponentUpgradeHelper
             newNum.Expression = oldNum.Expression;
         }
 
-        if (oldParam is Param_Boolean oldBool && newParam is Param_Boolean newBool) newBool.Invert = oldBool.Invert;
+        if (oldParam is Param_Boolean oldBool && newParam is Param_Boolean newBool)
+        {
+            newBool.Invert = oldBool.Invert;
+        }
     }
 
     /// <summary>
@@ -176,16 +199,24 @@ public class GH_ComponentUpgradeHelper
         {
             newInt.PersistentData.Clear();
             foreach (var data in oldInt.PersistentData.AllData(true))
+            {
                 if (data is GH_Integer ghInt)
+                {
                     newInt.PersistentData.Append(new GH_Integer(ghInt.Value));
+                }
+            }
         }
         // Handle Param_Number
         else if (oldParam is Param_Number oldNum && newParam is Param_Number newNum)
         {
             newNum.PersistentData.Clear();
             foreach (var data in oldNum.PersistentData.AllData(true))
+            {
                 if (data is GH_Number ghNum)
+                {
                     newNum.PersistentData.Append(new GH_Number(ghNum.Value));
+                }
+            }
         }
 
         // Handle Param_Boolean
@@ -193,16 +224,24 @@ public class GH_ComponentUpgradeHelper
         {
             newBool.PersistentData.Clear();
             foreach (var data in oldBool.PersistentData.AllData(true))
+            {
                 if (data is GH_Boolean ghBool)
+                {
                     newBool.PersistentData.Append(new GH_Boolean(ghBool.Value));
+                }
+            }
         }
         // Handle Param_String
         else if (oldParam is Param_String oldStr && newParam is Param_String newStr)
         {
             newStr.PersistentData.Clear();
             foreach (var data in oldStr.PersistentData.AllData(true))
+            {
                 if (data is GH_String ghStr)
+                {
                     newStr.PersistentData.Append(new GH_String(ghStr.Value));
+                }
+            }
         }
         else
         {
@@ -217,9 +256,11 @@ public class GH_ComponentUpgradeHelper
                 var oldData = oldProp.GetValue(oldParam);
                 var newData = newProp.GetValue(newParam);
                 if (oldData != null && newData != null)
+                {
                     newData.GetType()
                         .GetMethod("CopyFrom", BindingFlags.Public | BindingFlags.Instance)
                         ?.Invoke(newData, [oldData]);
+                }
             }
         }
     }

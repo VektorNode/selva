@@ -2,7 +2,6 @@ import { toast } from 'selva-shared';
 import type { DiscoveredInput, DiscoveredOutput, GroupConfig, LayoutItem } from 'selva-shared';
 import {
 	handleItemDrop,
-	handleGroupItemDrop,
 	addTab,
 	removeTab,
 	addGroup,
@@ -31,8 +30,7 @@ export function useBuilderActions(
 		// Save snapshot before mutation
 		builderState.history.push($state.snapshot(schema));
 
-		const { dropType, data, targetItem, dropPosition, sourceTabId, sourceGroupId, sourceItem } =
-			event.detail;
+		const { dropType, data, targetItem, dropPosition } = event.detail;
 
 		let group: GroupConfig | undefined;
 
@@ -64,7 +62,8 @@ export function useBuilderActions(
 			);
 		} else if (dropType === 'output') {
 			const output = data as DiscoveredOutput;
-			const widgetType = output.type === 'file' ? 'file' : output.type === 'chart' ? 'chart' : 'text';
+			const widgetType =
+				output.type === 'file' ? 'file' : output.type === 'chart' ? 'chart' : 'text';
 			handleItemDrop(
 				schema,
 				group,

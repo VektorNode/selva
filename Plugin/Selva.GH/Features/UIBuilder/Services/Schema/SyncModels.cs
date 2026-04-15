@@ -27,7 +27,7 @@ public class SyncChange
 /// </summary>
 public class SyncDiff
 {
-    public List<SyncChange> FromGH { get; set; } = new();
+    public List<SyncChange> FromGH { get; set; } = new List<SyncChange>();
 
-    public List<SyncChange> ToGH { get; set; } = new();
+    public List<SyncChange> ToGH { get; set; } = new List<SyncChange>();
 }

@@ -1,5 +1,12 @@
 <script lang="ts">
-	import type { LayoutItem, GroupConfig, DiscoveredInput, InputLayoutItem, OutputLayoutItem, LineBreakLayoutItem } from 'selva-shared';
+	import type {
+		LayoutItem,
+		GroupConfig,
+		DiscoveredInput,
+		InputLayoutItem,
+		OutputLayoutItem,
+		LineBreakLayoutItem
+	} from 'selva-shared';
 	import { Button, Card } from 'selva-shared';
 	import DropZone from './DropZone.svelte';
 	import BuilderGroupItem from './BuilderGroupItem.svelte';
@@ -157,7 +164,12 @@
 						class="border-border bg-background text-foreground w-10 rounded border px-1 py-0.5 text-xs"
 					/>
 				</label>
-				<Button variant="ghost" size="sm" class="text-muted-foreground h-6 px-2 text-[10px]" onclick={onAddLineBreak}>
+				<Button
+					variant="ghost"
+					size="sm"
+					class="text-muted-foreground h-6 px-2 text-[10px]"
+					onclick={onAddLineBreak}
+				>
 					+ Line Break
 				</Button>
 			{:else}
@@ -209,7 +221,13 @@
 				ondrop={handleDropEvent}
 			>
 				<div
-					use:dndzone={{ items: localItems, type: 'group-item', flipDurationMs: 200, dragDisabled: isSidebarDragging, dropTargetStyle: { outline: 'var(--primary) solid 2px' } }}
+					use:dndzone={{
+						items: localItems,
+						type: 'group-item',
+						flipDurationMs: 200,
+						dragDisabled: isSidebarDragging,
+						dropTargetStyle: { outline: 'var(--primary) solid 2px' }
+					}}
 					onconsider={handleConsider}
 					onfinalize={handleFinalize}
 					class="grid items-start gap-3"
@@ -218,8 +236,15 @@
 					{#each localItems as item (item.id)}
 						{#if item.isDndShadowItem}
 							<!-- Placeholder: outer div gets visibility:hidden from dndzone; inner overrides with visibility:visible -->
-							<div style="grid-column: {draggedSpan >= (group.columns ?? 1) ? '1 / -1' : `span ${draggedSpan}`}">
-								<div style="visibility: visible; min-height: 3rem;" class="pointer-events-none rounded border-2 border-dashed border-primary/30 bg-primary/5"></div>
+							<div
+								style="grid-column: {draggedSpan >= (group.columns ?? 1)
+									? '1 / -1'
+									: `span ${draggedSpan}`}"
+							>
+								<div
+									style="visibility: visible; min-height: 3rem;"
+									class="border-primary/30 bg-primary/5 pointer-events-none rounded border-2 border-dashed"
+								></div>
 							</div>
 						{:else if item.type === 'linebreak'}
 							<div style="grid-column: 1 / -1;">
@@ -230,7 +255,12 @@
 							</div>
 						{:else}
 							{@const idx = localItems.indexOf(item)}
-							<div style="grid-column: span {Math.min(Math.max(1, item.span ?? 1), group.columns ?? 1)}">
+							<div
+								style="grid-column: span {Math.min(
+									Math.max(1, item.span ?? 1),
+									group.columns ?? 1
+								)}"
+							>
 								<BuilderGroupItem
 									bind:item={localItems[idx] as InputLayoutItem | OutputLayoutItem}
 									paramInfo={getParameterInfo(item.paramId)}

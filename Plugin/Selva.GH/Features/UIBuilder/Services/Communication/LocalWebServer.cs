@@ -22,9 +22,9 @@ public class LocalWebServer : IDisposable
     private const string EMBEDDED_RESOURCE_PREFIX = AppConfig.HttpServer.EmbeddedResourcePrefix;
 
     private readonly Assembly _assembly;
-    private readonly object _lock = new();
+    private readonly object _lock = new object();
 
-    private readonly Dictionary<string, string> _mimeTypes = new()
+    private readonly Dictionary<string, string> _mimeTypes = new Dictionary<string, string>
     {
         { ".html", "text/html; charset=utf-8" },
         { ".css", "text/css; charset=utf-8" },
@@ -61,7 +61,11 @@ public class LocalWebServer : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
 
         Stop();
@@ -78,16 +82,22 @@ public class LocalWebServer : IDisposable
     /// </summary>
     public void Start()
     {
-        if (IsRunning) return;
+        if (IsRunning)
+        {
+            return;
+        }
 
         lock (_lock)
         {
-            if (IsRunning) return;
+            if (IsRunning)
+            {
+                return;
+            }
 
-            // Resolve port before touching HttpListener so we never have a
-            // TOCTOU window between "check free" and "bind".
             if (Port == 0)
+            {
                 Port = FindAvailablePort();
+            }
 
             _cancellationTokenSource = new CancellationTokenSource();
             _httpListener = new HttpListener();
@@ -117,11 +127,17 @@ public class LocalWebServer : IDisposable
     /// </summary>
     public void Stop()
     {
-        if (!IsRunning) return;
+        if (!IsRunning)
+        {
+            return;
+        }
 
         lock (_lock)
         {
-            if (!IsRunning) return;
+            if (!IsRunning)
+            {
+                return;
+            }
 
             // Signal the accept loop first, then abort the listener so
             // GetContextAsync() throws and the loop exits cleanly.
@@ -156,6 +172,7 @@ public class LocalWebServer : IDisposable
     private async Task AcceptRequestsAsync(CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested && IsRunning)
+        {
             try
             {
                 var context = await _httpListener.GetContextAsync().ConfigureAwait(false);
@@ -173,6 +190,7 @@ public class LocalWebServer : IDisposable
             {
                 Logger.Error($"Error accepting HTTP request: {ex.Message}");
             }
+        }
     }
 
     private async Task ProcessRequestAsync(HttpListenerContext context, CancellationToken cancellationToken)
@@ -193,7 +211,10 @@ public class LocalWebServer : IDisposable
             }
 
             var path = request.Url.AbsolutePath.TrimStart('/');
-            if (string.IsNullOrEmpty(path)) path = "index.html";
+            if (string.IsNullOrEmpty(path))
+            {
+                path = "index.html";
+            }
 
             // SPA fallback: non-file routes (no extension) fall back to index.html.
             var resourcePath = GetResourcePath(path);
@@ -212,7 +233,9 @@ public class LocalWebServer : IDisposable
             if (!_mimeTypes.TryGetValue(
                     Path.GetExtension(path).ToLowerInvariant(),
                     out var mimeType))
+            {
                 mimeType = "application/octet-stream";
+            }
 
             // index.html must never be cached; hashed assets can be cached forever.
             var isImmutableAsset = path != "index.html" && path.Contains(".");
@@ -240,8 +263,10 @@ public class LocalWebServer : IDisposable
 
             // HEAD: headers only, no body.
             if (request.HttpMethod != "HEAD")
+            {
                 await stream.CopyToAsync(response.OutputStream, BUFFER_SIZE, cancellationToken)
                     .ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {

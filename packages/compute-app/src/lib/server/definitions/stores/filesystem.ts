@@ -27,7 +27,8 @@ function stableFilename(ext: string): string {
 
 export class FilesystemDefinitionStore
 	extends FilesystemDefinitionLoader
-	implements IDefinitionStore {
+	implements IDefinitionStore
+{
 	private readonly definitionsPath: string;
 
 	constructor(definitionsPath: string) {
@@ -92,7 +93,14 @@ export class FilesystemDefinitionStore
 		input: CreateDefinitionInput,
 		imageFile?: FileInput | null
 	): Promise<{ guid: string; filename: string; coverImage?: string }> {
-		const { file: ghFile, displayName, description, category, tags, coverImage: coverImageUrl } = input;
+		const {
+			file: ghFile,
+			displayName,
+			description,
+			category,
+			tags,
+			coverImage: coverImageUrl
+		} = input;
 
 		const ext = path.extname(ghFile.name).toLowerCase();
 		if (!GH_EXTENSIONS.includes(ext)) {
@@ -388,7 +396,10 @@ export class FilesystemDefinitionStore
 		try {
 			const entries = await fs.readdir(guidDir);
 			for (const entry of entries) {
-				if (entry !== filename && ALLOWED_IMAGE_EXTENSIONS.includes(path.extname(entry).toLowerCase())) {
+				if (
+					entry !== filename &&
+					ALLOWED_IMAGE_EXTENSIONS.includes(path.extname(entry).toLowerCase())
+				) {
 					await fs.rm(path.join(guidDir, entry), { force: true });
 				}
 			}

@@ -23,7 +23,9 @@
 
 	// Resolve which modes are actually available
 	let effectiveModes = $derived(
-		allowedInputModes && allowedInputModes.length > 0 ? allowedInputModes : (['upload', 'url'] as const)
+		allowedInputModes && allowedInputModes.length > 0
+			? allowedInputModes
+			: (['upload', 'url'] as const)
 	);
 	let showToggle = $derived(effectiveModes.length > 1);
 
@@ -158,22 +160,32 @@
 			});
 		} catch (error) {
 			if (isCorsError(error)) {
-				const host = (() => { try { return new URL(urlInput).hostname; } catch { return ''; } })();
+				const host = (() => {
+					try {
+						return new URL(urlInput).hostname;
+					} catch {
+						return '';
+					}
+				})();
 				// We can't distinguish CORS blocks from non-CORS network errors (404, DNS fail, etc.)
 				// because the browser hides all of them behind the same opaque TypeError.
 				// Give a message that covers both cases.
-				let hint = 'Check that the URL is correct and the file is publicly accessible. If the server requires login, download the file and use the Upload option instead.';
+				let hint =
+					'Check that the URL is correct and the file is publicly accessible. If the server requires login, download the file and use the Upload option instead.';
 				if (host.includes('sharepoint.com') || host.includes('onedrive.com')) {
-					hint = 'SharePoint/OneDrive blocks browser access. Open the file in SharePoint, use "Download" to save it locally, then upload it here.';
+					hint =
+						'SharePoint/OneDrive blocks browser access. Open the file in SharePoint, use "Download" to save it locally, then upload it here.';
 				} else if (host.includes('drive.google.com')) {
-					hint = 'Google Drive blocks browser access. Use "Download" in Google Drive to save the file locally, then upload it here.';
+					hint =
+						'Google Drive blocks browser access. Use "Download" in Google Drive to save the file locally, then upload it here.';
 				} else if (host.includes('dropbox.com')) {
-					hint = 'Dropbox links may block browser access. Try changing "?dl=0" to "?dl=1" in the URL, or download and upload instead.';
+					hint =
+						'Dropbox links may block browser access. Try changing "?dl=0" to "?dl=1" in the URL, or download and upload instead.';
 				}
 				urlError = {
 					message: `Could not reach "${host}" — the file may not exist, or the server does not allow browser access.`,
 					isCors: true,
-					// @ts-ignore
+					// @ts-expect-error hint is properly typed at runtime
 					hint
 				};
 			} else {
@@ -258,15 +270,15 @@
 
 	<!-- Mode toggle (only shown when both modes are allowed) -->
 	{#if showToggle}
-		<div class="flex rounded border overflow-hidden text-xs">
+		<div class="rounded text-xs flex overflow-hidden border">
 			{#each effectiveModes as mode (mode)}
 				<button
 					type="button"
 					onclick={() => (activeMode = mode)}
-					class={`flex-1 px-3 py-1 transition-colors ${
+					class={`px-3 py-1 flex-1 transition-colors ${
 						activeMode === mode
 							? 'bg-primary text-primary-foreground'
-							: 'hover:bg-accent text-muted-foreground'
+							: 'text-muted-foreground hover:bg-accent'
 					}`}
 				>
 					{mode === 'upload' ? 'Upload' : 'URL'}
@@ -290,7 +302,10 @@
 					placeholder="https://example.com/model.3dm"
 					disabled={isLoading}
 					class={urlError ? 'border-destructive focus-visible:ring-destructive' : ''}
-					oninput={() => { urlError = null; urlSuccess = ''; }}
+					oninput={() => {
+						urlError = null;
+						urlSuccess = '';
+					}}
 				/>
 				<Button
 					type="button"
@@ -304,7 +319,7 @@
 
 			<!-- Success state -->
 			{#if urlSuccess}
-				<div class="flex items-center gap-1.5 text-xs text-success">
+				<div class="gap-1.5 text-xs flex items-center text-success">
 					<CircleCheck size={13} />
 					{urlSuccess}
 				</div>
@@ -312,13 +327,15 @@
 
 			<!-- Error state -->
 			{#if urlError}
-				<div class="rounded-md border border-destructive/40 bg-destructive/5 p-2.5 flex flex-col gap-1.5">
-					<div class="flex items-start gap-1.5">
-						<CircleAlert size={13} class="text-destructive mt-0.5 shrink-0" />
-						<p class="text-xs text-destructive leading-snug">{urlError.message}</p>
+				<div
+					class="p-2.5 gap-1.5 flex flex-col rounded-md border border-destructive/40 bg-destructive/5"
+				>
+					<div class="gap-1.5 flex items-start">
+						<CircleAlert size={13} class="mt-0.5 shrink-0 text-destructive" />
+						<p class="text-xs leading-snug text-destructive">{urlError.message}</p>
 					</div>
 					{#if urlError.isCors && (urlError as any).hint}
-						<p class="text-xs text-muted-foreground leading-snug pl-5">{(urlError as any).hint}</p>
+						<p class="text-xs leading-snug pl-5 text-muted-foreground">{(urlError as any).hint}</p>
 					{/if}
 				</div>
 			{/if}

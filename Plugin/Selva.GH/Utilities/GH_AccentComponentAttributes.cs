@@ -71,8 +71,15 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
         var hasOutput = Owner.Params.Output.Count > 0;
         capsule.SetJaggedEdges(!hasInput, !hasOutput);
 
-        foreach (var param in Owner.Params.Input) capsule.AddInputGrip(param.Attributes.InputGrip.Y);
-        foreach (var param in Owner.Params.Output) capsule.AddOutputGrip(param.Attributes.OutputGrip.Y);
+        foreach (var param in Owner.Params.Input)
+        {
+            capsule.AddInputGrip(param.Attributes.InputGrip.Y);
+        }
+
+        foreach (var param in Owner.Params.Output)
+        {
+            capsule.AddOutputGrip(param.Attributes.OutputGrip.Y);
+        }
 
         graphics.SmoothingMode = SmoothingMode.HighQuality;
 
@@ -88,7 +95,10 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
         }
 
         var icon = Owner.Icon_24x24;
-        if (Owner.Locked && Owner.Icon_24x24_Locked != null) icon = Owner.Icon_24x24_Locked;
+        if (Owner.Locked && Owner.Icon_24x24_Locked != null)
+        {
+            icon = Owner.Icon_24x24_Locked;
+        }
 
         capsule.Dispose();
 
@@ -120,7 +130,10 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
                 var t = Math.Min(1.0, elapsed / FadeDurationMs);
                 _iconOpacity = _fadingIn ? t : 1.0 - t;
 
-                if (t >= 1.0) StopFadeTimer();
+                if (t >= 1.0)
+                {
+                    StopFadeTimer();
+                }
             }
 
             if (_iconOpacity > 0.0)
@@ -162,12 +175,18 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
         RenderComponentParameters(canvas, graphics, Owner, impliedStyle);
 
         if (Owner.Obsolete && canvas.DrawingMode == GH_CanvasMode.Control)
+        {
             RenderObjectOverlay(graphics, Owner, ContentBox);
+        }
     }
 
     private void StartFadeTimer(GH_Canvas canvas)
     {
-        if (_fadeTimer != null) return;
+        if (_fadeTimer != null)
+        {
+            return;
+        }
+
         _fadeTimer = new Timer { Interval = 16 }; // ~60 fps
         _fadeTimer.Tick += (_, _) => canvas.Refresh();
         _fadeTimer.Start();
@@ -175,7 +194,11 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
 
     private void StopFadeTimer()
     {
-        if (_fadeTimer == null) return;
+        if (_fadeTimer == null)
+        {
+            return;
+        }
+
         _fadeTimer.Stop();
         _fadeTimer.Dispose();
         _fadeTimer = null;

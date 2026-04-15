@@ -21,7 +21,7 @@ public class CommunicationHandler : IDisposable
     /// <summary>
     ///     Secure JSON serializer — prevents type confusion attacks, created once and reused.
     /// </summary>
-    private static readonly JsonSerializerSettings SecureSerializerSettings = new()
+    private static readonly JsonSerializerSettings SecureSerializerSettings = new JsonSerializerSettings
     {
         TypeNameHandling = TypeNameHandling.None,
         MaxDepth = AppConfig.JsonSerialization.MaxJsonDepth,
@@ -35,7 +35,7 @@ public class CommunicationHandler : IDisposable
     private readonly string _sessionId;
 
     // All mutable state that can be touched from multiple threads is guarded by _stateLock.
-    private readonly object _stateLock = new();
+    private readonly object _stateLock = new object();
     private bool _disposed;
 
     // Interlocked is sufficient for a single int flag.
@@ -77,8 +77,16 @@ public class CommunicationHandler : IDisposable
 
     protected virtual void Dispose(bool disposing)
     {
-        if (_disposed) return;
-        if (disposing) Stop();
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (disposing)
+        {
+            Stop();
+        }
+
         _disposed = true;
     }
 
@@ -87,7 +95,10 @@ public class CommunicationHandler : IDisposable
     /// </summary>
     public async Task StartAsync(Action<string> logMessage)
     {
-        if (_webSocketServer?.IsRunning == true) return;
+        if (_webSocketServer?.IsRunning == true)
+        {
+            return;
+        }
 
         try
         {
@@ -98,8 +109,10 @@ public class CommunicationHandler : IDisposable
             var startTask = _webSocketServer.StartAsync();
             if (await Task.WhenAny(startTask, Task.Delay(AppConfig.WebSocket.ServerStartupTimeoutMs))
                 != startTask)
+            {
                 throw new TimeoutException(
                     $"WebSocket server startup timed out after {AppConfig.WebSocket.ServerStartupTimeoutMs}ms");
+            }
 
             await startTask; // propagate any startup exceptions
         }
@@ -117,7 +130,10 @@ public class CommunicationHandler : IDisposable
     /// </summary>
     public void Stop()
     {
-        if (_webSocketServer == null) return;
+        if (_webSocketServer == null)
+        {
+            return;
+        }
 
         try
         {
@@ -275,12 +291,21 @@ public class CommunicationHandler : IDisposable
     {
         lock (_stateLock)
         {
-            if (_suppressSolvingCyclesRemaining > 0) return Task.CompletedTask;
+            if (_suppressSolvingCyclesRemaining > 0)
+            {
+                return Task.CompletedTask;
+            }
         }
 
-        if (changedParams == null) return Task.CompletedTask;
-        if ((changedParams.Inputs?.Count ?? 0) == 0 && (changedParams.Outputs?.Count ?? 0) == 0)
+        if (changedParams == null)
+        {
             return Task.CompletedTask;
+        }
+
+        if ((changedParams.Inputs?.Count ?? 0) == 0 && (changedParams.Outputs?.Count ?? 0) == 0)
+        {
+            return Task.CompletedTask;
+        }
 
         return BroadcastAsync(new
         {
@@ -304,7 +329,11 @@ public class CommunicationHandler : IDisposable
 
     public Task BroadcastSyncPreview(SyncDiff syncDiff)
     {
-        if (syncDiff == null) return Task.CompletedTask;
+        if (syncDiff == null)
+        {
+            return Task.CompletedTask;
+        }
+
         return BroadcastAsync(new
         {
             type = "syncPreview",
@@ -336,7 +365,9 @@ public class CommunicationHandler : IDisposable
     private Task BroadcastAsync(object payload)
     {
         if (_webSocketServer == null || !_webSocketServer.IsRunning)
+        {
             return Task.CompletedTask;
+        }
 
         // Use the same secure settings for outbound messages for consistency.
         var json = JsonConvert.SerializeObject(payload, SecureSerializerSettings);
@@ -374,9 +405,14 @@ public class CommunicationHandler : IDisposable
                     {
                         var values = jObj["values"]?.ToObject<Dictionary<string, object>>(SecureSerializer);
                         if (values != null)
+                        {
                             MarshalToMainThread(() => OnValuesReceived?.Invoke(this, values));
+                        }
                         else
+                        {
                             Logger.Warn("[CommunicationHandler] valueUpdate missing 'values'.");
+                        }
+
                         break;
                     }
 
@@ -386,7 +422,10 @@ public class CommunicationHandler : IDisposable
 
                     case "requestInitialData":
                         // Guard against concurrent invocations — if the flag is already 1, bail out.
-                        if (Interlocked.CompareExchange(ref _initialDataInFlight, 1, 0) != 0) return;
+                        if (Interlocked.CompareExchange(ref _initialDataInFlight, 1, 0) != 0)
+                        {
+                            return;
+                        }
 
                         MarshalToMainThread(() =>
                         {
@@ -405,7 +444,10 @@ public class CommunicationHandler : IDisposable
                     {
                         var schema = jObj["schema"]?.ToObject<UISchema>(SecureSerializer);
                         if (schema != null)
+                        {
                             MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, schema));
+                        }
+
                         break;
                     }
 
@@ -413,7 +455,10 @@ public class CommunicationHandler : IDisposable
                     {
                         var schema = jObj["schema"]?.ToObject<UISchema>(SecureSerializer);
                         if (schema != null)
+                        {
                             MarshalToMainThread(() => OnSyncPreviewRequested?.Invoke(this, schema));
+                        }
+
                         break;
                     }
 
@@ -421,7 +466,10 @@ public class CommunicationHandler : IDisposable
                     {
                         var changes = jObj["changes"]?.ToObject<List<SyncChange>>(SecureSerializer);
                         if (changes != null)
+                        {
                             MarshalToMainThread(() => OnSyncChangesApply?.Invoke(this, changes));
+                        }
+
                         break;
                     }
 

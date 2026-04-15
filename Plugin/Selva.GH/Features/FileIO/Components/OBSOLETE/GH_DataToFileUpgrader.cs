@@ -10,14 +10,17 @@ namespace Selva.GH.Features.FileIO.Components;
 /// </summary>
 public class GH_DataToFileUpgrader : IGH_UpgradeObject
 {
-    public DateTime Version => new(2026, 3, 10);
-    public Guid UpgradeFrom => new("A51C8F6A-D422-4387-8170-F9F34D8E5351");
-    public Guid UpgradeTo => new("8D0ECB14-7318-4400-8AA2-588E6424ACC4");
+    public DateTime Version => new DateTime(2026, 3, 10);
+    public Guid UpgradeFrom => new Guid("A51C8F6A-D422-4387-8170-F9F34D8E5351");
+    public Guid UpgradeTo => new Guid("8D0ECB14-7318-4400-8AA2-588E6424ACC4");
 
     public IGH_DocumentObject Upgrade(IGH_DocumentObject target, GH_Document document)
     {
         var oldComponent = target as IGH_Component;
-        if (oldComponent == null) return null;
+        if (oldComponent == null)
+        {
+            return null;
+        }
 
         var helper = new GH_ComponentUpgradeHelper(oldComponent, UpgradeTo);
         var newComponent = helper

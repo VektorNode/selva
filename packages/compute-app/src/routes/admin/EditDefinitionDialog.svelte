@@ -42,10 +42,6 @@
 		revertingFile?: string | null;
 		onOpenChange?: (open: boolean) => void;
 		onSave?: (guid: string, config: DefinitionConfig) => void;
-		onDelete?: (guid: string) => void;
-		onFileUpload?: (guid: string) => void;
-		onImageUpload?: (guid: string) => void;
-		onRevert?: (guid: string, filename: string) => void;
 	}
 
 	let {
@@ -61,13 +57,13 @@
 		onSave
 	}: Props = $props();
 
-	let editImageMode = $state<'url' | 'upload'>('url');
+	let userImageMode = $state<'url' | 'upload' | undefined>(undefined);
+	let editImageMode = $derived.by(
+		() => userImageMode ?? (config.coverImage?.startsWith('/api/definitions/') ? 'upload' : 'url')
+	);
 	let imageJustUploaded = $state(false);
 	let showFileUploadConfirm = $state(false);
 	let showDeleteConfirm = $state(false);
-	$effect(() => {
-		editImageMode = config.coverImage?.startsWith('/api/definitions/') ? 'upload' : 'url';
-	});
 	let editModeImageInput = $state<HTMLInputElement>();
 	let editModeFileInput = $state<HTMLInputElement>();
 	let editModeFileHasFile = $state(false);
@@ -297,7 +293,7 @@
 								value=""
 								isUploading={uploadingDefinitionImage}
 								hasFile={editModeImageHasFile}
-								onModeChange={(m) => (editImageMode = m)}
+								onModeChange={(m) => (userImageMode = m)}
 								onUpload={handleImageUpload}
 								onFileSelected={() => (editModeImageHasFile = !!editModeImageInput?.files?.length)}
 								onUrlChange={(url) => (config.coverImage = url)}
@@ -305,7 +301,7 @@
 							/>
 						</div>
 						{#if imageJustUploaded}
-							<p class="text-xs font-medium text-success">✓ Image saved in definition folder</p>
+							<p class="text-success text-xs font-medium">✓ Image saved in definition folder</p>
 						{/if}
 					</div>
 				</div>
@@ -330,7 +326,6 @@
 						<div class="overflow-x-auto">
 							<FileUploadField
 								id="edit-gh-file-{guid}"
-								label="Grasshopper File"
 								accept=".gh,.ghx"
 								isUploading={uploadingDefinitionFile}
 								hasFile={editModeFileHasFile}

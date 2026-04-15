@@ -30,7 +30,10 @@ public class UISchemaGoo : IGH_Goo
 
     public IGH_Goo Duplicate()
     {
-        if (Value == null) return new UISchemaGoo();
+        if (Value == null)
+        {
+            return new UISchemaGoo();
+        }
 
         var json = JsonConvert.SerializeObject(Value, SchemaSerializationSettings.Settings);
         var copy = JsonConvert.DeserializeObject<UISchema>(json, SchemaSerializationSettings.Settings);
@@ -51,6 +54,7 @@ public class UISchemaGoo : IGH_Goo
         }
 
         if (source is string s)
+        {
             try
             {
                 Value = JsonConvert.DeserializeObject<UISchema>(s, SchemaSerializationSettings.Settings);
@@ -60,6 +64,7 @@ public class UISchemaGoo : IGH_Goo
             {
                 Logger.Warn($"Failed to cast to UISchema: {ex.Message}");
             }
+        }
 
         return false;
     }
@@ -99,7 +104,10 @@ public class UISchemaGoo : IGH_Goo
 
     public bool Read(GH_IReader reader)
     {
-        if (!reader.ItemExists("UISchemaJson")) return false;
+        if (!reader.ItemExists("UISchemaJson"))
+        {
+            return false;
+        }
 
         var json = reader.GetString("UISchemaJson");
         Value = JsonConvert.DeserializeObject<UISchema>(json, SchemaSerializationSettings.Settings);
@@ -108,15 +116,23 @@ public class UISchemaGoo : IGH_Goo
 
     public override string ToString()
     {
-        if (Value == null) return "UISchema (null)";
+        if (Value == null)
+        {
+            return "UISchema (null)";
+        }
 
         var inputCount = Value.Inputs?.Count ?? 0;
         var outputCount = Value.Outputs?.Count ?? 0;
         var layoutInfo = "unknown layout";
 
         if (Value.Layout is TabbedLayoutConfig tabbed)
+        {
             layoutInfo = $"{tabbed.Tabs?.Count ?? 0} tabs";
-        else if (Value.Layout is FlatLayoutConfig flat) layoutInfo = $"{flat.Groups?.Count ?? 0} groups";
+        }
+        else if (Value.Layout is FlatLayoutConfig flat)
+        {
+            layoutInfo = $"{flat.Groups?.Count ?? 0} groups";
+        }
 
         return $"UISchema: {Value.Name} (inputs={inputCount}, outputs={outputCount}, {layoutInfo})";
     }

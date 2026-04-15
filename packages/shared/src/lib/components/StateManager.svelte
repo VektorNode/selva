@@ -10,13 +10,25 @@
 	} from '../utils/param-exporter';
 	import { Button, Input, Label, Textarea, Dialog, Card } from '../components/ui';
 
+	import type { ActionButton } from '../types/actionButton';
+
 	interface Props {
 		schema: UISchema;
 		currentValues: Record<string, unknown>;
 		onLoadValues: (values: Record<string, unknown>) => void;
+		showSaveButton?: boolean;
+		showLoadButton?: boolean;
+		actions?: ActionButton[];
 	}
 
-	let { schema, currentValues, onLoadValues }: Props = $props();
+	let {
+		schema,
+		currentValues,
+		onLoadValues,
+		showSaveButton = true,
+		showLoadButton = true,
+		actions = []
+	}: Props = $props();
 
 	// Save dialog state
 	let showExportDialog = $state(false);
@@ -127,15 +139,33 @@
 </script>
 
 <div class="gap-2 mb-2 flex items-center justify-center">
-	<Button variant="default" size="sm" onclick={openExportDialog}>
-		<Download class="mr-2 h-4 w-4" />
-		Save State
-	</Button>
+	{#if showSaveButton}
+		<Button variant="default" size="sm" onclick={openExportDialog}>
+			<Download class="mr-2 h-4 w-4" />
+			Save State
+		</Button>
+	{/if}
 
-	<Button variant="outline" size="sm" onclick={openLoadDialog}>
-		<Upload class="mr-2 h-4 w-4" />
-		Load State
-	</Button>
+	{#if showLoadButton}
+		<Button variant="outline" size="sm" onclick={openLoadDialog}>
+			<Upload class="mr-2 h-4 w-4" />
+			Load State
+		</Button>
+	{/if}
+
+	{#each actions as action (action.id)}
+		<Button
+			variant={action.variant ?? 'outline'}
+			size={action.size ?? 'sm'}
+			onclick={action.onclick}
+		>
+			{#if action.icon}
+				{@const IconComponent = action.icon}
+				<IconComponent class="mr-2 h-4 w-4" />
+			{/if}
+			{action.label}
+		</Button>
+	{/each}
 
 	<input
 		bind:this={fileInputRef}
@@ -229,46 +259,36 @@
 			<div class="gap-4 py-4 grid">
 				<!-- Summary Alert -->
 				{#if validationResult.isValid}
-					<Card.Root
-						class="border-success/30 bg-success/5 p-4"
-					>
+					<Card.Root class="p-4 border-success/30 bg-success/5">
 						<div class="gap-3 flex items-start">
 							<CheckCircle class="h-5 w-5 text-success" />
 							<div>
-								<h4 class="text-sm font-semibold text-success-foreground">
-									No Issues Found
-								</h4>
-								<p class="text-sm text-success-foreground/80 mt-1">
+								<h4 class="text-sm font-semibold text-success-foreground">No Issues Found</h4>
+								<p class="text-sm mt-1 text-success-foreground/80">
 									This state can be loaded safely.
 								</p>
 							</div>
 						</div>
 					</Card.Root>
 				{:else if validationResult.canLoad}
-					<Card.Root
-						class="border-warning/30 bg-warning/5 p-4"
-					>
+					<Card.Root class="p-4 border-warning/30 bg-warning/5">
 						<div class="gap-3 flex items-start">
 							<AlertTriangle class="h-5 w-5 text-warning" />
 							<div>
-								<h4 class="text-sm font-semibold text-warning-foreground">
-									Warnings Detected
-								</h4>
-								<p class="text-sm text-warning-foreground/80 mt-1">
+								<h4 class="text-sm font-semibold text-warning-foreground">Warnings Detected</h4>
+								<p class="text-sm mt-1 text-warning-foreground/80">
 									{validationResult.issues.length} warning(s) found, but state can still be loaded.
 								</p>
 							</div>
 						</div>
 					</Card.Root>
 				{:else}
-					<Card.Root class="border-destructive/30 bg-destructive/5 p-4">
+					<Card.Root class="p-4 border-destructive/30 bg-destructive/5">
 						<div class="gap-3 flex items-start">
 							<AlertTriangle class="h-5 w-5 text-destructive" />
 							<div>
-								<h4 class="text-sm font-semibold text-destructive">
-									Critical Errors
-								</h4>
-								<p class="text-sm text-destructive/80 mt-1">
+								<h4 class="text-sm font-semibold text-destructive">Critical Errors</h4>
+								<p class="text-sm mt-1 text-destructive/80">
 									Cannot load this state due to critical incompatibilities.
 								</p>
 							</div>

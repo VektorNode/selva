@@ -218,10 +218,13 @@ Restart Rhino completely after installation.
 ## Environment Variables
 
 ### Builder App (`packages/builder-app/`)
+
 No environment variables required for development. Uses WebSocket at port 8765 by default.
 
 ### Compute App (`packages/compute-app/`)
+
 Required for production deployment (see `example.ecosystem.config.cjs`):
+
 - `COMPUTE_SERVER_URL` - Rhino.Compute server URL
 - `PORT` - Application port (default: 3000)
 - `GH_DEFINITIONS_PATH` - Path to Grasshopper definition files

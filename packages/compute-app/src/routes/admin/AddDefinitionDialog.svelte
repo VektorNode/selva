@@ -27,7 +27,13 @@
 	// Validation state
 	let validating = $state(false);
 	let validationError = $state<string | null>(null);
-	let validationSchema = $state<{ name: string; description?: string; tags?: string[]; inputs: unknown[]; outputs: unknown[] } | null>(null);
+	let validationSchema = $state<{
+		name: string;
+		description?: string;
+		tags?: string[];
+		inputs: unknown[];
+		outputs: unknown[];
+	} | null>(null);
 
 	function nameFromFile(file: File): string {
 		return file.name
@@ -177,8 +183,12 @@
 						<div class="min-w-0 flex-1">
 							<p class="text-success text-xs font-medium">Valid Selva definition</p>
 							<p class="text-muted-foreground mt-0.5 text-xs">
-								{validationSchema.inputs.length} input{validationSchema.inputs.length === 1 ? '' : 's'},
-								{validationSchema.outputs.length} output{validationSchema.outputs.length === 1 ? '' : 's'}
+								{validationSchema.inputs.length} input{validationSchema.inputs.length === 1
+									? ''
+									: 's'},
+								{validationSchema.outputs.length} output{validationSchema.outputs.length === 1
+									? ''
+									: 's'}
 							</p>
 						</div>
 					</div>

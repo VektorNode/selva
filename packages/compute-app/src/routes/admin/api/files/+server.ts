@@ -40,7 +40,10 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Validate file extension
 		const extension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
 		if (!ALLOWED_UPLOAD_EXTENSIONS.includes(extension)) {
-			throw error(400, `File type not allowed. Allowed types: ${ALLOWED_UPLOAD_EXTENSIONS.join(', ')}`);
+			throw error(
+				400,
+				`File type not allowed. Allowed types: ${ALLOWED_UPLOAD_EXTENSIONS.join(', ')}`
+			);
 		}
 
 		// Enforce file size limit
@@ -114,14 +117,16 @@ export const DELETE: RequestHandler = async ({ url }) => {
 						) {
 							definition.coverImage = '';
 							hasChanges = true;
-							console.log(`[FileDelete] Cleared coverImage for definition: ${key}`);
+							console.info(`[FileDelete] Cleared coverImage for definition: ${key}`);
 						}
 					}
 
 					// Write back if changes were made
 					if (hasChanges) {
 						await writeFile(configPath, JSON.stringify(config, null, '\t'), 'utf-8');
-						console.log(`[FileDelete] Updated definitions-config.json after deleting image: ${filename}`);
+						console.info(
+							`[FileDelete] Updated definitions-config.json after deleting image: ${filename}`
+						);
 					}
 				}
 			} catch (configErr) {

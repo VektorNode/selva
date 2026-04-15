@@ -230,7 +230,7 @@
 				onclick={toggleFullscreen}
 				disabled={loading}
 				title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-				class="rounded p-1 flex items-center text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+				class="rounded p-1 flex items-center text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
 			>
 				{#if isFullscreen}
 					<Minimize size={14} />

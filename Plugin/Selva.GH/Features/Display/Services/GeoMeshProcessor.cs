@@ -43,18 +43,27 @@ public static class GeoMeshProcessor
         // Count indices needed
         var totalIndices = 0;
         foreach (var face in faceList)
+        {
             if (face.IsTriangle)
+            {
                 totalIndices += verticesPerTriangle;
+            }
             else if (face.IsQuad)
+            {
                 totalIndices += verticesPerQuad;
+            }
             else
+            {
                 Console.WriteLine("NGON detected. This component only supports triangles and quads.");
+            }
+        }
 
         var faces = new int[totalIndices];
 
         // Convert faces (triangulate quads)
         var faceIndex = 0;
         foreach (var face in faceList)
+        {
             if (face.IsTriangle)
             {
                 faces[faceIndex++] = face.A;
@@ -70,6 +79,7 @@ public static class GeoMeshProcessor
                 faces[faceIndex++] = face.D;
                 faces[faceIndex++] = face.A;
             }
+        }
 
         return (vertices, faces);
     }
