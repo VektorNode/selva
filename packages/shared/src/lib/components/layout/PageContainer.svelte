@@ -11,7 +11,14 @@
 		footerChildren?: Snippet;
 	}
 
-	let { background = 'default', class: className = '', errors = [], warnings = [], children, footerChildren }: PageContainerProps = $props();
+	let {
+		background = 'default',
+		class: className = '',
+		errors = [],
+		warnings = [],
+		children,
+		footerChildren
+	}: PageContainerProps = $props();
 
 	const backgroundClasses = {
 		default: 'bg-background',

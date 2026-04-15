@@ -32,13 +32,40 @@ export const CreateDefinitionInputSchema = DefinitionMetadataSchema.omit({ file:
 /** Partial patch for updating an existing definition.
  * Uses nullish() on string fields so null values (e.g. from manual config edits) are
  * coerced to undefined instead of failing validation. */
-export const UpdateMetadataInputSchema = DefinitionMetadataSchema.omit({ file: true, lastUpdated: true, history: true }).extend({
-	description: z.string().max(2000).nullish().transform((v) => v ?? undefined),
-	coverImage: z.string().max(2048).nullish().transform((v) => v ?? undefined),
-	category: z.string().max(128).nullish().transform((v) => v ?? undefined),
-	author: z.string().max(128).nullish().transform((v) => v ?? undefined),
-	maxHistory: z.number().int().min(0).nullish().transform((v) => v ?? undefined)
-}).partial();
+export const UpdateMetadataInputSchema = DefinitionMetadataSchema.omit({
+	file: true,
+	lastUpdated: true,
+	history: true
+})
+	.extend({
+		description: z
+			.string()
+			.max(2000)
+			.nullish()
+			.transform((v) => v ?? undefined),
+		coverImage: z
+			.string()
+			.max(2048)
+			.nullish()
+			.transform((v) => v ?? undefined),
+		category: z
+			.string()
+			.max(128)
+			.nullish()
+			.transform((v) => v ?? undefined),
+		author: z
+			.string()
+			.max(128)
+			.nullish()
+			.transform((v) => v ?? undefined),
+		maxHistory: z
+			.number()
+			.int()
+			.min(0)
+			.nullish()
+			.transform((v) => v ?? undefined)
+	})
+	.partial();
 
 export type CreateDefinitionMetadata = z.infer<typeof CreateDefinitionInputSchema>;
 export type UpdateMetadataInput = z.infer<typeof UpdateMetadataInputSchema>;

@@ -25,11 +25,7 @@
 	<!-- Cover image -->
 	<div class="bg-muted h-32">
 		{#if config.coverImage}
-			<img
-				src={config.coverImage}
-				alt={config.displayName}
-				class="h-full w-full object-cover"
-			/>
+			<img src={config.coverImage} alt={config.displayName} class="h-full w-full object-cover" />
 		{/if}
 	</div>
 

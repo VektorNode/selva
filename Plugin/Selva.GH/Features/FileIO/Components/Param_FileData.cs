@@ -26,7 +26,7 @@ public class Param_FileData : GH_PersistentParam<FileDataGoo>, ISelvaFileOutput
     {
     }
 
-    public override Guid ComponentGuid => new("ACBCC8DD-9B2E-4A5D-8BE3-25FBE2B1CABA");
+    public override Guid ComponentGuid => new Guid("ACBCC8DD-9B2E-4A5D-8BE3-25FBE2B1CABA");
 
     public override GH_Exposure Exposure => GH_Exposure.secondary;
 

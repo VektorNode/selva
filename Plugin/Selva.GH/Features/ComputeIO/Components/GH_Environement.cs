@@ -15,7 +15,7 @@ public class GH_Environement : GH_Component
     {
     }
 
-    public override Guid ComponentGuid => new("58782D53-DA8B-4EFE-8577-B3FA22DA9E0F");
+    public override Guid ComponentGuid => new Guid("58782D53-DA8B-4EFE-8577-B3FA22DA9E0F");
 
     protected override Bitmap Icon => Resources.Environment;
 
@@ -37,7 +37,10 @@ public class GH_Environement : GH_Component
         var activeDoc = RhinoDoc.ActiveDoc;
         if (activeDoc != null)
         {
-            if (activeDoc.IsHeadless) isCompute = true;
+            if (activeDoc.IsHeadless)
+            {
+                isCompute = true;
+            }
         }
         else
         {

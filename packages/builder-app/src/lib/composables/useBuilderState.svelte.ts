@@ -5,6 +5,64 @@ import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 import type { SyncDiff, SyncChange } from '$lib/websocket/websocket.svelte';
 import { useSchemaHistory } from './useSchemaHistory.svelte';
 
+type AnyItem = {
+	type: string;
+	widgetType?: string;
+	paramId?: string;
+	config?: Record<string, unknown>;
+};
+
+function getAllLayoutItems(schema: UISchema): AnyItem[] {
+	const items: AnyItem[] = [];
+	if (!schema?.layout) return items;
+	if (schema.layout.type === 'tabbed') {
+		schema.layout.tabs.forEach((tab) =>
+			tab.groups?.forEach((g) => items.push(...(g.items as AnyItem[])))
+		);
+	} else if (schema.layout.type === 'flat') {
+		schema.layout.groups?.forEach((g) => items.push(...(g.items as AnyItem[])));
+	}
+	return items;
+}
+
+/**
+ * Backfill empty dropdown options in schema layout items from the available inputs list.
+ * Called after initialData so that ValueList options are always populated even when
+ * the saved schema has an empty options object (e.g. saved before the VL was wired).
+ */
+function backfillDropdownOptions(
+	schema: UISchema | null,
+	availableInputs: DiscoveredInput[]
+): void {
+	if (!schema) return;
+	const optionsByParamId = new Map(availableInputs.map((p) => [p.id, p.options]));
+	for (const item of getAllLayoutItems(schema)) {
+		if (item.type !== 'input' || item.widgetType !== 'dropdown' || !item.paramId) continue;
+		const existingOptions = item.config?.options as Record<string, unknown> | undefined;
+		if (existingOptions && Object.keys(existingOptions).length > 0) continue;
+		const options = optionsByParamId.get(item.paramId);
+		if (options && Object.keys(options).length > 0) {
+			item.config = { ...item.config, options };
+		}
+	}
+}
+
+/**
+ * Patch dropdown layout item configs in the schema when options change at runtime.
+ */
+function patchDropdownOptions(
+	schema: UISchema | null,
+	paramId: string,
+	options: Record<string, unknown>
+): void {
+	if (!schema) return;
+	for (const item of getAllLayoutItems(schema)) {
+		if (item.type !== 'input' || item.widgetType !== 'dropdown' || item.paramId !== paramId)
+			continue;
+		item.config = { ...item.config, options };
+	}
+}
+
 interface BuilderWebSocketState {
 	availableInputs: DiscoveredInput[];
 	availableOutputs: DiscoveredOutput[];
@@ -64,6 +122,9 @@ export function useBuilderState(sessionId: string) {
 			state.schema = result.schema;
 		}
 
+		// Backfill any dropdown layout items whose options are empty (e.g. schema saved before VL was wired)
+		backfillDropdownOptions(state.schema, state.availableInputs);
+
 		if (state.availableInputs.length === 0 && state.availableOutputs.length === 0) {
 			state.error =
 				'No parameters or outputs found. Please ensure the UI Builder component is active in Grasshopper and click Refresh.';
@@ -77,75 +138,87 @@ export function useBuilderState(sessionId: string) {
 	}
 
 	function handleSchemaSaved(message: any) {
-		// Toast is now handled by the page component's saveSchema() function
-		// This handler is kept for backwards compatibility if needed
 		if (message.sessionId !== sessionId) return;
 	}
 
 	function handleMetadataUpdated(message: any) {
-		if (message.sessionId !== sessionId || !state.schema) return;
+		if (message.sessionId !== sessionId) return;
 
-		const changedParams = message.changedParams || [];
+		const changedParams = [
+			...(message.changedParams?.inputs || []),
+			...(message.changedParams?.outputs || [])
+		];
 		if (changedParams.length === 0) return;
 
 		const updatedNames: string[] = [];
 
 		changedParams.forEach((updated: any) => {
-			// Update input parameters in schema and available list together
-			const inputIndex = state.schema!.inputs.findIndex((inp) => inp.id === updated.id);
-			if (inputIndex !== -1) {
-				const input = state.schema!.inputs[inputIndex];
-
-				if (updated.nickname !== undefined && input.nickname !== updated.nickname) {
-					input.nickname = updated.nickname;
-					updatedNames.push(input.nickname);
-				}
-				if (updated.description !== undefined) {
-					input.description = updated.description;
-				}
-
-				// Keep availableInputs in sync (same data, different list)
-				const availIndex = state.availableInputs.findIndex((p) => p.id === updated.id);
-				if (availIndex !== -1) {
-					if (updated.nickname !== undefined)
-						state.availableInputs[availIndex].nickname = updated.nickname;
-					if (updated.description !== undefined)
-						state.availableInputs[availIndex].description = updated.description;
-					if (updated.minimum !== undefined)
-						state.availableInputs[availIndex].minimum = updated.minimum;
-					if (updated.maximum !== undefined)
-						state.availableInputs[availIndex].maximum = updated.maximum;
-					if (updated.stepSize !== undefined)
-						state.availableInputs[availIndex].stepSize = updated.stepSize;
+			// Update schema inputs if present
+			let inputInSchema = false;
+			if (state.schema) {
+				const inputIndex = state.schema.inputs.findIndex((inp) => inp.id === updated.id);
+				if (inputIndex !== -1) {
+					inputInSchema = true;
+					const input = state.schema.inputs[inputIndex];
+					if (updated.nickname !== undefined && input.nickname !== updated.nickname) {
+						input.nickname = updated.nickname;
+						updatedNames.push(updated.nickname);
+					}
+					if (updated.description !== undefined) input.description = updated.description;
 				}
 			}
 
-			// Update output parameters in schema and available list together
-			const outputIndex = state.schema!.outputs.findIndex((out) => out.id === updated.id);
-			if (outputIndex !== -1) {
-				const output = state.schema!.outputs[outputIndex];
+			// Always update availableInputs regardless of schema membership
+			const availIndex = state.availableInputs.findIndex((p) => p.id === updated.id);
+			if (availIndex !== -1) {
+				if (updated.nickname !== undefined)
+					state.availableInputs[availIndex].nickname = updated.nickname;
+				if (updated.description !== undefined)
+					state.availableInputs[availIndex].description = updated.description;
+				if (updated.minimum !== undefined)
+					state.availableInputs[availIndex].minimum = updated.minimum;
+				if (updated.maximum !== undefined)
+					state.availableInputs[availIndex].maximum = updated.maximum;
+				if (updated.stepSize !== undefined)
+					state.availableInputs[availIndex].stepSize = updated.stepSize;
+				if (updated.options !== undefined) {
+					state.availableInputs[availIndex].options = updated.options;
+					patchDropdownOptions(state.schema, updated.id, updated.options);
+				}
+				// Toast if not already toasted via schema path
+				if (!inputInSchema && updated.nickname !== undefined) updatedNames.push(updated.nickname);
+			}
 
-				if (updated.nickname !== undefined && output.nickname !== updated.nickname) {
-					output.nickname = updated.nickname;
-					updatedNames.push(output.nickname);
+			// Update schema outputs if present
+			let outputInSchema = false;
+			if (state.schema) {
+				const outputIndex = state.schema.outputs.findIndex((out) => out.id === updated.id);
+				if (outputIndex !== -1) {
+					outputInSchema = true;
+					const output = state.schema.outputs[outputIndex];
+					if (updated.nickname !== undefined && output.nickname !== updated.nickname) {
+						output.nickname = updated.nickname;
+						updatedNames.push(updated.nickname);
+					}
+					if (updated.description !== undefined) output.description = updated.description;
 				}
-				if (updated.description !== undefined) {
-					output.description = updated.description;
-				}
+			}
 
-				// Keep availableOutputs in sync
-				const availOutputIndex = state.availableOutputs.findIndex((o) => o.id === updated.id);
-				if (availOutputIndex !== -1) {
-					if (updated.nickname !== undefined)
-						state.availableOutputs[availOutputIndex].nickname = updated.nickname;
-					if (updated.description !== undefined)
-						state.availableOutputs[availOutputIndex].description = updated.description;
-				}
+			// Always update availableOutputs regardless of schema membership
+			const availOutputIndex = state.availableOutputs.findIndex((o) => o.id === updated.id);
+			if (availOutputIndex !== -1) {
+				if (updated.nickname !== undefined)
+					state.availableOutputs[availOutputIndex].nickname = updated.nickname;
+				if (updated.description !== undefined)
+					state.availableOutputs[availOutputIndex].description = updated.description;
+				if (!outputInSchema && updated.nickname !== undefined) updatedNames.push(updated.nickname);
 			}
 		});
 
 		if (updatedNames.length > 0) {
-			toast.info(`Parameter${updatedNames.length > 1 ? 's' : ''} renamed in Grasshopper: ${updatedNames.join(', ')}`);
+			toast.info(
+				`Parameter${updatedNames.length > 1 ? 's' : ''} renamed in Grasshopper: ${updatedNames.join(', ')}`
+			);
 		}
 	}
 
@@ -156,26 +229,24 @@ export function useBuilderState(sessionId: string) {
 		const removedCount = removedIds.length;
 
 		if (removedCount > 0) {
-			// Remove from available lists
 			state.availableInputs = state.availableInputs.filter((p) => !removedIds.includes(p.id));
 			state.availableOutputs = state.availableOutputs.filter((o) => !removedIds.includes(o.id));
 
-			// Remove from schema
 			if (state.schema) {
 				state.schema.inputs = state.schema.inputs.filter((i) => !removedIds.includes(i.id));
 				state.schema.outputs = state.schema.outputs.filter((o) => !removedIds.includes(o.id));
 
-				// Remove from layout items
 				if (state.schema.layout) {
 					if (state.schema.layout.type === 'tabbed') {
 						state.schema.layout.tabs.forEach((tab) => {
 							tab.groups.forEach((group) => {
-								group.items = group.items.filter((item) => item.type === 'linebreak' || !removedIds.includes(item.paramId));
+								group.items = group.items.filter(
+									(item) => item.type === 'linebreak' || !removedIds.includes(item.paramId)
+								);
 							});
 							tab.groups = tab.groups.filter((g) => g.items.length > 0);
 						});
 
-						// Clean up empty tabs
 						state.schema.layout.tabs = state.schema.layout.tabs.filter((t) => t.groups.length > 0);
 
 						// If active tab was removed, switch to first available
@@ -188,7 +259,9 @@ export function useBuilderState(sessionId: string) {
 						}
 					} else if (state.schema.layout.type === 'flat') {
 						state.schema.layout.groups.forEach((group) => {
-							group.items = group.items.filter((item) => item.type === 'linebreak' || !removedIds.includes(item.paramId));
+							group.items = group.items.filter(
+								(item) => item.type === 'linebreak' || !removedIds.includes(item.paramId)
+							);
 						});
 						state.schema.layout.groups = state.schema.layout.groups.filter(
 							(g) => g.items.length > 0
@@ -201,7 +274,6 @@ export function useBuilderState(sessionId: string) {
 				);
 			}
 		} else {
-			// New parameters/outputs may have been added
 			wsState.requestInitialData(sessionId);
 			toast.info('Schema structure updated - checking for new items...');
 		}

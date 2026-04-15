@@ -4,7 +4,7 @@
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { CircleAlert, TriangleAlert, ChevronDown, ChevronRight } from '@lucide/svelte';
 	import { SvelteMap } from 'svelte/reactivity';
-	import { useFooter, type FooterItem } from '$lib/contexts/footerContext.svelte';
+	import { useFooter, type _FooterItem } from '$lib/contexts/footerContext.svelte';
 	import FooterItemRenderer from './FooterItemRenderer.svelte';
 
 	interface Props {

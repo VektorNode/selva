@@ -14,7 +14,7 @@ namespace Selva.GH.Features.UIBuilder.Services;
 public class ServerLifecycleManager : IDisposable
 {
     private readonly CommunicationHandler _communicationHandler;
-    private readonly object _lock = new();
+    private readonly object _lock = new object();
     private readonly LocalWebServer _webServer;
     private bool _disposed;
     private bool _isStarting;
@@ -33,14 +33,21 @@ public class ServerLifecycleManager : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
 
         // Synchronous cleanup only — avoid async/.Wait() which deadlocks on the main thread.
         // Clients will detect the dropped connection on their own.
         try
         {
-            if (_communicationHandler.IsRunning) _communicationHandler.Stop();
+            if (_communicationHandler.IsRunning)
+            {
+                _communicationHandler.Stop();
+            }
         }
         catch
         {
@@ -48,7 +55,10 @@ public class ServerLifecycleManager : IDisposable
 
         try
         {
-            if (_webServer.IsRunning) _webServer.Stop();
+            if (_webServer.IsRunning)
+            {
+                _webServer.Stop();
+            }
         }
         catch
         {
@@ -57,12 +67,19 @@ public class ServerLifecycleManager : IDisposable
 
     public async Task<bool> StartServersAsync(string sessionId)
     {
-        if (string.IsNullOrEmpty(sessionId)) throw new ArgumentNullException(nameof(sessionId));
+        if (string.IsNullOrEmpty(sessionId))
+        {
+            throw new ArgumentNullException(nameof(sessionId));
+        }
 
         // Prevent concurrent starts
         lock (_lock)
         {
-            if (_isStarting || IsRunning) return IsRunning;
+            if (_isStarting || IsRunning)
+            {
+                return IsRunning;
+            }
+
             _isStarting = true;
         }
 
@@ -80,7 +97,7 @@ public class ServerLifecycleManager : IDisposable
             await _communicationHandler.StartAsync(msg =>
             {
 #if DEBUG
-				Logger.Log($"[ServerLifecycleManager] {msg}");
+                Logger.Log($"[ServerLifecycleManager] {msg}");
 #endif
             });
 
@@ -140,6 +157,7 @@ public class ServerLifecycleManager : IDisposable
     public async Task StopServersAndNotifyAsync(string reason = null)
     {
         if (_communicationHandler.IsRunning)
+        {
             try
             {
                 await _communicationHandler.BroadcastMessage("disconnecting",
@@ -150,6 +168,7 @@ public class ServerLifecycleManager : IDisposable
             {
                 Logger.Error("[ServerLifecycleManager] Error sending disconnect notification", ex);
             }
+        }
 
         await StopServersAsync();
     }

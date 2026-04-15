@@ -2,7 +2,6 @@ using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq.Expressions;
 using System.Reflection;
 using Grasshopper;
@@ -26,7 +25,7 @@ public class ValueApplicator
     private const int MAX_STRING_LENGTH = AppConfig.ValueLimits.MaxStringLength;
 
     private static readonly Dictionary<string, (Type GhType, Func<object, IGH_Goo> Converter)> TypeHandlers =
-        new()
+        new Dictionary<string, (Type GhType, Func<object, IGH_Goo> Converter)>
         {
             { "number", (typeof(GH_Number), val => new GH_Number(Convert.ToDouble(val))) },
             { "integer", (typeof(GH_Integer), val => new GH_Integer(Convert.ToInt32(val))) },
@@ -52,9 +51,10 @@ public class ValueApplicator
         };
 
 
-    private static readonly ConcurrentDictionary<Type, ReflectionCache> _reflectionCache = new();
+    private static readonly ConcurrentDictionary<Type, ReflectionCache> _reflectionCache =
+        new ConcurrentDictionary<Type, ReflectionCache>();
 
-    private ConcurrentDictionary<string, object> _lastAppliedValues = new();
+    private ConcurrentDictionary<string, object> _lastAppliedValues = new ConcurrentDictionary<string, object>();
 
     /// <summary>
     ///     Apply values from web UI to Grasshopper parameters and schedule a solution
@@ -68,12 +68,16 @@ public class ValueApplicator
         var pendingExpirations = new HashSet<IGH_ActiveObject>(); // Local snapshot, HashSet dedupes
 
         foreach (var input in schema.Inputs)
+        {
             try
             {
                 var inputKey = input.Id.ToString();
 
                 // Check if value exists in payload FIRST (filters before expensive FindObject)
-                if (!values.TryGetValue(inputKey, out var value)) continue;
+                if (!values.TryGetValue(inputKey, out var value))
+                {
+                    continue;
+                }
 
                 // Only lookup parameter if we have a value to apply
                 var paramObject = document.FindObject(input.Id, false);
@@ -87,10 +91,16 @@ public class ValueApplicator
                 // Skip dedup check for file params: the same file can be re-submitted after
                 // the user clears the GH parameter (ClearContextualData doesn't touch
                 // _lastAppliedValues, so HasValueChanged would wrongly return false).
-                if (input.ParamType != "file" && !HasValueChanged(inputKey, value)) continue;
+                if (input.ParamType != "file" && !HasValueChanged(inputKey, value))
+                {
+                    continue;
+                }
 
                 // Validate value before applying (security check)
-                if (!ValidateValue(input, value, addMessage)) continue; // Skip invalid values
+                if (!ValidateValue(input, value, addMessage))
+                {
+                    continue; // Skip invalid values
+                }
 
                 if (paramObject is IGH_ContextualParameter contextParam)
                 {
@@ -102,7 +112,10 @@ public class ValueApplicator
                         updateCount++;
                         _lastAppliedValues[inputKey] = value;
 
-                        if (paramObject is IGH_ActiveObject activeObj) pendingExpirations.Add(activeObj);
+                        if (paramObject is IGH_ActiveObject activeObj)
+                        {
+                            pendingExpirations.Add(activeObj);
+                        }
                     }
                 }
                 else if (input.ParamType == "file")
@@ -114,7 +127,10 @@ public class ValueApplicator
                         updateCount++;
                         _lastAppliedValues[inputKey] = value;
 
-                        if (paramObject is IGH_ActiveObject activeObj) pendingExpirations.Add(activeObj);
+                        if (paramObject is IGH_ActiveObject activeObj)
+                        {
+                            pendingExpirations.Add(activeObj);
+                        }
                     }
                 }
             }
@@ -123,6 +139,7 @@ public class ValueApplicator
                 addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
                     $"Error applying value to '{input.Nickname}': {ex.Message}");
             }
+        }
 
         // Schedule expiration with local snapshot (thread-safe)
         if (pendingExpirations.Count > 0)
@@ -130,7 +147,10 @@ public class ValueApplicator
             var toExpire = pendingExpirations; // Capture for closure
             document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc =>
             {
-                foreach (var obj in toExpire) obj.ExpireSolution(false);
+                foreach (var obj in toExpire)
+                {
+                    obj.ExpireSolution(false);
+                }
             });
         }
 
@@ -143,7 +163,9 @@ public class ValueApplicator
     public bool HasValueChanged(string key, object newValue)
     {
         if (_lastAppliedValues.TryGetValue(key, out var lastValue))
+        {
             return newValue?.ToString() != lastValue?.ToString();
+        }
 
         return true;
     }
@@ -191,9 +213,15 @@ public class ValueApplicator
     /// </summary>
     public void RemoveValues(IEnumerable<string> keys)
     {
-        if (keys == null) return;
+        if (keys == null)
+        {
+            return;
+        }
 
-        foreach (var key in keys) _lastAppliedValues.TryRemove(key, out _);
+        foreach (var key in keys)
+        {
+            _lastAppliedValues.TryRemove(key, out _);
+        }
     }
 
     /// <summary>
@@ -211,18 +239,23 @@ public class ValueApplicator
     private bool ValidateValue(SchemaInput input, object value,
         Action<GH_RuntimeMessageLevel, string> addMessage)
     {
-        if (value == null) return true; // null is acceptable
+        if (value == null)
+        {
+            return true; // null is acceptable
+        }
 
         try
         {
             // Validate string length (excluding file input data which has separate limits)
             if (value is string strValue && input.ParamType != "file")
+            {
                 if (strValue.Length > MAX_STRING_LENGTH)
                 {
                     addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
                         $"String value too long for '{input.Nickname}' (max {MAX_STRING_LENGTH} characters)");
                     return false;
                 }
+            }
 
             // Validate numeric type conversions
             if (input.ParamType == "Number" || input.ParamType == "Integer")
@@ -250,6 +283,7 @@ public class ValueApplicator
 
             // Validate integer conversion
             if (input.ParamType == "Integer")
+            {
                 try
                 {
                     Convert.ToInt32(value);
@@ -260,6 +294,7 @@ public class ValueApplicator
                         $"Integer value overflow for '{input.Nickname}'");
                     return false;
                 }
+            }
 
             return true;
         }
@@ -282,11 +317,15 @@ public class ValueApplicator
         {
             // Special handling for ValueList - use the parameter's native type
             if (paramTypeName == "valueList")
+            {
                 return ApplyToValueList(contextParam, value, addMessage, pendingExpirations);
+            }
 
             // Special handling for file parameters - don't use AssignContextualDataTree
             if (paramTypeName == "file")
+            {
                 return ApplyToFileParameter(contextParam, value, addMessage, pendingExpirations);
+            }
 
             if (!TypeHandlers.TryGetValue(paramTypeName, out var handler))
             {
@@ -357,7 +396,9 @@ public class ValueApplicator
                     var connectedVLProperty = contextParam.GetType().GetProperty("ConnectedValueList",
                         BindingFlags.NonPublic | BindingFlags.Instance);
                     if (connectedVLProperty?.GetValue(contextParam) is IGH_ActiveObject connectedVL)
+                    {
                         pendingExpirations.Add(connectedVL);
+                    }
 
                     return true;
                 }
@@ -468,13 +509,16 @@ public class ValueApplicator
                 var assignContextualDataMethod = paramObject.GetType().GetMethod("AssignContextualData",
                     new[] { typeof(IEnumerable) });
                 if (assignContextualDataMethod != null)
+                {
                     try
                     {
                         var dataList = new List<object> { fileGoo };
                         assignContextualDataMethod.Invoke(paramObject, new object[] { dataList });
 
                         if (paramObject is IGH_ActiveObject activeObj)
+                        {
                             pendingExpirations.Add(activeObj);
+                        }
 
                         return true;
                     }
@@ -482,6 +526,7 @@ public class ValueApplicator
                     {
                         Logger.Log($"[ValueApplicator] AssignContextualData failed: {ex.Message}");
                     }
+                }
             }
 
             // Fallback: Try standard data tree methods
@@ -492,11 +537,15 @@ public class ValueApplicator
             var addVolatileMethod = param.GetType().GetMethod("AddVolatileDataTree",
                 new[] { typeof(IGH_DataTree) });
             if (addVolatileMethod != null)
+            {
                 try
                 {
                     addVolatileMethod.Invoke(param, new object[] { dataTree });
 
-                    if (paramObject is IGH_ActiveObject activeObj) pendingExpirations.Add(activeObj);
+                    if (paramObject is IGH_ActiveObject activeObj)
+                    {
+                        pendingExpirations.Add(activeObj);
+                    }
 
                     return true;
                 }
@@ -504,17 +553,22 @@ public class ValueApplicator
                 {
                     Logger.Log($"[ValueApplicator] AddVolatileDataTree failed: {ex.Message}");
                 }
+            }
 
             // Attempt 2: AddVolatileData with IGH_Goo
             param.ClearData();
             var addMethod = param.GetType().GetMethod("AddVolatileData",
                 new[] { typeof(IGH_Goo) });
             if (addMethod != null)
+            {
                 try
                 {
                     addMethod.Invoke(param, new object[] { fileGoo });
 
-                    if (paramObject is IGH_ActiveObject activeObj) pendingExpirations.Add(activeObj);
+                    if (paramObject is IGH_ActiveObject activeObj)
+                    {
+                        pendingExpirations.Add(activeObj);
+                    }
 
                     return true;
                 }
@@ -522,54 +576,16 @@ public class ValueApplicator
                 {
                     Logger.Log($"[ValueApplicator] AddVolatileData failed: {ex.Message}");
                 }
+            }
 
             addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
                 "Could not find any method to assign file data to parameter (tried: AssignContextualData, AddVolatileDataTree, AddVolatileData)");
             return false;
-
-            // Mark parameter as modified so it updates downstream (unreachable, but kept for structure)
-            /*if (paramObject is IGH_ActiveObject activeObj)
-            {
-                pendingExpirations.Add(activeObj);
-            }*/
-
-            /*return true;*/
         }
         catch (Exception ex)
         {
             addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
                 $"Error applying file value: {ex.Message}");
-            return false;
-        }
-    }
-
-    /// <summary>
-    ///     Validates that a file path received over WebSocket is a safe local path.
-    ///     Blocks UNC paths (\\server\share), path traversal (..), and non-rooted relative paths.
-    /// </summary>
-    private static bool IsSafeLocalPath(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path)) return false;
-
-        // Block UNC paths — these can trigger NTLM credential leaks to remote SMB servers
-        if (path.StartsWith("\\\\") || path.StartsWith("//")) return false;
-
-        // Block path traversal sequences
-        if (path.Contains("..")) return false;
-
-        // Block common URI/device path prefixes that aren't plain local paths
-        if (path.StartsWith("file://", StringComparison.OrdinalIgnoreCase)) return false;
-
-        // Enforce Windows MAX_PATH
-        if (path.Length > 32767) return false;
-
-        // Require an absolute local path — reject relative paths that could escape CWD
-        try
-        {
-            return Path.IsPathRooted(path);
-        }
-        catch
-        {
             return false;
         }
     }

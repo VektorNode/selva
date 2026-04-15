@@ -30,7 +30,10 @@ public class ThreeMaterialGoo : IGH_Goo
 
     public IGH_Goo Duplicate()
     {
-        if (Value == null) return new ThreeMaterialGoo();
+        if (Value == null)
+        {
+            return new ThreeMaterialGoo();
+        }
 
         var settings = new JsonSerializerSettings
         {
@@ -55,6 +58,7 @@ public class ThreeMaterialGoo : IGH_Goo
         }
 
         if (source is string s)
+        {
             try
             {
                 var settings = new JsonSerializerSettings
@@ -68,6 +72,7 @@ public class ThreeMaterialGoo : IGH_Goo
             {
                 Logger.Warn($"Failed to cast to ThreeMaterial: {ex.Message}");
             }
+        }
 
         return false;
     }
@@ -112,7 +117,10 @@ public class ThreeMaterialGoo : IGH_Goo
 
     public bool Read(GH_IReader reader)
     {
-        if (!reader.ItemExists("ThreeMaterialJson")) return false;
+        if (!reader.ItemExists("ThreeMaterialJson"))
+        {
+            return false;
+        }
 
         var json = reader.GetString("ThreeMaterialJson");
         var settings = new JsonSerializerSettings
@@ -125,7 +133,10 @@ public class ThreeMaterialGoo : IGH_Goo
 
     public override string ToString()
     {
-        if (Value == null) return "ThreeMaterial (null)";
+        if (Value == null)
+        {
+            return "ThreeMaterial (null)";
+        }
 
         return
             $"ThreeMaterial: color={Value.Color}, metalness={Value.Metalness}, roughness={Value.Roughness}, opacity={Value.Opacity}, transparent={Value.Transparent}";

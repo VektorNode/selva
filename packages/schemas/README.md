@@ -56,19 +56,19 @@ Single source of truth for type-safe C# and TypeScript types across the entire c
 
 ```json
 {
-  "definitions": {
-    "User": {
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "email": { "type": "string" },
-        "age": { "type": "integer" },
-        "active": { "type": "boolean" }
-      },
-      "required": ["id", "name", "email"]
-    }
-  }
+	"definitions": {
+		"User": {
+			"type": "object",
+			"properties": {
+				"id": { "type": "string" },
+				"name": { "type": "string" },
+				"email": { "type": "string" },
+				"age": { "type": "integer" },
+				"active": { "type": "boolean" }
+			},
+			"required": ["id", "name", "email"]
+		}
+	}
 }
 ```
 

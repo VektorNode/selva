@@ -15,7 +15,7 @@ namespace Selva.GH.Features.UIBuilder.Services;
 /// </summary>
 public class SchemaPersistenceService
 {
-    private static readonly JsonSerializerSettings SchemaSerializationSettings = new()
+    private static readonly JsonSerializerSettings SchemaSerializationSettings = new JsonSerializerSettings
     {
         NullValueHandling = NullValueHandling.Ignore,
         DefaultValueHandling = DefaultValueHandling.Ignore
@@ -34,7 +34,10 @@ public class SchemaPersistenceService
 
     public bool SerializeToArchive(GH_IWriter writer, UISchema schema, Dictionary<string, object> values)
     {
-        if (writer == null) throw new ArgumentNullException(nameof(writer));
+        if (writer == null)
+        {
+            throw new ArgumentNullException(nameof(writer));
+        }
 
         try
         {
@@ -42,7 +45,9 @@ public class SchemaPersistenceService
             {
                 // Ensure version is set before saving
                 if (string.IsNullOrEmpty(schema.SchemaVersion))
+                {
                     schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+                }
 
                 schema.LastModified = DateTime.UtcNow;
 
@@ -66,13 +71,17 @@ public class SchemaPersistenceService
 
     public (UISchema schema, Dictionary<string, object> values)? DeserializeFromArchive(GH_IReader reader)
     {
-        if (reader == null) throw new ArgumentNullException(nameof(reader));
+        if (reader == null)
+        {
+            throw new ArgumentNullException(nameof(reader));
+        }
 
         UISchema schema = null;
         Dictionary<string, object> values = null;
         string migrationMessage = null;
 
         if (reader.ItemExists("Schema"))
+        {
             try
             {
                 var schemaJson = reader.GetString("Schema");
@@ -97,7 +106,9 @@ public class SchemaPersistenceService
                             Logger.Warn
                         );
                         if (!string.IsNullOrEmpty(backupPath))
+                        {
                             migrationMessage = $"Backup created at: {backupPath}\n";
+                        }
                     }
 
                     // Run JSON-level migration (structural changes)
@@ -125,21 +136,29 @@ public class SchemaPersistenceService
             {
                 throw new InvalidOperationException($"Failed to deserialize schema: {ex.Message}", ex);
             }
+        }
 
         if (reader.ItemExists("Values"))
+        {
             try
             {
                 var valuesJson = reader.GetString("Values");
                 if (!string.IsNullOrEmpty(valuesJson))
+                {
                     values = JsonConvert.DeserializeObject<Dictionary<string, object>>(valuesJson);
+                }
             }
             catch (Exception ex)
             {
                 throw new InvalidOperationException($"Failed to deserialize values: {ex.Message}", ex);
             }
+        }
 
         // If we have schema or values, return them along with any migration message
-        if (schema != null || values != null) return (schema, values);
+        if (schema != null || values != null)
+        {
+            return (schema, values);
+        }
 
         return null;
     }

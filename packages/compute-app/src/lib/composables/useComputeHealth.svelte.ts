@@ -90,7 +90,12 @@ async function fetchComputeInfo() {
 			};
 		}
 	} catch {
-		compute = { rhinoVersion: null, computeVersion: null, selvaVersion: null, selvaInstalled: false };
+		compute = {
+			rhinoVersion: null,
+			computeVersion: null,
+			selvaVersion: null,
+			selvaInstalled: false
+		};
 		plugins = {};
 	}
 }

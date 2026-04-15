@@ -22,7 +22,7 @@ namespace Selva.GH.Features.FileIO.Components;
 public class OBSOLETE_BlockToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
 {
     private static RhinoDocumentConverter _converter;
-    private static readonly object _converterLock = new();
+    private static readonly object _converterLock = new object();
 
     private readonly Dictionary<string, int> _copiedBlockIndices;
 
@@ -38,7 +38,7 @@ public class OBSOLETE_BlockToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         EnsureConverterInitialized();
     }
 
-    public override Guid ComponentGuid => new("06308887-AADB-40EE-A6A8-9CC8E05900EB");
+    public override Guid ComponentGuid => new Guid("06308887-AADB-40EE-A6A8-9CC8E05900EB");
 
     protected override Bitmap Icon => Resources.BlockToFile;
 
@@ -68,19 +68,29 @@ public class OBSOLETE_BlockToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     {
         try
         {
-            if (!TryGetBlockInput(DA, out var blockObj)) return;
+            if (!TryGetBlockInput(DA, out var blockObj))
+            {
+                return;
+            }
 
             string fileName = null;
-            if (!DA.GetData(1, ref fileName)) return;
+            if (!DA.GetData(1, ref fileName))
+            {
+                return;
+            }
 
             var exportedFile = ExportBlockToFile(blockObj, fileName);
 
             if (exportedFile != null)
+            {
                 DA.SetData(0, new FileDataGoo(exportedFile));
+            }
             else
+            {
                 AddRuntimeMessage(
                     GH_RuntimeMessageLevel.Error,
                     "Failed to export block to file");
+            }
         }
         catch (Exception ex)
         {
@@ -119,10 +129,16 @@ public class OBSOLETE_BlockToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         _copiedBlockIndices.Clear();
 
 
-        if (!TryProcessBlockObject(blockObj, headlessDoc, out var blockName)) return null;
+        if (!TryProcessBlockObject(blockObj, headlessDoc, out var blockName))
+        {
+            return null;
+        }
 
         var base64String = ConvertDocumentToBase64(headlessDoc);
-        if (string.IsNullOrEmpty(base64String)) return null;
+        if (string.IsNullOrEmpty(base64String))
+        {
+            return null;
+        }
 
         return CreateFileData(fileName, base64String);
     }
@@ -131,10 +147,16 @@ public class OBSOLETE_BlockToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     {
         blockName = null;
 
-        if (!blockObj.CastTo<GH_InstanceReference>(out var instanceRef)) return false;
+        if (!blockObj.CastTo<GH_InstanceReference>(out var instanceRef))
+        {
+            return false;
+        }
 
         var modelIdef = instanceRef.InstanceDefinition;
-        if (modelIdef == null) return false;
+        if (modelIdef == null)
+        {
+            return false;
+        }
 
         blockName = modelIdef.Name;
         CopyBlockRecursive(modelIdef, targetDoc);
@@ -153,11 +175,17 @@ public class OBSOLETE_BlockToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     private void CopyBlockRecursive(ModelInstanceDefinition modelIdef, RhinoDoc targetDoc)
     {
         // Skip if already copied
-        if (_copiedBlockIndices.ContainsKey(modelIdef.Name)) return;
+        if (_copiedBlockIndices.ContainsKey(modelIdef.Name))
+        {
+            return;
+        }
 
         var geometries = CollectBlockGeometry(modelIdef, targetDoc);
 
-        if (geometries.Count == 0) return;
+        if (geometries.Count == 0)
+        {
+            return;
+        }
 
         var idefIndex = targetDoc.InstanceDefinitions.Add(
             modelIdef.Name,
@@ -165,7 +193,10 @@ public class OBSOLETE_BlockToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
             Point3d.Origin,
             geometries);
 
-        if (idefIndex >= 0) _copiedBlockIndices[modelIdef.Name] = idefIndex;
+        if (idefIndex >= 0)
+        {
+            _copiedBlockIndices[modelIdef.Name] = idefIndex;
+        }
     }
 
     private List<GeometryBase> CollectBlockGeometry(ModelInstanceDefinition modelIdef, RhinoDoc targetDoc)
@@ -174,11 +205,19 @@ public class OBSOLETE_BlockToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
 
         foreach (var modelObj in modelIdef.Objects)
         {
-            if (modelObj == null) continue;
+            if (modelObj == null)
+            {
+                continue;
+            }
 
             if (modelObj.ObjectType == ObjectType.InstanceReference)
+            {
                 TryAddNestedBlockReference(modelObj, targetDoc, geometries);
-            else if (modelObj.CastTo<GeometryBase>(out var geom)) geometries.Add(geom);
+            }
+            else if (modelObj.CastTo<GeometryBase>(out var geom))
+            {
+                geometries.Add(geom);
+            }
         }
 
         return geometries;
@@ -186,10 +225,16 @@ public class OBSOLETE_BlockToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
 
     private void TryAddNestedBlockReference(ModelObject modelObj, RhinoDoc targetDoc, List<GeometryBase> geometries)
     {
-        if (!modelObj.CastTo<GH_InstanceReference>(out var nestedInstanceRef)) return;
+        if (!modelObj.CastTo<GH_InstanceReference>(out var nestedInstanceRef))
+        {
+            return;
+        }
 
         var nestedModelIdef = nestedInstanceRef.InstanceDefinition;
-        if (nestedModelIdef == null) return;
+        if (nestedModelIdef == null)
+        {
+            return;
+        }
 
         // Recursively copy nested block first
         CopyBlockRecursive(nestedModelIdef, targetDoc);
@@ -222,11 +267,17 @@ public class OBSOLETE_BlockToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
 
     private void EnsureConverterInitialized()
     {
-        if (_converter != null) return;
+        if (_converter != null)
+        {
+            return;
+        }
 
         lock (_converterLock)
         {
-            if (_converter != null) return;
+            if (_converter != null)
+            {
+                return;
+            }
 
             var options = new RhinoConverterOptions();
 

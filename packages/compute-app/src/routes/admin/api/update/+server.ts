@@ -32,12 +32,15 @@ export const POST: RequestHandler = async () => {
 				});
 
 				// Kill the process if it runs longer than 15 minutes
-				const timeout = setTimeout(() => {
-					child.kill('SIGTERM');
-					sendEvent('log', { data: '[FATAL] Update timed out after 15 minutes' });
-					sendEvent('exit', { code: -1 });
-					controller.close();
-				}, 15 * 60 * 1000);
+				const timeout = setTimeout(
+					() => {
+						child.kill('SIGTERM');
+						sendEvent('log', { data: '[FATAL] Update timed out after 15 minutes' });
+						sendEvent('exit', { code: -1 });
+						controller.close();
+					},
+					15 * 60 * 1000
+				);
 
 				// Stream stdout
 				let restarting = false;
@@ -47,7 +50,11 @@ export const POST: RequestHandler = async () => {
 						const clean = stripAnsi(line).trim();
 						if (clean) {
 							// Detect both stopProcessId (pm2 restart) and restartProcessId (pm2 reload)
-							if (!restarting && (clean.includes('Applying action stopProcessId') || clean.includes('Applying action restartProcessId'))) {
+							if (
+								!restarting &&
+								(clean.includes('Applying action stopProcessId') ||
+									clean.includes('Applying action restartProcessId'))
+							) {
 								restarting = true;
 								sendEvent('restarting', { data: clean });
 							} else {

@@ -72,7 +72,9 @@ Since snippets are defined in the template in Svelte 5, you can also register th
 		};
 	});
 
-	const mySnippet = { /* ... */ };
+	const mySnippet = {
+		/* ... */
+	};
 </script>
 ```
 
@@ -109,13 +111,17 @@ const leftItems = footer.getItemsByPosition('left');
 ## Positioning
 
 ### Left Position
+
 Items appear to the left side of the footer, before error/warning messages:
+
 - Custom left items (sorted by priority, highest first)
 - Error/warning indicator
 - Legacy footerChildren snippet (if provided)
 
 ### Right Position
+
 Items appear on the right side of the footer:
+
 - Custom right items (sorted by priority, highest first)
 - Copyright notice
 
@@ -141,24 +147,26 @@ Priority -1 → renders last
 ## Migration from Props
 
 ### Before (Prop-based)
+
 ```svelte
 <!-- Page level -->
-<PageContainer errors={errors} warnings={warnings} let:footerChildren>
+<PageContainer {errors} {warnings} let:footerChildren>
 	<!-- Child components have no way to add footer content -->
 </PageContainer>
 ```
 
 ### After (Context-based)
-```svelte
-<!-- Page level - no changes needed -->
-<PageContainer errors={errors} warnings={warnings}>
-	<!-- Anywhere in this tree -->
-	<ChildComponent />
-</PageContainer>
 
+```svelte
 <!-- Child component can now add footer items -->
 <script lang="ts">
 	import { useFooterItem } from 'selva-shared';
 	useFooterItem('my-item', mySnippet);
 </script>
+
+<!-- Page level - no changes needed -->
+<PageContainer {errors} {warnings}>
+	<!-- Anywhere in this tree -->
+	<ChildComponent />
+</PageContainer>
 ```

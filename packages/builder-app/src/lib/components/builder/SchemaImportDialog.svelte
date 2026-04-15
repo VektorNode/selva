@@ -116,7 +116,7 @@
 			<!-- Validation Status -->
 			{#if validation.isValid}
 				<Alert.Root>
-					<CheckCircle2 class="h-4 w-4 text-success" />
+					<CheckCircle2 class="text-success h-4 w-4" />
 					<Alert.Title>Schema Valid</Alert.Title>
 					<Alert.Description>
 						This schema is compatible with your current document and can be safely imported.
@@ -124,7 +124,7 @@
 				</Alert.Root>
 			{:else if validation.canLoad}
 				<Alert.Root>
-					<AlertTriangle class="h-4 w-4 text-warning" />
+					<AlertTriangle class="text-warning h-4 w-4" />
 					<Alert.Title>Warnings Found</Alert.Title>
 					<Alert.Description>
 						The schema can be imported but has some warnings. Review them below.

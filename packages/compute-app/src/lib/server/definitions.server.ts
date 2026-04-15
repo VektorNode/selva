@@ -47,4 +47,3 @@ export function getDefinitionContainer() {
 export function getDefinitionStore() {
 	return getStore();
 }
-

@@ -30,12 +30,14 @@ async function fetchSchemaFromCompute(
 		throw new Error(`Schema endpoint returned ${response.status}: ${response.statusText}`);
 	}
 
-	// Compute returns [{ fileName, schemas }] with PascalCase keys — unwrap and normalize
+	// Compute returns [{ FileName, Schemas }] with PascalCase wrapper keys only.
+	// The schema contents are already camelCase from our C# serializer, so we only
+	// need a shallow camelcase to normalize FileName→fileName, Schemas→schemas.
+	// deep:true would mangle user-defined option names (e.g. "Display3d" → "display3d").
 	const raw = await response.json();
-	const results: { schemas: UISchema[] }[] = camelcaseKeys(Array.isArray(raw) ? raw : [raw], {
-		deep: true
-	}) as { schemas: UISchema[] }[];
-
+	const results: { schemas: UISchema[] }[] = camelcaseKeys(Array.isArray(raw) ? raw : [raw]) as {
+		schemas: UISchema[];
+	}[];
 	const schemas = results.flatMap((r) => r.schemas ?? []);
 
 	if (schemas.length === 0) {

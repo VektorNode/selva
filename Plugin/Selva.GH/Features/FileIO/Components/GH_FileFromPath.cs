@@ -19,7 +19,7 @@ public class GH_FileFromPath : GH_Component, ISelvaFileOutput
 
     protected override Bitmap Icon => Resources.PathToFile;
 
-    public override Guid ComponentGuid => new("F2B8D4A6-C3E7-4B1F-9D5A-8E2C6F4A1B3D");
+    public override Guid ComponentGuid => new Guid("F2B8D4A6-C3E7-4B1F-9D5A-8E2C6F4A1B3D");
 
     public override void CreateAttributes()
     {
@@ -46,7 +46,11 @@ public class GH_FileFromPath : GH_Component, ISelvaFileOutput
         var nameOverride = "";
         var subFolder = "";
 
-        if (!DA.GetData(0, ref path)) return;
+        if (!DA.GetData(0, ref path))
+        {
+            return;
+        }
+
         DA.GetData(1, ref nameOverride);
         DA.GetData(2, ref subFolder);
 

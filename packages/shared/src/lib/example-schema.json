@@ -16,7 +16,7 @@
 	"viewerOptions": {
 		"enableLocal": true,
 		"enableRemote": true,
-		"backgroundColor": "#f5f5f5"
+		"backgroundColor": "#c8c8c8"
 	},
 	"instanceSolve": false,
 	"inputs": [

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-04-14
+
+### Added
+
+**WebDisplay: Layer Input**
+
+- New `Layer` input parameter (`L`) on `WebDisplay` for grouping meshes in the scene manager (e.g. `"Structure/Walls"`)
+- `MeshMetadata` now carries `layer` and `originalIndex` fields for traceability back to the GH input tree
+- `MeshBatch` now carries `sourceComponentId` (the component `InstanceGuid`) so the viewer can identify which GH component produced each batch
+- `MeshBatchProcessor.CreateBatch` accepts the new optional `layers` and `sourceComponentId` parameters
+
+**Upgrader**
+
+- `GH_WebDisplayUpgrader_To_0_9`: migrates old `WebDisplay` component (GUID `9B5515B2`) to new one (GUID `4F7A9C2E`), remapping all existing inputs to their new indices and leaving the new `Layer` input empty
+
+**Obsolete Component**
+
+- `OBSOLETE_WebDisplay_UntilV0_8_3.cs` added for backward compatibility with definitions saved before v0.9.0
+
+### Changed
+
+- `WebDisplay` component GUID updated (`9B5515B2` → `4F7A9C2E`) to reflect the breaking input layout change
+- `Name` input label shortened from `"Mesh Name"` to `"Name"` for consistency
+- Metadata merging improved: when a branch has more metadata strings than geometry items, all metadata entries are merged into a single dictionary for that mesh (useful for one-mesh, many-metadata patterns)
+- Minor code style cleanup (single-line catch blocks, removed blank lines in `ParseMetadataString`)
+
 ## [0.7.1] - 2026-03-12
 
 ### Fix

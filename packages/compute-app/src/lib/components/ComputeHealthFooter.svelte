@@ -67,9 +67,7 @@
 						Selva {compute.selvaVersion}
 					</span>
 				{:else}
-					<span class="text-xs font-medium text-red-600 dark:text-red-400">
-						Selva missing
-					</span>
+					<span class="text-xs font-medium text-red-600 dark:text-red-400"> Selva missing </span>
 				{/if}
 			</div>
 		{/if}

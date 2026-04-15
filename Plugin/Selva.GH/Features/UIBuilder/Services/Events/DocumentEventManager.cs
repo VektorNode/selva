@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Selva.Core.Models;
-using Selva.GH.Features.ComputeIO.Components;
 using Selva.GH.Features.UIBuilder.Helpers;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Features.UIBuilder.Services.Schema;
@@ -19,17 +18,22 @@ namespace Selva.GH.Features.UIBuilder.Services.Events;
 /// </summary>
 public class DocumentEventManager : IDisposable
 {
-    private const int OUTPUT_BROADCAST_DEBOUNCE_MS = 100;
+    private const int DOCUMENT_MODIFIED_DEBOUNCE_MS = 600;
     private readonly CommunicationHandler _communicationHandler;
     private readonly SchemaManager _schemaManager;
     private readonly ValueCollector _valueCollector;
 
+    // Watched set — GUIDs of relevant objects (contextual params + output components).
+    // Populated via RegisterWatchedObjects on enable; updated incrementally in OnObjectsAdded/Deleted.
+    // Used to short-circuit UndoStateChanged when no relevant objects exist.
+    private readonly HashSet<Guid> _watchedIds = [];
+
     private GH_Document _currentDocument;
     private bool _disposed;
-    private bool _eventsRegistered;
 
-    // Debounce output broadcasts to prevent duplicate sends
-    private DateTime _lastOutputBroadcast = DateTime.MinValue;
+    // Trailing-edge debounce timer for UndoStateChanged — fires 600ms after the last event.
+    private Timer _documentModifiedTimer;
+    private bool _eventsRegistered;
 
     public DocumentEventManager(SchemaManager schemaManager, ValueCollector valueCollector,
         CommunicationHandler communicationHandler)
@@ -37,13 +41,23 @@ public class DocumentEventManager : IDisposable
         _schemaManager = schemaManager ?? throw new ArgumentNullException(nameof(schemaManager));
         _valueCollector = valueCollector ?? throw new ArgumentNullException(nameof(valueCollector));
         _communicationHandler = communicationHandler ?? throw new ArgumentNullException(nameof(communicationHandler));
+        _documentModifiedTimer = new Timer(
+            _ => DocumentModified?.Invoke(this, EventArgs.Empty),
+            null,
+            Timeout.Infinite,
+            Timeout.Infinite);
     }
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
 
         UnregisterEvents();
+        _documentModifiedTimer?.Dispose();
+        _documentModifiedTimer = null;
         _currentDocument = null;
         _disposed = true;
     }
@@ -53,19 +67,70 @@ public class DocumentEventManager : IDisposable
     public event EventHandler SolutionEnded;
     public event EventHandler<ParametersChangedEventArgs> ParametersChanged;
     public event EventHandler<MetadataChangedEventArgs> MetadataChanged;
+    public event EventHandler DocumentModified;
+
+    /// <summary>
+    ///     Seed the watched set from the current schema. Call on EnableRising so that
+    ///     UndoStateChanged can short-circuit immediately when no relevant objects exist.
+    /// </summary>
+    public void RegisterWatchedObjects(UISchema schema)
+    {
+        if (schema == null)
+        {
+            return;
+        }
+
+        foreach (var input in schema.Inputs)
+        {
+            _watchedIds.Add(input.Id);
+        }
+
+        foreach (var output in schema.Outputs)
+        {
+            _watchedIds.Add(output.Id);
+        }
+    }
+
+    /// <summary>
+    ///     Add individual IDs to the watched set — called when new params are merged into the schema.
+    /// </summary>
+    public void RegisterWatchedIds(IEnumerable<Guid> ids)
+    {
+        foreach (var id in ids)
+        {
+            _watchedIds.Add(id);
+        }
+    }
+
+    /// <summary>
+    ///     Clear the watched set. Called from UnregisterEvents on disable/document switch.
+    /// </summary>
+    public void ClearWatchedObjects()
+    {
+        _watchedIds.Clear();
+    }
 
     /// <summary>
     ///     Register events for a document
     /// </summary>
     public void RegisterEvents(GH_Document document)
     {
-        if (document == null) return;
+        if (document == null)
+        {
+            return;
+        }
 
         // Unregister from previous document if switching documents
-        if (_currentDocument != null && _currentDocument.DocumentID != document.DocumentID) UnregisterEvents();
+        if (_currentDocument != null && _currentDocument.DocumentID != document.DocumentID)
+        {
+            UnregisterEvents();
+        }
 
         // Early return if already registered for THIS document
-        if (_eventsRegistered && _currentDocument != null && _currentDocument.DocumentID == document.DocumentID) return;
+        if (_eventsRegistered && _currentDocument != null && _currentDocument.DocumentID == document.DocumentID)
+        {
+            return;
+        }
 
         _currentDocument = document;
 
@@ -82,8 +147,8 @@ public class DocumentEventManager : IDisposable
         {
             _currentDocument.SolutionStart += OnSolutionStart;
             _currentDocument.SolutionEnd += OnSolutionEnd;
-            _currentDocument.ObjectsAdded += OnObjectsChanged;
-            _currentDocument.ObjectsDeleted += OnObjectsChanged;
+            _currentDocument.ObjectsAdded += OnObjectsAdded;
+            _currentDocument.ObjectsDeleted += OnObjectsDeleted;
             _currentDocument.UndoStateChanged += OnUndoStateChanged;
         }
         catch (Exception ex)
@@ -99,7 +164,10 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     public void UnregisterEvents()
     {
-        if (!_eventsRegistered) return;
+        if (!_eventsRegistered)
+        {
+            return;
+        }
 
         try
         {
@@ -111,19 +179,22 @@ public class DocumentEventManager : IDisposable
         }
 
         if (_currentDocument != null)
+        {
             try
             {
                 _currentDocument.SolutionStart -= OnSolutionStart;
                 _currentDocument.SolutionEnd -= OnSolutionEnd;
-                _currentDocument.ObjectsAdded -= OnObjectsChanged;
-                _currentDocument.ObjectsDeleted -= OnObjectsChanged;
+                _currentDocument.ObjectsAdded -= OnObjectsAdded;
+                _currentDocument.ObjectsDeleted -= OnObjectsDeleted;
                 _currentDocument.UndoStateChanged -= OnUndoStateChanged;
             }
             catch (Exception ex)
             {
                 Logger.Warn($"Failed to unsubscribe from document events: {ex.Message}");
             }
+        }
 
+        ClearWatchedObjects();
         _eventsRegistered = false;
     }
 
@@ -143,7 +214,9 @@ public class DocumentEventManager : IDisposable
         if (_communicationHandler.IsRunning)
             // Fire and forget is ok for start message - it's informational
             // Note: SetSolving now returns false if debounced, so we always broadcast to be safe
+        {
             _ = _communicationHandler.BroadcastSolvingState(true);
+        }
     }
 
     private void OnSolutionEnd(object sender, GH_SolutionEventArgs e)
@@ -153,6 +226,7 @@ public class DocumentEventManager : IDisposable
         if (_communicationHandler.IsRunning)
             // Critical: Ensure solving=false is sent. If this fails, clients may get stuck.
             // We use Task.Run to avoid blocking Grasshopper's event thread
+        {
             _ = Task.Run(async () =>
             {
                 try
@@ -165,43 +239,89 @@ public class DocumentEventManager : IDisposable
                     // Even if broadcast fails, state should eventually timeout on client side
                 }
             });
+        }
     }
 
     /// <summary>
-    ///     Handle undo/redo state changes.
-    ///     Metadata detection is handled by the SolutionEnded path, which fires after undo triggers a re-solve.
+    ///     Handle undo/redo state changes. Trailing-edge debounced — fires 600ms after
+    ///     the last event, so a full rename is captured before metadata detection runs.
+    ///     Gated on the watched set: if no relevant objects exist, returns at zero cost.
     /// </summary>
     private void OnUndoStateChanged(object sender, GH_DocUndoEventArgs e)
     {
-        // No direct action needed: undo/redo triggers a new GH solution,
-        // which fires SolutionEnded → DetectAndBroadcastMetadataChanges naturally.
+        if (_currentDocument == null || !_communicationHandler.IsRunning)
+        {
+            return;
+        }
+
+        if (_watchedIds.Count == 0)
+        {
+            return;
+        }
+
+        // Reset the timer on every event — fires only after 600ms of silence
+        _documentModifiedTimer?.Change(DOCUMENT_MODIFIED_DEBOUNCE_MS, Timeout.Infinite);
+    }
+
+
+    /// <summary>
+    ///     Handle objects added to the document. Only fires ParametersChanged if a relevant
+    ///     object (contextual param or output component) was added, and adds it to the watched set.
+    /// </summary>
+    private void OnObjectsAdded(object sender, GH_DocObjectEventArgs e)
+    {
+        if (_currentDocument == null || !_communicationHandler.IsRunning)
+        {
+            return;
+        }
+
+        var anyAdded = false;
+        foreach (var obj in e.Objects)
+        {
+            if (obj is IGH_DocumentObject docObj && IsRelevantObject(obj))
+            {
+                _watchedIds.Add(docObj.InstanceGuid);
+                anyAdded = true;
+            }
+        }
+
+        if (anyAdded)
+        {
+            ParametersChanged?.Invoke(this, new ParametersChangedEventArgs { Document = _currentDocument });
+        }
     }
 
     /// <summary>
-    ///     Handle objects added or deleted in document
+    ///     Handle objects deleted from the document. Uses the watched set for O(1) membership
+    ///     check — no need to re-run type predicates on every deleted object.
     /// </summary>
-    private void OnObjectsChanged(object sender, GH_DocObjectEventArgs e)
+    private void OnObjectsDeleted(object sender, GH_DocObjectEventArgs e)
     {
-        if (_currentDocument == null || !_communicationHandler.IsRunning) return;
-
-        // Check if any changed objects are contextual parameters or output components
-        var relevantChange = false;
-        foreach (var obj in e.Objects)
-            if (obj is IGH_ContextualParameter ||
-                ParameterTypeHelper.IsContextOutputComponent(obj) ||
-                ParameterTypeHelper.IsContextBakeComponent(obj))
-            {
-                relevantChange = true;
-                break;
-            }
-
-        if (!relevantChange) return;
-
-        // Notify component that parameters changed
-        ParametersChanged?.Invoke(this, new ParametersChangedEventArgs
+        if (_currentDocument == null || !_communicationHandler.IsRunning)
         {
-            Document = _currentDocument
-        });
+            return;
+        }
+
+        var anyRemoved = false;
+        foreach (var obj in e.Objects)
+        {
+            if (obj is IGH_DocumentObject docObj && _watchedIds.Remove(docObj.InstanceGuid))
+            {
+                anyRemoved = true;
+            }
+        }
+
+        if (anyRemoved)
+        {
+            ParametersChanged?.Invoke(this, new ParametersChangedEventArgs { Document = _currentDocument });
+        }
+    }
+
+    private static bool IsRelevantObject(IGH_DocumentObject obj)
+    {
+        return obj is IGH_ContextualParameter
+               || ParameterTypeHelper.IsContextOutputComponent(obj)
+               || ParameterTypeHelper.IsContextBakeComponent(obj);
     }
 
     /// <summary>
@@ -209,56 +329,35 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     public void DetectAndBroadcastMetadataChanges(UISchema schema)
     {
-        if (_currentDocument == null || !_communicationHandler.IsRunning || schema == null) return;
+        if (_currentDocument == null || !_communicationHandler.IsRunning || schema == null)
+        {
+            return;
+        }
 
         try
         {
             var metadataChanges = _schemaManager.DetectMetadataChanges(_currentDocument, schema);
 #if DEBUG
-			Logger.Log($"[UIBuilder] MetadataDetect — changed inputs={metadataChanges.Inputs.Count}, outputs={metadataChanges.Outputs.Count}");
+            Logger.Log(
+                $"[UIBuilder] MetadataDetect — changed inputs={metadataChanges.Inputs.Count}, outputs={metadataChanges.Outputs.Count}");
 #endif
             if (metadataChanges.Inputs.Count > 0 || metadataChanges.Outputs.Count > 0)
             {
-                var requiresRecalc = ShouldRecalculateAfterMetadataChange(metadataChanges);
 #if DEBUG
-				var names = metadataChanges.Inputs.Select(i => i.Nickname)
-					.Concat(metadataChanges.Outputs.Select(o => o.Nickname));
-				Logger.Log($"[UIBuilder] MetadataChanged — params=[{string.Join(", ", names)}], requiresRecalc={requiresRecalc}");
+                var names = metadataChanges.Inputs.Select(i => i.Nickname)
+                    .Concat(metadataChanges.Outputs.Select(o => o.Nickname));
+                Logger.Log($"[UIBuilder] MetadataChanged — params=[{string.Join(", ", names)}]");
 #endif
                 var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
-                MetadataChanged?.Invoke(this, new MetadataChangedEventArgs
-                {
-                    Changes = metadataChanges,
-                    RequiresRecalculation = requiresRecalc
-                });
+                MetadataChanged?.Invoke(this, new MetadataChangedEventArgs { Changes = metadataChanges });
             }
         }
-        catch
+        catch (Exception ex)
         {
-            /* ignore */
+#if DEBUG
+            Logger.Error("[UIBuilder] DetectAndBroadcastMetadataChanges failed", ex);
+#endif
         }
-    }
-
-    /// <summary>
-    ///     Check if metadata changes require solution recalculation
-    /// </summary>
-    private bool ShouldRecalculateAfterMetadataChange(DiscoveredParameters changes)
-    {
-        // Check input changes
-        var hasInputChanges = changes.Inputs.Any(change =>
-        {
-            var paramObj = _currentDocument.FindObject(change.Id, false);
-            if (paramObj is GetValueListParameter && change.Options != null) return true; // ValueList options changed
-
-            if (paramObj is IGH_ContextualParameter &&
-                (change.Minimum != null || change.Maximum != null || change.StepSize != null))
-                return true; // Number constraints changed
-
-            return false;
-        });
-
-        // Output changes don't typically require recalculation
-        return hasInputChanges;
     }
 
     /// <summary>
@@ -266,7 +365,10 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     public void CollectAndBroadcastOutputs(UISchema schema)
     {
-        if (_currentDocument == null || !_communicationHandler.IsRunning || schema == null) return;
+        if (_currentDocument == null || !_communicationHandler.IsRunning || schema == null)
+        {
+            return;
+        }
 
         var includeDisplayData = schema.ViewerOptions?.EnableLocal ?? false;
 
@@ -298,5 +400,4 @@ public class ParametersChangedEventArgs : EventArgs
 public class MetadataChangedEventArgs : EventArgs
 {
     public DiscoveredParameters Changes { get; set; }
-    public bool RequiresRecalculation { get; set; }
 }

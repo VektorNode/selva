@@ -12,7 +12,7 @@ namespace Selva.GH.Features.FileIO.Services;
 [Guid("A3B5C7D9-2E4F-4A8B-9C1D-3F5E7A9B2C4D")]
 public class FileInputGoo : GH_Goo<FileInputData>
 {
-    private static readonly JsonSerializerSettings SecureSettings = new()
+    private static readonly JsonSerializerSettings SecureSettings = new JsonSerializerSettings
     {
         TypeNameHandling = TypeNameHandling.None,
         MaxDepth = 8
@@ -46,7 +46,10 @@ public class FileInputGoo : GH_Goo<FileInputData>
 
     public override string ToString()
     {
-        if (Value == null) return "null";
+        if (Value == null)
+        {
+            return "null";
+        }
 
         return Value.Type switch
         {
@@ -59,7 +62,10 @@ public class FileInputGoo : GH_Goo<FileInputData>
 
     public override bool CastFrom(object source)
     {
-        if (source == null) return false;
+        if (source == null)
+        {
+            return false;
+        }
 
         // Cast from string (assume it's a path)
         if (source is string str)
@@ -135,7 +141,10 @@ public class FileInputGoo : GH_Goo<FileInputData>
     /// </summary>
     public override bool Write(GH_IWriter writer)
     {
-        if (Value == null) return false;
+        if (Value == null)
+        {
+            return false;
+        }
 
         writer.SetString("File", Value.File ?? string.Empty);
         writer.SetString("Type", Value.Type ?? string.Empty);

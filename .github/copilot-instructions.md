@@ -5,6 +5,7 @@
 Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for building interactive Grasshopper definitions.
 
 **Architecture:**
+
 - **Monorepo:** Two main stacks managed in a single repository
   - Backend: C# plugin (`Plugin/`) targeting .NET net48 (Rhino 7) and net7.0 (Rhino 8)
   - Frontend: TypeScript/SvelteKit apps in `packages/` for two deployment modes
@@ -27,11 +28,13 @@ Copilot should use this context when generating code, explanations, review comme
 ## 3. Build, Test, Run, and Validate
 
 **Setup (required first):**
+
 ```bash
 pnpm install
 ```
 
 **Backend (C#):**
+
 ```bash
 cd Plugin
 dotnet build                           # Debug build
@@ -40,6 +43,7 @@ dotnet test                            # Run tests
 ```
 
 **Frontend (TypeScript/Svelte):**
+
 ```bash
 pnpm dev                    # Dev server (http://localhost:5173)
 pnpm type-check             # TypeScript check
@@ -49,6 +53,7 @@ pnpm run build:all          # Build all packages
 ```
 
 **Schema workflow (when modifying ui-schema.json):**
+
 ```bash
 cd packages/schemas && pnpm run generate:all
 # Updates: packages/shared/src/lib/types/generated/schema.ts
@@ -56,11 +61,13 @@ cd packages/schemas && pnpm run generate:all
 ```
 
 **Production build:**
+
 ```bash
 pnpm run build:plugin  # Builds plugin with embedded web assets
 ```
 
 **Deployment:**
+
 ```bash
 pm2 start ecosystem.config.cjs              # Start with PM2
 pm2 reload selva-compute --update-env       # Graceful reload (zero-downtime)

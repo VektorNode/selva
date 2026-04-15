@@ -15,7 +15,7 @@ public class GH_ThreeMaterial : GH_Component
     {
     }
 
-    public override Guid ComponentGuid => new("D7A8738A-85AA-4707-A486-DCB84AA21C6B");
+    public override Guid ComponentGuid => new Guid("D7A8738A-85AA-4707-A486-DCB84AA21C6B");
 
     protected override Bitmap Icon => Resources.ThreeMaterial;
 

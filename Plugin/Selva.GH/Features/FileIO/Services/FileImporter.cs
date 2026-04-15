@@ -25,7 +25,9 @@ public static class FileImporter
         ImportFromFileInputData(FileInputData fileData)
     {
         if (fileData == null || string.IsNullOrEmpty(fileData.File))
+        {
             return (false, new List<GeometryWithName>(), "", "File data is null or empty");
+        }
 
         string tempPath = null;
         try
@@ -40,7 +42,10 @@ public static class FileImporter
                 case "base64":
                     var decodeResult = DecodeBase64ToTemp(fileData.File, fileData.FileEnding);
                     if (!decodeResult.Success)
+                    {
                         return (false, new List<GeometryWithName>(), "", decodeResult.ErrorMessage);
+                    }
+
                     tempPath = decodeResult.TempPath;
                     break;
 
@@ -57,6 +62,7 @@ public static class FileImporter
             if (!string.IsNullOrEmpty(tempPath) &&
                 fileData.Type?.ToLowerInvariant() != "path" &&
                 File.Exists(tempPath))
+            {
                 try
                 {
                     File.Delete(tempPath);
@@ -65,6 +71,7 @@ public static class FileImporter
                 {
                     /* ignore cleanup errors */
                 }
+            }
         }
     }
 
@@ -75,23 +82,31 @@ public static class FileImporter
         ImportFile(string filePath)
     {
         if (string.IsNullOrEmpty(filePath))
+        {
             return (false, new List<GeometryWithName>(), "", "File path is empty");
+        }
 
         if (!File.Exists(filePath))
+        {
             return (false, new List<GeometryWithName>(), "", $"File not found: {filePath}");
+        }
 
         // Check file size
         var fileInfo = new FileInfo(filePath);
         if (fileInfo.Length > MAX_FILE_SIZE_BYTES)
+        {
             return (false, new List<GeometryWithName>(), "",
                 $"File too large: {fileInfo.Length / 1024 / 1024}MB (max {MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)");
+        }
 
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
 
         // Create headless Rhino document for import
         var doc = RhinoDoc.CreateHeadless(null);
         if (doc == null)
+        {
             return (false, new List<GeometryWithName>(), "", "Failed to create Rhino document");
+        }
 
         try
         {
@@ -127,8 +142,10 @@ public static class FileImporter
             }
 
             if (!importSuccess)
+            {
                 return (false, new List<GeometryWithName>(), extension,
                     $"Failed to import file with extension {extension}");
+            }
 
             // Extract geometry with metadata
             var geometryList = ExtractGeometryFromDocument(doc);
@@ -154,27 +171,38 @@ public static class FileImporter
         try
         {
             if (string.IsNullOrEmpty(base64Data))
+            {
                 return (false, null, "Base64 data is empty");
+            }
 
             // Validate base64 length to prevent DoS
             if (base64Data.Length > MAX_FILE_SIZE_BYTES * 2) // Base64 is ~1.37x larger
+            {
                 return (false, null, "Base64 data too large");
+            }
 
             // Validate and sanitize file extension
             var extension = !string.IsNullOrEmpty(fileEnding) ? fileEnding : ".tmp";
             if (extension.Contains("..") || extension.Contains("/") || extension.Contains("\\"))
+            {
                 return (false, null, "Invalid file extension");
+            }
 
             var allowedExtensions = AcceptedFileFormats.Values;
-            if (!allowedExtensions.Contains(extension?.ToLowerInvariant() ?? ""))
+            var normalizedExtension = extension?.ToLowerInvariant() ?? "";
+            if (!allowedExtensions.Any(ext => ext.Equals(normalizedExtension, StringComparison.OrdinalIgnoreCase)))
+            {
                 return (false, null, $"File extension '{extension}' is not supported");
+            }
 
             var bytes = Convert.FromBase64String(base64Data);
 
             // Check file size
             if (bytes.Length > MAX_FILE_SIZE_BYTES)
+            {
                 return (false, null,
                     $"Decoded file too large: {bytes.Length / 1024 / 1024}MB (max {MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)");
+            }
 
             // Use secure temp file name
             var tempPath = Path.Combine(Path.GetTempPath(), $"selva_base64_{Guid.NewGuid():N}{extension}");
@@ -311,7 +339,10 @@ public static class FileImporter
             else
             {
                 var geo = obj.Geometry.Duplicate();
-                if (geo != null) geometryList.Add(new GeometryWithName(geo, "No Block", layerName));
+                if (geo != null)
+                {
+                    geometryList.Add(new GeometryWithName(geo, "No Block", layerName));
+                }
             }
         }
 
@@ -328,19 +359,27 @@ public static class FileImporter
         var geometryList = new List<GeometryWithName>();
 
         var idef = doc.InstanceDefinitions.FindId(instanceRef.ParentIdefId);
-        if (idef == null) return geometryList;
+        if (idef == null)
+        {
+            return geometryList;
+        }
 
         var combinedTransform = parentTransform * instanceRef.Xform;
 
         var currentBlockName = idef.Name;
         if (!string.IsNullOrEmpty(parentBlockName) && parentBlockName != "No Block")
+        {
             currentBlockName = $"{parentBlockName}::{currentBlockName}";
+        }
 
         var defObjects = idef.GetObjects();
 
         foreach (var obj in defObjects)
         {
-            if (obj == null) continue;
+            if (obj == null)
+            {
+                continue;
+            }
 
             if (obj.Geometry.ObjectType == ObjectType.InstanceReference)
             {
@@ -364,9 +403,15 @@ public static class FileImporter
                     if (!combinedTransform.Equals(Transform.Identity))
                     {
                         if (combinedTransform.SimilarityType == TransformSimilarityType.NotSimilarity)
+                        {
                             if (!geo.MakeDeformable() && geo.ObjectType == ObjectType.Curve)
+                            {
                                 if (geo is Curve crv)
+                                {
                                     geo = crv.ToNurbsCurve();
+                                }
+                            }
+                        }
 
                         var transformSuccess = geo.Transform(combinedTransform);
                         if (!transformSuccess)
@@ -378,8 +423,13 @@ public static class FileImporter
                         if (combinedTransform.SimilarityType == TransformSimilarityType.OrientationReversing)
                         {
                             if (geo.ObjectType == ObjectType.Brep && geo is Brep brep)
+                            {
                                 brep.Flip();
-                            else if (geo.ObjectType == ObjectType.Mesh && geo is Mesh mesh) mesh.Flip(true, true, true);
+                            }
+                            else if (geo.ObjectType == ObjectType.Mesh && geo is Mesh mesh)
+                            {
+                                mesh.Flip(true, true, true);
+                            }
                         }
                     }
 

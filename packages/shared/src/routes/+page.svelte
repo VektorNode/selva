@@ -4,15 +4,17 @@
 	import { initializeValues } from '$lib/features/preview/handlers';
 	import exampleSchema from '$lib/example-schema.json';
 	import exampleSchemaLeftOnly from '$lib/example-schema-left-only.json';
-	import exampleSchemaRightOnly from '$lib/example-schema-right-only.json';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import PageContainer from '$lib/components/layout/PageContainer.svelte';
-	import { cubeMesh, dummyOutputValues } from '$lib/dummy-output-values';
+	import { cubeMesh, getParsedMeshes, dummyOutputValues } from '$lib/dummy-output-values';
 
 	// Switch between left-only, right-only and full schema
 	let schema = $state(exampleSchema as UISchema);
 	const _schemaLeft = exampleSchemaLeftOnly as UISchema;
 	const _schemaFull = exampleSchema as UISchema;
+
+	// Meshes state - starts with fallback cube
+	let meshes = $state([cubeMesh]);
 
 	const dummyErrors = [
 		'Error: Something went wrong with the calculation. Please check your input values and try again.',
@@ -23,6 +25,20 @@
 		'Warning: The value for "Parameter X" is approaching the maximum limit. Consider adjusting it to avoid potential issues.',
 		'Warning: The calculation may take longer than expected due to the complexity of the input values.'
 	];
+
+	// Load parsed meshes on mount
+	$effect(() => {
+		// This effect runs once on mount
+		getParsedMeshes()
+			.then((parsedMeshes: any[]) => {
+				if (parsedMeshes && parsedMeshes.length > 0) {
+					meshes = parsedMeshes;
+				}
+			})
+			.catch((err) => {
+				console.error('✗ Failed to parse meshes:', err);
+			});
+	});
 
 	let values = $state<Record<string, unknown>>({
 		...initializeValues({ schema }),
@@ -56,7 +72,7 @@
 	<div class="flex flex-1 flex-col overflow-hidden bg-background">
 		<AppLayout
 			{schema}
-			meshes={[cubeMesh]}
+			{meshes}
 			{isSolving}
 			showSolvingIndicator={schema.instanceSolve !== false}
 			{hasPendingChanges}
@@ -64,9 +80,20 @@
 			bind:values
 			onValueChange={handleValueChange}
 			oncalculate={handleCalculate}
+			showSaveButton={false}
+			showLoadButton={false}
+			stateManagerActions={[
+				{
+					id: 'reset',
+					label: 'Reset values',
+					onclick: () => {
+						console.log('Resetting values to default...');
+					}
+				}
+			]}
 			onLoadValues={async () => {
 				if (schema?.instanceSolve !== false) {
-					console.log('Performing solve on load values...');
+					console.error('Performing solve on load values...');
 				} else {
 					hasPendingChanges = true;
 				}

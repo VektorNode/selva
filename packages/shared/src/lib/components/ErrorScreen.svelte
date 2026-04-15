@@ -13,9 +13,7 @@
 	let { status = 500, message, details, homeLink = '/' }: Props = $props();
 </script>
 
-<div
-	class="p-4 flex min-h-screen items-center justify-center bg-background"
->
+<div class="p-4 flex min-h-screen items-center justify-center bg-background">
 	<Card.Root class="max-w-md w-full">
 		<Card.Header class="text-center">
 			<div class="mb-4 flex justify-center">
@@ -39,8 +37,8 @@
 			</div>
 
 			{#if details}
-				<div class="bg-muted p-4 rounded-lg">
-					<p class="font-mono text-sm text-muted-foreground break-all">
+				<div class="p-4 rounded-lg bg-muted">
+					<p class="font-mono text-sm break-all text-muted-foreground">
 						{details}
 					</p>
 				</div>

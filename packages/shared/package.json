@@ -1,6 +1,6 @@
 {
 	"name": "selva-shared",
-	"version": "0.8.3",
+	"version": "0.9.0",
 	"description": "Shared UI components and utilities for Selva applications",
 	"license": "MIT",
 	"publishConfig": {
@@ -42,7 +42,7 @@
 	"peerDependencies": {
 		"@sveltejs/kit": "^2",
 		"bits-ui": "^2.15.4",
-		"selva-compute": "^1",
+		"selva-compute": "catalog:",
 		"svelte": "^5",
 		"tailwind-variants": "^3.2.2",
 		"three": "catalog:"

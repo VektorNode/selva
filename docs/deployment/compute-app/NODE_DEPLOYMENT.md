@@ -72,9 +72,9 @@ pm2 restart selva-compute --update-env
 
 ## Troubleshooting
 
-| Issue | Fix |
-|---|---|
-| Port in use | `lsof -i :3000` → change `PORT` in config |
-| Can't reach Compute | `curl http://YOUR-COMPUTE/health` → check `COMPUTE_SERVER_URL` and firewall |
-| Definitions not loading | `ls definitions/` → verify filenames match `?gh=` param |
-| Body size limit exceeded | Set `BODY_SIZE_LIMIT: 'Infinity'` and restart with `--update-env` |
+| Issue                    | Fix                                                                         |
+| ------------------------ | --------------------------------------------------------------------------- |
+| Port in use              | `lsof -i :3000` → change `PORT` in config                                   |
+| Can't reach Compute      | `curl http://YOUR-COMPUTE/health` → check `COMPUTE_SERVER_URL` and firewall |
+| Definitions not loading  | `ls definitions/` → verify filenames match `?gh=` param                     |
+| Body size limit exceeded | Set `BODY_SIZE_LIMIT: 'Infinity'` and restart with `--update-env`           |

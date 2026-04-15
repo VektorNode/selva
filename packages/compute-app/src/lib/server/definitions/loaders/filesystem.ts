@@ -66,7 +66,11 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 			this.configCache = parsed;
 			return parsed;
 		} catch (err) {
-			if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
+			if (
+				err instanceof Error &&
+				'code' in err &&
+				(err as NodeJS.ErrnoException).code === 'ENOENT'
+			) {
 				const empty: DefinitionsConfig = { definitions: {} };
 				this.configCache = empty;
 				return empty;
@@ -177,7 +181,9 @@ export class FilesystemDefinitionLoader implements IDefinitionLoader {
 				// Normalize coverImage URLs: convert admin URLs to public URLs for compatibility
 				const normalizedMetadata = { ...metadata };
 				if (normalizedMetadata.coverImage?.startsWith('/admin/api/definitions/')) {
-					const match = normalizedMetadata.coverImage.match(/\/admin\/api\/definitions\/(.+?)\/(image\/.+)/);
+					const match = normalizedMetadata.coverImage.match(
+						/\/admin\/api\/definitions\/(.+?)\/(image\/.+)/
+					);
 					if (match) {
 						normalizedMetadata.coverImage = `/api/definitions/${match[1]}/${match[2]}`;
 					}

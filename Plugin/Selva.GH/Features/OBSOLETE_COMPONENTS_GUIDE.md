@@ -23,7 +23,7 @@ This makes it immediately clear:
 **Components:**
 
 - Prefix: `OBSOLETE_` — clearly marks as deprecated
-- Component name: matches the current component name (without "GH_" prefix)
+- Component name: matches the current component name (without "GH\_" prefix)
 - Version suffix: `_UntilVX_Y_Z` — last version this component was valid for
 - Class name: mirrors filename (e.g., `OBSOLETE_BlockToFile_UntilV0_6_2`)
 - Exposure: `GH_Exposure.hidden` — hidden from users, only for backward compatibility
@@ -44,7 +44,7 @@ This makes it immediately clear:
 **Components:**
 
 - Prefix: `GH_` — Grasshopper convention
-- Component name: matches the current component (without "OBSOLETE_" or version suffix)
+- Component name: matches the current component (without "OBSOLETE\_" or version suffix)
 - Suffix: `Upgrader` — clearly indicates purpose
 - Class name: mirrors filename (e.g., `GH_BlockToFileUpgrader`)
 - Interface: `IGH_UpgradeObject` — Grasshopper upgrade mechanism
@@ -78,24 +78,24 @@ Plugin/Selva.GH/Features/FileIO/Components/OBSOLETE/
 When deprecating a component:
 
 1. **Create the obsolete component:**
-	- Rename/copy current component: `GH_MyComponent.cs` → `OBSOLETE_MyComponent_UntilVX_Y_Z.cs`
-	- Update class name: `GH_MyComponent` → `OBSOLETE_MyComponent_UntilVX_Y_Z`
-	- Set `Exposure` to `GH_Exposure.hidden`
-	- Move to `/OBSOLETE/` folder
-	- Keep all original functionality intact
+   - Rename/copy current component: `GH_MyComponent.cs` → `OBSOLETE_MyComponent_UntilVX_Y_Z.cs`
+   - Update class name: `GH_MyComponent` → `OBSOLETE_MyComponent_UntilVX_Y_Z`
+   - Set `Exposure` to `GH_Exposure.hidden`
+   - Move to `/OBSOLETE/` folder
+   - Keep all original functionality intact
 
 2. **Create the upgrader:**
-	- Create new file: `GH_MyComponentUpgrader.cs`
-	- Implement `IGH_UpgradeObject` interface
-	- Map old inputs/outputs to new component
-	- Set `UpgradeFrom` GUID (old component GUID)
-	- Set `UpgradeTo` GUID (new component GUID)
-	- Set `Version` to current date
+   - Create new file: `GH_MyComponentUpgrader.cs`
+   - Implement `IGH_UpgradeObject` interface
+   - Map old inputs/outputs to new component
+   - Set `UpgradeFrom` GUID (old component GUID)
+   - Set `UpgradeTo` GUID (new component GUID)
+   - Set `Version` to current date
 
 3. **Ensure backward compatibility:**
-	- Test upgrading old definitions with the obsolete component
-	- Verify upgraded definitions work with new component
-	- Document any breaking changes in upgrader comments
+   - Test upgrading old definitions with the obsolete component
+   - Verify upgraded definitions work with new component
+   - Document any breaking changes in upgrader comments
 
 ## Current Status
 

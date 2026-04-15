@@ -19,15 +19,29 @@ public static class MeshBatchProcessor
         List<Mesh> meshes,
         List<string> names,
         List<ThreeMaterial> materials,
-        List<Dictionary<string, string>> metadataList = null)
+        List<Dictionary<string, string>> metadataList = null,
+        List<string> layers = null,
+        string sourceComponentId = null)
     {
-        if (meshes.Count == 0) throw new ArgumentException("Mesh list cannot be empty");
+        if (meshes.Count == 0)
+        {
+            throw new ArgumentException("Mesh list cannot be empty");
+        }
 
         if (meshes.Count != names.Count || meshes.Count != materials.Count)
+        {
             throw new ArgumentException("Meshes, names, and materials lists must have the same length");
+        }
 
         if (metadataList != null && meshes.Count != metadataList.Count)
+        {
             throw new ArgumentException("Metadata list must have the same length as meshes if provided");
+        }
+
+        if (layers != null && meshes.Count != layers.Count)
+        {
+            throw new ArgumentException("Layers list must have the same length as meshes if provided");
+        }
 
         var materialCache = new MaterialCache();
 
@@ -36,7 +50,10 @@ public static class MeshBatchProcessor
         for (var i = 0; i < meshes.Count; i++)
         {
             var mesh = meshes[i];
-            if (mesh == null || !mesh.IsValid) continue;
+            if (mesh == null || !mesh.IsValid)
+            {
+                continue;
+            }
 
             var (vertices, faces) = GeoMeshProcessor.ConvertMeshToArrays(mesh);
             var materialId = materialCache.GetMaterialId(materials[i]);
@@ -44,6 +61,8 @@ public static class MeshBatchProcessor
             processedMeshes.Add(new ProcessedMesh
             {
                 Name = names[i],
+                Layer = layers?[i] ?? "",
+                OriginalIndex = i,
                 Vertices = vertices,
                 Faces = faces,
                 MaterialId = materialId,
@@ -63,7 +82,8 @@ public static class MeshBatchProcessor
             Materials = materialCache.GetAllMaterials()
                 .Select(SerializableMaterial.FromThreeMaterial)
                 .ToList(),
-            Groups = new List<MaterialGroup>()
+            Groups = new List<MaterialGroup>(),
+            SourceComponentId = sourceComponentId
         };
 
         // Calculate total sizes for single allocation
@@ -95,6 +115,8 @@ public static class MeshBatchProcessor
                 materialGroup.Meshes.Add(new MeshMetadata
                 {
                     Name = mesh.Name,
+                    Layer = mesh.Layer,
+                    OriginalIndex = mesh.OriginalIndex,
                     VertexCount = vertexCount,
                     FaceCount = faceCount,
                     VertexOffset = currentVertexOffset,
@@ -112,7 +134,10 @@ public static class MeshBatchProcessor
                 // We need to offset it by the number of vertices already in the combined array
                 var baseVertexIndex = currentVertexCount; // Number of vertices already in combined array
                 var faceSpan = allFaces.AsSpan(currentFaceOffset, faceCount);
-                for (var i = 0; i < faceCount; i++) faceSpan[i] = mesh.Faces[i] + baseVertexIndex;
+                for (var i = 0; i < faceCount; i++)
+                {
+                    faceSpan[i] = mesh.Faces[i] + baseVertexIndex;
+                }
 
                 currentVertexOffset += vertexCount;
                 currentFaceOffset += faceCount;
@@ -134,6 +159,8 @@ public static class MeshBatchProcessor
     private struct ProcessedMesh
     {
         public string Name { get; set; }
+        public string Layer { get; set; }
+        public int OriginalIndex { get; set; }
         public float[] Vertices { get; set; }
         public int[] Faces { get; set; }
         public int MaterialId { get; set; }
