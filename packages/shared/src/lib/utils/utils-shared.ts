@@ -48,7 +48,6 @@ export function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | 
 	if (schema.layout.type === 'tabbed' && !schema.layout.tabs) {
 		schema.layout.tabs = [];
 	}
-	// Ensure instanceSolve has a default value
 	if (schema.instanceSolve === undefined) {
 		schema.instanceSolve = true;
 	}

@@ -12,9 +12,7 @@
  * 2. User changes value while request in-flight → current request aborted, new one starts
  * 3. Result: server never overwhelmed, always processing latest values
  */
-
 export interface ComputeThrottleOptions {
-	/** Timeout in milliseconds. Default: 60000 (60 seconds) */
 	timeout?: number;
 }
 
@@ -31,7 +29,7 @@ export function createComputeThrottle<T>(
 	/** Cancel any in-flight request */
 	cancel: () => void;
 } {
-	const { timeout = 60000 } = options;
+	const { timeout = 150000 } = options;
 
 	let isComputing = $state(false);
 	let pendingValues = $state<T | null>(null);
@@ -45,10 +43,8 @@ export function createComputeThrottle<T>(
 	}
 
 	async function executeCompute(values: T) {
-		// Abort any existing request
 		abortCurrent();
 
-		// Create new abort controller with timeout
 		currentAbortController = new AbortController();
 		const signal = currentAbortController.signal;
 
@@ -63,14 +59,11 @@ export function createComputeThrottle<T>(
 		try {
 			await computeFn(values, signal);
 		} catch (err) {
-			// Re-throw unless it's an abort (which we handle silently for cancellation)
 			if (err instanceof Error && err.name === 'AbortError') {
 				// Check if there are pending values - if so, this was intentional cancellation
 				if (pendingValues === null) {
-					// Timeout or manual cancel without pending values - rethrow
 					throw err;
 				}
-				// Otherwise, silently ignore - we're about to process pending values
 			} else {
 				throw err;
 			}
@@ -79,7 +72,6 @@ export function createComputeThrottle<T>(
 			isComputing = false;
 			currentAbortController = null;
 
-			// If values changed while we were computing, send the latest
 			if (pendingValues !== null) {
 				const next = pendingValues;
 				pendingValues = null;
@@ -94,7 +86,6 @@ export function createComputeThrottle<T>(
 			pendingValues = values;
 			abortCurrent();
 		} else {
-			// No request in-flight, send immediately
 			executeCompute(values);
 		}
 	}

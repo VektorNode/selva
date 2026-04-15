@@ -7,13 +7,12 @@ import type {
 } from '../types/generated';
 
 /**
- * Generate a UUID v4 (with fallback for older environments)
+ * Generate a UUID v4
  */
 function generateUUID(): string {
 	if (typeof crypto !== 'undefined' && crypto.randomUUID) {
 		return crypto.randomUUID();
 	}
-	// Fallback for older browsers/environments
 	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
 		const r = (Math.random() * 16) | 0;
 		const v = c === 'x' ? r : (r & 0x3) | 0x8;
@@ -34,7 +33,6 @@ export function createSavedState(
 		tags?: string[];
 	}
 ): ParameterPreset {
-	// Collect parameter states from schema
 	const parameters: ParameterState[] = [];
 
 	const processGroup = (group: GroupConfig) => {
@@ -97,7 +95,7 @@ export function validateSavedState(
 ): {
 	isValid: boolean;
 	issues: ValidationIssueMessage[];
-	canLoad: boolean; // Can we load despite issues?
+	canLoad: boolean;
 } {
 	const issues: ValidationIssueMessage[] = [];
 

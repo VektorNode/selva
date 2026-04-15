@@ -51,12 +51,10 @@ export function createSolvingIndicator(isSolving: () => boolean) {
 
 				const expected = getExpectedDuration();
 
-				// Skip indicator entirely for consistently fast solves
 				if (hasHistory && expected < FAST_THRESHOLD_MS) {
 					return;
 				}
 
-				// Delay: 0 for slow/unknown, proportional for mid-range
 				const delay =
 					expected === Infinity || expected >= SLOW_THRESHOLD_MS
 						? 0

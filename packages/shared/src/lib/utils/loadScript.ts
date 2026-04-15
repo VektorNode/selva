@@ -1,3 +1,5 @@
+const scriptLoaders = new Map<string, Promise<void>>();
+
 /**
  * Load an external script from a CDN with automatic deduplication.
  * All calls to load the same script will share a single promise,
@@ -7,9 +9,6 @@
  * @param options Script attributes (crossOrigin, async, etc.)
  * @returns Promise that resolves when script is loaded
  */
-
-const scriptLoaders = new Map<string, Promise<void>>();
-
 export function loadScript(
 	src: string,
 	options?: {
@@ -18,19 +17,16 @@ export function loadScript(
 		defer?: boolean;
 	}
 ): Promise<void> {
-	// Return existing promise if already loading/loaded
 	if (scriptLoaders.has(src)) {
 		return scriptLoaders.get(src)!;
 	}
 
-	// Check if script already exists in DOM
 	if (document.querySelector(`script[src="${src}"]`)) {
 		const resolved = Promise.resolve();
 		scriptLoaders.set(src, resolved);
 		return resolved;
 	}
 
-	// Create and load script
 	const promise = new Promise<void>((resolve, reject) => {
 		const script = document.createElement('script');
 		script.src = src;
