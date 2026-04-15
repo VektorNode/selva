@@ -1,6 +1,7 @@
 # Selva.Core
 
-Shared models and services for the Selva Grasshopper plugin. This library provides the core functionality for schema management, validation, and versioning.
+Shared models and services for the Selva Grasshopper plugin. This library provides the core functionality for schema
+management, validation, and versioning.
 
 ## Target Framework
 
@@ -14,7 +15,8 @@ Shared models and services for the Selva Grasshopper plugin. This library provid
 
 ### Generated Models
 
-[UISchema.Generated.cs](Models/UISchema.Generated.cs) - Auto-generated from `packages/schemas/ui-schema.json`. Contains type-safe C# models for the entire UI schema structure.
+[UISchema.Generated.cs](Models/UISchema.Generated.cs) - Auto-generated from `packages/schemas/ui-schema.json`. Contains
+type-safe C# models for the entire UI schema structure.
 
 **Do not modify manually.** Regenerate with:
 
@@ -28,7 +30,8 @@ cd packages/schemas && pnpm run generate:cs
 
 - [SchemaValidator.cs](Services/Validation/SchemaValidator.cs) - Composable validation engine
 - [IValidationRule.cs](Services/Validation/IValidationRule.cs) - Interface for custom rules
-- [Rules/](Services/Validation/Rules/) - Built-in validation rules (structure, parameters, layout, versioning, constraints, widget config)
+- [Rules/](Services/Validation/Rules/) - Built-in validation rules (structure, parameters, layout, versioning,
+	constraints, widget config)
 
 **Schema Migration** - Version upgrade handling:
 

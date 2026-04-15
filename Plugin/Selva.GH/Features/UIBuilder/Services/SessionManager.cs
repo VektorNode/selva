@@ -19,8 +19,16 @@ public class SessionManager
 
     public bool ValidateSession(string sessionId)
     {
-        if (string.IsNullOrEmpty(sessionId)) return false;
-        if (string.IsNullOrEmpty(CurrentSessionId)) return false;
+        if (string.IsNullOrEmpty(sessionId))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(CurrentSessionId))
+        {
+            return false;
+        }
+
         return sessionId == CurrentSessionId;
     }
 
@@ -35,7 +43,10 @@ public class SessionManager
     /// </summary>
     private static string GenerateSessionId(int length)
     {
-        if (length <= 0) throw new ArgumentOutOfRangeException(nameof(length), "Length must be > 0");
+        if (length <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(length), "Length must be > 0");
+        }
 
         string EncodeUrlSafe(byte[] bytes)
         {

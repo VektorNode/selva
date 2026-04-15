@@ -65,7 +65,11 @@ public class BridgeCommunicationService : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
 
         _communicationHandler.OnValuesReceived -= HandleWebSocketValueUpdate;
@@ -131,7 +135,9 @@ public class BridgeCommunicationService : IDisposable
                 _component.AddRuntimeMessage(level, msg);
 
                 if (level == GH_RuntimeMessageLevel.Error || level == GH_RuntimeMessageLevel.Warning)
+                {
                     _ = _communicationHandler.BroadcastRuntimeMessage(ConvertMessageLevel(level), msg);
+                }
             });
         }
         catch (Exception ex)
@@ -147,7 +153,10 @@ public class BridgeCommunicationService : IDisposable
         try
         {
             var document = _component.OnPingDocument();
-            if (!DocumentGuards.IsValid(document, out _)) return;
+            if (!DocumentGuards.IsValid(document, out _))
+            {
+                return;
+            }
 
             // Try to read the schema from the wired ContextBake component.
             var contextBake = FindWiredContextBake();
@@ -184,7 +193,9 @@ public class BridgeCommunicationService : IDisposable
             _ = _communicationHandler.BroadcastInitialData(validatedSchema, currentParams, currentValues);
 
             if (validatedSchema.Outputs?.Count > 0)
+            {
                 ScheduleOutputBroadcast(validatedSchema);
+            }
         }
         catch (Exception ex)
         {
@@ -258,7 +269,10 @@ public class BridgeCommunicationService : IDisposable
         try
         {
             var document = _component.OnPingDocument();
-            if (document == null) return;
+            if (document == null)
+            {
+                return;
+            }
 
             var currentValues = _valueCollector.CollectInputValues(
                 document, _getSchema(), _component.AddRuntimeMessage);
@@ -350,14 +364,28 @@ public class BridgeCommunicationService : IDisposable
     private GH_Component FindWiredContextBake()
     {
         var schemaOutput = _component?.Params.Output.FirstOrDefault(p => p.Name == "Schema");
-        if (schemaOutput == null) return null;
+        if (schemaOutput == null)
+        {
+            return null;
+        }
 
         foreach (var recipient in schemaOutput.Recipients)
         {
             var comp = recipient?.Attributes?.GetTopLevel?.DocObject as GH_Component;
-            if (comp == null) continue;
-            if (comp.Params.Input.Count == 0 || comp.Params.Input[0].NickName != "Schema") continue;
-            if (ParameterTypeHelper.IsContextBakeComponent(comp)) return comp;
+            if (comp == null)
+            {
+                continue;
+            }
+
+            if (comp.Params.Input.Count == 0 || comp.Params.Input[0].NickName != "Schema")
+            {
+                continue;
+            }
+
+            if (ParameterTypeHelper.IsContextBakeComponent(comp))
+            {
+                return comp;
+            }
         }
 
         return null;
@@ -369,7 +397,10 @@ public class BridgeCommunicationService : IDisposable
     /// </summary>
     private static UISchema ReadSchemaFromContextBake(GH_Component contextBake)
     {
-        if (contextBake == null) return null;
+        if (contextBake == null)
+        {
+            return null;
+        }
 
         var schemaInput = contextBake.Params.Input.FirstOrDefault(p => p.NickName == "Schema");
         var data = schemaInput?.VolatileData?.AllData(true).FirstOrDefault();
@@ -398,12 +429,14 @@ public class BridgeCommunicationService : IDisposable
     private DiscoveredParameters GetCurrentAvailableParameters(GH_Document document)
     {
         if (document == null)
+        {
             return new DiscoveredParameters
             {
                 SessionId = _sessionId,
                 Inputs = new List<DiscoveredInput>(),
                 Outputs = new List<DiscoveredOutput>()
             };
+        }
 
         return _schemaManager.ScanParameters(document, _component);
     }
@@ -438,7 +471,10 @@ public class BridgeCommunicationService : IDisposable
     /// </summary>
     private static void SanitizeSchema(UISchema schema)
     {
-        if (schema?.Layout == null) return;
+        if (schema?.Layout == null)
+        {
+            return;
+        }
 
         var groups = schema.Layout switch
         {
@@ -448,10 +484,14 @@ public class BridgeCommunicationService : IDisposable
         };
 
         foreach (var item in groups.SelectMany(g => g.Items).OfType<InputFileLayoutItem>())
+        {
             if (item.Config?.AcceptedFormats is { Count: > 0 } formats)
+            {
                 item.Config.AcceptedFormats = formats
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
+            }
+        }
     }
 
     private static string ConvertMessageLevel(GH_RuntimeMessageLevel level)

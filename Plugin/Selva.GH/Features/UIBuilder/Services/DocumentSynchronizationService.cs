@@ -44,7 +44,10 @@ public class DocumentSynchronizationService : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
 
         // Unwire event handlers
         if (_eventManager != null)
@@ -99,11 +102,15 @@ public class DocumentSynchronizationService : IDisposable
                         .BroadcastMessage("parametersAdded", new { availableParams = available })
                         .ContinueWith(t =>
                         {
-                            if (t.IsFaulted) Logger.Error("Failed to broadcast parametersAdded", t.Exception);
+                            if (t.IsFaulted)
+                            {
+                                Logger.Error("Failed to broadcast parametersAdded", t.Exception);
+                            }
                         });
                     _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
                         $"Parameter(s)/Output(s) detected: {available.Inputs.Count} params, {available.Outputs.Count} outputs. Check web UI.");
                 }
+
                 return;
             }
 
@@ -128,7 +135,10 @@ public class DocumentSynchronizationService : IDisposable
             var addedInputs = schema.Inputs.Where(i => !inputIdsBefore.Contains(i.Id)).ToList();
             var addedOutputs = schema.Outputs.Where(o => !outputIdsBefore.Contains(o.Id)).ToList();
 
-            if (addedInputs.Count == 0 && addedOutputs.Count == 0) return;
+            if (addedInputs.Count == 0 && addedOutputs.Count == 0)
+            {
+                return;
+            }
 
             // Register the new IDs in the watched set immediately
             OnNewIdsDiscovered?.Invoke(addedInputs.Select(i => i.Id).Concat(addedOutputs.Select(o => o.Id)));
@@ -138,7 +148,10 @@ public class DocumentSynchronizationService : IDisposable
                 .BroadcastSchemaUpdate(schema)
                 .ContinueWith(t =>
                 {
-                    if (t.IsFaulted) Logger.Error("Failed to broadcast schema update after param add", t.Exception);
+                    if (t.IsFaulted)
+                    {
+                        Logger.Error("Failed to broadcast schema update after param add", t.Exception);
+                    }
                 });
 
             // Expire UIBridge so downstream GH components (EvaluateSchema etc.) re-solve with updated schema
@@ -157,19 +170,25 @@ public class DocumentSynchronizationService : IDisposable
     {
         try
         {
-            if (e.Changes.Inputs.Count == 0 && e.Changes.Outputs.Count == 0) return;
+            if (e.Changes.Inputs.Count == 0 && e.Changes.Outputs.Count == 0)
+            {
+                return;
+            }
 
             var document = _currentDocument ?? _component?.OnPingDocument();
-            if (document == null) return;
+            if (document == null)
+            {
+                return;
+            }
 
             _currentDocument ??= document;
             document.Modified();
 
             // Schema already updated in memory — schedule a full expire so UIBridge re-solves
             // and downstream components (EvaluateSchema etc.) receive the updated schema.
-            GHDocumentMutator.ScheduleComponentExpire(document, _component, immediate: true);
+            GHDocumentMutator.ScheduleComponentExpire(document, _component, true);
 #if DEBUG
-            Logger.Log($"[UIBuilder] MetadataChanged — scheduling full expire");
+            Logger.Log("[UIBuilder] MetadataChanged — scheduling full expire");
 #endif
         }
         catch (Exception ex)
@@ -182,7 +201,9 @@ public class DocumentSynchronizationService : IDisposable
     private DiscoveredParameters GetCurrentAvailableParameters(GH_Document document)
     {
         if (document == null || _component == null)
+        {
             return new DiscoveredParameters { SessionId = "", Inputs = [], Outputs = [] };
+        }
 
         return _schemaManager.ScanParameters(document, _component);
     }

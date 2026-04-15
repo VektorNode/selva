@@ -24,10 +24,10 @@ public class WebSocketServer : IDisposable
     private const int HEARTBEAT_INTERVAL = AppConfig.WebSocket.HeartbeatIntervalMs;
     private const int BROADCAST_TIMEOUT = AppConfig.WebSocket.BroadcastTimeoutMs;
     private const int MAX_SEND_QUEUE = 10;
-    private readonly Dictionary<WebSocket, int> _clientPendingMessages = new();
+    private readonly Dictionary<WebSocket, int> _clientPendingMessages = new Dictionary<WebSocket, int>();
 
-    private readonly object _clientsLock = new();
-    private readonly List<WebSocket> _connectedClients = new();
+    private readonly object _clientsLock = new object();
+    private readonly List<WebSocket> _connectedClients = new List<WebSocket>();
 
     private CancellationTokenSource _cancellationTokenSource;
     private bool _disposed;
@@ -44,7 +44,11 @@ public class WebSocketServer : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
 
         Stop();
@@ -66,7 +70,10 @@ public class WebSocketServer : IDisposable
     /// </summary>
     public Task StartAsync()
     {
-        if (IsRunning) return Task.CompletedTask;
+        if (IsRunning)
+        {
+            return Task.CompletedTask;
+        }
 
         _cancellationTokenSource = new CancellationTokenSource();
 
@@ -136,7 +143,11 @@ public class WebSocketServer : IDisposable
         // Lock for the whole Stop() so BroadcastAsync cannot interleave.
         lock (_clientsLock)
         {
-            if (!IsRunning) return;
+            if (!IsRunning)
+            {
+                return;
+            }
+
             IsRunning = false;
         }
 
@@ -148,6 +159,7 @@ public class WebSocketServer : IDisposable
         lock (_clientsLock)
         {
             foreach (var client in _connectedClients)
+            {
                 try
                 {
                     client.CloseAsync(
@@ -162,6 +174,7 @@ public class WebSocketServer : IDisposable
                 {
                     Logger.Warn($"Error closing WebSocket client: {ex.Message}");
                 }
+            }
 
             _connectedClients.Clear();
             _clientPendingMessages.Clear();
@@ -196,7 +209,10 @@ public class WebSocketServer : IDisposable
     /// </summary>
     public async Task BroadcastAsync(string message)
     {
-        if (!IsRunning) return;
+        if (!IsRunning)
+        {
+            return;
+        }
 
         var buffer = Encoding.UTF8.GetBytes(message);
         var segment = new ArraySegment<byte>(buffer);
@@ -235,7 +251,9 @@ public class WebSocketServer : IDisposable
         }
 
         if (tasks.Count > 0)
+        {
             await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
 
         RemoveDeadClients(clientsToRemove);
     }
@@ -269,7 +287,9 @@ public class WebSocketServer : IDisposable
             lock (_clientsLock)
             {
                 if (_clientPendingMessages.TryGetValue(client, out var count))
+                {
                     _clientPendingMessages[client] = Math.Max(0, count - 1);
+                }
             }
         }
     }
@@ -281,6 +301,7 @@ public class WebSocketServer : IDisposable
     private async Task AcceptConnectionsAsync(CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested && IsRunning)
+        {
             try
             {
                 var context = await _httpListener.GetContextAsync().ConfigureAwait(false);
@@ -307,6 +328,7 @@ public class WebSocketServer : IDisposable
             {
                 Logger.Error($"Error accepting WebSocket connection: {ex.Message}");
             }
+        }
     }
 
     /// <summary>
@@ -327,7 +349,9 @@ public class WebSocketServer : IDisposable
             {
                 if (_connectedClients.Count >= MAX_CLIENTS)
                     // Reject outside the lock to avoid holding it during async work.
+                {
                     goto reject;
+                }
 
                 _connectedClients.Add(webSocket);
                 _clientPendingMessages[webSocket] = 0;
@@ -363,10 +387,12 @@ public class WebSocketServer : IDisposable
                 try
                 {
                     if (webSocket.State == WebSocketState.Open)
+                    {
                         await webSocket.CloseAsync(
                             WebSocketCloseStatus.NormalClosure,
                             "Connection closed",
                             CancellationToken.None).ConfigureAwait(false);
+                    }
 
                     webSocket.Dispose();
                 }
@@ -386,6 +412,7 @@ public class WebSocketServer : IDisposable
         using var messageBuffer = new MemoryStream();
 
         while (webSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+        {
             try
             {
                 messageBuffer.SetLength(0);
@@ -400,6 +427,7 @@ public class WebSocketServer : IDisposable
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
                         if (webSocket.State == WebSocketState.Open)
+                        {
                             try
                             {
                                 await webSocket.CloseOutputAsync(
@@ -411,6 +439,7 @@ public class WebSocketServer : IDisposable
                             {
                                 /* already closed */
                             }
+                        }
 
                         return;
                     }
@@ -421,6 +450,7 @@ public class WebSocketServer : IDisposable
                     {
                         Logger.Warn($"[WebSocket] Message size {messageBuffer.Length} exceeds max {MAX_MESSAGE_SIZE}.");
                         if (webSocket.State == WebSocketState.Open)
+                        {
                             try
                             {
                                 await webSocket.CloseOutputAsync(
@@ -432,6 +462,7 @@ public class WebSocketServer : IDisposable
                             {
                                 /* already closed */
                             }
+                        }
 
                         return;
                     }
@@ -456,6 +487,7 @@ public class WebSocketServer : IDisposable
                 Logger.Log("WebSocket receive cancelled.");
                 break;
             }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -473,7 +505,10 @@ public class WebSocketServer : IDisposable
 
     private void CleanupDeadConnections()
     {
-        if (!IsRunning) return;
+        if (!IsRunning)
+        {
+            return;
+        }
 
         List<WebSocket> snapshot;
         lock (_clientsLock)
@@ -483,12 +518,14 @@ public class WebSocketServer : IDisposable
 
         var dead = new List<WebSocket>();
         foreach (var client in snapshot)
+        {
             if (client.State != WebSocketState.Open &&
                 client.State != WebSocketState.Connecting)
             {
                 Logger.Log($"Heartbeat: dead connection detected (state={client.State}).");
                 dead.Add(client);
             }
+        }
 
         if (dead.Count > 0)
         {
@@ -506,13 +543,18 @@ public class WebSocketServer : IDisposable
         lock (_clientsLock)
         {
             if (!clientsToRemove.Contains(client))
+            {
                 clientsToRemove.Add(client);
+            }
         }
     }
 
     private void RemoveDeadClients(List<WebSocket> clients)
     {
-        if (clients.Count == 0) return;
+        if (clients.Count == 0)
+        {
+            return;
+        }
 
         lock (_clientsLock)
         {

@@ -9,8 +9,8 @@ namespace Selva.GH.Features.Display.Services;
 /// </summary>
 public class MaterialCache
 {
-    private readonly List<ThreeMaterial> _materials = new();
-    private readonly Dictionary<string, int> _materialToId = new();
+    private readonly List<ThreeMaterial> _materials = new List<ThreeMaterial>();
+    private readonly Dictionary<string, int> _materialToId = new Dictionary<string, int>();
     private int _nextId;
 
     /// <summary>
@@ -26,7 +26,10 @@ public class MaterialCache
     {
         var key = GetMaterialKey(material);
 
-        if (_materialToId.TryGetValue(key, out var existingId)) return existingId;
+        if (_materialToId.TryGetValue(key, out var existingId))
+        {
+            return existingId;
+        }
 
         var newId = _nextId++;
         _materialToId[key] = newId;
@@ -114,13 +117,15 @@ public class MeshMetadata
     /// <summary>
     ///     Layer path for grouping in the scene manager (e.g. "Structure/Walls").
     /// </summary>
-    [JsonProperty("layer")] public string Layer { get; set; }
+    [JsonProperty("layer")]
+    public string Layer { get; set; }
 
     /// <summary>
     ///     Original index of this mesh in the GH input tree, before material grouping.
     ///     Together with sourceComponentId on MeshBatch, uniquely identifies the GH source.
     /// </summary>
-    [JsonProperty("originalIndex")] public int OriginalIndex { get; set; }
+    [JsonProperty("originalIndex")]
+    public int OriginalIndex { get; set; }
 
     [JsonProperty("vertexCount")] public int VertexCount { get; set; }
 

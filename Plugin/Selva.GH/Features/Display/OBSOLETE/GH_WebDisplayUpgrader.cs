@@ -6,14 +6,17 @@ namespace Selva.GH.Features.Display.Components;
 
 public class GH_WebDisplayUpgrader_To_0_9 : IGH_UpgradeObject
 {
-    public DateTime Version => new(2026, 4, 14);
-    public Guid UpgradeFrom => new("9B5515B2-861A-4840-B884-82B725203ABB");
-    public Guid UpgradeTo => new("4F7A9C2E-1B3D-4E8F-A6C0-9D2E5B7F1A4C");
+    public DateTime Version => new DateTime(2026, 4, 14);
+    public Guid UpgradeFrom => new Guid("9B5515B2-861A-4840-B884-82B725203ABB");
+    public Guid UpgradeTo => new Guid("4F7A9C2E-1B3D-4E8F-A6C0-9D2E5B7F1A4C");
 
     public IGH_DocumentObject Upgrade(IGH_DocumentObject target, GH_Document document)
     {
         var oldComponent = target as IGH_Component;
-        if (oldComponent == null) return null;
+        if (oldComponent == null)
+        {
+            return null;
+        }
 
         var helper = new GH_ComponentUpgradeHelper(oldComponent, UpgradeTo);
         var newComponent = helper
@@ -32,14 +35,17 @@ public class GH_WebDisplayUpgrader_To_0_9 : IGH_UpgradeObject
 
 public class GH_WebDisplayUpgrader_To_0_6 : IGH_UpgradeObject
 {
-    public DateTime Version => new(2026, 2, 16);
-    public Guid UpgradeFrom => new("FCBBE140-D11C-4AA2-97E2-9DA0559CF0DF");
-    public Guid UpgradeTo => new("9B5515B2-861A-4840-B884-82B725203ABB");
+    public DateTime Version => new DateTime(2026, 2, 16);
+    public Guid UpgradeFrom => new Guid("FCBBE140-D11C-4AA2-97E2-9DA0559CF0DF");
+    public Guid UpgradeTo => new Guid("9B5515B2-861A-4840-B884-82B725203ABB");
 
     public IGH_DocumentObject Upgrade(IGH_DocumentObject target, GH_Document document)
     {
         var oldComponent = target as IGH_Component;
-        if (oldComponent == null) return null;
+        if (oldComponent == null)
+        {
+            return null;
+        }
 
         var helper = new GH_ComponentUpgradeHelper(oldComponent, UpgradeTo);
         var newComponent = helper
@@ -56,14 +62,17 @@ public class GH_WebDisplayUpgrader_To_0_6 : IGH_UpgradeObject
 
 public class GH_WebDisplayUpgrader : IGH_UpgradeObject
 {
-    public DateTime Version => new(2026, 1, 13);
-    public Guid UpgradeFrom => new("3B108239-0103-4D4B-8407-534A78811090");
-    public Guid UpgradeTo => new("FCBBE140-D11C-4AA2-97E2-9DA0559CF0DF");
+    public DateTime Version => new DateTime(2026, 1, 13);
+    public Guid UpgradeFrom => new Guid("3B108239-0103-4D4B-8407-534A78811090");
+    public Guid UpgradeTo => new Guid("FCBBE140-D11C-4AA2-97E2-9DA0559CF0DF");
 
     public IGH_DocumentObject Upgrade(IGH_DocumentObject target, GH_Document document)
     {
         var oldComponent = target as IGH_Component;
-        if (oldComponent == null) return null;
+        if (oldComponent == null)
+        {
+            return null;
+        }
 
         var helper = new GH_ComponentUpgradeHelper(oldComponent, UpgradeTo);
         var newComponent = helper

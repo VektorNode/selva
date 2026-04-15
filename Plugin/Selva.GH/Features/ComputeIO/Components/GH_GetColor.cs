@@ -31,7 +31,7 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
     public override GH_Exposure Exposure => GH_Exposure.quinary;
 
     public override string TypeName => "Color";
-    public override Guid ComponentGuid => new("C3A7F1D4-8E2B-4F6A-9C5D-1B3E7A4F8D2C");
+    public override Guid ComponentGuid => new Guid("C3A7F1D4-8E2B-4F6A-9C5D-1B3E7A4F8D2C");
 
     protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.ColorInput);
     public bool TreeAccess { get; set; }
@@ -46,7 +46,10 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
     {
         get
         {
-            if (_contextualColor != null) yield return _contextualColor;
+            if (_contextualColor != null)
+            {
+                yield return _contextualColor;
+            }
         }
     }
 
@@ -152,7 +155,9 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
         m_data.Clear();
 
         if (_contextualColor != null && _isFromContextual)
+        {
             m_data.Append(_contextualColor, new GH_Path(0));
+        }
     }
 
     protected override void CollectVolatileData_FromSources()
@@ -191,7 +196,10 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
     /// </summary>
     private static GH_Colour ParseHexToColor(string hex)
     {
-        if (string.IsNullOrWhiteSpace(hex)) return null;
+        if (string.IsNullOrWhiteSpace(hex))
+        {
+            return null;
+        }
 
         try
         {
@@ -222,16 +230,28 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
             Prompt = reader.GetString("Prompt") ?? "Select a color";
 
             var atLeast = 1;
-            if (reader.TryGetInt32("AtLeast", ref atLeast)) AtLeast = atLeast;
+            if (reader.TryGetInt32("AtLeast", ref atLeast))
+            {
+                AtLeast = atLeast;
+            }
 
             var atMost = 1;
-            if (reader.TryGetInt32("AtMost", ref atMost)) AtMost = atMost;
+            if (reader.TryGetInt32("AtMost", ref atMost))
+            {
+                AtMost = atMost;
+            }
 
             var treeAccess = false;
-            if (reader.TryGetBoolean("TreeAccess", ref treeAccess)) TreeAccess = treeAccess;
+            if (reader.TryGetBoolean("TreeAccess", ref treeAccess))
+            {
+                TreeAccess = treeAccess;
+            }
 
             var immediate = true;
-            if (reader.TryGetBoolean("Immediate", ref immediate)) Immediate = immediate;
+            if (reader.TryGetBoolean("Immediate", ref immediate))
+            {
+                Immediate = immediate;
+            }
         }
         catch (Exception ex)
         {

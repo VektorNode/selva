@@ -26,7 +26,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     private GH_ValueListDataGoo[] _contextual;
     private DataTree<GH_ValueListDataGoo> _contextualDataTree;
 
-    private List<(string Name, string Expression)> _storedItems = new();
+    private List<(string Name, string Expression)> _storedItems = new List<(string Name, string Expression)>();
 
     public GetValueListParameter()
         : base("Get Value List", "Get VL", "Get from ValueList", "Params", "Util", GH_ParamAccess.item)
@@ -36,7 +36,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     public override GH_Exposure Exposure => GH_Exposure.quinary;
 
     public override string TypeName => "ValueList";
-    public override Guid ComponentGuid => new("0CC81276-5DB7-4306-9968-086524EC0C6E");
+    public override Guid ComponentGuid => new Guid("0CC81276-5DB7-4306-9968-086524EC0C6E");
 
     protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.GetValueList);
 
@@ -52,16 +52,23 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
             if (_connectedValueListGuid != Guid.Empty)
             {
                 var cached = OnPingDocument()?.FindObject(_connectedValueListGuid, false) as GH_ValueList;
-                if (cached != null) return cached;
+                if (cached != null)
+                {
+                    return cached;
+                }
             }
 
             if (Sources != null)
+            {
                 foreach (var source in Sources)
+                {
                     if (source is GH_ValueList vl)
                     {
                         _connectedValueListGuid = vl.InstanceGuid;
                         return vl;
                     }
+                }
+            }
 
             return null;
         }
@@ -89,7 +96,10 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         get
         {
             var vl = ConnectedValueList;
-            if (vl == null || vl.SelectedItems.Count == 0) return -1;
+            if (vl == null || vl.SelectedItems.Count == 0)
+            {
+                return -1;
+            }
 
             return vl.ListItems.IndexOf(vl.SelectedItems[0]);
         }
@@ -104,7 +114,10 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         get
         {
             var dict = new Dictionary<string, string>();
-            foreach (var item in ListItems) dict[item.Name] = item.Expression;
+            foreach (var item in ListItems)
+            {
+                dict[item.Name] = item.Expression;
+            }
 
             return dict;
         }
@@ -138,7 +151,10 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         foreach (var item in data)
         {
             var stringValue = ExtractStringValue(item);
-            if (stringValue == null) continue;
+            if (stringValue == null)
+            {
+                continue;
+            }
 
             // Find matching index
             var matchIndex = FindMatchingIndex(stringValue);
@@ -160,11 +176,13 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         {
             var firstValue = _contextual[0].Value;
             for (var i = 0; i < vl.ListItems.Count; i++)
+            {
                 if (vl.ListItems[i].Expression == firstValue)
                 {
                     vl.SelectItem(i);
                     break;
                 }
+            }
         }
 
         ExpireSolution(false);
@@ -183,11 +201,15 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     {
         var vl = ConnectedValueList;
         if (vl != null && vl.SelectedItems.Count > 0)
+        {
             return vl.SelectedItems[0].Expression;
+        }
 
         var items = GetItemTuples();
         if (items.Count > 0)
+        {
             return items[0].Expression;
+        }
 
         return string.Empty;
     }
@@ -201,10 +223,14 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     public bool SelectItemByName(string value)
     {
         var vl = ConnectedValueList;
-        if (vl == null) return false;
+        if (vl == null)
+        {
+            return false;
+        }
 
         for (var i = 0; i < vl.ListItems.Count; i++)
             // Match by name (primary) OR expression (Compute compatibility)
+        {
             if (vl.ListItems[i].Name == value || vl.ListItems[i].Expression == value)
             {
                 var index = i;
@@ -221,6 +247,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
 
                 return true;
             }
+        }
 
         return false;
     }
@@ -320,20 +347,29 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         {
             m_data.Clear();
             for (var i = 0; i < _contextualDataTree.BranchCount; i++)
+            {
                 m_data.AppendRange(_contextualDataTree.Branches[i], _contextualDataTree.Paths[i]);
+            }
 
             return;
         }
 
         m_data.Clear();
 
-        if (Sources == null || Sources.Count == 0) return;
+        if (Sources == null || Sources.Count == 0)
+        {
+            return;
+        }
 
         foreach (var source in Sources)
+        {
             if (source is GH_ValueList vl)
             {
                 // Track the connected ValueList
-                if (_connectedValueListGuid != vl.InstanceGuid) _connectedValueListGuid = vl.InstanceGuid;
+                if (_connectedValueListGuid != vl.InstanceGuid)
+                {
+                    _connectedValueListGuid = vl.InstanceGuid;
+                }
 
                 // Build data directly from the ValueList's current state
                 var items = GetItemTuples();
@@ -345,32 +381,45 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
                     selectedData.Add(new GH_ValueListDataGoo(selectedItem.Expression, items, index));
                 }
 
-                if (selectedData.Count > 0) m_data.AppendRange(selectedData, new GH_Path(0));
+                if (selectedData.Count > 0)
+                {
+                    m_data.AppendRange(selectedData, new GH_Path(0));
+                }
             }
             else
             {
                 // Handle non-ValueList sources by matching against our items
                 ProcessGenericSource(source);
             }
+        }
     }
 
     private void ProcessGenericSource(IGH_Param source)
     {
         var sourceData = source.VolatileData;
-        if (sourceData == null || sourceData.PathCount == 0) return;
+        if (sourceData == null || sourceData.PathCount == 0)
+        {
+            return;
+        }
 
         var items = GetItemTuples();
 
         foreach (var path in sourceData.Paths)
         {
             var branch = sourceData.get_Branch(path);
-            if (branch == null) continue;
+            if (branch == null)
+            {
+                continue;
+            }
 
             var converted = new List<GH_ValueListDataGoo>();
             foreach (var item in branch)
             {
                 var stringValue = ExtractStringValue(item);
-                if (stringValue == null) continue;
+                if (stringValue == null)
+                {
+                    continue;
+                }
 
                 var matchIndex = FindMatchingIndex(stringValue);
                 // Use the expression (not the input string) when a match is found
@@ -380,7 +429,10 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
                 converted.Add(new GH_ValueListDataGoo(expressionValue, items, matchIndex));
             }
 
-            if (converted.Count > 0) m_data.AppendRange(converted, path);
+            if (converted.Count > 0)
+            {
+                m_data.AppendRange(converted, path);
+            }
         }
     }
 
@@ -388,7 +440,9 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     {
         var vl = ConnectedValueList;
         if (vl != null && vl.ListItems.Count > 0)
+        {
             _storedItems = vl.ListItems.Select(x => (x.Name, x.Expression)).ToList();
+        }
 
         return _storedItems;
     }
@@ -398,9 +452,13 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         // Always prefer live ValueList items — also refreshes _storedItems as a side effect
         var items = GetItemTuples();
         for (var i = 0; i < items.Count; i++)
+        {
             if (string.Equals(items[i].Expression, value, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(items[i].Name, value, StringComparison.OrdinalIgnoreCase))
+            {
                 return i;
+            }
+        }
 
         return -1;
     }
@@ -432,11 +490,13 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         var items = GetItemTuples();
         var itemsJson = new JArray();
         foreach (var item in items)
+        {
             itemsJson.Add(new JObject
             {
                 { "name", item.Name },
                 { "expression", item.Expression }
             });
+        }
 
         writer.SetString("StoredItems", itemsJson.ToString());
 
@@ -448,38 +508,56 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         Prompt = reader.GetString("Prompt");
 
         var atLeast = 1;
-        if (reader.TryGetInt32("AtLeast", ref atLeast)) AtLeast = atLeast;
+        if (reader.TryGetInt32("AtLeast", ref atLeast))
+        {
+            AtLeast = atLeast;
+        }
 
         var atMost = 1;
-        if (reader.TryGetInt32("AtMost", ref atMost)) AtMost = atMost;
+        if (reader.TryGetInt32("AtMost", ref atMost))
+        {
+            AtMost = atMost;
+        }
 
         var treeAccess = false;
-        if (reader.TryGetBoolean("TreeAccess", ref treeAccess)) TreeAccess = treeAccess;
+        if (reader.TryGetBoolean("TreeAccess", ref treeAccess))
+        {
+            TreeAccess = treeAccess;
+        }
 
         var immediate = true;
-        if (reader.TryGetBoolean("Immediate", ref immediate)) Immediate = immediate;
+        if (reader.TryGetBoolean("Immediate", ref immediate))
+        {
+            Immediate = immediate;
+        }
 
         string guidStr = null;
         if (reader.TryGetString("ConnectedValueListGuid", ref guidStr) &&
             Guid.TryParse(guidStr, out var guid))
+        {
             _connectedValueListGuid = guid;
+        }
 
         string itemsJson = null;
         if (reader.TryGetString("StoredItems", ref itemsJson) && !string.IsNullOrEmpty(itemsJson))
+        {
             try
             {
                 var array = JArray.Parse(itemsJson);
                 _storedItems.Clear();
                 foreach (var item in array)
+                {
                     _storedItems.Add((
                         item["name"]?.ToString() ?? "",
                         item["expression"]?.ToString() ?? ""
                     ));
+                }
             }
             catch
             {
                 // Ignore parse errors
             }
+        }
 
         return base.Read(reader);
     }

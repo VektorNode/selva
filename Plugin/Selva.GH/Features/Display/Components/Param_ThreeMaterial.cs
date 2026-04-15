@@ -38,7 +38,7 @@ public class Param_ThreeMaterial : GH_Param<ThreeMaterialGoo>
 
     public override GH_Exposure Exposure => GH_Exposure.tertiary;
 
-    public override Guid ComponentGuid => new("A1C3E5F7-B2D4-4A6C-8E0F-1234567890AB");
+    public override Guid ComponentGuid => new Guid("A1C3E5F7-B2D4-4A6C-8E0F-1234567890AB");
 
     protected override ThreeMaterialGoo InstantiateT()
     {

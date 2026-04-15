@@ -31,14 +31,20 @@ public class WebDisplayGoo : GH_Goo<MeshBatch>
 
     public override string ToString()
     {
-        if (!IsValid) return "Invalid WebDisplay";
+        if (!IsValid)
+        {
+            return "Invalid WebDisplay";
+        }
 
         return $"WebDisplay: {Value.Materials.Count} materials, {Value.Groups.Count} groups";
     }
 
     public override bool Write(GH_IWriter writer)
     {
-        if (!IsValid) return false;
+        if (!IsValid)
+        {
+            return false;
+        }
 
         var json = JsonConvert.SerializeObject(Value);
         writer.SetString("WebDisplayJson", json);
@@ -47,7 +53,10 @@ public class WebDisplayGoo : GH_Goo<MeshBatch>
 
     public override bool Read(GH_IReader reader)
     {
-        if (!reader.ItemExists("WebDisplayJson")) return false;
+        if (!reader.ItemExists("WebDisplayJson"))
+        {
+            return false;
+        }
 
         var json = reader.GetString("WebDisplayJson");
         Value = JsonConvert.DeserializeObject<MeshBatch>(json);
@@ -63,6 +72,7 @@ public class WebDisplayGoo : GH_Goo<MeshBatch>
         }
 
         if (source is GH_String ghString)
+        {
             try
             {
                 Value = JsonConvert.DeserializeObject<MeshBatch>(ghString.Value);
@@ -72,6 +82,7 @@ public class WebDisplayGoo : GH_Goo<MeshBatch>
             {
                 return false;
             }
+        }
 
         return false;
     }

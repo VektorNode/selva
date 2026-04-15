@@ -1,6 +1,7 @@
 # Modernized Validation System
 
-This validation system uses a **rules-based approach** for validating UI schemas. Instead of having all validation logic in one monolithic class, each validation concern is encapsulated in its own rule class.
+This validation system uses a **rules-based approach** for validating UI schemas. Instead of having all validation logic
+in one monolithic class, each validation concern is encapsulated in its own rule class.
 
 ## Architecture
 

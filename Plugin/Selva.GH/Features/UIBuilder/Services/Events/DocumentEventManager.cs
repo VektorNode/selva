@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Grasshopper;
 using Grasshopper.Kernel;
@@ -28,11 +29,11 @@ public class DocumentEventManager : IDisposable
     // Used to short-circuit UndoStateChanged when no relevant objects exist.
     private readonly HashSet<Guid> _watchedIds = [];
 
-    // Trailing-edge debounce timer for UndoStateChanged — fires 600ms after the last event.
-    private System.Threading.Timer _documentModifiedTimer;
-
     private GH_Document _currentDocument;
     private bool _disposed;
+
+    // Trailing-edge debounce timer for UndoStateChanged — fires 600ms after the last event.
+    private Timer _documentModifiedTimer;
     private bool _eventsRegistered;
 
     public DocumentEventManager(SchemaManager schemaManager, ValueCollector valueCollector,
@@ -41,16 +42,19 @@ public class DocumentEventManager : IDisposable
         _schemaManager = schemaManager ?? throw new ArgumentNullException(nameof(schemaManager));
         _valueCollector = valueCollector ?? throw new ArgumentNullException(nameof(valueCollector));
         _communicationHandler = communicationHandler ?? throw new ArgumentNullException(nameof(communicationHandler));
-        _documentModifiedTimer = new System.Threading.Timer(
+        _documentModifiedTimer = new Timer(
             _ => DocumentModified?.Invoke(this, EventArgs.Empty),
             null,
-            System.Threading.Timeout.Infinite,
-            System.Threading.Timeout.Infinite);
+            Timeout.Infinite,
+            Timeout.Infinite);
     }
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
 
         UnregisterEvents();
         _documentModifiedTimer?.Dispose();
@@ -72,9 +76,20 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     public void RegisterWatchedObjects(UISchema schema)
     {
-        if (schema == null) return;
-        foreach (var input in schema.Inputs) _watchedIds.Add(input.Id);
-        foreach (var output in schema.Outputs) _watchedIds.Add(output.Id);
+        if (schema == null)
+        {
+            return;
+        }
+
+        foreach (var input in schema.Inputs)
+        {
+            _watchedIds.Add(input.Id);
+        }
+
+        foreach (var output in schema.Outputs)
+        {
+            _watchedIds.Add(output.Id);
+        }
     }
 
     /// <summary>
@@ -82,26 +97,41 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     public void RegisterWatchedIds(IEnumerable<Guid> ids)
     {
-        foreach (var id in ids) _watchedIds.Add(id);
+        foreach (var id in ids)
+        {
+            _watchedIds.Add(id);
+        }
     }
 
     /// <summary>
     ///     Clear the watched set. Called from UnregisterEvents on disable/document switch.
     /// </summary>
-    public void ClearWatchedObjects() => _watchedIds.Clear();
+    public void ClearWatchedObjects()
+    {
+        _watchedIds.Clear();
+    }
 
     /// <summary>
     ///     Register events for a document
     /// </summary>
     public void RegisterEvents(GH_Document document)
     {
-        if (document == null) return;
+        if (document == null)
+        {
+            return;
+        }
 
         // Unregister from previous document if switching documents
-        if (_currentDocument != null && _currentDocument.DocumentID != document.DocumentID) UnregisterEvents();
+        if (_currentDocument != null && _currentDocument.DocumentID != document.DocumentID)
+        {
+            UnregisterEvents();
+        }
 
         // Early return if already registered for THIS document
-        if (_eventsRegistered && _currentDocument != null && _currentDocument.DocumentID == document.DocumentID) return;
+        if (_eventsRegistered && _currentDocument != null && _currentDocument.DocumentID == document.DocumentID)
+        {
+            return;
+        }
 
         _currentDocument = document;
 
@@ -135,7 +165,10 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     public void UnregisterEvents()
     {
-        if (!_eventsRegistered) return;
+        if (!_eventsRegistered)
+        {
+            return;
+        }
 
         try
         {
@@ -147,6 +180,7 @@ public class DocumentEventManager : IDisposable
         }
 
         if (_currentDocument != null)
+        {
             try
             {
                 _currentDocument.SolutionStart -= OnSolutionStart;
@@ -159,6 +193,7 @@ public class DocumentEventManager : IDisposable
             {
                 Logger.Warn($"Failed to unsubscribe from document events: {ex.Message}");
             }
+        }
 
         ClearWatchedObjects();
         _eventsRegistered = false;
@@ -180,7 +215,9 @@ public class DocumentEventManager : IDisposable
         if (_communicationHandler.IsRunning)
             // Fire and forget is ok for start message - it's informational
             // Note: SetSolving now returns false if debounced, so we always broadcast to be safe
+        {
             _ = _communicationHandler.BroadcastSolvingState(true);
+        }
     }
 
     private void OnSolutionEnd(object sender, GH_SolutionEventArgs e)
@@ -190,6 +227,7 @@ public class DocumentEventManager : IDisposable
         if (_communicationHandler.IsRunning)
             // Critical: Ensure solving=false is sent. If this fails, clients may get stuck.
             // We use Task.Run to avoid blocking Grasshopper's event thread
+        {
             _ = Task.Run(async () =>
             {
                 try
@@ -202,6 +240,7 @@ public class DocumentEventManager : IDisposable
                     // Even if broadcast fails, state should eventually timeout on client side
                 }
             });
+        }
     }
 
     /// <summary>
@@ -211,11 +250,18 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     private void OnUndoStateChanged(object sender, GH_DocUndoEventArgs e)
     {
-        if (_currentDocument == null || !_communicationHandler.IsRunning) return;
-        if (_watchedIds.Count == 0) return;
+        if (_currentDocument == null || !_communicationHandler.IsRunning)
+        {
+            return;
+        }
+
+        if (_watchedIds.Count == 0)
+        {
+            return;
+        }
 
         // Reset the timer on every event — fires only after 600ms of silence
-        _documentModifiedTimer?.Change(DOCUMENT_MODIFIED_DEBOUNCE_MS, System.Threading.Timeout.Infinite);
+        _documentModifiedTimer?.Change(DOCUMENT_MODIFIED_DEBOUNCE_MS, Timeout.Infinite);
     }
 
 
@@ -225,18 +271,25 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     private void OnObjectsAdded(object sender, GH_DocObjectEventArgs e)
     {
-        if (_currentDocument == null || !_communicationHandler.IsRunning) return;
+        if (_currentDocument == null || !_communicationHandler.IsRunning)
+        {
+            return;
+        }
 
         var anyAdded = false;
         foreach (var obj in e.Objects)
+        {
             if (obj is IGH_DocumentObject docObj && IsRelevantObject(obj))
             {
                 _watchedIds.Add(docObj.InstanceGuid);
                 anyAdded = true;
             }
+        }
 
         if (anyAdded)
+        {
             ParametersChanged?.Invoke(this, new ParametersChangedEventArgs { Document = _currentDocument });
+        }
     }
 
     /// <summary>
@@ -245,34 +298,49 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     private void OnObjectsDeleted(object sender, GH_DocObjectEventArgs e)
     {
-        if (_currentDocument == null || !_communicationHandler.IsRunning) return;
+        if (_currentDocument == null || !_communicationHandler.IsRunning)
+        {
+            return;
+        }
 
         var anyRemoved = false;
         foreach (var obj in e.Objects)
+        {
             if (obj is IGH_DocumentObject docObj && _watchedIds.Remove(docObj.InstanceGuid))
+            {
                 anyRemoved = true;
+            }
+        }
 
         if (anyRemoved)
+        {
             ParametersChanged?.Invoke(this, new ParametersChangedEventArgs { Document = _currentDocument });
+        }
     }
 
     private static bool IsRelevantObject(IGH_DocumentObject obj)
-        => obj is IGH_ContextualParameter
-           || ParameterTypeHelper.IsContextOutputComponent(obj)
-           || ParameterTypeHelper.IsContextBakeComponent(obj);
+    {
+        return obj is IGH_ContextualParameter
+               || ParameterTypeHelper.IsContextOutputComponent(obj)
+               || ParameterTypeHelper.IsContextBakeComponent(obj);
+    }
 
     /// <summary>
     ///     Notify that metadata should be detected and broadcast
     /// </summary>
     public void DetectAndBroadcastMetadataChanges(UISchema schema)
     {
-        if (_currentDocument == null || !_communicationHandler.IsRunning || schema == null) return;
+        if (_currentDocument == null || !_communicationHandler.IsRunning || schema == null)
+        {
+            return;
+        }
 
         try
         {
             var metadataChanges = _schemaManager.DetectMetadataChanges(_currentDocument, schema);
 #if DEBUG
-            Logger.Log($"[UIBuilder] MetadataDetect — changed inputs={metadataChanges.Inputs.Count}, outputs={metadataChanges.Outputs.Count}");
+            Logger.Log(
+                $"[UIBuilder] MetadataDetect — changed inputs={metadataChanges.Inputs.Count}, outputs={metadataChanges.Outputs.Count}");
 #endif
             if (metadataChanges.Inputs.Count > 0 || metadataChanges.Outputs.Count > 0)
             {
@@ -298,7 +366,10 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     public void CollectAndBroadcastOutputs(UISchema schema)
     {
-        if (_currentDocument == null || !_communicationHandler.IsRunning || schema == null) return;
+        if (_currentDocument == null || !_communicationHandler.IsRunning || schema == null)
+        {
+            return;
+        }
 
         var includeDisplayData = schema.ViewerOptions?.EnableLocal ?? false;
 

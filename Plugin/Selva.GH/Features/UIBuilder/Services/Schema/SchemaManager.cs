@@ -22,7 +22,7 @@ public class SchemaManager
     /// <summary>
     ///     Keyword → type name mapping. Entries are checked via string.Contains against the GH type name.
     /// </summary>
-    private static readonly Dictionary<string, string> ParameterTypeKeywords = new()
+    private static readonly Dictionary<string, string> ParameterTypeKeywords = new Dictionary<string, string>
     {
         { "GetNumberParameter", "number" },
         { "Slider", "number" },
@@ -56,13 +56,15 @@ public class SchemaManager
     ///     Note: Not thread-safe. If GH ever processes documents on multiple threads,
     ///     consider switching to ConcurrentDictionary.
     /// </summary>
-    private static readonly Dictionary<Type, string> TypeNameCache = new();
+    private static readonly Dictionary<Type, string> TypeNameCache = new Dictionary<Type, string>();
 
     #endregion
 
     #region Instance State
 
-    private readonly Dictionary<Guid, ParameterMetadataSnapshot> _metadataCache = new();
+    private readonly Dictionary<Guid, ParameterMetadataSnapshot> _metadataCache =
+        new Dictionary<Guid, ParameterMetadataSnapshot>();
+
     private readonly string _sessionId;
 
     public SchemaManager(string sessionId)
@@ -111,26 +113,34 @@ public class SchemaManager
     private static HashSet<Guid> BuildScopeFilter(GH_Document document, GH_Component ownerComponent)
     {
         if (ownerComponent == null)
+        {
             return null;
+        }
 
         var inScope = new HashSet<Guid>();
 
         foreach (var obj in document.Objects)
         {
             if (obj is not GH_Component c)
+            {
                 continue;
+            }
 
             var isBake = ParameterTypeHelper.IsContextBakeComponent(obj);
             var isPrint = ParameterTypeHelper.IsContextOutputComponent(obj);
             if (!isBake && !isPrint)
+            {
                 continue;
+            }
 
             // Context Print components use GH's contextual mechanism (not wires) so they are always in scope
             if (isPrint ||
                 ParameterTypeHelper.IsWiredToOwner(c, ownerComponent.InstanceGuid) ||
                 ParameterTypeHelper.IsFileOutputBakeComponent(c) ||
                 ParameterTypeHelper.IsChartOutputBakeComponent(c))
+            {
                 inScope.Add(c.InstanceGuid);
+            }
         }
 
         return inScope;
@@ -155,17 +165,23 @@ public class SchemaManager
             }
 
             if (obj is not GH_Component c)
+            {
                 continue;
+            }
 
             if (ParameterTypeHelper.IsContextOutputComponent(obj))
             {
                 if (scopeFilter == null || scopeFilter.Contains(c.InstanceGuid))
+                {
                     prints.Add(c);
+                }
             }
             else if (ParameterTypeHelper.IsContextBakeComponent(obj))
             {
                 if (scopeFilter == null || scopeFilter.Contains(c.InstanceGuid))
+                {
                     bakes.Add(c);
+                }
             }
         }
 
@@ -192,7 +208,9 @@ public class SchemaManager
         foreach (var c in bakeComponents)
         {
             if (!ParameterTypeHelper.IsFileOutputBakeComponent(c))
+            {
                 continue;
+            }
 
             outputs.Add(new DiscoveredOutput
             {
@@ -209,7 +227,9 @@ public class SchemaManager
         foreach (var c in bakeComponents)
         {
             if (!ParameterTypeHelper.IsChartOutputBakeComponent(c))
+            {
                 continue;
+            }
 
             outputs.Add(new DiscoveredOutput
             {
@@ -226,7 +246,9 @@ public class SchemaManager
         foreach (var param in contextParams)
         {
             if (param is not IGH_DocumentObject docObj)
+            {
                 continue;
+            }
 
             var ghParam = param as IGH_Param;
             var input = new DiscoveredInput
@@ -273,13 +295,18 @@ public class SchemaManager
             {
                 var options = new Dictionary<string, object>();
                 foreach (DictionaryEntry entry in rawDict)
+                {
                     options[entry.Key?.ToString() ?? string.Empty] = entry.Value;
+                }
+
                 input.Options = options;
             }
 
             var selectedValue = ghParam?.VolatileData.AllData(true).FirstOrDefault()?.ScriptVariable();
             if (selectedValue == null || input.Options == null)
+            {
                 return;
+            }
 
             var selectedString = selectedValue.ToString();
             input.Default = input.Options
@@ -299,7 +326,9 @@ public class SchemaManager
         {
             var prop = param.GetType().GetProperty("TreeAccess");
             if (prop != null)
+            {
                 input.TreeAccess = Convert.ToBoolean(prop.GetValue(param, null));
+            }
         }
         catch
         {
@@ -332,14 +361,20 @@ public class SchemaManager
     /// </summary>
     public bool SyncNicknamesFromDocument(UISchema schema, GH_Document document)
     {
-        if (schema == null || document == null) return false;
+        if (schema == null || document == null)
+        {
+            return false;
+        }
 
         var changed = false;
 
         foreach (var input in schema.Inputs)
         {
             var docObj = document.FindObject(input.Id, false);
-            if (docObj == null) continue;
+            if (docObj == null)
+            {
+                continue;
+            }
 
             if (input.Nickname != docObj.NickName)
             {
@@ -350,11 +385,21 @@ public class SchemaManager
 
         foreach (var output in schema.Outputs)
         {
-            if (document.FindObject(output.Id, false) is not GH_Component component) continue;
-            if (component.Params.Input.Count == 0) continue;
+            if (document.FindObject(output.Id, false) is not GH_Component component)
+            {
+                continue;
+            }
+
+            if (component.Params.Input.Count == 0)
+            {
+                continue;
+            }
 
             var inputParam = component.Params.Input[0];
-            if (inputParam == null) continue;
+            if (inputParam == null)
+            {
+                continue;
+            }
 
             if (output.Nickname != inputParam.NickName)
             {
@@ -365,7 +410,10 @@ public class SchemaManager
 
         // Also seed the metadata cache so the first UndoStateChanged after startup
         // has a baseline and doesn't incorrectly report everything as changed.
-        if (changed) ClearMetadataCache();
+        if (changed)
+        {
+            ClearMetadataCache();
+        }
 
         return changed;
     }
@@ -382,7 +430,11 @@ public class SchemaManager
 
     private void ValidateSchemaAndTrackChanges(UISchema schema, GH_Document document, out List<Guid> removedIds)
     {
-        if (schema == null) { removedIds = []; return; }
+        if (schema == null)
+        {
+            removedIds = [];
+            return;
+        }
 
         var referencedIds = CollectAllReferencedIds(schema);
         var existingIds = ResolveExistingIds(referencedIds, document);
@@ -400,7 +452,8 @@ public class SchemaManager
 
         ids.UnionWith(schema.Inputs.Select(i => i.Id));
         ids.UnionWith(schema.Outputs.Select(o => o.Id));
-        ids.UnionWith(GetAllLayoutItems(schema.Layout).Where(item => item.Type != "linebreak").Select(item => item.ParamId));
+        ids.UnionWith(GetAllLayoutItems(schema.Layout).Where(item => item.Type != "linebreak")
+            .Select(item => item.ParamId));
 
         return ids;
     }
@@ -412,8 +465,12 @@ public class SchemaManager
     {
         var existing = new HashSet<Guid>();
         foreach (var id in candidates)
+        {
             if (document.FindObject(id, false) != null)
+            {
                 existing.Add(id);
+            }
+        }
 
         return existing;
     }
@@ -450,7 +507,10 @@ public class SchemaManager
             foreach (var tab in tabbed.Tabs)
             {
                 foreach (var group in tab.Groups)
+                {
                     group.Items.RemoveAll(item => item.Type != "linebreak" && !existingIds.Contains(item.ParamId));
+                }
+
                 tab.Groups.RemoveAll(g => g.Items.Count == 0);
             }
 
@@ -459,7 +519,10 @@ public class SchemaManager
         else if (layout is FlatLayoutConfig flat && flat.Groups != null)
         {
             foreach (var group in flat.Groups)
+            {
                 group.Items.RemoveAll(item => item.Type != "linebreak" && !existingIds.Contains(item.ParamId));
+            }
+
             flat.Groups.RemoveAll(g => g.Items.Count == 0);
         }
     }
@@ -479,15 +542,29 @@ public class SchemaManager
     /// </summary>
     private static void MergeDiscoveredInputs(UISchema schema, GH_Document document)
     {
-        if (document == null) return;
+        if (document == null)
+        {
+            return;
+        }
 
         var existingIds = new HashSet<Guid>(schema.Inputs.Select(i => i.Id));
 
         foreach (var obj in document.Objects)
         {
-            if (obj is not IGH_ContextualParameter param) continue;
-            if (obj is not IGH_DocumentObject docObj) continue;
-            if (existingIds.Contains(docObj.InstanceGuid)) continue;
+            if (obj is not IGH_ContextualParameter param)
+            {
+                continue;
+            }
+
+            if (obj is not IGH_DocumentObject docObj)
+            {
+                continue;
+            }
+
+            if (existingIds.Contains(docObj.InstanceGuid))
+            {
+                continue;
+            }
 
             schema.Inputs.Add(new SchemaInput
             {
@@ -512,14 +589,19 @@ public class SchemaManager
     {
         var added = new List<Guid>();
         var removed = new List<Guid>();
-        if (schema == null || document == null) return (added, removed);
+        if (schema == null || document == null)
+        {
+            return (added, removed);
+        }
 
         // Build a map of all ContextBake components currently on the canvas
         var bakeComponents = new Dictionary<Guid, GH_Component>();
         foreach (var obj in document.Objects)
         {
             if (ParameterTypeHelper.IsContextBakeComponent(obj) && obj is GH_Component c)
+            {
                 bakeComponents[c.InstanceGuid] = c;
+            }
         }
 
         // Remove existing schema outputs that are ContextBake but no longer qualify
@@ -540,16 +622,29 @@ public class SchemaManager
         var existingIds = new HashSet<Guid>(schema.Outputs.Select(o => o.Id));
         foreach (var kvp in bakeComponents)
         {
-            if (existingIds.Contains(kvp.Key)) continue;
-            if (kvp.Value.Params.Input.Count == 0) continue;
+            if (existingIds.Contains(kvp.Key))
+            {
+                continue;
+            }
+
+            if (kvp.Value.Params.Input.Count == 0)
+            {
+                continue;
+            }
 
             string type;
             if (ParameterTypeHelper.IsFileOutputBakeComponent(kvp.Value))
+            {
                 type = "file";
+            }
             else if (ParameterTypeHelper.IsChartOutputBakeComponent(kvp.Value))
+            {
                 type = "chart";
+            }
             else
+            {
                 continue;
+            }
 
             schema.Outputs.Add(new SchemaOutput
             {
@@ -572,15 +667,29 @@ public class SchemaManager
     /// </summary>
     private static void MergeDiscoveredPrintOutputs(UISchema schema, GH_Document document)
     {
-        if (document == null) return;
+        if (document == null)
+        {
+            return;
+        }
 
         var existingIds = new HashSet<Guid>(schema.Outputs.Select(o => o.Id));
 
         foreach (var obj in document.Objects)
         {
-            if (!ParameterTypeHelper.IsContextOutputComponent(obj)) continue;
-            if (obj is not GH_Component c) continue;
-            if (existingIds.Contains(c.InstanceGuid)) continue;
+            if (!ParameterTypeHelper.IsContextOutputComponent(obj))
+            {
+                continue;
+            }
+
+            if (obj is not GH_Component c)
+            {
+                continue;
+            }
+
+            if (existingIds.Contains(c.InstanceGuid))
+            {
+                continue;
+            }
 
             var nickname = c.Params.Input.Count > 0 ? c.Params.Input[0].NickName : c.NickName;
             schema.Outputs.Add(new SchemaOutput
@@ -610,13 +719,17 @@ public class SchemaManager
         };
 
         if (schema == null)
+        {
             return changes;
+        }
 
         DetectChanges(document, schema.Inputs, changes.Inputs, i => i.Id, CreateInputFromSnapshot);
         DetectChanges(document, schema.Outputs, changes.Outputs, o => o.Id, CreateOutputFromSnapshot);
 
         if (changes.Inputs.Count > 0 || changes.Outputs.Count > 0)
+        {
             ApplyMetadataChangesToSchema(schema, changes);
+        }
 
         return changes;
     }
@@ -636,11 +749,15 @@ public class SchemaManager
             var id = idSelector(param);
             var docObj = document.FindObject(id, false);
             if (docObj == null)
+            {
                 continue;
+            }
 
             var snapshot = CreateParameterSnapshot(docObj);
             if (snapshot == null)
+            {
                 continue;
+            }
 
             if (_metadataCache.TryGetValue(id, out var previous))
             {
@@ -668,16 +785,20 @@ public class SchemaManager
     private ParameterMetadataSnapshot CreateParameterSnapshot(IGH_DocumentObject docObj)
     {
         if (docObj == null)
+        {
             return null;
+        }
 
         var contextParam = docObj as IGH_ContextualParameter;
         var ghParam = docObj as IGH_Param;
 
         // Output components (ContextPrint/ContextBake) use their first input param's NickName
         // as the user-facing label — match the same source as SyncNicknamesFromDocument.
-        string nickname = docObj.NickName;
+        var nickname = docObj.NickName;
         if (docObj is GH_Component comp && contextParam == null && comp.Params.Input.Count > 0)
+        {
             nickname = comp.Params.Input[0].NickName;
+        }
 
         var snapshot = new ParameterMetadataSnapshot
         {
@@ -696,7 +817,9 @@ public class SchemaManager
         }
 
         if (docObj is GetValueListParameter valueListParam)
+        {
             snapshot.Options = valueListParam.Values;
+        }
 
         return snapshot;
     }
@@ -714,7 +837,9 @@ public class SchemaManager
         };
 
         if (snapshot.Options != null)
+        {
             input.Options = snapshot.Options.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value);
+        }
 
         return input;
     }
@@ -746,9 +871,14 @@ public class SchemaManager
     public void ApplyMetadataChangesToSchema(UISchema schema, DiscoveredParameters changes)
     {
         if (schema?.Layout == null || changes == null)
+        {
             return;
+        }
+
         if (changes.Inputs.Count == 0 && changes.Outputs.Count == 0)
+        {
             return;
+        }
 
         var itemsByParamId = GetAllLayoutItems(schema.Layout)
             .ToLookup(item => item.ParamId);
@@ -772,7 +902,9 @@ public class SchemaManager
         foreach (var change in changes.Outputs)
         {
             foreach (var item in itemsByParamId[change.Id])
+            {
                 item.Description = change.Description;
+            }
 
             var schemaOutput = schema.Outputs.FirstOrDefault(o => o.Id == change.Id);
             if (schemaOutput != null)
@@ -819,44 +951,63 @@ public class SchemaManager
     {
         var diff = new SyncDiff();
         if (schema == null || document == null)
+        {
             return diff;
+        }
 
         var layoutLookup = GetAllLayoutItems(schema.Layout).ToDictionary(item => item.ParamId);
 
         if (schema.Inputs != null)
+        {
             foreach (var input in schema.Inputs)
             {
                 var docObj = document.FindObject(input.Id, false);
                 if (docObj == null)
+                {
                     continue;
+                }
 
                 var displayName = layoutLookup.TryGetValue(input.Id, out var item)
                     ? item.DisplayName
                     : input.Nickname;
 
                 if (docObj.NickName != displayName)
+                {
                     AddBidirectionalChange(diff, input.Id, docObj.NickName, displayName);
+                }
             }
+        }
 
         if (schema.Outputs != null)
+        {
             foreach (var output in schema.Outputs)
             {
                 if (document.FindObject(output.Id, false) is not GH_Component component)
+                {
                     continue;
+                }
+
                 if (component.Params.Input.Count == 0)
+                {
                     continue;
+                }
 
                 var inputParam = component.Params.Input[0];
                 if (inputParam == null)
+                {
                     continue;
+                }
 
                 var displayName = layoutLookup.TryGetValue(output.Id, out var item)
                     ? item.DisplayName
                     : output.Nickname;
 
                 if (inputParam.NickName != displayName)
+                {
                     AddBidirectionalChange(diff, output.Id, inputParam.NickName, displayName);
+                }
             }
+        }
 
         return diff;
     }
@@ -893,7 +1044,9 @@ public class SchemaManager
     public static UISchema ApplySyncChanges(List<SyncChange> changes, GH_Document document, UISchema schema)
     {
         if (changes == null || document == null || schema == null)
+        {
             return schema;
+        }
 
         var schemaModified = false;
         var layoutItems = GetAllLayoutItems(schema.Layout).ToList();
@@ -901,11 +1054,15 @@ public class SchemaManager
         foreach (var change in changes)
         {
             if (!Guid.TryParse(change.ParamId, out var paramGuid))
+            {
                 continue;
+            }
 
             var docObj = document.FindObject(paramGuid, false);
             if (docObj == null)
+            {
                 continue;
+            }
 
             try
             {
@@ -928,7 +1085,9 @@ public class SchemaManager
     private static bool ApplyToGH(SyncChange change, Guid paramGuid, IGH_DocumentObject docObj, UISchema schema)
     {
         if (change.Field != "nickname" || change.SchemaValue is not string displayName)
+        {
             return false;
+        }
 
         // Try as input
         var input = schema.Inputs?.FirstOrDefault(i => i.Id == paramGuid);
@@ -961,7 +1120,9 @@ public class SchemaManager
         UISchema schema, List<LayoutItemBase> allLayoutItems)
     {
         if (change.Field != "nickname")
+        {
             return false;
+        }
 
         var modified = false;
 
@@ -996,7 +1157,9 @@ public class SchemaManager
     {
         var item = items.FirstOrDefault(i => i.ParamId == paramId);
         if (item != null)
+        {
             item.DisplayName = name;
+        }
     }
 
     #endregion
@@ -1013,20 +1176,26 @@ public class SchemaManager
     private static string ResolveParameterTypeName(IGH_ContextualParameter contextParam)
     {
         if (contextParam is not IGH_Param param)
+        {
             return "generic";
+        }
 
         var clrType = param.GetType();
         if (TypeNameCache.TryGetValue(clrType, out var cached))
+        {
             return cached;
+        }
 
         var typeName = clrType.Name;
         var resolved = "generic";
         foreach (var kvp in ParameterTypeKeywords)
+        {
             if (typeName.Contains(kvp.Key))
             {
                 resolved = kvp.Value;
                 break;
             }
+        }
 
         TypeNameCache[clrType] = resolved;
         return resolved;
@@ -1038,10 +1207,14 @@ public class SchemaManager
     private static IEnumerable<LayoutItemBase> GetAllLayoutItems(LayoutConfigBase layout)
     {
         if (layout is TabbedLayoutConfig { Tabs: not null } tabbed)
+        {
             return tabbed.Tabs.SelectMany(t => t.Groups).SelectMany(g => g.Items);
+        }
 
         if (layout is FlatLayoutConfig { Groups: not null } flat)
+        {
             return flat.Groups.SelectMany(g => g.Items);
+        }
 
         return Enumerable.Empty<LayoutItemBase>();
     }
@@ -1064,8 +1237,15 @@ internal sealed class ParameterMetadataSnapshot : IEquatable<ParameterMetadataSn
 
     public bool Equals(ParameterMetadataSnapshot other)
     {
-        if (other is null) return false;
-        if (ReferenceEquals(this, other)) return true;
+        if (other is null)
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(this, other))
+        {
+            return true;
+        }
 
         return Id == other.Id
                && Nickname == other.Nickname
@@ -1098,13 +1278,28 @@ internal sealed class ParameterMetadataSnapshot : IEquatable<ParameterMetadataSn
 
     private static bool OptionsEqual(Dictionary<string, string> a, Dictionary<string, string> b)
     {
-        if (a == null && b == null) return true;
-        if (a == null || b == null) return false;
-        if (a.Count != b.Count) return false;
+        if (a == null && b == null)
+        {
+            return true;
+        }
+
+        if (a == null || b == null)
+        {
+            return false;
+        }
+
+        if (a.Count != b.Count)
+        {
+            return false;
+        }
 
         foreach (var kvp in a)
+        {
             if (!b.TryGetValue(kvp.Key, out var value) || value != kvp.Value)
+            {
                 return false;
+            }
+        }
 
         return true;
     }

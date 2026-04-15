@@ -55,7 +55,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
     }
 
     protected override Bitmap Icon => Resources.WebDisplay;
-    public override Guid ComponentGuid => new("4F7A9C2E-1B3D-4E8F-A6C0-9D2E5B7F1A4C");
+    public override Guid ComponentGuid => new Guid("4F7A9C2E-1B3D-4E8F-A6C0-9D2E5B7F1A4C");
     public override BoundingBox ClippingBox => _previewBB;
     public override bool IsPreviewCapable => true;
 
@@ -70,7 +70,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
     {
         pManager.AddGeometryParameter("Geo", "G", "Geometry to display", GH_ParamAccess.tree);
         pManager.AddTextParameter("Name", "N", "Name of the mesh", GH_ParamAccess.tree, "");
-        pManager.AddTextParameter("Layer", "L", "Layer for grouping in scene manager (e.g. 'Structure/Walls')", GH_ParamAccess.tree, "");
+        pManager.AddTextParameter("Layer", "L", "Layer for grouping in scene manager (e.g. 'Structure/Walls')",
+            GH_ParamAccess.tree, "");
         pManager.AddTextParameter("Metadata", "D", "Metadata for the mesh (Format: 'Key=Value')", GH_ParamAccess.tree);
         pManager.AddParameter(new Param_ThreeMaterial("T-Material", "TM", "ThreeMaterial for display", "Selva",
             "Display", GH_ParamAccess.tree));
@@ -121,7 +122,9 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         }
 
         if (!GetSolveResults(DA, out var result))
+        {
             result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings);
+        }
 
         if (result == null || result.Meshes.Count == 0)
         {
@@ -130,8 +133,10 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         }
 
         if (result.Skipped > 0)
+        {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
                 $"{result.Skipped} item(s) could not be meshed and were skipped");
+        }
 
         var batch = MeshBatchProcessor.CreateBatch(
             result.Meshes, result.Names, result.Materials, result.Metadata,
@@ -175,9 +180,17 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
     private static List<T> ResolveBranch<T>(IGH_Structure tree, GH_Path path) where T : class
     {
-        if (tree == null) return new List<T>();
+        if (tree == null)
+        {
+            return new List<T>();
+        }
+
         var branch = tree.get_Branch(path)?.Cast<T>().ToList();
-        if (branch != null && branch.Count > 0) return branch;
+        if (branch != null && branch.Count > 0)
+        {
+            return branch;
+        }
+
         var fallback = tree.get_Branch(new GH_Path(0))?.Cast<T>().ToList();
         return fallback ?? new List<T>();
     }
@@ -200,7 +213,10 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         foreach (var path in geoTree.Paths)
         {
             var geoItems = geoTree.get_Branch(path)?.Cast<IGH_GeometricGoo>().ToList();
-            if (geoItems == null || geoItems.Count == 0) continue;
+            if (geoItems == null || geoItems.Count == 0)
+            {
+                continue;
+            }
 
             var nameItems = ResolveBranch<GH_String>(nameTree, path);
             var layerItems = ResolveBranch<GH_String>(layerTree, path);
@@ -217,10 +233,18 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             for (var i = 0; i < geoItems.Count; i++)
             {
                 var geom = TryExtractGeometry(geoItems[i]);
-                if (geom == null || !geom.IsValid) { skipped++; continue; }
+                if (geom == null || !geom.IsValid)
+                {
+                    skipped++;
+                    continue;
+                }
 
                 var mesh = ConvertSingleGeometry(geom, meshSettings);
-                if (mesh == null || !mesh.IsValid) { skipped++; continue; }
+                if (mesh == null || !mesh.IsValid)
+                {
+                    skipped++;
+                    continue;
+                }
 
                 mesh.Normals.ComputeNormals();
                 mesh.Compact();
@@ -235,9 +259,15 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 if (metaItems.Count > geoItems.Count)
                 {
                     foreach (var m in metaItems)
+                    {
                         if (m?.Value != null)
+                        {
                             foreach (var kv in ParseMetadataString(m.Value))
+                            {
                                 mergedMeta[kv.Key] = kv.Value;
+                            }
+                        }
+                    }
                 }
                 else
                 {
@@ -260,39 +290,60 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
     public override void DrawViewportMeshes(IGH_PreviewArgs args)
     {
-        if (Locked || _previewItems == null) return;
+        if (Locked || _previewItems == null)
+        {
+            return;
+        }
 
         if (Attributes.Selected)
         {
             var sel = new GH_PreviewMeshArgs(args.Viewport, args.Display,
                 args.ShadeMaterial_Selected, args.MeshingParameters);
             foreach (var item in _previewItems)
+            {
                 item.Geometry.DrawViewportMeshes(sel);
+            }
         }
         else
         {
             foreach (var item in _previewItems)
+            {
                 item.Geometry.DrawViewportMeshes(new GH_PreviewMeshArgs(
                     args.Viewport, args.Display, item.Shader, args.MeshingParameters));
+            }
         }
     }
 
     public override void DrawViewportWires(IGH_PreviewArgs args)
     {
-        if (Locked || _previewItems == null) return;
+        if (Locked || _previewItems == null)
+        {
+            return;
+        }
+
         foreach (var item in _previewItems)
+        {
             item.Geometry.DrawViewportWires(new GH_PreviewWireArgs(
                 args.Viewport, args.Display,
                 Attributes.Selected ? args.WireColour_Selected : args.WireColour,
                 args.DefaultCurveThickness));
+        }
     }
 
     // ── Geometry helpers ─────────────────────────────────────────────────────────
 
     private static GeometryBase TryExtractGeometry(IGH_Goo goo)
     {
-        if (goo == null) return null;
-        if (goo.ScriptVariable() is GeometryBase g) return g;
+        if (goo == null)
+        {
+            return null;
+        }
+
+        if (goo.ScriptVariable() is GeometryBase g)
+        {
+            return g;
+        }
+
         return goo switch
         {
             GH_GeometricGoo<GeometryBase> x => x.Value,
@@ -307,7 +358,11 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
     private static Mesh ConvertSingleGeometry(GeometryBase geom, MeshingParameters mParams)
     {
-        if (geom == null || !geom.IsValid) return null;
+        if (geom == null || !geom.IsValid)
+        {
+            return null;
+        }
+
         try
         {
             var mesh = geom switch
@@ -319,34 +374,61 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             };
             return mesh != null && mesh.IsValid ? mesh : null;
         }
-        catch { return null; }
+        catch
+        {
+            return null;
+        }
     }
 
     private static Mesh CreateMeshFromBrep(Brep brep, MeshingParameters mParams)
     {
-        if (brep == null || !brep.IsValid) return null;
+        if (brep == null || !brep.IsValid)
+        {
+            return null;
+        }
+
         try
         {
             var meshArray = Mesh.CreateFromBrep(brep, mParams);
-            if (meshArray == null || meshArray.Length == 0) return null;
+            if (meshArray == null || meshArray.Length == 0)
+            {
+                return null;
+            }
+
             var mesh = new Mesh();
             foreach (var m in meshArray)
+            {
                 if (m != null && m.IsValid)
+                {
                     mesh.Append(m);
+                }
+            }
+
             return mesh.Faces.Count > 0 ? mesh : null;
         }
-        catch { return null; }
+        catch
+        {
+            return null;
+        }
     }
 
     private static Dictionary<string, string> ParseMetadataString(string s)
     {
         var d = new Dictionary<string, string>();
-        if (string.IsNullOrWhiteSpace(s)) return d;
+        if (string.IsNullOrWhiteSpace(s))
+        {
+            return d;
+        }
+
         foreach (var pair in s.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
         {
             var parts = pair.Split(new[] { '=' }, 2);
-            if (parts.Length == 2) d[parts[0].Trim()] = parts[1].Trim();
+            if (parts.Length == 2)
+            {
+                d[parts[0].Trim()] = parts[1].Trim();
+            }
         }
+
         return d;
     }
 }

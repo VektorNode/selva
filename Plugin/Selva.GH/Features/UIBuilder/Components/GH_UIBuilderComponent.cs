@@ -35,13 +35,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     private bool _disposed;
     private UISchema _embeddedSchema;
     private Dictionary<string, object> _embeddedValues;
-    private UIBuilderService _service;
-    private string _sessionId;
+    private EventHandler _onDocumentModified;
+    private EventHandler _onSolutionEnded;
 
     // Named event handler references so they can be unsubscribed on Dispose
     private EventHandler _onSolutionStarted;
-    private EventHandler _onSolutionEnded;
-    private EventHandler _onDocumentModified;
+    private UIBuilderService _service;
+    private string _sessionId;
 
     public GH_UIBuilderComponent()
         : base("UI Bridge", "UIBridge",
@@ -55,7 +55,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     /// </summary>
     private bool IsConnected => _service?.CommunicationHandler?.IsRunning == true;
 
-    public override Guid ComponentGuid => new("D4E5F6A7-B8C9-4D5E-0F1A-2B3C4D5E6F7A");
+    public override Guid ComponentGuid => new Guid("D4E5F6A7-B8C9-4D5E-0F1A-2B3C4D5E6F7A");
 
     protected override Bitmap Icon => Resources.UIBridge;
 
@@ -127,22 +127,31 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
         var transition = _service.StateManager.ProcessEnableInput(enable);
 
-        if (transition.EnableFalling) HandleDisablingState(document);
+        if (transition.EnableFalling)
+        {
+            HandleDisablingState(document);
+        }
 
         // Register document events only when enabled
         if (enable)
         {
             if (_currentDocument != document)
+            {
                 _currentDocument = document;
+            }
 
             _service.EventManager.RegisterEvents(document);
         }
 
         // Handle current state
         if (enable)
+        {
             HandleEnabledState(DA, document, transition);
+        }
         else
+        {
             HandleDisabledState(DA, document);
+        }
     }
 
     /// <summary>
@@ -150,7 +159,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     /// </summary>
     private void InitializeDependencies()
     {
-        if (_service != null) return;
+        if (_service != null)
+        {
+            return;
+        }
 
         // Always generate a new session ID on first initialization (don't restore from file)
         _sessionId = new SessionManager().CreateNewSession();
@@ -202,19 +214,26 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                 if (_embeddedSchema != null)
                 {
                     var document = OnPingDocument();
-                    var (addedIds, removedIds) = _service.SchemaManager.MergePostSolveBakeOutputs(_embeddedSchema, document);
+                    var (addedIds, removedIds) =
+                        _service.SchemaManager.MergePostSolveBakeOutputs(_embeddedSchema, document);
                     if (addedIds.Count > 0 || removedIds.Count > 0)
                     {
                         if (addedIds.Count > 0)
+                        {
                             _service.EventManager.RegisterWatchedIds(addedIds);
+                        }
+
                         _ = _service.CommunicationHandler
                             .BroadcastSchemaUpdate(_embeddedSchema, removedIds.Count > 0 ? removedIds : null)
                             .ContinueWith(t =>
                             {
                                 if (t.IsFaulted)
-                                    Logger.Error("Failed to broadcast schema update after bake output sync", t.Exception);
+                                {
+                                    Logger.Error("Failed to broadcast schema update after bake output sync",
+                                        t.Exception);
+                                }
                             });
-                        GHDocumentMutator.ScheduleComponentExpire(document, this, immediate: true);
+                        GHDocumentMutator.ScheduleComponentExpire(document, this, true);
                     }
                 }
             }
@@ -224,7 +243,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         _onDocumentModified = (s, e) =>
         {
             if (_embeddedSchema != null)
+            {
                 _service.EventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
+            }
         };
 
         _service.EventManager.SolutionStarted += _onSolutionStarted;
@@ -249,6 +270,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
                     if (started)
                         // Show Web UI URL if embedded assets are available
+                    {
                         if (_service.ServerManager.HttpPort.HasValue)
                         {
                             var wsPort = _service.ServerManager.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
@@ -259,6 +281,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                                     $"Web UI available at: http://localhost:{httpPort}/?session={_sessionId}&wsPort={wsPort}");
                             }));
                         }
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -389,7 +412,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     private void ClearAllContextualParameters()
     {
         var document = OnPingDocument();
-        if (document == null) return;
+        if (document == null)
+        {
+            return;
+        }
 
         try
         {
@@ -403,12 +429,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
             // Clear context output components (ContextPrintComponent)
             foreach (var obj in document.Objects)
+            {
                 if (ParameterTypeHelper.IsContextOutputComponent(obj) ||
                     ParameterTypeHelper.IsContextBakeComponent(obj))
                 {
                     var clearMethod = obj.GetType().GetMethod("ClearContextualData");
                     clearMethod?.Invoke(obj, null);
                 }
+            }
         }
         catch (Exception ex)
         {
@@ -422,6 +450,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     private void CleanupCommunication()
     {
         if (_service?.ServerManager != null)
+        {
             try
             {
                 // Use ServerLifecycleManager to stop servers and notify clients
@@ -431,6 +460,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             {
                 Logger.Warn($"Error during communication cleanup: {ex.Message}");
             }
+        }
     }
 
     private void Cleanup()
@@ -453,7 +483,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     protected virtual void Dispose(bool disposing)
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
 
         if (disposing)
         {
@@ -469,6 +502,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         // Use persistence service to save schema and values
         if (_service?.PersistenceService != null)
+        {
             try
             {
                 var lastValues = _service.ValueApplicator?.GetLastAppliedValues();
@@ -478,24 +512,29 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Could not save schema/values: {ex.Message}");
             }
+        }
 
         // Append to schema history on every GH file save
         if (_embeddedSchema != null)
+        {
             try
             {
                 var doc = OnPingDocument();
                 var documentId = doc?.DocumentID ?? Guid.Empty;
                 if (documentId != Guid.Empty)
+                {
                     SchemaBackupService.AppendHistory(
                         _embeddedSchema,
                         documentId,
                         Logger.Warn
                     );
+                }
             }
             catch (Exception ex)
             {
                 Logger.Warn($"Could not write schema history: {ex.Message}");
             }
+        }
 
         return base.Write(writer);
     }
@@ -503,6 +542,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     public override bool Read(GH_IReader reader)
     {
         if (reader.ItemExists("Schema") || reader.ItemExists("Values"))
+        {
             try
             {
                 var persistenceService = new SchemaPersistenceService(PluginVersion);
@@ -528,6 +568,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Could not load data: {ex.Message}");
             }
+        }
 
         return base.Read(reader);
     }
