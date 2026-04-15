@@ -7,6 +7,7 @@
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import PageContainer from '$lib/components/layout/PageContainer.svelte';
 	import { cubeMesh, getParsedMeshes, dummyOutputValues } from '$lib/dummy-output-values';
+	import { APP_DEFAULTS } from '$lib/constants';
 
 	// Switch between left-only, right-only and full schema
 	let schema = $state(exampleSchema as UISchema);
@@ -58,7 +59,7 @@
 	function handleCalculate() {
 		isSolving = true;
 		hasPendingChanges = false;
-		setTimeout(() => (isSolving = false), 3500);
+		setTimeout(() => (isSolving = false), APP_DEFAULTS.TIMEOUTS.SOLVE_STATE_DURATION);
 	}
 </script>
 

@@ -69,10 +69,12 @@ export function isFileDataArray(data: unknown): data is FileData[] {
 /**
  * Format file size for display
  */
+import { APP_DEFAULTS } from '../constants';
+
 export function formatFileSize(bytes: number): string {
 	if (bytes === 0) return '0 Bytes';
 
-	const k = 1024;
+	const k = APP_DEFAULTS.FILE_SIZE.BYTES_PER_KB;
 	const sizes = ['Bytes', 'KB', 'MB', 'GB'];
 	const i = Math.floor(Math.log(bytes) / Math.log(k));
 

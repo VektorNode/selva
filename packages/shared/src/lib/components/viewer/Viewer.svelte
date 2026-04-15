@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_DEFAULTS } from '../../constants';
 	import { onMount, untrack } from 'svelte';
 	import {
 		initThree,
@@ -66,7 +67,7 @@
 		} else {
 			const timer = setTimeout(() => {
 				hideButton = false;
-			}, 350);
+			}, APP_DEFAULTS.TIMEOUTS.VIEWER_INIT_DELAY);
 			return () => clearTimeout(timer);
 		}
 	});

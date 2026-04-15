@@ -9,6 +9,7 @@
 	import { createSolvingIndicator } from '../utils/solving.svelte';
 	import { useFooterItem } from '../composables/useFooterItem.svelte';
 	import { hexToOklch } from '../utils/color';
+	import { APP_DEFAULTS } from '../constants';
 	import PageContainer from './layout/PageContainer.svelte';
 	import PageHeader from './layout/PageHeader.svelte';
 	import AppLayout from './AppLayout.svelte';
@@ -112,7 +113,7 @@
 	}
 
 	const computeThrottle = createComputeThrottle<Record<string, unknown>>(performSolveInternal, {
-		timeout: 60000
+		timeout: APP_DEFAULTS.TIMEOUTS.COMPUTE_TIMEOUT
 	});
 
 	let solving = $derived(computeThrottle.isComputing);

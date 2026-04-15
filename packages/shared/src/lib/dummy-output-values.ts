@@ -21,6 +21,7 @@ cubeMesh.name = 'cube_mesh';
 // Helper function to parse and get the example meshes
 // Returns an array of THREE.Mesh objects like the real handler does
 export async function getParsedMeshes() {
+	// @ts-expect-error - using internal parsing function for demo purposes
 	const meshes = await parseMeshBatchObject(meshData, {
 		mergeByMaterial: false,
 		applyTransforms: true,

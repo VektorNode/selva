@@ -1,3 +1,5 @@
+import { APP_DEFAULTS } from '../constants';
+
 /**
  * Compute throttle utility for managing async compute requests.
  *
@@ -29,7 +31,7 @@ export function createComputeThrottle<T>(
 	/** Cancel any in-flight request */
 	cancel: () => void;
 } {
-	const { timeout = 150000 } = options;
+	const { timeout = APP_DEFAULTS.TIMEOUTS.COMPUTE_THROTTLE } = options;
 
 	let isComputing = $state(false);
 	let pendingValues = $state<T | null>(null);
