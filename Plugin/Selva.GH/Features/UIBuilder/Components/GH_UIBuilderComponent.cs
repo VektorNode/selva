@@ -183,7 +183,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         _onSolutionStarted = (s, e) =>
         {
 #if DEBUG
-			Logger.Log("[UIBuilder] SolutionStart");
+            Logger.Log("[UIBuilder] SolutionStart");
 #endif
             _service.StateManager.SetSolving(true);
         };
@@ -191,7 +191,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         {
             var wasActuallySolving = _service.StateManager.SetSolving(false);
 #if DEBUG
-			Logger.Log($"[UIBuilder] SolutionEnd — wasActuallySolving={wasActuallySolving}");
+            Logger.Log($"[UIBuilder] SolutionEnd — wasActuallySolving={wasActuallySolving}");
 #endif
             if (wasActuallySolving)
             {
