@@ -3,32 +3,27 @@ import { APP_DEFAULTS } from '../constants';
 /**
  * Compute throttle utility for managing async compute requests.
  *
- * Features:
  * - Only one request in-flight at a time
- * - Latest values always sent (no queue, just "latest wins")
+ * - Latest values always win (no queue)
  * - AbortController support to cancel stale requests
  * - Configurable timeout with automatic abort
- *
- * Flow:
- * 1. User changes value → request sent immediately
- * 2. User changes value while request in-flight → current request aborted, new one starts
- * 3. Result: server never overwhelmed, always processing latest values
  */
-export interface ComputeThrottleOptions {
+interface ComputeThrottleOptions {
 	timeout?: number;
 }
 
+/**
+ * Creates a throttled compute handler that ensures only one request is in-flight at a time.
+ * When a new request arrives while one is running, the new values are queued and processed
+ * immediately after the current request finishes (or aborts).
+ */
 export function createComputeThrottle<T>(
 	computeFn: (values: T, signal: AbortSignal) => Promise<void>,
 	options: ComputeThrottleOptions = {}
 ): {
-	/** Trigger a compute with the given values */
 	trigger: (values: T) => void;
-	/** Whether a compute is currently in progress */
 	readonly isComputing: boolean;
-	/** Whether there are pending values waiting to be sent */
 	readonly hasPending: boolean;
-	/** Cancel any in-flight request */
 	cancel: () => void;
 } {
 	const { timeout = APP_DEFAULTS.TIMEOUTS.COMPUTE_THROTTLE } = options;
@@ -38,35 +33,22 @@ export function createComputeThrottle<T>(
 	let currentAbortController: AbortController | null = null;
 
 	function abortCurrent() {
-		if (currentAbortController) {
-			currentAbortController.abort();
-			currentAbortController = null;
-		}
+		currentAbortController?.abort();
+		currentAbortController = null;
 	}
 
 	async function executeCompute(values: T) {
 		abortCurrent();
 
 		currentAbortController = new AbortController();
-		const signal = currentAbortController.signal;
-
-		// Set up timeout
-		const timeoutId = setTimeout(() => {
-			if (currentAbortController) {
-				currentAbortController.abort(new Error(`Request timed out after ${timeout}ms`));
-			}
-		}, timeout);
+		const { signal } = currentAbortController;
+		const timeoutId = setTimeout(() => currentAbortController?.abort(), timeout);
 
 		isComputing = true;
 		try {
 			await computeFn(values, signal);
 		} catch (err) {
-			if (err instanceof Error && err.name === 'AbortError') {
-				// Check if there are pending values - if so, this was intentional cancellation
-				if (pendingValues === null) {
-					throw err;
-				}
-			} else {
+			if (!(err instanceof Error && err.name === 'AbortError')) {
 				throw err;
 			}
 		} finally {
@@ -84,9 +66,7 @@ export function createComputeThrottle<T>(
 
 	function trigger(values: T) {
 		if (isComputing) {
-			// Store latest values and abort current request
 			pendingValues = values;
-			abortCurrent();
 		} else {
 			executeCompute(values);
 		}

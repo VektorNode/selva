@@ -88,7 +88,7 @@
 					id: 'reset',
 					label: 'Reset values',
 					onclick: () => {
-						console.log('Resetting values to default...');
+						console.info('Resetting values to default...');
 					}
 				}
 			]}

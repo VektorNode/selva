@@ -1,8 +1,6 @@
 import { untrack } from 'svelte';
 import { APP_DEFAULTS } from '../constants';
 
-// Using centralized thresholds from APP_DEFAULTS
-
 /**
  * Creates an adaptive solving indicator that measures actual solve durations
  * and adjusts its visibility delay accordingly.
@@ -13,30 +11,13 @@ import { APP_DEFAULTS } from '../constants';
  * - First solve: shows immediately (no history yet)
  */
 export function createSolvingIndicator(isSolving: () => boolean): { readonly show: boolean } {
+	const { FAST_THRESHOLD_MS, SLOW_THRESHOLD_MS, HISTORY_SIZE, ANIMATION_DELAY } =
+		APP_DEFAULTS.SOLVING_INDICATOR;
+
 	let show = $state(false);
 	let timeout: ReturnType<typeof setTimeout> | null = null;
-
-	// Solve duration history
-	const solveHistory: number[] = [];
 	let solveStartTime: number | null = null;
-	let hasHistory = false;
-
-	function getExpectedDuration(): number {
-		if (solveHistory.length === 0) return Infinity; // unknown → show immediately
-		return solveHistory.reduce((a, b) => a + b, 0) / solveHistory.length;
-	}
-
-	function recordSolveEnd() {
-		if (solveStartTime !== null) {
-			const duration = performance.now() - solveStartTime;
-			solveHistory.push(duration);
-			if (solveHistory.length > APP_DEFAULTS.SOLVING_INDICATOR.HISTORY_SIZE) {
-				solveHistory.shift();
-			}
-			solveStartTime = null;
-			hasHistory = true;
-		}
-	}
+	const solveHistory: number[] = [];
 
 	$effect(() => {
 		const solving = isSolving();
@@ -45,19 +26,18 @@ export function createSolvingIndicator(isSolving: () => boolean): { readonly sho
 			if (solving) {
 				solveStartTime = performance.now();
 
-				const expected = getExpectedDuration();
+				const avg =
+					solveHistory.length === 0
+						? Infinity
+						: solveHistory.reduce((a, b) => a + b, 0) / solveHistory.length;
 
-				if (hasHistory && expected < APP_DEFAULTS.SOLVING_INDICATOR.FAST_THRESHOLD_MS) {
-					return;
-				}
+				if (solveHistory.length > 0 && avg < FAST_THRESHOLD_MS) return;
 
 				const delay =
-					expected === Infinity || expected >= APP_DEFAULTS.SOLVING_INDICATOR.SLOW_THRESHOLD_MS
+					avg === Infinity || avg >= SLOW_THRESHOLD_MS
 						? 0
-						: ((expected - APP_DEFAULTS.SOLVING_INDICATOR.FAST_THRESHOLD_MS) /
-								(APP_DEFAULTS.SOLVING_INDICATOR.SLOW_THRESHOLD_MS -
-									APP_DEFAULTS.SOLVING_INDICATOR.FAST_THRESHOLD_MS)) *
-							APP_DEFAULTS.SOLVING_INDICATOR.ANIMATION_DELAY;
+						: ((avg - FAST_THRESHOLD_MS) / (SLOW_THRESHOLD_MS - FAST_THRESHOLD_MS)) *
+							ANIMATION_DELAY;
 
 				if (!timeout) {
 					if (delay === 0) {
@@ -70,7 +50,11 @@ export function createSolvingIndicator(isSolving: () => boolean): { readonly sho
 					}
 				}
 			} else {
-				recordSolveEnd();
+				if (solveStartTime !== null) {
+					solveHistory.push(performance.now() - solveStartTime);
+					if (solveHistory.length > HISTORY_SIZE) solveHistory.shift();
+					solveStartTime = null;
+				}
 
 				if (timeout) {
 					clearTimeout(timeout);
@@ -81,17 +65,13 @@ export function createSolvingIndicator(isSolving: () => boolean): { readonly sho
 		});
 
 		return () => {
-			if (timeout) {
-				clearTimeout(timeout);
-			}
+			if (timeout) clearTimeout(timeout);
 		};
 	});
 
-	const indicator: { readonly show: boolean } = {
+	return {
 		get show() {
 			return show;
 		}
 	};
-
-	return indicator;
 }

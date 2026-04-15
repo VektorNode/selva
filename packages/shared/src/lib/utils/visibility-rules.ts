@@ -5,19 +5,11 @@ import type {
 	GroupVisibilityCondition
 } from '$lib/types/generated';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface VisibilityResult {
 	visible: boolean;
 	disabled: boolean;
 	defaultValue?: unknown;
 }
-
-// ---------------------------------------------------------------------------
-// Rule operators
-// ---------------------------------------------------------------------------
 
 type RuleOperatorFn = (a: unknown, b: unknown, values?: unknown[]) => boolean;
 
@@ -41,10 +33,6 @@ const RULE_OPERATORS: Record<string, RuleOperatorFn> = {
 	}
 };
 
-// ---------------------------------------------------------------------------
-// Condition evaluation
-// ---------------------------------------------------------------------------
-
 export function evaluateRule(rule: VisibilityRule, values: Record<string, unknown>): boolean {
 	const fn = RULE_OPERATORS[rule.operator];
 	return fn ? fn(values[rule.paramId], rule.value, rule.values) : false;
@@ -57,10 +45,6 @@ export function evaluateCondition(
 	const results = condition.rules.map((rule) => evaluateRule(rule, values));
 	return condition.mode === 'any' ? results.some(Boolean) : results.every(Boolean);
 }
-
-// ---------------------------------------------------------------------------
-// Item / group visibility
-// ---------------------------------------------------------------------------
 
 type ActionFn = (met: boolean, defaultValue?: unknown) => VisibilityResult;
 
