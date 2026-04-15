@@ -136,7 +136,6 @@
 		onReady?.({ loadValues });
 	});
 
-	// ── Definition switching ─────────────────────────────────────────────────────
 	let previousDefinitionKey = $state('');
 	let isInitialLoad = $state(true);
 
