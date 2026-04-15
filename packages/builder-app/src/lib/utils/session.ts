@@ -84,7 +84,7 @@ export async function initializeWebSocketSession(sessionId: string): Promise<Ses
 /**
  * Ensure schema has proper layout defaults
  */
-export function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | null {
+function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | null {
 	if (!schema) return null;
 
 	if (!schema.layout) {
@@ -95,21 +95,9 @@ export function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | 
 		};
 	}
 
-	// Migration for v1 schemas (missing layout.type)
-	if (schema.layout && !schema.layout.type) {
-		if ('tabs' in schema.layout) {
-			(schema.layout as any).type = 'tabbed';
-		} else if ('groups' in schema.layout) {
-			(schema.layout as any).type = 'flat';
-		} else {
-			(schema.layout as any).type = 'tabbed';
-		}
-	}
-
 	if (schema.layout.type === 'tabbed' && !schema.layout.tabs) {
 		schema.layout.tabs = [];
 	}
-	// Ensure instanceSolve has a default value
 	if (schema.instanceSolve === undefined) {
 		schema.instanceSolve = true;
 	}

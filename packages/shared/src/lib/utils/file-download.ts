@@ -4,6 +4,7 @@
  */
 
 import { downloadFileData, type FileData } from 'selva-compute';
+import { APP_DEFAULTS } from '../constants';
 
 /**
  * Download file(s) from Grasshopper outputs
@@ -21,27 +22,9 @@ export async function downloadFiles(
 			return;
 		}
 
-		if (filesArray.length === 1) {
-			// Single file - download directly
-			await downloadSingleFile(filesArray[0]);
-		} else {
-			// Multiple files - use core's ZIP functionality
-			await downloadFileData(filesArray, fileName);
-		}
+		await downloadFileData(filesArray, fileName);
 	} catch (error) {
 		console.error('[FileDownload] Error downloading files:', error);
-		throw error;
-	}
-}
-
-/**
- * Download a single file directly
- */
-async function downloadSingleFile(fileData: FileData): Promise<void> {
-	try {
-		await downloadFileData([fileData], fileData.fileName.replace(/\.[^.]*$/, ''));
-	} catch (error) {
-		console.error('[FileDownload] Error downloading single file:', error);
 		throw error;
 	}
 }
@@ -60,17 +43,8 @@ export function isFileData(data: unknown): data is FileData {
 }
 
 /**
- * Check if data is FileData array
- */
-export function isFileDataArray(data: unknown): data is FileData[] {
-	return Array.isArray(data) && data.length > 0 && isFileData(data[0]);
-}
-
-/**
  * Format file size for display
  */
-import { APP_DEFAULTS } from '../constants';
-
 export function formatFileSize(bytes: number): string {
 	if (bytes === 0) return '0 Bytes';
 

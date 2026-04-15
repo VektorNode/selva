@@ -50,7 +50,7 @@ export * from './utils';
 // Re-export types from generated schema
 export type * from './types/generated';
 export type { ActionButton } from './types/actionButton';
-export type { SolveFn, SolveResult } from './types/solveFn';
+export type { SolveFn } from './types/solveFn';
 
 // Re-export constants from generated schema
 export { ACCEPTED_FILE_FORMATS } from './types/generated/schema';
