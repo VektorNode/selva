@@ -37,29 +37,24 @@
 </script>
 
 <div class="flex items-center gap-3" title={tooltip()}>
-	<!-- Status indicator -->
 	<div class="flex items-center gap-1.5">
 		<Circle class="h-2.5 w-2.5 shrink-0 fill-current {config.color}" />
 		<span class="text-xs font-medium {config.color}">{config.label}</span>
 	</div>
 
-	<!-- Desktop: Show all details with dividers -->
 	<div class="hidden items-center gap-3 sm:flex">
-		<!-- Rhino version -->
 		{#if compute.rhinoVersion}
 			<div class="border-border text-muted-foreground border-l pl-3 text-xs">
 				<span>Rhino {compute.rhinoVersion}</span>
 			</div>
 		{/if}
 
-		<!-- Compute version -->
 		{#if compute.computeVersion}
 			<div class="border-border text-muted-foreground border-l pl-3 text-xs">
 				<span>Compute {compute.computeVersion}</span>
 			</div>
 		{/if}
 
-		<!-- Selva plugin status (only show when server is reachable) -->
 		{#if health.reachable}
 			<div class="border-border border-l pl-3">
 				{#if compute.selvaInstalled}

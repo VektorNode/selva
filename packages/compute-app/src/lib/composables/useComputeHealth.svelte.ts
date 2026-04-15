@@ -6,8 +6,6 @@
  */
 import { browser } from '$app/environment';
 
-// --- Types ---
-
 export interface ComputeInfo {
 	rhinoVersion: string | null;
 	computeVersion: string | null;
@@ -22,8 +20,6 @@ export interface HealthStatus {
 	reachable: boolean;
 	message: string;
 }
-
-// --- Singleton state ---
 
 let health = $state<HealthStatus>({
 	state: 'checking',
@@ -40,8 +36,6 @@ let compute = $state<ComputeInfo>({
 
 let plugins = $state<PluginMap>({});
 
-// --- Internal state ---
-
 let timeoutId: ReturnType<typeof setTimeout> | null = null;
 let infoFetched = false;
 let consecutiveFailures = 0;
@@ -51,8 +45,6 @@ const STARTING_THRESHOLD = 3;
 const REQUEST_TIMEOUT_MS = 8000;
 const BASE_INTERVAL_MS = 5000;
 const MAX_INTERVAL_MS = 30000;
-
-// --- Helpers ---
 
 function fetchWithTimeout(url: string): Promise<Response> {
 	const controller = new AbortController();
