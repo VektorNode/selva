@@ -143,7 +143,6 @@
 				return;
 			}
 
-			// FileReader is async — keep isLoading=true until it completes
 			await new Promise<void>((resolve, reject) => {
 				const reader = new FileReader();
 				reader.onload = (e) => {
@@ -259,7 +258,6 @@
 </script>
 
 <div class="gap-4 flex w-full flex-col">
-	<!-- Hidden file input -->
 	<input
 		bind:this={fileInput}
 		type="file"
@@ -268,7 +266,6 @@
 		class="hidden"
 	/>
 
-	<!-- Mode toggle (only shown when both modes are allowed) -->
 	{#if showToggle}
 		<div class="rounded text-xs flex overflow-hidden border">
 			{#each effectiveModes as mode (mode)}
@@ -288,7 +285,6 @@
 	{/if}
 
 	{#if activeMode === 'url'}
-		<!-- URL Input -->
 		<div class="gap-2 flex flex-col">
 			<Label for="url-input" class="gap-2 flex items-center">
 				<Link size={16} />
@@ -317,7 +313,6 @@
 				</Button>
 			</div>
 
-			<!-- Success state -->
 			{#if urlSuccess}
 				<div class="gap-1.5 text-xs flex items-center text-success">
 					<CircleCheck size={13} />
@@ -325,7 +320,6 @@
 				</div>
 			{/if}
 
-			<!-- Error state -->
 			{#if urlError}
 				<div
 					class="p-2.5 gap-1.5 flex flex-col rounded-md border border-destructive/40 bg-destructive/5"
@@ -347,7 +341,6 @@
 			{/if}
 		</div>
 	{:else}
-		<!-- File Upload -->
 		<div class="gap-2 flex flex-col">
 			<Label for="file-upload" class="gap-2 flex items-center">
 				<FileUp size={16} />
