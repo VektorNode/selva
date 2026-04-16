@@ -34,6 +34,10 @@
 		"changeset": "changeset",
 		"release": "pnpm build:all && changeset publish"
 	},
+	"dependencies": {
+		"@selva/platform": "workspace:*",
+		"selva-local-provider": "workspace:*"
+	},
 	"devDependencies": {
 		"@changesets/cli": "^2.30.0",
 		"@eslint/compat": "^1.4.1",

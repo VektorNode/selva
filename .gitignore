@@ -61,6 +61,7 @@ packages/compute-app/definitions/**/*.json
 **/node_modules/
 **/.svelte-kit/
 **/*.svelte.d.ts
+**/dist/
 
 # Grasshopper definitions
 *.gh

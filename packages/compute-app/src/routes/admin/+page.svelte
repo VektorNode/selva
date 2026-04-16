@@ -6,7 +6,6 @@
 	import EditDefinitionDialog from './EditDefinitionDialog.svelte';
 	import AddDefinitionDialog from './AddDefinitionDialog.svelte';
 	import UpdateSection from './UpdateSection.svelte';
-	import ServerInfoSection from './ServerInfoSection.svelte';
 
 	interface HistoryEntry {
 		filename: string;
@@ -316,8 +315,6 @@
 		exitCode={updateExitCode}
 		onRun={runUpdate}
 	/>
-
-	<ServerInfoSection />
 </div>
 
 <style>

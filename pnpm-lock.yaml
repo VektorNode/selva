@@ -79,6 +79,13 @@ catalogs:
 importers:
 
   .:
+    dependencies:
+      '@selva/platform':
+        specifier: workspace:*
+        version: link:packages/platform
+      selva-local-provider:
+        specifier: workspace:*
+        version: link:packages/local-provider
     devDependencies:
       '@changesets/cli':
         specifier: ^2.30.0
@@ -210,6 +217,9 @@ importers:
       '@lucide/svelte':
         specifier: 'catalog:'
         version: 0.577.0(svelte@5.53.7)
+      '@selva/platform':
+        specifier: workspace:*
+        version: link:../platform
       bits-ui:
         specifier: ^2.15.4
         version: 2.16.3(@internationalized/date@3.12.0)(@sveltejs/kit@2.53.4(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.7)(vite@7.3.2(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)))(svelte@5.53.7)(typescript@5.9.3)(vite@7.3.2(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)))(svelte@5.53.7)
@@ -268,6 +278,35 @@ importers:
       vite:
         specifier: ^5.0.0 || ^6.0.0 || ^7.0.0
         version: 7.3.1(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)
+
+  packages/local-provider:
+    dependencies:
+      '@selva/platform':
+        specifier: workspace:*
+        version: link:../platform
+      sharp:
+        specifier: ^0.34.5
+        version: 0.34.5
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.17
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
+  packages/platform:
+    dependencies:
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
 
   packages/schemas:
     devDependencies:

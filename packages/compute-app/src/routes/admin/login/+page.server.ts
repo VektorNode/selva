@@ -1,12 +1,7 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, RequestEvent } from './$types';
-import {
-	verifyPassword,
-	createSession,
-	checkRateLimit,
-	recordFailedAttempt,
-	clearRateLimit
-} from '$lib/server/admin-auth.server';
+import { createSession, checkRateLimit, recordFailedAttempt, clearRateLimit } from '$lib/server/admin-auth.server';
+import { getAuthProvider } from '$lib/server/auth.server';
 
 export const actions = {
 	default: async (event: RequestEvent) => {
@@ -19,19 +14,23 @@ export const actions = {
 		}
 
 		const data = await request.formData();
+		// Email is optional — when users.json is not configured only password is needed
+		const email = (data.get('email') as string | null) ?? '';
 		const password = data.get('password');
 
 		if (!password || typeof password !== 'string') {
 			return fail(400, { error: 'Password is required' });
 		}
 
-		if (!verifyPassword(password)) {
+		const user = await getAuthProvider().verifyLoginCredentials(email, password);
+
+		if (!user) {
 			recordFailedAttempt(ip);
-			return fail(401, { error: 'Invalid password' });
+			return fail(401, { error: 'Invalid credentials' });
 		}
 
 		clearRateLimit(ip);
-		createSession(cookies);
+		await createSession(cookies, user);
 		redirect(303, '/admin');
 	}
 } satisfies Actions;
