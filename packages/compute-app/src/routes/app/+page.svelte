@@ -61,15 +61,4 @@
 	footerComponent={ComputeHealthFooter}
 	footerComponentProps={() => ({ health: computeHealth.health, compute: computeHealth.compute })}
 	showModeToggle={true}
-	showLoadButton={false}
-	showSaveButton={false}
-	stateManagerActions={[
-		{
-			id: 'reset',
-			label: 'Reset',
-			onclick: () => {
-				console.warn('Resetting app state');
-			}
-		}
-	]}
 />
