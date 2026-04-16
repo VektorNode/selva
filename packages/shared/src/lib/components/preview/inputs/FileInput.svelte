@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import { FileUp, Link, CircleAlert, CircleCheck } from '@lucide/svelte';
-	import { APP_CONSTANTS } from '$lib/constants';
+	import { APP_DEFAULTS } from '$lib/constants';
 
 	interface Props {
 		value?: string;
@@ -133,10 +133,10 @@
 				return;
 			}
 
-			const maxSize = APP_CONSTANTS.FILE_UPLOAD.MAX_SIZE_BYTES;
+			const maxSize = APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES;
 			if (blob.size > maxSize) {
 				urlError = {
-					message: `File too large: ${(blob.size / 1024 / 1024).toFixed(2)}MB (max ${APP_CONSTANTS.FILE_UPLOAD.MAX_SIZE_MB}MB). Download it and use Upload instead.`,
+					message: `File too large: ${(blob.size / 1024 / 1024).toFixed(2)}MB (max ${APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_MB}MB). Download it and use Upload instead.`,
 					isCors: false
 				};
 				isLoading = false;
