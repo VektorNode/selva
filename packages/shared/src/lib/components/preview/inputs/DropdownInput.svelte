@@ -12,7 +12,6 @@
 	let { value, config, onChange, disabled = false }: Props = $props();
 
 	const options = $derived(config?.options || {});
-	// value is always the expression (e.g. "1"), options is { "Display3d": "1", ... }
 	const currentValue = $derived(value || '');
 	const currentLabel = $derived(
 		Object.entries(options).find(([_, expr]) => expr === currentValue)?.[0] ?? currentValue

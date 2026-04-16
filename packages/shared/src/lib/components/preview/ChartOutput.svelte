@@ -14,8 +14,6 @@
 
 	const MAP_TYPE_SET = new Set(['scattermap', 'scattermapbox', 'choropleth', 'scattergeo']);
 
-	// ── Figure parsing ──────────────────────────────────────────────────
-
 	type PlotlyTrace = Record<string, unknown>;
 	type PlotlyFigure = {
 		data: PlotlyTrace[];
@@ -41,16 +39,12 @@
 		return null;
 	});
 
-	// ── DOM refs & state ────────────────────────────────────────────────
-
 	let containerEl = $state<HTMLDivElement | null>(null);
 	let wrapperEl = $state<HTMLDivElement | null>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	let isFullscreen = $state(false);
 	let mounted = false;
-
-	// ── Plotly loader ──────────────────────────────────────────────────
 
 	async function loadPlotly(): Promise<any> {
 		// @ts-expect-error — Plotly is loaded dynamically onto window
@@ -60,8 +54,6 @@
 		// @ts-expect-error — Plotly is loaded dynamically onto window
 		return window.Plotly;
 	}
-
-	// ── Fullscreen ──────────────────────────────────────────────────────
 
 	function toggleFullscreen() {
 		if (!wrapperEl) return;
@@ -79,7 +71,6 @@
 	$effect(() => {
 		function onFullscreenChange() {
 			isFullscreen = !!document.fullscreenElement;
-			// Resize immediately after state updates, then once more to catch layout
 			Promise.resolve().then(() => {
 				// @ts-expect-error — Plotly is loaded dynamically onto window
 				if (containerEl && window.Plotly) {
@@ -92,8 +83,6 @@
 		return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
 	});
 
-	// ── Theme-aware colors ──────────────────────────────────────────────
-
 	function getThemeColors(): { textColor: string; gridColor: string } {
 		if (!containerEl) return { textColor: '#333', gridColor: '#eee' };
 		const style = getComputedStyle(containerEl);
@@ -105,8 +94,6 @@
 		return { textColor, gridColor };
 	}
 
-	// ── Render ──────────────────────────────────────────────────────────
-
 	async function renderChart() {
 		if (!containerEl || !figData) return;
 		error = null;
@@ -116,7 +103,6 @@
 			const { textColor, gridColor } = getThemeColors();
 			const isMapFigure = figData.data?.some((t) => MAP_TYPE_SET.has(t.type as string));
 
-			// Strip title, template, and explicit sizing
 			const {
 				title: _title,
 				template: _template,
@@ -159,8 +145,6 @@
 		}
 	}
 
-	// ── Lifecycle ───────────────────────────────────────────────────────
-
 	onMount(() => {
 		mounted = true;
 
@@ -176,7 +160,6 @@
 				resizeTimer = null;
 			}, 150);
 		});
-		// Observe the wrapper (parent) so we catch sidebar resizes affecting the container's available space
 		if (wrapperEl) ro.observe(wrapperEl);
 
 		return () => {
@@ -186,8 +169,6 @@
 			if (containerEl && window.Plotly) window.Plotly.purge(containerEl);
 		};
 	});
-
-	// ── Debounced re-render on value change ─────────────────────────────
 
 	let renderTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -210,7 +191,6 @@
 		? 'bg-background'
 		: ''}"
 >
-	<!-- Header: title + controls -->
 	<div class="gap-2 px-3 py-1.5 relative z-10 flex items-center border-b border-border bg-muted/40">
 		<Label
 			class="text-xs font-medium truncate text-foreground"

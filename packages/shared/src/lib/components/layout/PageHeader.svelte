@@ -38,7 +38,6 @@
 	class={`px-4 py-3 backdrop-blur-sm sm:px-6 mb-0 sm:mb-4 border-b border-border bg-linear-to-b from-background to-card transition-all duration-200 ${className}`}
 >
 	<div class="gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4 flex flex-col">
-		<!-- Left section -->
 		<div class="gap-2 min-w-0 sm:gap-3 flex flex-1 items-center">
 			{#if logo}
 				<a
@@ -66,7 +65,6 @@
 			{/if}
 		</div>
 
-		<!-- Right section (rightContent + ModeToggle) -->
 		{#if rightContent || showModeToggle}
 			<div class="sm:flex gap-2 hidden items-center">
 				{#if rightContent}
