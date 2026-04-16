@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/private';
 import { redirect } from '@sveltejs/kit';
-import { verifySession } from '$lib/server/admin-auth.server';
+import { getAuthProvider } from '$lib/server/auth.server';
 
 /**
  * Validate Critical Environment Variables on Startup
@@ -36,7 +36,10 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 
 	// Guard all admin routes except the login page itself
 	if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
-		if (!verifySession(event.cookies)) {
+		const token = event.cookies.get('admin_session') ?? '';
+		const user = await getAuthProvider().verifyToken(token);
+
+		if (!user) {
 			// API requests get 401; page requests get redirected to login
 			if (pathname.startsWith('/admin/api/')) {
 				return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -46,6 +49,9 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 			}
 			redirect(303, '/admin/login');
 		}
+
+		// Make the authenticated user available to route loaders
+		event.locals.user = user;
 	}
 
 	const response = await resolve(event);

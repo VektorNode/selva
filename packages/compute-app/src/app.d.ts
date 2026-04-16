@@ -6,7 +6,10 @@ declare global {
 			message: string;
 			details?: string;
 		}
-		// interface Locals {}
+		interface Locals {
+			/** Authenticated user, set by hooks.server.ts for protected routes */
+			user?: import('@selva/platform/auth').AuthUser;
+		}
 		// interface PageData {}
 		// interface PageState {}
 		// interface Platform {}

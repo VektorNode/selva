@@ -1,5 +1,5 @@
-import { getDefinitionStore } from '$lib/server/definitions.server';
-import type { HistoryEntry } from '$lib/server/definitions/types';
+import { getDefinitionMeta } from '$lib/server/definitions.server';
+import type { HistoryEntry } from '$lib/server/definitions.server';
 import type { PageServerLoad } from './$types';
 
 // Normalize coverImage URLs: convert admin URLs to public URLs for compatibility
@@ -13,22 +13,35 @@ function normalizeImageUrl(url?: string): string | undefined {
 }
 
 export const load: PageServerLoad = async () => {
-	const store = getDefinitionStore();
+	const meta = getDefinitionMeta();
 
 	try {
-		const rawConfig = await store.readConfig();
-		const defs = rawConfig.definitions || {};
+		const records = await meta.list();
 
-		const config: Record<string, (typeof defs)[string]> = {};
+		const config: Record<string, {
+			displayName: string;
+			description?: string;
+			coverImage?: string;
+			category?: string;
+			tags?: string[];
+			originalFilename?: string;
+			file?: string;
+			maxHistory?: number;
+		}> = {};
 		const history: Record<string, HistoryEntry[]> = {};
 
-		for (const [guid, def] of Object.entries(defs)) {
-			// Normalize coverImage URLs
-			config[guid] = {
-				...def,
-				coverImage: normalizeImageUrl(def.coverImage)
+		for (const record of records) {
+			config[record.guid] = {
+				displayName: record.meta.displayName,
+				description: record.meta.description,
+				coverImage: normalizeImageUrl(record.meta.coverImage),
+				category: record.meta.category,
+				tags: record.meta.tags,
+				originalFilename: record.meta.originalFilename,
+				file: `definition.${record.fileExt}`,
+				maxHistory: record.maxHistory > 0 ? record.maxHistory : undefined
 			};
-			history[guid] = await store.getFileHistory(guid);
+			history[record.guid] = record.history;
 		}
 
 		return { config, history };

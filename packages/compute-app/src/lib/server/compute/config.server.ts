@@ -1,65 +1,36 @@
 import { env } from '$env/dynamic/private';
 
+export { getComputeServerProvider } from '../providers.server.js';
+
+export type ServerConfig = {
+	computeServerUrl: string;
+	ghDefinitionsPath: string;
+	computeApiKey?: string;
+};
+
 /**
- * Load and validate server configuration from environment variables
- *
- * Required variables:
- * - COMPUTE_SERVER_URL: URL of the Rhino.Compute server
- * - GH_DEFINITIONS_PATH: Local directory containing definitions
- *
- * Optional:
- * - COMPUTE_API_KEY: API key for Rhino.Compute (if required by server)
- *
- * @throws {Error} If required variables are missing or invalid
- * @returns Server configuration object
+ * Load and validate the raw compute server URL from environment variables.
+ * Used by GrasshopperClient in route handlers — not a provider concern.
  */
-export function getServerConfig() {
+export function getServerConfig(): ServerConfig {
 	const computeServerUrl = env.COMPUTE_SERVER_URL;
 	const ghDefinitionsPath = env.GH_DEFINITIONS_PATH;
 
-	// Validate: COMPUTE_SERVER_URL is required
 	if (!computeServerUrl) {
-		const message = [
-			'❌ COMPUTE_SERVER_URL environment variable is missing!',
-			'',
-			'This is the URL of your Rhino.Compute server.',
-			'',
-			'Examples:',
-			'  - Local Docker: http://host.docker.internal:8081',
-			'  - Cloud: https://compute.mycompany.com',
-			'  - Public: https://compute.rhino3d.com',
-			'',
-			'See .env.example for more details.'
-		].join('\n');
-		throw new Error(message);
+		throw new Error('COMPUTE_SERVER_URL environment variable is required.');
 	}
 
-	// Validate: GH_DEFINITIONS_PATH is required
 	if (!ghDefinitionsPath) {
-		const message = [
-			'❌ GH_DEFINITIONS_PATH is not set!',
-			'',
-			'You must configure where to load Grasshopper definitions from.',
-			'Set GH_DEFINITIONS_PATH to point to a local directory containing definitions.',
-			'',
-			'Examples:',
-			'  - GH_DEFINITIONS_PATH="./definitions"',
-			'  - GH_DEFINITIONS_PATH="/opt/grasshopper-defs"',
-			'',
-			'See .env.example for more details.'
-		].join('\n');
-		throw new Error(message);
+		throw new Error('GH_DEFINITIONS_PATH environment variable is required.');
 	}
 
-	// Validate: If COMPUTE_SERVER_URL is HTTP/HTTPS, check the protocol
-	if (isValidUrl(computeServerUrl)) {
+	try {
 		const parsed = new URL(computeServerUrl);
 		if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-			throw new Error(
-				`❌ COMPUTE_SERVER_URL has invalid protocol: ${parsed.protocol}\n` +
-					'Only http:// and https:// are supported.'
-			);
+			throw new Error('COMPUTE_SERVER_URL must use http:// or https://');
 		}
+	} catch {
+		throw new Error('COMPUTE_SERVER_URL must be a valid http(s) URL.');
 	}
 
 	return {
@@ -67,17 +38,4 @@ export function getServerConfig() {
 		ghDefinitionsPath,
 		computeApiKey: env.COMPUTE_API_KEY
 	};
-}
-
-function isValidUrl(url: string): boolean {
-	try {
-		// Only validate if it looks like a URL (starts with http)
-		if (!url.startsWith('http://') && !url.startsWith('https://')) {
-			return false; // Could be a local path like /definitions
-		}
-		new URL(url);
-		return true;
-	} catch {
-		return false;
-	}
 }

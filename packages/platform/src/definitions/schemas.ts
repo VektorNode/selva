@@ -6,9 +6,9 @@ export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 export const GuidSchema = z.string().regex(UUID_REGEX, 'Invalid GUID format');
 
 const HistoryEntrySchema = z.object({
-	filename: z.string(),
+	ref: z.string(),
 	originalName: z.string(),
-	date: z.string()
+	archivedAt: z.string()
 });
 
 export const DefinitionMetadataSchema = z.object({
@@ -17,15 +17,15 @@ export const DefinitionMetadataSchema = z.object({
 	coverImage: z.string().max(2048).optional(),
 	category: z.string().max(128).optional(),
 	tags: z.array(z.string().max(64)).max(20).optional(),
-	author: z.string().max(128).optional(),
-	lastUpdated: z.date().optional(),
-	file: z.string().optional(),
+	originalFilename: z.string().optional(),
 	history: z.array(HistoryEntrySchema).optional(),
 	maxHistory: z.number().int().min(0).optional()
 });
 
 /** Input for creating a new definition — validates metadata fields only (file binary handled separately) */
-export const CreateDefinitionInputSchema = DefinitionMetadataSchema.omit({ file: true }).extend({
+export const CreateDefinitionInputSchema = DefinitionMetadataSchema.omit({
+	history: true
+}).extend({
 	displayName: z.string().min(1, 'Display name is required')
 });
 
@@ -33,8 +33,6 @@ export const CreateDefinitionInputSchema = DefinitionMetadataSchema.omit({ file:
  * Uses nullish() on string fields so null values (e.g. from manual config edits) are
  * coerced to undefined instead of failing validation. */
 export const UpdateMetadataInputSchema = DefinitionMetadataSchema.omit({
-	file: true,
-	lastUpdated: true,
 	history: true
 })
 	.extend({
@@ -49,11 +47,6 @@ export const UpdateMetadataInputSchema = DefinitionMetadataSchema.omit({
 			.nullish()
 			.transform((v) => v ?? undefined),
 		category: z
-			.string()
-			.max(128)
-			.nullish()
-			.transform((v) => v ?? undefined),
-		author: z
 			.string()
 			.max(128)
 			.nullish()

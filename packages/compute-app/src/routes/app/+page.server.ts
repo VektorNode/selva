@@ -4,7 +4,9 @@ import { GrasshopperClient } from 'selva-compute/grasshopper';
 import { camelcaseKeys } from 'selva-compute/core';
 import type { UISchema } from 'selva-shared';
 import { getServerConfig } from '$lib/server/compute/config.server';
-import { getDefinitionContainer } from '$lib/server/definitions.server';
+import { getDefinitionFiles, getDefinitionMeta } from '$lib/server/definitions.server';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Fetch UI schema from Rhino Compute's /grasshopper/schema endpoint (no solve required).
@@ -52,7 +54,8 @@ async function fetchSchemaFromCompute(
 
 export const load = (async ({ url }) => {
 	const config = getServerConfig();
-	const container = getDefinitionContainer();
+	const files = getDefinitionFiles();
+	const meta = getDefinitionMeta();
 
 	const ghFilename = url.searchParams.get('gh');
 
@@ -67,8 +70,25 @@ export const load = (async ({ url }) => {
 	let clientDefUrl: string;
 
 	try {
-		definitionSource = await container.loadDefinition(ghFilename);
-		clientDefUrl = await container.getDefinitionUrl(ghFilename);
+		// Resolve ghFilename: can be a GUID or an originalFilename
+		let guid: string | null = null;
+		if (UUID_REGEX.test(ghFilename)) {
+			guid = ghFilename;
+		} else {
+			const records = await meta.list();
+			const match = records.find(
+				(r) => r.meta.originalFilename === ghFilename || `definition.${r.fileExt}` === ghFilename
+			);
+			if (match) guid = match.guid;
+		}
+
+		if (!guid) throw new Error(`Definition '${ghFilename}' not found`);
+
+		const bytes = await files.getFile(guid);
+		if (!bytes) throw new Error(`Definition file for '${guid}' not found on disk`);
+
+		definitionSource = bytes;
+		clientDefUrl = `local:${guid}`;
 	} catch (err) {
 		const errMsg = err instanceof Error ? err.message : String(err);
 		console.warn(`[App Load] Failed to load definition '${ghFilename}':`, err);

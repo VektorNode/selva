@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { getDefinitionStore } from '$lib/server/definitions.server';
-import { GuidSchema, UpdateMetadataInputSchema } from '$lib/server/definitions/schemas';
+import { getDefinitionFiles, getDefinitionMeta } from '$lib/server/definitions.server';
+import { GuidSchema, UpdateMetadataInputSchema } from '@selva/platform/definitions/schemas';
 
 // DELETE - Remove a definition: deletes the entire GUID folder and config entry
 export const DELETE: RequestHandler = async ({ params }) => {
@@ -9,7 +9,8 @@ export const DELETE: RequestHandler = async ({ params }) => {
 	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
 
 	try {
-		await getDefinitionStore().deleteDefinition(guidParsed.data);
+		await getDefinitionMeta().delete(guidParsed.data);
+		await getDefinitionFiles().deleteFiles(guidParsed.data);
 		return json({ success: true });
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
@@ -28,7 +29,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		const parsed = UpdateMetadataInputSchema.safeParse(body);
 		if (!parsed.success) throw error(400, parsed.error.issues[0].message);
 
-		await getDefinitionStore().updateMetadata(guidParsed.data, parsed.data);
+		await getDefinitionMeta().update(guidParsed.data, parsed.data);
 		return json({ success: true });
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;

@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { getDefinitionStore } from '$lib/server/definitions.server';
-import { GuidSchema } from '$lib/server/definitions/schemas';
+import { getDefinitionFiles, getDefinitionMeta } from '$lib/server/definitions.server';
+import { GuidSchema } from '@selva/platform/definitions/schemas';
 import { MAX_IMAGE_FILE_SIZE } from '$lib/server/admin-config';
 
 // POST /admin/api/definitions/{guid}/image — upload a cover image into the GUID folder
@@ -21,10 +21,13 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			throw error(400, `Image too large. Max size: ${MAX_IMAGE_FILE_SIZE / (1024 * 1024)} MB`);
 		}
 
-		const coverImage = await getDefinitionStore().saveImage(guidParsed.data, {
-			name: file.name,
-			data: await file.arrayBuffer()
-		});
+		const guid = guidParsed.data;
+		const imageData = new Uint8Array(await file.arrayBuffer());
+
+		const files = getDefinitionFiles();
+		await files.saveImage(guid, imageData);
+		const coverImage = files.getCoverImageUrl(guid);
+		await getDefinitionMeta().update(guid, { coverImage });
 
 		return json({ success: true, coverImage });
 	} catch (err) {

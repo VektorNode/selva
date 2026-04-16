@@ -8,6 +8,17 @@
 	}
 
 	let { children }: LayoutProps = $props();
+
+	const navItems = [
+		{ href: '/admin', label: 'Definitions' },
+		{ href: '/admin/users', label: 'Users' },
+		{ href: '/admin/compute', label: 'Compute' }
+	];
+
+	const isActive = (href: string) =>
+		href === '/admin'
+			? $page.url.pathname === '/admin'
+			: $page.url.pathname.startsWith(href);
 </script>
 
 {#if $page.url.pathname.startsWith('/admin/login')}
@@ -21,6 +32,22 @@
 				</form>
 			{/snippet}
 		</PageHeader>
+
+		<!-- Nav tabs -->
+		<div class="border-b">
+			<nav class="mx-auto flex max-w-7xl gap-1 px-6 sm:px-6 lg:px-8">
+				{#each navItems as item (item.href)}
+					<a
+						href={item.href}
+						class="border-b-2 px-3 py-3 text-sm font-medium transition-colors {isActive(item.href)
+							? 'border-primary text-foreground'
+							: 'border-transparent text-muted-foreground hover:text-foreground'}"
+					>
+						{item.label}
+					</a>
+				{/each}
+			</nav>
+		</div>
 
 		<main class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
 			{@render children?.()}

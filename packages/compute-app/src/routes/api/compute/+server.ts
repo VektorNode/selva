@@ -9,8 +9,8 @@ import {
 } from 'selva-compute';
 import type { SchemaInput } from 'selva-shared';
 import { error, json, isHttpError } from '@sveltejs/kit';
-import { getServerConfig } from '$lib/server/compute/config.server';
-import { getDefinitionContainer } from '$lib/server/definitions.server';
+import { getComputeServerProvider } from '$lib/server/compute/config.server';
+import { getDefinitionFiles } from '$lib/server/definitions.server';
 
 interface ComputeRequest {
 	inputs: (SchemaInput & { minimum?: number; maximum?: number; stepSize?: number })[];
@@ -36,11 +36,11 @@ let cachedClientConfig: { serverUrl: string; apiKey?: string } | null = null;
  * Get or create a GrasshopperClient instance.
  * Reuses existing client if config hasn't changed.
  */
-async function getClient(): Promise<GrasshopperClient> {
-	const config = getServerConfig();
+async function getClient(definitionGuid?: string): Promise<GrasshopperClient> {
+	const serverConfig = await getComputeServerProvider().getServer({ definitionGuid });
 	const currentConfig = {
-		serverUrl: config.computeServerUrl,
-		apiKey: config.computeApiKey
+		serverUrl: serverConfig.serverUrl,
+		apiKey: serverConfig.apiKey
 	};
 
 	// Check if we can reuse cached client
@@ -145,7 +145,7 @@ function transformInputParameter(
 }
 
 export const POST: RequestHandler = async ({ request }) => {
-	const container = getDefinitionContainer();
+	const files = getDefinitionFiles();
 
 	try {
 		const body: ComputeRequest = await request.json();
@@ -160,14 +160,21 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Determine definition source
 		let definitionSource: Uint8Array;
 
+		// Extract GUID for per-definition compute routing
+		const definitionGuid = definitionUrl.startsWith('local:')
+			? definitionUrl.substring(6)
+			: undefined;
+
 		if (definitionUrl.startsWith('local:')) {
-			// Extract filename from local URL
-			const filename = definitionUrl.substring(6);
+			// Extract GUID from local URL (format: "local:{guid}")
+			const guid = definitionUrl.substring(6);
 			try {
-				definitionSource = await container.loadDefinition(filename);
+				const bytes = await files.getFile(guid);
+				if (!bytes) throw new Error(`Definition '${guid}' not found on disk`);
+				definitionSource = bytes;
 			} catch (err) {
-				console.error(`Failed to load local definition: ${filename}`, err);
-				throw error(404, `Definition '${filename}' not found`);
+				console.error(`Failed to load local definition: ${guid}`, err);
+				throw error(404, `Definition '${guid}' not found`);
 			}
 		} else {
 			// Fetch from remote URL (with caching)
@@ -188,8 +195,8 @@ export const POST: RequestHandler = async ({ request }) => {
 				.map((input) => transformInputParameter(input, values[input.id]))
 		);
 
-		// Use cached client
-		const client = await getClient();
+		// Use cached client (passes definitionGuid for potential per-definition routing)
+		const client = await getClient(definitionGuid);
 		const solvedDefinition = await client.solve(definitionSource, inputTree);
 
 		return json(solvedDefinition);

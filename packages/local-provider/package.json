@@ -1,0 +1,45 @@
+{
+	"name": "selva-local-provider",
+	"version": "0.1.0",
+	"description": "Local filesystem, JSON, and HMAC implementations of @selva/platform interfaces",
+	"private": true,
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./auth": {
+			"types": "./dist/auth/index.d.ts",
+			"import": "./dist/auth/index.js"
+		},
+		"./definitions": {
+			"types": "./dist/definitions/index.d.ts",
+			"import": "./dist/definitions/index.js"
+		},
+		"./compute": {
+			"types": "./dist/compute/index.d.ts",
+			"import": "./dist/compute/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"src"
+	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"type-check": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@selva/platform": "workspace:*",
+		"sharp": "^0.34.5",
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"@types/node": "catalog:",
+		"typescript": "catalog:"
+	}
+}

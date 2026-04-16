@@ -1,0 +1,50 @@
+{
+	"name": "@selva/platform",
+	"version": "0.1.0",
+	"description": "Pure TypeScript interfaces for Selva platform providers (auth, definitions, compute)",
+	"license": "MIT",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./auth": {
+			"types": "./dist/auth.d.ts",
+			"import": "./dist/auth.js"
+		},
+		"./definitions": {
+			"types": "./dist/definitions.d.ts",
+			"import": "./dist/definitions.js"
+		},
+		"./compute": {
+			"types": "./dist/compute.d.ts",
+			"import": "./dist/compute.js"
+		},
+		"./definitions/schemas": {
+			"types": "./dist/definitions/schemas.d.ts",
+			"import": "./dist/definitions/schemas.js"
+		},
+		"./config": {
+			"types": "./dist/config.d.ts",
+			"import": "./dist/config.js"
+		}
+	},
+	"files": [
+		"dist",
+		"src"
+	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"type-check": "tsc --noEmit"
+	},
+	"dependencies": {
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"typescript": "catalog:"
+	}
+}
