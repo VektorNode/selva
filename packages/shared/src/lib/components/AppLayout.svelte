@@ -110,17 +110,17 @@
 {#snippet panelContent(
 	panelFilter: 'left' | 'right' | undefined,
 	requestedTabId: string | null,
-	showStateManager = true,
+	showParameterStateManager = true,
 	showCalculateButton = true
 )}
 	<div class="panel-content-wrapper">
 		{#if schema.layout.type === 'tabbed'}
 			<TabLayout {schema} bind:values {onValueChange} {panelFilter} {requestedTabId} />
 		{/if}
-		{#if showStateManager || (!isMobile && showCalculateButton && schema.instanceSolve === false)}
+		{#if showParameterStateManager || (!isMobile && showCalculateButton && schema.instanceSolve === false)}
 			<div class="panel-footer px-3">
-				<div class="flex items-center justify-center gap-2 flex-wrap">
-					{#if showStateManager}
+				<div class="gap-2 flex flex-wrap items-center justify-center">
+					{#if showParameterStateManager}
 						<ParameterPresetManager
 							{schema}
 							currentValues={values}
