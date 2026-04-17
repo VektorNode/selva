@@ -10,15 +10,19 @@
 		StateDisplay,
 		Button,
 		AppLayout,
-		initializeValues,
-		processOutputUpdate,
-		updateParameterMetadata,
-		removeParametersFromValues,
-		formatParameterUpdateMessage,
-		formatMetadataUpdateMessage,
 		createSolvingIndicator,
 		useFooterItem
 	} from 'selva-shared';
+	import {
+		initializeValues,
+		processOutputUpdate,
+		updateParameterMetadata,
+		removeParametersFromValues
+	} from '$lib/features/preview/handlers';
+	import {
+		formatParameterUpdateMessage,
+		formatMetadataUpdateMessage
+	} from '$lib/features/preview/notifications';
 	import {
 		initializeWebSocketSession,
 		getWebSocketPortFromUrl,
