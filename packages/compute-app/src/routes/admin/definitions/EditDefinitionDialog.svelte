@@ -16,9 +16,20 @@
 	import ImageUploadField from './ImageUploadField.svelte';
 
 	interface HistoryEntry {
-		filename: string;
+		ref: string;
 		originalName: string;
-		date: string;
+		archivedAt: string;
+	}
+
+	interface Project {
+		id: string;
+		name: string;
+	}
+
+	interface ComputeServer {
+		id: string;
+		label: string;
+		serverUrl: string;
 	}
 
 	interface DefinitionConfig {
@@ -27,27 +38,34 @@
 		category?: string;
 		tags?: string[];
 		coverImage?: string;
+		originalFilename?: string;
 		file?: string;
 		maxHistory?: number;
+		projectId?: string;
+		computeServerId?: string | null;
 	}
 
 	interface Props {
 		open: boolean;
 		guid: string;
 		config: DefinitionConfig;
+		projects?: Project[];
+		computeServers?: ComputeServer[];
 		history?: HistoryEntry[];
 		savingDefinition?: boolean;
 		uploadingDefinitionFile?: boolean;
 		uploadingDefinitionImage?: boolean;
 		revertingFile?: string | null;
 		onOpenChange?: (open: boolean) => void;
-		onSave?: (guid: string, config: DefinitionConfig) => void;
+		onSave?: (guid: string, patch: Partial<DefinitionConfig>) => void;
 	}
 
 	let {
 		open = false,
 		guid,
 		config = $bindable(),
+		projects = [],
+		computeServers = [],
 		history = [],
 		savingDefinition = false,
 		uploadingDefinitionFile = false,
@@ -337,6 +355,43 @@
 					</div>
 				</div>
 
+				<!-- Project & Compute Server -->
+				<div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+					{#if projects.length > 1}
+						<div class="space-y-1">
+							<Label for="project-{guid}">Project</Label>
+							<select
+								id="project-{guid}"
+								bind:value={config.projectId}
+								class="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
+							>
+								{#each projects as p (p.id)}
+									<option value={p.id}>{p.name}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+					{#if computeServers.length > 1}
+						<div class="space-y-1">
+							<Label for="server-{guid}">Compute Server</Label>
+							<select
+								id="server-{guid}"
+								value={config.computeServerId ?? ''}
+								onchange={(e) => {
+									const v = (e.currentTarget as HTMLSelectElement).value;
+									config.computeServerId = v || null;
+								}}
+								class="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
+							>
+								<option value="">Default</option>
+								{#each computeServers as s (s.id)}
+									<option value={s.id}>{s.label}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+				</div>
+
 				<!-- Version history limit -->
 				<div class="space-y-1">
 					<Label for="maxHistory-{guid}">Version history limit</Label>
@@ -362,20 +417,20 @@
 							<History class="h-3 w-3" /> Archived versions ({history.length})
 						</p>
 						<ul class="space-y-1.5">
-							{#each history as entry (entry.filename)}
+							{#each history as entry (entry.ref)}
 								<li class="flex items-center gap-2">
 									<div class="min-w-0 flex-1">
 										<p class="truncate font-mono text-xs">{entry.originalName}</p>
-										<p class="text-muted-foreground text-xs">{formatDate(entry.date)}</p>
+										<p class="text-muted-foreground text-xs">{formatDate(entry.archivedAt)}</p>
 									</div>
 									<Button
 										size="sm"
 										variant="outline"
 										class="h-6 shrink-0 px-2 text-xs"
-										disabled={revertingFile === entry.filename}
-										onclick={() => handleRevert(entry.filename)}
+										disabled={revertingFile === entry.ref}
+										onclick={() => handleRevert(entry.ref)}
 									>
-										{revertingFile === entry.filename ? 'Reverting…' : 'Revert'}
+										{revertingFile === entry.ref ? 'Reverting…' : 'Revert'}
 									</Button>
 								</li>
 							{/each}

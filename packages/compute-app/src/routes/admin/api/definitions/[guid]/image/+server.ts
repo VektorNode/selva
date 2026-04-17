@@ -27,7 +27,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		const files = getDefinitionFiles();
 		await files.saveImage(guid, imageData);
 		const coverImage = files.getCoverImageUrl(guid);
-		await getDefinitionMeta().update(guid, { coverImage });
+		await getDefinitionMeta().update(guid, { meta: { coverImage } });
 
 		return json({ success: true, coverImage });
 	} catch (err) {

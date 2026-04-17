@@ -3,6 +3,7 @@ export type {
 	IDefinitionFileProvider,
 	IDefinitionMetaProvider,
 	DefinitionRecord,
+	DefinitionRecordPatch,
 	DefinitionMeta,
 	DefinitionFileExt,
 	HistoryEntry

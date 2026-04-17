@@ -29,7 +29,13 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		const parsed = UpdateMetadataInputSchema.safeParse(body);
 		if (!parsed.success) throw error(400, parsed.error.issues[0].message);
 
-		await getDefinitionMeta().update(guidParsed.data, parsed.data);
+		const { maxHistory, projectId, computeServerId, ...metaFields } = parsed.data;
+		await getDefinitionMeta().update(guidParsed.data, {
+			...(maxHistory !== undefined && { maxHistory }),
+			...(projectId !== undefined && { projectId }),
+			...(computeServerId !== undefined && { computeServerId }),
+			meta: metaFields
+		});
 		return json({ success: true });
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;

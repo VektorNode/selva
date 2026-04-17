@@ -48,8 +48,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		// Write the restored file as the new active file
 		await files.saveFile(guid, archivedBytes, ext);
 
-		// Update meta: new originalFilename + add the newly archived entry
-		await meta.update(guid, { originalFilename: originalName });
+		// Update meta: new originalFilename + fileExt from the reverted file
+		await meta.update(guid, { fileExt: ext, meta: { originalFilename: originalName } });
 		if (newArchiveEntry) {
 			await meta.addHistoryEntry(guid, newArchiveEntry);
 

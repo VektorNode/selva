@@ -58,7 +58,9 @@ export const UpdateMetadataInputSchema = DefinitionMetadataSchema.omit({
 			.int()
 			.min(0)
 			.nullish()
-			.transform((v) => v ?? undefined)
+			.transform((v) => v ?? undefined),
+		projectId: GuidSchema.optional(),
+		computeServerId: GuidSchema.nullish().transform((v) => v ?? null)
 	})
 	.partial();
 

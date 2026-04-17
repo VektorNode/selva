@@ -13,7 +13,7 @@
 
 	interface PageData {
 		servers: (Omit<ComputeServerConfig, 'apiKey'> & { hasApiKey: boolean })[];
-		defaultServer: string;
+		defaultServerId: string;
 	}
 	interface Props {
 		data: PageData;
@@ -34,13 +34,14 @@
 
 	// Editable server list — synced from data on invalidateAll, but locally editable
 	let servers = $state<ServerEntry[]>([]);
-	let defaultServer = $state('');
+	let defaultServerId = $state('');
 	let saving = $state(false);
 	let dirty = $state(false);
 
 	$effect(() => {
 		if (!dirty) {
 			servers = data.servers.map((s, i) => ({
+				id: s.id,
 				label: s.label,
 				serverUrl: s.serverUrl,
 				timeoutMs: s.timeoutMs ?? 30000,
@@ -49,12 +50,14 @@
 				hasApiKey: s.hasApiKey,
 				storedKeyIndex: i
 			}));
-			defaultServer = data.defaultServer;
+			defaultServerId = data.defaultServerId;
 		}
 	});
 
 	function addServer() {
+		const id = crypto.randomUUID();
 		const entry = {
+			id,
 			label: 'new-server',
 			serverUrl: 'http://localhost:5000',
 			apiKey: '',
@@ -63,7 +66,7 @@
 			timeoutMs: 30000,
 			retryCount: 0
 		};
-		if (servers.length === 0) defaultServer = entry.label;
+		if (servers.length === 0) defaultServerId = id;
 		servers = [...servers, entry];
 		dirty = true;
 	}
@@ -71,8 +74,8 @@
 	function removeServer(index: number) {
 		const removed = servers[index];
 		servers = servers.filter((_, i) => i !== index);
-		if (defaultServer === removed.label && servers.length > 0) {
-			defaultServer = servers[0].label;
+		if (defaultServerId === removed.id && servers.length > 0) {
+			defaultServerId = servers[0].id;
 		}
 		dirty = true;
 	}
@@ -85,7 +88,7 @@
 		saving = true;
 		try {
 			const payload = {
-				defaultServer,
+				defaultServerId,
 				servers: servers.map(
 					({ apiKey, hasApiKey: _, retryCount, timeoutMs, storedKeyIndex, ...s }) => ({
 						...s,
@@ -208,15 +211,13 @@
 									value={server.label}
 									oninput={(e) => {
 										const input = e.target as HTMLInputElement;
-										const newLabel = input.value.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-										input.value = newLabel;
-										if (defaultServer === server.label) defaultServer = newLabel;
-										server.label = newLabel;
+										server.label = input.value.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+										input.value = server.label;
 										markDirty();
 									}}
 									class="h-7 w-32 font-mono text-xs"
 								/>
-								{#if server.label === defaultServer}
+								{#if server.id === defaultServerId}
 									<span
 										class="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400"
 									>
@@ -226,7 +227,7 @@
 									<button
 										class="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline"
 										onclick={() => {
-											defaultServer = server.label;
+											defaultServerId = server.id;
 											dirty = true;
 										}}
 									>
@@ -238,8 +239,8 @@
 								variant="ghost"
 								size="sm"
 								onclick={() => removeServer(i)}
-								disabled={server.label === defaultServer}
-								title={server.label === defaultServer
+								disabled={server.id === defaultServerId}
+								title={server.id === defaultServerId
 									? 'Set another server as default before deleting'
 									: undefined}
 								class="text-destructive hover:text-destructive h-7 w-7 p-0"

@@ -3,7 +3,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { getAuthProvider } from '$lib/server/auth.server';
 import type { UserRole } from '@selva/platform/auth';
 
-const VALID_ROLES: UserRole[] = ['admin', 'editor', 'viewer'];
+const VALID_ROLES: UserRole[] = ['platform_admin', 'user'];
 
 // PATCH — update role
 export const PATCH: RequestHandler = async ({ params, request }) => {

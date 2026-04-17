@@ -42,40 +42,12 @@ export class LocalDefinitionFileProvider implements IDefinitionFileProvider {
 	}
 
 	async getPreviewImage(guid: string): Promise<Uint8Array | null> {
-		// Read the coverImage field from the config to find the stored filename
-		const configPath = path.join(this.definitionsPath, 'definitions-config.json');
-		let coverImage: string | undefined;
 		try {
-			const content = await fs.readFile(configPath, 'utf-8');
-			const config = JSON.parse(content) as { definitions: Record<string, { coverImage?: string }> };
-			coverImage = config.definitions[guid]?.coverImage;
+			const buffer = await fs.readFile(path.join(this.guidPath(guid), 'cover.webp'));
+			return new Uint8Array(buffer);
 		} catch {
 			return null;
 		}
-
-		if (!coverImage) return null;
-
-		// Extract filename from the coverImage URL or path
-		const imageFilename = coverImage.split('/').pop();
-		if (!imageFilename) return null;
-
-		const guidDir = this.guidPath(guid);
-
-		// Try the stored filename, then fall back to the .webp variant
-		const webpFilename = imageFilename.replace(/\.[^.]+$/, '.webp');
-		const candidates =
-			imageFilename === webpFilename ? [imageFilename] : [imageFilename, webpFilename];
-
-		for (const candidate of candidates) {
-			try {
-				const buffer = await fs.readFile(path.join(guidDir, candidate));
-				return new Uint8Array(buffer);
-			} catch {
-				// try next candidate
-			}
-		}
-
-		return null;
 	}
 
 	async getArchivedFile(guid: string, ref: string): Promise<Uint8Array | null> {

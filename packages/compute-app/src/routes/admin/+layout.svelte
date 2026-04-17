@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { enhance } from '$app/forms';
 	import { Button, PageHeader } from 'selva-shared';
 
@@ -10,18 +10,20 @@
 	let { children }: LayoutProps = $props();
 
 	const navItems = [
-		{ href: '/admin', label: 'Definitions' },
+		{ href: '/admin', label: 'Dashboard' },
+		{ href: '/admin/definitions', label: 'Definitions' },
+		{ href: '/admin/projects', label: 'Projects' },
 		{ href: '/admin/users', label: 'Users' },
 		{ href: '/admin/compute', label: 'Compute' }
 	];
 
 	const isActive = (href: string) =>
 		href === '/admin'
-			? $page.url.pathname === '/admin'
-			: $page.url.pathname.startsWith(href);
+			? page.url.pathname === '/admin'
+			: page.url.pathname.startsWith(href);
 </script>
 
-{#if $page.url.pathname.startsWith('/admin/login')}
+{#if page.url.pathname.startsWith('/admin/login')}
 	{@render children?.()}
 {:else}
 	<div class="bg-background min-h-screen">

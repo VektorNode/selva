@@ -32,7 +32,7 @@ export interface DefinitionMeta {
 	description?: string;
 	category?: string;
 	tags?: string[];
-	/** Path or URL to cover image, provider-dependent */
+	/** Public URL to cover image, provider-dependent (e.g. /api/definitions/{guid}/image/cover.webp or a CDN URL) */
 	coverImage?: string;
 	/** Original uploaded filename, kept for display only */
 	originalFilename?: string;
@@ -111,7 +111,7 @@ export interface IDefinitionFileProvider {
 	 */
 	deleteArchivedFile(guid: string, ref: string): Promise<void>;
 
-	/** Store a preview image (expected to be WebP). */
+	/** Store a preview image. The provider may transcode to its preferred format. */
 	saveImage(guid: string, data: Uint8Array): Promise<void>;
 
 	/**
@@ -124,6 +124,18 @@ export interface IDefinitionFileProvider {
 
 	/** Delete all files associated with a GUID (active file, archives, image). */
 	deleteFiles(guid: string): Promise<void>;
+}
+
+/**
+ * Top-level fields that can be patched on an existing record.
+ * `meta` is merged shallowly; top-level fields replace the stored value.
+ */
+export interface DefinitionRecordPatch {
+	meta?: Partial<DefinitionMeta>;
+	fileExt?: DefinitionFileExt;
+	maxHistory?: number;
+	projectId?: string;
+	computeServerId?: string | null;
 }
 
 /**
@@ -147,8 +159,8 @@ export interface IDefinitionMetaProvider {
 	/** Create a new definition record. */
 	create(record: DefinitionRecord): Promise<void>;
 
-	/** Merge a partial metadata update into an existing record. */
-	update(guid: string, patch: Partial<DefinitionMeta>): Promise<void>;
+	/** Merge a patch into an existing record. `meta` fields are merged shallowly. */
+	update(guid: string, patch: DefinitionRecordPatch): Promise<void>;
 
 	/**
 	 * Prepend a new history entry and optionally prune old entries.

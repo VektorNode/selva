@@ -3,14 +3,28 @@
 	import { X } from '@lucide/svelte';
 	import ImageUploadField from './ImageUploadField.svelte';
 
+	interface Project {
+		id: string;
+		name: string;
+	}
+
+	interface ComputeServer {
+		id: string;
+		label: string;
+		serverUrl: string;
+	}
+
 	interface Props {
 		open: boolean;
 		isAdding?: boolean;
+		projects?: Project[];
+		defaultProjectId?: string;
+		computeServers?: ComputeServer[];
 		onOpenChange?: (open: boolean) => void;
 		onSubmit?: (data: FormData) => Promise<void>;
 	}
 
-	let { open = false, isAdding = false, onOpenChange, onSubmit }: Props = $props();
+	let { open = false, isAdding = false, projects = [], defaultProjectId, computeServers = [], onOpenChange, onSubmit }: Props = $props();
 
 	// Form state
 	let displayName = $state('');
@@ -19,6 +33,12 @@
 	let tags = $state<string[]>([]);
 	let coverImage = $state('');
 	let imageMode = $state<'url' | 'upload'>('url');
+	let selectedProjectId = $state('');
+	let selectedComputeServerId = $state('');
+
+	$effect(() => {
+		if (defaultProjectId) selectedProjectId = defaultProjectId;
+	});
 
 	// File inputs
 	let fileInput = $state<HTMLInputElement>();
@@ -106,6 +126,8 @@
 		}
 
 		formData.append('file', fileInput.files[0]);
+		if (selectedProjectId) formData.append('projectId', selectedProjectId);
+		if (selectedComputeServerId) formData.append('computeServerId', selectedComputeServerId);
 
 		try {
 			await onSubmit?.(formData);
@@ -121,6 +143,8 @@
 		tags = [];
 		coverImage = '';
 		imageMode = 'url';
+		selectedProjectId = defaultProjectId ?? '';
+		selectedComputeServerId = '';
 		validating = false;
 		validationError = null;
 		validationSchema = null;
@@ -142,6 +166,41 @@
 		</Dialog.Header>
 
 		<div class="space-y-4">
+			<!-- Project & compute server -->
+			{#if projects.length > 1 || computeServers.length > 1}
+				<div class="grid gap-3 {projects.length > 1 && computeServers.length > 1 ? 'sm:grid-cols-2' : ''}">
+					{#if projects.length > 1}
+						<div class="space-y-1">
+							<Label for="new-project">Project</Label>
+							<select
+								id="new-project"
+								bind:value={selectedProjectId}
+								class="border-input bg-background focus-visible:ring-ring h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+							>
+								{#each projects as project (project.id)}
+									<option value={project.id}>{project.name}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+					{#if computeServers.length > 1}
+						<div class="space-y-1">
+							<Label for="new-server">Compute Server</Label>
+							<select
+								id="new-server"
+								bind:value={selectedComputeServerId}
+								class="border-input bg-background focus-visible:ring-ring h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+							>
+								<option value="">Default</option>
+								{#each computeServers as s (s.id)}
+									<option value={s.id}>{s.label}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+				</div>
+			{/if}
+
 			<!-- File Upload -->
 			<div class="space-y-2">
 				<Label for="new-file">

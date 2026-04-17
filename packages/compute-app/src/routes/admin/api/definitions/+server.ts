@@ -2,11 +2,12 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import { getDefinitionFiles, getDefinitionMeta } from '$lib/server/definitions.server';
+import { getOrganizationProvider } from '$lib/server/providers.server';
 import { CreateDefinitionInputSchema } from '@selva/platform/definitions/schemas';
 import { GH_EXTENSIONS, MAX_GH_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '$lib/server/admin-config';
 
 // POST - Create a new definition (metadata + GH file in one request)
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
 	const files = getDefinitionFiles();
 	const meta = getDefinitionMeta();
 
@@ -32,12 +33,21 @@ export const POST: RequestHandler = async ({ request }) => {
 		.map((t) => t.trim())
 		.filter(Boolean);
 
+	// Resolve the default project for this install
+	const orgs = getOrganizationProvider();
+	const [defaultOrg] = await orgs.listOrgs();
+	if (!defaultOrg) throw error(500, 'No organization configured');
+	const [defaultProject] = await orgs.listProjects(defaultOrg.id);
+	if (!defaultProject) throw error(500, 'No project configured');
+
 	const parsed = CreateDefinitionInputSchema.safeParse({
 		displayName: formData.get('displayName'),
 		description: formData.get('description') || undefined,
 		category: formData.get('category') || undefined,
 		coverImage: formData.get('coverImage') || undefined,
-		tags: tags.length > 0 ? tags : undefined
+		tags: tags.length > 0 ? tags : undefined,
+		projectId: formData.get('projectId') || defaultProject.id,
+		computeServerId: formData.get('computeServerId') || undefined
 	});
 
 	if (!parsed.success) {
@@ -67,8 +77,12 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		// Create the metadata record
+		const now = new Date().toISOString();
 		await meta.create({
 			guid,
+			projectId: parsed.data.projectId,
+			ownerId: locals.user!.id,
+			computeServerId: parsed.data.computeServerId,
 			fileExt,
 			meta: {
 				displayName: parsed.data.displayName.trim(),
@@ -80,8 +94,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			},
 			history: [],
 			maxHistory: 0,
-			createdAt: new Date().toISOString(),
-			updatedAt: new Date().toISOString()
+			createdAt: now,
+			updatedAt: now
 		});
 
 		return json({ success: true, guid, filename: `definition.${fileExt}`, coverImage });
