@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 
-export type UserRole = 'admin' | 'editor' | 'viewer';
+export type UserRole = 'platform_admin' | 'user';
 
 export interface StoredUser {
 	id: string;

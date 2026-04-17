@@ -9,7 +9,7 @@
  * - Any OIDC/JWT provider
  */
 
-export type UserRole = 'admin' | 'editor' | 'viewer';
+export type UserRole = 'platform_admin' | 'user';
 
 export interface AuthUser {
 	id: string;

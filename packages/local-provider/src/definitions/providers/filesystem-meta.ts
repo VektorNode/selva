@@ -25,6 +25,11 @@ interface StoredDefinitionMetadata {
 	file?: string;
 	history?: StoredHistoryEntry[];
 	maxHistory?: number;
+	projectId?: string;
+	ownerId?: string;
+	computeServerId?: string;
+	createdAt?: string;
+	updatedAt?: string;
 }
 
 interface DefinitionsConfig {
@@ -69,6 +74,9 @@ function toDefinitionRecord(guid: string, stored: StoredDefinitionMetadata): Def
 
 	return {
 		guid,
+		projectId: stored.projectId ?? '',
+		ownerId: stored.ownerId ?? '',
+		computeServerId: stored.computeServerId,
 		fileExt: deriveFileExt(stored.file),
 		meta: {
 			displayName: stored.displayName,
@@ -80,8 +88,8 @@ function toDefinitionRecord(guid: string, stored: StoredDefinitionMetadata): Def
 		},
 		history,
 		maxHistory: stored.maxHistory ?? 0,
-		createdAt: new Date(0).toISOString(), // not stored in legacy format
-		updatedAt: new Date(0).toISOString()
+		createdAt: stored.createdAt ?? new Date(0).toISOString(),
+		updatedAt: stored.updatedAt ?? new Date(0).toISOString()
 	};
 }
 
@@ -127,6 +135,17 @@ export class LocalDefinitionMetaProvider implements IDefinitionMetaProvider {
 		return records;
 	}
 
+	async listByProject(projectId: string): Promise<DefinitionRecord[]> {
+		const all = await this.list();
+		return all.filter((r) => r.projectId === projectId);
+	}
+
+	async listPublic(): Promise<DefinitionRecord[]> {
+		// Local provider has no project visibility concept — return all records.
+		// A real multi-tenant provider would join against project visibility here.
+		return this.list();
+	}
+
 	async get(guid: string): Promise<DefinitionRecord | null> {
 		const config = await this.readConfig();
 		const stored = config.definitions[guid];
@@ -141,9 +160,14 @@ export class LocalDefinitionMetaProvider implements IDefinitionMetaProvider {
 			displayName: record.meta.displayName,
 			file: `definition.${record.fileExt}`,
 			originalFilename: record.meta.originalFilename,
-			history: []
+			history: [],
+			projectId: record.projectId,
+			ownerId: record.ownerId,
+			createdAt: record.createdAt,
+			updatedAt: record.updatedAt
 		};
 
+		if (record.computeServerId) entry.computeServerId = record.computeServerId;
 		if (record.meta.description) entry.description = record.meta.description;
 		if (record.meta.category) entry.category = record.meta.category;
 		if (record.meta.tags && record.meta.tags.length > 0) entry.tags = record.meta.tags;

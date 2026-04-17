@@ -46,7 +46,6 @@ export const PUT: RequestHandler = async ({ request }) => {
 
 	for (const s of incoming.servers) {
 		if (!s.label || typeof s.label !== 'string') throw error(400, 'Each server needs a label');
-		if (!/^[a-z0-9_-]+$/.test(s.label)) throw error(400, `Invalid label "${s.label}": only a-z, 0-9, _ and - are allowed`);
 		if (!s.serverUrl || typeof s.serverUrl !== 'string')
 			throw error(400, 'Each server needs a serverUrl');
 		try {
