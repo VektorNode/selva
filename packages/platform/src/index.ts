@@ -12,6 +12,6 @@ export {
 	ALLOWED_UPLOAD_EXTENSIONS,
 	IMAGE_CONTENT_TYPES
 } from './definitions.js';
-export type { IComputeServerProvider, ComputeServerConfig, SolveRequest } from './compute.js';
+export type { IComputeServerProvider, ComputeServerConfig, ComputeConfig, SolveRequest } from './compute.js';
 export type { SelvaConfig } from './config.js';
 export { defineConfig } from './config.js';

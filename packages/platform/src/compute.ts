@@ -9,6 +9,8 @@
  */
 
 export interface ComputeServerConfig {
+	/** Unique human-readable identifier. Referenced by ComputeConfig.defaultServer. */
+	label: string;
 	/** Base URL of the Rhino.Compute instance, e.g. http://localhost:5000 */
 	serverUrl: string;
 	/** Optional API key sent as RhinoComputeKey header */
@@ -19,6 +21,12 @@ export interface ComputeServerConfig {
 	retryCount?: number;
 }
 
+export interface ComputeConfig {
+	servers: ComputeServerConfig[];
+	/** Label of the server to use when no routing rule matches. Falls back to servers[0]. */
+	defaultServer?: string;
+}
+
 export interface SolveRequest {
 	/** GUID of the definition being solved — enables per-definition routing */
 	definitionGuid?: string;
@@ -27,15 +35,16 @@ export interface SolveRequest {
 }
 
 export interface IComputeServerProvider {
-	/**
-	 * Resolve which compute server to use for a given solve request.
-	 * The simplest implementation always returns the same server.
-	 */
+	/** Resolve which compute server to use for a given solve request. */
 	getServer(request?: SolveRequest): Promise<ComputeServerConfig>;
 
-	/**
-	 * Return all configured servers.
-	 * Used by the admin health dashboard to show server pool state.
-	 */
-	listServers(): Promise<ComputeServerConfig[]>;
+	/** Return the default server, or undefined if none configured. */
+	getDefaultServer(): Promise<ComputeServerConfig | undefined>;
+
+	/** Return the full config. Used by the admin UI. */
+	getConfig(): Promise<ComputeConfig>;
+
+	/** Replace the full config atomically. Used by the admin UI. */
+	saveConfig(config: ComputeConfig): Promise<void>;
 }
+
