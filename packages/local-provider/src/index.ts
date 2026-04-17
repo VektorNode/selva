@@ -11,6 +11,5 @@ export { LocalDefinitionMetaProvider } from './definitions/providers/filesystem-
 // Zod schemas live in @selva/platform/definitions/schemas — not re-exported here
 
 // ── Compute ───────────────────────────────────────────────────────────────
-export { SingleComputeServerProvider } from './compute/SingleComputeServerProvider.js';
 export { FilesystemComputeProvider } from './compute/FilesystemComputeProvider.js';
 export type { ComputeConfig, ComputeServerConfig } from '@selva/platform/compute';
