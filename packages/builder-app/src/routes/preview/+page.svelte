@@ -10,7 +10,6 @@
 		StateDisplay,
 		Button,
 		AppLayout,
-		ensureSchemaLayoutDefaults,
 		initializeValues,
 		processOutputUpdate,
 		updateParameterMetadata,
@@ -20,7 +19,11 @@
 		createSolvingIndicator,
 		useFooterItem
 	} from 'selva-shared';
-	import { initializeWebSocketSession, getWebSocketPortFromUrl } from '$lib/utils/session';
+	import {
+		initializeWebSocketSession,
+		getWebSocketPortFromUrl,
+		ensureSchemaLayoutDefaults
+	} from '$lib/utils/session';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import { parseMeshBatchObject, SCALE_FACTORS } from 'selva-compute/visualization';
 	import type { MeshBatch } from 'selva-compute/visualization';
