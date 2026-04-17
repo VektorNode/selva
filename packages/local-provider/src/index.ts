@@ -13,4 +13,4 @@ export { LocalDefinitionMetaProvider } from './definitions/providers/filesystem-
 // ── Compute ───────────────────────────────────────────────────────────────
 export { SingleComputeServerProvider } from './compute/SingleComputeServerProvider.js';
 export { FilesystemComputeProvider } from './compute/FilesystemComputeProvider.js';
-export type { ComputeConfig, ComputeServerEntry } from './compute/types.js';
+export type { ComputeConfig, ComputeServerConfig } from '@selva/platform/compute';

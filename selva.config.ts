@@ -12,6 +12,12 @@ import * as process from 'node:process';
 // (during a request) rather than at module load time — avoiding issues when
 // Vite evaluates the module before it has loaded the .env file.
 
+function requireEnv(name: string): string {
+	const value = process.env[name];
+	if (!value) throw new Error(`Missing required environment variable: ${name}`);
+	return value;
+}
+
 let _auth: LocalAuthProvider | undefined;
 let _files: LocalDefinitionFileProvider | undefined;
 let _meta: LocalDefinitionMetaProvider | undefined;
@@ -19,8 +25,12 @@ let _compute: FilesystemComputeProvider | undefined;
 
 export default defineConfig({
 	get auth() {
+		// Preference order: SESSION_SECRET (PM2) → ADMIN_SECRET (.env) → ADMIN_PASSWORD (dev fallback).
+		// Avoid using ADMIN_PASSWORD in production: rotating it would silently invalidate all sessions.
+		const hmacSecret = process.env.SESSION_SECRET || process.env.ADMIN_SECRET || process.env.ADMIN_PASSWORD;
+		if (!hmacSecret) throw new Error('Missing required environment variable: SESSION_SECRET, ADMIN_SECRET, or ADMIN_PASSWORD');
 		return (_auth ??= new LocalAuthProvider({
-			hmacSecret: (process.env.SESSION_SECRET || process.env.ADMIN_PASSWORD)!,
+			hmacSecret,
 			usersFilePath: process.env.GH_DEFINITIONS_PATH
 				? path.join(process.env.GH_DEFINITIONS_PATH, 'users.json')
 				: undefined,
@@ -30,18 +40,18 @@ export default defineConfig({
 
 	get definitionFiles() {
 		return (_files ??= new LocalDefinitionFileProvider(
-			process.env.GH_DEFINITIONS_PATH!,
+			requireEnv('GH_DEFINITIONS_PATH'),
 			'/api/definitions'
 		));
 	},
 
 	get definitionMeta() {
-		return (_meta ??= new LocalDefinitionMetaProvider(process.env.GH_DEFINITIONS_PATH!));
+		return (_meta ??= new LocalDefinitionMetaProvider(requireEnv('GH_DEFINITIONS_PATH')));
 	},
 
 	get compute() {
 		return (_compute ??= new FilesystemComputeProvider(
-			path.join(process.env.GH_DEFINITIONS_PATH!, 'compute.config.json')
+			path.join(requireEnv('GH_DEFINITIONS_PATH'), 'compute.config.json')
 		));
 	}
 });

@@ -5,12 +5,14 @@
 	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
 	import { invalidateAll } from '$app/navigation';
 
-	interface ServerEntry extends ComputeServerConfig {
-		label: string;
+	interface ServerEntry extends Omit<ComputeServerConfig, 'apiKey'> {
+		apiKey: string; // empty = unchanged, non-empty = new value, '__clear__' = explicit clear
+		hasApiKey: boolean; // true = a key is stored server-side (but we don't know its value)
+		storedKeyIndex: number; // index in the original server list, for server-side key preservation
 	}
 
 	interface PageData {
-		servers: ServerEntry[];
+		servers: (Omit<ComputeServerConfig, 'apiKey'> & { hasApiKey: boolean })[];
 		defaultServer: string;
 	}
 	interface Props {
@@ -38,27 +40,31 @@
 
 	$effect(() => {
 		if (!dirty) {
-			servers = data.servers.map((s) => ({
-				...s,
-				apiKey: s.apiKey ?? '',
+			servers = data.servers.map((s, i) => ({
+				label: s.label,
+				serverUrl: s.serverUrl,
 				timeoutMs: s.timeoutMs ?? 30000,
-				retryCount: s.retryCount ?? 0
+				retryCount: s.retryCount ?? 0,
+				apiKey: '',
+				hasApiKey: s.hasApiKey,
+				storedKeyIndex: i
 			}));
 			defaultServer = data.defaultServer;
 		}
 	});
 
 	function addServer() {
-		servers = [
-			...servers,
-			{
-				label: 'new-server',
-				serverUrl: 'http://localhost:5000',
-				apiKey: '',
-				timeoutMs: 30000,
-				retryCount: 0
-			}
-		];
+		const entry = {
+			label: 'new-server',
+			serverUrl: 'http://localhost:5000',
+			apiKey: '',
+			hasApiKey: false,
+			storedKeyIndex: -1,
+			timeoutMs: 30000,
+			retryCount: 0
+		};
+		if (servers.length === 0) defaultServer = entry.label;
+		servers = [...servers, entry];
 		dirty = true;
 	}
 
@@ -80,12 +86,18 @@
 		try {
 			const payload = {
 				defaultServer,
-				servers: servers.map(({ apiKey, retryCount, timeoutMs, ...s }) => ({
-					...s,
-					timeoutMs: Number(timeoutMs) || 30000,
-					...(apiKey ? { apiKey } : {}),
-					...(Number(retryCount) ? { retryCount: Number(retryCount) } : {})
-				}))
+				servers: servers.map(
+					({ apiKey, hasApiKey: _, retryCount, timeoutMs, storedKeyIndex, ...s }) => ({
+						...s,
+						storedKeyIndex,
+						timeoutMs: Math.min(300000, Math.max(1000, Number(timeoutMs) || 30000)),
+						// empty string = unchanged (omit); '__clear__' = null (explicit clear); value = new key
+						...(apiKey === '__clear__' ? { apiKey: null } : apiKey ? { apiKey } : {}),
+						...(Number(retryCount)
+							? { retryCount: Math.min(5, Math.max(0, Number(retryCount))) }
+							: {})
+					})
+				)
 			};
 			const res = await fetch('/admin/api/compute', {
 				method: 'PUT',
@@ -187,7 +199,7 @@
 					</Button>
 				</div>
 			{:else}
-				{#each servers as server, i (server.label + i)}
+				{#each servers as server, i (i)}
 					<div class="bg-muted/30 space-y-3 rounded-lg border p-4">
 						<div class="flex items-center justify-between">
 							<div class="flex items-center gap-2">
@@ -195,7 +207,9 @@
 									placeholder="label"
 									value={server.label}
 									oninput={(e) => {
-										const newLabel = (e.target as HTMLInputElement).value;
+										const input = e.target as HTMLInputElement;
+										const newLabel = input.value.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+										input.value = newLabel;
 										if (defaultServer === server.label) defaultServer = newLabel;
 										server.label = newLabel;
 										markDirty();
@@ -224,6 +238,10 @@
 								variant="ghost"
 								size="sm"
 								onclick={() => removeServer(i)}
+								disabled={server.label === defaultServer}
+								title={server.label === defaultServer
+									? 'Set another server as default before deleting'
+									: undefined}
 								class="text-destructive hover:text-destructive h-7 w-7 p-0"
 							>
 								<Trash2 class="h-3.5 w-3.5" />
@@ -241,13 +259,54 @@
 							</div>
 							<div class="space-y-1">
 								<p class="text-muted-foreground text-xs">API Key (optional)</p>
-								<Input
-									type="password"
-									placeholder="••••••••"
-									bind:value={server.apiKey}
-									oninput={markDirty}
-									class="font-mono text-xs"
-								/>
+								{#if server.hasApiKey && server.apiKey !== '__clear__' && !server.apiKey}
+									<div class="flex gap-1.5">
+										<Input
+											type="password"
+											placeholder="Key set — enter new value to replace"
+											class="font-mono text-xs"
+											oninput={(e) => {
+												server.apiKey = (e.target as HTMLInputElement).value;
+												markDirty();
+											}}
+										/>
+										<button
+											class="text-muted-foreground hover:text-destructive shrink-0 text-xs underline-offset-2 hover:underline"
+											onclick={() => {
+												server.apiKey = '__clear__';
+												markDirty();
+											}}
+										>
+											Clear
+										</button>
+									</div>
+								{:else}
+									<div class="flex gap-1.5">
+										<Input
+											type="password"
+											placeholder={server.apiKey === '__clear__'
+												? 'Key will be cleared on save'
+												: ''}
+											value={server.apiKey === '__clear__' ? '' : server.apiKey}
+											disabled={server.apiKey === '__clear__'}
+											oninput={(e) => {
+												server.apiKey = (e.target as HTMLInputElement).value;
+												markDirty();
+											}}
+											class="font-mono text-xs"
+										/>
+										{#if server.apiKey === '__clear__'}
+											<button
+												class="text-muted-foreground hover:text-foreground shrink-0 text-xs underline-offset-2 hover:underline"
+												onclick={() => {
+													server.apiKey = '';
+												}}
+											>
+												Undo
+											</button>
+										{/if}
+									</div>
+								{/if}
 							</div>
 							<div class="space-y-1">
 								<p class="text-muted-foreground text-xs">Timeout (ms)</p>
@@ -256,6 +315,12 @@
 									placeholder="30000"
 									bind:value={server.timeoutMs}
 									oninput={markDirty}
+									onblur={() => {
+										server.timeoutMs = Math.min(
+											300000,
+											Math.max(1000, Number(server.timeoutMs) || 30000)
+										);
+									}}
 									class="text-xs"
 								/>
 							</div>
@@ -266,6 +331,9 @@
 									placeholder="0"
 									bind:value={server.retryCount}
 									oninput={markDirty}
+									onblur={() => {
+										server.retryCount = Math.min(5, Math.max(0, Number(server.retryCount) || 0));
+									}}
 									class="text-xs"
 								/>
 							</div>

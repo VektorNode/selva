@@ -11,12 +11,13 @@ import type { IAuthProvider } from '@selva/platform/auth';
 import type { IComputeServerProvider } from '@selva/platform/compute';
 import type { IDefinitionFileProvider, IDefinitionMetaProvider } from '@selva/platform/definitions';
 
+let envInjected = false;
 function injectEnv() {
+	if (envInjected) return;
 	for (const [key, value] of Object.entries(env)) {
-		if (value !== undefined && process.env[key] === undefined) {
-			process.env[key] = value;
-		}
+		if (value !== undefined) process.env[key] = value;
 	}
+	envInjected = true;
 }
 
 export function getAuthProvider(): IAuthProvider {
