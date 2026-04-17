@@ -25,17 +25,14 @@
 		isEmbedded?: boolean;
 		primaryColor?: string;
 		showModeToggle?: boolean;
-		stateManagerActions?: ActionButton[];
+		panelActions?: ActionButton[];
 		showSaveButton?: boolean;
 		showLoadButton?: boolean;
 		footerComponent?: any;
 		footerComponentProps?: () => Record<string, unknown>;
 		footerItemId?: string;
 		footerItemPriority?: number;
-		// Callback to expose the loadValues function to the parent
-		// Usage: bind:loadValues={myLoadFn} or onReady={({ loadValues }) => ...}
 		onReady?: (api: { loadValues: (values: Record<string, unknown>) => void }) => void;
-		// Snippets for custom layout
 		header?: Snippet;
 		children?: Snippet<[{ errors: string[]; warnings: string[] }]>;
 	}
@@ -48,7 +45,7 @@
 		isEmbedded,
 		primaryColor,
 		showModeToggle = false,
-		stateManagerActions = [],
+		panelActions = [],
 		showSaveButton = true,
 		showLoadButton = true,
 		footerComponent,
@@ -228,7 +225,7 @@
 							{hasNeverSolved}
 							bind:isViewerFullscreen
 							bind:values
-							{stateManagerActions}
+							{panelActions}
 							{showSaveButton}
 							{showLoadButton}
 							onValueChange={handleValueChange}

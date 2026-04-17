@@ -72,7 +72,6 @@
 		}
 	});
 
-	// Initialize Three.js
 	onMount(() => {
 		if (!canvas) return;
 
@@ -96,19 +95,13 @@
 		camera = init.camera;
 		controls = init.controls;
 
-		// Dispose on unmount
 		return () => {
 			init.dispose();
 		};
 	});
 
-	// React to meshes changes
-	// We need to manually handle cleanup of Lines and Points because selva-compute's updateScene
-	// might only clean up Meshes.
 	$effect(() => {
 		if (scene && camera && controls) {
-			// Manual cleanup of types that updateScene might miss (Lines, Points)
-
 			updateScene(scene, meshes, camera, controls, viewerInitialized);
 			untrack(() => sceneVersion++);
 
@@ -125,13 +118,11 @@
 	function hasUsefulMetadata(metadata: Record<string, any>): boolean {
 		if (!metadata) return false;
 
-		// If there's a nested metadata object, check that instead
 		if (metadata.metadata && typeof metadata.metadata === 'object') {
 			const nestedMetadata = metadata.metadata;
 			return Object.keys(nestedMetadata).length > 0;
 		}
 
-		// Otherwise check the object itself, excluding system keys
 		const EXCLUDED_KEYS = new Set([
 			'name',
 			'layer',
@@ -149,7 +140,6 @@
 	function downloadScreenshot() {
 		if (!canvas) return;
 
-		// Use requestAnimationFrame to ensure a render has completed
 		requestAnimationFrame(() => {
 			canvas.toBlob((blob) => {
 				if (!blob) return;
