@@ -5,8 +5,8 @@ import type {
 	InputLayoutItem,
 	InputNumberLayoutItem,
 	NumberWidgetConfig
-} from '$lib/types/generated';
-import { getDefaultValue } from '$lib/utils/utils-shared';
+} from 'selva-shared';
+import { getDefaultValue } from 'selva-shared';
 
 function isInputLayoutItem(item: LayoutItem): item is InputLayoutItem {
 	return item.type === 'input';
@@ -22,22 +22,9 @@ interface InitializeValuesOptions {
 	currentValues?: Record<string, unknown>;
 }
 
-/**
- * Initialize parameter values for a schema with proper defaults and normalization.
- *
- * Priority order:
- * 1. currentValues (existing values passed in)
- * 2. availableParams.default (from Grasshopper parameter metadata)
- * 3. Type-based defaults (0 for numbers, false for booleans, etc.)
- *
- * Special handling for valueList/dropdown parameters:
- * - Converts label names (e.g., "Cylindrical") to their corresponding values (e.g., "1")
- * - This fixes cases where Grasshopper sends the selected label instead of the index value
- */
 export function initializeValues(options: InitializeValuesOptions): Record<string, unknown> {
 	const values: Record<string, unknown> = {};
 
-	// Initialize with type-based defaults or available parameter defaults
 	options.schema.inputs.forEach((input) => {
 		const availableParam = options.availableParams?.inputs?.find((p) => p.id === input.id);
 		const defaultValue =
@@ -48,12 +35,10 @@ export function initializeValues(options: InitializeValuesOptions): Record<strin
 		values[input.id] = defaultValue;
 	});
 
-	// Initialize outputs to null
 	options.schema.outputs.forEach((output) => {
 		values[output.id] = null;
 	});
 
-	// Override with current values if provided
 	if (options.currentValues && Object.keys(options.currentValues).length > 0) {
 		Object.assign(values, options.currentValues);
 	}
@@ -67,19 +52,13 @@ export interface OutputUpdateOptions {
 	schema: UISchema | null;
 }
 
-/**
- * Process output updates from Grasshopper solve results.
- * Filters outputs to only include those defined in the schema and merges with file outputs.
- */
 export function processOutputUpdate(options: OutputUpdateOptions): Record<string, unknown> {
-	// Only include outputs that exist in schema
 	const outputUpdates = Object.fromEntries(
 		Object.entries(options.outputs || {}).filter(([paramId]) =>
 			options.schema?.outputs.some((o) => o.id === paramId)
 		)
 	);
 
-	// File outputs are always included
 	const fileOutputUpdates = options.fileOutputs || {};
 	return { ...outputUpdates, ...fileOutputUpdates };
 }
@@ -93,14 +72,6 @@ interface ParameterUpdate {
 	stepSize?: number;
 }
 
-/**
- * Update schema metadata (nicknames, descriptions, constraints) from Grasshopper parameter changes.
- * Mutates the schema in place and returns count of updated parameters.
- *
- * Updates:
- * - Input/output nicknames and descriptions
- * - Widget config constraints (minimum, maximum, stepSize)
- */
 export function updateParameterMetadata(
 	schema: UISchema,
 	changedParams: ParameterUpdate[]
@@ -119,7 +90,6 @@ export function updateParameterMetadata(
 				const config = layoutItem.config as NumberWidgetConfig;
 				let configChanged = false;
 
-				// Update numeric constraints if present
 				if (updated.minimum !== undefined && config.minimum !== updated.minimum) {
 					config.minimum = updated.minimum;
 					configChanged = true;
@@ -141,7 +111,6 @@ export function updateParameterMetadata(
 	};
 
 	changedParams.forEach((updated) => {
-		// Update input metadata
 		const input = schema.inputs.find((inp) => inp.id === updated.id);
 		if (input) {
 			let changed = false;
@@ -160,7 +129,6 @@ export function updateParameterMetadata(
 				updatedNames.push(input.nickname);
 			}
 
-			// Update layout item configs
 			if (schema.layout.type === 'tabbed') {
 				schema.layout.tabs.forEach((tab) => tab.groups?.forEach((g) => processGroup(g, updated)));
 			} else if (schema.layout.type === 'flat') {
@@ -168,7 +136,6 @@ export function updateParameterMetadata(
 			}
 		}
 
-		// Update output metadata
 		const output = schema.outputs.find((out) => out.id === updated.id);
 		if (output) {
 			let changed = false;
@@ -192,10 +159,6 @@ export function updateParameterMetadata(
 	return { updated: updatedCount, names: updatedNames };
 }
 
-/**
- * Remove parameters from values object by their IDs.
- * Returns a new object without mutating the original.
- */
 export function removeParametersFromValues(
 	values: Record<string, unknown>,
 	removedIds: string[]

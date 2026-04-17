@@ -11,7 +11,7 @@
 	let { scene = $bindable(), sceneVersion = 0 }: Props = $props();
 
 	const getSceneObjects = () => {
-		void sceneVersion; // reactive dependency — re-runs when scene changes
+		void sceneVersion;
 		return scene.children.filter(
 			(obj) => !(obj instanceof THREE.Camera) && !(obj instanceof THREE.Light)
 		);
@@ -48,7 +48,6 @@
 
 	const toggleObject = (object: THREE.Object3D) => {
 		if (selectedUuids.has(object.uuid) && selectedUuids.size > 1) {
-			// Toggle all selected objects together
 			const allObjects = getSceneObjects();
 			const selected = allObjects.filter((o) => selectedUuids.has(o.uuid));
 			const allHidden = selected.every((o) => hiddenUuids.has(o.uuid));
@@ -103,7 +102,6 @@
 		return filtered;
 	};
 
-	// Flat ordered list of visible (non-collapsed) object UUIDs — used for range selection
 	const getFlatVisibleUuids = (): string[] => {
 		const result: string[] = [];
 		for (const [layerName, objects] of getFilteredLayerGroups()) {
@@ -119,7 +117,6 @@
 
 	const selectObject = (uuid: string, event: MouseEvent) => {
 		if (event.shiftKey && lastSelectedUuid) {
-			// Range select
 			const flat = getFlatVisibleUuids();
 			const a = flat.indexOf(lastSelectedUuid);
 			const b = flat.indexOf(uuid);
@@ -129,7 +126,6 @@
 				for (let i = lo; i <= hi; i++) selectedUuids.add(flat[i]);
 			}
 		} else if (event.ctrlKey || event.metaKey) {
-			// Toggle
 			if (selectedUuids.has(uuid)) {
 				selectedUuids.delete(uuid);
 			} else {
@@ -137,12 +133,10 @@
 				lastSelectedUuid = uuid;
 			}
 		} else {
-			// Single select
 			selectedUuids.clear();
 			selectedUuids.add(uuid);
 			lastSelectedUuid = uuid;
 		}
-		// Always update anchor on non-shift clicks
 		if (!event.shiftKey) lastSelectedUuid = uuid;
 	};
 </script>

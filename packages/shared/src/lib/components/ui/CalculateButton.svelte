@@ -38,19 +38,3 @@
 		{/if}
 	</Button>
 </div>
-
-<style>
-	:global(.selva-pending-pulse) {
-		animation: selva-pending-pulse 2s ease-in-out infinite;
-	}
-
-	@keyframes selva-pending-pulse {
-		0%,
-		100% {
-			box-shadow: 0 0 0 0 hsl(var(--primary) / 0.35);
-		}
-		50% {
-			box-shadow: 0 0 0 5px hsl(var(--primary) / 0);
-		}
-	}
-</style>

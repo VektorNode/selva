@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { UISchema, SupportedTypes } from '$lib/types/generated';
 	import AppLayout from '$lib/components/AppLayout.svelte';
-	import { initializeValues } from '$lib/features/preview/handlers';
 	import exampleSchema from '$lib/example-schema.json';
 	import exampleSchemaLeftOnly from '$lib/example-schema-left-only.json';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
@@ -41,8 +40,12 @@
 			});
 	});
 
+	const initialValues = Object.fromEntries([
+		...exampleSchema.inputs.map((i) => [i.id, null]),
+		...exampleSchema.outputs.map((o) => [o.id, null])
+	]);
 	let values = $state<Record<string, unknown>>({
-		...initializeValues({ schema }),
+		...initialValues,
 		...dummyOutputValues
 	});
 	let isSolving = $state(false);
@@ -81,17 +84,6 @@
 			bind:values
 			onValueChange={handleValueChange}
 			oncalculate={handleCalculate}
-			showSaveButton={false}
-			showLoadButton={false}
-			stateManagerActions={[
-				{
-					id: 'reset',
-					label: 'Reset values',
-					onclick: () => {
-						console.info('Resetting values to default...');
-					}
-				}
-			]}
 			onLoadValues={async () => {
 				if (schema?.instanceSolve !== false) {
 					console.error('Performing solve on load values...');

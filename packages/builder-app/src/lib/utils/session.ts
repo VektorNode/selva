@@ -84,7 +84,7 @@ export async function initializeWebSocketSession(sessionId: string): Promise<Ses
 /**
  * Ensure schema has proper layout defaults
  */
-function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | null {
+export function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | null {
 	if (!schema) return null;
 
 	if (!schema.layout) {
