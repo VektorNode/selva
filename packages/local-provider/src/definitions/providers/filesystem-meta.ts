@@ -3,94 +3,12 @@ import * as path from 'node:path';
 import type {
 	IDefinitionMetaProvider,
 	DefinitionRecord,
-	DefinitionMeta,
-	DefinitionFileExt,
+	DefinitionRecordPatch,
 	HistoryEntry
 } from '@selva/platform/definitions';
 
-// Shape of definitions-config.json on disk
-interface StoredHistoryEntry {
-	filename: string;
-	originalName: string;
-	date: string;
-}
-
-interface StoredDefinitionMetadata {
-	displayName: string;
-	description?: string;
-	coverImage?: string;
-	category?: string;
-	tags?: string[];
-	originalFilename?: string;
-	file?: string;
-	history?: StoredHistoryEntry[];
-	maxHistory?: number;
-	projectId?: string;
-	ownerId?: string;
-	computeServerId?: string;
-	createdAt?: string;
-	updatedAt?: string;
-}
-
 interface DefinitionsConfig {
-	definitions: Record<string, StoredDefinitionMetadata>;
-}
-
-// Normalize admin image URLs to public URLs
-function normalizeCoverImage(url?: string): string | undefined {
-	if (!url?.startsWith('/admin/api/definitions/')) return url;
-	const match = url.match(/\/admin\/api\/definitions\/(.+?)\/(image\/.+)/);
-	if (match) return `/api/definitions/${match[1]}/${match[2]}`;
-	return url;
-}
-
-// Map stored history entry (legacy filename/date fields) to platform HistoryEntry (ref/archivedAt)
-function toHistoryEntry(stored: StoredHistoryEntry): HistoryEntry {
-	return {
-		ref: stored.filename,
-		originalName: stored.originalName,
-		archivedAt: stored.date
-	};
-}
-
-// Map platform HistoryEntry back to stored shape
-function toStoredHistoryEntry(entry: HistoryEntry): StoredHistoryEntry {
-	return {
-		filename: entry.ref,
-		originalName: entry.originalName,
-		date: entry.archivedAt
-	};
-}
-
-function deriveFileExt(file?: string): DefinitionFileExt {
-	if (file?.endsWith('.ghx')) return 'ghx';
-	return 'gh';
-}
-
-function toDefinitionRecord(guid: string, stored: StoredDefinitionMetadata): DefinitionRecord {
-	const history = (stored.history ?? []).map(toHistoryEntry);
-	// Sort newest first
-	history.sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
-
-	return {
-		guid,
-		projectId: stored.projectId ?? '',
-		ownerId: stored.ownerId ?? '',
-		computeServerId: stored.computeServerId,
-		fileExt: deriveFileExt(stored.file),
-		meta: {
-			displayName: stored.displayName,
-			description: stored.description,
-			coverImage: normalizeCoverImage(stored.coverImage),
-			category: stored.category,
-			tags: stored.tags,
-			originalFilename: stored.originalFilename
-		},
-		history,
-		maxHistory: stored.maxHistory ?? 0,
-		createdAt: stored.createdAt ?? new Date(0).toISOString(),
-		updatedAt: stored.updatedAt ?? new Date(0).toISOString()
-	};
+	definitions: Record<string, DefinitionRecord>;
 }
 
 export class LocalDefinitionMetaProvider implements IDefinitionMetaProvider {
@@ -100,7 +18,7 @@ export class LocalDefinitionMetaProvider implements IDefinitionMetaProvider {
 		this.configPath = path.join(definitionsPath, 'definitions-config.json');
 	}
 
-	// ── Config helpers ──────────────────────────────────────────────────────
+	// ── Config helpers ──────────────────────────────────────────────────────────
 
 	private async readConfig(): Promise<DefinitionsConfig> {
 		try {
@@ -115,22 +33,17 @@ export class LocalDefinitionMetaProvider implements IDefinitionMetaProvider {
 	}
 
 	private async writeConfig(config: DefinitionsConfig): Promise<void> {
+		await fs.mkdir(path.dirname(this.configPath), { recursive: true });
 		const tmpPath = `${this.configPath}.tmp`;
 		await fs.writeFile(tmpPath, JSON.stringify(config, null, '\t'), 'utf-8');
 		await fs.rename(tmpPath, this.configPath);
 	}
 
-	// ── IDefinitionMetaProvider ─────────────────────────────────────────────
+	// ── IDefinitionMetaProvider ─────────────────────────────────────────────────
 
 	async list(): Promise<DefinitionRecord[]> {
 		const config = await this.readConfig();
-		const records: DefinitionRecord[] = [];
-
-		for (const [guid, stored] of Object.entries(config.definitions)) {
-			if (!stored.displayName) continue;
-			records.push(toDefinitionRecord(guid, stored));
-		}
-
+		const records = Object.values(config.definitions).filter((r) => r?.meta?.displayName);
 		records.sort((a, b) => a.meta.displayName.localeCompare(b.meta.displayName));
 		return records;
 	}
@@ -141,84 +54,36 @@ export class LocalDefinitionMetaProvider implements IDefinitionMetaProvider {
 	}
 
 	async listPublic(): Promise<DefinitionRecord[]> {
-		// Local provider has no project visibility concept — return all records.
-		// A real multi-tenant provider would join against project visibility here.
 		return this.list();
 	}
 
 	async get(guid: string): Promise<DefinitionRecord | null> {
 		const config = await this.readConfig();
-		const stored = config.definitions[guid];
-		if (!stored) return null;
-		return toDefinitionRecord(guid, stored);
+		return config.definitions[guid] ?? null;
 	}
 
 	async create(record: DefinitionRecord): Promise<void> {
 		const config = await this.readConfig();
-
-		const entry: StoredDefinitionMetadata = {
-			displayName: record.meta.displayName,
-			file: `definition.${record.fileExt}`,
-			originalFilename: record.meta.originalFilename,
-			history: [],
-			projectId: record.projectId,
-			ownerId: record.ownerId,
-			createdAt: record.createdAt,
-			updatedAt: record.updatedAt
-		};
-
-		if (record.computeServerId) entry.computeServerId = record.computeServerId;
-		if (record.meta.description) entry.description = record.meta.description;
-		if (record.meta.category) entry.category = record.meta.category;
-		if (record.meta.tags && record.meta.tags.length > 0) entry.tags = record.meta.tags;
-		if (record.meta.coverImage) entry.coverImage = record.meta.coverImage;
-		if (record.maxHistory > 0) entry.maxHistory = record.maxHistory;
-
-		config.definitions[record.guid] = entry;
+		config.definitions[record.guid] = record;
 		await this.writeConfig(config);
 	}
 
-	async update(guid: string, patch: Partial<DefinitionMeta>): Promise<void> {
+	async update(guid: string, patch: DefinitionRecordPatch): Promise<void> {
 		const config = await this.readConfig();
 		const existing = config.definitions[guid];
 		if (!existing) throw new Error(`Definition '${guid}' not found`);
 
-		const updated: StoredDefinitionMetadata = {
-			displayName: patch.displayName ?? existing.displayName,
-			file: existing.file || ''
+		config.definitions[guid] = {
+			...existing,
+			...(patch.fileExt !== undefined && { fileExt: patch.fileExt }),
+			...(patch.maxHistory !== undefined && { maxHistory: patch.maxHistory }),
+			...(patch.projectId !== undefined && { projectId: patch.projectId }),
+			...(patch.computeServerId !== undefined && {
+				computeServerId: patch.computeServerId ?? undefined
+			}),
+			meta: patch.meta ? { ...existing.meta, ...patch.meta } : existing.meta,
+			updatedAt: new Date().toISOString()
 		};
-
-		if (existing.originalFilename) updated.originalFilename = existing.originalFilename;
-
-		// String fields: patch overrides if provided; preserve existing otherwise
-		if (patch.description !== undefined) {
-			if (patch.description) updated.description = patch.description;
-		} else if (existing.description) {
-			updated.description = existing.description;
-		}
-
-		if (patch.category !== undefined) {
-			if (patch.category) updated.category = patch.category;
-		} else if (existing.category) {
-			updated.category = existing.category;
-		}
-
-		if (patch.tags !== undefined) {
-			if (patch.tags && patch.tags.length > 0) updated.tags = patch.tags;
-		} else if (existing.tags) {
-			updated.tags = existing.tags;
-		}
-
-		if (patch.coverImage !== undefined) {
-			if (patch.coverImage) updated.coverImage = patch.coverImage;
-		} else if (existing.coverImage) {
-			updated.coverImage = existing.coverImage;
-		}
-
-		if (existing.history !== undefined) updated.history = existing.history;
-		if (existing.maxHistory !== undefined) updated.maxHistory = existing.maxHistory;
-
-		config.definitions[guid] = updated;
 		await this.writeConfig(config);
 	}
 
@@ -227,19 +92,14 @@ export class LocalDefinitionMetaProvider implements IDefinitionMetaProvider {
 		const existing = config.definitions[guid];
 		if (!existing) throw new Error(`Definition '${guid}' not found`);
 
-		const storedEntry = toStoredHistoryEntry(entry);
-		const history = [storedEntry, ...(existing.history ?? [])];
+		const history = [entry, ...existing.history];
 
-		// Prune if maxHistory set — caller is responsible for deleting archived files
-		if (existing.maxHistory && existing.maxHistory > 0) {
+		if (existing.maxHistory > 0) {
 			existing.history = history.slice(0, existing.maxHistory);
 		} else {
 			existing.history = history;
 		}
 
-		// Update originalFilename to reflect the new file being uploaded
-		// (caller should also update this via update() if needed)
-		config.definitions[guid] = existing;
 		await this.writeConfig(config);
 	}
 
@@ -248,8 +108,7 @@ export class LocalDefinitionMetaProvider implements IDefinitionMetaProvider {
 		const existing = config.definitions[guid];
 		if (!existing) throw new Error(`Definition '${guid}' not found`);
 
-		existing.history = (existing.history ?? []).filter((e) => e.filename !== ref);
-		config.definitions[guid] = existing;
+		existing.history = existing.history.filter((e) => e.ref !== ref);
 		await this.writeConfig(config);
 	}
 

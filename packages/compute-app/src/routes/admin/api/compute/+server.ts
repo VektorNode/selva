@@ -9,7 +9,7 @@ type IncomingServer = Omit<ComputeServerConfig, 'apiKey'> & { apiKey?: string | 
 
 interface IncomingConfig {
 	servers: IncomingServer[];
-	defaultServer?: string;
+	defaultServerId?: string;
 }
 
 // GET — return compute config with API keys stripped and replaced by hasApiKey flag

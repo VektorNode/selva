@@ -8,6 +8,7 @@
 import { env } from '$env/dynamic/private';
 import config from '../../../../../selva.config.js';
 import type { IAuthProvider } from '@selva/platform/auth';
+import type { IOrganizationProvider } from '@selva/platform/organizations';
 import type { IComputeServerProvider } from '@selva/platform/compute';
 import type { IDefinitionFileProvider, IDefinitionMetaProvider } from '@selva/platform/definitions';
 
@@ -23,6 +24,11 @@ function injectEnv() {
 export function getAuthProvider(): IAuthProvider {
 	injectEnv();
 	return config.auth;
+}
+
+export function getOrganizationProvider(): IOrganizationProvider {
+	injectEnv();
+	return config.organizations;
 }
 
 export function getDefinitionFiles(): IDefinitionFileProvider {

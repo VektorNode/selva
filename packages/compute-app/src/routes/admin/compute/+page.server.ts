@@ -6,9 +6,9 @@ export const load: PageServerLoad = async () => {
 		const config = await getComputeServerProvider().getConfig();
 		return {
 			servers: config.servers ?? [],
-			defaultServer: config.defaultServer ?? config.servers?.[0]?.label ?? ''
+			defaultServerId: config.defaultServerId ?? config.servers?.[0]?.id ?? ''
 		};
 	} catch {
-		return { servers: [], defaultServer: '' };
+		return { servers: [], defaultServerId: '' };
 	}
 };

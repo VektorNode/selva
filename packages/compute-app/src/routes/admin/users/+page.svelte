@@ -12,13 +12,16 @@
 	}
 	let { data }: Props = $props();
 
-	const ROLES: UserRole[] = ['admin', 'editor', 'viewer'];
+	const ROLES: { value: UserRole; label: string }[] = [
+		{ value: 'platform_admin', label: 'Admin' },
+		{ value: 'user', label: 'User' }
+	];
 
 	// Add user form
 	let showAddForm = $state(false);
 	let newEmail = $state('');
 	let newPassword = $state('');
-	let newRole = $state<UserRole>('viewer');
+	let newRole = $state<UserRole>('user');
 	let adding = $state(false);
 
 	// Per-user loading state
@@ -37,7 +40,7 @@
 				toast.success(`User "${newEmail}" created`);
 				newEmail = '';
 				newPassword = '';
-				newRole = 'viewer';
+				newRole = 'user';
 				showAddForm = false;
 				await invalidateAll();
 			} else {
@@ -140,8 +143,8 @@
 							bind:value={newRole}
 							class="border-input bg-background rounded-md border px-3 py-2 text-sm"
 						>
-							{#each ROLES as role}
-								<option value={role}>{role}</option>
+							{#each ROLES as role (role.value)}
+								<option value={role.value}>{role.label}</option>
 							{/each}
 						</select>
 					</div>
@@ -183,8 +186,8 @@
 									onchange={(e) => updateRole(user.id, (e.target as HTMLSelectElement).value as UserRole)}
 									class="border-input bg-background rounded-md border px-2 py-1 text-xs disabled:opacity-50"
 								>
-									{#each ROLES as role}
-										<option value={role}>{role}</option>
+									{#each ROLES as role (role.value)}
+										<option value={role.value}>{role.label}</option>
 									{/each}
 								</select>
 								<Button

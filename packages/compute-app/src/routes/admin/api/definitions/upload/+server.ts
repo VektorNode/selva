@@ -41,8 +41,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		const fileData = new Uint8Array(await file.arrayBuffer());
 		await files.saveFile(resolvedGuid, fileData, fileExt);
 
-		// Update meta: new originalFilename + add history entry
-		await meta.update(resolvedGuid, { originalFilename: file.name });
+		// Update meta: new originalFilename + fileExt (may differ from previous upload)
+		await meta.update(resolvedGuid, { fileExt, meta: { originalFilename: file.name } });
 		if (archivedEntry) {
 			await meta.addHistoryEntry(resolvedGuid, archivedEntry);
 

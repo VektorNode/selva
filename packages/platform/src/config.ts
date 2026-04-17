@@ -1,10 +1,14 @@
 import type { IAuthProvider } from './auth.js';
 import type { IDefinitionFileProvider, IDefinitionMetaProvider } from './definitions.js';
 import type { IComputeServerProvider } from './compute.js';
+import type { IOrganizationProvider } from './organizations.js';
 
 export interface SelvaConfig {
 	/** Auth provider — handles session tokens and credential verification */
 	auth: IAuthProvider;
+
+	/** Organization and project provider — orgs, projects, membership, access checks */
+	organizations: IOrganizationProvider;
 
 	/** File storage provider — GH binaries, archives, preview images */
 	definitionFiles: IDefinitionFileProvider;

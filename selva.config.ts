@@ -1,6 +1,7 @@
 import { defineConfig } from '@selva/platform/config';
 import {
 	LocalAuthProvider,
+	LocalOrganizationProvider,
 	LocalDefinitionFileProvider,
 	LocalDefinitionMetaProvider,
 	FilesystemComputeProvider
@@ -19,6 +20,7 @@ function requireEnv(name: string): string {
 }
 
 let _auth: LocalAuthProvider | undefined;
+let _orgs: LocalOrganizationProvider | undefined;
 let _files: LocalDefinitionFileProvider | undefined;
 let _meta: LocalDefinitionMetaProvider | undefined;
 let _compute: FilesystemComputeProvider | undefined;
@@ -36,6 +38,10 @@ export default defineConfig({
 				: undefined,
 			fallbackAdminPassword: process.env.ADMIN_PASSWORD
 		}));
+	},
+
+	get organizations() {
+		return (_orgs ??= new LocalOrganizationProvider(requireEnv('GH_DEFINITIONS_PATH')));
 	},
 
 	get definitionFiles() {

@@ -5,6 +5,9 @@ export { LocalAuthProvider } from './auth/LocalAuthProvider.js';
 export type { LocalAuthProviderConfig } from './auth/LocalAuthProvider.js';
 export type { StoredUser, UsersFile, UserRole, LocalUserMetaProvider } from './auth/users.js';
 
+// ── Organizations ─────────────────────────────────────────────────────────
+export { LocalOrganizationProvider } from './organizations/LocalOrganizationProvider.js';
+
 // ── Definitions ───────────────────────────────────────────────────────────
 export { LocalDefinitionFileProvider } from './definitions/providers/filesystem-files.js';
 export { LocalDefinitionMetaProvider } from './definitions/providers/filesystem-meta.js';
