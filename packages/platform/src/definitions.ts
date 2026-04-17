@@ -13,13 +13,13 @@ export type DefinitionFileExt = 'gh' | 'ghx';
 export const GH_EXTENSIONS: string[] = ['.gh', '.ghx'];
 
 /** Image extensions accepted for cover images (with dot) */
-export const IMAGE_EXTENSIONS: string[] = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+export const COVER_IMAGE_EXTENSIONS: string[] = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
 
 /** All accepted upload extensions */
-export const ALLOWED_UPLOAD_EXTENSIONS: string[] = [...GH_EXTENSIONS, ...IMAGE_EXTENSIONS];
+export const ALLOWED_UPLOAD_EXTENSIONS: string[] = [...GH_EXTENSIONS, ...COVER_IMAGE_EXTENSIONS];
 
 /** MIME types for image extensions */
-export const IMAGE_CONTENT_TYPES: Record<string, string> = {
+export const COVER_IMAGE_CONTENT_TYPES: Record<string, string> = {
 	'.jpg': 'image/jpeg',
 	'.jpeg': 'image/jpeg',
 	'.png': 'image/png',
@@ -58,6 +58,15 @@ export interface HistoryEntry {
 export interface DefinitionRecord {
 	/** UUID v4 primary key */
 	guid: string;
+	/** UUID of the project that owns this definition */
+	projectId: string;
+	/** UUID of the user who created this definition */
+	ownerId: string;
+	/**
+	 * Optional UUID of a specific compute server to use when solving.
+	 * Falls back to the org default, then the platform default.
+	 */
+	computeServerId?: string;
 	fileExt: DefinitionFileExt;
 	meta: DefinitionMeta;
 	/** File version history, newest first */
@@ -125,6 +134,12 @@ export interface IDefinitionFileProvider {
 export interface IDefinitionMetaProvider {
 	/** List all definition records, sorted by displayName. */
 	list(): Promise<DefinitionRecord[]>;
+
+	/** List all definitions belonging to a specific project. */
+	listByProject(projectId: string): Promise<DefinitionRecord[]>;
+
+	/** List definitions that belong to projects with public visibility. */
+	listPublic(): Promise<DefinitionRecord[]>;
 
 	/** Get a single record by GUID. Returns null if not found. */
 	get(guid: string): Promise<DefinitionRecord | null>;

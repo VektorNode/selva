@@ -26,7 +26,9 @@ export const DefinitionMetadataSchema = z.object({
 export const CreateDefinitionInputSchema = DefinitionMetadataSchema.omit({
 	history: true
 }).extend({
-	displayName: z.string().min(1, 'Display name is required')
+	displayName: z.string().min(1, 'Display name is required'),
+	projectId: GuidSchema,
+	computeServerId: GuidSchema.optional()
 });
 
 /** Partial patch for updating an existing definition.

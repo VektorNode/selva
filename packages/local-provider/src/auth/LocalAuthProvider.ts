@@ -46,7 +46,7 @@ export class LocalAuthProvider implements IAuthProvider {
 	 */
 	async verifyToken(token: string): Promise<AuthUser | null> {
 		if (!verifyHmacToken(token, this.hmacSecret)) return null;
-		return { id: 'local-admin', role: 'admin' };
+		return { id: 'local-admin', role: 'platform_admin' };
 	}
 
 	async createSessionToken(_user: AuthUser): Promise<string> {
@@ -67,7 +67,7 @@ export class LocalAuthProvider implements IAuthProvider {
 			const a = Buffer.from(password);
 			const b = Buffer.from(this.fallbackAdminPassword);
 			if (a.length === b.length && timingSafeEqual(a, b)) {
-				return { id: 'local-admin', role: 'admin' };
+				return { id: 'local-admin', role: 'platform_admin' };
 			}
 		}
 
@@ -80,7 +80,7 @@ export class LocalAuthProvider implements IAuthProvider {
 			if (u) return { id: u.id, email: u.email, role: u.role };
 		}
 		if (id === 'local-admin') {
-			return { id: 'local-admin', role: 'admin' };
+			return { id: 'local-admin', role: 'platform_admin' };
 		}
 		return null;
 	}

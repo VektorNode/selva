@@ -9,7 +9,9 @@
  */
 
 export interface ComputeServerConfig {
-	/** Unique human-readable identifier. Referenced by ComputeConfig.defaultServer. */
+	/** UUID v4 primary key */
+	id: string;
+	/** Human-readable display label */
 	label: string;
 	/** Base URL of the Rhino.Compute instance, e.g. http://localhost:5000 */
 	serverUrl: string;
@@ -23,8 +25,8 @@ export interface ComputeServerConfig {
 
 export interface ComputeConfig {
 	servers: ComputeServerConfig[];
-	/** Label of the server to use when no routing rule matches. Falls back to servers[0]. */
-	defaultServer?: string;
+	/** UUID of the server to use when no routing rule matches. Falls back to servers[0]. */
+	defaultServerId?: string;
 }
 
 export interface SolveRequest {
@@ -40,6 +42,9 @@ export interface IComputeServerProvider {
 
 	/** Return the default server, or undefined if none configured. */
 	getDefaultServer(): Promise<ComputeServerConfig | undefined>;
+
+	/** Look up a specific server by its UUID. Returns undefined if not found. */
+	getServerById(id: string): Promise<ComputeServerConfig | undefined>;
 
 	/** Return the full config. Used by the admin UI. */
 	getConfig(): Promise<ComputeConfig>;

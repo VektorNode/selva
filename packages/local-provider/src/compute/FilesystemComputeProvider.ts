@@ -34,11 +34,16 @@ export class FilesystemComputeProvider implements IComputeServerProvider {
 
 	async getDefaultServer(): Promise<ComputeServerConfig | undefined> {
 		const config = await this.getConfig();
-		if (config.defaultServer) {
-			const found = config.servers.find((s) => s.label === config.defaultServer);
+		if (config.defaultServerId) {
+			const found = config.servers.find((s) => s.id === config.defaultServerId);
 			if (found) return found;
 		}
 		return config.servers[0];
+	}
+
+	async getServerById(id: string): Promise<ComputeServerConfig | undefined> {
+		const config = await this.getConfig();
+		return config.servers.find((s) => s.id === id);
 	}
 
 	async getServer(_request?: SolveRequest): Promise<ComputeServerConfig> {

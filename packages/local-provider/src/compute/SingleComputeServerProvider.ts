@@ -20,8 +20,12 @@ export class SingleComputeServerProvider implements IComputeServerProvider {
 		return this.server;
 	}
 
+	async getServerById(id: string): Promise<ComputeServerConfig | undefined> {
+		return this.server.id === id ? this.server : undefined;
+	}
+
 	async getConfig(): Promise<ComputeConfig> {
-		return { servers: [this.server], defaultServer: this.server.label };
+		return { servers: [this.server], defaultServerId: this.server.id };
 	}
 
 	async saveConfig(_config: ComputeConfig): Promise<void> {

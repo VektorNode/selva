@@ -30,6 +30,14 @@
 		"./config": {
 			"types": "./dist/config.d.ts",
 			"import": "./dist/config.js"
+		},
+		"./organizations": {
+			"types": "./dist/organizations.d.ts",
+			"import": "./dist/organizations.js"
+		},
+		"./organizations/schemas": {
+			"types": "./dist/organizations/schemas.d.ts",
+			"import": "./dist/organizations/schemas.js"
 		}
 	},
 	"files": [
