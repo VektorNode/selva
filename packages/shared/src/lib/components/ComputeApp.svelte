@@ -15,7 +15,6 @@
 	import AppLayout from './AppLayout.svelte';
 	import StateDisplay from './ui/StateDisplay.svelte';
 
-	// ── Props ────────────────────────────────────────────────────────────────────
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -61,7 +60,6 @@
 		onReady
 	}: Props = $props();
 
-	// ── Helpers ──────────────────────────────────────────────────────────────────
 	function createInitialValues(s: UISchema) {
 		const v: Record<string, unknown> = {};
 		for (const input of s.inputs) {
@@ -73,7 +71,6 @@
 		return v;
 	}
 
-	// ── Core state ───────────────────────────────────────────────────────────────
 	// svelte-ignore state_referenced_locally
 	let values = $state<Record<string, unknown>>(createInitialValues(schema));
 	let error = $state('');
@@ -87,7 +84,6 @@
 	let hasNeverSolved = $state(schema?.instanceSolve === false);
 	let isViewerFullscreen = $state(false);
 
-	// ── Solve logic ──────────────────────────────────────────────────────────────
 	async function performSolveInternal(solveValues: Record<string, unknown>, signal: AbortSignal) {
 		try {
 			error = '';
@@ -163,7 +159,6 @@
 		});
 	});
 
-	// ── Handlers ─────────────────────────────────────────────────────────────────
 	async function handleValueChange(id: string, val: unknown) {
 		values[id] = val;
 
@@ -180,7 +175,6 @@
 		performSolve();
 	}
 
-	// ── Footer item ──────────────────────────────────────────────────────────────
 	// Use untrack to read these static props without creating reactive dependencies.
 	// footerComponentProps is intentionally NOT untracked — it's a getter called every render.
 	const _footerItemId = untrack(() => footerItemId);
@@ -194,7 +188,6 @@
 		_footerItemPriority
 	);
 
-	// ── Embed + custom style ─────────────────────────────────────────────────────
 	let resolvedIsEmbedded = $derived(isEmbedded ?? page.url.searchParams.get('embed') === 'true');
 	let resolvedPrimaryColor = $derived(primaryColor ?? page.url.searchParams.get('primary'));
 	let customStyle = $derived(

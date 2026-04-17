@@ -286,7 +286,6 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         return meshes.Count > 0 ? new SolveResult(meshes, names, layers, metadata, materials, skipped) : null;
     }
 
-    // ── Viewport drawing ─────────────────────────────────────────────────────────
 
     public override void DrawViewportMeshes(IGH_PreviewArgs args)
     {
@@ -330,7 +329,6 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         }
     }
 
-    // ── Geometry helpers ─────────────────────────────────────────────────────────
 
     private static GeometryBase TryExtractGeometry(IGH_Goo goo)
     {

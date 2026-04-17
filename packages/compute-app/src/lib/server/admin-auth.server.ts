@@ -37,7 +37,6 @@ function verifyToken(token: string): boolean {
 	return Date.now() < expiry;
 }
 
-// ── Rate limiter ─────────────────────────────────────────────────────────────
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -79,8 +78,6 @@ export function clearRateLimit(ip: string): void {
 	rateLimitStore.delete(ip);
 }
 
-// ── Session management ───────────────────────────────────────────────────────
-
 export function verifySession(cookies: Cookies): boolean {
 	const token = cookies.get(SESSION_COOKIE_NAME);
 	if (!token) return false;
@@ -110,8 +107,6 @@ export function createSession(cookies: Cookies): void {
 export function destroySession(cookies: Cookies): void {
 	cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
 }
-
-// ── Password verification ────────────────────────────────────────────────────
 
 export function verifyPassword(password: string): boolean {
 	const adminPassword = env.ADMIN_PASSWORD;

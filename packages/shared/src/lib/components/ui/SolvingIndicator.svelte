@@ -7,7 +7,6 @@
 </script>
 
 {#if show}
-	<!-- Prominent toast in bottom-left -->
 	<div
 		class="bottom-6 left-6 gap-3 px-5 py-3 shadow-xl fixed z-50 flex animate-[selva-slideInLeft_0.2s_ease-out] items-center rounded-lg border border-primary/20 bg-primary text-primary-foreground"
 	>

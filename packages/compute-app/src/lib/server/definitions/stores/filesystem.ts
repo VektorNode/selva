@@ -36,8 +36,6 @@ export class FilesystemDefinitionStore
 		this.definitionsPath = definitionsPath;
 	}
 
-	// ── Config helpers ──────────────────────────────────────────────────────
-
 	async readConfig(): Promise<DefinitionsConfig> {
 		const configPath = this.getConfigFilePath();
 		try {
@@ -318,8 +316,6 @@ export class FilesystemDefinitionStore
 		const filePath = path.join(this.guidPath(guid), filename);
 		return fs.readFile(filePath);
 	}
-
-	// ── Private helpers ─────────────────────────────────────────────────────
 
 	private _parseHistoryEntry(filename: string): HistoryEntry | null {
 		const match = filename.match(ARCHIVE_FILENAME_RE);

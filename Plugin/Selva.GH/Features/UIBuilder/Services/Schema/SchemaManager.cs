@@ -74,10 +74,6 @@ public class SchemaManager
 
     #endregion
 
-    // ──────────────────────────────────────────────────────────────
-    //  1. Parameter Scanning
-    // ──────────────────────────────────────────────────────────────
-
     #region Parameter Scanning
 
     /// <summary>
@@ -338,10 +334,6 @@ public class SchemaManager
 
     #endregion
 
-    // ──────────────────────────────────────────────────────────────
-    //  2. Schema Validation
-    // ──────────────────────────────────────────────────────────────
-
     #region Schema Validation
 
     /// <summary>
@@ -528,10 +520,6 @@ public class SchemaManager
     }
 
     #endregion
-
-    // ──────────────────────────────────────────────────────────────
-    //  3. Metadata Change Detection
-    // ──────────────────────────────────────────────────────────────
 
     #region Metadata Change Detection
 
@@ -857,10 +845,6 @@ public class SchemaManager
 
     #endregion
 
-    // ──────────────────────────────────────────────────────────────
-    //  4. Applying Metadata Changes to Schema
-    // ──────────────────────────────────────────────────────────────
-
     #region Apply Metadata Changes
 
     /// <summary>
@@ -934,10 +918,6 @@ public class SchemaManager
     }
 
     #endregion
-
-    // ──────────────────────────────────────────────────────────────
-    //  5. Bidirectional Sync (GH ↔ Schema)
-    // ──────────────────────────────────────────────────────────────
 
     #region Sync
 
@@ -1163,10 +1143,6 @@ public class SchemaManager
     }
 
     #endregion
-
-    // ──────────────────────────────────────────────────────────────
-    //  6. Type Resolution & Layout Helpers
-    // ──────────────────────────────────────────────────────────────
 
     #region Helpers
 

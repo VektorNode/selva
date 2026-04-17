@@ -27,10 +27,6 @@ public static class SchemaBackupService
         return Path.Combine(appData, "Grasshopper", "Selva", "SchemaBackups");
     }
 
-    // ─────────────────────────────────────────────────────────────
-    //  1. Pre-migration backup (called before migration on load)
-    // ─────────────────────────────────────────────────────────────
-
     /// <summary>
     ///     Creates a backup of the raw pre-migration JSON before any deserialization/migration occurs.
     ///     <paramref name="rawJson" /> is the original schema JSON string as stored in the .gh file.
@@ -67,10 +63,6 @@ public static class SchemaBackupService
             return null;
         }
     }
-
-    // ─────────────────────────────────────────────────────────────
-    //  2. Save-triggered history (called every time user saves .gh)
-    // ─────────────────────────────────────────────────────────────
 
     /// <summary>
     ///     Appends a history entry to the schema history file for this document.
@@ -142,10 +134,6 @@ public static class SchemaBackupService
         var path = Path.Combine(backupDirectory, $"history_{documentId:N}.json");
         return File.Exists(path) ? path : null;
     }
-
-    // ─────────────────────────────────────────────────────────────
-    //  Helpers
-    // ─────────────────────────────────────────────────────────────
 
     private static void CleanupOldFiles(string directory, string prefix, int maxFiles)
     {
