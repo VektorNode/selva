@@ -2,13 +2,14 @@
 	import type { UISchema, SupportedTypes } from '../types/generated';
 	import type { ActionButton } from '../types/actionButton';
 	import { ChevronUp } from '@lucide/svelte';
-	import Viewer from './viewer/Viewer.svelte';
+	import Viewer, { type ViewerConfig } from './viewer/Viewer.svelte';
 	import CalculateButton from './ui/CalculateButton.svelte';
 	import SolvingIndicator from './ui/SolvingIndicator.svelte';
 	import TabLayout from './preview/TabLayout.svelte';
 	import CollapsedPanelStrip from './CollapsedPanelStrip.svelte';
 	import * as Resizable from '$lib/components/ui/resizable';
-	import { ParameterPresetManager, Button } from '$lib';
+	import { Button } from '$lib';
+	import ParameterPresetManager from './ParameterPresetManager.svelte';
 
 	const COLLAPSED_WIDTH = 48;
 
@@ -27,6 +28,7 @@
 		panelActions?: ActionButton[];
 		showSaveButton?: boolean;
 		showLoadButton?: boolean;
+		viewerConfig?: ViewerConfig;
 	}
 
 	let {
@@ -43,7 +45,8 @@
 		onLoadValues,
 		panelActions = [],
 		showSaveButton = true,
-		showLoadButton = true
+		showLoadButton = true,
+		viewerConfig = {}
 	}: Props = $props();
 
 	const hasViewer = $derived(
@@ -167,6 +170,7 @@
 					isBlurred={drawerOpen}
 					{drawerOpen}
 					viewerConfig={{
+						...viewerConfig,
 						backgroundColor: schema?.viewerOptions?.backgroundColor,
 						showSceneManager: false
 					}}

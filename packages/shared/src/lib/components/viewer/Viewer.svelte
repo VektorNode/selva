@@ -13,7 +13,7 @@
 	import MeshMetadataDialog from './MeshMetadataDialog.svelte';
 	import * as Resizable from '$lib/components/ui/resizable/index.js';
 
-	interface ViewerConfig {
+	export interface ViewerConfig {
 		showScreenshotButton?: boolean;
 		showFullscreenButton?: boolean;
 		showSceneManager?: boolean;
@@ -47,7 +47,7 @@
 		viewerConfig = {}
 	}: Props = $props();
 
-	const config = { ...defaultViewerConfig, ...viewerConfig };
+	const config = $derived({ ...defaultViewerConfig, ...viewerConfig });
 
 	let canvas: HTMLCanvasElement;
 	let scene: THREE.Scene | null = $state(null);
