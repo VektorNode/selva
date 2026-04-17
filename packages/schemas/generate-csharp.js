@@ -488,22 +488,72 @@ function generateUnionBaseClass(unionName, config) {
 
   let baseProps = '';
 
-  // Generate common properties
-  for (const propName of commonProps) {
-    if (discriminators.includes(propName)) {
-      // Discriminators are abstract properties
-      baseProps += `\n[JsonProperty("${propName}")]
-        public abstract string ${pascalCase(propName)} { get; }
+  // First, add all discriminators as abstract properties
+  for (const disc of discriminators) {
+    baseProps += `
+[JsonProperty("${disc}")]
+        public abstract string ${pascalCase(disc)} { get; }
 `;
-    } else {
-      // Regular common properties
-      const firstVariant = definitions[config.variants[0]];
-      const { properties, required: requiredFields } = resolveDefinition(firstVariant);
-      const prop = properties[propName];
-      const required = requiredFields.includes(propName);
+  }
 
+  // Extract base class from variants that use allOf with a base class
+  // (e.g., InputNumberLayoutItem references LayoutItemBase)
+  let baseClassProps = {};
+  for (const variantName of config.variants) {
+    const variant = definitions[variantName];
+    if (variant && variant.allOf) {
+      for (const item of variant.allOf) {
+        if (item.$ref && item.$ref.includes('ItemBase')) {
+          const refName = item.$ref.replace('#/definitions/', '');
+          const refDef = definitions[refName];
+          if (refDef && refDef.properties) {
+            Object.assign(baseClassProps, refDef.properties);
+          }
+        }
+      }
+    }
+  }
+
+  // Add base class properties (excluding discriminators), using the base schema's required list
+  const baseClassRequired = [];
+  for (const variantName of config.variants) {
+    const variant = definitions[variantName];
+    if (variant?.allOf) {
+      for (const item of variant.allOf) {
+        if (item.$ref && item.$ref.includes('ItemBase')) {
+          const refDef = definitions[item.$ref.replace('#/definitions/', '')];
+          if (refDef?.required) baseClassRequired.push(...refDef.required);
+        }
+      }
+      break;
+    }
+  }
+  for (const [propName, prop] of Object.entries(baseClassProps)) {
+    if (!discriminators.includes(propName)) {
+      const required = baseClassRequired.includes(propName);
       baseProps += `${generateProperty(propName, prop, required)}
 `;
+    }
+  }
+
+  // Then add common properties (excluding discriminators and base properties)
+  const addedProps = new Set(Object.keys(baseClassProps));
+  for (const propName of commonProps) {
+    if (!discriminators.includes(propName) && !addedProps.has(propName)) {
+      // Find the property definition from any variant
+      for (const variantName of config.variants) {
+        const variant = definitions[variantName];
+        if (variant) {
+          const { properties, required: requiredFields } = resolveDefinition(variant);
+          const prop = properties[propName];
+          if (prop) {
+            const required = requiredFields.includes(propName);
+            baseProps += `${generateProperty(propName, prop, required)}
+`;
+            break;
+          }
+        }
+      }
     }
   }
 
@@ -524,17 +574,39 @@ function generateUnionVariantClass(variantName, unionConfig) {
   const { properties, required } = resolveDefinition(def);
   const { commonProps, discriminators, baseClassName } = unionConfig;
 
-  // Get discriminator values
+  // Get discriminator values — use null for discriminators this variant doesn't define
   const discriminatorOverrides = discriminators
     .map((disc) => {
-      const value = properties[disc]?.const || 'unknown';
-      return `public override string ${pascalCase(disc)} => "${value}";`;
+      const value = properties[disc]?.const;
+      return value !== undefined
+        ? `public override string ${pascalCase(disc)} => "${value}";`
+        : `public override string ${pascalCase(disc)} => null;`;
     })
     .join('\n');
 
-  // Get variant-specific properties (not in base class)
+  // Build set of properties to exclude: commonProps, discriminators, and base class props
+  const excludedProps = new Set(commonProps);
+  discriminators.forEach((d) => excludedProps.add(d));
+
+  // Also exclude properties from the base class definition (e.g., LayoutItemBase)
+  for (const variantName of unionConfig.variants) {
+    const variant = definitions[variantName];
+    if (variant?.allOf) {
+      for (const item of variant.allOf) {
+        if (item.$ref && item.$ref.includes('ItemBase')) {
+          const refName = item.$ref.replace('#/definitions/', '');
+          const refDef = definitions[refName];
+          if (refDef?.properties) {
+            Object.keys(refDef.properties).forEach((p) => excludedProps.add(p));
+          }
+        }
+      }
+    }
+  }
+
+  // Get variant-specific properties (not in base class or discriminators)
   const variantProps = Object.entries(properties)
-    .filter(([propName]) => !commonProps.includes(propName))
+    .filter(([propName]) => !excludedProps.has(propName))
     .map(([propName, prop]) => generateProperty(propName, prop, required.includes(propName)))
     .join('\n');
 
@@ -557,15 +629,14 @@ function generateUnionConverter(unionName, config) {
     .map((variantName, index) => {
       const def = definitions[variantName];
       const { properties } = resolveDefinition(def);
+      // Only check discriminators that this variant actually defines as const
       const checks = discriminators
-        .map((disc) => {
-          const value = properties[disc]?.const || 'unknown';
-          return `${disc} == "${value}"`;
-        })
+        .filter((disc) => properties[disc]?.const !== undefined)
+        .map((disc) => `${disc} == "${properties[disc].const}"`)
         .join(' && ');
 
       const prefix = index === 0 ? 'if' : 'else if';
-      return `            ${prefix} (${checks})
+      return `            ${prefix} (${checks || 'true'})
                 item = new ${variantName}();`;
     })
     .join('\n');
@@ -607,14 +678,29 @@ ${conditions}
             // Serialize by writing properties directly to avoid converter recursion
             writer.WriteStartObject();
 
+            ${config.variants
+              .filter((v) => {
+                const def = definitions[v];
+                const { properties } = resolveDefinition(def);
+                return discriminators.some((d) => properties[d]?.const === undefined);
+              })
+              .map((v) => {
+                const def = definitions[v];
+                const { properties } = resolveDefinition(def);
+                const writableProps = Object.keys(properties).filter((p) => properties[p]?.const !== undefined || !discriminators.includes(p));
+                const writes = writableProps.map((p) => `writer.WritePropertyName("${p}"); serializer.Serialize(writer, ((${v})value).${pascalCase(p)});`).join('\n                ');
+                return `if (value is ${v})\n            {\n                ${writes}\n                writer.WriteEndObject();\n                return;\n            }`;
+              })
+              .join('\n            ')}
+
             // Use reflection to get all properties from the concrete type
             var properties = value.GetType().GetProperties();
             foreach (var property in properties)
             {
                 var propValue = property.GetValue(value);
 
-                // Skip null values if configured
-                if (propValue == null && serializer.NullValueHandling == NullValueHandling.Ignore)
+                // Skip null values (discriminator properties return null when not applicable to variant)
+                if (propValue == null)
                     continue;
 
                 // Get JsonProperty attribute - check property and base declaration
@@ -696,17 +782,17 @@ namespace Selva.Core.Constants;
 /// </summary>
 public static class SchemaVersion
 {
-\t/// <summary>
-\t///   Current version of the schema format (MAJOR.MINOR.PATCH).
-\t///   Update this when making breaking or non-breaking changes to the schema.
-\t/// </summary>
-\tpublic static readonly Version CURRENT = new(${major}, ${minor}, ${patch});
+	/// <summary>
+	///   Current version of the schema format (MAJOR.MINOR.PATCH).
+	///   Update this when making breaking or non-breaking changes to the schema.
+	/// </summary>
+	public static readonly Version CURRENT = new(${major}, ${minor}, ${patch});
 
-\t/// <summary>
-\t///   Current version as a string (e.g., "${schemaVersionDefault}").
-\t///   Used for serialization and comparison.
-\t/// </summary>
-\tpublic static readonly string CURRENT_STRING = CURRENT.ToString();
+	/// <summary>
+	///   Current version as a string (e.g., "${schemaVersionDefault}").
+	///   Used for serialization and comparison.
+	/// </summary>
+	public static readonly string CURRENT_STRING = CURRENT.ToString();
 }
 `;
   fs.writeFileSync(schemaVersionPath, schemaVersionContent);

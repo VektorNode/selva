@@ -45,7 +45,6 @@
 
 <Dialog.Root bind:open {onOpenChange}>
 	<Dialog.Content class="min-w-60 max-w-xs p-0 gap-0 w-auto overflow-hidden">
-		<!-- Title bar -->
 		{#if meshName}
 			<div class="px-4 pt-3 pb-2 border-b">
 				<Dialog.Title class="text-sm font-semibold">{meshName}</Dialog.Title>
@@ -54,7 +53,6 @@
 			<Dialog.Title class="sr-only">Object</Dialog.Title>
 		{/if}
 
-		<!-- Metadata rows -->
 		<div class="max-h-80 overflow-y-auto">
 			{#if !metadata || Object.keys(getFilteredMetadata()).length === 0}
 				<p class="px-4 py-3 text-xs text-muted-foreground">No metadata</p>
@@ -117,7 +115,6 @@
 </Dialog.Root>
 
 <style>
-	/* When the viewer is fullscreen (z-10000), lift the dialog portal above it */
 	:global([data-viewer-fullscreen] [data-slot='dialog-content']),
 	:global([data-viewer-fullscreen] [data-slot='dialog-overlay']) {
 		z-index: 10001;

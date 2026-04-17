@@ -8,7 +8,7 @@
 		exportStateAsJson,
 		importStateFromJson
 	} from '../utils/param-exporter';
-	import { Button, Input, Label, Textarea, Dialog, Card } from '../components/ui';
+	import { Button, Input, Label, Textarea, Dialog, Card } from './ui';
 
 	import type { ActionButton } from '../types/actionButton';
 
@@ -138,43 +138,41 @@
 	}
 </script>
 
-<div class="gap-2 mb-2 flex items-center justify-center">
-	{#if showSaveButton}
-		<Button variant="default" size="sm" onclick={openExportDialog}>
-			<Download class="mr-2 h-4 w-4" />
-			Save State
-		</Button>
-	{/if}
+{#if showSaveButton}
+	<Button variant="default" size="sm" onclick={openExportDialog}>
+		<Download class="mr-2 h-4 w-4" />
+		Save State
+	</Button>
+{/if}
 
-	{#if showLoadButton}
-		<Button variant="outline" size="sm" onclick={openLoadDialog}>
-			<Upload class="mr-2 h-4 w-4" />
-			Load State
-		</Button>
-	{/if}
+{#if showLoadButton}
+	<Button variant="outline" size="sm" onclick={openLoadDialog}>
+		<Upload class="mr-2 h-4 w-4" />
+		Load State
+	</Button>
+{/if}
 
-	{#each actions as action (action.id)}
-		<Button
-			variant={action.variant ?? 'outline'}
-			size={action.size ?? 'sm'}
-			onclick={action.onclick}
-		>
-			{#if action.icon}
-				{@const IconComponent = action.icon}
-				<IconComponent class="mr-2 h-4 w-4" />
-			{/if}
-			{action.label}
-		</Button>
-	{/each}
+{#each actions as action (action.id)}
+	<Button
+		variant={action.variant ?? 'outline'}
+		size={action.size ?? 'sm'}
+		onclick={action.onclick}
+	>
+		{#if action.icon}
+			{@const IconComponent = action.icon}
+			<IconComponent class="mr-2 h-4 w-4" />
+		{/if}
+		{action.label}
+	</Button>
+{/each}
 
-	<input
-		bind:this={fileInputRef}
-		type="file"
-		accept=".sps"
-		onchange={handleImport}
-		class="hidden"
-	/>
-</div>
+<input
+	bind:this={fileInputRef}
+	type="file"
+	accept=".sps"
+	onchange={handleImport}
+	class="hidden"
+/>
 
 <!-- Save Dialog -->
 <Dialog.Root bind:open={showExportDialog}>

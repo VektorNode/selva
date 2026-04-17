@@ -10,17 +10,24 @@
 		StateDisplay,
 		Button,
 		AppLayout,
-		ensureSchemaLayoutDefaults,
-		initializeValues,
-		processOutputUpdate,
-		updateParameterMetadata,
-		removeParametersFromValues,
-		formatParameterUpdateMessage,
-		formatMetadataUpdateMessage,
 		createSolvingIndicator,
 		useFooterItem
 	} from 'selva-shared';
-	import { initializeWebSocketSession, getWebSocketPortFromUrl } from '$lib/utils/session';
+	import {
+		initializeValues,
+		processOutputUpdate,
+		updateParameterMetadata,
+		removeParametersFromValues
+	} from '$lib/features/preview/handlers';
+	import {
+		formatParameterUpdateMessage,
+		formatMetadataUpdateMessage
+	} from '$lib/features/preview/notifications';
+	import {
+		initializeWebSocketSession,
+		getWebSocketPortFromUrl,
+		ensureSchemaLayoutDefaults
+	} from '$lib/utils/session';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import { parseMeshBatchObject, SCALE_FACTORS } from 'selva-compute/visualization';
 	import type { MeshBatch } from 'selva-compute/visualization';
