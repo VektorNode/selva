@@ -10,10 +10,8 @@
 	import CollapsedPanelStrip from './CollapsedPanelStrip.svelte';
 	import * as Resizable from '$lib/components/ui/resizable';
 
-	// ── Constants ────────────────────────────────────────────────────────────────
 	const COLLAPSED_WIDTH = 48;
 
-	// ── Props ────────────────────────────────────────────────────────────────────
 	interface Props {
 		schema: UISchema;
 		meshes?: any[];
@@ -48,7 +46,6 @@
 		showLoadButton = true
 	}: Props = $props();
 
-	// ── Layout flags ─────────────────────────────────────────────────────────────
 	const hasViewer = $derived(
 		!!(schema?.viewerOptions?.enableLocal || schema?.viewerOptions?.enableRemote)
 	);
@@ -64,7 +61,6 @@
 	// Two-panel mode: left + right, no viewer — both panels grow to fill full width
 	const isTwoPanelMode = $derived(!hasViewer && hasLeftPanel && hasRightPanel);
 
-	// ── Responsive state ─────────────────────────────────────────────────────────
 	let isMobile = $state(false);
 	let drawerOpen = $state(false);
 
@@ -80,7 +76,6 @@
 		return () => mqMobile.removeEventListener('change', update);
 	});
 
-	// ── Panel collapse state ──────────────────────────────────────────────────────
 	let leftCollapsed = $state(false);
 	let rightCollapsed = $state(false);
 	let leftPaneRef = $state<{ expand: () => void } | null>(null);
@@ -97,7 +92,6 @@
 		await onLoadValues?.();
 	}
 
-	// ── Swipe gesture (mobile drawer) ────────────────────────────────────────────
 	let _touchStartY = 0;
 
 	function onDrawerTouchStart(e: TouchEvent) {
@@ -112,8 +106,6 @@
 		}
 	}
 </script>
-
-<!-- ── Snippets ───────────────────────────────────────────────────────────────── -->
 
 {#snippet panelContent(
 	panelFilter: 'left' | 'right' | undefined,
@@ -145,7 +137,6 @@
 	</div>
 {/snippet}
 
-<!-- ── Root container ─────────────────────────────────────────────────────────── -->
 <div
 	data-layout-root
 	class="min-h-0 sm:flex-row flex flex-1 flex-col overflow-hidden"

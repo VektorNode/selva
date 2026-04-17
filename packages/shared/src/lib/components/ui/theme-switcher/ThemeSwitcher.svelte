@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { themeStore, type Theme } from '$lib/stores/themeStore.svelte';
+	import { themeStore, type Theme } from '$lib/theme/themeStore.svelte';
 	import * as Select from '$lib/components/ui/select';
 	import { Palette } from '@lucide/svelte';
 

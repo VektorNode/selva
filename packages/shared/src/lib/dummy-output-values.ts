@@ -3,7 +3,6 @@ import chart from '$lib/dummy-surface-chart.json';
 import meshData from '$lib/example-mesh.json';
 import { parseMeshBatchObject } from 'selva-compute/visualization';
 
-// ─── 3D mesh ────────────────────────────────────────────────────────────────
 // Create a fallback cube mesh for sync use cases
 export const cubeMesh = new THREE.Mesh(
 	new THREE.BoxGeometry(1, 1, 1, 4, 4, 4),
@@ -31,12 +30,10 @@ export async function getParsedMeshes() {
 	return meshes;
 }
 
-// ─── Plotly figures — add/edit charts here ──────────────────────────────────
 // Paste fig.to_json() output directly as a template literal — no cleanup needed.
 
 const contourPlot = `{"data":[{"z":[[10,10.625,12.5,15.625,20],[5.625,6.25,8.125,11.25,15.625],[2.5,3.125,5.0,8.125,12.5],[0.625,1.25,3.125,6.25,10.625],[0,0.625,2.5,5.625,10]],"type":"contour","colorscale":"Viridis","contours":{"coloring":"heatmap"},"showscale":true}],"layout":{"title":{"text":"Basic Contour Plot"}}}`;
 
-// ─── All output values ───────────────────────────────────────────────────────
 export const dummyOutputValues: Record<string, unknown> = {
 	'output-001': 'Computation completed successfully. All 12 parameters are within bounds.',
 	'output-002': 4827.63,

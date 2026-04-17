@@ -41,8 +41,9 @@ export * from './utils/computeThrottle.svelte';
 export * from './contexts/footerContext.svelte';
 export * from './composables/useFooterItem.svelte';
 
-// Stores
-export { themeStore } from './stores/themeStore.svelte';
+// Theme
+export { themeStore } from './theme/themeStore.svelte';
+export type { Theme } from './theme/themes';
 
 // Utils (cn function)
 export * from './utils';
@@ -56,4 +57,3 @@ export type { SolveFn } from './types/solveFn';
 export { ACCEPTED_FILE_FORMATS } from './types/generated/schema';
 
 // Theme utilities
-export * from './themes';
