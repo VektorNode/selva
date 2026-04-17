@@ -37,7 +37,6 @@ interface InitializeValuesOptions {
 export function initializeValues(options: InitializeValuesOptions): Record<string, unknown> {
 	const values: Record<string, unknown> = {};
 
-	// Initialize with type-based defaults or available parameter defaults
 	options.schema.inputs.forEach((input) => {
 		const availableParam = options.availableParams?.inputs?.find((p) => p.id === input.id);
 		const defaultValue =
@@ -48,12 +47,10 @@ export function initializeValues(options: InitializeValuesOptions): Record<strin
 		values[input.id] = defaultValue;
 	});
 
-	// Initialize outputs to null
 	options.schema.outputs.forEach((output) => {
 		values[output.id] = null;
 	});
 
-	// Override with current values if provided
 	if (options.currentValues && Object.keys(options.currentValues).length > 0) {
 		Object.assign(values, options.currentValues);
 	}
@@ -79,7 +76,6 @@ export function processOutputUpdate(options: OutputUpdateOptions): Record<string
 		)
 	);
 
-	// File outputs are always included
 	const fileOutputUpdates = options.fileOutputs || {};
 	return { ...outputUpdates, ...fileOutputUpdates };
 }

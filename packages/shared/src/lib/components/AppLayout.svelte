@@ -5,10 +5,10 @@
 	import Viewer from './viewer/Viewer.svelte';
 	import CalculateButton from './ui/CalculateButton.svelte';
 	import SolvingIndicator from './ui/SolvingIndicator.svelte';
-	import StateManager from './StateManager.svelte';
 	import TabLayout from './preview/TabLayout.svelte';
 	import CollapsedPanelStrip from './CollapsedPanelStrip.svelte';
 	import * as Resizable from '$lib/components/ui/resizable';
+	import { ParameterPresetManager, Button } from '$lib';
 
 	const COLLAPSED_WIDTH = 48;
 
@@ -24,7 +24,7 @@
 		values: Record<string, unknown>;
 		onValueChange: (id: string, val: SupportedTypes) => void | Promise<void>;
 		onLoadValues?: () => void | Promise<void>;
-		stateManagerActions?: ActionButton[];
+		panelActions?: ActionButton[];
 		showSaveButton?: boolean;
 		showLoadButton?: boolean;
 	}
@@ -41,7 +41,7 @@
 		values = $bindable({}),
 		onValueChange,
 		onLoadValues,
-		stateManagerActions = [],
+		panelActions = [],
 		showSaveButton = true,
 		showLoadButton = true
 	}: Props = $props();
@@ -119,16 +119,30 @@
 		{/if}
 		{#if showStateManager || (!isMobile && showCalculateButton && schema.instanceSolve === false)}
 			<div class="panel-footer px-3">
-				{#if showStateManager}
-					<StateManager
-						{schema}
-						currentValues={values}
-						onLoadValues={handleLoadValues}
-						actions={stateManagerActions}
-						{showSaveButton}
-						{showLoadButton}
-					/>
-				{/if}
+				<div class="flex items-center justify-center gap-2 flex-wrap">
+					{#if showStateManager}
+						<ParameterPresetManager
+							{schema}
+							currentValues={values}
+							onLoadValues={handleLoadValues}
+							{showSaveButton}
+							{showLoadButton}
+						/>
+					{/if}
+					{#each panelActions as action (action.id)}
+						<Button
+							variant={action.variant ?? 'outline'}
+							size={action.size ?? 'sm'}
+							onclick={action.onclick}
+						>
+							{#if action.icon}
+								{@const IconComponent = action.icon}
+								<IconComponent class="mr-2 h-4 w-4" />
+							{/if}
+							{action.label}
+						</Button>
+					{/each}
+				</div>
 				{#if !isMobile && showCalculateButton && schema.instanceSolve === false}
 					<CalculateButton {hasPendingChanges} {hasNeverSolved} {isSolving} {oncalculate} />
 				{/if}
@@ -144,7 +158,6 @@
 	class:relative={isMobile}
 >
 	{#if isMobile}
-		<!-- ═══ MOBILE LAYOUT ══════════════════════════════════════════════════════ -->
 		{#if hasViewer}
 			<div class="min-h-0 flex flex-1 flex-col">
 				<Viewer
@@ -242,124 +255,120 @@
 				{/if}
 			</div>
 		{/if}
+	{:else if !hasViewer && !isTwoPanelMode && hasLeftPanel !== hasRightPanel}
+		<!-- Single centered panel (left-only or right-only), no viewer -->
+		<div class="min-h-0 flex h-full flex-1 justify-center">
+			<div class="min-h-0 flex h-full w-4/5 flex-col">
+				{@render panelContent(
+					hasRightPanel ? 'right' : undefined,
+					hasRightPanel ? requestedRightTabId : requestedLeftTabId,
+					!hasRightPanel,
+					!hasRightPanel
+				)}
+			</div>
+		</div>
 	{:else}
-		<!-- ═══ DESKTOP LAYOUT ═════════════════════════════════════════════════════ -->
+		<div class="min-h-0 flex h-full flex-1">
+			<!-- Left collapsed strip (outside PaneGroup so it has fixed width) -->
+			{#if leftCollapsed && hasSidebar && hasLeftPanel}
+				<CollapsedPanelStrip
+					side="left"
+					tabs={leftTabs}
+					collapsedWidth={COLLAPSED_WIDTH}
+					onExpand={() => leftPaneRef?.expand()}
+					onTabClick={(id) => {
+						requestedLeftTabId = id;
+						leftPaneRef?.expand();
+					}}
+				/>
+			{/if}
 
-		{#if !hasViewer && !isTwoPanelMode && hasLeftPanel !== hasRightPanel}
-			<!-- Single centered panel (left-only or right-only), no viewer -->
-			<div class="min-h-0 flex h-full flex-1 justify-center">
-				<div class="min-h-0 flex h-full w-4/5 flex-col">
-					{@render panelContent(
-						hasRightPanel ? 'right' : undefined,
-						hasRightPanel ? requestedRightTabId : requestedLeftTabId,
-						!hasRightPanel,
-						!hasRightPanel
-					)}
-				</div>
-			</div>
-		{:else}
-			<div class="min-h-0 flex h-full flex-1">
-				<!-- Left collapsed strip (outside PaneGroup so it has fixed width) -->
-				{#if leftCollapsed && hasSidebar && hasLeftPanel}
-					<CollapsedPanelStrip
-						side="left"
-						tabs={leftTabs}
-						collapsedWidth={COLLAPSED_WIDTH}
-						onExpand={() => leftPaneRef?.expand()}
-						onTabClick={(id) => {
-							requestedLeftTabId = id;
-							leftPaneRef?.expand();
-						}}
+			<Resizable.PaneGroup
+				direction="horizontal"
+				autoSaveId="selva-layout-{layoutKey}"
+				class="min-h-0 flex-1"
+			>
+				<!-- Left pane -->
+				{#if hasLeftPanel}
+					<Resizable.Pane
+						bind:this={leftPaneRef}
+						order={1}
+						defaultSize={isTwoPanelMode ? 50 : hasViewer && hasRightPanel ? 22 : 30}
+						minSize={15}
+						maxSize={45}
+						collapsible
+						collapsedSize={0}
+						onCollapse={() => (leftCollapsed = true)}
+						onExpand={() => (leftCollapsed = false)}
+					>
+						<div
+							class="min-h-0 flex h-full flex-col {isViewerFullscreen || leftCollapsed
+								? 'hidden'
+								: ''}"
+						>
+							{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId)}
+						</div>
+					</Resizable.Pane>
+					<Resizable.Handle
+						class={leftCollapsed ? 'pointer-events-none hidden' : 'bg-transparent'}
 					/>
 				{/if}
 
-				<Resizable.PaneGroup
-					direction="horizontal"
-					autoSaveId="selva-layout-{layoutKey}"
-					class="min-h-0 flex-1"
-				>
-					<!-- Left pane -->
-					{#if hasLeftPanel}
-						<Resizable.Pane
-							bind:this={leftPaneRef}
-							order={1}
-							defaultSize={isTwoPanelMode ? 50 : hasViewer && hasRightPanel ? 22 : 30}
-							minSize={15}
-							maxSize={45}
-							collapsible
-							collapsedSize={0}
-							onCollapse={() => (leftCollapsed = true)}
-							onExpand={() => (leftCollapsed = false)}
-						>
-							<div
-								class="min-h-0 flex h-full flex-col {isViewerFullscreen || leftCollapsed
-									? 'hidden'
-									: ''}"
-							>
-								{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId)}
-							</div>
-						</Resizable.Pane>
-						<Resizable.Handle
-							class={leftCollapsed ? 'pointer-events-none hidden' : 'bg-transparent'}
+				<!-- Viewer pane -->
+				{#if hasViewer}
+					<Resizable.Pane order={2} minSize={20} class="min-h-0 mx-1 flex flex-col">
+						<Viewer
+							{meshes}
+							bind:isFullscreen={isViewerFullscreen}
+							{isSolving}
+							viewerConfig={{
+								backgroundColor: schema?.viewerOptions?.backgroundColor
+							}}
 						/>
-					{/if}
-
-					<!-- Viewer pane -->
-					{#if hasViewer}
-						<Resizable.Pane order={2} minSize={20} class="min-h-0 mx-1 flex flex-col">
-							<Viewer
-								{meshes}
-								bind:isFullscreen={isViewerFullscreen}
-								{isSolving}
-								viewerConfig={{
-									backgroundColor: schema?.viewerOptions?.backgroundColor
-								}}
-							/>
-						</Resizable.Pane>
-					{/if}
-
-					<!-- Right pane -->
-					{#if hasRightPanel}
-						<Resizable.Handle
-							class={rightCollapsed ? ' pointer-events-none hidden' : 'bg-transparent'}
-						/>
-						<Resizable.Pane
-							bind:this={rightPaneRef}
-							order={3}
-							defaultSize={isTwoPanelMode ? 50 : 25}
-							minSize={15}
-							maxSize={45}
-							collapsible
-							collapsedSize={0}
-							onCollapse={() => (rightCollapsed = true)}
-							onExpand={() => (rightCollapsed = false)}
-						>
-							<div
-								class="min-h-0 flex h-full flex-col {isViewerFullscreen || rightCollapsed
-									? 'hidden'
-									: ''}"
-							>
-								{@render panelContent('right', requestedRightTabId, !hasLeftPanel, !hasLeftPanel)}
-							</div>
-						</Resizable.Pane>
-					{/if}
-				</Resizable.PaneGroup>
-
-				<!-- Right collapsed strip -->
-				{#if rightCollapsed && hasRightPanel}
-					<CollapsedPanelStrip
-						side="right"
-						tabs={rightTabs}
-						collapsedWidth={COLLAPSED_WIDTH}
-						onExpand={() => rightPaneRef?.expand()}
-						onTabClick={(id) => {
-							requestedRightTabId = id;
-							rightPaneRef?.expand();
-						}}
-					/>
+					</Resizable.Pane>
 				{/if}
-			</div>
-		{/if}
+
+				<!-- Right pane -->
+				{#if hasRightPanel}
+					<Resizable.Handle
+						class={rightCollapsed ? ' pointer-events-none hidden' : 'bg-transparent'}
+					/>
+					<Resizable.Pane
+						bind:this={rightPaneRef}
+						order={3}
+						defaultSize={isTwoPanelMode ? 50 : 25}
+						minSize={15}
+						maxSize={45}
+						collapsible
+						collapsedSize={0}
+						onCollapse={() => (rightCollapsed = true)}
+						onExpand={() => (rightCollapsed = false)}
+					>
+						<div
+							class="min-h-0 flex h-full flex-col {isViewerFullscreen || rightCollapsed
+								? 'hidden'
+								: ''}"
+						>
+							{@render panelContent('right', requestedRightTabId, !hasLeftPanel, !hasLeftPanel)}
+						</div>
+					</Resizable.Pane>
+				{/if}
+			</Resizable.PaneGroup>
+
+			<!-- Right collapsed strip -->
+			{#if rightCollapsed && hasRightPanel}
+				<CollapsedPanelStrip
+					side="right"
+					tabs={rightTabs}
+					collapsedWidth={COLLAPSED_WIDTH}
+					onExpand={() => rightPaneRef?.expand()}
+					onTabClick={(id) => {
+						requestedRightTabId = id;
+						rightPaneRef?.expand();
+					}}
+				/>
+			{/if}
+		</div>
 	{/if}
 </div>
 
@@ -384,6 +393,9 @@
 		flex-shrink: 0;
 		padding-top: 1.5rem;
 		padding-bottom: 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
 	}
 
 	.drawer-container {

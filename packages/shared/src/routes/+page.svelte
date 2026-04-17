@@ -81,17 +81,6 @@
 			bind:values
 			onValueChange={handleValueChange}
 			oncalculate={handleCalculate}
-			showSaveButton={false}
-			showLoadButton={false}
-			stateManagerActions={[
-				{
-					id: 'reset',
-					label: 'Reset values',
-					onclick: () => {
-						console.info('Resetting values to default...');
-					}
-				}
-			]}
 			onLoadValues={async () => {
 				if (schema?.instanceSolve !== false) {
 					console.error('Performing solve on load values...');

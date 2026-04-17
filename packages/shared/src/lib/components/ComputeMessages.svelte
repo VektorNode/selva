@@ -38,7 +38,6 @@
 </script>
 
 {#if hasMessages}
-	<!-- Floating Indicator Badge (hidden on mobile) -->
 	<Dialog.Root bind:open>
 		<Dialog.Trigger
 			class="bottom-12 right-2 sm:bottom-4 sm:right-4 sm:block fixed z-100 hidden focus:outline-none"
@@ -85,7 +84,6 @@
 			</Dialog.Header>
 
 			<div class="space-y-3 pr-2 overflow-y-auto" style="max-height: calc(80vh - 180px);">
-				<!-- Errors Section -->
 				{#if errors.length > 0}
 					<Collapsible.Root bind:open={showErrors}>
 						<div class="overflow-hidden rounded-lg border border-destructive bg-card">
@@ -126,7 +124,6 @@
 					</Collapsible.Root>
 				{/if}
 
-				<!-- Warnings Section -->
 				{#if warnings.length > 0}
 					<Collapsible.Root bind:open={showWarnings}>
 						<div class="overflow-hidden rounded-lg border border-warning/50 bg-card">
