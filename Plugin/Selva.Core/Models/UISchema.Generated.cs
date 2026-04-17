@@ -607,6 +607,12 @@ namespace Selva.Core.Models
     [JsonConverter(typeof(LayoutItemBaseConverter))]
     public abstract class LayoutItemBase
     {
+[JsonProperty("type")]
+        public abstract string Type { get; }
+
+[JsonProperty("widgetType")]
+        public abstract string WidgetType { get; }
+
 /// <summary>
 /// Unique identifier for this layout item in the UI tree (not the parameter ID)
 /// </summary>
@@ -639,12 +645,6 @@ namespace Selva.Core.Models
 
         [JsonProperty("visibilityCondition", NullValueHandling = NullValueHandling.Ignore)]
         public VisibilityCondition VisibilityCondition { get; set; }
-
-[JsonProperty("type")]
-        public abstract string Type { get; }
-
-[JsonProperty("widgetType")]
-        public abstract string WidgetType { get; }
 
     }
 
@@ -732,9 +732,6 @@ public override string WidgetType => "chart";
         public ChartWidgetConfig Config { get; set; }
     }
 
-/// <summary>
-/// A full-width line break that forces subsequent items onto a new grid row
-/// </summary>
 public class LineBreakLayoutItem : LayoutItemBase
     {
 public override string Type => "linebreak";
@@ -791,15 +788,15 @@ public override string Type => "flat";
 var type = jsonObject["type"]?.Value<string>();
 var widgetType = jsonObject["widgetType"]?.Value<string>();
 
-            if (string.IsNullOrEmpty(type))
+            // Check if all discriminators are null or empty
+            var allEmpty = string.IsNullOrEmpty(type) && string.IsNullOrEmpty(widgetType);
+            if (allEmpty)
             {
-                throw new JsonSerializationException($"LayoutItem discriminator 'type' is missing or empty. JSON: {jsonObject.ToString()}");
+                throw new JsonSerializationException($"LayoutItem discriminator fields are missing or empty. JSON: {jsonObject.ToString()}");
             }
 
             LayoutItemBase item;
-            if (type == "linebreak")
-                item = new LineBreakLayoutItem();
-            else if (type == "input" && widgetType == "number")
+            if (type == "input" && widgetType == "number")
                 item = new InputNumberLayoutItem();
             else if (type == "input" && widgetType == "text")
                 item = new InputTextLayoutItem();
@@ -819,6 +816,8 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
                 item = new OutputFileLayoutItem();
             else if (type == "output" && widgetType == "chart")
                 item = new OutputChartLayoutItem();
+            else if (type == "linebreak")
+                item = new LineBreakLayoutItem();
             else
                 throw new JsonSerializationException($"Unknown LayoutItem variant: {type}/{widgetType}. JSON: {jsonObject.ToString()}");
 
@@ -828,15 +827,13 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
 
         public override void WriteJson(JsonWriter writer, LayoutItemBase value, JsonSerializer serializer)
         {
+            // Serialize by writing properties directly to avoid converter recursion
             writer.WriteStartObject();
 
-            // LineBreak items only need id and type
             if (value is LineBreakLayoutItem)
             {
-                writer.WritePropertyName("id");
-                serializer.Serialize(writer, value.Id);
-                writer.WritePropertyName("type");
-                serializer.Serialize(writer, value.Type);
+                writer.WritePropertyName("id"); serializer.Serialize(writer, ((LineBreakLayoutItem)value).Id);
+                writer.WritePropertyName("type"); serializer.Serialize(writer, ((LineBreakLayoutItem)value).Type);
                 writer.WriteEndObject();
                 return;
             }
@@ -847,8 +844,8 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
             {
                 var propValue = property.GetValue(value);
 
-                // Skip null values if configured
-                if (propValue == null && serializer.NullValueHandling == NullValueHandling.Ignore)
+                // Skip null values (discriminator properties return null when not applicable to variant)
+                if (propValue == null)
                     continue;
 
                 // Get JsonProperty attribute - check property and base declaration
@@ -911,14 +908,16 @@ var type = jsonObject["type"]?.Value<string>();
             // Serialize by writing properties directly to avoid converter recursion
             writer.WriteStartObject();
 
+            
+
             // Use reflection to get all properties from the concrete type
             var properties = value.GetType().GetProperties();
             foreach (var property in properties)
             {
                 var propValue = property.GetValue(value);
 
-                // Skip null values if configured
-                if (propValue == null && serializer.NullValueHandling == NullValueHandling.Ignore)
+                // Skip null values (discriminator properties return null when not applicable to variant)
+                if (propValue == null)
                     continue;
 
                 // Get JsonProperty attribute - check property and base declaration
