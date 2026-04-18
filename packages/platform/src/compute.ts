@@ -52,4 +52,3 @@ export interface IComputeServerProvider {
 	/** Replace the full config atomically. Used by the admin UI. */
 	saveConfig(config: ComputeConfig): Promise<void>;
 }
-

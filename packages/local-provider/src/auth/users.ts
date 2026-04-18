@@ -32,13 +32,8 @@ const PBKDF2_DIGEST = 'sha256';
 export async function hashPassword(password: string): Promise<string> {
 	const salt = crypto.randomBytes(16).toString('base64url');
 	const hash = await new Promise<Buffer>((resolve, reject) =>
-		crypto.pbkdf2(
-			password,
-			salt,
-			PBKDF2_ITERATIONS,
-			PBKDF2_KEYLEN,
-			PBKDF2_DIGEST,
-			(err, key) => (err ? reject(err) : resolve(key))
+		crypto.pbkdf2(password, salt, PBKDF2_ITERATIONS, PBKDF2_KEYLEN, PBKDF2_DIGEST, (err, key) =>
+			err ? reject(err) : resolve(key)
 		)
 	);
 	return `pbkdf2:${PBKDF2_DIGEST}:${PBKDF2_ITERATIONS}:${salt}:${hash.toString('base64url')}`;
@@ -88,7 +83,12 @@ export interface LocalUserMetaProvider {
 	findByEmail(email: string): Promise<StoredUser | null>;
 	findById(id: string): Promise<StoredUser | null>;
 	listUsers(): Promise<Omit<StoredUser, 'passwordHash'>[]>;
-	createUser(email: string, password: string, role: UserRole, displayName?: string): Promise<StoredUser>;
+	createUser(
+		email: string,
+		password: string,
+		role: UserRole,
+		displayName?: string
+	): Promise<StoredUser>;
 	updateRole(id: string, role: UserRole): Promise<void>;
 	deleteUser(id: string): Promise<void>;
 }

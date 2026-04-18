@@ -24,7 +24,15 @@
 		onSubmit?: (data: FormData) => Promise<void>;
 	}
 
-	let { open = false, isAdding = false, projects = [], defaultProjectId, computeServers = [], onOpenChange, onSubmit }: Props = $props();
+	let {
+		open = false,
+		isAdding = false,
+		projects = [],
+		defaultProjectId,
+		computeServers = [],
+		onOpenChange,
+		onSubmit
+	}: Props = $props();
 
 	// Form state
 	let displayName = $state('');
@@ -168,7 +176,11 @@
 		<div class="space-y-4">
 			<!-- Project & compute server -->
 			{#if projects.length > 1 || computeServers.length > 1}
-				<div class="grid gap-3 {projects.length > 1 && computeServers.length > 1 ? 'sm:grid-cols-2' : ''}">
+				<div
+					class="grid gap-3 {projects.length > 1 && computeServers.length > 1
+						? 'sm:grid-cols-2'
+						: ''}"
+				>
 					{#if projects.length > 1}
 						<div class="space-y-1">
 							<Label for="new-project">Project</Label>

@@ -39,13 +39,7 @@
 
 			<div class="space-y-2">
 				<Label for="password">Password</Label>
-				<Input
-					id="password"
-					name="password"
-					type="password"
-					required
-					placeholder="Password"
-				/>
+				<Input id="password" name="password" type="password" required placeholder="Password" />
 			</div>
 
 			<Button type="submit" class="w-full">Sign in</Button>

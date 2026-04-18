@@ -18,9 +18,7 @@
 	];
 
 	const isActive = (href: string) =>
-		href === '/admin'
-			? page.url.pathname === '/admin'
-			: page.url.pathname.startsWith(href);
+		href === '/admin' ? page.url.pathname === '/admin' : page.url.pathname.startsWith(href);
 </script>
 
 {#if page.url.pathname.startsWith('/admin/login')}
@@ -43,7 +41,7 @@
 						href={item.href}
 						class="border-b-2 px-3 py-3 text-sm font-medium transition-colors {isActive(item.href)
 							? 'border-primary text-foreground'
-							: 'border-transparent text-muted-foreground hover:text-foreground'}"
+							: 'text-muted-foreground hover:text-foreground border-transparent'}"
 					>
 						{item.label}
 					</a>

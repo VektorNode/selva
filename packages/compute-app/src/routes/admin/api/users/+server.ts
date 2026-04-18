@@ -11,7 +11,10 @@ export const GET: RequestHandler = async ({ locals }) => {
 	requirePlatformAdmin(locals);
 	const users = await getAuthProvider().listUsers();
 	if (users === null) {
-		throw error(501, 'User management is not supported in single-password mode. Configure a users.json path to enable it.');
+		throw error(
+			501,
+			'User management is not supported in single-password mode. Configure a users.json path to enable it.'
+		);
 	}
 	return json(users);
 };

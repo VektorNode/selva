@@ -153,11 +153,7 @@
 {/if}
 
 {#each actions as action (action.id)}
-	<Button
-		variant={action.variant ?? 'outline'}
-		size={action.size ?? 'sm'}
-		onclick={action.onclick}
-	>
+	<Button variant={action.variant ?? 'outline'} size={action.size ?? 'sm'} onclick={action.onclick}>
 		{#if action.icon}
 			{@const IconComponent = action.icon}
 			<IconComponent class="mr-2 h-4 w-4" />
@@ -166,13 +162,7 @@
 	</Button>
 {/each}
 
-<input
-	bind:this={fileInputRef}
-	type="file"
-	accept=".sps"
-	onchange={handleImport}
-	class="hidden"
-/>
+<input bind:this={fileInputRef} type="file" accept=".sps" onchange={handleImport} class="hidden" />
 
 <!-- Save Dialog -->
 <Dialog.Root bind:open={showExportDialog}>

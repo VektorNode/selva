@@ -164,9 +164,7 @@ export class LocalOrganizationProvider implements IOrganizationProvider {
 
 	async removeOrgMember(orgId: string, userId: string): Promise<void> {
 		const store = await this.getStore();
-		store.orgMembers = store.orgMembers.filter(
-			(m) => !(m.orgId === orgId && m.userId === userId)
-		);
+		store.orgMembers = store.orgMembers.filter((m) => !(m.orgId === orgId && m.userId === userId));
 		await this.writeStore(store);
 	}
 
@@ -229,9 +227,7 @@ export class LocalOrganizationProvider implements IOrganizationProvider {
 		role: ProjectRole
 	): Promise<void> {
 		const store = await this.getStore();
-		const m = store.projectMembers.find(
-			(m) => m.projectId === projectId && m.userId === userId
-		);
+		const m = store.projectMembers.find((m) => m.projectId === projectId && m.userId === userId);
 		if (!m) throw new ProviderError(`Project member '${userId}' not found`, 404);
 		m.role = role;
 		await this.writeStore(store);

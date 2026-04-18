@@ -16,15 +16,28 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	const patch: Record<string, unknown> = {};
 	if (typeof name === 'string' && name.trim()) {
 		patch.name = name.trim();
-		patch.slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+		patch.slug = name
+			.trim()
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-|-$/g, '');
 	}
-	if (description !== undefined) patch.description = typeof description === 'string' ? description : undefined;
+	if (description !== undefined)
+		patch.description = typeof description === 'string' ? description : undefined;
 	if (typeof visibility === 'string' && ['public', 'org', 'private'].includes(visibility)) {
 		patch.visibility = visibility;
 	}
 
 	try {
-		await getOrganizationProvider().updateProject(id, patch as { name?: string; slug?: string; description?: string; visibility?: ProjectVisibility });
+		await getOrganizationProvider().updateProject(
+			id,
+			patch as {
+				name?: string;
+				slug?: string;
+				description?: string;
+				visibility?: ProjectVisibility;
+			}
+		);
 		return json({ success: true });
 	} catch (err) {
 		throwProviderError(err, 'Failed to update project');

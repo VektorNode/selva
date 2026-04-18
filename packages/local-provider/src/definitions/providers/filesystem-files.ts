@@ -6,7 +6,10 @@ import type {
 	DefinitionFileExt,
 	HistoryEntry
 } from '@selva/platform/definitions';
-import { GH_EXTENSIONS, COVER_IMAGE_EXTENSIONS as ALLOWED_IMAGE_EXTENSIONS } from '@selva/platform/definitions';
+import {
+	GH_EXTENSIONS,
+	COVER_IMAGE_EXTENSIONS as ALLOWED_IMAGE_EXTENSIONS
+} from '@selva/platform/definitions';
 
 export class LocalDefinitionFileProvider implements IDefinitionFileProvider {
 	private readonly definitionsPath: string;
