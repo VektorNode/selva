@@ -1,6 +1,11 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, RequestEvent } from './$types';
-import { createSession, checkRateLimit, recordFailedAttempt, clearRateLimit } from '$lib/server/admin-auth.server';
+import {
+	createSession,
+	checkRateLimit,
+	recordFailedAttempt,
+	clearRateLimit
+} from '$lib/server/admin-auth.server';
 import { getAuthProvider } from '$lib/server/auth.server';
 
 export const actions = {

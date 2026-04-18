@@ -13,14 +13,9 @@ export interface ProjectWithMembers extends Project {
 export const load: PageServerLoad = async () => {
 	try {
 		const orgs = getOrganizationProvider();
-		const [orgList, users] = await Promise.all([
-			orgs.listOrgs(),
-			getAuthProvider().listUsers()
-		]);
+		const [orgList, users] = await Promise.all([orgs.listOrgs(), getAuthProvider().listUsers()]);
 
-		const allProjects = (
-			await Promise.all(orgList.map((org) => orgs.listProjects(org.id)))
-		).flat();
+		const allProjects = (await Promise.all(orgList.map((org) => orgs.listProjects(org.id)))).flat();
 
 		const projects: ProjectWithMembers[] = await Promise.all(
 			allProjects.map(async (p) => ({

@@ -39,11 +39,12 @@ export class LocalAuthProvider implements IAuthProvider {
 
 	static fromEnv(env: Record<string, string | undefined>): LocalAuthProvider {
 		const hmacSecret = env.SESSION_SECRET || env.ADMIN_PASSWORD;
-		if (!hmacSecret) throw new Error('Missing required env var: SESSION_SECRET (or ADMIN_PASSWORD for dev)');
+		if (!hmacSecret)
+			throw new Error('Missing required env var: SESSION_SECRET (or ADMIN_PASSWORD for dev)');
 		return new LocalAuthProvider({
 			hmacSecret,
 			usersFilePath: env.DATA_PATH ? path.join(env.DATA_PATH, 'users.json') : undefined,
-			fallbackAdminPassword: env.ADMIN_PASSWORD,
+			fallbackAdminPassword: env.ADMIN_PASSWORD
 		});
 	}
 
@@ -99,10 +100,20 @@ export class LocalAuthProvider implements IAuthProvider {
 	async listUsers(): Promise<AuthUser[] | null> {
 		if (!this.users) return null;
 		const users = await this.users.listUsers();
-		return users.map((u) => ({ id: u.id, email: u.email, displayName: u.displayName, role: u.role }));
+		return users.map((u) => ({
+			id: u.id,
+			email: u.email,
+			displayName: u.displayName,
+			role: u.role
+		}));
 	}
 
-	async createUser(email: string, password: string, role: UserRole, displayName?: string): Promise<AuthUser | null> {
+	async createUser(
+		email: string,
+		password: string,
+		role: UserRole,
+		displayName?: string
+	): Promise<AuthUser | null> {
 		if (!this.users) return null;
 		const u = await this.users.createUser(email, password, role, displayName);
 		return { id: u.id, email: u.email, displayName: u.displayName, role: u.role };

@@ -57,7 +57,14 @@
 		return `${fallback} (${response.status})`;
 	}
 
-	async function saveDefinition(guid: string, patch: Partial<DefinitionRecord['meta']> & { maxHistory?: number; projectId?: string; computeServerId?: string | null }) {
+	async function saveDefinition(
+		guid: string,
+		patch: Partial<DefinitionRecord['meta']> & {
+			maxHistory?: number;
+			projectId?: string;
+			computeServerId?: string | null;
+		}
+	) {
 		savingDefinition[guid] = true;
 		try {
 			const response = await fetch(`/admin/api/definitions/${guid}`, {
@@ -140,10 +147,10 @@
 				<div class="flex gap-1 border-b">
 					{#each data.projects as project (project.id)}
 						<button
-							class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
+							class="-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors
 								{activeProjectId === project.id
 								? 'border-primary text-foreground'
-								: 'border-transparent text-muted-foreground hover:text-foreground'}"
+								: 'text-muted-foreground hover:text-foreground border-transparent'}"
 							onclick={() => (activeProjectId = project.id)}
 						>
 							{project.name}
@@ -157,7 +164,9 @@
 
 			<!-- Grid -->
 			{#if visibleRecords.length === 0}
-				<div class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center">
+				<div
+					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
+				>
 					<p class="text-sm font-medium">No definitions found</p>
 					<p class="text-muted-foreground mt-1 text-sm">
 						{searchQuery ? 'Try adjusting your search' : 'Add your first definition to get started'}
@@ -207,7 +216,9 @@
 			computeServers={data.computeServers}
 			history={record.history}
 			savingDefinition={savingDefinition[record.guid]}
-			onOpenChange={(o) => { if (!o) editingDefinition = null; }}
+			onOpenChange={(o) => {
+				if (!o) editingDefinition = null;
+			}}
 			onSave={saveDefinition}
 		/>
 	{/if}

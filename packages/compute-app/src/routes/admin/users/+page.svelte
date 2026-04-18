@@ -113,7 +113,10 @@
 					</Card.Description>
 				</div>
 				{#if data.users !== null}
-					<Button onclick={() => (showAddForm = !showAddForm)} variant={showAddForm ? 'outline' : 'default'}>
+					<Button
+						onclick={() => (showAddForm = !showAddForm)}
+						variant={showAddForm ? 'outline' : 'default'}
+					>
 						<Plus class="mr-2 h-4 w-4" />
 						Add User
 					</Button>
@@ -127,12 +130,7 @@
 				<div class="bg-muted/40 space-y-3 rounded-lg border p-4">
 					<p class="text-sm font-medium">New User</p>
 					<div class="grid gap-3 sm:grid-cols-3">
-						<Input
-							type="email"
-							placeholder="Email"
-							bind:value={newEmail}
-							class="sm:col-span-1"
-						/>
+						<Input type="email" placeholder="Email" bind:value={newEmail} class="sm:col-span-1" />
 						<Input
 							type="password"
 							placeholder="Password (min 8 chars)"
@@ -159,15 +157,20 @@
 
 			<!-- User list -->
 			{#if data.users === null}
-				<div class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center">
+				<div
+					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
+				>
 					<ShieldCheck class="text-muted-foreground mb-3 h-8 w-8" />
 					<p class="text-sm font-medium">Single-password mode active</p>
 					<p class="text-muted-foreground mt-1 text-sm">
-						Set a <code class="text-xs">usersFilePath</code> in your <code class="text-xs">selva.config.ts</code> to manage multiple users.
+						Set a <code class="text-xs">usersFilePath</code> in your
+						<code class="text-xs">selva.config.ts</code> to manage multiple users.
 					</p>
 				</div>
 			{:else if data.users.length === 0}
-				<div class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center">
+				<div
+					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
+				>
 					<p class="text-sm font-medium">No users yet</p>
 					<p class="text-muted-foreground mt-1 text-sm">Add your first user above.</p>
 				</div>
@@ -183,7 +186,8 @@
 								<select
 									value={user.role}
 									disabled={updatingRoleId === user.id}
-									onchange={(e) => updateRole(user.id, (e.target as HTMLSelectElement).value as UserRole)}
+									onchange={(e) =>
+										updateRole(user.id, (e.target as HTMLSelectElement).value as UserRole)}
 									class="border-input bg-background rounded-md border px-2 py-1 text-xs disabled:opacity-50"
 								>
 									{#each ROLES as role (role.value)}

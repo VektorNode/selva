@@ -7,8 +7,18 @@ import type { SelvaConfig, SelvaConfigFactory } from '@selva/platform/config';
 const _raw = rawConfig as SelvaConfig | SelvaConfigFactory;
 export const providers: SelvaConfig = typeof _raw === 'function' ? _raw(env) : _raw;
 
-export function getAuthProvider() { return providers.auth; }
-export function getOrganizationProvider() { return providers.organizations; }
-export function getDefinitionFiles() { return providers.definitionFiles; }
-export function getDefinitionMeta() { return providers.definitionMeta; }
-export function getComputeServerProvider() { return providers.compute; }
+export function getAuthProvider() {
+	return providers.auth;
+}
+export function getOrganizationProvider() {
+	return providers.organizations;
+}
+export function getDefinitionFiles() {
+	return providers.definitionFiles;
+}
+export function getDefinitionMeta() {
+	return providers.definitionMeta;
+}
+export function getComputeServerProvider() {
+	return providers.compute;
+}

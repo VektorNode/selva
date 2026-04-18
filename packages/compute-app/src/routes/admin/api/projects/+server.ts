@@ -23,14 +23,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!body || typeof body !== 'object') throw error(400, 'Invalid request body');
 
 	const { name, description, visibility } = body as Record<string, unknown>;
-	if (!name || typeof name !== 'string' || !name.trim()) throw error(400, 'Project name is required');
+	if (!name || typeof name !== 'string' || !name.trim())
+		throw error(400, 'Project name is required');
 
 	const orgs = getOrganizationProvider();
 	const [org] = await orgs.listOrgs();
 	if (!org) throw error(500, 'No organization configured');
 
 	const now = new Date().toISOString();
-	const slug = (name as string).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+	const slug = (name as string)
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-|-$/g, '');
 
 	const project: Project = {
 		id: randomUUID(),
@@ -38,7 +43,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		name: (name as string).trim(),
 		slug,
 		description: typeof description === 'string' ? description : undefined,
-		visibility: (['public', 'org', 'private'].includes(visibility as string) ? visibility : 'public') as Project['visibility'],
+		visibility: (['public', 'org', 'private'].includes(visibility as string)
+			? visibility
+			: 'public') as Project['visibility'],
 		ownerId: locals.user!.id,
 		createdAt: now,
 		updatedAt: now

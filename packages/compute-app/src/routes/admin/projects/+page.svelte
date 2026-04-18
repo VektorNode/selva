@@ -73,7 +73,11 @@
 			const res = await fetch('/admin/api/projects', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-				body: JSON.stringify({ name: newName, description: newDescription, visibility: newVisibility })
+				body: JSON.stringify({
+					name: newName,
+					description: newDescription,
+					visibility: newVisibility
+				})
 			});
 			if (res.ok) {
 				toast.success(`Project "${newName}" created`);
@@ -99,7 +103,11 @@
 			const res = await fetch(`/admin/api/projects/${id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-				body: JSON.stringify({ name: editName, description: editDescription, visibility: editVisibility })
+				body: JSON.stringify({
+					name: editName,
+					description: editDescription,
+					visibility: editVisibility
+				})
 			});
 			if (res.ok) {
 				toast.success('Project saved');
@@ -118,7 +126,10 @@
 
 	async function deleteProject(id: string) {
 		try {
-			const res = await fetch(`/admin/api/projects/${id}`, { method: 'DELETE', headers: { Accept: 'application/json' } });
+			const res = await fetch(`/admin/api/projects/${id}`, {
+				method: 'DELETE',
+				headers: { Accept: 'application/json' }
+			});
 			if (res.ok) {
 				toast.success('Project deleted');
 				await invalidateAll();
@@ -179,7 +190,10 @@
 	async function removeMember(projectId: string, userId: string) {
 		removingMember = `${projectId}:${userId}`;
 		try {
-			const res = await fetch(`/admin/api/projects/${projectId}/members/${userId}`, { method: 'DELETE', headers: { Accept: 'application/json' } });
+			const res = await fetch(`/admin/api/projects/${projectId}/members/${userId}`, {
+				method: 'DELETE',
+				headers: { Accept: 'application/json' }
+			});
 			if (res.ok) {
 				await invalidateAll();
 			} else {
@@ -213,7 +227,10 @@
 						{data.projects.length} project{data.projects.length === 1 ? '' : 's'}
 					</Card.Description>
 				</div>
-				<Button onclick={() => (showAddForm = !showAddForm)} variant={showAddForm ? 'outline' : 'default'}>
+				<Button
+					onclick={() => (showAddForm = !showAddForm)}
+					variant={showAddForm ? 'outline' : 'default'}
+				>
 					<Plus class="mr-2 h-4 w-4" />
 					New Project
 				</Button>
@@ -257,7 +274,9 @@
 
 			<!-- Project list -->
 			{#if data.projects.length === 0}
-				<div class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center">
+				<div
+					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
+				>
 					<p class="text-sm font-medium">No projects yet</p>
 				</div>
 			{:else}
@@ -388,7 +407,12 @@
 												</span>
 												<select
 													value={member.role}
-													onchange={(e) => updateMemberRole(project.id, member.userId, (e.target as HTMLSelectElement).value as ProjectRole)}
+													onchange={(e) =>
+														updateMemberRole(
+															project.id,
+															member.userId,
+															(e.target as HTMLSelectElement).value as ProjectRole
+														)}
 													class="border-input bg-background rounded-md border px-2 py-0.5 text-xs"
 												>
 													{#each ROLES as r (r.value)}
@@ -416,7 +440,12 @@
 </div>
 
 <!-- Delete project confirmation -->
-<AlertDialog.Root open={!!deletingProjectId} onOpenChange={(o) => { if (!o) deletingProjectId = null; }}>
+<AlertDialog.Root
+	open={!!deletingProjectId}
+	onOpenChange={(o) => {
+		if (!o) deletingProjectId = null;
+	}}
+>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>Delete Project?</AlertDialog.Title>

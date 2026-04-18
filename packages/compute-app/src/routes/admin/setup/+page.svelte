@@ -41,7 +41,13 @@
 
 			<div class="space-y-2">
 				<Label for="password">Password</Label>
-				<Input id="password" name="password" type="password" required placeholder="Min. 8 characters" />
+				<Input
+					id="password"
+					name="password"
+					type="password"
+					required
+					placeholder="Min. 8 characters"
+				/>
 			</div>
 
 			<div class="space-y-2">
