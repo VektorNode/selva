@@ -12,6 +12,11 @@ export class LocalDefinitionFileProvider implements IDefinitionFileProvider {
 	private readonly definitionsPath: string;
 	private readonly imageUrlPrefix: string;
 
+	static fromEnv(env: Record<string, string | undefined>): LocalDefinitionFileProvider {
+		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
+		return new LocalDefinitionFileProvider(env.DATA_PATH, '/api/definitions');
+	}
+
 	constructor(definitionsPath: string, imageUrlPrefix = '/api/definitions') {
 		this.definitionsPath = definitionsPath;
 		this.imageUrlPrefix = imageUrlPrefix;

@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import * as path from 'node:path';
 import type { IAuthProvider, AuthUser, UserRole } from '@selva/platform/auth';
 import { signHmacToken, verifyHmacToken } from './hmac.js';
 import { verifyPasswordHash, createLocalUserMetaProvider } from './users.js';
@@ -7,7 +8,7 @@ import type { LocalUserMetaProvider } from './users.js';
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 export interface LocalAuthProviderConfig {
-	/** HMAC signing secret. Pass from env (SESSION_SECRET or ADMIN_PASSWORD). */
+	/** HMAC signing secret. Pass from env (SESSION_SECRET). */
 	hmacSecret: string;
 	/**
 	 * Absolute path to users.json.
@@ -36,6 +37,16 @@ export class LocalAuthProvider implements IAuthProvider {
 		}
 	}
 
+	static fromEnv(env: Record<string, string | undefined>): LocalAuthProvider {
+		const hmacSecret = env.SESSION_SECRET || env.ADMIN_PASSWORD;
+		if (!hmacSecret) throw new Error('Missing required env var: SESSION_SECRET (or ADMIN_PASSWORD for dev)');
+		return new LocalAuthProvider({
+			hmacSecret,
+			usersFilePath: env.DATA_PATH ? path.join(env.DATA_PATH, 'users.json') : undefined,
+			fallbackAdminPassword: env.ADMIN_PASSWORD,
+		});
+	}
+
 	/**
 	 * Verify an HMAC session token (the raw cookie value).
 	 * Returns the authenticated user, or null if the token is invalid or expired.
@@ -58,7 +69,7 @@ export class LocalAuthProvider implements IAuthProvider {
 		if (this.users) {
 			const user = await this.users.findByEmail(email);
 			if (user && (await verifyPasswordHash(password, user.passwordHash))) {
-				return { id: user.id, email: user.email, role: user.role };
+				return { id: user.id, email: user.email, displayName: user.displayName, role: user.role };
 			}
 		}
 
@@ -77,7 +88,7 @@ export class LocalAuthProvider implements IAuthProvider {
 	async getUser(id: string): Promise<AuthUser | null> {
 		if (this.users) {
 			const u = await this.users.findById(id);
-			if (u) return { id: u.id, email: u.email, role: u.role };
+			if (u) return { id: u.id, email: u.email, displayName: u.displayName, role: u.role };
 		}
 		if (id === 'local-admin') {
 			return { id: 'local-admin', role: 'platform_admin' };
@@ -88,13 +99,13 @@ export class LocalAuthProvider implements IAuthProvider {
 	async listUsers(): Promise<AuthUser[] | null> {
 		if (!this.users) return null;
 		const users = await this.users.listUsers();
-		return users.map((u) => ({ id: u.id, email: u.email, role: u.role }));
+		return users.map((u) => ({ id: u.id, email: u.email, displayName: u.displayName, role: u.role }));
 	}
 
-	async createUser(email: string, password: string, role: UserRole): Promise<AuthUser | null> {
+	async createUser(email: string, password: string, role: UserRole, displayName?: string): Promise<AuthUser | null> {
 		if (!this.users) return null;
-		const u = await this.users.createUser(email, password, role);
-		return { id: u.id, email: u.email, role: u.role };
+		const u = await this.users.createUser(email, password, role, displayName);
+		return { id: u.id, email: u.email, displayName: u.displayName, role: u.role };
 	}
 
 	async updateUserRole(id: string, role: UserRole): Promise<boolean> {

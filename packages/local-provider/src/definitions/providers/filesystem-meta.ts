@@ -6,6 +6,7 @@ import type {
 	DefinitionRecordPatch,
 	HistoryEntry
 } from '@selva/platform/definitions';
+import { ProviderError } from '@selva/platform';
 
 interface DefinitionsConfig {
 	definitions: Record<string, DefinitionRecord>;
@@ -13,6 +14,11 @@ interface DefinitionsConfig {
 
 export class LocalDefinitionMetaProvider implements IDefinitionMetaProvider {
 	private readonly configPath: string;
+
+	static fromEnv(env: Record<string, string | undefined>): LocalDefinitionMetaProvider {
+		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
+		return new LocalDefinitionMetaProvider(env.DATA_PATH);
+	}
 
 	constructor(definitionsPath: string) {
 		this.configPath = path.join(definitionsPath, 'definitions-config.json');
@@ -71,7 +77,7 @@ export class LocalDefinitionMetaProvider implements IDefinitionMetaProvider {
 	async update(guid: string, patch: DefinitionRecordPatch): Promise<void> {
 		const config = await this.readConfig();
 		const existing = config.definitions[guid];
-		if (!existing) throw new Error(`Definition '${guid}' not found`);
+		if (!existing) throw new ProviderError(`Definition '${guid}' not found`, 404);
 
 		config.definitions[guid] = {
 			...existing,
@@ -90,7 +96,7 @@ export class LocalDefinitionMetaProvider implements IDefinitionMetaProvider {
 	async addHistoryEntry(guid: string, entry: HistoryEntry): Promise<void> {
 		const config = await this.readConfig();
 		const existing = config.definitions[guid];
-		if (!existing) throw new Error(`Definition '${guid}' not found`);
+		if (!existing) throw new ProviderError(`Definition '${guid}' not found`, 404);
 
 		const history = [entry, ...existing.history];
 
@@ -106,7 +112,7 @@ export class LocalDefinitionMetaProvider implements IDefinitionMetaProvider {
 	async removeHistoryEntry(guid: string, ref: string): Promise<void> {
 		const config = await this.readConfig();
 		const existing = config.definitions[guid];
-		if (!existing) throw new Error(`Definition '${guid}' not found`);
+		if (!existing) throw new ProviderError(`Definition '${guid}' not found`, 404);
 
 		existing.history = existing.history.filter((e) => e.ref !== ref);
 		await this.writeConfig(config);

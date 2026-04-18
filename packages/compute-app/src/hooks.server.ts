@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/private';
 import { redirect } from '@sveltejs/kit';
-import { getAuthProvider } from '$lib/server/auth.server';
+import { providers } from '$lib/server/providers.server';
 
 /**
  * Validate Critical Environment Variables on Startup
@@ -16,9 +16,9 @@ if (!env.COMPUTE_SERVER_URL) {
 	missing.push('COMPUTE_SERVER_URL');
 }
 
-// GH_DEFINITIONS_PATH is only required for filesystem source
-if (definitionSource === 'filesystem' && !env.GH_DEFINITIONS_PATH) {
-	missing.push('GH_DEFINITIONS_PATH');
+// DATA_PATH is only required for filesystem source
+if (definitionSource === 'filesystem' && !env.DATA_PATH) {
+	missing.push('DATA_PATH');
 }
 
 if (missing.length > 0) {
@@ -32,12 +32,31 @@ if (missing.length > 0) {
 }
 
 export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve }) => {
+	event.locals.providers = providers;
+
 	const { pathname } = event.url;
 
-	// Guard all admin routes except the login page itself
-	if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
+	const isAdminRoute = pathname.startsWith('/admin');
+	const isPublicAdminRoute = pathname === '/admin/login' || pathname === '/admin/setup';
+
+	// On first run (no users yet), redirect all admin traffic to /admin/setup
+	if (isAdminRoute && !isPublicAdminRoute) {
+		const users = await providers.auth.listUsers();
+		if (users !== null && users.length === 0) {
+			if (pathname.startsWith('/admin/api/')) {
+				return new Response(JSON.stringify({ error: 'Setup required' }), {
+					status: 503,
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+			redirect(303, '/admin/setup');
+		}
+	}
+
+	// Guard all admin routes except public ones
+	if (isAdminRoute && !isPublicAdminRoute) {
 		const token = event.cookies.get('admin_session') ?? '';
-		const user = await getAuthProvider().verifyToken(token);
+		const user = await providers.auth.verifyToken(token);
 
 		if (!user) {
 			// API requests get 401; page requests get redirected to login

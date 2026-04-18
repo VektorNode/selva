@@ -11,6 +11,7 @@ import type {
 	ProjectRole,
 	ProjectMember
 } from '@selva/platform/organizations';
+import { ProviderError } from '@selva/platform';
 
 interface LocalOrgStore {
 	org: Organization;
@@ -22,6 +23,11 @@ interface LocalOrgStore {
 export class LocalOrganizationProvider implements IOrganizationProvider {
 	private readonly storePath: string;
 	private store: LocalOrgStore | null = null;
+
+	static fromEnv(env: Record<string, string | undefined>): LocalOrganizationProvider {
+		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
+		return new LocalOrganizationProvider(env.DATA_PATH);
+	}
 
 	constructor(definitionsPath: string) {
 		this.storePath = path.join(definitionsPath, 'local-org.json');
@@ -116,18 +122,18 @@ export class LocalOrganizationProvider implements IOrganizationProvider {
 	}
 
 	async createOrg(_org: Organization): Promise<void> {
-		throw new Error('LocalOrganizationProvider supports only a single org');
+		throw new ProviderError('Multiple organizations are not supported in local mode', 403);
 	}
 
 	async updateOrg(id: string, patch: Partial<Pick<Organization, 'name' | 'slug'>>): Promise<void> {
 		const store = await this.getStore();
-		if (store.org.id !== id) throw new Error(`Org '${id}' not found`);
+		if (store.org.id !== id) throw new ProviderError(`Org '${id}' not found`, 404);
 		store.org = { ...store.org, ...patch, updatedAt: new Date().toISOString() };
 		await this.writeStore(store);
 	}
 
 	async deleteOrg(_id: string): Promise<void> {
-		throw new Error('LocalOrganizationProvider does not support deleting the default org');
+		throw new ProviderError('Deleting the organization is not supported in local mode', 403);
 	}
 
 	// ── Org members ──────────────────────────────────────────────────────────────
@@ -151,7 +157,7 @@ export class LocalOrganizationProvider implements IOrganizationProvider {
 	async updateOrgMemberRole(orgId: string, userId: string, role: OrgRole): Promise<void> {
 		const store = await this.getStore();
 		const m = store.orgMembers.find((m) => m.orgId === orgId && m.userId === userId);
-		if (!m) throw new Error(`Org member '${userId}' not found`);
+		if (!m) throw new ProviderError(`Org member '${userId}' not found`, 404);
 		m.role = role;
 		await this.writeStore(store);
 	}
@@ -182,7 +188,7 @@ export class LocalOrganizationProvider implements IOrganizationProvider {
 	}
 
 	async createProject(_project: Project): Promise<void> {
-		throw new Error('LocalOrganizationProvider supports only a single project');
+		throw new ProviderError('Multiple projects are not supported in local mode', 403);
 	}
 
 	async updateProject(
@@ -190,13 +196,13 @@ export class LocalOrganizationProvider implements IOrganizationProvider {
 		patch: Partial<Pick<Project, 'name' | 'slug' | 'description' | 'visibility'>>
 	): Promise<void> {
 		const store = await this.getStore();
-		if (store.project.id !== id) throw new Error(`Project '${id}' not found`);
+		if (store.project.id !== id) throw new ProviderError(`Project '${id}' not found`, 404);
 		store.project = { ...store.project, ...patch, updatedAt: new Date().toISOString() };
 		await this.writeStore(store);
 	}
 
 	async deleteProject(_id: string): Promise<void> {
-		throw new Error('LocalOrganizationProvider does not support deleting the default project');
+		throw new ProviderError('Deleting the default project is not supported in local mode', 403);
 	}
 
 	// ── Project members ──────────────────────────────────────────────────────────
@@ -226,7 +232,7 @@ export class LocalOrganizationProvider implements IOrganizationProvider {
 		const m = store.projectMembers.find(
 			(m) => m.projectId === projectId && m.userId === userId
 		);
-		if (!m) throw new Error(`Project member '${userId}' not found`);
+		if (!m) throw new ProviderError(`Project member '${userId}' not found`, 404);
 		m.role = role;
 		await this.writeStore(store);
 	}

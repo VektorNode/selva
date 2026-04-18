@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import { join } from 'path';
 import { env } from '$env/dynamic/private';
 import type { RequestHandler } from '@sveltejs/kit';
+import { requirePlatformAdmin } from '$lib/server/access.server';
 
 // Strip ANSI escape codes from terminal output
 function stripAnsi(str: string): string {
@@ -10,7 +11,8 @@ function stripAnsi(str: string): string {
 }
 
 // POST - Run update script and stream output via Server-Sent Events
-export const POST: RequestHandler = async () => {
+export const POST: RequestHandler = async ({ locals }) => {
+	requirePlatformAdmin(locals);
 	// Fall back to cwd — PM2 launches from the repo root so process.cwd() is the install dir
 	const installDir = env.INSTALL_DIR || process.cwd();
 	const updateScript = join(installDir, 'scripts', 'update.sh');

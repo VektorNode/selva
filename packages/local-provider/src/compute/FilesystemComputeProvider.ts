@@ -1,4 +1,5 @@
 import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import type {
 	IComputeServerProvider,
 	ComputeServerConfig,
@@ -12,6 +13,11 @@ import type {
  * immediately without restarting the server.
  */
 export class FilesystemComputeProvider implements IComputeServerProvider {
+	static fromEnv(env: Record<string, string | undefined>): FilesystemComputeProvider {
+		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
+		return new FilesystemComputeProvider(path.join(env.DATA_PATH, 'compute.config.json'));
+	}
+
 	constructor(private readonly configFilePath: string) {}
 
 	async getConfig(): Promise<ComputeConfig> {

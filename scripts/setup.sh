@@ -41,7 +41,7 @@ GH_DEFINITIONS_PATH="${GH_DEFINITIONS_PATH:-./definitions}"
 COMPUTE_SERVER_URL="${COMPUTE_SERVER_URL:-http://localhost:5000}"
 COMPUTE_API_KEY="${COMPUTE_API_KEY:-}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
-ADMIN_SECRET="${ADMIN_SECRET:-}"
+SESSION_SECRET="${SESSION_SECRET:-}"
 ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES:-}"  # auto-detected: true for http, false for https
 PORT="${PORT:-3000}"
 ORIGIN="${ORIGIN:-}"  # auto-detected from public IP if not set
@@ -237,8 +237,8 @@ if [ ! -f "$ENV_FILE" ] || ([ "$INTERACTIVE" = true ] && [[ $REPLY =~ ^[Yy]$ ]])
     read -p "Admin Password (optional, press Enter to skip) [${ADMIN_PASSWORD:-none}]: " _INPUT
     ADMIN_PASSWORD="${_INPUT:-$ADMIN_PASSWORD}"
 
-    read -p "Admin Secret (optional, press Enter to skip) [${ADMIN_SECRET:-none}]: " _INPUT
-    ADMIN_SECRET="${_INPUT:-$ADMIN_SECRET}"
+    read -p "Session Secret (optional, press Enter to auto-generate) [${SESSION_SECRET:-auto}]: " _INPUT
+    SESSION_SECRET="${_INPUT:-$SESSION_SECRET}"
 
     read -p "Application Port [$PORT]: " _INPUT
     PORT="${_INPUT:-$PORT}"
@@ -291,11 +291,14 @@ ADMIN_PASSWORD="${ADMIN_PASSWORD}"
 EOF
   fi
 
-  if [ -n "$ADMIN_SECRET" ]; then
-    cat >> "$ENV_FILE" << EOF
-ADMIN_SECRET="${ADMIN_SECRET}"
-EOF
+  # Auto-generate SESSION_SECRET if not provided
+  if [ -z "$SESSION_SECRET" ]; then
+    SESSION_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+    print_success "SESSION_SECRET auto-generated"
   fi
+  cat >> "$ENV_FILE" << EOF
+SESSION_SECRET="${SESSION_SECRET}"
+EOF
 
   # Auto-detect ALLOW_INSECURE_COOKIES based on protocol if not set
   if [ -z "$ALLOW_INSECURE_COOKIES" ]; then
@@ -374,7 +377,7 @@ if [ "$SKIP_PM2" = false ]; then
   COMPUTE_SERVER_URL=$(grep "^COMPUTE_SERVER_URL=" "$ENV_FILE" | cut -d'"' -f2 || echo "$COMPUTE_SERVER_URL")
   COMPUTE_API_KEY=$(grep "^COMPUTE_API_KEY=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$COMPUTE_API_KEY")
   ADMIN_PASSWORD=$(grep "^ADMIN_PASSWORD=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$ADMIN_PASSWORD")
-  ADMIN_SECRET=$(grep "^ADMIN_SECRET=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$ADMIN_SECRET")
+  SESSION_SECRET=$(grep "^SESSION_SECRET=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$SESSION_SECRET")
   ALLOW_INSECURE_COOKIES=$(grep "^ALLOW_INSECURE_COOKIES=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$ALLOW_INSECURE_COOKIES")
   GH_DEFINITIONS_PATH=$(grep "^GH_DEFINITIONS_PATH=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$GH_DEFINITIONS_PATH")
 
@@ -398,9 +401,6 @@ if [ "$SKIP_PM2" = false ]; then
   OPT_ADMIN_PASSWORD=""
   [ -n "$ADMIN_PASSWORD" ] && OPT_ADMIN_PASSWORD="				ADMIN_PASSWORD: '$ADMIN_PASSWORD',"
 
-  OPT_ADMIN_SECRET=""
-  [ -n "$ADMIN_SECRET" ] && OPT_ADMIN_SECRET="				ADMIN_SECRET: '$ADMIN_SECRET',"
-
   cat > "$CONFIG_FILE" << EOF
 // This file is used by PM2 to manage the compute app process.
 // IMPORTANT: Do not commit sensitive values (API keys, passwords) to version control.
@@ -423,7 +423,7 @@ module.exports = {
 				BODY_SIZE_LIMIT: 'Infinity',
 			GH_DEFINITIONS_PATH: '$ABS_GH_PATH',
 $OPT_ADMIN_PASSWORD
-$OPT_ADMIN_SECRET
+				SESSION_SECRET: '$SESSION_SECRET',
 				ALLOW_INSECURE_COOKIES: '$ALLOW_INSECURE_COOKIES',
 				NODE_ENV: 'production'
 			}

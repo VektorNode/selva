@@ -3,6 +3,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import { getDefinitionFiles, getDefinitionMeta } from '$lib/server/definitions.server';
 import { getOrganizationProvider } from '$lib/server/providers.server';
+import { requireCanEdit } from '$lib/server/access.server';
 import { CreateDefinitionInputSchema } from '@selva/platform/definitions/schemas';
 import { GH_EXTENSIONS, MAX_GH_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '$lib/server/admin-config';
 
@@ -39,6 +40,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!defaultOrg) throw error(500, 'No organization configured');
 	const [defaultProject] = await orgs.listProjects(defaultOrg.id);
 	if (!defaultProject) throw error(500, 'No project configured');
+
+	const targetProjectId = (formData.get('projectId') as string) || defaultProject.id;
+	await requireCanEdit(locals, targetProjectId);
 
 	const parsed = CreateDefinitionInputSchema.safeParse({
 		displayName: formData.get('displayName'),

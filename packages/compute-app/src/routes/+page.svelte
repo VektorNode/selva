@@ -1,33 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
-	import { StateDisplay, PageHeader, PageContainer, Input, useFooterItem } from 'selva-shared';
+	import { StateDisplay, PageHeader, PageContainer, Input } from 'selva-shared';
 	import { Search, X } from '@lucide/svelte';
-	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
-	import ComputeHealthFooter from '$lib/components/ComputeHealthFooter.svelte';
 	import DefinitionCard from '$lib/components/DefinitionCard.svelte';
 
 	let { data }: { data: PageData } = $props();
 
-	// Track which definition is being loaded
 	let loadingDefinition = $state<string | null>(null);
 	let searchQuery = $state('');
-
-	const computeHealth = useComputeHealth();
-
-	// Register compute health in footer
-	// Health checking is handled globally in +layout.svelte
-	useFooterItem(
-		'compute-health',
-		ComputeHealthFooter,
-		() => ({
-			health: computeHealth.health,
-			compute: computeHealth.compute
-		}),
-		'left',
-		20,
-		undefined
-	);
 
 	// Filter definitions based on search query
 	const filteredDefinitions = $derived.by(() => {

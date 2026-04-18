@@ -20,10 +20,13 @@ export interface SelvaConfig {
 	compute: IComputeServerProvider;
 }
 
+export type SelvaConfigFactory = (env: Record<string, string | undefined>) => SelvaConfig;
+
 /**
- * No-op identity function. Its only purpose is to give TypeScript full inference
- * and IDE autocomplete when writing `selva.config.ts`. Same pattern as Vite's `defineConfig`.
+ * Same pattern as Vite's `defineConfig` — exists only for TypeScript inference and IDE autocomplete.
+ * Accepts either a plain config object (legacy) or a factory function that receives env vars.
+ * Use the factory form so each provider owns its own env var validation via `fromEnv()`.
  */
-export function defineConfig(config: SelvaConfig): SelvaConfig {
+export function defineConfig(config: SelvaConfig | SelvaConfigFactory): SelvaConfig | SelvaConfigFactory {
 	return config;
 }

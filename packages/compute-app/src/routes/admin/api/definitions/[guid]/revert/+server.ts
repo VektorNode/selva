@@ -1,10 +1,11 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getDefinitionFiles, getDefinitionMeta } from '$lib/server/definitions.server';
+import { requireCanEdit } from '$lib/server/access.server';
 import { GuidSchema } from '@selva/platform/definitions/schemas';
 
 // POST - Restore an archived file as the active GH file
-export const POST: RequestHandler = async ({ params, request }) => {
+export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const guidParsed = GuidSchema.safeParse(params.guid);
 	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
 
@@ -27,6 +28,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	try {
 		// Get the original name from history before removing the entry
 		const record = await meta.get(guid);
+		if (record) await requireCanEdit(locals, record.projectId);
 		const historyEntry = record?.history.find((e) => e.ref === ref);
 		const originalName = historyEntry?.originalName ?? ref.replace(/^[^_]+_/, '');
 

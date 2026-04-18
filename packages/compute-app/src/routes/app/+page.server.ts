@@ -4,6 +4,7 @@ import { GrasshopperClient } from 'selva-compute/grasshopper';
 import { camelcaseKeys } from 'selva-compute/core';
 import type { UISchema } from 'selva-shared';
 import { getServerConfig } from '$lib/server/compute/config.server';
+import { getComputeServerProvider } from '$lib/server/providers.server';
 import { getDefinitionFiles, getDefinitionMeta } from '$lib/server/definitions.server';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -147,10 +148,13 @@ export const load = (async ({ url }) => {
 			return schemaInput;
 		});
 
+		const server = await getComputeServerProvider().getDefaultServer();
+
 		return {
 			schema,
 			ghDefinition: clientDefUrl,
-			currentDefinition: ghFilename.replace(/\.gh$/, '')
+			currentDefinition: ghFilename.replace(/\.gh$/, ''),
+			serverLabel: server?.label ?? null
 		};
 	} catch (err) {
 		const errorMessage = err instanceof Error ? err.message : String(err);

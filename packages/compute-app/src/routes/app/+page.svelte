@@ -2,12 +2,9 @@
 	import type { PageProps } from './$types';
 	import { ComputeApp, type SolveFn } from 'selva-shared';
 	import { GrasshopperResponseProcessor } from 'selva-compute';
-	import { useComputeHealth } from '$lib/composables/useComputeHealth.svelte';
-	import ComputeHealthFooter from '$lib/components/ComputeHealthFooter.svelte';
+	import ServerFooter from '$lib/components/ServerFooter.svelte';
 
 	let { data }: PageProps = $props();
-
-	const computeHealth = useComputeHealth();
 
 	const onSolve: SolveFn = async (values, signal) => {
 		const res = await fetch('/api/compute', {
@@ -24,8 +21,10 @@
 		if (signal.aborted) return { outputs: {} };
 
 		if (!res.ok) {
-			if (res.status === 503) computeHealth.notifyFailure();
-			const d = await res.json();
+			if (res.status === 503) {
+				throw new Error('Compute server is offline or unreachable. Please try again later.');
+			}
+			const d = await res.json().catch(() => ({}));
 			throw new Error(d.message || 'Compute error');
 		}
 
@@ -58,7 +57,7 @@
 	{onSolve}
 	definitionKey={data.currentDefinition}
 	title={data.schema?.description || data.schema.name}
-	footerComponent={ComputeHealthFooter}
-	footerComponentProps={() => ({ health: computeHealth.health, compute: computeHealth.compute })}
 	showModeToggle={true}
+	footerComponent={ServerFooter}
+	footerComponentProps={() => ({ label: data.serverLabel })}
 />

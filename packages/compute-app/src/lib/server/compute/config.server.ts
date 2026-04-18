@@ -4,7 +4,7 @@ export { getComputeServerProvider } from '../providers.server.js';
 
 export type ServerConfig = {
 	computeServerUrl: string;
-	ghDefinitionsPath: string;
+	dataPath: string;
 	computeApiKey?: string;
 };
 
@@ -14,14 +14,14 @@ export type ServerConfig = {
  */
 export function getServerConfig(): ServerConfig {
 	const computeServerUrl = env.COMPUTE_SERVER_URL;
-	const ghDefinitionsPath = env.GH_DEFINITIONS_PATH;
+	const dataPath = env.DATA_PATH;
 
 	if (!computeServerUrl) {
 		throw new Error('COMPUTE_SERVER_URL environment variable is required.');
 	}
 
-	if (!ghDefinitionsPath) {
-		throw new Error('GH_DEFINITIONS_PATH environment variable is required.');
+	if (!dataPath) {
+		throw new Error('DATA_PATH environment variable is required.');
 	}
 
 	try {
@@ -35,7 +35,7 @@ export function getServerConfig(): ServerConfig {
 
 	return {
 		computeServerUrl,
-		ghDefinitionsPath,
+		dataPath,
 		computeApiKey: env.COMPUTE_API_KEY
 	};
 }
