@@ -14,6 +14,7 @@ export type UserRole = 'platform_admin' | 'user';
 export interface AuthUser {
 	id: string;
 	email?: string;
+	displayName?: string;
 	role: UserRole;
 	metadata?: Record<string, unknown>;
 }

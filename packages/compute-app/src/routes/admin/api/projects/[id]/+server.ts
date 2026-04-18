@@ -1,11 +1,13 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getOrganizationProvider } from '$lib/server/providers.server';
+import { requireCanManage, throwProviderError } from '$lib/server/access.server';
 import type { ProjectVisibility } from '@selva/platform/organizations';
 
-export const PATCH: RequestHandler = async ({ params, request }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	const { id } = params;
 	if (!id) throw error(400, 'Missing project ID');
+	await requireCanManage(locals, id);
 
 	const body = await request.json().catch(() => null);
 	if (!body || typeof body !== 'object') throw error(400, 'Invalid request body');
@@ -25,21 +27,19 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		await getOrganizationProvider().updateProject(id, patch as { name?: string; slug?: string; description?: string; visibility?: ProjectVisibility });
 		return json({ success: true });
 	} catch (err) {
-		if (err instanceof Error && err.message.includes('not found')) throw error(404, err.message);
-		throw error(500, 'Failed to update project');
+		throwProviderError(err, 'Failed to update project');
 	}
 };
 
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const { id } = params;
 	if (!id) throw error(400, 'Missing project ID');
+	await requireCanManage(locals, id);
 
 	try {
 		await getOrganizationProvider().deleteProject(id);
 		return json({ success: true });
 	} catch (err) {
-		if (err instanceof Error && err.message.includes('not support')) throw error(403, err.message);
-		if (err instanceof Error && err.message.includes('not found')) throw error(404, err.message);
-		throw error(500, 'Failed to delete project');
+		throwProviderError(err, 'Failed to delete project');
 	}
 };

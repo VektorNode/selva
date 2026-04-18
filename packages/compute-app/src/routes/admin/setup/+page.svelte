@@ -14,14 +14,16 @@
 </script>
 
 <svelte:head>
-	<title>Admin Login - Selva Compute</title>
+	<title>Setup - Selva Compute</title>
 </svelte:head>
 
 <div class="bg-background flex min-h-screen items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
 	<div class="w-full max-w-sm space-y-6">
 		<div class="space-y-1 text-center">
-			<h2 class="text-foreground text-2xl font-bold tracking-tight">Admin Login</h2>
-			<p class="text-muted-foreground text-sm">Sign in to your account</p>
+			<h2 class="text-foreground text-2xl font-bold tracking-tight">Create Admin Account</h2>
+			<p class="text-muted-foreground text-sm">
+				No users found. Set up your platform admin account to get started.
+			</p>
 		</div>
 
 		<form method="POST" class="space-y-4">
@@ -39,16 +41,15 @@
 
 			<div class="space-y-2">
 				<Label for="password">Password</Label>
-				<Input
-					id="password"
-					name="password"
-					type="password"
-					required
-					placeholder="Password"
-				/>
+				<Input id="password" name="password" type="password" required placeholder="Min. 8 characters" />
 			</div>
 
-			<Button type="submit" class="w-full">Sign in</Button>
+			<div class="space-y-2">
+				<Label for="confirm">Confirm Password</Label>
+				<Input id="confirm" name="confirm" type="password" required placeholder="Repeat password" />
+			</div>
+
+			<Button type="submit" class="w-full">Create Account</Button>
 		</form>
 	</div>
 </div>

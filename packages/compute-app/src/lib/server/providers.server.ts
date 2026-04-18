@@ -1,47 +1,14 @@
-/**
- * Reads selva.config.ts and exposes typed provider accessors.
- * To swap providers: edit selva.config.ts at the repo root only.
- *
- * env vars are injected from $env/dynamic/private into process.env before
- * the config is accessed, so selva.config.ts can read them via process.env.
- */
 import { env } from '$env/dynamic/private';
-import config from '../../../../../selva.config.js';
-import type { IAuthProvider } from '@selva/platform/auth';
-import type { IOrganizationProvider } from '@selva/platform/organizations';
-import type { IComputeServerProvider } from '@selva/platform/compute';
-import type { IDefinitionFileProvider, IDefinitionMetaProvider } from '@selva/platform/definitions';
+import rawConfig from '../../../../../selva.config.js';
+import type { SelvaConfig, SelvaConfigFactory } from '@selva/platform/config';
 
-let envInjected = false;
-function injectEnv() {
-	if (envInjected) return;
-	for (const [key, value] of Object.entries(env)) {
-		if (value !== undefined) process.env[key] = value;
-	}
-	envInjected = true;
-}
+// Resolved once at module load (server startup). selva.config.ts exports either
+// a SelvaConfig object (legacy) or a factory function (current).
+const _raw = rawConfig as SelvaConfig | SelvaConfigFactory;
+export const providers: SelvaConfig = typeof _raw === 'function' ? _raw(env) : _raw;
 
-export function getAuthProvider(): IAuthProvider {
-	injectEnv();
-	return config.auth;
-}
-
-export function getOrganizationProvider(): IOrganizationProvider {
-	injectEnv();
-	return config.organizations;
-}
-
-export function getDefinitionFiles(): IDefinitionFileProvider {
-	injectEnv();
-	return config.definitionFiles;
-}
-
-export function getDefinitionMeta(): IDefinitionMetaProvider {
-	injectEnv();
-	return config.definitionMeta;
-}
-
-export function getComputeServerProvider(): IComputeServerProvider {
-	injectEnv();
-	return config.compute;
-}
+export function getAuthProvider() { return providers.auth; }
+export function getOrganizationProvider() { return providers.organizations; }
+export function getDefinitionFiles() { return providers.definitionFiles; }
+export function getDefinitionMeta() { return providers.definitionMeta; }
+export function getComputeServerProvider() { return providers.compute; }

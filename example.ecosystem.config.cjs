@@ -16,8 +16,8 @@ module.exports = {
 				ORIGIN: 'http://your-public-ip',
 				COMPUTE_SERVER_URL: 'https://your-compute-server',
 				BODY_SIZE_LIMIT: 'Infinity',
-				// Path to Grasshopper definitions (use absolute path)
-				GH_DEFINITIONS_PATH: '/absolute/path/to/definitions',
+				// Path to local data directory (use absolute path)
+				DATA_PATH: '/absolute/path/to/definitions',
 				COMPUTE_API_KEY: 'your-api-key',
 				NODE_ENV: 'production',
 				ADMIN_PASSWORD: 'your-secure-password',

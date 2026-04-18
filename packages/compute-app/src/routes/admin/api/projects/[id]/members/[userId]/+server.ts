@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getOrganizationProvider } from '$lib/server/providers.server';
+import { throwProviderError } from '$lib/server/access.server';
 import type { ProjectRole } from '@selva/platform/organizations';
 
 const VALID_ROLES: ProjectRole[] = ['owner', 'editor', 'viewer'];
@@ -19,8 +20,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		await getOrganizationProvider().updateProjectMemberRole(id, userId, role as ProjectRole);
 		return json({ success: true });
 	} catch (err) {
-		if (err instanceof Error && err.message.includes('not found')) throw error(404, err.message);
-		throw error(500, 'Failed to update role');
+		throwProviderError(err, 'Failed to update role');
 	}
 };
 
@@ -32,7 +32,6 @@ export const DELETE: RequestHandler = async ({ params }) => {
 		await getOrganizationProvider().removeProjectMember(id, userId);
 		return json({ success: true });
 	} catch (err) {
-		if (err instanceof Error && err.message.includes('not found')) throw error(404, err.message);
-		throw error(500, 'Failed to remove member');
+		throwProviderError(err, 'Failed to remove member');
 	}
 };

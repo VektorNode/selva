@@ -9,6 +9,8 @@ declare global {
 		interface Locals {
 			/** Authenticated user, set by hooks.server.ts for protected routes */
 			user?: import('@selva/platform/auth').AuthUser;
+			/** Resolved provider instances, attached on every request by hooks.server.ts */
+			providers: import('@selva/platform/config').SelvaConfig;
 		}
 		// interface PageData {}
 		// interface PageState {}

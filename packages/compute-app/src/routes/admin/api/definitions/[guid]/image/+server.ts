@@ -1,11 +1,12 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getDefinitionFiles, getDefinitionMeta } from '$lib/server/definitions.server';
+import { requireCanEdit } from '$lib/server/access.server';
 import { GuidSchema } from '@selva/platform/definitions/schemas';
 import { MAX_IMAGE_FILE_SIZE } from '$lib/server/admin-config';
 
 // POST /admin/api/definitions/{guid}/image — upload a cover image into the GUID folder
-export const POST: RequestHandler = async ({ params, request }) => {
+export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const guidParsed = GuidSchema.safeParse(params.guid);
 	if (!guidParsed.success) throw error(400, 'Invalid GUID');
 
@@ -22,6 +23,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		}
 
 		const guid = guidParsed.data;
+		const record = await getDefinitionMeta().get(guid);
+		if (record) await requireCanEdit(locals, record.projectId);
 		const imageData = new Uint8Array(await file.arrayBuffer());
 
 		const files = getDefinitionFiles();

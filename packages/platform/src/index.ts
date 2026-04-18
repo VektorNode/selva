@@ -20,8 +20,9 @@ export type {
 	ComputeConfig,
 	SolveRequest
 } from './compute.js';
-export type { SelvaConfig } from './config.js';
+export type { SelvaConfig, SelvaConfigFactory } from './config.js';
 export { defineConfig } from './config.js';
+export { ProviderError } from './errors.js';
 export type {
 	IOrganizationProvider,
 	Organization,

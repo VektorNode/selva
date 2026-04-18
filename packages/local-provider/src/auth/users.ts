@@ -1,12 +1,14 @@
 import * as fs from 'node:fs/promises';
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
+import { ProviderError } from '@selva/platform';
 
 export type UserRole = 'platform_admin' | 'user';
 
 export interface StoredUser {
 	id: string;
 	email: string;
+	displayName?: string;
 	role: UserRole;
 	/**
 	 * Password hash in format: "pbkdf2:sha256:<iterations>:<salt>:<hash>"
@@ -86,7 +88,7 @@ export interface LocalUserMetaProvider {
 	findByEmail(email: string): Promise<StoredUser | null>;
 	findById(id: string): Promise<StoredUser | null>;
 	listUsers(): Promise<Omit<StoredUser, 'passwordHash'>[]>;
-	createUser(email: string, password: string, role: UserRole): Promise<StoredUser>;
+	createUser(email: string, password: string, role: UserRole, displayName?: string): Promise<StoredUser>;
 	updateRole(id: string, role: UserRole): Promise<void>;
 	deleteUser(id: string): Promise<void>;
 }
@@ -109,14 +111,15 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 			return users.map(({ passwordHash: _ph, ...rest }) => rest);
 		},
 
-		async createUser(email, password, role) {
+		async createUser(email, password, role, displayName?) {
 			const file = await readUsersFile(usersFilePath);
 			if (file.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
-				throw new Error(`User with email "${email}" already exists`);
+				throw new ProviderError(`User with email "${email}" already exists`, 409);
 			}
 			const user: StoredUser = {
 				id: randomUUID(),
 				email,
+				...(displayName && { displayName }),
 				role,
 				passwordHash: await hashPassword(password),
 				createdAt: new Date().toISOString()
@@ -129,7 +132,7 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 		async updateRole(id, role) {
 			const file = await readUsersFile(usersFilePath);
 			const user = file.users.find((u) => u.id === id);
-			if (!user) throw new Error(`User "${id}" not found`);
+			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
 			user.role = role;
 			await writeUsersFile(usersFilePath, file);
 		},
@@ -138,7 +141,7 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 			const file = await readUsersFile(usersFilePath);
 			const before = file.users.length;
 			file.users = file.users.filter((u) => u.id !== id);
-			if (file.users.length === before) throw new Error(`User "${id}" not found`);
+			if (file.users.length === before) throw new ProviderError(`User "${id}" not found`, 404);
 			await writeUsersFile(usersFilePath, file);
 		}
 	};

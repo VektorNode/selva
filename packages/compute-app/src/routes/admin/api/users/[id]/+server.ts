@@ -1,12 +1,14 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getAuthProvider } from '$lib/server/auth.server';
+import { requirePlatformAdmin } from '$lib/server/access.server';
 import type { UserRole } from '@selva/platform/auth';
 
 const VALID_ROLES: UserRole[] = ['platform_admin', 'user'];
 
 // PATCH — update role
-export const PATCH: RequestHandler = async ({ params, request }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
+	requirePlatformAdmin(locals);
 	const { id } = params;
 	if (!id) throw error(400, 'Missing user ID');
 
@@ -25,7 +27,8 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 };
 
 // DELETE — remove user
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
+	requirePlatformAdmin(locals);
 	const { id } = params;
 	if (!id) throw error(400, 'Missing user ID');
 

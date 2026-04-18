@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getComputeServerProvider } from '$lib/server/providers.server';
+import { requirePlatformAdmin } from '$lib/server/access.server';
 import type { ComputeConfig, ComputeServerConfig } from '@selva/platform/compute';
 
 type ServerWithKeyFlag = Omit<ComputeServerConfig, 'apiKey'> & { hasApiKey: boolean };
@@ -13,7 +14,8 @@ interface IncomingConfig {
 }
 
 // GET — return compute config with API keys stripped and replaced by hasApiKey flag
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async ({ locals }) => {
+	requirePlatformAdmin(locals);
 	try {
 		const config = await getComputeServerProvider().getConfig();
 		return json({
@@ -36,7 +38,8 @@ export const GET: RequestHandler = async () => {
 //   omitted / undefined  → preserve the currently stored key (matched by serverUrl)
 //   null                 → explicitly clear the key
 //   non-empty string     → replace with new value
-export const PUT: RequestHandler = async ({ request }) => {
+export const PUT: RequestHandler = async ({ request, locals }) => {
+	requirePlatformAdmin(locals);
 	const body = await request.json().catch(() => null);
 	if (!body || typeof body !== 'object') throw error(400, 'Invalid request body');
 

@@ -1,6 +1,7 @@
 import type { UISchema } from 'selva-shared';
 
 export function useSchemaHistory(sessionId: string) {
+	//TODO: The local storage gets poluted over time we need a bit more elegant solution for this, maybe a single entry with a timestamp and we can clean up old entries on load?
 	const past: UISchema[] = $state([]);
 	const future: UISchema[] = $state([]);
 	const MAX_HISTORY = 50;

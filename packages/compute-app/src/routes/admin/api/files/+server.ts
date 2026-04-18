@@ -9,10 +9,12 @@ import {
 	MAX_GH_FILE_SIZE,
 	MAX_IMAGE_FILE_SIZE
 } from '$lib/server/admin-config';
+import { requirePlatformAdmin } from '$lib/server/access.server';
 
 // GET - List all files
-export const GET: RequestHandler = async () => {
-	const envPath = env.GH_DEFINITIONS_PATH || './example-definitions';
+export const GET: RequestHandler = async ({ locals }) => {
+	requirePlatformAdmin(locals);
+	const envPath = env.DATA_PATH || './example-definitions';
 	const definitionsPath = resolve(process.cwd(), envPath);
 
 	try {
@@ -25,8 +27,9 @@ export const GET: RequestHandler = async () => {
 };
 
 // POST - Upload a file
-export const POST: RequestHandler = async ({ request }) => {
-	const envPath = env.GH_DEFINITIONS_PATH || './example-definitions';
+export const POST: RequestHandler = async ({ request, locals }) => {
+	requirePlatformAdmin(locals);
+	const envPath = env.DATA_PATH || './example-definitions';
 	const definitionsPath = resolve(process.cwd(), envPath);
 
 	try {
@@ -75,8 +78,9 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 
 // DELETE - Delete a file
-export const DELETE: RequestHandler = async ({ url }) => {
-	const envPath = env.GH_DEFINITIONS_PATH || './example-definitions';
+export const DELETE: RequestHandler = async ({ url, locals }) => {
+	requirePlatformAdmin(locals);
+	const envPath = env.DATA_PATH || './example-definitions';
 	const definitionsPath = resolve(process.cwd(), envPath);
 	const filename = url.searchParams.get('filename');
 

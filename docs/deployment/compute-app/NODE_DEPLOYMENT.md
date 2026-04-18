@@ -35,7 +35,6 @@ env: {
     COMPUTE_API_KEY: 'your-key-if-needed',
     BODY_SIZE_LIMIT: 'Infinity',              // Needed for large file uploads
     ADMIN_PASSWORD: 'your-secure-password',
-    ADMIN_SECRET: 'your-32-plus-char-secret',
     NODE_ENV: 'production',
     ALLOW_INSECURE_COOKIES: 'true'            // HTTP deployments only
 }

@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getOrganizationProvider } from '$lib/server/providers.server';
+import { requirePlatformAdmin, throwProviderError } from '$lib/server/access.server';
 import { randomUUID } from 'node:crypto';
 import type { Project } from '@selva/platform/organizations';
 
@@ -17,6 +18,7 @@ export const GET: RequestHandler = async () => {
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {
+	requirePlatformAdmin(locals);
 	const body = await request.json().catch(() => null);
 	if (!body || typeof body !== 'object') throw error(400, 'Invalid request body');
 
@@ -46,9 +48,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await orgs.createProject(project);
 		return json(project, { status: 201 });
 	} catch (err) {
-		if (err instanceof Error && err.message.includes('single project')) {
-			throw error(403, err.message);
-		}
-		throw error(500, 'Failed to create project');
+		throwProviderError(err, 'Failed to create project');
 	}
 };

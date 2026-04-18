@@ -1,11 +1,12 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getDefinitionFiles, getDefinitionMeta } from '$lib/server/definitions.server';
+import { requireCanEdit } from '$lib/server/access.server';
 import { GuidSchema } from '@selva/platform/definitions/schemas';
 import { GH_EXTENSIONS, MAX_GH_FILE_SIZE } from '$lib/server/admin-config';
 
 // POST - Replace the GH file for an existing definition (upload to GUID folder, archive old)
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
 	const formData = await request.formData();
 	const file = formData.get('file');
 	const guid = formData.get('guid') as string | null;
@@ -32,6 +33,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	try {
 		// Get current originalFilename for the archive entry label
 		const record = await meta.get(resolvedGuid);
+		if (record) await requireCanEdit(locals, record.projectId);
 		const originalName = record?.meta.originalFilename ?? file.name;
 
 		// Archive the current active file

@@ -72,7 +72,7 @@
 		try {
 			const res = await fetch('/admin/api/projects', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
 				body: JSON.stringify({ name: newName, description: newDescription, visibility: newVisibility })
 			});
 			if (res.ok) {
@@ -98,7 +98,7 @@
 		try {
 			const res = await fetch(`/admin/api/projects/${id}`, {
 				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
 				body: JSON.stringify({ name: editName, description: editDescription, visibility: editVisibility })
 			});
 			if (res.ok) {
@@ -118,7 +118,7 @@
 
 	async function deleteProject(id: string) {
 		try {
-			const res = await fetch(`/admin/api/projects/${id}`, { method: 'DELETE' });
+			const res = await fetch(`/admin/api/projects/${id}`, { method: 'DELETE', headers: { Accept: 'application/json' } });
 			if (res.ok) {
 				toast.success('Project deleted');
 				await invalidateAll();
@@ -139,7 +139,7 @@
 		try {
 			const res = await fetch(`/admin/api/projects/${projectId}/members`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
 				body: JSON.stringify({ userId: newMemberUserId, role: newMemberRole })
 			});
 			if (res.ok) {
@@ -163,7 +163,7 @@
 		try {
 			const res = await fetch(`/admin/api/projects/${projectId}/members/${userId}`, {
 				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
 				body: JSON.stringify({ role })
 			});
 			if (res.ok) {
@@ -179,7 +179,7 @@
 	async function removeMember(projectId: string, userId: string) {
 		removingMember = `${projectId}:${userId}`;
 		try {
-			const res = await fetch(`/admin/api/projects/${projectId}/members/${userId}`, { method: 'DELETE' });
+			const res = await fetch(`/admin/api/projects/${projectId}/members/${userId}`, { method: 'DELETE', headers: { Accept: 'application/json' } });
 			if (res.ok) {
 				await invalidateAll();
 			} else {
