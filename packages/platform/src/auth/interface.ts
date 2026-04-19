@@ -1,24 +1,20 @@
+import type { AuthUser, Permission } from './types.js';
+import type { ListOptions, Page } from '../pagination.js';
+
 /**
  * Authentication provider interface.
  *
- * Implement this to plug in any auth backend:
+ * Implement to plug in any auth backend:
  * - Local HMAC sessions (built-in default)
  * - Firebase Auth
  * - Supabase Auth
  * - AWS Cognito
  * - Any OIDC/JWT provider
+ *
+ * NOTE: Auth provider methods do NOT take a RequestContext. The provider is
+ * what *produces* the identity used to build the context — callers at the
+ * HTTP boundary (hooks.server.ts) derive the context from the returned user.
  */
-
-export type UserRole = 'platform_admin' | 'user';
-
-export interface AuthUser {
-	id: string;
-	email?: string;
-	displayName?: string;
-	role: UserRole;
-	metadata?: Record<string, unknown>;
-}
-
 export interface IAuthProvider {
 	/**
 	 * Verify a token string — session cookie value, JWT, Firebase ID token, etc.
@@ -34,8 +30,7 @@ export interface IAuthProvider {
 
 	/**
 	 * Create a new opaque session token for an authenticated user.
-	 * Stored in a cookie by the transport layer. Format is provider-specific:
-	 * HMAC string, signed JWT, Firebase custom token, etc.
+	 * Format is provider-specific: HMAC string, signed JWT, Firebase custom token, etc.
 	 */
 	createSessionToken(user: AuthUser): Promise<string>;
 
@@ -49,23 +44,17 @@ export interface IAuthProvider {
 	// ── User management ────────────────────────────────────────────────────────
 
 	/**
-	 * List all users. Returns null if this provider does not support user management
-	 * (e.g. single-password mode).
+	 * List users with pagination. Returns null if this provider does not
+	 * support user management (distinct from an empty page).
 	 */
-	listUsers(): Promise<AuthUser[] | null>;
+	listUsers(opts?: ListOptions): Promise<Page<AuthUser> | null>;
 
-	/**
-	 * Create a new user. Returns null if not supported.
-	 */
-	createUser(email: string, password: string, role: UserRole): Promise<AuthUser | null>;
+	/** Create a new user. Returns null if not supported. */
+	createUser(email: string, password: string, permissions: Permission[]): Promise<AuthUser | null>;
 
-	/**
-	 * Update a user's role. Returns false if not supported or user not found.
-	 */
-	updateUserRole(id: string, role: UserRole): Promise<boolean>;
+	/** Update a user's permissions. Returns false if not supported or user not found. */
+	updateUserPermissions(id: string, permissions: Permission[]): Promise<boolean>;
 
-	/**
-	 * Delete a user by ID. Returns false if not supported or user not found.
-	 */
+	/** Delete a user by ID. Returns false if not supported or user not found. */
 	deleteUser(id: string): Promise<boolean>;
 }

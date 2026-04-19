@@ -1,7 +1,8 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { getComputeServerProvider } from '$lib/server/providers.server';
-import { requirePlatformAdmin } from '$lib/server/access.server';
+import { getComputeServerConfigStore } from '$lib/server/providers.server';
+import { resolveServerById } from '@selva/platform';
+import { requireManageCompute } from '$lib/server/access.server';
 
 const TIMEOUT_MS = 8000;
 
@@ -16,12 +17,13 @@ function fetchFromServer(serverUrl: string, apiKey: string | undefined, path: st
 }
 
 export const GET: RequestHandler = async ({ url, locals }) => {
-	requirePlatformAdmin(locals);
+	requireManageCompute(locals);
 
 	const serverId = url.searchParams.get('serverId');
 	if (!serverId) throw error(400, 'serverId required');
 
-	const server = await getComputeServerProvider().getServerById(serverId);
+	const config = await getComputeServerConfigStore().getConfig();
+	const server = resolveServerById(config, serverId);
 	if (!server) throw error(404, 'Server not found');
 
 	try {

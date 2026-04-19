@@ -9,11 +9,11 @@ import {
 	MAX_GH_FILE_SIZE,
 	MAX_IMAGE_FILE_SIZE
 } from '$lib/server/admin-config';
-import { requirePlatformAdmin } from '$lib/server/access.server';
+import { requireManageDefinitions } from '$lib/server/access.server';
 
 // GET - List all files
 export const GET: RequestHandler = async ({ locals }) => {
-	requirePlatformAdmin(locals);
+	requireManageDefinitions(locals);
 	const envPath = env.DATA_PATH || './example-definitions';
 	const definitionsPath = resolve(process.cwd(), envPath);
 
@@ -28,7 +28,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 // POST - Upload a file
 export const POST: RequestHandler = async ({ request, locals }) => {
-	requirePlatformAdmin(locals);
+	requireManageDefinitions(locals);
 	const envPath = env.DATA_PATH || './example-definitions';
 	const definitionsPath = resolve(process.cwd(), envPath);
 
@@ -79,7 +79,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 // DELETE - Delete a file
 export const DELETE: RequestHandler = async ({ url, locals }) => {
-	requirePlatformAdmin(locals);
+	requireManageDefinitions(locals);
 	const envPath = env.DATA_PATH || './example-definitions';
 	const definitionsPath = resolve(process.cwd(), envPath);
 	const filename = url.searchParams.get('filename');

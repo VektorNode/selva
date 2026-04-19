@@ -1,5 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { redirect } from '@sveltejs/kit';
+import { isHttpError } from '@sveltejs/kit';
+import type { AuthUser, RequestContext } from '@selva/platform';
 import { providers } from '$lib/server/providers.server';
 
 /**
@@ -31,6 +33,18 @@ if (missing.length > 0) {
 	process.exit(1);
 }
 
+/**
+ * Build a per-request context from an authenticated user.
+ * Multi-tenant deployments will extend this to resolve the active org
+ * (from subdomain, header, or user's default).
+ */
+function buildContext(user: AuthUser): RequestContext {
+	return {
+		userId: user.id,
+		permissions: user.permissions
+	};
+}
+
 export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve }) => {
 	event.locals.providers = providers;
 
@@ -41,8 +55,8 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 
 	// On first run (no users yet), redirect all admin traffic to /admin/setup
 	if (isAdminRoute && !isPublicAdminRoute) {
-		const users = await providers.auth.listUsers();
-		if (users !== null && users.length === 0) {
+		const usersPage = await providers.auth.listUsers({ limit: 1 });
+		if (usersPage !== null && usersPage.items.length === 0) {
 			if (pathname.startsWith('/admin/api/')) {
 				return new Response(JSON.stringify({ error: 'Setup required' }), {
 					status: 503,
@@ -69,8 +83,9 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 			redirect(303, '/admin/login');
 		}
 
-		// Make the authenticated user available to route loaders
+		// Make the authenticated user + request context available to route loaders
 		event.locals.user = user;
+		event.locals.ctx = buildContext(user);
 	}
 
 	const response = await resolve(event);
@@ -90,4 +105,17 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	}
 
 	return response;
+};
+
+export const handleError: import('@sveltejs/kit').HandleServerError = ({ error, status }) => {
+	// For expected HTTP errors (thrown with error(4xx, message)), pass the message through as-is.
+	// For unexpected errors, show a generic message to avoid leaking internals.
+	if (isHttpError(error)) {
+		return { message: error.body.message };
+	}
+	if (status === 404) {
+		return { message: 'Page not found.' };
+	}
+	console.error('[Unhandled error]', error);
+	return { message: 'An unexpected error occurred.' };
 };

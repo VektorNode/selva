@@ -2,7 +2,8 @@
 	import { Button, Card, Input, toast } from 'selva-shared';
 	import { Plus, Trash2, ShieldCheck } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
-	import type { AuthUser, UserRole } from '@selva/platform/auth';
+	import type { AuthUser, Permission } from '@selva/platform/auth';
+	import { ALL_PERMISSIONS } from '@selva/platform/auth';
 
 	interface PageData {
 		users: AuthUser[] | null;
@@ -12,21 +13,32 @@
 	}
 	let { data }: Props = $props();
 
-	const ROLES: { value: UserRole; label: string }[] = [
-		{ value: 'platform_admin', label: 'Admin' },
-		{ value: 'user', label: 'User' }
-	];
+	const PERMISSION_LABELS: Record<Permission, string> = {
+		platform_admin: 'Platform Admin (all)',
+		manage_users: 'Manage Users',
+		manage_compute: 'Manage Compute',
+		manage_definitions: 'Manage Definitions',
+		manage_projects: 'Manage Projects'
+	};
 
 	// Add user form
 	let showAddForm = $state(false);
 	let newEmail = $state('');
 	let newPassword = $state('');
-	let newRole = $state<UserRole>('user');
+	let newPermissions = $state<Permission[]>([]);
 	let adding = $state(false);
 
 	// Per-user loading state
 	let deletingId = $state<string | null>(null);
-	let updatingRoleId = $state<string | null>(null);
+	let updatingId = $state<string | null>(null);
+
+	function toggleNewPermission(p: Permission, checked: boolean) {
+		if (checked) {
+			newPermissions = [...newPermissions, p];
+		} else {
+			newPermissions = newPermissions.filter((x) => x !== p);
+		}
+	}
 
 	async function addUser() {
 		adding = true;
@@ -34,13 +46,13 @@
 			const res = await fetch('/admin/api/users', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email: newEmail, password: newPassword, role: newRole })
+				body: JSON.stringify({ email: newEmail, password: newPassword, permissions: newPermissions })
 			});
 			if (res.ok) {
 				toast.success(`User "${newEmail}" created`);
 				newEmail = '';
 				newPassword = '';
-				newRole = 'user';
+				newPermissions = [];
 				showAddForm = false;
 				await invalidateAll();
 			} else {
@@ -54,24 +66,24 @@
 		}
 	}
 
-	async function updateRole(id: string, role: UserRole) {
-		updatingRoleId = id;
+	async function updatePermissions(id: string, permissions: Permission[]) {
+		updatingId = id;
 		try {
 			const res = await fetch(`/admin/api/users/${id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ role })
+				body: JSON.stringify({ permissions })
 			});
 			if (res.ok) {
-				toast.success('Role updated');
+				toast.success('Permissions updated');
 				await invalidateAll();
 			} else {
-				toast.error('Failed to update role');
+				toast.error('Failed to update permissions');
 			}
 		} catch {
-			toast.error('Failed to update role');
+			toast.error('Failed to update permissions');
 		} finally {
-			updatingRoleId = null;
+			updatingId = null;
 		}
 	}
 
@@ -129,22 +141,24 @@
 			{#if showAddForm}
 				<div class="bg-muted/40 space-y-3 rounded-lg border p-4">
 					<p class="text-sm font-medium">New User</p>
-					<div class="grid gap-3 sm:grid-cols-3">
-						<Input type="email" placeholder="Email" bind:value={newEmail} class="sm:col-span-1" />
-						<Input
-							type="password"
-							placeholder="Password (min 8 chars)"
-							bind:value={newPassword}
-							class="sm:col-span-1"
-						/>
-						<select
-							bind:value={newRole}
-							class="border-input bg-background rounded-md border px-3 py-2 text-sm"
-						>
-							{#each ROLES as role (role.value)}
-								<option value={role.value}>{role.label}</option>
+					<div class="grid gap-3 sm:grid-cols-2">
+						<Input type="email" placeholder="Email" bind:value={newEmail} />
+						<Input type="password" placeholder="Password (min 8 chars)" bind:value={newPassword} />
+					</div>
+					<div>
+						<p class="mb-2 text-xs font-medium">Permissions</p>
+						<div class="flex flex-wrap gap-3">
+							{#each ALL_PERMISSIONS as p (p)}
+								<label class="flex cursor-pointer items-center gap-1.5 text-xs">
+									<input
+										type="checkbox"
+										checked={newPermissions.includes(p)}
+										onchange={(e) => toggleNewPermission(p, (e.target as HTMLInputElement).checked)}
+									/>
+									{PERMISSION_LABELS[p]}
+								</label>
 							{/each}
-						</select>
+						</div>
 					</div>
 					<div class="flex gap-2">
 						<Button onclick={addUser} disabled={adding || !newEmail || !newPassword}>
@@ -177,32 +191,40 @@
 			{:else}
 				<div class="divide-y rounded-lg border">
 					{#each data.users as user (user.id)}
-						<div class="flex items-center justify-between px-4 py-3">
-							<div class="min-w-0 flex-1">
-								<p class="truncate text-sm font-medium">{user.email ?? user.id}</p>
-								<p class="text-muted-foreground text-xs">{user.id}</p>
-							</div>
-							<div class="ml-4 flex items-center gap-2">
-								<select
-									value={user.role}
-									disabled={updatingRoleId === user.id}
-									onchange={(e) =>
-										updateRole(user.id, (e.target as HTMLSelectElement).value as UserRole)}
-									class="border-input bg-background rounded-md border px-2 py-1 text-xs disabled:opacity-50"
-								>
-									{#each ROLES as role (role.value)}
-										<option value={role.value}>{role.label}</option>
-									{/each}
-								</select>
+						<div class="px-4 py-3">
+							<div class="flex items-start justify-between gap-4">
+								<div class="min-w-0 flex-1">
+									<p class="truncate text-sm font-medium">{user.email ?? user.id}</p>
+									<p class="text-muted-foreground text-xs">{user.id}</p>
+								</div>
 								<Button
 									variant="ghost"
 									size="sm"
 									disabled={deletingId === user.id}
 									onclick={() => deleteUser(user.id, user.email ?? user.id)}
-									class="text-destructive hover:text-destructive h-8 w-8 p-0"
+									class="text-destructive hover:text-destructive h-8 w-8 shrink-0 p-0"
 								>
 									<Trash2 class="h-4 w-4" />
 								</Button>
+							</div>
+							<div class="mt-2 flex flex-wrap gap-3">
+								{#each ALL_PERMISSIONS as p (p)}
+									<label class="flex cursor-pointer items-center gap-1.5 text-xs">
+										<input
+											type="checkbox"
+											checked={user.permissions.includes(p)}
+											disabled={updatingId === user.id}
+											onchange={async (e) => {
+												const checked = (e.target as HTMLInputElement).checked;
+												const next = checked
+													? [...user.permissions, p]
+													: user.permissions.filter((x) => x !== p);
+												await updatePermissions(user.id, next);
+											}}
+										/>
+										{PERMISSION_LABELS[p]}
+									</label>
+								{/each}
 							</div>
 						</div>
 					{/each}

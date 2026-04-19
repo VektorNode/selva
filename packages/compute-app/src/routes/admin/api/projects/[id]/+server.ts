@@ -2,12 +2,13 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getOrganizationProvider } from '$lib/server/providers.server';
 import { requireCanManage, throwProviderError } from '$lib/server/access.server';
-import type { ProjectVisibility } from '@selva/platform/organizations';
+import type { ProjectVisibility } from '@selva/platform';
 
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	const { id } = params;
 	if (!id) throw error(400, 'Missing project ID');
 	await requireCanManage(locals, id);
+	const ctx = locals.ctx!;
 
 	const body = await request.json().catch(() => null);
 	if (!body || typeof body !== 'object') throw error(400, 'Invalid request body');
@@ -30,6 +31,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 
 	try {
 		await getOrganizationProvider().updateProject(
+			ctx,
 			id,
 			patch as {
 				name?: string;
@@ -48,9 +50,10 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const { id } = params;
 	if (!id) throw error(400, 'Missing project ID');
 	await requireCanManage(locals, id);
+	const ctx = locals.ctx!;
 
 	try {
-		await getOrganizationProvider().deleteProject(id);
+		await getOrganizationProvider().deleteProject(ctx, id);
 		return json({ success: true });
 	} catch (err) {
 		throwProviderError(err, 'Failed to delete project');

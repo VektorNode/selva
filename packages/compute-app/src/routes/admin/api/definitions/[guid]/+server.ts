@@ -1,26 +1,27 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { getDefinitionFiles, getDefinitionMeta } from '$lib/server/definitions.server';
+import { definitionService, getDefinitionMeta } from '$lib/server/providers.server';
 import { requireCanEdit } from '$lib/server/access.server';
 import { GuidSchema, UpdateMetadataInputSchema } from '@selva/platform/definitions/schemas';
+import type { RequestContext } from '@selva/platform';
 
-async function resolveProjectId(guid: string): Promise<string> {
-	const record = await getDefinitionMeta().get(guid);
+async function resolveProjectId(ctx: RequestContext, guid: string): Promise<string> {
+	const record = await getDefinitionMeta().get(ctx, guid);
 	if (!record) throw error(404, 'Definition not found');
 	return record.projectId;
 }
 
-// DELETE - Remove a definition: deletes the entire GUID folder and config entry
+// DELETE - Remove a definition and all its files
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const guidParsed = GuidSchema.safeParse(params.guid);
 	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
 
-	const projectId = await resolveProjectId(guidParsed.data);
+	const ctx = locals.ctx!;
+	const projectId = await resolveProjectId(ctx, guidParsed.data);
 	await requireCanEdit(locals, projectId);
 
 	try {
-		await getDefinitionMeta().delete(guidParsed.data);
-		await getDefinitionFiles().deleteFiles(guidParsed.data);
+		await definitionService.delete(ctx, guidParsed.data);
 		return json({ success: true });
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
@@ -34,7 +35,8 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 	const guidParsed = GuidSchema.safeParse(params.guid);
 	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
 
-	const projectId = await resolveProjectId(guidParsed.data);
+	const ctx = locals.ctx!;
+	const projectId = await resolveProjectId(ctx, guidParsed.data);
 	await requireCanEdit(locals, projectId);
 
 	try {
@@ -43,7 +45,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 		if (!parsed.success) throw error(400, parsed.error.issues[0].message);
 
 		const { maxHistory, projectId: newProjectId, computeServerId, ...metaFields } = parsed.data;
-		await getDefinitionMeta().update(guidParsed.data, {
+		await definitionService.updateMeta(ctx, guidParsed.data, {
 			...(maxHistory !== undefined && { maxHistory }),
 			...(newProjectId !== undefined && { projectId: newProjectId }),
 			...(computeServerId !== undefined && { computeServerId }),

@@ -1,11 +1,16 @@
 import { timingSafeEqual } from 'node:crypto';
 import * as path from 'node:path';
-import type { IAuthProvider, AuthUser, UserRole } from '@selva/platform/auth';
+import type { IAuthProvider, AuthUser, Permission } from '@selva/platform';
+import { ALL_PERMISSIONS, ProviderError } from '@selva/platform';
 import { signHmacToken, verifyHmacToken } from './hmac.js';
 import { verifyPasswordHash, createLocalUserMetaProvider } from './users.js';
 import type { LocalUserMetaProvider } from './users.js';
+import { paginate } from '../pagination.js';
+import type { ListOptions, Page } from '@selva/platform';
 
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+const FALLBACK_ADMIN_ID = 'local-admin';
 
 export interface LocalAuthProviderConfig {
 	/** HMAC signing secret. Pass from env (SESSION_SECRET). */
@@ -49,20 +54,32 @@ export class LocalAuthProvider implements IAuthProvider {
 	}
 
 	/**
-	 * Verify an HMAC session token (the raw cookie value).
-	 * Returns the authenticated user, or null if the token is invalid or expired.
+	 * Verify an HMAC session token.
 	 *
-	 * TODO(multi-user): The token currently carries only an expiry — no user identity.
-	 * To support per-user sessions, encode the user ID in the token payload and decode
-	 * it here to return the correct AuthUser.
+	 * The token payload carries the userId so we can look up the live user
+	 * record — permissions changes take effect on the next request, not
+	 * just at the next login.
 	 */
 	async verifyToken(token: string): Promise<AuthUser | null> {
-		if (!verifyHmacToken(token, this.hmacSecret)) return null;
-		return { id: 'local-admin', role: 'platform_admin' };
+		const { valid, userId } = verifyHmacToken(token, this.hmacSecret);
+		if (!valid) return null;
+
+		// Fallback admin (single-password mode, no users.json)
+		if (userId === FALLBACK_ADMIN_ID) {
+			return { id: FALLBACK_ADMIN_ID, permissions: [...ALL_PERMISSIONS] };
+		}
+
+		// Look up live user record so permission changes are reflected immediately
+		if (this.users) {
+			const u = await this.users.findById(userId);
+			if (u) return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions };
+		}
+
+		return null;
 	}
 
-	async createSessionToken(_user: AuthUser): Promise<string> {
-		return signHmacToken(this.hmacSecret, SESSION_MAX_AGE_MS);
+	async createSessionToken(user: AuthUser): Promise<string> {
+		return signHmacToken(this.hmacSecret, user.id, SESSION_MAX_AGE_MS);
 	}
 
 	async verifyLoginCredentials(email: string, password: string): Promise<AuthUser | null> {
@@ -70,7 +87,7 @@ export class LocalAuthProvider implements IAuthProvider {
 		if (this.users) {
 			const user = await this.users.findByEmail(email);
 			if (user && (await verifyPasswordHash(password, user.passwordHash))) {
-				return { id: user.id, email: user.email, displayName: user.displayName, role: user.role };
+				return { id: user.id, email: user.email, displayName: user.displayName, permissions: user.permissions };
 			}
 		}
 
@@ -79,7 +96,7 @@ export class LocalAuthProvider implements IAuthProvider {
 			const a = Buffer.from(password);
 			const b = Buffer.from(this.fallbackAdminPassword);
 			if (a.length === b.length && timingSafeEqual(a, b)) {
-				return { id: 'local-admin', role: 'platform_admin' };
+				return { id: FALLBACK_ADMIN_ID, permissions: [...ALL_PERMISSIONS] };
 			}
 		}
 
@@ -89,43 +106,44 @@ export class LocalAuthProvider implements IAuthProvider {
 	async getUser(id: string): Promise<AuthUser | null> {
 		if (this.users) {
 			const u = await this.users.findById(id);
-			if (u) return { id: u.id, email: u.email, displayName: u.displayName, role: u.role };
+			if (u) return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions };
 		}
-		if (id === 'local-admin') {
-			return { id: 'local-admin', role: 'platform_admin' };
+		if (id === FALLBACK_ADMIN_ID) {
+			return { id: FALLBACK_ADMIN_ID, permissions: [...ALL_PERMISSIONS] };
 		}
 		return null;
 	}
 
-	async listUsers(): Promise<AuthUser[] | null> {
+	async listUsers(opts?: ListOptions): Promise<Page<AuthUser> | null> {
 		if (!this.users) return null;
 		const users = await this.users.listUsers();
-		return users.map((u) => ({
+		const mapped: AuthUser[] = users.map((u) => ({
 			id: u.id,
 			email: u.email,
 			displayName: u.displayName,
-			role: u.role
+			permissions: u.permissions
 		}));
+		return paginate(mapped, opts);
 	}
 
 	async createUser(
 		email: string,
 		password: string,
-		role: UserRole,
-		displayName?: string
+		permissions: Permission[]
 	): Promise<AuthUser | null> {
 		if (!this.users) return null;
-		const u = await this.users.createUser(email, password, role, displayName);
-		return { id: u.id, email: u.email, displayName: u.displayName, role: u.role };
+		const u = await this.users.createUser(email, password, permissions);
+		return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions };
 	}
 
-	async updateUserRole(id: string, role: UserRole): Promise<boolean> {
+	async updateUserPermissions(id: string, permissions: Permission[]): Promise<boolean> {
 		if (!this.users) return false;
 		try {
-			await this.users.updateRole(id, role);
+			await this.users.updatePermissions(id, permissions);
 			return true;
-		} catch {
-			return false;
+		} catch (err) {
+			if (err instanceof ProviderError && err.statusCode === 404) return false;
+			throw err;
 		}
 	}
 
@@ -134,8 +152,9 @@ export class LocalAuthProvider implements IAuthProvider {
 		try {
 			await this.users.deleteUser(id);
 			return true;
-		} catch {
-			return false;
+		} catch (err) {
+			if (err instanceof ProviderError && err.statusCode === 404) return false;
+			throw err;
 		}
 	}
 }

@@ -60,4 +60,3 @@ bash setup-caddy.sh --domain app.example.com  # HTTPS via Let's Encrypt
 ## Next Steps
 
 - **[Node.js Deployment](./NODE_DEPLOYMENT.md)** — PM2 configuration and management
-- **[Docker Deployment](./DOCKER_DEPLOYMENT.md)** — Docker image setup

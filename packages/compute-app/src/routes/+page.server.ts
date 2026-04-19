@@ -1,12 +1,13 @@
 import type { PageServerLoad } from './$types';
-import { getDefinitionMeta } from '$lib/server/definitions.server';
+import { getDefinitionMeta } from '$lib/server/providers.server';
+import { SYSTEM_CONTEXT } from '@selva/platform';
 
 export const load = (async () => {
 	try {
 		const meta = getDefinitionMeta();
-		const records = await meta.list();
+		const recordsPage = await meta.list(SYSTEM_CONTEXT, { limit: 200 });
 
-		const definitions = records.map((r) => ({
+		const definitions = recordsPage.items.map((r) => ({
 			guid: r.guid,
 			filename: `definition.${r.fileExt}`,
 			fileType: r.fileExt,

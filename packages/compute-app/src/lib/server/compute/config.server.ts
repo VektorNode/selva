@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/private';
 
-export { getComputeServerProvider } from '../providers.server.js';
+export { getComputeServerConfigStore } from '../providers.server.js';
 
 export type ServerConfig = {
 	computeServerUrl: string;

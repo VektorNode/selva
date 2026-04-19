@@ -1,25 +1,27 @@
-import { getDefinitionMeta } from '$lib/server/definitions.server';
-import { getOrganizationProvider } from '$lib/server/providers.server';
+import { getDefinitionMeta, getOrganizationProvider } from '$lib/server/providers.server';
 import { getAuthProvider } from '$lib/server/auth.server';
+import { SYSTEM_CONTEXT } from '@selva/platform';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+	const ctx = locals.ctx ?? SYSTEM_CONTEXT;
 	try {
-		const [records, orgList, users] = await Promise.all([
-			getDefinitionMeta().list(),
-			getOrganizationProvider().listOrgs(),
-			getAuthProvider().listUsers()
+		const [recordsPage, orgsPage, usersPage] = await Promise.all([
+			getDefinitionMeta().list(ctx, { limit: 200 }),
+			getOrganizationProvider().listOrgs(ctx, { limit: 200 }),
+			getAuthProvider().listUsers({ limit: 200 })
 		]);
 
-		const projects = (
-			await Promise.all(orgList.map((org) => getOrganizationProvider().listProjects(org.id)))
-		).flat();
+		const projectPages = await Promise.all(
+			orgsPage.items.map((org) => getOrganizationProvider().listProjects(ctx, org.id, { limit: 200 }))
+		);
+		const projects = projectPages.flatMap((p) => p.items);
 
 		return {
 			stats: {
-				definitions: records.length,
+				definitions: recordsPage.items.length,
 				projects: projects.length,
-				users: users?.length ?? null
+				users: usersPage?.items.length ?? null
 			}
 		};
 	} catch {

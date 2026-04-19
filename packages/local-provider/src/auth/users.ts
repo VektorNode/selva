@@ -1,19 +1,18 @@
 import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import { ProviderError } from '@selva/platform';
+import type { Permission } from '@selva/platform';
 
-export type UserRole = 'platform_admin' | 'user';
+export type { Permission };
 
 export interface StoredUser {
 	id: string;
 	email: string;
 	displayName?: string;
-	role: UserRole;
-	/**
-	 * Password hash in format: "pbkdf2:sha256:<iterations>:<salt>:<hash>"
-	 * All binary values are base64url encoded.
-	 */
+	permissions: Permission[];
+	/** "pbkdf2:sha256:<iterations>:<salt>:<hash>" — all binary values base64url encoded. */
 	passwordHash: string;
 	createdAt: string; // ISO 8601
 }
@@ -22,8 +21,7 @@ export interface UsersFile {
 	users: StoredUser[];
 }
 
-// ── PBKDF2 password hashing ────────────────────────────────────────────────
-// Uses Node.js built-in crypto — no extra dependencies.
+// ── PBKDF2 password hashing ───────────────────────────────────────────────
 
 const PBKDF2_ITERATIONS = 100_000;
 const PBKDF2_KEYLEN = 32;
@@ -72,6 +70,7 @@ async function readUsersFile(usersPath: string): Promise<UsersFile> {
 }
 
 async function writeUsersFile(usersPath: string, data: UsersFile): Promise<void> {
+	await fs.mkdir(path.dirname(usersPath), { recursive: true });
 	const tmp = `${usersPath}.tmp`;
 	await fs.writeFile(tmp, JSON.stringify(data, null, '\t'), 'utf-8');
 	await fs.rename(tmp, usersPath);
@@ -86,10 +85,10 @@ export interface LocalUserMetaProvider {
 	createUser(
 		email: string,
 		password: string,
-		role: UserRole,
+		permissions: Permission[],
 		displayName?: string
 	): Promise<StoredUser>;
-	updateRole(id: string, role: UserRole): Promise<void>;
+	updatePermissions(id: string, permissions: Permission[]): Promise<void>;
 	deleteUser(id: string): Promise<void>;
 }
 
@@ -107,11 +106,10 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 
 		async listUsers() {
 			const { users } = await readUsersFile(usersFilePath);
-			// Strip passwordHash before returning
 			return users.map(({ passwordHash: _ph, ...rest }) => rest);
 		},
 
-		async createUser(email, password, role, displayName?) {
+		async createUser(email, password, permissions, displayName?) {
 			const file = await readUsersFile(usersFilePath);
 			if (file.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
 				throw new ProviderError(`User with email "${email}" already exists`, 409);
@@ -120,7 +118,7 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 				id: randomUUID(),
 				email,
 				...(displayName && { displayName }),
-				role,
+				permissions,
 				passwordHash: await hashPassword(password),
 				createdAt: new Date().toISOString()
 			};
@@ -129,11 +127,11 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 			return user;
 		},
 
-		async updateRole(id, role) {
+		async updatePermissions(id, permissions) {
 			const file = await readUsersFile(usersFilePath);
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
-			user.role = role;
+			user.permissions = permissions;
 			await writeUsersFile(usersFilePath, file);
 		},
 

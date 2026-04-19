@@ -2,20 +2,27 @@
 	import { page } from '$app/state';
 	import { enhance } from '$app/forms';
 	import { Button, PageHeader } from 'selva-shared';
+	import type { Permission } from '@selva/platform';
+	import { hasPermission } from '@selva/platform';
 
+	interface LayoutData {
+		permissions: Permission[];
+	}
 	interface LayoutProps {
+		data: LayoutData;
 		children?: import('svelte').Snippet;
 	}
+	let { data, children }: LayoutProps = $props();
 
-	let { children }: LayoutProps = $props();
+	const can = (p: Permission) => hasPermission(data.permissions, p);
 
-	const navItems = [
-		{ href: '/admin', label: 'Dashboard' },
-		{ href: '/admin/definitions', label: 'Definitions' },
-		{ href: '/admin/projects', label: 'Projects' },
-		{ href: '/admin/users', label: 'Users' },
-		{ href: '/admin/compute', label: 'Compute' }
-	];
+	const navItems = $derived([
+		{ href: '/admin', label: 'Dashboard', show: true },
+		{ href: '/admin/definitions', label: 'Definitions', show: can('manage_definitions') },
+		{ href: '/admin/projects', label: 'Projects', show: can('manage_projects') },
+		{ href: '/admin/users', label: 'Users', show: can('manage_users') },
+		{ href: '/admin/compute', label: 'Compute', show: can('manage_compute') }
+	].filter((i) => i.show));
 
 	const isActive = (href: string) =>
 		href === '/admin' ? page.url.pathname === '/admin' : page.url.pathname.startsWith(href);
