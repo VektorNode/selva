@@ -12,7 +12,6 @@ Follow these steps in order:
 2. **[Server Setup](./SERVER_SETUP.md)** — Install tools, clone repo, build (automated via `setup.sh`)
 3. **Choose a deployment method:**
    - **[Node.js with PM2](./NODE_DEPLOYMENT.md)** — Simpler, lower overhead (recommended for most)
-   - **[Docker](./DOCKER_DEPLOYMENT.md)** — Container-based, better for scaling (Experimental)
 4. **[Caddy Reverse Proxy](./REVERSE_PROXY_LOAD_BALANCER.md)** — HTTPS and port 80 forwarding (recommended for production)
 5. **[Configure Definitions](./DEFINITIONS_SETUP.md)** — Set up your `.gh` files
 

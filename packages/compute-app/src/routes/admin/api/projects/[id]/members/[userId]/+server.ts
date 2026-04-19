@@ -2,13 +2,15 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getOrganizationProvider } from '$lib/server/providers.server';
 import { throwProviderError } from '$lib/server/access.server';
-import type { ProjectRole } from '@selva/platform/organizations';
+import { SYSTEM_CONTEXT } from '@selva/platform';
+import type { ProjectRole } from '@selva/platform';
 
 const VALID_ROLES: ProjectRole[] = ['owner', 'editor', 'viewer'];
 
-export const PATCH: RequestHandler = async ({ params, request }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	const { id, userId } = params;
 	if (!id || !userId) throw error(400, 'Missing project ID or user ID');
+	const ctx = locals.ctx ?? SYSTEM_CONTEXT;
 
 	const body = await request.json().catch(() => null);
 	const { role } = (body ?? {}) as Record<string, unknown>;
@@ -17,19 +19,20 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 	}
 
 	try {
-		await getOrganizationProvider().updateProjectMemberRole(id, userId, role as ProjectRole);
+		await getOrganizationProvider().updateProjectMemberRole(ctx, id, userId, role as ProjectRole);
 		return json({ success: true });
 	} catch (err) {
 		throwProviderError(err, 'Failed to update role');
 	}
 };
 
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const { id, userId } = params;
 	if (!id || !userId) throw error(400, 'Missing project ID or user ID');
+	const ctx = locals.ctx ?? SYSTEM_CONTEXT;
 
 	try {
-		await getOrganizationProvider().removeProjectMember(id, userId);
+		await getOrganizationProvider().removeProjectMember(ctx, id, userId);
 		return json({ success: true });
 	} catch (err) {
 		throwProviderError(err, 'Failed to remove member');

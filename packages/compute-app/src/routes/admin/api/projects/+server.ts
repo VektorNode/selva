@@ -1,15 +1,20 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getOrganizationProvider } from '$lib/server/providers.server';
-import { requirePlatformAdmin, throwProviderError } from '$lib/server/access.server';
+import { requireManageProjects, throwProviderError } from '$lib/server/access.server';
 import { randomUUID } from 'node:crypto';
-import type { Project } from '@selva/platform/organizations';
+import { SYSTEM_CONTEXT } from '@selva/platform';
+import type { Project } from '@selva/platform';
 
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async ({ locals }) => {
+	const ctx = locals.ctx ?? SYSTEM_CONTEXT;
 	try {
 		const orgs = getOrganizationProvider();
-		const orgList = await orgs.listOrgs();
-		const projects = (await Promise.all(orgList.map((org) => orgs.listProjects(org.id)))).flat();
+		const orgsPage = await orgs.listOrgs(ctx, { limit: 200 });
+		const projectPages = await Promise.all(
+			orgsPage.items.map((org) => orgs.listProjects(ctx, org.id, { limit: 200 }))
+		);
+		const projects = projectPages.flatMap((p) => p.items);
 		return json({ projects });
 	} catch (err) {
 		console.error('[Projects GET] Failed:', err);
@@ -18,7 +23,8 @@ export const GET: RequestHandler = async () => {
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-	requirePlatformAdmin(locals);
+	requireManageProjects(locals);
+	const ctx = locals.ctx!;
 	const body = await request.json().catch(() => null);
 	if (!body || typeof body !== 'object') throw error(400, 'Invalid request body');
 
@@ -27,7 +33,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(400, 'Project name is required');
 
 	const orgs = getOrganizationProvider();
-	const [org] = await orgs.listOrgs();
+	const orgsPage = await orgs.listOrgs(ctx, { limit: 1 });
+	const org = orgsPage.items[0];
 	if (!org) throw error(500, 'No organization configured');
 
 	const now = new Date().toISOString();
@@ -52,7 +59,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	};
 
 	try {
-		await orgs.createProject(project);
+		await orgs.createProject(ctx, project);
 		return json(project, { status: 201 });
 	} catch (err) {
 		throwProviderError(err, 'Failed to create project');

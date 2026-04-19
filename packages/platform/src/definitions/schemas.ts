@@ -31,9 +31,7 @@ export const CreateDefinitionInputSchema = DefinitionMetadataSchema.omit({
 	computeServerId: GuidSchema.optional()
 });
 
-/** Partial patch for updating an existing definition.
- * Uses nullish() on string fields so null values (e.g. from manual config edits) are
- * coerced to undefined instead of failing validation. */
+/** Partial patch for updating an existing definition. */
 export const UpdateMetadataInputSchema = DefinitionMetadataSchema.omit({
 	history: true
 })

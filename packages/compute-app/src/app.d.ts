@@ -8,9 +8,14 @@ declare global {
 		}
 		interface Locals {
 			/** Authenticated user, set by hooks.server.ts for protected routes */
-			user?: import('@selva/platform/auth').AuthUser;
+			user?: import('@selva/platform').AuthUser;
+			/**
+			 * Per-request identity + scope for data provider calls.
+			 * Set by hooks.server.ts whenever a user is authenticated.
+			 */
+			ctx?: import('@selva/platform').RequestContext;
 			/** Resolved provider instances, attached on every request by hooks.server.ts */
-			providers: import('@selva/platform/config').SelvaConfig;
+			providers: import('@selva/platform').SelvaConfig;
 		}
 		// interface PageData {}
 		// interface PageState {}

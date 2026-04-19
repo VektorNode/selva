@@ -1,31 +1,30 @@
-import type { IAuthProvider } from './auth.js';
-import type { IDefinitionFileProvider, IDefinitionMetaProvider } from './definitions.js';
-import type { IComputeServerProvider } from './compute.js';
-import type { IOrganizationProvider } from './organizations.js';
+import type { IAuthProvider } from './auth/interface.js';
+import type { IDataProvider } from './data/interface.js';
+import type { IStorageProvider } from './storage/interface.js';
 
 export interface SelvaConfig {
-	/** Auth provider — handles session tokens and credential verification */
+	/** Auth provider — session tokens and credential verification */
 	auth: IAuthProvider;
 
-	/** Organization and project provider — orgs, projects, membership, access checks */
-	organizations: IOrganizationProvider;
+	/**
+	 * Structured data provider — orgs, projects, members, definition metadata,
+	 * and compute server configuration.
+	 * To add a new entity type, extend IDataProvider rather than adding a new key here.
+	 */
+	data: IDataProvider;
 
-	/** File storage provider — GH binaries, archives, preview images */
-	definitionFiles: IDefinitionFileProvider;
-
-	/** Metadata storage provider — definitions-config.json or DB */
-	definitionMeta: IDefinitionMetaProvider;
-
-	/** Compute server provider — resolves which Rhino.Compute to use */
-	compute: IComputeServerProvider;
+	/**
+	 * Blob storage provider — .gh/.ghx files, archived versions, images.
+	 * Generic path-based interface: works with filesystem, S3, Firebase Storage, etc.
+	 */
+	storage: IStorageProvider;
 }
 
 export type SelvaConfigFactory = (env: Record<string, string | undefined>) => SelvaConfig;
 
 /**
- * Same pattern as Vite's `defineConfig` — exists only for TypeScript inference and IDE autocomplete.
- * Accepts either a plain config object (legacy) or a factory function that receives env vars.
- * Use the factory form so each provider owns its own env var validation via `fromEnv()`.
+ * Same pattern as Vite's defineConfig — exists only for TypeScript inference and IDE autocomplete.
+ * Use the factory form so each provider owns its own env var validation via fromEnv().
  */
 export function defineConfig(
 	config: SelvaConfig | SelvaConfigFactory

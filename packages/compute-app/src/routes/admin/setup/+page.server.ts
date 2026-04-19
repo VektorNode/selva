@@ -5,12 +5,12 @@ import { createSession } from '$lib/server/admin-auth.server';
 
 // Redirect away if users already exist — setup is only for a fresh install
 export const load: PageServerLoad = async () => {
-	const users = await getAuthProvider().listUsers();
-	if (users === null) {
+	const page = await getAuthProvider().listUsers({ limit: 1 });
+	if (page === null) {
 		// Single-password mode — setup not applicable
 		redirect(303, '/admin/login');
 	}
-	if (users.length > 0) {
+	if (page.items.length > 0) {
 		redirect(303, '/admin/login');
 	}
 	return {};
@@ -35,7 +35,7 @@ export const actions = {
 
 		try {
 			const auth = getAuthProvider();
-			const user = await auth.createUser(email, password, 'platform_admin');
+			const user = await auth.createUser(email, password, ['platform_admin', 'manage_users', 'manage_compute', 'manage_definitions', 'manage_projects']);
 			if (!user) return fail(500, { error: 'Failed to create user' });
 			await createSession(cookies, user);
 		} catch (err) {

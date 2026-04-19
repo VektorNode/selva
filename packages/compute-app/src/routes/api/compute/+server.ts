@@ -9,8 +9,9 @@ import {
 } from 'selva-compute';
 import type { SchemaInput } from 'selva-shared';
 import { error, json, isHttpError } from '@sveltejs/kit';
-import { getComputeServerProvider } from '$lib/server/compute/config.server';
-import { getDefinitionFiles } from '$lib/server/definitions.server';
+import { getComputeServerConfigStore } from '$lib/server/compute/config.server';
+import { resolveComputeServer, definitionPaths, SYSTEM_CONTEXT } from '@selva/platform';
+import { getStorageProvider, providers } from '$lib/server/providers.server';
 
 interface ComputeRequest {
 	inputs: (SchemaInput & { minimum?: number; maximum?: number; stepSize?: number })[];
@@ -37,7 +38,8 @@ let cachedClientConfig: { serverUrl: string; apiKey?: string } | null = null;
  * Reuses existing client if config hasn't changed.
  */
 async function getClient(definitionGuid?: string): Promise<GrasshopperClient> {
-	const serverConfig = await getComputeServerProvider().getServer({ definitionGuid });
+	const config = await getComputeServerConfigStore().getConfig();
+	const serverConfig = resolveComputeServer(config, { definitionGuid });
 	const currentConfig = {
 		serverUrl: serverConfig.serverUrl,
 		apiKey: serverConfig.apiKey
@@ -145,7 +147,7 @@ function transformInputParameter(
 }
 
 export const POST: RequestHandler = async ({ request }) => {
-	const files = getDefinitionFiles();
+	const storage = getStorageProvider();
 
 	try {
 		const body: ComputeRequest = await request.json();
@@ -169,7 +171,9 @@ export const POST: RequestHandler = async ({ request }) => {
 			// Extract GUID from local URL (format: "local:{guid}")
 			const guid = definitionUrl.substring(6);
 			try {
-				const bytes = await files.getFile(guid);
+				const record = await providers.data.definitions.get(SYSTEM_CONTEXT, guid);
+				if (!record) throw new Error(`Definition '${guid}' not found`);
+				const bytes = await storage.get(definitionPaths.file(guid, record.fileExt));
 				if (!bytes) throw new Error(`Definition '${guid}' not found on disk`);
 				definitionSource = bytes;
 			} catch (err) {

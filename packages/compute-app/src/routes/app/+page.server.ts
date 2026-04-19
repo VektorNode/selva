@@ -3,9 +3,9 @@ import { error } from '@sveltejs/kit';
 import { GrasshopperClient } from 'selva-compute/grasshopper';
 import { camelcaseKeys } from 'selva-compute/core';
 import type { UISchema } from 'selva-shared';
-import { getServerConfig } from '$lib/server/compute/config.server';
-import { getComputeServerProvider } from '$lib/server/providers.server';
-import { getDefinitionFiles, getDefinitionMeta } from '$lib/server/definitions.server';
+import { getServerConfig, getComputeServerConfigStore } from '$lib/server/compute/config.server';
+import { resolveComputeServer, SYSTEM_CONTEXT } from '@selva/platform';
+import { getStorageProvider, getDefinitionMeta } from '$lib/server/providers.server';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -55,7 +55,7 @@ async function fetchSchemaFromCompute(
 
 export const load = (async ({ url }) => {
 	const config = getServerConfig();
-	const files = getDefinitionFiles();
+	const storage = getStorageProvider();
 	const meta = getDefinitionMeta();
 
 	const ghFilename = url.searchParams.get('gh');
@@ -76,8 +76,8 @@ export const load = (async ({ url }) => {
 		if (UUID_REGEX.test(ghFilename)) {
 			guid = ghFilename;
 		} else {
-			const records = await meta.list();
-			const match = records.find(
+			const recordsPage = await meta.list(SYSTEM_CONTEXT, { limit: 200 });
+			const match = recordsPage.items.find(
 				(r) => r.meta.originalFilename === ghFilename || `definition.${r.fileExt}` === ghFilename
 			);
 			if (match) guid = match.guid;
@@ -85,7 +85,9 @@ export const load = (async ({ url }) => {
 
 		if (!guid) throw new Error(`Definition '${ghFilename}' not found`);
 
-		const bytes = await files.getFile(guid);
+		const record = await meta.get(SYSTEM_CONTEXT, guid);
+		if (!record) throw new Error(`Definition '${guid}' not found`);
+		const bytes = await storage.get(`definitions/${guid}/definition.${record.fileExt}`);
 		if (!bytes) throw new Error(`Definition file for '${guid}' not found on disk`);
 
 		definitionSource = bytes;
@@ -148,7 +150,8 @@ export const load = (async ({ url }) => {
 			return schemaInput;
 		});
 
-		const server = await getComputeServerProvider().getDefaultServer();
+		const computeConfig = await getComputeServerConfigStore().getConfig();
+		const server = computeConfig.servers.length > 0 ? resolveComputeServer(computeConfig) : undefined;
 
 		return {
 			schema,
