@@ -11,6 +11,10 @@
 	);
 
 	const initial = $derived(label[0]?.toUpperCase() ?? '');
+
+	const loginHref = $derived(
+		`/login?redirectTo=${encodeURIComponent(page.url.pathname + page.url.search)}`
+	);
 </script>
 
 {#if user}
@@ -34,7 +38,7 @@
 {:else}
 	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 	<a
-		href="/login"
+		href={loginHref}
 		class="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm transition-colors"
 	>
 		<LogIn class="h-4 w-4" />

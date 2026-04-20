@@ -10,7 +10,7 @@ import { getAuthProvider } from '$lib/server/auth.server';
 
 export const actions = {
 	default: async (event: RequestEvent) => {
-		const { request, cookies } = event;
+		const { request, cookies, url } = event;
 		const ip = event.getClientAddress();
 
 		const { allowed } = checkRateLimit(ip);
@@ -22,6 +22,7 @@ export const actions = {
 		// Email is optional — when users.json is not configured only password is needed
 		const email = (data.get('email') as string | null) ?? '';
 		const password = data.get('password');
+		const redirectTo = data.get('redirectTo');
 
 		if (!password || typeof password !== 'string') {
 			return fail(400, { error: 'Password is required' });
@@ -36,6 +37,14 @@ export const actions = {
 
 		clearRateLimit(ip);
 		await createSession(cookies, user);
-		redirect(303, '/admin');
+
+		// Redirect back to where the user came from, defaulting to /admin.
+		// Only allow same-origin paths to prevent open redirect attacks.
+		const destination =
+			typeof redirectTo === 'string' && redirectTo.startsWith('/')
+				? redirectTo
+				: url.searchParams.get('redirectTo') ?? '/admin';
+
+		redirect(303, destination.startsWith('/') ? destination : '/admin');
 	}
 } satisfies Actions;

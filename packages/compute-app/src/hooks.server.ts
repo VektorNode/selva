@@ -91,7 +91,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 				const response = await resolve(event);
 				return response;
 			}
-			redirect(303, '/login');
+			redirect(303, `/login?redirectTo=${encodeURIComponent(pathname)}`);
 		}
 
 		// Make the authenticated user + request context available to route loaders
