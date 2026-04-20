@@ -23,7 +23,9 @@
 	}
 	let { data }: Props = $props();
 
-	console.log('Loaded compute config:', data);
+	$effect(() => {
+		console.log('Loaded compute config:', data);
+	});
 
 	const statusConfig = {
 		ok: { label: 'Online', color: 'text-green-600 dark:text-green-400' },
@@ -211,11 +213,11 @@
 			<div class="grid grid-cols-3 gap-2">
 				<div class="bg-muted/40 rounded-md px-3 py-2">
 					<p class="text-muted-foreground text-xs">Rhino</p>
-					<p class="mt-0.5 text-xs font-medium">{health.rhinoVersion ?? '\u2014'}</p>
+					<p class="mt-0.5 text-xs font-medium">{health.rhinoVersion ?? '-'}</p>
 				</div>
 				<div class="bg-muted/40 rounded-md px-3 py-2">
 					<p class="text-muted-foreground text-xs">Compute</p>
-					<p class="mt-0.5 text-xs font-medium">{health.computeVersion ?? '\u2014'}</p>
+					<p class="mt-0.5 text-xs font-medium">{health.computeVersion ?? '-'}</p>
 				</div>
 				<div class="bg-muted/40 rounded-md px-3 py-2">
 					<p class="text-muted-foreground text-xs">Selva Plugin</p>
@@ -246,7 +248,7 @@
 					<Input
 						type="password"
 						placeholder={server.hasApiKey && server.apiKey !== API_KEY_CLEAR && !server.apiKey
-							? 'Key set \u2014 enter new value to replace'
+							? 'Key set - enter new value to replace'
 							: server.apiKey === API_KEY_CLEAR
 								? 'Key will be cleared on save'
 								: ''}
@@ -340,8 +342,7 @@
 			<div class="flex items-center justify-between">
 				<div>
 					<Card.Title>Servers</Card.Title>
-					<Card.Description
-						>Changes take effect immediately \u2014 no restart required.</Card.Description
+					<Card.Description>Changes take effect immediately - no restart required.</Card.Description
 					>
 				</div>
 				<div class="flex gap-2">

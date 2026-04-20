@@ -21,6 +21,12 @@ export const GET: RequestHandler = async ({ locals }) => {
 // POST — create a user
 export const POST: RequestHandler = async ({ request, locals }) => {
 	requireManageUsers(locals);
+	const auth = getAuthProvider();
+
+	if (auth.capabilities.userCreation === 'none') {
+		throw error(501, `User creation is not supported by ${auth.capabilities.name}. Users are managed externally.`);
+	}
+
 	const body = await request.json().catch(() => null);
 	if (!body || typeof body !== 'object') throw error(400, 'Invalid request body');
 
@@ -29,15 +35,22 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!email || typeof email !== 'string' || !email.includes('@')) {
 		throw error(400, 'Valid email is required');
 	}
-	if (!password || typeof password !== 'string' || password.length < 8) {
+
+	const needsPassword = auth.capabilities.userCreation === 'email-password';
+	if (needsPassword && (!password || typeof password !== 'string' || password.length < 8)) {
 		throw error(400, 'Password must be at least 8 characters');
 	}
+
 	if (!Array.isArray(permissions) || !permissions.every((p) => ALL_PERMISSIONS.includes(p as Permission))) {
 		throw error(400, `permissions must be an array of valid Permission values: ${ALL_PERMISSIONS.join(', ')}`);
 	}
 
 	try {
-		const user = await getAuthProvider().createUser(email, password, permissions as Permission[]);
+		const user = await auth.createUser(
+			email,
+			needsPassword ? (password as string) : null,
+			permissions as Permission[]
+		);
 		if (user === null) {
 			throw error(501, 'User management is not supported in single-password mode.');
 		}

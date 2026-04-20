@@ -18,10 +18,3 @@ export interface ComputeConfig {
 	/** UUID of the server to use when no routing rule matches. Falls back to servers[0]. */
 	defaultServerId?: string;
 }
-
-export interface SolveRequest {
-	/** GUID of the definition being solved — enables per-definition routing */
-	definitionGuid?: string;
-	/** Arbitrary hints for routing decisions (e.g. required plugin versions) */
-	hints?: Record<string, string>;
-}

@@ -10,23 +10,12 @@
  * directly; for node:test, wrap them.
  */
 
-import type { IDefinitionStore } from '../data/interface.js';
-import type { DefinitionRecord, HistoryEntry } from '../definitions/types.js';
-import type { RequestContext } from '../context.js';
-import { SYSTEM_CONTEXT } from '../context.js';
+import type { IDefinitionStore } from '../../data/interface.js';
+import type { DefinitionRecord, HistoryEntry } from '../../definitions/types.js';
+import { SYSTEM_CONTEXT } from '../../context.js';
+import { type ConformanceRunner, makeCtx, makeUuid } from './runner.js';
 
-// Minimal runner interface — all we use from the host test framework.
-export interface ConformanceRunner {
-	describe: (name: string, fn: () => void) => void;
-	it: (name: string, fn: () => Promise<void> | void) => void;
-	expect: <T>(actual: T) => {
-		toBe: (expected: T) => void;
-		toEqual: (expected: unknown) => void;
-		toBeNull: () => void;
-		toBeTruthy: () => void;
-		toContain: (expected: unknown) => void;
-	};
-}
+export type { ConformanceRunner };
 
 export interface DefinitionStoreConformanceOptions {
 	/** Name to show in the test output (e.g. "local-provider"). */
@@ -35,16 +24,19 @@ export interface DefinitionStoreConformanceOptions {
 	createStore: () => Promise<IDefinitionStore> | IDefinitionStore;
 	/** Test runner globals injected from the host package. */
 	runner: ConformanceRunner;
+	/**
+	 * Set to true for adapters that enforce per-user ctx scoping (e.g. Supabase RLS).
+	 * When false, ctx-isolation tests are skipped (local JSON adapter shares all records).
+	 */
+	ctxIsolation?: boolean;
 }
 
-function ctx(userId: string, permissions: RequestContext['permissions'] = ['platform_admin']): RequestContext {
-	return { userId, permissions };
-}
+const ctx = makeCtx;
 
 function record(overrides: Partial<DefinitionRecord> = {}): DefinitionRecord {
 	const now = new Date().toISOString();
 	return {
-		guid: overrides.guid ?? cryptoRandom(),
+		guid: overrides.guid ?? makeUuid(),
 		projectId: overrides.projectId ?? 'project-1',
 		ownerId: overrides.ownerId ?? 'user-1',
 		fileExt: overrides.fileExt ?? 'gh',
@@ -58,13 +50,8 @@ function record(overrides: Partial<DefinitionRecord> = {}): DefinitionRecord {
 	};
 }
 
-// Minimal UUID-ish helper — good enough for tests, no crypto import needed.
-function cryptoRandom(): string {
-	return `test-${Math.random().toString(36).slice(2, 10)}`;
-}
-
 export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOptions): void {
-	const { name, createStore, runner } = opts;
+	const { name, createStore, runner, ctxIsolation = false } = opts;
 	const { describe, it, expect } = runner;
 
 	describe(`IDefinitionStore conformance: ${name}`, () => {
@@ -90,7 +77,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			const page = await store.list(ctx('u1'));
 			const guids = page.items.map((r) => r.guid);
 			expect(guids).toContain('r1');
-			expect(guids.includes('p1')).toBe(false);
+			expect(guids).not.toContain('p1');
 		});
 
 		it('list with includePending returns pending too', async () => {
@@ -134,8 +121,8 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 				thrown = err;
 			}
 			expect(thrown).toBeTruthy();
-			const e = thrown as { status?: number };
-			expect(e.status).toBe(404);
+			const e = thrown as { statusCode?: number };
+			expect(e.statusCode).toBe(404);
 		});
 
 		it('status flip pending → ready via update', async () => {
@@ -143,7 +130,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			await store.create(ctx('u1'), record({ guid: 'x', status: 'pending' }));
 
 			const beforeFlip = await store.list(ctx('u1'));
-			expect(beforeFlip.items.map((r) => r.guid).includes('x')).toBe(false);
+			expect(beforeFlip.items.map((r) => r.guid)).not.toContain('x');
 
 			await store.update(ctx('u1'), 'x', { status: 'ready' });
 			const afterFlip = await store.list(ctx('u1'));
@@ -182,21 +169,37 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(got).toBeNull();
 		});
 
+		it('listPublic returns only ready records', async () => {
+			const store = await createStore();
+			await store.create(ctx('u1'), record({ guid: 'pub-ready', status: 'ready' }));
+			await store.create(ctx('u1'), record({ guid: 'pub-pending', status: 'pending' }));
+
+			const page = await store.listPublic(ctx('u1'));
+			expect(page.items.map((r) => r.guid)).toContain('pub-ready');
+			expect(page.items.map((r) => r.guid)).not.toContain('pub-pending');
+		});
+
 		it('listStalePending returns only pending + older than cutoff', async () => {
 			const store = await createStore();
 			const old = '2024-01-01T00:00:00.000Z';
 			const recent = new Date().toISOString();
 
-			await store.create(ctx('u1'), record({ guid: 'old-pending', status: 'pending', createdAt: old }));
-			await store.create(ctx('u1'), record({ guid: 'new-pending', status: 'pending', createdAt: recent }));
+			await store.create(
+				ctx('u1'),
+				record({ guid: 'old-pending', status: 'pending', createdAt: old })
+			);
+			await store.create(
+				ctx('u1'),
+				record({ guid: 'new-pending', status: 'pending', createdAt: recent })
+			);
 			await store.create(ctx('u1'), record({ guid: 'old-ready', status: 'ready', createdAt: old }));
 
 			const cutoff = '2024-06-01T00:00:00.000Z';
 			const stale = await store.listStalePending(SYSTEM_CONTEXT, cutoff);
 			const guids = stale.map((r) => r.guid);
 			expect(guids).toContain('old-pending');
-			expect(guids.includes('new-pending')).toBe(false);
-			expect(guids.includes('old-ready')).toBe(false);
+			expect(guids).not.toContain('new-pending');
+			expect(guids).not.toContain('old-ready');
 		});
 
 		it('pagination respects limit and nextCursor', async () => {
@@ -211,10 +214,28 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 
 			const second = await store.list(ctx('u1'), { limit: 2, cursor: first.nextCursor });
 			expect(second.items.length).toBe(2);
-			const firstGuids = new Set(first.items.map((r) => r.guid));
+			const firstGuids = first.items.map((r) => r.guid);
 			for (const item of second.items) {
-				expect(firstGuids.has(item.guid)).toBe(false);
+				expect(firstGuids).not.toContain(item.guid);
 			}
 		});
+
+		if (ctxIsolation) {
+			it('ctx isolation: records created by one user are not visible to another', async () => {
+				const store = await createStore();
+				await store.create(ctx('user-a'), record({ guid: 'a1', projectId: 'proj-a' }));
+
+				const page = await store.list(ctx('user-b'));
+				expect(page.items.map((r) => r.guid)).not.toContain('a1');
+			});
+
+			it('ctx isolation: user cannot get a record they do not own', async () => {
+				const store = await createStore();
+				await store.create(ctx('user-a'), record({ guid: 'a1' }));
+
+				const got = await store.get(ctx('user-b'), 'a1');
+				expect(got).toBeNull();
+			});
+		}
 	});
 }

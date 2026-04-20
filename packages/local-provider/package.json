@@ -15,13 +15,29 @@
 			"types": "./dist/auth/index.d.ts",
 			"import": "./dist/auth/index.js"
 		},
+		"./organizations": {
+			"types": "./dist/organizations/index.d.ts",
+			"import": "./dist/organizations/index.js"
+		},
+		"./projects": {
+			"types": "./dist/projects/index.d.ts",
+			"import": "./dist/projects/index.js"
+		},
 		"./definitions": {
 			"types": "./dist/definitions/index.d.ts",
 			"import": "./dist/definitions/index.js"
 		},
-		"./compute": {
-			"types": "./dist/compute/index.d.ts",
-			"import": "./dist/compute/index.js"
+		"./storage": {
+			"types": "./dist/storage/index.d.ts",
+			"import": "./dist/storage/index.js"
+		},
+		"./computeServer": {
+			"types": "./dist/computeServer/index.d.ts",
+			"import": "./dist/computeServer/index.js"
+		},
+		"./data": {
+			"types": "./dist/data/index.d.ts",
+			"import": "./dist/data/index.js"
 		}
 	},
 	"files": [
@@ -31,7 +47,9 @@
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsc --watch",
-		"type-check": "tsc --noEmit"
+		"type-check": "tsc --noEmit",
+		"test": "vitest",
+		"test:watch": "vitest --watch"
 	},
 	"dependencies": {
 		"@selva/platform": "workspace:*",
@@ -40,6 +58,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "catalog:",
-		"typescript": "catalog:"
+		"typescript": "catalog:",
+		"vitest": "^2.1.8"
 	}
 }

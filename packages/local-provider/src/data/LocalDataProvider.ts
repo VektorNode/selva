@@ -1,27 +1,34 @@
-import type { IDataProvider, IOrgStore, IDefinitionStore, IComputeServerStore } from '@selva/platform';
-import { LocalOrganizationProvider } from '../organizations/LocalOrganizationProvider.js';
-import { LocalDefinitionMetaProvider } from './LocalDefinitionMetaProvider.js';
-import { FilesystemComputeServerStore } from '../computeServer/FilesystemComputeServerStore.js';
+import type { IDataProvider, IOrgStore, IProjectStore, IDefinitionStore, IComputeServerStore } from '@selva/platform';
+import { LocalOrgStoreLoader, LocalOrganizationProvider } from '../organizations/LocalOrganizationProvider.js';
+import { LocalProjectProvider } from '../projects/LocalProjectProvider.js';
+import { LocalDefinitionMetaProvider } from '../definitions/LocalDefinitionMetaProvider.js';
+import { LocalComputeServerProvider } from '../computeServer/LocalComputeServerProvider.js';
 
 export class LocalDataProvider implements IDataProvider {
 	readonly orgs: IOrgStore;
+	readonly projects: IProjectStore;
 	readonly definitions: IDefinitionStore;
 	readonly computeServer: IComputeServerStore;
 
 	static fromEnv(env: Record<string, string | undefined>): LocalDataProvider {
+		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
+		const loader = new LocalOrgStoreLoader(env.DATA_PATH);
 		return new LocalDataProvider(
-			LocalOrganizationProvider.fromEnv(env),
+			new LocalOrganizationProvider(loader),
+			new LocalProjectProvider(loader),
 			LocalDefinitionMetaProvider.fromEnv(env),
-			FilesystemComputeServerStore.fromEnv(env)
+			LocalComputeServerProvider.fromEnv(env)
 		);
 	}
 
 	constructor(
 		orgs: IOrgStore,
+		projects: IProjectStore,
 		definitions: IDefinitionStore,
 		computeServer: IComputeServerStore
 	) {
 		this.orgs = orgs;
+		this.projects = projects;
 		this.definitions = definitions;
 		this.computeServer = computeServer;
 	}

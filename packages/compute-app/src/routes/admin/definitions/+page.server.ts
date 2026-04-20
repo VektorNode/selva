@@ -1,6 +1,7 @@
 import {
 	getDefinitionMeta,
 	getOrganizationProvider,
+	getProjectProvider,
 	getComputeServerConfigStore
 } from '$lib/server/providers.server';
 import { SYSTEM_CONTEXT } from '@selva/platform';
@@ -20,6 +21,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const ctx = locals.ctx ?? SYSTEM_CONTEXT;
 	const meta = getDefinitionMeta();
 	const orgs = getOrganizationProvider();
+	const projectStore = getProjectProvider();
 	const compute = getComputeServerConfigStore();
 
 	try {
@@ -30,12 +32,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 		]);
 
 		const projectPages = await Promise.all(
-			orgsPage.items.map((org) => orgs.listProjects(ctx, org.id, { limit: 200 }))
+			orgsPage.items.map((org) => projectStore.listProjects(ctx, org.id, { limit: 200 }))
 		);
 		const allProjects: Project[] = projectPages.flatMap((p) => p.items);
 
 		// Filter to projects the current user can actually edit
-		const editableFlags = await Promise.all(allProjects.map((p) => orgs.canEdit(ctx, p.id)));
+		const editableFlags = await Promise.all(allProjects.map((p) => projectStore.canEdit(ctx, p.id)));
 		const projects = allProjects.filter((_, i) => editableFlags[i]);
 
 		// Only show definitions belonging to accessible projects
@@ -44,6 +46,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 		return { projects, records, computeServers: computeConfig.servers };
 	} catch (err) {
+		// Let auth errors bubble up; only catch data loading failures
+		if (err && typeof err === 'object' && 'status' in err) {
+			throw err;
+		}
 		console.error('Failed to load definitions page data:', err);
 		return {
 			projects: [] as Project[],

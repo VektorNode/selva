@@ -34,6 +34,7 @@
 		footerItemPriority?: number;
 		onReady?: (api: { loadValues: (values: Record<string, unknown>) => void }) => void;
 		header?: Snippet;
+		headerRight?: Snippet;
 		children?: Snippet<[{ errors: string[]; warnings: string[] }]>;
 	}
 
@@ -53,6 +54,7 @@
 		footerItemId = 'footer-item',
 		footerItemPriority = 0,
 		header,
+		headerRight,
 		children,
 		onReady
 	}: Props = $props();
@@ -202,7 +204,7 @@
 			{#if header}
 				{@render header()}
 			{:else if !resolvedIsEmbedded}
-				<PageHeader title={pageTitle} {showModeToggle} />
+				<PageHeader title={pageTitle} {showModeToggle} rightContent={headerRight} />
 			{/if}
 
 			<div class="flex flex-1 flex-col overflow-hidden bg-background">

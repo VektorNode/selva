@@ -1,17 +1,17 @@
 // Auth
-export type { IAuthProvider, AuthUser, Permission } from './auth/index.js';
+export type { IAuthProvider, AuthProviderCapabilities, AuthUser, Permission, UserManagementResult } from './auth/index.js';
 export { ALL_PERMISSIONS, hasPermission } from './auth/index.js';
 
 // Organizations
+export type { Organization, OrgRole, OrgMember } from './organizations/index.js';
+
+// Projects
 export type {
-	Organization,
-	OrgRole,
-	OrgMember,
 	Project,
 	ProjectVisibility,
 	ProjectRole,
 	ProjectMember
-} from './organizations/index.js';
+} from './projects/index.js';
 
 // Definitions
 export type {
@@ -40,6 +40,7 @@ export type { IStorageProvider } from './storage/index.js';
 export type {
 	IDataProvider,
 	IOrgStore,
+	IProjectStore,
 	IDefinitionStore,
 	IComputeServerStore
 } from './data/index.js';
@@ -49,11 +50,11 @@ export type { RequestContext } from './context.js';
 export { SYSTEM_CONTEXT } from './context.js';
 
 // Pagination
-export type { ListOptions, Page } from './pagination.js';
+export type { ListOptions, DefinitionListOptions, Page } from './pagination.js';
 export { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from './pagination.js';
 
 // Compute server
-export type { ComputeServerConfig, ComputeConfig, SolveRequest } from './computeServer/index.js';
+export type { ComputeServerConfig, ComputeConfig } from './computeServer/index.js';
 export { resolveComputeServer, resolveServerById } from './computeServer/index.js';
 
 // Config

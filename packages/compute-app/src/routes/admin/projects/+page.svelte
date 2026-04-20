@@ -3,7 +3,7 @@
 	import { Plus, Trash2, UserPlus, X } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { ProjectWithMembers, AuthUser } from './+page.server.js';
-	import type { ProjectRole, ProjectVisibility } from '@selva/platform/organizations';
+	import type { ProjectRole, ProjectVisibility } from '@selva/platform/projects';
 
 	interface PageData {
 		projects: ProjectWithMembers[];
@@ -20,10 +20,25 @@
 		{ value: 'viewer', label: 'Viewer' }
 	];
 
-	const VISIBILITY: { value: ProjectVisibility; label: string; description: string }[] = [
-		{ value: 'public', label: 'Public', description: 'Any authenticated user can solve' },
-		{ value: 'org', label: 'Org', description: 'Any org member can solve' },
-		{ value: 'private', label: 'Private', description: 'Only project members can solve' }
+	const VISIBILITY: { value: ProjectVisibility; label: string; description: string; uploadNote?: string }[] = [
+		{
+			value: 'public',
+			label: 'Public',
+			description: 'Any authenticated user can solve',
+			uploadNote: 'Any user with manage_definitions can upload (no membership needed)'
+		},
+		{
+			value: 'org',
+			label: 'Org',
+			description: 'Any org member can solve',
+			uploadNote: 'Any org member with manage_definitions can upload (no membership needed)'
+		},
+		{
+			value: 'private',
+			label: 'Private',
+			description: 'Only project members can solve',
+			uploadNote: 'Must be a project member to upload'
+		}
 	];
 
 	// New project form
@@ -323,6 +338,7 @@
 											<p class="text-muted-foreground mt-0.5 text-sm">{project.description}</p>
 										{/if}
 										<p class="text-muted-foreground mt-0.5 font-mono text-xs">{project.id}</p>
+										<p class="text-muted-foreground mt-1 text-xs">Only project owners can edit.</p>
 									</div>
 									<div class="ml-4 flex shrink-0 gap-1">
 										<Button size="sm" variant="outline" onclick={() => startEdit(project)}>
@@ -342,21 +358,27 @@
 
 							<!-- Members section -->
 							<div class="border-t px-4 py-3">
-								<div class="mb-2 flex items-center justify-between">
-									<p class="text-muted-foreground text-xs font-medium">
-										Members ({project.members.length})
-									</p>
-									{#if data.users.length > 0}
-										<button
-											class="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs underline-offset-2 hover:underline"
-											onclick={() => {
-												addMemberProjectId = addMemberProjectId === project.id ? null : project.id;
-												newMemberUserId = '';
-												newMemberRole = 'viewer';
-											}}
-										>
-											<UserPlus class="h-3 w-3" /> Add member
-										</button>
+								<div class="mb-3 space-y-2">
+									<div class="flex items-center justify-between">
+										<p class="text-muted-foreground text-xs font-medium">
+											Members ({project.members.length})
+										</p>
+										{#if data.users.length > 0}
+											<button
+												class="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs underline-offset-2 hover:underline"
+												onclick={() => {
+													addMemberProjectId = addMemberProjectId === project.id ? null : project.id;
+													newMemberUserId = '';
+													newMemberRole = 'viewer';
+												}}
+											>
+												<UserPlus class="h-3 w-3" /> Add member
+											</button>
+										{/if}
+									</div>
+									{#if project.visibility !== 'private'}
+										{@const note = VISIBILITY.find((v) => v.value === project.visibility)?.uploadNote}
+										<p class="text-muted-foreground text-xs italic">{note}</p>
 									{/if}
 								</div>
 

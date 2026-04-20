@@ -20,6 +20,7 @@
 		projects?: Project[];
 		defaultProjectId?: string;
 		computeServers?: ComputeServer[];
+		showProjectDropdown?: boolean;
 		onOpenChange?: (open: boolean) => void;
 		onSubmit?: (data: FormData) => Promise<void>;
 	}
@@ -30,6 +31,7 @@
 		projects = [],
 		defaultProjectId,
 		computeServers = [],
+		showProjectDropdown = false,
 		onOpenChange,
 		onSubmit
 	}: Props = $props();
@@ -175,13 +177,13 @@
 
 		<div class="space-y-4">
 			<!-- Project & compute server -->
-			{#if projects.length > 1 || computeServers.length > 1}
+			{#if showProjectDropdown || computeServers.length > 1}
 				<div
-					class="grid gap-3 {projects.length > 1 && computeServers.length > 1
+					class="grid gap-3 {showProjectDropdown && computeServers.length > 1
 						? 'sm:grid-cols-2'
 						: ''}"
 				>
-					{#if projects.length > 1}
+					{#if showProjectDropdown}
 						<div class="space-y-1">
 							<Label for="new-project">Project</Label>
 							<select
@@ -193,6 +195,14 @@
 									<option value={project.id}>{project.name}</option>
 								{/each}
 							</select>
+						</div>
+					{:else if defaultProjectId}
+						{@const selectedProject = projects.find((p) => p.id === defaultProjectId)}
+						<div class="space-y-1">
+							<Label>Project</Label>
+							<div class="bg-muted rounded-md px-3 py-2">
+								<p class="text-sm font-medium">{selectedProject?.name ?? 'Unknown'}</p>
+							</div>
 						</div>
 					{/if}
 					{#if computeServers.length > 1}

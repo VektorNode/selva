@@ -1,14 +1,16 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { getOrganizationProvider } from '$lib/server/providers.server';
-import { requireCanManage, throwProviderError } from '$lib/server/access.server';
+import { getProjectProvider } from '$lib/server/providers.server';
+import { requireManageProjects, requireCanManage, throwProviderError } from '$lib/server/access.server';
 import type { ProjectVisibility } from '@selva/platform';
 
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	const { id } = params;
 	if (!id) throw error(400, 'Missing project ID');
-	await requireCanManage(locals, id);
+	requireManageProjects(locals);
 	const ctx = locals.ctx!;
+	const allowed = await getProjectProvider().canEditProjectSettings(ctx, id);
+	if (!allowed) throw error(403, 'You do not have permission to edit this project.');
 
 	const body = await request.json().catch(() => null);
 	if (!body || typeof body !== 'object') throw error(400, 'Invalid request body');
@@ -30,7 +32,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	}
 
 	try {
-		await getOrganizationProvider().updateProject(
+		await getProjectProvider().updateProject(
 			ctx,
 			id,
 			patch as {
@@ -53,7 +55,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const ctx = locals.ctx!;
 
 	try {
-		await getOrganizationProvider().deleteProject(ctx, id);
+		await getProjectProvider().deleteProject(ctx, id);
 		return json({ success: true });
 	} catch (err) {
 		throwProviderError(err, 'Failed to delete project');

@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { getOrganizationProvider } from '$lib/server/providers.server';
+import { getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
 import { requireManageProjects, throwProviderError } from '$lib/server/access.server';
 import { randomUUID } from 'node:crypto';
 import { SYSTEM_CONTEXT } from '@selva/platform';
@@ -9,10 +9,9 @@ import type { Project } from '@selva/platform';
 export const GET: RequestHandler = async ({ locals }) => {
 	const ctx = locals.ctx ?? SYSTEM_CONTEXT;
 	try {
-		const orgs = getOrganizationProvider();
-		const orgsPage = await orgs.listOrgs(ctx, { limit: 200 });
+		const orgsPage = await getOrganizationProvider().listOrgs(ctx, { limit: 200 });
 		const projectPages = await Promise.all(
-			orgsPage.items.map((org) => orgs.listProjects(ctx, org.id, { limit: 200 }))
+			orgsPage.items.map((org) => getProjectProvider().listProjects(ctx, org.id, { limit: 200 }))
 		);
 		const projects = projectPages.flatMap((p) => p.items);
 		return json({ projects });
@@ -32,8 +31,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!name || typeof name !== 'string' || !name.trim())
 		throw error(400, 'Project name is required');
 
-	const orgs = getOrganizationProvider();
-	const orgsPage = await orgs.listOrgs(ctx, { limit: 1 });
+	const orgsPage = await getOrganizationProvider().listOrgs(ctx, { limit: 1 });
 	const org = orgsPage.items[0];
 	if (!org) throw error(500, 'No organization configured');
 
@@ -59,7 +57,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	};
 
 	try {
-		await orgs.createProject(ctx, project);
+		await getProjectProvider().createProject(ctx, project);
+		// Add creator as project owner
+		await getProjectProvider().addProjectMember(ctx, {
+			projectId: project.id,
+			userId: locals.user!.id,
+			role: 'owner',
+			joinedAt: now
+		});
 		return json(project, { status: 201 });
 	} catch (err) {
 		throwProviderError(err, 'Failed to create project');

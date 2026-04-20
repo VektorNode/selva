@@ -3,6 +3,7 @@
 	import { ComputeApp, type SolveFn } from 'selva-shared';
 	import { GrasshopperResponseProcessor } from 'selva-compute';
 	import ServerFooter from '$lib/components/ServerFooter.svelte';
+	import UserChip from '$lib/components/UserChip.svelte';
 
 	let { data }: PageProps = $props();
 
@@ -60,4 +61,8 @@
 	showModeToggle={true}
 	footerComponent={ServerFooter}
 	footerComponentProps={() => ({ label: data.serverLabel })}
-/>
+>
+	{#snippet headerRight()}
+		<UserChip />
+	{/snippet}
+</ComputeApp>

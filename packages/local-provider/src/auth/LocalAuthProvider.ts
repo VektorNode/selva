@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import * as path from 'node:path';
-import type { IAuthProvider, AuthUser, Permission } from '@selva/platform';
+import type { IAuthProvider, AuthUser, Permission, UserManagementResult } from '@selva/platform';
 import { ALL_PERMISSIONS, ProviderError } from '@selva/platform';
 import { signHmacToken, verifyHmacToken } from './hmac.js';
 import { verifyPasswordHash, createLocalUserMetaProvider } from './users.js';
@@ -33,6 +33,13 @@ export class LocalAuthProvider implements IAuthProvider {
 	private readonly hmacSecret: string;
 	private readonly users?: LocalUserMetaProvider;
 	private readonly fallbackAdminPassword?: string;
+
+	readonly capabilities = {
+		name: 'Local',
+		userCreation: 'email-password',
+		selfRegistration: false,
+		passwordReset: false,
+	} as const;
 
 	constructor(config: LocalAuthProviderConfig) {
 		this.hmacSecret = config.hmacSecret;
@@ -86,7 +93,7 @@ export class LocalAuthProvider implements IAuthProvider {
 		// Check users.json first
 		if (this.users) {
 			const user = await this.users.findByEmail(email);
-			if (user && (await verifyPasswordHash(password, user.passwordHash))) {
+			if (user && user.passwordHash && (await verifyPasswordHash(password, user.passwordHash))) {
 				return { id: user.id, email: user.email, displayName: user.displayName, permissions: user.permissions };
 			}
 		}
@@ -128,7 +135,7 @@ export class LocalAuthProvider implements IAuthProvider {
 
 	async createUser(
 		email: string,
-		password: string,
+		password: string | null,
 		permissions: Permission[]
 	): Promise<AuthUser | null> {
 		if (!this.users) return null;
@@ -136,25 +143,43 @@ export class LocalAuthProvider implements IAuthProvider {
 		return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions };
 	}
 
-	async updateUserPermissions(id: string, permissions: Permission[]): Promise<boolean> {
-		if (!this.users) return false;
+	async registerUser(email: string, password: string): Promise<AuthUser | null> {
+		if (!this.users) return null;
+		const u = await this.users.createUser(email, password, []);
+		return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions };
+	}
+
+	async updateUserPermissions(id: string, permissions: Permission[]): Promise<UserManagementResult> {
+		if (!this.users) return 'not_supported';
 		try {
 			await this.users.updatePermissions(id, permissions);
-			return true;
+			return 'ok';
 		} catch (err) {
-			if (err instanceof ProviderError && err.statusCode === 404) return false;
+			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';
 			throw err;
 		}
 	}
 
-	async deleteUser(id: string): Promise<boolean> {
-		if (!this.users) return false;
+	async deleteUser(id: string): Promise<UserManagementResult> {
+		if (!this.users) return 'not_supported';
 		try {
 			await this.users.deleteUser(id);
-			return true;
+			return 'ok';
 		} catch (err) {
-			if (err instanceof ProviderError && err.statusCode === 404) return false;
+			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';
 			throw err;
 		}
+	}
+
+	async requestPasswordReset(_email: string): Promise<UserManagementResult> {
+		// Local provider doesn't implement password reset emails.
+		// For production, implement via email service (SendGrid, AWS SES, etc.)
+		return 'not_supported';
+	}
+
+	async completePasswordReset(_token: string, _newPassword: string): Promise<UserManagementResult> {
+		// Local provider doesn't implement password reset token validation.
+		// For production, implement via email service or your own token store.
+		return 'not_supported';
 	}
 }

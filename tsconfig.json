@@ -1,6 +1,6 @@
 {
 	"extends": "./tsconfig.base.json",
-	"include": ["scripts/**/*", "eslint.config.js", "packages/config/**/*"],
+	"include": ["scripts/**/*", "eslint.config.js", "packages/config/**/*", "selva.config.ts"],
 	"compilerOptions": {
 		"noEmit": true,
 		"moduleResolution": "bundler",

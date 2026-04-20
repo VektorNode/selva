@@ -2,6 +2,7 @@ import type { IDataProvider } from '../data/interface.js';
 import type { IStorageProvider } from '../storage/interface.js';
 import type { RequestContext } from '../context.js';
 import { SYSTEM_CONTEXT } from '../context.js';
+import { ProviderError } from '../errors.js';
 import type {
 	DefinitionRecord,
 	DefinitionRecordPatch,
@@ -9,6 +10,7 @@ import type {
 	DefinitionMeta
 } from './types.js';
 import { definitionPaths } from './paths.js';
+import type { UpdateMetadataInput } from './schemas.js';
 
 export interface CreateDefinitionInput {
 	guid: string;
@@ -99,10 +101,11 @@ export class DefinitionService {
 		originalName: string
 	): Promise<void> {
 		const existing = await this.data.definitions.get(ctx, guid);
-		if (!existing) throw new Error(`Definition not found: ${guid}`);
+		if (!existing) throw new ProviderError(`Definition not found: ${guid}`, 404);
 
 		const now = new Date().toISOString();
-		const ref = `${now.replace(/[:.]/g, '-')}_${originalName}`;
+		// UUID-based ref avoids collisions from identical timestamps or special chars in filenames.
+		const ref = `${crypto.randomUUID()}_${originalName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
 
 		// Archive the current file before overwriting
 		const currentFile = await this.storage.get(definitionPaths.file(guid, existing.fileExt));
@@ -120,6 +123,9 @@ export class DefinitionService {
 		}
 
 		await this.storage.put(definitionPaths.file(guid, ext), file, 'application/octet-stream');
+		if (ext !== existing.fileExt) {
+			await this.storage.delete(definitionPaths.file(guid, existing.fileExt));
+		}
 		await this.data.definitions.update(ctx, guid, { fileExt: ext });
 
 		// Prune history if maxHistory is set
@@ -133,14 +139,16 @@ export class DefinitionService {
 		}
 	}
 
-	async updateMeta(
-		ctx: RequestContext,
-		guid: string,
-		patch: DefinitionRecordPatch
-	): Promise<void> {
-		// status is not end-user patchable — strip it defensively
-		const { status: _ignored, ...safe } = patch;
-		await this.data.definitions.update(ctx, guid, safe);
+	async updateMeta(ctx: RequestContext, guid: string, patch: UpdateMetadataInput): Promise<void> {
+		const { maxHistory, projectId, computeServerId, ...metaFields } = patch;
+		const meta = Object.keys(metaFields).length > 0 ? (metaFields as Partial<DefinitionMeta>) : undefined;
+		const recordPatch: DefinitionRecordPatch = {
+			...(meta !== undefined && { meta }),
+			...(maxHistory !== undefined && { maxHistory }),
+			...(projectId !== undefined && { projectId }),
+			...(computeServerId !== undefined && { computeServerId })
+		};
+		await this.data.definitions.update(ctx, guid, recordPatch);
 	}
 
 	async saveCoverImage(ctx: RequestContext, guid: string, imageData: Uint8Array): Promise<void> {
@@ -152,13 +160,13 @@ export class DefinitionService {
 
 	async revertToVersion(ctx: RequestContext, guid: string, ref: string): Promise<void> {
 		const existing = await this.data.definitions.get(ctx, guid);
-		if (!existing) throw new Error(`Definition not found: ${guid}`);
+		if (!existing) throw new ProviderError(`Definition not found: ${guid}`, 404);
 
 		const entry = existing.history.find((h) => h.ref === ref);
-		if (!entry) throw new Error(`History entry not found: ${ref}`);
+		if (!entry) throw new ProviderError(`History entry not found: ${ref}`, 404);
 
 		const archived = await this.storage.get(definitionPaths.archive(guid, ref));
-		if (!archived) throw new Error(`Archived file not found for ref: ${ref}`);
+		if (!archived) throw new ProviderError(`Archived file not found for ref: ${ref}`, 404);
 
 		// Archive the current file first, then restore the old one
 		await this.updateFile(ctx, guid, archived, existing.fileExt, entry.originalName);

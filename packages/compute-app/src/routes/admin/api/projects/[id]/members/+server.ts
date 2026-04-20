@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { getOrganizationProvider } from '$lib/server/providers.server';
+import { getProjectProvider } from '$lib/server/providers.server';
 import { SYSTEM_CONTEXT } from '@selva/platform';
 import type { ProjectMember, ProjectRole } from '@selva/platform';
 
@@ -12,7 +12,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	const ctx = locals.ctx ?? SYSTEM_CONTEXT;
 
 	try {
-		const page = await getOrganizationProvider().listProjectMembers(ctx, id, { limit: 200 });
+		const page = await getProjectProvider().listProjectMembers(ctx, id, { limit: 200 });
 		return json({ members: page.items });
 	} catch (err) {
 		console.error('[Project members GET] Failed:', err);
@@ -42,7 +42,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	};
 
 	try {
-		await getOrganizationProvider().addProjectMember(ctx, member);
+		await getProjectProvider().addProjectMember(ctx, member);
 		return json(member, { status: 201 });
 	} catch (err) {
 		console.error('[Project members POST] Failed:', err);

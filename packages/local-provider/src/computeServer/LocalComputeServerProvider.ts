@@ -7,10 +7,10 @@ import type { IComputeServerStore, ComputeConfig } from '@selva/platform';
  * The file is re-read on every getConfig() call — changes take effect
  * immediately without restarting the server.
  */
-export class FilesystemComputeServerStore implements IComputeServerStore {
-	static fromEnv(env: Record<string, string | undefined>): FilesystemComputeServerStore {
+export class LocalComputeServerProvider implements IComputeServerStore {
+	static fromEnv(env: Record<string, string | undefined>): LocalComputeServerProvider {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
-		return new FilesystemComputeServerStore(path.join(env.DATA_PATH, 'compute.config.json'));
+		return new LocalComputeServerProvider(path.join(env.DATA_PATH, 'compute.config.json'));
 	}
 
 	constructor(private readonly configFilePath: string) {}

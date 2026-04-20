@@ -4,6 +4,7 @@
 	import { StateDisplay, PageHeader, PageContainer, Input } from 'selva-shared';
 	import { Search, X } from '@lucide/svelte';
 	import DefinitionCard from '$lib/components/DefinitionCard.svelte';
+	import UserChip from '$lib/components/UserChip.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -39,7 +40,11 @@
 
 <PageContainer>
 	<!-- Header -->
-	<PageHeader title="Definitions" showModeToggle={true} />
+	<PageHeader title="Definitions" showModeToggle={true}>
+		{#snippet rightContent()}
+			<UserChip />
+		{/snippet}
+	</PageHeader>
 
 	{#if data.definitions && data.definitions.length > 0}
 		<p class="border-border text-muted-foreground border-b px-4 py-3 text-sm sm:px-8">

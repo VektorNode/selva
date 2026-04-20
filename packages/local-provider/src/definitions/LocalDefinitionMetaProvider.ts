@@ -2,14 +2,15 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type {
 	IDefinitionStore,
+	IProjectStore,
 	DefinitionRecord,
 	DefinitionRecordPatch,
 	HistoryEntry,
 	RequestContext,
-	ListOptions,
+	DefinitionListOptions,
 	Page
 } from '@selva/platform';
-import { ProviderError } from '@selva/platform';
+import { ProviderError, hasPermission } from '@selva/platform';
 import { paginate } from '../pagination.js';
 
 interface DefinitionsConfig {
@@ -18,14 +19,20 @@ interface DefinitionsConfig {
 
 export class LocalDefinitionMetaProvider implements IDefinitionStore {
 	private readonly configPath: string;
+	private projectProvider?: IProjectStore;
 
 	static fromEnv(env: Record<string, string | undefined>): LocalDefinitionMetaProvider {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
 		return new LocalDefinitionMetaProvider(env.DATA_PATH);
 	}
 
-	constructor(definitionsPath: string) {
+	constructor(definitionsPath: string, projectProvider?: IProjectStore) {
 		this.configPath = path.join(definitionsPath, 'definitions-config.json');
+		this.projectProvider = projectProvider;
+	}
+
+	setProjectProvider(projectProvider: IProjectStore): void {
+		this.projectProvider = projectProvider;
 	}
 
 	private async readConfig(): Promise<DefinitionsConfig> {
@@ -51,7 +58,7 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		await fs.rename(tmpPath, this.configPath);
 	}
 
-	private sortedRecords(records: DefinitionRecord[], opts?: ListOptions): DefinitionRecord[] {
+	private sortedRecords(records: DefinitionRecord[], opts?: DefinitionListOptions): DefinitionRecord[] {
 		const field = opts?.orderBy ?? 'name';
 		const dir = opts?.orderDir ?? 'asc';
 		const mul = dir === 'asc' ? 1 : -1;
@@ -67,14 +74,13 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		});
 	}
 
-	/** Apply the default 'ready' filter, respecting ListOptions.includePending. */
-	private visibleRecords(records: DefinitionRecord[], opts?: ListOptions): DefinitionRecord[] {
+	private visibleRecords(records: DefinitionRecord[], opts?: DefinitionListOptions): DefinitionRecord[] {
 		const filtered = records.filter((r) => r?.meta?.displayName);
 		if (opts?.includePending) return filtered;
 		return filtered.filter((r) => r.status === 'ready');
 	}
 
-	async list(_ctx: RequestContext, opts?: ListOptions): Promise<Page<DefinitionRecord>> {
+	async list(_ctx: RequestContext, opts?: DefinitionListOptions): Promise<Page<DefinitionRecord>> {
 		const config = await this.readConfig();
 		const records = this.visibleRecords(Object.values(config.definitions), opts);
 		return paginate(this.sortedRecords(records, opts), opts);
@@ -83,7 +89,7 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 	async listByProject(
 		_ctx: RequestContext,
 		projectId: string,
-		opts?: ListOptions
+		opts?: DefinitionListOptions
 	): Promise<Page<DefinitionRecord>> {
 		const config = await this.readConfig();
 		const records = this.visibleRecords(
@@ -93,7 +99,10 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		return paginate(this.sortedRecords(records, opts), opts);
 	}
 
-	async listPublic(ctx: RequestContext, opts?: ListOptions): Promise<Page<DefinitionRecord>> {
+	async listPublic(ctx: RequestContext, opts?: DefinitionListOptions): Promise<Page<DefinitionRecord>> {
+		// In local mode the default project is always 'public', so all ready
+		// definitions are publicly visible. A cloud adapter would join on project
+		// visibility and filter to 'public' projects only.
 		return this.list(ctx, opts);
 	}
 
@@ -161,5 +170,40 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		return Object.values(config.definitions).filter(
 			(r) => r?.status === 'pending' && r.createdAt <= olderThanIso
 		);
+	}
+
+	async canEditDefinition(
+		ctx: RequestContext,
+		projectId: string,
+		userId: string,
+		definitionOwnerId: string
+	): Promise<boolean> {
+		if (!this.projectProvider) return false;
+		if (hasPermission(ctx.permissions, 'platform_admin')) return true;
+
+		const project = await this.projectProvider.getProject(ctx, projectId);
+		if (!project) return false;
+
+		const projectMembers = await this.projectProvider.listProjectMembers(ctx, projectId);
+		const member = projectMembers.items.find((m) => m.userId === userId);
+
+		// For public projects: only owner of definition can edit
+		if (project.visibility === 'public') {
+			return userId === definitionOwnerId;
+		}
+
+		// For org-level projects: definition owner OR project member with owner/editor role
+		if (project.visibility === 'org') {
+			if (userId === definitionOwnerId) return true;
+			if (member?.role === 'owner' || member?.role === 'editor') return true;
+			return false;
+		}
+
+		// For private projects: must be project member (owner or editor)
+		if (project.visibility === 'private') {
+			return member?.role === 'owner' || member?.role === 'editor';
+		}
+
+		return false;
 	}
 }

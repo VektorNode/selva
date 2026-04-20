@@ -23,6 +23,10 @@
 			"types": "./dist/organizations/schemas.d.ts",
 			"import": "./dist/organizations/schemas.js"
 		},
+		"./projects": {
+			"types": "./dist/projects/index.d.ts",
+			"import": "./dist/projects/index.js"
+		},
 		"./definitions": {
 			"types": "./dist/definitions/index.d.ts",
 			"import": "./dist/definitions/index.js"
