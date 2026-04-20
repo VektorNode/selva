@@ -22,6 +22,8 @@ This is a monorepo with two distinct stacks:
 - **`@selva/compute-app`** - Standalone app for solving Grasshopper definitions via Rhino.Compute (cloud mode)
 - **`@selva/shared`** - Shared Svelte components, utilities, and theme styles (CSS + theme utilities)
 - **`@selva/schemas`** - Schema definitions and code generators (TypeScript + C#)
+- **`@selva/platform`** - Pure TypeScript interfaces for platform providers (auth, definitions, compute, storage, organizations, projects) with conformance test suites
+- **`selva-local-provider`** - Filesystem/JSON/HMAC implementations of `@selva/platform` interfaces for local development
 
 ### .NET Workspace (`Plugin/`)
 
@@ -181,6 +183,7 @@ Key features:
 - Write self-documenting code; add comments only for complex logic
 - Keep code simple; avoid premature abstractions
 - Only add error handling at system boundaries (user input, external APIs)
+- Section headers use the format: `// ============================================================================` with title between two lines of equals signs
 
 ## Performance Notes
 
@@ -207,6 +210,15 @@ cp Plugin/bin/Release/net7.0/Selva.gha ~/Library/Application\ Support/McNeel/Rhi
 
 Restart Rhino completely after installation.
 
+## Data Privacy & Compliance
+
+**User data isolation is by design.** All authentication, credentials, and personal information (PII) are owned exclusively by the auth provider. Selva stores only:
+- Opaque session tokens (in cookies)
+- User ID and permissions (minimal authorization data)
+- Optional provider-specific metadata (non-sensitive only)
+
+This architecture means Selva has **zero exposure to EU data regulations, credentials, or company user records**. The provider handles all data residency, retention, and compliance.
+
 ## Requirements
 
 - [pnpm](https://pnpm.io) >= 9.0.0 (Node.js package manager)
@@ -229,6 +241,28 @@ Required for production deployment (see `example.ecosystem.config.cjs`):
 - `PORT` - Application port (default: 3000)
 - `GH_DEFINITIONS_PATH` - Path to Grasshopper definition files
 
+### Platform Package (`@selva/platform`)
+
+Core provider interfaces for Selva's pluggable architecture. All modules support Zod schema validation and are granular exports for tree-shaking.
+
+| Module | Interface | Purpose |
+|--------|-----------|---------|
+| `@selva/platform/auth` | `IAuthProvider` | HMAC session tokens, user management |
+| `@selva/platform/data` | `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IComputeServerStore` | Structured data storage (all methods take `RequestContext`) |
+| `@selva/platform/storage` | `IStorageProvider` | Blob storage (get, put, delete, getPublicUrl) |
+| `@selva/platform/definitions` | `DefinitionService` | Orchestrates data + storage for definitions (create, updateFile, delete, GC) |
+| `@selva/platform/organizations` | — | `Organization`, `OrgMember`, `OrgRole` types + Zod schemas |
+| `@selva/platform/projects` | — | `Project`, `ProjectMember`, `ProjectRole`, `ProjectVisibility` types + schemas |
+| `@selva/platform/computeServer` | — | `ComputeServerConfig`, `resolveComputeServer()` helpers |
+| `@selva/platform/testing` | `ConformanceRunner` | Framework-agnostic conformance suites for all stores |
+
+**Local provider** (`selva-local-provider`) implements all interfaces using the filesystem:
+
+- `LocalAuthProvider` — HMAC tokens + optional `users.json`
+- `LocalDataProvider` — Wires all stores; reads/writes JSON config files
+- `LocalStorageProvider` — Filesystem blobs, auto-transcodes images to WebP via sharp
+- `LocalComputeServerProvider` — `compute.config.json`
+
 ## Issues
 
-When creating issues, use the templates in [.github/ISSUE_TEMPLATE/](/.github/ISSUE_TEMPLATE/):
+When creating issues, use the templates in [.github/ISSUE_TEMPLATE/](/.github/ISSUE_TEMPLATE/)

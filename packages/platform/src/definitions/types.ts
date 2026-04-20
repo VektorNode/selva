@@ -23,7 +23,11 @@ export interface DefinitionMeta {
 	description?: string;
 	category?: string;
 	tags?: string[];
-	/** Public URL to cover image — provider-dependent (local path or CDN URL) */
+	/**
+	 * Public URL to cover image — provider-dependent (CDN URL, signed S3, etc.).
+	 * Provider must ensure this URL is safe to send to clients and does not leak
+	 * internal storage paths or unsecured file locations.
+	 */
 	coverImage?: string;
 	/** Original uploaded filename, kept for display only */
 	originalFilename?: string;
@@ -31,8 +35,9 @@ export interface DefinitionMeta {
 
 export interface HistoryEntry {
 	/**
-	 * Storage path of the archived file (matches the path used in IStorageProvider).
-	 * e.g. "definitions/{guid}/old_files/2024-01-15T10-30-45-123Z_definition.gh"
+	 * Archive key for this entry — a suffix only (UUID + sanitized filename).
+	 * The full storage path is constructed via `definitionPaths.archive(guid, ref)`.
+	 * e.g. "550e8400-e29b-41d4-a716-446655440000_definition.gh"
 	 */
 	ref: string;
 	/** Original uploaded filename, for display purposes */

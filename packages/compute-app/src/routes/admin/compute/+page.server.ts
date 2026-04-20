@@ -10,7 +10,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 			servers: config.servers ?? [],
 			defaultServerId: config.defaultServerId ?? config.servers?.[0]?.id ?? ''
 		};
-	} catch {
+	} catch (err) {
+		// Let auth errors bubble up; only catch data loading failures
+		if (err && typeof err === 'object' && 'status' in err) {
+			throw err;
+		}
 		return { servers: [], defaultServerId: '' };
 	}
 };

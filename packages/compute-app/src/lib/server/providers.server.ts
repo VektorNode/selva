@@ -22,6 +22,10 @@ export function getOrganizationProvider() {
 	return providers.data.orgs;
 }
 
+export function getProjectProvider() {
+	return providers.data.projects;
+}
+
 export function getDefinitionMeta() {
 	return providers.data.definitions;
 }

@@ -159,6 +159,20 @@
 				</div>
 			{/if}
 
+			<!-- Upload permissions note -->
+			{@const activeProject = data.projects.find((p) => p.id === activeProjectId)}
+			{#if activeProject}
+				{#if activeProject.visibility !== 'private'}
+					<p class="text-muted-foreground text-xs italic">
+						💡 Any {activeProject.visibility === 'org' ? 'org member' : 'authenticated user'} with manage_definitions permission can upload definitions to this project—no membership required.
+					</p>
+				{:else}
+					<p class="text-muted-foreground text-xs italic">
+						💡 Only project members can upload definitions to this private project.
+					</p>
+				{/if}
+			{/if}
+
 			<!-- Search -->
 			<Input type="text" bind:value={searchQuery} placeholder="Search definitions..." />
 
@@ -175,6 +189,7 @@
 			{:else}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 					{#each visibleRecords as record (record.guid)}
+						{@const project = data.projects.find((p) => p.id === record.projectId)}
 						<DefinitionCard
 							guid={record.guid}
 							config={{
@@ -186,6 +201,9 @@
 								originalFilename: record.meta.originalFilename,
 								file: `definition.${record.fileExt}`
 							}}
+							projectName={project?.name}
+							projectVisibility={project?.visibility}
+							ownerId={record.ownerId}
 							onEdit={(g) => (editingDefinition = g)}
 						/>
 					{/each}
@@ -230,6 +248,7 @@
 		projects={data.projects}
 		defaultProjectId={activeProjectId ?? data.projects[0]?.id}
 		computeServers={data.computeServers}
+		showProjectDropdown={data.projects.length > 1 && !activeProjectId}
 		onOpenChange={(o) => (showAddModal = o)}
 		onSubmit={submitAddDefinition}
 	/>

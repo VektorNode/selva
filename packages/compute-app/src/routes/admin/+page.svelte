@@ -5,6 +5,7 @@
 
 	interface PageData {
 		stats: { definitions: number; projects: number; users: number | null };
+		isPlatformAdmin: boolean;
 	}
 	interface Props {
 		data: PageData;
@@ -41,7 +42,7 @@
 			}
 			await new Promise((r) => setTimeout(r, 2000));
 		}
-		updateLogs += '\u26a0 App did not come back within 60s \u2014 check PM2 logs.\n';
+		updateLogs += '\u26a0 App did not come back within 60s - check PM2 logs.\n';
 		updateRunning = false;
 		updateRestarting = false;
 	}
@@ -142,7 +143,7 @@
 						<Users class="text-primary h-5 w-5" />
 					</div>
 					<div>
-						<p class="text-2xl font-bold">{data.stats.users ?? '\u2014'}</p>
+						<p class="text-2xl font-bold">{data.stats.users ?? '—'}</p>
 						<p class="text-muted-foreground text-sm">
 							{data.stats.users === null
 								? 'Single-password mode'
@@ -184,11 +185,13 @@
 		</Card.Root>
 	</div>
 
-	<UpdateSection
-		isRunning={updateRunning}
-		isRestarting={updateRestarting}
-		logs={updateLogs}
-		exitCode={updateExitCode}
-		onRun={runUpdate}
-	/>
+	{#if data.isPlatformAdmin}
+		<UpdateSection
+			isRunning={updateRunning}
+			isRestarting={updateRestarting}
+			logs={updateLogs}
+			exitCode={updateExitCode}
+			onRun={runUpdate}
+		/>
+	{/if}
 </div>

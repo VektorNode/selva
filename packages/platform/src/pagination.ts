@@ -14,9 +14,16 @@ export interface ListOptions {
 	orderBy?: 'createdAt' | 'updatedAt' | 'name';
 	/** Sort direction. Default: 'desc'. */
 	orderDir?: 'asc' | 'desc';
+}
+
+/**
+ * List options for definition queries. Extends ListOptions with
+ * definition-specific filtering that has no meaning for other entities.
+ */
+export interface DefinitionListOptions extends ListOptions {
 	/**
-	 * Definition listings only: include records with status='pending' alongside
-	 * 'ready'. Default false — consumers never see half-written state unless
+	 * Include records with status='pending' alongside 'ready'.
+	 * Default false — consumers never see half-written state unless
 	 * they explicitly opt in (admin/janitor tooling).
 	 */
 	includePending?: boolean;

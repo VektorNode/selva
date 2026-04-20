@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
-import { definitionService, getOrganizationProvider } from '$lib/server/providers.server';
+import { definitionService, getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
 import { requireCanEdit } from '$lib/server/access.server';
 import { CreateDefinitionInputSchema } from '@selva/platform/definitions/schemas';
 import { GH_EXTENSIONS, MAX_GH_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '$lib/server/admin-config';
@@ -35,7 +35,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const orgsPage = await orgs.listOrgs(ctx, { limit: 1 });
 	const defaultOrg = orgsPage.items[0];
 	if (!defaultOrg) throw error(500, 'No organization configured');
-	const projectsPage = await orgs.listProjects(ctx, defaultOrg.id, { limit: 1 });
+	const projectsPage = await getProjectProvider().listProjects(ctx, defaultOrg.id, { limit: 1 });
 	const defaultProject = projectsPage.items[0];
 	if (!defaultProject) throw error(500, 'No project configured');
 

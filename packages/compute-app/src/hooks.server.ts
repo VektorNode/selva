@@ -50,11 +50,15 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 
 	const { pathname } = event.url;
 
-	const isAdminRoute = pathname.startsWith('/admin');
-	const isPublicAdminRoute = pathname === '/admin/login' || pathname === '/admin/setup';
+	const isPublicRoute =
+		pathname === '/login' ||
+		pathname === '/setup' ||
+		pathname.startsWith('/logout');
 
-	// On first run (no users yet), redirect all admin traffic to /admin/setup
-	if (isAdminRoute && !isPublicAdminRoute) {
+	const isAdminRoute = pathname.startsWith('/admin');
+
+	// On first run (no users yet), redirect all admin traffic to /setup
+	if (isAdminRoute) {
 		const usersPage = await providers.auth.listUsers({ limit: 1 });
 		if (usersPage !== null && usersPage.items.length === 0) {
 			if (pathname.startsWith('/admin/api/')) {
@@ -63,12 +67,13 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 					headers: { 'Content-Type': 'application/json' }
 				});
 			}
-			redirect(303, '/admin/setup');
+			redirect(303, '/setup');
 		}
 	}
 
-	// Guard all admin routes except public ones
-	if (isAdminRoute && !isPublicAdminRoute) {
+	// Guard admin routes and /app (login/setup/logout are public)
+	const needsAuth = (isAdminRoute || pathname.startsWith('/app')) && !isPublicRoute;
+	if (needsAuth) {
 		const token = event.cookies.get('admin_session') ?? '';
 		const user = await providers.auth.verifyToken(token);
 
@@ -80,7 +85,13 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 					headers: { 'Content-Type': 'application/json' }
 				});
 			}
-			redirect(303, '/admin/login');
+			// For /app, let the route handle auth (it throws proper 401)
+			if (pathname.startsWith('/app')) {
+				event.locals.user = undefined;
+				const response = await resolve(event);
+				return response;
+			}
+			redirect(303, '/login');
 		}
 
 		// Make the authenticated user + request context available to route loaders

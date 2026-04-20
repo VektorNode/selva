@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Button, Card, Badge } from 'selva-shared';
-	import { Pencil } from '@lucide/svelte';
+	import { Pencil, Lock, Globe, Users } from '@lucide/svelte';
+	import type { ProjectVisibility } from '@selva/platform';
 
 	interface DefinitionConfig {
 		displayName: string;
@@ -15,10 +16,19 @@
 	interface Props {
 		guid: string;
 		config: DefinitionConfig;
+		projectName?: string;
+		projectVisibility?: ProjectVisibility;
+		ownerId?: string;
 		onEdit?: (guid: string) => void;
 	}
 
-	let { guid, config, onEdit }: Props = $props();
+	let { guid, config, projectName, projectVisibility, ownerId, onEdit }: Props = $props();
+
+	const visibilityIcon = {
+		private: { icon: Lock, label: 'Private', color: 'text-red-500' },
+		org: { icon: Users, label: 'Organization', color: 'text-blue-500' },
+		public: { icon: Globe, label: 'Public', color: 'text-green-500' }
+	} as const;
 </script>
 
 <Card.Root class="overflow-hidden pt-0">
@@ -45,6 +55,20 @@
 			>
 				<Pencil class="h-4 w-4" />
 			</Button>
+		</div>
+
+		<!-- Project & visibility info -->
+		<div class="mb-3 flex items-center gap-2">
+			{#if projectName}
+				<span class="text-muted-foreground text-xs font-medium">{projectName}</span>
+			{/if}
+			{#if projectVisibility}
+				{@const vis = visibilityIcon[projectVisibility]}
+				<vis.icon class="h-3.5 w-3.5 {vis.color}" title={vis.label} />
+			{/if}
+			{#if ownerId}
+				<span class="text-muted-foreground text-xs">• Owner: {ownerId.slice(0, 8)}</span>
+			{/if}
 		</div>
 
 		<p class="text-muted-foreground mb-3 line-clamp-2 text-xs">

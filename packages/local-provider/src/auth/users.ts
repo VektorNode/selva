@@ -12,8 +12,11 @@ export interface StoredUser {
 	email: string;
 	displayName?: string;
 	permissions: Permission[];
-	/** "pbkdf2:sha256:<iterations>:<salt>:<hash>" — all binary values base64url encoded. */
-	passwordHash: string;
+	/**
+	 * "pbkdf2:sha256:<iterations>:<salt>:<hash>" — all binary values base64url encoded.
+	 * Null for OAuth-only users (allowlisted email, no password stored).
+	 */
+	passwordHash: string | null;
 	createdAt: string; // ISO 8601
 }
 
@@ -82,9 +85,10 @@ export interface LocalUserMetaProvider {
 	findByEmail(email: string): Promise<StoredUser | null>;
 	findById(id: string): Promise<StoredUser | null>;
 	listUsers(): Promise<Omit<StoredUser, 'passwordHash'>[]>;
+	/** password null = OAuth allowlist entry (no password stored) */
 	createUser(
 		email: string,
-		password: string,
+		password: string | null,
 		permissions: Permission[],
 		displayName?: string
 	): Promise<StoredUser>;
@@ -119,7 +123,7 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 				email,
 				...(displayName && { displayName }),
 				permissions,
-				passwordHash: await hashPassword(password),
+				passwordHash: password !== null ? await hashPassword(password) : null,
 				createdAt: new Date().toISOString()
 			};
 			file.users.push(user);

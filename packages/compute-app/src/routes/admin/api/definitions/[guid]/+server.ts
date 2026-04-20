@@ -24,7 +24,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 		await definitionService.delete(ctx, guidParsed.data);
 		return json({ success: true });
 	} catch (err) {
-		if (err && typeof err === 'object' && 'status' in err) throw err;
+		if (err && typeof err === 'object' && 'statusCode' in err) throw err;
 		console.error('[Definition DELETE] Failed:', err);
 		throw error(500, 'Failed to delete definition');
 	}
@@ -44,16 +44,10 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 		const parsed = UpdateMetadataInputSchema.safeParse(body);
 		if (!parsed.success) throw error(400, parsed.error.issues[0].message);
 
-		const { maxHistory, projectId: newProjectId, computeServerId, ...metaFields } = parsed.data;
-		await definitionService.updateMeta(ctx, guidParsed.data, {
-			...(maxHistory !== undefined && { maxHistory }),
-			...(newProjectId !== undefined && { projectId: newProjectId }),
-			...(computeServerId !== undefined && { computeServerId }),
-			meta: metaFields
-		});
+		await definitionService.updateMeta(ctx, guidParsed.data, parsed.data);
 		return json({ success: true });
 	} catch (err) {
-		if (err && typeof err === 'object' && 'status' in err) throw err;
+		if (err && typeof err === 'object' && 'statusCode' in err) throw err;
 		console.error('[Definition PUT] Failed:', err);
 		throw error(500, 'Failed to update definition');
 	}

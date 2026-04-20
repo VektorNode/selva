@@ -107,6 +107,50 @@ The suite covers: `ctx` scoping, `pending` filtering, `includePending` opt-in, `
 
 ---
 
+## Data Privacy & Security
+
+**User data isolation is by design.** All authentication, credentials, and personally identifiable information (PII) are owned exclusively by the auth provider. Selva stores only:
+
+- Opaque session tokens (in cookies)
+- User ID and permissions (minimal authorization data)
+- Optional provider-specific metadata (non-sensitive only)
+
+**Selva has zero exposure to:**
+- EU GDPR, CCPA, or other data residency regulations (provider's responsibility)
+- User credentials, passwords, or OAuth tokens (provider manages these)
+- Company user records or sensitive employee data (provider owns this)
+
+### Auth Provider Contract
+
+`IAuthProvider` is the trust boundary. The provider is responsible for:
+
+1. **Token generation & validation** — Format is provider-specific (HMAC, JWT, OAuth, OIDC, etc.)
+2. **Credential management** — Passwords, OAuth tokens, MFA secrets
+3. **User lifecycle** — Creation, password resets, account deletion
+4. **Data residency & retention** — Where user data lives, how long it's kept, GDPR compliance
+5. **Password reset flows** — Email tokens, validation, expiration (via `requestPasswordReset` / `completePasswordReset`)
+
+Selva never stores, logs, or processes raw credentials. For password resets:
+- OAuth providers return `'not_supported'` (reset handled by OAuth platform)
+- Local/email-based providers implement token generation, email delivery, and validation
+- Selva only receives the final `AuthUser` object after reset completes
+
+### RequestContext Security
+
+Every data store method receives a `RequestContext` containing the authenticated user and their active scope. The adapter MUST enforce access control:
+
+```ts
+async list(ctx: RequestContext, opts?: ListOptions): Promise<Page<DefinitionRecord>> {
+  // Filter by ctx.orgId — never leak data from other orgs
+  // Respect ctx.permissions for visibility rules
+  // Return empty page for unauthorized callers
+}
+```
+
+See [RequestContext rules](#requestcontext-rules) for the full contract.
+
+---
+
 ## Errors
 
 Throw `ProviderError` for user-facing failures (`new ProviderError('...', 404)`). Everything else should propagate as a raw `Error` — the compute-app will render it as a 500.

@@ -5,9 +5,58 @@ import { camelcaseKeys } from 'selva-compute/core';
 import type { UISchema } from 'selva-shared';
 import { getServerConfig, getComputeServerConfigStore } from '$lib/server/compute/config.server';
 import { resolveComputeServer, SYSTEM_CONTEXT } from '@selva/platform';
-import { getStorageProvider, getDefinitionMeta } from '$lib/server/providers.server';
+import {
+	getStorageProvider,
+	getDefinitionMeta,
+	getOrganizationProvider,
+	getProjectProvider
+} from '$lib/server/providers.server';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Check if a user can access a definition based on project visibility.
+ * Throws 401 if not authenticated, 403 if no access.
+ */
+async function checkDefinitionAccess(
+	userId: string | undefined,
+	projectId: string
+): Promise<void> {
+	if (!userId) {
+		throw error(401, 'Unauthorized: You must be logged in to access definitions');
+	}
+
+	const projects = getProjectProvider();
+	const orgs = getOrganizationProvider();
+	const project = await projects.getProject(SYSTEM_CONTEXT, projectId);
+
+	if (!project) {
+		throw error(404, 'Project not found');
+	}
+
+	if (project.visibility === 'public') {
+		return;
+	}
+
+	if (project.visibility === 'org') {
+		const member = await orgs.getOrgMember(SYSTEM_CONTEXT, project.orgId, userId);
+		if (!member) {
+			throw error(
+				403,
+				`Forbidden: This definition belongs to an organization you are not a member of`
+			);
+		}
+		return;
+	}
+
+	if (project.visibility === 'private') {
+		const member = await projects.getProjectMember(SYSTEM_CONTEXT, projectId, userId);
+		if (!member) {
+			throw error(403, `Forbidden: This definition is private and you are not a project member`);
+		}
+		return;
+	}
+}
 
 /**
  * Fetch UI schema from Rhino Compute's /grasshopper/schema endpoint (no solve required).
@@ -53,7 +102,7 @@ async function fetchSchemaFromCompute(
 	return schemas[0];
 }
 
-export const load = (async ({ url }) => {
+export const load = (async ({ url, locals }) => {
 	const config = getServerConfig();
 	const storage = getStorageProvider();
 	const meta = getDefinitionMeta();
@@ -87,15 +136,22 @@ export const load = (async ({ url }) => {
 
 		const record = await meta.get(SYSTEM_CONTEXT, guid);
 		if (!record) throw new Error(`Definition '${guid}' not found`);
+
+		// Check access based on project visibility
+		await checkDefinitionAccess(locals.user?.id, record.projectId);
+
 		const bytes = await storage.get(`definitions/${guid}/definition.${record.fileExt}`);
 		if (!bytes) throw new Error(`Definition file for '${guid}' not found on disk`);
 
 		definitionSource = bytes;
 		clientDefUrl = `local:${guid}`;
 	} catch (err) {
-		const errMsg = err instanceof Error ? err.message : String(err);
-		console.warn(`[App Load] Failed to load definition '${ghFilename}':`, err);
-		throw error(400, `Failed to load definition '${ghFilename}': ${errMsg}`);
+		// Only wrap actual errors; let HttpError (from error() calls) bubble up
+		if (err instanceof Error && !('status' in err)) {
+			console.warn(`[App Load] Failed to load definition '${ghFilename}':`, err);
+			throw error(400, `Failed to load definition '${ghFilename}': ${err.message}`);
+		}
+		throw err;
 	}
 
 	let client: GrasshopperClient;

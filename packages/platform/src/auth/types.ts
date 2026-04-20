@@ -28,5 +28,14 @@ export interface AuthUser {
 	email?: string;
 	displayName?: string;
 	permissions: Permission[];
+	/** Provider-specific data only — do not store sensitive user information (PII, credentials, tokens). */
 	metadata?: Record<string, unknown>;
 }
+
+/**
+ * Result type for user-management mutations that can fail in distinct ways.
+ * - 'ok'            — operation succeeded
+ * - 'not_found'     — the target user does not exist
+ * - 'not_supported' — this provider does not implement user management
+ */
+export type UserManagementResult = 'ok' | 'not_found' | 'not_supported';
