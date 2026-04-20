@@ -4,159 +4,190 @@
 
 ---
 
-## Permissions → Admin Pages
+## Quick Reference: Permission Model
 
-| Page | `platform_admin` | `manage_users` | `manage_compute` | `manage_definitions` | `manage_projects` |
-|------|:---:|:---:|:---:|:---:|:---:|
-| `/admin` (dashboard) | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/admin/definitions` | ✅ | — | — | ✅ | — |
-| `/admin/projects`    | ✅ | — | — | — | ✅ |
-| `/admin/users`       | ✅ | ✅ | — | — | — |
-| `/admin/compute`     | ✅ | — | ✅ | — | — |
-| Update section (dashboard) | ✅ | — | — | — | — |
-
-> Denied → redirects to `/admin`.
+| Permission           | Scope                  | Key Role                     |
+| -------------------- | ---------------------- | ---------------------------- |
+| `platform_admin`     | All admin pages & APIs | Global admin (⚡ super-user) |
+| `manage_users`       | User management API    | User admin                   |
+| `manage_compute`     | Compute server config  | Compute admin                |
+| `manage_definitions` | Definition CRUD        | Definition curator           |
+| `manage_projects`    | Project & member mgmt  | Project curator              |
 
 ---
 
-## Permissions → API Routes
+## Admin Pages Access
 
-| API Route | Method | `platform_admin` | `manage_users` | `manage_compute` | `manage_definitions` | `manage_projects` | Extra check |
-|-----------|--------|:---:|:---:|:---:|:---:|:---:|---|
-| `/admin/api/definitions` | GET | ✅ | — | — | ✅ | — | — |
-| `/admin/api/definitions` | POST | ✅ | — | — | ✅ | — | `canEditDefinition` |
-| `/admin/api/definitions/upload` | POST | ✅ | — | — | ✅ | — | `canEditDefinition` |
-| `/admin/api/definitions/[guid]` | PATCH | ✅ | — | — | ✅ | — | `canEditDefinition` |
-| `/admin/api/definitions/[guid]/image` | PUT | ✅ | — | — | ✅ | — | `canEditDefinition` |
-| `/admin/api/definitions/[guid]/revert` | POST | ✅ | — | — | ✅ | — | `canEditDefinition` |
-| `/admin/api/definitions/[guid]` | DELETE | ✅ | — | — | ✅ | — | `canEditDefinition` |
-| `/admin/api/files` | GET | ✅ | — | — | ✅ | — | — |
-| `/admin/api/projects` | GET | ✅ | — | — | — | ✅ | — |
-| `/admin/api/projects/[id]` | PATCH | ✅ | — | — | — | ✅ | `canEditProjectSettings` |
-| `/admin/api/projects/[id]` | DELETE | ✅ | — | — | — | ✅ | `canManage` |
-| `/admin/api/projects/[id]/members` | * | ✅ | — | — | — | ✅ | — |
-| `/admin/api/users` | * | ✅ | ✅ | — | — | — | — |
-| `/admin/api/compute` | * | ✅ | — | ✅ | — | — | — |
-| `/admin/api/compute/status` | GET | ✅ | — | ✅ | — | — | — |
-| `/admin/api/update` | POST | ✅ | — | — | — | — | — |
+| Page                 | `platform_admin` | `manage_users` | `manage_compute` | `manage_definitions` | `manage_projects` |
+| -------------------- | :--------------: | :------------: | :--------------: | :------------------: | :---------------: |
+| `/admin` (dashboard) |        ✅        |       ✅       |        ✅        |          ✅          |        ✅         |
+| `/admin/definitions` |        ✅        |       —        |        —         |          ✅          |         —         |
+| `/admin/projects`    |        ✅        |       —        |        —         |          —           |        ✅         |
+| `/admin/users`       |        ✅        |       ✅       |        —         |          —           |         —         |
+| `/admin/compute`     |        ✅        |       —        |        ✅        |          —           |         —         |
+| Update section       |        ✅        |       —        |        —         |          —           |         —         |
 
-> Denied → returns **403**.
+**Denied** → redirects to `/admin`
 
 ---
 
-## Public Routes
+## Admin API Routes
 
-### `/app` — View and solve definitions
+| Route                                  | Method | `platform_admin` | `manage_users` | `manage_compute` | `manage_definitions` | `manage_projects` | Extra Checks             |
+| -------------------------------------- | ------ | :--------------: | :------------: | :--------------: | :------------------: | :---------------: | ------------------------ |
+| **Definitions**                        |
+| `/admin/api/definitions`               | GET    |        ✅        |       —        |        —         |          ✅          |         —         | —                        |
+| `/admin/api/definitions`               | POST   |        ✅        |       —        |        —         |          ✅          |         —         | `canEditDefinition`      |
+| `/admin/api/definitions/upload`        | POST   |        ✅        |       —        |        —         |          ✅          |         —         | `canEditDefinition`      |
+| `/admin/api/definitions/[guid]`        | PATCH  |        ✅        |       —        |        —         |          ✅          |         —         | `canEditDefinition`      |
+| `/admin/api/definitions/[guid]/image`  | PUT    |        ✅        |       —        |        —         |          ✅          |         —         | `canEditDefinition`      |
+| `/admin/api/definitions/[guid]/revert` | POST   |        ✅        |       —        |        —         |          ✅          |         —         | `canEditDefinition`      |
+| `/admin/api/definitions/[guid]`        | DELETE |        ✅        |       —        |        —         |          ✅          |         —         | `canEditDefinition`      |
+| `/admin/api/files`                     | GET    |        ✅        |       —        |        —         |          ✅          |         —         | —                        |
+| **Projects**                           |
+| `/admin/api/projects`                  | GET    |        ✅        |       —        |        —         |          —           |        ✅         | —                        |
+| `/admin/api/projects/[id]`             | PATCH  |        ✅        |       —        |        —         |          —           |        ✅         | `canEditProjectSettings` |
+| `/admin/api/projects/[id]`             | DELETE |        ✅        |       —        |        —         |          —           |        ✅         | `canManage`              |
+| `/admin/api/projects/[id]/members`     | \*     |        ✅        |       —        |        —         |          —           |        ✅         | —                        |
+| **Users**                              |
+| `/admin/api/users`                     | \*     |        ✅        |       ✅       |        —         |          —           |         —         | —                        |
+| **Compute**                            |
+| `/admin/api/compute`                   | \*     |        ✅        |       —        |        ✅        |          —           |         —         | —                        |
+| `/admin/api/compute/status`            | GET    |        ✅        |       —        |        ✅        |          —           |         —         | —                        |
+| **System**                             |
+| `/admin/api/update`                    | POST   |        ✅        |       —        |        —         |          —           |         —         | —                        |
 
-| Project type | Who can access | Rule | Error |
-|---|---|---|---|
-| **Public** | Any authenticated user | Logged-in users can view and solve | 401 if not authenticated |
-| **Org** | Organization members only | Users belonging to the org can solve | 403 if not an org member |
-| **Private** | Project members only | Only members (owner/editor/viewer) can access | 403 if not a project member |
-
-> Denied → returns **401** (not authenticated) or **403** (authenticated but no access).
-
-**Error messages:**
-- `401 Unauthorized` — User is not authenticated
-- `403 Forbidden: Not an organization member` — User is authenticated but not in the org
-- `403 Forbidden: Not a project member` — User is authenticated but not a member of this project
-
----
-
-## Project-level checks
-
-These run **after** the permission check above, on routes marked with an extra check.
-
-### `canEditDefinition(projectId, userId, definitionOwnerId)` — can upload/edit/delete definitions
-
-Ownership-based access control depending on project visibility.
-
-| Project type | Who can edit | Rule |
-|---|---|---|
-| **Public** | Definition owner only | Only the person who uploaded it can modify it |
-| **Org** | Definition owner OR project member (owner/editor) | The uploader can always edit, or any project member (with proper role) |
-| **Private** | Project member (owner/editor) | Standard project membership check—no special owner privileges |
-
-> **Key:** Definition ownership provides special privileges in **public** and **org** projects, but not in **private** projects where project membership is the gatekeeper.
-
-### `canEditProjectSettings(projectId)` — can edit project name, description, visibility
-
-| Who | Allowed |
-|-----|:---:|
-| `platform_admin` | ✅ |
-| Project member with role `owner` | ✅ |
-| Project member with role `editor` + `manage_definitions` permission | ✅ |
-| Anyone else | ❌ |
-
-### `canManage(projectId)` — can delete project and manage members
-
-| Who | Allowed |
-|-----|:---:|
-| `platform_admin` | ✅ |
-| Project member with role `owner` | ✅ |
-| Anyone else | ❌ |
+**Denied** → returns **403**
 
 ---
 
-## Permission scope details
+## Public Routes: `/app` (View & Solve Definitions)
 
-### `manage_projects` — what can they actually do?
+| Project Type | Who Can Access | Can View Schema? | Can Solve? | Can Download Results? | Error If Denied |
+|---|---|:---:|:---:|:---:|---|
+| **Public** | Any authenticated user | ✅ Yes | ✅ Yes | ✅ Yes | 401 Unauthorized |
+| **Org** | Organization members only | ✅ Yes | ✅ Yes | ✅ Yes | 403 Forbidden: Not an org member |
+| **Private** | Project members only (owner/editor/viewer) | ✅ Yes | ✅ Yes | ✅ Yes | 403 Forbidden: Not a project member |
+| **Not logged in** | N/A | ❌ No | ❌ No | ❌ No | 401 Unauthorized (must log in first) |
 
-| Action | Scope |
-|--------|-------|
-| **List projects** | ✅ All projects in all orgs |
-| **Edit project settings** (name, description, visibility) | ✅ If project `owner`, or if `editor` with `manage_definitions` permission |
-| **Delete project** | ❌ Only if project `owner` |
-| **Manage members** | ✅ All projects in all orgs (add/remove/change role) |
+**Access flow:**
+1. User navigates to `/app?gh=definition-name.gh` or `/app?gh={guid}`
+2. System checks: Is user authenticated? (401 if no)
+3. System checks: Can user access the project based on visibility?
+4. If granted: User can view schema and solve the definition interactively
+5. If denied: User gets 403 error (see table)
 
-> **Key:** `manage_projects` alone doesn't let you edit projects. You need to be a project member. With `manage_definitions` + `editor` role, you can edit settings but not delete.
+**Concrete scenarios:**
 
-### `manage_definitions` — what can they actually do?
+| Scenario | Can Access? | Why |
+|---|:---:|---|
+| Alice (logged in) views **public** project | ✅ Yes | Public = any authenticated user |
+| Bob (not logged in) views **public** project | ❌ No | Must be authenticated first (401) |
+| Carol (org member) views **org** project | ✅ Yes | Org project = org members only |
+| David (different org) views **org** project | ❌ No | Not a member of that org (403) |
+| Eve (project member) views **private** project | ✅ Yes | Private project = members only |
+| Frank (not a member) views **private** project | ❌ No | Not invited to project (403) |
+| Grace (project owner) views **private** project | ✅ Yes | Owners are members (403) |
 
-| Action | Scope |
-|--------|-------|
-| **List definitions** | ✅ All definitions |
-| **Upload definition** | ✅ **Public/Org projects**: any org member (no project membership needed). **Private projects**: must be a project member |
-| **Edit/Delete own definitions** | ✅ In **public** and **org** projects (owner privileges) |
-| **Edit/Delete others' definitions** | ✅ In **private** projects + **org** projects as project member (owner/editor role) |
-| **Edit/Delete others' definitions** | ❌ In **public** projects (only your own) |
-
-**Example scenarios:**
-
-- **Public project, not a member** → Can upload new definitions (become owner), can only edit your own
-- **Org project, not a member** → Can upload new definitions (org membership sufficient), can edit/delete your own, cannot edit others'
-- **Org project, member (editor)** → Can upload, can edit/delete your own AND others' definitions in the project
-- **Private project, not a member** → Cannot upload (project membership required)
-- **Private project, member (editor)** → Can upload, standard member access—project membership is the gate
-
-> **Key:** Definition ownership provides special privileges in **public** (full isolation) and **org** (owner can manage own definitions) projects. In **private** projects, project membership is the only gate—no owner privileges matter.
+**Note:** All authenticated users can **upload** definitions to **public** projects (if they have `manage_definitions` permission), becoming the definition owner. This is separate from viewing/solving.
 
 ---
 
-## Ownership hierarchy
+## Custom Access Checks (Gate Keepers)
 
-### Definition owner vs Project owner
+These run **after** permission check on specific routes.
 
-| Scenario | Definition owner | Project owner | Can definition owner edit? |
-|----------|:---:|:---:|---|
-| **Public project** — definition owner NOT a member | ✅ (uploaded it) | — | ✅ Yes (ownership privilege) |
-| **Public project** — definition owner IS a member | ✅ (uploaded it) | — | ✅ Yes (both roles apply) |
-| **Org project** — definition owner NOT a member | ✅ (uploaded it) | — | ✅ Yes (ownership privilege) |
-| **Org project** — definition owner IS a member | ✅ (uploaded it) | — | ✅ Yes (both roles apply) |
-| **Private project** — definition owner NOT a member | ✅ (uploaded it) | — | ❌ No (not a project member) |
-| **Private project** — definition owner IS a member | ✅ (uploaded it) | — | ✅ Yes (project member) |
+### `canEditDefinition` — Can upload/edit/delete definitions?
 
-### Key insight
+| Project Type | Permission + Role                                                             | Rule                                                         |
+| ------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **Public**   | `manage_definitions` + definition owner                                       | Only the uploader can modify (full isolation)                |
+| **Org**      | `manage_definitions` + (definition owner OR project member with owner/editor) | Uploader always can; project members with role can also edit |
+| **Private**  | Project member (owner/editor)                                                 | Standard membership check (no owner privileges)              |
 
-- **Project owner** = controls access, settings, and membership; can edit all definitions in the project (any project type)
-- **Definition owner** = the person who uploaded the definition
-- **In public/org projects**: Definition owner can always edit their own definition, even if not a project member
-- **In private projects**: Must be a project member to edit anything (definition ownership doesn't grant access)
-- **Project owner vs Definition owner**: Project owner has broader control but definition owner has isolation in public projects
+**Examples:**
 
-**Real example:**
+- Alice uploads to a public project → Only Alice can edit, even project members can't
+- Bob uploads to an org project → Bob can edit as definition owner; also any project member with editor or owner role can edit that definition in that project
+- Carol uploads to a private project but isn't a member → Can't edit (membership is the gate)
 
-- Alice uploads `scheme-v1.gh` to a **public project** she's not a member of → Alice becomes definition owner
-- Bob is the project owner but **cannot edit** Alice's definition (in public projects, uploader has full isolation)
-- Charlie is a project member (editor) but also **cannot edit** Alice's definition (in public projects, only uploader can)
-- Alice **can always edit** her own definition, even though she's not a project member
+### `canEditProjectSettings` — Can edit name, description, visibility?
+
+| Who                                                                 | Allowed |
+| ------------------------------------------------------------------- | :-----: |
+| `platform_admin`                                                    |   ✅    |
+| Project member with role `owner`                                    |   ✅    |
+| Project member with role `editor` + `manage_definitions` permission |   ✅    |
+| Anyone else                                                         |   ❌    |
+
+### `canManage` — Can delete project & manage members?
+
+| Who                              | Allowed |
+| -------------------------------- | :-----: |
+| `platform_admin`                 |   ✅    |
+| Project member with role `owner` |   ✅    |
+| Anyone else                      |   ❌    |
+
+---
+
+## What Each Permission Actually Allows
+
+### `manage_definitions` Capability Breakdown
+
+| Action               | Public Project                     | Org Project                   | Private Project               |
+| -------------------- | ---------------------------------- | ----------------------------- | ----------------------------- |
+| **List definitions** | ✅ All                             | ✅ All                        | ✅ All                        |
+| **Upload**           | ✅ Any user (no membership needed) | ✅ Org members only           | ❌ Members only               |
+| **Edit own**         | ✅ Definition owner privilege      | ✅ Definition owner privilege | ✅ Only if member             |
+| **Edit others**      | ❌ No (full isolation)             | ✅ If project member (editor) | ✅ If project member (editor) |
+| **Delete own**       | ✅ Definition owner privilege      | ✅ Definition owner privilege | ✅ Only if member             |
+| **Delete others**    | ❌ No                              | ✅ If project member (editor) | ✅ If project member (editor) |
+
+**Scenarios:**
+
+- **Public, not member** → Upload new definitions (own them) + edit/delete your own only
+- **Org, not member** → Upload new definitions (org member) + edit/delete your own only
+- **Org, member (editor)** → Upload + edit/delete your own AND others' in project
+- **Private, not member** → Can't upload (members only)
+- **Private, member (editor)** → Standard access—project membership is the only gate
+
+### `manage_projects` Capability Breakdown
+
+| Action             | Allowed | Condition                                                           |
+| ------------------ | :-----: | ------------------------------------------------------------------- |
+| **List projects**  |   ✅    | All projects in all orgs                                            |
+| **Edit settings**  |   ✅    | Must be project `owner`, OR project `editor` + `manage_definitions` |
+| **Delete project** |   ❌    | Only project `owner` can delete                                     |
+| **Manage members** |   ✅    | All projects (add/remove/change role)                               |
+
+**Key:** `manage_projects` alone doesn't let you edit. You need to be a project member with proper role.
+
+---
+
+## Ownership vs Membership
+
+### Definition Owner vs Project Owner
+
+| Scenario                           | Can Definition Owner Edit? | Why                         |
+| ---------------------------------- | :------------------------: | --------------------------- |
+| **Public project** — not a member  |           ✅ Yes           | Ownership privilege applies |
+| **Public project** — is a member   |           ✅ Yes           | Both roles apply            |
+| **Org project** — not a member     |           ✅ Yes           | Ownership privilege applies |
+| **Org project** — is a member      |           ✅ Yes           | Both roles apply            |
+| **Private project** — not a member |           ❌ No            | Membership is the only gate |
+| **Private project** — is a member  |           ✅ Yes           | Member of project           |
+
+### Key Rules
+
+- **Project owner** = controls access, settings, members; can edit all definitions in project (any type)
+- **Definition owner** = person who uploaded the definition
+- **Public/Org projects** = Definition owner can always edit their own, even if not a project member
+- **Private projects** = Must be project member to edit anything (definition ownership doesn't grant access)
+
+### Real Example: Alice, Bob, Charlie
+
+- **Alice** uploads `scheme-v1.gh` to a **public project** she doesn't own/manage
+  - Alice becomes **definition owner** of that specific definition
+  - Alice **can edit/delete** her own definition (ownership privilege)
+  - Bob (project owner) **cannot edit** Alice's definition (public = full isolation)
+  - Charlie (project member) **cannot edit** Alice's definition (same reason)
