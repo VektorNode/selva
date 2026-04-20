@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { Button, Input, Label, Alert } from 'selva-shared';
 	import { CircleAlert } from '@lucide/svelte';
 
@@ -11,6 +12,8 @@
 	}
 
 	let { form }: Props = $props();
+
+	const redirectTo = $derived(page.url.searchParams.get('redirectTo') ?? '');
 </script>
 
 <svelte:head>
@@ -25,6 +28,9 @@
 		</div>
 
 		<form method="POST" class="space-y-4">
+			{#if redirectTo}
+				<input type="hidden" name="redirectTo" value={redirectTo} />
+			{/if}
 			{#if form?.error}
 				<Alert.Root variant="destructive">
 					<CircleAlert />
