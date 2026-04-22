@@ -129,6 +129,12 @@ export interface IDefinitionStore {
 	delete(ctx: RequestContext, guid: string): Promise<void>;
 
 	/**
+	 * Atomically increment the run counter for a definition.
+	 * Called after each successful solve. No-op if the record doesn't exist.
+	 */
+	incrementRunCount(ctx: RequestContext, guid: string): Promise<void>;
+
+	/**
 	 * Return records stuck in status='pending' older than the given ISO timestamp.
 	 * Used by the janitor to GC records whose blob upload failed mid-flight.
 	 * System-context only — never exposed to end users.

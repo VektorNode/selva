@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Input, Card, toast } from 'selva-shared';
+	import { Button, Card, toast, Search } from 'selva-shared';
 	import { Plus } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import DefinitionCard from './DefinitionCard.svelte';
@@ -117,7 +117,7 @@
 	<title>Definitions - Selva Admin</title>
 </svelte:head>
 
-<div class="w-full space-y-6 p-6 lg:px-12 xl:px-16">
+<div class="w-full space-y-6 px-6 py-6">
 	<Card.Root>
 		<Card.Header>
 			<div class="flex items-center justify-between">
@@ -174,7 +174,7 @@
 			{/if}
 
 			<!-- Search -->
-			<Input type="text" bind:value={searchQuery} placeholder="Search definitions..." />
+			<Search bind:value={searchQuery} placeholder="Search definitions..." />
 
 			<!-- Grid -->
 			{#if visibleRecords.length === 0}

@@ -1,5 +1,5 @@
 // Auth
-export type { IAuthProvider, AuthProviderCapabilities, AuthUser, Permission, UserManagementResult } from './auth/index.js';
+export type { IAuthProvider, AuthProviderCapabilities, AuthUser, Permission, UserManagementResult, RecentRun } from './auth/index.js';
 export { ALL_PERMISSIONS, hasPermission } from './auth/index.js';
 
 // Organizations
@@ -28,6 +28,8 @@ export {
 	COVER_IMAGE_EXTENSIONS,
 	ALLOWED_UPLOAD_EXTENSIONS,
 	COVER_IMAGE_CONTENT_TYPES,
+	RUNNER_VISIBLE_STATUSES,
+	EDITOR_VISIBLE_STATUSES,
 	definitionPaths,
 	DefinitionService,
 	PENDING_GC_AGE_MS

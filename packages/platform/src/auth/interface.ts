@@ -1,4 +1,4 @@
-import type { AuthUser, Permission, UserManagementResult } from './types.js';
+import type { AuthUser, Permission, UserManagementResult, RecentRun } from './types.js';
 import type { ListOptions, Page } from '../pagination.js';
 
 /**
@@ -99,6 +99,37 @@ export interface IAuthProvider {
 
 	/** Delete a user by ID. Returns 'ok', 'not_found', or 'not_supported'. */
 	deleteUser(id: string): Promise<UserManagementResult>;
+
+	// ============================================================================
+	// User profile (self-service)
+	// ============================================================================
+
+	/**
+	 * Update mutable profile fields for a user (display name, avatar URL).
+	 * Returns 'ok', 'not_found', or 'not_supported'.
+	 */
+	updateUserProfile(
+		id: string,
+		patch: { displayName?: string }
+	): Promise<UserManagementResult>;
+
+	/**
+	 * Star (pin) a definition for quick access on the runner home.
+	 * No-op if already starred.
+	 */
+	starDefinition(userId: string, definitionId: string): Promise<UserManagementResult>;
+
+	/**
+	 * Unstar a definition.
+	 * No-op if not starred.
+	 */
+	unstarDefinition(userId: string, definitionId: string): Promise<UserManagementResult>;
+
+	/**
+	 * Record a solve run for this user.
+	 * Implementations should cap the list to a reasonable recent window (e.g. 20 entries).
+	 */
+	recordRun(userId: string, run: RecentRun): Promise<UserManagementResult>;
 
 	// ============================================================================
 	// Password reset (optional)

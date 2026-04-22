@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import * as path from 'node:path';
-import type { IAuthProvider, AuthUser, Permission, UserManagementResult } from '@selva/platform';
+import type { IAuthProvider, AuthUser, Permission, UserManagementResult, RecentRun } from '@selva/platform';
 import { ALL_PERMISSIONS, ProviderError } from '@selva/platform';
 import { signHmacToken, verifyHmacToken } from './hmac.js';
 import { verifyPasswordHash, createLocalUserMetaProvider } from './users.js';
@@ -73,13 +73,13 @@ export class LocalAuthProvider implements IAuthProvider {
 
 		// Fallback admin (single-password mode, no users.json)
 		if (userId === FALLBACK_ADMIN_ID) {
-			return { id: FALLBACK_ADMIN_ID, permissions: [...ALL_PERMISSIONS] };
+			return { id: FALLBACK_ADMIN_ID, permissions: [...ALL_PERMISSIONS], starredDefinitions: [], recentRuns: [] };
 		}
 
 		// Look up live user record so permission changes are reflected immediately
 		if (this.users) {
 			const u = await this.users.findById(userId);
-			if (u) return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions };
+			if (u) return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions, starredDefinitions: u.starredDefinitions, recentRuns: u.recentRuns };
 		}
 
 		return null;
@@ -94,7 +94,7 @@ export class LocalAuthProvider implements IAuthProvider {
 		if (this.users) {
 			const user = await this.users.findByEmail(email);
 			if (user && user.passwordHash && (await verifyPasswordHash(password, user.passwordHash))) {
-				return { id: user.id, email: user.email, displayName: user.displayName, permissions: user.permissions };
+				return { id: user.id, email: user.email, displayName: user.displayName, permissions: user.permissions, starredDefinitions: user.starredDefinitions, recentRuns: user.recentRuns };
 			}
 		}
 
@@ -103,7 +103,7 @@ export class LocalAuthProvider implements IAuthProvider {
 			const a = Buffer.from(password);
 			const b = Buffer.from(this.fallbackAdminPassword);
 			if (a.length === b.length && timingSafeEqual(a, b)) {
-				return { id: FALLBACK_ADMIN_ID, permissions: [...ALL_PERMISSIONS] };
+				return { id: FALLBACK_ADMIN_ID, permissions: [...ALL_PERMISSIONS], starredDefinitions: [], recentRuns: [] };
 			}
 		}
 
@@ -113,10 +113,10 @@ export class LocalAuthProvider implements IAuthProvider {
 	async getUser(id: string): Promise<AuthUser | null> {
 		if (this.users) {
 			const u = await this.users.findById(id);
-			if (u) return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions };
+			if (u) return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions, starredDefinitions: u.starredDefinitions, recentRuns: u.recentRuns };
 		}
 		if (id === FALLBACK_ADMIN_ID) {
-			return { id: FALLBACK_ADMIN_ID, permissions: [...ALL_PERMISSIONS] };
+			return { id: FALLBACK_ADMIN_ID, permissions: [...ALL_PERMISSIONS], starredDefinitions: [], recentRuns: [] };
 		}
 		return null;
 	}
@@ -128,7 +128,9 @@ export class LocalAuthProvider implements IAuthProvider {
 			id: u.id,
 			email: u.email,
 			displayName: u.displayName,
-			permissions: u.permissions
+			permissions: u.permissions,
+			starredDefinitions: u.starredDefinitions,
+			recentRuns: u.recentRuns
 		}));
 		return paginate(mapped, opts);
 	}
@@ -140,13 +142,13 @@ export class LocalAuthProvider implements IAuthProvider {
 	): Promise<AuthUser | null> {
 		if (!this.users) return null;
 		const u = await this.users.createUser(email, password, permissions);
-		return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions };
+		return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions, starredDefinitions: u.starredDefinitions, recentRuns: u.recentRuns };
 	}
 
 	async registerUser(email: string, password: string): Promise<AuthUser | null> {
 		if (!this.users) return null;
 		const u = await this.users.createUser(email, password, []);
-		return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions };
+		return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions, starredDefinitions: u.starredDefinitions, recentRuns: u.recentRuns };
 	}
 
 	async updateUserPermissions(id: string, permissions: Permission[]): Promise<UserManagementResult> {
@@ -164,6 +166,53 @@ export class LocalAuthProvider implements IAuthProvider {
 		if (!this.users) return 'not_supported';
 		try {
 			await this.users.deleteUser(id);
+			return 'ok';
+		} catch (err) {
+			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';
+			throw err;
+		}
+	}
+
+	async updateUserProfile(
+		id: string,
+		patch: { displayName?: string }
+	): Promise<UserManagementResult> {
+		if (!this.users) return 'not_supported';
+		try {
+			await this.users.updateProfile(id, patch);
+			return 'ok';
+		} catch (err) {
+			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';
+			throw err;
+		}
+	}
+
+	async starDefinition(userId: string, definitionId: string): Promise<UserManagementResult> {
+		if (!this.users) return 'not_supported';
+		try {
+			await this.users.starDefinition(userId, definitionId);
+			return 'ok';
+		} catch (err) {
+			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';
+			throw err;
+		}
+	}
+
+	async unstarDefinition(userId: string, definitionId: string): Promise<UserManagementResult> {
+		if (!this.users) return 'not_supported';
+		try {
+			await this.users.unstarDefinition(userId, definitionId);
+			return 'ok';
+		} catch (err) {
+			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';
+			throw err;
+		}
+	}
+
+	async recordRun(userId: string, run: RecentRun): Promise<UserManagementResult> {
+		if (!this.users) return 'not_supported';
+		try {
+			await this.users.recordRun(userId, run);
 			return 'ok';
 		} catch (err) {
 			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';

@@ -44,17 +44,34 @@ export interface HistoryEntry {
 	originalName: string;
 	/** ISO 8601 date of when the file was archived */
 	archivedAt: string;
+	/** ID of the user who uploaded this version */
+	uploadedBy?: string;
+	/** Optional changelog note for this version */
+	note?: string;
 }
 
 /**
  * Lifecycle status of a definition record.
- * - 'pending' — metadata written, blob upload may be in flight or may have failed
- * - 'ready'   — blob is durably written and the record is visible to consumers
  *
- * List endpoints filter to 'ready' by default so callers never observe
- * half-written state. A janitor sweeps stale 'pending' records.
+ * Internal upload state:
+ * - 'pending' — metadata written, blob upload may be in flight or may have failed
+ *
+ * Editorial workflow (visible to project editors/owners):
+ * - 'draft'     — work in progress, not visible to runners
+ * - 'review'    — submitted for review, read-only for editors
+ * - 'published' — live and visible to all project members with solve access
+ * - 'archived'  — retired, hidden from runners but preserved for history
+ *
+ * List endpoints filter out 'pending' by default. Runners only see 'published'.
+ * A janitor sweeps stale 'pending' records.
  */
-export type DefinitionStatus = 'pending' | 'ready';
+export type DefinitionStatus = 'pending' | 'draft' | 'review' | 'published' | 'archived';
+
+/** Statuses visible to runners (end users with solve access) */
+export const RUNNER_VISIBLE_STATUSES: DefinitionStatus[] = ['published'];
+
+/** Statuses visible to project editors/owners */
+export const EDITOR_VISIBLE_STATUSES: DefinitionStatus[] = ['draft', 'review', 'published', 'archived'];
 
 export interface DefinitionRecord {
 	/** UUID v4 primary key */
@@ -63,6 +80,8 @@ export interface DefinitionRecord {
 	projectId: string;
 	/** UUID of the user who created this definition */
 	ownerId: string;
+	/** UUID of the user who last modified this definition */
+	lastEditedBy?: string;
 	/**
 	 * Optional UUID of a specific compute server to use when solving.
 	 * Falls back to the org default, then the platform default.
@@ -76,6 +95,8 @@ export interface DefinitionRecord {
 	maxHistory: number;
 	/** Lifecycle status. See DefinitionStatus. */
 	status: DefinitionStatus;
+	/** Total number of successful solve runs across all time. */
+	runCount: number;
 	createdAt: string; // ISO 8601
 	updatedAt: string; // ISO 8601
 }
@@ -88,4 +109,7 @@ export interface DefinitionRecordPatch {
 	projectId?: string;
 	computeServerId?: string | null;
 	status?: DefinitionStatus;
+	lastEditedBy?: string;
+	/** Increments runCount by this value (always positive). */
+	incrementRunCount?: number;
 }

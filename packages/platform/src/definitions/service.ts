@@ -73,6 +73,7 @@ export class DefinitionService {
 			history: [],
 			maxHistory: input.maxHistory ?? 10,
 			status: 'pending',
+			runCount: 0,
 			createdAt: now,
 			updatedAt: now
 		};
@@ -87,10 +88,10 @@ export class DefinitionService {
 			'application/octet-stream'
 		);
 
-		// 3. Flip to ready — the record is now visible to list queries.
-		await this.data.definitions.update(ctx, input.guid, { status: 'ready' });
+		// 3. Flip to draft — the record is now visible to editors.
+		await this.data.definitions.update(ctx, input.guid, { status: 'draft' });
 
-		return { ...record, status: 'ready' };
+		return { ...record, status: 'draft' };
 	}
 
 	async updateFile(
@@ -140,13 +141,14 @@ export class DefinitionService {
 	}
 
 	async updateMeta(ctx: RequestContext, guid: string, patch: UpdateMetadataInput): Promise<void> {
-		const { maxHistory, projectId, computeServerId, ...metaFields } = patch;
+		const { maxHistory, projectId, computeServerId, status, ...metaFields } = patch;
 		const meta = Object.keys(metaFields).length > 0 ? (metaFields as Partial<DefinitionMeta>) : undefined;
 		const recordPatch: DefinitionRecordPatch = {
 			...(meta !== undefined && { meta }),
 			...(maxHistory !== undefined && { maxHistory }),
 			...(projectId !== undefined && { projectId }),
-			...(computeServerId !== undefined && { computeServerId })
+			...(computeServerId !== undefined && { computeServerId }),
+			...(status !== undefined && { status })
 		};
 		await this.data.definitions.update(ctx, guid, recordPatch);
 	}

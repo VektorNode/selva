@@ -7,6 +7,10 @@ export interface ConformanceExpect<T> {
 	toBeTruthy: () => void;
 	toBeFalsy: () => void;
 	toContain: (expected: unknown) => void;
+	toBeLessThanOrEqual: (expected: number) => void;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	toThrow: (expected?: any) => void;
+	resolves: ConformanceExpect<Awaited<T>>;
 	not: ConformanceExpect<T>;
 }
 

@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { Card } from 'selva-shared';
-	import { FileCode, FolderOpen, Users, Server, ArrowRight } from '@lucide/svelte';
+	import { Users, Server, LayoutDashboard, ArrowRight } from '@lucide/svelte';
 	import UpdateSection from './UpdateSection.svelte';
 
 	interface PageData {
-		stats: { definitions: number; projects: number; users: number | null };
+		stats: { users: number | null };
 		isPlatformAdmin: boolean;
 	}
 	interface Props {
@@ -25,13 +25,13 @@
 	let updateRestarting = $state(false);
 
 	async function waitForAppRestart() {
-		updateLogs += '\nWaiting for app to come back online\u2026\n';
+		updateLogs += '\nWaiting for app to come back online…\n';
 		await new Promise((r) => setTimeout(r, 3000));
 		for (let i = 0; i < 30; i++) {
 			try {
 				const res = await fetch('/api/health', { cache: 'no-store' });
 				if (res.ok) {
-					updateLogs += '\u2713 App is back online!\n';
+					updateLogs += '✓ App is back online!\n';
 					updateExitCode = 0;
 					updateRunning = false;
 					updateRestarting = false;
@@ -42,7 +42,7 @@
 			}
 			await new Promise((r) => setTimeout(r, 2000));
 		}
-		updateLogs += '\u26a0 App did not come back within 60s - check PM2 logs.\n';
+		updateLogs += '⚠ App did not come back within 60s - check PM2 logs.\n';
 		updateRunning = false;
 		updateRestarting = false;
 	}
@@ -105,37 +105,12 @@
 </script>
 
 <svelte:head>
-	<title>Admin Dashboard - Selva Compute</title>
+	<title>Admin - Selva</title>
 </svelte:head>
 
-<div class="w-full space-y-6 p-6 lg:px-12 xl:px-16">
+<div class="w-full space-y-6 px-6 py-6">
+	<!-- Platform stats -->
 	<div class="grid gap-4 sm:grid-cols-3">
-		<a href="/admin/definitions">
-			<Card.Root class="hover:bg-muted/40 cursor-pointer transition-colors">
-				<Card.Content class="flex items-center gap-4 pt-6">
-					<div class="bg-primary/10 rounded-lg p-3">
-						<FileCode class="text-primary h-5 w-5" />
-					</div>
-					<div>
-						<p class="text-2xl font-bold">{data.stats.definitions}</p>
-						<p class="text-muted-foreground text-sm">
-							Definition{data.stats.definitions === 1 ? '' : 's'}
-						</p>
-					</div>
-				</Card.Content>
-			</Card.Root>
-		</a>
-		<Card.Root>
-			<Card.Content class="flex items-center gap-4 pt-6">
-				<div class="bg-primary/10 rounded-lg p-3">
-					<FolderOpen class="text-primary h-5 w-5" />
-				</div>
-				<div>
-					<p class="text-2xl font-bold">{data.stats.projects}</p>
-					<p class="text-muted-foreground text-sm">Project{data.stats.projects === 1 ? '' : 's'}</p>
-				</div>
-			</Card.Content>
-		</Card.Root>
 		<a href="/admin/users">
 			<Card.Root class="hover:bg-muted/40 cursor-pointer transition-colors">
 				<Card.Content class="flex items-center gap-4 pt-6">
@@ -145,45 +120,56 @@
 					<div>
 						<p class="text-2xl font-bold">{data.stats.users ?? '—'}</p>
 						<p class="text-muted-foreground text-sm">
-							{data.stats.users === null
-								? 'Single-password mode'
-								: `User${data.stats.users === 1 ? '' : 's'}`}
+							{data.stats.users === null ? 'Single-password mode' : `User${data.stats.users === 1 ? '' : 's'}`}
 						</p>
 					</div>
 				</Card.Content>
 			</Card.Root>
 		</a>
-	</div>
 
-	<div class="grid gap-4 sm:grid-cols-2">
 		<a href="/admin/compute">
-			<Card.Root class="hover:bg-muted/40 h-full cursor-pointer transition-colors">
+			<Card.Root class="hover:bg-muted/40 cursor-pointer transition-colors">
+				<Card.Content class="flex items-center gap-4 pt-6">
+					<div class="bg-primary/10 rounded-lg p-3">
+						<Server class="text-primary h-5 w-5" />
+					</div>
+					<div>
+						<p class="text-sm font-semibold">Compute Servers</p>
+						<p class="text-muted-foreground text-xs">Status &amp; config</p>
+					</div>
+				</Card.Content>
+			</Card.Root>
+		</a>
+
+		<a href="/definitions">
+			<Card.Root class="hover:bg-muted/40 cursor-pointer transition-colors">
 				<Card.Content class="flex items-center justify-between gap-4 pt-6">
 					<div class="flex items-center gap-4">
 						<div class="bg-primary/10 rounded-lg p-3">
-							<Server class="text-primary h-5 w-5" />
+							<LayoutDashboard class="text-primary h-5 w-5" />
 						</div>
 						<div>
-							<p class="text-sm font-semibold">Compute Servers</p>
-							<p class="text-muted-foreground text-xs">Status, versions &amp; plugins</p>
+							<p class="text-sm font-semibold">Content Dashboard</p>
+							<p class="text-muted-foreground text-xs">Definitions &amp; projects</p>
 						</div>
 					</div>
 					<ArrowRight class="text-muted-foreground h-4 w-4 shrink-0" />
 				</Card.Content>
 			</Card.Root>
 		</a>
-
-		<Card.Root>
-			<Card.Content class="pt-6">
-				<p class="text-muted-foreground mb-2 text-xs">Web App Build</p>
-				<div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-					<code class="text-foreground font-mono text-xs" title={build.fullHash}>{build.hash}</code>
-					<span class="text-muted-foreground text-xs">{build.message}</span>
-					<span class="text-muted-foreground text-xs">{build.date}</span>
-				</div>
-			</Card.Content>
-		</Card.Root>
 	</div>
+
+	<!-- Build info -->
+	<Card.Root>
+		<Card.Content class="pt-6">
+			<p class="text-muted-foreground mb-2 text-xs">Web App Build</p>
+			<div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+				<code class="text-foreground font-mono text-xs" title={build.fullHash}>{build.hash}</code>
+				<span class="text-muted-foreground text-xs">{build.message}</span>
+				<span class="text-muted-foreground text-xs">{build.date}</span>
+			</div>
+		</Card.Content>
+	</Card.Root>
 
 	{#if data.isPlatformAdmin}
 		<UpdateSection

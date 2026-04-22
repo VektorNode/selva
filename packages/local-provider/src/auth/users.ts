@@ -17,8 +17,14 @@ export interface StoredUser {
 	 * Null for OAuth-only users (allowlisted email, no password stored).
 	 */
 	passwordHash: string | null;
+	/** Definition GUIDs pinned by this user. */
+	starredDefinitions: string[];
+	/** Last N solve runs, newest first. Capped at MAX_RECENT_RUNS. */
+	recentRuns: import('@selva/platform').RecentRun[];
 	createdAt: string; // ISO 8601
 }
+
+const MAX_RECENT_RUNS = 20;
 
 export interface UsersFile {
 	users: StoredUser[];
@@ -93,24 +99,36 @@ export interface LocalUserMetaProvider {
 		displayName?: string
 	): Promise<StoredUser>;
 	updatePermissions(id: string, permissions: Permission[]): Promise<void>;
+	updateProfile(id: string, patch: { displayName?: string }): Promise<void>;
+	starDefinition(id: string, definitionId: string): Promise<void>;
+	unstarDefinition(id: string, definitionId: string): Promise<void>;
+	recordRun(id: string, run: import('@selva/platform').RecentRun): Promise<void>;
 	deleteUser(id: string): Promise<void>;
+}
+
+function backfillUser(u: StoredUser): StoredUser {
+	if (!u.starredDefinitions) u.starredDefinitions = [];
+	if (!u.recentRuns) u.recentRuns = [];
+	return u;
 }
 
 export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMetaProvider {
 	return {
 		async findByEmail(email) {
 			const { users } = await readUsersFile(usersFilePath);
-			return users.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? null;
+			const u = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+			return u ? backfillUser(u) : null;
 		},
 
 		async findById(id) {
 			const { users } = await readUsersFile(usersFilePath);
-			return users.find((u) => u.id === id) ?? null;
+			const u = users.find((u) => u.id === id);
+			return u ? backfillUser(u) : null;
 		},
 
 		async listUsers() {
 			const { users } = await readUsersFile(usersFilePath);
-			return users.map(({ passwordHash: _ph, ...rest }) => rest);
+			return users.map(({ passwordHash: _ph, ...rest }) => backfillUser(rest as StoredUser));
 		},
 
 		async createUser(email, password, permissions, displayName?) {
@@ -124,6 +142,8 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 				...(displayName && { displayName }),
 				permissions,
 				passwordHash: password !== null ? await hashPassword(password) : null,
+				starredDefinitions: [],
+				recentRuns: [],
 				createdAt: new Date().toISOString()
 			};
 			file.users.push(user);
@@ -136,6 +156,43 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
 			user.permissions = permissions;
+			await writeUsersFile(usersFilePath, file);
+		},
+
+		async updateProfile(id, patch) {
+			const file = await readUsersFile(usersFilePath);
+			const user = file.users.find((u) => u.id === id);
+			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
+			if (patch.displayName !== undefined) user.displayName = patch.displayName;
+			await writeUsersFile(usersFilePath, file);
+		},
+
+		async starDefinition(id, definitionId) {
+			const file = await readUsersFile(usersFilePath);
+			const user = file.users.find((u) => u.id === id);
+			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
+			if (!user.starredDefinitions) user.starredDefinitions = [];
+			if (!user.starredDefinitions.includes(definitionId)) {
+				user.starredDefinitions.push(definitionId);
+				await writeUsersFile(usersFilePath, file);
+			}
+		},
+
+		async unstarDefinition(id, definitionId) {
+			const file = await readUsersFile(usersFilePath);
+			const user = file.users.find((u) => u.id === id);
+			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
+			user.starredDefinitions = (user.starredDefinitions ?? []).filter((d) => d !== definitionId);
+			await writeUsersFile(usersFilePath, file);
+		},
+
+		async recordRun(id, run) {
+			const file = await readUsersFile(usersFilePath);
+			const user = file.users.find((u) => u.id === id);
+			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
+			if (!user.recentRuns) user.recentRuns = [];
+			// Remove older entry for same definition, then prepend newest
+			user.recentRuns = [run, ...user.recentRuns.filter((r) => r.definitionId !== run.definitionId)].slice(0, MAX_RECENT_RUNS);
 			await writeUsersFile(usersFilePath, file);
 		},
 

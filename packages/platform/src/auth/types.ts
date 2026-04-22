@@ -23,11 +23,22 @@ export function hasPermission(permissions: Permission[], permission: Permission)
 	return permissions.includes('platform_admin') || permissions.includes(permission);
 }
 
+export interface RecentRun {
+	definitionId: string;
+	runId: string;
+	definitionName: string;
+	timestamp: string; // ISO 8601
+}
+
 export interface AuthUser {
 	id: string;
 	email?: string;
 	displayName?: string;
 	permissions: Permission[];
+	/** Definition GUIDs pinned by this user for quick access. */
+	starredDefinitions: string[];
+	/** Last N solve runs across all definitions, newest first. */
+	recentRuns: RecentRun[];
 	/** Provider-specific data only — do not store sensitive user information (PII, credentials, tokens). */
 	metadata?: Record<string, unknown>;
 }

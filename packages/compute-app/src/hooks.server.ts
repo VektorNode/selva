@@ -56,6 +56,8 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		pathname.startsWith('/logout');
 
 	const isAdminRoute = pathname.startsWith('/admin');
+	const isDefinitionsRoute = pathname.startsWith('/definitions');
+	const isAppRoute = pathname.startsWith('/app');
 
 	// On first run (no users yet), redirect all admin traffic to /setup
 	if (isAdminRoute) {
@@ -71,25 +73,18 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		}
 	}
 
-	// Guard admin routes and /app (login/setup/logout are public)
-	const needsAuth = (isAdminRoute || pathname.startsWith('/app')) && !isPublicRoute;
+	// Guard admin, definitions, and /app routes
+	const needsAuth = (isAdminRoute || isDefinitionsRoute || isAppRoute) && !isPublicRoute;
 	if (needsAuth) {
 		const token = event.cookies.get('admin_session') ?? '';
 		const user = await providers.auth.verifyToken(token);
 
 		if (!user) {
-			// API requests get 401; page requests get redirected to login
 			if (pathname.startsWith('/admin/api/')) {
 				return new Response(JSON.stringify({ error: 'Unauthorized' }), {
 					status: 401,
 					headers: { 'Content-Type': 'application/json' }
 				});
-			}
-			// For /app, let the route handle auth (it throws proper 401)
-			if (pathname.startsWith('/app')) {
-				event.locals.user = undefined;
-				const response = await resolve(event);
-				return response;
 			}
 			redirect(303, `/login?redirectTo=${encodeURIComponent(pathname)}`);
 		}
