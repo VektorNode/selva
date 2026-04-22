@@ -39,10 +39,15 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		try {
 			const content = await fs.readFile(this.configPath, 'utf-8');
 			const parsed = JSON.parse(content) as DefinitionsConfig;
-			// Backfill status for records written before Phase 4 landed.
-			// Anything on disk is by definition fully written, so treat as 'ready'.
+			// Backfill fields for records written before schema migrations.
 			for (const record of Object.values(parsed.definitions)) {
-				if (record && !record.status) record.status = 'ready';
+				if (!record) continue;
+				// Records that pre-date the editorial workflow: treat as published.
+				if (!record.status || record.status === ('ready' as string)) record.status = 'published';
+				if (record.runCount === undefined) record.runCount = 0;
+				for (const entry of record.history ?? []) {
+					if (!entry.uploadedBy) entry.uploadedBy = record.ownerId;
+				}
 			}
 			return parsed;
 		} catch (err) {
@@ -66,6 +71,9 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 			if (field === 'name') {
 				return a.meta.displayName.localeCompare(b.meta.displayName) * mul;
 			}
+			if (field === 'runCount') {
+				return ((a.runCount ?? 0) - (b.runCount ?? 0)) * mul;
+			}
 			const av = (a as unknown as Record<string, string>)[field] ?? '';
 			const bv = (b as unknown as Record<string, string>)[field] ?? '';
 			if (av < bv) return -1 * mul;
@@ -76,8 +84,14 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 
 	private visibleRecords(records: DefinitionRecord[], opts?: DefinitionListOptions): DefinitionRecord[] {
 		const filtered = records.filter((r) => r?.meta?.displayName);
+		// Apply status filter
+		if (opts?.statuses?.length) {
+			const allowed = new Set(opts.statuses);
+			return filtered.filter((r) => allowed.has(r.status));
+		}
 		if (opts?.includePending) return filtered;
-		return filtered.filter((r) => r.status === 'ready');
+		// Default: everything except internal 'pending' state
+		return filtered.filter((r) => r.status !== 'pending');
 	}
 
 	async list(_ctx: RequestContext, opts?: DefinitionListOptions): Promise<Page<DefinitionRecord>> {
@@ -131,6 +145,10 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 				computeServerId: patch.computeServerId ?? undefined
 			}),
 			...(patch.status !== undefined && { status: patch.status }),
+			...(patch.lastEditedBy !== undefined && { lastEditedBy: patch.lastEditedBy }),
+			...(patch.incrementRunCount !== undefined && {
+				runCount: (existing.runCount ?? 0) + patch.incrementRunCount
+			}),
 			meta: patch.meta ? { ...existing.meta, ...patch.meta } : existing.meta,
 			updatedAt: new Date().toISOString()
 		};
@@ -162,13 +180,22 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		await this.writeConfig(config);
 	}
 
+	async incrementRunCount(_ctx: RequestContext, guid: string): Promise<void> {
+		const config = await this.readConfig();
+		const existing = config.definitions[guid];
+		if (!existing) return;
+		existing.runCount = (existing.runCount ?? 0) + 1;
+		existing.updatedAt = new Date().toISOString();
+		await this.writeConfig(config);
+	}
+
 	async listStalePending(
 		_ctx: RequestContext,
 		olderThanIso: string
 	): Promise<DefinitionRecord[]> {
 		const config = await this.readConfig();
 		return Object.values(config.definitions).filter(
-			(r) => r?.status === 'pending' && r.createdAt <= olderThanIso
+			(r) => r?.status === ('pending' as string) && r.createdAt <= olderThanIso
 		);
 	}
 

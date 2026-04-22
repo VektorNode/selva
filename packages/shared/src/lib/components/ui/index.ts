@@ -10,6 +10,7 @@ export {
 } from './button';
 export { Badge, badgeVariants, type BadgeVariant } from './badge';
 export { Input } from './input';
+export { Search } from './search';
 export { Textarea } from './textarea';
 export { Label } from './label';
 export { Checkbox } from './checkbox';

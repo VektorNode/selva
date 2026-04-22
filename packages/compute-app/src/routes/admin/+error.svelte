@@ -3,6 +3,6 @@
 	import { ErrorScreen } from 'selva-shared';
 </script>
 
-<div class="p-6 lg:px-12 xl:px-16">
+<div class="px-6 py-6">
 	<ErrorScreen status={page.status} message={page.error?.message} />
 </div>

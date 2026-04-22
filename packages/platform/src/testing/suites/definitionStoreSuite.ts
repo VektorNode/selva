@@ -43,7 +43,8 @@ function record(overrides: Partial<DefinitionRecord> = {}): DefinitionRecord {
 		meta: overrides.meta ?? { displayName: 'Test' },
 		history: overrides.history ?? [],
 		maxHistory: overrides.maxHistory ?? 10,
-		status: overrides.status ?? 'ready',
+		status: overrides.status ?? 'published',
+		runCount: overrides.runCount ?? 0,
 		createdAt: overrides.createdAt ?? now,
 		updatedAt: overrides.updatedAt ?? now,
 		...overrides
@@ -71,7 +72,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 
 		it('list filters pending by default', async () => {
 			const store = await createStore();
-			await store.create(ctx('u1'), record({ guid: 'r1', status: 'ready' }));
+			await store.create(ctx('u1'), record({ guid: 'r1', status: 'published' }));
 			await store.create(ctx('u1'), record({ guid: 'p1', status: 'pending' }));
 
 			const page = await store.list(ctx('u1'));
@@ -82,13 +83,26 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 
 		it('list with includePending returns pending too', async () => {
 			const store = await createStore();
-			await store.create(ctx('u1'), record({ guid: 'r1', status: 'ready' }));
+			await store.create(ctx('u1'), record({ guid: 'r1', status: 'published' }));
 			await store.create(ctx('u1'), record({ guid: 'p1', status: 'pending' }));
 
 			const page = await store.list(ctx('u1'), { includePending: true });
 			const guids = page.items.map((r) => r.guid);
 			expect(guids).toContain('r1');
 			expect(guids).toContain('p1');
+		});
+
+		it('list with statuses filter returns only matching statuses', async () => {
+			const store = await createStore();
+			await store.create(ctx('u1'), record({ guid: 'pub', status: 'published' }));
+			await store.create(ctx('u1'), record({ guid: 'dft', status: 'draft' }));
+			await store.create(ctx('u1'), record({ guid: 'rev', status: 'review' }));
+
+			const page = await store.list(ctx('u1'), { statuses: ['draft', 'review'] });
+			const guids = page.items.map((r) => r.guid);
+			expect(guids).toContain('dft');
+			expect(guids).toContain('rev');
+			expect(guids).not.toContain('pub');
 		});
 
 		it('listByProject filters by projectId', async () => {
@@ -125,16 +139,39 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(e.statusCode).toBe(404);
 		});
 
-		it('status flip pending → ready via update', async () => {
+		it('status flip pending → published via update', async () => {
 			const store = await createStore();
 			await store.create(ctx('u1'), record({ guid: 'x', status: 'pending' }));
 
 			const beforeFlip = await store.list(ctx('u1'));
 			expect(beforeFlip.items.map((r) => r.guid)).not.toContain('x');
 
-			await store.update(ctx('u1'), 'x', { status: 'ready' });
+			await store.update(ctx('u1'), 'x', { status: 'published' });
 			const afterFlip = await store.list(ctx('u1'));
 			expect(afterFlip.items.map((r) => r.guid)).toContain('x');
+		});
+
+		it('incrementRunCount increases runCount by 1', async () => {
+			const store = await createStore();
+			await store.create(ctx('u1'), record({ guid: 'rc', runCount: 5 }));
+			await store.incrementRunCount(ctx('u1'), 'rc');
+			const got = await store.get(ctx('u1'), 'rc');
+			expect(got?.runCount).toBe(6);
+		});
+
+		it('incrementRunCount is a no-op for missing guid', async () => {
+			const store = await createStore();
+			let threw = false;
+			try { await store.incrementRunCount(ctx('u1'), 'no-such-guid'); } catch { threw = true; }
+			expect(threw).toBe(false);
+		});
+
+		it('update patches lastEditedBy', async () => {
+			const store = await createStore();
+			await store.create(ctx('u1'), record({ guid: 'le' }));
+			await store.update(ctx('u1'), 'le', { lastEditedBy: 'user-2' });
+			const got = await store.get(ctx('u1'), 'le');
+			expect(got?.lastEditedBy).toBe('user-2');
 		});
 
 		it('addHistoryEntry prepends entries (newest first)', async () => {
@@ -169,13 +206,14 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(got).toBeNull();
 		});
 
-		it('listPublic returns only ready records', async () => {
+		it('listPublic returns published records, not pending', async () => {
 			const store = await createStore();
-			await store.create(ctx('u1'), record({ guid: 'pub-ready', status: 'ready' }));
+			await store.create(ctx('u1'), record({ guid: 'pub-published', status: 'published' }));
 			await store.create(ctx('u1'), record({ guid: 'pub-pending', status: 'pending' }));
+			await store.create(ctx('u1'), record({ guid: 'pub-draft', status: 'draft' }));
 
 			const page = await store.listPublic(ctx('u1'));
-			expect(page.items.map((r) => r.guid)).toContain('pub-ready');
+			expect(page.items.map((r) => r.guid)).toContain('pub-published');
 			expect(page.items.map((r) => r.guid)).not.toContain('pub-pending');
 		});
 
@@ -192,7 +230,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 				ctx('u1'),
 				record({ guid: 'new-pending', status: 'pending', createdAt: recent })
 			);
-			await store.create(ctx('u1'), record({ guid: 'old-ready', status: 'ready', createdAt: old }));
+			await store.create(ctx('u1'), record({ guid: 'old-ready', status: 'published', createdAt: old }));
 
 			const cutoff = '2024-06-01T00:00:00.000Z';
 			const stale = await store.listStalePending(SYSTEM_CONTEXT, cutoff);

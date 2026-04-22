@@ -7,7 +7,7 @@
  * Runner-agnostic: callers inject a `{ describe, it, expect }` trio.
  */
 
-import type { IAuthProvider } from '../../auth/index.js';
+import type { IAuthProvider, RecentRun } from '../../auth/index.js';
 import { type ConformanceRunner } from './runner.js';
 
 export interface AuthProviderConformanceOptions {
@@ -170,6 +170,78 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 				const result = await provider.deleteUser('ghost');
 				expect(result).toBe('not_found');
 			});
+
+			it('createUser returns user with empty starredDefinitions and recentRuns', async () => {
+				const { provider } = await createProvider();
+				const user = await provider.createUser('new@example.com', 'pw', []);
+				expect(user?.starredDefinitions).toEqual([]);
+				expect(user?.recentRuns).toEqual([]);
+			});
+
+			it('updateUserProfile changes displayName', async () => {
+				const { provider } = await createProvider();
+				const user = await provider.createUser('p@example.com', 'pw', []);
+				const result = await provider.updateUserProfile(user!.id, { displayName: 'Felix' });
+				expect(result).toBe('ok');
+				const fetched = await provider.getUser(user!.id);
+				expect(fetched?.displayName).toBe('Felix');
+			});
+
+			it('updateUserProfile returns not_found for unknown user', async () => {
+				const { provider } = await createProvider();
+				const result = await provider.updateUserProfile('ghost', { displayName: 'X' });
+				expect(result).toBe('not_found');
+			});
+
+			it('starDefinition adds guid and unstarDefinition removes it', async () => {
+				const { provider } = await createProvider();
+				const user = await provider.createUser('star@example.com', 'pw', []);
+				await provider.starDefinition(user!.id, 'def-abc');
+				let fetched = await provider.getUser(user!.id);
+				expect(fetched?.starredDefinitions).toContain('def-abc');
+
+				await provider.unstarDefinition(user!.id, 'def-abc');
+				fetched = await provider.getUser(user!.id);
+				expect(fetched?.starredDefinitions).not.toContain('def-abc');
+			});
+
+			it('starDefinition is idempotent (no duplicates)', async () => {
+				const { provider } = await createProvider();
+				const user = await provider.createUser('idem@example.com', 'pw', []);
+				await provider.starDefinition(user!.id, 'def-xyz');
+				await provider.starDefinition(user!.id, 'def-xyz');
+				const fetched = await provider.getUser(user!.id);
+				expect(fetched?.starredDefinitions.filter((d) => d === 'def-xyz').length).toBe(1);
+			});
+
+			it('recordRun prepends to recentRuns and caps at 20', async () => {
+				const { provider } = await createProvider();
+				const user = await provider.createUser('runs@example.com', 'pw', []);
+				const makeRun = (i: number): RecentRun => ({
+					definitionId: `def-${i}`,
+					runId: `run-${i}`,
+					definitionName: `Def ${i}`,
+					timestamp: new Date(Date.now() + i * 1000).toISOString()
+				});
+				for (let i = 0; i < 25; i++) {
+					await provider.recordRun(user!.id, makeRun(i));
+				}
+				const fetched = await provider.getUser(user!.id);
+				expect(fetched?.recentRuns.length).toBeLessThanOrEqual(20);
+				// Most recent run should be first
+				expect(fetched?.recentRuns[0].definitionId).toBe('def-24');
+			});
+
+			it('recordRun deduplicates by definitionId (keeps most recent)', async () => {
+				const { provider } = await createProvider();
+				const user = await provider.createUser('dedup@example.com', 'pw', []);
+				await provider.recordRun(user!.id, { definitionId: 'def-1', runId: 'old', definitionName: 'D', timestamp: '2024-01-01T00:00:00Z' });
+				await provider.recordRun(user!.id, { definitionId: 'def-1', runId: 'new', definitionName: 'D', timestamp: '2024-01-02T00:00:00Z' });
+				const fetched = await provider.getUser(user!.id);
+				const runs = fetched?.recentRuns.filter((r) => r.definitionId === 'def-1');
+				expect(runs?.length).toBe(1);
+				expect(runs?.[0].runId).toBe('new');
+			});
 		} else {
 			it('listUsers returns null when user management is not supported', async () => {
 				const { provider } = await createProvider();
@@ -192,6 +264,26 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 			it('deleteUser returns not_supported', async () => {
 				const { provider } = await createProvider();
 				const result = await provider.deleteUser('any-id');
+				expect(result).toBe('not_supported');
+			});
+
+			it('updateUserProfile returns not_supported', async () => {
+				const { provider } = await createProvider();
+				const result = await provider.updateUserProfile('any-id', { displayName: 'X' });
+				expect(result).toBe('not_supported');
+			});
+
+			it('starDefinition returns not_supported', async () => {
+				const { provider } = await createProvider();
+				const result = await provider.starDefinition('any-id', 'def-1');
+				expect(result).toBe('not_supported');
+			});
+
+			it('recordRun returns not_supported', async () => {
+				const { provider } = await createProvider();
+				const result = await provider.recordRun('any-id', {
+					definitionId: 'def-1', runId: 'r1', definitionName: 'D', timestamp: new Date().toISOString()
+				});
 				expect(result).toBe('not_supported');
 			});
 		}

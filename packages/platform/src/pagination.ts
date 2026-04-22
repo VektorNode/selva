@@ -20,13 +20,22 @@ export interface ListOptions {
  * List options for definition queries. Extends ListOptions with
  * definition-specific filtering that has no meaning for other entities.
  */
-export interface DefinitionListOptions extends ListOptions {
+export interface DefinitionListOptions extends Omit<ListOptions, 'orderBy'> {
+	/** Field to sort by. Definitions additionally support 'runCount'. */
+	orderBy?: 'createdAt' | 'updatedAt' | 'name' | 'runCount';
 	/**
-	 * Include records with status='pending' alongside 'ready'.
+	 * Include records with status='pending' alongside ready statuses.
 	 * Default false — consumers never see half-written state unless
 	 * they explicitly opt in (admin/janitor tooling).
 	 */
 	includePending?: boolean;
+	/**
+	 * Filter to specific editorial statuses.
+	 * - Omit for the default view (all non-pending statuses).
+	 * - Pass ['published'] for the runner home (only live definitions).
+	 * - Pass ['draft','review'] for the review queue.
+	 */
+	statuses?: import('./definitions/types.js').DefinitionStatus[];
 }
 
 export interface Page<T> {

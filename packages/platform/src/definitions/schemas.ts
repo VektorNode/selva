@@ -5,6 +5,8 @@ export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 
 export const GuidSchema = z.string().regex(UUID_REGEX, 'Invalid GUID format');
 
+export const DefinitionStatusSchema = z.enum(['draft', 'review', 'published', 'archived']);
+
 
 /** User-facing metadata fields — display info only, no lifecycle state. */
 export const DefinitionMetadataSchema = z.object({
@@ -47,7 +49,8 @@ export const UpdateMetadataInputSchema = DefinitionMetadataSchema.extend({
 		.nullish()
 		.transform((v) => v ?? undefined),
 	projectId: GuidSchema.optional(),
-	computeServerId: GuidSchema.nullish().transform((v) => v ?? null)
+	computeServerId: GuidSchema.nullish().transform((v) => v ?? null),
+	status: DefinitionStatusSchema.optional()
 })
 	.partial();
 

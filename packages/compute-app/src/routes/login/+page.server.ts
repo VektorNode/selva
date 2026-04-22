@@ -43,8 +43,8 @@ export const actions = {
 		const destination =
 			typeof redirectTo === 'string' && redirectTo.startsWith('/')
 				? redirectTo
-				: url.searchParams.get('redirectTo') ?? '/admin';
+				: url.searchParams.get('redirectTo') ?? '/app';
 
-		redirect(303, destination.startsWith('/') ? destination : '/admin');
+		redirect(303, destination.startsWith('/') ? destination : '/app');
 	}
 } satisfies Actions;
