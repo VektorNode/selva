@@ -14,8 +14,7 @@ export const DefinitionMetadataSchema = z.object({
 	description: z.string().max(2000).optional(),
 	coverImage: z.string().max(2048).optional(),
 	category: z.string().max(128).optional(),
-	tags: z.array(z.string().max(64)).max(20).optional(),
-	originalFilename: z.string().optional()
+	tags: z.array(z.string().max(64)).max(20).optional()
 });
 
 /** Input for creating a new definition — metadata + routing, file binary handled separately. */

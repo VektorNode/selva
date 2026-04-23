@@ -73,13 +73,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				projectId: parsed.data.projectId,
 				ownerId: locals.user!.id,
 				fileExt,
+				originalFilename: file.name,
 				computeServerId: parsed.data.computeServerId,
 				meta: {
 					displayName: parsed.data.displayName.trim(),
 					description: parsed.data.description,
 					category: parsed.data.category,
-					tags: parsed.data.tags,
-					originalFilename: file.name
+					tags: parsed.data.tags
 				}
 			},
 			fileData

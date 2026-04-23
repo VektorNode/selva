@@ -1,4 +1,3 @@
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type {
 	IDefinitionStore,
@@ -11,7 +10,8 @@ import type {
 	Page
 } from '@selva/platform';
 import { ProviderError, hasPermission } from '@selva/platform';
-import { paginate } from '../pagination.js';
+import { paginate, applyOrder } from '../pagination.js';
+import { readJsonFile, writeJsonFile } from '../fsJson.js';
 
 interface DefinitionsConfig {
 	definitions: Record<string, DefinitionRecord>;
@@ -36,49 +36,34 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 	}
 
 	private async readConfig(): Promise<DefinitionsConfig> {
-		try {
-			const content = await fs.readFile(this.configPath, 'utf-8');
-			const parsed = JSON.parse(content) as DefinitionsConfig;
-			// Backfill fields for records written before schema migrations.
-			for (const record of Object.values(parsed.definitions)) {
-				if (!record) continue;
-				// Records that pre-date the editorial workflow: treat as published.
-				if (!record.status || record.status === ('ready' as string)) record.status = 'published';
-				if (record.runCount === undefined) record.runCount = 0;
-				for (const entry of record.history ?? []) {
-					if (!entry.uploadedBy) entry.uploadedBy = record.ownerId;
-				}
+		const parsed = await readJsonFile<DefinitionsConfig>(this.configPath, { definitions: {} });
+		// Backfill fields for records written before schema migrations.
+		for (const record of Object.values(parsed.definitions)) {
+			if (!record) continue;
+			// Records that pre-date the editorial workflow: treat as published.
+			if (!record.status || record.status === ('ready' as string)) record.status = 'published';
+			if (record.runCount === undefined) record.runCount = 0;
+			for (const entry of record.history ?? []) {
+				if (!entry.uploadedBy) entry.uploadedBy = record.ownerId;
 			}
-			return parsed;
-		} catch (err) {
-			if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { definitions: {} };
-			throw err;
 		}
+		return parsed;
 	}
 
 	private async writeConfig(config: DefinitionsConfig): Promise<void> {
-		await fs.mkdir(path.dirname(this.configPath), { recursive: true });
-		const tmpPath = `${this.configPath}.tmp`;
-		await fs.writeFile(tmpPath, JSON.stringify(config, null, '\t'), 'utf-8');
-		await fs.rename(tmpPath, this.configPath);
+		await writeJsonFile(this.configPath, config);
 	}
 
 	private sortedRecords(records: DefinitionRecord[], opts?: DefinitionListOptions): DefinitionRecord[] {
-		const field = opts?.orderBy ?? 'name';
-		const dir = opts?.orderDir ?? 'asc';
-		const mul = dir === 'asc' ? 1 : -1;
-		return [...records].sort((a, b) => {
-			if (field === 'name') {
-				return a.meta.displayName.localeCompare(b.meta.displayName) * mul;
-			}
-			if (field === 'runCount') {
-				return ((a.runCount ?? 0) - (b.runCount ?? 0)) * mul;
-			}
-			const av = (a as unknown as Record<string, string>)[field] ?? '';
-			const bv = (b as unknown as Record<string, string>)[field] ?? '';
-			if (av < bv) return -1 * mul;
-			if (av > bv) return 1 * mul;
-			return 0;
+		const defaulted: DefinitionListOptions = {
+			...opts,
+			orderBy: opts?.orderBy ?? 'name',
+			orderDir: opts?.orderDir ?? 'asc'
+		};
+		return applyOrder([...records], defaulted, (r, field) => {
+			if (field === 'name') return r.meta.displayName.toLowerCase();
+			if (field === 'runCount') return r.runCount ?? 0;
+			return (r as unknown as Record<string, unknown>)[field];
 		});
 	}
 
@@ -139,6 +124,7 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		config.definitions[guid] = {
 			...existing,
 			...(patch.fileExt !== undefined && { fileExt: patch.fileExt }),
+			...(patch.originalFilename !== undefined && { originalFilename: patch.originalFilename }),
 			...(patch.maxHistory !== undefined && { maxHistory: patch.maxHistory }),
 			...(patch.projectId !== undefined && { projectId: patch.projectId }),
 			...(patch.computeServerId !== undefined && {
@@ -214,23 +200,13 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		const projectMembers = await this.projectProvider.listProjectMembers(ctx, projectId);
 		const member = projectMembers.items.find((m) => m.userId === userId);
 
-		// For public projects: only owner of definition can edit
-		if (project.visibility === 'public') {
-			return userId === definitionOwnerId;
-		}
-
-		// For org-level projects: definition owner OR project member with owner/editor role
+		if (project.visibility === 'public') return userId === definitionOwnerId;
 		if (project.visibility === 'org') {
-			if (userId === definitionOwnerId) return true;
-			if (member?.role === 'owner' || member?.role === 'editor') return true;
-			return false;
+			return userId === definitionOwnerId || member?.role === 'owner' || member?.role === 'editor';
 		}
-
-		// For private projects: must be project member (owner or editor)
 		if (project.visibility === 'private') {
 			return member?.role === 'owner' || member?.role === 'editor';
 		}
-
 		return false;
 	}
 }

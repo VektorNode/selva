@@ -1,4 +1,3 @@
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type {
@@ -14,6 +13,7 @@ import type {
 } from '@selva/platform';
 import { ProviderError } from '@selva/platform';
 import { paginate, applyOrder } from '../pagination.js';
+import { readJsonFile, writeJsonFile } from '../fsJson.js';
 
 export interface LocalOrgStore {
 	org: Organization;
@@ -38,12 +38,10 @@ export class LocalOrgStoreLoader {
 	async get(): Promise<LocalOrgStore> {
 		if (this.store) return this.store;
 
-		try {
-			const content = await fs.readFile(this.storePath, 'utf-8');
-			this.store = JSON.parse(content) as LocalOrgStore;
-			return this.store;
-		} catch (err) {
-			if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+		const existing = await readJsonFile<LocalOrgStore | null>(this.storePath, null);
+		if (existing) {
+			this.store = existing;
+			return existing;
 		}
 
 		const now = new Date().toISOString();
@@ -81,10 +79,7 @@ export class LocalOrgStoreLoader {
 
 	async write(store: LocalOrgStore): Promise<void> {
 		this.store = store;
-		await fs.mkdir(path.dirname(this.storePath), { recursive: true });
-		const tmp = `${this.storePath}.tmp`;
-		await fs.writeFile(tmp, JSON.stringify(store, null, '\t'), 'utf-8');
-		await fs.rename(tmp, this.storePath);
+		await writeJsonFile(this.storePath, store);
 	}
 }
 

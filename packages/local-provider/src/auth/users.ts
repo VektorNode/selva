@@ -1,9 +1,8 @@
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import { ProviderError } from '@selva/platform';
 import type { Permission } from '@selva/platform';
+import { readJsonFile, writeJsonFile } from '../fsJson.js';
 
 export type { Permission };
 
@@ -64,28 +63,9 @@ export async function verifyPasswordHash(password: string, storedHash: string): 
 	return crypto.timingSafeEqual(actual, expected);
 }
 
-// ── File I/O ────────────────────────────────────────────────────────────────
-
-async function readUsersFile(usersPath: string): Promise<UsersFile> {
-	try {
-		const raw = await fs.readFile(usersPath, 'utf-8');
-		return JSON.parse(raw) as UsersFile;
-	} catch (err) {
-		if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-			return { users: [] };
-		}
-		throw err;
-	}
-}
-
-async function writeUsersFile(usersPath: string, data: UsersFile): Promise<void> {
-	await fs.mkdir(path.dirname(usersPath), { recursive: true });
-	const tmp = `${usersPath}.tmp`;
-	await fs.writeFile(tmp, JSON.stringify(data, null, '\t'), 'utf-8');
-	await fs.rename(tmp, usersPath);
-}
-
 // ── CRUD ────────────────────────────────────────────────────────────────────
+
+const EMPTY_USERS: UsersFile = { users: [] };
 
 export interface LocalUserMetaProvider {
 	findByEmail(email: string): Promise<StoredUser | null>;
@@ -115,24 +95,27 @@ function backfillUser(u: StoredUser): StoredUser {
 export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMetaProvider {
 	return {
 		async findByEmail(email) {
-			const { users } = await readUsersFile(usersFilePath);
+			const { users } = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
 			const u = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
 			return u ? backfillUser(u) : null;
 		},
 
 		async findById(id) {
-			const { users } = await readUsersFile(usersFilePath);
+			const { users } = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
 			const u = users.find((u) => u.id === id);
 			return u ? backfillUser(u) : null;
 		},
 
 		async listUsers() {
-			const { users } = await readUsersFile(usersFilePath);
-			return users.map(({ passwordHash: _ph, ...rest }) => backfillUser(rest as StoredUser));
+			const { users } = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
+			return users.map((u) => {
+				const { passwordHash: _ph, ...rest } = backfillUser(u);
+				return rest;
+			});
 		},
 
 		async createUser(email, password, permissions, displayName?) {
-			const file = await readUsersFile(usersFilePath);
+			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
 			if (file.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
 				throw new ProviderError(`User with email "${email}" already exists`, 409);
 			}
@@ -147,61 +130,61 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 				createdAt: new Date().toISOString()
 			};
 			file.users.push(user);
-			await writeUsersFile(usersFilePath, file);
+			await writeJsonFile(usersFilePath, file);
 			return user;
 		},
 
 		async updatePermissions(id, permissions) {
-			const file = await readUsersFile(usersFilePath);
+			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
 			user.permissions = permissions;
-			await writeUsersFile(usersFilePath, file);
+			await writeJsonFile(usersFilePath, file);
 		},
 
 		async updateProfile(id, patch) {
-			const file = await readUsersFile(usersFilePath);
+			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
 			if (patch.displayName !== undefined) user.displayName = patch.displayName;
-			await writeUsersFile(usersFilePath, file);
+			await writeJsonFile(usersFilePath, file);
 		},
 
 		async starDefinition(id, definitionId) {
-			const file = await readUsersFile(usersFilePath);
+			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
 			if (!user.starredDefinitions) user.starredDefinitions = [];
 			if (!user.starredDefinitions.includes(definitionId)) {
 				user.starredDefinitions.push(definitionId);
-				await writeUsersFile(usersFilePath, file);
+				await writeJsonFile(usersFilePath, file);
 			}
 		},
 
 		async unstarDefinition(id, definitionId) {
-			const file = await readUsersFile(usersFilePath);
+			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
 			user.starredDefinitions = (user.starredDefinitions ?? []).filter((d) => d !== definitionId);
-			await writeUsersFile(usersFilePath, file);
+			await writeJsonFile(usersFilePath, file);
 		},
 
 		async recordRun(id, run) {
-			const file = await readUsersFile(usersFilePath);
+			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
 			if (!user.recentRuns) user.recentRuns = [];
 			// Remove older entry for same definition, then prepend newest
 			user.recentRuns = [run, ...user.recentRuns.filter((r) => r.definitionId !== run.definitionId)].slice(0, MAX_RECENT_RUNS);
-			await writeUsersFile(usersFilePath, file);
+			await writeJsonFile(usersFilePath, file);
 		},
 
 		async deleteUser(id) {
-			const file = await readUsersFile(usersFilePath);
+			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
 			const before = file.users.length;
 			file.users = file.users.filter((u) => u.id !== id);
 			if (file.users.length === before) throw new ProviderError(`User "${id}" not found`, 404);
-			await writeUsersFile(usersFilePath, file);
+			await writeJsonFile(usersFilePath, file);
 		}
 	};
 }
