@@ -29,8 +29,6 @@ export interface DefinitionMeta {
 	 * internal storage paths or unsecured file locations.
 	 */
 	coverImage?: string;
-	/** Original uploaded filename, kept for display only */
-	originalFilename?: string;
 }
 
 export interface HistoryEntry {
@@ -88,6 +86,8 @@ export interface DefinitionRecord {
 	 */
 	computeServerId?: string;
 	fileExt: DefinitionFileExt;
+	/** Original uploaded filename, kept for display only. Refreshed on each file upload. */
+	originalFilename?: string;
 	meta: DefinitionMeta;
 	/** File version history, newest first */
 	history: HistoryEntry[];
@@ -101,10 +101,20 @@ export interface DefinitionRecord {
 	updatedAt: string; // ISO 8601
 }
 
-/** Top-level fields that can be patched on an existing record. */
+/**
+ * Patch input for `IDefinitionStore.update`. Omits immutable fields (`guid`,
+ * `ownerId`, `createdAt`) and provider-managed fields (`updatedAt`, `history`).
+ *
+ * Semantics:
+ * - `undefined` = leave field unchanged
+ * - `computeServerId: null` = clear the override
+ * - `meta` is a shallow merge against the existing meta
+ * - `incrementRunCount` is an atomic "+N" operation, not a field assignment
+ */
 export interface DefinitionRecordPatch {
 	meta?: Partial<DefinitionMeta>;
 	fileExt?: DefinitionFileExt;
+	originalFilename?: string;
 	maxHistory?: number;
 	projectId?: string;
 	computeServerId?: string | null;

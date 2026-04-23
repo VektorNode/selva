@@ -14,14 +14,6 @@ import type { LocalOrgStoreLoader } from '../organizations/LocalOrganizationProv
 export class LocalProjectProvider implements IProjectStore {
 	private readonly loader: LocalOrgStoreLoader;
 
-	static fromEnv(
-		env: Record<string, string | undefined>,
-		loader: LocalOrgStoreLoader
-	): LocalProjectProvider {
-		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
-		return new LocalProjectProvider(loader);
-	}
-
 	constructor(loader: LocalOrgStoreLoader) {
 		this.loader = loader;
 	}
@@ -197,38 +189,4 @@ export class LocalProjectProvider implements IProjectStore {
 		return false;
 	}
 
-	async canEditDefinition(
-		ctx: RequestContext,
-		projectId: string,
-		userId: string,
-		definitionOwnerId: string
-	): Promise<boolean> {
-		if (hasPermission(ctx.permissions, 'platform_admin')) return true;
-		const { projectMembers, projects } = await this.loader.get();
-		const project = projects.find((p) => p.id === projectId);
-		if (!project) return false;
-
-		const member = projectMembers.find((m) => m.projectId === projectId && m.userId === userId);
-
-		// For public projects: only owner of definition can edit (or platform_admin checked above)
-		if (project.visibility === 'public') {
-			if (userId === definitionOwnerId) return true;
-			return false;
-		}
-
-		// For org-level projects: definition owner OR project member with owner/editor role
-		if (project.visibility === 'org') {
-			if (userId === definitionOwnerId) return true;
-			if (member?.role === 'owner' || member?.role === 'editor') return true;
-			return false;
-		}
-
-		// For private projects: must be project member (owner or editor)
-		if (project.visibility === 'private') {
-			if (member?.role === 'owner' || member?.role === 'editor') return true;
-			return false;
-		}
-
-		return false;
-	}
 }

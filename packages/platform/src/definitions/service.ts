@@ -17,6 +17,7 @@ export interface CreateDefinitionInput {
 	projectId: string;
 	ownerId: string;
 	fileExt: DefinitionFileExt;
+	originalFilename?: string;
 	meta: DefinitionMeta;
 	computeServerId?: string;
 	maxHistory?: number;
@@ -68,6 +69,7 @@ export class DefinitionService {
 			projectId: input.projectId,
 			ownerId: input.ownerId,
 			fileExt: input.fileExt,
+			originalFilename: input.originalFilename,
 			meta: input.meta,
 			computeServerId: input.computeServerId,
 			history: [],
@@ -127,7 +129,7 @@ export class DefinitionService {
 		if (ext !== existing.fileExt) {
 			await this.storage.delete(definitionPaths.file(guid, existing.fileExt));
 		}
-		await this.data.definitions.update(ctx, guid, { fileExt: ext });
+		await this.data.definitions.update(ctx, guid, { fileExt: ext, originalFilename: originalName });
 
 		// Prune history if maxHistory is set
 		const updated = await this.data.definitions.get(ctx, guid);

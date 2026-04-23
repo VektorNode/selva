@@ -40,7 +40,7 @@
 			return (
 				r.meta.displayName?.toLowerCase().includes(q) ||
 				r.meta.description?.toLowerCase().includes(q) ||
-				r.meta.originalFilename?.toLowerCase().includes(q)
+				r.originalFilename?.toLowerCase().includes(q)
 			);
 		})
 	);
@@ -198,7 +198,7 @@
 								category: record.meta.category,
 								tags: record.meta.tags,
 								coverImage: record.meta.coverImage,
-								originalFilename: record.meta.originalFilename,
+								originalFilename: record.originalFilename,
 								file: `definition.${record.fileExt}`
 							}}
 							projectName={project?.name}
@@ -224,7 +224,7 @@
 				category: record.meta.category ?? '',
 				coverImage: record.meta.coverImage ?? '',
 				tags: record.meta.tags,
-				originalFilename: record.meta.originalFilename,
+				originalFilename: record.originalFilename,
 				file: `definition.${record.fileExt}`,
 				maxHistory: record.maxHistory > 0 ? record.maxHistory : undefined,
 				projectId: record.projectId,

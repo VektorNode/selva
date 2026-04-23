@@ -4,13 +4,24 @@ import type { IAuthProvider, AuthUser, Permission, UserManagementResult, RecentR
 import { ALL_PERMISSIONS, ProviderError } from '@selva/platform';
 import { signHmacToken, verifyHmacToken } from './hmac.js';
 import { verifyPasswordHash, createLocalUserMetaProvider } from './users.js';
-import type { LocalUserMetaProvider } from './users.js';
+import type { LocalUserMetaProvider, StoredUser } from './users.js';
 import { paginate } from '../pagination.js';
 import type { ListOptions, Page } from '@selva/platform';
 
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 const FALLBACK_ADMIN_ID = 'local-admin';
+
+function toAuthUser(u: Pick<StoredUser, 'id' | 'email' | 'displayName' | 'permissions' | 'starredDefinitions' | 'recentRuns'>): AuthUser {
+	return {
+		id: u.id,
+		email: u.email,
+		displayName: u.displayName,
+		permissions: u.permissions,
+		starredDefinitions: u.starredDefinitions,
+		recentRuns: u.recentRuns
+	};
+}
 
 export interface LocalAuthProviderConfig {
 	/** HMAC signing secret. Pass from env (SESSION_SECRET). */
@@ -79,7 +90,7 @@ export class LocalAuthProvider implements IAuthProvider {
 		// Look up live user record so permission changes are reflected immediately
 		if (this.users) {
 			const u = await this.users.findById(userId);
-			if (u) return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions, starredDefinitions: u.starredDefinitions, recentRuns: u.recentRuns };
+			if (u) return toAuthUser(u);
 		}
 
 		return null;
@@ -94,7 +105,7 @@ export class LocalAuthProvider implements IAuthProvider {
 		if (this.users) {
 			const user = await this.users.findByEmail(email);
 			if (user && user.passwordHash && (await verifyPasswordHash(password, user.passwordHash))) {
-				return { id: user.id, email: user.email, displayName: user.displayName, permissions: user.permissions, starredDefinitions: user.starredDefinitions, recentRuns: user.recentRuns };
+				return toAuthUser(user);
 			}
 		}
 
@@ -113,7 +124,7 @@ export class LocalAuthProvider implements IAuthProvider {
 	async getUser(id: string): Promise<AuthUser | null> {
 		if (this.users) {
 			const u = await this.users.findById(id);
-			if (u) return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions, starredDefinitions: u.starredDefinitions, recentRuns: u.recentRuns };
+			if (u) return toAuthUser(u);
 		}
 		if (id === FALLBACK_ADMIN_ID) {
 			return { id: FALLBACK_ADMIN_ID, permissions: [...ALL_PERMISSIONS], starredDefinitions: [], recentRuns: [] };
@@ -124,15 +135,7 @@ export class LocalAuthProvider implements IAuthProvider {
 	async listUsers(opts?: ListOptions): Promise<Page<AuthUser> | null> {
 		if (!this.users) return null;
 		const users = await this.users.listUsers();
-		const mapped: AuthUser[] = users.map((u) => ({
-			id: u.id,
-			email: u.email,
-			displayName: u.displayName,
-			permissions: u.permissions,
-			starredDefinitions: u.starredDefinitions,
-			recentRuns: u.recentRuns
-		}));
-		return paginate(mapped, opts);
+		return paginate(users.map(toAuthUser), opts);
 	}
 
 	async createUser(
@@ -141,14 +144,12 @@ export class LocalAuthProvider implements IAuthProvider {
 		permissions: Permission[]
 	): Promise<AuthUser | null> {
 		if (!this.users) return null;
-		const u = await this.users.createUser(email, password, permissions);
-		return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions, starredDefinitions: u.starredDefinitions, recentRuns: u.recentRuns };
+		return toAuthUser(await this.users.createUser(email, password, permissions));
 	}
 
 	async registerUser(email: string, password: string): Promise<AuthUser | null> {
 		if (!this.users) return null;
-		const u = await this.users.createUser(email, password, []);
-		return { id: u.id, email: u.email, displayName: u.displayName, permissions: u.permissions, starredDefinitions: u.starredDefinitions, recentRuns: u.recentRuns };
+		return toAuthUser(await this.users.createUser(email, password, []));
 	}
 
 	async updateUserPermissions(id: string, permissions: Permission[]): Promise<UserManagementResult> {

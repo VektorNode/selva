@@ -990,7 +990,7 @@
 						File
 					</p>
 					<p class="text-muted-foreground mt-1 font-mono text-[12px]">
-						{rec.meta.originalFilename ?? `definition.${rec.fileExt}`}
+						{rec.originalFilename ?? `definition.${rec.fileExt}`}
 					</p>
 				</div>
 				{#if rec.meta.category}
@@ -1261,9 +1261,9 @@
 					<Upload class="text-muted-foreground h-4 w-4" />
 					<Label>Grasshopper file</Label>
 				</div>
-				{#if rec.meta.originalFilename}
+				{#if rec.originalFilename}
 					<p class="text-muted-foreground font-mono text-xs">
-						Current: {rec.meta.originalFilename}
+						Current: {rec.originalFilename}
 					</p>
 				{/if}
 				<FileUploadField

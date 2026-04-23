@@ -17,16 +17,23 @@ export function paginate<T>(items: T[], opts?: AnyListOptions): Page<T> {
 	};
 }
 
-type Orderable = { name?: string; createdAt?: string; updatedAt?: string; runCount?: number };
-
-/** Sort a list in place per ListOptions. Mutates the input. */
-export function applyOrder<T extends Orderable>(items: T[], opts?: AnyListOptions): T[] {
+/**
+ * Sort a list in place per ListOptions. Mutates the input.
+ * Pass `keyFn` to customize how the comparison value is derived (e.g. nested
+ * fields, case-folded strings).
+ */
+export function applyOrder<T>(
+	items: T[],
+	opts?: AnyListOptions,
+	keyFn: (item: T, field: string) => unknown = (item, field) =>
+		(item as Record<string, unknown>)[field]
+): T[] {
 	const field = opts?.orderBy ?? 'createdAt';
 	const dir = opts?.orderDir ?? 'desc';
 	const mul = dir === 'asc' ? 1 : -1;
 	items.sort((a, b) => {
-		const av = a[field] ?? '';
-		const bv = b[field] ?? '';
+		const av = (keyFn(a, field) ?? '') as string | number;
+		const bv = (keyFn(b, field) ?? '') as string | number;
 		if (av < bv) return -1 * mul;
 		if (av > bv) return 1 * mul;
 		return 0;
