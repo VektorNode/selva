@@ -1,6 +1,9 @@
 // Auth
-export type { IAuthProvider, AuthProviderCapabilities, AuthUser, Permission, UserManagementResult, RecentRun } from './auth/index.js';
-export { ALL_PERMISSIONS, hasPermission } from './auth/index.js';
+export type { IAuthProvider, IPasswordAuth, AuthUser, Permission, UserManagementResult, RecentRun } from './auth/index.js';
+export { ALL_PERMISSIONS, PermissionSchema, hasPermission } from './auth/index.js';
+
+// User profile
+export type { IUserProfileStore } from './userProfile/index.js';
 
 // Organizations
 export type { Organization, OrgRole, OrgMember } from './organizations/index.js';
@@ -12,6 +15,7 @@ export type {
 	ProjectRole,
 	ProjectMember
 } from './projects/index.js';
+export { ProjectVisibilitySchema, ProjectRoleSchema } from './projects/index.js';
 
 // Definitions
 export type {
@@ -19,20 +23,16 @@ export type {
 	DefinitionRecord,
 	DefinitionRecordPatch,
 	DefinitionStatus,
-	HistoryEntry,
-	CreateDefinitionInput
+	HistoryEntry
 } from './definitions/index.js';
 export {
 	GH_EXTENSIONS,
 	COVER_IMAGE_EXTENSIONS,
 	ALLOWED_UPLOAD_EXTENSIONS,
 	COVER_IMAGE_CONTENT_TYPES,
-	RUNNER_VISIBLE_STATUSES,
-	EDITOR_VISIBLE_STATUSES,
-	definitionPaths,
-	DefinitionService,
-	PENDING_GC_AGE_MS
+	definitionPaths
 } from './definitions/index.js';
+export type { UpdateMetadataInput } from './definitions/schemas.js';
 
 // Storage
 export type { IStorageProvider } from './storage/index.js';
@@ -64,4 +64,3 @@ export { defineConfig } from './config.js';
 
 // Errors
 export { ProviderError } from './errors.js';
-export type { ProviderErrorStatus } from './errors.js';

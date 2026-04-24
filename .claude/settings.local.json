@@ -15,7 +15,10 @@
       "mcp__svelte__get-documentation",
       "Bash(xargs grep -l \"color\\\\|Color\")",
       "Bash(xargs grep:*)",
-      "Bash(pnpm build *)"
+      "Bash(pnpm build *)",
+      "Bash(pnpm --filter selva-shared check)",
+      "Bash(pnpm --filter @selva/platform run type-check)",
+      "Bash(pnpm --filter @selva/platform build)"
     ],
     "deny": [],
     "ask": []

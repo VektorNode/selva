@@ -1,7 +1,8 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { definitionService, getDefinitionMeta } from '$lib/server/providers.server';
-import { requireCanEdit } from '$lib/server/access.server';
+import { definitionService } from '$lib/server/providers.server';
+import { requireEditableDefinition } from '$lib/server/access.server';
+import { handleApiError } from '$lib/server/api-errors';
 import { GuidSchema } from '@selva/platform/definitions/schemas';
 import { MAX_IMAGE_FILE_SIZE } from '$lib/server/admin-config';
 
@@ -10,31 +11,23 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const guidParsed = GuidSchema.safeParse(params.guid);
 	if (!guidParsed.success) throw error(400, 'Invalid GUID');
 
+	const guid = guidParsed.data;
+	const { ctx } = await requireEditableDefinition(locals, guid);
+
+	const formData = await request.formData();
+	const file = formData.get('image');
+	if (!(file instanceof File) || file.size === 0) {
+		throw error(400, 'Image file is required');
+	}
+	if (file.size > MAX_IMAGE_FILE_SIZE) {
+		throw error(400, `Image too large. Max size: ${MAX_IMAGE_FILE_SIZE / (1024 * 1024)} MB`);
+	}
+
 	try {
-		const formData = await request.formData();
-		const file = formData.get('image');
-
-		if (!file || !(file instanceof File) || file.size === 0) {
-			throw error(400, 'Image file is required');
-		}
-
-		if (file.size > MAX_IMAGE_FILE_SIZE) {
-			throw error(400, `Image too large. Max size: ${MAX_IMAGE_FILE_SIZE / (1024 * 1024)} MB`);
-		}
-
-		const guid = guidParsed.data;
-		const ctx = locals.ctx!;
-		const record = await getDefinitionMeta().get(ctx, guid);
-		if (record) await requireCanEdit(locals, record.projectId);
-
 		const imageData = new Uint8Array(await file.arrayBuffer());
-		await definitionService.saveCoverImage(ctx, guid, imageData);
-
-		const updated = await getDefinitionMeta().get(ctx, guid);
-		return json({ success: true, coverImage: updated?.coverImage ?? null });
+		const coverImage = await definitionService.saveCoverImage(ctx, guid, imageData);
+		return json({ success: true, coverImage });
 	} catch (err) {
-		if (err && typeof err === 'object' && 'status' in err) throw err;
-		console.error('[Image POST] Failed:', err);
-		throw error(500, 'Failed to upload image');
+		handleApiError(err, 'Failed to upload image');
 	}
 };

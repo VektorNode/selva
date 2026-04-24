@@ -1,5 +1,7 @@
-import type { Organization, OrgRole, OrgMember } from '../organizations/types.js';
-import type { Project, ProjectRole, ProjectMember } from '../projects/types.js';
+import type { Organization, OrgMember } from '../organizations/types.js';
+import type { OrgRole } from '../organizations/schemas.js';
+import type { Project, ProjectMember } from '../projects/types.js';
+import type { ProjectRole } from '../projects/schemas.js';
 import type {
 	DefinitionRecord,
 	DefinitionRecordPatch,
@@ -103,7 +105,6 @@ export interface IProjectStore {
 	// or, in SQL, a single `select has_permission(...)` call. The mutating
 	// methods above enforce the same rule independently; these helpers are never
 	// a prerequisite for calling them.
-	canSolve(ctx: RequestContext, projectId: string): Promise<boolean>;
 	canEdit(ctx: RequestContext, projectId: string): Promise<boolean>;
 	canEditProjectSettings(ctx: RequestContext, projectId: string): Promise<boolean>;
 	canManage(ctx: RequestContext, projectId: string): Promise<boolean>;
@@ -153,12 +154,16 @@ export interface IDefinitionStore {
 }
 
 /**
- * Compute-server configuration store. Global (not tenant-scoped) — accessed
- * only by platform admins, so no RequestContext required.
+ * Compute-server configuration store.
+ *
+ * Currently global in the local provider. Once Supabase + multi-tenant Entra
+ * land, "platform admin" becomes per-org and the adapter will need `ctx`
+ * to authorize writes; passing it now means consumers don't have to be
+ * touched again at that point.
  */
 export interface IComputeServerStore {
-	getConfig(): Promise<ComputeConfig>;
-	saveConfig(config: ComputeConfig): Promise<void>;
+	getConfig(ctx: RequestContext): Promise<ComputeConfig>;
+	saveConfig(ctx: RequestContext, config: ComputeConfig): Promise<void>;
 }
 
 /**

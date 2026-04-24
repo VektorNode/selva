@@ -1,3 +1,5 @@
+import type { OrgRole } from './schemas.js';
+
 export interface Organization {
 	/** UUID v4 primary key */
 	id: string;
@@ -10,8 +12,6 @@ export interface Organization {
 	createdAt: string; // ISO 8601
 	updatedAt: string; // ISO 8601
 }
-
-export type OrgRole = 'owner' | 'admin' | 'member';
 
 export interface OrgMember {
 	orgId: string;

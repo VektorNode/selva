@@ -1,13 +1,21 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
-import { requireManageProjects, throwProviderError } from '$lib/server/access.server';
+import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
-import { SYSTEM_CONTEXT } from '@selva/platform';
-import type { Project } from '@selva/platform';
+import { getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
+import { requireManageProjects } from '$lib/server/access.server';
+import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { slugify } from '$lib/server/slug';
+import { ProjectVisibilitySchema, type Project } from '@selva/platform';
+
+const CreateProjectBody = z.object({
+	name: z.string().min(1, 'Project name is required').max(128).trim(),
+	description: z.string().max(2000).optional(),
+	visibility: ProjectVisibilitySchema.default('public')
+});
 
 export const GET: RequestHandler = async ({ locals }) => {
-	const ctx = locals.ctx ?? SYSTEM_CONTEXT;
+	const ctx = locals.ctx!;
 	try {
 		const orgsPage = await getOrganizationProvider().listOrgs(ctx, { limit: 200 });
 		const projectPages = await Promise.all(
@@ -16,41 +24,30 @@ export const GET: RequestHandler = async ({ locals }) => {
 		const projects = projectPages.flatMap((p) => p.items);
 		return json({ projects });
 	} catch (err) {
-		console.error('[Projects GET] Failed:', err);
-		throw error(500, 'Failed to load projects');
+		handleApiError(err, 'Failed to load projects');
 	}
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	requireManageProjects(locals);
 	const ctx = locals.ctx!;
-	const body = await request.json().catch(() => null);
-	if (!body || typeof body !== 'object') throw error(400, 'Invalid request body');
 
-	const { name, description, visibility } = body as Record<string, unknown>;
-	if (!name || typeof name !== 'string' || !name.trim())
-		throw error(400, 'Project name is required');
+	const body = await request.json().catch(() => null);
+	const parsed = CreateProjectBody.safeParse(body);
+	if (!parsed.success) throwZodError(parsed.error);
 
 	const orgsPage = await getOrganizationProvider().listOrgs(ctx, { limit: 1 });
 	const org = orgsPage.items[0];
 	if (!org) throw error(500, 'No organization configured');
 
 	const now = new Date().toISOString();
-	const slug = (name as string)
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-|-$/g, '');
-
 	const project: Project = {
 		id: randomUUID(),
 		orgId: org.id,
-		name: (name as string).trim(),
-		slug,
-		description: typeof description === 'string' ? description : undefined,
-		visibility: (['public', 'org', 'private'].includes(visibility as string)
-			? visibility
-			: 'public') as Project['visibility'],
+		name: parsed.data.name,
+		slug: slugify(parsed.data.name),
+		description: parsed.data.description,
+		visibility: parsed.data.visibility,
 		ownerId: locals.user!.id,
 		createdAt: now,
 		updatedAt: now
@@ -58,7 +55,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		await getProjectProvider().createProject(ctx, project);
-		// Add creator as project owner
 		await getProjectProvider().addProjectMember(ctx, {
 			projectId: project.id,
 			userId: locals.user!.id,
@@ -67,6 +63,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 		return json(project, { status: 201 });
 	} catch (err) {
-		throwProviderError(err, 'Failed to create project');
+		handleApiError(err, 'Failed to create project');
 	}
 };

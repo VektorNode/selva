@@ -8,49 +8,40 @@ export const GuidSchema = z.string().regex(UUID_REGEX, 'Invalid GUID format');
 export const DefinitionStatusSchema = z.enum(['draft', 'review', 'published', 'archived']);
 
 
-/** User-facing metadata fields — display info only, no lifecycle state. */
-export const DefinitionMetadataSchema = z.object({
+/**
+ * Input for creating a new definition — HTTP-body validator. Distinct from
+ * `CreateDefinitionRecord` in `./service.ts`, which is the service-side type
+ * with server-derived fields (guid, ownerId, fileExt) added.
+ */
+export const CreateDefinitionInputSchema = z.object({
 	displayName: z.string().min(1, 'Display name is required').max(256),
 	description: z.string().max(2000).optional(),
 	coverImage: z.string().max(2048).optional(),
 	category: z.string().max(128).optional(),
-	tags: z.array(z.string().max(64)).max(20).optional()
-});
-
-/** Input for creating a new definition — metadata + routing, file binary handled separately. */
-export const CreateDefinitionInputSchema = DefinitionMetadataSchema.extend({
+	tags: z.array(z.string().max(64)).max(20).optional(),
 	projectId: GuidSchema,
 	computeServerId: GuidSchema.optional(),
 	maxHistory: z.number().int().min(0).optional()
 });
 
-/** Partial patch for updating an existing definition. */
-export const UpdateMetadataInputSchema = DefinitionMetadataSchema.extend({
-	description: z
-		.string()
-		.max(2000)
-		.nullish()
-		.transform((v) => v ?? undefined),
-	coverImage: z
-		.string()
-		.max(2048)
-		.nullish()
-		.transform((v) => v ?? undefined),
-	category: z
-		.string()
-		.max(128)
-		.nullish()
-		.transform((v) => v ?? undefined),
-	maxHistory: z
-		.number()
-		.int()
-		.min(0)
-		.nullish()
-		.transform((v) => v ?? undefined),
+/**
+ * Partial patch for updating an existing definition.
+ *
+ * Field semantics (matches `DefinitionRecordPatch`):
+ * - missing / `undefined` — leave unchanged
+ * - `null` — clear the field (only the nullable fields below)
+ * - value — set
+ */
+export const UpdateMetadataInputSchema = z.object({
+	displayName: z.string().min(1, 'Display name is required').max(256).optional(),
+	description: z.string().max(2000).nullable().optional(),
+	coverImage: z.string().max(2048).nullable().optional(),
+	category: z.string().max(128).nullable().optional(),
+	tags: z.array(z.string().max(64)).max(20).nullable().optional(),
+	maxHistory: z.number().int().min(0).optional(),
 	projectId: GuidSchema.optional(),
-	computeServerId: GuidSchema.nullish().transform((v) => v ?? null),
+	computeServerId: GuidSchema.nullable().optional(),
 	status: DefinitionStatusSchema.optional()
-})
-	.partial();
+});
 
 export type UpdateMetadataInput = z.infer<typeof UpdateMetadataInputSchema>;

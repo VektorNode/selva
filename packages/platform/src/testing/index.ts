@@ -1,5 +1,3 @@
-export type { ConformanceRunner, ConformanceExpect } from './suites/runner.js';
-
 export { runAuthProviderConformance } from './suites/authProviderSuite.js';
 export type { AuthProviderConformanceOptions } from './suites/authProviderSuite.js';
 
@@ -14,3 +12,6 @@ export type { ProjectStoreConformanceOptions } from './suites/projectStoreSuite.
 
 export { runStorageProviderConformance } from './suites/storageProviderSuite.js';
 export type { StorageProviderConformanceOptions } from './suites/storageProviderSuite.js';
+
+export { runUserProfileStoreConformance } from './suites/userProfileStoreSuite.js';
+export type { UserProfileStoreConformanceOptions } from './suites/userProfileStoreSuite.js';

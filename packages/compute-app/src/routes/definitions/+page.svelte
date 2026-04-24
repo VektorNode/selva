@@ -2,7 +2,7 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { AlertDialog, Button, Search, toast } from 'selva-shared';
 	import { Grid2x2, List, Plus, Settings } from '@lucide/svelte';
-	import AddDefinitionDialog from '../admin/definitions/AddDefinitionDialog.svelte';
+	import AddDefinitionDialog from '$lib/components/definitions/AddDefinitionDialog.svelte';
 	import ProjectSidebar from './_components/ProjectSidebar.svelte';
 	import ProjectSettingsDialog from './_components/ProjectSettingsDialog.svelte';
 	import DefinitionGridCard from './_components/DefinitionGridCard.svelte';

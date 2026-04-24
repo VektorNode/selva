@@ -15,6 +15,7 @@ export const SlugSchema = z
 	);
 
 export const OrgRoleSchema = z.enum(['owner', 'admin', 'member']);
+export type OrgRole = z.infer<typeof OrgRoleSchema>;
 
 export const CreateOrgSchema = z.object({
 	name: z.string().min(1, 'Organization name is required').max(128),

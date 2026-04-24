@@ -2,12 +2,15 @@
 	import { Button, Card, Input, toast } from 'selva-shared';
 	import { Plus, Trash2, ShieldCheck } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
-	import type { AuthUser, Permission, AuthProviderCapabilities } from '@selva/platform/auth';
+	import type { AuthUser, Permission } from '@selva/platform/auth';
 	import { ALL_PERMISSIONS } from '@selva/platform/auth';
 
 	interface PageData {
 		users: AuthUser[] | null;
-		capabilities: AuthProviderCapabilities;
+		provider: {
+			name: string;
+			userCreation: 'email-password' | 'email-only' | 'none';
+		};
 	}
 	interface Props {
 		data: PageData;
@@ -49,7 +52,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					email: newEmail,
-					...(data.capabilities.userCreation === 'email-password' && { password: newPassword }),
+					...(data.provider.userCreation === 'email-password' && { password: newPassword }),
 					permissions: newPermissions
 				})
 			});
@@ -129,13 +132,13 @@
 						{/if}
 					</Card.Description>
 				</div>
-				{#if data.users !== null && data.capabilities.userCreation !== 'none'}
+				{#if data.users !== null && data.provider.userCreation !== 'none'}
 					<Button
 						onclick={() => (showAddForm = !showAddForm)}
 						variant={showAddForm ? 'outline' : 'default'}
 					>
 						<Plus class="mr-2 h-4 w-4" />
-						{data.capabilities.userCreation === 'email-only' ? 'Allowlist User' : 'Add User'}
+						{data.provider.userCreation === 'email-only' ? 'Allowlist User' : 'Add User'}
 					</Button>
 				{/if}
 			</div>
@@ -148,13 +151,13 @@
 					<p class="text-sm font-medium">New User</p>
 					<div class="grid gap-3 sm:grid-cols-2">
 						<Input type="email" placeholder="Email" bind:value={newEmail} />
-						{#if data.capabilities.userCreation === 'email-password'}
+						{#if data.provider.userCreation === 'email-password'}
 							<Input type="password" placeholder="Password (min 8 chars)" bind:value={newPassword} />
 						{/if}
 					</div>
-					{#if data.capabilities.userCreation === 'email-only'}
+					{#if data.provider.userCreation === 'email-only'}
 						<p class="text-muted-foreground text-xs">
-							This user will authenticate via {data.capabilities.name}. No password is stored.
+							This user will authenticate via {data.provider.name}. No password is stored.
 						</p>
 					{/if}
 					<div>
@@ -175,7 +178,7 @@
 					<div class="flex gap-2">
 						<Button
 							onclick={addUser}
-							disabled={adding || !newEmail || (data.capabilities.userCreation === 'email-password' && !newPassword)}
+							disabled={adding || !newEmail || (data.provider.userCreation === 'email-password' && !newPassword)}
 						>
 							{adding ? 'Creating…' : 'Create User'}
 						</Button>

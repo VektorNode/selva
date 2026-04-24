@@ -5,7 +5,6 @@ import {
 	getComputeServerConfigStore,
 	getAuthProvider
 } from '$lib/server/providers.server';
-import { SYSTEM_CONTEXT } from '@selva/platform';
 import { hasPermission } from '@selva/platform';
 import type {
 	DefinitionRecord,
@@ -27,7 +26,7 @@ export interface ProjectWithMembers extends Project {
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) return { projects: [], records: [], computeServers: [], users: [], canManageProjects: false, isPlatformAdmin: false };
 
-	const ctx = locals.ctx ?? SYSTEM_CONTEXT;
+	const ctx = locals.ctx!;
 	const canManageProjects = hasPermission(locals.user.permissions, 'manage_projects');
 	const isPlatformAdmin = hasPermission(locals.user.permissions, 'platform_admin');
 
@@ -35,7 +34,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const [orgsPage, recordsPage, computeConfig] = await Promise.all([
 			getOrganizationProvider().listOrgs(ctx, { limit: 200 }),
 			getDefinitionMeta().list(ctx, { limit: 200 }),
-			getComputeServerConfigStore().getConfig()
+			getComputeServerConfigStore().getConfig(ctx)
 		]);
 
 		const projectStore = getProjectProvider();

@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
 import rawConfig from '../../../../../selva.config.js';
 import type { SelvaConfig, SelvaConfigFactory } from '@selva/platform';
-import { DefinitionService } from '@selva/platform';
+import { DefinitionService } from './definitions/DefinitionService.js';
 
 const _raw = rawConfig as SelvaConfig | SelvaConfigFactory;
 export const providers: SelvaConfig = typeof _raw === 'function' ? _raw(env) : _raw;
@@ -32,4 +32,8 @@ export function getDefinitionMeta() {
 
 export function getComputeServerConfigStore() {
 	return providers.data.computeServer;
+}
+
+export function getUserProfileStore() {
+	return providers.userProfile;
 }

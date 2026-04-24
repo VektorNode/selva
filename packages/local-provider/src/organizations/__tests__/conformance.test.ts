@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -19,7 +19,6 @@ describe('LocalOrganizationProvider', () => {
 	runOrgStoreConformance({
 		name: 'LocalOrganizationProvider',
 		createStore: () => new LocalOrganizationProvider(new LocalOrgStoreLoader(tempDir)),
-		runner: { describe, it, expect },
 		singleOrgMode: true
 	});
 });

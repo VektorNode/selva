@@ -5,9 +5,10 @@
  * ensure all adapters behave identically.
  */
 
+import { describe, it, expect } from 'vitest';
 import type { IProjectStore } from '../../data/interface.js';
 import type { Project, ProjectMember } from '../../index.js';
-import { type ConformanceRunner, makeCtx, makeUuid } from './runner.js';
+import { makeCtx, makeUuid } from './helpers.js';
 
 export interface ProjectStoreConformanceOptions {
 	/** Name to show in test output (e.g. "local-provider"). */
@@ -17,8 +18,6 @@ export interface ProjectStoreConformanceOptions {
 	 * In single-org mode, return the pre-existing org's id.
 	 */
 	createStore: () => Promise<{ store: IProjectStore; orgId: string }>;
-	/** Test runner globals. */
-	runner: ConformanceRunner;
 	/** If true, run ctx-isolation tests (adapters with row-level security). */
 	ctxIsolation?: boolean;
 }
@@ -41,8 +40,7 @@ function project(orgId: string, overrides: Partial<Project> = {}): Project {
 }
 
 export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions): void {
-	const { name, createStore, runner, ctxIsolation = false } = opts;
-	const { describe, it, expect } = runner;
+	const { name, createStore, ctxIsolation = false } = opts;
 
 	describe(`IProjectStore conformance: ${name}`, () => {
 		// ============================================================================

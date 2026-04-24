@@ -18,8 +18,7 @@ describe('LocalAuthProvider — fallback mode (no users.json)', () => {
 			}),
 			adminPassword: TEST_PASSWORD
 		}),
-		userManagement: false,
-		runner: { describe, it, expect }
+		userManagement: false
 	});
 });
 
@@ -44,7 +43,6 @@ describe('LocalAuthProvider — users.json mode', () => {
 			}),
 			adminPassword: TEST_PASSWORD
 		}),
-		userManagement: true,
-		runner: { describe, it, expect }
+		userManagement: true
 	});
 });

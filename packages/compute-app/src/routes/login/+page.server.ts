@@ -28,7 +28,11 @@ export const actions = {
 			return fail(400, { error: 'Password is required' });
 		}
 
-		const user = await getAuthProvider().verifyLoginCredentials(email, password);
+		const passwordAuth = getAuthProvider().passwordAuth;
+		if (!passwordAuth) {
+			return fail(501, { error: 'Password login is not supported by this provider' });
+		}
+		const user = await passwordAuth.verifyLoginCredentials(email, password);
 
 		if (!user) {
 			recordFailedAttempt(ip);

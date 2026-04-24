@@ -3,8 +3,10 @@ import { GuidSchema } from '../definitions/schemas.js';
 import { SlugSchema } from '../organizations/schemas.js';
 
 export const ProjectVisibilitySchema = z.enum(['public', 'org', 'private']);
+export type ProjectVisibility = z.infer<typeof ProjectVisibilitySchema>;
 
 export const ProjectRoleSchema = z.enum(['owner', 'editor', 'viewer']);
+export type ProjectRole = z.infer<typeof ProjectRoleSchema>;
 
 export const CreateProjectSchema = z.object({
 	orgId: GuidSchema,

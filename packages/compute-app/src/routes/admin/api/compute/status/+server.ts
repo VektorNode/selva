@@ -22,7 +22,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	const serverId = url.searchParams.get('serverId');
 	if (!serverId) throw error(400, 'serverId required');
 
-	const config = await getComputeServerConfigStore().getConfig();
+	const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
 	const server = resolveServerById(config, serverId);
 	if (!server) throw error(404, 'Server not found');
 

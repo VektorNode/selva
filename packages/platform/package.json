@@ -68,7 +68,16 @@
 	"dependencies": {
 		"zod": "^4.3.6"
 	},
+	"peerDependencies": {
+		"vitest": "^2.1.8"
+	},
+	"peerDependenciesMeta": {
+		"vitest": {
+			"optional": true
+		}
+	},
 	"devDependencies": {
-		"typescript": "catalog:"
+		"typescript": "catalog:",
+		"vitest": "^2.1.8"
 	}
 }

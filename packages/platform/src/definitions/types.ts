@@ -52,12 +52,6 @@ export interface HistoryEntry {
  */
 export type DefinitionStatus = 'pending' | 'draft' | 'review' | 'published' | 'archived';
 
-/** Statuses visible to runners (end users with solve access) */
-export const RUNNER_VISIBLE_STATUSES: DefinitionStatus[] = ['published'];
-
-/** Statuses visible to project editors/owners */
-export const EDITOR_VISIBLE_STATUSES: DefinitionStatus[] = ['draft', 'review', 'published', 'archived'];
-
 export interface DefinitionRecord {
 	/** UUID v4 primary key */
 	guid: string;
@@ -101,17 +95,19 @@ export interface DefinitionRecord {
  * Patch input for `IDefinitionStore.update`. Omits immutable fields (`guid`,
  * `ownerId`, `createdAt`) and provider-managed fields (`updatedAt`, `history`).
  *
- * Semantics:
- * - `undefined` = leave field unchanged
- * - `computeServerId: null` = clear the override
- * - `incrementRunCount` is an atomic "+N" operation, not a field assignment
+ * Field semantics:
+ * - missing / `undefined` — leave unchanged
+ * - `null` — clear the field (only nullable fields below accept null)
+ * - value — set
+ *
+ * Use `IDefinitionStore.incrementRunCount` for atomic "+1" run count bumps.
  */
 export interface DefinitionRecordPatch {
 	displayName?: string;
-	description?: string;
-	category?: string;
-	tags?: string[];
-	coverImage?: string;
+	description?: string | null;
+	category?: string | null;
+	tags?: string[] | null;
+	coverImage?: string | null;
 	fileExt?: DefinitionFileExt;
 	originalFilename?: string;
 	maxHistory?: number;
@@ -119,6 +115,4 @@ export interface DefinitionRecordPatch {
 	computeServerId?: string | null;
 	status?: DefinitionStatus;
 	lastEditedBy?: string;
-	/** Increments runCount by this value (always positive). */
-	incrementRunCount?: number;
 }

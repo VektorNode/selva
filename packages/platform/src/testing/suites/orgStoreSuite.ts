@@ -5,19 +5,16 @@
  * adapters behave identically.
  */
 
+import { describe, it, expect } from 'vitest';
 import type { IOrgStore } from '../../data/interface.js';
 import type { Organization, OrgMember } from '../../index.js';
-import { type ConformanceRunner, makeCtx, makeUuid } from './runner.js';
-
-export type { ConformanceRunner };
+import { makeCtx, makeUuid } from './helpers.js';
 
 export interface OrgStoreConformanceOptions {
 	/** Name to show in test output (e.g. "local-provider"). */
 	name: string;
 	/** Factory that returns a fresh, empty store per test. */
 	createStore: () => Promise<IOrgStore> | IOrgStore;
-	/** Test runner globals. */
-	runner: ConformanceRunner;
 	/** If true, skip createOrg/deleteOrg tests (e.g. single-org providers). */
 	singleOrgMode?: boolean;
 	/** If true, run ctx-isolation tests (adapters with row-level security). */
@@ -40,8 +37,7 @@ function org(overrides: Partial<Organization> = {}): Organization {
 }
 
 export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
-	const { name, createStore, runner, singleOrgMode = false, ctxIsolation = false } = opts;
-	const { describe, it, expect } = runner;
+	const { name, createStore, singleOrgMode = false, ctxIsolation = false } = opts;
 
 	describe(`IOrgStore conformance: ${name}`, () => {
 		// ============================================================================
