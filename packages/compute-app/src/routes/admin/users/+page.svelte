@@ -40,9 +40,12 @@
 	);
 
 	const PERMISSION_LABELS: Record<FlatPermission, string> = {
-		platform_admin: 'Platform Admin (all)',
-		manage_users: 'Manage Users',
-		manage_compute: 'Manage Compute',
+		instance_admin: 'Instance Admin (all)',
+		manage_instance_users: 'Manage Instance Users',
+		manage_compute: 'Manage Compute (instance)',
+		manage_updates: 'Manage Updates',
+		manage_org_members: 'Manage Org Members',
+		manage_org_compute: 'Manage Org Compute',
 		manage_definitions: 'Manage Definitions',
 		manage_projects: 'Manage Projects'
 	};

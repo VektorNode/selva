@@ -90,7 +90,12 @@ interface LegacyStoredUser {
 	legacyOrgPermissions?: string[];
 }
 
-const PLATFORM_PERMS = new Set<string>(['platform_admin']);
+const PLATFORM_PERMS = new Set<string>([
+	'instance_admin',
+	'manage_compute',
+	'manage_instance_users',
+	'manage_updates'
+]);
 
 function migrateUser(u: StoredUser & LegacyStoredUser): StoredUser {
 	if (!u.starredDefinitions) u.starredDefinitions = [];

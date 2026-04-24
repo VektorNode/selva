@@ -14,17 +14,17 @@
 	}
 	let { data, children }: LayoutProps = $props();
 
-	// §1g-core: client-side permission check. platform_admin implies every org perm.
+	// §1g-core: client-side permission check. instance_admin implies every org perm.
 	const can = (p: PlatformPermission | OrgPermission) => {
-		if (data.platformPermissions.includes('platform_admin')) return true;
-		if (p === 'platform_admin') return false;
+		if (data.platformPermissions.includes('instance_admin')) return true;
+		if (p === 'instance_admin') return false;
 		return data.orgPermissions.includes(p as OrgPermission);
 	};
 
 	const adminNavItems = $derived(
 		[
 			{ href: '/admin', label: 'General', show: true },
-			{ href: '/admin/users', label: 'Users', show: can('manage_users') },
+			{ href: '/admin/users', label: 'Users', show: can('manage_instance_users') },
 			{ href: '/admin/compute', label: 'Compute', show: can('manage_compute') }
 		].filter((i) => i.show)
 	);

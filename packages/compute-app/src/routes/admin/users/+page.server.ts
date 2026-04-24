@@ -7,7 +7,7 @@ import {
 	getOrganizationProvider,
 	getUserProfileStore
 } from '$lib/server/providers.server';
-import { assertManageUsers } from '$lib/server/access.server';
+import { assertManageInstanceUsers } from '$lib/server/access.server';
 import { flattenPermissions } from '$lib/server/permissions-compat.server';
 
 /**
@@ -27,7 +27,7 @@ export interface UserRow extends AuthUser {
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-	assertManageUsers(locals);
+	assertManageInstanceUsers(locals);
 	const ctx = locals.ctx!;
 	const auth = getAuthProvider();
 	const userCreation: 'email-password' | 'email-only' | 'none' = auth.passwordAuth
@@ -81,6 +81,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 		}
 	}
 
-	const isPlatformAdmin = ctx.platformPermissions.includes('platform_admin');
+	const isPlatformAdmin = ctx.platformPermissions.includes('instance_admin');
 	return { users, provider: providerInfo, invites, isPlatformAdmin };
 };

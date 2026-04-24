@@ -1,3 +1,25 @@
+-- ============================================================================
+-- TODO(access-control refactor / B1): permission identifier renames
+--
+-- This file gates invite + compute policies on the OLD permission names.
+-- Rename the following consistently across policy names, comments, USING/WITH
+-- CHECK clauses, and any indexes.
+--
+--   • Policy names + string literals:
+--       `'manage_users'`   → `'manage_org_members'`   (invites gating)
+--       `'manage_compute'` (when used via `has_org_permission(org_id, …)`)
+--           → `'manage_org_compute'`
+--   • Keep platform-level `'manage_compute'` when called via
+--     `is_platform_admin()` — that check stays; see spec §2.
+--   • `is_platform_admin()` call sites here → `is_instance_admin()`
+--     (rename defined in migration 0003's TODO).
+--
+-- Additional work deferred to B4: add per-org compute override gating through
+-- `ALLOW_ORG_COMPUTE_OVERRIDE` — when that platform flag is off, `manage_org_compute`
+-- must be inert regardless of grant. Safest to leave policies strict for now
+-- and add the flag check later.
+-- ============================================================================
+
 -- Invites + compute_servers.
 
 -- ── Invites ───────────────────────────────────────────────────────────────

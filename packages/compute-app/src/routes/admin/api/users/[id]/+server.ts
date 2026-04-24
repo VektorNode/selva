@@ -3,7 +3,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { getOrganizationProvider } from '$lib/server/providers.server';
-import { requireManageUsers } from '$lib/server/access.server';
+import { requireManageInstanceUsers } from '$lib/server/access.server';
 import { throwZodError } from '$lib/server/api-errors';
 import {
 	OrgPermissionSchema,
@@ -24,7 +24,7 @@ const UpdatePermissionsBody = z.object({
 // PATCH — update permissions. Splits the flat list into platform + default-org
 // permissions and writes both. §1g-ui will replace with scoped endpoints.
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
-	requireManageUsers(locals);
+	requireManageInstanceUsers(locals);
 	const { id } = params;
 	if (!id) throw error(400, 'Missing user ID');
 
@@ -34,15 +34,15 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	const { platform, org } = splitFlatPermissions(parsed.data.permissions);
 
 	// Granting or revoking platform-scope permissions requires the caller to
-	// already hold platform_admin. Without this, any org admin with
-	// manage_users could self-elevate to platform_admin.
+	// already hold instance_admin. Without this, any org admin with
+	// manage_instance_users could self-elevate to instance_admin.
 	const existingUser = await getAuthProvider().getUser(id);
 	const existingPlatform = existingUser?.platformPermissions ?? [];
 	const platformChanged =
 		platform.length !== existingPlatform.length ||
 		platform.some((p) => !existingPlatform.includes(p)) ||
 		existingPlatform.some((p) => !platform.includes(p));
-	if (platformChanged && !hasPermission(locals.ctx!, 'platform_admin')) {
+	if (platformChanged && !hasPermission(locals.ctx!, 'instance_admin')) {
 		throw error(403, 'Only a platform admin can change platform-scope permissions');
 	}
 
@@ -87,7 +87,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 
 // DELETE — remove user
 export const DELETE: RequestHandler = async ({ params, locals }) => {
-	requireManageUsers(locals);
+	requireManageInstanceUsers(locals);
 	const { id } = params;
 	if (!id) throw error(400, 'Missing user ID');
 

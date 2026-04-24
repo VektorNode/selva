@@ -12,7 +12,7 @@ function stripAnsi(str: string): string {
 
 // POST - Run update script and stream output via Server-Sent Events
 export const POST: RequestHandler = async ({ locals }) => {
-	requirePermission(locals, 'platform_admin');
+	requirePermission(locals, 'instance_admin');
 	// Fall back to cwd — PM2 launches from the repo root so process.cwd() is the install dir
 	const installDir = env.INSTALL_DIR || process.cwd();
 	const updateScript = join(installDir, 'scripts', 'update.sh');

@@ -3,7 +3,7 @@ import { hasPermission } from '@selva/platform';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	const isPlatformAdmin = locals.ctx ? hasPermission(locals.ctx, 'platform_admin') : false;
+	const isPlatformAdmin = locals.ctx ? hasPermission(locals.ctx, 'instance_admin') : false;
 
 	try {
 		const usersPage = await getAuthProvider().listUsers({ limit: 200 });

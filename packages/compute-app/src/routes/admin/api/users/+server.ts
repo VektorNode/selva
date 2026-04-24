@@ -3,7 +3,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { getOrganizationProvider } from '$lib/server/providers.server';
-import { requireManageUsers } from '$lib/server/access.server';
+import { requireManageInstanceUsers } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import {
 	OrgPermissionSchema,
@@ -29,7 +29,7 @@ const PasswordUserBody = BaseUserBody.extend({
 
 // GET — list all users with a flat "permissions" projection for the admin UI.
 export const GET: RequestHandler = async ({ locals }) => {
-	requireManageUsers(locals);
+	requireManageInstanceUsers(locals);
 	const page = await getAuthProvider().listUsers({ limit: 200 });
 	if (page === null) {
 		throw error(
@@ -63,7 +63,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 // POST — create a user + attach to default org with split permissions.
 export const POST: RequestHandler = async ({ request, locals }) => {
-	requireManageUsers(locals);
+	requireManageInstanceUsers(locals);
 	const auth = getAuthProvider();
 
 	const body = await request.json().catch(() => null);
@@ -73,7 +73,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const { platform, org } = splitFlatPermissions(permissions);
 
 	// Only an existing platform admin may create a user with platform-scope perms.
-	if (platform.length > 0 && !hasPermission(locals.ctx!, 'platform_admin')) {
+	if (platform.length > 0 && !hasPermission(locals.ctx!, 'instance_admin')) {
 		throw error(403, 'Only a platform admin can grant platform-scope permissions');
 	}
 

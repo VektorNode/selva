@@ -95,7 +95,7 @@ export interface IPasswordAuth {
  * This interface owns **platform-level identity + platform permissions only**.
  * Per-org memberships and `OrgPermission`s live on `IOrgStore` (`OrgMember`
  * records). `createUser` / `updateUserPlatformPermissions` here operate on
- * the rare platform-scope role set (typically just `platform_admin`); to
+ * the rare platform-scope role set (e.g. `instance_admin`); to
  * give a user rights inside an org, call `IOrgStore.addOrgMember` /
  * `updateOrgMemberRole`.
  *

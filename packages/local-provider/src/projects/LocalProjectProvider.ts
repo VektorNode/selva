@@ -170,7 +170,7 @@ export class LocalProjectProvider implements IProjectStore {
 	// UI gating only — the mutating methods above are the real security boundary.
 
 	async canEdit(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (hasPermission(ctx, 'platform_admin')) return true;
+		if (hasPermission(ctx, 'instance_admin')) return true;
 		const { projectMembers, projects, orgMembers } = await this.loader.get();
 		const member = projectMembers.find((m) => m.projectId === projectId && m.userId === ctx.userId);
 		if (member?.role === 'owner' || member?.role === 'editor') return true;
@@ -186,14 +186,14 @@ export class LocalProjectProvider implements IProjectStore {
 	}
 
 	async canManage(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (hasPermission(ctx, 'platform_admin')) return true;
+		if (hasPermission(ctx, 'instance_admin')) return true;
 		const { projectMembers } = await this.loader.get();
 		const member = projectMembers.find((m) => m.projectId === projectId && m.userId === ctx.userId);
 		return member?.role === 'owner';
 	}
 
 	async canEditProjectSettings(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (hasPermission(ctx, 'platform_admin')) return true;
+		if (hasPermission(ctx, 'instance_admin')) return true;
 		const { projectMembers } = await this.loader.get();
 		const member = projectMembers.find((m) => m.projectId === projectId && m.userId === ctx.userId);
 		// project owners can always edit

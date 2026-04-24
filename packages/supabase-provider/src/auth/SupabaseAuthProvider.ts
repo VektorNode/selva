@@ -207,7 +207,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 
 		const rawPerms = (profile?.platform_permissions ?? []) as string[];
 		const platformPermissions = rawPerms.filter(
-			(p): p is PlatformPermission => p === 'platform_admin'
+			(p): p is PlatformPermission => p === 'instance_admin'
 		);
 
 		return {

@@ -46,7 +46,7 @@ async function buildContext(
 		}
 	}
 
-	if (!orgId && user.platformPermissions.includes('platform_admin')) {
+	if (!orgId && user.platformPermissions.includes('instance_admin')) {
 		// Platform admins without an explicit membership row fall back to the
 		// first org so admin tooling stays usable pre-§1g-ui.
 		const firstOrg = orgsPage.items[0];

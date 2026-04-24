@@ -1,3 +1,10 @@
+-- ============================================================================
+-- TODO(access-control refactor / B1): permission identifier renames
+--
+--   • Every `public.is_platform_admin()` call below → `public.is_instance_admin()`
+--     once migration 0003 provides the renamed helper.
+-- ============================================================================
+
 -- Fix RLS policy scoping bug on `public.definitions`.
 --
 -- In 0004_definitions.sql the insert/update/delete policies checked membership

@@ -226,7 +226,7 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		definitionOwnerId: string
 	): Promise<boolean> {
 		if (!this.projectProvider) return false;
-		if (hasPermission(ctx, 'platform_admin')) return true;
+		if (hasPermission(ctx, 'instance_admin')) return true;
 
 		const project = await this.projectProvider.getProject(ctx, projectId);
 		if (!project) return false;

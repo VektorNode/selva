@@ -204,7 +204,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		userId: string,
 		definitionOwnerId: string
 	): Promise<boolean> {
-		if (ctx.platformPermissions.includes('platform_admin')) return true;
+		if (ctx.platformPermissions.includes('instance_admin')) return true;
 
 		// Load the parent project to read its visibility + org_id.
 		const { data: project } = await this.clients
