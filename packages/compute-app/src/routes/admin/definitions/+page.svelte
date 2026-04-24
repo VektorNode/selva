@@ -38,8 +38,8 @@
 			if (!searchQuery) return true;
 			const q = searchQuery.toLowerCase();
 			return (
-				r.meta.displayName?.toLowerCase().includes(q) ||
-				r.meta.description?.toLowerCase().includes(q) ||
+				r.displayName?.toLowerCase().includes(q) ||
+				r.description?.toLowerCase().includes(q) ||
 				r.originalFilename?.toLowerCase().includes(q)
 			);
 		})
@@ -59,7 +59,12 @@
 
 	async function saveDefinition(
 		guid: string,
-		patch: Partial<DefinitionRecord['meta']> & {
+		patch: {
+			displayName?: string;
+			description?: string;
+			category?: string;
+			tags?: string[];
+			coverImage?: string;
 			maxHistory?: number;
 			projectId?: string;
 			computeServerId?: string | null;
@@ -193,11 +198,11 @@
 						<DefinitionCard
 							guid={record.guid}
 							config={{
-								displayName: record.meta.displayName,
-								description: record.meta.description ?? '',
-								category: record.meta.category,
-								tags: record.meta.tags,
-								coverImage: record.meta.coverImage,
+								displayName: record.displayName,
+								description: record.description ?? '',
+								category: record.category,
+								tags: record.tags,
+								coverImage: record.coverImage,
 								originalFilename: record.originalFilename,
 								file: `definition.${record.fileExt}`
 							}}
@@ -219,11 +224,11 @@
 			open={true}
 			guid={record.guid}
 			config={{
-				displayName: record.meta.displayName,
-				description: record.meta.description ?? '',
-				category: record.meta.category ?? '',
-				coverImage: record.meta.coverImage ?? '',
-				tags: record.meta.tags,
+				displayName: record.displayName,
+				description: record.description ?? '',
+				category: record.category ?? '',
+				coverImage: record.coverImage ?? '',
+				tags: record.tags,
 				originalFilename: record.originalFilename,
 				file: `definition.${record.fileExt}`,
 				maxHistory: record.maxHistory > 0 ? record.maxHistory : undefined,

@@ -75,12 +75,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				fileExt,
 				originalFilename: file.name,
 				computeServerId: parsed.data.computeServerId,
-				meta: {
-					displayName: parsed.data.displayName.trim(),
-					description: parsed.data.description,
-					category: parsed.data.category,
-					tags: parsed.data.tags
-				}
+				displayName: parsed.data.displayName.trim(),
+				description: parsed.data.description,
+				category: parsed.data.category,
+				tags: parsed.data.tags
 			},
 			fileData
 		);
@@ -91,7 +89,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			await definitionService.saveCoverImage(ctx, guid, imageData);
 		}
 
-		return json({ success: true, guid, filename: `definition.${fileExt}`, coverImage: record.meta.coverImage });
+		return json({ success: true, guid, filename: `definition.${fileExt}`, coverImage: record.coverImage });
 	} catch (err) {
 		console.error('[Definitions POST] Failed to create definition:', err);
 		throw error(500, 'Failed to create definition');

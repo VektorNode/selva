@@ -16,7 +16,6 @@ export type {
 // Definitions
 export type {
 	DefinitionFileExt,
-	DefinitionMeta,
 	DefinitionRecord,
 	DefinitionRecordPatch,
 	DefinitionStatus,

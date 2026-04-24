@@ -20,10 +20,10 @@
 			const q = searchQuery.toLowerCase();
 			out = out.filter(
 				(r) =>
-					r.meta.displayName?.toLowerCase().includes(q) ||
-					r.meta.description?.toLowerCase().includes(q) ||
-					r.meta.category?.toLowerCase().includes(q) ||
-					r.meta.tags?.some((t) => t.toLowerCase().includes(q))
+					r.displayName?.toLowerCase().includes(q) ||
+					r.description?.toLowerCase().includes(q) ||
+					r.category?.toLowerCase().includes(q) ||
+					r.tags?.some((t) => t.toLowerCase().includes(q))
 			);
 		}
 		return out;
@@ -50,7 +50,7 @@
 	}
 
 	function categoryLabel(r: DefinitionRecord, project?: { id: string; name: string }) {
-		return (r.meta.category ?? project?.name ?? '').toUpperCase();
+		return (r.category ?? project?.name ?? '').toUpperCase();
 	}
 </script>
 
@@ -141,10 +141,10 @@
 							class="group border-border bg-card flex flex-col overflow-hidden rounded-xl border text-left shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-shadow hover:shadow-[0_10px_30px_-16px_rgba(0,0,0,0.18)] disabled:cursor-not-allowed disabled:opacity-60"
 						>
 							<div class="border-border bg-muted relative aspect-[16/10] overflow-hidden border-b">
-								{#if record.meta.coverImage}
+								{#if record.coverImage}
 									<img
-										src={record.meta.coverImage}
-										alt={record.meta.displayName}
+										src={record.coverImage}
+										alt={record.displayName}
 										class="absolute inset-0 h-full w-full object-cover"
 									/>
 								{/if}
@@ -164,16 +164,16 @@
 							</div>
 							<div class="flex flex-1 flex-col p-3.5">
 								<div class="flex items-start justify-between gap-2">
-									<p class="truncate text-[14.5px] font-semibold">{record.meta.displayName}</p>
+									<p class="truncate text-[14.5px] font-semibold">{record.displayName}</p>
 									{#if categoryLabel(record, project)}
 										<span class="text-muted-foreground mt-0.5 shrink-0 font-mono text-[10.5px]"
 											>{categoryLabel(record, project)}</span
 										>
 									{/if}
 								</div>
-								{#if record.meta.description}
+								{#if record.description}
 									<p class="text-muted-foreground mt-1 line-clamp-2 text-[12.5px] leading-relaxed">
-										{record.meta.description}
+										{record.description}
 									</p>
 								{/if}
 								<div class="mt-auto">
@@ -217,10 +217,10 @@
 							class="group border-border bg-card flex flex-col overflow-hidden rounded-xl border text-left shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-shadow hover:shadow-[0_10px_30px_-16px_rgba(0,0,0,0.18)] disabled:cursor-not-allowed disabled:opacity-60"
 						>
 							<div class="border-border bg-muted relative aspect-[16/10] overflow-hidden border-b">
-								{#if record.meta.coverImage}
+								{#if record.coverImage}
 									<img
-										src={record.meta.coverImage}
-										alt={record.meta.displayName}
+										src={record.coverImage}
+										alt={record.displayName}
 										class="absolute inset-0 h-full w-full object-cover"
 									/>
 								{/if}
@@ -234,16 +234,16 @@
 							</div>
 							<div class="flex flex-1 flex-col p-3.5">
 								<div class="flex items-start justify-between gap-2">
-									<p class="truncate text-[14.5px] font-semibold">{record.meta.displayName}</p>
+									<p class="truncate text-[14.5px] font-semibold">{record.displayName}</p>
 									{#if categoryLabel(record, project)}
 										<span class="text-muted-foreground mt-0.5 shrink-0 font-mono text-[10.5px]"
 											>{categoryLabel(record, project)}</span
 										>
 									{/if}
 								</div>
-								{#if record.meta.description}
+								{#if record.description}
 									<p class="text-muted-foreground mt-1 line-clamp-2 text-[12.5px] leading-relaxed">
-										{record.meta.description}
+										{record.description}
 									</p>
 								{/if}
 								<div class="mt-auto">

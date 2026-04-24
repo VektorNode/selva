@@ -15,9 +15,9 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 	// Get the stored coverImage filename from meta to determine content-type
 	const record = await getDefinitionMeta().get(ctx, guid);
-	if (!record?.meta.coverImage) throw error(404, 'Image not found');
+	if (!record?.coverImage) throw error(404, 'Image not found');
 
-	const storedFilename = record.meta.coverImage.split('/').pop() ?? 'cover.webp';
+	const storedFilename = record.coverImage.split('/').pop() ?? 'cover.webp';
 	const ext = storedFilename.substring(storedFilename.lastIndexOf('.')).toLowerCase();
 	const contentType = IMAGE_CONTENT_TYPES[ext] ?? 'image/webp';
 

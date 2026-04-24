@@ -40,7 +40,7 @@ function record(overrides: Partial<DefinitionRecord> = {}): DefinitionRecord {
 		projectId: overrides.projectId ?? 'project-1',
 		ownerId: overrides.ownerId ?? 'user-1',
 		fileExt: overrides.fileExt ?? 'gh',
-		meta: overrides.meta ?? { displayName: 'Test' },
+		displayName: overrides.displayName ?? 'Test',
 		history: overrides.history ?? [],
 		maxHistory: overrides.maxHistory ?? 10,
 		status: overrides.status ?? 'published',
@@ -117,12 +117,12 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 
 		it('update applies patch and bumps updatedAt', async () => {
 			const store = await createStore();
-			const created = record({ guid: 'u1', meta: { displayName: 'Old' } });
+			const created = record({ guid: 'u1', displayName: 'Old' });
 			await store.create(ctx('u1'), created);
 
-			await store.update(ctx('u1'), 'u1', { meta: { displayName: 'New' } });
+			await store.update(ctx('u1'), 'u1', { displayName: 'New' });
 			const got = await store.get(ctx('u1'), 'u1');
-			expect(got?.meta.displayName).toBe('New');
+			expect(got?.displayName).toBe('New');
 			expect(got!.updatedAt >= created.updatedAt).toBe(true);
 		});
 
@@ -130,7 +130,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			const store = await createStore();
 			let thrown: unknown;
 			try {
-				await store.update(ctx('u1'), 'nope', { meta: { displayName: 'X' } });
+				await store.update(ctx('u1'), 'nope', { displayName: 'X' });
 			} catch (err) {
 				thrown = err;
 			}
@@ -243,7 +243,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 		it('pagination respects limit and nextCursor', async () => {
 			const store = await createStore();
 			for (let i = 0; i < 5; i++) {
-				await store.create(ctx('u1'), record({ guid: `p${i}`, meta: { displayName: `N${i}` } }));
+				await store.create(ctx('u1'), record({ guid: `p${i}`, displayName: `N${i}` }));
 			}
 
 			const first = await store.list(ctx('u1'), { limit: 2 });
