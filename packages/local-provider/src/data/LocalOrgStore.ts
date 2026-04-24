@@ -14,17 +14,18 @@ import type {
 import { DEFAULT_ORG_PERMISSIONS, ProviderError, ALL_ORG_PERMISSIONS } from '@selva/platform';
 import { createLocalUserMetaProvider } from '../auth/users.js';
 import type { LocalUserMetaProvider } from '../auth/users.js';
-import { paginate, applyOrder } from '../pagination.js';
-import { readJsonFile, writeJsonFile } from '../fsJson.js';
+import { paginate, applyOrder } from './pagination.js';
+import { readJsonFile, writeJsonFile } from './fsJson.js';
 
-export interface LocalOrgStore {
+/** Shape of the on-disk local-org.json file. */
+export interface LocalOrgStoreData {
 	orgs: Organization[];
 	projects: Project[];
 	orgMembers: OrgMember[];
 	projectMembers: ProjectMember[];
 }
 
-const EMPTY_STORE: LocalOrgStore = {
+const EMPTY_STORE: LocalOrgStoreData = {
 	orgs: [],
 	projects: [],
 	orgMembers: [],
@@ -43,11 +44,7 @@ function sanitizeOrgPermissions(raw: readonly string[] | undefined): OrgPermissi
 	return raw.filter((p): p is OrgPermission => VALID_ORG_PERMS.has(p as OrgPermission));
 }
 
-/**
- * Pre-§1g OrgMember records had no `permissions` field. Backfill from the
- * role's defaults so existing `local-org.json` files keep working. Also
- * backfills audit fields introduced in the B3 refactor.
- */
+/** Backfills fields added in later refactors so older JSON files keep working. */
 function migrateOrgMember(m: OrgMember & { permissions?: OrgPermission[] }): OrgMember {
 	if (!m.permissions) m.permissions = [...DEFAULT_ORG_PERMISSIONS[m.role]];
 	if (!m.updatedAt) m.updatedAt = m.joinedAt;
@@ -56,11 +53,8 @@ function migrateOrgMember(m: OrgMember & { permissions?: OrgPermission[] }): Org
 	return m;
 }
 
-/**
- * Legacy on-disk shape (pre multi-org refactor): `{ org: Organization, ... }`.
- * Migrated on first read into the array-shaped `LocalOrgStore`.
- */
-interface LegacyLocalOrgStore {
+/** Pre-multi-org shape: `{ org: Organization, ... }`. Migrated on first read. */
+interface LegacyLocalOrgStoreData {
 	org?: Organization;
 	orgs?: Organization[];
 	projects: Project[];
@@ -69,18 +63,15 @@ interface LegacyLocalOrgStore {
 }
 
 /**
- * Shared loader for the local-org.json file. Both LocalOrganizationProvider
- * and LocalProjectProvider point to the same instance so all reads and writes
- * go through one cache and one atomic write path.
- *
- * The store starts empty — orgs are created explicitly via `createOrg`
- * (typically from the setup flow). No lazy seeding.
+ * Shared by LocalOrgStore and LocalProjectStore — one instance so all
+ * reads/writes go through one cache and one atomic write path. The store
+ * starts empty; orgs are created explicitly via `createOrg`.
  */
 export class LocalOrgStoreLoader {
 	readonly storePath: string;
 	private readonly usersPath: string;
 	private readonly userMeta: LocalUserMetaProvider | null;
-	private store: LocalOrgStore | null = null;
+	private store: LocalOrgStoreData | null = null;
 
 	constructor(dataPath: string) {
 		this.storePath = path.join(dataPath, 'local-org.json');
@@ -88,12 +79,12 @@ export class LocalOrgStoreLoader {
 		this.userMeta = createLocalUserMetaProvider(this.usersPath);
 	}
 
-	async get(): Promise<LocalOrgStore> {
+	async get(): Promise<LocalOrgStoreData> {
 		if (this.store) {
 			return this.store;
 		}
 
-		const raw = await readJsonFile<LegacyLocalOrgStore | null>(this.storePath, null);
+		const raw = await readJsonFile<LegacyLocalOrgStoreData | null>(this.storePath, null);
 		if (!raw) {
 			this.store = { ...EMPTY_STORE, orgs: [], projects: [], orgMembers: [], projectMembers: [] };
 			return this.store;
@@ -101,22 +92,19 @@ export class LocalOrgStoreLoader {
 
 		// Migrate the singleton `org` field to the new `orgs[]` array.
 		const orgs: Organization[] = raw.orgs ?? (raw.org ? [raw.org] : []);
-		const store: LocalOrgStore = {
+		const store: LocalOrgStoreData = {
 			orgs,
 			projects: raw.projects ?? [],
 			orgMembers: raw.orgMembers ?? [],
 			projectMembers: raw.projectMembers ?? []
 		};
 
-		// Migrate legacy members (no permissions field) in place.
 		let changed = raw.orgs === undefined && raw.org !== undefined;
 		for (const m of store.orgMembers) {
 			const before = m.permissions;
 			migrateOrgMember(m);
 			if (before === undefined) changed = true;
 		}
-		// B4 backfill: legacy projects lack the commons/anonymous flags. Default
-		// both to false so the schema invariant (feature opt-in) stays safe.
 		for (const p of store.projects as Array<
 			Project & { autoJoinOnUpload?: boolean; allowAnonymous?: boolean }
 		>) {
@@ -145,25 +133,23 @@ export class LocalOrgStoreLoader {
 		return store;
 	}
 
-	async write(store: LocalOrgStore): Promise<void> {
+	async write(store: LocalOrgStoreData): Promise<void> {
 		this.store = store;
 		await writeJsonFile(this.storePath, store);
 	}
 }
 
-export class LocalOrganizationProvider implements IOrgStore {
+export class LocalOrgStore implements IOrgStore {
 	private readonly loader: LocalOrgStoreLoader;
 
-	static fromEnv(env: Record<string, string | undefined>): LocalOrganizationProvider {
+	static fromEnv(env: Record<string, string | undefined>): LocalOrgStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
-		return new LocalOrganizationProvider(new LocalOrgStoreLoader(env.DATA_PATH));
+		return new LocalOrgStore(new LocalOrgStoreLoader(env.DATA_PATH));
 	}
 
 	constructor(loader: LocalOrgStoreLoader) {
 		this.loader = loader;
 	}
-
-	// ── Organizations ────────────────────────────────────────────────────────────
 
 	async listOrgs(_ctx: RequestContext, opts?: ListOptions): Promise<Page<Organization>> {
 		const { orgs } = await this.loader.get();
@@ -191,8 +177,6 @@ export class LocalOrganizationProvider implements IOrgStore {
 			throw new ProviderError(`Org slug '${org.slug}' already in use`, 409);
 		}
 		store.orgs.push({ ...org, deletedAt: null });
-		// Seed the owner membership so the creator can see their own org through
-		// downstream permission checks. Mirrors SupabaseOrgStore.createOrg.
 		const now = new Date().toISOString();
 		store.orgMembers.push({
 			orgId: org.id,
@@ -235,8 +219,7 @@ export class LocalOrganizationProvider implements IOrgStore {
 		if (idx === -1) throw new ProviderError(`Org '${id}' not found`, 404);
 		const now = new Date().toISOString();
 		const actor = ctx.userId || store.orgs[idx].updatedBy;
-		// Soft-delete the org + cascade-soft-delete its members, projects, and
-		// project members. All reads filter deletedAt so nothing leaks.
+		// Cascade soft-delete into members, projects, and project members.
 		store.orgs[idx] = {
 			...store.orgs[idx],
 			deletedAt: now,
@@ -261,8 +244,6 @@ export class LocalOrganizationProvider implements IOrgStore {
 		);
 		await this.loader.write(store);
 	}
-
-	// ── Org members ──────────────────────────────────────────────────────────────
 
 	async listOrgMembers(
 		_ctx: RequestContext,
@@ -290,7 +271,7 @@ export class LocalOrganizationProvider implements IOrgStore {
 		const store = await this.loader.get();
 		const now = new Date().toISOString();
 		const actor = ctx.userId || member.userId;
-		// Reactivate a prior soft-deleted membership row rather than piling rows up.
+		// Reactivate a prior soft-deleted row rather than piling rows up.
 		const existing = store.orgMembers.find(
 			(m) => m.orgId === member.orgId && m.userId === member.userId
 		);
@@ -325,9 +306,8 @@ export class LocalOrganizationProvider implements IOrgStore {
 		);
 		if (!m) throw new ProviderError(`Org member '${userId}' not found`, 404);
 		m.role = role;
-		// Role change re-seeds the permission defaults. Callers that want to
-		// preserve a custom OrgPermission set must call updateOrgMemberPermissions
-		// (once §1g-ui adds it) after updating the role.
+		// Role change re-seeds the permission defaults. To preserve a custom
+		// OrgPermission set, call updateOrgMemberPermissions after the role change.
 		m.permissions = [...DEFAULT_ORG_PERMISSIONS[role]];
 		m.updatedAt = new Date().toISOString();
 		m.updatedBy = ctx.userId || m.updatedBy;

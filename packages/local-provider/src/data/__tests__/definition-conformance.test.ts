@@ -3,9 +3,9 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { runDefinitionStoreConformance } from '@selva/platform/testing';
-import { LocalDefinitionMetaProvider } from '../LocalDefinitionMetaProvider.js';
+import { LocalDefinitionStore } from '../LocalDefinitionStore.js';
 
-describe('LocalDefinitionMetaProvider', () => {
+describe('LocalDefinitionStore', () => {
 	let tempDir: string;
 
 	beforeEach(async () => {
@@ -17,7 +17,7 @@ describe('LocalDefinitionMetaProvider', () => {
 	});
 
 	runDefinitionStoreConformance({
-		name: 'LocalDefinitionMetaProvider',
-		createStore: () => new LocalDefinitionMetaProvider(tempDir)
+		name: 'LocalDefinitionStore',
+		createStore: () => new LocalDefinitionStore(tempDir)
 	});
 });

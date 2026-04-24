@@ -1,10 +1,7 @@
 /**
- * Pure-rule tests for @selva/platform/access. These exercise the rule
- * functions directly with constructed inputs — no storage, no adapters.
- *
- * Lives in the local-provider package because platform doesn't run its own
- * vitest. Any rule regression surfaces here before a store-level test can
- * even get a chance to fail.
+ * Pure-rule tests for @selva/platform/access — exercised directly with
+ * constructed inputs. Lives here because the platform package doesn't run
+ * its own vitest.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -200,7 +197,7 @@ describe('canView', () => {
 // ── canSolve equals canView today ─────────────────────────────────────────
 
 describe('canSolve', () => {
-	it('matches canView for every visibility (A1)', () => {
+	it('matches canView for every visibility', () => {
 		for (const v of ['public', 'org', 'private'] as const) {
 			const input = {
 				platformPermissions: noPerms,
@@ -230,7 +227,7 @@ describe('canEdit', () => {
 		expect(canEdit({ ...base, member: null })).toBe(false);
 	});
 
-	it('manage_definitions org-perm no longer grants edit (A3)', () => {
+	it('manage_definitions org-perm does not grant edit', () => {
 		expect(
 			canEdit({
 				platformPermissions: noPerms,
@@ -244,7 +241,7 @@ describe('canEdit', () => {
 });
 
 describe('canEditProjectSettings', () => {
-	it('project owner yes; editor no (A4 collapse)', () => {
+	it('project owner yes; editor no', () => {
 		const base = {
 			platformPermissions: noPerms,
 			project: project(),
@@ -277,7 +274,7 @@ describe('canManage', () => {
 	});
 });
 
-// ── canChangeVisibilityToPublic (A6) ──────────────────────────────────────
+// ── canChangeVisibilityToPublic ───────────────────────────────────────────
 
 describe('canChangeVisibilityToPublic', () => {
 	it('org owner/admin can flip when flag is on', () => {
@@ -318,7 +315,7 @@ describe('canChangeVisibilityToPublic', () => {
 	});
 });
 
-// ── canEditDefinition (A3 + B4 commons) ───────────────────────────────────
+// ── canEditDefinition ─────────────────────────────────────────────────────
 
 describe('canEditDefinition', () => {
 	it('container project: only project editors/owners', () => {
@@ -384,7 +381,7 @@ describe('canEditDefinition', () => {
 	});
 });
 
-// ── withAdminBypass wrapper (A5) ──────────────────────────────────────────
+// ── withAdminBypass wrapper ───────────────────────────────────────────────
 
 describe('withAdminBypass', () => {
 	it('short-circuits true for instance_admin', () => {

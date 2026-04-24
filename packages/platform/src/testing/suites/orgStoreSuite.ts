@@ -214,7 +214,7 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 		});
 
 		// ============================================================================
-		// B3: audit fields + soft delete
+		// Audit fields + soft delete
 		// ============================================================================
 
 		if (!singleOrgMode) {

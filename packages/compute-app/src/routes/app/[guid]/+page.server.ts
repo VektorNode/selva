@@ -75,7 +75,6 @@ export const load = (async ({ params, locals }) => {
 		const record = await meta.get(locals.ctx, guid);
 		if (!record) throw new Error(`Definition '${guid}' not found`);
 
-		// Spec §5 canSolve — viewer role is sufficient here.
 		await requireCanSolve(locals, record.projectId);
 
 		const bytes = await storage.get(`definitions/${guid}/definition.${record.fileExt}`);

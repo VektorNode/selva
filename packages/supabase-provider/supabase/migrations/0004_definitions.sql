@@ -14,20 +14,20 @@
 --  * Image/cover URL storage is just `cover_image text` — provider ensures it's
 --    safe to send to clients (public bucket URL or authenticated proxy path).
 --
--- Audit + soft-delete (B3):
+-- Audit + soft-delete:
 --  * `created_by` / `updated_by` replace the old `last_edited_by` field;
 --    the TS mapper still reads `last_edited_by` as a fallback for older
 --    deployments that haven't been reset, but new installs don't ship it.
 --  * `deleted_at` soft-deletes. Reads filter it out. Hard deletion is a
 --    service-role retention sweep.
 --
--- Versioning scaffold (B4, spec §6):
+-- Versioning scaffold:
 --  * `definition_versions` stores immutable snapshots of each uploaded .gh
 --    with a monotonic `version_number` per definition.
 --  * `definitions.live_version_id` / `draft_version_id` point to the
---    currently-published and in-review versions respectively. Both nullable
---    until the upload/publish flow lands in a later PR — the columns exist
---    today so the data model is future-compatible.
+--    currently-published and in-review versions. Both nullable until the
+--    upload/publish flow ships; the columns exist today so the data model
+--    stays forward-compatible.
 
 -- ── Table: definitions ────────────────────────────────────────────────────
 

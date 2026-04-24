@@ -11,13 +11,12 @@ import { assertManageInstanceUsers } from '$lib/server/access.server';
 import { flattenPermissions } from '$lib/server/permissions-compat.server';
 
 /**
- * §1g-core compat: the admin users UI still renders permissions as one flat list.
- * We merge each user's `platformPermissions` with their default-org permissions
- * into a `permissions` array on the returned UserRow so the existing UI keeps
- * working. §1g-ui replaces this with scoped views.
+ * The admin users UI renders permissions as one flat list today; scoped views
+ * come later. Each user's `platformPermissions` + default-org permissions are
+ * merged into a single `permissions` array on the returned UserRow.
  *
- * §1e: `displayName` now lives on `UserProfile`, not `AuthUser`. We batch-load
- * profiles and merge into the row so the UI keeps its one-row-per-user shape.
+ * `displayName` lives on `UserProfile`, not `AuthUser`. Profiles are
+ * batch-loaded and merged into the row so the UI keeps one row per user.
  */
 export interface UserRow extends AuthUser {
 	displayName?: string;

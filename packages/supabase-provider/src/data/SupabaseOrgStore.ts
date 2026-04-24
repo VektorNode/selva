@@ -179,11 +179,9 @@ export class SupabaseOrgStore implements IOrgStore {
 
 // ── Row ↔ domain mappers ────────────────────────────────────────────────
 //
-// Audit + soft-delete columns (created_by, updated_by, deleted_at on orgs;
-// updated_at, updated_by, deleted_at on org_members) are introduced by the
-// B3 refactor. The corresponding SQL column adds are TODO in the migration
-// files. Until those migrations land, these mappers fall back to owner_id
-// so the runtime stays safe on an un-migrated DB.
+// Audit columns are nullable in the row types as a safety net for older
+// DBs that haven't applied the latest migration — the mapper falls back to
+// owner_id / user_id / joined_at in those cases.
 
 interface OrgRow {
 	id: string;

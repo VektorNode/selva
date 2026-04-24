@@ -244,10 +244,8 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 
 // ── Row ↔ domain mappers ────────────────────────────────────────────────
 //
-// Audit + soft-delete columns (created_by, updated_by, deleted_at) match
-// the post-refactor schema in migration 0004. The old `last_edited_by`
-// column has been removed from the schema; if you're upgrading a DB that
-// still carries it, reset migrations rather than editing this mapper.
+// Audit columns are nullable on the row type as a safety net for older DBs
+// — the mapper falls back to owner_id when `created_by`/`updated_by` are null.
 
 interface DefinitionRow {
 	guid: string;
@@ -266,7 +264,7 @@ interface DefinitionRow {
 	max_history: number;
 	status: DefinitionStatus;
 	run_count: number | string; // Postgres bigint round-trips as string under some drivers.
-	/** B4 scaffold: FK to definition_versions. Null until PR A wires publish. */
+	/** FK to definition_versions. Null until the publish flow is wired. */
 	live_version_id?: string | null;
 	draft_version_id?: string | null;
 	created_at: string;

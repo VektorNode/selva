@@ -10,8 +10,7 @@
 	} from '@selva/platform';
 	import type { UserRow } from './+page.server';
 
-	// §1g-core compat: the UI still renders one flat "permissions" list. Split
-	// Platform Admins + per-org Members views land in §1g-ui.
+	// One flat list today; scoped Platform-admin + Org-member views come later.
 	type FlatPermission = PlatformPermission | OrgPermission;
 	const ALL_FLAT_PERMISSIONS: FlatPermission[] = [
 		...ALL_PLATFORM_PERMISSIONS,

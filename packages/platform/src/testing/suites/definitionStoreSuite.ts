@@ -285,7 +285,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 		});
 
 		// ============================================================================
-		// B3: audit fields + soft delete
+		// Audit fields + soft delete
 		// ============================================================================
 
 		it('create populates createdBy/updatedBy and deletedAt=null', async () => {

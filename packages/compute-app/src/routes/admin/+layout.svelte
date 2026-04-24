@@ -14,7 +14,7 @@
 	}
 	let { data, children }: LayoutProps = $props();
 
-	// §1g-core: client-side permission check. instance_admin implies every org perm.
+	// Client-side gate — `instance_admin` implies every org perm.
 	const can = (p: PlatformPermission | OrgPermission) => {
 		if (data.platformPermissions.includes('instance_admin')) return true;
 		if (p === 'instance_admin') return false;

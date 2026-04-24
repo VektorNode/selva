@@ -14,7 +14,7 @@ import { ALL_PLATFORM_PERMISSIONS, ProviderError } from '@selva/platform';
 import { signHmacToken, verifyHmacToken } from './hmac.js';
 import { verifyPasswordHash, createLocalUserMetaProvider } from './users.js';
 import type { LocalUserMetaProvider, StoredUser } from './users.js';
-import { paginate } from '../pagination.js';
+import { paginate } from '../data/pagination.js';
 
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
 

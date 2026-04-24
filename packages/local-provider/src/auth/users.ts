@@ -2,7 +2,7 @@ import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import { ProviderError } from '@selva/platform';
 import type { PlatformPermission } from '@selva/platform';
-import { readJsonFile, writeJsonFile } from '../fsJson.js';
+import { readJsonFile, writeJsonFile } from '../data/fsJson.js';
 
 export type { PlatformPermission };
 
@@ -79,10 +79,10 @@ export async function verifyPasswordHash(password: string, storedHash: string): 
 const EMPTY_USERS: UsersFile = { users: [] };
 
 /**
- * Pre-§1g legacy shape — a flat `permissions: (PlatformPermission | OrgPermission)[]`
- * array at the user level. Back-compat migration: read it, split it, and stash
- * the OrgPermissions under `legacyOrgPermissions` so `LocalOrgStoreLoader` can
- * apply them to the default-org membership on first run.
+ * Legacy shape — a flat `permissions` array at the user level. Migrated on
+ * read: split into platform + org buckets, the org entries stashed on
+ * `legacyOrgPermissions` so `LocalOrgStoreLoader` can apply them to the
+ * default-org membership on first run.
  */
 interface LegacyStoredUser {
 	permissions?: string[];

@@ -14,9 +14,8 @@ import {
 } from '@selva/platform';
 import { splitFlatPermissions, flattenPermissions } from '$lib/server/permissions-compat.server';
 
-// §1g-core: the admin UI still sends a flat list of permissions. We accept it
-// and split into platform + default-org scopes server-side. §1g-ui will replace
-// this with two dedicated surfaces (Platform Admins + per-org Members).
+// Admin UI sends a flat permission list; we split into platform + default-org
+// scopes server-side until the UI grows two dedicated surfaces.
 const FlatPermissionSchema = z.union([PlatformPermissionSchema, OrgPermissionSchema]);
 
 const BaseUserBody = z.object({

@@ -3,9 +3,9 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { runComputeServerStoreConformance } from '@selva/platform/testing';
-import { LocalComputeServerProvider } from '../LocalComputeServerProvider.js';
+import { LocalComputeServerStore } from '../LocalComputeServerStore.js';
 
-describe('LocalComputeServerProvider', () => {
+describe('LocalComputeServerStore', () => {
 	let tempDir: string;
 
 	beforeEach(async () => {
@@ -17,8 +17,8 @@ describe('LocalComputeServerProvider', () => {
 	});
 
 	runComputeServerStoreConformance({
-		name: 'LocalComputeServerProvider',
+		name: 'LocalComputeServerStore',
 		createStore: () =>
-			new LocalComputeServerProvider(path.join(tempDir, 'compute.config.json'))
+			new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'))
 	});
 });

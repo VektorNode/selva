@@ -258,10 +258,9 @@ export class SupabaseProjectStore implements IProjectStore {
 
 // ── Row ↔ domain mappers ────────────────────────────────────────────────
 //
-// Audit + soft-delete columns on projects/project_members are introduced by
-// the B3 refactor and listed as TODOs in the SQL migration files. Mappers
-// fall back to owner_id / joined_at until those columns land so the runtime
-// stays safe on an un-migrated DB.
+// Audit columns are nullable on the row types as a safety net for older DBs
+// that haven't applied the latest migration — the mapper falls back to
+// owner_id / user_id / joined_at in those cases.
 
 interface ProjectRow {
 	id: string;
@@ -273,9 +272,7 @@ interface ProjectRow {
 	owner_id: string;
 	created_by?: string | null;
 	updated_by?: string | null;
-	/** B4: commons mode toggle — see spec §4. Defaults to false in the mapper. */
 	auto_join_on_upload?: boolean | null;
-	/** B4: anonymous-view toggle — see spec §4. Defaults to false in the mapper. */
 	allow_anonymous?: boolean | null;
 	created_at: string;
 	updated_at: string;
