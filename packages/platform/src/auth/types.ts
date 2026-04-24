@@ -39,6 +39,21 @@ export interface AuthUser {
 	recentRuns: RecentRun[];
 	/** Provider-specific data only — do not store sensitive user information (PII, credentials, tokens). */
 	metadata?: Record<string, unknown>;
+
+	/** ISO 8601 — when the user record was first created. */
+	createdAt?: string;
+	/**
+	 * ISO 8601 — most recent successful token verification or credential login.
+	 * Provider-updated only; never writable from the client.
+	 * Adapters MAY debounce writes (e.g. once per minute) to avoid a write per request.
+	 */
+	lastLoginAt?: string;
+	/**
+	 * When true, verifyToken and verifyLoginCredentials MUST return null.
+	 * Preserves audit trail — prefer disabling over deletion for offboarding,
+	 * compromise response, or any case where history must be retained.
+	 */
+	disabled?: boolean;
 }
 
 /**

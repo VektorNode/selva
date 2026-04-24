@@ -1,0 +1,119 @@
+import type { Permission } from '../auth/types.js';
+import { hasPermission } from '../auth/types.js';
+import type { Project, ProjectMember } from '../projects/types.js';
+import type { OrgMember } from '../organizations/types.js';
+
+/**
+ * Pure access-control rules shared across every adapter.
+ *
+ * Adapters do the data lookup (their strength) and call these rules with the
+ * already-resolved entities. A single source of truth prevents two adapters
+ * from drifting — e.g. one being more permissive than another after a policy
+ * change. Each rule takes primitives only; no I/O, no adapter types.
+ *
+ * These are *UI-gating* rules only. The mutating store methods are the real
+ * security boundary — they must re-enforce the same rules independently
+ * (RLS in SQL, rules.json in Firestore, code in local/JSON).
+ */
+
+export interface ProjectAccessInput {
+	/** Caller's permissions from RequestContext. */
+	permissions: readonly Permission[];
+	/** The project being accessed. Null if not found. */
+	project: Project | null;
+	/** The caller's membership in that project. Null if not a member. */
+	member: ProjectMember | null;
+	/** The caller's membership in the parent org. Null if not a member. */
+	orgMember: OrgMember | null;
+}
+
+/**
+ * Can the caller invoke a solve on this project?
+ * Today: any authenticated user — visibility is enforced at listing time.
+ */
+export function canSolve(_input: ProjectAccessInput): boolean {
+	return true;
+}
+
+/**
+ * Can the caller edit definitions in this project?
+ * - platform_admin: always
+ * - project owner / editor: always
+ * - manage_definitions + public project + org member: yes
+ */
+export function canEdit(input: ProjectAccessInput): boolean {
+	if (hasPermission(input.permissions, 'platform_admin')) return true;
+	const { member, project, orgMember, permissions } = input;
+	if (member?.role === 'owner' || member?.role === 'editor') return true;
+	if (
+		hasPermission(permissions, 'manage_definitions') &&
+		project?.visibility === 'public' &&
+		orgMember !== null
+	) {
+		return true;
+	}
+	return false;
+}
+
+/**
+ * Can the caller manage project-level settings (members, deletion)?
+ * - platform_admin: always
+ * - project owner: yes
+ */
+export function canManage(input: ProjectAccessInput): boolean {
+	if (hasPermission(input.permissions, 'platform_admin')) return true;
+	return input.member?.role === 'owner';
+}
+
+/**
+ * Can the caller edit project settings (name, slug, description, visibility)?
+ * - platform_admin: always
+ * - project owner: yes
+ * - manage_definitions + project editor: yes
+ */
+export function canEditProjectSettings(input: ProjectAccessInput): boolean {
+	if (hasPermission(input.permissions, 'platform_admin')) return true;
+	const { member, permissions } = input;
+	if (member?.role === 'owner') return true;
+	if (hasPermission(permissions, 'manage_definitions') && member?.role === 'editor') return true;
+	return false;
+}
+
+export interface DefinitionAccessInput {
+	/** Caller's permissions from RequestContext. */
+	permissions: readonly Permission[];
+	/** The project the definition lives in. Null if not found. */
+	project: Project | null;
+	/** Membership record for the *subject* user (usually the caller). */
+	member: ProjectMember | null;
+	/** Id of the user whose access is being checked. */
+	userId: string;
+	/** Id of the user who owns the definition record. */
+	definitionOwnerId: string;
+}
+
+/**
+ * Can `userId` edit the definition owned by `definitionOwnerId` in `project`?
+ *
+ * - platform_admin: always
+ * - public projects: only the definition owner
+ * - org projects: definition owner, OR project owner/editor
+ * - private projects: project owner/editor only
+ */
+export function canEditDefinition(input: DefinitionAccessInput): boolean {
+	if (hasPermission(input.permissions, 'platform_admin')) return true;
+	const { project, member, userId, definitionOwnerId } = input;
+	if (!project) return false;
+
+	if (project.visibility === 'public') {
+		return userId === definitionOwnerId;
+	}
+	if (project.visibility === 'org') {
+		if (userId === definitionOwnerId) return true;
+		return member?.role === 'owner' || member?.role === 'editor';
+	}
+	if (project.visibility === 'private') {
+		return member?.role === 'owner' || member?.role === 'editor';
+	}
+	return false;
+}

@@ -64,3 +64,13 @@ export { defineConfig } from './config.js';
 
 // Errors
 export { ProviderError } from './errors.js';
+
+// Access control (UI-gating rules — mutating stores re-enforce independently)
+export type { ProjectAccessInput, DefinitionAccessInput } from './access/index.js';
+export {
+	canSolve,
+	canEdit,
+	canManage,
+	canEditProjectSettings,
+	canEditDefinition
+} from './access/index.js';

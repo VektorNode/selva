@@ -22,8 +22,19 @@ export class LocalStorageProvider implements IStorageProvider {
 		this.publicUrlBase = publicUrlBase;
 	}
 
+	/**
+	 * Resolve a caller-provided path under basePath, rejecting anything that
+	 * would escape the root. Last line of defense against traversal — while
+	 * platform-side helpers (definitionPaths) also assert safe keys, this
+	 * adapter is reached by any IStorageProvider caller.
+	 */
 	private resolvePath(storagePath: string): string {
-		return path.join(this.basePath, storagePath);
+		const base = path.resolve(this.basePath);
+		const full = path.resolve(base, storagePath);
+		if (full !== base && !full.startsWith(base + path.sep)) {
+			throw new Error(`Path escapes base: ${storagePath}`);
+		}
+		return full;
 	}
 
 	async get(storagePath: string): Promise<Uint8Array | null> {

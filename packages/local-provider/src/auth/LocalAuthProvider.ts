@@ -22,7 +22,15 @@ const FALLBACK_ADMIN_ID = 'local-admin';
 function toAuthUser(
 	u: Pick<
 		StoredUser,
-		'id' | 'email' | 'displayName' | 'permissions' | 'starredDefinitions' | 'recentRuns'
+		| 'id'
+		| 'email'
+		| 'displayName'
+		| 'permissions'
+		| 'starredDefinitions'
+		| 'recentRuns'
+		| 'createdAt'
+		| 'lastLoginAt'
+		| 'disabled'
 	>
 ): AuthUser {
 	return {
@@ -31,7 +39,10 @@ function toAuthUser(
 		displayName: u.displayName,
 		permissions: u.permissions,
 		starredDefinitions: u.starredDefinitions,
-		recentRuns: u.recentRuns
+		recentRuns: u.recentRuns,
+		createdAt: u.createdAt,
+		lastLoginAt: u.lastLoginAt,
+		disabled: u.disabled
 	};
 }
 
@@ -69,7 +80,13 @@ class LocalPasswordAuth implements IPasswordAuth {
 	async verifyLoginCredentials(email: string, password: string): Promise<AuthUser | null> {
 		if (this.users) {
 			const user = await this.users.findByEmail(email);
-			if (user && user.passwordHash && (await verifyPasswordHash(password, user.passwordHash))) {
+			if (
+				user &&
+				!user.disabled &&
+				user.passwordHash &&
+				(await verifyPasswordHash(password, user.passwordHash))
+			) {
+				await this.users.touchLastLogin(user.id).catch(() => {});
 				return toAuthUser(user);
 			}
 		}
@@ -138,9 +155,17 @@ export class LocalAuthProvider implements IAuthProvider {
 
 		if (this.users) {
 			const u = await this.users.findById(userId);
-			if (u) return toAuthUser(u);
+			if (u && !u.disabled) {
+				await this.users.touchLastLogin(u.id).catch(() => {});
+				return toAuthUser(u);
+			}
 		}
 		return null;
+	}
+
+	async touchLastLogin(id: string): Promise<void> {
+		if (!this.users) return;
+		await this.users.touchLastLogin(id);
 	}
 
 	async createSessionToken(user: AuthUser): Promise<string> {
