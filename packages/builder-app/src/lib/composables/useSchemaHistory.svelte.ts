@@ -1,12 +1,36 @@
 import type { UISchema } from 'selva-shared';
 
+const LS_HISTORY_PREFIX = 'selva-schema-history:';
+const LS_CURRENT_PREFIX = 'selva-schema-current:';
+
+function purgeStaleSessions(keepSessionId: string) {
+	try {
+		const stale: string[] = [];
+		for (let i = 0; i < localStorage.length; i++) {
+			const key = localStorage.key(i);
+			if (!key) continue;
+			if (key === `${LS_HISTORY_PREFIX}${keepSessionId}`) continue;
+			if (key === `${LS_CURRENT_PREFIX}${keepSessionId}`) continue;
+			if (key.startsWith(LS_HISTORY_PREFIX) || key.startsWith(LS_CURRENT_PREFIX)) {
+				stale.push(key);
+			}
+		}
+		for (const key of stale) localStorage.removeItem(key);
+	} catch {
+		// Silently ignore (e.g. localStorage unavailable)
+	}
+}
+
 export function useSchemaHistory(sessionId: string) {
-	//TODO: The local storage gets poluted over time we need a bit more elegant solution for this, maybe a single entry with a timestamp and we can clean up old entries on load?
 	const past: UISchema[] = $state([]);
 	const future: UISchema[] = $state([]);
 	const MAX_HISTORY = 50;
-	const LS_KEY = `selva-schema-history:${sessionId}`;
-	const LS_CURRENT_KEY = `selva-schema-current:${sessionId}`;
+	const LS_KEY = `${LS_HISTORY_PREFIX}${sessionId}`;
+	const LS_CURRENT_KEY = `${LS_CURRENT_PREFIX}${sessionId}`;
+
+	// Drop entries from any other session so localStorage doesn't accumulate
+	// one pair of keys per definition ever opened.
+	if (typeof localStorage !== 'undefined') purgeStaleSessions(sessionId);
 
 	function push(schema: UISchema) {
 		// Deep clone using JSON round-trip for compatibility

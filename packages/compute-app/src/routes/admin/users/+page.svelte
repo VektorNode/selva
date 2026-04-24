@@ -5,7 +5,8 @@
 	import type { Invite, OrgPermission, OrgRole, PlatformPermission } from '@selva/platform';
 	import {
 		ALL_ORG_PERMISSIONS,
-		ALL_PLATFORM_PERMISSIONS
+		ALL_PLATFORM_PERMISSIONS,
+		OWNER_ADMIN_ONLY_PERMISSIONS
 	} from '@selva/platform';
 	import type { UserRow } from './+page.server';
 
@@ -24,11 +25,19 @@
 			userCreation: 'email-password' | 'email-only' | 'none';
 		};
 		invites: Invite[];
+		isPlatformAdmin: boolean;
 	}
 	interface Props {
 		data: PageData;
 	}
 	let { data }: Props = $props();
+
+	// Platform-scope checkboxes are hidden for non-platform-admins — the server
+	// rejects them anyway. Invites never carry platform perms (invite API drops
+	// them), so the invite form always shows the org-only list.
+	const assignablePermissions = $derived<FlatPermission[]>(
+		data.isPlatformAdmin ? ALL_FLAT_PERMISSIONS : [...ALL_ORG_PERMISSIONS]
+	);
 
 	const PERMISSION_LABELS: Record<FlatPermission, string> = {
 		platform_admin: 'Platform Admin (all)',
@@ -55,6 +64,17 @@
 	let creatingInvite = $state(false);
 	let lastInviteLink = $state<string | null>(null);
 	let revokingId = $state<string | null>(null);
+
+	// For members, hide owner/admin-only permissions entirely — they're never
+	// grantable to a member. Owners/admins see the whole list (all boxes are
+	// implicitly checked in the template).
+	const invitePermissionOptions = $derived<FlatPermission[]>(
+		inviteRole === 'member'
+			? ALL_ORG_PERMISSIONS.filter(
+					(p) => !(OWNER_ADMIN_ONLY_PERMISSIONS as readonly OrgPermission[]).includes(p)
+				)
+			: [...ALL_ORG_PERMISSIONS]
+	);
 
 	// Per-user loading state
 	let deletingId = $state<string | null>(null);
@@ -274,13 +294,25 @@
 						</select>
 					</div>
 					<div>
-						<p class="mb-2 text-xs font-medium">Platform permissions</p>
+						<p class="mb-2 text-xs font-medium">Organization permissions</p>
+						{#if inviteRole !== 'member'}
+							<p class="text-muted-foreground mb-2 text-xs">
+								{inviteRole === 'owner' ? 'Owners' : 'Admins'} automatically receive all organization
+								permissions. Pick <span class="font-mono">member</span> to grant a custom subset.
+							</p>
+						{/if}
 						<div class="flex flex-wrap gap-3">
-							{#each ALL_FLAT_PERMISSIONS as p (p)}
-								<label class="flex cursor-pointer items-center gap-1.5 text-xs">
+							{#each invitePermissionOptions as p (p)}
+								{@const roleLocked = inviteRole !== 'member'}
+								<label
+									class="flex items-center gap-1.5 text-xs {roleLocked
+										? 'cursor-not-allowed opacity-60'
+										: 'cursor-pointer'}"
+								>
 									<input
 										type="checkbox"
-										checked={invitePermissions.includes(p)}
+										checked={roleLocked || invitePermissions.includes(p)}
+										disabled={roleLocked}
 										onchange={(e) =>
 											toggleInvitePermission(p, (e.target as HTMLInputElement).checked)}
 									/>
@@ -342,12 +374,27 @@
 					{/if}
 					<div>
 						<p class="mb-2 text-xs font-medium">Permissions</p>
+						<p class="text-muted-foreground mb-2 text-xs">
+							New users are added as <span class="font-mono">member</span>. Promote them to owner or
+							admin from the user list to grant full organization access.
+						</p>
 						<div class="flex flex-wrap gap-3">
-							{#each ALL_FLAT_PERMISSIONS as p (p)}
-								<label class="flex cursor-pointer items-center gap-1.5 text-xs">
+							{#each assignablePermissions as p (p)}
+								{@const isOwnerAdminOnly = (OWNER_ADMIN_ONLY_PERMISSIONS as readonly FlatPermission[]).includes(p)}
+								{@const isPlatformScope = (ALL_PLATFORM_PERMISSIONS as readonly FlatPermission[]).includes(p)}
+								{@const memberExcluded = isOwnerAdminOnly && !isPlatformScope}
+								<label
+									class="flex items-center gap-1.5 text-xs {memberExcluded
+										? 'cursor-not-allowed opacity-60'
+										: 'cursor-pointer'}"
+									title={memberExcluded
+										? 'Only owners and admins can hold this permission'
+										: undefined}
+								>
 									<input
 										type="checkbox"
-										checked={newPermissions.includes(p)}
+										checked={!memberExcluded && newPermissions.includes(p)}
+										disabled={memberExcluded}
 										onchange={(e) => toggleNewPermission(p, (e.target as HTMLInputElement).checked)}
 									/>
 									{PERMISSION_LABELS[p]}
@@ -389,10 +436,25 @@
 			{:else}
 				<div class="divide-y rounded-lg border">
 					{#each data.users as user (user.id)}
+						{@const isOwnerOrAdmin = user.orgRole === 'owner' || user.orgRole === 'admin'}
 						<div class="px-4 py-3">
 							<div class="flex items-start justify-between gap-4">
 								<div class="min-w-0 flex-1">
-									<p class="truncate text-sm font-medium">{user.email ?? user.id}</p>
+									<div class="flex items-center gap-2">
+										<p class="truncate text-sm font-medium">{user.email ?? user.id}</p>
+										{#if user.orgRole}
+											<span
+												class="rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase {user.orgRole ===
+												'owner'
+													? 'border-amber-500/40 text-amber-600 dark:text-amber-400'
+													: user.orgRole === 'admin'
+														? 'border-blue-500/40 text-blue-600 dark:text-blue-400'
+														: 'border-border text-muted-foreground'}"
+											>
+												{user.orgRole}
+											</span>
+										{/if}
+									</div>
 									<p class="text-muted-foreground text-xs">{user.id}</p>
 								</div>
 								<Button
@@ -407,21 +469,41 @@
 							</div>
 							<div class="mt-2 flex flex-wrap gap-3">
 								{#each ALL_FLAT_PERMISSIONS as p (p)}
-									<label class="flex cursor-pointer items-center gap-1.5 text-xs">
-										<input
-											type="checkbox"
-											checked={user.permissions.includes(p)}
-											disabled={updatingId === user.id}
-											onchange={async (e) => {
-												const checked = (e.target as HTMLInputElement).checked;
-												const next = checked
-													? [...user.permissions, p]
-													: user.permissions.filter((x) => x !== p);
-												await updatePermissions(user.id, next);
-											}}
-										/>
-										{PERMISSION_LABELS[p]}
-									</label>
+									{@const isPlatformScope = (ALL_PLATFORM_PERMISSIONS as readonly FlatPermission[]).includes(p)}
+									{@const isOwnerAdminOnly = (OWNER_ADMIN_ONLY_PERMISSIONS as readonly FlatPermission[]).includes(p)}
+									{@const platformLocked = isPlatformScope && !data.isPlatformAdmin}
+									{@const governanceLocked =
+										isOwnerAdminOnly && !isOwnerOrAdmin && user.orgRole !== undefined}
+									{@const ownerAdminPreset = isOwnerOrAdmin && !isPlatformScope}
+									{@const locked = platformLocked || governanceLocked || ownerAdminPreset}
+									{#if !platformLocked || user.permissions.includes(p)}
+										<label
+											class="flex items-center gap-1.5 text-xs {locked
+												? 'cursor-not-allowed opacity-60'
+												: 'cursor-pointer'}"
+											title={platformLocked
+												? 'Only a platform admin can change this'
+												: governanceLocked
+													? 'Only owners and admins can hold this permission'
+													: ownerAdminPreset
+														? 'Owners and admins always hold all organization permissions'
+														: undefined}
+										>
+											<input
+												type="checkbox"
+												checked={ownerAdminPreset || user.permissions.includes(p)}
+												disabled={updatingId === user.id || locked}
+												onchange={async (e) => {
+													const checked = (e.target as HTMLInputElement).checked;
+													const next = checked
+														? [...user.permissions, p]
+														: user.permissions.filter((x) => x !== p);
+													await updatePermissions(user.id, next);
+												}}
+											/>
+											{PERMISSION_LABELS[p]}
+										</label>
+									{/if}
 								{/each}
 							</div>
 						</div>

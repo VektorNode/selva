@@ -30,14 +30,13 @@ Test: `curl http://localhost:3000/api/health`
 env: {
     PORT: 3000,
     ORIGIN: 'http://your-public-ip',          // No trailing slash
-    COMPUTE_SERVER_URL: 'https://your-compute-server',
     GH_DEFINITIONS_PATH: '/absolute/path/to/definitions',  // Always use absolute path
-    COMPUTE_API_KEY: 'your-key-if-needed',
     BODY_SIZE_LIMIT: 'Infinity',              // Needed for large file uploads
     ADMIN_PASSWORD: 'your-secure-password',
     NODE_ENV: 'production',
     ALLOW_INSECURE_COOKIES: 'true'            // HTTP deployments only
 }
+// Rhino.Compute URL + API key are configured in /admin/compute after first boot
 ```
 
 ---
@@ -74,6 +73,6 @@ pm2 restart selva-compute --update-env
 | Issue                    | Fix                                                                         |
 | ------------------------ | --------------------------------------------------------------------------- |
 | Port in use              | `lsof -i :3000` → change `PORT` in config                                   |
-| Can't reach Compute      | `curl http://YOUR-COMPUTE/health` → check `COMPUTE_SERVER_URL` and firewall |
+| Can't reach Compute      | `curl http://YOUR-COMPUTE/health` → verify the URL in `/admin/compute` and firewall |
 | Definitions not loading  | `ls definitions/` → verify filenames match `?gh=` param                     |
 | Body size limit exceeded | Set `BODY_SIZE_LIMIT: 'Infinity'` and restart with `--update-env`           |

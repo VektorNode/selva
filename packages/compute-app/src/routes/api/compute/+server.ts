@@ -9,7 +9,7 @@ import {
 } from 'selva-compute';
 import type { SchemaInput } from 'selva-shared';
 import { error, json, isHttpError } from '@sveltejs/kit';
-import { getComputeServerConfigStore } from '$lib/server/compute/config.server';
+import { getComputeServerConfigStore } from '$lib/server/providers.server';
 import { resolveComputeServer, definitionPaths, SYSTEM_CONTEXT } from '@selva/platform';
 import { getStorageProvider, providers } from '$lib/server/providers.server';
 

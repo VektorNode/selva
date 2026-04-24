@@ -52,4 +52,4 @@ To update your server with the latest custom fork, re-run the update script from
 
 ## Next Steps
 
-Update your Selva compute-app environment variables to point to your server's URL (`COMPUTE_SERVER_URL`).
+Register your server in Selva's admin dashboard at `/admin/compute` — enter the Rhino.Compute URL and (optionally) its API key. The config is persisted via the data provider, not environment variables.

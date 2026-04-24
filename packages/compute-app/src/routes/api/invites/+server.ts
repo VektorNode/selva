@@ -2,13 +2,15 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { getInviteStore, getOrganizationProvider } from '$lib/server/providers.server';
+import { getInviteStore } from '$lib/server/providers.server';
 import { requireManageUsers } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import {
 	OrgRoleSchema,
 	OrgPermissionSchema,
 	PlatformPermissionSchema,
+	DEFAULT_ORG_PERMISSIONS,
+	MEMBER_ASSIGNABLE_PERMISSIONS,
 	type Invite
 } from '@selva/platform';
 import { splitFlatPermissions } from '$lib/server/permissions-compat.server';
@@ -36,11 +38,9 @@ function generateToken(): string {
 export const GET: RequestHandler = async ({ locals }) => {
 	requireManageUsers(locals);
 	const ctx = locals.ctx!;
+	if (!ctx.orgId) throw error(400, 'No active organization');
 	try {
-		const orgsPage = await getOrganizationProvider().listOrgs(ctx, { limit: 1 });
-		const org = orgsPage.items[0];
-		if (!org) throw error(500, 'No organization configured');
-		const page = await getInviteStore().listByOrg(ctx, org.id, { limit: 200 });
+		const page = await getInviteStore().listByOrg(ctx, ctx.orgId, { limit: 200 });
 		return json(page.items);
 	} catch (err) {
 		handleApiError(err, 'Failed to list invites');
@@ -52,24 +52,29 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	requireManageUsers(locals);
 	const ctx = locals.ctx!;
 	const user = locals.user!;
+	if (!ctx.orgId) throw error(400, 'No active organization');
 
 	const body = await request.json().catch(() => null);
 	const parsed = CreateBody.safeParse(body);
 	if (!parsed.success) throwZodError(parsed.error);
 
 	try {
-		const orgsPage = await getOrganizationProvider().listOrgs(ctx, { limit: 1 });
-		const org = orgsPage.items[0];
-		if (!org) throw error(500, 'No organization configured');
-
-		const { org: orgPermissions } = splitFlatPermissions(parsed.data.permissions);
+		const { org: submittedOrgPerms } = splitFlatPermissions(parsed.data.permissions);
+		// owner/admin always carry the full permission set — the checkbox array
+		// from the UI is ignored for those roles. `member` takes the caller's
+		// selection, intersected with MEMBER_ASSIGNABLE_PERMISSIONS so governance
+		// perms (manage_users, manage_compute) can't be granted to members.
+		const orgPermissions =
+			parsed.data.orgRole === 'member'
+				? submittedOrgPerms.filter((p) => MEMBER_ASSIGNABLE_PERMISSIONS.includes(p))
+				: [...DEFAULT_ORG_PERMISSIONS[parsed.data.orgRole]];
 
 		const now = new Date();
 		const invite: Invite = {
 			id: randomUUID(),
 			token: generateToken(),
 			email: parsed.data.email,
-			orgId: org.id,
+			orgId: ctx.orgId,
 			orgRole: parsed.data.orgRole,
 			orgPermissions,
 			invitedBy: user.id,

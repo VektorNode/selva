@@ -8,23 +8,30 @@
 import { describe, it, expect } from 'vitest';
 import type { IProjectStore } from '../../data/interface.js';
 import type { Project, ProjectMember } from '../../index.js';
-import { makeCtx, makeUuid } from './helpers.js';
+import { makeCtx, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
 
 export interface ProjectStoreConformanceOptions {
 	/** Name to show in test output (e.g. "local-provider"). */
 	name: string;
 	/**
-	 * Factory that returns a fresh store and the orgId to use for projects.
+	 * Factory that returns a fresh store, the orgId to use for projects, and
+	 * the userId that owns the org (used to scope project ownership).
 	 * In single-org mode, return the pre-existing org's id.
 	 */
-	createStore: () => Promise<{ store: IProjectStore; orgId: string }>;
+	createStore: () => Promise<{ store: IProjectStore; orgId: string; ownerId: string }>;
+	/**
+	 * Hook adapters with user FK constraints use to seed `auth.users` before
+	 * a conformance test references a user id. Returns the id the adapter
+	 * actually stored — callers use that, not the suggested one.
+	 */
+	seedUser?: SeedUserFn;
 	/** If true, run ctx-isolation tests (adapters with row-level security). */
 	ctxIsolation?: boolean;
 }
 
 const ctx = makeCtx;
 
-function project(orgId: string, overrides: Partial<Project> = {}): Project {
+function project(orgId: string, ownerId: string, overrides: Partial<Project> = {}): Project {
 	const now = new Date().toISOString();
 	return {
 		id: overrides.id ?? makeUuid(),
@@ -32,15 +39,20 @@ function project(orgId: string, overrides: Partial<Project> = {}): Project {
 		name: overrides.name ?? 'Test Project',
 		slug: overrides.slug ?? `test-${Math.random().toString(36).slice(2, 8)}`,
 		visibility: overrides.visibility ?? 'private',
-		ownerId: overrides.ownerId ?? 'user-1',
+		ownerId: overrides.ownerId ?? ownerId,
 		createdAt: overrides.createdAt ?? now,
 		updatedAt: overrides.updatedAt ?? now,
 		...overrides
 	};
 }
 
+function member(projectId: string, userId: string, role: ProjectMember['role']): ProjectMember {
+	return { projectId, userId, role, joinedAt: new Date().toISOString() };
+}
+
 export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions): void {
-	const { name, createStore, ctxIsolation = false } = opts;
+	const { name, createStore, seedUser = noopSeedUser, ctxIsolation = false } = opts;
+	const seed = () => seedUser(makeUuid());
 
 	describe(`IProjectStore conformance: ${name}`, () => {
 		// ============================================================================
@@ -48,57 +60,87 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 		// ============================================================================
 
 		it('createProject + getProject returns the project', async () => {
-			const { store, orgId } = await createStore();
-			const p = project(orgId, { id: 'p1' });
-			await store.createProject(ctx('u1'), p);
-			const got = await store.getProject(ctx('u1'), 'p1');
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId);
+			await store.createProject(ctx(ownerId), p);
+			const got = await store.getProject(ctx(ownerId), p.id);
 			expect(got?.name).toBe('Test Project');
 		});
 
 		it('getProject returns null for missing id', async () => {
-			const { store } = await createStore();
-			const got = await store.getProject(ctx('u1'), 'nonexistent');
+			const { store, ownerId } = await createStore();
+			const got = await store.getProject(ctx(ownerId), makeUuid());
 			expect(got).toBeNull();
 		});
 
-		it('getProjectBySlug finds project by slug within org', async () => {
-			const { store, orgId } = await createStore();
-			await store.createProject(ctx('u1'), project(orgId, { id: 'p1', slug: 'my-proj' }));
-			const got = await store.getProjectBySlug(ctx('u1'), orgId, 'my-proj');
-			expect(got?.id).toBe('p1');
+		it('getProjectBySlug finds project by slug', async () => {
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId, { slug: 'my-proj' });
+			await store.createProject(ctx(ownerId), p);
+			const got = await store.getProjectBySlug(ctx(ownerId), orgId, 'my-proj');
+			expect(got?.id).toBe(p.id);
 		});
 
 		it('getProjectBySlug returns null for missing slug', async () => {
-			const { store, orgId } = await createStore();
-			const got = await store.getProjectBySlug(ctx('u1'), orgId, 'nonexistent');
+			const { store, orgId, ownerId } = await createStore();
+			const got = await store.getProjectBySlug(ctx(ownerId), orgId, 'nonexistent');
 			expect(got).toBeNull();
 		});
 
 		it('updateProject modifies name, slug, description, visibility', async () => {
-			const { store, orgId } = await createStore();
-			await store.createProject(ctx('u1'), project(orgId, { id: 'p1', slug: 'old', visibility: 'private' }));
-			await store.updateProject(ctx('u1'), 'p1', { name: 'New Name', slug: 'new-slug', description: 'New desc', visibility: 'org' });
-			const got = await store.getProject(ctx('u1'), 'p1');
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId, { slug: 'old', visibility: 'private' });
+			await store.createProject(ctx(ownerId), p);
+			await store.updateProject(ctx(ownerId), p.id, {
+				name: 'New Name',
+				slug: 'new-slug',
+				description: 'New desc',
+				visibility: 'org'
+			});
+			const got = await store.getProject(ctx(ownerId), p.id);
 			expect(got?.name).toBe('New Name');
 			expect(got?.slug).toBe('new-slug');
 			expect(got?.description).toBe('New desc');
 			expect(got?.visibility).toBe('org');
 		});
 
+		it('createProject rejects duplicate name in the same org (case-insensitive)', async () => {
+			const { store, orgId, ownerId } = await createStore();
+			await store.createProject(ctx(ownerId), project(orgId, ownerId, { name: 'Shared' }));
+			await expect(
+				store.createProject(ctx(ownerId), project(orgId, ownerId, { name: 'shared' }))
+			).rejects.toThrow();
+		});
+
+		it('updateProject rejects renaming to a name already used in the same org', async () => {
+			const { store, orgId, ownerId } = await createStore();
+			const a = project(orgId, ownerId, { name: 'Alpha' });
+			const b = project(orgId, ownerId, { name: 'Beta' });
+			await store.createProject(ctx(ownerId), a);
+			await store.createProject(ctx(ownerId), b);
+			await expect(
+				store.updateProject(ctx(ownerId), b.id, { name: 'ALPHA' })
+			).rejects.toThrow();
+		});
+
 		it('deleteProject removes the project', async () => {
-			const { store, orgId } = await createStore();
-			await store.createProject(ctx('u1'), project(orgId, { id: 'p1' }));
-			await store.deleteProject(ctx('u1'), 'p1');
-			const got = await store.getProject(ctx('u1'), 'p1');
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId);
+			await store.createProject(ctx(ownerId), p);
+			await store.deleteProject(ctx(ownerId), p.id);
+			const got = await store.getProject(ctx(ownerId), p.id);
 			expect(got).toBeNull();
 		});
 
-		it('listProjects returns projects for org with pagination', async () => {
-			const { store, orgId } = await createStore();
+		it('listProjects returns all projects with pagination', async () => {
+			const { store, orgId, ownerId } = await createStore();
 			for (let i = 0; i < 3; i++) {
-				await store.createProject(ctx('u1'), project(orgId, { id: `p${i}` }));
+				await store.createProject(
+					ctx(ownerId),
+					project(orgId, ownerId, { name: `Paginated ${i}` })
+				);
 			}
-			const page = await store.listProjects(ctx('u1'), orgId, { limit: 2 });
+			const page = await store.listProjects(ctx(ownerId), orgId, { limit: 2 });
 			expect(page.items.length).toBe(2);
 		});
 
@@ -107,63 +149,77 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 		// ============================================================================
 
 		it('addProjectMember + getProjectMember returns the member', async () => {
-			const { store, orgId } = await createStore();
-			await store.createProject(ctx('u1'), project(orgId, { id: 'p1' }));
-			const member: ProjectMember = { projectId: 'p1', userId: 'u2', role: 'editor', joinedAt: new Date().toISOString() };
-			await store.addProjectMember(ctx('u1'), member);
-			const got = await store.getProjectMember(ctx('u1'), 'p1', 'u2');
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId);
+			await store.createProject(ctx(ownerId), p);
+			const u2 = await seed();
+			await store.addProjectMember(ctx(ownerId), member(p.id, u2, 'editor'));
+			const got = await store.getProjectMember(ctx(ownerId), p.id, u2);
 			expect(got?.role).toBe('editor');
 		});
 
 		it('getProjectMember returns null for missing member', async () => {
-			const { store, orgId } = await createStore();
-			await store.createProject(ctx('u1'), project(orgId, { id: 'p1' }));
-			const got = await store.getProjectMember(ctx('u1'), 'p1', 'nonexistent');
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId);
+			await store.createProject(ctx(ownerId), p);
+			const got = await store.getProjectMember(ctx(ownerId), p.id, makeUuid());
 			expect(got).toBeNull();
 		});
 
 		it('updateProjectMemberRole changes role', async () => {
-			const { store, orgId } = await createStore();
-			await store.createProject(ctx('u1'), project(orgId, { id: 'p1' }));
-			await store.addProjectMember(ctx('u1'), { projectId: 'p1', userId: 'u2', role: 'viewer', joinedAt: new Date().toISOString() });
-			await store.updateProjectMemberRole(ctx('u1'), 'p1', 'u2', 'editor');
-			const got = await store.getProjectMember(ctx('u1'), 'p1', 'u2');
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId);
+			await store.createProject(ctx(ownerId), p);
+			const u2 = await seed();
+			await store.addProjectMember(ctx(ownerId), member(p.id, u2, 'viewer'));
+			await store.updateProjectMemberRole(ctx(ownerId), p.id, u2, 'editor');
+			const got = await store.getProjectMember(ctx(ownerId), p.id, u2);
 			expect(got?.role).toBe('editor');
 		});
 
 		it('removeProjectMember deletes the member', async () => {
-			const { store, orgId } = await createStore();
-			await store.createProject(ctx('u1'), project(orgId, { id: 'p1' }));
-			await store.addProjectMember(ctx('u1'), { projectId: 'p1', userId: 'u2', role: 'editor', joinedAt: new Date().toISOString() });
-			await store.removeProjectMember(ctx('u1'), 'p1', 'u2');
-			const got = await store.getProjectMember(ctx('u1'), 'p1', 'u2');
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId);
+			await store.createProject(ctx(ownerId), p);
+			const u2 = await seed();
+			await store.addProjectMember(ctx(ownerId), member(p.id, u2, 'editor'));
+			await store.removeProjectMember(ctx(ownerId), p.id, u2);
+			const got = await store.getProjectMember(ctx(ownerId), p.id, u2);
 			expect(got).toBeNull();
 		});
 
 		it('listProjectMembers returns members with pagination', async () => {
-			const { store, orgId } = await createStore();
-			await store.createProject(ctx('u1'), project(orgId, { id: 'p1' }));
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId);
+			await store.createProject(ctx(ownerId), p);
 			for (let i = 0; i < 3; i++) {
-				await store.addProjectMember(ctx('u1'), { projectId: 'p1', userId: `u${i}`, role: 'viewer', joinedAt: new Date().toISOString() });
+				const u = await seed();
+				await store.addProjectMember(ctx(ownerId), member(p.id, u, 'viewer'));
 			}
-			const page = await store.listProjectMembers(ctx('u1'), 'p1', { limit: 2 });
+			const page = await store.listProjectMembers(ctx(ownerId), p.id, { limit: 2 });
 			expect(page.items.length).toBe(2);
 		});
 
 		if (ctxIsolation) {
 			it('ctx isolation: projects created by one user are not visible to another', async () => {
 				const { store, orgId } = await createStore();
-				await store.createProject(ctx('user-a'), project(orgId, { id: 'p-a' }));
+				const userA = await seed();
+				const userB = await seed();
+				const pA = project(orgId, userA);
+				await store.createProject(ctx(userA), pA);
 
-				const page = await store.listProjects(ctx('user-b'), orgId);
-				expect(page.items.map((p) => p.id)).not.toContain('p-a');
+				const page = await store.listProjects(ctx(userB), orgId);
+				expect(page.items.map((p) => p.id)).not.toContain(pA.id);
 			});
 
 			it('ctx isolation: user cannot get a project they do not own', async () => {
 				const { store, orgId } = await createStore();
-				await store.createProject(ctx('user-a'), project(orgId, { id: 'p-a' }));
+				const userA = await seed();
+				const userB = await seed();
+				const pA = project(orgId, userA);
+				await store.createProject(ctx(userA), pA);
 
-				const got = await store.getProject(ctx('user-b'), 'p-a');
+				const got = await store.getProject(ctx(userB), pA.id);
 				expect(got).toBeNull();
 			});
 		}

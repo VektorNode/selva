@@ -8,7 +8,9 @@ import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import {
 	OrgPermissionSchema,
 	PlatformPermissionSchema,
-	SYSTEM_CONTEXT
+	SYSTEM_CONTEXT,
+	hasPermission,
+	MEMBER_ASSIGNABLE_PERMISSIONS
 } from '@selva/platform';
 import { splitFlatPermissions, flattenPermissions } from '$lib/server/permissions-compat.server';
 
@@ -70,6 +72,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const { email, password, permissions } = parsed.data;
 	const { platform, org } = splitFlatPermissions(permissions);
 
+	// Only an existing platform admin may create a user with platform-scope perms.
+	if (platform.length > 0 && !hasPermission(locals.ctx!, 'platform_admin')) {
+		throw error(403, 'Only a platform admin can grant platform-scope permissions');
+	}
+
 	try {
 		let user;
 		if (auth.passwordAuth) {
@@ -81,14 +88,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			throw error(501, `User creation is not supported by ${auth.name}. Users are managed externally.`);
 		}
 
-		// Attach to the active org with the requested OrgPermissions.
+		// Attach to the active org as a member. Members can only hold the
+		// non-governance permissions (manage_definitions, manage_projects) —
+		// drop anything else silently so the UI can send whatever.
 		const orgId = locals.ctx?.orgId;
 		if (orgId) {
 			await getOrganizationProvider().addOrgMember(SYSTEM_CONTEXT, {
 				orgId,
 				userId: user.id,
 				role: 'member',
-				permissions: org,
+				permissions: org.filter((p) => MEMBER_ASSIGNABLE_PERMISSIONS.includes(p)),
 				joinedAt: new Date().toISOString()
 			});
 		}

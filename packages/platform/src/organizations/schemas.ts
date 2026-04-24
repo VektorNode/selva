@@ -34,6 +34,21 @@ export type OrgPermission = z.infer<typeof OrgPermissionSchema>;
 export const ALL_ORG_PERMISSIONS: readonly OrgPermission[] = OrgPermissionSchema.options;
 
 /**
+ * Permissions reserved for owner/admin roles and never grantable to `member`.
+ * Members run the day-to-day work (definitions, projects); governance
+ * (inviting users, configuring compute servers) is owner/admin territory.
+ */
+export const OWNER_ADMIN_ONLY_PERMISSIONS: readonly OrgPermission[] = [
+	'manage_users',
+	'manage_compute'
+];
+
+/** Org permissions that a `member` role is allowed to hold. */
+export const MEMBER_ASSIGNABLE_PERMISSIONS: readonly OrgPermission[] = ALL_ORG_PERMISSIONS.filter(
+	(p) => !OWNER_ADMIN_ONLY_PERMISSIONS.includes(p)
+);
+
+/**
  * Default OrgPermission[] granted to each role. Roles are the user-facing
  * primitive; permissions are what the adapters check. These defaults are
  * applied by the local provider when a member is added without an explicit

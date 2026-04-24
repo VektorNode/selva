@@ -18,13 +18,6 @@ export class LocalProjectProvider implements IProjectStore {
 		this.loader = loader;
 	}
 
-	/** Returns the first project ID — used as the default target for uploads. */
-	async getDefaultProjectId(): Promise<string> {
-		const { projects } = await this.loader.get();
-		if (projects.length === 0) throw new ProviderError('No projects configured', 500);
-		return projects[0].id;
-	}
-
 	// ── Projects ─────────────────────────────────────────────────────────────────
 
 	async listProjects(
@@ -52,16 +45,28 @@ export class LocalProjectProvider implements IProjectStore {
 
 	async createProject(_ctx: RequestContext, project: Project): Promise<void> {
 		const store = await this.loader.get();
-		if (project.orgId !== store.org.id) {
+		if (!store.orgs.some((o) => o.id === project.orgId)) {
 			throw new ProviderError(`Org '${project.orgId}' not found`, 404);
 		}
 		if (store.projects.some((p) => p.id === project.id)) {
 			throw new ProviderError(`Project '${project.id}' already exists`, 409);
 		}
+		const nameKey = project.name.toLowerCase();
+		if (
+			store.projects.some((p) => p.orgId === project.orgId && p.name.toLowerCase() === nameKey)
+		) {
+			throw new ProviderError('projects_org_name_unique: project name already in use', 409);
+		}
 		if (store.projects.some((p) => p.orgId === project.orgId && p.slug === project.slug)) {
-			throw new ProviderError(`Project slug '${project.slug}' already in use`, 409);
+			throw new ProviderError('projects_org_id_slug_key: project slug already in use', 409);
 		}
 		store.projects.push(project);
+		store.projectMembers.push({
+			projectId: project.id,
+			userId: project.ownerId,
+			role: 'owner',
+			joinedAt: project.createdAt
+		});
 		await this.loader.write(store);
 	}
 
@@ -74,14 +79,30 @@ export class LocalProjectProvider implements IProjectStore {
 		const idx = store.projects.findIndex((p) => p.id === id);
 		if (idx === -1) throw new ProviderError(`Project '${id}' not found`, 404);
 
-		if (patch.slug && patch.slug !== store.projects[idx].slug) {
-			const orgId = store.projects[idx].orgId;
-			if (store.projects.some((p) => p.orgId === orgId && p.slug === patch.slug && p.id !== id)) {
-				throw new ProviderError(`Project slug '${patch.slug}' already in use`, 409);
+		const current = store.projects[idx];
+
+		if (patch.name && patch.name.toLowerCase() !== current.name.toLowerCase()) {
+			const nameKey = patch.name.toLowerCase();
+			if (
+				store.projects.some(
+					(p) => p.orgId === current.orgId && p.id !== id && p.name.toLowerCase() === nameKey
+				)
+			) {
+				throw new ProviderError('projects_org_name_unique: project name already in use', 409);
 			}
 		}
 
-		store.projects[idx] = { ...store.projects[idx], ...patch, updatedAt: new Date().toISOString() };
+		if (patch.slug && patch.slug !== current.slug) {
+			if (
+				store.projects.some(
+					(p) => p.orgId === current.orgId && p.slug === patch.slug && p.id !== id
+				)
+			) {
+				throw new ProviderError('projects_org_id_slug_key: project slug already in use', 409);
+			}
+		}
+
+		store.projects[idx] = { ...current, ...patch, updatedAt: new Date().toISOString() };
 		await this.loader.write(store);
 	}
 
@@ -89,9 +110,6 @@ export class LocalProjectProvider implements IProjectStore {
 		const store = await this.loader.get();
 		const idx = store.projects.findIndex((p) => p.id === id);
 		if (idx === -1) throw new ProviderError(`Project '${id}' not found`, 404);
-		if (store.projects.length === 1) {
-			throw new ProviderError('Cannot delete the last remaining project', 409);
-		}
 		store.projects.splice(idx, 1);
 		store.projectMembers = store.projectMembers.filter((m) => m.projectId !== id);
 		await this.loader.write(store);

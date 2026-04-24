@@ -31,10 +31,11 @@ curl -fsSL https://raw.githubusercontent.com/VektorNode/selva/main/scripts/setup
 bash setup.sh
 
 # Non-interactive (CI/automation) — uses env vars / defaults
-COMPUTE_SERVER_URL=https://your-compute.com \
 ADMIN_PASSWORD=yourpassword \
 ADMIN_SECRET=yoursecret \
 bash setup.sh --no-interactive
+
+# After setup, register your Rhino.Compute server in the admin dashboard at /admin/compute
 
 # Set up Caddy reverse proxy (run after setup.sh)
 bash setup-caddy.sh                           # HTTP on port 80
@@ -46,14 +47,15 @@ bash setup-caddy.sh --domain app.example.com  # HTTPS via Let's Encrypt
 | Variable              | Default                               | Description                                           |
 | --------------------- | ------------------------------------- | ----------------------------------------------------- |
 | `REPO_URL`            | `git@github.com:VektorNode/selva.git` | Repository SSH URL                                    |
-| `COMPUTE_SERVER_URL`  | `http://localhost:5000`               | Rhino.Compute URL                                     |
 | `GH_DEFINITIONS_PATH` | `./example-definitions`               | Path to `.gh` files                                   |
-| `COMPUTE_API_KEY`     | —                                     | Rhino.Compute API key                                 |
 | `ADMIN_PASSWORD`      | —                                     | Admin panel password                                  |
 | `ADMIN_SECRET`        | —                                     | Admin session secret                                  |
 | `PORT`                | `3000`                                | Internal app port                                     |
 | `ORIGIN`              | `http://your-server-ip`               | Public-facing URL — no port suffix, no trailing slash |
 | `INSTALL_DIR`         | `~/selva`                             | Install directory                                     |
+
+Rhino.Compute URL + API key are configured post-install via the admin dashboard
+(`/admin/compute`), not env vars.
 
 ---
 

@@ -1,4 +1,5 @@
-import { getServerConfig } from './config.server';
+import { resolveComputeServer, SYSTEM_CONTEXT } from '@selva/platform';
+import { getComputeServerConfigStore } from '../providers.server';
 
 interface ComputeEndpointResponseMap {
 	'/version': { rhino: string; compute: string; git_sha: string | null };
@@ -15,12 +16,13 @@ type ComputeEndpointResponse<T extends ComputeEndpoint> = T extends keyof Comput
 export async function getComputeEndpoint<T extends ComputeEndpoint>(
 	endpoint: T
 ): Promise<ComputeEndpointResponse<T>> {
-	const config = getServerConfig();
-	const url = new URL(endpoint, config.computeServerUrl).toString();
+	const config = await getComputeServerConfigStore().getConfig(SYSTEM_CONTEXT);
+	const server = resolveComputeServer(config);
+	const url = new URL(endpoint, server.serverUrl).toString();
 
 	const headers: Record<string, string> = {};
-	if (config.computeApiKey) {
-		headers['RhinoComputeKey'] = config.computeApiKey;
+	if (server.apiKey) {
+		headers['RhinoComputeKey'] = server.apiKey;
 	}
 
 	const response = await fetch(url, { headers });

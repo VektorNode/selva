@@ -1,11 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
-import {
-	definitionService,
-	getOrganizationProvider,
-	getProjectProvider
-} from '$lib/server/providers.server';
+import { definitionService, getProjectProvider } from '$lib/server/providers.server';
 import { requireCanEdit } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { CreateDefinitionInputSchema } from '@selva/platform/definitions/schemas';
@@ -45,11 +41,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	let projectId = formData.get('projectId');
 	if (typeof projectId !== 'string' || !projectId) {
-		// Fall back to the first project of the first org — single-tenant default.
-		const orgsPage = await getOrganizationProvider().listOrgs(ctx, { limit: 1 });
-		const defaultOrg = orgsPage.items[0];
-		if (!defaultOrg) throw error(500, 'No organization configured');
-		const projectsPage = await getProjectProvider().listProjects(ctx, defaultOrg.id, { limit: 1 });
+		// Fall back to the first project of the active org.
+		if (!ctx.orgId) throw error(400, 'No active organization');
+		const projectsPage = await getProjectProvider().listProjects(ctx, ctx.orgId, { limit: 1 });
 		const defaultProject = projectsPage.items[0];
 		if (!defaultProject) throw error(500, 'No project configured');
 		projectId = defaultProject.id;

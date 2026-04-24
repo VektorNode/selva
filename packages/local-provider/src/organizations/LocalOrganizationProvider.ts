@@ -1,5 +1,4 @@
 import * as path from 'node:path';
-import { randomUUID } from 'node:crypto';
 import type {
 	IOrgStore,
 	Organization,
@@ -19,11 +18,18 @@ import { paginate, applyOrder } from '../pagination.js';
 import { readJsonFile, writeJsonFile } from '../fsJson.js';
 
 export interface LocalOrgStore {
-	org: Organization;
+	orgs: Organization[];
 	projects: Project[];
 	orgMembers: OrgMember[];
 	projectMembers: ProjectMember[];
 }
+
+const EMPTY_STORE: LocalOrgStore = {
+	orgs: [],
+	projects: [],
+	orgMembers: [],
+	projectMembers: []
+};
 
 const VALID_ORG_PERMS = new Set<OrgPermission>(ALL_ORG_PERMISSIONS);
 
@@ -42,9 +48,24 @@ function migrateOrgMember(m: OrgMember & { permissions?: OrgPermission[] }): Org
 }
 
 /**
+ * Legacy on-disk shape (pre multi-org refactor): `{ org: Organization, ... }`.
+ * Migrated on first read into the array-shaped `LocalOrgStore`.
+ */
+interface LegacyLocalOrgStore {
+	org?: Organization;
+	orgs?: Organization[];
+	projects: Project[];
+	orgMembers: OrgMember[];
+	projectMembers: ProjectMember[];
+}
+
+/**
  * Shared loader for the local-org.json file. Both LocalOrganizationProvider
  * and LocalProjectProvider point to the same instance so all reads and writes
  * go through one cache and one atomic write path.
+ *
+ * The store starts empty — orgs are created explicitly via `createOrg`
+ * (typically from the setup flow). No lazy seeding.
  */
 export class LocalOrgStoreLoader {
 	readonly storePath: string;
@@ -63,80 +84,42 @@ export class LocalOrgStoreLoader {
 			return this.store;
 		}
 
-		const existing = await readJsonFile<LocalOrgStore | null>(this.storePath, null);
-		if (existing) {
-			// Migrate legacy members (no permissions field) in place.
-			let changed = false;
-			for (const m of existing.orgMembers) {
-				const before = m.permissions;
-				migrateOrgMember(m);
-				if (before === undefined) changed = true;
-			}
-			// One-time sweep: apply legacy user-level OrgPermissions (read out of
-			// users.json by the migrateUser helper) to each member record.
-			if (this.userMeta) {
-				for (const m of existing.orgMembers) {
-					const legacy = await this.userMeta.consumeLegacyOrgPermissions(m.userId);
-					if (legacy) {
-						const extra = sanitizeOrgPermissions(legacy);
-						m.permissions = Array.from(new Set([...(m.permissions ?? []), ...extra]));
-						changed = true;
-					}
-				}
-			}
-			this.store = existing;
-			if (changed) await this.write(existing);
-			return existing;
+		const raw = await readJsonFile<LegacyLocalOrgStore | null>(this.storePath, null);
+		if (!raw) {
+			this.store = { ...EMPTY_STORE, orgs: [], projects: [], orgMembers: [], projectMembers: [] };
+			return this.store;
 		}
 
-		const now = new Date().toISOString();
-		const orgId = randomUUID();
-		const projectId = randomUUID();
-		// Prefer the first real user (from setup) over the synthetic fallback so
-		// project/org membership checks work for the actual admin account.
-		const usersFile = await readJsonFile<{ users?: Array<{ id: string }> } | null>(
-			this.usersPath,
-			null
-		);
-		const adminUserId = usersFile?.users?.[0]?.id ?? 'local-admin';
-
-		// First admin is the org owner with every OrgPermission on the default org.
-		// Platform-admin status (§1g-ui: restricted) is a separate concern — setup
-		// still grants it via LocalAuthProvider while the §1g-ui rebuild is pending.
-		this.store = {
-			org: {
-				id: orgId,
-				name: 'Local',
-				slug: 'local',
-				ownerId: adminUserId,
-				createdAt: now,
-				updatedAt: now
-			},
-			projects: [
-				{
-					id: projectId,
-					orgId,
-					name: 'Default',
-					slug: 'default',
-					visibility: 'public',
-					ownerId: adminUserId,
-					createdAt: now,
-					updatedAt: now
-				}
-			],
-			orgMembers: [
-				{
-					orgId,
-					userId: adminUserId,
-					role: 'owner',
-					permissions: [...DEFAULT_ORG_PERMISSIONS.owner],
-					joinedAt: now
-				}
-			],
-			projectMembers: [{ projectId, userId: adminUserId, role: 'owner', joinedAt: now }]
+		// Migrate the singleton `org` field to the new `orgs[]` array.
+		const orgs: Organization[] = raw.orgs ?? (raw.org ? [raw.org] : []);
+		const store: LocalOrgStore = {
+			orgs,
+			projects: raw.projects ?? [],
+			orgMembers: raw.orgMembers ?? [],
+			projectMembers: raw.projectMembers ?? []
 		};
-		await this.write(this.store);
-		return this.store;
+
+		// Migrate legacy members (no permissions field) in place.
+		let changed = raw.orgs === undefined && raw.org !== undefined;
+		for (const m of store.orgMembers) {
+			const before = m.permissions;
+			migrateOrgMember(m);
+			if (before === undefined) changed = true;
+		}
+		// One-time sweep: apply legacy user-level OrgPermissions to memberships.
+		if (this.userMeta) {
+			for (const m of store.orgMembers) {
+				const legacy = await this.userMeta.consumeLegacyOrgPermissions(m.userId);
+				if (legacy) {
+					const extra = sanitizeOrgPermissions(legacy);
+					m.permissions = Array.from(new Set([...(m.permissions ?? []), ...extra]));
+					changed = true;
+				}
+			}
+		}
+		this.store = store;
+		if (changed) await this.write(store);
+		return store;
 	}
 
 	async write(store: LocalOrgStore): Promise<void> {
@@ -160,22 +143,39 @@ export class LocalOrganizationProvider implements IOrgStore {
 	// ── Organizations ────────────────────────────────────────────────────────────
 
 	async listOrgs(_ctx: RequestContext, opts?: ListOptions): Promise<Page<Organization>> {
-		const all = [(await this.loader.get()).org];
-		return paginate(applyOrder(all, opts), opts);
+		const { orgs } = await this.loader.get();
+		return paginate(applyOrder(orgs, opts), opts);
 	}
 
 	async getOrg(_ctx: RequestContext, id: string): Promise<Organization | null> {
-		const { org } = await this.loader.get();
-		return org.id === id ? org : null;
+		const { orgs } = await this.loader.get();
+		return orgs.find((o) => o.id === id) ?? null;
 	}
 
 	async getOrgBySlug(_ctx: RequestContext, slug: string): Promise<Organization | null> {
-		const { org } = await this.loader.get();
-		return org.slug === slug ? org : null;
+		const { orgs } = await this.loader.get();
+		return orgs.find((o) => o.slug === slug) ?? null;
 	}
 
-	async createOrg(_ctx: RequestContext, _org: Organization): Promise<void> {
-		throw new ProviderError('Multiple organizations are not supported in local mode', 403);
+	async createOrg(_ctx: RequestContext, org: Organization): Promise<void> {
+		const store = await this.loader.get();
+		if (store.orgs.some((o) => o.id === org.id)) {
+			throw new ProviderError(`Org '${org.id}' already exists`, 409);
+		}
+		if (store.orgs.some((o) => o.slug === org.slug)) {
+			throw new ProviderError(`Org slug '${org.slug}' already in use`, 409);
+		}
+		store.orgs.push(org);
+		// Seed the owner membership so the creator can see their own org through
+		// downstream permission checks. Mirrors SupabaseOrgStore.createOrg.
+		store.orgMembers.push({
+			orgId: org.id,
+			userId: org.ownerId,
+			role: 'owner',
+			permissions: [...DEFAULT_ORG_PERMISSIONS.owner],
+			joinedAt: new Date().toISOString()
+		});
+		await this.loader.write(store);
 	}
 
 	async updateOrg(
@@ -184,13 +184,30 @@ export class LocalOrganizationProvider implements IOrgStore {
 		patch: Partial<Pick<Organization, 'name' | 'slug'>>
 	): Promise<void> {
 		const store = await this.loader.get();
-		if (store.org.id !== id) throw new ProviderError(`Org '${id}' not found`, 404);
-		store.org = { ...store.org, ...patch, updatedAt: new Date().toISOString() };
+		const idx = store.orgs.findIndex((o) => o.id === id);
+		if (idx === -1) throw new ProviderError(`Org '${id}' not found`, 404);
+		if (patch.slug && patch.slug !== store.orgs[idx].slug) {
+			if (store.orgs.some((o) => o.id !== id && o.slug === patch.slug)) {
+				throw new ProviderError(`Org slug '${patch.slug}' already in use`, 409);
+			}
+		}
+		store.orgs[idx] = { ...store.orgs[idx], ...patch, updatedAt: new Date().toISOString() };
 		await this.loader.write(store);
 	}
 
-	async deleteOrg(_ctx: RequestContext, _id: string): Promise<void> {
-		throw new ProviderError('Deleting the organization is not supported in local mode', 403);
+	async deleteOrg(_ctx: RequestContext, id: string): Promise<void> {
+		const store = await this.loader.get();
+		const idx = store.orgs.findIndex((o) => o.id === id);
+		if (idx === -1) throw new ProviderError(`Org '${id}' not found`, 404);
+		store.orgs.splice(idx, 1);
+		store.orgMembers = store.orgMembers.filter((m) => m.orgId !== id);
+		// Cascade: drop projects + project members in this org.
+		const droppedProjectIds = new Set(
+			store.projects.filter((p) => p.orgId === id).map((p) => p.id)
+		);
+		store.projects = store.projects.filter((p) => p.orgId !== id);
+		store.projectMembers = store.projectMembers.filter((m) => !droppedProjectIds.has(m.projectId));
+		await this.loader.write(store);
 	}
 
 	// ── Org members ──────────────────────────────────────────────────────────────

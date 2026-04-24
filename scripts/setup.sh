@@ -38,8 +38,6 @@ REPO_URL="${REPO_URL:-git@github.com:VektorNode/selva.git}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
 DEFINITION_SOURCE="${DEFINITION_SOURCE:-filesystem}"
 GH_DEFINITIONS_PATH="${GH_DEFINITIONS_PATH:-./definitions}"
-COMPUTE_SERVER_URL="${COMPUTE_SERVER_URL:-http://localhost:5000}"
-COMPUTE_API_KEY="${COMPUTE_API_KEY:-}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 SESSION_SECRET="${SESSION_SECRET:-}"
 ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES:-}"  # auto-detected: true for http, false for https
@@ -225,14 +223,7 @@ if [ ! -f "$ENV_FILE" ] || ([ "$INTERACTIVE" = true ] && [[ $REPLY =~ ^[Yy]$ ]])
       GH_DEFINITIONS_PATH="${_INPUT:-$GH_DEFINITIONS_PATH}"
     fi
 
-    read -p "Rhino.Compute Server URL [$COMPUTE_SERVER_URL]: " _INPUT
-    COMPUTE_SERVER_URL="${_INPUT:-$COMPUTE_SERVER_URL}"
-
-    while [ -z "$COMPUTE_API_KEY" ]; do
-      read -p "Rhino.Compute API Key (required): " _INPUT
-      COMPUTE_API_KEY="${_INPUT:-}"
-      [ -z "$COMPUTE_API_KEY" ] && print_warning "API key is required."
-    done
+    print_step "Rhino.Compute URL + API key are configured post-install at /admin/compute."
 
     read -p "Admin Password (optional, press Enter to skip) [${ADMIN_PASSWORD:-none}]: " _INPUT
     ADMIN_PASSWORD="${_INPUT:-$ADMIN_PASSWORD}"
@@ -272,18 +263,8 @@ GH_DEFINITIONS_PATH="${GH_DEFINITIONS_PATH}"
 EOF
   fi
 
-  cat >> "$ENV_FILE" << EOF
-# Rhino.Compute Server Configuration
-COMPUTE_SERVER_URL="${COMPUTE_SERVER_URL}"
-EOF
-
-  if [ -z "$COMPUTE_API_KEY" ]; then
-    print_error "COMPUTE_API_KEY is required but not set."
-    exit 1
-  fi
-  cat >> "$ENV_FILE" << EOF
-COMPUTE_API_KEY="${COMPUTE_API_KEY}"
-EOF
+  # Rhino.Compute server URL + API key are configured post-install via /admin/compute
+  # and persisted by the data provider — not written to .env.
 
   if [ -n "$ADMIN_PASSWORD" ]; then
     cat >> "$ENV_FILE" << EOF
@@ -374,8 +355,6 @@ if [ "$SKIP_PM2" = false ]; then
   # Re-read vars from .env in case we skipped the config step (file already existed)
   PORT=$(grep "^PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ' || echo "$PORT")
   ORIGIN=$(grep "^ORIGIN=" "$ENV_FILE" | cut -d'"' -f2 || echo "$ORIGIN")
-  COMPUTE_SERVER_URL=$(grep "^COMPUTE_SERVER_URL=" "$ENV_FILE" | cut -d'"' -f2 || echo "$COMPUTE_SERVER_URL")
-  COMPUTE_API_KEY=$(grep "^COMPUTE_API_KEY=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$COMPUTE_API_KEY")
   ADMIN_PASSWORD=$(grep "^ADMIN_PASSWORD=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$ADMIN_PASSWORD")
   SESSION_SECRET=$(grep "^SESSION_SECRET=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$SESSION_SECRET")
   ALLOW_INSECURE_COOKIES=$(grep "^ALLOW_INSECURE_COOKIES=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$ALLOW_INSECURE_COOKIES")
@@ -391,11 +370,6 @@ if [ "$SKIP_PM2" = false ]; then
     ABS_GH_PATH="$INSTALL_DIR/packages/compute-app/$GH_DEFINITIONS_PATH"
   else
     ABS_GH_PATH="$GH_DEFINITIONS_PATH"
-  fi
-
-  if [ -z "$COMPUTE_API_KEY" ]; then
-    print_error "COMPUTE_API_KEY is required but not set."
-    exit 1
   fi
 
   OPT_ADMIN_PASSWORD=""
@@ -418,8 +392,6 @@ module.exports = {
 			env: {
 				PORT: $PORT,
 				ORIGIN: '$ORIGIN',
-				COMPUTE_SERVER_URL: '$COMPUTE_SERVER_URL',
-				COMPUTE_API_KEY: '$COMPUTE_API_KEY',
 				BODY_SIZE_LIMIT: 'Infinity',
 			GH_DEFINITIONS_PATH: '$ABS_GH_PATH',
 $OPT_ADMIN_PASSWORD
@@ -495,7 +467,7 @@ fi
 
 echo "📝 Next steps:"
 echo "   1. Add your .gh files to: $INSTALL_DIR/packages/compute-app/definitions/"
-echo "   2. Update COMPUTE_SERVER_URL in $ENV_FILE if needed"
+echo "   2. Open /admin/compute to register your Rhino.Compute server URL (+ optional API key)"
 echo "   3. (Optional) Set up Caddy reverse proxy: bash setup-caddy.sh [--domain app.example.com]"
 echo ""
 

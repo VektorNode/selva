@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import type { AuthUser, Invite, OrgPermission, PlatformPermission } from '@selva/platform';
+import type { AuthUser, Invite, OrgPermission, OrgRole, PlatformPermission } from '@selva/platform';
 import { SYSTEM_CONTEXT } from '@selva/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
 import {
@@ -21,6 +21,7 @@ import { flattenPermissions } from '$lib/server/permissions-compat.server';
  */
 export interface UserRow extends AuthUser {
 	displayName?: string;
+	orgRole?: OrgRole;
 	orgPermissions: OrgPermission[];
 	permissions: Array<PlatformPermission | OrgPermission>;
 }
@@ -47,14 +48,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 			users = await Promise.all(
 				page.items.map(async (u) => {
 					let orgPermissions: OrgPermission[] = [];
+					let orgRole: OrgRole | undefined;
 					if (activeOrgId) {
 						const member = await orgs.getOrgMember(SYSTEM_CONTEXT, activeOrgId, u.id);
 						orgPermissions = member?.permissions ?? [];
+						orgRole = member?.role;
 					}
 					const profile = profileById.get(u.id);
 					return {
 						...u,
 						displayName: profile?.displayName,
+						orgRole,
 						orgPermissions,
 						permissions: flattenPermissions(u.platformPermissions, orgPermissions)
 					};
@@ -66,18 +70,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 	}
 
 	// Pending + recently-accepted invites for the active org. Non-fatal if
-	// no org is configured yet — setup flow will create one on first login.
+	// no active org yet (e.g. multi-tenant user not in any org).
 	let invites: Invite[] = [];
-	try {
-		const orgsPage = await getOrganizationProvider().listOrgs(ctx, { limit: 1 });
-		const org = orgsPage.items[0];
-		if (org) {
-			const page = await getInviteStore().listByOrg(ctx, org.id, { limit: 100 });
+	if (ctx.orgId) {
+		try {
+			const page = await getInviteStore().listByOrg(ctx, ctx.orgId, { limit: 100 });
 			invites = page.items;
+		} catch {
+			// Non-fatal — users page still renders without invite list
 		}
-	} catch {
-		// Non-fatal — users page still renders without invite list
 	}
 
-	return { users, provider: providerInfo, invites };
+	const isPlatformAdmin = ctx.platformPermissions.includes('platform_admin');
+	return { users, provider: providerInfo, invites, isPlatformAdmin };
 };

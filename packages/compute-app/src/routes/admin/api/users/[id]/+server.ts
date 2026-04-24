@@ -9,7 +9,9 @@ import {
 	OrgPermissionSchema,
 	PlatformPermissionSchema,
 	SYSTEM_CONTEXT,
-	DEFAULT_ORG_PERMISSIONS
+	DEFAULT_ORG_PERMISSIONS,
+	MEMBER_ASSIGNABLE_PERMISSIONS,
+	hasPermission
 } from '@selva/platform';
 import { splitFlatPermissions } from '$lib/server/permissions-compat.server';
 
@@ -31,6 +33,19 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	if (!parsed.success) throwZodError(parsed.error);
 	const { platform, org } = splitFlatPermissions(parsed.data.permissions);
 
+	// Granting or revoking platform-scope permissions requires the caller to
+	// already hold platform_admin. Without this, any org admin with
+	// manage_users could self-elevate to platform_admin.
+	const existingUser = await getAuthProvider().getUser(id);
+	const existingPlatform = existingUser?.platformPermissions ?? [];
+	const platformChanged =
+		platform.length !== existingPlatform.length ||
+		platform.some((p) => !existingPlatform.includes(p)) ||
+		existingPlatform.some((p) => !platform.includes(p));
+	if (platformChanged && !hasPermission(locals.ctx!, 'platform_admin')) {
+		throw error(403, 'Only a platform admin can change platform-scope permissions');
+	}
+
 	const platformResult = await getAuthProvider().updateUserPlatformPermissions(id, platform);
 	if (platformResult === 'not_found') throw error(404, 'User not found');
 	if (platformResult === 'not_supported')
@@ -40,13 +55,20 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	if (orgId) {
 		const orgs = getOrganizationProvider();
 		const existing = await orgs.getOrgMember(SYSTEM_CONTEXT, orgId, id);
+		// owner/admin always hold all org permissions; members are capped to the
+		// non-governance subset. The UI mirrors this — the server is the
+		// safety net if anything bypasses the UI.
+		const resolvedPermissions = (role: 'owner' | 'admin' | 'member') =>
+			role === 'member'
+				? org.filter((p) => MEMBER_ASSIGNABLE_PERMISSIONS.includes(p))
+				: [...DEFAULT_ORG_PERMISSIONS[role]];
 		if (existing) {
 			// In-place permission update. We cheat through the loader by re-adding
 			// after removing — a clean updateOrgMemberPermissions will arrive in §1g-ui.
 			await orgs.removeOrgMember(SYSTEM_CONTEXT, orgId, id);
 			await orgs.addOrgMember(SYSTEM_CONTEXT, {
 				...existing,
-				permissions: org
+				permissions: resolvedPermissions(existing.role)
 			});
 		} else {
 			// Promote to member with the requested org perms.
@@ -54,7 +76,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 				orgId,
 				userId: id,
 				role: 'member',
-				permissions: org.length > 0 ? org : [...DEFAULT_ORG_PERMISSIONS.member],
+				permissions: resolvedPermissions('member'),
 				joinedAt: new Date().toISOString()
 			});
 		}

@@ -1,12 +1,14 @@
 import { redirect, fail } from '@sveltejs/kit';
+import { randomUUID } from 'node:crypto';
 import type { Actions, PageServerLoad } from './$types';
 import {
-	ALL_ORG_PERMISSIONS,
 	ALL_PLATFORM_PERMISSIONS,
-	SYSTEM_CONTEXT
+	SYSTEM_CONTEXT,
+	type Organization,
+	type Project
 } from '@selva/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
-import { getOrganizationProvider } from '$lib/server/providers.server';
+import { getOrganizationProvider, getProjectProvider, tenancy } from '$lib/server/providers.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
 
 function slugify(raw: string): string {
@@ -39,11 +41,15 @@ export const actions = {
 		const password = data.get('password') as string | null;
 		const confirm = data.get('confirm') as string | null;
 
-		if (!companyName) {
+		// In single-tenant mode the first user owns the only org, so company
+		// name is required. In multi-tenant mode setup creates only the
+		// platform admin — orgs are created separately later.
+		const requireCompany = tenancy === 'single';
+		if (requireCompany && !companyName) {
 			return fail(400, { error: 'Company name is required' });
 		}
-		const slug = slugify(companyName);
-		if (slug.length < 3) {
+		const slug = requireCompany ? slugify(companyName) : '';
+		if (requireCompany && slug.length < 3) {
 			return fail(400, { error: 'Company name must contain at least 3 letters or digits' });
 		}
 		if (!email || !email.includes('@')) {
@@ -68,20 +74,45 @@ export const actions = {
 				...ALL_PLATFORM_PERMISSIONS
 			]);
 
-			// Seed/update the org with the admin's company name. The first call to
-			// listOrgs triggers seeding with the newly-created user as owner + all
-			// OrgPermissions; the subsequent updateOrg renames it from "Local".
-			const orgs = getOrganizationProvider();
-			const setupCtx = {
-				userId: user.id,
-				platformPermissions: [...ALL_PLATFORM_PERMISSIONS],
-				orgPermissions: [...ALL_ORG_PERMISSIONS]
-			};
-			const page = await orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
-			const org = page.items[0];
-			if (org) {
-				await orgs.updateOrg(setupCtx, org.id, { name: companyName, slug });
+			if (tenancy === 'single') {
+				// Explicitly bootstrap the single org and a default project. Adapters
+				// are pure stores — they no longer auto-seed on read.
+				const orgs = getOrganizationProvider();
+				const projects = getProjectProvider();
+				const now = new Date().toISOString();
+				const org: Organization = {
+					id: randomUUID(),
+					name: companyName,
+					slug,
+					ownerId: user.id,
+					createdAt: now,
+					updatedAt: now
+				};
+				// SYSTEM_CONTEXT bypasses RLS — needed because the new user has no
+				// session yet. createOrg seeds the owner membership row in the same
+				// call (see SupabaseOrgStore.createOrg / LocalOrganizationProvider).
+				await orgs.createOrg(SYSTEM_CONTEXT, org);
+
+				const project: Project = {
+					id: randomUUID(),
+					orgId: org.id,
+					name: 'Default',
+					slug: 'default',
+					visibility: 'public',
+					ownerId: user.id,
+					createdAt: now,
+					updatedAt: now
+				};
+				await projects.createProject(SYSTEM_CONTEXT, project);
+				await projects.addProjectMember(SYSTEM_CONTEXT, {
+					projectId: project.id,
+					userId: user.id,
+					role: 'owner',
+					joinedAt: now
+				});
 			}
+			// In multi-tenant mode no org is created here; the user lands on a
+			// "create your organization" flow after sign-in.
 
 			// §1a: `createUserWithPassword` doesn't return a session — matches
 			// Supabase's admin.createUser contract. Sign in to mint one.

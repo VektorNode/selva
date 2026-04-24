@@ -14,11 +14,11 @@ module.exports = {
 			env: {
 				PORT: 3000,
 				ORIGIN: 'http://your-public-ip',
-				COMPUTE_SERVER_URL: 'https://your-compute-server',
 				BODY_SIZE_LIMIT: 'Infinity',
 				// Path to local data directory (use absolute path)
 				DATA_PATH: '/absolute/path/to/definitions',
-				COMPUTE_API_KEY: 'your-api-key',
+				// Rhino.Compute server URL + API key are configured in the admin dashboard
+				// (/admin/compute), not here.
 				NODE_ENV: 'production',
 				ADMIN_PASSWORD: 'your-secure-password',
 				// Used to sign admin session cookies — must be stable across restarts.

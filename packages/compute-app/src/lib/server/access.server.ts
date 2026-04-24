@@ -69,10 +69,8 @@ export async function requireCanEdit(locals: Locals, projectId: string): Promise
 	const project = await getProjectProvider().getProject(ctx, projectId);
 	if (!project) throw error(404, 'Project not found');
 
-	if (project.visibility === 'private') {
-		const allowed = await getProjectProvider().canEdit(ctx, projectId);
-		if (!allowed) throw error(403, 'You are not a member of this project.');
-	}
+	const allowed = await getProjectProvider().canEdit(ctx, projectId);
+	if (!allowed) throw error(403, 'You do not have permission to edit this project.');
 	return user;
 }
 
@@ -138,10 +136,19 @@ export async function requireCanViewProject(
  * record so callers don't re-fetch. Throws 404 if the definition is missing.
  */
 export async function requireEditableDefinition(locals: Locals, guid: string) {
-	const { ctx } = requireAuthed(locals);
+	const { user, ctx } = requireAuthed(locals);
 	const record = await getDefinitionMeta().get(ctx, guid);
 	if (!record) throw error(404, 'Definition not found');
 	await requireCanEdit(locals, record.projectId);
+	if (!hasPermission(ctx, 'platform_admin')) {
+		const allowed = await getDefinitionMeta().canEditDefinition(
+			ctx,
+			record.projectId,
+			user.id,
+			record.ownerId
+		);
+		if (!allowed) throw error(403, 'You do not have permission to edit this definition.');
+	}
 	return { record, ctx };
 }
 

@@ -1,38 +1,100 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import type { PageData } from './$types';
-	import { ArrowRight } from '@lucide/svelte';
-	import { Search } from 'selva-shared';
+	import { goto, invalidateAll } from '$app/navigation';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { Search, toast, PageHeader, PageContent } from 'selva-shared';
+	import { ArrowRight, ChevronDown } from '@lucide/svelte';
 	import type { DefinitionRecord } from '@selva/platform';
+	import type { PageData } from './$types';
+	import ToolCard from './_components/ToolCard.svelte';
+	import ToolListView from './_components/ToolListView.svelte';
+	import ViewToggle from './_components/ViewToggle.svelte';
+	import { formatRelative } from './_components/toolStyles';
+	import UserChip from '$lib/components/UserChip.svelte';
+
+	type ViewMode = 'grid' | 'list';
 
 	let { data }: { data: PageData } = $props();
 
+	// ── State ─────────────────────────────────────────────────────────────
 	let searchQuery = $state('');
 	let activeProjectId = $state<string | null>(null);
+	let activeCategory = $state<string | null>(null);
+	let activeTag = $state<string | null>(null);
+	let viewMode = $state<ViewMode>('grid');
+	let expandedProjects = $state<Set<string>>(new Set());
 	let loadingGuid = $state<string | null>(null);
+	let starBusyGuid = $state<string | null>(null);
 
-	const projectList = $derived(Object.values(data.projects));
+	const PREVIEW_COUNT = 4;
 
-	const filterRecords = (list: DefinitionRecord[]) => {
-		let out = list;
-		if (activeProjectId) out = out.filter((r) => r.projectId === activeProjectId);
+	// Client-side starred set so optimistic toggles feel instant.
+	const starredIds = $derived(new Set(data.starredRecords.map((r) => r.guid)));
+
+	// ── Derived lists ─────────────────────────────────────────────────────
+	const allRecords = $derived<DefinitionRecord[]>([...data.starredRecords, ...data.records]);
+
+	const projectsWithDefinitions = $derived(new Set(allRecords.map((r) => r.projectId)));
+
+	const projectList = $derived(
+		Object.values(data.projects).filter((p) => projectsWithDefinitions.has(p.id))
+	);
+
+	const availableCategories = $derived(
+		Array.from(new Set(allRecords.map((r) => r.category).filter((c): c is string => !!c))).sort()
+	);
+
+	const availableTags = $derived(
+		Array.from(new Set(allRecords.flatMap((r) => r.tags ?? []))).sort()
+	);
+
+	function matches(r: DefinitionRecord): boolean {
+		if (activeProjectId && r.projectId !== activeProjectId) return false;
+		if (activeCategory && r.category !== activeCategory) return false;
+		if (activeTag && !(r.tags ?? []).includes(activeTag)) return false;
 		if (searchQuery.trim()) {
 			const q = searchQuery.toLowerCase();
-			out = out.filter(
-				(r) =>
-					r.displayName?.toLowerCase().includes(q) ||
-					r.description?.toLowerCase().includes(q) ||
-					r.category?.toLowerCase().includes(q) ||
-					r.tags?.some((t) => t.toLowerCase().includes(q))
-			);
+			const hay = [r.displayName, r.description, r.category, ...(r.tags ?? [])]
+				.filter(Boolean)
+				.join(' ')
+				.toLowerCase();
+			if (!hay.includes(q)) return false;
 		}
-		return out;
-	};
+		return true;
+	}
 
-	const filteredStarred = $derived(filterRecords(data.starredRecords));
-	const filteredAll = $derived(filterRecords(data.records));
-	const totalVisible = $derived(filteredStarred.length + filteredAll.length);
+	const filteredRecords = $derived(allRecords.filter(matches));
 
+	const hasAnyFilter = $derived(
+		searchQuery.trim() !== '' ||
+			activeProjectId !== null ||
+			activeCategory !== null ||
+			activeTag !== null
+	);
+
+	// Group by project, keeping only projects with at least one matching record.
+	const grouped = $derived.by(() => {
+		const byProject = new SvelteMap<string, DefinitionRecord[]>();
+		for (const r of filteredRecords) {
+			const list = byProject.get(r.projectId);
+			if (list) list.push(r);
+			else byProject.set(r.projectId, [r]);
+		}
+		// Order projects by the order they appear in data.projects, unknown ids last.
+		const ordered: { id: string; name: string; records: DefinitionRecord[] }[] = [];
+		for (const p of projectList) {
+			const records = byProject.get(p.id);
+			if (records && records.length > 0) {
+				ordered.push({ id: p.id, name: p.name, records });
+				byProject.delete(p.id);
+			}
+		}
+		for (const [id, records] of byProject) {
+			ordered.push({ id, name: data.projects[id]?.name ?? 'Unknown project', records });
+		}
+		return ordered;
+	});
+
+	// ── Actions ───────────────────────────────────────────────────────────
 	function open(guid: string) {
 		loadingGuid = guid;
 		goto(`/app/${guid}`).catch(() => {
@@ -40,63 +102,137 @@
 		});
 	}
 
-	function formatRelative(iso: string) {
-		const diff = Date.now() - new Date(iso).getTime();
-		const m = Math.floor(diff / 60000);
-		if (m < 60) return `${m}m ago`;
-		const h = Math.floor(m / 60);
-		if (h < 24) return `${h}h ago`;
-		return `${Math.floor(h / 24)}d ago`;
+	async function toggleStar(guid: string) {
+		starBusyGuid = guid;
+		const isStarred = starredIds.has(guid);
+		try {
+			const res = await fetch(`/api/me/starred/${guid}`, {
+				method: isStarred ? 'DELETE' : 'POST'
+			});
+			if (!res.ok) throw new Error(`${res.status}`);
+			await invalidateAll();
+		} catch {
+			toast.error(isStarred ? 'Failed to unstar' : 'Failed to star');
+		} finally {
+			starBusyGuid = null;
+		}
 	}
 
-	function categoryLabel(r: DefinitionRecord, project?: { id: string; name: string }) {
-		return (r.category ?? project?.name ?? '').toUpperCase();
+	function toggleExpanded(projectId: string) {
+		const next = new SvelteSet(expandedProjects);
+		if (next.has(projectId)) next.delete(projectId);
+		else next.add(projectId);
+		expandedProjects = next;
+	}
+
+	function clearFilters() {
+		searchQuery = '';
+		activeProjectId = null;
+		activeCategory = null;
+		activeTag = null;
 	}
 </script>
 
-<div class="px-6 pb-20">
-	<!-- Hero search -->
-	<div class="mx-auto max-w-2xl pt-14 pb-12 text-center">
-		<Search
-			bind:value={searchQuery}
-			placeholder="Search tools…"
-			autofocus
-			clearable
-			containerClass="mx-auto mt-8 max-w-lg"
-			class="h-12 rounded-xl text-[14px] shadow-sm"
-		/>
+<PageHeader>
+	{#snippet rightContent()}
+		<UserChip />
+	{/snippet}
+</PageHeader>
 
-		<!-- Project filter pills -->
+<PageContent>
+	<div class="mx-auto max-w-6xl px-6 pt-6 pb-20">
+		<!-- ── Header ───────────────────────────────────────────────────── -->
+		<div class="flex flex-wrap items-center gap-3">
+			<h1 class="text-lg font-semibold">Tools</h1>
+			<span class="text-muted-foreground text-[12px]">
+				{filteredRecords.length}
+				{filteredRecords.length === 1 ? 'tool' : 'tools'}
+				{#if hasAnyFilter}<button
+						class="hover:text-foreground ml-2 underline underline-offset-2"
+						onclick={clearFilters}>clear filters</button
+					>{/if}
+			</span>
+			<div class="ml-auto">
+				<ViewToggle mode={viewMode} onChange={(m) => (viewMode = m)} />
+			</div>
+		</div>
+
+		<!-- ── Search + filter row ──────────────────────────────────────── -->
+		<div class="mt-4 flex flex-wrap items-center gap-2">
+			<Search
+				bind:value={searchQuery}
+				placeholder="Search tools, descriptions, tags…"
+				clearable
+				containerClass="min-w-[240px] flex-1"
+				class="h-9 rounded-lg text-[13px]"
+			/>
+
+			{#if availableCategories.length > 1}
+				<div class="relative">
+					<select
+						bind:value={activeCategory}
+						class="border-border bg-card h-9 appearance-none rounded-lg border py-1 pr-8 pl-3 text-[13px]"
+					>
+						<option value={null}>All categories</option>
+						{#each availableCategories as cat (cat)}
+							<option value={cat}>{cat}</option>
+						{/each}
+					</select>
+					<ChevronDown
+						class="text-muted-foreground pointer-events-none absolute top-1/2 right-2 h-4 w-4 -translate-y-1/2"
+					/>
+				</div>
+			{/if}
+
+			{#if availableTags.length > 1}
+				<div class="relative">
+					<select
+						bind:value={activeTag}
+						class="border-border bg-card h-9 appearance-none rounded-lg border py-1 pr-8 pl-3 text-[13px]"
+					>
+						<option value={null}>All tags</option>
+						{#each availableTags as tag (tag)}
+							<option value={tag}>#{tag}</option>
+						{/each}
+					</select>
+					<ChevronDown
+						class="text-muted-foreground pointer-events-none absolute top-1/2 right-2 h-4 w-4 -translate-y-1/2"
+					/>
+				</div>
+			{/if}
+		</div>
+
+		<!-- ── Project pills ────────────────────────────────────────────── -->
 		{#if projectList.length > 1}
-			<div class="mt-4 flex flex-wrap justify-center gap-1.5">
+			<div class="mt-3 flex flex-wrap gap-1.5">
 				<button
 					onclick={() => (activeProjectId = null)}
-					class="rounded-full px-3 py-1 font-mono text-[11px] tracking-wide uppercase transition-colors {activeProjectId ===
-					null
+					class="rounded-full px-3 py-1 text-[12px] transition-colors {activeProjectId === null
 						? 'bg-foreground text-background'
-						: 'bg-muted text-muted-foreground hover:text-foreground'}">All</button
+						: 'bg-muted text-muted-foreground hover:text-foreground'}"
 				>
+					All projects
+				</button>
 				{#each projectList as p (p.id)}
 					<button
 						onclick={() => (activeProjectId = activeProjectId === p.id ? null : p.id)}
-						class="rounded-full px-3 py-1 font-mono text-[11px] tracking-wide uppercase transition-colors {activeProjectId ===
-						p.id
+						class="rounded-full px-3 py-1 text-[12px] transition-colors {activeProjectId === p.id
 							? 'bg-foreground text-background'
-							: 'bg-muted text-muted-foreground hover:text-foreground'}">{p.name}</button
+							: 'bg-muted text-muted-foreground hover:text-foreground'}"
 					>
+						{p.name}
+					</button>
 				{/each}
 			</div>
 		{/if}
-	</div>
 
-	<div class="mx-auto max-w-5xl space-y-14">
-		<!-- Recent runs -->
-		{#if data.recentRuns.length > 0 && !searchQuery && !activeProjectId}
-			<section>
-				<div class="mb-4 flex items-baseline justify-between">
-					<span class="text-muted-foreground font-mono text-[11px] tracking-widest uppercase"
-						>Recent runs</span
-					>
+		<!-- ── Recent runs (only with no filters) ───────────────────────── -->
+		{#if data.recentRuns.length > 0 && !hasAnyFilter}
+			<section class="mt-10">
+				<div class="mb-3 flex items-baseline justify-between">
+					<span class="text-muted-foreground font-mono text-[11px] tracking-widest uppercase">
+						Recent runs
+					</span>
 					<span class="text-muted-foreground text-[12px]">Resume where you left off</span>
 				</div>
 				<div class="border-border bg-card overflow-hidden rounded-xl border">
@@ -104,8 +240,8 @@
 						<button
 							onclick={() => open(run.definitionId)}
 							disabled={loadingGuid === run.definitionId}
-							class="hover:bg-muted/50 group grid w-full items-center gap-4 px-5 py-3.5 text-left text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-60
-								{i < Math.min(data.recentRuns.length, 5) - 1 ? 'border-border border-b' : ''}"
+							class="hover:bg-muted/40 group grid w-full items-center gap-4 px-4 py-3 text-left text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-60
+							{i < Math.min(data.recentRuns.length, 5) - 1 ? 'border-border border-b' : ''}"
 							style="grid-template-columns: 1fr 120px auto"
 						>
 							<span class="truncate font-semibold">{run.definitionName}</span>
@@ -123,158 +259,78 @@
 			</section>
 		{/if}
 
-		<!-- Starred / Pinned -->
-		{#if filteredStarred.length > 0}
-			<section>
-				<div class="mb-4 flex items-baseline justify-between">
-					<span class="text-muted-foreground font-mono text-[11px] tracking-widest uppercase"
-						>Pinned for you</span
-					>
-					<span class="text-muted-foreground text-[12px]">{filteredStarred.length} tools</span>
-				</div>
-				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					{#each filteredStarred as record (record.guid)}
-						{@const project = data.projects[record.projectId]}
-						<button
-							onclick={() => open(record.guid)}
-							disabled={loadingGuid === record.guid}
-							class="group border-border bg-card flex flex-col overflow-hidden rounded-xl border text-left shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-shadow hover:shadow-[0_10px_30px_-16px_rgba(0,0,0,0.18)] disabled:cursor-not-allowed disabled:opacity-60"
-						>
-							<div class="border-border bg-muted relative aspect-[16/10] overflow-hidden border-b">
-								{#if record.coverImage}
-									<img
-										src={record.coverImage}
-										alt={record.displayName}
-										class="absolute inset-0 h-full w-full object-cover"
-									/>
-								{/if}
-								<div class="absolute top-2.5 left-2.5">
-									<span
-										class="border-border bg-card text-muted-foreground rounded border px-1.5 py-px font-mono text-[10px]"
-										>★ PINNED</span
-									>
-								</div>
-								{#if loadingGuid === record.guid}
-									<div class="absolute inset-0 flex items-center justify-center bg-black/25">
-										<div
-											class="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"
-										></div>
-									</div>
-								{/if}
-							</div>
-							<div class="flex flex-1 flex-col p-3.5">
-								<div class="flex items-start justify-between gap-2">
-									<p class="truncate text-[14.5px] font-semibold">{record.displayName}</p>
-									{#if categoryLabel(record, project)}
-										<span class="text-muted-foreground mt-0.5 shrink-0 font-mono text-[10.5px]"
-											>{categoryLabel(record, project)}</span
-										>
-									{/if}
-								</div>
-								{#if record.description}
-									<p class="text-muted-foreground mt-1 line-clamp-2 text-[12.5px] leading-relaxed">
-										{record.description}
-									</p>
-								{/if}
-								<div class="mt-auto">
-									<hr class="border-border my-3" />
-									<div
-										class="text-muted-foreground flex items-center justify-between text-[11.5px]"
-									>
-										<span class="font-mono"
-											>{record.runCount > 0
-												? `${record.runCount.toLocaleString()} runs`
-												: 'No runs yet'}</span
-										>
-										<span
-											class="text-foreground flex items-center gap-1 font-medium opacity-0 transition-opacity group-hover:opacity-100"
-											>Open <ArrowRight class="h-3 w-3" /></span
-										>
-									</div>
-								</div>
-							</div>
-						</button>
-					{/each}
-				</div>
-			</section>
-		{/if}
+		<!-- ── Grouped project sections ─────────────────────────────────── -->
+		{#if grouped.length > 0}
+			<div class="mt-10 space-y-10">
+				{#each grouped as group (group.id)}
+					{@const expanded = expandedProjects.has(group.id)}
+					{@const visible = expanded ? group.records : group.records.slice(0, PREVIEW_COUNT)}
+					{@const hidden = group.records.length - visible.length}
 
-		<!-- All tools -->
-		{#if filteredAll.length > 0}
-			<section>
-				<div class="mb-4 flex items-baseline justify-between">
-					<span class="text-muted-foreground font-mono text-[11px] tracking-widest uppercase">
-						{filteredStarred.length > 0 ? 'All tools' : searchQuery ? 'Results' : 'All tools'}
-					</span>
-					<span class="text-muted-foreground text-[12px]">{filteredAll.length} available</span>
-				</div>
-				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					{#each filteredAll as record (record.guid)}
-						{@const project = data.projects[record.projectId]}
-						<button
-							onclick={() => open(record.guid)}
-							disabled={loadingGuid === record.guid}
-							class="group border-border bg-card flex flex-col overflow-hidden rounded-xl border text-left shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-shadow hover:shadow-[0_10px_30px_-16px_rgba(0,0,0,0.18)] disabled:cursor-not-allowed disabled:opacity-60"
-						>
-							<div class="border-border bg-muted relative aspect-[16/10] overflow-hidden border-b">
-								{#if record.coverImage}
-									<img
-										src={record.coverImage}
-										alt={record.displayName}
-										class="absolute inset-0 h-full w-full object-cover"
-									/>
-								{/if}
-								{#if loadingGuid === record.guid}
-									<div class="absolute inset-0 flex items-center justify-center bg-black/25">
-										<div
-											class="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"
-										></div>
-									</div>
-								{/if}
+					<section>
+						<div class="mb-3 flex items-baseline justify-between">
+							<div class="flex items-baseline gap-2">
+								<span class="text-[15px] font-semibold">{group.name}</span>
+								<span class="text-muted-foreground text-[12px]">
+									{group.records.length}
+									{group.records.length === 1 ? 'tool' : 'tools'}
+								</span>
 							</div>
-							<div class="flex flex-1 flex-col p-3.5">
-								<div class="flex items-start justify-between gap-2">
-									<p class="truncate text-[14.5px] font-semibold">{record.displayName}</p>
-									{#if categoryLabel(record, project)}
-										<span class="text-muted-foreground mt-0.5 shrink-0 font-mono text-[10.5px]"
-											>{categoryLabel(record, project)}</span
-										>
-									{/if}
-								</div>
-								{#if record.description}
-									<p class="text-muted-foreground mt-1 line-clamp-2 text-[12.5px] leading-relaxed">
-										{record.description}
-									</p>
-								{/if}
-								<div class="mt-auto">
-									<hr class="border-border my-3" />
-									<div
-										class="text-muted-foreground flex items-center justify-between text-[11.5px]"
-									>
-										<span class="font-mono"
-											>{record.runCount > 0
-												? `${record.runCount.toLocaleString()} runs`
-												: 'No runs yet'}</span
-										>
-										<span
-											class="text-foreground flex items-center gap-1 font-medium opacity-0 transition-opacity group-hover:opacity-100"
-											>Open <ArrowRight class="h-3 w-3" /></span
-										>
-									</div>
-								</div>
-							</div>
-						</button>
-					{/each}
-				</div>
-			</section>
-		{/if}
+						</div>
 
-		<!-- Empty -->
-		{#if totalVisible === 0}
+						{#if viewMode === 'grid'}
+							<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+								{#each visible as record (record.guid)}
+									<ToolCard
+										{record}
+										starred={starredIds.has(record.guid)}
+										loading={loadingGuid === record.guid}
+										starBusy={starBusyGuid === record.guid}
+										onOpen={open}
+										onToggleStar={toggleStar}
+									/>
+								{/each}
+							</div>
+						{:else}
+							<ToolListView
+								records={visible}
+								{starredIds}
+								{loadingGuid}
+								{starBusyGuid}
+								onOpen={open}
+								onToggleStar={toggleStar}
+							/>
+						{/if}
+
+						{#if hidden > 0 || expanded}
+							<div class="mt-3 flex justify-center">
+								<button
+									onclick={() => toggleExpanded(group.id)}
+									class="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-medium transition-colors"
+								>
+									{#if expanded}
+										Show less
+									{:else}
+										Show all {group.records.length}
+										<ArrowRight class="h-3 w-3" />
+									{/if}
+								</button>
+							</div>
+						{/if}
+					</section>
+				{/each}
+			</div>
+		{:else}
+			<!-- ── Empty state ─────────────────────────────────────────────── -->
 			<div class="flex flex-col items-center justify-center py-24 text-center">
-				{#if searchQuery}
-					<p class="text-sm font-medium">No tools match "{searchQuery}"</p>
-					<p class="text-muted-foreground mt-1 text-xs">Try a different search term.</p>
+				{#if hasAnyFilter}
+					<p class="text-sm font-medium">No tools match your filters</p>
+					<button
+						class="text-muted-foreground hover:text-foreground mt-2 text-xs underline underline-offset-2"
+						onclick={clearFilters}
+					>
+						Clear all filters
+					</button>
 				{:else}
 					<p class="text-sm font-medium">No tools available yet</p>
 					<p class="text-muted-foreground mt-1 text-xs">
@@ -284,4 +340,4 @@
 			</div>
 		{/if}
 	</div>
-</div>
+</PageContent>

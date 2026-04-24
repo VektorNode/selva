@@ -1,10 +1,13 @@
 import { env } from '$env/dynamic/private';
 import rawConfig from '../../../../../selva.config.js';
-import type { SelvaConfig, SelvaConfigFactory } from '@selva/platform';
+import type { SelvaConfig, SelvaConfigFactory, TenancyMode } from '@selva/platform';
 import { DefinitionService } from './definitions/DefinitionService.js';
 
 const _raw = rawConfig as SelvaConfig | SelvaConfigFactory;
 export const providers: SelvaConfig = typeof _raw === 'function' ? _raw(env) : _raw;
+
+/** Tenancy model from config; defaults to `single` when unset. */
+export const tenancy: TenancyMode = providers.tenancy ?? 'single';
 
 export const definitionService = new DefinitionService(providers.data, providers.storage);
 
