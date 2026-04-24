@@ -14,7 +14,7 @@ catalogs:
       version: 5.2.1
     '@lucide/svelte':
       specifier: ^1.9.0
-      version: 1.9.0
+      version: 1.11.0
     '@sveltejs/adapter-auto':
       specifier: ^7.0.1
       version: 7.0.1
@@ -56,7 +56,7 @@ catalogs:
       version: 4.4.6
     svelte-sonner:
       specifier: ^1.0.7
-      version: 1.1.0
+      version: 1.1.1
     tailwind-merge:
       specifier: ^3.4.0
       version: 3.5.0
@@ -201,7 +201,7 @@ importers:
     devDependencies:
       '@lucide/svelte':
         specifier: 'catalog:'
-        version: 1.9.0(svelte@5.55.5(@typescript-eslint/types@8.59.0))
+        version: 1.11.0(svelte@5.55.5(@typescript-eslint/types@8.59.0))
       '@selva/config':
         specifier: workspace:*
         version: link:../config
@@ -219,7 +219,7 @@ importers:
     dependencies:
       '@lucide/svelte':
         specifier: 'catalog:'
-        version: 1.9.0(svelte@5.55.5(@typescript-eslint/types@8.59.0))
+        version: 1.11.0(svelte@5.55.5(@typescript-eslint/types@8.59.0))
       '@selva/platform':
         specifier: workspace:*
         version: link:../platform
@@ -333,7 +333,7 @@ importers:
         version: 5.2.1(svelte@5.55.5(@typescript-eslint/types@8.59.0))
       '@lucide/svelte':
         specifier: 'catalog:'
-        version: 1.9.0(svelte@5.55.5(@typescript-eslint/types@8.59.0))
+        version: 1.11.0(svelte@5.55.5(@typescript-eslint/types@8.59.0))
       clsx:
         specifier: 'catalog:'
         version: 2.1.1
@@ -348,7 +348,7 @@ importers:
         version: 1.4.1(three@0.184.0)
       svelte-sonner:
         specifier: 'catalog:'
-        version: 1.1.0(svelte@5.55.5(@typescript-eslint/types@8.59.0))
+        version: 1.1.1(svelte@5.55.5(@typescript-eslint/types@8.59.0))
       tailwind-merge:
         specifier: 'catalog:'
         version: 3.5.0
@@ -398,7 +398,7 @@ importers:
         version: 22.19.17
       supabase:
         specifier: ^2.0.0
-        version: 2.95.1
+        version: 2.95.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1047,8 +1047,8 @@ packages:
   '@jsdevtools/ono@7.1.3':
     resolution: {integrity: sha512-4JQNk+3mVzK3xh2rqd6RB4J46qUR19azEHBneZyTZM+c456qOrbbM/5xcR8huNCCcbVt7+UmizG6GuUvPvKUYg==}
 
-  '@lucide/svelte@1.9.0':
-    resolution: {integrity: sha512-+5RmY0tqeuGGbiI2BnyDp1Ft/EP7AKReStHeFEKJ0mPcW1w51Tm41R2GvUfz0sGLJhmRhVAe2zKaTfqrcpJqqg==}
+  '@lucide/svelte@1.11.0':
+    resolution: {integrity: sha512-4I9b+RuxIf8OkGG883bIYDIXjqVOH0ClgrB0j+jI6CrzEziroEwxiubQwW2xKT3esdJcRVTtW9RtCQM9D+r+ew==}
     peerDependencies:
       svelte: ^5
 
@@ -2654,8 +2654,8 @@ packages:
   style-to-object@1.0.14:
     resolution: {integrity: sha512-LIN7rULI0jBscWQYaSswptyderlarFkjQ+t79nzty8tcIAceVomEVlLzH5VP4Cmsv6MtKhs7qaAiwlcp+Mgaxw==}
 
-  supabase@2.95.1:
-    resolution: {integrity: sha512-zQY21c8xVtWsU1SuhlLsJKzfwoCfZHsdwQ/H1B8uIZzfVAhMS/cdZ4CqONY4WBlZ9Cn2N4ftcAPMxUC4Pm9sdA==}
+  supabase@2.95.2:
+    resolution: {integrity: sha512-/inQRAchr5ciGbqR3VEVq7boQUhcQ6QDENZgyIiPRm7UYw6+slIihFjvhisTo5Kd9NK6RJID7L2N2+ct+xAqNQ==}
     engines: {npm: '>=8'}
     hasBin: true
 
@@ -2689,8 +2689,8 @@ packages:
       svelte:
         optional: true
 
-  svelte-sonner@1.1.0:
-    resolution: {integrity: sha512-3lYM6ZIqWe+p9vwwWHGWP/ZdvHiUtzURsud2quIxivrX4rvpXh6i+geBGn0m3JS6KwW6W8VgbOl3xQMcDuh6gg==}
+  svelte-sonner@1.1.1:
+    resolution: {integrity: sha512-5cd3p7wa4cq0NsqslMwdlPb7x1JglEZ/GKrLePWNr5bCxR1nagAVrY01FRFrXfUGs41miLt3C327+8XJo5BzZw==}
     peerDependencies:
       svelte: ^5.0.0
 
@@ -3517,7 +3517,7 @@ snapshots:
 
   '@jsdevtools/ono@7.1.3': {}
 
-  '@lucide/svelte@1.9.0(svelte@5.55.5(@typescript-eslint/types@8.59.0))':
+  '@lucide/svelte@1.11.0(svelte@5.55.5(@typescript-eslint/types@8.59.0))':
     dependencies:
       svelte: 5.55.5(@typescript-eslint/types@8.59.0)
 
@@ -5009,7 +5009,7 @@ snapshots:
     dependencies:
       inline-style-parser: 0.2.7
 
-  supabase@2.95.1:
+  supabase@2.95.2:
     dependencies:
       bin-links: 6.0.0
       https-proxy-agent: 9.0.0
@@ -5052,7 +5052,7 @@ snapshots:
     optionalDependencies:
       svelte: 5.55.5(@typescript-eslint/types@8.59.0)
 
-  svelte-sonner@1.1.0(svelte@5.55.5(@typescript-eslint/types@8.59.0)):
+  svelte-sonner@1.1.1(svelte@5.55.5(@typescript-eslint/types@8.59.0)):
     dependencies:
       runed: 0.28.0(svelte@5.55.5(@typescript-eslint/types@8.59.0))
       svelte: 5.55.5(@typescript-eslint/types@8.59.0)

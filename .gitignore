@@ -49,6 +49,11 @@ _ReSharper*/
 Thumbs.db
 ehthumbs.db
 
+# Claude Code & agent config (personal/local)
+.claude/
+.agents/
+skills-lock.json
+
 # Local environment & config files
 .env
 .env.local
