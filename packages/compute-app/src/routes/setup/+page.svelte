@@ -46,6 +46,16 @@
 			</div>
 
 			<div class="space-y-2">
+				<Label for="displayName">Display name</Label>
+				<Input
+					id="displayName"
+					name="displayName"
+					type="text"
+					placeholder="Jane Smith"
+				/>
+			</div>
+
+			<div class="space-y-2">
 				<Label for="email">Email</Label>
 				<Input id="email" name="email" type="email" required placeholder="admin@example.com" />
 			</div>

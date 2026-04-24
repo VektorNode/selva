@@ -8,7 +8,12 @@ import {
 	type Project
 } from '@selva/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
-import { getOrganizationProvider, getProjectProvider, tenancy } from '$lib/server/providers.server';
+import {
+	getOrganizationProvider,
+	getProjectProvider,
+	getUserProfileStore,
+	tenancy
+} from '$lib/server/providers.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
 
 function slugify(raw: string): string {
@@ -37,6 +42,7 @@ export const actions = {
 	default: async ({ request, cookies }) => {
 		const data = await request.formData();
 		const companyName = (data.get('companyName') as string | null)?.trim() ?? '';
+		const displayName = (data.get('displayName') as string | null)?.trim() || undefined;
 		const email = data.get('email') as string | null;
 		const password = data.get('password') as string | null;
 		const confirm = data.get('confirm') as string | null;
@@ -73,6 +79,9 @@ export const actions = {
 			const user = await passwordAuth.createUserWithPassword(email, password, [
 				...ALL_PLATFORM_PERMISSIONS
 			]);
+			if (displayName) {
+				await getUserProfileStore().updateProfile(user.id, { displayName });
+			}
 
 			if (tenancy === 'single') {
 				// Explicitly bootstrap the single org and a default project. Adapters
