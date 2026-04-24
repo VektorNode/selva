@@ -122,7 +122,24 @@ export interface IDefinitionStore {
 		projectId: string,
 		opts?: DefinitionListOptions
 	): Promise<Page<DefinitionRecord>>;
-	listPublic(ctx: RequestContext, opts?: DefinitionListOptions): Promise<Page<DefinitionRecord>>;
+	/**
+	 * List definitions whose parent project has `visibility === 'public'`.
+	 *
+	 * Scope:
+	 * - When `orgId` is provided, restrict to public projects in that org.
+	 * - When `orgId` is omitted, list public projects across every org on
+	 *   the instance. Adapters with tenant isolation (RLS) MUST still apply
+	 *   whatever cross-org rules they enforce — `public` means "publicly
+	 *   visible within the tenant boundary the query already respects",
+	 *   not "bypass all auth."
+	 *
+	 * Filtering by definition `status` uses `opts.statuses` as usual;
+	 * `includePending` still hides `pending` records by default.
+	 */
+	listPublic(
+		ctx: RequestContext,
+		opts?: DefinitionListOptions & { orgId?: string }
+	): Promise<Page<DefinitionRecord>>;
 	get(ctx: RequestContext, guid: string): Promise<DefinitionRecord | null>;
 	create(ctx: RequestContext, record: DefinitionRecord): Promise<void>;
 	update(ctx: RequestContext, guid: string, patch: DefinitionRecordPatch): Promise<void>;

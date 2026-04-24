@@ -1,12 +1,14 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import sharp from 'sharp';
+import { transcodeImageIfNeeded } from '@selva/platform/storage';
 import type { IStorageProvider } from '@selva/platform/storage';
 
 /**
  * Filesystem implementation of IStorageProvider.
  * Files are stored under DATA_PATH/{path}.
- * Images (*.webp, *.jpg, etc.) are auto-transcoded to WebP on put().
+ * Images are auto-transcoded to WebP on put() via the shared platform helper
+ * (`transcodeImageIfNeeded`) — the same helper the Supabase adapter uses,
+ * so both providers produce identical bytes for the same upload.
  */
 export class LocalStorageProvider implements IStorageProvider {
 	private readonly basePath: string;
@@ -48,26 +50,13 @@ export class LocalStorageProvider implements IStorageProvider {
 	}
 
 	async put(storagePath: string, data: Uint8Array, contentType?: string): Promise<void> {
-		const fullPath = this.resolvePath(storagePath);
+		// Normalize images through the shared transcoder — rewrites `.png` → `.webp`,
+		// caps dimensions, and re-encodes at the platform's canonical quality.
+		// Non-images pass through untouched.
+		const transcoded = await transcodeImageIfNeeded(data, contentType, storagePath);
+		const fullPath = this.resolvePath(transcoded.path);
 		await fs.mkdir(path.dirname(fullPath), { recursive: true });
-
-		// Auto-transcode images to WebP
-		if (contentType?.startsWith('image/') && !storagePath.endsWith('.webp')) {
-			const compressed = await sharp(Buffer.from(data))
-				.resize({ width: 1200, withoutEnlargement: true })
-				.webp({ quality: 85 })
-				.toBuffer();
-			await fs.writeFile(fullPath, compressed);
-		} else if (contentType === 'image/webp' || storagePath.endsWith('.webp')) {
-			// Already webp — still run through sharp to ensure correct dimensions/quality
-			const compressed = await sharp(Buffer.from(data))
-				.resize({ width: 1200, withoutEnlargement: true })
-				.webp({ quality: 85 })
-				.toBuffer();
-			await fs.writeFile(fullPath, compressed);
-		} else {
-			await fs.writeFile(fullPath, Buffer.from(data));
-		}
+		await fs.writeFile(fullPath, Buffer.from(transcoded.data));
 	}
 
 	async delete(storagePath: string): Promise<void> {

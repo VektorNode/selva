@@ -98,11 +98,42 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		return paginate(this.sortedRecords(records, opts), opts);
 	}
 
-	async listPublic(ctx: RequestContext, opts?: DefinitionListOptions): Promise<Page<DefinitionRecord>> {
-		// In local mode the default project is always 'public', so all ready
-		// definitions are publicly visible. A cloud adapter would join on project
-		// visibility and filter to 'public' projects only.
-		return this.list(ctx, opts);
+	async listPublic(
+		ctx: RequestContext,
+		opts?: DefinitionListOptions & { orgId?: string }
+	): Promise<Page<DefinitionRecord>> {
+		if (!this.projectProvider) {
+			// Pre-wiring fallback: behave as if the default project is public, which
+			// matches the local bootstrap. Once setProjectProvider is called this
+			// branch stops executing.
+			return this.list(ctx, opts);
+		}
+
+		const config = await this.readConfig();
+		const records = Object.values(config.definitions).filter((r): r is DefinitionRecord =>
+			Boolean(r?.displayName)
+		);
+
+		// Resolve each record's project once, in bulk — one getProject call per
+		// unique projectId. Cheap for local scale (single file read behind the scenes).
+		const projectIds = Array.from(new Set(records.map((r) => r.projectId)));
+		const projects = await Promise.all(
+			projectIds.map((id) => this.projectProvider!.getProject(ctx, id))
+		);
+		const publicProjectIds = new Set(
+			projects
+				.filter(
+					(p): p is NonNullable<typeof p> =>
+						p !== null && p.visibility === 'public' && (!opts?.orgId || p.orgId === opts.orgId)
+				)
+				.map((p) => p.id)
+		);
+
+		const publicRecords = this.visibleRecords(
+			records.filter((r) => publicProjectIds.has(r.projectId)),
+			opts
+		);
+		return paginate(this.sortedRecords(publicRecords, opts), opts);
 	}
 
 	async get(_ctx: RequestContext, guid: string): Promise<DefinitionRecord | null> {
@@ -195,7 +226,7 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		definitionOwnerId: string
 	): Promise<boolean> {
 		if (!this.projectProvider) return false;
-		if (hasPermission(ctx.permissions, 'platform_admin')) return true;
+		if (hasPermission(ctx, 'platform_admin')) return true;
 
 		const project = await this.projectProvider.getProject(ctx, projectId);
 		if (!project) return false;

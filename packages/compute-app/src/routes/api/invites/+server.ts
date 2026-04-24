@@ -2,19 +2,28 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import {
-	getInviteStore,
-	getOrganizationProvider
-} from '$lib/server/providers.server';
+import { getInviteStore, getOrganizationProvider } from '$lib/server/providers.server';
 import { requireManageUsers } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
-import { OrgRoleSchema } from '@selva/platform/organizations/schemas';
-import { PermissionSchema, type Invite } from '@selva/platform';
+import {
+	OrgRoleSchema,
+	OrgPermissionSchema,
+	PlatformPermissionSchema,
+	type Invite
+} from '@selva/platform';
+import { splitFlatPermissions } from '$lib/server/permissions-compat.server';
+
+// §1g-core: still accept the legacy flat `permissions[]` from the current admin UI.
+// Platform-scope entries are silently dropped — invites only grant org rights.
+const FlatPermissionSchema = z.union([PlatformPermissionSchema, OrgPermissionSchema]);
 
 const CreateBody = z.object({
-	email: z.string().email('Valid email is required').transform((s) => s.toLowerCase().trim()),
+	email: z
+		.string()
+		.email('Valid email is required')
+		.transform((s) => s.toLowerCase().trim()),
 	orgRole: OrgRoleSchema.default('member'),
-	permissions: z.array(PermissionSchema).default([])
+	permissions: z.array(FlatPermissionSchema).default([])
 });
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -53,6 +62,8 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		const org = orgsPage.items[0];
 		if (!org) throw error(500, 'No organization configured');
 
+		const { org: orgPermissions } = splitFlatPermissions(parsed.data.permissions);
+
 		const now = new Date();
 		const invite: Invite = {
 			id: randomUUID(),
@@ -60,7 +71,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			email: parsed.data.email,
 			orgId: org.id,
 			orgRole: parsed.data.orgRole,
-			permissions: parsed.data.permissions,
+			orgPermissions,
 			invitedBy: user.id,
 			createdAt: now.toISOString(),
 			expiresAt: new Date(now.getTime() + INVITE_TTL_MS).toISOString()

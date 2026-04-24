@@ -1,11 +1,18 @@
 import { error, redirect } from '@sveltejs/kit';
-import type { AuthUser, Permission, RequestContext } from '@selva/platform';
+import type {
+	AuthUser,
+	OrgPermission,
+	PlatformPermission,
+	RequestContext
+} from '@selva/platform';
 import { hasPermission } from '@selva/platform';
 import { getProjectProvider, getDefinitionMeta } from './providers.server.js';
 import { handleApiError } from './api-errors.js';
 
 // Kept for backwards compatibility with existing callers; prefer handleApiError.
 export const throwProviderError = handleApiError;
+
+type AnyPermission = PlatformPermission | OrgPermission;
 
 interface Locals {
 	user?: AuthUser;
@@ -19,18 +26,18 @@ function requireAuthed(locals: Locals): { user: AuthUser; ctx: RequestContext } 
 }
 
 /** Assert the current user holds a specific permission. Throws 403 — use in API routes. */
-export function requirePermission(locals: Locals, permission: Permission): AuthUser {
-	const { user } = requireAuthed(locals);
-	if (!hasPermission(user.permissions, permission)) {
+export function requirePermission(locals: Locals, permission: AnyPermission): AuthUser {
+	const { user, ctx } = requireAuthed(locals);
+	if (!hasPermission(ctx, permission)) {
 		throw error(403, `You don't have permission to do this.`);
 	}
 	return user;
 }
 
 /** Same check but redirects to /admin — use in page load functions. */
-export function assertPagePermission(locals: Locals, permission: Permission): AuthUser {
-	const { user } = requireAuthed(locals);
-	if (!hasPermission(user.permissions, permission)) {
+export function assertPagePermission(locals: Locals, permission: AnyPermission): AuthUser {
+	const { user, ctx } = requireAuthed(locals);
+	if (!hasPermission(ctx, permission)) {
 		redirect(303, '/admin');
 	}
 	return user;
@@ -55,8 +62,8 @@ export const requirePlatformAdmin = (locals: Locals) => requirePermission(locals
 
 export async function requireCanEdit(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	if (hasPermission(user.permissions, 'platform_admin')) return user;
-	if (!hasPermission(user.permissions, 'manage_definitions')) {
+	if (hasPermission(ctx, 'platform_admin')) return user;
+	if (!hasPermission(ctx, 'manage_definitions')) {
 		throw error(403, `You don't have permission to do this.`);
 	}
 	const project = await getProjectProvider().getProject(ctx, projectId);
@@ -71,8 +78,8 @@ export async function requireCanEdit(locals: Locals, projectId: string): Promise
 
 export async function requireCanManage(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	if (hasPermission(user.permissions, 'platform_admin')) return user;
-	if (!hasPermission(user.permissions, 'manage_projects')) {
+	if (hasPermission(ctx, 'platform_admin')) return user;
+	if (!hasPermission(ctx, 'manage_projects')) {
 		throw error(403, `You don't have permission to do this.`);
 	}
 	const allowed = await getProjectProvider().canManage(ctx, projectId);
@@ -96,8 +103,8 @@ export async function requireCanManageMembers(
 	projectId: string
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	if (hasPermission(user.permissions, 'platform_admin')) return user;
-	if (!hasPermission(user.permissions, 'manage_projects')) {
+	if (hasPermission(ctx, 'platform_admin')) return user;
+	if (!hasPermission(ctx, 'manage_projects')) {
 		throw error(403, `You don't have permission to do this.`);
 	}
 	const allowed = await getProjectProvider().canEditProjectSettings(ctx, projectId);
@@ -114,7 +121,7 @@ export async function requireCanViewProject(
 	projectId: string
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	if (hasPermission(user.permissions, 'platform_admin')) return user;
+	if (hasPermission(ctx, 'platform_admin')) return user;
 
 	const project = await getProjectProvider().getProject(ctx, projectId);
 	if (!project) throw error(404, 'Project not found');
@@ -144,7 +151,7 @@ export async function requireCanEditDefinition(
 	definitionOwnerId: string
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	if (!hasPermission(user.permissions, 'manage_definitions')) {
+	if (!hasPermission(ctx, 'manage_definitions')) {
 		throw error(403, `You don't have permission to do this.`);
 	}
 	const allowed = await getDefinitionMeta().canEditDefinition(

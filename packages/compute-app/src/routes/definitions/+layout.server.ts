@@ -3,16 +3,17 @@ import { redirect } from '@sveltejs/kit';
 import { hasPermission } from '@selva/platform';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
-	if (!locals.user) redirect(303, '/login?redirectTo=/definitions');
+	if (!locals.user || !locals.ctx) redirect(303, '/login?redirectTo=/definitions');
 
-	const canManageDefinitions = hasPermission(locals.user.permissions, 'manage_definitions');
-	const canManageProjects = hasPermission(locals.user.permissions, 'manage_projects');
+	const canManageDefinitions = hasPermission(locals.ctx, 'manage_definitions');
+	const canManageProjects = hasPermission(locals.ctx, 'manage_projects');
 
 	if (!canManageDefinitions && !canManageProjects) {
 		redirect(303, '/app');
 	}
 
 	return {
-		permissions: locals.user.permissions
+		platformPermissions: locals.ctx.platformPermissions,
+		orgPermissions: locals.ctx.orgPermissions
 	};
 };

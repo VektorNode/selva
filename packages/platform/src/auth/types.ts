@@ -1,25 +1,18 @@
 import { z } from 'zod';
 
 /**
- * Fine-grained platform permissions.
- * A user may hold any combination. 'platform_admin' implies all others.
+ * Platform-scope permissions. Very limited on purpose — only rights that
+ * apply *across* every organization on the instance. Regular users hold an
+ * empty array; `platform_admin` is reserved for rare roles like support
+ * impersonation and system maintenance.
  */
-export const PermissionSchema = z.enum([
-	'platform_admin',     // superuser — implies all permissions below
-	'manage_users',       // create / edit / delete users
-	'manage_compute',     // configure compute servers
-	'manage_definitions', // upload / edit / delete definitions
-	'manage_projects'     // create / edit / delete projects
+export const PlatformPermissionSchema = z.enum([
+	'platform_admin' // superuser across all orgs — implies every OrgPermission, everywhere
 ]);
-export type Permission = z.infer<typeof PermissionSchema>;
+export type PlatformPermission = z.infer<typeof PlatformPermissionSchema>;
 
-/** Convenience: every permission, including the implied-everything 'platform_admin'. */
-export const ALL_PERMISSIONS: readonly Permission[] = PermissionSchema.options;
-
-/** Returns true if the permission set grants the requested permission. */
-export function hasPermission(permissions: readonly Permission[], permission: Permission): boolean {
-	return permissions.includes('platform_admin') || permissions.includes(permission);
-}
+/** Convenience: every platform permission. */
+export const ALL_PLATFORM_PERMISSIONS: readonly PlatformPermission[] = PlatformPermissionSchema.options;
 
 export interface RecentRun {
 	definitionId: string;
@@ -28,15 +21,20 @@ export interface RecentRun {
 	timestamp: string; // ISO 8601
 }
 
+/**
+ * Identity record returned by an auth provider.
+ *
+ * Carries only what identity providers universally own: id, email, lifecycle
+ * timestamps, platform-scope permissions. Profile state (displayName,
+ * starredDefinitions, recentRuns) lives on `UserProfile` in `IUserProfileStore`
+ * so OIDC providers (Supabase Auth, Entra, Firebase) don't have to stub out
+ * fields they can't own. Callers that need both request them as a pair.
+ */
 export interface AuthUser {
 	id: string;
 	email?: string;
-	displayName?: string;
-	permissions: Permission[];
-	/** Definition GUIDs pinned by this user for quick access. */
-	starredDefinitions: string[];
-	/** Last N solve runs across all definitions, newest first. */
-	recentRuns: RecentRun[];
+	/** Platform-scope permissions. Typically empty; non-empty for Selva-staff roles. */
+	platformPermissions: PlatformPermission[];
 	/** Provider-specific data only — do not store sensitive user information (PII, credentials, tokens). */
 	metadata?: Record<string, unknown>;
 
@@ -49,7 +47,7 @@ export interface AuthUser {
 	 */
 	lastLoginAt?: string;
 	/**
-	 * When true, verifyToken and verifyLoginCredentials MUST return null.
+	 * When true, `verifyToken` and `verifyLogin` MUST return failure.
 	 * Preserves audit trail — prefer disabling over deletion for offboarding,
 	 * compromise response, or any case where history must be retained.
 	 */
@@ -63,3 +61,33 @@ export interface AuthUser {
  * - 'not_supported' — this provider does not implement user management
  */
 export type UserManagementResult = 'ok' | 'not_found' | 'not_supported';
+
+/**
+ * MFA factor metadata returned when a login succeeds at the first step but
+ * needs a second-factor challenge. Providers that don't support MFA never
+ * emit this variant and return `success` / `failed` only.
+ */
+export interface MfaFactor {
+	/** Opaque provider-specific id used with `verifyMfaChallenge`. */
+	id: string;
+	type: 'totp' | 'phone';
+	/** Optional human-readable label shown to the user (e.g. "Authenticator app"). */
+	friendlyName?: string;
+}
+
+/**
+ * Discriminated login outcome.
+ *
+ * - `success` — credentials valid, no further factor needed. Includes the
+ *   session token the provider minted so the caller can set the cookie
+ *   without a separate round-trip.
+ * - `mfa_required` — credentials valid, but the user has an enrolled MFA
+ *   factor. The caller presents a challenge UI and calls
+ *   `verifyMfaChallenge(challengeToken, factorId, code)` to finish.
+ * - `failed` — credentials invalid, user disabled, or rate-limited. `reason`
+ *   is a hint only; UI should use a generic message regardless.
+ */
+export type LoginResult =
+	| { kind: 'success'; user: AuthUser; sessionToken: string }
+	| { kind: 'mfa_required'; challengeToken: string; factors: MfaFactor[] }
+	| { kind: 'failed'; reason?: 'invalid_credentials' | 'disabled' | 'rate_limited' };

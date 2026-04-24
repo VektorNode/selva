@@ -1,5 +1,5 @@
-import type { Permission } from '../auth/types.js';
-import { hasPermission } from '../auth/types.js';
+import type { PlatformPermission } from '../auth/types.js';
+import type { OrgPermission } from '../organizations/schemas.js';
 import type { Project, ProjectMember } from '../projects/types.js';
 import type { OrgMember } from '../organizations/types.js';
 
@@ -16,9 +16,22 @@ import type { OrgMember } from '../organizations/types.js';
  * (RLS in SQL, rules.json in Firestore, code in local/JSON).
  */
 
+function isPlatformAdmin(platformPermissions: readonly PlatformPermission[]): boolean {
+	return platformPermissions.includes('platform_admin');
+}
+
+function hasOrgPermission(
+	orgPermissions: readonly OrgPermission[],
+	permission: OrgPermission
+): boolean {
+	return orgPermissions.includes(permission);
+}
+
 export interface ProjectAccessInput {
-	/** Caller's permissions from RequestContext. */
-	permissions: readonly Permission[];
+	/** Caller's platform-scope permissions. */
+	platformPermissions: readonly PlatformPermission[];
+	/** Caller's org-scope permissions for the project's org. */
+	orgPermissions: readonly OrgPermission[];
 	/** The project being accessed. Null if not found. */
 	project: Project | null;
 	/** The caller's membership in that project. Null if not a member. */
@@ -39,14 +52,14 @@ export function canSolve(_input: ProjectAccessInput): boolean {
  * Can the caller edit definitions in this project?
  * - platform_admin: always
  * - project owner / editor: always
- * - manage_definitions + public project + org member: yes
+ * - manage_definitions (org-scope) + public project + org member: yes
  */
 export function canEdit(input: ProjectAccessInput): boolean {
-	if (hasPermission(input.permissions, 'platform_admin')) return true;
-	const { member, project, orgMember, permissions } = input;
+	if (isPlatformAdmin(input.platformPermissions)) return true;
+	const { member, project, orgMember, orgPermissions } = input;
 	if (member?.role === 'owner' || member?.role === 'editor') return true;
 	if (
-		hasPermission(permissions, 'manage_definitions') &&
+		hasOrgPermission(orgPermissions, 'manage_definitions') &&
 		project?.visibility === 'public' &&
 		orgMember !== null
 	) {
@@ -61,7 +74,7 @@ export function canEdit(input: ProjectAccessInput): boolean {
  * - project owner: yes
  */
 export function canManage(input: ProjectAccessInput): boolean {
-	if (hasPermission(input.permissions, 'platform_admin')) return true;
+	if (isPlatformAdmin(input.platformPermissions)) return true;
 	return input.member?.role === 'owner';
 }
 
@@ -69,19 +82,22 @@ export function canManage(input: ProjectAccessInput): boolean {
  * Can the caller edit project settings (name, slug, description, visibility)?
  * - platform_admin: always
  * - project owner: yes
- * - manage_definitions + project editor: yes
+ * - manage_definitions (org-scope) + project editor: yes
  */
 export function canEditProjectSettings(input: ProjectAccessInput): boolean {
-	if (hasPermission(input.permissions, 'platform_admin')) return true;
-	const { member, permissions } = input;
+	if (isPlatformAdmin(input.platformPermissions)) return true;
+	const { member, orgPermissions } = input;
 	if (member?.role === 'owner') return true;
-	if (hasPermission(permissions, 'manage_definitions') && member?.role === 'editor') return true;
+	if (hasOrgPermission(orgPermissions, 'manage_definitions') && member?.role === 'editor')
+		return true;
 	return false;
 }
 
 export interface DefinitionAccessInput {
-	/** Caller's permissions from RequestContext. */
-	permissions: readonly Permission[];
+	/** Caller's platform-scope permissions. */
+	platformPermissions: readonly PlatformPermission[];
+	/** Caller's org-scope permissions for the definition's org. */
+	orgPermissions: readonly OrgPermission[];
 	/** The project the definition lives in. Null if not found. */
 	project: Project | null;
 	/** Membership record for the *subject* user (usually the caller). */
@@ -101,7 +117,7 @@ export interface DefinitionAccessInput {
  * - private projects: project owner/editor only
  */
 export function canEditDefinition(input: DefinitionAccessInput): boolean {
-	if (hasPermission(input.permissions, 'platform_admin')) return true;
+	if (isPlatformAdmin(input.platformPermissions)) return true;
 	const { project, member, userId, definitionOwnerId } = input;
 	if (!project) return false;
 

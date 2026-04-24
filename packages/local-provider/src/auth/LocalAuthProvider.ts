@@ -4,12 +4,13 @@ import type {
 	IAuthProvider,
 	IPasswordAuth,
 	AuthUser,
-	Permission,
+	LoginResult,
+	PlatformPermission,
 	UserManagementResult,
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { ALL_PERMISSIONS, ProviderError } from '@selva/platform';
+import { ALL_PLATFORM_PERMISSIONS, ProviderError } from '@selva/platform';
 import { signHmacToken, verifyHmacToken } from './hmac.js';
 import { verifyPasswordHash, createLocalUserMetaProvider } from './users.js';
 import type { LocalUserMetaProvider, StoredUser } from './users.js';
@@ -22,24 +23,13 @@ const FALLBACK_ADMIN_ID = 'local-admin';
 function toAuthUser(
 	u: Pick<
 		StoredUser,
-		| 'id'
-		| 'email'
-		| 'displayName'
-		| 'permissions'
-		| 'starredDefinitions'
-		| 'recentRuns'
-		| 'createdAt'
-		| 'lastLoginAt'
-		| 'disabled'
+		'id' | 'email' | 'platformPermissions' | 'createdAt' | 'lastLoginAt' | 'disabled'
 	>
 ): AuthUser {
 	return {
 		id: u.id,
 		email: u.email,
-		displayName: u.displayName,
-		permissions: u.permissions,
-		starredDefinitions: u.starredDefinitions,
-		recentRuns: u.recentRuns,
+		platformPermissions: u.platformPermissions,
 		createdAt: u.createdAt,
 		lastLoginAt: u.lastLoginAt,
 		disabled: u.disabled
@@ -49,9 +39,7 @@ function toAuthUser(
 function fallbackAdmin(): AuthUser {
 	return {
 		id: FALLBACK_ADMIN_ID,
-		permissions: [...ALL_PERMISSIONS],
-		starredDefinitions: [],
-		recentRuns: []
+		platformPermissions: [...ALL_PLATFORM_PERMISSIONS]
 	};
 }
 
@@ -74,36 +62,41 @@ export interface LocalAuthProviderConfig {
 class LocalPasswordAuth implements IPasswordAuth {
 	constructor(
 		private readonly users: LocalUserMetaProvider | undefined,
-		private readonly fallbackAdminPassword: string | undefined
+		private readonly fallbackAdminPassword: string | undefined,
+		private readonly mintToken: (user: AuthUser) => string
 	) {}
 
-	async verifyLoginCredentials(email: string, password: string): Promise<AuthUser | null> {
+	async verifyLogin(email: string, password: string): Promise<LoginResult> {
 		if (this.users) {
 			const user = await this.users.findByEmail(email);
-			if (
-				user &&
-				!user.disabled &&
+			if (!user) {
+				// Fall through to fallback-admin password below.
+			} else if (user.disabled) {
+				return { kind: 'failed', reason: 'disabled' };
+			} else if (
 				user.passwordHash &&
 				(await verifyPasswordHash(password, user.passwordHash))
 			) {
 				await this.users.touchLastLogin(user.id).catch(() => {});
-				return toAuthUser(user);
+				const auth = toAuthUser(user);
+				return { kind: 'success', user: auth, sessionToken: this.mintToken(auth) };
 			}
 		}
 		if (this.fallbackAdminPassword) {
 			const a = Buffer.from(password);
 			const b = Buffer.from(this.fallbackAdminPassword);
 			if (a.length === b.length && timingSafeEqual(a, b)) {
-				return fallbackAdmin();
+				const auth = fallbackAdmin();
+				return { kind: 'success', user: auth, sessionToken: this.mintToken(auth) };
 			}
 		}
-		return null;
+		return { kind: 'failed', reason: 'invalid_credentials' };
 	}
 
 	async createUserWithPassword(
 		email: string,
 		password: string,
-		permissions: Permission[]
+		platformPermissions: PlatformPermission[]
 	): Promise<AuthUser> {
 		if (!this.users) {
 			throw new ProviderError(
@@ -111,7 +104,7 @@ class LocalPasswordAuth implements IPasswordAuth {
 				500
 			);
 		}
-		return toAuthUser(await this.users.createUser(email, password, permissions));
+		return toAuthUser(await this.users.createUser(email, password, platformPermissions));
 	}
 
 	async registerUser(email: string, password: string): Promise<AuthUser | null> {
@@ -132,7 +125,11 @@ export class LocalAuthProvider implements IAuthProvider {
 		if (config.usersFilePath) {
 			this.users = createLocalUserMetaProvider(config.usersFilePath);
 		}
-		this.passwordAuth = new LocalPasswordAuth(this.users, config.fallbackAdminPassword);
+		this.passwordAuth = new LocalPasswordAuth(
+			this.users,
+			config.fallbackAdminPassword,
+			(user) => signHmacToken(this.hmacSecret, user.id, SESSION_MAX_AGE_MS)
+		);
 	}
 
 	static fromEnv(env: Record<string, string | undefined>): LocalAuthProvider {
@@ -168,10 +165,6 @@ export class LocalAuthProvider implements IAuthProvider {
 		await this.users.touchLastLogin(id);
 	}
 
-	async createSessionToken(user: AuthUser): Promise<string> {
-		return signHmacToken(this.hmacSecret, user.id, SESSION_MAX_AGE_MS);
-	}
-
 	async getUser(id: string): Promise<AuthUser | null> {
 		if (this.users) {
 			const u = await this.users.findById(id);
@@ -187,10 +180,13 @@ export class LocalAuthProvider implements IAuthProvider {
 		return paginate(users.map(toAuthUser), opts);
 	}
 
-	async updateUserPermissions(id: string, permissions: Permission[]): Promise<UserManagementResult> {
+	async updateUserPlatformPermissions(
+		id: string,
+		platformPermissions: PlatformPermission[]
+	): Promise<UserManagementResult> {
 		if (!this.users) return 'not_supported';
 		try {
-			await this.users.updatePermissions(id, permissions);
+			await this.users.updatePlatformPermissions(id, platformPermissions);
 			return 'ok';
 		} catch (err) {
 			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';

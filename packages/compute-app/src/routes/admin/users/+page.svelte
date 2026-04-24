@@ -2,11 +2,23 @@
 	import { Button, Card, Input, toast } from 'selva-shared';
 	import { Plus, Trash2, ShieldCheck, Mail, Copy, X } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
-	import type { AuthUser, Permission, Invite, OrgRole } from '@selva/platform';
-	import { ALL_PERMISSIONS } from '@selva/platform';
+	import type { Invite, OrgPermission, OrgRole, PlatformPermission } from '@selva/platform';
+	import {
+		ALL_ORG_PERMISSIONS,
+		ALL_PLATFORM_PERMISSIONS
+	} from '@selva/platform';
+	import type { UserRow } from './+page.server';
+
+	// §1g-core compat: the UI still renders one flat "permissions" list. Split
+	// Platform Admins + per-org Members views land in §1g-ui.
+	type FlatPermission = PlatformPermission | OrgPermission;
+	const ALL_FLAT_PERMISSIONS: FlatPermission[] = [
+		...ALL_PLATFORM_PERMISSIONS,
+		...ALL_ORG_PERMISSIONS
+	];
 
 	interface PageData {
-		users: AuthUser[] | null;
+		users: UserRow[] | null;
 		provider: {
 			name: string;
 			userCreation: 'email-password' | 'email-only' | 'none';
@@ -18,7 +30,7 @@
 	}
 	let { data }: Props = $props();
 
-	const PERMISSION_LABELS: Record<Permission, string> = {
+	const PERMISSION_LABELS: Record<FlatPermission, string> = {
 		platform_admin: 'Platform Admin (all)',
 		manage_users: 'Manage Users',
 		manage_compute: 'Manage Compute',
@@ -32,14 +44,14 @@
 	let showAddForm = $state(false);
 	let newEmail = $state('');
 	let newPassword = $state('');
-	let newPermissions = $state<Permission[]>([]);
+	let newPermissions = $state<FlatPermission[]>([]);
 	let adding = $state(false);
 
 	// Invite form state
 	let showInviteForm = $state(false);
 	let inviteEmail = $state('');
 	let inviteRole = $state<OrgRole>('member');
-	let invitePermissions = $state<Permission[]>([]);
+	let invitePermissions = $state<FlatPermission[]>([]);
 	let creatingInvite = $state(false);
 	let lastInviteLink = $state<string | null>(null);
 	let revokingId = $state<string | null>(null);
@@ -48,7 +60,7 @@
 	let deletingId = $state<string | null>(null);
 	let updatingId = $state<string | null>(null);
 
-	function toggleNewPermission(p: Permission, checked: boolean) {
+	function toggleNewPermission(p: FlatPermission, checked: boolean) {
 		if (checked) {
 			newPermissions = [...newPermissions, p];
 		} else {
@@ -86,7 +98,7 @@
 		}
 	}
 
-	async function updatePermissions(id: string, permissions: Permission[]) {
+	async function updatePermissions(id: string, permissions: FlatPermission[]) {
 		updatingId = id;
 		try {
 			const res = await fetch(`/admin/api/users/${id}`, {
@@ -107,7 +119,7 @@
 		}
 	}
 
-	function toggleInvitePermission(p: Permission, checked: boolean) {
+	function toggleInvitePermission(p: FlatPermission, checked: boolean) {
 		if (checked) {
 			invitePermissions = [...invitePermissions, p];
 		} else {
@@ -264,7 +276,7 @@
 					<div>
 						<p class="mb-2 text-xs font-medium">Platform permissions</p>
 						<div class="flex flex-wrap gap-3">
-							{#each ALL_PERMISSIONS as p (p)}
+							{#each ALL_FLAT_PERMISSIONS as p (p)}
 								<label class="flex cursor-pointer items-center gap-1.5 text-xs">
 									<input
 										type="checkbox"
@@ -331,7 +343,7 @@
 					<div>
 						<p class="mb-2 text-xs font-medium">Permissions</p>
 						<div class="flex flex-wrap gap-3">
-							{#each ALL_PERMISSIONS as p (p)}
+							{#each ALL_FLAT_PERMISSIONS as p (p)}
 								<label class="flex cursor-pointer items-center gap-1.5 text-xs">
 									<input
 										type="checkbox"
@@ -394,7 +406,7 @@
 								</Button>
 							</div>
 							<div class="mt-2 flex flex-wrap gap-3">
-								{#each ALL_PERMISSIONS as p (p)}
+								{#each ALL_FLAT_PERMISSIONS as p (p)}
 									<label class="flex cursor-pointer items-center gap-1.5 text-xs">
 										<input
 											type="checkbox"

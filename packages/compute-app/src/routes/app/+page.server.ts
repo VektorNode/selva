@@ -7,11 +7,12 @@ import type { DefinitionRecord, Project } from '@selva/platform';
 export type { DefinitionRecord, Project };
 
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) {
+	if (!locals.user || !locals.profile) {
 		redirect(303, `/login?redirectTo=/app`);
 	}
 
 	const user = locals.user;
+	const profile = locals.profile;
 	const meta = getDefinitionMeta();
 	const projectStore = getProjectProvider();
 	const orgs = getOrganizationProvider();
@@ -53,14 +54,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const projectMap = Object.fromEntries(allProjects.map((p) => [p.id, p]));
 
 		// Split into starred and rest
-		const starredIds = new Set(user.starredDefinitions);
+		const starredIds = new Set(profile.starredDefinitions);
 		const starred = visibleRecords.filter((r) => starredIds.has(r.guid));
 		const rest = visibleRecords.filter((r) => !starredIds.has(r.guid));
 
 		return {
 			records: rest,
 			starredRecords: starred,
-			recentRuns: user.recentRuns,
+			recentRuns: profile.recentRuns,
 			projects: Object.fromEntries(
 				accessibleProjects.filter(Boolean).map((p) => [p!.id, { id: p!.id, name: p!.name }])
 			),
@@ -71,7 +72,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		return {
 			records: [] as DefinitionRecord[],
 			starredRecords: [] as DefinitionRecord[],
-			recentRuns: user.recentRuns,
+			recentRuns: profile.recentRuns,
 			projects: {} as Record<string, { id: string; name: string }>,
 			projectMap: {} as Record<string, Project>
 		};

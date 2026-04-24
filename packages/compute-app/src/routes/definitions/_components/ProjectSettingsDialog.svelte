@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { Button, Dialog, Input, Label, Tabs, Textarea } from 'selva-shared';
 	import { Trash2, UserPlus, Users, X } from '@lucide/svelte';
-	import type { ProjectWithMembers, AuthUser } from '../+page.server';
+	import type { ProjectWithMembers, UserListItem } from '../+page.server';
 	import type { ProjectRole, ProjectVisibility } from '@selva/platform/projects';
 
 	interface Props {
 		project: ProjectWithMembers;
-		users: AuthUser[];
+		users: UserListItem[];
 		open: boolean;
 		onOpenChange: (open: boolean) => void;
 		onSave: (

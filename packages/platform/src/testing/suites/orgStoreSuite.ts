@@ -7,7 +7,8 @@
 
 import { describe, it, expect } from 'vitest';
 import type { IOrgStore } from '../../data/interface.js';
-import type { Organization, OrgMember } from '../../index.js';
+import type { Organization, OrgMember, OrgRole } from '../../index.js';
+import { DEFAULT_ORG_PERMISSIONS } from '../../organizations/schemas.js';
 import { makeCtx, makeUuid } from './helpers.js';
 
 export interface OrgStoreConformanceOptions {
@@ -33,6 +34,16 @@ function org(overrides: Partial<Organization> = {}): Organization {
 		createdAt: overrides.createdAt ?? now,
 		updatedAt: overrides.updatedAt ?? now,
 		...overrides
+	};
+}
+
+function member(orgId: string, userId: string, role: OrgRole = 'member'): OrgMember {
+	return {
+		orgId,
+		userId,
+		role,
+		permissions: [...DEFAULT_ORG_PERMISSIONS[role]],
+		joinedAt: new Date().toISOString()
 	};
 }
 
@@ -116,8 +127,7 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 			const orgs = await store.listOrgs(ctx('u1'));
 			const orgId = singleOrgMode ? orgs.items[0].id : 'o1';
 			if (!singleOrgMode) await store.createOrg(ctx('u1'), org({ id: orgId }));
-			const member: OrgMember = { orgId, userId: 'u2', role: 'member', joinedAt: new Date().toISOString() };
-			await store.addOrgMember(ctx('u1'), member);
+			await store.addOrgMember(ctx('u1'), member(orgId, 'u2'));
 			const got = await store.getOrgMember(ctx('u1'), orgId, 'u2');
 			expect(got?.role).toBe('member');
 		});
@@ -136,7 +146,7 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 			const orgs = await store.listOrgs(ctx('u1'));
 			const orgId = singleOrgMode ? orgs.items[0].id : 'o1';
 			if (!singleOrgMode) await store.createOrg(ctx('u1'), org({ id: orgId }));
-			await store.addOrgMember(ctx('u1'), { orgId, userId: 'u2', role: 'member', joinedAt: new Date().toISOString() });
+			await store.addOrgMember(ctx('u1'), member(orgId, 'u2'));
 			await store.updateOrgMemberRole(ctx('u1'), orgId, 'u2', 'admin');
 			const got = await store.getOrgMember(ctx('u1'), orgId, 'u2');
 			expect(got?.role).toBe('admin');
@@ -147,7 +157,7 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 			const orgs = await store.listOrgs(ctx('u1'));
 			const orgId = singleOrgMode ? orgs.items[0].id : 'o1';
 			if (!singleOrgMode) await store.createOrg(ctx('u1'), org({ id: orgId }));
-			await store.addOrgMember(ctx('u1'), { orgId, userId: 'u2', role: 'member', joinedAt: new Date().toISOString() });
+			await store.addOrgMember(ctx('u1'), member(orgId, 'u2'));
 			await store.removeOrgMember(ctx('u1'), orgId, 'u2');
 			const got = await store.getOrgMember(ctx('u1'), orgId, 'u2');
 			expect(got).toBeNull();
@@ -159,7 +169,7 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 			const orgId = singleOrgMode ? orgs.items[0].id : 'o1';
 			if (!singleOrgMode) await store.createOrg(ctx('u1'), org({ id: orgId }));
 			for (let i = 0; i < 3; i++) {
-				await store.addOrgMember(ctx('u1'), { orgId, userId: `u${i}`, role: 'member', joinedAt: new Date().toISOString() });
+				await store.addOrgMember(ctx('u1'), member(orgId, `u${i}`));
 			}
 			const page = await store.listOrgMembers(ctx('u1'), orgId, { limit: 2 });
 			expect(page.items.length).toBe(2);

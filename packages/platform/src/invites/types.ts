@@ -1,9 +1,8 @@
-import type { OrgRole } from '../organizations/schemas.js';
-import type { Permission } from '../auth/types.js';
+import type { OrgRole, OrgPermission } from '../organizations/schemas.js';
 
 /**
  * A pre-authorization record: "the holder of `token` may join `orgId`
- * at `orgRole`, with the platform `permissions` listed below". Accepting
+ * at `orgRole`, with the org `orgPermissions` listed below". Accepting
  * the invite creates the user (if needed), the org membership, and marks
  * the invite consumed.
  *
@@ -19,8 +18,13 @@ export interface Invite {
 	email: string;
 	orgId: string;
 	orgRole: OrgRole;
-	/** Platform permissions to grant on accept. May be empty. */
-	permissions: Permission[];
+	/**
+	 * Org-scope permissions to grant on accept, applied to the new
+	 * `OrgMember.permissions` row for `orgId`. May be empty (the `orgRole`
+	 * alone is often enough; adapters may seed from DEFAULT_ORG_PERMISSIONS
+	 * when this is empty).
+	 */
+	orgPermissions: OrgPermission[];
 	/** User ID of the admin who created the invite. */
 	invitedBy: string;
 	createdAt: string;

@@ -1,6 +1,4 @@
 import type { Cookies } from '@sveltejs/kit';
-import type { AuthUser } from '@selva/platform/auth';
-import { getAuthProvider } from './providers.server.js';
 
 const SESSION_COOKIE_NAME = 'admin_session';
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
@@ -50,13 +48,16 @@ export function clearRateLimit(ip: string): void {
 
 // ── Session management (cookie I/O — SvelteKit transport layer) ──────────────
 
-export async function createSession(cookies: Cookies, user: AuthUser): Promise<void> {
-	const token = await getAuthProvider().createSessionToken(user);
-
+/**
+ * Set the session cookie using a token produced by the auth provider. §1a:
+ * the token is always minted by the provider (local = HMAC, Supabase = JWT)
+ * as part of `verifyLogin` — this helper does cookie transport only.
+ */
+export function setSessionCookie(cookies: Cookies, sessionToken: string): void {
 	const isSecure =
 		process.env.NODE_ENV === 'production' && process.env.ALLOW_INSECURE_COOKIES !== 'true';
 
-	cookies.set(SESSION_COOKIE_NAME, token, {
+	cookies.set(SESSION_COOKIE_NAME, sessionToken, {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
