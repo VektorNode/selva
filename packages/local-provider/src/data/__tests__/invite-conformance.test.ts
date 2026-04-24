@@ -3,9 +3,9 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { runInviteStoreConformance } from '@selva/platform/testing';
-import { LocalInviteProvider } from '../LocalInviteProvider.js';
+import { LocalInviteStore } from '../LocalInviteStore.js';
 
-describe('LocalInviteProvider', () => {
+describe('LocalInviteStore', () => {
 	let tempDir: string;
 
 	beforeEach(async () => {
@@ -18,7 +18,7 @@ describe('LocalInviteProvider', () => {
 
 	// Local provider has no FK constraints so the default scope ids are fine.
 	runInviteStoreConformance({
-		name: 'LocalInviteProvider',
-		createStore: () => new LocalInviteProvider(tempDir)
+		name: 'LocalInviteStore',
+		createStore: () => new LocalInviteStore(tempDir)
 	});
 });

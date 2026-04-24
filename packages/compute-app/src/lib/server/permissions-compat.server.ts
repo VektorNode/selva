@@ -1,11 +1,8 @@
 /**
- * §1g-core compat layer.
- *
- * The admin UI still treats platform + org permissions as one flat list
- * ({ permissions: ['instance_admin', 'manage_instance_users', ...] }). §1g-ui will
- * split the UI into a Platform Admins view and a per-org Members view; until
- * then, this helper bridges the flat list to the new two-scope model so the
- * current admin/users page keeps working end-to-end.
+ * Bridges the flat permission list the admin UI currently sends
+ * (`{ permissions: ['instance_admin', 'manage_instance_users', ...] }`) to
+ * the two-scope model adapters expect. Retire this when the UI splits into
+ * scoped Platform-admin + Org-member views.
  */
 
 import type { OrgPermission, PlatformPermission } from '@selva/platform';

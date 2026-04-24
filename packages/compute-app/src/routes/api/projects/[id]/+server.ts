@@ -8,7 +8,6 @@ import { slugify } from '$lib/server/slug';
 import {
 	ProjectVisibilitySchema,
 	canChangeVisibilityToPublic,
-	hasPermission,
 	validateProjectFlags,
 	withAdminBypass
 } from '@selva/platform';
@@ -36,13 +35,10 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	const parsed = UpdateProjectBody.safeParse(body);
 	if (!parsed.success) throwZodError(parsed.error);
 
-	// Load the current project state so we can reason about the merged shape:
-	// the flag/visibility invariant depends on both the patch and what's already
-	// there (you can set autoJoinOnUpload=true only if visibility stays public).
 	const existing = await getProjectProvider().getProject(ctx, id);
 	if (!existing) throw error(404, 'Project not found');
 
-	// A6: flipping visibility *to* public is a disclosure action — stricter gate.
+	// Flipping *to* public is a disclosure action — stricter gate than a normal edit.
 	if (
 		parsed.data.visibility !== undefined &&
 		parsed.data.visibility === 'public' &&
@@ -70,8 +66,8 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		}
 	}
 
-	// Flag invariant: autoJoinOnUpload / allowAnonymous require visibility=public.
-	// Evaluate against the *merged* post-patch shape so partial updates behave.
+	// Flag/visibility invariant runs on the merged post-patch shape so partial
+	// updates are validated correctly.
 	const mergedVisibility = parsed.data.visibility ?? existing.visibility;
 	const mergedAutoJoin = parsed.data.autoJoinOnUpload ?? existing.autoJoinOnUpload;
 	const mergedAllowAnon = parsed.data.allowAnonymous ?? existing.allowAnonymous;
@@ -113,10 +109,6 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	} catch (err) {
 		handleApiError(err, 'Failed to update project');
 	}
-
-	// Unused import guarded to satisfy lint — hasPermission is exported in case
-	// future gates compose with platform permissions directly.
-	void hasPermission;
 };
 
 export const DELETE: RequestHandler = async ({ params, locals }) => {

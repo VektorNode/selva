@@ -73,9 +73,9 @@ export const actions = {
 			if (!passwordAuth) {
 				return fail(501, { error: 'Password-based setup is not supported by this provider' });
 			}
-			// §1g-core: setup still grants instance_admin to the first user so
-			// the existing admin UI remains usable. §1g-ui tightens this to
-			// org-owner-only + env-var bootstrap for the platform admin.
+			// First-run setup grants the creator every platform permission.
+			// Later deployments will bootstrap the platform admin from an env
+			// var instead so setup can be constrained to org-owner rights.
 			const user = await passwordAuth.createUserWithPassword(email, password, [
 				...ALL_PLATFORM_PERMISSIONS
 			]);

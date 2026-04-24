@@ -15,8 +15,8 @@ import {
 } from '@selva/platform';
 import { splitFlatPermissions } from '$lib/server/permissions-compat.server';
 
-// §1g-core: still accept the legacy flat `permissions[]` from the current admin UI.
-// Platform-scope entries are silently dropped — invites only grant org rights.
+// Accept a flat `permissions[]` from the UI; platform-scope entries are
+// silently dropped since invites only grant org rights.
 const FlatPermissionSchema = z.union([PlatformPermissionSchema, OrgPermissionSchema]);
 
 const CreateBody = z.object({

@@ -8,26 +8,20 @@ import type {
 	Page
 } from '@selva/platform';
 import { ProviderError, hasPermission } from '@selva/platform';
-import { paginate, applyOrder } from '../pagination.js';
-import type { LocalOrgStoreLoader } from '../organizations/LocalOrganizationProvider.js';
+import { paginate, applyOrder } from './pagination.js';
+import type { LocalOrgStoreLoader } from './LocalOrgStore.js';
 
-/**
- * Returns true if the row is live (not soft-deleted). Data-access-layer filter
- * — every read path funnels through this helper so we can never accidentally
- * surface a deleted row to a caller.
- */
+/** Data-access-layer filter — never let a soft-deleted row surface to callers. */
 function isLive<T extends { deletedAt?: string | null }>(row: T): boolean {
 	return row.deletedAt == null;
 }
 
-export class LocalProjectProvider implements IProjectStore {
+export class LocalProjectStore implements IProjectStore {
 	private readonly loader: LocalOrgStoreLoader;
 
 	constructor(loader: LocalOrgStoreLoader) {
 		this.loader = loader;
 	}
-
-	// ── Projects ─────────────────────────────────────────────────────────────────
 
 	async listProjects(
 		_ctx: RequestContext,
@@ -96,7 +90,12 @@ export class LocalProjectProvider implements IProjectStore {
 	async updateProject(
 		ctx: RequestContext,
 		id: string,
-		patch: Partial<Pick<Project, 'name' | 'slug' | 'description' | 'visibility'>>
+		patch: Partial<
+			Pick<
+				Project,
+				'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload' | 'allowAnonymous'
+			>
+		>
 	): Promise<void> {
 		const store = await this.loader.get();
 		const idx = store.projects.findIndex((p) => p.id === id && isLive(p));
@@ -144,7 +143,6 @@ export class LocalProjectProvider implements IProjectStore {
 		if (idx === -1) throw new ProviderError(`Project '${id}' not found`, 404);
 		const now = new Date().toISOString();
 		const actor = ctx.userId || store.projects[idx].updatedBy;
-		// Soft-delete the project; cascade-soft-delete its members.
 		store.projects[idx] = {
 			...store.projects[idx],
 			deletedAt: now,
@@ -158,8 +156,6 @@ export class LocalProjectProvider implements IProjectStore {
 		);
 		await this.loader.write(store);
 	}
-
-	// ── Project members ──────────────────────────────────────────────────────────
 
 	async listProjectMembers(
 		_ctx: RequestContext,
@@ -186,7 +182,7 @@ export class LocalProjectProvider implements IProjectStore {
 	async addProjectMember(ctx: RequestContext, member: ProjectMember): Promise<void> {
 		const store = await this.loader.get();
 		const now = new Date().toISOString();
-		// If a prior soft-deleted membership row exists, reactivate it; otherwise append.
+		// Reactivate a prior soft-deleted row rather than piling rows up.
 		const existing = store.projectMembers.find(
 			(m) => m.projectId === member.projectId && m.userId === member.userId
 		);
@@ -241,27 +237,13 @@ export class LocalProjectProvider implements IProjectStore {
 		await this.loader.write(store);
 	}
 
-	// ── Access checks ─────────────────────────────────────────────────────────────
-	// UI gating only — the mutating methods above are the real security boundary.
-
 	async canEdit(ctx: RequestContext, projectId: string): Promise<boolean> {
 		if (hasPermission(ctx, 'instance_admin')) return true;
-		const { projectMembers, projects, orgMembers } = await this.loader.get();
+		const { projectMembers } = await this.loader.get();
 		const member = projectMembers.find(
 			(m) => m.projectId === projectId && m.userId === ctx.userId && isLive(m)
 		);
-		if (member?.role === 'owner' || member?.role === 'editor') return true;
-		// manage_definitions permission allows editing public projects in orgs where user is a member
-		if (hasPermission(ctx, 'manage_definitions')) {
-			const project = projects.find((p) => p.id === projectId && isLive(p));
-			if (project?.visibility === 'public') {
-				const isOrgMember = orgMembers.some(
-					(m) => m.orgId === project.orgId && m.userId === ctx.userId && isLive(m)
-				);
-				return isOrgMember;
-			}
-		}
-		return false;
+		return member?.role === 'owner' || member?.role === 'editor';
 	}
 
 	async canManage(ctx: RequestContext, projectId: string): Promise<boolean> {
@@ -279,10 +261,6 @@ export class LocalProjectProvider implements IProjectStore {
 		const member = projectMembers.find(
 			(m) => m.projectId === projectId && m.userId === ctx.userId && isLive(m)
 		);
-		// project owners can always edit
-		if (member?.role === 'owner') return true;
-		// manage_definitions permission allows editing project settings if they're an editor
-		if (hasPermission(ctx, 'manage_definitions') && member?.role === 'editor') return true;
-		return false;
+		return member?.role === 'owner';
 	}
 }

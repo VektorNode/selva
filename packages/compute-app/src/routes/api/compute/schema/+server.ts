@@ -6,9 +6,8 @@ import { camelcaseKeys } from 'selva-compute/core';
 import type { UISchema } from 'selva-shared';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-	// A2: requires an authenticated session. The payload is user-supplied, so
-	// there's no project to gate on; the auth check alone prevents anonymous
-	// drain attacks on the compute pool.
+	// Payload is user-supplied, so there's no project to gate on — the auth
+	// check alone prevents anonymous drain attacks on the compute pool.
 	if (!locals.ctx || !locals.user) {
 		throw error(401, 'Unauthorized');
 	}

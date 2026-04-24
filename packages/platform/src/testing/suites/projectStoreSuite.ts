@@ -215,7 +215,7 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 		});
 
 		// ============================================================================
-		// B3: audit fields + soft delete
+		// Audit fields + soft delete
 		// ============================================================================
 
 		it('createProject populates createdBy and updatedBy', async () => {
@@ -277,7 +277,7 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 		});
 
 		// ============================================================================
-		// B4: project flags (autoJoinOnUpload, allowAnonymous)
+		// Project flags (autoJoinOnUpload, allowAnonymous)
 		// ============================================================================
 
 		it('create + get round-trips autoJoinOnUpload and allowAnonymous', async () => {

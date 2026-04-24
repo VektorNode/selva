@@ -6,8 +6,8 @@ import type {
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { paginate, applyOrder } from '../pagination.js';
-import { readJsonFile, writeJsonFile } from '../fsJson.js';
+import { paginate, applyOrder } from './pagination.js';
+import { readJsonFile, writeJsonFile } from './fsJson.js';
 
 interface InvitesFile {
 	invites: Invite[];
@@ -15,10 +15,9 @@ interface InvitesFile {
 const EMPTY: InvitesFile = { invites: [] };
 
 /**
- * Pre-§1g invite records carried a flat `permissions` array. Drop any entry
- * that isn't a valid OrgPermission (including platform-scope perms like
- * `instance_admin`, which are never invite-grantable) and store the result
- * under `orgPermissions`.
+ * Legacy invite records carried a flat `permissions` array. Drop anything
+ * that isn't a valid OrgPermission (platform-scope perms are never
+ * invite-grantable) and store the result under `orgPermissions`.
  */
 const VALID_ORG_PERMS = new Set([
 	'manage_org_members',
@@ -37,21 +36,17 @@ function migrateInvite(i: Invite & { permissions?: string[] }): Invite {
 }
 
 /**
- * Filesystem-backed invite store (invites.json in DATA_PATH).
- *
- * Notes:
- * - No explicit per-call scoping by ctx.userId — the route layer gates
- *   admin actions (manage_org_members + correct org). `getByToken` is the one
- *   unauthenticated read and is implicitly scoped by the secret token.
- * - Expired or already-accepted invites are hidden from `getByToken` so
- *   a reused link returns null and the public route surfaces a clean error.
+ * Filesystem-backed invite store. No per-call scoping by ctx.userId — the
+ * route layer gates admin actions. `getByToken` is the sole unauthenticated
+ * read and is scoped by the secret token itself; it hides expired and
+ * already-accepted invites so a reused link surfaces a clean error.
  */
-export class LocalInviteProvider implements IInviteStore {
+export class LocalInviteStore implements IInviteStore {
 	private readonly filePath: string;
 
-	static fromEnv(env: Record<string, string | undefined>): LocalInviteProvider {
+	static fromEnv(env: Record<string, string | undefined>): LocalInviteStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
-		return new LocalInviteProvider(env.DATA_PATH);
+		return new LocalInviteStore(env.DATA_PATH);
 	}
 
 	constructor(dataPath: string) {

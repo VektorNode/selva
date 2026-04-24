@@ -6,12 +6,17 @@ import type {
 	IComputeServerStore,
 	IInviteStore
 } from '@selva/platform';
-import { LocalOrgStoreLoader, LocalOrganizationProvider } from '../organizations/LocalOrganizationProvider.js';
-import { LocalProjectProvider } from '../projects/LocalProjectProvider.js';
-import { LocalDefinitionMetaProvider } from '../definitions/LocalDefinitionMetaProvider.js';
-import { LocalComputeServerProvider } from '../computeServer/LocalComputeServerProvider.js';
-import { LocalInviteProvider } from '../invites/LocalInviteProvider.js';
+import { LocalOrgStore, LocalOrgStoreLoader } from './LocalOrgStore.js';
+import { LocalProjectStore } from './LocalProjectStore.js';
+import { LocalDefinitionStore } from './LocalDefinitionStore.js';
+import { LocalComputeServerStore } from './LocalComputeServerStore.js';
+import { LocalInviteStore } from './LocalInviteStore.js';
 
+/**
+ * Composition of every local-provider data store. One `LocalOrgStoreLoader`
+ * is shared across org + project stores so they see the same cache and
+ * atomic write path.
+ */
 export class LocalDataProvider implements IDataProvider {
 	readonly orgs: IOrgStore;
 	readonly projects: IProjectStore;
@@ -23,11 +28,11 @@ export class LocalDataProvider implements IDataProvider {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
 		const loader = new LocalOrgStoreLoader(env.DATA_PATH);
 		return new LocalDataProvider(
-			new LocalOrganizationProvider(loader),
-			new LocalProjectProvider(loader),
-			LocalDefinitionMetaProvider.fromEnv(env),
-			LocalComputeServerProvider.fromEnv(env),
-			LocalInviteProvider.fromEnv(env)
+			new LocalOrgStore(loader),
+			new LocalProjectStore(loader),
+			LocalDefinitionStore.fromEnv(env),
+			LocalComputeServerStore.fromEnv(env),
+			LocalInviteStore.fromEnv(env)
 		);
 	}
 

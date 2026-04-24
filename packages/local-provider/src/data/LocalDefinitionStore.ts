@@ -10,20 +10,20 @@ import type {
 	Page
 } from '@selva/platform';
 import { ProviderError, hasPermission } from '@selva/platform';
-import { paginate, applyOrder } from '../pagination.js';
-import { readJsonFile, writeJsonFile } from '../fsJson.js';
+import { paginate, applyOrder } from './pagination.js';
+import { readJsonFile, writeJsonFile } from './fsJson.js';
 
 interface DefinitionsConfig {
 	definitions: Record<string, DefinitionRecord>;
 }
 
-export class LocalDefinitionMetaProvider implements IDefinitionStore {
+export class LocalDefinitionStore implements IDefinitionStore {
 	private readonly configPath: string;
 	private projectProvider?: IProjectStore;
 
-	static fromEnv(env: Record<string, string | undefined>): LocalDefinitionMetaProvider {
+	static fromEnv(env: Record<string, string | undefined>): LocalDefinitionStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
-		return new LocalDefinitionMetaProvider(env.DATA_PATH);
+		return new LocalDefinitionStore(env.DATA_PATH);
 	}
 
 	constructor(definitionsPath: string, projectProvider?: IProjectStore) {
@@ -37,21 +37,16 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 
 	private async readConfig(): Promise<DefinitionsConfig> {
 		const parsed = await readJsonFile<DefinitionsConfig>(this.configPath, { definitions: {} });
-		// Backfill fields for records written before schema migrations.
+		// Backfills for records written before later schema migrations.
 		for (const record of Object.values(parsed.definitions)) {
 			if (!record) continue;
-			// Records that pre-date the editorial workflow: treat as published.
 			if (!record.status || record.status === ('ready' as string)) record.status = 'published';
 			if (record.runCount === undefined) record.runCount = 0;
-			// Audit-field backfill (B3): older records predate createdBy/updatedBy.
-			// `lastEditedBy` was the old optional field; fall back to ownerId.
 			const legacy = record as DefinitionRecord & { lastEditedBy?: string };
 			if (!record.createdBy) record.createdBy = record.ownerId;
 			if (!record.updatedBy) record.updatedBy = legacy.lastEditedBy ?? record.ownerId;
 			if (legacy.lastEditedBy !== undefined) delete legacy.lastEditedBy;
 			if (record.deletedAt === undefined) record.deletedAt = null;
-			// B4 versioning scaffold: fields are nullable and unused until PR A
-			// wires the publish flow. Default to null so the mapper is stable.
 			if (record.liveVersionId === undefined) record.liveVersionId = null;
 			if (record.draftVersionId === undefined) record.draftVersionId = null;
 			for (const entry of record.history ?? []) {
@@ -61,7 +56,6 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		return parsed;
 	}
 
-	/** Data-access-layer filter: live (non-soft-deleted) only. */
 	private live(record: DefinitionRecord | undefined | null): record is DefinitionRecord {
 		return Boolean(record && record.deletedAt == null);
 	}
@@ -84,15 +78,12 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 	}
 
 	private visibleRecords(records: DefinitionRecord[], opts?: DefinitionListOptions): DefinitionRecord[] {
-		// Always drop soft-deleted rows before any other filter.
 		const filtered = records.filter((r) => r?.displayName && this.live(r));
-		// Apply status filter
 		if (opts?.statuses?.length) {
 			const allowed = new Set(opts.statuses);
 			return filtered.filter((r) => allowed.has(r.status));
 		}
 		if (opts?.includePending) return filtered;
-		// Default: everything except internal 'pending' state
 		return filtered.filter((r) => r.status !== 'pending');
 	}
 
@@ -271,10 +262,7 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		const member = await this.projectProvider.getProjectMember(ctx, projectId, ctx.userId);
 		const role = member?.role;
 
-		// Project editors/owners always can — moderation path, any project type.
 		if (role === 'owner' || role === 'editor') return true;
-
-		// Commons carve-out: definition owner edits their own on commons projects.
 		if (project.autoJoinOnUpload && ctx.userId === definition.ownerId) return true;
 
 		return false;

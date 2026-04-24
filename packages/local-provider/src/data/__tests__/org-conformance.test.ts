@@ -3,9 +3,9 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { runOrgStoreConformance } from '@selva/platform/testing';
-import { LocalOrganizationProvider, LocalOrgStoreLoader } from '../LocalOrganizationProvider.js';
+import { LocalOrgStore, LocalOrgStoreLoader } from '../LocalOrgStore.js';
 
-describe('LocalOrganizationProvider', () => {
+describe('LocalOrgStore', () => {
 	let tempDir: string;
 
 	beforeEach(async () => {
@@ -17,7 +17,7 @@ describe('LocalOrganizationProvider', () => {
 	});
 
 	runOrgStoreConformance({
-		name: 'LocalOrganizationProvider',
-		createStore: () => new LocalOrganizationProvider(new LocalOrgStoreLoader(tempDir))
+		name: 'LocalOrgStore',
+		createStore: () => new LocalOrgStore(new LocalOrgStoreLoader(tempDir))
 	});
 });

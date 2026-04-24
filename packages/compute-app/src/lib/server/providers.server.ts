@@ -12,15 +12,10 @@ import { DefinitionService } from './definitions/DefinitionService.js';
 const _raw = rawConfig as SelvaConfig | SelvaConfigFactory;
 export const providers: SelvaConfig = typeof _raw === 'function' ? _raw(env) : _raw;
 
-/** Tenancy model from config; defaults to `single` when unset. */
 export const tenancy: TenancyMode = providers.tenancy ?? 'single';
 
-/**
- * Platform feature flags for this deployment. All default to `false` when the
- * `flags` block is omitted from `selva.config.js`. Use the `flag()` helper
- * rather than reading `flags` directly so omitted flags resolve correctly.
- */
 export const flags: SelvaFlags = providers.flags ?? {};
+/** Use this rather than reading `flags` directly — omitted flags resolve to false. */
 export function flag(name: keyof SelvaFlags): boolean {
 	return isFlagEnabled(providers, name);
 }
@@ -34,8 +29,6 @@ export function getAuthProvider() {
 export function getStorageProvider() {
 	return providers.storage;
 }
-
-// ── Convenience accessors ─────────────────────────────────────────────────────
 
 export function getOrganizationProvider() {
 	return providers.data.orgs;

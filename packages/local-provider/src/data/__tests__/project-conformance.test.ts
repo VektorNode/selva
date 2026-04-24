@@ -5,13 +5,10 @@ import * as os from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { runProjectStoreConformance } from '@selva/platform/testing';
 import { ALL_PLATFORM_PERMISSIONS, ALL_ORG_PERMISSIONS } from '@selva/platform';
-import {
-	LocalOrgStoreLoader,
-	LocalOrganizationProvider
-} from '../../organizations/LocalOrganizationProvider.js';
-import { LocalProjectProvider } from '../LocalProjectProvider.js';
+import { LocalOrgStoreLoader, LocalOrgStore } from '../LocalOrgStore.js';
+import { LocalProjectStore } from '../LocalProjectStore.js';
 
-describe('LocalProjectProvider', () => {
+describe('LocalProjectStore', () => {
 	let tempDir: string;
 
 	beforeEach(async () => {
@@ -23,11 +20,11 @@ describe('LocalProjectProvider', () => {
 	});
 
 	runProjectStoreConformance({
-		name: 'LocalProjectProvider',
+		name: 'LocalProjectStore',
 		createStore: async () => {
 			const loader = new LocalOrgStoreLoader(tempDir);
-			const orgs = new LocalOrganizationProvider(loader);
-			const store = new LocalProjectProvider(loader);
+			const orgs = new LocalOrgStore(loader);
+			const store = new LocalProjectStore(loader);
 			// Explicitly create the host org for the project tests.
 			const ownerId = randomUUID();
 			const orgId = randomUUID();

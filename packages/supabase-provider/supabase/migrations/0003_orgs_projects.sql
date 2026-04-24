@@ -11,13 +11,13 @@
 --    `SECURITY DEFINER` so it bypasses RLS itself (avoids recursion).
 --  * Service role bypasses RLS entirely — admin/system code paths use it.
 --
--- Audit + soft-delete (B3):
+-- Audit + soft-delete:
 --  * Every tenant-owned table carries `created_by` / `updated_by` (where
 --    applicable), `updated_at`, and `deleted_at`. Reads filter
 --    `deleted_at is null`; deletes set `deleted_at` rather than DROPping rows.
 --    A retention sweep (service-role) hard-deletes later.
 --
--- Project flags (B4):
+-- Project flags:
 --  * `auto_join_on_upload` enables the commons model (see spec §4).
 --  * `allow_anonymous` enables iframe-embed anonymous access.
 --  * Both guarded by a CHECK that they may only be true when visibility='public'.
@@ -321,9 +321,7 @@ on public.projects for insert
 to authenticated
 with check (public.has_org_permission(org_id, 'manage_projects'));
 
--- A4: project settings (name, slug, description, visibility, flags) are
--- owner-only. Earlier drafts allowed editor + manage_projects; that side
--- channel is gone.
+-- Project settings (name, slug, description, visibility, flags) are owner-only.
 drop policy if exists "projects: owners or org admins can update" on public.projects;
 drop policy if exists "projects: owners can update" on public.projects;
 create policy "projects: owners can update"

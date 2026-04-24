@@ -21,8 +21,7 @@ const UpdatePermissionsBody = z.object({
 	permissions: z.array(FlatPermissionSchema)
 });
 
-// PATCH — update permissions. Splits the flat list into platform + default-org
-// permissions and writes both. §1g-ui will replace with scoped endpoints.
+// Splits the flat list into platform + default-org permissions and writes both.
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	requireManageInstanceUsers(locals);
 	const { id } = params;
@@ -63,8 +62,8 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 				? org.filter((p) => MEMBER_ASSIGNABLE_PERMISSIONS.includes(p))
 				: [...DEFAULT_ORG_PERMISSIONS[role]];
 		if (existing) {
-			// In-place permission update. We cheat through the loader by re-adding
-			// after removing — a clean updateOrgMemberPermissions will arrive in §1g-ui.
+			// Remove-then-add is a placeholder until we add a dedicated
+			// updateOrgMemberPermissions method to the store.
 			await orgs.removeOrgMember(SYSTEM_CONTEXT, orgId, id);
 			await orgs.addOrgMember(SYSTEM_CONTEXT, {
 				...existing,

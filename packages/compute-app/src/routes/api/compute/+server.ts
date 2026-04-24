@@ -148,9 +148,6 @@ function transformInputParameter(
 }
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-	// A2: solving is a privileged operation. Every request must be authenticated,
-	// and `local:` GUIDs must pass the solve rule for their project — loaded with
-	// the *user's* ctx, never SYSTEM_CONTEXT.
 	if (!locals.ctx || !locals.user) {
 		throw error(401, 'Unauthorized');
 	}
@@ -166,16 +163,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			throw error(400, 'Missing required fields: inputs, values, or definitionUrl');
 		}
 
-		// Determine definition source
 		let definitionSource: Uint8Array;
 
-		// Extract GUID for per-definition compute routing
 		const definitionGuid = definitionUrl.startsWith('local:')
 			? definitionUrl.substring(6)
 			: undefined;
 
 		if (definitionUrl.startsWith('local:')) {
-			// Extract GUID from local URL (format: "local:{guid}")
 			const guid = definitionUrl.substring(6);
 			let record;
 			try {
@@ -186,7 +180,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 			if (!record) throw error(404, `Definition '${guid}' not found`);
 
-			// Visibility + membership gate — spec §5 canSolve.
 			await requireCanSolve(locals, record.projectId);
 
 			try {
@@ -198,9 +191,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				throw error(404, `Definition '${guid}' not found`);
 			}
 		} else {
-			// Remote URL — authenticated solve of an externally-hosted definition.
-			// Auth was already asserted above; no project gate applies since this
-			// definition isn't tenant-owned.
+			// Externally-hosted definition; no tenant-scoped gate applies.
 			try {
 				definitionSource = await loadRemoteDefinition(definitionUrl);
 			} catch (err) {

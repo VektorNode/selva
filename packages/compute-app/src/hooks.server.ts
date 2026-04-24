@@ -10,17 +10,14 @@ import { providers } from '$lib/server/providers.server';
 // is needed here.
 
 /**
- * Build a per-request context from an authenticated user.
- *
- * §1g-core: resolves the user's active org membership and loads its
- * `OrgPermission[]` into the context so store methods and routes see the
- * fine-grained org-scope permissions.
+ * Build a per-request context from an authenticated user. Resolves the
+ * active-org membership and loads its OrgPermissions into the context.
  *
  * Active-org resolution:
  *  - Single tenancy: the deployment has exactly one org; pick it.
- *  - Multi tenancy: pick the first org the user is a member of. §1g-ui will
- *    replace this with URL-prefix resolution (`/o/{slug}/...`) once routes
- *    are tenant-namespaced.
+ *  - Multi tenancy: pick the first org the user is a member of. URL-prefix
+ *    resolution (`/o/{slug}/...`) will replace this once routes are
+ *    tenant-namespaced.
  *
  * `sessionToken` is forwarded as `adapterContext` so adapters that need the
  * upstream auth token (e.g. Supabase RLS) can pull it off the context.
@@ -48,7 +45,7 @@ async function buildContext(
 
 	if (!actingOrgId && user.platformPermissions.includes('instance_admin')) {
 		// Instance admins without an explicit membership row fall back to the
-		// first org so admin tooling stays usable pre-§1g-ui.
+		// first org so admin tooling stays usable before a switcher exists.
 		const firstOrg = orgsPage.items[0];
 		if (firstOrg) actingOrgId = firstOrg.id;
 	}
