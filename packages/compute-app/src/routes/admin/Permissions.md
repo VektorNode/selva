@@ -31,31 +31,35 @@
 
 ---
 
+## Content API Routes
+
+Used by `/definitions` (content dashboard). Gated by permission, not URL prefix.
+
+| Route                            | Method | `platform_admin` | `manage_definitions` | `manage_projects` | Extra Checks             |
+| -------------------------------- | ------ | :--------------: | :------------------: | :---------------: | ------------------------ |
+| **Definitions**                  |
+| `/api/definitions`               | POST   |        ✅        |          ✅          |         —         | `canEditDefinition`      |
+| `/api/definitions/upload`        | POST   |        ✅        |          ✅          |         —         | `canEditDefinition`      |
+| `/api/definitions/[guid]`        | PUT    |        ✅        |          ✅          |         —         | `canEditDefinition`      |
+| `/api/definitions/[guid]`        | DELETE |        ✅        |          ✅          |         —         | `canEditDefinition`      |
+| `/api/definitions/[guid]/image`  | POST   |        ✅        |          ✅          |         —         | `canEditDefinition`      |
+| **Projects**                     |
+| `/api/projects`                  | GET    |        ✅        |          —           |         —         | —                        |
+| `/api/projects`                  | POST   |        ✅        |          —           |        ✅         | —                        |
+| `/api/projects/[id]`             | PATCH  |        ✅        |          —           |        ✅         | `canEditProjectSettings` |
+| `/api/projects/[id]`             | DELETE |        ✅        |          —           |         —         | `canManage`              |
+| `/api/projects/[id]/members`     | \*     |        ✅        |          —           |         —         | `canManageMembers`       |
+
 ## Admin API Routes
 
-| Route                                  | Method | `platform_admin` | `manage_users` | `manage_compute` | `manage_definitions` | `manage_projects` | Extra Checks             |
-| -------------------------------------- | ------ | :--------------: | :------------: | :--------------: | :------------------: | :---------------: | ------------------------ |
-| **Definitions**                        |
-| `/admin/api/definitions`               | GET    |        ✅        |       —        |        —         |          ✅          |         —         | —                        |
-| `/admin/api/definitions`               | POST   |        ✅        |       —        |        —         |          ✅          |         —         | `canEditDefinition`      |
-| `/admin/api/definitions/upload`        | POST   |        ✅        |       —        |        —         |          ✅          |         —         | `canEditDefinition`      |
-| `/admin/api/definitions/[guid]`        | PATCH  |        ✅        |       —        |        —         |          ✅          |         —         | `canEditDefinition`      |
-| `/admin/api/definitions/[guid]/image`  | PUT    |        ✅        |       —        |        —         |          ✅          |         —         | `canEditDefinition`      |
-| `/admin/api/definitions/[guid]/revert` | POST   |        ✅        |       —        |        —         |          ✅          |         —         | `canEditDefinition`      |
-| `/admin/api/definitions/[guid]`        | DELETE |        ✅        |       —        |        —         |          ✅          |         —         | `canEditDefinition`      |
-| `/admin/api/files`                     | GET    |        ✅        |       —        |        —         |          ✅          |         —         | —                        |
-| **Projects**                           |
-| `/admin/api/projects`                  | GET    |        ✅        |       —        |        —         |          —           |        ✅         | —                        |
-| `/admin/api/projects/[id]`             | PATCH  |        ✅        |       —        |        —         |          —           |        ✅         | `canEditProjectSettings` |
-| `/admin/api/projects/[id]`             | DELETE |        ✅        |       —        |        —         |          —           |        ✅         | `canManage`              |
-| `/admin/api/projects/[id]/members`     | \*     |        ✅        |       —        |        —         |          —           |        ✅         | —                        |
-| **Users**                              |
-| `/admin/api/users`                     | \*     |        ✅        |       ✅       |        —         |          —           |         —         | —                        |
-| **Compute**                            |
-| `/admin/api/compute`                   | \*     |        ✅        |       —        |        ✅        |          —           |         —         | —                        |
-| `/admin/api/compute/status`            | GET    |        ✅        |       —        |        ✅        |          —           |         —         | —                        |
-| **System**                             |
-| `/admin/api/update`                    | POST   |        ✅        |       —        |        —         |          —           |         —         | —                        |
+Used by `/admin/*` pages. Genuinely admin-only.
+
+| Route                       | Method | `platform_admin` | `manage_users` | `manage_compute` |
+| --------------------------- | ------ | :--------------: | :------------: | :--------------: |
+| `/admin/api/users`          | \*     |        ✅        |       ✅       |        —         |
+| `/admin/api/compute`        | \*     |        ✅        |       —        |        ✅        |
+| `/admin/api/compute/status` | GET    |        ✅        |       —        |        ✅        |
+| `/admin/api/update`         | POST   |        ✅        |       —        |        —         |
 
 **Denied** → returns **403**
 

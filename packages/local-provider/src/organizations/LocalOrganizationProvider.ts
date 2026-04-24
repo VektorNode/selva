@@ -29,10 +29,12 @@ export interface LocalOrgStore {
  */
 export class LocalOrgStoreLoader {
 	readonly storePath: string;
+	private readonly usersPath: string;
 	private store: LocalOrgStore | null = null;
 
 	constructor(dataPath: string) {
 		this.storePath = path.join(dataPath, 'local-org.json');
+		this.usersPath = path.join(dataPath, 'users.json');
 	}
 
 	async get(): Promise<LocalOrgStore> {
@@ -47,7 +49,13 @@ export class LocalOrgStoreLoader {
 		const now = new Date().toISOString();
 		const orgId = randomUUID();
 		const projectId = randomUUID();
-		const adminUserId = 'local-admin';
+		// Prefer the first real user (from setup) over the synthetic fallback so
+		// project/org membership checks work for the actual admin account.
+		const usersFile = await readJsonFile<{ users?: Array<{ id: string }> } | null>(
+			this.usersPath,
+			null
+		);
+		const adminUserId = usersFile?.users?.[0]?.id ?? 'local-admin';
 
 		this.store = {
 			org: {

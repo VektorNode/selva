@@ -10,6 +10,7 @@ import type {
 import type { ComputeConfig } from '../computeServer/types.js';
 import type { RequestContext } from '../context.js';
 import type { ListOptions, DefinitionListOptions, Page } from '../pagination.js';
+import type { IInviteStore } from '../invites/interface.js';
 
 /**
  * ## Auth boundary contract (applies to IOrgStore and IProjectStore)
@@ -175,4 +176,5 @@ export interface IDataProvider {
 	projects: IProjectStore;
 	definitions: IDefinitionStore;
 	computeServer: IComputeServerStore;
+	invites: IInviteStore;
 }

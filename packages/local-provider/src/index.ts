@@ -20,3 +20,5 @@ export { LocalComputeServerProvider } from './computeServer/LocalComputeServerPr
 export { LocalDataProvider } from './data/LocalDataProvider.js';
 
 export { LocalUserProfileProvider } from './userProfile/LocalUserProfileProvider.js';
+
+export { LocalInviteProvider } from './invites/LocalInviteProvider.js';

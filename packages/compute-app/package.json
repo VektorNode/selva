@@ -30,7 +30,6 @@
 		"@selva/config": "workspace:*",
 		"@sveltejs/adapter-auto": "catalog:",
 		"@sveltejs/adapter-node": "^5.5.1",
-		"@types/sharp": "^0.32.0",
 		"@types/three": "catalog:",
 		"tw-animate-css": "catalog:"
 	}
