@@ -57,10 +57,16 @@ export interface DefinitionRecord {
 	guid: string;
 	/** UUID of the project that owns this definition */
 	projectId: string;
-	/** UUID of the user who created this definition */
+	/**
+	 * UUID of the user who currently owns this definition (as a business
+	 * concept — the "uploader" for commons projects). Separate from
+	 * `createdBy` so ownership can be transferred without losing attribution.
+	 */
 	ownerId: string;
-	/** UUID of the user who last modified this definition */
-	lastEditedBy?: string;
+	/** UUID of the user who created this definition. Immutable. */
+	createdBy: string;
+	/** UUID of the user who last mutated this definition. */
+	updatedBy: string;
 	/**
 	 * Optional UUID of a specific compute server to use when solving.
 	 * Falls back to the org default, then the platform default.
@@ -89,11 +95,17 @@ export interface DefinitionRecord {
 	runCount: number;
 	createdAt: string; // ISO 8601
 	updatedAt: string; // ISO 8601
+	/**
+	 * ISO 8601 soft-delete timestamp. Null means live. All reads filter out
+	 * non-null at the data-access layer.
+	 */
+	deletedAt?: string | null;
 }
 
 /**
  * Patch input for `IDefinitionStore.update`. Omits immutable fields (`guid`,
- * `ownerId`, `createdAt`) and provider-managed fields (`updatedAt`, `history`).
+ * `createdBy`, `createdAt`) and provider-managed fields (`updatedAt`,
+ * `updatedBy`, `history`, `deletedAt`).
  *
  * Field semantics:
  * - missing / `undefined` — leave unchanged
@@ -114,5 +126,6 @@ export interface DefinitionRecordPatch {
 	projectId?: string;
 	computeServerId?: string | null;
 	status?: DefinitionStatus;
-	lastEditedBy?: string;
+	/** Ownership transfer — advances the owning user. Immutable fields don't appear here. */
+	ownerId?: string;
 }

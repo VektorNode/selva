@@ -70,8 +70,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			description: parsed.data.description,
 			visibility: parsed.data.visibility,
 			ownerId: locals.user!.id,
+			createdBy: locals.user!.id,
+			updatedBy: locals.user!.id,
 			createdAt: now,
-			updatedAt: now
+			updatedAt: now,
+			deletedAt: null
 		};
 
 		try {

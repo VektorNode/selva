@@ -67,6 +67,8 @@ function record(
 		guid: overrides.guid ?? makeUuid(),
 		projectId: overrides.projectId ?? scope.projectId,
 		ownerId: overrides.ownerId ?? scope.ownerId,
+		createdBy: overrides.createdBy ?? scope.ownerId,
+		updatedBy: overrides.updatedBy ?? scope.ownerId,
 		fileExt: overrides.fileExt ?? 'gh',
 		displayName: overrides.displayName ?? 'Test',
 		history: overrides.history ?? [],
@@ -75,6 +77,7 @@ function record(
 		runCount: overrides.runCount ?? 0,
 		createdAt: overrides.createdAt ?? now,
 		updatedAt: overrides.updatedAt ?? now,
+		deletedAt: overrides.deletedAt ?? null,
 		...overrides
 	};
 }
@@ -228,15 +231,17 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(threw).toBe(false);
 		});
 
-		it('update patches lastEditedBy', async () => {
+		it('update advances updatedBy to the caller', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const guid = makeUuid();
 			const editor = scope.secondaryUserId ?? makeUuid();
 			await store.create(ctx(scope.ownerId), record(scope, { guid }));
-			await store.update(ctx(scope.ownerId), guid, { lastEditedBy: editor });
+			// Editing as a different user — updatedBy should advance.
+			await store.update(ctx(editor), guid, { displayName: 'Renamed' });
 			const got = await store.get(ctx(scope.ownerId), guid);
-			expect(got?.lastEditedBy).toBe(editor);
+			expect(got?.updatedBy).toBe(editor);
+			expect(got?.createdBy).toBe(scope.ownerId);
 		});
 
 		it('addHistoryEntry prepends entries (newest first)', async () => {
@@ -275,6 +280,35 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			await store.delete(ctx(scope.ownerId), guid);
 			const got = await store.get(ctx(scope.ownerId), guid);
 			expect(got).toBeNull();
+		});
+
+		// ============================================================================
+		// B3: audit fields + soft delete
+		// ============================================================================
+
+		it('create populates createdBy/updatedBy and deletedAt=null', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid }));
+			const got = await store.get(ctx(scope.ownerId), guid);
+			expect(got?.createdBy).toBe(scope.ownerId);
+			expect(got?.updatedBy).toBe(scope.ownerId);
+			expect(got?.deletedAt ?? null).toBeNull();
+		});
+
+		it('delete soft-deletes — record excluded from list/listByProject', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid, status: 'published' }));
+			await store.delete(ctx(scope.ownerId), guid);
+			const all = await store.list(ctx(scope.ownerId), { limit: 500 });
+			expect(all.items.map((r) => r.guid)).not.toContain(guid);
+			const byProject = await store.listByProject(ctx(scope.ownerId), scope.projectId, {
+				limit: 500
+			});
+			expect(byProject.items.map((r) => r.guid)).not.toContain(guid);
 		});
 
 		it('listPublic returns published records, not pending', async () => {

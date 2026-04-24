@@ -43,8 +43,11 @@ describe('LocalProjectProvider', () => {
 					name: 'Test Org',
 					slug: 'test',
 					ownerId,
+					createdBy: ownerId,
+					updatedBy: ownerId,
 					createdAt: now,
-					updatedAt: now
+					updatedAt: now,
+					deletedAt: null
 				}
 			);
 			return { store, orgId, ownerId };

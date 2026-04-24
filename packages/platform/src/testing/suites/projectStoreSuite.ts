@@ -40,14 +40,26 @@ function project(orgId: string, ownerId: string, overrides: Partial<Project> = {
 		slug: overrides.slug ?? `test-${Math.random().toString(36).slice(2, 8)}`,
 		visibility: overrides.visibility ?? 'private',
 		ownerId: overrides.ownerId ?? ownerId,
+		createdBy: overrides.createdBy ?? ownerId,
+		updatedBy: overrides.updatedBy ?? ownerId,
 		createdAt: overrides.createdAt ?? now,
 		updatedAt: overrides.updatedAt ?? now,
+		deletedAt: overrides.deletedAt ?? null,
 		...overrides
 	};
 }
 
 function member(projectId: string, userId: string, role: ProjectMember['role']): ProjectMember {
-	return { projectId, userId, role, joinedAt: new Date().toISOString() };
+	const now = new Date().toISOString();
+	return {
+		projectId,
+		userId,
+		role,
+		joinedAt: now,
+		updatedAt: now,
+		updatedBy: userId,
+		deletedAt: null
+	};
 }
 
 export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions): void {
@@ -198,6 +210,68 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 			}
 			const page = await store.listProjectMembers(ctx(ownerId), p.id, { limit: 2 });
 			expect(page.items.length).toBe(2);
+		});
+
+		// ============================================================================
+		// B3: audit fields + soft delete
+		// ============================================================================
+
+		it('createProject populates createdBy and updatedBy', async () => {
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId);
+			await store.createProject(ctx(ownerId), p);
+			const got = await store.getProject(ctx(ownerId), p.id);
+			expect(got?.createdBy).toBe(ownerId);
+			expect(got?.updatedBy).toBe(ownerId);
+			expect(got?.deletedAt ?? null).toBeNull();
+		});
+
+		it('updateProject advances updatedBy to the caller, preserves createdBy', async () => {
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId);
+			await store.createProject(ctx(ownerId), p);
+			const editor = await seed();
+			// Give the editor membership so the adapter's auth check (if any) permits
+			// the update. Conformance runs with permissive ctx defaults in practice.
+			await store.addProjectMember(ctx(ownerId), member(p.id, editor, 'editor'));
+			await store.updateProject(ctx(editor), p.id, { name: 'Renamed' });
+			const got = await store.getProject(ctx(ownerId), p.id);
+			expect(got?.updatedBy).toBe(editor);
+			expect(got?.createdBy).toBe(ownerId);
+		});
+
+		it('deleteProject soft-deletes — the project stops appearing in reads', async () => {
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId);
+			await store.createProject(ctx(ownerId), p);
+			await store.deleteProject(ctx(ownerId), p.id);
+			expect(await store.getProject(ctx(ownerId), p.id)).toBeNull();
+			expect(await store.getProjectBySlug(ctx(ownerId), orgId, p.slug)).toBeNull();
+			const listed = await store.listProjects(ctx(ownerId), orgId, { limit: 100 });
+			expect(listed.items.map((x) => x.id)).not.toContain(p.id);
+		});
+
+		it('deleteProject cascades soft-delete to project members', async () => {
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId);
+			await store.createProject(ctx(ownerId), p);
+			const u2 = await seed();
+			await store.addProjectMember(ctx(ownerId), member(p.id, u2, 'editor'));
+			await store.deleteProject(ctx(ownerId), p.id);
+			const got = await store.getProjectMember(ctx(ownerId), p.id, u2);
+			expect(got).toBeNull();
+			const listed = await store.listProjectMembers(ctx(ownerId), p.id, { limit: 100 });
+			expect(listed.items).toHaveLength(0);
+		});
+
+		it('removeProjectMember soft-deletes — the member stops appearing in reads', async () => {
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId);
+			await store.createProject(ctx(ownerId), p);
+			const u2 = await seed();
+			await store.addProjectMember(ctx(ownerId), member(p.id, u2, 'editor'));
+			await store.removeProjectMember(ctx(ownerId), p.id, u2);
+			expect(await store.getProjectMember(ctx(ownerId), p.id, u2)).toBeNull();
 		});
 
 		if (ctxIsolation) {

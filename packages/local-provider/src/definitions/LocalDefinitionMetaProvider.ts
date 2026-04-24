@@ -43,11 +43,23 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 			// Records that pre-date the editorial workflow: treat as published.
 			if (!record.status || record.status === ('ready' as string)) record.status = 'published';
 			if (record.runCount === undefined) record.runCount = 0;
+			// Audit-field backfill (B3): older records predate createdBy/updatedBy.
+			// `lastEditedBy` was the old optional field; fall back to ownerId.
+			const legacy = record as DefinitionRecord & { lastEditedBy?: string };
+			if (!record.createdBy) record.createdBy = record.ownerId;
+			if (!record.updatedBy) record.updatedBy = legacy.lastEditedBy ?? record.ownerId;
+			if (legacy.lastEditedBy !== undefined) delete legacy.lastEditedBy;
+			if (record.deletedAt === undefined) record.deletedAt = null;
 			for (const entry of record.history ?? []) {
 				if (!entry.uploadedBy) entry.uploadedBy = record.ownerId;
 			}
 		}
 		return parsed;
+	}
+
+	/** Data-access-layer filter: live (non-soft-deleted) only. */
+	private live(record: DefinitionRecord | undefined | null): record is DefinitionRecord {
+		return Boolean(record && record.deletedAt == null);
 	}
 
 	private async writeConfig(config: DefinitionsConfig): Promise<void> {
@@ -68,7 +80,8 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 	}
 
 	private visibleRecords(records: DefinitionRecord[], opts?: DefinitionListOptions): DefinitionRecord[] {
-		const filtered = records.filter((r) => r?.displayName);
+		// Always drop soft-deleted rows before any other filter.
+		const filtered = records.filter((r) => r?.displayName && this.live(r));
 		// Apply status filter
 		if (opts?.statuses?.length) {
 			const allowed = new Set(opts.statuses);
@@ -111,7 +124,7 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 
 		const config = await this.readConfig();
 		const records = Object.values(config.definitions).filter((r): r is DefinitionRecord =>
-			Boolean(r?.displayName)
+			Boolean(r?.displayName && this.live(r))
 		);
 
 		// Resolve each record's project once, in bulk — one getProject call per
@@ -138,19 +151,26 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 
 	async get(_ctx: RequestContext, guid: string): Promise<DefinitionRecord | null> {
 		const config = await this.readConfig();
-		return config.definitions[guid] ?? null;
+		const r = config.definitions[guid];
+		return this.live(r) ? r : null;
 	}
 
-	async create(_ctx: RequestContext, record: DefinitionRecord): Promise<void> {
+	async create(ctx: RequestContext, record: DefinitionRecord): Promise<void> {
 		const config = await this.readConfig();
-		config.definitions[record.guid] = record;
+		const actor = ctx.userId || record.ownerId;
+		config.definitions[record.guid] = {
+			...record,
+			createdBy: record.createdBy || actor,
+			updatedBy: record.updatedBy || actor,
+			deletedAt: null
+		};
 		await this.writeConfig(config);
 	}
 
-	async update(_ctx: RequestContext, guid: string, patch: DefinitionRecordPatch): Promise<void> {
+	async update(ctx: RequestContext, guid: string, patch: DefinitionRecordPatch): Promise<void> {
 		const config = await this.readConfig();
 		const existing = config.definitions[guid];
-		if (!existing) throw new ProviderError(`Definition '${guid}' not found`, 404);
+		if (!this.live(existing)) throw new ProviderError(`Definition '${guid}' not found`, 404);
 
 		// `null` clears the field (sets to undefined); `undefined` leaves unchanged.
 		const clearable = (v: unknown) => (v === null ? undefined : v);
@@ -169,41 +189,51 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 				computeServerId: clearable(patch.computeServerId) as string | undefined
 			}),
 			...(patch.status !== undefined && { status: patch.status }),
-			...(patch.lastEditedBy !== undefined && { lastEditedBy: patch.lastEditedBy }),
-			updatedAt: new Date().toISOString()
+			...(patch.ownerId !== undefined && { ownerId: patch.ownerId }),
+			updatedAt: new Date().toISOString(),
+			updatedBy: ctx.userId || existing.updatedBy
 		};
 		await this.writeConfig(config);
 	}
 
-	async addHistoryEntry(_ctx: RequestContext, guid: string, entry: HistoryEntry): Promise<void> {
+	async addHistoryEntry(ctx: RequestContext, guid: string, entry: HistoryEntry): Promise<void> {
 		const config = await this.readConfig();
 		const existing = config.definitions[guid];
-		if (!existing) throw new ProviderError(`Definition '${guid}' not found`, 404);
+		if (!this.live(existing)) throw new ProviderError(`Definition '${guid}' not found`, 404);
 
 		const history = [entry, ...existing.history];
 		existing.history = existing.maxHistory > 0 ? history.slice(0, existing.maxHistory) : history;
+		existing.updatedAt = new Date().toISOString();
+		existing.updatedBy = ctx.userId || existing.updatedBy;
 		await this.writeConfig(config);
 	}
 
-	async removeHistoryEntry(_ctx: RequestContext, guid: string, ref: string): Promise<void> {
+	async removeHistoryEntry(ctx: RequestContext, guid: string, ref: string): Promise<void> {
 		const config = await this.readConfig();
 		const existing = config.definitions[guid];
-		if (!existing) throw new ProviderError(`Definition '${guid}' not found`, 404);
+		if (!this.live(existing)) throw new ProviderError(`Definition '${guid}' not found`, 404);
 
 		existing.history = existing.history.filter((e) => e.ref !== ref);
+		existing.updatedAt = new Date().toISOString();
+		existing.updatedBy = ctx.userId || existing.updatedBy;
 		await this.writeConfig(config);
 	}
 
-	async delete(_ctx: RequestContext, guid: string): Promise<void> {
+	async delete(ctx: RequestContext, guid: string): Promise<void> {
 		const config = await this.readConfig();
-		delete config.definitions[guid];
+		const existing = config.definitions[guid];
+		if (!this.live(existing)) return;
+		const now = new Date().toISOString();
+		existing.deletedAt = now;
+		existing.updatedAt = now;
+		existing.updatedBy = ctx.userId || existing.updatedBy;
 		await this.writeConfig(config);
 	}
 
 	async incrementRunCount(_ctx: RequestContext, guid: string): Promise<void> {
 		const config = await this.readConfig();
 		const existing = config.definitions[guid];
-		if (!existing) return;
+		if (!this.live(existing)) return;
 		existing.runCount = (existing.runCount ?? 0) + 1;
 		existing.updatedAt = new Date().toISOString();
 		await this.writeConfig(config);
@@ -215,7 +245,8 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 	): Promise<DefinitionRecord[]> {
 		const config = await this.readConfig();
 		return Object.values(config.definitions).filter(
-			(r) => r?.status === ('pending' as string) && r.createdAt <= olderThanIso
+			(r) =>
+				this.live(r) && r.status === ('pending' as string) && r.createdAt <= olderThanIso
 		);
 	}
 

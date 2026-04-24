@@ -15,6 +15,46 @@
 -- See related migrations 0002, 0004, 0005, 0007 for additional call-site renames.
 -- ============================================================================
 
+-- ============================================================================
+-- TODO(access-control refactor / B3): audit fields + soft delete
+--
+-- Add the following columns to every tenant-owned table in this file. All are
+-- additive — existing rows take a default. The TS mappers already fall back to
+-- owner-equivalent ids when columns are null, so the code runs safely
+-- pre-migration.
+--
+-- Tables to extend:
+--   public.orgs          → add  created_by uuid references auth.users(id),
+--                              updated_by uuid references auth.users(id),
+--                              deleted_at timestamptz null
+--                         defaults: created_by = owner_id, updated_by = owner_id
+--                         (backfill existing rows with the owner on migration).
+--
+--   public.org_members   → add  updated_at timestamptz not null default now(),
+--                              updated_by uuid references auth.users(id),
+--                              deleted_at timestamptz null
+--                         defaults: updated_at = joined_at, updated_by = user_id.
+--                         Add a trigger to keep updated_at current on role/perm change.
+--
+--   public.projects      → add  created_by uuid references auth.users(id),
+--                              updated_by uuid references auth.users(id),
+--                              deleted_at timestamptz null
+--                         defaults mirror public.orgs.
+--
+--   public.project_members → add updated_at timestamptz not null default now(),
+--                               updated_by uuid references auth.users(id),
+--                               deleted_at timestamptz null
+--                         defaults mirror public.org_members.
+--
+-- RLS impact: every SELECT/UPDATE/DELETE policy on these tables must include
+-- `deleted_at is null` in the USING clause. Adds on DELETE policies are
+-- effectively dead since the TS layer soft-deletes (sets deleted_at); a
+-- hard-delete retention sweep will run as service-role later.
+--
+-- Indexes: add a partial index `where deleted_at is null` on every hot-read
+-- column (orgs.slug, projects.slug+org_id, org_members(org_id,user_id)).
+-- ============================================================================
+
 -- Orgs, org_members, projects, project_members + RLS helpers and policies.
 --
 -- Design notes:

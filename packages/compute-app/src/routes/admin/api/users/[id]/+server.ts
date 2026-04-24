@@ -72,12 +72,16 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			});
 		} else {
 			// Promote to member with the requested org perms.
+			const joinedAt = new Date().toISOString();
 			await orgs.addOrgMember(SYSTEM_CONTEXT, {
 				orgId,
 				userId: id,
 				role: 'member',
 				permissions: resolvedPermissions('member'),
-				joinedAt: new Date().toISOString()
+				joinedAt,
+				updatedAt: joinedAt,
+				updatedBy: locals.user?.id ?? id,
+				deletedAt: null
 			});
 		}
 	}
