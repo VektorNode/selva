@@ -75,6 +75,8 @@ function record(
 		maxHistory: overrides.maxHistory ?? 10,
 		status: overrides.status ?? 'published',
 		runCount: overrides.runCount ?? 0,
+		liveVersionId: overrides.liveVersionId ?? null,
+		draftVersionId: overrides.draftVersionId ?? null,
 		createdAt: overrides.createdAt ?? now,
 		updatedAt: overrides.updatedAt ?? now,
 		deletedAt: overrides.deletedAt ?? null,
@@ -295,6 +297,16 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(got?.createdBy).toBe(scope.ownerId);
 			expect(got?.updatedBy).toBe(scope.ownerId);
 			expect(got?.deletedAt ?? null).toBeNull();
+		});
+
+		it('versioning scaffold: liveVersionId/draftVersionId default to null on create', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid }));
+			const got = await store.get(ctx(scope.ownerId), guid);
+			expect(got?.liveVersionId ?? null).toBeNull();
+			expect(got?.draftVersionId ?? null).toBeNull();
 		});
 
 		it('delete soft-deletes — record excluded from list/listByProject', async () => {

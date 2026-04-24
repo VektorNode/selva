@@ -266,6 +266,10 @@ interface ProjectRow {
 	owner_id: string;
 	created_by?: string | null;
 	updated_by?: string | null;
+	/** B4: commons mode toggle — see spec §4. Defaults to false in the mapper. */
+	auto_join_on_upload?: boolean | null;
+	/** B4: anonymous-view toggle — see spec §4. Defaults to false in the mapper. */
+	allow_anonymous?: boolean | null;
 	created_at: string;
 	updated_at: string;
 	deleted_at?: string | null;
@@ -292,6 +296,8 @@ function rowToProject(row: ProjectRow): Project {
 		ownerId: row.owner_id,
 		createdBy: row.created_by ?? row.owner_id,
 		updatedBy: row.updated_by ?? row.owner_id,
+		autoJoinOnUpload: row.auto_join_on_upload ?? false,
+		allowAnonymous: row.allow_anonymous ?? false,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		deletedAt: row.deleted_at ?? null
@@ -309,6 +315,8 @@ function projectToRow(p: Project): ProjectRow {
 		owner_id: p.ownerId,
 		created_by: p.createdBy,
 		updated_by: p.updatedBy,
+		auto_join_on_upload: p.autoJoinOnUpload,
+		allow_anonymous: p.allowAnonymous,
 		created_at: p.createdAt,
 		updated_at: p.updatedAt,
 		deleted_at: p.deletedAt ?? null

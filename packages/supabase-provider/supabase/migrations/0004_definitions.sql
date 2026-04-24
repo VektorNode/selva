@@ -19,6 +19,42 @@
 --     (it never issues a hard DELETE).
 -- ============================================================================
 
+-- ============================================================================
+-- TODO(access-control refactor / B4): definition versioning scaffold
+--
+-- New table:
+--   create table public.definition_versions (
+--     id uuid primary key,
+--     definition_guid uuid not null references public.definitions(guid)
+--                            on delete cascade,
+--     version_number integer not null check (version_number >= 1),
+--     file_key text not null,
+--     uploaded_by uuid not null references auth.users(id),
+--     uploaded_at timestamptz not null default now(),
+--     unique (definition_guid, version_number)
+--   );
+--
+-- New columns on public.definitions (both nullable FK to definition_versions.id):
+--   live_version_id  uuid references public.definition_versions(id)
+--                     on delete set null
+--   draft_version_id uuid references public.definition_versions(id)
+--                     on delete set null
+--
+-- RLS: a `definitions.deleted_at is null` predicate is already required for
+-- reads per B3. `definition_versions` inherits visibility through the parent
+-- definition — policy shape:
+--   using (exists (
+--     select 1 from public.definitions d
+--     where d.guid = definition_versions.definition_guid
+--       and d.deleted_at is null
+--       and public.can_view_project(d.project_id)  -- helper from 0003
+--   ))
+--
+-- Versions are immutable. No UPDATE policy needed. DELETE is service-role
+-- only (retention sweep) — spec §6 forbids deleting a version referenced by
+-- live/draft.
+-- ============================================================================
+
 -- Definitions + definition_history + atomic run count RPC.
 --
 -- Design notes:

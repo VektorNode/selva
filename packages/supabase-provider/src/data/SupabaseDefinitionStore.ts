@@ -262,6 +262,9 @@ interface DefinitionRow {
 	max_history: number;
 	status: DefinitionStatus;
 	run_count: number | string; // Postgres bigint round-trips as string under some drivers.
+	/** B4 scaffold: FK to definition_versions. Null until PR A wires publish. */
+	live_version_id?: string | null;
+	draft_version_id?: string | null;
 	created_at: string;
 	updated_at: string;
 	deleted_at?: string | null;
@@ -287,6 +290,8 @@ function rowToRecord(row: DefinitionRow): DefinitionRecord {
 		ownerId: row.owner_id,
 		createdBy: row.created_by ?? row.owner_id,
 		updatedBy: row.updated_by ?? row.last_edited_by ?? row.owner_id,
+		liveVersionId: row.live_version_id ?? null,
+		draftVersionId: row.draft_version_id ?? null,
 		computeServerId: row.compute_server_id ?? undefined,
 		fileExt: row.file_ext,
 		originalFilename: row.original_filename ?? undefined,
@@ -326,6 +331,8 @@ function recordToRow(r: DefinitionRecord): Record<string, unknown> {
 		owner_id: r.ownerId,
 		created_by: r.createdBy,
 		updated_by: r.updatedBy,
+		live_version_id: r.liveVersionId ?? null,
+		draft_version_id: r.draftVersionId ?? null,
 		compute_server_id: r.computeServerId ?? null,
 		file_ext: r.fileExt,
 		original_filename: r.originalFilename ?? null,

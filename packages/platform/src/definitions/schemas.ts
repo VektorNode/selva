@@ -7,6 +7,18 @@ export const GuidSchema = z.string().regex(UUID_REGEX, 'Invalid GUID format');
 
 export const DefinitionStatusSchema = z.enum(['draft', 'review', 'published', 'archived']);
 
+/**
+ * DefinitionVersion schema — B4 scaffold. See definitions/types.ts for shape.
+ */
+export const DefinitionVersionSchema = z.object({
+	id: GuidSchema,
+	definitionId: GuidSchema,
+	versionNumber: z.number().int().min(1),
+	fileKey: z.string().min(1),
+	uploadedBy: z.string().min(1),
+	uploadedAt: z.string()
+});
+
 
 /**
  * Input for creating a new definition — HTTP-body validator. Distinct from

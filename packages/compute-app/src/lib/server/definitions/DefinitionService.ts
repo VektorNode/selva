@@ -97,6 +97,9 @@ export class DefinitionService {
 			maxHistory: input.maxHistory ?? 10,
 			status: 'pending',
 			runCount: 0,
+			// Versioning scaffold (B4) — no upload/publish flow wires these yet.
+			liveVersionId: null,
+			draftVersionId: null,
 			createdAt: now,
 			updatedAt: now,
 			deletedAt: null

@@ -114,6 +114,8 @@ export const actions = {
 					ownerId: user.id,
 					createdBy: user.id,
 					updatedBy: user.id,
+					autoJoinOnUpload: false,
+					allowAnonymous: false,
 					createdAt: now,
 					updatedAt: now,
 					deletedAt: null

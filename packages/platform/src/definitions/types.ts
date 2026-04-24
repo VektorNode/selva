@@ -52,6 +52,27 @@ export interface HistoryEntry {
  */
 export type DefinitionStatus = 'pending' | 'draft' | 'review' | 'published' | 'archived';
 
+/**
+ * Immutable snapshot of a definition's `.gh` file at a point in time.
+ *
+ * Scaffold only (B4): the entity exists so adapters can round-trip rows and
+ * tests can assert the shape, but no upload/publish/rollback flow consumes
+ * versions yet. That wiring lands with PR A's versioning work. See spec §6.
+ */
+export interface DefinitionVersion {
+	/** UUID v4 primary key */
+	id: string;
+	/** UUID of the parent definition */
+	definitionId: string;
+	/** Monotonic integer starting at 1 and incrementing on each upload. */
+	versionNumber: number;
+	/** Storage key for this version's blob (opaque to the domain layer). */
+	fileKey: string;
+	/** UUID of the user who uploaded this version. */
+	uploadedBy: string;
+	uploadedAt: string; // ISO 8601
+}
+
 export interface DefinitionRecord {
 	/** UUID v4 primary key */
 	guid: string;
@@ -93,6 +114,15 @@ export interface DefinitionRecord {
 	status: DefinitionStatus;
 	/** Total number of successful solve runs across all time. */
 	runCount: number;
+	/**
+	 * Versioning scaffold (B4). `liveVersionId` points at the DefinitionVersion
+	 * external consumers solve; `draftVersionId` is what project editors test
+	 * against. Both are null until the upload/publish flow is wired in PR A.
+	 * Legacy code paths keep writing to `history[]` — the scaffold fields just
+	 * make the data model forward-compatible. Spec §6.
+	 */
+	liveVersionId?: string | null;
+	draftVersionId?: string | null;
 	createdAt: string; // ISO 8601
 	updatedAt: string; // ISO 8601
 	/**

@@ -15,9 +15,44 @@ import type { IUserProfileStore } from './userProfile/interface.js';
  */
 export type TenancyMode = 'single' | 'multi';
 
+/**
+ * Platform-level feature flags. Each flag gates behavior the spec explicitly
+ * designed for but that an operator must opt into. All default to `false` when
+ * absent — the safer posture for self-hosted and early SaaS deployments.
+ *
+ * These are read at request time via `isFlagEnabled` so a config hot-reload
+ * (if any) picks up changes without an app restart.
+ */
+export interface SelvaFlags {
+	/**
+	 * Allow projects with `visibility='public'` to be visible across orgs on
+	 * the instance. When false, `public` effectively means "public inside the
+	 * one org" — correct for single-tenant deployments. See spec §4.
+	 */
+	ALLOW_CROSS_ORG_PUBLIC?: boolean;
+	/**
+	 * Allow an org to override the instance compute pool with its own
+	 * Rhino.Compute server. Until enabled, `manage_org_compute` is inert and
+	 * every solve uses the instance default. See spec §3 "Compute (BYO override)".
+	 */
+	ALLOW_ORG_COMPUTE_OVERRIDE?: boolean;
+	/**
+	 * Allow authenticated users to create new orgs. Self-hosted / single-tenant
+	 * deployments keep this off; only the platform admin provisions orgs.
+	 * See spec §2.
+	 */
+	ALLOW_ORG_CREATION?: boolean;
+}
+
 export interface SelvaConfig {
 	/** Tenancy model. Defaults to `single` if omitted. */
 	tenancy?: TenancyMode;
+
+	/**
+	 * Platform-level feature flags. Omitted flags default to `false` (safest
+	 * posture). See `SelvaFlags` for the individual toggles.
+	 */
+	flags?: SelvaFlags;
 
 	/** Auth provider — session tokens and identity verification only. */
 	auth: IAuthProvider;
@@ -45,6 +80,15 @@ export interface SelvaConfig {
 }
 
 export type SelvaConfigFactory = (env: Record<string, string | undefined>) => SelvaConfig;
+
+/**
+ * Safe accessor for a platform flag. Omitted flags resolve to `false` — never
+ * assume a flag's value by reading the object directly, since the block itself
+ * is optional.
+ */
+export function isFlagEnabled(config: SelvaConfig, flag: keyof SelvaFlags): boolean {
+	return Boolean(config.flags?.[flag]);
+}
 
 /**
  * Same pattern as Vite's defineConfig — exists only for TypeScript inference and IDE autocomplete.

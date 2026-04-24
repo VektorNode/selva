@@ -26,6 +26,22 @@ export interface Project {
 	createdBy: string;
 	/** UUID of the user who last mutated this project. */
 	updatedBy: string;
+	/**
+	 * Commons mode toggle. Only meaningful on `public` projects. When true,
+	 * any authenticated user can upload a *new* definition (becoming its
+	 * `ownerId`) and edit / delete what they uploaded. Existing definitions
+	 * are still protected by project-role authority.
+	 * Default: false.
+	 */
+	autoJoinOnUpload: boolean;
+	/**
+	 * Unauthenticated access toggle. Only meaningful on `public` projects.
+	 * Spec §4 gates the toggle's production use on shipping abuse controls
+	 * (per-project quota, domain allowlist, signed embed tokens). The field
+	 * lives in the schema today so adapters and rules can evolve without
+	 * another migration. Default: false.
+	 */
+	allowAnonymous: boolean;
 	createdAt: string; // ISO 8601
 	updatedAt: string; // ISO 8601
 	/**
