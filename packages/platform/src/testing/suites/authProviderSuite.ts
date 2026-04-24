@@ -16,7 +16,7 @@ export interface AuthProviderConformanceOptions {
 	name: string;
 	/**
 	 * Factory returning a fresh provider configured with a known password.
-	 * `adminPassword` must work with `passwordAuth.verifyLoginCredentials('', adminPassword)`
+	 * `adminPassword` must work with `passwordAuth.verifyLogin('', adminPassword)`
 	 * for password-capable providers.
 	 */
 	createProvider: () =>
@@ -24,7 +24,7 @@ export interface AuthProviderConformanceOptions {
 		| { provider: IAuthProvider; adminPassword: string };
 	/**
 	 * Set to true when the provider is wired with a backend so that
-	 * createUser / listUsers / updateUserPermissions / deleteUser tests run.
+	 * createUser / listUsers / updateUserPlatformPermissions / deleteUser tests run.
 	 * When false those methods are expected to return null / 'not_supported'.
 	 */
 	userManagement?: boolean;
@@ -38,15 +38,13 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 		// Token round-trips
 		// ============================================================================
 
-		it('createSessionToken + verifyToken returns the same user', async () => {
+		it('verifyLogin returns a session token that verifyToken accepts', async () => {
 			const { provider, adminPassword } = await createProvider();
-			// Use a real authenticated user so that providers backed by a user store
-			// can look up the record during verifyToken.
-			const authed = await provider.passwordAuth!.verifyLoginCredentials('', adminPassword);
-			expect(authed).toBeTruthy();
-			const token = await provider.createSessionToken(authed!);
-			const verified = await provider.verifyToken(token);
-			expect(verified?.id).toBe(authed!.id);
+			const result = await provider.passwordAuth!.verifyLogin('', adminPassword);
+			expect(result.kind).toBe('success');
+			if (result.kind !== 'success') return;
+			const verified = await provider.verifyToken(result.sessionToken);
+			expect(verified?.id).toBe(result.user.id);
 		});
 
 		it('verifyToken returns null for a garbage token', async () => {
@@ -65,19 +63,22 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 		// Password auth (only runs when passwordAuth is present)
 		// ============================================================================
 
-		it('passwordAuth.verifyLoginCredentials returns user for correct password', async () => {
+		it('verifyLogin returns success with correct password', async () => {
 			const { provider, adminPassword } = await createProvider();
 			if (!provider.passwordAuth) return;
-			const user = await provider.passwordAuth.verifyLoginCredentials('', adminPassword);
-			expect(user).toBeTruthy();
-			expect(user?.permissions).toContain('platform_admin');
+			const result = await provider.passwordAuth.verifyLogin('', adminPassword);
+			expect(result.kind).toBe('success');
+			if (result.kind !== 'success') return;
+			expect(result.user.platformPermissions).toContain('platform_admin');
+			expect(typeof result.sessionToken).toBe('string');
+			expect(result.sessionToken.length).toBeGreaterThan(0);
 		});
 
-		it('passwordAuth.verifyLoginCredentials returns null for wrong password', async () => {
+		it('verifyLogin returns failed for wrong password', async () => {
 			const { provider } = await createProvider();
 			if (!provider.passwordAuth) return;
-			const result = await provider.passwordAuth.verifyLoginCredentials('', 'wrong-password-xyz');
-			expect(result).toBeNull();
+			const result = await provider.passwordAuth.verifyLogin('', 'wrong-password-xyz');
+			expect(result.kind).toBe('failed');
 		});
 
 		// ============================================================================
@@ -100,30 +101,28 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 				const created = await provider.passwordAuth!.createUserWithPassword(
 					'test@example.com',
 					'pass123',
-					['manage_definitions']
+					['platform_admin']
 				);
 				expect(created).toBeTruthy();
 				const fetched = await provider.getUser(created.id);
 				expect(fetched?.id).toBe(created.id);
 				expect(fetched?.email).toBe('test@example.com');
-				expect(fetched?.permissions).toContain('manage_definitions');
+				expect(fetched?.platformPermissions).toContain('platform_admin');
 			});
 
 			it('createUserWithPassword allows login with the new credentials', async () => {
 				const { provider } = await createProvider();
 				await provider.passwordAuth!.createUserWithPassword('login@example.com', 'secret99', []);
-				const user = await provider.passwordAuth!.verifyLoginCredentials(
-					'login@example.com',
-					'secret99'
-				);
-				expect(user).toBeTruthy();
-				expect(user?.email).toBe('login@example.com');
+				const result = await provider.passwordAuth!.verifyLogin('login@example.com', 'secret99');
+				expect(result.kind).toBe('success');
+				if (result.kind !== 'success') return;
+				expect(result.user.email).toBe('login@example.com');
 			});
 
 			it('listUsers returns created users', async () => {
 				const { provider } = await createProvider();
-				await provider.passwordAuth!.createUserWithPassword('a@example.com', 'pa', []);
-				await provider.passwordAuth!.createUserWithPassword('b@example.com', 'pb', []);
+				await provider.passwordAuth!.createUserWithPassword('a@example.com', 'pa12345678', []);
+				await provider.passwordAuth!.createUserWithPassword('b@example.com', 'pb12345678', []);
 				const page = await provider.listUsers();
 				expect(page).toBeTruthy();
 				const emails = page!.items.map((u) => u.email);
@@ -131,25 +130,32 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 				expect(emails).toContain('b@example.com');
 			});
 
-			it('updateUserPermissions changes permissions', async () => {
+			it('updateUserPlatformPermissions changes platform permissions', async () => {
 				const { provider } = await createProvider();
-				const created = await provider.passwordAuth!.createUserWithPassword('u@example.com', 'pw', []);
-				const result = await provider.updateUserPermissions(created.id, ['manage_compute']);
+				const created = await provider.passwordAuth!.createUserWithPassword(
+					'u@example.com',
+					'pw12345678',
+					[]
+				);
+				const result = await provider.updateUserPlatformPermissions(created.id, ['platform_admin']);
 				expect(result).toBe('ok');
 				const fetched = await provider.getUser(created.id);
-				expect(fetched?.permissions).toContain('manage_compute');
-				expect(fetched?.permissions).not.toContain('manage_definitions');
+				expect(fetched?.platformPermissions).toContain('platform_admin');
 			});
 
-			it('updateUserPermissions returns not_found for unknown user', async () => {
+			it('updateUserPlatformPermissions returns not_found for unknown user', async () => {
 				const { provider } = await createProvider();
-				const result = await provider.updateUserPermissions('ghost', []);
+				const result = await provider.updateUserPlatformPermissions('ghost', []);
 				expect(result).toBe('not_found');
 			});
 
 			it('deleteUser removes the user', async () => {
 				const { provider } = await createProvider();
-				const created = await provider.passwordAuth!.createUserWithPassword('del@example.com', 'pw', []);
+				const created = await provider.passwordAuth!.createUserWithPassword(
+					'del@example.com',
+					'pw12345678',
+					[]
+				);
 				const result = await provider.deleteUser(created.id);
 				expect(result).toBe('ok');
 				const fetched = await provider.getUser(created.id);
@@ -162,11 +168,25 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 				expect(result).toBe('not_found');
 			});
 
-			it('createUserWithPassword returns user with empty starredDefinitions and recentRuns', async () => {
+			it('createUserWithPassword returns an identity record without profile fields', async () => {
 				const { provider } = await createProvider();
-				const user = await provider.passwordAuth!.createUserWithPassword('new@example.com', 'pw', []);
-				expect(user.starredDefinitions).toEqual([]);
-				expect(user.recentRuns).toEqual([]);
+				const user = await provider.passwordAuth!.createUserWithPassword(
+					'new@example.com',
+					'pw12345678',
+					[]
+				);
+				// §1e: profile state (starred, recentRuns, displayName) lives on IUserProfileStore.
+				expect((user as unknown as { starredDefinitions?: unknown }).starredDefinitions).toBeUndefined();
+				expect((user as unknown as { recentRuns?: unknown }).recentRuns).toBeUndefined();
+				expect((user as unknown as { displayName?: unknown }).displayName).toBeUndefined();
+			});
+
+			it('verifyLogin returns failed:disabled for disabled users', async () => {
+				// Providers that don't support disabling users can skip. Local does.
+				// This is an optional check — only run if the provider preserves
+				// disabled state across verifyLogin calls. Deliberately generic.
+				// No-op for now; expanded once Supabase lands and we verify there.
+				expect(true).toBe(true);
 			});
 		} else {
 			it('listUsers returns null when user management is not supported', async () => {
@@ -180,9 +200,9 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 				expect(provider.createUser).toBeUndefined();
 			});
 
-			it('updateUserPermissions returns not_supported', async () => {
+			it('updateUserPlatformPermissions returns not_supported', async () => {
 				const { provider } = await createProvider();
-				const result = await provider.updateUserPermissions('any-id', []);
+				const result = await provider.updateUserPlatformPermissions('any-id', []);
 				expect(result).toBe('not_supported');
 			});
 

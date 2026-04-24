@@ -1,12 +1,33 @@
 // Auth
-export type { IAuthProvider, IPasswordAuth, AuthUser, Permission, UserManagementResult, RecentRun } from './auth/index.js';
-export { ALL_PERMISSIONS, PermissionSchema, hasPermission } from './auth/index.js';
+export type {
+	IAuthProvider,
+	IPasswordAuth,
+	AuthUser,
+	PlatformPermission,
+	UserManagementResult,
+	RecentRun,
+	LoginResult,
+	MfaFactor
+} from './auth/index.js';
+export { ALL_PLATFORM_PERMISSIONS, PlatformPermissionSchema } from './auth/index.js';
 
 // User profile
-export type { IUserProfileStore } from './userProfile/index.js';
+export type { IUserProfileStore, UserProfile } from './userProfile/index.js';
+export { emptyProfile } from './userProfile/index.js';
 
 // Organizations
-export type { Organization, OrgRole, OrgMember } from './organizations/index.js';
+export type {
+	Organization,
+	OrgRole,
+	OrgPermission,
+	OrgMember
+} from './organizations/index.js';
+export {
+	OrgRoleSchema,
+	OrgPermissionSchema,
+	ALL_ORG_PERMISSIONS,
+	DEFAULT_ORG_PERMISSIONS
+} from './organizations/index.js';
 
 // Invites
 export type { Invite, IInviteStore } from './invites/index.js';
@@ -44,7 +65,14 @@ export {
 export type { UpdateMetadataInput } from './definitions/schemas.js';
 
 // Storage
-export type { IStorageProvider } from './storage/index.js';
+export type { IStorageProvider, TranscodeResult } from './storage/index.js';
+export {
+	IMAGE_MAX_WIDTH,
+	IMAGE_WEBP_QUALITY,
+	isImageUpload,
+	toWebpPath,
+	transcodeImageIfNeeded
+} from './storage/index.js';
 
 // Data
 export type {
@@ -57,7 +85,7 @@ export type {
 
 // Request context
 export type { RequestContext } from './context.js';
-export { SYSTEM_CONTEXT } from './context.js';
+export { SYSTEM_CONTEXT, hasPermission } from './context.js';
 
 // Pagination
 export type { ListOptions, DefinitionListOptions, Page } from './pagination.js';

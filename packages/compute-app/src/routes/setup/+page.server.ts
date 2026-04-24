@@ -1,8 +1,13 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import {
+	ALL_ORG_PERMISSIONS,
+	ALL_PLATFORM_PERMISSIONS,
+	SYSTEM_CONTEXT
+} from '@selva/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { getOrganizationProvider } from '$lib/server/providers.server';
-import { createSession } from '$lib/server/admin-auth.server';
+import { setSessionCookie } from '$lib/server/admin-auth.server';
 
 function slugify(raw: string): string {
 	return raw
@@ -56,26 +61,35 @@ export const actions = {
 			if (!passwordAuth) {
 				return fail(501, { error: 'Password-based setup is not supported by this provider' });
 			}
+			// §1g-core: setup still grants platform_admin to the first user so
+			// the existing admin UI remains usable. §1g-ui tightens this to
+			// org-owner-only + env-var bootstrap for the platform admin.
 			const user = await passwordAuth.createUserWithPassword(email, password, [
-				'platform_admin',
-				'manage_users',
-				'manage_compute',
-				'manage_definitions',
-				'manage_projects'
+				...ALL_PLATFORM_PERMISSIONS
 			]);
 
 			// Seed/update the org with the admin's company name. The first call to
-			// getOrg triggers seeding with the newly-created user as owner; the
-			// subsequent updateOrg renames it from the default "Local".
+			// listOrgs triggers seeding with the newly-created user as owner + all
+			// OrgPermissions; the subsequent updateOrg renames it from "Local".
 			const orgs = getOrganizationProvider();
-			const ctx = { userId: user.id, permissions: user.permissions };
-			const page = await orgs.listOrgs(ctx, { limit: 1 });
+			const setupCtx = {
+				userId: user.id,
+				platformPermissions: [...ALL_PLATFORM_PERMISSIONS],
+				orgPermissions: [...ALL_ORG_PERMISSIONS]
+			};
+			const page = await orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
 			const org = page.items[0];
 			if (org) {
-				await orgs.updateOrg(ctx, org.id, { name: companyName, slug });
+				await orgs.updateOrg(setupCtx, org.id, { name: companyName, slug });
 			}
 
-			await createSession(cookies, user);
+			// §1a: `createUserWithPassword` doesn't return a session — matches
+			// Supabase's admin.createUser contract. Sign in to mint one.
+			const loginResult = await passwordAuth.verifyLogin(email, password);
+			if (loginResult.kind !== 'success') {
+				return fail(500, { error: 'Account created but login failed. Please sign in manually.' });
+			}
+			setSessionCookie(cookies, loginResult.sessionToken);
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
 			return fail(500, { error: msg });

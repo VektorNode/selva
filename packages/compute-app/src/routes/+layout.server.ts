@@ -7,10 +7,22 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 			? {
 					id: locals.user.id,
 					email: locals.user.email,
-					displayName: locals.user.displayName,
-					permissions: locals.user.permissions,
-					starredDefinitions: locals.user.starredDefinitions,
-					recentRuns: locals.user.recentRuns
+					platformPermissions: locals.user.platformPermissions
+				}
+			: null,
+		profile: locals.profile
+			? {
+					userId: locals.profile.userId,
+					displayName: locals.profile.displayName,
+					starredDefinitions: locals.profile.starredDefinitions,
+					recentRuns: locals.profile.recentRuns
+				}
+			: null,
+		ctx: locals.ctx
+			? {
+					orgId: locals.ctx.orgId,
+					platformPermissions: locals.ctx.platformPermissions,
+					orgPermissions: locals.ctx.orgPermissions
 				}
 			: null
 	};

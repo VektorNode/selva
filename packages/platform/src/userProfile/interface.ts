@@ -1,4 +1,5 @@
 import type { RecentRun, UserManagementResult } from '../auth/types.js';
+import type { UserProfile } from './types.js';
 
 /**
  * User-profile data store. Owns mutable profile state (display name,
@@ -10,6 +11,18 @@ import type { RecentRun, UserManagementResult } from '../auth/types.js';
  * state from your DB.
  */
 export interface IUserProfileStore {
+	/**
+	 * Read a profile by user id. Returns null when no profile row exists
+	 * (callers can treat this as the same as an empty profile via `emptyProfile(id)`).
+	 */
+	getProfile(userId: string): Promise<UserProfile | null>;
+
+	/**
+	 * Batch-read profiles for a set of user ids. Missing users are simply
+	 * omitted from the result. Order is not guaranteed.
+	 */
+	getProfiles(userIds: readonly string[]): Promise<UserProfile[]>;
+
 	/** Update mutable profile fields (display name, etc.). */
 	updateProfile(
 		userId: string,

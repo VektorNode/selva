@@ -7,7 +7,7 @@ import {
 	getUserProfileStore
 } from '$lib/server/providers.server';
 import { getAuthProvider } from '$lib/server/auth.server';
-import { createSession } from '$lib/server/admin-auth.server';
+import { setSessionCookie } from '$lib/server/admin-auth.server';
 
 /**
  * Public page — the invite token is the capability. `SYSTEM_CONTEXT` is
@@ -69,11 +69,10 @@ export const actions = {
 
 		let user;
 		try {
-			user = await auth.passwordAuth.createUserWithPassword(
-				invite.email,
-				password,
-				invite.permissions
-			);
+			// §1g: invites grant org-scope permissions only — platform permissions
+			// are never invite-grantable. New users start with an empty platform
+			// permission set.
+			user = await auth.passwordAuth.createUserWithPassword(invite.email, password, []);
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : 'Could not create your account.';
 			return fail(400, { error: msg });
@@ -84,6 +83,7 @@ export const actions = {
 				orgId: invite.orgId,
 				userId: user.id,
 				role: invite.orgRole,
+				permissions: invite.orgPermissions,
 				joinedAt: new Date().toISOString()
 			});
 			await getInviteStore().markAccepted(SYSTEM_CONTEXT, invite.id, user.id);
@@ -105,7 +105,14 @@ export const actions = {
 			}
 		}
 
-		await createSession(cookies, { ...user, displayName: displayName ?? user.displayName });
+		// §1a: sign in to mint a session token — matches Supabase's shape.
+		const loginResult = await auth.passwordAuth.verifyLogin(invite.email, password);
+		if (loginResult.kind !== 'success') {
+			return fail(500, {
+				error: 'Your account was created but login failed. Please sign in manually.'
+			});
+		}
+		setSessionCookie(cookies, loginResult.sessionToken);
 		redirect(303, '/admin');
 	}
 } satisfies Actions;

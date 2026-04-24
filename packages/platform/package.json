@@ -47,6 +47,10 @@
 			"types": "./dist/storage/index.d.ts",
 			"import": "./dist/storage/index.js"
 		},
+		"./userProfile": {
+			"types": "./dist/userProfile/index.d.ts",
+			"import": "./dist/userProfile/index.js"
+		},
 		"./data": {
 			"types": "./dist/data/index.d.ts",
 			"import": "./dist/data/index.js"
@@ -77,14 +81,19 @@
 		"zod": "^4.3.6"
 	},
 	"peerDependencies": {
+		"sharp": "^0.34.0",
 		"vitest": "^2.1.8"
 	},
 	"peerDependenciesMeta": {
+		"sharp": {
+			"optional": true
+		},
 		"vitest": {
 			"optional": true
 		}
 	},
 	"devDependencies": {
+		"sharp": "^0.34.5",
 		"typescript": "catalog:",
 		"vitest": "^2.1.8"
 	}

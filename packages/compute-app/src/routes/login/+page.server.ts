@@ -1,7 +1,7 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, RequestEvent } from './$types';
 import {
-	createSession,
+	setSessionCookie,
 	checkRateLimit,
 	recordFailedAttempt,
 	clearRateLimit
@@ -32,23 +32,28 @@ export const actions = {
 		if (!passwordAuth) {
 			return fail(501, { error: 'Password login is not supported by this provider' });
 		}
-		const user = await passwordAuth.verifyLoginCredentials(email, password);
 
-		if (!user) {
-			recordFailedAttempt(ip);
-			return fail(401, { error: 'Invalid credentials' });
+		const result = await passwordAuth.verifyLogin(email, password);
+
+		switch (result.kind) {
+			case 'failed':
+				recordFailedAttempt(ip);
+				return fail(401, { error: 'Invalid credentials' });
+			case 'mfa_required':
+				// §1f: MFA challenge flow lives in a follow-up UI. For now, fail
+				// closed — we never emit this kind in the local provider today.
+				return fail(501, { error: 'MFA challenge flow is not yet implemented' });
+			case 'success': {
+				clearRateLimit(ip);
+				setSessionCookie(cookies, result.sessionToken);
+
+				const destination =
+					typeof redirectTo === 'string' && redirectTo.startsWith('/')
+						? redirectTo
+						: url.searchParams.get('redirectTo') ?? '/app';
+
+				redirect(303, destination.startsWith('/') ? destination : '/app');
+			}
 		}
-
-		clearRateLimit(ip);
-		await createSession(cookies, user);
-
-		// Redirect back to where the user came from, defaulting to /admin.
-		// Only allow same-origin paths to prevent open redirect attacks.
-		const destination =
-			typeof redirectTo === 'string' && redirectTo.startsWith('/')
-				? redirectTo
-				: url.searchParams.get('redirectTo') ?? '/app';
-
-		redirect(303, destination.startsWith('/') ? destination : '/app');
 	}
 } satisfies Actions;

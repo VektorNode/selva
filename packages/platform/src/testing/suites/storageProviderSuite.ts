@@ -139,5 +139,37 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 			const got = await storage.get('files/test.bin');
 			expect(got).toEqual(data);
 		});
+
+		// ============================================================================
+		// Image transcoding (§1b)
+		// ============================================================================
+		//
+		// Every adapter MUST run uploads through the shared `transcodeImageIfNeeded`
+		// helper so cover images, archive thumbnails, etc. land as WebP regardless
+		// of what the user uploaded. Otherwise a provider that skipped this would
+		// produce a pipeline that looks correct until someone uploads a PNG.
+
+		it('transcodes png input to webp (path rewritten, magic bytes flipped)', async () => {
+			const storage = await createStorage();
+			// Minimal valid 1×1 transparent PNG — the canonical 67-byte fixture.
+			const pngBytes = Uint8Array.from([
+				0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+				0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f,
+				0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00,
+				0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+				0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
+			]);
+			await storage.put('covers/tiny.png', pngBytes, 'image/png');
+
+			// Image transcoding rewrites the path to .webp — the original path is empty.
+			const atPng = await storage.get('covers/tiny.png');
+			expect(atPng).toBeNull();
+
+			// At the webp path we get a valid RIFF/WEBP container.
+			const atWebp = await storage.get('covers/tiny.webp');
+			expect(atWebp).toBeTruthy();
+			expect(atWebp?.slice(0, 4)).toEqual(bytes('RIFF'));
+			expect(atWebp?.slice(8, 12)).toEqual(bytes('WEBP'));
+		});
 	});
 }

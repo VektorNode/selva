@@ -2,6 +2,7 @@ import { env } from '$env/dynamic/private';
 import { redirect } from '@sveltejs/kit';
 import { isHttpError } from '@sveltejs/kit';
 import type { AuthUser, RequestContext } from '@selva/platform';
+import { SYSTEM_CONTEXT, emptyProfile } from '@selva/platform';
 import { providers } from '$lib/server/providers.server';
 
 /**
@@ -36,17 +37,49 @@ if (missing.length > 0) {
 /**
  * Build a per-request context from an authenticated user.
  *
+ * §1g-core: resolves the user's active org membership and loads its
+ * `OrgPermission[]` into the context so store methods and routes see the
+ * fine-grained org-scope permissions. Single-org local mode means "active
+ * org" is just the one org the user belongs to. §1g-ui will generalize this
+ * to resolve from `/o/{slug}/` path prefix for multi-tenant deployments.
+ *
  * `sessionToken` is forwarded as `adapterContext` so adapters that need the
  * upstream auth token (e.g. Supabase RLS) can pull it off the context.
- * Adapters that don't need it ignore the field — local provider doesn't read it.
- *
- * Multi-tenant deployments will extend this to resolve the active org
- * (from subdomain, header, or user's default).
  */
-function buildContext(user: AuthUser, sessionToken: string | undefined): RequestContext {
+async function buildContext(
+	user: AuthUser,
+	sessionToken: string | undefined
+): Promise<RequestContext> {
+	// Pick the first org the user belongs to. Local provider is single-org,
+	// so this is deterministic. Platform admins without an explicit org
+	// membership get an empty `orgPermissions` — `hasPermission(ctx, ...)`
+	// still returns true for them because of the platform_admin short-circuit.
+	let orgId: string | undefined;
+	let orgPermissions: RequestContext['orgPermissions'] = [];
+
+	const orgsPage = await providers.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
+	const firstOrg = orgsPage.items[0];
+	if (firstOrg) {
+		const member = await providers.data.orgs.getOrgMember(
+			SYSTEM_CONTEXT,
+			firstOrg.id,
+			user.id
+		);
+		if (member) {
+			orgId = firstOrg.id;
+			orgPermissions = member.permissions;
+		} else if (user.platformPermissions.includes('platform_admin')) {
+			// Platform admins act against the first org even without an explicit
+			// membership row — keeps the UI usable pre-§1g-ui.
+			orgId = firstOrg.id;
+		}
+	}
+
 	return {
 		userId: user.id,
-		permissions: user.permissions,
+		orgId,
+		platformPermissions: user.platformPermissions,
+		orgPermissions,
 		adapterContext: sessionToken ? { sessionToken } : undefined
 	};
 }
@@ -100,9 +133,13 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 			redirect(303, `/login?redirectTo=${encodeURIComponent(pathname)}`);
 		}
 
-		// Make the authenticated user + request context available to route loaders
+		// Make the authenticated user + profile + request context available to route loaders.
+		// The profile lookup is one extra read per authed request; local reads `users.json`
+		// already cached by the auth flow, Supabase will hit the user_profiles table.
 		event.locals.user = user;
-		event.locals.ctx = buildContext(user, token);
+		event.locals.profile =
+			(await providers.userProfile.getProfile(user.id)) ?? emptyProfile(user.id);
+		event.locals.ctx = await buildContext(user, token);
 	}
 
 	const response = await resolve(event);

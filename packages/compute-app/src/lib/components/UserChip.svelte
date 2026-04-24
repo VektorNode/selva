@@ -4,10 +4,17 @@
 
 	import { LogIn, LogOut } from '@lucide/svelte';
 
-	const user = $derived((page.data as { user?: { id: string; email?: string; displayName?: string } | null }).user ?? null);
+	const pageData = $derived(
+		page.data as {
+			user?: { id: string; email?: string } | null;
+			profile?: { displayName?: string } | null;
+		}
+	);
+	const user = $derived(pageData.user ?? null);
+	const profile = $derived(pageData.profile ?? null);
 
 	const label = $derived(
-		user?.displayName ?? user?.email?.split('@')[0] ?? user?.id ?? ''
+		profile?.displayName ?? user?.email?.split('@')[0] ?? user?.id ?? ''
 	);
 
 	const initial = $derived(label[0]?.toUpperCase() ?? '');

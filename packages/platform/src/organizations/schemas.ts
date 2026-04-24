@@ -17,6 +17,34 @@ export const SlugSchema = z
 export const OrgRoleSchema = z.enum(['owner', 'admin', 'member']);
 export type OrgRole = z.infer<typeof OrgRoleSchema>;
 
+/**
+ * Org-scope permissions. Apply *within a single organization* only —
+ * never across orgs. A user may hold different OrgPermissions in different
+ * orgs they belong to.
+ */
+export const OrgPermissionSchema = z.enum([
+	'manage_users', // invite / remove / role-change within THIS org
+	'manage_compute', // configure compute servers for THIS org
+	'manage_definitions', // create / edit / delete defs in THIS org
+	'manage_projects' // create / edit / delete projects in THIS org
+]);
+export type OrgPermission = z.infer<typeof OrgPermissionSchema>;
+
+/** Convenience: every org permission. */
+export const ALL_ORG_PERMISSIONS: readonly OrgPermission[] = OrgPermissionSchema.options;
+
+/**
+ * Default OrgPermission[] granted to each role. Roles are the user-facing
+ * primitive; permissions are what the adapters check. These defaults are
+ * applied by the local provider when a member is added without an explicit
+ * permissions list; Supabase can seed via a trigger on `org_members` insert.
+ */
+export const DEFAULT_ORG_PERMISSIONS: Record<OrgRole, readonly OrgPermission[]> = {
+	owner: [...ALL_ORG_PERMISSIONS],
+	admin: [...ALL_ORG_PERMISSIONS],
+	member: []
+};
+
 export const CreateOrgSchema = z.object({
 	name: z.string().min(1, 'Organization name is required').max(128),
 	slug: SlugSchema

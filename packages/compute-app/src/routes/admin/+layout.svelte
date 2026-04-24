@@ -2,11 +2,11 @@
 	import { page } from '$app/state';
 	import { PageHeader, PageContent } from 'selva-shared';
 	import UserChip from '$lib/components/UserChip.svelte';
-	import type { Permission } from '@selva/platform';
-	import { hasPermission } from '@selva/platform';
+	import type { OrgPermission, PlatformPermission } from '@selva/platform';
 
 	interface LayoutData {
-		permissions: Permission[];
+		platformPermissions: PlatformPermission[];
+		orgPermissions: OrgPermission[];
 	}
 	interface LayoutProps {
 		data: LayoutData;
@@ -14,7 +14,12 @@
 	}
 	let { data, children }: LayoutProps = $props();
 
-	const can = (p: Permission) => hasPermission(data.permissions, p);
+	// §1g-core: client-side permission check. platform_admin implies every org perm.
+	const can = (p: PlatformPermission | OrgPermission) => {
+		if (data.platformPermissions.includes('platform_admin')) return true;
+		if (p === 'platform_admin') return false;
+		return data.orgPermissions.includes(p as OrgPermission);
+	};
 
 	const adminNavItems = $derived(
 		[

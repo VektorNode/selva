@@ -3,7 +3,8 @@ import {
 	getOrganizationProvider,
 	getProjectProvider,
 	getComputeServerConfigStore,
-	getAuthProvider
+	getAuthProvider,
+	getUserProfileStore
 } from '$lib/server/providers.server';
 import { hasPermission } from '@selva/platform';
 import type {
@@ -12,8 +13,7 @@ import type {
 	Project,
 	ProjectMember,
 	ComputeServerConfig,
-	AuthUser,
-	Permission
+	AuthUser
 } from '@selva/platform';
 import type { PageServerLoad } from './$types';
 
@@ -23,12 +23,17 @@ export interface ProjectWithMembers extends Project {
 	members: ProjectMember[];
 }
 
+/** User row with display name joined from the profile store (§1e). */
+export interface UserListItem extends AuthUser {
+	displayName?: string;
+}
+
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) return { projects: [], records: [], computeServers: [], users: [], canManageProjects: false, isPlatformAdmin: false };
 
 	const ctx = locals.ctx!;
-	const canManageProjects = hasPermission(locals.user.permissions, 'manage_projects');
-	const isPlatformAdmin = hasPermission(locals.user.permissions, 'platform_admin');
+	const canManageProjects = hasPermission(ctx, 'manage_projects');
+	const isPlatformAdmin = hasPermission(ctx, 'platform_admin');
 
 	try {
 		const [orgsPage, recordsPage, computeConfig] = await Promise.all([
@@ -66,11 +71,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 			projects = accessibleProjects.map((p) => ({ ...p, members: [] }));
 		}
 
-		// Load users for member management
-		let users: AuthUser[] = [];
+		// Load users for member management, with display names joined from profiles.
+		let users: UserListItem[] = [];
 		if (canManageProjects || isPlatformAdmin) {
 			const usersPage = await getAuthProvider().listUsers({ limit: 200 });
-			users = usersPage?.items ?? [];
+			const authUsers = usersPage?.items ?? [];
+			const profiles = await getUserProfileStore().getProfiles(authUsers.map((u) => u.id));
+			const displayById = new Map(profiles.map((p) => [p.userId, p.displayName]));
+			users = authUsers.map((u) => ({ ...u, displayName: displayById.get(u.id) }));
 		}
 
 		return {
@@ -88,7 +96,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			projects: [] as ProjectWithMembers[],
 			records: [] as DefinitionRecord[],
 			computeServers: [] as ComputeServerConfig[],
-			users: [] as AuthUser[],
+			users: [] as UserListItem[],
 			canManageProjects: false,
 			isPlatformAdmin: false
 		};

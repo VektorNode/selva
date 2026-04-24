@@ -1,4 +1,4 @@
-import type { OrgRole } from './schemas.js';
+import type { OrgRole, OrgPermission } from './schemas.js';
 
 export interface Organization {
 	/** UUID v4 primary key */
@@ -17,5 +17,12 @@ export interface OrgMember {
 	orgId: string;
 	userId: string;
 	role: OrgRole;
+	/**
+	 * Fine-grained permissions for this user in this org. The `role` is the
+	 * user-facing summary; `permissions` is what adapters check. Adapters
+	 * seed these from `DEFAULT_ORG_PERMISSIONS[role]` when a member is
+	 * added without an explicit list.
+	 */
+	permissions: OrgPermission[];
 	joinedAt: string; // ISO 8601
 }

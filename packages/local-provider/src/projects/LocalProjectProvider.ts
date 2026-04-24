@@ -152,12 +152,12 @@ export class LocalProjectProvider implements IProjectStore {
 	// UI gating only — the mutating methods above are the real security boundary.
 
 	async canEdit(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (hasPermission(ctx.permissions, 'platform_admin')) return true;
+		if (hasPermission(ctx, 'platform_admin')) return true;
 		const { projectMembers, projects, orgMembers } = await this.loader.get();
 		const member = projectMembers.find((m) => m.projectId === projectId && m.userId === ctx.userId);
 		if (member?.role === 'owner' || member?.role === 'editor') return true;
 		// manage_definitions permission allows editing public projects in orgs where user is a member
-		if (hasPermission(ctx.permissions, 'manage_definitions')) {
+		if (hasPermission(ctx, 'manage_definitions')) {
 			const project = projects.find((p) => p.id === projectId);
 			if (project?.visibility === 'public') {
 				const isOrgMember = orgMembers.some((m) => m.orgId === project.orgId && m.userId === ctx.userId);
@@ -168,20 +168,20 @@ export class LocalProjectProvider implements IProjectStore {
 	}
 
 	async canManage(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (hasPermission(ctx.permissions, 'platform_admin')) return true;
+		if (hasPermission(ctx, 'platform_admin')) return true;
 		const { projectMembers } = await this.loader.get();
 		const member = projectMembers.find((m) => m.projectId === projectId && m.userId === ctx.userId);
 		return member?.role === 'owner';
 	}
 
 	async canEditProjectSettings(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (hasPermission(ctx.permissions, 'platform_admin')) return true;
+		if (hasPermission(ctx, 'platform_admin')) return true;
 		const { projectMembers } = await this.loader.get();
 		const member = projectMembers.find((m) => m.projectId === projectId && m.userId === ctx.userId);
 		// project owners can always edit
 		if (member?.role === 'owner') return true;
 		// manage_definitions permission allows editing project settings if they're an editor
-		if (hasPermission(ctx.permissions, 'manage_definitions') && member?.role === 'editor') return true;
+		if (hasPermission(ctx, 'manage_definitions') && member?.role === 'editor') return true;
 		return false;
 	}
 
