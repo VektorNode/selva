@@ -79,12 +79,16 @@ export const actions = {
 		}
 
 		try {
+			const joinedAt = new Date().toISOString();
 			await getOrganizationProvider().addOrgMember(SYSTEM_CONTEXT, {
 				orgId: invite.orgId,
 				userId: user.id,
 				role: invite.orgRole,
 				permissions: invite.orgPermissions,
-				joinedAt: new Date().toISOString()
+				joinedAt,
+				updatedAt: joinedAt,
+				updatedBy: invite.invitedBy,
+				deletedAt: null
 			});
 			await getInviteStore().markAccepted(SYSTEM_CONTEXT, invite.id, user.id);
 		} catch (err) {

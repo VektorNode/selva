@@ -178,14 +178,23 @@ export class SupabaseOrgStore implements IOrgStore {
 }
 
 // ── Row ↔ domain mappers ────────────────────────────────────────────────
+//
+// Audit + soft-delete columns (created_by, updated_by, deleted_at on orgs;
+// updated_at, updated_by, deleted_at on org_members) are introduced by the
+// B3 refactor. The corresponding SQL column adds are TODO in the migration
+// files. Until those migrations land, these mappers fall back to owner_id
+// so the runtime stays safe on an un-migrated DB.
 
 interface OrgRow {
 	id: string;
 	name: string;
 	slug: string;
 	owner_id: string;
+	created_by?: string | null;
+	updated_by?: string | null;
 	created_at: string;
 	updated_at: string;
+	deleted_at?: string | null;
 }
 
 interface OrgMemberRow {
@@ -194,6 +203,9 @@ interface OrgMemberRow {
 	role: OrgRole;
 	permissions: string[];
 	joined_at: string;
+	updated_at?: string | null;
+	updated_by?: string | null;
+	deleted_at?: string | null;
 }
 
 function rowToOrg(row: OrgRow): Organization {
@@ -202,8 +214,11 @@ function rowToOrg(row: OrgRow): Organization {
 		name: row.name,
 		slug: row.slug,
 		ownerId: row.owner_id,
+		createdBy: row.created_by ?? row.owner_id,
+		updatedBy: row.updated_by ?? row.owner_id,
 		createdAt: row.created_at,
-		updatedAt: row.updated_at
+		updatedAt: row.updated_at,
+		deletedAt: row.deleted_at ?? null
 	};
 }
 
@@ -213,8 +228,11 @@ function orgToRow(org: Organization): OrgRow {
 		name: org.name,
 		slug: org.slug,
 		owner_id: org.ownerId,
+		created_by: org.createdBy,
+		updated_by: org.updatedBy,
 		created_at: org.createdAt,
-		updated_at: org.updatedAt
+		updated_at: org.updatedAt,
+		deleted_at: org.deletedAt ?? null
 	};
 }
 
@@ -224,7 +242,10 @@ function rowToOrgMember(row: OrgMemberRow): OrgMember {
 		userId: row.user_id,
 		role: row.role,
 		permissions: (row.permissions ?? []) as OrgMember['permissions'],
-		joinedAt: row.joined_at
+		joinedAt: row.joined_at,
+		updatedAt: row.updated_at ?? row.joined_at,
+		updatedBy: row.updated_by ?? row.user_id,
+		deletedAt: row.deleted_at ?? null
 	};
 }
 

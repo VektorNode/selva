@@ -78,10 +78,13 @@ export class DefinitionService {
 		file: Uint8Array
 	): Promise<DefinitionRecord> {
 		const now = new Date().toISOString();
+		const actor = ctx.userId || input.ownerId;
 		const record: DefinitionRecord = {
 			guid: input.guid,
 			projectId: input.projectId,
 			ownerId: input.ownerId,
+			createdBy: actor,
+			updatedBy: actor,
 			fileExt: input.fileExt,
 			originalFilename: input.originalFilename,
 			displayName: input.displayName,
@@ -95,7 +98,8 @@ export class DefinitionService {
 			status: 'pending',
 			runCount: 0,
 			createdAt: now,
-			updatedAt: now
+			updatedAt: now,
+			deletedAt: null
 		};
 
 		// 1. Metadata first — if this fails there's nothing to clean up.

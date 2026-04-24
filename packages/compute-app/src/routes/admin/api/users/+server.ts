@@ -93,12 +93,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// drop anything else silently so the UI can send whatever.
 		const orgId = locals.ctx?.actingOrgId;
 		if (orgId) {
+			const joinedAt = new Date().toISOString();
 			await getOrganizationProvider().addOrgMember(SYSTEM_CONTEXT, {
 				orgId,
 				userId: user.id,
 				role: 'member',
 				permissions: org.filter((p) => MEMBER_ASSIGNABLE_PERMISSIONS.includes(p)),
-				joinedAt: new Date().toISOString()
+				joinedAt,
+				updatedAt: joinedAt,
+				updatedBy: locals.user?.id ?? user.id,
+				deletedAt: null
 			});
 		}
 

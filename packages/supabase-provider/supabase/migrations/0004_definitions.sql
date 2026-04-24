@@ -5,6 +5,20 @@
 --     once migration 0003 is updated.
 -- ============================================================================
 
+-- ============================================================================
+-- TODO(access-control refactor / B3): audit fields + soft delete for definitions
+--
+--   • Rename column `last_edited_by` → `updated_by` on public.definitions.
+--     The TS mapper still reads `last_edited_by` as a fallback until rename lands.
+--   • Add column `created_by uuid references auth.users(id)` — backfill with
+--     existing `owner_id`. The TS contract treats `createdBy` as immutable.
+--   • Add column `deleted_at timestamptz null` with a partial index on
+--     `(project_id) where deleted_at is null` for hot list queries.
+--   • Update every SELECT/UPDATE/DELETE policy below to include
+--     `and deleted_at is null` in the USING clause. The TS layer soft-deletes
+--     (it never issues a hard DELETE).
+-- ============================================================================
+
 -- Definitions + definition_history + atomic run count RPC.
 --
 -- Design notes:

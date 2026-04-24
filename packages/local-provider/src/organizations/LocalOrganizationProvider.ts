@@ -33,6 +33,11 @@ const EMPTY_STORE: LocalOrgStore = {
 
 const VALID_ORG_PERMS = new Set<OrgPermission>(ALL_ORG_PERMISSIONS);
 
+/** Data-access-layer filter: row is live (not soft-deleted). */
+function isLive<T extends { deletedAt?: string | null }>(row: T): boolean {
+	return row.deletedAt == null;
+}
+
 function sanitizeOrgPermissions(raw: readonly string[] | undefined): OrgPermission[] {
 	if (!raw) return [];
 	return raw.filter((p): p is OrgPermission => VALID_ORG_PERMS.has(p as OrgPermission));
@@ -40,10 +45,14 @@ function sanitizeOrgPermissions(raw: readonly string[] | undefined): OrgPermissi
 
 /**
  * Pre-§1g OrgMember records had no `permissions` field. Backfill from the
- * role's defaults so existing `local-org.json` files keep working.
+ * role's defaults so existing `local-org.json` files keep working. Also
+ * backfills audit fields introduced in the B3 refactor.
  */
 function migrateOrgMember(m: OrgMember & { permissions?: OrgPermission[] }): OrgMember {
 	if (!m.permissions) m.permissions = [...DEFAULT_ORG_PERMISSIONS[m.role]];
+	if (!m.updatedAt) m.updatedAt = m.joinedAt;
+	if (!m.updatedBy) m.updatedBy = m.userId;
+	if (m.deletedAt === undefined) m.deletedAt = null;
 	return m;
 }
 
@@ -144,69 +153,98 @@ export class LocalOrganizationProvider implements IOrgStore {
 
 	async listOrgs(_ctx: RequestContext, opts?: ListOptions): Promise<Page<Organization>> {
 		const { orgs } = await this.loader.get();
-		return paginate(applyOrder(orgs, opts), opts);
+		return paginate(applyOrder(orgs.filter(isLive), opts), opts);
 	}
 
 	async getOrg(_ctx: RequestContext, id: string): Promise<Organization | null> {
 		const { orgs } = await this.loader.get();
-		return orgs.find((o) => o.id === id) ?? null;
+		const o = orgs.find((o) => o.id === id);
+		return o && isLive(o) ? o : null;
 	}
 
 	async getOrgBySlug(_ctx: RequestContext, slug: string): Promise<Organization | null> {
 		const { orgs } = await this.loader.get();
-		return orgs.find((o) => o.slug === slug) ?? null;
+		const o = orgs.find((o) => o.slug === slug);
+		return o && isLive(o) ? o : null;
 	}
 
-	async createOrg(_ctx: RequestContext, org: Organization): Promise<void> {
+	async createOrg(ctx: RequestContext, org: Organization): Promise<void> {
 		const store = await this.loader.get();
-		if (store.orgs.some((o) => o.id === org.id)) {
+		if (store.orgs.some((o) => o.id === org.id && isLive(o))) {
 			throw new ProviderError(`Org '${org.id}' already exists`, 409);
 		}
-		if (store.orgs.some((o) => o.slug === org.slug)) {
+		if (store.orgs.some((o) => o.slug === org.slug && isLive(o))) {
 			throw new ProviderError(`Org slug '${org.slug}' already in use`, 409);
 		}
-		store.orgs.push(org);
+		store.orgs.push({ ...org, deletedAt: null });
 		// Seed the owner membership so the creator can see their own org through
 		// downstream permission checks. Mirrors SupabaseOrgStore.createOrg.
+		const now = new Date().toISOString();
 		store.orgMembers.push({
 			orgId: org.id,
 			userId: org.ownerId,
 			role: 'owner',
 			permissions: [...DEFAULT_ORG_PERMISSIONS.owner],
-			joinedAt: new Date().toISOString()
+			joinedAt: now,
+			updatedAt: now,
+			updatedBy: ctx.userId || org.ownerId,
+			deletedAt: null
 		});
 		await this.loader.write(store);
 	}
 
 	async updateOrg(
-		_ctx: RequestContext,
+		ctx: RequestContext,
 		id: string,
 		patch: Partial<Pick<Organization, 'name' | 'slug'>>
 	): Promise<void> {
 		const store = await this.loader.get();
-		const idx = store.orgs.findIndex((o) => o.id === id);
+		const idx = store.orgs.findIndex((o) => o.id === id && isLive(o));
 		if (idx === -1) throw new ProviderError(`Org '${id}' not found`, 404);
 		if (patch.slug && patch.slug !== store.orgs[idx].slug) {
-			if (store.orgs.some((o) => o.id !== id && o.slug === patch.slug)) {
+			if (store.orgs.some((o) => o.id !== id && o.slug === patch.slug && isLive(o))) {
 				throw new ProviderError(`Org slug '${patch.slug}' already in use`, 409);
 			}
 		}
-		store.orgs[idx] = { ...store.orgs[idx], ...patch, updatedAt: new Date().toISOString() };
+		store.orgs[idx] = {
+			...store.orgs[idx],
+			...patch,
+			updatedAt: new Date().toISOString(),
+			updatedBy: ctx.userId || store.orgs[idx].updatedBy
+		};
 		await this.loader.write(store);
 	}
 
-	async deleteOrg(_ctx: RequestContext, id: string): Promise<void> {
+	async deleteOrg(ctx: RequestContext, id: string): Promise<void> {
 		const store = await this.loader.get();
-		const idx = store.orgs.findIndex((o) => o.id === id);
+		const idx = store.orgs.findIndex((o) => o.id === id && isLive(o));
 		if (idx === -1) throw new ProviderError(`Org '${id}' not found`, 404);
-		store.orgs.splice(idx, 1);
-		store.orgMembers = store.orgMembers.filter((m) => m.orgId !== id);
-		// Cascade: drop projects + project members in this org.
-		const droppedProjectIds = new Set(
-			store.projects.filter((p) => p.orgId === id).map((p) => p.id)
+		const now = new Date().toISOString();
+		const actor = ctx.userId || store.orgs[idx].updatedBy;
+		// Soft-delete the org + cascade-soft-delete its members, projects, and
+		// project members. All reads filter deletedAt so nothing leaks.
+		store.orgs[idx] = {
+			...store.orgs[idx],
+			deletedAt: now,
+			updatedAt: now,
+			updatedBy: actor
+		};
+		store.orgMembers = store.orgMembers.map((m) =>
+			m.orgId === id && isLive(m) ? { ...m, deletedAt: now, updatedAt: now, updatedBy: actor } : m
 		);
-		store.projects = store.projects.filter((p) => p.orgId !== id);
-		store.projectMembers = store.projectMembers.filter((m) => !droppedProjectIds.has(m.projectId));
+		const orgProjectIds = new Set(
+			store.projects.filter((p) => p.orgId === id && isLive(p)).map((p) => p.id)
+		);
+		store.projects = store.projects.map((p) =>
+			p.orgId === id && isLive(p)
+				? { ...p, deletedAt: now, updatedAt: now, updatedBy: actor }
+				: p
+		);
+		store.projectMembers = store.projectMembers.map((m) =>
+			orgProjectIds.has(m.projectId) && isLive(m)
+				? { ...m, deletedAt: now, updatedAt: now, updatedBy: actor }
+				: m
+		);
 		await this.loader.write(store);
 	}
 
@@ -219,7 +257,7 @@ export class LocalOrganizationProvider implements IOrgStore {
 	): Promise<Page<OrgMember>> {
 		const { orgMembers } = await this.loader.get();
 		return paginate(
-			orgMembers.filter((m) => m.orgId === orgId).map(migrateOrgMember),
+			orgMembers.filter((m) => m.orgId === orgId && isLive(m)).map(migrateOrgMember),
 			opts
 		);
 	}
@@ -231,42 +269,67 @@ export class LocalOrganizationProvider implements IOrgStore {
 	): Promise<OrgMember | null> {
 		const { orgMembers } = await this.loader.get();
 		const m = orgMembers.find((m) => m.orgId === orgId && m.userId === userId);
-		return m ? migrateOrgMember(m) : null;
+		return m && isLive(m) ? migrateOrgMember(m) : null;
 	}
 
-	async addOrgMember(_ctx: RequestContext, member: OrgMember): Promise<void> {
+	async addOrgMember(ctx: RequestContext, member: OrgMember): Promise<void> {
 		const store = await this.loader.get();
-		// If callers forget to pass permissions, seed from role defaults.
-		const full: OrgMember = {
-			...member,
-			permissions: member.permissions ?? [...DEFAULT_ORG_PERMISSIONS[member.role]]
-		};
-		store.orgMembers.push(full);
+		const now = new Date().toISOString();
+		const actor = ctx.userId || member.userId;
+		// Reactivate a prior soft-deleted membership row rather than piling rows up.
+		const existing = store.orgMembers.find(
+			(m) => m.orgId === member.orgId && m.userId === member.userId
+		);
+		if (existing) {
+			Object.assign(existing, member, {
+				permissions: member.permissions ?? [...DEFAULT_ORG_PERMISSIONS[member.role]],
+				updatedAt: now,
+				updatedBy: actor,
+				deletedAt: null
+			});
+		} else {
+			store.orgMembers.push({
+				...member,
+				permissions: member.permissions ?? [...DEFAULT_ORG_PERMISSIONS[member.role]],
+				updatedAt: member.updatedAt ?? now,
+				updatedBy: member.updatedBy ?? actor,
+				deletedAt: null
+			});
+		}
 		await this.loader.write(store);
 	}
 
 	async updateOrgMemberRole(
-		_ctx: RequestContext,
+		ctx: RequestContext,
 		orgId: string,
 		userId: string,
 		role: OrgRole
 	): Promise<void> {
 		const store = await this.loader.get();
-		const m = store.orgMembers.find((m) => m.orgId === orgId && m.userId === userId);
+		const m = store.orgMembers.find(
+			(m) => m.orgId === orgId && m.userId === userId && isLive(m)
+		);
 		if (!m) throw new ProviderError(`Org member '${userId}' not found`, 404);
 		m.role = role;
 		// Role change re-seeds the permission defaults. Callers that want to
 		// preserve a custom OrgPermission set must call updateOrgMemberPermissions
 		// (once §1g-ui adds it) after updating the role.
 		m.permissions = [...DEFAULT_ORG_PERMISSIONS[role]];
+		m.updatedAt = new Date().toISOString();
+		m.updatedBy = ctx.userId || m.updatedBy;
 		await this.loader.write(store);
 	}
 
-	async removeOrgMember(_ctx: RequestContext, orgId: string, userId: string): Promise<void> {
+	async removeOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<void> {
 		const store = await this.loader.get();
-		store.orgMembers = store.orgMembers.filter(
-			(m) => !(m.orgId === orgId && m.userId === userId)
+		const m = store.orgMembers.find(
+			(m) => m.orgId === orgId && m.userId === userId && isLive(m)
 		);
+		if (!m) return;
+		const now = new Date().toISOString();
+		m.deletedAt = now;
+		m.updatedAt = now;
+		m.updatedBy = ctx.userId || m.updatedBy;
 		await this.loader.write(store);
 	}
 }

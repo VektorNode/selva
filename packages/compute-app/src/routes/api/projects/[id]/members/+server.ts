@@ -35,11 +35,15 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const parsed = AddMemberSchema.safeParse(body);
 	if (!parsed.success) throwZodError(parsed.error);
 
+	const now = new Date().toISOString();
 	const member: ProjectMember = {
 		projectId: id,
 		userId: parsed.data.userId,
 		role: parsed.data.role,
-		joinedAt: new Date().toISOString()
+		joinedAt: now,
+		updatedAt: now,
+		updatedBy: ctx.userId || parsed.data.userId,
+		deletedAt: null
 	};
 
 	try {

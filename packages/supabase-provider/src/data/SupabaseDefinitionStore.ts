@@ -236,12 +236,21 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 }
 
 // ── Row ↔ domain mappers ────────────────────────────────────────────────
+//
+// Audit + soft-delete columns on `definitions` (created_by, updated_by,
+// deleted_at) are introduced by the B3 refactor and listed as TODOs in the
+// SQL migration files. The old `last_edited_by` is replaced by `updated_by`
+// in the domain type; the mapper keeps accepting it as a legacy alias until
+// the SQL migration renames the column.
 
 interface DefinitionRow {
 	guid: string;
 	project_id: string;
 	owner_id: string;
-	last_edited_by: string | null;
+	/** @deprecated renamed to updated_by at the domain level; kept as a fallback source. */
+	last_edited_by?: string | null;
+	created_by?: string | null;
+	updated_by?: string | null;
 	compute_server_id: string | null;
 	file_ext: DefinitionFileExt;
 	original_filename: string | null;
@@ -255,6 +264,7 @@ interface DefinitionRow {
 	run_count: number | string; // Postgres bigint round-trips as string under some drivers.
 	created_at: string;
 	updated_at: string;
+	deleted_at?: string | null;
 	history?: HistoryRow[];
 }
 
@@ -275,7 +285,8 @@ function rowToRecord(row: DefinitionRow): DefinitionRecord {
 		guid: row.guid,
 		projectId: row.project_id,
 		ownerId: row.owner_id,
-		lastEditedBy: row.last_edited_by ?? undefined,
+		createdBy: row.created_by ?? row.owner_id,
+		updatedBy: row.updated_by ?? row.last_edited_by ?? row.owner_id,
 		computeServerId: row.compute_server_id ?? undefined,
 		fileExt: row.file_ext,
 		originalFilename: row.original_filename ?? undefined,
@@ -289,7 +300,8 @@ function rowToRecord(row: DefinitionRow): DefinitionRecord {
 		status: row.status,
 		runCount: typeof row.run_count === 'string' ? Number(row.run_count) : row.run_count,
 		createdAt: row.created_at,
-		updatedAt: row.updated_at
+		updatedAt: row.updated_at,
+		deletedAt: row.deleted_at ?? null
 	};
 }
 
@@ -306,13 +318,14 @@ function rowToHistory(row: HistoryRow): HistoryEntry {
 function recordToRow(r: DefinitionRecord): Record<string, unknown> {
 	// Build the row without `null` for fields that have NOT NULL DEFAULT in SQL
 	// (e.g. `tags`). Send `undefined` for absent values so PostgREST lets the
-	// column default apply. `last_edited_by` etc. are nullable — null is fine
-	// there.
+	// column default apply. `compute_server_id`, audit ids etc. are nullable —
+	// null is fine there.
 	const row: Record<string, unknown> = {
 		guid: r.guid,
 		project_id: r.projectId,
 		owner_id: r.ownerId,
-		last_edited_by: r.lastEditedBy ?? null,
+		created_by: r.createdBy,
+		updated_by: r.updatedBy,
 		compute_server_id: r.computeServerId ?? null,
 		file_ext: r.fileExt,
 		original_filename: r.originalFilename ?? null,
@@ -324,7 +337,8 @@ function recordToRow(r: DefinitionRecord): Record<string, unknown> {
 		status: r.status,
 		run_count: r.runCount,
 		created_at: r.createdAt,
-		updated_at: r.updatedAt
+		updated_at: r.updatedAt,
+		deleted_at: r.deletedAt ?? null
 	};
 	// `tags` is NOT NULL DEFAULT '{}' — include it only when the caller gives
 	// us an array; otherwise let the default apply.
@@ -345,7 +359,7 @@ function patchToRow(patch: DefinitionRecordPatch): Record<string, unknown> {
 	if (patch.projectId !== undefined) row.project_id = patch.projectId;
 	if (patch.computeServerId !== undefined) row.compute_server_id = patch.computeServerId;
 	if (patch.status !== undefined) row.status = patch.status;
-	if (patch.lastEditedBy !== undefined) row.last_edited_by = patch.lastEditedBy;
+	if (patch.ownerId !== undefined) row.owner_id = patch.ownerId;
 	return row;
 }
 

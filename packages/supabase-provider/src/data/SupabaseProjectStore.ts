@@ -250,6 +250,11 @@ export class SupabaseProjectStore implements IProjectStore {
 }
 
 // ── Row ↔ domain mappers ────────────────────────────────────────────────
+//
+// Audit + soft-delete columns on projects/project_members are introduced by
+// the B3 refactor and listed as TODOs in the SQL migration files. Mappers
+// fall back to owner_id / joined_at until those columns land so the runtime
+// stays safe on an un-migrated DB.
 
 interface ProjectRow {
 	id: string;
@@ -259,8 +264,11 @@ interface ProjectRow {
 	description: string | null;
 	visibility: Project['visibility'];
 	owner_id: string;
+	created_by?: string | null;
+	updated_by?: string | null;
 	created_at: string;
 	updated_at: string;
+	deleted_at?: string | null;
 }
 
 interface ProjectMemberRow {
@@ -268,6 +276,9 @@ interface ProjectMemberRow {
 	user_id: string;
 	role: ProjectRole;
 	joined_at: string;
+	updated_at?: string | null;
+	updated_by?: string | null;
+	deleted_at?: string | null;
 }
 
 function rowToProject(row: ProjectRow): Project {
@@ -279,8 +290,11 @@ function rowToProject(row: ProjectRow): Project {
 		description: row.description ?? undefined,
 		visibility: row.visibility,
 		ownerId: row.owner_id,
+		createdBy: row.created_by ?? row.owner_id,
+		updatedBy: row.updated_by ?? row.owner_id,
 		createdAt: row.created_at,
-		updatedAt: row.updated_at
+		updatedAt: row.updated_at,
+		deletedAt: row.deleted_at ?? null
 	};
 }
 
@@ -293,8 +307,11 @@ function projectToRow(p: Project): ProjectRow {
 		description: p.description ?? null,
 		visibility: p.visibility,
 		owner_id: p.ownerId,
+		created_by: p.createdBy,
+		updated_by: p.updatedBy,
 		created_at: p.createdAt,
-		updated_at: p.updatedAt
+		updated_at: p.updatedAt,
+		deleted_at: p.deletedAt ?? null
 	};
 }
 
@@ -303,7 +320,10 @@ function rowToProjectMember(row: ProjectMemberRow): ProjectMember {
 		projectId: row.project_id,
 		userId: row.user_id,
 		role: row.role,
-		joinedAt: row.joined_at
+		joinedAt: row.joined_at,
+		updatedAt: row.updated_at ?? row.joined_at,
+		updatedBy: row.updated_by ?? row.user_id,
+		deletedAt: row.deleted_at ?? null
 	};
 }
 

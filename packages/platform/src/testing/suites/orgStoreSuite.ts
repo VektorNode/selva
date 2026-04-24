@@ -37,19 +37,26 @@ function org(ownerId: string, overrides: Partial<Organization> = {}): Organizati
 		name: overrides.name ?? 'Test Org',
 		slug: overrides.slug ?? `test-${Math.random().toString(36).slice(2, 8)}`,
 		ownerId: overrides.ownerId ?? ownerId,
+		createdBy: overrides.createdBy ?? ownerId,
+		updatedBy: overrides.updatedBy ?? ownerId,
 		createdAt: overrides.createdAt ?? now,
 		updatedAt: overrides.updatedAt ?? now,
+		deletedAt: overrides.deletedAt ?? null,
 		...overrides
 	};
 }
 
 function member(orgId: string, userId: string, role: OrgRole = 'member'): OrgMember {
+	const now = new Date().toISOString();
 	return {
 		orgId,
 		userId,
 		role,
 		permissions: [...DEFAULT_ORG_PERMISSIONS[role]],
-		joinedAt: new Date().toISOString()
+		joinedAt: now,
+		updatedAt: now,
+		updatedBy: userId,
+		deletedAt: null
 	};
 }
 
@@ -204,6 +211,70 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 			}
 			const page = await store.listOrgMembers(ctx(u1), orgId, { limit: 2 });
 			expect(page.items.length).toBe(2);
+		});
+
+		// ============================================================================
+		// B3: audit fields + soft delete
+		// ============================================================================
+
+		if (!singleOrgMode) {
+			it('createOrg populates createdBy and updatedBy', async () => {
+				const store = await createStore();
+				const u1 = await seed();
+				const orgId = makeUuid();
+				await store.createOrg(ctx(u1), org(u1, { id: orgId, slug: `audit-${orgId.slice(0, 8)}` }));
+				const got = await store.getOrg(ctx(u1), orgId);
+				expect(got?.createdBy).toBe(u1);
+				expect(got?.updatedBy).toBe(u1);
+				expect(got?.deletedAt ?? null).toBeNull();
+			});
+
+			it('updateOrg advances updatedBy to the caller, preserves createdBy', async () => {
+				const store = await createStore();
+				const u1 = await seed();
+				const u2 = await seed();
+				const orgId = makeUuid();
+				await store.createOrg(ctx(u1), org(u1, { id: orgId, slug: `u-${orgId.slice(0, 8)}` }));
+				// Seed u2 as admin so (if auth is enforced) they can mutate the org.
+				await store.addOrgMember(ctx(u1), member(orgId, u2, 'admin'));
+				await store.updateOrg(ctx(u2), orgId, { name: 'Renamed' });
+				const got = await store.getOrg(ctx(u1), orgId);
+				expect(got?.updatedBy).toBe(u2);
+				expect(got?.createdBy).toBe(u1);
+			});
+
+			it('deleteOrg soft-deletes — org stops appearing in reads', async () => {
+				const store = await createStore();
+				const u1 = await seed();
+				const orgId = makeUuid();
+				const slug = `sd-${orgId.slice(0, 8)}`;
+				await store.createOrg(ctx(u1), org(u1, { id: orgId, slug }));
+				await store.deleteOrg(ctx(u1), orgId);
+				expect(await store.getOrg(ctx(u1), orgId)).toBeNull();
+				expect(await store.getOrgBySlug(ctx(u1), slug)).toBeNull();
+			});
+
+			it('deleteOrg cascades soft-delete to org members', async () => {
+				const store = await createStore();
+				const u1 = await seed();
+				const u2 = await seed();
+				const orgId = makeUuid();
+				await store.createOrg(ctx(u1), org(u1, { id: orgId, slug: `c-${orgId.slice(0, 8)}` }));
+				await store.addOrgMember(ctx(u1), member(orgId, u2));
+				await store.deleteOrg(ctx(u1), orgId);
+				expect(await store.getOrgMember(ctx(u1), orgId, u2)).toBeNull();
+			});
+		}
+
+		it('removeOrgMember soft-deletes — the member stops appearing in reads', async () => {
+			const store = await createStore();
+			const { u1, orgId } = await setupOrg(store);
+			const u2 = await seed();
+			await store.addOrgMember(ctx(u1), member(orgId, u2));
+			await store.removeOrgMember(ctx(u1), orgId, u2);
+			expect(await store.getOrgMember(ctx(u1), orgId, u2)).toBeNull();
+			const page = await store.listOrgMembers(ctx(u1), orgId, { limit: 100 });
+			expect(page.items.map((m) => m.userId)).not.toContain(u2);
 		});
 
 		if (ctxIsolation) {

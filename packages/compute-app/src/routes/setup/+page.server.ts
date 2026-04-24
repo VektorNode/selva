@@ -94,8 +94,11 @@ export const actions = {
 					name: companyName,
 					slug,
 					ownerId: user.id,
+					createdBy: user.id,
+					updatedBy: user.id,
 					createdAt: now,
-					updatedAt: now
+					updatedAt: now,
+					deletedAt: null
 				};
 				// SYSTEM_CONTEXT bypasses RLS — needed because the new user has no
 				// session yet. createOrg seeds the owner membership row in the same
@@ -109,15 +112,21 @@ export const actions = {
 					slug: 'default',
 					visibility: 'public',
 					ownerId: user.id,
+					createdBy: user.id,
+					updatedBy: user.id,
 					createdAt: now,
-					updatedAt: now
+					updatedAt: now,
+					deletedAt: null
 				};
 				await projects.createProject(SYSTEM_CONTEXT, project);
 				await projects.addProjectMember(SYSTEM_CONTEXT, {
 					projectId: project.id,
 					userId: user.id,
 					role: 'owner',
-					joinedAt: now
+					joinedAt: now,
+					updatedAt: now,
+					updatedBy: user.id,
+					deletedAt: null
 				});
 			}
 			// In multi-tenant mode no org is created here; the user lands on a
