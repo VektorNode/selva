@@ -35,6 +35,17 @@
 			{/if}
 
 			<div class="space-y-2">
+				<Label for="companyName">Company name</Label>
+				<Input
+					id="companyName"
+					name="companyName"
+					type="text"
+					required
+					placeholder="Acme Corp"
+				/>
+			</div>
+
+			<div class="space-y-2">
 				<Label for="email">Email</Label>
 				<Input id="email" name="email" type="email" required placeholder="admin@example.com" />
 			</div>

@@ -98,7 +98,7 @@
 	async function saveDefinition(guid: string, patch: EditPatch) {
 		savingDefinitionId = guid;
 		try {
-			const res = await fetch(`/admin/api/definitions/${guid}`, {
+			const res = await fetch(`/api/definitions/${guid}`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(patch)
@@ -121,7 +121,7 @@
 	async function deleteDefinition(guid: string) {
 		const rec = data.records.find((r) => r.guid === guid);
 		try {
-			const res = await fetch(`/admin/api/definitions/${guid}`, { method: 'DELETE' });
+			const res = await fetch(`/api/definitions/${guid}`, { method: 'DELETE' });
 			if (res.ok) {
 				toast.success(`"${rec?.displayName ?? 'Definition'}" deleted`);
 				editingDefinitionId = null;
@@ -137,7 +137,7 @@
 	async function submitAddDefinition(formData: FormData) {
 		addingDefinition = true;
 		try {
-			const res = await fetch('/admin/api/definitions', { method: 'POST', body: formData });
+			const res = await fetch('/api/definitions', { method: 'POST', body: formData });
 			if (res.ok) {
 				toast.success(`"${formData.get('displayName')}" created`);
 				showAddModal = false;
@@ -158,7 +158,7 @@
 		description: string;
 		visibility: ProjectVisibility;
 	}) {
-		const res = await fetch('/admin/api/projects', {
+		const res = await fetch('/api/projects', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(p)
@@ -176,7 +176,7 @@
 		id: string,
 		patch: { name: string; description: string; visibility: ProjectVisibility }
 	) {
-		const res = await fetch(`/admin/api/projects/${id}`, {
+		const res = await fetch(`/api/projects/${id}`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(patch)
@@ -191,7 +191,7 @@
 	}
 
 	async function deleteProject(id: string) {
-		const res = await fetch(`/admin/api/projects/${id}`, { method: 'DELETE' });
+		const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
 		if (res.ok) {
 			toast.success('Project deleted');
 			if (activeProjectId === id) {
@@ -207,7 +207,7 @@
 
 	// ── Members ──────────────────────────────────────────────────────────────
 	async function addMember(projectId: string, userId: string, role: ProjectRole) {
-		const res = await fetch(`/admin/api/projects/${projectId}/members`, {
+		const res = await fetch(`/api/projects/${projectId}/members`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ userId, role })
@@ -221,7 +221,7 @@
 	}
 
 	async function updateMemberRole(projectId: string, userId: string, role: ProjectRole) {
-		const res = await fetch(`/admin/api/projects/${projectId}/members/${userId}`, {
+		const res = await fetch(`/api/projects/${projectId}/members/${userId}`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ role })
@@ -231,7 +231,7 @@
 	}
 
 	async function removeMember(projectId: string, userId: string) {
-		const res = await fetch(`/admin/api/projects/${projectId}/members/${userId}`, {
+		const res = await fetch(`/api/projects/${projectId}/members/${userId}`, {
 			method: 'DELETE'
 		});
 		if (res.ok) await invalidateAll();

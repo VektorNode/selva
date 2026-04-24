@@ -8,6 +8,15 @@ export type { IUserProfileStore } from './userProfile/index.js';
 // Organizations
 export type { Organization, OrgRole, OrgMember } from './organizations/index.js';
 
+// Invites
+export type { Invite, IInviteStore } from './invites/index.js';
+export {
+	CreateInviteInputSchema,
+	AcceptInviteInputSchema,
+	type CreateInviteInput,
+	type AcceptInviteInput
+} from './invites/index.js';
+
 // Projects
 export type {
 	Project,

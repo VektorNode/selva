@@ -11,7 +11,7 @@
 		Textarea,
 		toast
 	} from 'selva-shared';
-	import { Image, Trash2, Upload, X } from '@lucide/svelte';
+	import { History, Image, RotateCcw, Trash2, Upload, X } from '@lucide/svelte';
 	import ImageUploadField from '$lib/components/definitions/ImageUploadField.svelte';
 	import FileUploadField from '$lib/components/definitions/FileUploadField.svelte';
 	import type {
@@ -81,6 +81,8 @@
 	let showFileUploadConfirm = $state(false);
 	let uploadingFile = $state(false);
 	let uploadingImage = $state(false);
+	let revertingRef = $state<string | null>(null);
+	let revertTarget = $state<{ ref: string; originalName: string } | null>(null);
 
 	const imageMode = $derived<'url' | 'upload'>(
 		userImageMode ?? (record.coverImage?.startsWith('/api/definitions/') ? 'upload' : 'url')
@@ -93,7 +95,7 @@
 		formData.append('file', fileInput.files[0]);
 		formData.append('guid', record.guid);
 		try {
-			const res = await fetch('/admin/api/definitions/upload', {
+			const res = await fetch('/api/definitions/upload', {
 				method: 'POST',
 				body: formData
 			});
@@ -115,13 +117,38 @@
 		}
 	}
 
+	async function confirmRevert() {
+		if (!revertTarget) return;
+		const target = revertTarget;
+		revertingRef = target.ref;
+		try {
+			const res = await fetch(`/api/definitions/${record.guid}/revert`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ ref: target.ref })
+			});
+			if (res.ok) {
+				toast.success(`Restored "${target.originalName}"`);
+				await invalidateAll();
+			} else {
+				const e = await res.json().catch(() => ({}));
+				toast.error(e.message || 'Restore failed');
+			}
+		} catch {
+			toast.error('Restore failed');
+		} finally {
+			revertingRef = null;
+			revertTarget = null;
+		}
+	}
+
 	async function handleImageUpload() {
 		if (!imageInput?.files?.length) return;
 		uploadingImage = true;
 		const formData = new FormData();
 		formData.append('image', imageInput.files[0]);
 		try {
-			const res = await fetch(`/admin/api/definitions/${record.guid}/image`, {
+			const res = await fetch(`/api/definitions/${record.guid}/image`, {
 				method: 'POST',
 				body: formData
 			});
@@ -280,6 +307,39 @@
 			/>
 		</div>
 
+		{#if record.history && record.history.length > 0}
+			<div class="space-y-2">
+				<div class="flex items-center gap-2">
+					<History class="text-muted-foreground h-4 w-4" />
+					<Label>Version history</Label>
+					<span class="text-muted-foreground text-xs">({record.history.length})</span>
+				</div>
+				<div class="border-border divide-border divide-y rounded-md border">
+					{#each record.history as entry (entry.ref)}
+						<div class="flex items-center justify-between gap-2 px-3 py-2">
+							<div class="min-w-0 flex-1">
+								<p class="truncate font-mono text-xs">{entry.originalName}</p>
+								<p class="text-muted-foreground text-[10.5px]">
+									Archived {new Date(entry.archivedAt).toLocaleString()}
+								</p>
+							</div>
+							<Button
+								variant="outline"
+								size="sm"
+								disabled={revertingRef !== null}
+								onclick={() =>
+									(revertTarget = { ref: entry.ref, originalName: entry.originalName })}
+								class="h-7 gap-1 px-2 text-xs"
+							>
+								<RotateCcw class="h-3 w-3" />
+								{revertingRef === entry.ref ? 'Restoring…' : 'Restore'}
+							</Button>
+						</div>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
 		{#if projects.length > 1 || computeServers.length > 1}
 			<div class="grid grid-cols-2 gap-3">
 				{#if projects.length > 1}
@@ -343,6 +403,28 @@
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
 			<AlertDialog.Action onclick={() => onDelete(record.guid)}>Delete</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>
+
+<AlertDialog.Root
+	open={revertTarget !== null}
+	onOpenChange={(o: boolean) => {
+		if (!o) revertTarget = null;
+	}}
+>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>Restore "{revertTarget?.originalName}"?</AlertDialog.Title>
+			<AlertDialog.Description>
+				The current file will be archived and this version will become active.
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+			<AlertDialog.Action onclick={confirmRevert} disabled={revertingRef !== null}>
+				{revertingRef !== null ? 'Restoring…' : 'Restore'}
+			</AlertDialog.Action>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>

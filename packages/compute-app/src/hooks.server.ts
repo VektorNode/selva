@@ -59,17 +59,21 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	const isPublicRoute =
 		pathname === '/login' ||
 		pathname === '/setup' ||
+		pathname === '/accept-invite' ||
 		pathname.startsWith('/logout');
 
 	const isAdminRoute = pathname.startsWith('/admin');
+	const isApiRoute = pathname.startsWith('/api/');
 	const isDefinitionsRoute = pathname.startsWith('/definitions');
 	const isAppRoute = pathname.startsWith('/app');
 
+	const isJsonApiRoute = isApiRoute || pathname.startsWith('/admin/api/');
+
 	// On first run (no users yet), redirect all admin traffic to /setup
-	if (isAdminRoute) {
+	if (isAdminRoute || isApiRoute) {
 		const usersPage = await providers.auth.listUsers({ limit: 1 });
 		if (usersPage !== null && usersPage.items.length === 0) {
-			if (pathname.startsWith('/admin/api/')) {
+			if (isJsonApiRoute) {
 				return new Response(JSON.stringify({ error: 'Setup required' }), {
 					status: 503,
 					headers: { 'Content-Type': 'application/json' }
@@ -79,14 +83,15 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		}
 	}
 
-	// Guard admin, definitions, and /app routes
-	const needsAuth = (isAdminRoute || isDefinitionsRoute || isAppRoute) && !isPublicRoute;
+	// Guard admin, api, definitions, and /app routes
+	const needsAuth =
+		(isAdminRoute || isApiRoute || isDefinitionsRoute || isAppRoute) && !isPublicRoute;
 	if (needsAuth) {
 		const token = event.cookies.get('admin_session') ?? '';
 		const user = await providers.auth.verifyToken(token);
 
 		if (!user) {
-			if (pathname.startsWith('/admin/api/')) {
+			if (isJsonApiRoute) {
 				return new Response(JSON.stringify({ error: 'Unauthorized' }), {
 					status: 401,
 					headers: { 'Content-Type': 'application/json' }

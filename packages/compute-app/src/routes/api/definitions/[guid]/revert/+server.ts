@@ -7,16 +7,16 @@ import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { GuidSchema } from '@selva/platform/definitions/schemas';
 
 const RevertSchema = z.object({
-	filename: z
+	ref: z
 		.string()
-		.min(1, 'filename is required')
+		.min(1, 'ref is required')
 		.refine(
 			(v) => !v.includes('/') && !v.includes('\\') && !v.includes('..'),
-			'Invalid filename'
+			'Invalid ref'
 		)
 });
 
-// POST - Restore an archived file as the active GH file
+// POST /api/definitions/{guid}/revert — restore an archived version as the active GH file
 export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const guidParsed = GuidSchema.safeParse(params.guid);
 	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
@@ -28,8 +28,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const { record, ctx } = await requireEditableDefinition(locals, guidParsed.data);
 
 	try {
-		await definitionService.revertToVersion(ctx, guidParsed.data, parsed.data.filename);
-		// revertToVersion preserves fileExt; no re-fetch needed.
+		await definitionService.revertToVersion(ctx, guidParsed.data, parsed.data.ref);
 		return json({ success: true, filename: `definition.${record.fileExt}` });
 	} catch (err) {
 		handleApiError(err, 'Failed to revert file');

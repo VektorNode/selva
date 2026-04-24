@@ -37,3 +37,7 @@ export function getComputeServerConfigStore() {
 export function getUserProfileStore() {
 	return providers.userProfile;
 }
+
+export function getInviteStore() {
+	return providers.data.invites;
+}

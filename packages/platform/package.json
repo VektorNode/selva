@@ -23,6 +23,14 @@
 			"types": "./dist/organizations/schemas.d.ts",
 			"import": "./dist/organizations/schemas.js"
 		},
+		"./invites": {
+			"types": "./dist/invites/index.d.ts",
+			"import": "./dist/invites/index.js"
+		},
+		"./invites/schemas": {
+			"types": "./dist/invites/schemas.d.ts",
+			"import": "./dist/invites/schemas.js"
+		},
 		"./projects": {
 			"types": "./dist/projects/index.d.ts",
 			"import": "./dist/projects/index.js"
