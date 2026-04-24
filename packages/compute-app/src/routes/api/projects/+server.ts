@@ -34,9 +34,9 @@ const CreateProjectBody = z.object({
 
 export const GET: RequestHandler = async ({ locals }) => {
 	const ctx = locals.ctx!;
-	if (!ctx.orgId) throw error(400, 'No active organization');
+	if (!ctx.actingOrgId) throw error(400, 'No active organization');
 	try {
-		const page = await getProjectProvider().listProjects(ctx, ctx.orgId, { limit: 200 });
+		const page = await getProjectProvider().listProjects(ctx, ctx.actingOrgId, { limit: 200 });
 		return json({ projects: page.items });
 	} catch (err) {
 		handleApiError(err, 'Failed to load projects');
@@ -46,7 +46,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 export const POST: RequestHandler = async ({ request, locals }) => {
 	requireManageProjects(locals);
 	const ctx = locals.ctx!;
-	if (!ctx.orgId) throw error(400, 'No active organization');
+	if (!ctx.actingOrgId) throw error(400, 'No active organization');
 
 	const body = await request.json().catch(() => null);
 	const parsed = CreateProjectBody.safeParse(body);
@@ -64,7 +64,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
 		const project: Project = {
 			id: projectId,
-			orgId: ctx.orgId,
+			orgId: ctx.actingOrgId,
 			name: parsed.data.name,
 			slug,
 			description: parsed.data.description,

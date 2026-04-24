@@ -44,7 +44,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			const orgs = getOrganizationProvider();
 			const profiles = await getUserProfileStore().getProfiles(page.items.map((u) => u.id));
 			const profileById = new Map(profiles.map((p) => [p.userId, p]));
-			const activeOrgId = ctx.orgId;
+			const activeOrgId = ctx.actingOrgId;
 			users = await Promise.all(
 				page.items.map(async (u) => {
 					let orgPermissions: OrgPermission[] = [];
@@ -72,9 +72,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// Pending + recently-accepted invites for the active org. Non-fatal if
 	// no active org yet (e.g. multi-tenant user not in any org).
 	let invites: Invite[] = [];
-	if (ctx.orgId) {
+	if (ctx.actingOrgId) {
 		try {
-			const page = await getInviteStore().listByOrg(ctx, ctx.orgId, { limit: 100 });
+			const page = await getInviteStore().listByOrg(ctx, ctx.actingOrgId, { limit: 100 });
 			invites = page.items;
 		} catch {
 			// Non-fatal — users page still renders without invite list

@@ -9,14 +9,14 @@ import { ALL_ORG_PERMISSIONS } from '../../organizations/schemas.js';
 export function makeCtx(
 	userId: string,
 	opts: {
-		orgId?: string;
+		actingOrgId?: string;
 		platformPermissions?: RequestContext['platformPermissions'];
 		orgPermissions?: RequestContext['orgPermissions'];
 	} = {}
 ): RequestContext {
 	return {
 		userId,
-		orgId: opts.orgId,
+		actingOrgId: opts.actingOrgId,
 		platformPermissions: opts.platformPermissions ?? ['instance_admin'],
 		orgPermissions: opts.orgPermissions ?? [...ALL_ORG_PERMISSIONS]
 	};

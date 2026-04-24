@@ -16,7 +16,7 @@ import type { ClientBundle } from './client.js';
  *     platform-wide default (Postgres can't use NULL in a PK, so we
  *     use a boolean singleton).
  *
- * `getConfig` / `saveConfig` take a `RequestContext`. If `ctx.orgId` is
+ * `getConfig` / `saveConfig` take a `RequestContext`. If `ctx.actingOrgId` is
  * set, we scope to that org; otherwise we return the platform-wide view.
  * Matches what the local provider does today.
  *
@@ -29,7 +29,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 
 	async getConfig(ctx: RequestContext): Promise<ComputeConfig> {
 		const client = this.clients.forRequest(ctx);
-		const orgId = ctx.orgId ?? null;
+		const orgId = ctx.actingOrgId ?? null;
 
 		const serversQuery = orgId
 			? client.from('compute_servers').select('*').eq('org_id', orgId)
@@ -65,7 +65,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 
 	async saveConfig(ctx: RequestContext, config: ComputeConfig): Promise<void> {
 		const client = this.clients.forRequest(ctx);
-		const orgId = ctx.orgId ?? null;
+		const orgId = ctx.actingOrgId ?? null;
 
 		// Replace-all: delete current rows in scope, insert the new set.
 		// Not atomic across PostgREST calls — acceptable here because

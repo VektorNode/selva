@@ -13,6 +13,14 @@ import { ALL_ORG_PERMISSIONS } from './organizations/schemas.js';
  * Adding a new dimension (tenantId, impersonatedBy, etc.) goes here — not
  * as a new parameter on every method.
  *
+ * ## Acting org
+ *
+ * `actingOrgId` names the org the user is **currently acting as**, not
+ * simply "an org the user is a member of." A user who belongs to multiple
+ * orgs acts as one at a time; tenancy checks compare
+ * `ctx.actingOrgId === resource.orgId`, never "is the user a member of some
+ * org that happens to match." This prevents subtle cross-org leaks.
+ *
  * ## Permission model
  *
  * Permissions live at two scopes:
@@ -20,8 +28,8 @@ import { ALL_ORG_PERMISSIONS } from './organizations/schemas.js';
  *   empty. `instance_admin`, `manage_compute`, `manage_instance_users`, and
  *   `manage_updates` live here.
  * - `orgPermissions` — fine-grained rights within the **active** org
- *   (`orgId`). Empty when `orgId` is undefined. These are resolved from
- *   the user's `OrgMember.permissions` row for the active org.
+ *   (`actingOrgId`). Empty when `actingOrgId` is undefined. These are
+ *   resolved from the user's `OrgMember.permissions` row for that org.
  *
  * An `instance_admin` implicitly holds every other permission, everywhere;
  * the `hasPermission` helper encodes that.
@@ -37,11 +45,15 @@ import { ALL_ORG_PERMISSIONS } from './organizations/schemas.js';
 export interface RequestContext {
 	/** Stable user id from the auth provider. Empty string for system contexts. */
 	userId: string;
-	/** Active organization scope. Undefined for platform-admin global reads / pre-org routes. */
-	orgId?: string;
+	/**
+	 * The org the user is currently acting as. Undefined for instance-admin
+	 * global reads or pre-org routes (login, setup). Tenancy checks compare
+	 * this to the resource's `orgId`; never assume "membership implies scope."
+	 */
+	actingOrgId?: string;
 	/** Platform-scope permissions (e.g. `instance_admin`). Typically empty. */
 	platformPermissions: PlatformPermission[];
-	/** Org-scope permissions for the active org. Empty when `orgId` is undefined. */
+	/** Org-scope permissions for the acting org. Empty when `actingOrgId` is undefined. */
 	orgPermissions: OrgPermission[];
 	/**
 	 * When true, this is a trusted server-internal call (not a user request).
@@ -83,10 +95,10 @@ export const SYSTEM_CONTEXT: RequestContext = {
  *   (which implicitly grants every org permission everywhere) or by having
  *   it in `ctx.orgPermissions` for the currently active org.
  *
- * Does NOT cross-check `ctx.orgId`: the caller is responsible for building
- * a context scoped to the org they're acting on. Passing an org permission
- * against a `ctx` without `orgId` returns false unless the caller is
- * `instance_admin` or `system`.
+ * Does NOT cross-check `ctx.actingOrgId`: the caller is responsible for
+ * building a context scoped to the org they're acting on. Passing an org
+ * permission against a `ctx` without `actingOrgId` returns false unless the
+ * caller is `instance_admin` or `system`.
  */
 export function hasPermission(
 	ctx: RequestContext,

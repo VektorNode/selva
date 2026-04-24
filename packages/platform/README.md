@@ -68,7 +68,7 @@ import type {
 
 export class MyDefinitionStore implements IDefinitionStore {
   async list(ctx: RequestContext, opts?: ListOptions): Promise<Page<DefinitionRecord>> {
-    // Filter by ctx.orgId; exclude status='pending' unless opts.includePending.
+    // Filter by ctx.actingOrgId; exclude status='pending' unless opts.includePending.
     // Return { items, nextCursor } honoring opts.limit / opts.cursor.
   }
   async listByProject(ctx, projectId, opts) { /* ... */ }
@@ -141,7 +141,7 @@ Every data store method receives a `RequestContext` containing the authenticated
 
 ```ts
 async list(ctx: RequestContext, opts?: ListOptions): Promise<Page<DefinitionRecord>> {
-  // Filter by ctx.orgId — never leak data from other orgs
+  // Filter by ctx.actingOrgId — never leak data from other orgs
   // Respect ctx.permissions for visibility rules
   // Return empty page for unauthorized callers
 }
