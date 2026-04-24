@@ -29,7 +29,9 @@ function isNameConflict(err: unknown): boolean {
 const CreateProjectBody = z.object({
 	name: z.string().min(1, 'Project name is required').max(128).trim(),
 	description: z.string().max(2000).optional(),
-	visibility: ProjectVisibilitySchema.default('public')
+	visibility: ProjectVisibilitySchema.default('private'),
+	autoJoinOnUpload: z.boolean().optional(),
+	allowAnonymous: z.boolean().optional()
 });
 
 export const GET: RequestHandler = async ({ locals }) => {
@@ -52,6 +54,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const parsed = CreateProjectBody.safeParse(body);
 	if (!parsed.success) throwZodError(parsed.error);
 
+	const autoJoinOnUpload = parsed.data.autoJoinOnUpload ?? false;
+	const allowAnonymous = parsed.data.allowAnonymous ?? false;
+	if ((autoJoinOnUpload || allowAnonymous) && parsed.data.visibility !== 'public') {
+		throw error(400, 'autoJoinOnUpload and allowAnonymous require visibility=public');
+	}
+
 	const projectStore = getProjectProvider();
 	const baseSlug = slugify(parsed.data.name) || 'project';
 	const now = new Date().toISOString();
@@ -72,6 +80,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			ownerId: locals.user!.id,
 			createdBy: locals.user!.id,
 			updatedBy: locals.user!.id,
+			autoJoinOnUpload,
+			allowAnonymous,
 			createdAt: now,
 			updatedAt: now,
 			deletedAt: null

@@ -45,9 +45,17 @@ export type {
 	Project,
 	ProjectVisibility,
 	ProjectRole,
-	ProjectMember
+	ProjectMember,
+	CreateProjectInput,
+	UpdateProjectInput
 } from './projects/index.js';
-export { ProjectVisibilitySchema, ProjectRoleSchema } from './projects/index.js';
+export {
+	ProjectVisibilitySchema,
+	ProjectRoleSchema,
+	CreateProjectSchema,
+	UpdateProjectSchema,
+	validateProjectFlags
+} from './projects/index.js';
 
 // Definitions
 export type {
@@ -55,6 +63,7 @@ export type {
 	DefinitionRecord,
 	DefinitionRecordPatch,
 	DefinitionStatus,
+	DefinitionVersion,
 	HistoryEntry
 } from './definitions/index.js';
 export {
@@ -65,6 +74,7 @@ export {
 	definitionPaths
 } from './definitions/index.js';
 export type { UpdateMetadataInput } from './definitions/schemas.js';
+export { DefinitionVersionSchema } from './definitions/schemas.js';
 
 // Storage
 export type { IStorageProvider, TranscodeResult } from './storage/index.js';
@@ -98,8 +108,8 @@ export type { ComputeServerConfig, ComputeConfig } from './computeServer/index.j
 export { resolveComputeServer, resolveServerById } from './computeServer/index.js';
 
 // Config
-export type { SelvaConfig, SelvaConfigFactory, TenancyMode } from './config.js';
-export { defineConfig } from './config.js';
+export type { SelvaConfig, SelvaConfigFactory, SelvaFlags, TenancyMode } from './config.js';
+export { defineConfig, isFlagEnabled } from './config.js';
 
 // Errors
 export { ProviderError } from './errors.js';

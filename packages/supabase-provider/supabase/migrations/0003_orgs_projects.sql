@@ -55,6 +55,24 @@
 -- column (orgs.slug, projects.slug+org_id, org_members(org_id,user_id)).
 -- ============================================================================
 
+-- ============================================================================
+-- TODO(access-control refactor / B4): project flags + versioning scaffold
+--
+-- Columns to add to public.projects:
+--   auto_join_on_upload boolean not null default false
+--   allow_anonymous     boolean not null default false
+--
+-- Both must be false whenever visibility <> 'public'. Enforce with a CHECK
+-- constraint:
+--   check (
+--     (auto_join_on_upload = false and allow_anonymous = false)
+--     or visibility = 'public'
+--   )
+--
+-- The TS CreateProjectSchema already enforces this at the API boundary; the
+-- CHECK is defense-in-depth. RLS policies do not need to change.
+-- ============================================================================
+
 -- Orgs, org_members, projects, project_members + RLS helpers and policies.
 --
 -- Design notes:

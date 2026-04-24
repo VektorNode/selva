@@ -115,6 +115,20 @@ export class LocalOrgStoreLoader {
 			migrateOrgMember(m);
 			if (before === undefined) changed = true;
 		}
+		// B4 backfill: legacy projects lack the commons/anonymous flags. Default
+		// both to false so the schema invariant (feature opt-in) stays safe.
+		for (const p of store.projects as Array<
+			Project & { autoJoinOnUpload?: boolean; allowAnonymous?: boolean }
+		>) {
+			if (p.autoJoinOnUpload === undefined) {
+				p.autoJoinOnUpload = false;
+				changed = true;
+			}
+			if (p.allowAnonymous === undefined) {
+				p.allowAnonymous = false;
+				changed = true;
+			}
+		}
 		// One-time sweep: apply legacy user-level OrgPermissions to memberships.
 		if (this.userMeta) {
 			for (const m of store.orgMembers) {

@@ -3,6 +3,7 @@ export type {
 	DefinitionRecord,
 	DefinitionRecordPatch,
 	DefinitionStatus,
+	DefinitionVersion,
 	HistoryEntry
 } from './types.js';
 export {

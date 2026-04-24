@@ -50,6 +50,10 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 			if (!record.updatedBy) record.updatedBy = legacy.lastEditedBy ?? record.ownerId;
 			if (legacy.lastEditedBy !== undefined) delete legacy.lastEditedBy;
 			if (record.deletedAt === undefined) record.deletedAt = null;
+			// B4 versioning scaffold: fields are nullable and unused until PR A
+			// wires the publish flow. Default to null so the mapper is stable.
+			if (record.liveVersionId === undefined) record.liveVersionId = null;
+			if (record.draftVersionId === undefined) record.draftVersionId = null;
 			for (const entry of record.history ?? []) {
 				if (!entry.uploadedBy) entry.uploadedBy = record.ownerId;
 			}
