@@ -237,9 +237,11 @@ No environment variables required for development. Uses WebSocket at port 8765 b
 
 Required for production deployment (see `example.ecosystem.config.cjs`):
 
-- `COMPUTE_SERVER_URL` - Rhino.Compute server URL
 - `PORT` - Application port (default: 3000)
 - `GH_DEFINITIONS_PATH` - Path to Grasshopper definition files
+
+Rhino.Compute server URL and API key are configured in the admin dashboard
+(`/admin/compute`) and persisted via `IComputeServerStore` — no env var needed.
 
 ### Platform Package (`@selva/platform`)
 

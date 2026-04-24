@@ -34,6 +34,7 @@ catalogs:
 onlyBuiltDependencies:
   - esbuild
   - '@tailwindcss/oxide'
+  - supabase
 
 preferWorkspacePackages: true
 

@@ -23,7 +23,7 @@
 		"build:compute": "pnpm --filter selva-compute-app build",
 		"build:all": "pnpm build:shared && pnpm build:builder && pnpm build:compute",
 		"build:plugin": "pnpm build:shared && pnpm build:builder && node scripts/build-production.js",
-		"build:platform": "pnpm --filter @selva/platform build && pnpm --filter selva-local-provider build",
+		"build:platform": "pnpm --filter @selva/platform build && pnpm --filter selva-local-provider build && pnpm --filter @selva/supabase-provider build",
 		"check": "pnpm --filter ./packages --recursive run check",
 		"type-check": "pnpm --filter ./packages --recursive run type-check",
 		"lint": "eslint .",
@@ -37,6 +37,7 @@
 	},
 	"dependencies": {
 		"@selva/platform": "workspace:*",
+		"@selva/supabase-provider": "workspace:*",
 		"selva-local-provider": "workspace:*"
 	},
 	"devDependencies": {

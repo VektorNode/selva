@@ -26,7 +26,9 @@ export {
 	OrgRoleSchema,
 	OrgPermissionSchema,
 	ALL_ORG_PERMISSIONS,
-	DEFAULT_ORG_PERMISSIONS
+	DEFAULT_ORG_PERMISSIONS,
+	OWNER_ADMIN_ONLY_PERMISSIONS,
+	MEMBER_ASSIGNABLE_PERMISSIONS
 } from './organizations/index.js';
 
 // Invites
@@ -96,7 +98,7 @@ export type { ComputeServerConfig, ComputeConfig } from './computeServer/index.j
 export { resolveComputeServer, resolveServerById } from './computeServer/index.js';
 
 // Config
-export type { SelvaConfig, SelvaConfigFactory } from './config.js';
+export type { SelvaConfig, SelvaConfigFactory, TenancyMode } from './config.js';
 export { defineConfig } from './config.js';
 
 // Errors

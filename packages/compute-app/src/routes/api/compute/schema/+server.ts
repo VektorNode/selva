@@ -1,18 +1,20 @@
-import { getServerConfig } from '$lib/server/compute/config.server';
+import { getComputeServerConfigStore } from '$lib/server/providers.server';
+import { resolveComputeServer, SYSTEM_CONTEXT } from '@selva/platform';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { camelcaseKeys } from 'selva-compute/core';
 import type { UISchema } from 'selva-shared';
 
 export const POST: RequestHandler = async ({ request }) => {
-	const config = getServerConfig();
+	const config = await getComputeServerConfigStore().getConfig(SYSTEM_CONTEXT);
+	const server = resolveComputeServer(config);
 	const formData = await request.formData();
 
-	const schemaUrl = new URL('/grasshopper/schema', config.computeServerUrl).toString();
+	const schemaUrl = new URL('/grasshopper/schema', server.serverUrl).toString();
 
 	const headers: Record<string, string> = {};
-	if (config.computeApiKey) {
-		headers['RhinoComputeKey'] = config.computeApiKey;
+	if (server.apiKey) {
+		headers['RhinoComputeKey'] = server.apiKey;
 	}
 
 	let response: Response;

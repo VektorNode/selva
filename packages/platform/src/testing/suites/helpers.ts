@@ -25,3 +25,20 @@ export function makeCtx(
 export function makeUuid(): string {
 	return crypto.randomUUID();
 }
+
+/**
+ * Optional hook adapters pass when their backend enforces referential
+ * integrity on user ids (e.g. Supabase `auth.users`). Returns the id the
+ * adapter actually stored — adapters that require DB-generated ids (like
+ * Supabase Auth, which won't let the caller pick) can ignore the suggested
+ * id and return whatever real id ended up created. Adapters without user
+ * FKs (local JSON) return the suggested id as-is.
+ *
+ * The conformance suite calls this to get a usable id *before* constructing
+ * any record that references a user. It never assumes the suggested id is
+ * the one used.
+ */
+export type SeedUserFn = (suggestedId: string) => Promise<string>;
+
+/** Default no-op for adapters that don't need to seed users. Echoes the id back. */
+export const noopSeedUser: SeedUserFn = async (id) => id;

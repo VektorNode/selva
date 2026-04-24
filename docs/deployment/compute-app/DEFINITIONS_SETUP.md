@@ -55,4 +55,4 @@ definitions/
 | "No definitions found"           | Verify `GH_DEFINITIONS_PATH` exists and points to the right folder    |
 | "Invalid config format"          | Ensure `definitions-config.json` has a top-level `definitions` object |
 | Definition not loading           | Filename in config must match the `.gh` file name (without extension) |
-| "COMPUTE_SERVER_URL is required" | Set `COMPUTE_SERVER_URL` environment variable                         |
+| "No compute server configured"   | Register a Rhino.Compute server at `/admin/compute`                   |

@@ -3,7 +3,22 @@ import type { IDataProvider } from './data/interface.js';
 import type { IStorageProvider } from './storage/interface.js';
 import type { IUserProfileStore } from './userProfile/interface.js';
 
+/**
+ * Tenancy model.
+ *
+ * - `single`: one org per deployment. Setup creates it; `ctx.orgId` resolves
+ *   to that org for every authenticated user. Multi-org APIs (createOrg,
+ *   listOrgs of *other* orgs) are not exposed in the UI.
+ * - `multi`: orgs are first-class. Setup creates only a platform admin;
+ *   orgs are created later by users. `ctx.orgId` is resolved per-request
+ *   from the URL prefix or session.
+ */
+export type TenancyMode = 'single' | 'multi';
+
 export interface SelvaConfig {
+	/** Tenancy model. Defaults to `single` if omitted. */
+	tenancy?: TenancyMode;
+
 	/** Auth provider — session tokens and identity verification only. */
 	auth: IAuthProvider;
 

@@ -164,8 +164,10 @@
 			body: JSON.stringify(p)
 		});
 		if (res.ok) {
+			const created = (await res.json().catch(() => null)) as { id: string } | null;
 			toast.success(`Project "${p.name}" created`);
 			await invalidateAll();
+			if (created?.id) activeProjectId = created.id;
 		} else {
 			toast.error(await errorMessage(res, 'Failed to create project'));
 			throw new Error('create project failed');
@@ -380,7 +382,10 @@
 			if (!o) editingProjectId = null;
 		}}
 		onSave={saveProject}
-		onDelete={(id) => (deletingProjectId = id)}
+		onDelete={(id) => {
+			editingProjectId = null;
+			deletingProjectId = id;
+		}}
 		onAddMember={addMember}
 		onUpdateMemberRole={updateMemberRole}
 		onRemoveMember={removeMember}

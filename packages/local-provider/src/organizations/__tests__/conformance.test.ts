@@ -18,7 +18,6 @@ describe('LocalOrganizationProvider', () => {
 
 	runOrgStoreConformance({
 		name: 'LocalOrganizationProvider',
-		createStore: () => new LocalOrganizationProvider(new LocalOrgStoreLoader(tempDir)),
-		singleOrgMode: true
+		createStore: () => new LocalOrganizationProvider(new LocalOrgStoreLoader(tempDir))
 	});
 });

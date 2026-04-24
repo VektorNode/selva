@@ -3,8 +3,8 @@ import { error } from '@sveltejs/kit';
 import { GrasshopperClient } from 'selva-compute/grasshopper';
 import { camelcaseKeys } from 'selva-compute/core';
 import type { UISchema } from 'selva-shared';
-import { getServerConfig, getComputeServerConfigStore } from '$lib/server/compute/config.server';
-import { resolveComputeServer, SYSTEM_CONTEXT } from '@selva/platform';
+import { getComputeServerConfigStore } from '$lib/server/providers.server';
+import { resolveComputeServer, SYSTEM_CONTEXT, type ComputeServerConfig } from '@selva/platform';
 import {
 	getStorageProvider,
 	getDefinitionMeta,
@@ -61,17 +61,17 @@ async function checkDefinitionAccess(
  */
 async function fetchSchemaFromCompute(
 	definitionBytes: Uint8Array,
-	config: { computeServerUrl: string; computeApiKey?: string }
+	server: ComputeServerConfig
 ): Promise<UISchema> {
-	const schemaUrl = new URL('/grasshopper/schema', config.computeServerUrl).toString();
+	const schemaUrl = new URL('/grasshopper/schema', server.serverUrl).toString();
 
 	const formData = new FormData();
 	const blob = new Blob([new Uint8Array(definitionBytes)], { type: 'application/octet-stream' });
 	formData.append('file', blob, 'definition.gh');
 
 	const headers: Record<string, string> = {};
-	if (config.computeApiKey) {
-		headers['RhinoComputeKey'] = config.computeApiKey;
+	if (server.apiKey) {
+		headers['RhinoComputeKey'] = server.apiKey;
 	}
 
 	const response = await fetch(schemaUrl, { method: 'POST', headers, body: formData });
@@ -101,7 +101,12 @@ async function fetchSchemaFromCompute(
 }
 
 export const load = (async ({ params, locals }) => {
-	const config = getServerConfig();
+	const computeConfig = await getComputeServerConfigStore().getConfig(SYSTEM_CONTEXT);
+	if (computeConfig.servers.length === 0) {
+		throw error(503, 'No compute server configured. Ask an admin to add one in /admin/compute.');
+	}
+	const server = resolveComputeServer(computeConfig);
+
 	const storage = getStorageProvider();
 	const meta = getDefinitionMeta();
 
@@ -134,8 +139,8 @@ export const load = (async ({ params, locals }) => {
 
 	try {
 		client = await GrasshopperClient.create({
-			serverUrl: config.computeServerUrl,
-			apiKey: config.computeApiKey
+			serverUrl: server.serverUrl,
+			apiKey: server.apiKey
 		});
 	} catch (err) {
 		const errorMessage = err instanceof Error ? err.message : String(err);
@@ -147,7 +152,7 @@ export const load = (async ({ params, locals }) => {
 		// Fetch schema and IO in parallel — both are fast (no solve needed)
 		const [definition, schema] = await Promise.all([
 			client.getIO(definitionSource),
-			fetchSchemaFromCompute(definitionSource, config)
+			fetchSchemaFromCompute(definitionSource, server)
 		]);
 
 		if (!definition) {
@@ -182,14 +187,11 @@ export const load = (async ({ params, locals }) => {
 			return schemaInput;
 		});
 
-		const computeConfig = await getComputeServerConfigStore().getConfig(SYSTEM_CONTEXT);
-		const server = computeConfig.servers.length > 0 ? resolveComputeServer(computeConfig) : undefined;
-
 		return {
 			schema,
 			ghDefinition: clientDefUrl,
 			currentDefinition: guid,
-			serverLabel: server?.label ?? null
+			serverLabel: server.label
 		};
 	} catch (err) {
 		const errorMessage = err instanceof Error ? err.message : String(err);

@@ -1,47 +1,26 @@
-import { env } from '$env/dynamic/private';
 import { redirect } from '@sveltejs/kit';
 import { isHttpError } from '@sveltejs/kit';
 import type { AuthUser, RequestContext } from '@selva/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selva/platform';
 import { providers } from '$lib/server/providers.server';
 
-/**
- * Validate Critical Environment Variables on Startup
- *
- * We check this at runtime (not build time) to allow for
- * "Build Once, Run Anywhere" Docker images.
- */
-const definitionSource = env.DEFINITION_SOURCE || 'filesystem';
-const missing = [];
-
-// COMPUTE_SERVER_URL is always required
-if (!env.COMPUTE_SERVER_URL) {
-	missing.push('COMPUTE_SERVER_URL');
-}
-
-// DATA_PATH is only required for filesystem source
-if (definitionSource === 'filesystem' && !env.DATA_PATH) {
-	missing.push('DATA_PATH');
-}
-
-if (missing.length > 0) {
-	console.error('\n❌ CRITICAL CONFIGURATION ERROR');
-	console.error('The following required environment variables are missing:');
-	missing.forEach((key) => console.error(`   - ${key}`));
-	console.error('\nPlease check your .env file or container configuration.\n');
-
-	// Hard exit to prevent undefined behavior
-	process.exit(1);
-}
+// Env validation is owned by each provider's `fromEnv()` — the selected
+// provider throws on missing vars (e.g. DATA_PATH for local, SUPABASE_URL for
+// supabase) while `providers.server.ts` is loaded. No compute-app-level check
+// is needed here.
 
 /**
  * Build a per-request context from an authenticated user.
  *
  * §1g-core: resolves the user's active org membership and loads its
  * `OrgPermission[]` into the context so store methods and routes see the
- * fine-grained org-scope permissions. Single-org local mode means "active
- * org" is just the one org the user belongs to. §1g-ui will generalize this
- * to resolve from `/o/{slug}/` path prefix for multi-tenant deployments.
+ * fine-grained org-scope permissions.
+ *
+ * Active-org resolution:
+ *  - Single tenancy: the deployment has exactly one org; pick it.
+ *  - Multi tenancy: pick the first org the user is a member of. §1g-ui will
+ *    replace this with URL-prefix resolution (`/o/{slug}/...`) once routes
+ *    are tenant-namespaced.
  *
  * `sessionToken` is forwarded as `adapterContext` so adapters that need the
  * upstream auth token (e.g. Supabase RLS) can pull it off the context.
@@ -50,29 +29,28 @@ async function buildContext(
 	user: AuthUser,
 	sessionToken: string | undefined
 ): Promise<RequestContext> {
-	// Pick the first org the user belongs to. Local provider is single-org,
-	// so this is deterministic. Platform admins without an explicit org
-	// membership get an empty `orgPermissions` — `hasPermission(ctx, ...)`
-	// still returns true for them because of the platform_admin short-circuit.
 	let orgId: string | undefined;
 	let orgPermissions: RequestContext['orgPermissions'] = [];
 
-	const orgsPage = await providers.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
-	const firstOrg = orgsPage.items[0];
-	if (firstOrg) {
-		const member = await providers.data.orgs.getOrgMember(
-			SYSTEM_CONTEXT,
-			firstOrg.id,
-			user.id
-		);
+	// SYSTEM_CONTEXT is fine here — we then look up the *user's* membership
+	// explicitly. For multi-tenant the membership lookup is what scopes; for
+	// single-tenant there's only one org anyway.
+	const orgsPage = await providers.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 50 });
+
+	for (const org of orgsPage.items) {
+		const member = await providers.data.orgs.getOrgMember(SYSTEM_CONTEXT, org.id, user.id);
 		if (member) {
-			orgId = firstOrg.id;
+			orgId = org.id;
 			orgPermissions = member.permissions;
-		} else if (user.platformPermissions.includes('platform_admin')) {
-			// Platform admins act against the first org even without an explicit
-			// membership row — keeps the UI usable pre-§1g-ui.
-			orgId = firstOrg.id;
+			break;
 		}
+	}
+
+	if (!orgId && user.platformPermissions.includes('platform_admin')) {
+		// Platform admins without an explicit membership row fall back to the
+		// first org so admin tooling stays usable pre-§1g-ui.
+		const firstOrg = orgsPage.items[0];
+		if (firstOrg) orgId = firstOrg.id;
 	}
 
 	return {

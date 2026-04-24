@@ -22,5 +22,8 @@
     ],
     "deny": [],
     "ask": []
+  },
+  "enabledPlugins": {
+    "supabase@claude-plugins-official": true
   }
 }

@@ -44,11 +44,11 @@ The app is designed to run behind a **reverse proxy** (recommended for productio
 
 The Compute App is configured via environment variables. Set these during deployment using `.env` files or deployment configs (e.g., `ecosystem.config.cjs`).
 
-### Required Variables
+### Rhino.Compute Server
 
-| Variable             | Description                      | Example                   |
-| -------------------- | -------------------------------- | ------------------------- |
-| `COMPUTE_SERVER_URL` | URL of your Rhino.Compute server | `http://your-compute.com` |
+Compute server URL and API key are configured in the admin dashboard
+(`/admin/compute`) — not env vars. The config is persisted by the active data
+provider (filesystem JSON or Supabase Postgres).
 
 ### Definition Source
 
@@ -58,10 +58,9 @@ See [Definitions Setup](./DEFINITIONS_SETUP.md) for details.
 
 ### Optional Variables
 
-| Variable          | Description                                                 | Default       |
-| ----------------- | ----------------------------------------------------------- | ------------- |
-| `COMPUTE_API_KEY` | API key for compute server (sent as RhinoComputeKey header) | None          |
-| `PORT`            | Server port                                                 | `3000`        |
-| `HOST`            | Host binding                                                | `localhost`   |
-| `NODE_ENV`        | Environment mode                                            | `development` |
-| `ORIGIN`          | Public URL for origin/CSRF checks (recommended in prod)     | None          |
+| Variable   | Description                                             | Default       |
+| ---------- | ------------------------------------------------------- | ------------- |
+| `PORT`     | Server port                                             | `3000`        |
+| `HOST`     | Host binding                                            | `localhost`   |
+| `NODE_ENV` | Environment mode                                        | `development` |
+| `ORIGIN`   | Public URL for origin/CSRF checks (recommended in prod) | None          |
