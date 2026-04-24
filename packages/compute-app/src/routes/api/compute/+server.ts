@@ -12,6 +12,7 @@ import { error, json, isHttpError } from '@sveltejs/kit';
 import { getComputeServerConfigStore } from '$lib/server/providers.server';
 import { resolveComputeServer, definitionPaths, SYSTEM_CONTEXT } from '@selva/platform';
 import { getStorageProvider, providers } from '$lib/server/providers.server';
+import { requireCanSolve } from '$lib/server/access.server';
 
 interface ComputeRequest {
 	inputs: (SchemaInput & { minimum?: number; maximum?: number; stepSize?: number })[];
@@ -146,7 +147,13 @@ function transformInputParameter(
 	} as TextInputType;
 }
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
+	// A2: solving is a privileged operation. Every request must be authenticated,
+	// and `local:` GUIDs must pass the solve rule for their project — loaded with
+	// the *user's* ctx, never SYSTEM_CONTEXT.
+	if (!locals.ctx || !locals.user) {
+		throw error(401, 'Unauthorized');
+	}
 	const storage = getStorageProvider();
 
 	try {
@@ -170,18 +177,30 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (definitionUrl.startsWith('local:')) {
 			// Extract GUID from local URL (format: "local:{guid}")
 			const guid = definitionUrl.substring(6);
+			let record;
 			try {
-				const record = await providers.data.definitions.get(SYSTEM_CONTEXT, guid);
-				if (!record) throw new Error(`Definition '${guid}' not found`);
-				const bytes = await storage.get(definitionPaths.file(guid, record.fileExt));
-				if (!bytes) throw new Error(`Definition '${guid}' not found on disk`);
-				definitionSource = bytes;
+				record = await providers.data.definitions.get(locals.ctx, guid);
 			} catch (err) {
 				console.error(`Failed to load local definition: ${guid}`, err);
 				throw error(404, `Definition '${guid}' not found`);
 			}
+			if (!record) throw error(404, `Definition '${guid}' not found`);
+
+			// Visibility + membership gate — spec §5 canSolve.
+			await requireCanSolve(locals, record.projectId);
+
+			try {
+				const bytes = await storage.get(definitionPaths.file(guid, record.fileExt));
+				if (!bytes) throw new Error(`Definition '${guid}' not found on disk`);
+				definitionSource = bytes;
+			} catch (err) {
+				console.error(`Failed to load local definition blob: ${guid}`, err);
+				throw error(404, `Definition '${guid}' not found`);
+			}
 		} else {
-			// Fetch from remote URL (with caching)
+			// Remote URL — authenticated solve of an externally-hosted definition.
+			// Auth was already asserted above; no project gate applies since this
+			// definition isn't tenant-owned.
 			try {
 				definitionSource = await loadRemoteDefinition(definitionUrl);
 			} catch (err) {

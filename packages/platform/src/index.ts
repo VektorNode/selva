@@ -115,11 +115,18 @@ export { defineConfig, isFlagEnabled } from './config.js';
 export { ProviderError } from './errors.js';
 
 // Access control (UI-gating rules — mutating stores re-enforce independently)
-export type { ProjectAccessInput, DefinitionAccessInput } from './access/index.js';
+export type {
+	ProjectAccessInput,
+	DefinitionAccessInput,
+	VisibilityChangeInput
+} from './access/index.js';
 export {
+	canView,
 	canSolve,
 	canEdit,
 	canManage,
 	canEditProjectSettings,
-	canEditDefinition
+	canChangeVisibilityToPublic,
+	canEditDefinition,
+	withAdminBypass
 } from './access/index.js';

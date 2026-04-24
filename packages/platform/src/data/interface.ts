@@ -73,7 +73,12 @@ export interface IProjectStore {
 	updateProject(
 		ctx: RequestContext,
 		id: string,
-		patch: Partial<Pick<Project, 'name' | 'slug' | 'description' | 'visibility'>>
+		patch: Partial<
+			Pick<
+				Project,
+				'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload' | 'allowAnonymous'
+			>
+		>
 	): Promise<void>;
 	deleteProject(ctx: RequestContext, id: string): Promise<void>;
 
@@ -163,12 +168,12 @@ export interface IDefinitionStore {
 	// ============================================================================
 	// Access checks (UI gating — NOT the security boundary)
 	// ============================================================================
-	canEditDefinition(
-		ctx: RequestContext,
-		projectId: string,
-		userId: string,
-		definitionOwnerId: string
-	): Promise<boolean>;
+	/**
+	 * Resolve the project + definition and apply `canEditDefinition` from
+	 * `@selva/platform/access`. Returns false when either entity is missing
+	 * (soft-deleted or never existed) so callers don't need to pre-fetch.
+	 */
+	canEditDefinition(ctx: RequestContext, projectId: string, definitionGuid: string): Promise<boolean>;
 }
 
 /**

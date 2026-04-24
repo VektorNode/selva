@@ -201,54 +201,58 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	async canEditDefinition(
 		ctx: RequestContext,
 		projectId: string,
-		userId: string,
-		definitionOwnerId: string
+		definitionGuid: string
 	): Promise<boolean> {
 		if (ctx.platformPermissions.includes('instance_admin')) return true;
 
-		// Load the parent project to read its visibility + org_id.
+		// Load the parent project (visibility + commons flag) and the definition
+		// (owner_id) in one round trip each. Deleted rows return nothing thanks
+		// to RLS-side filters (once 0003/0004 ship the B3 column adds).
 		const { data: project } = await this.clients
 			.forRequest(ctx)
 			.from('projects')
-			.select('visibility, org_id')
+			.select('auto_join_on_upload')
 			.eq('id', projectId)
 			.maybeSingle();
 		if (!project) return false;
+
+		const { data: definition } = await this.clients
+			.forRequest(ctx)
+			.from('definitions')
+			.select('owner_id')
+			.eq('guid', definitionGuid)
+			.maybeSingle();
+		if (!definition) return false;
 
 		const { data: member } = await this.clients
 			.forRequest(ctx)
 			.from('project_members')
 			.select('role')
 			.eq('project_id', projectId)
-			.eq('user_id', userId)
+			.eq('user_id', ctx.userId)
 			.maybeSingle();
 
-		if (project.visibility === 'public') {
-			return userId === definitionOwnerId;
-		}
-		if (project.visibility === 'org') {
-			if (userId === definitionOwnerId) return true;
-			return member?.role === 'owner' || member?.role === 'editor';
-		}
-		// private
-		return member?.role === 'owner' || member?.role === 'editor';
+		const role = member?.role;
+		if (role === 'owner' || role === 'editor') return true;
+
+		// Commons carve-out: definition owner edits their own on commons projects.
+		if (project.auto_join_on_upload && ctx.userId === definition.owner_id) return true;
+
+		return false;
 	}
 }
 
 // ── Row ↔ domain mappers ────────────────────────────────────────────────
 //
-// Audit + soft-delete columns on `definitions` (created_by, updated_by,
-// deleted_at) are introduced by the B3 refactor and listed as TODOs in the
-// SQL migration files. The old `last_edited_by` is replaced by `updated_by`
-// in the domain type; the mapper keeps accepting it as a legacy alias until
-// the SQL migration renames the column.
+// Audit + soft-delete columns (created_by, updated_by, deleted_at) match
+// the post-refactor schema in migration 0004. The old `last_edited_by`
+// column has been removed from the schema; if you're upgrading a DB that
+// still carries it, reset migrations rather than editing this mapper.
 
 interface DefinitionRow {
 	guid: string;
 	project_id: string;
 	owner_id: string;
-	/** @deprecated renamed to updated_by at the domain level; kept as a fallback source. */
-	last_edited_by?: string | null;
 	created_by?: string | null;
 	updated_by?: string | null;
 	compute_server_id: string | null;
@@ -289,7 +293,7 @@ function rowToRecord(row: DefinitionRow): DefinitionRecord {
 		projectId: row.project_id,
 		ownerId: row.owner_id,
 		createdBy: row.created_by ?? row.owner_id,
-		updatedBy: row.updated_by ?? row.last_edited_by ?? row.owner_id,
+		updatedBy: row.updated_by ?? row.owner_id,
 		liveVersionId: row.live_version_id ?? null,
 		draftVersionId: row.draft_version_id ?? null,
 		computeServerId: row.compute_server_id ?? undefined,

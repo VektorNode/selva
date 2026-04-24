@@ -87,13 +87,20 @@ export class SupabaseProjectStore implements IProjectStore {
 	async updateProject(
 		ctx: RequestContext,
 		id: string,
-		patch: Partial<Pick<Project, 'name' | 'slug' | 'description' | 'visibility'>>
+		patch: Partial<
+			Pick<
+				Project,
+				'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload' | 'allowAnonymous'
+			>
+		>
 	): Promise<void> {
 		const row: Record<string, unknown> = {};
 		if (patch.name !== undefined) row.name = patch.name;
 		if (patch.slug !== undefined) row.slug = patch.slug;
 		if (patch.description !== undefined) row.description = patch.description;
 		if (patch.visibility !== undefined) row.visibility = patch.visibility;
+		if (patch.autoJoinOnUpload !== undefined) row.auto_join_on_upload = patch.autoJoinOnUpload;
+		if (patch.allowAnonymous !== undefined) row.allow_anonymous = patch.allowAnonymous;
 		if (Object.keys(row).length === 0) return;
 
 		const { data, error } = await this.clients
