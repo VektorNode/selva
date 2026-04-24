@@ -17,7 +17,7 @@ export function makeCtx(
 	return {
 		userId,
 		orgId: opts.orgId,
-		platformPermissions: opts.platformPermissions ?? ['platform_admin'],
+		platformPermissions: opts.platformPermissions ?? ['instance_admin'],
 		orgPermissions: opts.orgPermissions ?? [...ALL_ORG_PERMISSIONS]
 	};
 }

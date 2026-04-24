@@ -74,7 +74,7 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 			const result = await provider.passwordAuth.verifyLogin(adminEmail, adminPassword);
 			expect(result.kind).toBe('success');
 			if (result.kind !== 'success') return;
-			expect(result.user.platformPermissions).toContain('platform_admin');
+			expect(result.user.platformPermissions).toContain('instance_admin');
 			expect(typeof result.sessionToken).toBe('string');
 			expect(result.sessionToken.length).toBeGreaterThan(0);
 		});
@@ -109,13 +109,13 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 				const created = await provider.passwordAuth!.createUserWithPassword(
 					email,
 					'password1234',
-					['platform_admin']
+					['instance_admin']
 				);
 				expect(created).toBeTruthy();
 				const fetched = await provider.getUser(created.id);
 				expect(fetched?.id).toBe(created.id);
 				expect(fetched?.email).toBe(email);
-				expect(fetched?.platformPermissions).toContain('platform_admin');
+				expect(fetched?.platformPermissions).toContain('instance_admin');
 			});
 
 			it('createUserWithPassword allows login with the new credentials', async () => {
@@ -150,11 +150,11 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 					[]
 				);
 				const result = await provider.updateUserPlatformPermissions(created.id, [
-					'platform_admin'
+					'instance_admin'
 				]);
 				expect(result).toBe('ok');
 				const fetched = await provider.getUser(created.id);
-				expect(fetched?.platformPermissions).toContain('platform_admin');
+				expect(fetched?.platformPermissions).toContain('instance_admin');
 			});
 
 			it('updateUserPlatformPermissions returns not_found for unknown user', async () => {

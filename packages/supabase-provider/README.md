@@ -241,8 +241,8 @@ Studio is a full admin UI at `http://127.0.0.1:54323`. Use it to inspect tables,
    After deploying, register your Rhino.Compute server URL (+ optional API key) via `/admin/compute`.
 6. Deploy the compute-app with `selva.config.ts` wired to `@selva/supabase-provider`.
 7. Bootstrap the first user:
-   - Open `/setup` once — creates the first admin with `platform_admin`.
-   - Or manually: Dashboard → **Authentication** → **Add user**, then in the SQL Editor: `UPDATE public.user_profiles SET platform_permissions = ARRAY['platform_admin']::text[] WHERE user_id = '<uuid>';`
+   - Open `/setup` once — creates the first admin with `instance_admin`.
+   - Or manually: Dashboard → **Authentication** → **Add user**, then in the SQL Editor: `UPDATE public.user_profiles SET platform_permissions = ARRAY['instance_admin']::text[] WHERE user_id = '<uuid>';`
 
 ### Operational checklist
 
@@ -305,7 +305,7 @@ Every store goes through `ClientBundle.forRequest(ctx)`:
 - `ctx.adapterContext.sessionToken` → anon client with `Authorization: Bearer <jwt>` (RLS enforces per-user visibility)
 - neither → service-role fallback (admin paths)
 
-Helper SQL functions (`is_platform_admin`, `is_org_member`, `visible_project`, `has_org_permission`) are `SECURITY DEFINER` so they evaluate without looping through RLS.
+Helper SQL functions (`is_instance_admin`, `is_org_member`, `visible_project`, `has_org_permission`) are `SECURITY DEFINER` so they evaluate without looping through RLS.
 
 ### User profile
 

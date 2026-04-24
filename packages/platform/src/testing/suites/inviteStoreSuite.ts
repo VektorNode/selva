@@ -17,7 +17,7 @@ import { SYSTEM_CONTEXT } from '../../context.js';
 import { makeCtx, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
 
 export interface InviteTestScope {
-	/** User that creates invites. Must be seeded + have `manage_users` in the org. */
+	/** User that creates invites. Must be seeded + have `manage_org_members` in the org. */
 	adminId: string;
 	/** Org invites are issued for. Must be seeded with the admin as a member. */
 	orgId: string;

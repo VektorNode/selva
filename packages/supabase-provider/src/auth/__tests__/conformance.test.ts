@@ -36,11 +36,11 @@ if (!envCtx) {
 			anonKey: ctx.anonKey,
 			serviceRoleKey: ctx.serviceRoleKey
 		});
-		// Ensure the admin account exists + has platform_admin.
+		// Ensure the admin account exists + has instance_admin.
 		const id = await ensureAdmin();
 		const { error: upError } = await ctx.adminClient
 			.from('user_profiles')
-			.update({ platform_permissions: ['platform_admin'] })
+			.update({ platform_permissions: ['instance_admin'] })
 			.eq('user_id', id);
 		if (upError) throw upError;
 		return { provider, adminPassword: ADMIN_PASSWORD };

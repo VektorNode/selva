@@ -1,3 +1,10 @@
+-- ============================================================================
+-- TODO(access-control refactor / B1): permission identifier renames
+--
+--   • Every `public.is_platform_admin()` call in this file → `public.is_instance_admin()`
+--     once migration 0003 is updated.
+-- ============================================================================
+
 -- Definitions + definition_history + atomic run count RPC.
 --
 -- Design notes:

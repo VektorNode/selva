@@ -43,26 +43,37 @@ export function assertPagePermission(locals: Locals, permission: AnyPermission):
 	return user;
 }
 
-export const requireManageUsers = (locals: Locals) => requirePermission(locals, 'manage_users');
+export const requireManageInstanceUsers = (locals: Locals) =>
+	requirePermission(locals, 'manage_instance_users');
 export const requireManageCompute = (locals: Locals) => requirePermission(locals, 'manage_compute');
+export const requireManageUpdates = (locals: Locals) =>
+	requirePermission(locals, 'manage_updates');
+export const requireManageOrgMembers = (locals: Locals) =>
+	requirePermission(locals, 'manage_org_members');
+export const requireManageOrgCompute = (locals: Locals) =>
+	requirePermission(locals, 'manage_org_compute');
 export const requireManageDefinitions = (locals: Locals) =>
 	requirePermission(locals, 'manage_definitions');
 export const requireManageProjects = (locals: Locals) =>
 	requirePermission(locals, 'manage_projects');
 
-export const assertManageUsers = (locals: Locals) => assertPagePermission(locals, 'manage_users');
+export const assertManageInstanceUsers = (locals: Locals) =>
+	assertPagePermission(locals, 'manage_instance_users');
 export const assertManageCompute = (locals: Locals) =>
 	assertPagePermission(locals, 'manage_compute');
+export const assertManageUpdates = (locals: Locals) =>
+	assertPagePermission(locals, 'manage_updates');
 export const assertManageDefinitions = (locals: Locals) =>
 	assertPagePermission(locals, 'manage_definitions');
 export const assertManageProjects = (locals: Locals) =>
 	assertPagePermission(locals, 'manage_projects');
 
-export const requirePlatformAdmin = (locals: Locals) => requirePermission(locals, 'platform_admin');
+export const requireInstanceAdmin = (locals: Locals) =>
+	requirePermission(locals, 'instance_admin');
 
 export async function requireCanEdit(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	if (hasPermission(ctx, 'platform_admin')) return user;
+	if (hasPermission(ctx, 'instance_admin')) return user;
 	if (!hasPermission(ctx, 'manage_definitions')) {
 		throw error(403, `You don't have permission to do this.`);
 	}
@@ -76,7 +87,7 @@ export async function requireCanEdit(locals: Locals, projectId: string): Promise
 
 export async function requireCanManage(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	if (hasPermission(ctx, 'platform_admin')) return user;
+	if (hasPermission(ctx, 'instance_admin')) return user;
 	if (!hasPermission(ctx, 'manage_projects')) {
 		throw error(403, `You don't have permission to do this.`);
 	}
@@ -93,7 +104,7 @@ export async function requireCanManage(locals: Locals, projectId: string): Promi
 
 /**
  * Gate for adding/removing/updating project members. Same rule as editing
- * project settings: platform_admin, or a user with manage_projects who also
+ * project settings: instance_admin, or a user with manage_projects who also
  * has canEditProjectSettings on the target project.
  */
 export async function requireCanManageMembers(
@@ -101,7 +112,7 @@ export async function requireCanManageMembers(
 	projectId: string
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	if (hasPermission(ctx, 'platform_admin')) return user;
+	if (hasPermission(ctx, 'instance_admin')) return user;
 	if (!hasPermission(ctx, 'manage_projects')) {
 		throw error(403, `You don't have permission to do this.`);
 	}
@@ -119,7 +130,7 @@ export async function requireCanViewProject(
 	projectId: string
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	if (hasPermission(ctx, 'platform_admin')) return user;
+	if (hasPermission(ctx, 'instance_admin')) return user;
 
 	const project = await getProjectProvider().getProject(ctx, projectId);
 	if (!project) throw error(404, 'Project not found');
@@ -140,7 +151,7 @@ export async function requireEditableDefinition(locals: Locals, guid: string) {
 	const record = await getDefinitionMeta().get(ctx, guid);
 	if (!record) throw error(404, 'Definition not found');
 	await requireCanEdit(locals, record.projectId);
-	if (!hasPermission(ctx, 'platform_admin')) {
+	if (!hasPermission(ctx, 'instance_admin')) {
 		const allowed = await getDefinitionMeta().canEditDefinition(
 			ctx,
 			record.projectId,

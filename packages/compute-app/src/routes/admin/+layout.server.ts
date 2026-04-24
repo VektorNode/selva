@@ -7,9 +7,12 @@ import type { LayoutServerLoad } from './$types';
 // user holds at least one admin-level permission — otherwise /admin is off-limits
 // and they get sent back to the app.
 const ADMIN_PERMISSIONS: Array<PlatformPermission | OrgPermission> = [
-	'platform_admin',
-	'manage_users',
+	'instance_admin',
+	'manage_instance_users',
 	'manage_compute',
+	'manage_updates',
+	'manage_org_members',
+	'manage_org_compute',
 	'manage_definitions',
 	'manage_projects'
 ];

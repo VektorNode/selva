@@ -23,8 +23,8 @@ export type OrgRole = z.infer<typeof OrgRoleSchema>;
  * orgs they belong to.
  */
 export const OrgPermissionSchema = z.enum([
-	'manage_users', // invite / remove / role-change within THIS org
-	'manage_compute', // configure compute servers for THIS org
+	'manage_org_members', // invite / remove / role-change within THIS org
+	'manage_org_compute', // configure THIS org's compute override (gated by ALLOW_ORG_COMPUTE_OVERRIDE)
 	'manage_definitions', // create / edit / delete defs in THIS org
 	'manage_projects' // create / edit / delete projects in THIS org
 ]);
@@ -39,8 +39,8 @@ export const ALL_ORG_PERMISSIONS: readonly OrgPermission[] = OrgPermissionSchema
  * (inviting users, configuring compute servers) is owner/admin territory.
  */
 export const OWNER_ADMIN_ONLY_PERMISSIONS: readonly OrgPermission[] = [
-	'manage_users',
-	'manage_compute'
+	'manage_org_members',
+	'manage_org_compute'
 ];
 
 /** Org permissions that a `member` role is allowed to hold. */

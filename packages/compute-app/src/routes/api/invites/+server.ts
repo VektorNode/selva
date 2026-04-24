@@ -3,7 +3,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { getInviteStore } from '$lib/server/providers.server';
-import { requireManageUsers } from '$lib/server/access.server';
+import { requireManageOrgMembers } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import {
 	OrgRoleSchema,
@@ -36,7 +36,7 @@ function generateToken(): string {
 
 // GET — list pending (and recently accepted) invites for the active org
 export const GET: RequestHandler = async ({ locals }) => {
-	requireManageUsers(locals);
+	requireManageOrgMembers(locals);
 	const ctx = locals.ctx!;
 	if (!ctx.orgId) throw error(400, 'No active organization');
 	try {
@@ -49,7 +49,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 // POST — create an invite, return the shareable accept URL
 export const POST: RequestHandler = async ({ request, locals, url }) => {
-	requireManageUsers(locals);
+	requireManageOrgMembers(locals);
 	const ctx = locals.ctx!;
 	const user = locals.user!;
 	if (!ctx.orgId) throw error(400, 'No active organization');
@@ -63,7 +63,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		// owner/admin always carry the full permission set — the checkbox array
 		// from the UI is ignored for those roles. `member` takes the caller's
 		// selection, intersected with MEMBER_ASSIGNABLE_PERMISSIONS so governance
-		// perms (manage_users, manage_compute) can't be granted to members.
+		// perms (manage_org_members, manage_org_compute) can't be granted to members.
 		const orgPermissions =
 			parsed.data.orgRole === 'member'
 				? submittedOrgPerms.filter((p) => MEMBER_ASSIGNABLE_PERMISSIONS.includes(p))

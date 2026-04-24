@@ -16,13 +16,13 @@ const EMPTY: InvitesFile = { invites: [] };
 
 /**
  * Pre-§1g invite records carried a flat `permissions` array. Drop any entry
- * that isn't a valid OrgPermission (including the legacy `platform_admin`,
- * which is no longer invite-grantable) and store the result under
- * `orgPermissions`.
+ * that isn't a valid OrgPermission (including platform-scope perms like
+ * `instance_admin`, which are never invite-grantable) and store the result
+ * under `orgPermissions`.
  */
 const VALID_ORG_PERMS = new Set([
-	'manage_users',
-	'manage_compute',
+	'manage_org_members',
+	'manage_org_compute',
 	'manage_definitions',
 	'manage_projects'
 ]);
@@ -41,7 +41,7 @@ function migrateInvite(i: Invite & { permissions?: string[] }): Invite {
  *
  * Notes:
  * - No explicit per-call scoping by ctx.userId — the route layer gates
- *   admin actions (manage_users + correct org). `getByToken` is the one
+ *   admin actions (manage_org_members + correct org). `getByToken` is the one
  *   unauthenticated read and is implicitly scoped by the secret token.
  * - Expired or already-accepted invites are hidden from `getByToken` so
  *   a reused link returns null and the public route surfaces a clean error.

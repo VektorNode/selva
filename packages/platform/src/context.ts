@@ -16,13 +16,14 @@ import { ALL_ORG_PERMISSIONS } from './organizations/schemas.js';
  * ## Permission model
  *
  * Permissions live at two scopes:
- * - `platformPermissions` — span every org on the instance. Rare role;
- *   typically empty. Only `platform_admin` exists here today.
+ * - `platformPermissions` — span every org on the instance. Rare; typically
+ *   empty. `instance_admin`, `manage_compute`, `manage_instance_users`, and
+ *   `manage_updates` live here.
  * - `orgPermissions` — fine-grained rights within the **active** org
  *   (`orgId`). Empty when `orgId` is undefined. These are resolved from
  *   the user's `OrgMember.permissions` row for the active org.
  *
- * A `platform_admin` implicitly holds every `OrgPermission` in every org;
+ * An `instance_admin` implicitly holds every other permission, everywhere;
  * the `hasPermission` helper encodes that.
  *
  * ## System context
@@ -38,7 +39,7 @@ export interface RequestContext {
 	userId: string;
 	/** Active organization scope. Undefined for platform-admin global reads / pre-org routes. */
 	orgId?: string;
-	/** Platform-scope permissions (e.g. `platform_admin`). Typically empty. */
+	/** Platform-scope permissions (e.g. `instance_admin`). Typically empty. */
 	platformPermissions: PlatformPermission[];
 	/** Org-scope permissions for the active org. Empty when `orgId` is undefined. */
 	orgPermissions: OrgPermission[];
@@ -76,22 +77,32 @@ export const SYSTEM_CONTEXT: RequestContext = {
 /**
  * Returns true if the caller holds the given permission, resolving
  * platform-vs-org scope automatically:
- * - `platform_admin` is checked against `ctx.platformPermissions`.
- * - Any `OrgPermission` is satisfied either by holding `platform_admin`
+ * - A platform permission is checked against `ctx.platformPermissions`; an
+ *   `instance_admin` implicitly holds every other platform permission.
+ * - Any `OrgPermission` is satisfied either by holding `instance_admin`
  *   (which implicitly grants every org permission everywhere) or by having
  *   it in `ctx.orgPermissions` for the currently active org.
  *
  * Does NOT cross-check `ctx.orgId`: the caller is responsible for building
  * a context scoped to the org they're acting on. Passing an org permission
  * against a `ctx` without `orgId` returns false unless the caller is
- * `platform_admin` or `system`.
+ * `instance_admin` or `system`.
  */
 export function hasPermission(
 	ctx: RequestContext,
 	permission: PlatformPermission | OrgPermission
 ): boolean {
 	if (ctx.system) return true;
-	if (ctx.platformPermissions.includes('platform_admin')) return true;
-	if (permission === 'platform_admin') return false;
+	const isInstanceAdmin = ctx.platformPermissions.includes('instance_admin');
+	if (isInstanceAdmin) return true;
+	if (isPlatformPermission(permission)) {
+		return ctx.platformPermissions.includes(permission);
+	}
 	return ctx.orgPermissions.includes(permission);
+}
+
+const PLATFORM_PERMISSION_VALUES = new Set<string>(ALL_PLATFORM_PERMISSIONS);
+
+function isPlatformPermission(p: string): p is PlatformPermission {
+	return PLATFORM_PERMISSION_VALUES.has(p);
 }

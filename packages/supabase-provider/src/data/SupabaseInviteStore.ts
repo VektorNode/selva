@@ -13,7 +13,7 @@ import { nextCursorFromRange, toRange } from './pagination.js';
  * Invite store. `getByToken` and `accept` route through SECURITY DEFINER
  * RPCs so unauthenticated / just-signed-up callers can validate and consume
  * the invite without RLS blocking them. Other operations (create, list,
- * revoke) go through the normal REST API with RLS enforcing `manage_users`.
+ * revoke) go through the normal REST API with RLS enforcing `manage_org_members`.
  */
 export class SupabaseInviteStore implements IInviteStore {
 	constructor(private readonly clients: ClientBundle) {}

@@ -33,7 +33,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const ctx = locals.ctx!;
 	const canManageProjects = hasPermission(ctx, 'manage_projects');
-	const isPlatformAdmin = hasPermission(ctx, 'platform_admin');
+	const isPlatformAdmin = hasPermission(ctx, 'instance_admin');
 
 	try {
 		const [orgsPage, recordsPage, computeConfig] = await Promise.all([

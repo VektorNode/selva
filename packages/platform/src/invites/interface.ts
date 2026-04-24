@@ -10,7 +10,7 @@ import type { Invite } from './types.js';
  *
  * Auth model:
  * - Mutations (`create`, `listByOrg`, `revoke`) require a session and are
- *   gated by the route layer (manage_users + same-org membership).
+ *   gated by the route layer (manage_org_members + same-org membership).
  * - `getByToken` and `markAccepted` accept `SYSTEM_CONTEXT` because the
  *   token itself is the capability; the public /accept-invite page has no
  *   session yet.

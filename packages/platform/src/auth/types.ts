@@ -3,11 +3,19 @@ import { z } from 'zod';
 /**
  * Platform-scope permissions. Very limited on purpose — only rights that
  * apply *across* every organization on the instance. Regular users hold an
- * empty array; `platform_admin` is reserved for rare roles like support
- * impersonation and system maintenance.
+ * empty array; these are reserved for Selva-staff roles and instance operators.
+ *
+ * - `instance_admin`        — superuser across all orgs; implies every
+ *   OrgPermission everywhere plus every other platform permission.
+ * - `manage_compute`        — configure the instance-wide Rhino.Compute pool.
+ * - `manage_instance_users` — disable/enable any user on the instance.
+ * - `manage_updates`        — run system updates.
  */
 export const PlatformPermissionSchema = z.enum([
-	'platform_admin' // superuser across all orgs — implies every OrgPermission, everywhere
+	'instance_admin',
+	'manage_compute',
+	'manage_instance_users',
+	'manage_updates'
 ]);
 export type PlatformPermission = z.infer<typeof PlatformPermissionSchema>;
 

@@ -1,3 +1,13 @@
+-- ============================================================================
+-- TODO(access-control refactor / B1): comment mentions the old identifier.
+--
+--   • In the comment below, rename `platform_admin` → `instance_admin` so the
+--     docstring tracks the new platform permission vocabulary:
+--     `instance_admin`, `manage_compute`, `manage_instance_users`,
+--     `manage_updates`.
+-- No column change is required for this migration.
+-- ============================================================================
+
 -- user_profiles: profile state (displayName, starred definitions, recent runs)
 -- plus platform-scope permissions (platform_admin, etc.).
 --

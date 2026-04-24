@@ -190,7 +190,7 @@ export class SupabaseProjectStore implements IProjectStore {
 	// ── Access checks (UI gating — mutating methods are the real boundary) ──
 
 	async canEdit(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (ctx.platformPermissions.includes('platform_admin')) return true;
+		if (ctx.platformPermissions.includes('instance_admin')) return true;
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('project_members')
@@ -223,7 +223,7 @@ export class SupabaseProjectStore implements IProjectStore {
 	}
 
 	async canEditProjectSettings(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (ctx.platformPermissions.includes('platform_admin')) return true;
+		if (ctx.platformPermissions.includes('instance_admin')) return true;
 		const { data } = await this.clients
 			.forRequest(ctx)
 			.from('project_members')
@@ -237,7 +237,7 @@ export class SupabaseProjectStore implements IProjectStore {
 	}
 
 	async canManage(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (ctx.platformPermissions.includes('platform_admin')) return true;
+		if (ctx.platformPermissions.includes('instance_admin')) return true;
 		const { data } = await this.clients
 			.forRequest(ctx)
 			.from('project_members')

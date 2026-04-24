@@ -1,3 +1,20 @@
+-- ============================================================================
+-- TODO(access-control refactor / B1): permission identifier renames
+--
+-- The TypeScript platform contract (spec: compute-app/src/routes/admin/Permissions.md)
+-- was renamed. This SQL must follow to keep RLS aligned. All renames are
+-- hand-fixes; no migration needed (nothing is live).
+--
+--   • Helper function `is_platform_admin()`      → rename to `is_instance_admin()`
+--     and change its body to match `'instance_admin' = any(platform_permissions)`.
+--     Every policy below calls this function; rename call sites too.
+--
+--   • String literal `'platform_admin'` (in `is_platform_admin` body and any
+--     manual checks in policies)                → `'instance_admin'`
+--
+-- See related migrations 0002, 0004, 0005, 0007 for additional call-site renames.
+-- ============================================================================
+
 -- Orgs, org_members, projects, project_members + RLS helpers and policies.
 --
 -- Design notes:
