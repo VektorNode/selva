@@ -90,4 +90,13 @@ export interface IAuthProvider {
 
 	/** Delete a user. Returns 'ok', 'not_found', or 'not_supported'. */
 	deleteUser(id: string): Promise<UserManagementResult>;
+
+	/**
+	 * Stamp the user's `lastLoginAt` to now. Called by the auth entry points
+	 * (verifyLoginCredentials and verifyToken) on success. Best-effort —
+	 * failure MUST NOT block auth. Adapters MAY debounce (e.g. skip if the
+	 * existing timestamp is < 60s old) to avoid a write per request.
+	 * Omitted on providers that cannot persist user state.
+	 */
+	touchLastLogin?(id: string): Promise<void>;
 }

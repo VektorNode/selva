@@ -21,7 +21,14 @@ export interface StoredUser {
 	/** Last N solve runs, newest first. Capped at MAX_RECENT_RUNS. */
 	recentRuns: import('@selva/platform').RecentRun[];
 	createdAt: string; // ISO 8601
+	/** ISO 8601 — most recent successful credential login or token verification. */
+	lastLoginAt?: string;
+	/** When true, the provider MUST refuse to authenticate this user. */
+	disabled?: boolean;
 }
+
+/** Debounce window for lastLoginAt writes — skip if prior stamp is newer than this. */
+const LAST_LOGIN_DEBOUNCE_MS = 60_000;
 
 const MAX_RECENT_RUNS = 20;
 
@@ -80,6 +87,8 @@ export interface LocalUserMetaProvider {
 	): Promise<StoredUser>;
 	updatePermissions(id: string, permissions: Permission[]): Promise<void>;
 	updateProfile(id: string, patch: { displayName?: string }): Promise<void>;
+	setDisabled(id: string, disabled: boolean): Promise<void>;
+	touchLastLogin(id: string): Promise<void>;
 	starDefinition(id: string, definitionId: string): Promise<void>;
 	unstarDefinition(id: string, definitionId: string): Promise<void>;
 	recordRun(id: string, run: import('@selva/platform').RecentRun): Promise<void>;
@@ -147,6 +156,27 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
 			if (patch.displayName !== undefined) user.displayName = patch.displayName;
+			await writeJsonFile(usersFilePath, file);
+		},
+
+		async setDisabled(id, disabled) {
+			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
+			const user = file.users.find((u) => u.id === id);
+			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
+			user.disabled = disabled;
+			await writeJsonFile(usersFilePath, file);
+		},
+
+		async touchLastLogin(id) {
+			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
+			const user = file.users.find((u) => u.id === id);
+			if (!user) return;
+			const now = Date.now();
+			if (user.lastLoginAt) {
+				const prev = Date.parse(user.lastLoginAt);
+				if (Number.isFinite(prev) && now - prev < LAST_LOGIN_DEBOUNCE_MS) return;
+			}
+			user.lastLoginAt = new Date(now).toISOString();
 			await writeJsonFile(usersFilePath, file);
 		},
 
