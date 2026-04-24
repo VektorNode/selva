@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -18,7 +18,6 @@ describe('LocalStorageProvider', () => {
 
 	runStorageProviderConformance({
 		name: 'LocalStorageProvider',
-		createStorage: () => new LocalStorageProvider(tempDir),
-		runner: { describe, it, expect }
+		createStorage: () => new LocalStorageProvider(tempDir)
 	});
 });

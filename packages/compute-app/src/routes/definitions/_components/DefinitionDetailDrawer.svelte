@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Separator } from 'selva-shared';
+	import { Button, Drawer, Separator } from 'selva-shared';
 	import { Play, X } from '@lucide/svelte';
 	import type { DefinitionRecord } from '../+page.server';
 	import StatusBadge from './StatusBadge.svelte';
@@ -16,17 +16,7 @@
 	let { record, projectName, onClose, onEdit, onOpenRunner }: Props = $props();
 </script>
 
-<div
-	role="button"
-	tabindex="-1"
-	aria-label="Close drawer"
-	class="fixed inset-0 z-50 bg-black/30"
-	onclick={onClose}
-	onkeydown={(e) => e.key === 'Escape' && onClose()}
-></div>
-<div
-	class="border-border bg-background animate-in slide-in-from-right-4 fixed top-0 right-0 z-50 flex h-full w-125 flex-col overflow-y-auto border-l duration-150"
->
+<Drawer {onClose}>
 	<div class="border-border flex items-start justify-between gap-4 border-b p-6">
 		<div>
 			<div class="flex items-center gap-2">
@@ -117,4 +107,4 @@
 			</div>
 		{/if}
 	</div>
-</div>
+</Drawer>

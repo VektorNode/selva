@@ -1,50 +1,53 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
+import { z } from 'zod';
 import { getProjectProvider } from '$lib/server/providers.server';
-import { requireManageProjects, requireCanManage, throwProviderError } from '$lib/server/access.server';
-import type { ProjectVisibility } from '@selva/platform';
+import { requireManageProjects, requireCanManage } from '$lib/server/access.server';
+import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { slugify } from '$lib/server/slug';
+import { ProjectVisibilitySchema } from '@selva/platform';
+
+const UpdateProjectBody = z
+	.object({
+		name: z.string().min(1).max(128).trim(),
+		description: z.string().max(2000).nullish(),
+		visibility: ProjectVisibilitySchema
+	})
+	.partial();
 
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	const { id } = params;
 	if (!id) throw error(400, 'Missing project ID');
+
 	requireManageProjects(locals);
 	const ctx = locals.ctx!;
 	const allowed = await getProjectProvider().canEditProjectSettings(ctx, id);
 	if (!allowed) throw error(403, 'You do not have permission to edit this project.');
 
 	const body = await request.json().catch(() => null);
-	if (!body || typeof body !== 'object') throw error(400, 'Invalid request body');
+	const parsed = UpdateProjectBody.safeParse(body);
+	if (!parsed.success) throwZodError(parsed.error);
 
-	const { name, description, visibility } = body as Record<string, unknown>;
-	const patch: Record<string, unknown> = {};
-	if (typeof name === 'string' && name.trim()) {
-		patch.name = name.trim();
-		patch.slug = name
-			.trim()
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, '-')
-			.replace(/^-|-$/g, '');
+	const patch: {
+		name?: string;
+		slug?: string;
+		description?: string;
+		visibility?: 'public' | 'org' | 'private';
+	} = {};
+	if (parsed.data.name !== undefined) {
+		patch.name = parsed.data.name;
+		patch.slug = slugify(parsed.data.name);
 	}
-	if (description !== undefined)
-		patch.description = typeof description === 'string' ? description : undefined;
-	if (typeof visibility === 'string' && ['public', 'org', 'private'].includes(visibility)) {
-		patch.visibility = visibility;
+	if (parsed.data.description !== undefined) {
+		patch.description = parsed.data.description ?? undefined;
 	}
+	if (parsed.data.visibility !== undefined) patch.visibility = parsed.data.visibility;
 
 	try {
-		await getProjectProvider().updateProject(
-			ctx,
-			id,
-			patch as {
-				name?: string;
-				slug?: string;
-				description?: string;
-				visibility?: ProjectVisibility;
-			}
-		);
+		await getProjectProvider().updateProject(ctx, id, patch);
 		return json({ success: true });
 	} catch (err) {
-		throwProviderError(err, 'Failed to update project');
+		handleApiError(err, 'Failed to update project');
 	}
 };
 
@@ -58,6 +61,6 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 		await getProjectProvider().deleteProject(ctx, id);
 		return json({ success: true });
 	} catch (err) {
-		throwProviderError(err, 'Failed to delete project');
+		handleApiError(err, 'Failed to delete project');
 	}
 };

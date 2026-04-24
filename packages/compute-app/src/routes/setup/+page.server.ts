@@ -34,9 +34,17 @@ export const actions = {
 		}
 
 		try {
-			const auth = getAuthProvider();
-			const user = await auth.createUser(email, password, ['platform_admin', 'manage_users', 'manage_compute', 'manage_definitions', 'manage_projects']);
-			if (!user) return fail(500, { error: 'Failed to create user' });
+			const passwordAuth = getAuthProvider().passwordAuth;
+			if (!passwordAuth) {
+				return fail(501, { error: 'Password-based setup is not supported by this provider' });
+			}
+			const user = await passwordAuth.createUserWithPassword(email, password, [
+				'platform_admin',
+				'manage_users',
+				'manage_compute',
+				'manage_definitions',
+				'manage_projects'
+			]);
 			await createSession(cookies, user);
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);

@@ -121,25 +121,24 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		const existing = config.definitions[guid];
 		if (!existing) throw new ProviderError(`Definition '${guid}' not found`, 404);
 
+		// `null` clears the field (sets to undefined); `undefined` leaves unchanged.
+		const clearable = (v: unknown) => (v === null ? undefined : v);
 		config.definitions[guid] = {
 			...existing,
 			...(patch.displayName !== undefined && { displayName: patch.displayName }),
-			...(patch.description !== undefined && { description: patch.description }),
-			...(patch.category !== undefined && { category: patch.category }),
-			...(patch.tags !== undefined && { tags: patch.tags }),
-			...(patch.coverImage !== undefined && { coverImage: patch.coverImage }),
+			...(patch.description !== undefined && { description: clearable(patch.description) as string | undefined }),
+			...(patch.category !== undefined && { category: clearable(patch.category) as string | undefined }),
+			...(patch.tags !== undefined && { tags: clearable(patch.tags) as string[] | undefined }),
+			...(patch.coverImage !== undefined && { coverImage: clearable(patch.coverImage) as string | undefined }),
 			...(patch.fileExt !== undefined && { fileExt: patch.fileExt }),
 			...(patch.originalFilename !== undefined && { originalFilename: patch.originalFilename }),
 			...(patch.maxHistory !== undefined && { maxHistory: patch.maxHistory }),
 			...(patch.projectId !== undefined && { projectId: patch.projectId }),
 			...(patch.computeServerId !== undefined && {
-				computeServerId: patch.computeServerId ?? undefined
+				computeServerId: clearable(patch.computeServerId) as string | undefined
 			}),
 			...(patch.status !== undefined && { status: patch.status }),
 			...(patch.lastEditedBy !== undefined && { lastEditedBy: patch.lastEditedBy }),
-			...(patch.incrementRunCount !== undefined && {
-				runCount: (existing.runCount ?? 0) + patch.incrementRunCount
-			}),
 			updatedAt: new Date().toISOString()
 		};
 		await this.writeConfig(config);

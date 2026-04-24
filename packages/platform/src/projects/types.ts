@@ -1,12 +1,14 @@
-/**
- * Who can invoke solve on definitions in this project:
- * - 'public'  — any authenticated user
- * - 'org'     — any member of the parent organization
- * - 'private' — only users listed in ProjectMember
- */
-export type ProjectVisibility = 'public' | 'org' | 'private';
+import type { ProjectRole, ProjectVisibility } from './schemas.js';
 
-export type ProjectRole = 'owner' | 'editor' | 'viewer';
+/**
+ * `ProjectVisibility` and `ProjectRole` live in `./schemas.js` so the Zod
+ * enum is the single source of truth. Re-exported from `./index.js`.
+ *
+ * Visibility:
+ * - 'public'  — any authenticated user can solve
+ * - 'org'     — any member of the parent organization can solve
+ * - 'private' — only users listed in ProjectMember can solve
+ */
 
 export interface Project {
 	/** UUID v4 primary key */

@@ -1,77 +1,75 @@
-import type { AuthUser, Permission, UserManagementResult, RecentRun } from './types.js';
+import type { AuthUser, Permission, UserManagementResult } from './types.js';
 import type { ListOptions, Page } from '../pagination.js';
 
 /**
- * Describes what an auth provider supports, so the UI and API routes can
- * adapt without hardcoding provider-specific logic.
+ * Optional password-based authentication surface. Implemented by providers
+ * that own credentials (LocalAuthProvider). OIDC / OAuth providers (Entra,
+ * Supabase Auth, Firebase) leave `IAuthProvider.passwordAuth` undefined.
  */
-export interface AuthProviderCapabilities {
-	/** Human-readable name shown in the admin UI (e.g. "Local", "GitHub", "Firebase"). */
-	name: string;
+export interface IPasswordAuth {
 	/**
-	 * How admin-initiated user creation works:
-	 * - 'email-password' — admin sets both email and password (local provider)
-	 * - 'email-only'     — admin allowlists an email; user authenticates via OAuth
-	 * - 'none'           — provider manages users externally (no in-app creation)
+	 * Verify login credentials.
+	 * Email may be empty for password-only modes (no users.json configured).
 	 */
-	userCreation: 'email-password' | 'email-only' | 'none';
+	verifyLoginCredentials(email: string, password: string): Promise<AuthUser | null>;
+
+	/** Admin-initiated user creation with a known password. */
+	createUserWithPassword(
+		email: string,
+		password: string,
+		permissions: Permission[]
+	): Promise<AuthUser>;
+
 	/**
-	 * Whether end-users can self-register via /signup.
-	 * OAuth providers handle this via their own callback; local providers use registerUser().
+	 * Self-service registration (called from /signup). Return null when
+	 * self-registration is disabled.
 	 */
-	selfRegistration: boolean;
-	/** Whether password reset is supported. */
-	passwordReset: boolean;
+	registerUser?(email: string, password: string): Promise<AuthUser | null>;
+
+	/**
+	 * Optional password-reset flow. Provider sends the email with token,
+	 * validates the token, and writes the new hash.
+	 */
+	requestPasswordReset?(email: string): Promise<UserManagementResult>;
+	completePasswordReset?(token: string, newPassword: string): Promise<UserManagementResult>;
 }
 
 /**
- * Authentication provider interface.
+ * Authentication provider interface — identity verification only.
+ * User-profile state (starred defs, recent runs, display name) lives in
+ * `IUserProfileStore`. Password operations live in optional `passwordAuth`.
  *
- * Implement to plug in any auth backend:
- * - Local HMAC sessions (built-in default)
- * - Firebase Auth
- * - Supabase Auth
- * - AWS Cognito
- * - Any OIDC/JWT provider
+ * Implement to plug in any auth backend: local HMAC sessions, Microsoft
+ * Entra ID, Supabase Auth, Firebase Auth, AWS Cognito, any OIDC/JWT provider.
  *
- * NOTE: Auth provider methods do NOT take a RequestContext. The provider is
- * what *produces* the identity used to build the context — callers at the
+ * NOTE: Auth provider methods do NOT take a RequestContext — the provider is
+ * what *produces* the identity used to build the context. Callers at the
  * HTTP boundary (hooks.server.ts) derive the context from the returned user.
  */
 export interface IAuthProvider {
-	/** Describes what this provider supports — used to adapt UI and API routes. */
-	readonly capabilities: AuthProviderCapabilities;
+	/** Display name shown in the admin UI (e.g. "Local", "Microsoft Entra ID"). */
+	readonly name: string;
+
+	/**
+	 * Optional password-based auth surface. Present for local providers;
+	 * undefined for OIDC providers that delegate password handling externally.
+	 */
+	readonly passwordAuth?: IPasswordAuth;
+
 	/**
 	 * Verify a token string — session cookie value, JWT, Firebase ID token, etc.
 	 * Returns the authenticated user, or null if the token is invalid or expired.
 	 */
 	verifyToken(token: string): Promise<AuthUser | null>;
 
-	/**
-	 * Look up a user by their provider-specific ID.
-	 * Returns null if the user does not exist.
-	 */
+	/** Look up a user by their provider-specific ID. Returns null if not found. */
 	getUser(id: string): Promise<AuthUser | null>;
 
 	/**
 	 * Create a new opaque session token for an authenticated user.
-	 * Format is provider-specific: HMAC string, signed JWT, Firebase custom token, etc.
+	 * Format is provider-specific: HMAC string, signed JWT, custom token, etc.
 	 */
 	createSessionToken(user: AuthUser): Promise<string>;
-
-	/**
-	 * Verify login credentials (email + password).
-	 * Returns the authenticated user, or null if credentials are invalid.
-	 * Email may be an empty string for password-only auth (no users.json configured).
-	 *
-	 * Note: OAuth providers should return null (not supported). User creation happens
-	 * during the OAuth callback flow, not via this method.
-	 */
-	verifyLoginCredentials(email: string, password: string): Promise<AuthUser | null>;
-
-	// ============================================================================
-	// User management
-	// ============================================================================
 
 	/**
 	 * List users with pagination. Returns null if this provider does not
@@ -80,80 +78,16 @@ export interface IAuthProvider {
 	listUsers(opts?: ListOptions): Promise<Page<AuthUser> | null>;
 
 	/**
-	 * Admin-initiated user creation.
-	 * - password is required for 'email-password' providers (local)
-	 * - password should be null for 'email-only' providers (OAuth allowlist)
-	 * Returns null if this provider does not support admin user creation.
+	 * Optional: allowlist a user (no password). Implemented by OAuth providers
+	 * where the user authenticates via the upstream IdP. Providers that
+	 * require passwords expose creation through `passwordAuth.createUserWithPassword`
+	 * and leave this undefined.
 	 */
-	createUser(email: string, password: string | null, permissions: Permission[]): Promise<AuthUser | null>;
-
-	/**
-	 * Self-service user registration — called from /signup, not /admin.
-	 * Returns the new user, or null if self-registration is not supported.
-	 * OAuth providers omit this; their OAuth callback IS the registration.
-	 */
-	registerUser?(email: string, password: string): Promise<AuthUser | null>;
+	createUser?(email: string, permissions: Permission[]): Promise<AuthUser>;
 
 	/** Update a user's permissions. Returns 'ok', 'not_found', or 'not_supported'. */
 	updateUserPermissions(id: string, permissions: Permission[]): Promise<UserManagementResult>;
 
-	/** Delete a user by ID. Returns 'ok', 'not_found', or 'not_supported'. */
+	/** Delete a user. Returns 'ok', 'not_found', or 'not_supported'. */
 	deleteUser(id: string): Promise<UserManagementResult>;
-
-	// ============================================================================
-	// User profile (self-service)
-	// ============================================================================
-
-	/**
-	 * Update mutable profile fields for a user (display name, avatar URL).
-	 * Returns 'ok', 'not_found', or 'not_supported'.
-	 */
-	updateUserProfile(
-		id: string,
-		patch: { displayName?: string }
-	): Promise<UserManagementResult>;
-
-	/**
-	 * Star (pin) a definition for quick access on the runner home.
-	 * No-op if already starred.
-	 */
-	starDefinition(userId: string, definitionId: string): Promise<UserManagementResult>;
-
-	/**
-	 * Unstar a definition.
-	 * No-op if not starred.
-	 */
-	unstarDefinition(userId: string, definitionId: string): Promise<UserManagementResult>;
-
-	/**
-	 * Record a solve run for this user.
-	 * Implementations should cap the list to a reasonable recent window (e.g. 20 entries).
-	 */
-	recordRun(userId: string, run: RecentRun): Promise<UserManagementResult>;
-
-	// ============================================================================
-	// Password reset (optional)
-	// ============================================================================
-
-	/**
-	 * Request a password reset for a user (email-based flow).
-	 * Returns 'ok' if reset email was sent, 'not_found' if user doesn't exist,
-	 * 'not_supported' if this provider doesn't support password resets.
-	 *
-	 * The provider is responsible for:
-	 * - Sending the reset email with a token/link
-	 * - Validating the token when the user clicks the link
-	 * - Handling token expiration
-	 *
-	 * OAuth providers should return 'not_supported' — password resets are handled
-	 * on the OAuth provider's platform.
-	 */
-	requestPasswordReset(email: string): Promise<UserManagementResult>;
-
-	/**
-	 * Complete a password reset with a provider-specific token.
-	 * Returns 'ok' on success, 'not_found' if token is invalid/expired,
-	 * 'not_supported' if this provider doesn't implement password resets.
-	 */
-	completePasswordReset(token: string, newPassword: string): Promise<UserManagementResult>;
 }

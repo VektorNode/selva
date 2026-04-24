@@ -151,10 +151,6 @@ export class LocalProjectProvider implements IProjectStore {
 	// ── Access checks ─────────────────────────────────────────────────────────────
 	// UI gating only — the mutating methods above are the real security boundary.
 
-	async canSolve(_ctx: RequestContext, _projectId: string): Promise<boolean> {
-		return true;
-	}
-
 	async canEdit(ctx: RequestContext, projectId: string): Promise<boolean> {
 		if (hasPermission(ctx.permissions, 'platform_admin')) return true;
 		const { projectMembers, projects, orgMembers } = await this.loader.get();

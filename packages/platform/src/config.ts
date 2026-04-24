@@ -1,9 +1,10 @@
 import type { IAuthProvider } from './auth/interface.js';
 import type { IDataProvider } from './data/interface.js';
 import type { IStorageProvider } from './storage/interface.js';
+import type { IUserProfileStore } from './userProfile/interface.js';
 
 export interface SelvaConfig {
-	/** Auth provider — session tokens and credential verification */
+	/** Auth provider — session tokens and identity verification only. */
 	auth: IAuthProvider;
 
 	/**
@@ -18,6 +19,14 @@ export interface SelvaConfig {
 	 * Generic path-based interface: works with filesystem, S3, Firebase Storage, etc.
 	 */
 	storage: IStorageProvider;
+
+	/**
+	 * User-profile data store — display name, starred definitions, recent runs.
+	 * Kept separate from `auth` so OAuth providers (Entra, Supabase Auth) don't
+	 * have to stub out profile state — identity comes from the IdP, profile
+	 * state from your DB.
+	 */
+	userProfile: IUserProfileStore;
 }
 
 export type SelvaConfigFactory = (env: Record<string, string | undefined>) => SelvaConfig;

@@ -18,3 +18,5 @@ export { LocalStorageProvider } from './storage/LocalStorageProvider.js';
 export { LocalComputeServerProvider } from './computeServer/LocalComputeServerProvider.js';
 
 export { LocalDataProvider } from './data/LocalDataProvider.js';
+
+export { LocalUserProfileProvider } from './userProfile/LocalUserProfileProvider.js';

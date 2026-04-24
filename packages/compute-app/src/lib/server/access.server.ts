@@ -1,13 +1,11 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { AuthUser, Permission, RequestContext } from '@selva/platform';
-import { hasPermission, ProviderError } from '@selva/platform';
+import { hasPermission } from '@selva/platform';
 import { getProjectProvider, getDefinitionMeta } from './providers.server.js';
+import { handleApiError } from './api-errors.js';
 
-export function throwProviderError(err: unknown, fallback: string): never {
-	if (err && typeof err === 'object' && 'status' in err) throw err;
-	if (err instanceof ProviderError) throw error(err.statusCode, err.message);
-	throw error(500, fallback);
-}
+// Kept for backwards compatibility with existing callers; prefer handleApiError.
+export const throwProviderError = handleApiError;
 
 interface Locals {
 	user?: AuthUser;
@@ -57,37 +55,28 @@ export const requirePlatformAdmin = (locals: Locals) => requirePermission(locals
 
 export async function requireCanEdit(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	// platform_admin can edit any project globally
 	if (hasPermission(user.permissions, 'platform_admin')) return user;
-	// Must have manage_definitions permission
 	if (!hasPermission(user.permissions, 'manage_definitions')) {
 		throw error(403, `You don't have permission to do this.`);
 	}
-	// Check project access based on visibility
 	const project = await getProjectProvider().getProject(ctx, projectId);
 	if (!project) throw error(404, 'Project not found');
 
 	if (project.visibility === 'private') {
-		// Private: user must be a project member
 		const allowed = await getProjectProvider().canEdit(ctx, projectId);
 		if (!allowed) throw error(403, 'You are not a member of this project.');
 	}
-	// For 'org' and 'public': org membership is checked by locals.ctx which is org-scoped
-	// Implicitly allowed if they have manage_definitions permission
 	return user;
 }
 
 export async function requireCanManage(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	// platform_admin can manage any project globally
 	if (hasPermission(user.permissions, 'platform_admin')) return user;
-	// Everyone else (including manage_projects holders) must also be a project member
 	if (!hasPermission(user.permissions, 'manage_projects')) {
 		throw error(403, `You don't have permission to do this.`);
 	}
 	const allowed = await getProjectProvider().canManage(ctx, projectId);
 	if (!allowed) {
-		// Check if they're a member but just don't have owner role
 		const canEdit = await getProjectProvider().canEditProjectSettings(ctx, projectId);
 		if (canEdit) {
 			throw error(403, 'Only project owners can delete projects.');
@@ -95,6 +84,58 @@ export async function requireCanManage(locals: Locals, projectId: string): Promi
 		throw error(403, 'You are not a member of this project.');
 	}
 	return user;
+}
+
+/**
+ * Gate for adding/removing/updating project members. Same rule as editing
+ * project settings: platform_admin, or a user with manage_projects who also
+ * has canEditProjectSettings on the target project.
+ */
+export async function requireCanManageMembers(
+	locals: Locals,
+	projectId: string
+): Promise<AuthUser> {
+	const { user, ctx } = requireAuthed(locals);
+	if (hasPermission(user.permissions, 'platform_admin')) return user;
+	if (!hasPermission(user.permissions, 'manage_projects')) {
+		throw error(403, `You don't have permission to do this.`);
+	}
+	const allowed = await getProjectProvider().canEditProjectSettings(ctx, projectId);
+	if (!allowed) throw error(403, 'Only project owners can manage members.');
+	return user;
+}
+
+/**
+ * Gate for reading project-scoped resources (e.g. cover images). Enforces
+ * visibility: private projects require membership, org/public require auth.
+ */
+export async function requireCanViewProject(
+	locals: Locals,
+	projectId: string
+): Promise<AuthUser> {
+	const { user, ctx } = requireAuthed(locals);
+	if (hasPermission(user.permissions, 'platform_admin')) return user;
+
+	const project = await getProjectProvider().getProject(ctx, projectId);
+	if (!project) throw error(404, 'Project not found');
+
+	if (project.visibility === 'private') {
+		const allowed = await getProjectProvider().canEdit(ctx, projectId);
+		if (!allowed) throw error(403, 'You do not have access to this project.');
+	}
+	return user;
+}
+
+/**
+ * Load a definition by GUID and assert the user can edit it. Returns the
+ * record so callers don't re-fetch. Throws 404 if the definition is missing.
+ */
+export async function requireEditableDefinition(locals: Locals, guid: string) {
+	const { ctx } = requireAuthed(locals);
+	const record = await getDefinitionMeta().get(ctx, guid);
+	if (!record) throw error(404, 'Definition not found');
+	await requireCanEdit(locals, record.projectId);
+	return { record, ctx };
 }
 
 export async function requireCanEditDefinition(

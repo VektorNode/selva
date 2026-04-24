@@ -1,8 +1,20 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { definitionService, getDefinitionMeta } from '$lib/server/providers.server';
-import { requireCanEdit } from '$lib/server/access.server';
+import { z } from 'zod';
+import { definitionService } from '$lib/server/providers.server';
+import { requireEditableDefinition } from '$lib/server/access.server';
+import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { GuidSchema } from '@selva/platform/definitions/schemas';
+
+const RevertSchema = z.object({
+	filename: z
+		.string()
+		.min(1, 'filename is required')
+		.refine(
+			(v) => !v.includes('/') && !v.includes('\\') && !v.includes('..'),
+			'Invalid filename'
+		)
+});
 
 // POST - Restore an archived file as the active GH file
 export const POST: RequestHandler = async ({ params, request, locals }) => {
@@ -10,29 +22,16 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
 
 	const body = await request.json().catch(() => null);
-	const ref = body?.filename;
-	if (!ref || typeof ref !== 'string') {
-		throw error(400, 'filename is required');
-	}
+	const parsed = RevertSchema.safeParse(body);
+	if (!parsed.success) throwZodError(parsed.error);
 
-	if (ref.includes('/') || ref.includes('\\') || ref.includes('..')) {
-		throw error(400, 'Invalid filename');
-	}
-
-	const guid = guidParsed.data;
-	const ctx = locals.ctx!;
+	const { record, ctx } = await requireEditableDefinition(locals, guidParsed.data);
 
 	try {
-		const record = await getDefinitionMeta().get(ctx, guid);
-		if (record) await requireCanEdit(locals, record.projectId);
-
-		await definitionService.revertToVersion(ctx, guid, ref);
-
-		const updated = await getDefinitionMeta().get(ctx, guid);
-		return json({ success: true, filename: `definition.${updated?.fileExt ?? 'gh'}` });
+		await definitionService.revertToVersion(ctx, guidParsed.data, parsed.data.filename);
+		// revertToVersion preserves fileExt; no re-fetch needed.
+		return json({ success: true, filename: `definition.${record.fileExt}` });
 	} catch (err) {
-		if (err && typeof err === 'object' && 'status' in err) throw err;
-		console.error('[Revert] Failed:', err);
-		throw error(500, 'Failed to revert file');
+		handleApiError(err, 'Failed to revert file');
 	}
 };

@@ -4,6 +4,7 @@
 		AlertDialog,
 		Badge,
 		Button,
+		Drawer,
 		Input,
 		Label,
 		Separator,
@@ -11,8 +12,8 @@
 		toast
 	} from 'selva-shared';
 	import { Image, Trash2, Upload, X } from '@lucide/svelte';
-	import ImageUploadField from '../../admin/definitions/ImageUploadField.svelte';
-	import FileUploadField from '../../admin/definitions/FileUploadField.svelte';
+	import ImageUploadField from '$lib/components/definitions/ImageUploadField.svelte';
+	import FileUploadField from '$lib/components/definitions/FileUploadField.svelte';
 	import type {
 		DefinitionRecord,
 		ProjectWithMembers,
@@ -155,17 +156,7 @@
 	}
 </script>
 
-<div
-	role="button"
-	tabindex="-1"
-	aria-label="Close edit drawer"
-	class="fixed inset-0 z-50 bg-black/30"
-	onclick={onClose}
-	onkeydown={(e) => e.key === 'Escape' && onClose()}
-></div>
-<div
-	class="border-border bg-background animate-in slide-in-from-right-4 fixed top-0 right-0 z-50 flex h-full w-125 flex-col border-l duration-150"
->
+<Drawer {onClose} ariaLabel="Close edit drawer">
 	<div class="border-border flex shrink-0 items-center justify-between border-b px-6 py-4">
 		<div>
 			<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">
@@ -339,7 +330,7 @@
 			</Button>
 		</div>
 	</div>
-</div>
+</Drawer>
 
 <AlertDialog.Root open={showDeleteConfirm} onOpenChange={(o) => (showDeleteConfirm = o)}>
 	<AlertDialog.Content>

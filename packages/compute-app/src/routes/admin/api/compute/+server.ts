@@ -17,7 +17,7 @@ interface IncomingConfig {
 export const GET: RequestHandler = async ({ locals }) => {
 	requireManageCompute(locals);
 	try {
-		const config = await getComputeServerConfigStore().getConfig();
+		const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
 		return json({
 			...config,
 			servers: config.servers.map(
@@ -62,7 +62,8 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		const provider = getComputeServerConfigStore();
-		const existing = await provider.getConfig();
+		const ctx = locals.ctx!;
+		const existing = await provider.getConfig(ctx);
 
 		// Build a lookup map from serverUrl → stored apiKey for stable key preservation.
 		const storedKeyMap = new Map(existing.servers.map((s) => [s.serverUrl, s.apiKey]));
@@ -80,7 +81,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 			}))
 		};
 
-		await provider.saveConfig(merged);
+		await provider.saveConfig(ctx, merged);
 		return new Response(null, { status: 204 });
 	} catch (err) {
 		console.error('[Compute PUT] Failed:', err);

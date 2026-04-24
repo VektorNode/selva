@@ -182,7 +182,7 @@ export const load = (async ({ params, locals }) => {
 			return schemaInput;
 		});
 
-		const computeConfig = await getComputeServerConfigStore().getConfig();
+		const computeConfig = await getComputeServerConfigStore().getConfig(SYSTEM_CONTEXT);
 		const server = computeConfig.servers.length > 0 ? resolveComputeServer(computeConfig) : undefined;
 
 		return {

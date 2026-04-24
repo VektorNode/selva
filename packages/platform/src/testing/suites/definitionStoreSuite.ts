@@ -4,26 +4,19 @@
  * The goal is to prove every adapter behaves identically from the consuming
  * app's perspective — `ctx` scoping, `pending` filtering, `listStalePending`
  * cutoff, history mutations, and error shapes.
- *
- * Runner-agnostic: callers inject a `{ describe, it, expect }` trio so this
- * package stays test-framework free. For vitest or jest, pass the globals
- * directly; for node:test, wrap them.
  */
 
+import { describe, it, expect } from 'vitest';
 import type { IDefinitionStore } from '../../data/interface.js';
 import type { DefinitionRecord, HistoryEntry } from '../../definitions/types.js';
 import { SYSTEM_CONTEXT } from '../../context.js';
-import { type ConformanceRunner, makeCtx, makeUuid } from './runner.js';
-
-export type { ConformanceRunner };
+import { makeCtx, makeUuid } from './helpers.js';
 
 export interface DefinitionStoreConformanceOptions {
 	/** Name to show in the test output (e.g. "local-provider"). */
 	name: string;
 	/** Factory that returns a fresh, empty store per test. */
 	createStore: () => Promise<IDefinitionStore> | IDefinitionStore;
-	/** Test runner globals injected from the host package. */
-	runner: ConformanceRunner;
 	/**
 	 * Set to true for adapters that enforce per-user ctx scoping (e.g. Supabase RLS).
 	 * When false, ctx-isolation tests are skipped (local JSON adapter shares all records).
@@ -52,8 +45,7 @@ function record(overrides: Partial<DefinitionRecord> = {}): DefinitionRecord {
 }
 
 export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOptions): void {
-	const { name, createStore, runner, ctxIsolation = false } = opts;
-	const { describe, it, expect } = runner;
+	const { name, createStore, ctxIsolation = false } = opts;
 
 	describe(`IDefinitionStore conformance: ${name}`, () => {
 		it('create + get returns the record', async () => {

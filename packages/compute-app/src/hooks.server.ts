@@ -35,13 +35,19 @@ if (missing.length > 0) {
 
 /**
  * Build a per-request context from an authenticated user.
+ *
+ * `sessionToken` is forwarded as `adapterContext` so adapters that need the
+ * upstream auth token (e.g. Supabase RLS) can pull it off the context.
+ * Adapters that don't need it ignore the field — local provider doesn't read it.
+ *
  * Multi-tenant deployments will extend this to resolve the active org
  * (from subdomain, header, or user's default).
  */
-function buildContext(user: AuthUser): RequestContext {
+function buildContext(user: AuthUser, sessionToken: string | undefined): RequestContext {
 	return {
 		userId: user.id,
-		permissions: user.permissions
+		permissions: user.permissions,
+		adapterContext: sessionToken ? { sessionToken } : undefined
 	};
 }
 
@@ -91,7 +97,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 
 		// Make the authenticated user + request context available to route loaders
 		event.locals.user = user;
-		event.locals.ctx = buildContext(user);
+		event.locals.ctx = buildContext(user, token);
 	}
 
 	const response = await resolve(event);

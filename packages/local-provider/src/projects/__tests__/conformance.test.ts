@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -25,7 +25,6 @@ describe('LocalProjectProvider', () => {
 			// Bootstrap the store so the org exists, then get its id
 			const storeData = await loader.get();
 			return { store, orgId: storeData.org.id };
-		},
-		runner: { describe, it, expect }
+		}
 	});
 });

@@ -1,13 +1,22 @@
-import type { IDataProvider } from '../data/interface.js';
-import type { IStorageProvider } from '../storage/interface.js';
-import type { RequestContext } from '../context.js';
-import { SYSTEM_CONTEXT } from '../context.js';
-import { ProviderError } from '../errors.js';
-import type { DefinitionRecord, DefinitionFileExt } from './types.js';
-import { definitionPaths } from './paths.js';
-import type { UpdateMetadataInput } from './schemas.js';
+import type {
+	IDataProvider,
+	IStorageProvider,
+	RequestContext,
+	DefinitionRecord,
+	DefinitionFileExt,
+	UpdateMetadataInput
+} from '@selva/platform';
+import { SYSTEM_CONTEXT, ProviderError, definitionPaths } from '@selva/platform';
 
-export interface CreateDefinitionInput {
+/**
+ * Input passed to `DefinitionService.create`. Carries everything the service
+ * needs to assemble a `DefinitionRecord` plus orchestrate the blob upload.
+ *
+ * Distinct from `CreateDefinitionInputSchema` exported by
+ * `@selva/platform/definitions/schemas`, which validates the user-facing
+ * HTTP body (no guid/ownerId/fileExt — those are derived server-side).
+ */
+export interface CreateDefinitionRecord {
 	guid: string;
 	projectId: string;
 	ownerId: string;
@@ -26,17 +35,24 @@ export interface CreateDefinitionInput {
  * Default age threshold after which a 'pending' record is considered stale.
  * Conservative — covers slow uploads over weak connections.
  */
-export const PENDING_GC_AGE_MS = 30 * 60 * 1000; // 30 minutes
+const PENDING_GC_AGE_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
  * Orchestrates writes that span IDataProvider + IStorageProvider.
  *
- * Ordering rules (see Phase 4 of the provider refactor):
+ * Lives in compute-app (not @selva/platform) because it is application
+ * orchestration, not platform contract — every method assumes the local
+ * provider's no-transactions model. Once a transactional adapter (Supabase)
+ * is wired up, the create-pending → upload → flip-to-ready dance should
+ * move into `IDefinitionStore.create` so each adapter implements the
+ * right semantics for its backend.
+ *
+ * Ordering rules:
  *
  *   create — metadata-first:
  *     1. Write record with status='pending'
  *     2. Upload blob
- *     3. Flip status to 'ready'
+ *     3. Flip status to 'draft'
  *   If step 2 fails the record stays 'pending' with no blob. List queries
  *   filter 'pending' by default, so no consumer sees the half-written state.
  *   The janitor (gcStalePending) sweeps records older than PENDING_GC_AGE_MS.
@@ -48,8 +64,7 @@ export const PENDING_GC_AGE_MS = 30 * 60 * 1000; // 30 minutes
  *     4. Prune history beyond maxHistory
  *   A failure between 2 and 3 leaves the record pointing at a missing active
  *   blob. The operation is idempotent — retrying with the same file restores
- *   a consistent state. This is an acknowledged limitation; the create path
- *   is where orphan risk is highest and is the one we fully guard.
+ *   a consistent state.
  */
 export class DefinitionService {
 	constructor(
@@ -59,7 +74,7 @@ export class DefinitionService {
 
 	async create(
 		ctx: RequestContext,
-		input: CreateDefinitionInput,
+		input: CreateDefinitionRecord,
 		file: Uint8Array
 	): Promise<DefinitionRecord> {
 		const now = new Date().toISOString();
@@ -149,11 +164,12 @@ export class DefinitionService {
 		await this.data.definitions.update(ctx, guid, patch);
 	}
 
-	async saveCoverImage(ctx: RequestContext, guid: string, imageData: Uint8Array): Promise<void> {
+	async saveCoverImage(ctx: RequestContext, guid: string, imageData: Uint8Array): Promise<string> {
 		const path = definitionPaths.image(guid);
 		await this.storage.put(path, imageData, 'image/webp');
 		const url = this.storage.getPublicUrl(path);
 		await this.data.definitions.update(ctx, guid, { coverImage: url });
+		return url;
 	}
 
 	async revertToVersion(ctx: RequestContext, guid: string, ref: string): Promise<void> {
@@ -171,9 +187,11 @@ export class DefinitionService {
 	}
 
 	async delete(ctx: RequestContext, guid: string): Promise<void> {
-		// Blobs first — if this fails, record remains and retry is safe.
-		// If record delete fails after, the record points at nothing; the
-		// next get() returns null-payload semantics and the janitor cleans up.
+		// Blobs first — if this fails, the record remains and retry is safe.
+		// Known gap: if blob deletion succeeds and record deletion fails, the
+		// record is orphaned (no blobs, status='draft'/'published') and the
+		// pending-only janitor will not reclaim it. Acceptable for now;
+		// revisit when a transactional adapter is wired up.
 		await this.storage.deletePrefix(definitionPaths.prefix(guid));
 		await this.data.definitions.delete(ctx, guid);
 	}

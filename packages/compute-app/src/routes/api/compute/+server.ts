@@ -38,7 +38,7 @@ let cachedClientConfig: { serverUrl: string; apiKey?: string } | null = null;
  * Reuses existing client if config hasn't changed.
  */
 async function getClient(_definitionGuid?: string): Promise<GrasshopperClient> {
-	const config = await getComputeServerConfigStore().getConfig();
+	const config = await getComputeServerConfigStore().getConfig(SYSTEM_CONTEXT);
 	const serverConfig = resolveComputeServer(config);
 	const currentConfig = {
 		serverUrl: serverConfig.serverUrl,

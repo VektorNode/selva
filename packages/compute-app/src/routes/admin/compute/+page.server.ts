@@ -5,7 +5,7 @@ import { assertManageCompute } from '$lib/server/access.server';
 export const load: PageServerLoad = async ({ locals }) => {
 	assertManageCompute(locals);
 	try {
-		const config = await getComputeServerConfigStore().getConfig();
+		const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
 		return {
 			servers: config.servers ?? [],
 			defaultServerId: config.defaultServerId ?? config.servers?.[0]?.id ?? ''

@@ -1,9 +1,14 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
+import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { requireManageUsers } from '$lib/server/access.server';
-import type { Permission } from '@selva/platform';
-import { ALL_PERMISSIONS } from '@selva/platform';
+import { throwZodError } from '$lib/server/api-errors';
+import { PermissionSchema } from '@selva/platform';
+
+const UpdatePermissionsBody = z.object({
+	permissions: z.array(PermissionSchema)
+});
 
 // PATCH — update permissions
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
@@ -12,14 +17,10 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	if (!id) throw error(400, 'Missing user ID');
 
 	const body = await request.json().catch(() => null);
-	if (!body || typeof body !== 'object') throw error(400, 'Invalid request body');
+	const parsed = UpdatePermissionsBody.safeParse(body);
+	if (!parsed.success) throwZodError(parsed.error);
 
-	const { permissions } = body as Record<string, unknown>;
-	if (!Array.isArray(permissions) || !permissions.every((p) => ALL_PERMISSIONS.includes(p as Permission))) {
-		throw error(400, `permissions must be an array of valid Permission values: ${ALL_PERMISSIONS.join(', ')}`);
-	}
-
-	const ok = await getAuthProvider().updateUserPermissions(id, permissions as Permission[]);
+	const ok = await getAuthProvider().updateUserPermissions(id, parsed.data.permissions);
 	if (!ok) throw error(404, 'User not found or operation not supported');
 
 	return json({ success: true });

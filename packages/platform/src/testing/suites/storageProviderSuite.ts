@@ -3,35 +3,24 @@
  *
  * Tests blob storage operations (get, put, delete, deletePrefix, getPublicUrl)
  * to ensure all adapters behave identically.
- *
- * Runner-agnostic: callers inject a `{ describe, it, expect }` trio.
  */
 
+import { describe, it, expect } from 'vitest';
 import type { IStorageProvider } from '../../storage/interface.js';
-import { type ConformanceRunner } from './runner.js';
-
-export type { ConformanceRunner };
 
 export interface StorageProviderConformanceOptions {
 	/** Name to show in test output (e.g. "local-filesystem"). */
 	name: string;
 	/** Factory that returns a fresh, empty storage per test. */
 	createStorage: () => Promise<IStorageProvider> | IStorageProvider;
-	/** Test runner globals. */
-	runner: ConformanceRunner;
-}
-
-function utf8(text: string): Uint8Array {
-	return new TextEncoder().encode(text);
 }
 
 function bytes(text: string): Uint8Array {
-	return utf8(text);
+	return new TextEncoder().encode(text);
 }
 
 export function runStorageProviderConformance(opts: StorageProviderConformanceOptions): void {
-	const { name, createStorage, runner } = opts;
-	const { describe, it, expect } = runner;
+	const { name, createStorage } = opts;
 
 	describe(`IStorageProvider conformance: ${name}`, () => {
 		it('put + get returns the stored data', async () => {

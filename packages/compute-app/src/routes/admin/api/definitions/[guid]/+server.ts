@@ -1,54 +1,40 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { definitionService, getDefinitionMeta } from '$lib/server/providers.server';
-import { requireCanEdit } from '$lib/server/access.server';
+import { definitionService } from '$lib/server/providers.server';
+import { requireEditableDefinition } from '$lib/server/access.server';
+import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { GuidSchema, UpdateMetadataInputSchema } from '@selva/platform/definitions/schemas';
-import type { RequestContext } from '@selva/platform';
 
-async function resolveProjectId(ctx: RequestContext, guid: string): Promise<string> {
-	const record = await getDefinitionMeta().get(ctx, guid);
-	if (!record) throw error(404, 'Definition not found');
-	return record.projectId;
-}
-
-// DELETE - Remove a definition and all its files
+// DELETE — remove a definition and all its files
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const guidParsed = GuidSchema.safeParse(params.guid);
 	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
 
-	const ctx = locals.ctx!;
-	const projectId = await resolveProjectId(ctx, guidParsed.data);
-	await requireCanEdit(locals, projectId);
+	const { ctx } = await requireEditableDefinition(locals, guidParsed.data);
 
 	try {
 		await definitionService.delete(ctx, guidParsed.data);
 		return json({ success: true });
 	} catch (err) {
-		if (err && typeof err === 'object' && 'statusCode' in err) throw err;
-		console.error('[Definition DELETE] Failed:', err);
-		throw error(500, 'Failed to delete definition');
+		handleApiError(err, 'Failed to delete definition');
 	}
 };
 
-// PUT - Update metadata only (not the file)
+// PUT — update metadata only
 export const PUT: RequestHandler = async ({ params, request, locals }) => {
 	const guidParsed = GuidSchema.safeParse(params.guid);
 	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
 
-	const ctx = locals.ctx!;
-	const projectId = await resolveProjectId(ctx, guidParsed.data);
-	await requireCanEdit(locals, projectId);
+	const { ctx } = await requireEditableDefinition(locals, guidParsed.data);
+
+	const body = await request.json().catch(() => null);
+	const parsed = UpdateMetadataInputSchema.safeParse(body);
+	if (!parsed.success) throwZodError(parsed.error);
 
 	try {
-		const body = await request.json();
-		const parsed = UpdateMetadataInputSchema.safeParse(body);
-		if (!parsed.success) throw error(400, parsed.error.issues[0].message);
-
 		await definitionService.updateMeta(ctx, guidParsed.data, parsed.data);
 		return json({ success: true });
 	} catch (err) {
-		if (err && typeof err === 'object' && 'statusCode' in err) throw err;
-		console.error('[Definition PUT] Failed:', err);
-		throw error(500, 'Failed to update definition');
+		handleApiError(err, 'Failed to update definition');
 	}
 };
