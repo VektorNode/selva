@@ -257,8 +257,7 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 	async canEditDefinition(
 		ctx: RequestContext,
 		projectId: string,
-		userId: string,
-		definitionOwnerId: string
+		definitionGuid: string
 	): Promise<boolean> {
 		if (!this.projectProvider) return false;
 		if (hasPermission(ctx, 'instance_admin')) return true;
@@ -266,16 +265,18 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 		const project = await this.projectProvider.getProject(ctx, projectId);
 		if (!project) return false;
 
-		const projectMembers = await this.projectProvider.listProjectMembers(ctx, projectId);
-		const member = projectMembers.items.find((m) => m.userId === userId);
+		const definition = await this.get(ctx, definitionGuid);
+		if (!definition) return false;
 
-		if (project.visibility === 'public') return userId === definitionOwnerId;
-		if (project.visibility === 'org') {
-			return userId === definitionOwnerId || member?.role === 'owner' || member?.role === 'editor';
-		}
-		if (project.visibility === 'private') {
-			return member?.role === 'owner' || member?.role === 'editor';
-		}
+		const member = await this.projectProvider.getProjectMember(ctx, projectId, ctx.userId);
+		const role = member?.role;
+
+		// Project editors/owners always can — moderation path, any project type.
+		if (role === 'owner' || role === 'editor') return true;
+
+		// Commons carve-out: definition owner edits their own on commons projects.
+		if (project.autoJoinOnUpload && ctx.userId === definition.ownerId) return true;
+
 		return false;
 	}
 }

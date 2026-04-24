@@ -1,83 +1,45 @@
--- ============================================================================
--- TODO(access-control refactor / B1): permission identifier renames
---
---   • Every `public.is_platform_admin()` call in this file → `public.is_instance_admin()`
---     once migration 0003 is updated.
--- ============================================================================
-
--- ============================================================================
--- TODO(access-control refactor / B3): audit fields + soft delete for definitions
---
---   • Rename column `last_edited_by` → `updated_by` on public.definitions.
---     The TS mapper still reads `last_edited_by` as a fallback until rename lands.
---   • Add column `created_by uuid references auth.users(id)` — backfill with
---     existing `owner_id`. The TS contract treats `createdBy` as immutable.
---   • Add column `deleted_at timestamptz null` with a partial index on
---     `(project_id) where deleted_at is null` for hot list queries.
---   • Update every SELECT/UPDATE/DELETE policy below to include
---     `and deleted_at is null` in the USING clause. The TS layer soft-deletes
---     (it never issues a hard DELETE).
--- ============================================================================
-
--- ============================================================================
--- TODO(access-control refactor / B4): definition versioning scaffold
---
--- New table:
---   create table public.definition_versions (
---     id uuid primary key,
---     definition_guid uuid not null references public.definitions(guid)
---                            on delete cascade,
---     version_number integer not null check (version_number >= 1),
---     file_key text not null,
---     uploaded_by uuid not null references auth.users(id),
---     uploaded_at timestamptz not null default now(),
---     unique (definition_guid, version_number)
---   );
---
--- New columns on public.definitions (both nullable FK to definition_versions.id):
---   live_version_id  uuid references public.definition_versions(id)
---                     on delete set null
---   draft_version_id uuid references public.definition_versions(id)
---                     on delete set null
---
--- RLS: a `definitions.deleted_at is null` predicate is already required for
--- reads per B3. `definition_versions` inherits visibility through the parent
--- definition — policy shape:
---   using (exists (
---     select 1 from public.definitions d
---     where d.guid = definition_versions.definition_guid
---       and d.deleted_at is null
---       and public.can_view_project(d.project_id)  -- helper from 0003
---   ))
---
--- Versions are immutable. No UPDATE policy needed. DELETE is service-role
--- only (retention sweep) — spec §6 forbids deleting a version referenced by
--- live/draft.
--- ============================================================================
-
 -- Definitions + definition_history + atomic run count RPC.
 --
 -- Design notes:
 --  * `definitions.guid` is the PK (matches `DefinitionRecord.guid` in the platform
 --    contract — UUID v4 is the "obvious" id the app already uses everywhere).
---  * History is its own table with a composite PK `(definition_guid, ref)` so
---    we can insert/delete single entries without rewriting the whole row.
---    The platform `HistoryEntry.ref` is a text suffix; uuids are not required.
+--  * History (public.definition_history) is its own table with a composite PK
+--    `(definition_guid, ref)` so single entries can be inserted/deleted without
+--    rewriting the whole row. `HistoryEntry.ref` is a text suffix.
 --  * `run_count` is `bigint` — most definitions will stay under 2^31 but
 --    bigint is the safe default for counters.
 --  * `increment_run_count(g uuid)` RPC runs an atomic `UPDATE … SET run_count = run_count + 1`
---    and returns void. This is the first genuine cloud-over-local improvement:
---    the local provider does a read-modify-write loop which races under load.
---  * Image/cover URL storage is just `coverImage text` — provider ensures it's safe
---    to send to clients (either a public bucket URL or an authenticated proxy path).
+--    and returns void. Cloud-over-local improvement — the local provider does
+--    a read-modify-write loop which races under load.
+--  * Image/cover URL storage is just `cover_image text` — provider ensures it's
+--    safe to send to clients (public bucket URL or authenticated proxy path).
+--
+-- Audit + soft-delete (B3):
+--  * `created_by` / `updated_by` replace the old `last_edited_by` field;
+--    the TS mapper still reads `last_edited_by` as a fallback for older
+--    deployments that haven't been reset, but new installs don't ship it.
+--  * `deleted_at` soft-deletes. Reads filter it out. Hard deletion is a
+--    service-role retention sweep.
+--
+-- Versioning scaffold (B4, spec §6):
+--  * `definition_versions` stores immutable snapshots of each uploaded .gh
+--    with a monotonic `version_number` per definition.
+--  * `definitions.live_version_id` / `draft_version_id` point to the
+--    currently-published and in-review versions respectively. Both nullable
+--    until the upload/publish flow lands in a later PR — the columns exist
+--    today so the data model is future-compatible.
 
--- ── Table ─────────────────────────────────────────────────────────────────
+-- ── Table: definitions ────────────────────────────────────────────────────
 
 create table if not exists public.definitions (
 	guid uuid primary key,
 	project_id uuid not null references public.projects(id) on delete cascade,
 	owner_id uuid not null references auth.users(id) on delete cascade,
-	last_edited_by uuid references auth.users(id) on delete set null,
+	created_by uuid references auth.users(id) on delete set null,
+	updated_by uuid references auth.users(id) on delete set null,
+	-- FKs to definition_versions added after that table is created (below).
+	live_version_id uuid,
+	draft_version_id uuid,
 	compute_server_id uuid,
 	file_ext text not null check (file_ext in ('gh', 'ghx')),
 	original_filename text,
@@ -90,20 +52,58 @@ create table if not exists public.definitions (
 	status text not null check (status in ('pending', 'draft', 'review', 'published', 'archived')),
 	run_count bigint not null default 0,
 	created_at timestamptz not null default now(),
-	updated_at timestamptz not null default now()
+	updated_at timestamptz not null default now(),
+	deleted_at timestamptz
 );
 
-create index if not exists idx_definitions_project on public.definitions(project_id);
-create index if not exists idx_definitions_status on public.definitions(status);
+create index if not exists idx_definitions_project
+	on public.definitions(project_id) where deleted_at is null;
+create index if not exists idx_definitions_status
+	on public.definitions(status) where deleted_at is null;
 create index if not exists idx_definitions_pending_updated
 	on public.definitions(updated_at)
-	where status = 'pending';
+	where status = 'pending' and deleted_at is null;
 
 drop trigger if exists trg_definitions_updated_at on public.definitions;
 create trigger trg_definitions_updated_at before update on public.definitions
 	for each row execute function public.set_updated_at();
 
--- ── History table ─────────────────────────────────────────────────────────
+-- ── Table: definition_versions (B4 scaffold) ──────────────────────────────
+
+create table if not exists public.definition_versions (
+	id uuid primary key,
+	definition_guid uuid not null references public.definitions(guid) on delete cascade,
+	version_number integer not null check (version_number >= 1),
+	file_key text not null,
+	uploaded_by uuid not null references auth.users(id) on delete cascade,
+	uploaded_at timestamptz not null default now(),
+	unique (definition_guid, version_number)
+);
+
+create index if not exists idx_definition_versions_def
+	on public.definition_versions(definition_guid, version_number desc);
+
+-- Wire the live/draft FKs now that the target table exists.
+alter table public.definitions
+	drop constraint if exists fk_definitions_live_version;
+alter table public.definitions
+	add constraint fk_definitions_live_version
+	foreign key (live_version_id) references public.definition_versions(id)
+	on delete set null;
+
+alter table public.definitions
+	drop constraint if exists fk_definitions_draft_version;
+alter table public.definitions
+	add constraint fk_definitions_draft_version
+	foreign key (draft_version_id) references public.definition_versions(id)
+	on delete set null;
+
+-- ── Table: definition_history (legacy file archive) ───────────────────────
+--
+-- Retained during the transition from the flat history model to the
+-- versioned model. Upload flow still writes HistoryEntry rows; PR-A wiring
+-- will replace consumers with definition_versions. Keep both in sync until
+-- that lands — removing this table is its own migration, not part of B3/B4.
 
 create table if not exists public.definition_history (
 	definition_guid uuid not null references public.definitions(guid) on delete cascade,
@@ -119,8 +119,8 @@ create index if not exists idx_definition_history_archived_at
 	on public.definition_history(definition_guid, archived_at desc);
 
 -- ── Atomic run count RPC ──────────────────────────────────────────────────
--- Called after each successful solve. No-op if the row doesn't exist
--- (matches the platform contract).
+-- Called after each successful solve. No-op if the row doesn't exist or is
+-- soft-deleted (matches the platform contract).
 
 create or replace function public.increment_run_count(g uuid)
 returns void
@@ -128,12 +128,19 @@ language sql
 security definer
 set search_path = public
 as $$
-	update public.definitions set run_count = run_count + 1 where guid = g;
+	update public.definitions
+	set run_count = run_count + 1
+	where guid = g and deleted_at is null;
 $$;
 
 grant execute on function public.increment_run_count(uuid) to authenticated, service_role;
 
 -- ── RLS: definitions ─────────────────────────────────────────────────────
+--
+-- A3 rewrite: project role is authoritative. Commons mode
+-- (projects.auto_join_on_upload=true) lets the definition owner edit their
+-- own definition; in container mode only project editors/owners may edit.
+-- The old `manage_definitions` org-permission side-channel is gone.
 
 alter table public.definitions enable row level security;
 
@@ -141,23 +148,31 @@ drop policy if exists "definitions: visible via project" on public.definitions;
 create policy "definitions: visible via project"
 on public.definitions for select
 to authenticated
-using (public.visible_project(project_id));
+using (deleted_at is null and public.visible_project(project_id));
 
 drop policy if exists "definitions: editors can insert" on public.definitions;
 create policy "definitions: editors can insert"
 on public.definitions for insert
 to authenticated
 with check (
-	public.is_platform_admin()
+	public.is_instance_admin()
+	-- Container mode: project editor/owner required.
 	or exists (
 		select 1 from public.project_members m
 		where m.project_id = definitions.project_id
 		and m.user_id = auth.uid()
+		and m.deleted_at is null
 		and m.role in ('owner', 'editor')
 	)
-	or public.has_org_permission(
-		(select org_id from public.projects where id = definitions.project_id),
-		'manage_definitions'
+	-- Commons mode: any authenticated user may create a new definition in a
+	-- public + auto_join_on_upload project. They become its owner_id.
+	or exists (
+		select 1 from public.projects p
+		where p.id = definitions.project_id
+		and p.deleted_at is null
+		and p.visibility = 'public'
+		and p.auto_join_on_upload = true
+		and definitions.owner_id = auth.uid()
 	)
 );
 
@@ -166,38 +181,116 @@ create policy "definitions: editors can update"
 on public.definitions for update
 to authenticated
 using (
-	public.is_platform_admin()
-	or owner_id = auth.uid()
-	or exists (
-		select 1 from public.project_members m
-		where m.project_id = definitions.project_id
-		and m.user_id = auth.uid()
-		and m.role in ('owner', 'editor')
+	deleted_at is null and (
+		public.is_instance_admin()
+		-- Project editor/owner moderates any definition in the project.
+		or exists (
+			select 1 from public.project_members m
+			where m.project_id = definitions.project_id
+			and m.user_id = auth.uid()
+			and m.deleted_at is null
+			and m.role in ('owner', 'editor')
+		)
+		-- Commons carve-out: definition owner can edit their own on commons.
+		or exists (
+			select 1 from public.projects p
+			where p.id = definitions.project_id
+			and p.deleted_at is null
+			and p.auto_join_on_upload = true
+			and definitions.owner_id = auth.uid()
+		)
 	)
 )
 with check (
-	public.is_platform_admin()
-	or owner_id = auth.uid()
+	public.is_instance_admin()
 	or exists (
 		select 1 from public.project_members m
 		where m.project_id = definitions.project_id
 		and m.user_id = auth.uid()
+		and m.deleted_at is null
 		and m.role in ('owner', 'editor')
+	)
+	or exists (
+		select 1 from public.projects p
+		where p.id = definitions.project_id
+		and p.deleted_at is null
+		and p.auto_join_on_upload = true
+		and definitions.owner_id = auth.uid()
 	)
 );
 
+-- DELETE is retained for service-role retention sweeps. Application code
+-- soft-deletes (sets deleted_at). The policy shape matches update so an
+-- editor can hard-delete if needed during manual cleanup.
 drop policy if exists "definitions: editors can delete" on public.definitions;
 create policy "definitions: editors can delete"
 on public.definitions for delete
 to authenticated
 using (
-	public.is_platform_admin()
-	or owner_id = auth.uid()
+	public.is_instance_admin()
 	or exists (
 		select 1 from public.project_members m
 		where m.project_id = definitions.project_id
 		and m.user_id = auth.uid()
+		and m.deleted_at is null
 		and m.role in ('owner', 'editor')
+	)
+	or exists (
+		select 1 from public.projects p
+		where p.id = definitions.project_id
+		and p.deleted_at is null
+		and p.auto_join_on_upload = true
+		and definitions.owner_id = auth.uid()
+	)
+);
+
+-- ── RLS: definition_versions ─────────────────────────────────────────────
+--
+-- Visibility inherits from the parent definition (which inherits from the
+-- parent project). Versions are immutable — no UPDATE policy. No user-level
+-- DELETE; retention sweeps use service-role.
+
+alter table public.definition_versions enable row level security;
+
+drop policy if exists "definition_versions: visible via parent" on public.definition_versions;
+create policy "definition_versions: visible via parent"
+on public.definition_versions for select
+to authenticated
+using (
+	exists (
+		select 1 from public.definitions d
+		where d.guid = definition_versions.definition_guid
+		and d.deleted_at is null
+		and public.visible_project(d.project_id)
+	)
+);
+
+drop policy if exists "definition_versions: editors can insert" on public.definition_versions;
+create policy "definition_versions: editors can insert"
+on public.definition_versions for insert
+to authenticated
+with check (
+	public.is_instance_admin()
+	or exists (
+		select 1
+		from public.definitions d
+		join public.project_members m on m.project_id = d.project_id
+		where d.guid = definition_guid
+		and d.deleted_at is null
+		and m.user_id = auth.uid()
+		and m.deleted_at is null
+		and m.role in ('owner', 'editor')
+	)
+	or exists (
+		select 1
+		from public.definitions d
+		join public.projects p on p.id = d.project_id
+		where d.guid = definition_guid
+		and d.deleted_at is null
+		and p.deleted_at is null
+		and p.auto_join_on_upload = true
+		and d.owner_id = auth.uid()
+		and definition_versions.uploaded_by = auth.uid()
 	)
 );
 
@@ -213,6 +306,7 @@ using (
 	exists (
 		select 1 from public.definitions d
 		where d.guid = definition_guid
+		and d.deleted_at is null
 		and public.visible_project(d.project_id)
 	)
 );
@@ -222,13 +316,24 @@ create policy "definition_history: editors can insert"
 on public.definition_history for insert
 to authenticated
 with check (
-	public.is_platform_admin()
+	public.is_instance_admin()
 	or exists (
 		select 1 from public.definitions d
 		join public.project_members m on m.project_id = d.project_id
 		where d.guid = definition_guid
+		and d.deleted_at is null
 		and m.user_id = auth.uid()
+		and m.deleted_at is null
 		and m.role in ('owner', 'editor')
+	)
+	or exists (
+		select 1 from public.definitions d
+		join public.projects p on p.id = d.project_id
+		where d.guid = definition_guid
+		and d.deleted_at is null
+		and p.deleted_at is null
+		and p.auto_join_on_upload = true
+		and d.owner_id = auth.uid()
 	)
 );
 
@@ -237,12 +342,14 @@ create policy "definition_history: editors can delete"
 on public.definition_history for delete
 to authenticated
 using (
-	public.is_platform_admin()
+	public.is_instance_admin()
 	or exists (
 		select 1 from public.definitions d
 		join public.project_members m on m.project_id = d.project_id
 		where d.guid = definition_guid
+		and d.deleted_at is null
 		and m.user_id = auth.uid()
+		and m.deleted_at is null
 		and m.role in ('owner', 'editor')
 	)
 );

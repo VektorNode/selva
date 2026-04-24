@@ -1,26 +1,18 @@
--- ============================================================================
--- TODO(access-control refactor / B1): permission identifier renames
---
--- This file gates invite + compute policies on the OLD permission names.
--- Rename the following consistently across policy names, comments, USING/WITH
--- CHECK clauses, and any indexes.
---
---   • Policy names + string literals:
---       `'manage_users'`   → `'manage_org_members'`   (invites gating)
---       `'manage_compute'` (when used via `has_org_permission(org_id, …)`)
---           → `'manage_org_compute'`
---   • Keep platform-level `'manage_compute'` when called via
---     `is_platform_admin()` — that check stays; see spec §2.
---   • `is_platform_admin()` call sites here → `is_instance_admin()`
---     (rename defined in migration 0003's TODO).
---
--- Additional work deferred to B4: add per-org compute override gating through
--- `ALLOW_ORG_COMPUTE_OVERRIDE` — when that platform flag is off, `manage_org_compute`
--- must be inert regardless of grant. Safest to leave policies strict for now
--- and add the flag check later.
--- ============================================================================
-
 -- Invites + compute_servers.
+--
+-- Permissions used here reflect the post-refactor vocabulary:
+--   * Invite management → `manage_org_members` (org-scope).
+--   * Instance-wide compute pool (rows with org_id IS NULL) → `manage_compute`
+--     (platform-scope), callable only by an instance_admin.
+--   * Per-org compute override (rows with org_id IS NOT NULL) →
+--     `manage_org_compute` (org-scope).
+--
+-- BYO compute is gated at the TS layer by the `ALLOW_ORG_COMPUTE_OVERRIDE`
+-- platform flag. When the flag is off the TS provider refuses to insert
+-- non-null org_id rows; the DB policy below still accepts them so flipping
+-- the flag on doesn't require a policy change. If you want defense in depth,
+-- fold a platform-config check in here later — for now the TS boundary is
+-- the single source of truth.
 
 -- ── Invites ───────────────────────────────────────────────────────────────
 
@@ -43,29 +35,33 @@ create index if not exists idx_invites_org on public.invites(org_id, created_at 
 alter table public.invites enable row level security;
 
 drop policy if exists "invites: manage_users can read org invites" on public.invites;
-create policy "invites: manage_users can read org invites"
+drop policy if exists "invites: manage_org_members can read org invites" on public.invites;
+create policy "invites: manage_org_members can read org invites"
 on public.invites for select
 to authenticated
-using (public.has_org_permission(org_id, 'manage_users'));
+using (public.has_org_permission(org_id, 'manage_org_members'));
 
 drop policy if exists "invites: manage_users can insert" on public.invites;
-create policy "invites: manage_users can insert"
+drop policy if exists "invites: manage_org_members can insert" on public.invites;
+create policy "invites: manage_org_members can insert"
 on public.invites for insert
 to authenticated
-with check (public.has_org_permission(org_id, 'manage_users'));
+with check (public.has_org_permission(org_id, 'manage_org_members'));
 
 drop policy if exists "invites: manage_users can update" on public.invites;
-create policy "invites: manage_users can update"
+drop policy if exists "invites: manage_org_members can update" on public.invites;
+create policy "invites: manage_org_members can update"
 on public.invites for update
 to authenticated
-using (public.has_org_permission(org_id, 'manage_users'))
-with check (public.has_org_permission(org_id, 'manage_users'));
+using (public.has_org_permission(org_id, 'manage_org_members'))
+with check (public.has_org_permission(org_id, 'manage_org_members'));
 
 drop policy if exists "invites: manage_users can delete" on public.invites;
-create policy "invites: manage_users can delete"
+drop policy if exists "invites: manage_org_members can delete" on public.invites;
+create policy "invites: manage_org_members can delete"
 on public.invites for delete
 to authenticated
-using (public.has_org_permission(org_id, 'manage_users'));
+using (public.has_org_permission(org_id, 'manage_org_members'));
 
 -- Token-gated read via SECURITY DEFINER so the token itself is the capability.
 --
@@ -89,6 +85,12 @@ $$;
 grant execute on function public.get_invite_by_token(text) to anon, authenticated, service_role;
 
 -- ── Compute servers ───────────────────────────────────────────────────────
+--
+-- Row shape:
+--   * `org_id IS NULL`   → instance-pool server (managed by instance_admin
+--                          via `manage_compute` platform permission).
+--   * `org_id IS NOT NULL` → per-org override (BYO compute); managed by an
+--                          org member holding `manage_org_compute`.
 
 create table if not exists public.compute_servers (
 	id uuid primary key,
@@ -126,36 +128,43 @@ create policy "compute_servers: members can read"
 on public.compute_servers for select
 to authenticated
 using (
-	public.is_platform_admin()
+	public.is_instance_admin()
 	or org_id is null
 	or public.is_org_member(org_id)
 );
 
+-- Writes:
+--   * Instance pool (org_id is null) → only instance_admin may write.
+--   * Org override    (org_id is not null) → `manage_org_compute` grant required.
 drop policy if exists "compute_servers: manage_compute can write" on public.compute_servers;
-create policy "compute_servers: manage_compute can write"
+drop policy if exists "compute_servers: scoped write" on public.compute_servers;
+create policy "compute_servers: scoped write"
 on public.compute_servers for all
 to authenticated
 using (
-	public.is_platform_admin()
-	or (org_id is not null and public.has_org_permission(org_id, 'manage_compute'))
+	public.is_instance_admin()
+	or (org_id is not null and public.has_org_permission(org_id, 'manage_org_compute'))
 )
 with check (
-	public.is_platform_admin()
-	or (org_id is not null and public.has_org_permission(org_id, 'manage_compute'))
+	public.is_instance_admin()
+	or (org_id is not null and public.has_org_permission(org_id, 'manage_org_compute'))
 );
 
 drop policy if exists "compute_server_defaults: members can read" on public.compute_server_defaults;
 create policy "compute_server_defaults: members can read"
 on public.compute_server_defaults for select
 to authenticated
-using (public.is_platform_admin() or public.is_org_member(org_id));
+using (public.is_instance_admin() or public.is_org_member(org_id));
 
+-- compute_server_defaults always carries an org_id (PK), so write authority
+-- is exactly `manage_org_compute` on that org (or instance_admin).
 drop policy if exists "compute_server_defaults: manage_compute can write" on public.compute_server_defaults;
-create policy "compute_server_defaults: manage_compute can write"
+drop policy if exists "compute_server_defaults: manage_org_compute can write" on public.compute_server_defaults;
+create policy "compute_server_defaults: manage_org_compute can write"
 on public.compute_server_defaults for all
 to authenticated
-using (public.is_platform_admin() or public.has_org_permission(org_id, 'manage_compute'))
-with check (public.is_platform_admin() or public.has_org_permission(org_id, 'manage_compute'));
+using (public.is_instance_admin() or public.has_org_permission(org_id, 'manage_org_compute'))
+with check (public.is_instance_admin() or public.has_org_permission(org_id, 'manage_org_compute'));
 
 drop policy if exists "compute_server_platform_default: read all" on public.compute_server_platform_default;
 create policy "compute_server_platform_default: read all"
@@ -167,5 +176,5 @@ drop policy if exists "compute_server_platform_default: admin write" on public.c
 create policy "compute_server_platform_default: admin write"
 on public.compute_server_platform_default for all
 to authenticated
-using (public.is_platform_admin())
-with check (public.is_platform_admin());
+using (public.is_instance_admin())
+with check (public.is_instance_admin());

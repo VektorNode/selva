@@ -5,7 +5,13 @@ import type { RequestHandler } from './$types';
 import { camelcaseKeys } from 'selva-compute/core';
 import type { UISchema } from 'selva-shared';
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
+	// A2: requires an authenticated session. The payload is user-supplied, so
+	// there's no project to gate on; the auth check alone prevents anonymous
+	// drain attacks on the compute pool.
+	if (!locals.ctx || !locals.user) {
+		throw error(401, 'Unauthorized');
+	}
 	const config = await getComputeServerConfigStore().getConfig(SYSTEM_CONTEXT);
 	const server = resolveComputeServer(config);
 	const formData = await request.formData();

@@ -5,56 +5,8 @@ import { camelcaseKeys } from 'selva-compute/core';
 import type { UISchema } from 'selva-shared';
 import { getComputeServerConfigStore } from '$lib/server/providers.server';
 import { resolveComputeServer, SYSTEM_CONTEXT, type ComputeServerConfig } from '@selva/platform';
-import {
-	getStorageProvider,
-	getDefinitionMeta,
-	getOrganizationProvider,
-	getProjectProvider
-} from '$lib/server/providers.server';
-
-/**
- * Check if a user can access a definition based on project visibility.
- * Throws 401 if not authenticated, 403 if no access.
- */
-async function checkDefinitionAccess(
-	userId: string | undefined,
-	projectId: string
-): Promise<void> {
-	if (!userId) {
-		throw error(401, 'Unauthorized: You must be logged in to access definitions');
-	}
-
-	const projects = getProjectProvider();
-	const orgs = getOrganizationProvider();
-	const project = await projects.getProject(SYSTEM_CONTEXT, projectId);
-
-	if (!project) {
-		throw error(404, 'Project not found');
-	}
-
-	if (project.visibility === 'public') {
-		return;
-	}
-
-	if (project.visibility === 'org') {
-		const member = await orgs.getOrgMember(SYSTEM_CONTEXT, project.orgId, userId);
-		if (!member) {
-			throw error(
-				403,
-				`Forbidden: This definition belongs to an organization you are not a member of`
-			);
-		}
-		return;
-	}
-
-	if (project.visibility === 'private') {
-		const member = await projects.getProjectMember(SYSTEM_CONTEXT, projectId, userId);
-		if (!member) {
-			throw error(403, `Forbidden: This definition is private and you are not a project member`);
-		}
-		return;
-	}
-}
+import { getStorageProvider, getDefinitionMeta } from '$lib/server/providers.server';
+import { requireCanSolve } from '$lib/server/access.server';
 
 /**
  * Fetch UI schema from Rhino Compute's /grasshopper/schema endpoint (no solve required).
@@ -116,11 +68,15 @@ export const load = (async ({ params, locals }) => {
 	const clientDefUrl = `local:${guid}`;
 
 	try {
-		const record = await meta.get(SYSTEM_CONTEXT, guid);
+		if (!locals.ctx || !locals.user) {
+			throw error(401, 'Unauthorized: You must be logged in to access definitions');
+		}
+
+		const record = await meta.get(locals.ctx, guid);
 		if (!record) throw new Error(`Definition '${guid}' not found`);
 
-		// Check access based on project visibility
-		await checkDefinitionAccess(locals.user?.id, record.projectId);
+		// Spec §5 canSolve — viewer role is sufficient here.
+		await requireCanSolve(locals, record.projectId);
 
 		const bytes = await storage.get(`definitions/${guid}/definition.${record.fileExt}`);
 		if (!bytes) throw new Error(`Definition file for '${guid}' not found on disk`);
