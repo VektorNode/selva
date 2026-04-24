@@ -5,6 +5,7 @@
 	interface PageHeaderProps {
 		homeUrl?: string;
 		title?: string | null;
+		logo?: string;
 		navItems?: Snippet;
 		rightContent?: Snippet;
 		showModeToggle?: boolean;
@@ -14,6 +15,7 @@
 	let {
 		homeUrl = '/app',
 		title = undefined,
+		logo = '/favicon/favicon.svg',
 		navItems,
 		rightContent,
 		showModeToggle = true,
@@ -26,12 +28,7 @@
 	<div class="flex h-14 items-center gap-5 px-6">
 		<!-- Logo -->
 		<a href={homeUrl} class="flex items-center gap-2 shrink-0">
-			<span class="flex h-5 w-5 items-center justify-center rounded bg-foreground text-background">
-				<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M20 3c0 10-6 16-16 16 0-8 7-15 16-16Z"/>
-					<path d="M4 19c5-5 9-8 16-16"/>
-				</svg>
-			</span>
+			<img src={logo} alt="" aria-hidden="true" class="h-5 w-5" />
 			<span class="font-semibold text-sm tracking-tight">Selva</span>
 		</a>
 
