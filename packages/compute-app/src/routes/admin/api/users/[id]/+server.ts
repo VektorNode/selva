@@ -51,7 +51,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	if (platformResult === 'not_supported')
 		throw error(501, 'Platform permission updates not supported by this auth provider');
 
-	const orgId = locals.ctx?.orgId;
+	const orgId = locals.ctx?.actingOrgId;
 	if (orgId) {
 		const orgs = getOrganizationProvider();
 		const existing = await orgs.getOrgMember(SYSTEM_CONTEXT, orgId, id);

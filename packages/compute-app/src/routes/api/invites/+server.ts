@@ -38,9 +38,9 @@ function generateToken(): string {
 export const GET: RequestHandler = async ({ locals }) => {
 	requireManageOrgMembers(locals);
 	const ctx = locals.ctx!;
-	if (!ctx.orgId) throw error(400, 'No active organization');
+	if (!ctx.actingOrgId) throw error(400, 'No active organization');
 	try {
-		const page = await getInviteStore().listByOrg(ctx, ctx.orgId, { limit: 200 });
+		const page = await getInviteStore().listByOrg(ctx, ctx.actingOrgId, { limit: 200 });
 		return json(page.items);
 	} catch (err) {
 		handleApiError(err, 'Failed to list invites');
@@ -52,7 +52,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	requireManageOrgMembers(locals);
 	const ctx = locals.ctx!;
 	const user = locals.user!;
-	if (!ctx.orgId) throw error(400, 'No active organization');
+	if (!ctx.actingOrgId) throw error(400, 'No active organization');
 
 	const body = await request.json().catch(() => null);
 	const parsed = CreateBody.safeParse(body);
@@ -74,7 +74,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			id: randomUUID(),
 			token: generateToken(),
 			email: parsed.data.email,
-			orgId: ctx.orgId,
+			orgId: ctx.actingOrgId,
 			orgRole: parsed.data.orgRole,
 			orgPermissions,
 			invitedBy: user.id,

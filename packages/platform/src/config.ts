@@ -6,11 +6,11 @@ import type { IUserProfileStore } from './userProfile/interface.js';
 /**
  * Tenancy model.
  *
- * - `single`: one org per deployment. Setup creates it; `ctx.orgId` resolves
+ * - `single`: one org per deployment. Setup creates it; `ctx.actingOrgId` resolves
  *   to that org for every authenticated user. Multi-org APIs (createOrg,
  *   listOrgs of *other* orgs) are not exposed in the UI.
  * - `multi`: orgs are first-class. Setup creates only a platform admin;
- *   orgs are created later by users. `ctx.orgId` is resolved per-request
+ *   orgs are created later by users. `ctx.actingOrgId` is resolved per-request
  *   from the URL prefix or session.
  */
 export type TenancyMode = 'single' | 'multi';

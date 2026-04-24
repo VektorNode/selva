@@ -42,8 +42,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	let projectId = formData.get('projectId');
 	if (typeof projectId !== 'string' || !projectId) {
 		// Fall back to the first project of the active org.
-		if (!ctx.orgId) throw error(400, 'No active organization');
-		const projectsPage = await getProjectProvider().listProjects(ctx, ctx.orgId, { limit: 1 });
+		if (!ctx.actingOrgId) throw error(400, 'No active organization');
+		const projectsPage = await getProjectProvider().listProjects(ctx, ctx.actingOrgId, { limit: 1 });
 		const defaultProject = projectsPage.items[0];
 		if (!defaultProject) throw error(500, 'No project configured');
 		projectId = defaultProject.id;

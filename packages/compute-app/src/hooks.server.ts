@@ -29,7 +29,7 @@ async function buildContext(
 	user: AuthUser,
 	sessionToken: string | undefined
 ): Promise<RequestContext> {
-	let orgId: string | undefined;
+	let actingOrgId: string | undefined;
 	let orgPermissions: RequestContext['orgPermissions'] = [];
 
 	// SYSTEM_CONTEXT is fine here — we then look up the *user's* membership
@@ -40,22 +40,22 @@ async function buildContext(
 	for (const org of orgsPage.items) {
 		const member = await providers.data.orgs.getOrgMember(SYSTEM_CONTEXT, org.id, user.id);
 		if (member) {
-			orgId = org.id;
+			actingOrgId = org.id;
 			orgPermissions = member.permissions;
 			break;
 		}
 	}
 
-	if (!orgId && user.platformPermissions.includes('instance_admin')) {
-		// Platform admins without an explicit membership row fall back to the
+	if (!actingOrgId && user.platformPermissions.includes('instance_admin')) {
+		// Instance admins without an explicit membership row fall back to the
 		// first org so admin tooling stays usable pre-§1g-ui.
 		const firstOrg = orgsPage.items[0];
-		if (firstOrg) orgId = firstOrg.id;
+		if (firstOrg) actingOrgId = firstOrg.id;
 	}
 
 	return {
 		userId: user.id,
-		orgId,
+		actingOrgId,
 		platformPermissions: user.platformPermissions,
 		orgPermissions,
 		adapterContext: sessionToken ? { sessionToken } : undefined

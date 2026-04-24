@@ -39,8 +39,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 	}
 
 	// Merge each user's platform perms with their default-org perms so the
-	// current admin UI sees the familiar flat list. Default org = ctx.orgId.
-	const orgId = locals.ctx?.orgId;
+	// current admin UI sees the familiar flat list. Default org = ctx.actingOrgId.
+	const orgId = locals.ctx?.actingOrgId;
 	const orgs = getOrganizationProvider();
 	const flattened = await Promise.all(
 		page.items.map(async (u) => {
@@ -91,7 +91,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// Attach to the active org as a member. Members can only hold the
 		// non-governance permissions (manage_definitions, manage_projects) —
 		// drop anything else silently so the UI can send whatever.
-		const orgId = locals.ctx?.orgId;
+		const orgId = locals.ctx?.actingOrgId;
 		if (orgId) {
 			await getOrganizationProvider().addOrgMember(SYSTEM_CONTEXT, {
 				orgId,

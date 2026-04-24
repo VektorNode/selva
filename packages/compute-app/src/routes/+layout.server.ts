@@ -20,7 +20,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 			: null,
 		ctx: locals.ctx
 			? {
-					orgId: locals.ctx.orgId,
+					orgId: locals.ctx.actingOrgId,
 					platformPermissions: locals.ctx.platformPermissions,
 					orgPermissions: locals.ctx.orgPermissions
 				}
