@@ -61,14 +61,14 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 			orderDir: opts?.orderDir ?? 'asc'
 		};
 		return applyOrder([...records], defaulted, (r, field) => {
-			if (field === 'name') return r.meta.displayName.toLowerCase();
+			if (field === 'name') return r.displayName.toLowerCase();
 			if (field === 'runCount') return r.runCount ?? 0;
 			return (r as unknown as Record<string, unknown>)[field];
 		});
 	}
 
 	private visibleRecords(records: DefinitionRecord[], opts?: DefinitionListOptions): DefinitionRecord[] {
-		const filtered = records.filter((r) => r?.meta?.displayName);
+		const filtered = records.filter((r) => r?.displayName);
 		// Apply status filter
 		if (opts?.statuses?.length) {
 			const allowed = new Set(opts.statuses);
@@ -123,6 +123,11 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 
 		config.definitions[guid] = {
 			...existing,
+			...(patch.displayName !== undefined && { displayName: patch.displayName }),
+			...(patch.description !== undefined && { description: patch.description }),
+			...(patch.category !== undefined && { category: patch.category }),
+			...(patch.tags !== undefined && { tags: patch.tags }),
+			...(patch.coverImage !== undefined && { coverImage: patch.coverImage }),
 			...(patch.fileExt !== undefined && { fileExt: patch.fileExt }),
 			...(patch.originalFilename !== undefined && { originalFilename: patch.originalFilename }),
 			...(patch.maxHistory !== undefined && { maxHistory: patch.maxHistory }),
@@ -135,7 +140,6 @@ export class LocalDefinitionMetaProvider implements IDefinitionStore {
 			...(patch.incrementRunCount !== undefined && {
 				runCount: (existing.runCount ?? 0) + patch.incrementRunCount
 			}),
-			meta: patch.meta ? { ...existing.meta, ...patch.meta } : existing.meta,
 			updatedAt: new Date().toISOString()
 		};
 		await this.writeConfig(config);

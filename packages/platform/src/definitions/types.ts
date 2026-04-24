@@ -18,19 +18,6 @@ export const COVER_IMAGE_CONTENT_TYPES: Record<string, string> = {
 	'.gif': 'image/gif'
 };
 
-export interface DefinitionMeta {
-	displayName: string;
-	description?: string;
-	category?: string;
-	tags?: string[];
-	/**
-	 * Public URL to cover image — provider-dependent (CDN URL, signed S3, etc.).
-	 * Provider must ensure this URL is safe to send to clients and does not leak
-	 * internal storage paths or unsecured file locations.
-	 */
-	coverImage?: string;
-}
-
 export interface HistoryEntry {
 	/**
 	 * Archive key for this entry — a suffix only (UUID + sanitized filename).
@@ -88,7 +75,16 @@ export interface DefinitionRecord {
 	fileExt: DefinitionFileExt;
 	/** Original uploaded filename, kept for display only. Refreshed on each file upload. */
 	originalFilename?: string;
-	meta: DefinitionMeta;
+	displayName: string;
+	description?: string;
+	category?: string;
+	tags?: string[];
+	/**
+	 * Public URL to cover image — provider-dependent (CDN URL, signed S3, etc.).
+	 * Provider must ensure this URL is safe to send to clients and does not leak
+	 * internal storage paths or unsecured file locations.
+	 */
+	coverImage?: string;
 	/** File version history, newest first */
 	history: HistoryEntry[];
 	/** Maximum archived versions to keep. 0 = unlimited. */
@@ -108,11 +104,14 @@ export interface DefinitionRecord {
  * Semantics:
  * - `undefined` = leave field unchanged
  * - `computeServerId: null` = clear the override
- * - `meta` is a shallow merge against the existing meta
  * - `incrementRunCount` is an atomic "+N" operation, not a field assignment
  */
 export interface DefinitionRecordPatch {
-	meta?: Partial<DefinitionMeta>;
+	displayName?: string;
+	description?: string;
+	category?: string;
+	tags?: string[];
+	coverImage?: string;
 	fileExt?: DefinitionFileExt;
 	originalFilename?: string;
 	maxHistory?: number;

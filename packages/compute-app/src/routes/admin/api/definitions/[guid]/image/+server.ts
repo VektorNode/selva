@@ -31,7 +31,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		await definitionService.saveCoverImage(ctx, guid, imageData);
 
 		const updated = await getDefinitionMeta().get(ctx, guid);
-		return json({ success: true, coverImage: updated?.meta.coverImage ?? null });
+		return json({ success: true, coverImage: updated?.coverImage ?? null });
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
 		console.error('[Image POST] Failed:', err);

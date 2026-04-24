@@ -3,12 +3,7 @@ import type { IStorageProvider } from '../storage/interface.js';
 import type { RequestContext } from '../context.js';
 import { SYSTEM_CONTEXT } from '../context.js';
 import { ProviderError } from '../errors.js';
-import type {
-	DefinitionRecord,
-	DefinitionRecordPatch,
-	DefinitionFileExt,
-	DefinitionMeta
-} from './types.js';
+import type { DefinitionRecord, DefinitionFileExt } from './types.js';
 import { definitionPaths } from './paths.js';
 import type { UpdateMetadataInput } from './schemas.js';
 
@@ -18,7 +13,11 @@ export interface CreateDefinitionInput {
 	ownerId: string;
 	fileExt: DefinitionFileExt;
 	originalFilename?: string;
-	meta: DefinitionMeta;
+	displayName: string;
+	description?: string;
+	category?: string;
+	tags?: string[];
+	coverImage?: string;
 	computeServerId?: string;
 	maxHistory?: number;
 }
@@ -70,7 +69,11 @@ export class DefinitionService {
 			ownerId: input.ownerId,
 			fileExt: input.fileExt,
 			originalFilename: input.originalFilename,
-			meta: input.meta,
+			displayName: input.displayName,
+			description: input.description,
+			category: input.category,
+			tags: input.tags,
+			coverImage: input.coverImage,
 			computeServerId: input.computeServerId,
 			history: [],
 			maxHistory: input.maxHistory ?? 10,
@@ -143,23 +146,14 @@ export class DefinitionService {
 	}
 
 	async updateMeta(ctx: RequestContext, guid: string, patch: UpdateMetadataInput): Promise<void> {
-		const { maxHistory, projectId, computeServerId, status, ...metaFields } = patch;
-		const meta = Object.keys(metaFields).length > 0 ? (metaFields as Partial<DefinitionMeta>) : undefined;
-		const recordPatch: DefinitionRecordPatch = {
-			...(meta !== undefined && { meta }),
-			...(maxHistory !== undefined && { maxHistory }),
-			...(projectId !== undefined && { projectId }),
-			...(computeServerId !== undefined && { computeServerId }),
-			...(status !== undefined && { status })
-		};
-		await this.data.definitions.update(ctx, guid, recordPatch);
+		await this.data.definitions.update(ctx, guid, patch);
 	}
 
 	async saveCoverImage(ctx: RequestContext, guid: string, imageData: Uint8Array): Promise<void> {
 		const path = definitionPaths.image(guid);
 		await this.storage.put(path, imageData, 'image/webp');
 		const url = this.storage.getPublicUrl(path);
-		await this.data.definitions.update(ctx, guid, { meta: { coverImage: url } });
+		await this.data.definitions.update(ctx, guid, { coverImage: url });
 	}
 
 	async revertToVersion(ctx: RequestContext, guid: string, ref: string): Promise<void> {
