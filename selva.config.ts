@@ -38,15 +38,23 @@ export default defineConfig((env) => {
 	const flags = resolveFlags(env);
 
 	if (env.SELVA_PROVIDER === 'supabase') {
-		const data = supa.SupabaseDataProvider.fromEnv(env);
+		const supabaseUrl = env.SUPABASE_URL;
+		const anonKey = env.SUPABASE_ANON_KEY;
+		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+		if (!supabaseUrl) throw new Error('Missing required env var: SUPABASE_URL');
+		if (!anonKey) throw new Error('Missing required env var: SUPABASE_ANON_KEY');
+		if (!serviceRoleKey) throw new Error('Missing required env var: SUPABASE_SERVICE_ROLE_KEY');
 		// Share one ClientBundle across every Supabase provider so they reuse
-		// a single service-role client and per-request WeakMap cache.
-		const bundle = data.getClientBundle();
+		// a single service-role client and per-request WeakMap cache. The audit
+		// sink writes via the same bundle, persisting every domain event to
+		// `audit_events` (Permissions.md §9).
+		const bundle = supa.buildClientBundle({ supabaseUrl, anonKey, serviceRoleKey });
+		const events = new supa.SupabaseEventSink(bundle);
 		return {
 			tenancy,
 			flags,
 			auth: supa.SupabaseAuthProvider.fromEnv(env),
-			data,
+			data: supa.SupabaseDataProvider.fromBundle(bundle, events),
 			storage: supa.SupabaseStorageProvider.fromEnv(env),
 			userProfile: new supa.SupabaseUserProfileProvider(bundle),
 			permissions: new supa.SupabasePlatformPermissionStore(bundle)

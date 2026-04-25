@@ -52,6 +52,18 @@ export class SupabaseDataProvider implements IDataProvider {
 	}
 
 	/**
+	 * Build from a pre-existing `ClientBundle`. Used when the caller wants to
+	 * share one bundle across the data provider AND a sink that writes through
+	 * the same service-role client (e.g., `SupabaseEventSink`).
+	 */
+	static fromBundle(
+		bundle: ClientBundle,
+		events: IEventSink = new NoopEventSink()
+	): SupabaseDataProvider {
+		return new SupabaseDataProvider(bundle, events);
+	}
+
+	/**
 	 * Expose the underlying bundle so other providers in the same package
 	 * (storage, user profile, auth) can share one set of clients per process.
 	 */
