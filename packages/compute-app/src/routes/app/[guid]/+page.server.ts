@@ -77,7 +77,11 @@ export const load = (async ({ params, locals }) => {
 
 		await requireCanSolve(locals, record.projectId);
 
-		const bytes = await storage.get(`definitions/${guid}/definition.${record.fileExt}`);
+		// §6 — the schema page always reflects the live channel.
+		if (!record.liveVersionId) throw new Error(`Definition '${guid}' has no live version`);
+		const version = await meta.getVersion(locals.ctx, record.liveVersionId);
+		if (!version) throw new Error(`Live version missing for '${guid}'`);
+		const bytes = await storage.get(version.fileKey);
 		if (!bytes) throw new Error(`Definition file for '${guid}' not found on disk`);
 
 		definitionSource = bytes;

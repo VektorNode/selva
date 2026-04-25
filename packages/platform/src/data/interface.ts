@@ -1,11 +1,11 @@
 import type { Organization, OrgMember } from '../organizations/types.js';
-import type { OrgRole } from '../organizations/schemas.js';
+import type { OrgRole, OrgPermission } from '../organizations/schemas.js';
 import type { Project, ProjectMember } from '../projects/types.js';
 import type { ProjectRole } from '../projects/schemas.js';
 import type {
 	DefinitionRecord,
 	DefinitionRecordPatch,
-	HistoryEntry
+	DefinitionVersion
 } from '../definitions/types.js';
 import type { ComputeConfig } from '../computeServer/types.js';
 import type { RequestContext } from '../context.js';
@@ -58,6 +58,17 @@ export interface IOrgStore {
 		orgId: string,
 		userId: string,
 		role: OrgRole
+	): Promise<void>;
+	/**
+	 * Replace the member's `OrgPermission` set without changing role. Use this
+	 * for permission edits — going through `removeOrgMember` + `addOrgMember`
+	 * cascades the org-removal soft-delete into project memberships (§9).
+	 */
+	updateOrgMemberPermissions(
+		ctx: RequestContext,
+		orgId: string,
+		userId: string,
+		permissions: readonly OrgPermission[]
 	): Promise<void>;
 	removeOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<void>;
 }
@@ -117,10 +128,14 @@ export interface IProjectStore {
 }
 
 /**
- * Definition metadata record store. Blob contents live in IStorageProvider;
- * this interface only handles the structured record + history entries.
+ * Definition metadata + version store. Blob contents live in IStorageProvider;
+ * this interface tracks the parent record plus its immutable `DefinitionVersion`
+ * rows and the `live`/`draft` channel pointers (spec §6).
  */
 export interface IDefinitionStore {
+	// ============================================================================
+	// Definitions
+	// ============================================================================
 	list(ctx: RequestContext, opts?: DefinitionListOptions): Promise<Page<DefinitionRecord>>;
 	listByProject(
 		ctx: RequestContext,
@@ -148,8 +163,6 @@ export interface IDefinitionStore {
 	get(ctx: RequestContext, guid: string): Promise<DefinitionRecord | null>;
 	create(ctx: RequestContext, record: DefinitionRecord): Promise<void>;
 	update(ctx: RequestContext, guid: string, patch: DefinitionRecordPatch): Promise<void>;
-	addHistoryEntry(ctx: RequestContext, guid: string, entry: HistoryEntry): Promise<void>;
-	removeHistoryEntry(ctx: RequestContext, guid: string, ref: string): Promise<void>;
 	delete(ctx: RequestContext, guid: string): Promise<void>;
 
 	/**
@@ -164,6 +177,33 @@ export interface IDefinitionStore {
 	 * System-context only — never exposed to end users.
 	 */
 	listStalePending(ctx: RequestContext, olderThanIso: string): Promise<DefinitionRecord[]>;
+
+	// ============================================================================
+	// Versions (spec §6 — immutable rows)
+	// ============================================================================
+	/** Insert a new immutable version row. */
+	createVersion(ctx: RequestContext, version: DefinitionVersion): Promise<void>;
+	/** Newest first by `versionNumber`. Definition must be live. */
+	listVersions(
+		ctx: RequestContext,
+		definitionId: string,
+		opts?: ListOptions
+	): Promise<Page<DefinitionVersion>>;
+	getVersion(ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null>;
+	/**
+	 * Delete a version row. Spec §6 deletion protection: throws 409 if the
+	 * version is referenced by its parent's `liveVersionId` or `draftVersionId`.
+	 * Caller deletes the blob separately.
+	 */
+	deleteVersion(ctx: RequestContext, versionId: string): Promise<void>;
+
+	/**
+	 * Atomically point the parent's `liveVersionId` at a target version. The
+	 * adapter validates that the version belongs to this definition.
+	 */
+	setLiveVersion(ctx: RequestContext, definitionId: string, versionId: string): Promise<void>;
+	/** Same as `setLiveVersion` but for `draftVersionId`. */
+	setDraftVersion(ctx: RequestContext, definitionId: string, versionId: string): Promise<void>;
 
 	// ============================================================================
 	// Access checks (UI gating — NOT the security boundary)

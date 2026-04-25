@@ -9,7 +9,7 @@ import {
 import { hasPermission } from '@selva/platform';
 import type {
 	DefinitionRecord,
-	HistoryEntry,
+	DefinitionVersion,
 	Project,
 	ProjectMember,
 	ComputeServerConfig,
@@ -17,7 +17,7 @@ import type {
 } from '@selva/platform';
 import type { PageServerLoad } from './$types';
 
-export type { DefinitionRecord, HistoryEntry, Project, ProjectMember, ComputeServerConfig, AuthUser };
+export type { DefinitionRecord, DefinitionVersion, Project, ProjectMember, ComputeServerConfig, AuthUser };
 
 export interface ProjectWithMembers extends Project {
 	members: ProjectMember[];

@@ -1,19 +1,19 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
-	import type { UISchema } from '../types/generated';
-	import type { ActionButton } from '../types/actionButton';
-	import type { SolveFn } from '../types/solveFn';
-	import { getDefaultValue } from '../utils/utils-shared';
-	import { createComputeThrottle } from '../utils/computeThrottle.svelte';
-	import { createSolvingIndicator } from '../utils/solving.svelte';
-	import { useFooterItem } from '../composables/useFooterItem.svelte';
-	import { hexToOklch } from '../utils/color';
-	import { APP_DEFAULTS } from '../constants';
-	import PageContainer from './layout/PageContainer.svelte';
-	import PageHeader from './layout/PageHeader.svelte';
+	import type { UISchema } from '../../types/generated';
+	import type { ActionButton } from '../../types/actionButton';
+	import type { SolveFn } from '../../types/solveFn';
+	import { getDefaultValue } from '../../utils/utils-shared';
+	import { createComputeThrottle } from '../../utils/computeThrottle.svelte';
+	import { createSolvingIndicator } from '../../utils/solving.svelte';
+	import { useFooterItem } from '../../composables/useFooterItem.svelte';
+	import { hexToOklch } from '../../utils/color';
+	import { APP_DEFAULTS } from '../../constants';
+	import PageContainer from '../layout/PageContainer.svelte';
+	import PageHeader from '../layout/PageHeader.svelte';
 	import AppLayout from './AppLayout.svelte';
-	import StateDisplay from './ui/StateDisplay.svelte';
+	import StateDisplay from '../ui/StateDisplay.svelte';
 
 	import type { Snippet } from 'svelte';
 

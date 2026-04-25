@@ -75,9 +75,9 @@
 				<p class="mt-1 text-[13.5px]">{record.runCount.toLocaleString()}</p>
 			</div>
 			<div>
-				<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">File</p>
+				<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">Live</p>
 				<p class="text-muted-foreground mt-1 font-mono text-[12px]">
-					{record.originalFilename ?? `definition.${record.fileExt}`}
+					{record.liveVersionId ? record.liveVersionId.slice(0, 8) : 'pending'}
 				</p>
 			</div>
 			{#if record.category}

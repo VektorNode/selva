@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import chart from '$lib/dummy-surface-chart.json';
-import meshData from '$lib/example-mesh.json';
+import chart from './dummy-surface-chart.json';
+import meshData from './example-mesh.json';
 import { parseMeshBatchObject } from 'selva-compute/visualization';
 
 // Create a fallback cube mesh for sync use cases

@@ -12,18 +12,6 @@ export const COVER_IMAGE_CONTENT_TYPES: Record<string, string> = {
 	'.gif': 'image/gif'
 };
 
-export interface HistoryEntry {
-	/**
-	 * UUID + sanitized filename suffix; full storage path built via
-	 * `definitionPaths.archive(guid, ref)`.
-	 */
-	ref: string;
-	originalName: string;
-	archivedAt: string;
-	uploadedBy?: string;
-	note?: string;
-}
-
 /**
  * Lifecycle status. Internal state:
  * - 'pending' — metadata written, blob upload may be in flight or failed
@@ -39,16 +27,22 @@ export interface HistoryEntry {
 export type DefinitionStatus = 'pending' | 'draft' | 'review' | 'published' | 'archived';
 
 /**
- * Immutable snapshot of a definition's `.gh` file at a point in time.
- * Scaffold only — no upload/publish flow consumes versions yet. Spec §6.
+ * Spec §6 — immutable snapshot of a definition's `.gh` file at a point in
+ * time. New uploads create new versions; rollback re-points the parent's
+ * `liveVersionId` at a previous version (it never mutates the version itself).
  */
 export interface DefinitionVersion {
 	id: string;
 	definitionId: string;
-	/** Monotonic integer starting at 1, incrementing on each upload. */
+	/** Monotonic integer starting at 1; never reused. */
 	versionNumber: number;
-	/** Storage key — opaque to the domain layer. */
+	fileExt: DefinitionFileExt;
+	/**
+	 * Full storage key (e.g. `definitions/{guid}/versions/v3.gh`). Opaque to
+	 * callers — the version row is the canonical location, not the path.
+	 */
 	fileKey: string;
+	originalFilename?: string;
 	uploadedBy: string;
 	uploadedAt: string;
 }
@@ -65,8 +59,6 @@ export interface DefinitionRecord {
 	updatedBy: string;
 	/** Falls back to the org default, then the platform default. */
 	computeServerId?: string;
-	fileExt: DefinitionFileExt;
-	originalFilename?: string;
 	displayName: string;
 	description?: string;
 	category?: string;
@@ -77,18 +69,16 @@ export interface DefinitionRecord {
 	 * unsecured internal storage path).
 	 */
 	coverImage?: string;
-	/** Newest first. */
-	history: HistoryEntry[];
-	/** 0 = unlimited. */
-	maxHistory: number;
 	status: DefinitionStatus;
 	runCount: number;
 	/**
-	 * Versioning scaffold. Both null until the upload/publish flow lands;
-	 * legacy paths keep writing to `history[]` in the meantime. Spec §6.
+	 * Spec §6 channels. Both null only during the brief 'pending' window
+	 * between metadata create and v1 upload; otherwise both reference live
+	 * `DefinitionVersion` rows. Solving picks live by default; draft requires
+	 * `canEditDefinition` (handled at the route layer).
 	 */
-	liveVersionId?: string | null;
-	draftVersionId?: string | null;
+	liveVersionId: string | null;
+	draftVersionId: string | null;
 	createdAt: string;
 	updatedAt: string;
 	/** Null = live. Reads filter non-null at the data-access layer. */
@@ -97,7 +87,8 @@ export interface DefinitionRecord {
 
 /**
  * Patch omits immutable fields (`guid`, `createdBy`, `createdAt`) and
- * provider-managed ones (`updatedAt`, `updatedBy`, `history`, `deletedAt`).
+ * provider-managed ones (`updatedAt`, `updatedBy`, `deletedAt`, version
+ * pointers). Use `setLiveVersion`/`setDraftVersion` for the latter.
  *
  * - `undefined` — leave unchanged
  * - `null` — clear (only on nullable fields below)
@@ -111,12 +102,12 @@ export interface DefinitionRecordPatch {
 	category?: string | null;
 	tags?: string[] | null;
 	coverImage?: string | null;
-	fileExt?: DefinitionFileExt;
-	originalFilename?: string;
-	maxHistory?: number;
 	projectId?: string;
 	computeServerId?: string | null;
 	status?: DefinitionStatus;
 	/** Ownership transfer. */
 	ownerId?: string;
 }
+
+/** Spec §6 — channel for solve dispatch. */
+export type DefinitionChannel = 'live' | 'draft';

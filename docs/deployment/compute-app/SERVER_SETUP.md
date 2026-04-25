@@ -32,7 +32,7 @@ bash setup.sh
 
 # Non-interactive (CI/automation) — uses env vars / defaults
 ADMIN_PASSWORD=yourpassword \
-ADMIN_SECRET=yoursecret \
+SESSION_SECRET=yoursecret \
 bash setup.sh --no-interactive
 
 # After setup, register your Rhino.Compute server in the admin dashboard at /admin/compute
@@ -44,12 +44,16 @@ bash setup-caddy.sh --domain app.example.com  # HTTPS via Let's Encrypt
 
 ## Configuration Variables
 
+`setup.sh` defaults to the **local provider**. Provider-specific vars (`DATA_PATH`, `SESSION_SECRET`, `ADMIN_PASSWORD`) are documented in the [selva-local-provider README](../../../packages/local-provider/README.md). For Supabase, see the [@selva/supabase-provider README](../../../packages/supabase-provider/README.md).
+
+Vars `setup.sh` itself reads:
+
 | Variable              | Default                               | Description                                           |
 | --------------------- | ------------------------------------- | ----------------------------------------------------- |
 | `REPO_URL`            | `git@github.com:VektorNode/selva.git` | Repository SSH URL                                    |
-| `GH_DEFINITIONS_PATH` | `./example-definitions`               | Path to `.gh` files                                   |
-| `ADMIN_PASSWORD`      | —                                     | Admin panel password                                  |
-| `ADMIN_SECRET`        | —                                     | Admin session secret                                  |
+| `DATA_PATH`           | `./definitions`                       | Local provider data directory (the script also accepts `GH_DEFINITIONS_PATH` as an alias for now) |
+| `ADMIN_PASSWORD`      | —                                     | Admin panel password (local provider only)            |
+| `SESSION_SECRET`      | auto-generated                        | HMAC secret for session cookies (local provider only) |
 | `PORT`                | `3000`                                | Internal app port                                     |
 | `ORIGIN`              | `http://your-server-ip`               | Public-facing URL — no port suffix, no trailing slash |
 | `INSTALL_DIR`         | `~/selva`                             | Install directory                                     |

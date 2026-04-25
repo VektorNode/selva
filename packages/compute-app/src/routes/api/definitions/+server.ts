@@ -67,7 +67,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		const fileData = new Uint8Array(await file.arrayBuffer());
-		const record = await definitionService.create(
+		const { record, version } = await definitionService.create(
 			ctx,
 			{
 				guid,
@@ -90,7 +90,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			coverImage = await definitionService.saveCoverImage(ctx, guid, imageData);
 		}
 
-		return json({ success: true, guid, filename: `definition.${fileExt}`, coverImage });
+		return json({ success: true, guid, version, coverImage });
 	} catch (err) {
 		handleApiError(err, 'Failed to create definition');
 	}

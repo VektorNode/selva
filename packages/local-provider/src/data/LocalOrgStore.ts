@@ -314,6 +314,23 @@ export class LocalOrgStore implements IOrgStore {
 		await this.loader.write(store);
 	}
 
+	async updateOrgMemberPermissions(
+		ctx: RequestContext,
+		orgId: string,
+		userId: string,
+		permissions: readonly OrgPermission[]
+	): Promise<void> {
+		const store = await this.loader.get();
+		const m = store.orgMembers.find(
+			(m) => m.orgId === orgId && m.userId === userId && isLive(m)
+		);
+		if (!m) throw new ProviderError(`Org member '${userId}' not found`, 404);
+		m.permissions = sanitizeOrgPermissions(permissions as readonly string[]);
+		m.updatedAt = new Date().toISOString();
+		m.updatedBy = ctx.userId || m.updatedBy;
+		await this.loader.write(store);
+	}
+
 	async removeOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<void> {
 		const store = await this.loader.get();
 		const m = store.orgMembers.find(
@@ -321,9 +338,23 @@ export class LocalOrgStore implements IOrgStore {
 		);
 		if (!m) return;
 		const now = new Date().toISOString();
+		const actor = ctx.userId || m.updatedBy;
 		m.deletedAt = now;
 		m.updatedAt = now;
-		m.updatedBy = ctx.userId || m.updatedBy;
+		m.updatedBy = actor;
+
+		// §9: losing org membership ends every project membership scoped to
+		// that tenant. Cascading here keeps the "members ⊂ org members"
+		// invariant true by construction so reads don't need to re-check it.
+		const projectIdsInOrg = new Set(
+			store.projects.filter((p) => p.orgId === orgId).map((p) => p.id)
+		);
+		store.projectMembers = store.projectMembers.map((pm) =>
+			pm.userId === userId && projectIdsInOrg.has(pm.projectId) && isLive(pm)
+				? { ...pm, deletedAt: now, updatedAt: now, updatedBy: actor }
+				: pm
+		);
+
 		await this.loader.write(store);
 	}
 }

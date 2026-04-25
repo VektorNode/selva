@@ -3,8 +3,9 @@ export { default as PageContainer } from './components/layout/PageContainer.svel
 export { default as PageHeader } from './components/layout/PageHeader.svelte';
 export { default as PageContent } from './components/layout/PageContent.svelte';
 export { default as PageFooter } from './components/layout/PageFooter.svelte';
-export { default as AppLayout } from './components/AppLayout.svelte';
-export { default as ComputeApp } from './components/ComputeApp.svelte';
+// App shell (compose schema + viewer + layout into a runnable app)
+export { default as AppLayout } from './components/app-shell/AppLayout.svelte';
+export { default as ComputeApp } from './components/app-shell/ComputeApp.svelte';
 
 // Error components
 export { default as ErrorScreen } from './components/ErrorScreen.svelte';
@@ -32,5 +33,3 @@ export type { SolveFn } from './types/solveFn';
 
 // Re-export constants from generated schema
 export { ACCEPTED_FILE_FORMATS } from './types/generated/schema';
-
-// Theme utilities

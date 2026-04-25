@@ -1,11 +1,11 @@
 <script lang="ts">
-	import type { UISchema, SupportedTypes } from '../types/generated';
-	import type { ActionButton } from '../types/actionButton';
+	import type { UISchema, SupportedTypes } from '../../types/generated';
+	import type { ActionButton } from '../../types/actionButton';
 	import { ChevronUp } from '@lucide/svelte';
-	import Viewer, { type ViewerConfig } from './viewer/Viewer.svelte';
-	import CalculateButton from './ui/CalculateButton.svelte';
-	import SolvingIndicator from './ui/SolvingIndicator.svelte';
-	import TabLayout from './preview/TabLayout.svelte';
+	import Viewer, { type ViewerConfig } from '../viewer/Viewer.svelte';
+	import CalculateButton from '../ui/CalculateButton.svelte';
+	import SolvingIndicator from '../ui/SolvingIndicator.svelte';
+	import TabLayout from '../preview/TabLayout.svelte';
 	import CollapsedPanelStrip from './CollapsedPanelStrip.svelte';
 	import * as Resizable from '$lib/components/ui/resizable';
 	import { Button } from '$lib';

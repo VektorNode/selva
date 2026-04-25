@@ -1,66 +1,56 @@
 # Deployment Prerequisites
 
-The Selva Compute App requires two external dependencies:
+## 1. System requirements
 
-1. **Rhino.Compute Server** — See [Rhino Compute Setup](../../RHINO_COMPUTE.md)
-2. **Grasshopper Definition Files (.gh)** — See [Definitions Setup](./DEFINITIONS_SETUP.md)
+- **CPU**: 2 cores (4+ for complex definitions)
+- **RAM**: 2 GB minimum, 4 GB+ recommended
+- **Disk**: 5 GB free
+- **OS**: Ubuntu 22.04 LTS recommended for production
+- **Network**: stable connection to your Rhino.Compute server
 
-## 1. System Requirements
+## 2. External dependencies
 
-### Minimum Hardware
+| Dependency | Setup |
+|---|---|
+| Rhino.Compute server | [Rhino Compute Setup](../../RHINO_COMPUTE.md) |
+| Grasshopper definitions | [Definitions Setup](./DEFINITIONS_SETUP.md) |
 
-- **CPU**: 2 cores
-- **RAM**: 2GB (4GB+ recommended for complex definitions)
-- **Disk**: 5GB free space
-- **Network**: Stable connection to Rhino.Compute server
+The server URL + API key are registered post-install via `/admin/compute` — not env vars.
 
-**Recommended:** Linux (Ubuntu 22.04 LTS) for production deployments
+## 3. Choose a backend provider
 
----
+Selva's auth, data, and storage are pluggable. Pick one before configuring the app:
 
-## 2. Network Configuration
+| Provider | When to use | Setup |
+|---|---|---|
+| **Local** (default) | Single-instance deployments, dev, evaluation. Filesystem + JSON. | [selva-local-provider README](../../../packages/local-provider/README.md) |
+| **Supabase** | Multi-instance, managed auth + Postgres + storage, RLS. | [@selva/supabase-provider README](../../../packages/supabase-provider/README.md) |
 
-### Port Setup
+The provider you pick determines the env vars the app needs at runtime — see the provider's README.
 
-**Internal Application Port:**
+## 4. Network configuration
 
-- Default: 3000 (configurable via `PORT` environment variable)
-- Compute Server: Typically 5000 (configured separately in Rhino.Compute)
-- Dev Mode WebSocket: 8765 (dev only, not needed in production)
+**Internal port:** `3000` (configurable via `PORT`).
 
-**External Access:**
+The app is designed to run behind a reverse proxy:
 
-The app is designed to run behind a **reverse proxy** (recommended for production):
+| Scenario | Setup | Firewall |
+|---|---|---|
+| Production (recommended) | Caddy/nginx on 80/443 → app on 3000 | Allow 80/443 externally; restrict 3000 to proxy only |
+| Direct exposure | `http://yourip:3000` | Allow 3000; no SSL/DDoS protection |
+| Development | `http://localhost:3000` | None |
 
-| Scenario                     | Setup                                     | Firewall                                             |
-| ---------------------------- | ----------------------------------------- | ---------------------------------------------------- |
-| **Development**              | Direct: `http://localhost:3000`           | No changes needed                                    |
-| **Production (Recommended)** | Behind nginx/caddy on 80/443, app on 3000 | Allow 80/443 externally, restrict 3000 to proxy only |
-| **Direct Exposure**          | `http://yourip:3000` (not recommended)    | Allow 3000 externally (no SSL/DDoS protection)       |
+When behind a proxy, set `ORIGIN` to the public URL (no trailing slash) — SvelteKit's CSRF check uses it.
 
-**If using a reverse proxy**, set the `ORIGIN` environment variable to your public URL (e.g., `ORIGIN=https://yourapp.com`).
+## 5. Generic app env vars
 
-## 3. Environment Configuration
+These apply regardless of provider:
 
-The Compute App is configured via environment variables. Set these during deployment using `.env` files or deployment configs (e.g., `ecosystem.config.cjs`).
-
-### Rhino.Compute Server
-
-Compute server URL and API key are configured in the admin dashboard
-(`/admin/compute`) — not env vars. The config is persisted by the active data
-provider (filesystem JSON or Supabase Postgres).
-
-### Definition Source
-
-Set `GH_DEFINITIONS_PATH` to a local folder containing your `.gh` files and `definitions-config.json`.
-
-See [Definitions Setup](./DEFINITIONS_SETUP.md) for details.
-
-### Optional Variables
-
-| Variable   | Description                                             | Default       |
-| ---------- | ------------------------------------------------------- | ------------- |
-| `PORT`     | Server port                                             | `3000`        |
-| `HOST`     | Host binding                                            | `localhost`   |
-| `NODE_ENV` | Environment mode                                        | `development` |
-| `ORIGIN`   | Public URL for origin/CSRF checks (recommended in prod) | None          |
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `3000` | Server port |
+| `HOST` | `0.0.0.0` | Bind address |
+| `NODE_ENV` | `development` | Set `production` to hide stack traces |
+| `ORIGIN` | — | Public URL — **required behind a reverse proxy** |
+| `BODY_SIZE_LIMIT` | `512kb` | Increase for large geometry uploads (`Infinity` works) |
+| `ALLOW_INSECURE_COOKIES` | — | Set `true` for HTTP-only deployments (dev/testing) |

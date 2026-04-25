@@ -27,9 +27,13 @@ pnpm run build:all
 
 ### Compute App (Rhino.Compute cloud mode)
 
-1. Create a `.env` file in `packages/compute-app/` from the example env file
-2. Install the [Selva plugin](../Plugin/) and set up the [custom Rhino.Compute fork](https://github.com/VektorNode/compute.rhino3d.git)
-3. After the app is running, open `/admin/compute` and register your Rhino.Compute server URL (and optional API key)
+1. Copy the env template:
+   ```bash
+   cp packages/compute-app/.env.example packages/compute-app/.env
+   ```
+   Pick a backend provider and fill in its vars — see [selva-local-provider](../packages/local-provider/README.md) (default) or [@selva/supabase-provider](../packages/supabase-provider/README.md).
+2. Install the [Selva plugin](../Plugin/) and set up the [custom Rhino.Compute fork](https://github.com/VektorNode/compute.rhino3d.git).
+3. After the app is running, open `/admin/compute` and register your Rhino.Compute server URL (and optional API key).
 
 ```bash
 cd packages/compute-app

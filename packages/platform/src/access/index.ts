@@ -1,7 +1,9 @@
 export type {
 	ProjectAccessInput,
 	DefinitionAccessInput,
-	VisibilityChangeInput
+	VisibilityChangeInput,
+	ReclaimAccessInput,
+	CreateProjectAccessInput
 } from './rules.js';
 export {
 	canView,
@@ -11,5 +13,7 @@ export {
 	canEditProjectSettings,
 	canChangeVisibilityToPublic,
 	canEditDefinition,
+	canReclaim,
+	canCreateProject,
 	withAdminBypass
 } from './rules.js';
