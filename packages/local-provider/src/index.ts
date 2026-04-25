@@ -23,3 +23,6 @@ export { LocalStorageProvider } from './storage/LocalStorageProvider.js';
 
 // User profile
 export { LocalUserProfileProvider } from './userProfile/LocalUserProfileProvider.js';
+
+// Platform permissions (data-layer authorization store)
+export { LocalPlatformPermissionStore } from './permissions/LocalPlatformPermissionStore.js';

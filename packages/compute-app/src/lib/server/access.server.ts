@@ -6,7 +6,13 @@ import type {
 	Project,
 	RequestContext
 } from '@selva/platform';
-import { hasPermission, canReclaim, canCreateProject } from '@selva/platform';
+import {
+	hasPermission,
+	canReclaim,
+	canCreateProject,
+	canView as ruleCanView,
+	canSolve as ruleCanSolve
+} from '@selva/platform';
 import {
 	getProjectProvider,
 	getDefinitionMeta,
@@ -221,22 +227,49 @@ export async function requireCanManageMembers(
 }
 
 /**
- * Resolve the rule for a `project.visibility` cell. Public visibility honours
- * `ALLOW_CROSS_ORG_PUBLIC`: when off, public is downgraded to within-org reach
- * (spec §4 line 211). Mirrors the pure `canView` rule in `@selva/platform`;
- * see Permissions.md §5 note on the duplication.
+ * Load the inputs the canonical `canView`/`canSolve` rules need, then call
+ * the rule. The cross-org-public shortcut (allow-cross-org-public flag is on
+ * AND visibility is public) returns early without any membership fetch.
+ *
+ * Permissions.md §5 — this is the single source of truth for view/solve
+ * gating. Adapter `can*` methods on the project store also delegate to
+ * `rules.ts`; the route layer used to inline its own predicate but now
+ * funnels through the same rule.
  */
-async function resolveCanView(ctx: RequestContext, project: Project): Promise<boolean> {
-	if (project.visibility === 'private') {
-		const member = await getProjectProvider().getProjectMember(ctx, project.id, ctx.userId);
-		return member != null;
+async function loadAndCheckView(
+	ctx: RequestContext,
+	project: Project
+): Promise<boolean> {
+	const allowCrossOrgPublic = flag('ALLOW_CROSS_ORG_PUBLIC');
+	// Cross-org public bypass: no membership fetch needed.
+	if (project.visibility === 'public' && allowCrossOrgPublic) {
+		return ruleCanView({
+			platformPermissions: ctx.platformPermissions,
+			orgPermissions: ctx.orgPermissions,
+			project,
+			member: null,
+			orgMember: null,
+			allowCrossOrgPublic
+		});
 	}
-	if (project.visibility === 'org') {
-		return ctx.actingOrgId === project.orgId;
-	}
-	// public
-	if (flag('ALLOW_CROSS_ORG_PUBLIC')) return true;
-	return ctx.actingOrgId === project.orgId;
+	// Private needs member, org/within-org-public needs orgMember. Fetch only
+	// what the rule will consult.
+	const [member, orgMember] = await Promise.all([
+		project.visibility === 'private'
+			? getProjectProvider().getProjectMember(ctx, project.id, ctx.userId)
+			: Promise.resolve(null),
+		project.visibility !== 'private'
+			? getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId)
+			: Promise.resolve(null)
+	]);
+	return ruleCanView({
+		platformPermissions: ctx.platformPermissions,
+		orgPermissions: ctx.orgPermissions,
+		project,
+		member,
+		orgMember,
+		allowCrossOrgPublic
+	});
 }
 
 export async function requireCanViewProject(
@@ -246,15 +279,16 @@ export async function requireCanViewProject(
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await bypassOrRun(ctx, async () => {
 		const project = await loadProjectOr404(ctx, projectId);
-		return resolveCanView(ctx, project);
+		return loadAndCheckView(ctx, project);
 	});
 	if (!allowed) throw error(403, 'You do not have access to this project.');
 	return user;
 }
 
 /**
- * Same shape as view today; kept separate so future cost gating lands here
- * without touching view semantics. `viewer` project role passes.
+ * Solve gating. Today `canSolve === canView`, but the rule lives in its own
+ * function so future cost-gating (quotas, rate limits) lands without touching
+ * view semantics. `viewer` project role passes.
  */
 export async function requireCanSolve(
 	locals: Locals,
@@ -263,7 +297,35 @@ export async function requireCanSolve(
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId);
 
-	const allowed = await bypassOrRun(ctx, () => resolveCanView(ctx, project));
+	const allowed = await bypassOrRun(ctx, async () => {
+		const allowCrossOrgPublic = flag('ALLOW_CROSS_ORG_PUBLIC');
+		if (project.visibility === 'public' && allowCrossOrgPublic) {
+			return ruleCanSolve({
+				platformPermissions: ctx.platformPermissions,
+				orgPermissions: ctx.orgPermissions,
+				project,
+				member: null,
+				orgMember: null,
+				allowCrossOrgPublic
+			});
+		}
+		const [member, orgMember] = await Promise.all([
+			project.visibility === 'private'
+				? getProjectProvider().getProjectMember(ctx, project.id, ctx.userId)
+				: Promise.resolve(null),
+			project.visibility !== 'private'
+				? getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId)
+				: Promise.resolve(null)
+		]);
+		return ruleCanSolve({
+			platformPermissions: ctx.platformPermissions,
+			orgPermissions: ctx.orgPermissions,
+			project,
+			member,
+			orgMember,
+			allowCrossOrgPublic
+		});
+	});
 	if (!allowed) throw error(403, 'You do not have access to this project.');
 	return { user, ctx, project };
 }

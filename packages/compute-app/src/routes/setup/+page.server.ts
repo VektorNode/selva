@@ -15,6 +15,7 @@ import {
 	tenancy
 } from '$lib/server/providers.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
+import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 
 function slugify(raw: string): string {
 	return raw
@@ -73,10 +74,12 @@ export const actions = {
 			if (!passwordAuth) {
 				return fail(501, { error: 'Password-based setup is not supported by this provider' });
 			}
-			// First-run setup grants the creator every platform permission.
-			// Later deployments will bootstrap the platform admin from an env
-			// var instead so setup can be constrained to org-owner rights.
-			const user = await passwordAuth.createUserWithPassword(email, password, [
+			// First-run setup creates the identity, then grants every platform
+			// permission via the data-layer store. Later deployments will
+			// bootstrap the platform admin from an env var instead so setup
+			// can be constrained to org-owner rights.
+			const user = await passwordAuth.createUserWithPassword(email, password);
+			await setUserPlatformPermissions(SYSTEM_CONTEXT, user.id, [
 				...ALL_PLATFORM_PERMISSIONS
 			]);
 			if (displayName) {

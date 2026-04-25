@@ -4,12 +4,10 @@ import type {
 	IPasswordAuth,
 	AuthUser,
 	LoginResult,
-	PlatformPermission,
 	UserManagementResult,
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { PlatformPermissionSchema } from '@selva/platform';
 
 /**
  * Auth backed by Supabase Auth (GoTrue).
@@ -21,11 +19,9 @@ import { PlatformPermissionSchema } from '@selva/platform';
  *    to that bearer; GoTrue validates the JWT for us.
  *  - User management uses `auth.admin.*` with the service-role client.
  *
- * Platform-scope permissions live in `public.user_profiles.platform_permissions`
- * (created by the `handle_new_auth_user` trigger on signup). We read them
- * server-side and merge into `AuthUser.platformPermissions` on every `getUser`
- * / `verifyToken` / `listUsers`. Profile state (displayName, starred, recent runs)
- * is NOT in the AuthUser — that's `SupabaseUserProfileProvider`'s job (§1e).
+ * Identity-only — platform permissions live on `IPlatformPermissionStore`
+ * (`SupabasePlatformPermissionStore` reads `user_profiles.platform_permissions`)
+ * and profile state on `IUserProfileStore`.
  */
 export interface SupabaseAuthProviderConfig {
 	supabaseUrl: string;
@@ -61,7 +57,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			this.anon,
 			(email, password) => this.signIn(email, password),
 			config.enableSelfSignup ?? false,
-			() => this.hydrate.bind(this)
+			(user) => this.hydrate(user)
 		);
 	}
 
@@ -109,57 +105,28 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		if (error) throw error;
 
 		const users = data.users;
-		const hydrated = await Promise.all(users.map((u) => this.hydrate(u)));
+		const hydrated = users.map((u) => this.hydrate(u));
 		// If the page was full, assume there may be more.
 		const nextCursor = users.length >= perPage ? String(page + 1) : undefined;
 		return { items: hydrated, nextCursor };
 	}
 
-	async createUser(email: string, platformPermissions: PlatformPermission[]): Promise<AuthUser> {
+	async createUser(email: string): Promise<AuthUser> {
 		// Allowlist variant: create without a password. The user receives a
-		// magic-link / OIDC handoff from the consuming app.
+		// magic-link / OIDC handoff from the consuming app. Identity-only;
+		// platform permissions are granted via IPlatformPermissionStore.
 		const { data, error } = await this.admin.auth.admin.createUser({
 			email,
 			email_confirm: true
 		});
 		if (error) throw error;
 		if (!data.user) throw new Error('createUser returned no user');
-
-		if (platformPermissions.length > 0) {
-			await this.applyPlatformPermissions(data.user.id, platformPermissions);
-		}
 		return this.hydrate(data.user);
 	}
 
-	async updateUserPlatformPermissions(
-		id: string,
-		platformPermissions: PlatformPermission[]
-	): Promise<UserManagementResult> {
-		const { data: existing, error: fetchError } = await this.admin.auth.admin.getUserById(id);
-		if (fetchError || !existing.user) return 'not_found';
-		// Permissions.md §2 invariant: refuse if this update drops the last
-		// instance_admin. Race window between the count and the write is
-		// acceptable at admin-flow cadence; the UI mirror prevents the common case.
-		const target = await this.hydrate(existing.user);
-		const wasAdmin = target.platformPermissions.includes('instance_admin');
-		const willBeAdmin = platformPermissions.includes('instance_admin');
-		if (wasAdmin && !willBeAdmin && (await this.countOtherInstanceAdmins(id)) === 0) {
-			return 'last_admin';
-		}
-		await this.applyPlatformPermissions(id, platformPermissions);
-		return 'ok';
-	}
-
 	async deleteUser(id: string): Promise<UserManagementResult> {
-		const { data: existing, error: fetchError } = await this.admin.auth.admin.getUserById(id);
-		if (fetchError || !existing.user) return 'not_found';
-		const target = await this.hydrate(existing.user);
-		if (
-			target.platformPermissions.includes('instance_admin') &&
-			(await this.countOtherInstanceAdmins(id)) === 0
-		) {
-			return 'last_admin';
-		}
+		// Identity-only delete. The §2 sole-`instance_admin` invariant lives
+		// on IPlatformPermissionStore; callers consult it before calling here.
 		const { error } = await this.admin.auth.admin.deleteUser(id);
 		if (error) {
 			// 404-shaped errors from GoTrue surface as { status: 404 } or a
@@ -174,16 +141,6 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	async disableUser(id: string): Promise<UserManagementResult> {
 		const { data: existing, error: fetchError } = await this.admin.auth.admin.getUserById(id);
 		if (fetchError || !existing.user) return 'not_found';
-		const target = await this.hydrate(existing.user);
-		// Permissions.md §10: disabling the last enabled instance_admin is
-		// blocked at the provider. Already-disabled targets are a no-op.
-		if (
-			!target.disabled &&
-			target.platformPermissions.includes('instance_admin') &&
-			(await this.countOtherInstanceAdmins(id)) === 0
-		) {
-			return 'last_admin';
-		}
 		// GoTrue's user_metadata update merges shallowly — preserve existing
 		// fields by spreading them in.
 		const mergedMetadata = {
@@ -199,27 +156,6 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			throw error;
 		}
 		return 'ok';
-	}
-
-	private async countOtherInstanceAdmins(excludeId: string): Promise<number> {
-		// Postgres `?` operator: array contains element. `user_profiles.disabled`
-		// isn't tracked here — disabled state lives in auth.users.user_metadata,
-		// so we cross-reference. Cheap; admin user counts are tiny.
-		const { data, error } = await this.admin
-			.from('user_profiles')
-			.select('user_id')
-			.contains('platform_permissions', ['instance_admin'])
-			.neq('user_id', excludeId);
-		if (error) throw error;
-		const candidateIds = (data ?? []).map((r) => r.user_id as string);
-		if (candidateIds.length === 0) return 0;
-		// Filter out disabled users by checking auth.users metadata.
-		let count = 0;
-		for (const uid of candidateIds) {
-			const { data: authData } = await this.admin.auth.admin.getUserById(uid);
-			if (authData.user && authData.user.user_metadata?.disabled !== true) count += 1;
-		}
-		return count;
 	}
 
 	async touchLastLogin(id: string): Promise<void> {
@@ -256,50 +192,23 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		const { data, error } = await this.anon.auth.signInWithPassword({ email, password });
 		if (error || !data.user || !data.session) return null;
 		if (data.user.user_metadata?.disabled === true) return null;
-		const user = await this.hydrate(data.user);
-		return { user, sessionToken: data.session.access_token };
+		return { user: this.hydrate(data.user), sessionToken: data.session.access_token };
 	}
 
 	/**
-	 * Merge a GoTrue `User` with the platform permissions from `user_profiles`
-	 * into our platform-contract `AuthUser`. Profile fields (displayName,
-	 * starred, recentRuns) are intentionally omitted — §1e split.
+	 * Map a GoTrue `User` to our identity-only `AuthUser`. Platform permissions
+	 * live on `IPlatformPermissionStore` and profile fields (displayName,
+	 * starred, recentRuns) on `IUserProfileStore` — neither is in AuthUser.
 	 */
-	private async hydrate(user: User): Promise<AuthUser> {
-		// One service-role read per hydrate. Cheap; would cache per-request if
-		// needed. `maybeSingle` returns null for users whose trigger hasn't
-		// fired yet (race window during signup).
-		const { data: profile } = await this.admin
-			.from('user_profiles')
-			.select('platform_permissions')
-			.eq('user_id', user.id)
-			.maybeSingle();
-
-		const rawPerms = (profile?.platform_permissions ?? []) as string[];
-		const platformPermissions = rawPerms.filter(
-			(p): p is PlatformPermission => PlatformPermissionSchema.safeParse(p).success
-		);
-
+	private hydrate(user: User): AuthUser {
 		return {
 			id: user.id,
 			email: user.email ?? undefined,
-			platformPermissions,
 			createdAt: user.created_at ?? undefined,
 			lastLoginAt: user.last_sign_in_at ?? undefined,
 			disabled: user.user_metadata?.disabled === true,
 			metadata: user.user_metadata
 		};
-	}
-
-	private async applyPlatformPermissions(
-		id: string,
-		platformPermissions: PlatformPermission[]
-	): Promise<void> {
-		const { error } = await this.admin
-			.from('user_profiles')
-			.update({ platform_permissions: platformPermissions })
-			.eq('user_id', id);
-		if (error) throw error;
 	}
 
 	/**
@@ -321,7 +230,7 @@ class SupabasePasswordAuth implements IPasswordAuth {
 			password: string
 		) => Promise<{ user: AuthUser; sessionToken: string } | null>,
 		private readonly enableSelfSignup: boolean,
-		private readonly hydrateFactory: () => (user: User) => Promise<AuthUser>
+		private readonly hydrate: (user: User) => AuthUser
 	) {}
 
 	async verifyLogin(email: string, password: string): Promise<LoginResult> {
@@ -330,11 +239,9 @@ class SupabasePasswordAuth implements IPasswordAuth {
 		return { kind: 'success', user: result.user, sessionToken: result.sessionToken };
 	}
 
-	async createUserWithPassword(
-		email: string,
-		password: string,
-		platformPermissions: PlatformPermission[]
-	): Promise<AuthUser> {
+	async createUserWithPassword(email: string, password: string): Promise<AuthUser> {
+		// Identity-only — platform permissions are granted separately via
+		// IPlatformPermissionStore.set after creation.
 		const { data, error } = await this.admin.auth.admin.createUser({
 			email,
 			password,
@@ -342,21 +249,13 @@ class SupabasePasswordAuth implements IPasswordAuth {
 		});
 		if (error) throw error;
 		if (!data.user) throw new Error('createUserWithPassword returned no user');
-
-		if (platformPermissions.length > 0) {
-			const { error: upError } = await this.admin
-				.from('user_profiles')
-				.update({ platform_permissions: platformPermissions })
-				.eq('user_id', data.user.id);
-			if (upError) throw upError;
-		}
-		return this.hydrateFactory()(data.user);
+		return this.hydrate(data.user);
 	}
 
 	async registerUser(email: string, password: string): Promise<AuthUser | null> {
 		if (!this.enableSelfSignup) return null;
 		const { data, error } = await this.anon.auth.signUp({ email, password });
 		if (error || !data.user) return null;
-		return this.hydrateFactory()(data.user);
+		return this.hydrate(data.user);
 	}
 }

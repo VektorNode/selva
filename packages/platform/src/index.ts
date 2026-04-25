@@ -11,6 +11,9 @@ export type {
 } from './auth/index.js';
 export { ALL_PLATFORM_PERMISSIONS, PlatformPermissionSchema } from './auth/index.js';
 
+// Platform permissions (data-layer authorization store)
+export type { IPlatformPermissionStore } from './permissions/index.js';
+
 // User profile
 export type { IUserProfileStore, UserProfile } from './userProfile/index.js';
 export { emptyProfile } from './userProfile/index.js';
@@ -151,7 +154,9 @@ export type {
 	DefinitionAccessInput,
 	VisibilityChangeInput,
 	ReclaimAccessInput,
-	CreateProjectAccessInput
+	CreateProjectAccessInput,
+	OwnerRemovalInput,
+	OwnerRemovalCheck
 } from './access/index.js';
 export {
 	canView,
@@ -163,5 +168,6 @@ export {
 	canEditDefinition,
 	canReclaim,
 	canCreateProject,
+	checkOwnerRemoval,
 	withAdminBypass
 } from './access/index.js';

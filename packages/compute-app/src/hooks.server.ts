@@ -29,9 +29,12 @@ async function buildContext(
 	let actingOrgId: string | undefined;
 	let orgPermissions: RequestContext['orgPermissions'] = [];
 
-	// SYSTEM_CONTEXT is fine here — we then look up the *user's* membership
-	// explicitly. For multi-tenant the membership lookup is what scopes; for
-	// single-tenant there's only one org anyway.
+	// Identity from the auth provider, authorization from the data layer.
+	// Both reads run as SYSTEM_CONTEXT during request bootstrap (the user's
+	// own ctx isn't built yet).
+	const platformPermissions = await providers.permissions.getFor(SYSTEM_CONTEXT, user.id);
+
+	// Look up the user's org membership to resolve `actingOrgId`.
 	const orgsPage = await providers.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 50 });
 
 	for (const org of orgsPage.items) {
@@ -43,22 +46,17 @@ async function buildContext(
 		}
 	}
 
-	if (!actingOrgId && user.platformPermissions.includes('instance_admin')) {
+	if (!actingOrgId && platformPermissions.includes('instance_admin')) {
 		// Instance admins without an explicit membership row fall back to the
 		// first org so admin tooling stays usable before a switcher exists.
 		const firstOrg = orgsPage.items[0];
 		if (firstOrg) actingOrgId = firstOrg.id;
 	}
 
-	// Composition seam — `platformPermissions` come from the auth provider today
-	// (baked into `AuthUser`). Future Eterna refactor will source them from a
-	// data-layer permission store instead so external IdPs don't need to own
-	// Selva-specific authorization. When that lands, this is the one line that
-	// changes here; writes funnel through `lib/server/permissions.server.ts`.
 	return {
 		userId: user.id,
 		actingOrgId,
-		platformPermissions: user.platformPermissions,
+		platformPermissions,
 		orgPermissions,
 		adapterContext: sessionToken ? { sessionToken } : undefined
 	};

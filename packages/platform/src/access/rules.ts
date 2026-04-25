@@ -162,3 +162,32 @@ export function canCreateProject(input: CreateProjectAccessInput): boolean {
 	if (role === 'member' && orgPermissions.includes('manage_projects')) return true;
 	return false;
 }
+
+/**
+ * Pre-flight check for project-owner removal (Permissions.md §5, §10). Pure
+ * function over already-loaded membership rows so the route handler can call
+ * it after the standard `canManage` gate. Returns:
+ *
+ * - `'ok'` — proceed with the removal
+ * - `'sole_owner'` — last owner; route must surface 409 + suggest reclaim
+ * - `'needs_confirm'` — owner-on-owner removal without `?confirm=true`; route
+ *   surfaces 409 + asks the client to retry with confirmation
+ *
+ * Only meaningful when `target.role === 'owner'` — non-owner targets always
+ * return `'ok'` (the standard gate already authorized).
+ */
+export type OwnerRemovalCheck = 'ok' | 'sole_owner' | 'needs_confirm';
+
+export interface OwnerRemovalInput {
+	target: { role: 'owner' | 'editor' | 'viewer' };
+	allMembers: readonly { role: 'owner' | 'editor' | 'viewer' }[];
+	confirmed: boolean;
+}
+
+export function checkOwnerRemoval(input: OwnerRemovalInput): OwnerRemovalCheck {
+	if (input.target.role !== 'owner') return 'ok';
+	const ownerCount = input.allMembers.filter((m) => m.role === 'owner').length;
+	if (ownerCount <= 1) return 'sole_owner';
+	if (!input.confirmed) return 'needs_confirm';
+	return 'ok';
+}

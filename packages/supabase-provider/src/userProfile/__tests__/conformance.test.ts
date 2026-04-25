@@ -29,8 +29,7 @@ if (!envCtx) {
 					if (error) throw error;
 					return {
 						id: data.user.id,
-						email: data.user.email,
-						platformPermissions: []
+						email: data.user.email
 					};
 				};
 				return { store, seedUser };

@@ -27,15 +27,16 @@ export interface RecentRun {
 }
 
 /**
- * Identity record from an auth provider. Profile state (displayName,
- * starredDefinitions, recentRuns) lives separately on `UserProfile` in
- * `IUserProfileStore` — OIDC providers (Supabase Auth, Entra, Firebase) don't
- * own those fields, so they stay out of the identity contract.
+ * Identity record from an auth provider. Pure identity — no Selva-specific
+ * authorization or profile state. `platformPermissions` lives in
+ * `IPlatformPermissionStore` (data layer); profile state (displayName,
+ * starredDefinitions, recentRuns) lives in `IUserProfileStore`. Both seams
+ * exist so external IdPs (Supabase Auth, Entra, Firebase) don't need to
+ * model anything Selva-specific.
  */
 export interface AuthUser {
 	id: string;
 	email?: string;
-	platformPermissions: PlatformPermission[];
 	/** Provider-specific only — never PII, credentials, or tokens. */
 	metadata?: Record<string, unknown>;
 	createdAt?: string;

@@ -31,9 +31,7 @@ describe('LocalAuthProvider — users.json mode', () => {
 			// but a single test may invoke it more than once.
 			const existing = await provider.passwordAuth.verifyLogin(ADMIN_EMAIL, ADMIN_PASSWORD);
 			if (existing.kind !== 'success') {
-				await provider.passwordAuth.createUserWithPassword(ADMIN_EMAIL, ADMIN_PASSWORD, [
-					'instance_admin'
-				]);
+				await provider.passwordAuth.createUserWithPassword(ADMIN_EMAIL, ADMIN_PASSWORD);
 			}
 			return { provider, adminEmail: ADMIN_EMAIL, adminPassword: ADMIN_PASSWORD };
 		},

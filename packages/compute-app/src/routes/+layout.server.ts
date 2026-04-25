@@ -7,7 +7,8 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 			? {
 					id: locals.user.id,
 					email: locals.user.email,
-					platformPermissions: locals.user.platformPermissions
+					// Platform permissions live on `ctx`, not on the AuthUser identity.
+					platformPermissions: locals.ctx?.platformPermissions ?? []
 				}
 			: null,
 		profile: locals.profile
