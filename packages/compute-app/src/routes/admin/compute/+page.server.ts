@@ -5,7 +5,10 @@ import { assertManageCompute } from '$lib/server/access.server';
 export const load: PageServerLoad = async ({ locals }) => {
 	assertManageCompute(locals);
 	try {
-		const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
+		// Admin compute page manages the instance pool — strip actingOrgId so
+		// reads match what /admin/api/compute writes. See Permissions.md §3.
+		const ctx = { ...locals.ctx!, actingOrgId: undefined, orgPermissions: [] };
+		const config = await getComputeServerConfigStore().getConfig(ctx);
 		return {
 			servers: config.servers ?? [],
 			defaultServerId: config.defaultServerId ?? config.servers?.[0]?.id ?? ''

@@ -154,7 +154,7 @@ export class SupabaseOrgStore implements IOrgStore {
 		userId: string,
 		role: OrgRole
 	): Promise<void> {
-		// Role change re-seeds default permissions. Matches LocalOrganizationProvider.
+		// Role change re-seeds default permissions. Matches LocalOrgStore.
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
@@ -222,9 +222,11 @@ export class SupabaseOrgStore implements IOrgStore {
 
 // ── Row ↔ domain mappers ────────────────────────────────────────────────
 //
-// Audit columns are nullable in the row types as a safety net for older
-// DBs that haven't applied the latest migration — the mapper falls back to
-// owner_id / user_id / joined_at in those cases.
+// Audit columns (`created_by` / `updated_by`) FK to `auth.users(id)` with
+// `ON DELETE SET NULL`, so they can legitimately become NULL when the
+// referenced user is deleted (spec §8). Mappers fall back to `owner_id` /
+// `user_id` so the domain type stays non-nullable; UIs that care about
+// creator-vs-owner attribution should render "Deleted user" at that layer.
 
 interface OrgRow {
 	id: string;

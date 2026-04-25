@@ -229,19 +229,11 @@ This architecture means Selva has **zero exposure to EU data regulations, creden
 
 ## Environment Variables
 
-### Builder App (`packages/builder-app/`)
+The authoritative reference is [packages/compute-app/.env.example](packages/compute-app/.env.example) — every var the compute-app reads (provider, tenancy, flags, secrets, optional server config) is documented inline there. Don't duplicate that documentation here or in provider READMEs; link to `.env.example`.
 
-No environment variables required for development. Uses WebSocket at port 8765 by default.
+The builder app needs no env vars (WebSocket on port 8765 by default).
 
-### Compute App (`packages/compute-app/`)
-
-Required for production deployment (see `example.ecosystem.config.cjs`):
-
-- `PORT` - Application port (default: 3000)
-- `GH_DEFINITIONS_PATH` - Path to Grasshopper definition files
-
-Rhino.Compute server URL and API key are configured in the admin dashboard
-(`/admin/compute`) and persisted via `IComputeServerStore` — no env var needed.
+Rhino.Compute server URL + API key are configured in `/admin/compute` and persisted via `IComputeServerStore` — not env vars.
 
 ### Platform Package (`@selva/platform`)
 
@@ -263,7 +255,7 @@ Core provider interfaces for Selva's pluggable architecture. All modules support
 - `LocalAuthProvider` — HMAC tokens + optional `users.json`
 - `LocalDataProvider` — Wires all stores; reads/writes JSON config files
 - `LocalStorageProvider` — Filesystem blobs, auto-transcodes images to WebP via sharp
-- `LocalComputeServerProvider` — `compute.config.json`
+- `LocalComputeServerStore` — `compute.config.json`
 
 ## Issues
 

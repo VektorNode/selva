@@ -11,9 +11,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { DEFAULT_ORG_PERMISSIONS, ProviderError, ALL_ORG_PERMISSIONS } from '@selva/platform';
-import { createLocalUserMetaProvider } from '../auth/users.js';
-import type { LocalUserMetaProvider } from '../auth/users.js';
+import { DEFAULT_ORG_PERMISSIONS, ProviderError } from '@selva/platform';
 import { paginate, applyOrder } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 
@@ -25,41 +23,9 @@ export interface LocalOrgStoreData {
 	projectMembers: ProjectMember[];
 }
 
-const EMPTY_STORE: LocalOrgStoreData = {
-	orgs: [],
-	projects: [],
-	orgMembers: [],
-	projectMembers: []
-};
-
-const VALID_ORG_PERMS = new Set<OrgPermission>(ALL_ORG_PERMISSIONS);
-
 /** Data-access-layer filter: row is live (not soft-deleted). */
 function isLive<T extends { deletedAt?: string | null }>(row: T): boolean {
 	return row.deletedAt == null;
-}
-
-function sanitizeOrgPermissions(raw: readonly string[] | undefined): OrgPermission[] {
-	if (!raw) return [];
-	return raw.filter((p): p is OrgPermission => VALID_ORG_PERMS.has(p as OrgPermission));
-}
-
-/** Backfills fields added in later refactors so older JSON files keep working. */
-function migrateOrgMember(m: OrgMember & { permissions?: OrgPermission[] }): OrgMember {
-	if (!m.permissions) m.permissions = [...DEFAULT_ORG_PERMISSIONS[m.role]];
-	if (!m.updatedAt) m.updatedAt = m.joinedAt;
-	if (!m.updatedBy) m.updatedBy = m.userId;
-	if (m.deletedAt === undefined) m.deletedAt = null;
-	return m;
-}
-
-/** Pre-multi-org shape: `{ org: Organization, ... }`. Migrated on first read. */
-interface LegacyLocalOrgStoreData {
-	org?: Organization;
-	orgs?: Organization[];
-	projects: Project[];
-	orgMembers: OrgMember[];
-	projectMembers: ProjectMember[];
 }
 
 /**
@@ -69,69 +35,21 @@ interface LegacyLocalOrgStoreData {
  */
 export class LocalOrgStoreLoader {
 	readonly storePath: string;
-	private readonly usersPath: string;
-	private readonly userMeta: LocalUserMetaProvider | null;
 	private store: LocalOrgStoreData | null = null;
 
 	constructor(dataPath: string) {
 		this.storePath = path.join(dataPath, 'local-org.json');
-		this.usersPath = path.join(dataPath, 'users.json');
-		this.userMeta = createLocalUserMetaProvider(this.usersPath);
 	}
 
 	async get(): Promise<LocalOrgStoreData> {
-		if (this.store) {
-			return this.store;
-		}
-
-		const raw = await readJsonFile<LegacyLocalOrgStoreData | null>(this.storePath, null);
-		if (!raw) {
-			this.store = { ...EMPTY_STORE, orgs: [], projects: [], orgMembers: [], projectMembers: [] };
-			return this.store;
-		}
-
-		// Migrate the singleton `org` field to the new `orgs[]` array.
-		const orgs: Organization[] = raw.orgs ?? (raw.org ? [raw.org] : []);
-		const store: LocalOrgStoreData = {
-			orgs,
-			projects: raw.projects ?? [],
-			orgMembers: raw.orgMembers ?? [],
-			projectMembers: raw.projectMembers ?? []
-		};
-
-		let changed = raw.orgs === undefined && raw.org !== undefined;
-		for (const m of store.orgMembers) {
-			const before = m.permissions;
-			migrateOrgMember(m);
-			if (before === undefined) changed = true;
-		}
-		for (const p of store.projects as Array<
-			Project & { autoJoinOnUpload?: boolean; allowAnonymous?: boolean }
-		>) {
-			if (p.autoJoinOnUpload === undefined) {
-				p.autoJoinOnUpload = false;
-				changed = true;
-			}
-			// Strip the dropped allowAnonymous flag if present in legacy on-disk data.
-			if (p.allowAnonymous !== undefined) {
-				delete p.allowAnonymous;
-				changed = true;
-			}
-		}
-		// One-time sweep: apply legacy user-level OrgPermissions to memberships.
-		if (this.userMeta) {
-			for (const m of store.orgMembers) {
-				const legacy = await this.userMeta.consumeLegacyOrgPermissions(m.userId);
-				if (legacy) {
-					const extra = sanitizeOrgPermissions(legacy);
-					m.permissions = Array.from(new Set([...(m.permissions ?? []), ...extra]));
-					changed = true;
-				}
-			}
-		}
-		this.store = store;
-		if (changed) await this.write(store);
-		return store;
+		if (this.store) return this.store;
+		this.store = await readJsonFile<LocalOrgStoreData>(this.storePath, {
+			orgs: [],
+			projects: [],
+			orgMembers: [],
+			projectMembers: []
+		});
+		return this.store;
 	}
 
 	async write(store: LocalOrgStoreData): Promise<void> {
@@ -252,10 +170,7 @@ export class LocalOrgStore implements IOrgStore {
 		opts?: ListOptions
 	): Promise<Page<OrgMember>> {
 		const { orgMembers } = await this.loader.get();
-		return paginate(
-			orgMembers.filter((m) => m.orgId === orgId && isLive(m)).map(migrateOrgMember),
-			opts
-		);
+		return paginate(orgMembers.filter((m) => m.orgId === orgId && isLive(m)), opts);
 	}
 
 	async getOrgMember(
@@ -265,7 +180,7 @@ export class LocalOrgStore implements IOrgStore {
 	): Promise<OrgMember | null> {
 		const { orgMembers } = await this.loader.get();
 		const m = orgMembers.find((m) => m.orgId === orgId && m.userId === userId);
-		return m && isLive(m) ? migrateOrgMember(m) : null;
+		return m && isLive(m) ? m : null;
 	}
 
 	async addOrgMember(ctx: RequestContext, member: OrgMember): Promise<void> {
@@ -278,19 +193,12 @@ export class LocalOrgStore implements IOrgStore {
 		);
 		if (existing) {
 			Object.assign(existing, member, {
-				permissions: member.permissions ?? [...DEFAULT_ORG_PERMISSIONS[member.role]],
 				updatedAt: now,
 				updatedBy: actor,
 				deletedAt: null
 			});
 		} else {
-			store.orgMembers.push({
-				...member,
-				permissions: member.permissions ?? [...DEFAULT_ORG_PERMISSIONS[member.role]],
-				updatedAt: member.updatedAt ?? now,
-				updatedBy: member.updatedBy ?? actor,
-				deletedAt: null
-			});
+			store.orgMembers.push({ ...member, deletedAt: null });
 		}
 		await this.loader.write(store);
 	}
@@ -326,7 +234,7 @@ export class LocalOrgStore implements IOrgStore {
 			(m) => m.orgId === orgId && m.userId === userId && isLive(m)
 		);
 		if (!m) throw new ProviderError(`Org member '${userId}' not found`, 404);
-		m.permissions = sanitizeOrgPermissions(permissions as readonly string[]);
+		m.permissions = [...permissions];
 		m.updatedAt = new Date().toISOString();
 		m.updatedBy = ctx.userId || m.updatedBy;
 		await this.loader.write(store);

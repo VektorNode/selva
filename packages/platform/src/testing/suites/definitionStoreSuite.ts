@@ -156,15 +156,12 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			const scope = await scopeFor();
 			const pub = makeUuid();
 			const dft = makeUuid();
-			const rev = makeUuid();
 			await store.create(ctx(scope.ownerId), record(scope, { guid: pub, status: 'published' }));
 			await store.create(ctx(scope.ownerId), record(scope, { guid: dft, status: 'draft' }));
-			await store.create(ctx(scope.ownerId), record(scope, { guid: rev, status: 'review' }));
 
-			const page = await store.list(ctx(scope.ownerId), { statuses: ['draft', 'review'] });
+			const page = await store.list(ctx(scope.ownerId), { statuses: ['draft'] });
 			const guids = page.items.map((r) => r.guid);
 			expect(guids).toContain(dft);
-			expect(guids).toContain(rev);
 			expect(guids).not.toContain(pub);
 		});
 

@@ -82,6 +82,19 @@
 	let deletingId = $state<string | null>(null);
 	let updatingId = $state<string | null>(null);
 
+	// Permissions.md §2 invariant mirror: if only one enabled user holds
+	// instance_admin, lock the checkbox and delete button on that row. The
+	// server enforces the same; this is the UX nudge.
+	const enabledInstanceAdminCount = $derived(
+		(data.users ?? []).filter(
+			(u) => !u.disabled && u.platformPermissions.includes('instance_admin')
+		).length
+	);
+	const isSoleInstanceAdmin = (user: UserRow) =>
+		enabledInstanceAdminCount === 1 &&
+		!user.disabled &&
+		user.platformPermissions.includes('instance_admin');
+
 	function toggleNewPermission(p: FlatPermission, checked: boolean) {
 		if (checked) {
 			newPermissions = [...newPermissions, p];
@@ -132,7 +145,9 @@
 				toast.success('Permissions updated');
 				await invalidateAll();
 			} else {
-				toast.error('Failed to update permissions');
+				const err = await res.json().catch(() => ({}));
+				toast.error(err.message || err.error || 'Failed to update permissions');
+				await invalidateAll();
 			}
 		} catch {
 			toast.error('Failed to update permissions');
@@ -218,7 +233,8 @@
 				toast.success(`User "${email}" deleted`);
 				await invalidateAll();
 			} else {
-				toast.error('Failed to delete user');
+				const err = await res.json().catch(() => ({}));
+				toast.error(err.message || err.error || 'Failed to delete user');
 			}
 		} catch {
 			toast.error('Failed to delete user');
@@ -439,6 +455,7 @@
 				<div class="divide-y rounded-lg border">
 					{#each data.users as user (user.id)}
 						{@const isOwnerOrAdmin = user.orgRole === 'owner' || user.orgRole === 'admin'}
+						{@const soleAdmin = isSoleInstanceAdmin(user)}
 						<div class="px-4 py-3">
 							<div class="flex items-start justify-between gap-4">
 								<div class="min-w-0 flex-1">
@@ -462,8 +479,11 @@
 								<Button
 									variant="ghost"
 									size="sm"
-									disabled={deletingId === user.id}
+									disabled={deletingId === user.id || soleAdmin}
 									onclick={() => deleteUser(user.id, user.email ?? user.id)}
+									title={soleAdmin
+										? 'Cannot delete the only instance admin. Promote another user first.'
+										: undefined}
 									class="text-destructive hover:text-destructive h-8 w-8 shrink-0 p-0"
 								>
 									<Trash2 class="h-4 w-4" />
@@ -474,26 +494,29 @@
 									{@const isPlatformScope = (ALL_PLATFORM_PERMISSIONS as readonly FlatPermission[]).includes(p)}
 									{@const isOwnerAdminOnly = (OWNER_ADMIN_ONLY_PERMISSIONS as readonly FlatPermission[]).includes(p)}
 									{@const platformLocked = isPlatformScope && !data.isPlatformAdmin}
-									{@const governanceLocked =
-										isOwnerAdminOnly && !isOwnerOrAdmin && user.orgRole !== undefined}
-									{@const ownerAdminPreset = isOwnerOrAdmin && !isPlatformScope}
-									{@const locked = platformLocked || governanceLocked || ownerAdminPreset}
-									{#if !platformLocked || user.permissions.includes(p)}
+									{@const soleAdminLock = p === 'instance_admin' && soleAdmin}
+									<!--
+										Visibility per row, by relevance to the user/role:
+										- Platform-scope: viewer needs to be platform admin to toggle;
+										  otherwise show only if the user actually holds it (audit view).
+										- Owner/admin rows: org perms are implicit in the role badge — hide.
+										- Member rows: hide owner-admin-only org perms (never grantable).
+									-->
+									{#if isPlatformScope ? !platformLocked || user.permissions.includes(p) : !isOwnerOrAdmin && !(isOwnerAdminOnly && user.orgRole !== undefined)}
+										{@const locked = platformLocked || soleAdminLock}
 										<label
 											class="flex items-center gap-1.5 text-xs {locked
 												? 'cursor-not-allowed opacity-60'
 												: 'cursor-pointer'}"
-											title={platformLocked
-												? 'Only a platform admin can change this'
-												: governanceLocked
-													? 'Only owners and admins can hold this permission'
-													: ownerAdminPreset
-														? 'Owners and admins always hold all organization permissions'
-														: undefined}
+											title={soleAdminLock
+												? 'Cannot remove the only instance admin. Promote another user first.'
+												: platformLocked
+													? 'Only a platform admin can change this'
+													: undefined}
 										>
 											<input
 												type="checkbox"
-												checked={ownerAdminPreset || user.permissions.includes(p)}
+												checked={user.permissions.includes(p)}
 												disabled={updatingId === user.id || locked}
 												onchange={async (e) => {
 													const checked = (e.target as HTMLInputElement).checked;

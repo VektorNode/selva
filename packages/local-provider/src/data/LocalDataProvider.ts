@@ -4,13 +4,15 @@ import type {
 	IProjectStore,
 	IDefinitionStore,
 	IComputeServerStore,
-	IInviteStore
+	IInviteStore,
+	IShareLinkStore
 } from '@selva/platform';
 import { LocalOrgStore, LocalOrgStoreLoader } from './LocalOrgStore.js';
 import { LocalProjectStore } from './LocalProjectStore.js';
 import { LocalDefinitionStore } from './LocalDefinitionStore.js';
 import { LocalComputeServerStore } from './LocalComputeServerStore.js';
 import { LocalInviteStore } from './LocalInviteStore.js';
+import { LocalShareLinkStore } from './LocalShareLinkStore.js';
 
 /**
  * Composition of every local-provider data store. One `LocalOrgStoreLoader`
@@ -23,6 +25,7 @@ export class LocalDataProvider implements IDataProvider {
 	readonly definitions: IDefinitionStore;
 	readonly computeServer: IComputeServerStore;
 	readonly invites: IInviteStore;
+	readonly shareLinks: IShareLinkStore;
 
 	static fromEnv(env: Record<string, string | undefined>): LocalDataProvider {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
@@ -32,7 +35,8 @@ export class LocalDataProvider implements IDataProvider {
 			new LocalProjectStore(loader),
 			LocalDefinitionStore.fromEnv(env),
 			LocalComputeServerStore.fromEnv(env),
-			LocalInviteStore.fromEnv(env)
+			LocalInviteStore.fromEnv(env),
+			LocalShareLinkStore.fromEnv(env)
 		);
 	}
 
@@ -41,12 +45,14 @@ export class LocalDataProvider implements IDataProvider {
 		projects: IProjectStore,
 		definitions: IDefinitionStore,
 		computeServer: IComputeServerStore,
-		invites: IInviteStore
+		invites: IInviteStore,
+		shareLinks: IShareLinkStore
 	) {
 		this.orgs = orgs;
 		this.projects = projects;
 		this.definitions = definitions;
 		this.computeServer = computeServer;
 		this.invites = invites;
+		this.shareLinks = shareLinks;
 	}
 }

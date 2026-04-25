@@ -102,8 +102,16 @@ export type {
 	IOrgStore,
 	IProjectStore,
 	IDefinitionStore,
-	IComputeServerStore
+	IComputeServerStore,
+	IShareLinkStore
 } from './data/index.js';
+
+// Share links (spec §7)
+export type { ShareLink, CreateShareLinkInput } from './shareLinks/index.js';
+export {
+	DEFAULT_SHARE_LINK_MAX_SOLVES,
+	CreateShareLinkInputSchema
+} from './shareLinks/index.js';
 
 // Request context
 export type { RequestContext } from './context.js';

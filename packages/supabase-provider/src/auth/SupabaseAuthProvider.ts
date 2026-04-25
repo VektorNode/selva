@@ -9,6 +9,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selva/platform';
+import { PlatformPermissionSchema } from '@selva/platform';
 
 /**
  * Auth backed by Supabase Auth (GoTrue).
@@ -136,11 +137,29 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	): Promise<UserManagementResult> {
 		const { data: existing, error: fetchError } = await this.admin.auth.admin.getUserById(id);
 		if (fetchError || !existing.user) return 'not_found';
+		// Permissions.md §2 invariant: refuse if this update drops the last
+		// instance_admin. Race window between the count and the write is
+		// acceptable at admin-flow cadence; the UI mirror prevents the common case.
+		const target = await this.hydrate(existing.user);
+		const wasAdmin = target.platformPermissions.includes('instance_admin');
+		const willBeAdmin = platformPermissions.includes('instance_admin');
+		if (wasAdmin && !willBeAdmin && (await this.countOtherInstanceAdmins(id)) === 0) {
+			return 'last_admin';
+		}
 		await this.applyPlatformPermissions(id, platformPermissions);
 		return 'ok';
 	}
 
 	async deleteUser(id: string): Promise<UserManagementResult> {
+		const { data: existing, error: fetchError } = await this.admin.auth.admin.getUserById(id);
+		if (fetchError || !existing.user) return 'not_found';
+		const target = await this.hydrate(existing.user);
+		if (
+			target.platformPermissions.includes('instance_admin') &&
+			(await this.countOtherInstanceAdmins(id)) === 0
+		) {
+			return 'last_admin';
+		}
 		const { error } = await this.admin.auth.admin.deleteUser(id);
 		if (error) {
 			// 404-shaped errors from GoTrue surface as { status: 404 } or a
@@ -150,6 +169,57 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			throw error;
 		}
 		return 'ok';
+	}
+
+	async disableUser(id: string): Promise<UserManagementResult> {
+		const { data: existing, error: fetchError } = await this.admin.auth.admin.getUserById(id);
+		if (fetchError || !existing.user) return 'not_found';
+		const target = await this.hydrate(existing.user);
+		// Permissions.md §10: disabling the last enabled instance_admin is
+		// blocked at the provider. Already-disabled targets are a no-op.
+		if (
+			!target.disabled &&
+			target.platformPermissions.includes('instance_admin') &&
+			(await this.countOtherInstanceAdmins(id)) === 0
+		) {
+			return 'last_admin';
+		}
+		// GoTrue's user_metadata update merges shallowly — preserve existing
+		// fields by spreading them in.
+		const mergedMetadata = {
+			...(existing.user.user_metadata ?? {}),
+			disabled: true
+		};
+		const { error } = await this.admin.auth.admin.updateUserById(id, {
+			user_metadata: mergedMetadata
+		});
+		if (error) {
+			const e = error as unknown as { status?: number; message?: string };
+			if (e.status === 404 || /not.?found/i.test(e.message ?? '')) return 'not_found';
+			throw error;
+		}
+		return 'ok';
+	}
+
+	private async countOtherInstanceAdmins(excludeId: string): Promise<number> {
+		// Postgres `?` operator: array contains element. `user_profiles.disabled`
+		// isn't tracked here — disabled state lives in auth.users.user_metadata,
+		// so we cross-reference. Cheap; admin user counts are tiny.
+		const { data, error } = await this.admin
+			.from('user_profiles')
+			.select('user_id')
+			.contains('platform_permissions', ['instance_admin'])
+			.neq('user_id', excludeId);
+		if (error) throw error;
+		const candidateIds = (data ?? []).map((r) => r.user_id as string);
+		if (candidateIds.length === 0) return 0;
+		// Filter out disabled users by checking auth.users metadata.
+		let count = 0;
+		for (const uid of candidateIds) {
+			const { data: authData } = await this.admin.auth.admin.getUserById(uid);
+			if (authData.user && authData.user.user_metadata?.disabled !== true) count += 1;
+		}
+		return count;
 	}
 
 	async touchLastLogin(id: string): Promise<void> {
@@ -207,7 +277,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 
 		const rawPerms = (profile?.platform_permissions ?? []) as string[];
 		const platformPermissions = rawPerms.filter(
-			(p): p is PlatformPermission => p === 'instance_admin'
+			(p): p is PlatformPermission => PlatformPermissionSchema.safeParse(p).success
 		);
 
 		return {

@@ -24,3 +24,9 @@ export type {
 
 export { runComputeServerStoreConformance } from './suites/computeServerStoreSuite.js';
 export type { ComputeServerStoreConformanceOptions } from './suites/computeServerStoreSuite.js';
+
+export { runShareLinkStoreConformance } from './suites/shareLinkStoreSuite.js';
+export type {
+	ShareLinkStoreConformanceOptions,
+	ShareLinkTestScope
+} from './suites/shareLinkStoreSuite.js';

@@ -22,7 +22,10 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	const serverId = url.searchParams.get('serverId');
 	if (!serverId) throw error(400, 'serverId required');
 
-	const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
+	// Admin compute route manages the instance pool — strip actingOrgId so
+	// status lookups match what /admin/api/compute writes. See Permissions.md §3.
+	const ctx = { ...locals.ctx!, actingOrgId: undefined, orgPermissions: [] };
+	const config = await getComputeServerConfigStore().getConfig(ctx);
 	const server = resolveServerById(config, serverId);
 	if (!server) throw error(404, 'Server not found');
 

@@ -163,6 +163,24 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 				expect(result).toBe('not_found');
 			});
 
+			// All four platform permissions must round-trip — guards against
+			// hydrate filters that silently drop unrecognized perms (regression
+			// test for the Supabase filter bug that only accepted instance_admin).
+			it('updateUserPlatformPermissions round-trips every platform permission', async () => {
+				const { provider } = await createProvider();
+				const created = await provider.passwordAuth!.createUserWithPassword(
+					`round-trip-${makeUuid()}@example.com`,
+					'pass12345678',
+					[]
+				);
+				const all = ['manage_compute', 'manage_instance_users', 'manage_updates'] as const;
+				const result = await provider.updateUserPlatformPermissions(created.id, [...all]);
+				expect(result).toBe('ok');
+				const fetched = await provider.getUser(created.id);
+				expect(fetched?.platformPermissions).toEqual(expect.arrayContaining([...all]));
+				expect(fetched?.platformPermissions).not.toContain('instance_admin');
+			});
+
 			it('deleteUser removes the user', async () => {
 				const { provider } = await createProvider();
 				const email = `del-${makeUuid()}@example.com`;
@@ -203,6 +221,98 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 				// No-op for now; expanded once Supabase lands and we verify there.
 				expect(true).toBe(true);
 			});
+
+			// Permissions.md §2 invariant: at least one user must hold instance_admin.
+			it('updateUserPlatformPermissions refuses to remove instance_admin from the sole admin', async () => {
+				const { provider, adminEmail } = await createProvider();
+				if (!adminEmail) return; // legacy createProvider — no seeded admin to target
+				const admin = (await provider.listUsers({ limit: 200 }))!.items.find(
+					(u) => u.email === adminEmail
+				);
+				expect(admin?.platformPermissions).toContain('instance_admin');
+				const result = await provider.updateUserPlatformPermissions(admin!.id, []);
+				expect(result).toBe('last_admin');
+				const after = await provider.getUser(admin!.id);
+				expect(after?.platformPermissions).toContain('instance_admin');
+			});
+
+			it('deleteUser refuses to delete the sole instance_admin', async () => {
+				const { provider, adminEmail } = await createProvider();
+				if (!adminEmail) return;
+				const admin = (await provider.listUsers({ limit: 200 }))!.items.find(
+					(u) => u.email === adminEmail
+				);
+				const result = await provider.deleteUser(admin!.id);
+				expect(result).toBe('last_admin');
+				const stillThere = await provider.getUser(admin!.id);
+				expect(stillThere?.id).toBe(admin!.id);
+			});
+
+			it('updateUserPlatformPermissions allows demotion when another instance_admin exists', async () => {
+				const { provider, adminEmail } = await createProvider();
+				if (!adminEmail) return;
+				const second = await provider.passwordAuth!.createUserWithPassword(
+					`second-admin-${makeUuid()}@example.com`,
+					'pass12345678',
+					['instance_admin']
+				);
+				const admin = (await provider.listUsers({ limit: 200 }))!.items.find(
+					(u) => u.email === adminEmail
+				);
+				const result = await provider.updateUserPlatformPermissions(admin!.id, []);
+				expect(result).toBe('ok');
+				// Second admin keeps the permission, system still has ≥1 admin.
+				const after = await provider.getUser(second.id);
+				expect(after?.platformPermissions).toContain('instance_admin');
+			});
+
+			// Permissions.md §10: disabling the sole instance_admin must be
+			// blocked at the provider, same invariant as revoke and delete.
+			it('disableUser disables a non-admin user', async () => {
+				const { provider } = await createProvider();
+				const created = await provider.passwordAuth!.createUserWithPassword(
+					`disable-${makeUuid()}@example.com`,
+					'pass12345678',
+					[]
+				);
+				const result = await provider.disableUser(created.id);
+				expect(result).toBe('ok');
+				const fetched = await provider.getUser(created.id);
+				expect(fetched?.disabled).toBe(true);
+			});
+
+			it('disableUser returns not_found for unknown user', async () => {
+				const { provider } = await createProvider();
+				const result = await provider.disableUser(makeUuid());
+				expect(result).toBe('not_found');
+			});
+
+			it('disableUser refuses to disable the sole instance_admin', async () => {
+				const { provider, adminEmail } = await createProvider();
+				if (!adminEmail) return;
+				const admin = (await provider.listUsers({ limit: 200 }))!.items.find(
+					(u) => u.email === adminEmail
+				);
+				const result = await provider.disableUser(admin!.id);
+				expect(result).toBe('last_admin');
+				const after = await provider.getUser(admin!.id);
+				expect(after?.disabled).not.toBe(true);
+			});
+
+			it('disableUser allows disabling an admin when another instance_admin exists', async () => {
+				const { provider, adminEmail } = await createProvider();
+				if (!adminEmail) return;
+				await provider.passwordAuth!.createUserWithPassword(
+					`other-admin-${makeUuid()}@example.com`,
+					'pass12345678',
+					['instance_admin']
+				);
+				const admin = (await provider.listUsers({ limit: 200 }))!.items.find(
+					(u) => u.email === adminEmail
+				);
+				const result = await provider.disableUser(admin!.id);
+				expect(result).toBe('ok');
+			});
 		} else {
 			it('listUsers returns null when user management is not supported', async () => {
 				const { provider } = await createProvider();
@@ -224,6 +334,12 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 			it('deleteUser returns not_supported', async () => {
 				const { provider } = await createProvider();
 				const result = await provider.deleteUser(makeUuid());
+				expect(result).toBe('not_supported');
+			});
+
+			it('disableUser returns not_supported', async () => {
+				const { provider } = await createProvider();
+				const result = await provider.disableUser(makeUuid());
 				expect(result).toBe('not_supported');
 			});
 		}

@@ -4,6 +4,8 @@ Supabase (Auth + Postgres + Storage) implementation of the `@selva/platform` int
 
 Runs the Selva backend against **either** a managed Supabase project (production) or a local Supabase CLI stack in Docker (development). Same code — different `SUPABASE_URL` and keys.
 
+For testing multi-org tenancy against the local Supabase stack, see [docs/MultiOrg-LocalDev.md](../../docs/MultiOrg-LocalDev.md).
+
 ---
 
 ## Table of contents
@@ -32,23 +34,9 @@ Runs the Selva backend against **either** a managed Supabase project (production
 
 ## Environment variables
 
-The Supabase provider reads three vars. Set them in the app's `.env` (not in the provider package).
+All env vars are documented in [`packages/compute-app/.env.example`](../compute-app/.env.example) — copy that file to `.env` and edit it. The Supabase provider needs `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`; the optional bucket / private-URL / signup overrides are also listed there.
 
-| Variable | Required | Description |
-|---|---|---|
-| `SUPABASE_URL` | ✅ | Project URL. Local: `http://127.0.0.1:54321`. Hosted: `https://<project-ref>.supabase.co`. |
-| `SUPABASE_ANON_KEY` | ✅ | Public key used by the user-scoped browser/Node client. Safe to ship to the browser. CLI v2.95+ calls this the **Publishable** key. |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Server-only admin key that bypasses RLS. **Never** exposed to the browser. CLI v2.95+ calls this the **Secret** key. |
-| `SUPABASE_PUBLIC_BUCKET` | optional | Bucket name for public files (covers, archives). Default: `selva-public`. |
-| `SUPABASE_PRIVATE_BUCKET` | optional | Bucket name for authenticated-only files (`.gh` / `.ghx`). Default: `selva-private`. |
-| `SUPABASE_PRIVATE_URL_PREFIX` | optional | App-internal URL prefix the compute-app serves private downloads at. Default: `/api/files`. |
-| `SUPABASE_ENABLE_SELF_SIGNUP` | optional | `true` allows `passwordAuth.registerUser` via the `/signup` route. Default: `false` (invite-only). |
-
-Platform-wide vars (already used by compute-app) still apply:
-
-| Variable | Description |
-|---|---|
-| `SESSION_SECRET` | **Not used** by the Supabase provider (sessions are Supabase JWTs). Harmless if left set. |
+`SESSION_SECRET` is not used by the Supabase provider — sessions are Supabase JWTs. Harmless if left set.
 
 Rhino.Compute URL + API key are configured in `/admin/compute` and persisted in the `compute_config` table — unchanged by the provider choice.
 
@@ -147,15 +135,13 @@ export default defineConfig((env) => {
 
 ## Applying the schema
 
-The `supabase/migrations/` directory holds five ordered SQL files:
+The `supabase/migrations/` directory holds a single bootstrap file that installs the entire schema in one pass:
 
 | File | What it installs |
 |---|---|
-| `0001_storage_buckets.sql` | RLS policies for `selva-public` / `selva-private` buckets |
-| `0002_user_profiles.sql` | `user_profiles` table + `handle_new_auth_user` trigger that auto-seeds profile rows on signup |
-| `0003_orgs_projects.sql` | `orgs`, `org_members`, `projects`, `project_members` + helper functions (`is_org_member`, `visible_project`, `has_org_permission`, …) + RLS |
-| `0004_definitions.sql` | `definitions`, `definition_history`, and the atomic `increment_run_count(uuid)` RPC |
-| `0005_invites_compute.sql` | `invites`, `compute_servers`, `compute_server_defaults`, `compute_server_platform_default` + RLS + `get_invite_by_token` SECURITY DEFINER RPC |
+| `0001_initial.sql` | Everything: `user_profiles` (+ auto-seed trigger), `orgs` / `org_members` / `projects` / `project_members` (+ RLS helpers), `definitions` / `definition_versions` (+ deletion-protection FKs and the atomic `increment_run_count` RPC), `invites` (+ `get_invite_by_token` RPC), `compute_servers` (+ per-org/instance defaults, spec §3 BYO compute), `share_links` (+ `try_increment_share_link_solve_count` RPC, spec §7), and the `selva-public` / `selva-private` storage policies. |
+
+Future schema changes go in numbered files (`0002_…`, `0003_…`).
 
 The `supabase/seed.sql` file creates the two storage buckets (`selva-public`, `selva-private`).
 

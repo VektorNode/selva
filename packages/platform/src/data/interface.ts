@@ -11,6 +11,7 @@ import type { ComputeConfig } from '../computeServer/types.js';
 import type { RequestContext } from '../context.js';
 import type { ListOptions, DefinitionListOptions, Page } from '../pagination.js';
 import type { IInviteStore } from '../invites/interface.js';
+import type { ShareLink } from '../shareLinks/types.js';
 
 /**
  * ## Auth boundary contract (applies to IOrgStore and IProjectStore)
@@ -230,7 +231,45 @@ export interface IComputeServerStore {
 }
 
 /**
- * Aggregate data provider — a composition of the four stores above.
+ * Spec §7 — share-link store. Per-definition tokens granting unauthenticated
+ * access to one (definitionId, channel). The store sees only the HMAC hash
+ * of each token; the raw token is generated and shown to the minter at the
+ * route layer and never reaches the store.
+ *
+ * Reads filter `revokedAt IS NULL` defensively. Resolution is by `tokenHash`
+ * because the route can hash the supplied token and look up by exact match.
+ */
+export interface IShareLinkStore {
+	/** Insert a new link. The caller has already hashed the raw token. */
+	create(ctx: RequestContext, link: ShareLink): Promise<void>;
+	/** Newest first by `createdAt`. Excludes revoked links. */
+	listByDefinition(
+		ctx: RequestContext,
+		definitionId: string,
+		opts?: ListOptions
+	): Promise<Page<ShareLink>>;
+	getById(ctx: RequestContext, id: string): Promise<ShareLink | null>;
+	/**
+	 * Lookup by HMAC hash. Returns null when the link doesn't exist OR is
+	 * revoked OR its parent definition is soft-deleted — token resolution
+	 * MUST NOT see expired/revoked rows even by accident.
+	 */
+	getByTokenHash(ctx: RequestContext, tokenHash: string): Promise<ShareLink | null>;
+	/** Soft-delete (set revokedAt). Idempotent. */
+	revoke(ctx: RequestContext, id: string): Promise<void>;
+	/**
+	 * Atomic check-and-increment. Returns the new `solveCount` on success.
+	 * Returns null when the cap was already reached (no row updated). Adapters
+	 * MUST do this in a single statement: a read-then-write pattern races
+	 * under load and lets the cap be exceeded.
+	 *
+	 * `null` maxSolves means uncapped — always increment.
+	 */
+	tryIncrementSolveCount(ctx: RequestContext, id: string): Promise<number | null>;
+}
+
+/**
+ * Aggregate data provider — a composition of the stores above.
  * Adapters typically implement one class per store and compose them here.
  */
 export interface IDataProvider {
@@ -239,4 +278,5 @@ export interface IDataProvider {
 	definitions: IDefinitionStore;
 	computeServer: IComputeServerStore;
 	invites: IInviteStore;
+	shareLinks: IShareLinkStore;
 }

@@ -3,5 +3,6 @@ export type {
 	IOrgStore,
 	IProjectStore,
 	IDefinitionStore,
-	IComputeServerStore
+	IComputeServerStore,
+	IShareLinkStore
 } from './interface.js';

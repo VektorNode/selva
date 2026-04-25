@@ -9,10 +9,11 @@ import {
 } from 'selva-compute';
 import type { SchemaInput } from 'selva-shared';
 import { error, json, isHttpError } from '@sveltejs/kit';
-import type { ComputeServerConfig } from '@selva/platform';
+import type { ComputeServerConfig, RequestContext } from '@selva/platform';
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
 import { getStorageProvider, providers } from '$lib/server/providers.server';
 import { requireCanSolve, requireCanEditDefinition } from '$lib/server/access.server';
+import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
 
 interface ComputeRequest {
 	inputs: (SchemaInput & { minimum?: number; maximum?: number; stepSize?: number })[];
@@ -145,10 +146,7 @@ function transformInputParameter(
 	} as TextInputType;
 }
 
-export const POST: RequestHandler = async ({ request, locals }) => {
-	if (!locals.ctx || !locals.user) {
-		throw error(401, 'Unauthorized');
-	}
+export const POST: RequestHandler = async ({ request, locals, url }) => {
 	const storage = getStorageProvider();
 
 	try {
@@ -171,25 +169,46 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// externally hosted — no tenant context, fall through to instance pool.
 		let solveOrgId: string | null = null;
 
-		if (definitionUrl.startsWith('local:')) {
-			const guid = definitionUrl.substring(6);
+		// Spec §7 — share-link tokens authenticate anonymous solves to one
+		// (definitionId, channel). Only meaningful for `local:` URLs; remote
+		// definitions stay user-auth-only.
+		const isLocal = definitionUrl.startsWith('local:');
+		const guid = isLocal ? definitionUrl.substring(6) : null;
+		const sharedAccess =
+			isLocal && guid
+				? await tryResolveShareToken(request, url, guid, channel, { requireSolve: true })
+				: null;
+
+		// User-auth fallback: every non-token request still needs a session.
+		if (!sharedAccess && (!locals.ctx || !locals.user)) {
+			throw error(401, 'Unauthorized');
+		}
+
+		// `solveCtx` is the data-layer context — synthetic when token-resolved,
+		// the user's ctx otherwise. Used for definition + version + project reads.
+		const solveCtx: RequestContext = sharedAccess?.ctx ?? locals.ctx!;
+
+		if (isLocal && guid) {
 			let record;
 			try {
-				record = await providers.data.definitions.get(locals.ctx, guid);
+				record = await providers.data.definitions.get(solveCtx, guid);
 			} catch (err) {
 				console.error(`Failed to load local definition: ${guid}`, err);
 				throw error(404, `Definition '${guid}' not found`);
 			}
 			if (!record) throw error(404, `Definition '${guid}' not found`);
 
-			const project = await providers.data.projects.getProject(locals.ctx, record.projectId);
+			const project = await providers.data.projects.getProject(solveCtx, record.projectId);
 			solveOrgId = project?.orgId ?? null;
 
-			// 'live' is the public channel; 'draft' is for editors only (spec §6).
-			if (channel === 'draft') {
-				await requireCanEditDefinition(locals, record.projectId, guid);
-			} else {
-				await requireCanSolve(locals, record.projectId);
+			// Token-resolved requests skip the user-auth gate (the token IS the
+			// authorization). Otherwise enforce the channel-appropriate user rule.
+			if (!sharedAccess) {
+				if (channel === 'draft') {
+					await requireCanEditDefinition(locals, record.projectId, guid);
+				} else {
+					await requireCanSolve(locals, record.projectId);
+				}
 			}
 
 			const versionId =
@@ -197,7 +216,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			if (!versionId) {
 				throw error(404, `Definition '${guid}' has no ${channel} version yet`);
 			}
-			const version = await providers.data.definitions.getVersion(locals.ctx, versionId);
+			const version = await providers.data.definitions.getVersion(solveCtx, versionId);
 			if (!version || version.definitionId !== guid) {
 				throw error(404, `Definition '${guid}' ${channel} version is missing`);
 			}
@@ -229,7 +248,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				.map((input) => transformInputParameter(input, values[input.id]))
 		);
 
-		const serverConfig = await resolveServerForOrg(locals.ctx, solveOrgId);
+		// Spec §7 — atomic check-and-increment BEFORE the solve, so a request
+		// past the cap doesn't burn compute. Returns null when the cap is hit.
+		if (sharedAccess) {
+			const next = await providers.data.shareLinks.tryIncrementSolveCount(
+				solveCtx,
+				sharedAccess.link.id
+			);
+			if (next === null) {
+				throw error(429, 'Share link solve cap reached.');
+			}
+		}
+
+		const serverConfig = await resolveServerForOrg(solveCtx, solveOrgId);
 		const client = await getClient(serverConfig);
 		const solvedDefinition = await client.solve(definitionSource, inputTree);
 

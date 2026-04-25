@@ -33,7 +33,6 @@ export interface DefinitionListOptions extends Omit<ListOptions, 'orderBy'> {
 	 * Filter to specific editorial statuses.
 	 * - Omit for the default view (all non-pending statuses).
 	 * - Pass ['published'] for the runner home (only live definitions).
-	 * - Pass ['draft','review'] for the review queue.
 	 */
 	statuses?: import('./definitions/types.js').DefinitionStatus[];
 }

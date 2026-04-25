@@ -53,7 +53,7 @@
 		updateLogs = '';
 		updateExitCode = null;
 		try {
-			const response = await fetch('/admin/api/update', { method: 'POST' });
+			const response = await fetch('/admin/api/system/update', { method: 'POST' });
 			if (!response.ok) {
 				updateLogs = 'Failed to start update process';
 				updateRunning = false;

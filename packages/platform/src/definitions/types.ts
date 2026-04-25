@@ -18,13 +18,11 @@ export const COVER_IMAGE_CONTENT_TYPES: Record<string, string> = {
  *
  * Editorial workflow (visible to project editors/owners):
  * - 'draft'     — work in progress, not visible to runners
- * - 'review'    — submitted for review, read-only for editors
  * - 'published' — live and visible to all with solve access
- * - 'archived'  — retired, hidden from runners but preserved
  *
  * List endpoints filter out 'pending' by default; a janitor sweeps stale ones.
  */
-export type DefinitionStatus = 'pending' | 'draft' | 'review' | 'published' | 'archived';
+export type DefinitionStatus = 'pending' | 'draft' | 'published';
 
 /**
  * Spec §6 — immutable snapshot of a definition's `.gh` file at a point in

@@ -10,7 +10,8 @@ import { hasPermission, canReclaim, canCreateProject } from '@selva/platform';
 import {
 	getProjectProvider,
 	getDefinitionMeta,
-	getOrganizationProvider
+	getOrganizationProvider,
+	flag
 } from './providers.server.js';
 import { handleApiError } from './api-errors.js';
 
@@ -219,6 +220,25 @@ export async function requireCanManageMembers(
 	return user;
 }
 
+/**
+ * Resolve the rule for a `project.visibility` cell. Public visibility honours
+ * `ALLOW_CROSS_ORG_PUBLIC`: when off, public is downgraded to within-org reach
+ * (spec §4 line 211). Mirrors the pure `canView` rule in `@selva/platform`;
+ * see Permissions.md §5 note on the duplication.
+ */
+async function resolveCanView(ctx: RequestContext, project: Project): Promise<boolean> {
+	if (project.visibility === 'private') {
+		const member = await getProjectProvider().getProjectMember(ctx, project.id, ctx.userId);
+		return member != null;
+	}
+	if (project.visibility === 'org') {
+		return ctx.actingOrgId === project.orgId;
+	}
+	// public
+	if (flag('ALLOW_CROSS_ORG_PUBLIC')) return true;
+	return ctx.actingOrgId === project.orgId;
+}
+
 export async function requireCanViewProject(
 	locals: Locals,
 	projectId: string
@@ -226,18 +246,7 @@ export async function requireCanViewProject(
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await bypassOrRun(ctx, async () => {
 		const project = await loadProjectOr404(ctx, projectId);
-		if (project.visibility === 'private') {
-			const member = await getProjectProvider().getProjectMember(
-				ctx,
-				projectId,
-				ctx.userId
-			);
-			return member != null;
-		}
-		if (project.visibility === 'org') {
-			return ctx.actingOrgId === project.orgId;
-		}
-		return true;
+		return resolveCanView(ctx, project);
 	});
 	if (!allowed) throw error(403, 'You do not have access to this project.');
 	return user;
@@ -254,20 +263,7 @@ export async function requireCanSolve(
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId);
 
-	const allowed = await bypassOrRun(ctx, async () => {
-		if (project.visibility === 'private') {
-			const member = await getProjectProvider().getProjectMember(
-				ctx,
-				projectId,
-				ctx.userId
-			);
-			return member != null;
-		}
-		if (project.visibility === 'org') {
-			return ctx.actingOrgId === project.orgId;
-		}
-		return true;
-	});
+	const allowed = await bypassOrRun(ctx, () => resolveCanView(ctx, project));
 	if (!allowed) throw error(403, 'You do not have access to this project.');
 	return { user, ctx, project };
 }
