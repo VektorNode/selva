@@ -10,8 +10,8 @@ import {
 	hasPermission,
 	canReclaim,
 	canCreateProject,
-	canView as ruleCanView,
-	canSolve as ruleCanSolve
+	canView,
+	canSolve
 } from '@selva/platform';
 import {
 	getProjectProvider,
@@ -243,7 +243,7 @@ async function loadAndCheckView(
 	const allowCrossOrgPublic = flag('ALLOW_CROSS_ORG_PUBLIC');
 	// Cross-org public bypass: no membership fetch needed.
 	if (project.visibility === 'public' && allowCrossOrgPublic) {
-		return ruleCanView({
+		return canView({
 			platformPermissions: ctx.platformPermissions,
 			orgPermissions: ctx.orgPermissions,
 			project,
@@ -262,7 +262,7 @@ async function loadAndCheckView(
 			? getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId)
 			: Promise.resolve(null)
 	]);
-	return ruleCanView({
+	return canView({
 		platformPermissions: ctx.platformPermissions,
 		orgPermissions: ctx.orgPermissions,
 		project,
@@ -300,7 +300,7 @@ export async function requireCanSolve(
 	const allowed = await bypassOrRun(ctx, async () => {
 		const allowCrossOrgPublic = flag('ALLOW_CROSS_ORG_PUBLIC');
 		if (project.visibility === 'public' && allowCrossOrgPublic) {
-			return ruleCanSolve({
+			return canSolve({
 				platformPermissions: ctx.platformPermissions,
 				orgPermissions: ctx.orgPermissions,
 				project,
@@ -317,7 +317,7 @@ export async function requireCanSolve(
 				? getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId)
 				: Promise.resolve(null)
 		]);
-		return ruleCanSolve({
+		return canSolve({
 			platformPermissions: ctx.platformPermissions,
 			orgPermissions: ctx.orgPermissions,
 			project,

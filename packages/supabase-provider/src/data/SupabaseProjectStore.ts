@@ -14,9 +14,9 @@ import {
 	hasPermission,
 	actorFrom,
 	NoopEventSink,
-	canEdit as ruleCanEdit,
-	canEditProjectSettings as ruleCanEditProjectSettings,
-	canManage as ruleCanManage
+	canEdit,
+	canEditProjectSettings,
+	canManage
 } from '@selva/platform';
 import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
@@ -288,17 +288,17 @@ export class SupabaseProjectStore implements IProjectStore {
 
 	async canEdit(ctx: RequestContext, projectId: string): Promise<boolean> {
 		if (hasPermission(ctx, 'instance_admin')) return true;
-		return ruleCanEdit(await this.loadAccessInput(ctx, projectId));
+		return canEdit(await this.loadAccessInput(ctx, projectId));
 	}
 
 	async canEditProjectSettings(ctx: RequestContext, projectId: string): Promise<boolean> {
 		if (hasPermission(ctx, 'instance_admin')) return true;
-		return ruleCanEditProjectSettings(await this.loadAccessInput(ctx, projectId));
+		return canEditProjectSettings(await this.loadAccessInput(ctx, projectId));
 	}
 
 	async canManage(ctx: RequestContext, projectId: string): Promise<boolean> {
 		if (hasPermission(ctx, 'instance_admin')) return true;
-		return ruleCanManage(await this.loadAccessInput(ctx, projectId));
+		return canManage(await this.loadAccessInput(ctx, projectId));
 	}
 
 	/** Load the inputs that the pure project-access rules need. */
