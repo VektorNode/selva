@@ -1,5 +1,6 @@
 import type {
 	IDefinitionStore,
+	IEventSink,
 	DefinitionRecord,
 	DefinitionRecordPatch,
 	DefinitionStatus,
@@ -14,6 +15,8 @@ import {
 	ProviderError,
 	auditSoftDelete,
 	hasPermission,
+	actorFrom,
+	NoopEventSink,
 	canEditDefinition as ruleCanEditDefinition
 } from '@selva/platform';
 import type { ClientBundle } from './client.js';
@@ -32,7 +35,14 @@ import { nextCursorFromRange, toRange } from './pagination.js';
  * read-modify-write race like the local provider has.
  */
 export class SupabaseDefinitionStore implements IDefinitionStore {
-	constructor(private readonly clients: ClientBundle) {}
+	private readonly events: IEventSink;
+
+	constructor(
+		private readonly clients: ClientBundle,
+		events: IEventSink = new NoopEventSink()
+	) {
+		this.events = events;
+	}
 
 	// ============================================================================
 	// Definitions
@@ -123,6 +133,12 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.from('definitions')
 			.insert(recordToRow(record));
 		if (error) throw mapError(error);
+		await this.events.emit({
+			type: 'definition.created',
+			definitionId: record.guid,
+			projectId: record.projectId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async update(
@@ -162,6 +178,11 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.eq('guid', guid)
 			.is('deleted_at', null);
 		if (error) throw mapError(error);
+		await this.events.emit({
+			type: 'definition.deleted',
+			definitionId: guid,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async incrementRunCount(ctx: RequestContext, guid: string): Promise<void> {
@@ -198,6 +219,12 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.from('definition_versions')
 			.insert(versionToRow(version));
 		if (error) throw mapError(error);
+		await this.events.emit({
+			type: 'definition_version.created',
+			versionId: version.id,
+			definitionId: version.definitionId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async listVersions(
@@ -239,6 +266,11 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.delete()
 			.eq('id', versionId);
 		if (error) throw mapError(error);
+		await this.events.emit({
+			type: 'definition_version.deleted',
+			versionId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async setLiveVersion(
@@ -247,6 +279,14 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		versionId: string
 	): Promise<void> {
 		await this.repointChannel(ctx, definitionId, versionId, 'live_version_id');
+		// Only `live` advancement is the published-event trigger. Draft
+		// repointing is the editor's working pointer, not a publication signal.
+		await this.events.emit({
+			type: 'definition.published',
+			definitionId,
+			versionId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async setDraftVersion(

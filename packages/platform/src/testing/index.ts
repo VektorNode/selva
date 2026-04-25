@@ -30,3 +30,6 @@ export type {
 	ShareLinkStoreConformanceOptions,
 	ShareLinkTestScope
 } from './suites/shareLinkStoreSuite.js';
+
+export { runEventSinkConformance, RecordingEventSink } from './suites/eventSinkSuite.js';
+export type { EventSinkConformanceOptions } from './suites/eventSinkSuite.js';

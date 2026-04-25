@@ -141,6 +141,10 @@ export { ProviderError } from './errors.js';
 export type { AuditUpdate, AuditSoftDelete } from './utils/index.js';
 export { auditUpdate, auditSoftDelete } from './utils/index.js';
 
+// Domain events (Permissions.md §9 — every mutation emits one)
+export type { DomainEvent, DomainEventType, IEventSink } from './events/index.js';
+export { actorFrom, NoopEventSink } from './events/index.js';
+
 // Access control (UI-gating rules — mutating stores re-enforce independently)
 export type {
 	ProjectAccessInput,

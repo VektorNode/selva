@@ -2,6 +2,7 @@ import type { IAuthProvider } from './auth/interface.js';
 import type { IDataProvider } from './data/interface.js';
 import type { IStorageProvider } from './storage/interface.js';
 import type { IUserProfileStore } from './userProfile/interface.js';
+import type { IEventSink } from './events/interface.js';
 
 /**
  * - `single`: one org per deployment. Setup creates it; `ctx.actingOrgId`
@@ -38,6 +39,12 @@ export interface SelvaConfig {
 	 * profile state — identity from IdP, profile state from DB.
 	 */
 	userProfile: IUserProfileStore;
+	/**
+	 * Domain-event sink (Permissions.md §9). Optional; if absent, providers
+	 * default to `NoopEventSink`. Wire a real implementation to enable
+	 * webhooks, audit logging, or analytics dispatch.
+	 */
+	events?: IEventSink;
 }
 
 export type SelvaConfigFactory = (env: Record<string, string | undefined>) => SelvaConfig;

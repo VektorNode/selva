@@ -1,5 +1,6 @@
 import type {
 	IProjectStore,
+	IEventSink,
 	Project,
 	ProjectMember,
 	ProjectRole,
@@ -11,6 +12,8 @@ import {
 	ProviderError,
 	auditSoftDelete,
 	hasPermission,
+	actorFrom,
+	NoopEventSink,
 	canEdit as ruleCanEdit,
 	canEditProjectSettings as ruleCanEditProjectSettings,
 	canManage as ruleCanManage
@@ -29,7 +32,14 @@ import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
  * `project_members` so subsequent user-scoped reads can see it.
  */
 export class SupabaseProjectStore implements IProjectStore {
-	constructor(private readonly clients: ClientBundle) {}
+	private readonly events: IEventSink;
+
+	constructor(
+		private readonly clients: ClientBundle,
+		events: IEventSink = new NoopEventSink()
+	) {
+		this.events = events;
+	}
 
 	async listProjects(
 		ctx: RequestContext,
@@ -99,6 +109,12 @@ export class SupabaseProjectStore implements IProjectStore {
 			{ onConflict: 'project_id,user_id' }
 		);
 		if (memberError) throw mapError(memberError);
+		await this.events.emit({
+			type: 'project.created',
+			projectId: project.id,
+			orgId: project.orgId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async updateProject(
@@ -161,6 +177,8 @@ export class SupabaseProjectStore implements IProjectStore {
 			.eq('project_id', id)
 			.is('deleted_at', null);
 		if (defErr) throw mapError(defErr);
+
+		await this.events.emit({ type: 'project.deleted', projectId: id, actorId: actorFrom(ctx) });
 	}
 
 	// ── Project members ──────────────────────────────────────────────────────
@@ -214,6 +232,12 @@ export class SupabaseProjectStore implements IProjectStore {
 			.from('project_members')
 			.upsert(row, { onConflict: 'project_id,user_id' });
 		if (error) throw mapError(error);
+		await this.events.emit({
+			type: 'project_member.added',
+			projectId: member.projectId,
+			userId: member.userId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async updateProjectMemberRole(
@@ -251,6 +275,12 @@ export class SupabaseProjectStore implements IProjectStore {
 			.eq('user_id', userId)
 			.is('deleted_at', null);
 		if (error) throw mapError(error);
+		await this.events.emit({
+			type: 'project_member.removed',
+			projectId,
+			userId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	// ── Access checks (UI gating — delegate to canonical pure rules in

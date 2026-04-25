@@ -1,5 +1,6 @@
 import type {
 	IOrgStore,
+	IEventSink,
 	Organization,
 	OrgMember,
 	OrgRole,
@@ -8,7 +9,13 @@ import type {
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { DEFAULT_ORG_PERMISSIONS, ProviderError, auditUpdate, auditSoftDelete } from '@selva/platform';
+import {
+	DEFAULT_ORG_PERMISSIONS,
+	ProviderError,
+	auditSoftDelete,
+	actorFrom,
+	NoopEventSink
+} from '@selva/platform';
 import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
 
@@ -22,7 +29,14 @@ import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
  * immediately lose visibility of their own org.
  */
 export class SupabaseOrgStore implements IOrgStore {
-	constructor(private readonly clients: ClientBundle) {}
+	private readonly events: IEventSink;
+
+	constructor(
+		private readonly clients: ClientBundle,
+		events: IEventSink = new NoopEventSink()
+	) {
+		this.events = events;
+	}
 
 	async listOrgs(ctx: RequestContext, opts?: ListOptions): Promise<Page<Organization>> {
 		const range = toRange(opts);
@@ -85,6 +99,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			{ onConflict: 'org_id,user_id' }
 		);
 		if (memberError) throw mapError(memberError);
+		await this.events.emit({ type: 'org.created', orgId: org.id, actorId: actorFrom(ctx) });
 	}
 
 	async updateOrg(
@@ -172,6 +187,8 @@ export class SupabaseOrgStore implements IOrgStore {
 				.is('deleted_at', null);
 			if (defErr) throw mapError(defErr);
 		}
+
+		await this.events.emit({ type: 'org.deleted', orgId: id, actorId: actorFrom(ctx) });
 	}
 
 	// ── Org members ──────────────────────────────────────────────────────────
@@ -225,6 +242,12 @@ export class SupabaseOrgStore implements IOrgStore {
 			.from('org_members')
 			.upsert(row, { onConflict: 'org_id,user_id' });
 		if (error) throw mapError(error);
+		await this.events.emit({
+			type: 'org_member.added',
+			orgId: member.orgId,
+			userId: member.userId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async updateOrgMemberRole(
@@ -311,6 +334,12 @@ export class SupabaseOrgStore implements IOrgStore {
 			.eq('user_id', userId)
 			.is('deleted_at', null);
 		if (error) throw mapError(error);
+		await this.events.emit({
+			type: 'org_member.removed',
+			orgId,
+			userId,
+			actorId: actorFrom(ctx)
+		});
 	}
 }
 

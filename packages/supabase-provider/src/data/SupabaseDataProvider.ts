@@ -1,4 +1,5 @@
-import type { IDataProvider } from '@selva/platform';
+import type { IDataProvider, IEventSink } from '@selva/platform';
+import { NoopEventSink } from '@selva/platform';
 import type { ClientBundle, BuildClientOptions } from './client.js';
 import { buildClientBundle } from './client.js';
 import { SupabaseOrgStore } from './SupabaseOrgStore.js';
@@ -21,27 +22,33 @@ export class SupabaseDataProvider implements IDataProvider {
 	readonly computeServer: SupabaseComputeServerStore;
 	readonly shareLinks: SupabaseShareLinkStore;
 
-	private constructor(private readonly clients: ClientBundle) {
-		this.orgs = new SupabaseOrgStore(clients);
-		this.projects = new SupabaseProjectStore(clients);
-		this.definitions = new SupabaseDefinitionStore(clients);
+	private constructor(private readonly clients: ClientBundle, events: IEventSink) {
+		this.orgs = new SupabaseOrgStore(clients, events);
+		this.projects = new SupabaseProjectStore(clients, events);
+		this.definitions = new SupabaseDefinitionStore(clients, events);
 		this.invites = new SupabaseInviteStore(clients);
 		this.computeServer = new SupabaseComputeServerStore(clients);
-		this.shareLinks = new SupabaseShareLinkStore(clients);
+		this.shareLinks = new SupabaseShareLinkStore(clients, events);
 	}
 
-	static fromEnv(env: Record<string, string | undefined>): SupabaseDataProvider {
+	static fromEnv(
+		env: Record<string, string | undefined>,
+		events: IEventSink = new NoopEventSink()
+	): SupabaseDataProvider {
 		const supabaseUrl = env.SUPABASE_URL;
 		const anonKey = env.SUPABASE_ANON_KEY;
 		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
 		if (!supabaseUrl) throw new Error('Missing required env var: SUPABASE_URL');
 		if (!anonKey) throw new Error('Missing required env var: SUPABASE_ANON_KEY');
 		if (!serviceRoleKey) throw new Error('Missing required env var: SUPABASE_SERVICE_ROLE_KEY');
-		return SupabaseDataProvider.create({ supabaseUrl, anonKey, serviceRoleKey });
+		return SupabaseDataProvider.create({ supabaseUrl, anonKey, serviceRoleKey }, events);
 	}
 
-	static create(opts: BuildClientOptions): SupabaseDataProvider {
-		return new SupabaseDataProvider(buildClientBundle(opts));
+	static create(
+		opts: BuildClientOptions,
+		events: IEventSink = new NoopEventSink()
+	): SupabaseDataProvider {
+		return new SupabaseDataProvider(buildClientBundle(opts), events);
 	}
 
 	/**
