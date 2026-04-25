@@ -17,7 +17,7 @@ import {
 	hasPermission,
 	actorFrom,
 	NoopEventSink,
-	canEditDefinition as ruleCanEditDefinition
+	canEditDefinition
 } from '@selva/platform';
 import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
@@ -368,7 +368,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		// `canEditDefinition` consults: project.autoJoinOnUpload, definition.ownerId,
 		// member.role. Other fields aren't read; we leave them as best-effort
 		// defaults rather than re-fetching the full rows.
-		return ruleCanEditDefinition({
+		return canEditDefinition({
 			platformPermissions: ctx.platformPermissions,
 			project: projectRow
 				? {

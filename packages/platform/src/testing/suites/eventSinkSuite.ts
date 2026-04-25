@@ -20,7 +20,6 @@ import type {
 	Organization,
 	Project,
 	OrgMember,
-	ProjectMember,
 	DefinitionRecord,
 	DefinitionVersion,
 	ShareLink,

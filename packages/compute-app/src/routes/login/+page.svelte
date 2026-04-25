@@ -22,9 +22,13 @@
 	const redirectTo = $derived(page.url.searchParams.get('redirectTo') ?? '');
 
 	function oauthHref(provider: string): string {
-		const params = new URLSearchParams({ provider });
-		if (redirectTo) params.set('redirectTo', redirectTo);
-		return `/auth/supabase/start?${params.toString()}`;
+		// Plain string concatenation — `URLSearchParams` triggers a Svelte
+		// reactivity lint warning, and we don't need reactivity for a static
+		// link href.
+		const qs = `provider=${encodeURIComponent(provider)}${
+			redirectTo ? `&redirectTo=${encodeURIComponent(redirectTo)}` : ''
+		}`;
+		return `/auth/supabase/start?${qs}`;
 	}
 
 	function providerLabel(p: string): string {

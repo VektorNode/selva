@@ -20,9 +20,9 @@
 
 	function oauthHref(provider: string): string {
 		// First-OAuth-signin-becomes-admin: the callback grants instance_admin
-		// when no admin exists yet.
-		const params = new URLSearchParams({ provider, redirectTo: '/admin' });
-		return `/auth/supabase/start?${params.toString()}`;
+		// when no admin exists yet. Plain string concat — Svelte's lint flags
+		// a mutable URLSearchParams here.
+		return `/auth/supabase/start?provider=${encodeURIComponent(provider)}&redirectTo=%2Fadmin`;
 	}
 
 	function providerLabel(p: string): string {

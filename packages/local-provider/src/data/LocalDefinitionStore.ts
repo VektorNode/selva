@@ -18,7 +18,7 @@ import {
 	auditSoftDelete,
 	actorFrom,
 	NoopEventSink,
-	canEditDefinition as ruleCanEditDefinition
+	canEditDefinition
 } from '@selva/platform';
 import { paginate, applyOrder } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
@@ -357,7 +357,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			this.projectProvider.getProjectMember(ctx, projectId, ctx.userId)
 		]);
 
-		return ruleCanEditDefinition({
+		return canEditDefinition({
 			platformPermissions: ctx.platformPermissions,
 			project,
 			definition,

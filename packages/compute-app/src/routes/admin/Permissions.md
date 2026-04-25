@@ -37,7 +37,7 @@ One role, four permissions. All instance-wide.
 >
 > **`manage_users` renamed to `manage_instance_users`** — symmetric with org-scope `manage_org_members`, no collision possible.
 
-**Invariant: at least one user holds `instance_admin`.** Any operation that would leave the instance with zero `instance_admin`s — revoking the permission, deleting the user, disabling the user — is rejected by the auth provider. Mirrored in the admin UI by disabling the relevant control on the sole admin. See §10 for the offboarding pattern; §12 for break-glass recovery if the invariant is ever bypassed.
+**Invariant: at least one user holds `instance_admin`.** Any operation that would leave the instance with zero `instance_admin`s — revoking the permission, deleting the user, disabling the user — is rejected by the data layer (`IPlatformPermissionStore`). Revocation is blocked inside `set()`; delete/disable is blocked by the route handler consulting `countInstanceAdminsExcluding(targetId)` before calling the auth provider. Mirrored in the admin UI by disabling the relevant control on the sole admin. See §10 for the offboarding pattern; §12 for break-glass recovery if the invariant is ever bypassed.
 
 **Deployment modes:**
 
@@ -218,7 +218,18 @@ The `ALLOW_CROSS_ORG_PUBLIC` platform flag does **not** gate this rule — it on
 - Project `owner` → yes
 - Otherwise → no
 
-**Owner-on-owner removal requires explicit confirmation.** When a project has multiple owners (e.g., after a reclaim), one owner can remove another, but the handler surfaces a confirm step to prevent accidental lockouts.
+**Owner-on-owner removal requires explicit confirmation.** When a project has multiple owners (e.g., after a reclaim), one owner can remove another, but the handler surfaces a confirm step via `checkOwnerRemoval` (below) to prevent accidental lockouts.
+
+### `checkOwnerRemoval(target, allMembers, confirmed) → 'ok' | 'sole_owner' | 'needs_confirm'`
+
+Pre-flight check the route handler runs after `canManage` has authorized the actor. Pure function over already-loaded membership rows so behavior is identical across providers.
+
+- Target is non-owner → `'ok'` (canManage already authorized)
+- Target is the sole owner → `'sole_owner'` (route returns 409; suggests reclaim)
+- Owner-on-owner removal without `?confirm=true` → `'needs_confirm'` (route returns 409; client retries with confirmation)
+- Owner-on-owner with `?confirm=true` and ≥2 owners remain after → `'ok'`
+
+The route handler at `/api/projects/[id]/members/[userId]` `DELETE` consults this and translates the result to the appropriate HTTP response.
 
 ### `canReclaim(project, user, ctx) → bool` — org owner/admin escape hatch
 
@@ -380,20 +391,27 @@ Authoritative mapping of HTTP routes to rule checks. `instance_admin` passes eve
 | `/api/definitions/[guid]/share-links`                | `GET/POST` | `canEditDefinition`. POST returns the raw token once.                                                                                                                                         |
 | `/api/definitions/[guid]/share-links/[linkId]`       | `DELETE`   | `canEditDefinition`. Soft-delete (sets `revokedAt`).                                                                                                                                          |
 | `/api/compute/solve`                                 | `POST`     | `canSolve(project, user, ctx)`. Channel: `live` (default) or `draft`; `draft` requires `canEditDefinition`. **A valid `?token=…` (§7) bypasses user auth and grants the token's pinned scope only.** |
+| `/api/compute/schema`                                | `GET`      | `canView(project, user, ctx)`. Same share-link bypass as `/api/compute/solve`.                                                                                                                |
 | `/api/org/compute`                                   | `GET/PUT`  | `manage_org_compute`. Gated by `ALLOW_ORG_COMPUTE_OVERRIDE` platform flag. Tenancy implicit via `ctx.actingOrgId`.                                                                            |
+| `/api/invites`                                       | `GET/POST` | `manage_org_members` for the active org.                                                                                                                                                       |
+| `/api/invites/[id]`                                  | `DELETE`   | `manage_org_members`.                                                                                                                                                                          |
+| `/api/me/starred/[guid]`                             | `POST/DELETE` | Authenticated. Acts on `locals.user.id`'s own profile only — `IUserProfileStore` enforces self-or-admin scoping.                                                                          |
+| `/api/files/[...path]`                               | `GET`      | Storage proxy. Public buckets serve unauthenticated; private buckets require an authenticated session whose ctx authorizes the resource the path encodes.                                      |
 
 ### Admin API (`/admin/api/*`)
 
 Instance-level only. Denial returns **403** (not redirect).
 
-| Route                       | Method | Permission              |
-| --------------------------- | ------ | ----------------------- |
-| `/admin/api/users`          | `*`    | `manage_instance_users` |
-| `/admin/api/compute`        | `*`    | `manage_compute`        |
-| `/admin/api/compute/status` | `GET`  | `manage_compute`        |
-| `/admin/api/system/update`  | `POST` | `manage_updates`        |
-| `/admin/api/orgs`           | `*`    | `instance_admin`        |
-| `/admin/api/orgs/[id]`      | `*`    | `instance_admin`        |
+| Route                              | Method | Permission              |
+| ---------------------------------- | ------ | ----------------------- |
+| `/admin/api/users`                 | `*`    | `manage_instance_users` |
+| `/admin/api/users/[id]`            | `PATCH/DELETE` | `manage_instance_users`. PATCH that changes platform-scope perms additionally requires `instance_admin`. DELETE consults `IPlatformPermissionStore.countInstanceAdminsExcluding` and returns 409 when removing the sole admin. |
+| `/admin/api/users/[id]/disable`    | `POST` | `manage_instance_users`. Same sole-admin invariant as DELETE. |
+| `/admin/api/compute`               | `*`    | `manage_compute`        |
+| `/admin/api/compute/status`        | `GET`  | `manage_compute`        |
+| `/admin/api/system/update`         | `POST` | `manage_updates`        |
+| `/admin/api/orgs`                  | `*`    | `instance_admin`        |
+| `/admin/api/orgs/[id]`             | `*`    | `instance_admin`        |
 
 ### Admin pages (`/admin/*`)
 
@@ -406,6 +424,15 @@ Denial redirects to `/admin`.
 | `/admin/compute`     | `manage_compute`        |
 | `/admin/orgs`        | `instance_admin`        |
 | `/admin/update`      | `manage_updates`        |
+
+### Auth flow (`/auth/*`)
+
+Public routes — the auth round-trip IS the credential flow, so no permission check applies. Used when `SUPABASE_OAUTH_PROVIDERS` is set.
+
+| Route                          | Method | What it does                                                                                                                                                                                                  |
+| ------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/auth/supabase/start`         | `GET`  | `?provider=google&redirectTo=/app` — mints an OAuth authorize URL via Supabase and redirects.                                                                                                                 |
+| `/auth/supabase/callback`      | `GET`  | `?code=…` — exchanges the code for a session, sets `admin_session` + `admin_refresh` cookies, redirects to `redirectTo`. **First-OAuth-signin-becomes-admin:** if no `instance_admin` exists, the new user is granted every platform permission via `IPlatformPermissionStore.set`. |
 
 ---
 
@@ -496,8 +523,9 @@ Walk through these to confirm the model behaves as expected.
 | Alice deletes the definition that a share link points at.                                                                     | Token resolution fails closed (`def.deletedAt IS NULL` check). Hard delete cascades the link out.                                                                             |
 | Acme org configures a BYO compute server; instance has `ALLOW_ORG_COMPUTE_OVERRIDE=true`.                                     | Solves on Acme projects route to Acme's compute. Solves on other orgs' projects continue to use the instance pool.                                                            |
 | `instance_admin` edits compute config in their personal org context.                                                          | Edits the **instance pool** regardless of `actingOrgId` — the `/admin/api/compute` route explicitly scopes to instance.                                                       |
-| Sole `instance_admin` unchecks their own `Instance Admin (all)` checkbox.                                                     | **409.** Auth provider returns `last_admin`; UI mirror disables the checkbox preemptively. Promote another user first, then demote.                                           |
-| `instance_admin` deletes the only other user, who also holds `instance_admin`.                                                | Allowed — the actor still holds it. Reverse case (deleting self while sole admin) is blocked the same way as the checkbox case.                                               |
+| Sole `instance_admin` unchecks their own `Instance Admin (all)` checkbox.                                                     | **409.** `IPlatformPermissionStore.set` returns `last_admin`; UI mirror disables the checkbox preemptively. Promote another user first, then demote.                          |
+| `instance_admin` deletes the only other user, who also holds `instance_admin`.                                                | Allowed — the actor still holds it. The DELETE handler consults `countInstanceAdminsExcluding(targetId)` first; with the actor still admin, the count is ≥1 and the call proceeds. |
+| Sole `instance_admin` tries to delete or disable themselves.                                                                  | **409.** The route handler's `countInstanceAdminsExcluding(self)` returns 0 and surfaces `last_admin` before reaching the auth provider.                                       |
 
 ---
 
