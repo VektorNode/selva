@@ -5,6 +5,7 @@ import { getAuthProvider } from '$lib/server/auth.server';
 import {
 	getInviteStore,
 	getOrganizationProvider,
+	getPermissionStore,
 	getUserProfileStore
 } from '$lib/server/providers.server';
 import { assertManageInstanceUsers } from '$lib/server/access.server';
@@ -20,6 +21,7 @@ import { flattenPermissions } from '$lib/server/permissions-compat.server';
  */
 export interface UserRow extends AuthUser {
 	displayName?: string;
+	platformPermissions: PlatformPermission[];
 	orgRole?: OrgRole;
 	orgPermissions: OrgPermission[];
 	permissions: Array<PlatformPermission | OrgPermission>;
@@ -41,11 +43,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const page = await auth.listUsers({ limit: 200 });
 		if (page) {
 			const orgs = getOrganizationProvider();
-			const profiles = await getUserProfileStore().getProfiles(
-				ctx,
-				page.items.map((u) => u.id)
-			);
+			const userIds = page.items.map((u) => u.id);
+			const profiles = await getUserProfileStore().getProfiles(ctx, userIds);
 			const profileById = new Map(profiles.map((p) => [p.userId, p]));
+			const platformByUser = await getPermissionStore().getForBatch(ctx, userIds);
 			const activeOrgId = ctx.actingOrgId;
 			users = await Promise.all(
 				page.items.map(async (u) => {
@@ -57,12 +58,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 						orgRole = member?.role;
 					}
 					const profile = profileById.get(u.id);
+					const platformPermissions = platformByUser.get(u.id) ?? [];
 					return {
 						...u,
 						displayName: profile?.displayName,
+						platformPermissions,
 						orgRole,
 						orgPermissions,
-						permissions: flattenPermissions(u.platformPermissions, orgPermissions)
+						permissions: flattenPermissions(platformPermissions, orgPermissions)
 					};
 				})
 			);

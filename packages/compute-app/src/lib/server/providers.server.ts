@@ -53,3 +53,7 @@ export function getUserProfileStore() {
 export function getInviteStore() {
 	return providers.data.invites;
 }
+
+export function getPermissionStore() {
+	return providers.permissions;
+}

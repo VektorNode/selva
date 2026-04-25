@@ -29,7 +29,7 @@ describe('LocalUserProfileProvider', () => {
 			return {
 				store,
 				seedUser: async (email: string) => {
-					const user = await auth.passwordAuth.createUserWithPassword(email, 'pw', []);
+					const user = await auth.passwordAuth.createUserWithPassword(email, 'pw');
 					return user;
 				}
 			};

@@ -1,10 +1,4 @@
-import type {
-	AuthUser,
-	LoginResult,
-	MfaFactor,
-	PlatformPermission,
-	UserManagementResult
-} from './types.js';
+import type { AuthUser, LoginResult, MfaFactor, UserManagementResult } from './types.js';
 import type { ListOptions, Page } from '../pagination.js';
 
 /**
@@ -29,12 +23,12 @@ export interface IPasswordAuth {
 	 */
 	verifyLogin(email: string, password: string): Promise<LoginResult>;
 
-	/** Admin-initiated user creation with a known password. */
-	createUserWithPassword(
-		email: string,
-		password: string,
-		platformPermissions: PlatformPermission[]
-	): Promise<AuthUser>;
+	/**
+	 * Admin-initiated user creation with a known password. Pure identity
+	 * creation — platform permissions are NOT set here; callers grant them
+	 * separately via `IPlatformPermissionStore.set`.
+	 */
+	createUserWithPassword(email: string, password: string): Promise<AuthUser>;
 
 	/**
 	 * Self-service registration (called from /signup). Return null when
@@ -94,10 +88,9 @@ export interface IPasswordAuth {
  *
  * This interface owns **platform-level identity + platform permissions only**.
  * Per-org memberships and `OrgPermission`s live on `IOrgStore` (`OrgMember`
- * records). `createUser` / `updateUserPlatformPermissions` here operate on
- * the rare platform-scope role set (e.g. `instance_admin`); to
- * give a user rights inside an org, call `IOrgStore.addOrgMember` /
- * `updateOrgMemberRole`.
+ * records). Platform-scope permissions (`instance_admin`, etc.) live on
+ * `IPlatformPermissionStore` — the auth provider only handles identity, so
+ * external IdPs can plug in without modeling Selva-specific authorization.
  *
  * Implement to plug in any auth backend: local HMAC sessions, Microsoft
  * Entra ID, Supabase Auth, Firebase Auth, AWS Cognito, any OIDC/JWT provider.
@@ -136,25 +129,29 @@ export interface IAuthProvider {
 	 * where the user authenticates via the upstream IdP. Providers that
 	 * require passwords expose creation through `passwordAuth.createUserWithPassword`
 	 * and leave this undefined.
+	 *
+	 * Pure identity creation — platform permissions are NOT set here. Callers
+	 * that want to grant `instance_admin` (e.g. setup flow) call
+	 * `permissions.set(ctx, user.id, [...])` after creation.
 	 */
-	createUser?(email: string, platformPermissions: PlatformPermission[]): Promise<AuthUser>;
+	createUser?(email: string): Promise<AuthUser>;
 
-	/** Update a user's platform-scope permissions. Returns 'ok', 'not_found', or 'not_supported'. */
-	updateUserPlatformPermissions(
-		id: string,
-		platformPermissions: PlatformPermission[]
-	): Promise<UserManagementResult>;
-
-	/** Delete a user. Returns 'ok', 'not_found', or 'not_supported'. */
+	/**
+	 * Delete a user identity from the auth backend. Returns 'ok', 'not_found',
+	 * or 'not_supported'. The §2 sole-`instance_admin` invariant is NOT
+	 * enforced here — callers MUST consult
+	 * `IPlatformPermissionStore.countInstanceAdminsExcluding(id)` first and
+	 * surface `'last_admin'` themselves. Auth providers don't know about
+	 * Selva-specific permissions, so the invariant lives at the data layer.
+	 */
 	deleteUser(id: string): Promise<UserManagementResult>;
 
 	/**
-	 * Disable a user. Sessions become invalid; identity and attribution are
-	 * preserved (preferred over deletion for offboarding). Returns 'last_admin'
-	 * when this would leave the instance with zero enabled `instance_admin`s —
-	 * the §2 invariant is enforced here (same load-bearing layer as revoke /
-	 * delete). Returns 'not_supported' on providers that cannot persist a
-	 * disabled flag.
+	 * Disable a user identity. Sessions become invalid; identity and
+	 * attribution are preserved (preferred over deletion for offboarding).
+	 * As with `deleteUser`, the §2 invariant is enforced by the caller via
+	 * the permission store, not here. Returns 'not_supported' on providers
+	 * that cannot persist a disabled flag.
 	 */
 	disableUser(id: string): Promise<UserManagementResult>;
 

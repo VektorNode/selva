@@ -74,6 +74,10 @@
 		"./events": {
 			"types": "./dist/events/index.d.ts",
 			"import": "./dist/events/index.js"
+		},
+		"./permissions": {
+			"types": "./dist/permissions/index.d.ts",
+			"import": "./dist/permissions/index.js"
 		}
 	},
 	"files": [

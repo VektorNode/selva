@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getProjectProvider } from '$lib/server/providers.server';
 import { requireCanManageMembers } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
-import { ProjectRoleSchema } from '@selva/platform';
+import { ProjectRoleSchema, checkOwnerRemoval } from '@selva/platform';
 
 const UpdateRoleSchema = z.object({ role: ProjectRoleSchema });
 
@@ -40,20 +40,22 @@ export const DELETE: RequestHandler = async ({ params, url, locals }) => {
 		return json({ success: true });
 	}
 
-	// §9 — sole-owner removal must be blocked. The org-leadership escape
-	// hatch is `POST /api/projects/[id]/reclaim`, which adds a co-owner first.
+	// §5/§10 owner-removal preconditions. Pure check from rules.ts so the
+	// behavior is the same across providers and is unit-tested in isolation.
 	if (target.role === 'owner') {
 		const page = await projects.listProjectMembers(ctx, id, { limit: 200 });
-		const ownerCount = page.items.filter((m) => m.role === 'owner').length;
-		if (ownerCount <= 1) {
+		const decision = checkOwnerRemoval({
+			target: { role: target.role },
+			allMembers: page.items.map((m) => ({ role: m.role })),
+			confirmed
+		});
+		if (decision === 'sole_owner') {
 			throw error(
 				409,
 				'Cannot remove the sole owner of a project. Assign another owner first, or use reclaim to add a co-owner.'
 			);
 		}
-		// §5 — owner-on-owner removal requires explicit confirmation to prevent
-		// accidental lockouts. Surface a 409; the client retries with ?confirm=true.
-		if (!confirmed) {
+		if (decision === 'needs_confirm') {
 			throw error(
 				409,
 				'Removing another project owner requires explicit confirmation. Retry with ?confirm=true.'

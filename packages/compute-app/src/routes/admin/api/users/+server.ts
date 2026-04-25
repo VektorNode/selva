@@ -2,8 +2,9 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
-import { getOrganizationProvider } from '$lib/server/providers.server';
+import { getOrganizationProvider, getPermissionStore } from '$lib/server/providers.server';
 import { requireManageInstanceUsers } from '$lib/server/access.server';
+import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import {
 	OrgPermissionSchema,
@@ -41,6 +42,9 @@ export const GET: RequestHandler = async ({ locals }) => {
 	// current admin UI sees the familiar flat list. Default org = ctx.actingOrgId.
 	const orgId = locals.ctx?.actingOrgId;
 	const orgs = getOrganizationProvider();
+	// Single batch read for platform permissions instead of N round-trips.
+	const userIds = page.items.map((u) => u.id);
+	const platformByUser = await getPermissionStore().getForBatch(locals.ctx!, userIds);
 	const flattened = await Promise.all(
 		page.items.map(async (u) => {
 			let orgPerms: readonly string[] = [];
@@ -48,10 +52,12 @@ export const GET: RequestHandler = async ({ locals }) => {
 				const member = await orgs.getOrgMember(SYSTEM_CONTEXT, orgId, u.id);
 				orgPerms = member?.permissions ?? [];
 			}
+			const platformPerms = platformByUser.get(u.id) ?? [];
 			return {
 				...u,
+				platformPermissions: platformPerms,
 				permissions: flattenPermissions(
-					u.platformPermissions,
+					platformPerms,
 					orgPerms as Parameters<typeof flattenPermissions>[1]
 				)
 			};
@@ -80,11 +86,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		let user;
 		if (auth.passwordAuth) {
 			if (!password) throw error(400, 'Password is required');
-			user = await auth.passwordAuth.createUserWithPassword(email, password, platform);
+			user = await auth.passwordAuth.createUserWithPassword(email, password);
 		} else if (auth.createUser) {
-			user = await auth.createUser(email, platform);
+			user = await auth.createUser(email);
 		} else {
 			throw error(501, `User creation is not supported by ${auth.name}. Users are managed externally.`);
+		}
+
+		// Grant platform permissions out-of-band via the data-layer store.
+		if (platform.length > 0) {
+			await setUserPlatformPermissions(locals.ctx!, user.id, platform);
 		}
 
 		// Attach to the active org as a member. Members can only hold the

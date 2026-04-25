@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
-import { getOrganizationProvider } from '$lib/server/providers.server';
+import { getOrganizationProvider, getPermissionStore } from '$lib/server/providers.server';
 import { requireManageInstanceUsers } from '$lib/server/access.server';
 import { throwZodError } from '$lib/server/api-errors';
 import {
@@ -11,6 +11,7 @@ import {
 	SYSTEM_CONTEXT,
 	DEFAULT_ORG_PERMISSIONS,
 	MEMBER_ASSIGNABLE_PERMISSIONS,
+	type PlatformPermission,
 	hasPermission
 } from '@selva/platform';
 import { splitFlatPermissions } from '$lib/server/permissions-compat.server';
@@ -36,17 +37,19 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	// Granting or revoking platform-scope permissions requires the caller to
 	// already hold instance_admin. Without this, any org admin with
 	// manage_instance_users could self-elevate to instance_admin.
-	const existingUser = await getAuthProvider().getUser(id);
-	const existingPlatform = existingUser?.platformPermissions ?? [];
+	const existingPlatform: PlatformPermission[] = await getPermissionStore().getFor(
+		locals.ctx!,
+		id
+	);
 	const platformChanged =
 		platform.length !== existingPlatform.length ||
-		platform.some((p) => !existingPlatform.includes(p)) ||
-		existingPlatform.some((p) => !platform.includes(p));
+		platform.some((p: PlatformPermission) => !existingPlatform.includes(p)) ||
+		existingPlatform.some((p: PlatformPermission) => !platform.includes(p));
 	if (platformChanged && !hasPermission(locals.ctx!, 'instance_admin')) {
 		throw error(403, 'Only a platform admin can change platform-scope permissions');
 	}
 
-	const platformResult = await setUserPlatformPermissions(id, platform);
+	const platformResult = await setUserPlatformPermissions(locals.ctx!, id, platform);
 	if (platformResult === 'not_found') throw error(404, 'User not found');
 	if (platformResult === 'not_supported')
 		throw error(501, 'Platform permission updates not supported by this auth provider');
@@ -93,20 +96,29 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	return json({ success: true });
 };
 
-// DELETE — remove user
+// DELETE — remove user. The §2 sole-`instance_admin` invariant is enforced
+// here, BEFORE the auth provider deletes, by consulting the permission store
+// (the auth provider no longer owns Selva-specific authorization).
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	requireManageInstanceUsers(locals);
 	const { id } = params;
 	if (!id) throw error(400, 'Missing user ID');
 
+	const targetPerms = await getPermissionStore().getFor(locals.ctx!, id);
+	if (targetPerms.includes('instance_admin')) {
+		const others = await getPermissionStore().countInstanceAdminsExcluding(locals.ctx!, id);
+		if (others === 0) {
+			throw error(
+				409,
+				'Cannot delete the last instance admin. Promote another user to instance admin first.'
+			);
+		}
+	}
+
 	const result = await getAuthProvider().deleteUser(id);
 	if (result === 'not_found') throw error(404, 'User not found');
-	if (result === 'not_supported') throw error(501, 'User deletion not supported by this auth provider');
-	if (result === 'last_admin')
-		throw error(
-			409,
-			'Cannot delete the last instance admin. Promote another user to instance admin first.'
-		);
+	if (result === 'not_supported')
+		throw error(501, 'User deletion not supported by this auth provider');
 
 	return json({ success: true });
 };

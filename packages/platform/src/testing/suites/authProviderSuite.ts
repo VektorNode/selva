@@ -74,7 +74,8 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 			const result = await provider.passwordAuth.verifyLogin(adminEmail, adminPassword);
 			expect(result.kind).toBe('success');
 			if (result.kind !== 'success') return;
-			expect(result.user.platformPermissions).toContain('instance_admin');
+			// Identity-only — platform permissions live on IPlatformPermissionStore now.
+			expect(result.user.id).toBeTruthy();
 			expect(typeof result.sessionToken).toBe('string');
 			expect(result.sessionToken.length).toBeGreaterThan(0);
 		});
@@ -108,20 +109,18 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 				const email = `test-${makeUuid()}@example.com`;
 				const created = await provider.passwordAuth!.createUserWithPassword(
 					email,
-					'password1234',
-					['instance_admin']
+					'password1234'
 				);
 				expect(created).toBeTruthy();
 				const fetched = await provider.getUser(created.id);
 				expect(fetched?.id).toBe(created.id);
 				expect(fetched?.email).toBe(email);
-				expect(fetched?.platformPermissions).toContain('instance_admin');
 			});
 
 			it('createUserWithPassword allows login with the new credentials', async () => {
 				const { provider } = await createProvider();
 				const email = `login-${makeUuid()}@example.com`;
-				await provider.passwordAuth!.createUserWithPassword(email, 'secret9999', []);
+				await provider.passwordAuth!.createUserWithPassword(email, 'secret9999');
 				const result = await provider.passwordAuth!.verifyLogin(email, 'secret9999');
 				expect(result.kind).toBe('success');
 				if (result.kind !== 'success') return;
@@ -132,8 +131,8 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 				const { provider } = await createProvider();
 				const a = `a-${makeUuid()}@example.com`;
 				const b = `b-${makeUuid()}@example.com`;
-				await provider.passwordAuth!.createUserWithPassword(a, 'pass12345678', []);
-				await provider.passwordAuth!.createUserWithPassword(b, 'pass12345678', []);
+				await provider.passwordAuth!.createUserWithPassword(a, 'pass12345678');
+				await provider.passwordAuth!.createUserWithPassword(b, 'pass12345678');
 				const page = await provider.listUsers({ limit: 200 });
 				expect(page).toBeTruthy();
 				const emails = page!.items.map((u) => u.email);
@@ -141,53 +140,12 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 				expect(emails).toContain(b);
 			});
 
-			it('updateUserPlatformPermissions changes platform permissions', async () => {
-				const { provider } = await createProvider();
-				const email = `u-${makeUuid()}@example.com`;
-				const created = await provider.passwordAuth!.createUserWithPassword(
-					email,
-					'pass12345678',
-					[]
-				);
-				const result = await provider.updateUserPlatformPermissions(created.id, [
-					'instance_admin'
-				]);
-				expect(result).toBe('ok');
-				const fetched = await provider.getUser(created.id);
-				expect(fetched?.platformPermissions).toContain('instance_admin');
-			});
-
-			it('updateUserPlatformPermissions returns not_found for unknown user', async () => {
-				const { provider } = await createProvider();
-				const result = await provider.updateUserPlatformPermissions(makeUuid(), []);
-				expect(result).toBe('not_found');
-			});
-
-			// All four platform permissions must round-trip — guards against
-			// hydrate filters that silently drop unrecognized perms (regression
-			// test for the Supabase filter bug that only accepted instance_admin).
-			it('updateUserPlatformPermissions round-trips every platform permission', async () => {
-				const { provider } = await createProvider();
-				const created = await provider.passwordAuth!.createUserWithPassword(
-					`round-trip-${makeUuid()}@example.com`,
-					'pass12345678',
-					[]
-				);
-				const all = ['manage_compute', 'manage_instance_users', 'manage_updates'] as const;
-				const result = await provider.updateUserPlatformPermissions(created.id, [...all]);
-				expect(result).toBe('ok');
-				const fetched = await provider.getUser(created.id);
-				expect(fetched?.platformPermissions).toEqual(expect.arrayContaining([...all]));
-				expect(fetched?.platformPermissions).not.toContain('instance_admin');
-			});
-
 			it('deleteUser removes the user', async () => {
 				const { provider } = await createProvider();
 				const email = `del-${makeUuid()}@example.com`;
 				const created = await provider.passwordAuth!.createUserWithPassword(
 					email,
-					'pass12345678',
-					[]
+					'pass12345678'
 				);
 				const result = await provider.deleteUser(created.id);
 				expect(result).toBe('ok');
@@ -201,79 +159,33 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 				expect(result).toBe('not_found');
 			});
 
+			// Note: the §2 sole-`instance_admin` invariant is no longer enforced
+			// by IAuthProvider — it lives on IPlatformPermissionStore now and
+			// callers consult `countInstanceAdminsExcluding` before destructive
+			// ops. Auth-side delete/disable just deletes the identity and
+			// trusts the caller. See `runPlatformPermissionStoreConformance`
+			// for the invariant tests.
+
 			it('createUserWithPassword returns an identity record without profile fields', async () => {
 				const { provider } = await createProvider();
 				const user = await provider.passwordAuth!.createUserWithPassword(
 					`new-${makeUuid()}@example.com`,
-					'pass12345678',
-					[]
+					'pass12345678'
 				);
-				// §1e: profile state (starred, recentRuns, displayName) lives on IUserProfileStore.
+				// §1e: profile state (starred, recentRuns, displayName) lives on
+				// IUserProfileStore. Platform permissions live on
+				// IPlatformPermissionStore. AuthUser is identity-only.
 				expect((user as unknown as { starredDefinitions?: unknown }).starredDefinitions).toBeUndefined();
 				expect((user as unknown as { recentRuns?: unknown }).recentRuns).toBeUndefined();
 				expect((user as unknown as { displayName?: unknown }).displayName).toBeUndefined();
+				expect((user as unknown as { platformPermissions?: unknown }).platformPermissions).toBeUndefined();
 			});
 
-			it('verifyLogin returns failed:disabled for disabled users', async () => {
-				// Providers that don't support disabling users can skip. Local does.
-				// This is an optional check — only run if the provider preserves
-				// disabled state across verifyLogin calls. Deliberately generic.
-				// No-op for now; expanded once Supabase lands and we verify there.
-				expect(true).toBe(true);
-			});
-
-			// Permissions.md §2 invariant: at least one user must hold instance_admin.
-			it('updateUserPlatformPermissions refuses to remove instance_admin from the sole admin', async () => {
-				const { provider, adminEmail } = await createProvider();
-				if (!adminEmail) return; // legacy createProvider — no seeded admin to target
-				const admin = (await provider.listUsers({ limit: 200 }))!.items.find(
-					(u) => u.email === adminEmail
-				);
-				expect(admin?.platformPermissions).toContain('instance_admin');
-				const result = await provider.updateUserPlatformPermissions(admin!.id, []);
-				expect(result).toBe('last_admin');
-				const after = await provider.getUser(admin!.id);
-				expect(after?.platformPermissions).toContain('instance_admin');
-			});
-
-			it('deleteUser refuses to delete the sole instance_admin', async () => {
-				const { provider, adminEmail } = await createProvider();
-				if (!adminEmail) return;
-				const admin = (await provider.listUsers({ limit: 200 }))!.items.find(
-					(u) => u.email === adminEmail
-				);
-				const result = await provider.deleteUser(admin!.id);
-				expect(result).toBe('last_admin');
-				const stillThere = await provider.getUser(admin!.id);
-				expect(stillThere?.id).toBe(admin!.id);
-			});
-
-			it('updateUserPlatformPermissions allows demotion when another instance_admin exists', async () => {
-				const { provider, adminEmail } = await createProvider();
-				if (!adminEmail) return;
-				const second = await provider.passwordAuth!.createUserWithPassword(
-					`second-admin-${makeUuid()}@example.com`,
-					'pass12345678',
-					['instance_admin']
-				);
-				const admin = (await provider.listUsers({ limit: 200 }))!.items.find(
-					(u) => u.email === adminEmail
-				);
-				const result = await provider.updateUserPlatformPermissions(admin!.id, []);
-				expect(result).toBe('ok');
-				// Second admin keeps the permission, system still has ≥1 admin.
-				const after = await provider.getUser(second.id);
-				expect(after?.platformPermissions).toContain('instance_admin');
-			});
-
-			// Permissions.md §10: disabling the sole instance_admin must be
-			// blocked at the provider, same invariant as revoke and delete.
-			it('disableUser disables a non-admin user', async () => {
+			it('disableUser disables a user', async () => {
 				const { provider } = await createProvider();
 				const created = await provider.passwordAuth!.createUserWithPassword(
 					`disable-${makeUuid()}@example.com`,
-					'pass12345678',
-					[]
+					'pass12345678'
 				);
 				const result = await provider.disableUser(created.id);
 				expect(result).toBe('ok');
@@ -286,33 +198,6 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 				const result = await provider.disableUser(makeUuid());
 				expect(result).toBe('not_found');
 			});
-
-			it('disableUser refuses to disable the sole instance_admin', async () => {
-				const { provider, adminEmail } = await createProvider();
-				if (!adminEmail) return;
-				const admin = (await provider.listUsers({ limit: 200 }))!.items.find(
-					(u) => u.email === adminEmail
-				);
-				const result = await provider.disableUser(admin!.id);
-				expect(result).toBe('last_admin');
-				const after = await provider.getUser(admin!.id);
-				expect(after?.disabled).not.toBe(true);
-			});
-
-			it('disableUser allows disabling an admin when another instance_admin exists', async () => {
-				const { provider, adminEmail } = await createProvider();
-				if (!adminEmail) return;
-				await provider.passwordAuth!.createUserWithPassword(
-					`other-admin-${makeUuid()}@example.com`,
-					'pass12345678',
-					['instance_admin']
-				);
-				const admin = (await provider.listUsers({ limit: 200 }))!.items.find(
-					(u) => u.email === adminEmail
-				);
-				const result = await provider.disableUser(admin!.id);
-				expect(result).toBe('ok');
-			});
 		} else {
 			it('listUsers returns null when user management is not supported', async () => {
 				const { provider } = await createProvider();
@@ -323,12 +208,6 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 			it('createUser (allowlist) is undefined when user management is not supported', async () => {
 				const { provider } = await createProvider();
 				expect(provider.createUser).toBeUndefined();
-			});
-
-			it('updateUserPlatformPermissions returns not_supported', async () => {
-				const { provider } = await createProvider();
-				const result = await provider.updateUserPlatformPermissions(makeUuid(), []);
-				expect(result).toBe('not_supported');
 			});
 
 			it('deleteUser returns not_supported', async () => {

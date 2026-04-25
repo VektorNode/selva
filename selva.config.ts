@@ -48,7 +48,8 @@ export default defineConfig((env) => {
 			auth: supa.SupabaseAuthProvider.fromEnv(env),
 			data,
 			storage: supa.SupabaseStorageProvider.fromEnv(env),
-			userProfile: new supa.SupabaseUserProfileProvider(bundle)
+			userProfile: new supa.SupabaseUserProfileProvider(bundle),
+			permissions: new supa.SupabasePlatformPermissionStore(bundle)
 		};
 	}
 
@@ -58,6 +59,7 @@ export default defineConfig((env) => {
 		auth: local.LocalAuthProvider.fromEnv(env),
 		data: local.LocalDataProvider.fromEnv(env),
 		storage: local.LocalStorageProvider.fromEnv(env),
-		userProfile: local.LocalUserProfileProvider.fromEnv(env)
+		userProfile: local.LocalUserProfileProvider.fromEnv(env),
+		permissions: local.LocalPlatformPermissionStore.fromEnv(env)
 	};
 });

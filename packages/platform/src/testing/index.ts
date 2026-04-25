@@ -33,3 +33,6 @@ export type {
 
 export { runEventSinkConformance, RecordingEventSink } from './suites/eventSinkSuite.js';
 export type { EventSinkConformanceOptions } from './suites/eventSinkSuite.js';
+
+export { runPlatformPermissionStoreConformance } from './suites/platformPermissionStoreSuite.js';
+export type { PlatformPermissionStoreConformanceOptions } from './suites/platformPermissionStoreSuite.js';

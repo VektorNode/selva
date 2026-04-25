@@ -4,7 +4,6 @@ import type {
 	IPasswordAuth,
 	AuthUser,
 	LoginResult,
-	PlatformPermission,
 	UserManagementResult,
 	ListOptions,
 	Page
@@ -18,15 +17,11 @@ import { paginate } from '../data/pagination.js';
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 function toAuthUser(
-	u: Pick<
-		StoredUser,
-		'id' | 'email' | 'platformPermissions' | 'createdAt' | 'lastLoginAt' | 'disabled'
-	>
+	u: Pick<StoredUser, 'id' | 'email' | 'createdAt' | 'lastLoginAt' | 'disabled'>
 ): AuthUser {
 	return {
 		id: u.id,
 		email: u.email,
-		platformPermissions: u.platformPermissions,
 		createdAt: u.createdAt,
 		lastLoginAt: u.lastLoginAt,
 		disabled: u.disabled
@@ -63,18 +58,16 @@ class LocalPasswordAuth implements IPasswordAuth {
 		return { kind: 'success', user: auth, sessionToken: this.mintToken(auth) };
 	}
 
-	async createUserWithPassword(
-		email: string,
-		password: string,
-		platformPermissions: PlatformPermission[]
-	): Promise<AuthUser> {
+	async createUserWithPassword(email: string, password: string): Promise<AuthUser> {
 		if (!this.users) {
 			throw new ProviderError(
 				'createUserWithPassword requires a users.json backend (DATA_PATH)',
 				500
 			);
 		}
-		return toAuthUser(await this.users.createUser(email, password, platformPermissions));
+		// Pure identity creation — platform permissions are granted separately
+		// via IPlatformPermissionStore.set.
+		return toAuthUser(await this.users.createUser(email, password, []));
 	}
 
 	async registerUser(email: string, password: string): Promise<AuthUser | null> {
@@ -137,40 +130,13 @@ export class LocalAuthProvider implements IAuthProvider {
 		return paginate(users.map(toAuthUser), opts);
 	}
 
-	async updateUserPlatformPermissions(
-		id: string,
-		platformPermissions: PlatformPermission[]
-	): Promise<UserManagementResult> {
-		if (!this.users) return 'not_supported';
-		const target = await this.users.findById(id);
-		if (!target) return 'not_found';
-		// Permissions.md §2 invariant: at least one user must hold instance_admin.
-		// Refuse if this update would drop the last one. Race acceptable at
-		// single-node scale (matches share-link counter pattern in §7).
-		const wasAdmin = target.platformPermissions.includes('instance_admin');
-		const willBeAdmin = platformPermissions.includes('instance_admin');
-		if (wasAdmin && !willBeAdmin && (await this.countOtherInstanceAdmins(id)) === 0) {
-			return 'last_admin';
-		}
-		try {
-			await this.users.updatePlatformPermissions(id, platformPermissions);
-			return 'ok';
-		} catch (err) {
-			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';
-			throw err;
-		}
-	}
-
 	async deleteUser(id: string): Promise<UserManagementResult> {
+		// Identity-only delete. The §2 sole-`instance_admin` invariant is
+		// enforced by the caller via `IPlatformPermissionStore.countInstanceAdminsExcluding`
+		// before this method is called.
 		if (!this.users) return 'not_supported';
 		const target = await this.users.findById(id);
 		if (!target) return 'not_found';
-		if (
-			target.platformPermissions.includes('instance_admin') &&
-			(await this.countOtherInstanceAdmins(id)) === 0
-		) {
-			return 'last_admin';
-		}
 		try {
 			await this.users.deleteUser(id);
 			return 'ok';
@@ -181,19 +147,11 @@ export class LocalAuthProvider implements IAuthProvider {
 	}
 
 	async disableUser(id: string): Promise<UserManagementResult> {
+		// Identity-only disable. The §2 sole-`instance_admin` invariant is
+		// enforced by the caller, same as `deleteUser`.
 		if (!this.users) return 'not_supported';
 		const target = await this.users.findById(id);
 		if (!target) return 'not_found';
-		// Permissions.md §10: disabling the last enabled instance_admin is
-		// blocked at the provider — same invariant as revoke and delete.
-		// Already-disabled targets are a no-op (still return 'ok').
-		if (
-			!target.disabled &&
-			target.platformPermissions.includes('instance_admin') &&
-			(await this.countOtherInstanceAdmins(id)) === 0
-		) {
-			return 'last_admin';
-		}
 		try {
 			await this.users.setDisabled(id, true);
 			return 'ok';
@@ -201,13 +159,5 @@ export class LocalAuthProvider implements IAuthProvider {
 			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';
 			throw err;
 		}
-	}
-
-	private async countOtherInstanceAdmins(excludeId: string): Promise<number> {
-		if (!this.users) return 0;
-		const users = await this.users.listUsers();
-		return users.filter(
-			(u) => u.id !== excludeId && !u.disabled && u.platformPermissions.includes('instance_admin')
-		).length;
 	}
 }

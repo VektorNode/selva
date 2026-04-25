@@ -69,9 +69,9 @@ export const actions = {
 
 		let user;
 		try {
-			// Invites grant org-scope perms only; platform perms are never
-			// invite-grantable, so new users start with an empty platform set.
-			user = await auth.passwordAuth.createUserWithPassword(invite.email, password, []);
+			// Invites grant org-scope perms only; new users start with no
+			// platform permissions (the empty default in IPlatformPermissionStore).
+			user = await auth.passwordAuth.createUserWithPassword(invite.email, password);
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : 'Could not create your account.';
 			return fail(400, { error: msg });

@@ -16,3 +16,5 @@ export { SupabaseUserProfileProvider } from './userProfile/index.js';
 
 export { SupabaseAuthProvider } from './auth/index.js';
 export type { SupabaseAuthProviderConfig } from './auth/index.js';
+
+export { SupabasePlatformPermissionStore } from './permissions/index.js';

@@ -1,21 +1,17 @@
-import type { PlatformPermission, UserManagementResult } from '@selva/platform';
-import { getAuthProvider } from './auth.server.js';
+import type { PlatformPermission, RequestContext, UserManagementResult } from '@selva/platform';
+import { getPermissionStore } from './providers.server.js';
 
 /**
- * Permission read/write seam.
- *
- * Today `platformPermissions` live on the auth provider's `AuthUser`; the
- * future Eterna refactor moves them to a data-layer permission store so an
- * external IdP can own identity without owning Selva-specific authorization.
- *
- * Reads already funnel through `locals.user.platformPermissions` (set once
- * in `hooks.server.ts:buildContext`). Writes funnel through this module.
- * When the store moves, only this file and the hooks composition seam change.
+ * Permission read/write seam over `IPlatformPermissionStore`. Reads happen
+ * via `locals.ctx.platformPermissions` (set once in `hooks.server.ts`);
+ * writes funnel through this module so any future change (caching,
+ * invalidation, audit hooks) is one-file.
  */
 
 export async function setUserPlatformPermissions(
+	ctx: RequestContext,
 	userId: string,
 	permissions: PlatformPermission[]
 ): Promise<UserManagementResult> {
-	return getAuthProvider().updateUserPlatformPermissions(userId, permissions);
+	return getPermissionStore().set(ctx, userId, permissions);
 }

@@ -3,6 +3,7 @@ import type { IDataProvider } from './data/interface.js';
 import type { IStorageProvider } from './storage/interface.js';
 import type { IUserProfileStore } from './userProfile/interface.js';
 import type { IEventSink } from './events/interface.js';
+import type { IPlatformPermissionStore } from './permissions/interface.js';
 
 /**
  * - `single`: one org per deployment. Setup creates it; `ctx.actingOrgId`
@@ -39,6 +40,14 @@ export interface SelvaConfig {
 	 * profile state — identity from IdP, profile state from DB.
 	 */
 	userProfile: IUserProfileStore;
+	/**
+	 * Per-user platform permissions (Selva-staff/instance operator grants).
+	 * Lives outside `auth` so external IdPs don't need to own Selva-specific
+	 * authorization. The §2 sole-`instance_admin` invariant is enforced by
+	 * this store; `auth.deleteUser` / `disableUser` consult it before any
+	 * destructive op. Required.
+	 */
+	permissions: IPlatformPermissionStore;
 	/**
 	 * Domain-event sink (Permissions.md §9). Optional; if absent, providers
 	 * default to `NoopEventSink`. Wire a real implementation to enable

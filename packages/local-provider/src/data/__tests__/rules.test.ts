@@ -12,6 +12,7 @@ import {
 	canEditProjectSettings,
 	canEditDefinition,
 	canChangeVisibilityToPublic,
+	checkOwnerRemoval,
 	withAdminBypass,
 	type DefinitionRecord,
 	type OrgMember,
@@ -405,5 +406,79 @@ describe('withAdminBypass', () => {
 		});
 		expect(result).toBe(true);
 		expect(invoked).toBe(true);
+	});
+});
+
+// ── checkOwnerRemoval (Permissions.md §5, §10) ─────────────────────────────
+
+describe('checkOwnerRemoval', () => {
+	it('returns ok for non-owner targets regardless of confirmation', () => {
+		expect(
+			checkOwnerRemoval({
+				target: { role: 'editor' },
+				allMembers: [{ role: 'owner' }],
+				confirmed: false
+			})
+		).toBe('ok');
+		expect(
+			checkOwnerRemoval({
+				target: { role: 'viewer' },
+				allMembers: [{ role: 'owner' }],
+				confirmed: false
+			})
+		).toBe('ok');
+	});
+
+	it('blocks sole-owner removal even with confirmation', () => {
+		expect(
+			checkOwnerRemoval({
+				target: { role: 'owner' },
+				allMembers: [{ role: 'owner' }, { role: 'editor' }],
+				confirmed: true
+			})
+		).toBe('sole_owner');
+	});
+
+	it('owner-on-owner without confirmation needs_confirm', () => {
+		expect(
+			checkOwnerRemoval({
+				target: { role: 'owner' },
+				allMembers: [{ role: 'owner' }, { role: 'owner' }],
+				confirmed: false
+			})
+		).toBe('needs_confirm');
+	});
+
+	it('owner-on-owner with confirmation succeeds', () => {
+		expect(
+			checkOwnerRemoval({
+				target: { role: 'owner' },
+				allMembers: [{ role: 'owner' }, { role: 'owner' }],
+				confirmed: true
+			})
+		).toBe('ok');
+	});
+
+	it('three owners + confirmation succeeds (still leaves two)', () => {
+		expect(
+			checkOwnerRemoval({
+				target: { role: 'owner' },
+				allMembers: [{ role: 'owner' }, { role: 'owner' }, { role: 'owner' }],
+				confirmed: true
+			})
+		).toBe('ok');
+	});
+
+	it('zero owners (corrupt state) reports sole_owner', () => {
+		// Defensive: if the caller somehow asks to remove an owner from a project
+		// with no owner rows in the page, treat it as sole_owner so we never let
+		// the project end up with zero owners.
+		expect(
+			checkOwnerRemoval({
+				target: { role: 'owner' },
+				allMembers: [{ role: 'editor' }],
+				confirmed: true
+			})
+		).toBe('sole_owner');
 	});
 });
