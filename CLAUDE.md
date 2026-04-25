@@ -239,16 +239,16 @@ Rhino.Compute server URL + API key are configured in `/admin/compute` and persis
 
 Core provider interfaces for Selva's pluggable architecture. All modules support Zod schema validation and are granular exports for tree-shaking.
 
-| Module | Interface | Purpose |
-|--------|-----------|---------|
-| `@selva/platform/auth` | `IAuthProvider` | HMAC session tokens, user management |
-| `@selva/platform/data` | `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IComputeServerStore` | Structured data storage (all methods take `RequestContext`) |
+| Module | Exports | Purpose |
+|--------|---------|---------|
+| `@selva/platform/auth` | `IAuthProvider`, `IPasswordAuth` | Identity verification, optional password capability, user management |
+| `@selva/platform/data` | `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IShareLinkStore`, `IInviteStore`, `IComputeServerStore` | Structured data storage (all methods take `RequestContext`) |
 | `@selva/platform/storage` | `IStorageProvider` | Blob storage (get, put, delete, getPublicUrl) |
-| `@selva/platform/definitions` | `DefinitionService` | Orchestrates data + storage for definitions (create, updateFile, delete, GC) |
+| `@selva/platform/definitions` | Types, schemas, `definitionPaths` | Definition record types + path helpers. (Service orchestration lives in compute-app; see `lib/server/definitions/DefinitionService.ts`.) |
 | `@selva/platform/organizations` | — | `Organization`, `OrgMember`, `OrgRole` types + Zod schemas |
 | `@selva/platform/projects` | — | `Project`, `ProjectMember`, `ProjectRole`, `ProjectVisibility` types + schemas |
 | `@selva/platform/computeServer` | — | `ComputeServerConfig`, `resolveComputeServer()` helpers |
-| `@selva/platform/testing` | `ConformanceRunner` | Framework-agnostic conformance suites for all stores |
+| `@selva/platform/testing` | `runXxxConformance` functions (one per store) | Vitest-based conformance suites for all stores |
 
 **Local provider** (`selva-local-provider`) implements all interfaces using the filesystem:
 
