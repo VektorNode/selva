@@ -3,6 +3,12 @@ import { isHttpError } from '@sveltejs/kit';
 import type { AuthUser, RequestContext } from '@selva/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selva/platform';
 import { providers } from '$lib/server/providers.server';
+import {
+	getRefreshToken,
+	setSessionCookie,
+	setRefreshCookie,
+	clearRefreshCookie
+} from '$lib/server/admin-auth.server';
 
 // Env validation is owned by each provider's `fromEnv()` — the selected
 // provider throws on missing vars (e.g. DATA_PATH for local, SUPABASE_URL for
@@ -98,8 +104,34 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	const needsAuth =
 		(isAdminRoute || isApiRoute || isDefinitionsRoute || isAppRoute) && !isPublicRoute;
 	if (needsAuth) {
-		const token = event.cookies.get('admin_session') ?? '';
-		const user = await providers.auth.verifyToken(token);
+		let token = event.cookies.get('admin_session') ?? '';
+		let user = await providers.auth.verifyToken(token);
+
+		// Session-refresh middleware: when the access token has expired but a
+		// refresh token is present (Supabase OAuth flow), swap silently for a
+		// fresh pair and rotate the cookies. Local/HMAC sessions never set a
+		// refresh cookie, so this branch is a no-op there.
+		if (!user) {
+			const refreshToken = getRefreshToken(event.cookies);
+			const refresher = providers.auth as unknown as {
+				refreshSession?: (
+					rt: string
+				) => Promise<{ sessionToken: string; refreshToken: string } | null>;
+			};
+			if (refreshToken && typeof refresher.refreshSession === 'function') {
+				const refreshed = await refresher.refreshSession(refreshToken);
+				if (refreshed) {
+					setSessionCookie(event.cookies, refreshed.sessionToken);
+					setRefreshCookie(event.cookies, refreshed.refreshToken);
+					token = refreshed.sessionToken;
+					user = await providers.auth.verifyToken(token);
+				} else {
+					// Refresh failed — clear the stale cookie so the next request
+					// goes through the login flow cleanly.
+					clearRefreshCookie(event.cookies);
+				}
+			}
+		}
 
 		if (!user) {
 			if (isJsonApiRoute) {

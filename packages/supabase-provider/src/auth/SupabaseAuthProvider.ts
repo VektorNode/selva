@@ -178,6 +178,69 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			.eq('user_id', id);
 	}
 
+	// ── OAuth (Supabase-specific; not on IAuthProvider yet) ──────────────────
+	//
+	// Concrete implementation; an `IOAuthAuth` capability on `IAuthProvider`
+	// will be extracted once a second OAuth-capable backend (Eterna, etc.)
+	// lands and the surface is validated against two implementations.
+
+	/**
+	 * Initiate an OAuth sign-in. Returns the URL to redirect the user to;
+	 * the OAuth provider then bounces back to `redirectTo` with `?code=...`.
+	 *
+	 * Providers must be enabled in the Supabase dashboard first; calling with
+	 * an unconfigured provider raises a Supabase error.
+	 */
+	async getOAuthAuthorizationUrl(
+		provider: 'google' | 'github' | 'azure' | 'gitlab',
+		redirectTo: string
+	): Promise<string> {
+		const { data, error } = await this.anon.auth.signInWithOAuth({
+			provider,
+			options: { redirectTo, skipBrowserRedirect: true }
+		});
+		if (error || !data.url) throw error ?? new Error('signInWithOAuth returned no URL');
+		return data.url;
+	}
+
+	/**
+	 * Complete an OAuth sign-in by exchanging the authorization code for a
+	 * session. Returns the identity + access token + refresh token. The
+	 * access token has GoTrue's default 1h lifetime; the refresh token is the
+	 * load-bearing piece for the session-refresh middleware.
+	 */
+	async exchangeOAuthCode(code: string): Promise<{
+		user: AuthUser;
+		sessionToken: string;
+		refreshToken: string;
+	} | null> {
+		const { data, error } = await this.anon.auth.exchangeCodeForSession(code);
+		if (error || !data.user || !data.session) return null;
+		if (data.user.user_metadata?.disabled === true) return null;
+		return {
+			user: this.hydrate(data.user),
+			sessionToken: data.session.access_token,
+			refreshToken: data.session.refresh_token
+		};
+	}
+
+	/**
+	 * Refresh an expired session. Returns null when the refresh token is
+	 * invalid (revoked, expired, signed by a different secret). Callers
+	 * (session-refresh middleware) treat null as "force re-login".
+	 */
+	async refreshSession(refreshToken: string): Promise<{
+		sessionToken: string;
+		refreshToken: string;
+	} | null> {
+		const { data, error } = await this.anon.auth.refreshSession({ refresh_token: refreshToken });
+		if (error || !data.session) return null;
+		return {
+			sessionToken: data.session.access_token,
+			refreshToken: data.session.refresh_token
+		};
+	}
+
 	// ── Internals ─────────────────────────────────────────────────────────────
 
 	/**
