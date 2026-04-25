@@ -1,12 +1,13 @@
 import * as path from 'node:path';
 import type {
 	IShareLinkStore,
+	IDefinitionStore,
 	ShareLink,
 	RequestContext,
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { ProviderError } from '@selva/platform';
+import { ProviderError, SYSTEM_CONTEXT } from '@selva/platform';
 import { paginate } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 
@@ -25,12 +26,25 @@ const empty = (): OnDiskShape => ({ links: {} });
  * atomic UPDATE.
  */
 export class LocalShareLinkStore implements IShareLinkStore {
+	private definitionProvider?: IDefinitionStore;
+
 	static fromEnv(env: Record<string, string | undefined>): LocalShareLinkStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
 		return new LocalShareLinkStore(path.join(env.DATA_PATH, 'share-links.json'));
 	}
 
 	constructor(private readonly configFilePath: string) {}
+
+	/**
+	 * Wire the definition store so token resolution can check the parent
+	 * definition's `deletedAt` (Permissions.md §7 cascade contract). Mirrors
+	 * Supabase, which performs the equivalent JOIN. Optional: when unset, the
+	 * store falls back to the local-only revoke check; the route layer in
+	 * compute-app does the parent lookup as a safety net either way.
+	 */
+	setDefinitionProvider(definitions: IDefinitionStore): void {
+		this.definitionProvider = definitions;
+	}
 
 	private async readAll(): Promise<OnDiskShape> {
 		return readJsonFile<OnDiskShape>(this.configFilePath, empty());
@@ -73,7 +87,14 @@ export class LocalShareLinkStore implements IShareLinkStore {
 	async getByTokenHash(_ctx: RequestContext, tokenHash: string): Promise<ShareLink | null> {
 		const all = await this.readAll();
 		const found = Object.values(all.links).find((l) => l.tokenHash === tokenHash);
-		return this.isLive(found) ? found : null;
+		if (!this.isLive(found)) return null;
+		// §7: token resolution MUST NOT see links whose parent definition is
+		// soft-deleted. Supabase enforces this via JOIN; here we look up.
+		if (this.definitionProvider) {
+			const parent = await this.definitionProvider.get(SYSTEM_CONTEXT, found.definitionId);
+			if (!parent) return null;
+		}
+		return found;
 	}
 
 	async revoke(_ctx: RequestContext, id: string): Promise<void> {

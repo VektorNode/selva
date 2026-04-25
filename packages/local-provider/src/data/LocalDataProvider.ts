@@ -30,13 +30,21 @@ export class LocalDataProvider implements IDataProvider {
 	static fromEnv(env: Record<string, string | undefined>): LocalDataProvider {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
 		const loader = new LocalOrgStoreLoader(env.DATA_PATH);
+		const projects = new LocalProjectStore(loader);
+		const definitions = LocalDefinitionStore.fromEnv(env);
+		const shareLinks = LocalShareLinkStore.fromEnv(env);
+		// Wire cross-store deps: canEditDefinition needs the project store, and
+		// share-link resolution needs the definition store to enforce the §7
+		// soft-delete cascade (Supabase does the equivalent via JOIN).
+		definitions.setProjectProvider(projects);
+		shareLinks.setDefinitionProvider(definitions);
 		return new LocalDataProvider(
 			new LocalOrgStore(loader),
-			new LocalProjectStore(loader),
-			LocalDefinitionStore.fromEnv(env),
+			projects,
+			definitions,
 			LocalComputeServerStore.fromEnv(env),
 			LocalInviteStore.fromEnv(env),
-			LocalShareLinkStore.fromEnv(env)
+			shareLinks
 		);
 	}
 

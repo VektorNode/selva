@@ -7,7 +7,15 @@ import type {
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { ProviderError, hasPermission } from '@selva/platform';
+import {
+	ProviderError,
+	hasPermission,
+	auditUpdate,
+	auditSoftDelete,
+	canEdit as ruleCanEdit,
+	canEditProjectSettings as ruleCanEditProjectSettings,
+	canManage as ruleCanManage
+} from '@selva/platform';
 import { paginate, applyOrder } from './pagination.js';
 import type { LocalOrgStoreLoader } from './LocalOrgStore.js';
 
@@ -131,8 +139,7 @@ export class LocalProjectStore implements IProjectStore {
 		store.projects[idx] = {
 			...current,
 			...patch,
-			updatedAt: new Date().toISOString(),
-			updatedBy: ctx.userId || current.updatedBy
+			...auditUpdate(ctx, current.updatedBy ?? current.ownerId)
 		};
 		await this.loader.write(store);
 	}
@@ -141,18 +148,13 @@ export class LocalProjectStore implements IProjectStore {
 		const store = await this.loader.get();
 		const idx = store.projects.findIndex((p) => p.id === id && isLive(p));
 		if (idx === -1) throw new ProviderError(`Project '${id}' not found`, 404);
-		const now = new Date().toISOString();
-		const actor = ctx.userId || store.projects[idx].updatedBy;
-		store.projects[idx] = {
-			...store.projects[idx],
-			deletedAt: now,
-			updatedAt: now,
-			updatedBy: actor
-		};
+		const stamp = auditSoftDelete(
+			ctx,
+			store.projects[idx].updatedBy ?? store.projects[idx].ownerId
+		);
+		store.projects[idx] = { ...store.projects[idx], ...stamp };
 		store.projectMembers = store.projectMembers.map((m) =>
-			m.projectId === id && isLive(m)
-				? { ...m, deletedAt: now, updatedAt: now, updatedBy: actor }
-				: m
+			m.projectId === id && isLive(m) ? { ...m, ...stamp } : m
 		);
 		await this.loader.write(store);
 	}
@@ -181,22 +183,21 @@ export class LocalProjectStore implements IProjectStore {
 
 	async addProjectMember(ctx: RequestContext, member: ProjectMember): Promise<void> {
 		const store = await this.loader.get();
-		const now = new Date().toISOString();
 		// Reactivate a prior soft-deleted row rather than piling rows up.
 		const existing = store.projectMembers.find(
 			(m) => m.projectId === member.projectId && m.userId === member.userId
 		);
 		if (existing) {
 			Object.assign(existing, member, {
-				updatedAt: now,
-				updatedBy: ctx.userId || member.userId,
+				...auditUpdate(ctx, member.userId),
 				deletedAt: null
 			});
 		} else {
+			const stamp = auditUpdate(ctx, member.userId);
 			store.projectMembers.push({
 				...member,
-				updatedAt: member.updatedAt ?? now,
-				updatedBy: member.updatedBy ?? (ctx.userId || member.userId),
+				updatedAt: member.updatedAt ?? stamp.updatedAt,
+				updatedBy: member.updatedBy ?? stamp.updatedBy,
 				deletedAt: null
 			});
 		}
@@ -215,8 +216,7 @@ export class LocalProjectStore implements IProjectStore {
 		);
 		if (!m) throw new ProviderError(`Project member '${userId}' not found`, 404);
 		m.role = role;
-		m.updatedAt = new Date().toISOString();
-		m.updatedBy = ctx.userId || m.updatedBy;
+		Object.assign(m, auditUpdate(ctx, m.updatedBy));
 		await this.loader.write(store);
 	}
 
@@ -230,37 +230,49 @@ export class LocalProjectStore implements IProjectStore {
 			(m) => m.projectId === projectId && m.userId === userId && isLive(m)
 		);
 		if (!m) return;
-		const now = new Date().toISOString();
-		m.deletedAt = now;
-		m.updatedAt = now;
-		m.updatedBy = ctx.userId || m.updatedBy;
+		Object.assign(m, auditSoftDelete(ctx, m.updatedBy));
 		await this.loader.write(store);
 	}
 
 	async canEdit(ctx: RequestContext, projectId: string): Promise<boolean> {
 		if (hasPermission(ctx, 'instance_admin')) return true;
-		const { projectMembers } = await this.loader.get();
-		const member = projectMembers.find(
-			(m) => m.projectId === projectId && m.userId === ctx.userId && isLive(m)
-		);
-		return member?.role === 'owner' || member?.role === 'editor';
+		return ruleCanEdit(await this.loadAccessInput(ctx, projectId));
 	}
 
 	async canManage(ctx: RequestContext, projectId: string): Promise<boolean> {
 		if (hasPermission(ctx, 'instance_admin')) return true;
-		const { projectMembers } = await this.loader.get();
-		const member = projectMembers.find(
-			(m) => m.projectId === projectId && m.userId === ctx.userId && isLive(m)
-		);
-		return member?.role === 'owner';
+		return ruleCanManage(await this.loadAccessInput(ctx, projectId));
 	}
 
 	async canEditProjectSettings(ctx: RequestContext, projectId: string): Promise<boolean> {
 		if (hasPermission(ctx, 'instance_admin')) return true;
-		const { projectMembers } = await this.loader.get();
-		const member = projectMembers.find(
-			(m) => m.projectId === projectId && m.userId === ctx.userId && isLive(m)
-		);
-		return member?.role === 'owner';
+		return ruleCanEditProjectSettings(await this.loadAccessInput(ctx, projectId));
+	}
+
+	private async loadAccessInput(
+		ctx: RequestContext,
+		projectId: string
+	): Promise<{
+		platformPermissions: RequestContext['platformPermissions'];
+		orgPermissions: RequestContext['orgPermissions'];
+		project: Project | null;
+		member: ProjectMember | null;
+		orgMember: null;
+		allowCrossOrgPublic: boolean;
+	}> {
+		const { projects, projectMembers } = await this.loader.get();
+		const project = projects.find((p) => p.id === projectId && isLive(p)) ?? null;
+		const member =
+			projectMembers.find(
+				(m) => m.projectId === projectId && m.userId === ctx.userId && isLive(m)
+			) ?? null;
+		return {
+			platformPermissions: ctx.platformPermissions,
+			orgPermissions: ctx.orgPermissions,
+			project,
+			member,
+			orgMember: null,
+			allowCrossOrgPublic: false
+		};
 	}
 }

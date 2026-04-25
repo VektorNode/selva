@@ -7,15 +7,23 @@ import type {
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { ProviderError } from '@selva/platform';
+import {
+	ProviderError,
+	auditSoftDelete,
+	hasPermission,
+	canEdit as ruleCanEdit,
+	canEditProjectSettings as ruleCanEditProjectSettings,
+	canManage as ruleCanManage
+} from '@selva/platform';
 import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
 
 /**
  * Project + project-membership store backed by Postgres. Visibility semantics
  * (public / org / private) are enforced by the `visible_project()` helper in
- * RLS; `canEdit` / `canEditProjectSettings` / `canManage` call into the same
- * SQL helpers so UI gating matches policy evaluation exactly.
+ * RLS. The `canEdit` / `canEditProjectSettings` / `canManage` methods delegate
+ * to the canonical pure rules in `@selva/platform/access` so UI gating matches
+ * the documented policy exactly (Permissions.md §5).
  *
  * `createProject` atomically seeds the creator as the project `owner` in
  * `project_members` so subsequent user-scoped reads can see it.
@@ -35,6 +43,7 @@ export class SupabaseProjectStore implements IProjectStore {
 			.from('projects')
 			.select('*', { count: 'exact' })
 			.eq('org_id', orgId)
+			.is('deleted_at', null)
 			.order(orderColumn(opts?.orderBy), { ascending: direction === 'asc' })
 			.range(range.from, range.to);
 		if (error) throw mapError(error);
@@ -48,6 +57,7 @@ export class SupabaseProjectStore implements IProjectStore {
 			.from('projects')
 			.select('*')
 			.eq('id', id)
+			.is('deleted_at', null)
 			.maybeSingle();
 		if (error) throw mapError(error);
 		return data ? rowToProject(data) : null;
@@ -64,6 +74,7 @@ export class SupabaseProjectStore implements IProjectStore {
 			.select('*')
 			.eq('org_id', orgId)
 			.eq('slug', slug)
+			.is('deleted_at', null)
 			.maybeSingle();
 		if (error) throw mapError(error);
 		return data ? rowToProject(data) : null;
@@ -75,13 +86,19 @@ export class SupabaseProjectStore implements IProjectStore {
 		if (error) throw mapError(error);
 
 		// Seed owner membership so user-scoped reads see the project post-create.
-		const { error: memberError } = await client.from('project_members').insert({
-			project_id: project.id,
-			user_id: project.ownerId,
-			role: 'owner',
-			joined_at: new Date().toISOString()
-		});
-		if (memberError && !isUniqueViolation(memberError)) throw mapError(memberError);
+		// Upsert so a stale soft-deleted row from a prior project with the same id
+		// is reactivated rather than blocking creation.
+		const { error: memberError } = await client.from('project_members').upsert(
+			{
+				project_id: project.id,
+				user_id: project.ownerId,
+				role: 'owner',
+				joined_at: new Date().toISOString(),
+				deleted_at: null
+			},
+			{ onConflict: 'project_id,user_id' }
+		);
+		if (memberError) throw mapError(memberError);
 	}
 
 	async updateProject(
@@ -101,20 +118,49 @@ export class SupabaseProjectStore implements IProjectStore {
 		if (patch.visibility !== undefined) row.visibility = patch.visibility;
 		if (patch.autoJoinOnUpload !== undefined) row.auto_join_on_upload = patch.autoJoinOnUpload;
 		if (Object.keys(row).length === 0) return;
+		if (ctx.userId) row.updated_by = ctx.userId;
 
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('projects')
 			.update(row)
 			.eq('id', id)
+			.is('deleted_at', null)
 			.select('id');
 		if (error) throw mapError(error);
 		if (!data || data.length === 0) throw new ProviderError(`Project '${id}' not found`, 404);
 	}
 
 	async deleteProject(ctx: RequestContext, id: string): Promise<void> {
-		const { error } = await this.clients.forRequest(ctx).from('projects').delete().eq('id', id);
+		// §9 soft-delete with cascade. Mirrors LocalProjectStore: project →
+		// project_members, definitions. FK CASCADE doesn't fire on soft-delete,
+		// so the cascade is in app code.
+		const client = this.clients.forRequest(ctx);
+		const stamp = auditSoftDelete(ctx, ctx.userId);
+		const stampRow = stampToRow(stamp);
+
+		const { data, error } = await client
+			.from('projects')
+			.update(stampRow)
+			.eq('id', id)
+			.is('deleted_at', null)
+			.select('id');
 		if (error) throw mapError(error);
+		if (!data || data.length === 0) throw new ProviderError(`Project '${id}' not found`, 404);
+
+		const { error: pmErr } = await client
+			.from('project_members')
+			.update(stampRow)
+			.eq('project_id', id)
+			.is('deleted_at', null);
+		if (pmErr) throw mapError(pmErr);
+
+		const { error: defErr } = await client
+			.from('definitions')
+			.update(stampRow)
+			.eq('project_id', id)
+			.is('deleted_at', null);
+		if (defErr) throw mapError(defErr);
 	}
 
 	// ── Project members ──────────────────────────────────────────────────────
@@ -130,6 +176,7 @@ export class SupabaseProjectStore implements IProjectStore {
 			.from('project_members')
 			.select('*', { count: 'exact' })
 			.eq('project_id', projectId)
+			.is('deleted_at', null)
 			.order('joined_at', { ascending: (opts?.orderDir ?? 'desc') === 'asc' })
 			.range(range.from, range.to);
 		if (error) throw mapError(error);
@@ -148,16 +195,24 @@ export class SupabaseProjectStore implements IProjectStore {
 			.select('*')
 			.eq('project_id', projectId)
 			.eq('user_id', userId)
+			.is('deleted_at', null)
 			.maybeSingle();
 		if (error) throw mapError(error);
 		return data ? rowToProjectMember(data) : null;
 	}
 
 	async addProjectMember(ctx: RequestContext, member: ProjectMember): Promise<void> {
+		// Upsert reactivates a prior soft-deleted row instead of throwing
+		// duplicate-key. Mirrors LocalProjectStore.addProjectMember.
+		const row: Record<string, unknown> = {
+			...projectMemberToRow(member),
+			deleted_at: null
+		};
+		if (ctx.userId) row.updated_by = ctx.userId;
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('project_members')
-			.insert(projectMemberToRow(member));
+			.upsert(row, { onConflict: 'project_id,user_id' });
 		if (error) throw mapError(error);
 	}
 
@@ -167,12 +222,15 @@ export class SupabaseProjectStore implements IProjectStore {
 		userId: string,
 		role: ProjectRole
 	): Promise<void> {
+		const row: Record<string, unknown> = { role };
+		if (ctx.userId) row.updated_by = ctx.userId;
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('project_members')
-			.update({ role })
+			.update(row)
 			.eq('project_id', projectId)
 			.eq('user_id', userId)
+			.is('deleted_at', null)
 			.select('user_id');
 		if (error) throw mapError(error);
 		if (!data || data.length === 0)
@@ -184,74 +242,62 @@ export class SupabaseProjectStore implements IProjectStore {
 		projectId: string,
 		userId: string
 	): Promise<void> {
+		const stamp = auditSoftDelete(ctx, ctx.userId);
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('project_members')
-			.delete()
+			.update(stampToRow(stamp))
 			.eq('project_id', projectId)
-			.eq('user_id', userId);
+			.eq('user_id', userId)
+			.is('deleted_at', null);
 		if (error) throw mapError(error);
 	}
 
-	// ── Access checks (UI gating — mutating methods are the real boundary) ──
+	// ── Access checks (UI gating — delegate to canonical pure rules in
+	// @selva/platform/access; mutating methods are the real boundary) ──
 
 	async canEdit(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (ctx.platformPermissions.includes('instance_admin')) return true;
-		const { data, error } = await this.clients
-			.forRequest(ctx)
-			.from('project_members')
-			.select('role')
-			.eq('project_id', projectId)
-			.eq('user_id', ctx.userId)
-			.maybeSingle();
-		if (error) throw mapError(error);
-		if (data?.role === 'owner' || data?.role === 'editor') return true;
-
-		// `manage_definitions` + public project + member of the org → can edit.
-		if (!ctx.orgPermissions.includes('manage_definitions')) return false;
-		const { data: project, error: projectError } = await this.clients
-			.forRequest(ctx)
-			.from('projects')
-			.select('visibility, org_id')
-			.eq('id', projectId)
-			.maybeSingle();
-		if (projectError) throw mapError(projectError);
-		if (!project || project.visibility !== 'public') return false;
-		// RLS on org_members already restricts to caller's orgs.
-		const { data: member } = await this.clients
-			.forRequest(ctx)
-			.from('org_members')
-			.select('user_id')
-			.eq('org_id', project.org_id)
-			.eq('user_id', ctx.userId)
-			.maybeSingle();
-		return member !== null;
+		if (hasPermission(ctx, 'instance_admin')) return true;
+		return ruleCanEdit(await this.loadAccessInput(ctx, projectId));
 	}
 
 	async canEditProjectSettings(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (ctx.platformPermissions.includes('instance_admin')) return true;
-		const { data } = await this.clients
-			.forRequest(ctx)
-			.from('project_members')
-			.select('role')
-			.eq('project_id', projectId)
-			.eq('user_id', ctx.userId)
-			.maybeSingle();
-		if (data?.role === 'owner') return true;
-		if (data?.role === 'editor' && ctx.orgPermissions.includes('manage_definitions')) return true;
-		return false;
+		if (hasPermission(ctx, 'instance_admin')) return true;
+		return ruleCanEditProjectSettings(await this.loadAccessInput(ctx, projectId));
 	}
 
 	async canManage(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (ctx.platformPermissions.includes('instance_admin')) return true;
-		const { data } = await this.clients
-			.forRequest(ctx)
-			.from('project_members')
-			.select('role')
-			.eq('project_id', projectId)
-			.eq('user_id', ctx.userId)
-			.maybeSingle();
-		return data?.role === 'owner';
+		if (hasPermission(ctx, 'instance_admin')) return true;
+		return ruleCanManage(await this.loadAccessInput(ctx, projectId));
+	}
+
+	/** Load the inputs that the pure project-access rules need. */
+	private async loadAccessInput(
+		ctx: RequestContext,
+		projectId: string
+	): Promise<{
+		platformPermissions: RequestContext['platformPermissions'];
+		orgPermissions: RequestContext['orgPermissions'];
+		project: Project | null;
+		member: ProjectMember | null;
+		orgMember: null;
+		allowCrossOrgPublic: boolean;
+	}> {
+		// Pure project-edit/manage/settings rules don't consult orgMember or the
+		// cross-org-public flag, so we don't pay for those fetches here. Future
+		// rules that do (e.g. `canView`, `canSolve`) will need them.
+		const [project, member] = await Promise.all([
+			this.getProject(ctx, projectId),
+			this.getProjectMember(ctx, projectId, ctx.userId)
+		]);
+		return {
+			platformPermissions: ctx.platformPermissions,
+			orgPermissions: ctx.orgPermissions,
+			project,
+			member,
+			orgMember: null,
+			allowCrossOrgPublic: false
+		};
 	}
 }
 
@@ -354,8 +400,20 @@ interface PostgrestError {
 	message?: string;
 }
 
-function isUniqueViolation(e: unknown): boolean {
-	return Boolean(e && typeof e === 'object' && (e as PostgrestError).code === '23505');
+/**
+ * Build a row payload from an audit-soft-delete stamp. `updated_by` only goes
+ * into the row when ctx.userId is set — passing `''` would violate the
+ * `references auth.users(id)` FK on system contexts. The DB trigger sets
+ * `updated_at`, but for soft-delete we set it explicitly so it matches
+ * `deleted_at` (single timestamp for the deletion event).
+ */
+function stampToRow(stamp: { updatedAt: string; updatedBy: string; deletedAt: string }): Record<string, unknown> {
+	const row: Record<string, unknown> = {
+		deleted_at: stamp.deletedAt,
+		updated_at: stamp.updatedAt
+	};
+	if (stamp.updatedBy) row.updated_by = stamp.updatedBy;
+	return row;
 }
 
 function mapError(e: unknown): Error {

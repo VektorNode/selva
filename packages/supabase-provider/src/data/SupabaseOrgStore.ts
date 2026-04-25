@@ -8,7 +8,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { DEFAULT_ORG_PERMISSIONS, ProviderError } from '@selva/platform';
+import { DEFAULT_ORG_PERMISSIONS, ProviderError, auditUpdate, auditSoftDelete } from '@selva/platform';
 import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
 
@@ -31,6 +31,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.forRequest(ctx)
 			.from('orgs')
 			.select('*', { count: 'exact' })
+			.is('deleted_at', null)
 			.order(orderColumn(opts?.orderBy), { ascending: direction === 'asc' })
 			.range(range.from, range.to);
 		if (error) throw mapError(error);
@@ -44,6 +45,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.from('orgs')
 			.select('*')
 			.eq('id', id)
+			.is('deleted_at', null)
 			.maybeSingle();
 		if (error) throw mapError(error);
 		return data ? rowToOrg(data) : null;
@@ -55,6 +57,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.from('orgs')
 			.select('*')
 			.eq('slug', slug)
+			.is('deleted_at', null)
 			.maybeSingle();
 		if (error) throw mapError(error);
 		return data ? rowToOrg(data) : null;
@@ -68,15 +71,20 @@ export class SupabaseOrgStore implements IOrgStore {
 		// Seed owner membership so user-scoped queries can see the org post-create.
 		// Service-role bypasses RLS, but the same code path runs for user-scoped
 		// callers — the membership row is what makes them visible to themselves.
-		const { error: memberError } = await client.from('org_members').insert({
-			org_id: org.id,
-			user_id: org.ownerId,
-			role: 'owner',
-			permissions: [...DEFAULT_ORG_PERMISSIONS.owner],
-			joined_at: new Date().toISOString()
-		});
-		// Ignore duplicate-key — the app may pre-seed. Surface anything else.
-		if (memberError && !isUniqueViolation(memberError)) throw mapError(memberError);
+		// Upsert so a stale soft-deleted row from a prior org with the same id
+		// is reactivated rather than blocking creation.
+		const { error: memberError } = await client.from('org_members').upsert(
+			{
+				org_id: org.id,
+				user_id: org.ownerId,
+				role: 'owner',
+				permissions: [...DEFAULT_ORG_PERMISSIONS.owner],
+				joined_at: new Date().toISOString(),
+				deleted_at: null
+			},
+			{ onConflict: 'org_id,user_id' }
+		);
+		if (memberError) throw mapError(memberError);
 	}
 
 	async updateOrg(
@@ -88,20 +96,82 @@ export class SupabaseOrgStore implements IOrgStore {
 		if (patch.name !== undefined) row.name = patch.name;
 		if (patch.slug !== undefined) row.slug = patch.slug;
 		if (Object.keys(row).length === 0) return;
+		// `updated_at` is set by the trg_orgs_updated_at trigger; `updated_by`
+		// is not, so stamp it here. ctx.userId can be empty in system contexts —
+		// the DB FK is `on delete set null` so passing empty would fail; let it
+		// fall back to whatever's already on the row by omitting in that case.
+		if (ctx.userId) row.updated_by = ctx.userId;
 
 		const { error, data } = await this.clients
 			.forRequest(ctx)
 			.from('orgs')
 			.update(row)
 			.eq('id', id)
+			.is('deleted_at', null)
 			.select('id');
 		if (error) throw mapError(error);
 		if (!data || data.length === 0) throw new ProviderError(`Org '${id}' not found`, 404);
 	}
 
 	async deleteOrg(ctx: RequestContext, id: string): Promise<void> {
-		const { error } = await this.clients.forRequest(ctx).from('orgs').delete().eq('id', id);
-		if (error) throw mapError(error);
+		// §9 soft-delete with cascade. Mirrors LocalOrgStore: org → org_members,
+		// projects → project_members, definitions. Hard delete is reserved for
+		// the background janitor; user-facing deletes preserve the audit trail.
+		const client = this.clients.forRequest(ctx);
+		const stamp = auditSoftDelete(ctx, ctx.userId);
+		const stampRow = stampToRow(stamp);
+
+		// Org itself.
+		const { error: orgErr, data: orgData } = await client
+			.from('orgs')
+			.update(stampRow)
+			.eq('id', id)
+			.is('deleted_at', null)
+			.select('id');
+		if (orgErr) throw mapError(orgErr);
+		if (!orgData || orgData.length === 0) throw new ProviderError(`Org '${id}' not found`, 404);
+
+		// Cascade: org_members.
+		const { error: omErr } = await client
+			.from('org_members')
+			.update(stampRow)
+			.eq('org_id', id)
+			.is('deleted_at', null);
+		if (omErr) throw mapError(omErr);
+
+		// Cascade: projects in this org. Fetch IDs first so we can cascade to
+		// project_members and definitions in app code (Postgres FK CASCADE only
+		// fires on hard DELETE, which we're not doing here).
+		const { data: orgProjects, error: projFetchErr } = await client
+			.from('projects')
+			.select('id')
+			.eq('org_id', id)
+			.is('deleted_at', null);
+		if (projFetchErr) throw mapError(projFetchErr);
+		const projectIds = (orgProjects ?? []).map((p) => p.id as string);
+
+		const { error: projErr } = await client
+			.from('projects')
+			.update(stampRow)
+			.eq('org_id', id)
+			.is('deleted_at', null);
+		if (projErr) throw mapError(projErr);
+
+		if (projectIds.length > 0) {
+			const { error: pmErr } = await client
+				.from('project_members')
+				.update(stampRow)
+				.in('project_id', projectIds)
+				.is('deleted_at', null);
+			if (pmErr) throw mapError(pmErr);
+
+			const { error: defErr } = await client
+				.from('definitions')
+				.update(stampRow)
+				.in('project_id', projectIds)
+				.is('deleted_at', null);
+			if (defErr) throw mapError(defErr);
+		}
 	}
 
 	// ── Org members ──────────────────────────────────────────────────────────
@@ -117,6 +187,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.from('org_members')
 			.select('*', { count: 'exact' })
 			.eq('org_id', orgId)
+			.is('deleted_at', null)
 			.order('joined_at', { ascending: (opts?.orderDir ?? 'desc') === 'asc' })
 			.range(range.from, range.to);
 		if (error) throw mapError(error);
@@ -135,16 +206,24 @@ export class SupabaseOrgStore implements IOrgStore {
 			.select('*')
 			.eq('org_id', orgId)
 			.eq('user_id', userId)
+			.is('deleted_at', null)
 			.maybeSingle();
 		if (error) throw mapError(error);
 		return data ? rowToOrgMember(data) : null;
 	}
 
 	async addOrgMember(ctx: RequestContext, member: OrgMember): Promise<void> {
+		// Upsert so a prior soft-deleted row is reactivated rather than throwing
+		// a duplicate-key error. Mirrors LocalOrgStore.addOrgMember.
+		const row: Record<string, unknown> = {
+			...memberToRow(member),
+			deleted_at: null
+		};
+		if (ctx.userId) row.updated_by = ctx.userId;
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
-			.insert(memberToRow(member));
+			.upsert(row, { onConflict: 'org_id,user_id' });
 		if (error) throw mapError(error);
 	}
 
@@ -155,12 +234,18 @@ export class SupabaseOrgStore implements IOrgStore {
 		role: OrgRole
 	): Promise<void> {
 		// Role change re-seeds default permissions. Matches LocalOrgStore.
+		const row: Record<string, unknown> = {
+			role,
+			permissions: [...DEFAULT_ORG_PERMISSIONS[role]]
+		};
+		if (ctx.userId) row.updated_by = ctx.userId;
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
-			.update({ role, permissions: [...DEFAULT_ORG_PERMISSIONS[role]] })
+			.update(row)
 			.eq('org_id', orgId)
 			.eq('user_id', userId)
+			.is('deleted_at', null)
 			.select('user_id');
 		if (error) throw mapError(error);
 		if (!data || data.length === 0)
@@ -176,12 +261,15 @@ export class SupabaseOrgStore implements IOrgStore {
 		// Replace permissions only. Matches LocalOrgStore.updateOrgMemberPermissions —
 		// distinct from role change so callers can grant a finer-grained set without
 		// re-seeding defaults from the role.
+		const row: Record<string, unknown> = { permissions: [...permissions] };
+		if (ctx.userId) row.updated_by = ctx.userId;
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
-			.update({ permissions: [...permissions] })
+			.update(row)
 			.eq('org_id', orgId)
 			.eq('user_id', userId)
+			.is('deleted_at', null)
 			.select('user_id');
 		if (error) throw mapError(error);
 		if (!data || data.length === 0)
@@ -189,35 +277,57 @@ export class SupabaseOrgStore implements IOrgStore {
 	}
 
 	async removeOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<void> {
-		const client = this.clients.forRequest(ctx);
-
 		// §9 cascade — losing org membership ends every project membership scoped
-		// to that tenant. Run this BEFORE deleting org_members so RLS policies
-		// that gate project_members on org_member existence still pass for the
-		// duration of the cascade.
+		// to that tenant. Soft-delete the org_member row, then cascade-soft-delete
+		// the user's project_members for any project in this org. Run the project
+		// cascade BEFORE the org_member update so RLS policies that gate
+		// project_members on org_member existence still pass for the duration.
+		const client = this.clients.forRequest(ctx);
+		const stamp = auditSoftDelete(ctx, ctx.userId);
+		const stampRow = stampToRow(stamp);
+
 		const { data: orgProjects, error: projError } = await client
 			.from('projects')
 			.select('id')
-			.eq('org_id', orgId);
+			.eq('org_id', orgId)
+			.is('deleted_at', null);
 		if (projError) throw mapError(projError);
 
-		const projectIds = (orgProjects ?? []).map((p) => p.id);
+		const projectIds = (orgProjects ?? []).map((p) => p.id as string);
 		if (projectIds.length > 0) {
 			const { error: pmError } = await client
 				.from('project_members')
-				.delete()
+				.update(stampRow)
 				.in('project_id', projectIds)
-				.eq('user_id', userId);
+				.eq('user_id', userId)
+				.is('deleted_at', null);
 			if (pmError) throw mapError(pmError);
 		}
 
 		const { error } = await client
 			.from('org_members')
-			.delete()
+			.update(stampRow)
 			.eq('org_id', orgId)
-			.eq('user_id', userId);
+			.eq('user_id', userId)
+			.is('deleted_at', null);
 		if (error) throw mapError(error);
 	}
+}
+
+/**
+ * Build a row payload from an audit-soft-delete stamp. `updated_by` only
+ * goes into the row when ctx.userId is set — passing `''` would violate the
+ * `references auth.users(id)` FK on system contexts. The DB trigger sets
+ * `updated_at`, but for soft-delete we set it explicitly so it matches
+ * `deleted_at` (single timestamp for the deletion event).
+ */
+function stampToRow(stamp: { updatedAt: string; updatedBy: string; deletedAt: string }): Record<string, unknown> {
+	const row: Record<string, unknown> = {
+		deleted_at: stamp.deletedAt,
+		updated_at: stamp.updatedAt
+	};
+	if (stamp.updatedBy) row.updated_by = stamp.updatedBy;
+	return row;
 }
 
 // ── Row ↔ domain mappers ────────────────────────────────────────────────
@@ -308,10 +418,6 @@ interface PostgrestError {
 	code?: string;
 	message?: string;
 	details?: string;
-}
-
-function isUniqueViolation(e: unknown): boolean {
-	return Boolean(e && typeof e === 'object' && (e as PostgrestError).code === '23505');
 }
 
 function mapError(e: unknown): Error {
