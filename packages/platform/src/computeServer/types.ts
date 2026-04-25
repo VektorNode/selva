@@ -1,6 +1,12 @@
 export interface ComputeServerConfig {
 	/** UUID v4 primary key */
 	id: string;
+	/**
+	 * Spec §3 — `null` (or omitted) for instance-pool servers, an org id for
+	 * BYO compute overrides. Stores filter by this on read so the right
+	 * scope is returned for each ctx.
+	 */
+	orgId?: string | null;
 	/** Human-readable display label */
 	label: string;
 	/** Base URL of the Rhino.Compute instance, e.g. http://localhost:5000 */

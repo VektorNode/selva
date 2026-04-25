@@ -29,7 +29,7 @@ Test: `curl http://localhost:3000/api/health`
 
 ## ecosystem.config.cjs
 
-The example below assumes the **local provider**. Swap the `DATA_PATH` / `SESSION_SECRET` / `ADMIN_PASSWORD` block for the corresponding Supabase vars when using `@selva/supabase-provider` (see that package's README).
+The example below assumes the **local provider**. Swap the `DATA_PATH` / `SESSION_SECRET` block for the corresponding Supabase vars when using `@selva/supabase-provider` (see that package's README).
 
 ```javascript
 env: {
@@ -41,10 +41,10 @@ env: {
 
     // ---- Local provider ----
     DATA_PATH: '/absolute/path/to/data',      // Always absolute
-    SESSION_SECRET: 'your-random-32-byte-hex-secret',
-    ADMIN_PASSWORD: 'your-secure-password'
+    SESSION_SECRET: 'your-random-32-byte-hex-secret'
 }
-// Rhino.Compute URL + API key are configured in /admin/compute after first boot
+// First admin user is created via the in-app setup page on first boot.
+// Rhino.Compute URL + API key are configured in /admin/compute after first boot.
 ```
 
 See [`example.ecosystem.config.cjs`](../../../example.ecosystem.config.cjs) at the repo root for the canonical template.

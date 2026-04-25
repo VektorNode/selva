@@ -38,10 +38,16 @@ export function readEnv(): TestContext | null {
  */
 export async function resetAllData(ctx: TestContext): Promise<void> {
 	await truncate(ctx, 'invites');
-	await truncate(ctx, 'definition_history');
+	// Versions FK to definitions ON DELETE CASCADE, but `definitions` can't
+	// be wiped while live/draft pointers reference versions (ON DELETE
+	// RESTRICT, spec §6). Null the pointers, drop versions, then drop defs.
+	await ctx.adminClient
+		.from('definitions')
+		.update({ live_version_id: null, draft_version_id: null })
+		.not('guid', 'is', null);
+	await truncate(ctx, 'definition_versions');
 	await truncate(ctx, 'definitions');
 	await truncate(ctx, 'project_members');
-	await truncate(ctx, 'projects');
 	// compute_server_defaults has a platform_default sibling — reset both.
 	await truncate(ctx, 'compute_server_defaults');
 	await resetComputePlatformDefault(ctx);
@@ -74,7 +80,7 @@ function columnForDeleteAll(table: string): string {
 	if (table === 'project_members') return 'user_id';
 	if (table === 'user_profiles') return 'user_id';
 	if (table === 'definitions') return 'guid';
-	if (table === 'definition_history') return 'definition_guid';
+	if (table === 'definition_versions') return 'id';
 	if (table === 'compute_server_defaults') return 'org_id';
 	return 'id';
 }

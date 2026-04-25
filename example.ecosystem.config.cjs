@@ -20,10 +20,10 @@ module.exports = {
 				// Rhino.Compute server URL + API key are configured in the admin dashboard
 				// (/admin/compute), not here.
 				NODE_ENV: 'production',
-				ADMIN_PASSWORD: 'your-secure-password',
 				// Used to sign admin session cookies — must be stable across restarts.
 				// Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 				SESSION_SECRET: 'your-random-32-byte-hex-secret'
+				// First admin user is created via the in-app setup page on first boot.
 			}
 		}
 	]

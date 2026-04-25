@@ -9,8 +9,8 @@ import {
 } from 'selva-compute';
 import type { SchemaInput } from 'selva-shared';
 import { error, json, isHttpError } from '@sveltejs/kit';
-import { getComputeServerConfigStore } from '$lib/server/providers.server';
-import { resolveComputeServer, SYSTEM_CONTEXT } from '@selva/platform';
+import type { ComputeServerConfig } from '@selva/platform';
+import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
 import { getStorageProvider, providers } from '$lib/server/providers.server';
 import { requireCanSolve, requireCanEditDefinition } from '$lib/server/access.server';
 
@@ -37,18 +37,16 @@ let cachedClient: GrasshopperClient | null = null;
 let cachedClientConfig: { serverUrl: string; apiKey?: string } | null = null;
 
 /**
- * Get or create a GrasshopperClient instance.
- * Reuses existing client if config hasn't changed.
+ * Get or create a GrasshopperClient for the resolved server. The cache is
+ * keyed by serverUrl + apiKey identity so distinct orgs sharing a server
+ * reuse one warm client; switching servers invalidates and rebuilds.
  */
-async function getClient(_definitionGuid?: string): Promise<GrasshopperClient> {
-	const config = await getComputeServerConfigStore().getConfig(SYSTEM_CONTEXT);
-	const serverConfig = resolveComputeServer(config);
+async function getClient(serverConfig: ComputeServerConfig): Promise<GrasshopperClient> {
 	const currentConfig = {
 		serverUrl: serverConfig.serverUrl,
 		apiKey: serverConfig.apiKey
 	};
 
-	// Check if we can reuse cached client
 	if (
 		cachedClient &&
 		cachedClientConfig &&
@@ -58,13 +56,11 @@ async function getClient(_definitionGuid?: string): Promise<GrasshopperClient> {
 		return cachedClient;
 	}
 
-	// Create new client
 	cachedClient = await GrasshopperClient.create({
 		serverUrl: currentConfig.serverUrl,
 		apiKey: currentConfig.apiKey
 	});
 	cachedClientConfig = currentConfig;
-
 	return cachedClient;
 }
 
@@ -170,10 +166,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		let definitionSource: Uint8Array;
-
-		const definitionGuid = definitionUrl.startsWith('local:')
-			? definitionUrl.substring(6)
-			: undefined;
+		// Track which org owns the definition so BYO compute can route the solve
+		// to that org's override server (spec §3). Null when the definition is
+		// externally hosted — no tenant context, fall through to instance pool.
+		let solveOrgId: string | null = null;
 
 		if (definitionUrl.startsWith('local:')) {
 			const guid = definitionUrl.substring(6);
@@ -185,6 +181,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				throw error(404, `Definition '${guid}' not found`);
 			}
 			if (!record) throw error(404, `Definition '${guid}' not found`);
+
+			const project = await providers.data.projects.getProject(locals.ctx, record.projectId);
+			solveOrgId = project?.orgId ?? null;
 
 			// 'live' is the public channel; 'draft' is for editors only (spec §6).
 			if (channel === 'draft') {
@@ -230,8 +229,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				.map((input) => transformInputParameter(input, values[input.id]))
 		);
 
-		// Use cached client (passes definitionGuid for potential per-definition routing)
-		const client = await getClient(definitionGuid);
+		const serverConfig = await resolveServerForOrg(locals.ctx, solveOrgId);
+		const client = await getClient(serverConfig);
 		const solvedDefinition = await client.solve(definitionSource, inputTree);
 
 		return json(solvedDefinition);

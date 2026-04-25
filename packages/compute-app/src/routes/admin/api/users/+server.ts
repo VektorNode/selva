@@ -33,7 +33,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 	if (page === null) {
 		throw error(
 			501,
-			'User management is not supported in single-password mode. Configure a users.json path to enable it.'
+			'User management is not supported by the current auth provider. Configure DATA_PATH (local provider) or check your provider wiring.'
 		);
 	}
 

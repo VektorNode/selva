@@ -240,7 +240,7 @@
 					<Card.Title>User Management</Card.Title>
 					<Card.Description>
 						{#if data.users === null}
-							Single-password mode — configure a users.json path to enable multi-user management.
+							The current auth provider does not expose a user store. Configure DATA_PATH (local provider) or check your provider wiring.
 						{:else}
 							{data.users.length} user{data.users.length === 1 ? '' : 's'}
 						{/if}
@@ -422,10 +422,10 @@
 					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
 				>
 					<ShieldCheck class="text-muted-foreground mb-3 h-8 w-8" />
-					<p class="text-sm font-medium">Single-password mode active</p>
+					<p class="text-sm font-medium">User store unavailable</p>
 					<p class="text-muted-foreground mt-1 text-sm">
-						Set a <code class="text-xs">usersFilePath</code> in your
-						<code class="text-xs">selva.config.ts</code> to manage multiple users.
+						Set <code class="text-xs">DATA_PATH</code> (local provider) or check your provider
+						wiring in <code class="text-xs">selva.config.ts</code>.
 					</p>
 				</div>
 			{:else if data.users.length === 0}

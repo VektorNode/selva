@@ -3,6 +3,7 @@ import type {
 	Organization,
 	OrgMember,
 	OrgRole,
+	OrgPermission,
 	RequestContext,
 	ListOptions,
 	Page
@@ -166,9 +167,51 @@ export class SupabaseOrgStore implements IOrgStore {
 			throw new ProviderError(`Org member '${userId}' not found`, 404);
 	}
 
-	async removeOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<void> {
-		const { error } = await this.clients
+	async updateOrgMemberPermissions(
+		ctx: RequestContext,
+		orgId: string,
+		userId: string,
+		permissions: readonly OrgPermission[]
+	): Promise<void> {
+		// Replace permissions only. Matches LocalOrgStore.updateOrgMemberPermissions —
+		// distinct from role change so callers can grant a finer-grained set without
+		// re-seeding defaults from the role.
+		const { data, error } = await this.clients
 			.forRequest(ctx)
+			.from('org_members')
+			.update({ permissions: [...permissions] })
+			.eq('org_id', orgId)
+			.eq('user_id', userId)
+			.select('user_id');
+		if (error) throw mapError(error);
+		if (!data || data.length === 0)
+			throw new ProviderError(`Org member '${userId}' not found`, 404);
+	}
+
+	async removeOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<void> {
+		const client = this.clients.forRequest(ctx);
+
+		// §9 cascade — losing org membership ends every project membership scoped
+		// to that tenant. Run this BEFORE deleting org_members so RLS policies
+		// that gate project_members on org_member existence still pass for the
+		// duration of the cascade.
+		const { data: orgProjects, error: projError } = await client
+			.from('projects')
+			.select('id')
+			.eq('org_id', orgId);
+		if (projError) throw mapError(projError);
+
+		const projectIds = (orgProjects ?? []).map((p) => p.id);
+		if (projectIds.length > 0) {
+			const { error: pmError } = await client
+				.from('project_members')
+				.delete()
+				.in('project_id', projectIds)
+				.eq('user_id', userId);
+			if (pmError) throw mapError(pmError);
+		}
+
+		const { error } = await client
 			.from('org_members')
 			.delete()
 			.eq('org_id', orgId)
