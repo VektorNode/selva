@@ -180,6 +180,13 @@ A distinct function from `canView`. **Today its body is `canView(...)`** — if 
 
 It exists as a separate function so future solve-gating (cost quotas, rate limits, compute-budget checks) has an obvious home without touching every call site or retrofitting `canView` semantics. Authorization and cost are two different concerns; keeping the functions distinct keeps them from tangling.
 
+### `canEdit(project, user) → bool` — project-level edit gate
+
+- Project `owner` or `editor` → yes
+- Otherwise → no
+
+The generic "can this user touch project-scoped resources" predicate. Used where the gate is project-level and definition ownership doesn't apply: filtering the project list to ones the caller can edit, gating new-definition uploads on container projects (commons projects skip this and use the §4 commons contract), and as the building block for `requireCanEdit` in the access layer. Distinct from `canEditDefinition` (which adds the commons-mode definition-owner branch) and `canEditProjectSettings` (owner-only).
+
 ### `canEditDefinition(project, definition, user) → bool`
 
 - Project `owner` or `editor` → **yes** (always — moderation authority)
@@ -391,7 +398,7 @@ Authoritative mapping of HTTP routes to rule checks. `instance_admin` passes eve
 | `/api/definitions/[guid]/share-links`                | `GET/POST` | `canEditDefinition`. POST returns the raw token once.                                                                                                                                         |
 | `/api/definitions/[guid]/share-links/[linkId]`       | `DELETE`   | `canEditDefinition`. Soft-delete (sets `revokedAt`).                                                                                                                                          |
 | `/api/compute/solve`                                 | `POST`     | `canSolve(project, user, ctx)`. Channel: `live` (default) or `draft`; `draft` requires `canEditDefinition`. **A valid `?token=…` (§7) bypasses user auth and grants the token's pinned scope only.** |
-| `/api/compute/schema`                                | `GET`      | `canView(project, user, ctx)`. Same share-link bypass as `/api/compute/solve`.                                                                                                                |
+| `/api/compute/schema`                                | `POST`     | Authenticated. Payload is a user-supplied definition file, so there's no project to gate on; the auth check alone prevents anonymous drain on the compute pool. `ctx.actingOrgId` selects the org's BYO compute when configured. |
 | `/api/org/compute`                                   | `GET/PUT`  | `manage_org_compute`. Gated by `ALLOW_ORG_COMPUTE_OVERRIDE` platform flag. Tenancy implicit via `ctx.actingOrgId`.                                                                            |
 | `/api/invites`                                       | `GET/POST` | `manage_org_members` for the active org.                                                                                                                                                       |
 | `/api/invites/[id]`                                  | `DELETE`   | `manage_org_members`.                                                                                                                                                                          |
@@ -461,7 +468,7 @@ Hard deletion is a background / admin-only operation that removes rows with `del
 ### Request context
 
 - `RequestContext.user` is an **identity**, not specifically a human. A service account, anonymous visitor, or share-token-resolved synthetic identity slots in without changing rule signatures.
-- `RequestContext.actingOrgId` identifies which org the user is acting as. Required on every request that touches tenant-owned data. Prevents cross-org leaks when a user belongs to multiple orgs.
+- `RequestContext.actingOrgId` identifies which org the user is acting as. The field is **optional in the type** (undefined for instance-admin global reads and pre-org routes), but **required at every route handler that touches tenant-owned data** — those handlers reject with 400 when it's missing. Prevents cross-org leaks when a user belongs to multiple orgs.
 - User IDs referenced on entities (e.g., `createdBy`) may become unresolvable over time (account deletion). UI renders as "Deleted user"; entities are not orphaned.
 
 ### Project membership schema
