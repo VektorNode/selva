@@ -76,7 +76,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		if (canManageProjects || isPlatformAdmin) {
 			const usersPage = await getAuthProvider().listUsers({ limit: 200 });
 			const authUsers = usersPage?.items ?? [];
-			const profiles = await getUserProfileStore().getProfiles(authUsers.map((u) => u.id));
+			const profiles = await getUserProfileStore().getProfiles(
+				ctx,
+				authUsers.map((u) => u.id)
+			);
 			const displayById = new Map(profiles.map((p) => [p.userId, p.displayName]));
 			users = authUsers.map((u) => ({ ...u, displayName: displayById.get(u.id) }));
 		}

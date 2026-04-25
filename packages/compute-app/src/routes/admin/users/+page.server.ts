@@ -41,7 +41,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const page = await auth.listUsers({ limit: 200 });
 		if (page) {
 			const orgs = getOrganizationProvider();
-			const profiles = await getUserProfileStore().getProfiles(page.items.map((u) => u.id));
+			const profiles = await getUserProfileStore().getProfiles(
+				ctx,
+				page.items.map((u) => u.id)
+			);
 			const profileById = new Map(profiles.map((p) => [p.userId, p]));
 			const activeOrgId = ctx.actingOrgId;
 			users = await Promise.all(
