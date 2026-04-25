@@ -37,7 +37,9 @@ One role, four permissions. All instance-wide.
 >
 > **`manage_users` renamed to `manage_instance_users`** — symmetric with org-scope `manage_org_members`, no collision possible.
 
-**Invariant: at least one user holds `instance_admin`.** Any operation that would leave the instance with zero `instance_admin`s — revoking the permission, deleting the user, disabling the user — is rejected by the data layer (`IPlatformPermissionStore`). Revocation is blocked inside `set()`; delete/disable is blocked by the route handler consulting `countInstanceAdminsExcluding(targetId)` before calling the auth provider. Mirrored in the admin UI by disabling the relevant control on the sole admin. See §10 for the offboarding pattern; §12 for break-glass recovery if the invariant is ever bypassed.
+**Invariant: at least one user holds `instance_admin`.** Any operation that would leave the instance with zero `instance_admin`s — revoking the permission, deleting the user, disabling the user — is rejected by the data layer (`IPlatformPermissionStore`). Revocation is blocked inside `set()`; delete/disable is blocked by the route handler consulting `countInstanceAdminsExcluding(targetId)` before calling the auth provider. Mirrored in the admin UI by disabling the relevant control on the sole admin. See §10 for the offboarding pattern.
+
+**Break-glass recovery.** If the invariant is ever bypassed by non-runtime means (manual DB edits, restoring from a backup pre-dating the invariant, migration drift), set `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` and have the named user sign in via OAuth. The callback grants every platform permission iff no admin exists *and* the signing-in email matches. The env var also functions as a production hardening — without it, any user can win the bootstrap race on a fresh install; with it, only the configured operator can. Local provider has no equivalent path because admin can be edited directly in `users.json`.
 
 **Deployment modes:**
 
@@ -398,7 +400,7 @@ Authoritative mapping of HTTP routes to rule checks. `instance_admin` passes eve
 | `/api/definitions/[guid]/share-links`                | `GET/POST` | `canEditDefinition`. POST returns the raw token once.                                                                                                                                         |
 | `/api/definitions/[guid]/share-links/[linkId]`       | `DELETE`   | `canEditDefinition`. Soft-delete (sets `revokedAt`).                                                                                                                                          |
 | `/api/compute/solve`                                 | `POST`     | `canSolve(project, user, ctx)`. Channel: `live` (default) or `draft`; `draft` requires `canEditDefinition`. **A valid `?token=…` (§7) bypasses user auth and grants the token's pinned scope only.** |
-| `/api/compute/schema`                                | `POST`     | Authenticated. Payload is a user-supplied definition file, so there's no project to gate on; the auth check alone prevents anonymous drain on the compute pool. `ctx.actingOrgId` selects the org's BYO compute when configured. |
+| `/api/compute/schema?projectId=…`                    | `POST`     | `requireCanCreateDefinition(projectId)` — same gate as creating a definition. Container projects need owner/editor; commons projects accept any authenticated user. The target project's `orgId` selects BYO compute. Used by the upload dialog to preview a user-supplied .gh file's schema before saving. |
 | `/api/org/compute`                                   | `GET/PUT`  | `manage_org_compute`. Gated by `ALLOW_ORG_COMPUTE_OVERRIDE` platform flag. Tenancy implicit via `ctx.actingOrgId`.                                                                            |
 | `/api/invites`                                       | `GET/POST` | `manage_org_members` for the active org.                                                                                                                                                       |
 | `/api/invites/[id]`                                  | `DELETE`   | `manage_org_members`.                                                                                                                                                                          |
@@ -483,7 +485,7 @@ Hard deletion is a background / admin-only operation that removes rows with `del
 
 ### Events (future-proofing)
 
-Every successful mutation emits an internal domain event (`project.created`, `definition.published`, `member.removed`, `share_link.minted`, `share_link.revoked`, …). Initially a no-op sink. Later this becomes the webhook dispatcher, audit-log writer, and analytics source. Design in now; cost is trivial.
+Every successful mutation emits an internal domain event (`project.created`, `definition.published`, `member.removed`, `share_link.minted`, `share_link.revoked`, …). The Supabase deployment wires `SupabaseEventSink`, persisting every event to `public.audit_events` (type, actor, timestamp, full JSONB payload). The local provider stays on `NoopEventSink` — dev mode has no audit requirement. Webhook dispatch and the audit-log viewer UI plug in later as additional `IEventSink` implementations.
 
 ---
 
@@ -492,7 +494,7 @@ Every successful mutation emits an internal domain event (`project.created`, `de
 - **Disable user (instance-wide):** `manage_instance_users` sets `disabled=true`. Sessions invalidated; identity and attribution preserved.
 - **Remove user from org:** org `owner`/`admin` or `manage_org_members`. User loses all project memberships in that org. Still exists on the instance.
 - **Sole-owner projects on offboarding:** removal is **blocked** until a new owner is assigned (manual step). No silent reassignment. If the original owner is unreachable, org `owner`/`admin` uses **Reclaim** (§5 `canReclaim`) to become co-owner first, then proceeds with removal — that's the explicit escape hatch.
-- **Sole instance admin:** revoking `instance_admin`, deleting, or disabling the last user holding `instance_admin` is **blocked** at the data layer (`IPlatformPermissionStore`) — the operation returns `last_admin`, which the API surfaces as **409 Conflict** with an actionable message ("Promote another user to instance admin first"). For revocation the store enforces the invariant directly inside `set`. For delete/disable the route handler consults `countInstanceAdminsExcluding(targetUserId)` BEFORE calling the auth provider, since the auth provider only handles identity and doesn't know about Selva-specific permissions. The admin UI mirrors the lock by disabling the relevant control on the sole admin and surfacing the reason. Symmetric with sole-owner project removal above. Recovery for non-runtime corruption (manual DB edits, bad migrations) is deferred — see §12.
+- **Sole instance admin:** revoking `instance_admin`, deleting, or disabling the last user holding `instance_admin` is **blocked** at the data layer (`IPlatformPermissionStore`) — the operation returns `last_admin`, which the API surfaces as **409 Conflict** with an actionable message ("Promote another user to instance admin first"). For revocation the store enforces the invariant directly inside `set`. For delete/disable the route handler consults `countInstanceAdminsExcluding(targetUserId)` BEFORE calling the auth provider, since the auth provider only handles identity and doesn't know about Selva-specific permissions. The admin UI mirrors the lock by disabling the relevant control on the sole admin and surfacing the reason. Symmetric with sole-owner project removal above. Non-runtime corruption (manual DB edits, bad migrations, backup restore) is recoverable via `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` (§2).
 - **Delete user (hard):** admin-initiated only. Goes through the auth provider. Selva's references resolve to "Deleted user." Share links the user minted are unaffected (they belong to the definition, not the creator).
 - **Org ownership transfer:** explicit action by the current org owner. `instance_admin` can force-transfer as a break-glass.
 
@@ -543,12 +545,11 @@ Designed-for but not implemented. Each can ship later without breaking the model
 - Cross-org guest on a private project
 - Personal scope outside any org
 - Project transfer between orgs (UI — data model allows it)
-- Full audit log storage & UI (hook points exist in the `instance_admin` bypass wrapper and event sink)
+- Audit-log viewer UI. Storage **is** wired in v1: `SupabaseEventSink` persists every domain event to `public.audit_events`. What's deferred is the operator-facing UI for browsing it. The `instance_admin` bypass wrapper is also a hook point for recording cross-tenant admin reads — currently a no-op, lit up when the viewer ships.
 - API tokens / service accounts / PATs (distinct from share links — share links are for unauthenticated end-users; PATs are for authenticated programmatic access)
-- Webhooks (events emit; dispatcher is later)
+- Webhooks (events emit; dispatcher is later — it slots in as another `IEventSink` alongside the audit sink)
 - Per-org data residency / storage backends
 - Project templates / bulk member operations (pressure valve for flat ACLs at scale)
-- Break-glass recovery for zero-`instance_admin` state (e.g., `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` env var auto-promoting on startup, or a `pnpm selva grant-admin <email>` CLI). The §2 invariant prevents this case at runtime; the recovery path is for non-runtime corruption only (manual DB edits, bad migrations, restoring from a backup that pre-dates the invariant).
 
 ---
 

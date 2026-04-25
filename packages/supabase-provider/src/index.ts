@@ -8,6 +8,7 @@ export {
 	SupabaseInviteStore,
 	SupabaseComputeServerStore,
 	SupabaseDataProvider,
+	SupabaseEventSink,
 	buildClientBundle
 } from './data/index.js';
 export type { ClientBundle, BuildClientOptions } from './data/index.js';

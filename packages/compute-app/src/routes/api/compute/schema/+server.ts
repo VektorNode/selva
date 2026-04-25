@@ -1,18 +1,22 @@
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
+import { requireCanCreateDefinition } from '$lib/server/access.server';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { camelcaseKeys } from 'selva-compute/core';
 import type { UISchema } from 'selva-shared';
 
-export const POST: RequestHandler = async ({ request, locals }) => {
-	// Payload is user-supplied, so there's no project to gate on — the auth
-	// check alone prevents anonymous drain attacks on the compute pool.
-	// The user's actingOrgId routes the schema fetch through their BYO compute
-	// when one is configured (spec §3); otherwise instance pool.
-	if (!locals.ctx || !locals.user) {
-		throw error(401, 'Unauthorized');
+export const POST: RequestHandler = async ({ request, locals, url }) => {
+	const projectId = url.searchParams.get('projectId');
+	if (!projectId) {
+		throw error(400, 'projectId query parameter is required');
 	}
-	const server = await resolveServerForOrg(locals.ctx, locals.ctx.actingOrgId ?? null);
+
+	// Same gate as POST /api/definitions: container projects need owner/editor;
+	// commons projects (`autoJoinOnUpload=true`) accept any authenticated user.
+	// Eliminates the random-authenticated-drain path the auth-only check left open.
+	const { project } = await requireCanCreateDefinition(locals, projectId);
+
+	const server = await resolveServerForOrg(locals.ctx!, project.orgId);
 	const formData = await request.formData();
 
 	const schemaUrl = new URL('/grasshopper/schema', server.serverUrl).toString();

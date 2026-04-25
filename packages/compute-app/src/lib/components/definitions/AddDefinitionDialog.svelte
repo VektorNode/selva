@@ -81,12 +81,21 @@
 		if (!file) return;
 
 		displayName = nameFromFile(file);
+
+		// Schema preview needs a target project for the upload-rights gate. If one
+		// isn't picked yet, skip the preview — the user still gets the filename-derived
+		// name and can submit; server-side validation runs on actual upload.
+		if (!selectedProjectId) return;
+
 		validating = true;
 
 		try {
 			const formData = new FormData();
 			formData.append('files', file);
-			const response = await fetch('/api/compute/schema', { method: 'POST', body: formData });
+			const response = await fetch(
+				`/api/compute/schema?projectId=${encodeURIComponent(selectedProjectId)}`,
+				{ method: 'POST', body: formData }
+			);
 
 			// Compute unreachable — skip silently, name already set from filename
 			if (response.status === 404) return;

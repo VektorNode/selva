@@ -1,6 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { ALL_PLATFORM_PERMISSIONS, SYSTEM_CONTEXT } from '@selva/platform';
+import { env } from '$env/dynamic/private';
+import { ALL_PLATFORM_PERMISSIONS, SYSTEM_CONTEXT, type AuthUser } from '@selva/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { getPermissionStore } from '$lib/server/providers.server';
 import { setSessionCookie, setRefreshCookie } from '$lib/server/admin-auth.server';
@@ -11,11 +12,13 @@ import { setSessionCookie, setRefreshCookie } from '$lib/server/admin-auth.serve
  * Completes a Supabase OAuth round-trip. Exchanges the authorization code
  * for a session, sets the session cookie, and redirects to `redirectTo`.
  *
- * **First-OAuth-signin-becomes-admin** (Permissions.md §2 invariant
- * bootstrap): if no user currently holds `instance_admin` and the deployment
- * has no other way to bootstrap one (no password setup form because OIDC-only),
- * the first OAuth sign-in is granted every platform permission. Subsequent
- * sign-ins behave normally.
+ * **Instance-admin bootstrap** (Permissions.md §2 invariant): if no user
+ * currently holds `instance_admin`, the signing-in user is granted every
+ * platform permission. `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` constrains this to a
+ * single configured email — without it, *whoever signs in first wins the race*,
+ * which is fine for fresh self-hosted installs but risky in production. Setting
+ * the env var also doubles as the break-glass recovery path (Permissions.md §12)
+ * when admin is lost to manual DB edits or a backup restore.
  */
 export const GET: RequestHandler = async ({ url, cookies }) => {
 	const code = url.searchParams.get('code');
@@ -29,16 +32,14 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	const oauth = auth as unknown as {
 		exchangeOAuthCode: (
 			code: string
-		) => Promise<{ user: { id: string }; sessionToken: string; refreshToken: string } | null>;
+		) => Promise<{ user: AuthUser; sessionToken: string; refreshToken: string } | null>;
 	};
 	const result = await oauth.exchangeOAuthCode(code);
 	if (!result) throw error(401, 'OAuth exchange failed');
 
-	// First-signin-becomes-admin bootstrap path. Runs at most once per
-	// deployment — once a user holds instance_admin, this branch never fires.
 	const perms = getPermissionStore();
 	const hasAdmin = await perms.hasInstanceAdmin(SYSTEM_CONTEXT);
-	if (!hasAdmin) {
+	if (!hasAdmin && shouldBootstrapAdmin(result.user, env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL)) {
 		await perms.set(SYSTEM_CONTEXT, result.user.id, [...ALL_PLATFORM_PERMISSIONS]);
 	}
 
@@ -49,3 +50,10 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	const dest = rawRedirect && rawRedirect.startsWith('/') ? rawRedirect : '/app';
 	redirect(303, dest);
 };
+
+function shouldBootstrapAdmin(user: AuthUser, configuredEmail: string | undefined): boolean {
+	if (!configuredEmail) return true;
+	const expected = configuredEmail.trim().toLowerCase();
+	const actual = user.email?.trim().toLowerCase();
+	return !!actual && actual === expected;
+}
