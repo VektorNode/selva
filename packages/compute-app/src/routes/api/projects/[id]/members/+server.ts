@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { z } from 'zod';
 import { getProjectProvider } from '$lib/server/providers.server';
-import { requireCanManageMembers } from '$lib/server/access.server';
+import { requireCanManageMembers, requireTargetIsOrgMember } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { ProjectRoleSchema, type ProjectMember } from '@selva/platform';
 
@@ -34,6 +34,10 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const body = await request.json().catch(() => null);
 	const parsed = AddMemberSchema.safeParse(body);
 	if (!parsed.success) throwZodError(parsed.error);
+
+	const project = await getProjectProvider().getProject(ctx, id);
+	if (!project) throw error(404, 'Project not found');
+	await requireTargetIsOrgMember(locals, project.orgId, parsed.data.userId);
 
 	const now = new Date().toISOString();
 	const member: ProjectMember = {

@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import { definitionService, getProjectProvider } from '$lib/server/providers.server';
-import { requireCanEdit } from '$lib/server/access.server';
+import { requireCanCreateDefinition } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { CreateDefinitionInputSchema } from '@selva/platform/definitions/schemas';
 import { GH_EXTENSIONS, MAX_GH_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '$lib/server/admin-config';
@@ -49,7 +49,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		projectId = defaultProject.id;
 	}
 
-	await requireCanEdit(locals, projectId);
+	await requireCanCreateDefinition(locals, projectId);
 
 	const parsed = CreateDefinitionInputSchema.safeParse({
 		displayName: formData.get('displayName'),

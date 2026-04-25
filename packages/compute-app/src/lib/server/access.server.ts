@@ -7,7 +7,11 @@ import type {
 	RequestContext
 } from '@selva/platform';
 import { hasPermission } from '@selva/platform';
-import { getProjectProvider, getDefinitionMeta } from './providers.server.js';
+import {
+	getProjectProvider,
+	getDefinitionMeta,
+	getOrganizationProvider
+} from './providers.server.js';
 import { handleApiError } from './api-errors.js';
 
 export const throwProviderError = handleApiError;
@@ -97,6 +101,45 @@ export async function requireCanEdit(locals: Locals, projectId: string): Promise
 	});
 	if (!allowed) throw error(403, 'You do not have permission to edit this project.');
 	return user;
+}
+
+/**
+ * Gate creation of a *new* definition. Container projects require project
+ * owner/editor (canEdit). Commons projects (`autoJoinOnUpload=true`) accept
+ * any authenticated user — the handler stamps `ownerId = user.id` so the
+ * uploader becomes the definition owner.
+ */
+export async function requireCanCreateDefinition(
+	locals: Locals,
+	projectId: string
+): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
+	const { user, ctx } = requireAuthed(locals);
+	const project = await loadProjectOr404(ctx, projectId);
+	const allowed = await bypassOrRun(ctx, async () => {
+		if (project.autoJoinOnUpload) return true;
+		return await getProjectProvider().canEdit(ctx, projectId);
+	});
+	if (!allowed) {
+		throw error(403, 'You do not have permission to upload definitions to this project.');
+	}
+	return { user, ctx, project };
+}
+
+/**
+ * Project members must be members of the project's parent org (§4). Enforced
+ * at the rule layer, not as a DB constraint, to leave room for cross-org
+ * guests later without a schema migration.
+ */
+export async function requireTargetIsOrgMember(
+	locals: Locals,
+	orgId: string,
+	targetUserId: string
+): Promise<void> {
+	const { ctx } = requireAuthed(locals);
+	const member = await getOrganizationProvider().getOrgMember(ctx, orgId, targetUserId);
+	if (!member) {
+		throw error(400, 'User must be a member of this organization to be added to a project.');
+	}
 }
 
 export async function requireCanManage(locals: Locals, projectId: string): Promise<AuthUser> {
