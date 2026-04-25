@@ -34,7 +34,6 @@ function project(overrides: Partial<Project> = {}): Project {
 		createdBy: 'u-1',
 		updatedBy: 'u-1',
 		autoJoinOnUpload: false,
-		allowAnonymous: false,
 		createdAt: now,
 		updatedAt: now,
 		deletedAt: null,
@@ -150,32 +149,6 @@ describe('canView', () => {
 				orgMember: null
 			})
 		).toBe(true);
-	});
-
-	it('public + allowAnonymous: anonymous passes', () => {
-		expect(
-			canView({
-				platformPermissions: noPerms,
-				orgPermissions: [],
-				project: project({ visibility: 'public', allowAnonymous: true }),
-				member: null,
-				orgMember: null,
-				anonymous: true
-			})
-		).toBe(true);
-	});
-
-	it('public without allowAnonymous: anonymous denied', () => {
-		expect(
-			canView({
-				platformPermissions: noPerms,
-				orgPermissions: [],
-				project: project({ visibility: 'public', allowAnonymous: false }),
-				member: null,
-				orgMember: null,
-				anonymous: true
-			})
-		).toBe(false);
 	});
 
 	it('null project denies', () => {

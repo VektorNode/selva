@@ -30,8 +30,7 @@ const CreateProjectBody = z.object({
 	name: z.string().min(1, 'Project name is required').max(128).trim(),
 	description: z.string().max(2000).optional(),
 	visibility: ProjectVisibilitySchema.default('private'),
-	autoJoinOnUpload: z.boolean().optional(),
-	allowAnonymous: z.boolean().optional()
+	autoJoinOnUpload: z.boolean().optional()
 });
 
 export const GET: RequestHandler = async ({ locals }) => {
@@ -55,9 +54,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!parsed.success) throwZodError(parsed.error);
 
 	const autoJoinOnUpload = parsed.data.autoJoinOnUpload ?? false;
-	const allowAnonymous = parsed.data.allowAnonymous ?? false;
-	if ((autoJoinOnUpload || allowAnonymous) && parsed.data.visibility !== 'public') {
-		throw error(400, 'autoJoinOnUpload and allowAnonymous require visibility=public');
+	if (autoJoinOnUpload && parsed.data.visibility !== 'public') {
+		throw error(400, 'autoJoinOnUpload requires visibility=public');
 	}
 
 	const projectStore = getProjectProvider();
@@ -81,7 +79,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			createdBy: locals.user!.id,
 			updatedBy: locals.user!.id,
 			autoJoinOnUpload,
-			allowAnonymous,
 			createdAt: now,
 			updatedAt: now,
 			deletedAt: null

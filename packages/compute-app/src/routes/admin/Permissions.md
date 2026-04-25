@@ -29,7 +29,7 @@ One role, four permissions. All instance-wide.
 | Permission              | What it grants                                                                                          |
 | ----------------------- | ------------------------------------------------------------------------------------------------------- |
 | `instance_admin`        | Superuser. Implies every other permission, everywhere.                                                  |
-| `manage_compute`        | Configure the instance-wide Rhino.Compute pool (default + named servers). See §4 for per-org overrides. |
+| `manage_compute`        | Configure the instance-wide Rhino.Compute pool (default + named servers). See §3 for per-org overrides. |
 | `manage_instance_users` | Disable/enable any user on the instance.                                                                |
 | `manage_updates`        | Run system updates.                                                                                     |
 
@@ -56,12 +56,12 @@ One role, four permissions. All instance-wide.
 
 ### Permissions
 
-| Permission           | What it grants                                                                                                                                                                                                                   |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `manage_org_members` | Invite, remove, change roles of users in **this** org. Owner/admin only — never grantable to `member`.                                                                                                                           |
-| `manage_definitions` | Upload/edit definitions in this org (further gated by project role).                                                                                                                                                             |
-| `manage_projects`    | Create projects in this org. (Editing/deleting gated by project role.)                                                                                                                                                           |
-| `manage_org_compute` | Configure this org's compute server override (BYO compute). Owner/admin only. **Gated by platform flag `ALLOW_ORG_COMPUTE_OVERRIDE`**; when off, this permission is effectively inert and all solves use the instance pool (§4). |
+| Permission           | What it grants                                                                                                                                                                                                             |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `manage_org_members` | Invite, remove, change roles of users in **this** org. Owner/admin only — never grantable to `member`.                                                                                                                     |
+| `manage_definitions` | Upload/edit definitions in this org (further gated by project role).                                                                                                                                                       |
+| `manage_projects`    | Create projects in this org. (Editing/deleting gated by project role.)                                                                                                                                                     |
+| `manage_org_compute` | Configure this org's compute server override (BYO compute). Owner/admin only. **Gated by platform flag `ALLOW_ORG_COMPUTE_OVERRIDE`**; when off, this permission is effectively inert and all solves use the instance pool. |
 
 > **`manage_compute` stays at platform scope.** Instance-wide compute is the platform admin's concern. `manage_org_compute` is a separate, org-scoped permission that only grants authority over the org's _override_, never the instance pool.
 
@@ -69,7 +69,7 @@ One role, four permissions. All instance-wide.
 
 - **Org-scoped only.** You invite a user to an org, not to a project.
 - Once in an org, project membership is managed within-org (see §5).
-- Cross-org project guests are **out of scope for now.** Deferred (see §11).
+- Cross-org project guests are **out of scope for now.** Deferred (see §12).
 
 ### Compute (BYO override)
 
@@ -86,7 +86,7 @@ Each instance has a default compute pool configured by `instance_admin` (§2). O
 
 The override is never instance-wide. An org misconfiguring their compute (wrong URL, bad key) only affects that org's solves. The instance pool is the `instance_admin`'s domain and cannot be touched by org admins under any circumstance.
 
-Today `ComputeServerConfig` ([computeServer/types.ts](../../../../../platform/src/computeServer/types.ts)) describes one instance-wide pool of named servers. BYO compute adds an optional `orgId` field: null rows are instance-pool servers, non-null rows are that org's override. `resolveComputeServer()` extends to "org-scoped servers first, fall through to instance pool." Additive migration, no schema break.
+`ComputeServerConfig` carries an optional `orgId` field: null rows are instance-pool servers, non-null rows are that org's override. Stores filter by scope on read; the `resolveComputeServerForOrg(instance, org, opts)` helper applies the precedence rule with the platform flag.
 
 ---
 
@@ -112,6 +112,8 @@ Today `ComputeServerConfig` ([computeServer/types.ts](../../../../../platform/sr
 
 **Default for new projects: `private`.** Users opt into broader visibility explicitly.
 
+**Anonymous access is not a project flag** — it's delivered via per-definition **share links** (§7). The project owner mints a link for one definition + channel; the link carries its own cap, expiry, and revocation. There is no "this project is anonymously solvable" mode; explicit per-link grants only.
+
 ### Project members must be org members
 
 To become a project member, a user must first be a member of the project's parent org. This is enforced in the **rule layer**, not as a hard DB constraint — leaving room for cross-org identities (guests, service accounts) later without a schema migration.
@@ -121,9 +123,6 @@ To become a project member, a user must first be a member of the project's paren
 | Flag               | Default | Meaning                                                                                        |
 | ------------------ | :-----: | ---------------------------------------------------------------------------------------------- |
 | `autoJoinOnUpload` | `false` | Enables the **commons model** on this project (see below). Only settable on `public` projects. |
-| `allowAnonymous`   | `false` | Unauthenticated visitors can view/solve. Only meaningful for `public` projects.                |
-
-`allowAnonymous` powers iframe embeds on third-party sites. Before it can be flipped on in production, the instance must ship **at least one** abuse control from this set: per-project solve quota, embedding-domain allowlist, or signed embed tokens. Without these, `allowAnonymous=true` is a denial-of-wallet vector — a high-traffic embed or deliberate drain attack lands directly on the publishing org's compute bill. The flag can exist as a schema field today; the toggle gates behind abuse controls shipping.
 
 ### The two project models
 
@@ -160,12 +159,15 @@ Rather than every rule starting with `if (instance_admin) return true`, the bypa
 
 This matters for two reasons: (1) a bug in a rule doesn't become a bug in god-mode, and (2) the wrapper is the future hook point for audit logging instance-admin access to foreign org data. Today the hook is a no-op; when audit ships, every cross-tenant admin access records automatically without touching rule bodies.
 
+### Share-link grants are a parallel path
+
+A request authenticated by a valid share-link token (§7) is granted access to **one specific (definitionId, channel) pair only**, regardless of project visibility or membership. Token validation runs **before** the user-based rules below in the request pipeline; if a valid token resolves, those rules are skipped for that request. See §7 for the token contract.
+
 ### `canView(project, user, ctx) → bool`
 
 - `private` → yes iff user is a project member (any role)
 - `org` → yes iff `ctx.actingOrgId === project.orgId` **and** user is a member of that org
 - `public` → yes iff user is authenticated on the instance
-- `public` + `allowAnonymous=true` → yes even if user is anonymous
 
 ### `canSolve(project, user, ctx) → bool`
 
@@ -187,15 +189,15 @@ It exists as a separate function so future solve-gating (cost quotas, rate limit
 
 Upload behavior depends on whether the request is creating a _new definition_ or a _new version of an existing one_:
 
-- **New definition** (no `guid` in path): on container projects, requires `canEditDefinition` to pass preemptively — in practice means project `owner`/`editor`. On commons projects, any authenticated user on the instance may create a new definition; `ownerId` is set to the uploader.
-- **New version of existing definition** (`guid` in path → `POST /api/definitions/[guid]`): requires `canEditDefinition(project, definition, user)` to pass. In container mode, that means project `owner`/`editor`. In commons mode, that means the same OR the definition owner. Random users cannot version-bump someone else's definition.
+- **New definition** (`POST /api/definitions`): on container projects, requires `canEditDefinition` to pass preemptively — in practice means project `owner`/`editor`. On commons projects, any authenticated user on the instance may create a new definition; `ownerId` is set to the uploader.
+- **New version of existing definition** (`POST /api/definitions/[guid]`): requires `canEditDefinition(project, definition, user)` to pass. In container mode, that means project `owner`/`editor`. In commons mode, that means the same OR the definition owner. Random users cannot version-bump someone else's definition.
 
 ### `canEditProjectSettings(project, user) → bool`
 
 - Project `owner` → yes
 - Otherwise → no
 
-> **Simplified.** An earlier draft allowed `editor + manage_projects` org-permission to edit settings. That violated §12's no-inheritance rule (org permission leaks into project authority) and created non-local confusion ("why can this editor edit settings but that one can't?"). Collapsed to **owner only**. If an editor needs settings authority, promote them to owner. Org-side escape hatches exist via `canReclaim`.
+> **Simplified.** An earlier draft allowed `editor + manage_projects` org-permission to edit settings. That violated §13's no-inheritance rule (org permission leaks into project authority) and created non-local confusion ("why can this editor edit settings but that one can't?"). Collapsed to **owner only**. If an editor needs settings authority, promote them to owner. Org-side escape hatches exist via `canReclaim`.
 
 ### `canChangeVisibilityToPublic(project, user) → bool`
 
@@ -238,9 +240,11 @@ Every definition has **immutable versions** and **named channels** pointing at v
 
 ### Data model
 
-- `DefinitionVersion { id, definitionId, versionNumber, fileKey, uploadedBy, uploadedAt }`
+- `DefinitionVersion { id, definitionId, versionNumber, fileExt, fileKey, originalFilename?, uploadedBy, uploadedAt }`
 - `Definition.liveVersionId` — the published version (what external consumers solve)
 - `Definition.draftVersionId` — the latest upload (what editors test against)
+
+`fileExt` and `originalFilename` live on the version, not the parent record — different versions of the same definition can carry different uploaded filenames or extensions.
 
 ### Channels
 
@@ -262,7 +266,7 @@ Every definition has **immutable versions** and **named channels** pointing at v
 
 ### Deletion protection
 
-Versions are immutable. A `DefinitionVersion` **cannot be deleted** while referenced by `liveVersionId` or `draftVersionId`. This protection is enforced at the data layer, not just in application code — the foreign keys prevent orphaning even if a buggy handler tries.
+Versions are immutable. A `DefinitionVersion` **cannot be deleted** while referenced by `liveVersionId` or `draftVersionId`. This protection is enforced at the data layer — the foreign keys (`ON DELETE RESTRICT` in Postgres; explicit check in the local provider) prevent orphaning even if a buggy handler tries.
 
 ### Why
 
@@ -275,32 +279,103 @@ Versioning applies to **all** definitions regardless of project visibility. One 
 
 ---
 
-## 7. API route matrix
+## 7. Share links
+
+Per-definition tokens that grant access to one definition + channel **without requiring an account**. Replaces both "share-by-link" and "anonymous-embed abuse controls" — one mechanism, both use cases (sharing a draft for review; embedding a definition in a public iframe).
+
+### Why this shape
+
+- **Definition-scoped, not project-scoped.** Tokens pin to a specific `(definitionId, channel)` pair. A leaked link exposes one definition; new definitions added to the project later are NOT auto-included.
+- **Parallel grant system.** Tokens never mutate `Project.visibility` or membership. They are a separate, narrower path — a private project can have share links, and a public project can choose not to.
+- **Explicit opt-in per link.** No project-wide "anonymous mode" flag. Every link is minted individually by someone who can edit the definition. Revocation is per-link.
+- **Token leakage is the design assumption**, not a failure mode. Anyone viewing an iframe sees the token. So per-link caps and revocation are the load-bearing protections — not "keep tokens secret."
+
+### Data model
+
+```
+ShareLink {
+  id: string                    PK
+  definitionId: string          FK definitions(guid), ON DELETE CASCADE
+  channel: 'live' | 'draft'
+  tokenHash: string             HMAC of the raw token; raw shown once at mint
+  name?: string                 Optional label, UX only
+  createdBy: string
+  createdAt: ISO
+  expiresAt?: ISO               null = no expiry
+  revokedAt?: ISO               soft-delete; resolution checks IS NULL
+  allowSolve: boolean           false = view-only (schema fetch); true = solve
+  maxSolves?: number            null = unlimited (manager opt-in)
+  solveCount: number            atomic increment on each successful solve
+}
+```
+
+### Authorization to mint
+
+A user can mint a share link for a definition iff `canEditDefinition(project, definition, user)` passes. Container-mode editors and commons-mode definition owners both qualify — same rule that gates uploads. Same authority revokes.
+
+### Default cap
+
+Tokens are issued with a default `maxSolves` cap on creation. The minter may raise or remove the cap explicitly with an additional confirm step. The default exists because the design assumes leakage; an uncapped token in an iframe with no expiry is a denial-of-wallet vector.
+
+### Token resolution
+
+When a request to a definition-scoped route (`/api/compute/solve`, `/app/[guid]`, schema fetch) carries `?token=…` (or `Authorization: Bearer …`):
+
+1. HMAC the supplied token; look up `tokenHash`.
+2. Token must exist; `revokedAt IS NULL`; `expiresAt IS NULL OR expiresAt > now()`; `maxSolves IS NULL OR solveCount < maxSolves`; parent definition must itself be live (`deletedAt IS NULL`).
+3. Token's `definitionId` must equal the requested definition; token's `channel` must equal the requested channel. Both strict equality.
+4. For solve routes, token must have `allowSolve = true`.
+5. Build a synthetic `RequestContext` scoped to the token: no user identity, tenancy = the project's `orgId`, no platform/org permissions.
+6. Skip `canSolve` / `canView`. Authorization is the token.
+7. On a successful solve, atomically increment `solveCount`. (Postgres: `UPDATE … SET solve_count = solve_count + 1 WHERE solve_count < max_solves OR max_solves IS NULL RETURNING …` — atomic check-and-increment. Local: read-modify-write; race acceptable at single-node scale.)
+
+If any check fails, the route falls through to the existing user-based auth. A request without a valid token AND without a user session ends with 401 as today.
+
+### Cascade
+
+- Definition soft-deleted → tokens fail closed at resolution (`def.deletedAt IS NULL` check).
+- Definition hard-deleted → tokens cascade-delete via FK.
+- Project deleted → cascades through definition.
+- Token creator's user account deleted → tokens unaffected. The link works as long as the parent definition allows it. (Intentional: share links shouldn't break when a contributor leaves the org.)
+
+### What's NOT in v1
+
+- **JWT.** Random opaque tokens + DB lookup is sufficient. JWT only helps stateless validation, but every check hits the DB anyway (revocation, counter).
+- **Per-version pinning.** Tokens follow the channel pointer. Publishing v3 means existing live tokens now serve v3 — same semantics as rollback. Add a `versionId` field then if "always serve v2 specifically" becomes a real need.
+- **Origin / Referer allowlist.** Easy to bypass server-side; gives a false sense of security. Caps and revocation are the load-bearing protections.
+- **Project-scoped tokens.** Granularity is one definition, not a project bundle. If a customer wants to share five, they mint five — explicit and revocable separately.
+
+---
+
+## 8. API route matrix
 
 Authoritative mapping of HTTP routes to rule checks. `instance_admin` passes every row (via the centralized bypass, §5).
 
 ### Content API (`/api/*`)
 
-| Route                                 | Method     | Rule                                                                                                                                                                                       |
-| ------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/api/projects`                       | `GET`      | Authenticated. Filtered by visibility + membership.                                                                                                                                        |
-| `/api/projects`                       | `POST`     | `canCreateProject(targetOrg, user, ctx)`                                                                                                                                                   |
-| `/api/projects/[id]`                  | `GET`      | `canView(project, user, ctx)`                                                                                                                                                              |
-| `/api/projects/[id]`                  | `PATCH`    | `canEditProjectSettings`. Visibility → `public` additionally requires `canChangeVisibilityToPublic`.                                                                                       |
-| `/api/projects/[id]`                  | `DELETE`   | `canManage(project, user)`                                                                                                                                                                 |
-| `/api/projects/[id]/reclaim`          | `POST`     | `canReclaim(project, user, ctx)`                                                                                                                                                           |
-| `/api/projects/[id]/members`          | `GET/POST` | `canManage(project, user)`. Target user must be org member (rule layer).                                                                                                                   |
-| `/api/projects/[id]/members/[userId]` | `PATCH`    | `canManage(project, user)`                                                                                                                                                                 |
-| `/api/projects/[id]/members/[userId]` | `DELETE`   | `canManage(project, user)`. Owner-on-owner removal surfaces a confirm.                                                                                                                     |
-| `/api/definitions`                    | `POST`     | **Create new definition.** Container mode: requires project `owner`/`editor`. Commons mode (`autoJoinOnUpload=true`): any authenticated user; handler sets `definition.ownerId = user.id`. |
-| `/api/definitions/upload`             | `POST`     | Alias for the above when uploading a fresh `.gh`. Creates `Definition` + initial `DefinitionVersion`.                                                                                      |
-| `/api/definitions/[guid]`             | `POST`     | **New version of existing definition.** `canEditDefinition(project, definition, user)`. Creates new `DefinitionVersion`; advances `draft`.                                                 |
-| `/api/definitions/[guid]`             | `PUT`      | `canEditDefinition(project, definition, user)`                                                                                                                                             |
-| `/api/definitions/[guid]`             | `DELETE`   | `canEditDefinition(project, definition, user)`                                                                                                                                             |
-| `/api/definitions/[guid]/image`       | `POST`     | `canEditDefinition(project, definition, user)`                                                                                                                                             |
-| `/api/definitions/[guid]/publish`     | `POST`     | `canEditDefinition(project, definition, user)`. Advances `live` to a target version (current `draft` or a prior version for rollback).                                                     |
-| `/api/definitions/[guid]/versions`    | `GET`      | `canView`                                                                                                                                                                                  |
-| `/api/compute/solve`                  | `POST`     | `canSolve(project, user, ctx)`. Channel defaults to `live`; `draft` requires `canEditDefinition`.                                                                                          |
+| Route                                                | Method     | Rule                                                                                                                                                                                          |
+| ---------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/projects`                                      | `GET`      | Authenticated. Filtered by visibility + membership.                                                                                                                                           |
+| `/api/projects`                                      | `POST`     | `canCreateProject(targetOrg, user, ctx)`                                                                                                                                                      |
+| `/api/projects/[id]`                                 | `GET`      | `canView(project, user, ctx)`                                                                                                                                                                 |
+| `/api/projects/[id]`                                 | `PATCH`    | `canEditProjectSettings`. Visibility → `public` additionally requires `canChangeVisibilityToPublic`.                                                                                          |
+| `/api/projects/[id]`                                 | `DELETE`   | `canManage(project, user)`                                                                                                                                                                    |
+| `/api/projects/[id]/reclaim`                         | `POST`     | `canReclaim(project, user, ctx)`                                                                                                                                                              |
+| `/api/projects/[id]/members`                         | `GET/POST` | `canManage(project, user)`. Target user must be org member (rule layer).                                                                                                                      |
+| `/api/projects/[id]/members/[userId]`                | `PATCH`    | `canManage(project, user)`                                                                                                                                                                    |
+| `/api/projects/[id]/members/[userId]`                | `DELETE`   | `canManage(project, user)`. Sole-owner removal blocked. Owner-on-owner removal requires `?confirm=true`.                                                                                      |
+| `/api/definitions`                                   | `POST`     | **Create new definition.** Container mode: project `owner`/`editor`. Commons mode (`autoJoinOnUpload=true`): any authenticated user; handler sets `definition.ownerId = user.id`.             |
+| `/api/definitions/[guid]`                            | `POST`     | **New version of existing definition.** `canEditDefinition`. Creates a new `DefinitionVersion`; advances `draft`.                                                                             |
+| `/api/definitions/[guid]`                            | `PUT`      | `canEditDefinition` (metadata only).                                                                                                                                                          |
+| `/api/definitions/[guid]`                            | `DELETE`   | `canEditDefinition`                                                                                                                                                                           |
+| `/api/definitions/[guid]/image`                      | `POST`     | `canEditDefinition`                                                                                                                                                                           |
+| `/api/definitions/[guid]/publish`                    | `POST`     | `canEditDefinition`. Body `{ versionId? }`; advances `live` to a target version (current `draft` or any prior version for rollback).                                                          |
+| `/api/definitions/[guid]/versions`                   | `GET`      | `canView`                                                                                                                                                                                     |
+| `/api/definitions/[guid]/versions/[versionId]`       | `DELETE`   | `canEditDefinition`. §6 deletion protection — 409 if version is referenced by `liveVersionId`/`draftVersionId`.                                                                               |
+| `/api/definitions/[guid]/share-links`                | `GET/POST` | `canEditDefinition`. POST returns the raw token once.                                                                                                                                         |
+| `/api/definitions/[guid]/share-links/[linkId]`       | `DELETE`   | `canEditDefinition`. Soft-delete (sets `revokedAt`).                                                                                                                                          |
+| `/api/compute/solve`                                 | `POST`     | `canSolve(project, user, ctx)`. Channel: `live` (default) or `draft`; `draft` requires `canEditDefinition`. **A valid `?token=…` (§7) bypasses user auth and grants the token's pinned scope only.** |
+| `/api/org/compute`                                   | `GET/PUT`  | `manage_org_compute`. Gated by `ALLOW_ORG_COMPUTE_OVERRIDE` platform flag. Tenancy implicit via `ctx.actingOrgId`.                                                                            |
 
 ### Admin API (`/admin/api/*`)
 
@@ -313,6 +388,7 @@ Instance-level only. Denial returns **403** (not redirect).
 | `/admin/api/compute/status` | `GET`  | `manage_compute`        |
 | `/admin/api/update`         | `POST` | `manage_updates`        |
 | `/admin/api/orgs`           | `*`    | `instance_admin`        |
+| `/admin/api/orgs/[id]`      | `*`    | `instance_admin`        |
 
 ### Admin pages (`/admin/*`)
 
@@ -328,7 +404,7 @@ Denial redirects to `/admin`.
 
 ---
 
-## 8. Data model invariants
+## 9. Data model invariants
 
 These are the decisions that are **cheap to lock in now, expensive to retrofit later**.
 
@@ -352,7 +428,7 @@ Hard deletion is a background / admin-only operation that removes rows with `del
 
 ### Request context
 
-- `RequestContext.user` is an **identity**, not specifically a human. A service account or anonymous visitor slots in later without changing rule signatures.
+- `RequestContext.user` is an **identity**, not specifically a human. A service account, anonymous visitor, or share-token-resolved synthetic identity slots in without changing rule signatures.
 - `RequestContext.actingOrgId` identifies which org the user is acting as. Required on every request that touches tenant-owned data. Prevents cross-org leaks when a user belongs to multiple orgs.
 - User IDs referenced on entities (e.g., `createdBy`) may become unresolvable over time (account deletion). UI renders as "Deleted user"; entities are not orphaned.
 
@@ -368,70 +444,73 @@ Hard deletion is a background / admin-only operation that removes rows with `del
 
 ### Events (future-proofing)
 
-Every successful mutation emits an internal domain event (`project.created`, `definition.published`, `member.removed`, …). Initially a no-op sink. Later this becomes the webhook dispatcher, audit-log writer, and analytics source. Design in now; cost is trivial.
+Every successful mutation emits an internal domain event (`project.created`, `definition.published`, `member.removed`, `share_link.minted`, `share_link.revoked`, …). Initially a no-op sink. Later this becomes the webhook dispatcher, audit-log writer, and analytics source. Design in now; cost is trivial.
 
 ---
 
-## 9. Offboarding & ownership transfer
+## 10. Offboarding & ownership transfer
 
 - **Disable user (instance-wide):** `manage_instance_users` sets `disabled=true`. Sessions invalidated; identity and attribution preserved.
 - **Remove user from org:** org `owner`/`admin` or `manage_org_members`. User loses all project memberships in that org. Still exists on the instance.
 - **Sole-owner projects on offboarding:** removal is **blocked** until a new owner is assigned (manual step). No silent reassignment. If the original owner is unreachable, org `owner`/`admin` uses **Reclaim** (§5 `canReclaim`) to become co-owner first, then proceeds with removal — that's the explicit escape hatch.
-- **Delete user (hard):** admin-initiated only. Goes through the auth provider. Selva's references resolve to "Deleted user."
+- **Delete user (hard):** admin-initiated only. Goes through the auth provider. Selva's references resolve to "Deleted user." Share links the user minted are unaffected (they belong to the definition, not the creator).
 - **Org ownership transfer:** explicit action by the current org owner. `instance_admin` can force-transfer as a break-glass.
 
 ---
 
-## 10. Scenarios (sanity checks)
+## 11. Scenarios (sanity checks)
 
 Walk through these to confirm the model behaves as expected.
 
 | Scenario                                                                                                                      | Outcome                                                                                                                                                                       |
 | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Alice (Acme `admin`) creates a `private` project.                                                                             | Alice is project `owner`. Only project members can view or solve.                                                                                                             |
-| Bob (Acme `member`, no project membership) navigates directly to the private project URL.                                     | **403.** Visibility is enforced on solve too (fix vs. current code).                                                                                                          |
+| Bob (Acme `member`, no project membership) navigates directly to the private project URL.                                     | **403.** Visibility is enforced on solve too.                                                                                                                                 |
 | Carol (BigClient `member`) navigates to Acme's `org` project URL.                                                             | **403.** `ctx.actingOrgId` doesn't match Acme's org.                                                                                                                          |
 | Bob (Acme `member`, no project membership) views/solves an Acme `org` project.                                                | **OK.** `canView`/`canSolve` pass — org visibility grants view + solve to all org members.                                                                                    |
 | Bob (Acme `member`, no project membership) tries to edit the same `org` project's definition.                                 | **403.** `canEditDefinition` requires explicit project `owner`/`editor` role — org membership alone is view + solve, not edit.                                                |
 | Dave (authenticated, any org) navigates to a `public` project Alice published.                                                | **OK.** Cross-org public visible to any authenticated user (with platform flag on).                                                                                           |
-| Anonymous visitor hits an iframe embedding a `public` + `allowAnonymous=true` project.                                        | **OK** — but only if abuse controls (quota / domain allowlist / signed tokens) are live.                                                                                      |
 | Bob uploads a **new** definition to a `public` + `autoJoinOnUpload=true` commons project.                                     | **OK.** Definition created with `ownerId = Bob`. Bob is the definition owner — _not_ a project member. He can edit/delete this one definition; he cannot touch anyone else's. |
 | Alice (definition owner on commons) uploads `v2` of her own definition.                                                       | **OK.** `canEditDefinition` passes because Alice is the definition's owner. `draft` = `v2`, `live` = `v1` until she publishes.                                                |
 | **Peter (random authenticated user, no project membership) tries to upload `v2` on Alice's definition in a commons project.** | **403.** Peter is not the definition owner and not a project editor. The "anyone can contribute" opt-in does **not** mean "anyone can vandalize existing work."               |
 | Peter (random user) uploads his _own_ new definition to the same commons project.                                             | **OK.** New definition, `ownerId = Peter`. Peter can edit his own; Alice's remains untouchable to him.                                                                        |
 | Alice (project owner on a commons project) moderates Peter's definition (it's inappropriate).                                 | **OK.** Project owner/editor retains full moderation authority over every definition in the project regardless of commons mode.                                               |
 | Alice realizes `v2` is broken. Rolls `live` back to `v1`.                                                                     | `live` re-points to `v1`. `v2` still exists, can be re-published after fixes.                                                                                                 |
+| Alice tries to delete `v1` while it's the live version.                                                                       | **409.** §6 deletion protection — repoint `live` first.                                                                                                                       |
 | Alice (project `editor`) tries to edit project settings.                                                                      | **403.** Editors cannot edit settings. Promote to owner if needed.                                                                                                            |
 | Alice (project `viewer`) tries to delete a definition.                                                                        | **403.** Viewers cannot edit.                                                                                                                                                 |
 | Project owner leaves Acme. Org owner opens the project.                                                                       | Uses **Reclaim** → becomes co-owner. Original owner not demoted. Audit entry (future).                                                                                        |
-| Reclaim done; co-owner tries to remove the original owner.                                                                    | Handler surfaces owner-on-owner confirm step before proceeding.                                                                                                               |
+| Reclaim done; co-owner tries to remove the original owner.                                                                    | Handler surfaces owner-on-owner confirm step (`?confirm=true`) before proceeding.                                                                                             |
 | Last Acme member is removed while sole-owning 3 projects.                                                                     | **Blocked.** Reclaim or manual "assign owner" flow runs first.                                                                                                                |
 | Alice flips a `private` project to `public`.                                                                                  | Requires org `owner`/`admin` (Alice qualifies as `admin`). If cross-org public is off at platform level, flip is rejected.                                                    |
 | `instance_admin` views Acme data.                                                                                             | **OK.** Centralized bypass wrapper records the access (future audit hook).                                                                                                    |
+| Alice mints a `live`-channel share link for her definition with a 1000-solve cap. Bob (no account) solves 999 times via the link; the 1000th request hits 429. | **OK.** Cap enforced by atomic increment. Alice raises the cap, removes it, or revokes. |
+| Alice mints a `draft`-channel share link for QA review. The reviewer (no account) opens it and solves the unpublished version. | **OK.** Token grants the pinned channel only. The reviewer cannot switch to `live` from the same token.                                                                       |
+| Alice's share link gets posted publicly and starts seeing a flood of solves. Alice clicks **Revoke**.                         | The link 401s on next use. Existing in-flight solves complete; subsequent ones fail at token resolution.                                                                      |
+| Alice deletes the definition that a share link points at.                                                                     | Token resolution fails closed (`def.deletedAt IS NULL` check). Hard delete cascades the link out.                                                                             |
+| Acme org configures a BYO compute server; instance has `ALLOW_ORG_COMPUTE_OVERRIDE=true`.                                     | Solves on Acme projects route to Acme's compute. Solves on other orgs' projects continue to use the instance pool.                                                            |
+| `instance_admin` edits compute config in their personal org context.                                                          | Edits the **instance pool** regardless of `actingOrgId` — the `/admin/api/compute` route explicitly scopes to instance.                                                       |
 
 ---
 
-## 11. Deferred (tracked, not built)
+## 12. Deferred (tracked, not built)
 
 Designed-for but not implemented. Each can ship later without breaking the model.
 
-- Share-by-link (Figma-style scoped tokens — parallel grant system, does not mutate visibility)
 - Cross-org guest on a private project
 - Personal scope outside any org
 - Project transfer between orgs (UI — data model allows it)
 - Full audit log storage & UI (hook points exist in the `instance_admin` bypass wrapper and event sink)
-- API tokens / service accounts / PATs
+- API tokens / service accounts / PATs (distinct from share links — share links are for unauthenticated end-users; PATs are for authenticated programmatic access)
 - Webhooks (events emit; dispatcher is later)
-- Anonymous-embed abuse controls (per-project solve quotas, embedding-domain allowlist, signed embed tokens) — **gating `allowAnonymous` public release**
-- Per-org BYO compute **implementation** — designed in §3 (permission `manage_org_compute`, resolution order, platform flag). Schema additive; UI + `ComputeServerConfig.orgId` field deferred until a customer asks.
 - Per-org data residency / storage backends
 - Project templates / bulk member operations (pressure valve for flat ACLs at scale)
 
 ---
 
-## 12. Change discipline
+## 13. Change discipline
 
-The three rules to keep this model from rotting:
+The two rules to keep this model from rotting:
 
 1. **Permissions are extensible; roles are not.** Roles are named bundles of permissions — adding a role is a schema migration and UX churn. Adding a permission is cheap. When in doubt, add a permission and map it into the existing roles; don't invent a new role.
 2. **No permission inheritance.** Each project carries its own ACL. No cascading from folders, orgs, or templates. Org permissions don't leak into project rules (the old `editor + manage_projects → edit settings` rule violated this and was removed).

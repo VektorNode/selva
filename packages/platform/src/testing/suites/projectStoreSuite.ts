@@ -43,7 +43,6 @@ function project(orgId: string, ownerId: string, overrides: Partial<Project> = {
 		createdBy: overrides.createdBy ?? ownerId,
 		updatedBy: overrides.updatedBy ?? ownerId,
 		autoJoinOnUpload: overrides.autoJoinOnUpload ?? false,
-		allowAnonymous: overrides.allowAnonymous ?? false,
 		createdAt: overrides.createdAt ?? now,
 		updatedAt: overrides.updatedAt ?? now,
 		deletedAt: overrides.deletedAt ?? null,
@@ -277,29 +276,26 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 		});
 
 		// ============================================================================
-		// Project flags (autoJoinOnUpload, allowAnonymous)
+		// Project flags (autoJoinOnUpload)
 		// ============================================================================
 
-		it('create + get round-trips autoJoinOnUpload and allowAnonymous', async () => {
+		it('create + get round-trips autoJoinOnUpload', async () => {
 			const { store, orgId, ownerId } = await createStore();
 			const p = project(orgId, ownerId, {
 				visibility: 'public',
-				autoJoinOnUpload: true,
-				allowAnonymous: true
+				autoJoinOnUpload: true
 			});
 			await store.createProject(ctx(ownerId), p);
 			const got = await store.getProject(ctx(ownerId), p.id);
 			expect(got?.autoJoinOnUpload).toBe(true);
-			expect(got?.allowAnonymous).toBe(true);
 		});
 
-		it('flags default to false on a project created without them set', async () => {
+		it('flag defaults to false on a project created without it set', async () => {
 			const { store, orgId, ownerId } = await createStore();
 			const p = project(orgId, ownerId);
 			await store.createProject(ctx(ownerId), p);
 			const got = await store.getProject(ctx(ownerId), p.id);
 			expect(got?.autoJoinOnUpload).toBe(false);
-			expect(got?.allowAnonymous).toBe(false);
 		});
 
 		if (ctxIsolation) {

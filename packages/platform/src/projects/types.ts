@@ -20,8 +20,6 @@ export interface Project {
 	updatedBy: string;
 	/** Commons mode — only valid when visibility='public'. */
 	autoJoinOnUpload: boolean;
-	/** Anonymous iframe access — only valid when visibility='public'. */
-	allowAnonymous: boolean;
 	createdAt: string;
 	updatedAt: string;
 	/** Null = live. Reads filter non-null at the data-access layer. */
