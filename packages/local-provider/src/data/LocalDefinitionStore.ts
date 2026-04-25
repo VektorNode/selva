@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import type {
 	IDefinitionStore,
 	IProjectStore,
+	IEventSink,
 	DefinitionRecord,
 	DefinitionRecordPatch,
 	DefinitionVersion,
@@ -15,6 +16,8 @@ import {
 	hasPermission,
 	auditUpdate,
 	auditSoftDelete,
+	actorFrom,
+	NoopEventSink,
 	canEditDefinition as ruleCanEditDefinition
 } from '@selva/platform';
 import { paginate, applyOrder } from './pagination.js';
@@ -32,6 +35,7 @@ const empty = (): DefinitionsConfig => ({ definitions: {}, definitionVersions: {
 
 export class LocalDefinitionStore implements IDefinitionStore {
 	private readonly configPath: string;
+	private readonly events: IEventSink;
 	private projectProvider?: IProjectStore;
 
 	static fromEnv(env: Record<string, string | undefined>): LocalDefinitionStore {
@@ -39,9 +43,14 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		return new LocalDefinitionStore(env.DATA_PATH);
 	}
 
-	constructor(definitionsPath: string, projectProvider?: IProjectStore) {
+	constructor(
+		definitionsPath: string,
+		projectProvider?: IProjectStore,
+		events: IEventSink = new NoopEventSink()
+	) {
 		this.configPath = path.join(definitionsPath, 'definitions-config.json');
 		this.projectProvider = projectProvider;
+		this.events = events;
 	}
 
 	setProjectProvider(projectProvider: IProjectStore): void {
@@ -156,6 +165,12 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			deletedAt: null
 		};
 		await this.writeConfig(config);
+		await this.events.emit({
+			type: 'definition.created',
+			definitionId: record.guid,
+			projectId: record.projectId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async update(ctx: RequestContext, guid: string, patch: DefinitionRecordPatch): Promise<void> {
@@ -188,6 +203,11 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		if (!this.live(existing)) return;
 		Object.assign(existing, auditSoftDelete(ctx, existing.updatedBy ?? existing.ownerId));
 		await this.writeConfig(config);
+		await this.events.emit({
+			type: 'definition.deleted',
+			definitionId: guid,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async incrementRunCount(_ctx: RequestContext, guid: string): Promise<void> {
@@ -214,7 +234,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 	// Versions (spec §6)
 	// ============================================================================
 
-	async createVersion(_ctx: RequestContext, version: DefinitionVersion): Promise<void> {
+	async createVersion(ctx: RequestContext, version: DefinitionVersion): Promise<void> {
 		const config = await this.readConfig();
 		const parent = config.definitions[version.definitionId];
 		if (!this.live(parent)) {
@@ -225,6 +245,12 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		}
 		config.definitionVersions[version.id] = { ...version };
 		await this.writeConfig(config);
+		await this.events.emit({
+			type: 'definition_version.created',
+			versionId: version.id,
+			definitionId: version.definitionId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async listVersions(
@@ -246,7 +272,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		return config.definitionVersions[versionId] ?? null;
 	}
 
-	async deleteVersion(_ctx: RequestContext, versionId: string): Promise<void> {
+	async deleteVersion(ctx: RequestContext, versionId: string): Promise<void> {
 		const config = await this.readConfig();
 		const version = config.definitionVersions[versionId];
 		if (!version) return;
@@ -264,6 +290,11 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		}
 		delete config.definitionVersions[versionId];
 		await this.writeConfig(config);
+		await this.events.emit({
+			type: 'definition_version.deleted',
+			versionId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async setLiveVersion(
@@ -299,6 +330,17 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		else record.draftVersionId = versionId;
 		Object.assign(record, auditUpdate(ctx, record.updatedBy ?? record.ownerId));
 		await this.writeConfig(config);
+		// Only `live` advancement is the published-event trigger. Draft
+		// repointing is silent — it's the editor's working pointer, not a
+		// publication signal.
+		if (channel === 'live') {
+			await this.events.emit({
+				type: 'definition.published',
+				definitionId,
+				versionId,
+				actorId: actorFrom(ctx)
+			});
+		}
 	}
 
 	async canEditDefinition(

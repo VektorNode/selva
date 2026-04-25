@@ -2,12 +2,13 @@ import * as path from 'node:path';
 import type {
 	IShareLinkStore,
 	IDefinitionStore,
+	IEventSink,
 	ShareLink,
 	RequestContext,
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { ProviderError, SYSTEM_CONTEXT } from '@selva/platform';
+import { ProviderError, SYSTEM_CONTEXT, actorFrom, NoopEventSink } from '@selva/platform';
 import { paginate } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 
@@ -27,13 +28,19 @@ const empty = (): OnDiskShape => ({ links: {} });
  */
 export class LocalShareLinkStore implements IShareLinkStore {
 	private definitionProvider?: IDefinitionStore;
+	private readonly events: IEventSink;
 
 	static fromEnv(env: Record<string, string | undefined>): LocalShareLinkStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
 		return new LocalShareLinkStore(path.join(env.DATA_PATH, 'share-links.json'));
 	}
 
-	constructor(private readonly configFilePath: string) {}
+	constructor(
+		private readonly configFilePath: string,
+		events: IEventSink = new NoopEventSink()
+	) {
+		this.events = events;
+	}
 
 	/**
 	 * Wire the definition store so token resolution can check the parent
@@ -58,13 +65,19 @@ export class LocalShareLinkStore implements IShareLinkStore {
 		return Boolean(l && l.revokedAt == null);
 	}
 
-	async create(_ctx: RequestContext, link: ShareLink): Promise<void> {
+	async create(ctx: RequestContext, link: ShareLink): Promise<void> {
 		const all = await this.readAll();
 		if (all.links[link.id]) {
 			throw new ProviderError(`Share link '${link.id}' already exists`, 409);
 		}
 		all.links[link.id] = { ...link, revokedAt: null };
 		await this.writeAll(all);
+		await this.events.emit({
+			type: 'share_link.minted',
+			linkId: link.id,
+			definitionId: link.definitionId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async listByDefinition(
@@ -97,12 +110,13 @@ export class LocalShareLinkStore implements IShareLinkStore {
 		return found;
 	}
 
-	async revoke(_ctx: RequestContext, id: string): Promise<void> {
+	async revoke(ctx: RequestContext, id: string): Promise<void> {
 		const all = await this.readAll();
 		const l = all.links[id];
 		if (!l || !this.isLive(l)) return; // idempotent
 		l.revokedAt = new Date().toISOString();
 		await this.writeAll(all);
+		await this.events.emit({ type: 'share_link.revoked', linkId: id, actorId: actorFrom(ctx) });
 	}
 
 	async tryIncrementSolveCount(_ctx: RequestContext, id: string): Promise<number | null> {

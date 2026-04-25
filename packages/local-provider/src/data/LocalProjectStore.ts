@@ -1,5 +1,6 @@
 import type {
 	IProjectStore,
+	IEventSink,
 	Project,
 	ProjectRole,
 	ProjectMember,
@@ -12,6 +13,8 @@ import {
 	hasPermission,
 	auditUpdate,
 	auditSoftDelete,
+	actorFrom,
+	NoopEventSink,
 	canEdit as ruleCanEdit,
 	canEditProjectSettings as ruleCanEditProjectSettings,
 	canManage as ruleCanManage
@@ -26,9 +29,11 @@ function isLive<T extends { deletedAt?: string | null }>(row: T): boolean {
 
 export class LocalProjectStore implements IProjectStore {
 	private readonly loader: LocalOrgStoreLoader;
+	private readonly events: IEventSink;
 
-	constructor(loader: LocalOrgStoreLoader) {
+	constructor(loader: LocalOrgStoreLoader, events: IEventSink = new NoopEventSink()) {
 		this.loader = loader;
+		this.events = events;
 	}
 
 	async listProjects(
@@ -59,7 +64,7 @@ export class LocalProjectStore implements IProjectStore {
 		return p && isLive(p) ? p : null;
 	}
 
-	async createProject(_ctx: RequestContext, project: Project): Promise<void> {
+	async createProject(ctx: RequestContext, project: Project): Promise<void> {
 		const store = await this.loader.get();
 		if (!store.orgs.some((o) => o.id === project.orgId && isLive(o))) {
 			throw new ProviderError(`Org '${project.orgId}' not found`, 404);
@@ -93,6 +98,12 @@ export class LocalProjectStore implements IProjectStore {
 			deletedAt: null
 		});
 		await this.loader.write(store);
+		await this.events.emit({
+			type: 'project.created',
+			projectId: project.id,
+			orgId: project.orgId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async updateProject(
@@ -157,6 +168,7 @@ export class LocalProjectStore implements IProjectStore {
 			m.projectId === id && isLive(m) ? { ...m, ...stamp } : m
 		);
 		await this.loader.write(store);
+		await this.events.emit({ type: 'project.deleted', projectId: id, actorId: actorFrom(ctx) });
 	}
 
 	async listProjectMembers(
@@ -202,6 +214,12 @@ export class LocalProjectStore implements IProjectStore {
 			});
 		}
 		await this.loader.write(store);
+		await this.events.emit({
+			type: 'project_member.added',
+			projectId: member.projectId,
+			userId: member.userId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async updateProjectMemberRole(
@@ -232,6 +250,12 @@ export class LocalProjectStore implements IProjectStore {
 		if (!m) return;
 		Object.assign(m, auditSoftDelete(ctx, m.updatedBy));
 		await this.loader.write(store);
+		await this.events.emit({
+			type: 'project_member.removed',
+			projectId,
+			userId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async canEdit(ctx: RequestContext, projectId: string): Promise<boolean> {

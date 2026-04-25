@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import type {
 	IOrgStore,
+	IEventSink,
 	Organization,
 	OrgRole,
 	OrgPermission,
@@ -11,7 +12,14 @@ import type {
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { DEFAULT_ORG_PERMISSIONS, ProviderError, auditUpdate, auditSoftDelete } from '@selva/platform';
+import {
+	DEFAULT_ORG_PERMISSIONS,
+	ProviderError,
+	auditUpdate,
+	auditSoftDelete,
+	actorFrom,
+	NoopEventSink
+} from '@selva/platform';
 import { paginate, applyOrder } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 
@@ -60,14 +68,16 @@ export class LocalOrgStoreLoader {
 
 export class LocalOrgStore implements IOrgStore {
 	private readonly loader: LocalOrgStoreLoader;
+	private readonly events: IEventSink;
 
 	static fromEnv(env: Record<string, string | undefined>): LocalOrgStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
 		return new LocalOrgStore(new LocalOrgStoreLoader(env.DATA_PATH));
 	}
 
-	constructor(loader: LocalOrgStoreLoader) {
+	constructor(loader: LocalOrgStoreLoader, events: IEventSink = new NoopEventSink()) {
 		this.loader = loader;
+		this.events = events;
 	}
 
 	async listOrgs(_ctx: RequestContext, opts?: ListOptions): Promise<Page<Organization>> {
@@ -107,6 +117,7 @@ export class LocalOrgStore implements IOrgStore {
 			deletedAt: null
 		});
 		await this.loader.write(store);
+		await this.events.emit({ type: 'org.created', orgId: org.id, actorId: actorFrom(ctx) });
 	}
 
 	async updateOrg(
@@ -150,6 +161,7 @@ export class LocalOrgStore implements IOrgStore {
 			orgProjectIds.has(m.projectId) && isLive(m) ? { ...m, ...stamp } : m
 		);
 		await this.loader.write(store);
+		await this.events.emit({ type: 'org.deleted', orgId: id, actorId: actorFrom(ctx) });
 	}
 
 	async listOrgMembers(
@@ -186,6 +198,12 @@ export class LocalOrgStore implements IOrgStore {
 			store.orgMembers.push({ ...member, deletedAt: null });
 		}
 		await this.loader.write(store);
+		await this.events.emit({
+			type: 'org_member.added',
+			orgId: member.orgId,
+			userId: member.userId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async updateOrgMemberRole(
@@ -245,5 +263,11 @@ export class LocalOrgStore implements IOrgStore {
 		);
 
 		await this.loader.write(store);
+		await this.events.emit({
+			type: 'org_member.removed',
+			orgId,
+			userId,
+			actorId: actorFrom(ctx)
+		});
 	}
 }

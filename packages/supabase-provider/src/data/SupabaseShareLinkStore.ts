@@ -1,11 +1,12 @@
 import type {
 	IShareLinkStore,
+	IEventSink,
 	ShareLink,
 	RequestContext,
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { ProviderError } from '@selva/platform';
+import { ProviderError, actorFrom, NoopEventSink } from '@selva/platform';
 import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
 
@@ -22,7 +23,14 @@ import { nextCursorFromRange, toRange } from './pagination.js';
  * one statement, so even concurrent solves can't overshoot the cap.
  */
 export class SupabaseShareLinkStore implements IShareLinkStore {
-	constructor(private readonly clients: ClientBundle) {}
+	private readonly events: IEventSink;
+
+	constructor(
+		private readonly clients: ClientBundle,
+		events: IEventSink = new NoopEventSink()
+	) {
+		this.events = events;
+	}
 
 	async create(ctx: RequestContext, link: ShareLink): Promise<void> {
 		const { error } = await this.clients
@@ -30,6 +38,12 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 			.from('share_links')
 			.insert(linkToRow(link));
 		if (error) throw mapError(error);
+		await this.events.emit({
+			type: 'share_link.minted',
+			linkId: link.id,
+			definitionId: link.definitionId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async listByDefinition(
@@ -88,6 +102,7 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 			.eq('id', id)
 			.is('revoked_at', null);
 		if (error) throw mapError(error);
+		await this.events.emit({ type: 'share_link.revoked', linkId: id, actorId: actorFrom(ctx) });
 	}
 
 	async tryIncrementSolveCount(_ctx: RequestContext, id: string): Promise<number | null> {
