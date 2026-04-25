@@ -46,6 +46,20 @@ export interface IOrgStore {
 		id: string,
 		patch: Partial<Pick<Organization, 'name' | 'slug'>>
 	): Promise<void>;
+	/**
+	 * Soft-delete the org (sets `deletedAt`). Cascades soft-delete to:
+	 * - Org members (`OrgMember.deletedAt`)
+	 * - Projects in the org (`Project.deletedAt`) and their project members
+	 *
+	 * Definitions and share links cascade through the project deletion above —
+	 * see `IProjectStore.deleteProject`. Invites and the org's compute-server
+	 * override (if any) are NOT cascaded by this method; callers must clean
+	 * them up explicitly if needed.
+	 *
+	 * Adapters with FK constraints (Postgres `ON DELETE` on the soft-delete
+	 * predicate, RLS) get the cascade for free; document-store adapters must
+	 * replicate it in application code.
+	 */
 	deleteOrg(ctx: RequestContext, id: string): Promise<void>;
 
 	// ============================================================================
@@ -92,6 +106,14 @@ export interface IProjectStore {
 			>
 		>
 	): Promise<void>;
+	/**
+	 * Soft-delete the project (sets `deletedAt`). Cascades soft-delete to:
+	 * - Project members (`ProjectMember.deletedAt`)
+	 * - Definitions in the project (`DefinitionRecord.deletedAt`)
+	 *
+	 * Definition versions and share links cascade through the definition
+	 * deletion (`IDefinitionStore.delete` / FK CASCADE).
+	 */
 	deleteProject(ctx: RequestContext, id: string): Promise<void>;
 
 	// ============================================================================

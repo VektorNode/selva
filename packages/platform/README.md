@@ -10,13 +10,17 @@ This README is the contract. Read it before writing an adapter.
 
 | Interface | Purpose | Scoped by `RequestContext`? |
 | --- | --- | --- |
-| `IAuthProvider` | Verify tokens, manage users, issue sessions. | No — the auth provider *produces* the identity that fills the context. |
-| `IOrgStore` | Orgs, projects, memberships, access checks. | Yes — every method. |
-| `IDefinitionStore` | Definition metadata records + history entries. | Yes — every method. |
-| `IComputeServerStore` | Global compute-server config. Platform-admin only. | No — not tenant-scoped. |
-| `IStorageProvider` | Path-based blob storage (files, cover images, archives). | No — callers pass already-scoped paths. |
+| `IAuthProvider` | Verify tokens, manage users, issue sessions. Optional `passwordAuth?` capability for credential-based providers. | No — the auth provider *produces* the identity that fills the context. |
+| `IOrgStore` | Orgs and org memberships. | Yes — every method. |
+| `IProjectStore` | Projects and project memberships. | Yes — every method. |
+| `IDefinitionStore` | Definition metadata records + version history. | Yes — every method. |
+| `IShareLinkStore` | Per-definition anonymous-access tokens. | Yes — every method. |
+| `IInviteStore` | Pending org-membership invitations. | Yes — every method. |
+| `IComputeServerStore` | Global + per-org compute-server config. | No — not tenant-scoped. |
+| `IStorageProvider` | Path-based blob storage. Authorization is the caller's responsibility — paths must be constructed within already-authorized scope. | No — callers pass already-scoped paths. |
+| `IUserProfileStore` | Per-user profile metadata (display name, starred definitions, recent runs). | No — the user IS the scope; callers MUST authorize before invocation. |
 
-`IDataProvider` is the composition: `{ orgs, definitions, computeServer }`. An adapter typically implements one class per store and aggregates them.
+`IDataProvider` is the composition over the data stores: `{ orgs, projects, definitions, shareLinks, invites, computeServer }`. An adapter typically implements one class per store and aggregates them.
 
 ---
 
@@ -35,7 +39,7 @@ This README is the contract. Read it before writing an adapter.
 
 ## Transaction ordering rules
 
-Providers are two-phase: a metadata store (`IDataProvider`) and a blob store (`IStorageProvider`). They have no shared transaction. Services in this package (`DefinitionService`) compose them using a fixed ordering so that a partial failure is recoverable.
+Providers are two-phase: a metadata store (`IDataProvider`) and a blob store (`IStorageProvider`). They have no shared transaction. The consumer's orchestration layer (`DefinitionService` in compute-app) composes them using a fixed ordering so that a partial failure is recoverable.
 
 **Create — metadata-first with `pending` → `ready`:**
 
@@ -54,7 +58,7 @@ If step 2 fails, a retry re-deletes blobs (no-op) and succeeds. The record never
 
 **Update-file — best-effort, retry-safe:**
 
-Archive current → append history → write new → prune history. Not fully atomic; retrying the same file converges. Documented limitation (see `DefinitionService.updateFile`).
+Archive current → append history → write new → prune history. Not fully atomic; retrying the same file converges. Documented limitation (see `DefinitionService.updateFile` in compute-app).
 
 ---
 
@@ -160,5 +164,6 @@ Throw `ProviderError` for user-facing failures (`new ProviderError('...', 404)`)
 ## What not to put in this package
 
 - No runtime dependencies on databases, ORMs, auth SDKs, or HTTP frameworks.
-- No concrete adapters. They live in their own packages (`selva-local-provider`, future `selva-supabase-provider`, ...).
-- No business logic beyond the service composition in `DefinitionService`. Access checks, multi-step workflows, and rendering concerns belong in the consuming app.
+- No concrete adapters. They live in their own packages (`selva-local-provider`, `selva-supabase-provider`, ...).
+- No service orchestration. Multi-step workflows that compose data + storage (e.g. `DefinitionService`) live in the consuming app, not here.
+- No HTTP-boundary concerns. Zod request schemas and access checks belong in the consuming app's route handlers.
