@@ -73,6 +73,49 @@ Legend:
 > Acme and member in BigClient. The UI must scope every action to the
 > `actingOrgId`.
 
+### 2.0 Platform vs. org admin — surface split
+- **STATUS** — Backend leak is **fixed**. The original bug:
+  [admin/+layout.server.ts](src/routes/admin/+layout.server.ts) admitted
+  anyone holding any of eight admin-class perms (including org-scope ones
+  like `manage_org_members`), but the General dashboard
+  ([admin/+page.server.ts](src/routes/admin/+page.server.ts)) called
+  `auth.listUsers({ limit: 200 })` unconditionally — so an org owner with
+  zero platform perms (e.g. Acme's Robert Hayes) saw the **instance-wide
+  user total**, plus dead-end "Users"/"Compute" cards that 403'd him, plus
+  build/git-hash deployment metadata. The layout now uses
+  `assertAnyPlatformPermission` (admits only the four platform perms), and
+  the user-count fetch is conditioned on `manage_instance_users`.
+- **DIRECTION CHOSEN** — Two alternatives were considered: (1) keep `/admin`
+  but make every panel conditional on the right perm and add org-scope
+  tabs/cards inside it; (2) split — `/admin` stays platform-only, org admins
+  get a sibling surface. **(2) wins.** Going back to a combined route would
+  re-introduce the heterogeneous gate we just removed, and a separate route
+  pairs naturally with the §2.1 acting-org switcher (switching orgs
+  re-scopes the org surface; `/admin` stays anchored to the platform).
+- **NEW** — Build the `/team` route (or `/org` — vocabulary preference;
+  "team" reads more user-friendly, "org" is more accurate to the data
+  model). Layout gates on a new `assertAnyOrgAdminPermission` helper that
+  mirrors `assertAnyPlatformPermission` but admits any of the four org
+  perms. Sub-pages, each scoped to `actingOrgId` and reusing existing API
+  endpoints — no new server logic, just shells:
+  - `/team` (general) — org name/slug, member count, "this is the
+    `<org>` workspace" header. Always visible to anyone who passes the
+    layout gate.
+  - `/team/members` — gated `manage_org_members`. Roster + invite form
+    (reuses `/api/invites`, the same one `/admin/users` already calls).
+    See §2.2, §2.3, §2.5, §2.6.
+  - `/team/compute` — gated `manage_org_compute`, **and** only mounted
+    when `ALLOW_ORG_COMPUTE_OVERRIDE=true`. BYO compute config. See §2.7.
+  - `/team/projects` — gated `manage_projects`. Project list with
+    create/reclaim affordances. See §2.8.
+  - `/team/settings` — owner-only org settings (name, slug edit, ownership
+    transfer, delete). See §2.4.
+- **OPEN** — Where the org switcher lives once it ships (§2.1) — most
+  natural in the top-bar account menu so it's reachable from both `/admin`
+  (platform admins acting on a specific org) and `/team` (org admins
+  switching between their orgs). Not blocking; just flag the placement
+  call when scaffolding.
+
 ### 2.1 Acting-org switcher
 - **NEW** — The UI currently assumes one active org. With multi-tenant on the
   horizon, a user may belong to several orgs. Need: a picker (top bar / account
@@ -149,16 +192,19 @@ Legend:
 > project and may or may not hold broader org authority.
 
 ### 3.1 Project settings
-- **CHANGED** — Settings page now has strictly owner-only editability (spec A4).
-  The old "project editor + manage_definitions can edit" affordance is gone.
-  UI must hide the edit controls for non-owners.
-- **NEW** — New editable fields: `autoJoinOnUpload` (commons toggle) and
-  `allowAnonymous` (anonymous embed toggle). Both:
+- **CHANGED** — Settings page now has strictly owner-only editability (spec §5,
+  `canEditProjectSettings`). The old "project editor + manage_definitions can
+  edit" affordance is gone. UI must hide the edit controls for non-owners.
+- **NEW** — New editable field: `autoJoinOnUpload` (commons toggle).
   - Disabled in the UI unless `visibility === 'public'`. Flipping visibility
-    off `public` should either confirm clearing the flags or reject the change.
-  - Each gets a short explanation. `autoJoinOnUpload` explains the Alice/Peter
-    trust model; `allowAnonymous` warns about compute-cost exposure and that
-    it's blocked in production until abuse controls ship.
+    off `public` should either confirm clearing the flag or reject the change.
+  - Short explanation of the Alice/Peter trust model: commons projects let any
+    authenticated user upload a definition they then own; project editors
+    retain moderator authority over everyone's contributions.
+- **NEW** — Anonymous access (iframe embeds, share-by-URL) is delivered via
+  per-definition share links (Permissions.md §7), minted from the definition
+  page. There is **no project-level toggle** for anonymous access. See §8 for
+  the share-link UI surface.
 - **NEW** — Changing visibility **to `public`** is a stricter action
   (canChangeVisibilityToPublic). The UI should:
   1. Show the option only to org owner/admin (not project owner alone).
@@ -203,8 +249,9 @@ as before. Just two cleanups:
 - **CORRECTNESS** — Editor no longer sees project-settings edit. Hide the
   controls unless the current member role is `owner`.
 - **CORRECTNESS** — "Edit definition" now always works for editors regardless
-  of project visibility, per A3. Any UI logic that previously grayed out the
-  edit action on public projects for non-uploaders was wrong; remove it.
+  of project visibility (Permissions.md §5, `canEditDefinition`). Any UI logic
+  that previously grayed out the edit action on public projects for
+  non-uploaders was wrong; remove it.
 
 ---
 
@@ -231,8 +278,8 @@ as before. Just two cleanups:
   old rule "anyone with `manage_definitions` in the org can upload to a public
   project" is gone. UI should hide the upload button for non-members.
 - **NEW** — Display `createdBy` and `updatedBy` on the definition detail view
-  ("uploaded by Alice; last edited by Bob 3 days ago"). Spec §8 mandates the
-  fields; they're not rendered today.
+  ("uploaded by Alice; last edited by Bob 3 days ago"). Permissions.md §9
+  mandates the fields on every mutable entity; they're not rendered today.
 
 ---
 
@@ -263,9 +310,61 @@ as before. Just two cleanups:
 
 ---
 
-## 8. Definition versioning (scaffold only)
+## 8. Share-link management
 
-> Spec §6. The data model exists (B4); no upload/publish flow is wired yet.
+> Permissions.md §7. Backend is fully wired (mint, list, revoke, atomic
+> solve-count enforcement). Zero UI surface today — this is the largest
+> gap from a user-visible-functionality standpoint.
+
+Per-definition tokens that grant access to one (definition, channel) pair
+without requiring an account. Replaces both "share-by-link" and "anonymous-
+embed" use cases. Authorization to mint mirrors `canEditDefinition` —
+container-mode editors and commons-mode definition owners both qualify.
+
+### 8.1 Mint a share link
+- **NEW** — On any definition the current user can edit, surface a "Share"
+  action that opens a mint dialog with:
+  - **Channel** picker — `live` (default) or `draft`. `draft` warns "reviewers
+    will see the unpublished version."
+  - **Allow solve** toggle — off = view-only schema; on = full solve.
+  - **Expiry** — optional ISO date / "never expires."
+  - **Solve cap** — pre-filled with the default (`DEFAULT_SHARE_LINK_MAX_SOLVES`,
+    currently 1000). Removing or raising the cap requires an extra confirm
+    step (the design assumes leakage; an uncapped iframe is a denial-of-
+    wallet vector).
+  - **Optional label** — `name?` field for distinguishing links in the list.
+- **NEW** — On submit, surface the **raw token exactly once** with a copy
+  button and a clear "this is the only time you'll see it" warning. The
+  backend hashes on store; we genuinely cannot re-derive it.
+
+### 8.2 List existing links per definition
+- **NEW** — Tab or panel on the definition detail page showing every active
+  + revoked link: label, channel, allow-solve flag, cap, current count,
+  expiry, mint date, mint user. No raw token.
+- **NEW** — Per-row affordances:
+  - **Revoke** — soft-delete (sets `revokedAt`); cannot be undone.
+  - **Copy URL** — re-derives the share URL from the link id (sans token —
+    only useful as a reference, NOT a working link). Or omit; raw token is
+    only shown at mint.
+
+### 8.3 Anonymous iframe embed
+- **NEW** — On the same definition page, an "Embed" affordance that mints a
+  share link (or selects an existing one) and produces a copy-pasteable
+  iframe snippet pre-filled with `?token=…`. Flag the snippet with a
+  warning banner: "This URL grants the configured solves to anyone who
+  receives it; revoke immediately if compromised."
+
+### 8.4 Cap-reached and revoked states for consumers
+- **NEW** — When a token-resolved request returns 429 (cap reached) or 401
+  (revoked / expired), the embedded solve page should render a clear,
+  branded "this share link is no longer active" state rather than a raw
+  error. Pure copy + UI work; backend already returns the correct codes.
+
+---
+
+## 9. Definition versioning (scaffold only)
+
+> Permissions.md §6. Data model exists; no upload/publish UI is wired yet.
 
 - **NEW (future)** — Version list per definition (`liveVersionId`,
   `draftVersionId`, plus a historical timeline).
@@ -281,7 +380,7 @@ as before. Just two cleanups:
 
 ---
 
-## 9. Solve / view (the consumer-facing app)
+## 10. Solve / view (the consumer-facing app)
 
 ### 9.1 Visibility-aware listing
 - **CORRECTNESS** — The `/app` home lists definitions. The list must reflect
@@ -301,45 +400,53 @@ as before. Just two cleanups:
   client probably needs copy improvements.
 
 ### 9.3 Anonymous iframe embeds
-- **NEW (future)** — When `allowAnonymous=true`, the solve page works for
-  non-authenticated visitors. Before this ships, abuse controls must exist
-  (spec §11). The UI piece:
-  - An embed-code generator on the project page (copy-paste iframe snippet).
-  - A warning banner explaining the solve-cost exposure.
-  - Preview mode showing what the embed looks like without auth.
-- **NOT NOW** — Blocked on abuse controls; track in deferred list.
+- Delivered via per-definition share links (Permissions.md §7). The minter
+  pastes the link's URL into an iframe; the token in the URL authenticates
+  the embed. Caps and revocation are the load-bearing protections. All UI
+  work is enumerated in §8.
 
 ---
 
-## 10. Audit and attribution (rendering concerns)
+## 11. Audit and attribution (rendering concerns)
 
-These are **display-only** items enabled by the new B3 audit fields. None
-require new endpoints; they're read-only surfacings of data that now exists.
+These are **display-only** items enabled by the audit fields on every mutable
+entity (Permissions.md §9). None require new endpoints; they're read-only
+surfacings of data that now exists.
 
 - **NEW** — "Created by" / "last updated by" display on project, org,
   definition pages.
 - **NEW** — "Deleted user" rendering everywhere a `userId` might no longer
-  resolve (spec §9). The backend already leaves orphan IDs in place — the
-  frontend needs a safe fallback component.
-- **NEW (future)** — Audit log viewer (spec §11 deferred). Not now.
+  resolve (Permissions.md §9). The backend already leaves orphan IDs in place
+  — the frontend needs a safe fallback component.
+- **NEW (future)** — Audit log **viewer UI**. Storage is live (every domain
+  event is persisted to `public.audit_events` via `SupabaseEventSink`); only
+  the operator-facing browser is deferred (Permissions.md §12). Tracked in
+  the deferred list below.
 
 ---
 
-## 11. Deferred features — UI tracking
+## 12. Deferred features — UI tracking
 
 For completeness, features designed-for in the spec but without UI yet. If a
 user asks "where's X?" we should have consistent "coming soon" placeholders
 rather than ad-hoc empty states.
 
-- Reclaim audit trail (§2.8) — action exists, log UI doesn't.
-- Share-by-link (§11) — not built at all.
-- Cross-org project guests (§11) — not built.
-- Full audit log storage + viewer (§11) — hook points exist.
-- API tokens / PATs (§11) — not built.
-- Webhooks (§11) — events emit, no UI.
-- Anonymous-embed abuse controls (§4, §11) — gates `allowAnonymous` release.
-- Per-org data residency (§11) — not built.
-- Project templates / bulk member ops (§11) — not built.
+- Reclaim audit trail (§2.8) — action exists, audit row IS now persisted to
+  `audit_events`; only the operator-facing browser is deferred.
+- **Share-by-link UI is no longer deferred** — backend is fully wired and
+  the UI work is enumerated in §8 above. Removed from this list.
+- Cross-org project guests (Permissions.md §12) — not built.
+- **Audit log VIEWER UI** (Permissions.md §12). Storage IS live: every domain
+  event is persisted to `audit_events` via `SupabaseEventSink` — the data is
+  accumulating from day one. What's deferred is the operator-facing surface
+  for browsing it (filter by actor, type, time window; resolve `actorId` to a
+  display name; render the JSONB payload).
+- API tokens / PATs (Permissions.md §12) — not built.
+- Webhooks (Permissions.md §12) — events emit, no dispatcher; UI for managing
+  webhook endpoints lands later.
+- Cross-org guest on a private project (Permissions.md §12) — not built.
+- Per-org data residency (Permissions.md §12) — not built.
+- Project templates / bulk member ops (Permissions.md §12) — not built.
 
 ---
 
@@ -351,12 +458,15 @@ If you want to sequence this, my recommendation:
    a bug — the UI shows actions that now 403 at the server, or vice versa.
    Silent but ugly.
 2. **Acting-org switcher** (§2.1). Every multi-tenant flow depends on it.
-3. **Project flag editors** (§3.1). The backend enforces, but there's no way
+3. **Share-link management** (§8). Backend is fully wired; this is the largest
+   shippable user-visible feature with zero current UI surface. Also unblocks
+   anonymous-embed iframes that the doc previously deferred.
+4. **Project flag editors** (§3.1). The backend enforces, but there's no way
    for a user to turn them on.
-4. **Commons model affordances** (§7). The most user-visible new behavior.
-5. **Reclaim + offboarding flows** (§2.5, §2.8). These are the enterprise
+5. **Commons model affordances** (§7). The most user-visible new behavior.
+6. **Reclaim + offboarding flows** (§2.5, §2.8). These are the enterprise
    safety net; shipping without them is embarrassing when the first real
    customer asks.
-6. **Attribution display** (§10). Low effort, high "feels professional" value.
-7. **Viewer role UI** (§5). Unblocks the client-review use case you wanted.
-8. Everything else can wait for real demand.
+7. **Attribution display** (§11). Low effort, high "feels professional" value.
+8. **Viewer role UI** (§5). Unblocks the client-review use case you wanted.
+9. Everything else can wait for real demand.

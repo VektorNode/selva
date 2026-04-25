@@ -424,11 +424,11 @@ Instance-level only. Denial returns **403** (not redirect).
 
 ### Admin pages (`/admin/*`)
 
-Denial redirects to `/admin`.
+Instance-level only. The shell admits **platform** perms exclusively — org-scope perms (`manage_org_members`, `manage_org_compute`, `manage_definitions`, `manage_projects`) never grant entry, even though they share the `manage_*` prefix. Sub-page denial redirects to `/admin`; layout-level denial (no platform perm at all) redirects to `/app`.
 
 | Page                 | Permission              |
 | -------------------- | ----------------------- |
-| `/admin` (dashboard) | Any admin perm          |
+| `/admin` (dashboard) | Any platform perm       |
 | `/admin/users`       | `manage_instance_users` |
 | `/admin/compute`     | `manage_compute`        |
 | `/admin/orgs`        | `instance_admin`        |

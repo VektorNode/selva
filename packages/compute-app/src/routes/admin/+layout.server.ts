@@ -1,28 +1,17 @@
 import { redirect } from '@sveltejs/kit';
-import { hasPermission } from '@selva/platform';
-import type { OrgPermission, PlatformPermission } from '@selva/platform';
+import { assertAnyPlatformPermission } from '$lib/server/access.server';
 import type { LayoutServerLoad } from './$types';
 
-// Auth is handled in hooks.server.ts. Here we enforce that the authenticated
-// user holds at least one admin-level permission — otherwise /admin is off-limits
-// and they get sent back to the app.
-const ADMIN_PERMISSIONS: Array<PlatformPermission | OrgPermission> = [
-	'instance_admin',
-	'manage_instance_users',
-	'manage_compute',
-	'manage_updates',
-	'manage_org_members',
-	'manage_org_compute',
-	'manage_definitions',
-	'manage_projects'
-];
-
+/**
+ * `/admin` is a platform-scope surface — instance operators and Selva staff
+ * only. Holding only org-class permissions (`manage_org_members`,
+ * `manage_org_compute`, `manage_definitions`, `manage_projects`) does NOT
+ * admit you here, even though those permissions also start with `manage_`.
+ * Org admins get their own surface elsewhere (see UI_INVENTORY.md §2.0).
+ */
 export const load: LayoutServerLoad = async ({ locals }) => {
 	if (!locals.ctx) redirect(303, '/login');
-	const hasAdminAccess = ADMIN_PERMISSIONS.some((p) => hasPermission(locals.ctx!, p));
-	if (!hasAdminAccess) {
-		redirect(303, '/app');
-	}
+	assertAnyPlatformPermission(locals);
 	return {
 		platformPermissions: locals.ctx.platformPermissions,
 		orgPermissions: locals.ctx.orgPermissions
