@@ -7,6 +7,7 @@ import type {
 	RequestContext
 } from '@selva/platform';
 import {
+	ALL_PLATFORM_PERMISSIONS,
 	hasPermission,
 	canReclaim,
 	canCreateProject,
@@ -81,6 +82,30 @@ export const assertManageProjects = (locals: Locals) =>
 
 export const requireInstanceAdmin = (locals: Locals) =>
 	requirePermission(locals, 'instance_admin');
+
+/**
+ * Gate for routes that may be reached by any platform-class permission holder
+ * (e.g. the `/admin` shell — `instance_admin`, `manage_compute`,
+ * `manage_instance_users`, or `manage_updates` all qualify). Org-scope
+ * permissions never admit entry: org admins do not belong on platform-scoped
+ * surfaces.
+ *
+ * Throws 403 — use in API routes.
+ */
+export function requireAnyPlatformPermission(locals: Locals): AuthUser {
+	const { user, ctx } = requireAuthed(locals);
+	const allowed = ALL_PLATFORM_PERMISSIONS.some((p) => hasPermission(ctx, p));
+	if (!allowed) throw error(403, `You don't have permission to do this.`);
+	return user;
+}
+
+/** Redirects to /app — use in page load functions on platform-scoped routes. */
+export function assertAnyPlatformPermission(locals: Locals): AuthUser {
+	const { user, ctx } = requireAuthed(locals);
+	const allowed = ALL_PLATFORM_PERMISSIONS.some((p) => hasPermission(ctx, p));
+	if (!allowed) redirect(303, '/app');
+	return user;
+}
 
 /**
  * Every project/definition gate funnels through this so the `instance_admin`
