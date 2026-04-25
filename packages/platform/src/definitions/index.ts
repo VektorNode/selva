@@ -4,7 +4,7 @@ export type {
 	DefinitionRecordPatch,
 	DefinitionStatus,
 	DefinitionVersion,
-	HistoryEntry
+	DefinitionChannel
 } from './types.js';
 export {
 	GH_EXTENSIONS,

@@ -64,7 +64,7 @@ export type {
 	DefinitionRecordPatch,
 	DefinitionStatus,
 	DefinitionVersion,
-	HistoryEntry
+	DefinitionChannel
 } from './definitions/index.js';
 export {
 	GH_EXTENSIONS,
@@ -74,7 +74,12 @@ export {
 	definitionPaths
 } from './definitions/index.js';
 export type { UpdateMetadataInput } from './definitions/schemas.js';
-export { DefinitionVersionSchema } from './definitions/schemas.js';
+export {
+	DefinitionVersionSchema,
+	DefinitionChannelSchema,
+	DefinitionFileExtSchema,
+	PublishVersionInputSchema
+} from './definitions/schemas.js';
 
 // Storage
 export type { IStorageProvider, TranscodeResult } from './storage/index.js';
@@ -118,7 +123,9 @@ export { ProviderError } from './errors.js';
 export type {
 	ProjectAccessInput,
 	DefinitionAccessInput,
-	VisibilityChangeInput
+	VisibilityChangeInput,
+	ReclaimAccessInput,
+	CreateProjectAccessInput
 } from './access/index.js';
 export {
 	canView,
@@ -128,5 +135,7 @@ export {
 	canEditProjectSettings,
 	canChangeVisibilityToPublic,
 	canEditDefinition,
+	canReclaim,
+	canCreateProject,
 	withAdminBypass
 } from './access/index.js';

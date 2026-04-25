@@ -4,9 +4,10 @@ import type {
 	IProjectStore,
 	DefinitionRecord,
 	DefinitionRecordPatch,
-	HistoryEntry,
+	DefinitionVersion,
 	RequestContext,
 	DefinitionListOptions,
+	ListOptions,
 	Page
 } from '@selva/platform';
 import { ProviderError, hasPermission } from '@selva/platform';
@@ -15,7 +16,13 @@ import { readJsonFile, writeJsonFile } from './fsJson.js';
 
 interface DefinitionsConfig {
 	definitions: Record<string, DefinitionRecord>;
+	definitionVersions: Record<string, DefinitionVersion>;
 }
+
+/** Always return a fresh object — `readJsonFile` returns its fallback by
+ * reference when the file is missing, so a shared singleton would let one
+ * read pollute the next. */
+const empty = (): DefinitionsConfig => ({ definitions: {}, definitionVersions: {} });
 
 export class LocalDefinitionStore implements IDefinitionStore {
 	private readonly configPath: string;
@@ -36,24 +43,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 	}
 
 	private async readConfig(): Promise<DefinitionsConfig> {
-		const parsed = await readJsonFile<DefinitionsConfig>(this.configPath, { definitions: {} });
-		// Backfills for records written before later schema migrations.
-		for (const record of Object.values(parsed.definitions)) {
-			if (!record) continue;
-			if (!record.status || record.status === ('ready' as string)) record.status = 'published';
-			if (record.runCount === undefined) record.runCount = 0;
-			const legacy = record as DefinitionRecord & { lastEditedBy?: string };
-			if (!record.createdBy) record.createdBy = record.ownerId;
-			if (!record.updatedBy) record.updatedBy = legacy.lastEditedBy ?? record.ownerId;
-			if (legacy.lastEditedBy !== undefined) delete legacy.lastEditedBy;
-			if (record.deletedAt === undefined) record.deletedAt = null;
-			if (record.liveVersionId === undefined) record.liveVersionId = null;
-			if (record.draftVersionId === undefined) record.draftVersionId = null;
-			for (const entry of record.history ?? []) {
-				if (!entry.uploadedBy) entry.uploadedBy = record.ownerId;
-			}
-		}
-		return parsed;
+		return readJsonFile<DefinitionsConfig>(this.configPath, empty());
 	}
 
 	private live(record: DefinitionRecord | undefined | null): record is DefinitionRecord {
@@ -122,8 +112,6 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			Boolean(r?.displayName && this.live(r))
 		);
 
-		// Resolve each record's project once, in bulk — one getProject call per
-		// unique projectId. Cheap for local scale (single file read behind the scenes).
 		const projectIds = Array.from(new Set(records.map((r) => r.projectId)));
 		const projects = await Promise.all(
 			projectIds.map((id) => this.projectProvider!.getProject(ctx, id))
@@ -157,6 +145,8 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			...record,
 			createdBy: record.createdBy || actor,
 			updatedBy: record.updatedBy || actor,
+			liveVersionId: record.liveVersionId ?? null,
+			draftVersionId: record.draftVersionId ?? null,
 			deletedAt: null
 		};
 		await this.writeConfig(config);
@@ -167,7 +157,6 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		const existing = config.definitions[guid];
 		if (!this.live(existing)) throw new ProviderError(`Definition '${guid}' not found`, 404);
 
-		// `null` clears the field (sets to undefined); `undefined` leaves unchanged.
 		const clearable = (v: unknown) => (v === null ? undefined : v);
 		config.definitions[guid] = {
 			...existing,
@@ -176,9 +165,6 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			...(patch.category !== undefined && { category: clearable(patch.category) as string | undefined }),
 			...(patch.tags !== undefined && { tags: clearable(patch.tags) as string[] | undefined }),
 			...(patch.coverImage !== undefined && { coverImage: clearable(patch.coverImage) as string | undefined }),
-			...(patch.fileExt !== undefined && { fileExt: patch.fileExt }),
-			...(patch.originalFilename !== undefined && { originalFilename: patch.originalFilename }),
-			...(patch.maxHistory !== undefined && { maxHistory: patch.maxHistory }),
 			...(patch.projectId !== undefined && { projectId: patch.projectId }),
 			...(patch.computeServerId !== undefined && {
 				computeServerId: clearable(patch.computeServerId) as string | undefined
@@ -188,29 +174,6 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			updatedAt: new Date().toISOString(),
 			updatedBy: ctx.userId || existing.updatedBy
 		};
-		await this.writeConfig(config);
-	}
-
-	async addHistoryEntry(ctx: RequestContext, guid: string, entry: HistoryEntry): Promise<void> {
-		const config = await this.readConfig();
-		const existing = config.definitions[guid];
-		if (!this.live(existing)) throw new ProviderError(`Definition '${guid}' not found`, 404);
-
-		const history = [entry, ...existing.history];
-		existing.history = existing.maxHistory > 0 ? history.slice(0, existing.maxHistory) : history;
-		existing.updatedAt = new Date().toISOString();
-		existing.updatedBy = ctx.userId || existing.updatedBy;
-		await this.writeConfig(config);
-	}
-
-	async removeHistoryEntry(ctx: RequestContext, guid: string, ref: string): Promise<void> {
-		const config = await this.readConfig();
-		const existing = config.definitions[guid];
-		if (!this.live(existing)) throw new ProviderError(`Definition '${guid}' not found`, 404);
-
-		existing.history = existing.history.filter((e) => e.ref !== ref);
-		existing.updatedAt = new Date().toISOString();
-		existing.updatedBy = ctx.userId || existing.updatedBy;
 		await this.writeConfig(config);
 	}
 
@@ -243,6 +206,98 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			(r) =>
 				this.live(r) && r.status === ('pending' as string) && r.createdAt <= olderThanIso
 		);
+	}
+
+	// ============================================================================
+	// Versions (spec §6)
+	// ============================================================================
+
+	async createVersion(_ctx: RequestContext, version: DefinitionVersion): Promise<void> {
+		const config = await this.readConfig();
+		const parent = config.definitions[version.definitionId];
+		if (!this.live(parent)) {
+			throw new ProviderError(`Definition '${version.definitionId}' not found`, 404);
+		}
+		if (config.definitionVersions[version.id]) {
+			throw new ProviderError(`Version '${version.id}' already exists`, 409);
+		}
+		config.definitionVersions[version.id] = { ...version };
+		await this.writeConfig(config);
+	}
+
+	async listVersions(
+		_ctx: RequestContext,
+		definitionId: string,
+		opts?: ListOptions
+	): Promise<Page<DefinitionVersion>> {
+		const config = await this.readConfig();
+		const parent = config.definitions[definitionId];
+		if (!this.live(parent)) return paginate([], opts);
+		const rows = Object.values(config.definitionVersions)
+			.filter((v) => v.definitionId === definitionId)
+			.sort((a, b) => b.versionNumber - a.versionNumber);
+		return paginate(rows, opts);
+	}
+
+	async getVersion(_ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null> {
+		const config = await this.readConfig();
+		return config.definitionVersions[versionId] ?? null;
+	}
+
+	async deleteVersion(_ctx: RequestContext, versionId: string): Promise<void> {
+		const config = await this.readConfig();
+		const version = config.definitionVersions[versionId];
+		if (!version) return;
+		const parent = config.definitions[version.definitionId];
+		// §6 deletion protection — cannot delete a version while it's serving
+		// either channel. Caller must repoint live/draft first.
+		if (
+			parent &&
+			(parent.liveVersionId === versionId || parent.draftVersionId === versionId)
+		) {
+			throw new ProviderError(
+				`Version '${versionId}' is referenced by liveVersionId or draftVersionId`,
+				409
+			);
+		}
+		delete config.definitionVersions[versionId];
+		await this.writeConfig(config);
+	}
+
+	async setLiveVersion(
+		ctx: RequestContext,
+		definitionId: string,
+		versionId: string
+	): Promise<void> {
+		await this.repoint('live', ctx, definitionId, versionId);
+	}
+
+	async setDraftVersion(
+		ctx: RequestContext,
+		definitionId: string,
+		versionId: string
+	): Promise<void> {
+		await this.repoint('draft', ctx, definitionId, versionId);
+	}
+
+	private async repoint(
+		channel: 'live' | 'draft',
+		ctx: RequestContext,
+		definitionId: string,
+		versionId: string
+	): Promise<void> {
+		const config = await this.readConfig();
+		const record = config.definitions[definitionId];
+		if (!this.live(record)) throw new ProviderError(`Definition '${definitionId}' not found`, 404);
+		const version = config.definitionVersions[versionId];
+		if (!version || version.definitionId !== definitionId) {
+			throw new ProviderError(`Version '${versionId}' not found for this definition`, 404);
+		}
+		if (channel === 'live') record.liveVersionId = versionId;
+		else record.draftVersionId = versionId;
+		record.updatedAt = new Date().toISOString();
+		record.updatedBy = ctx.userId || record.updatedBy;
+		await this.writeConfig(config);
 	}
 
 	async canEditDefinition(

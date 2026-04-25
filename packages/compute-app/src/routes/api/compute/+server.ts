@@ -10,14 +10,16 @@ import {
 import type { SchemaInput } from 'selva-shared';
 import { error, json, isHttpError } from '@sveltejs/kit';
 import { getComputeServerConfigStore } from '$lib/server/providers.server';
-import { resolveComputeServer, definitionPaths, SYSTEM_CONTEXT } from '@selva/platform';
+import { resolveComputeServer, SYSTEM_CONTEXT } from '@selva/platform';
 import { getStorageProvider, providers } from '$lib/server/providers.server';
-import { requireCanSolve } from '$lib/server/access.server';
+import { requireCanSolve, requireCanEditDefinition } from '$lib/server/access.server';
 
 interface ComputeRequest {
 	inputs: (SchemaInput & { minimum?: number; maximum?: number; stepSize?: number })[];
 	values: Record<string, unknown>;
 	definitionUrl: string;
+	/** Spec §6 channel selector. Defaults to 'live'. 'draft' requires editor. */
+	channel?: 'live' | 'draft';
 }
 
 // -----------------------------
@@ -158,9 +160,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		const { inputs, values } = body;
 		const definitionUrl = body.definitionUrl;
+		const channel: 'live' | 'draft' = body.channel ?? 'live';
 
 		if (!inputs || !values || !definitionUrl) {
 			throw error(400, 'Missing required fields: inputs, values, or definitionUrl');
+		}
+		if (channel !== 'live' && channel !== 'draft') {
+			throw error(400, `Invalid channel: ${channel}. Must be 'live' or 'draft'.`);
 		}
 
 		let definitionSource: Uint8Array;
@@ -180,11 +186,26 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 			if (!record) throw error(404, `Definition '${guid}' not found`);
 
-			await requireCanSolve(locals, record.projectId);
+			// 'live' is the public channel; 'draft' is for editors only (spec §6).
+			if (channel === 'draft') {
+				await requireCanEditDefinition(locals, record.projectId, guid);
+			} else {
+				await requireCanSolve(locals, record.projectId);
+			}
+
+			const versionId =
+				channel === 'live' ? record.liveVersionId : record.draftVersionId;
+			if (!versionId) {
+				throw error(404, `Definition '${guid}' has no ${channel} version yet`);
+			}
+			const version = await providers.data.definitions.getVersion(locals.ctx, versionId);
+			if (!version || version.definitionId !== guid) {
+				throw error(404, `Definition '${guid}' ${channel} version is missing`);
+			}
 
 			try {
-				const bytes = await storage.get(definitionPaths.file(guid, record.fileExt));
-				if (!bytes) throw new Error(`Definition '${guid}' not found on disk`);
+				const bytes = await storage.get(version.fileKey);
+				if (!bytes) throw new Error(`Version blob missing: ${version.fileKey}`);
 				definitionSource = bytes;
 			} catch (err) {
 				console.error(`Failed to load local definition blob: ${guid}`, err);

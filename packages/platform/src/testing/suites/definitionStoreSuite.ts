@@ -3,12 +3,12 @@
  *
  * The goal is to prove every adapter behaves identically from the consuming
  * app's perspective — `ctx` scoping, `pending` filtering, `listStalePending`
- * cutoff, history mutations, and error shapes.
+ * cutoff, version CRUD + reference protection (spec §6), and error shapes.
  */
 
 import { describe, it, expect } from 'vitest';
 import type { IDefinitionStore } from '../../data/interface.js';
-import type { DefinitionRecord, HistoryEntry } from '../../definitions/types.js';
+import type { DefinitionRecord, DefinitionVersion } from '../../definitions/types.js';
 import { SYSTEM_CONTEXT } from '../../context.js';
 import { makeCtx, makeUuid } from './helpers.js';
 
@@ -69,10 +69,7 @@ function record(
 		ownerId: overrides.ownerId ?? scope.ownerId,
 		createdBy: overrides.createdBy ?? scope.ownerId,
 		updatedBy: overrides.updatedBy ?? scope.ownerId,
-		fileExt: overrides.fileExt ?? 'gh',
 		displayName: overrides.displayName ?? 'Test',
-		history: overrides.history ?? [],
-		maxHistory: overrides.maxHistory ?? 10,
 		status: overrides.status ?? 'published',
 		runCount: overrides.runCount ?? 0,
 		liveVersionId: overrides.liveVersionId ?? null,
@@ -80,6 +77,25 @@ function record(
 		createdAt: overrides.createdAt ?? now,
 		updatedAt: overrides.updatedAt ?? now,
 		deletedAt: overrides.deletedAt ?? null,
+		...overrides
+	};
+}
+
+function version(
+	definitionId: string,
+	versionNumber: number,
+	uploadedBy: string,
+	overrides: Partial<DefinitionVersion> = {}
+): DefinitionVersion {
+	return {
+		id: overrides.id ?? makeUuid(),
+		definitionId,
+		versionNumber,
+		fileExt: overrides.fileExt ?? 'gh',
+		fileKey: overrides.fileKey ?? `definitions/${definitionId}/versions/v${versionNumber}.gh`,
+		originalFilename: overrides.originalFilename,
+		uploadedBy,
+		uploadedAt: overrides.uploadedAt ?? new Date().toISOString(),
 		...overrides
 	};
 }
@@ -246,32 +262,112 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(got?.createdBy).toBe(scope.ownerId);
 		});
 
-		it('addHistoryEntry prepends entries (newest first)', async () => {
+		// ============================================================================
+		// Versions (spec §6)
+		// ============================================================================
+
+		it('createVersion + listVersions: rows return newest-first by versionNumber', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const guid = makeUuid();
-			await store.create(ctx(scope.ownerId), record(scope, { guid, maxHistory: 0 }));
+			await store.create(ctx(scope.ownerId), record(scope, { guid }));
 
-			const e1: HistoryEntry = { ref: 'r1', originalName: 'a.gh', archivedAt: '2024-01-01T00:00:00.000Z' };
-			const e2: HistoryEntry = { ref: 'r2', originalName: 'b.gh', archivedAt: '2024-01-02T00:00:00.000Z' };
-			await store.addHistoryEntry(ctx(scope.ownerId), guid, e1);
-			await store.addHistoryEntry(ctx(scope.ownerId), guid, e2);
+			const v1 = version(guid, 1, scope.ownerId);
+			const v2 = version(guid, 2, scope.ownerId);
+			await store.createVersion(ctx(scope.ownerId), v1);
+			await store.createVersion(ctx(scope.ownerId), v2);
 
-			const got = await store.get(ctx(scope.ownerId), guid);
-			expect(got!.history.map((h) => h.ref)).toEqual(['r2', 'r1']);
+			const page = await store.listVersions(ctx(scope.ownerId), guid);
+			expect(page.items.map((v) => v.versionNumber)).toEqual([2, 1]);
+			expect(page.items.map((v) => v.id)).toEqual([v2.id, v1.id]);
 		});
 
-		it('removeHistoryEntry removes the matching ref', async () => {
+		it('getVersion returns the row by id', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const guid = makeUuid();
-			const entry: HistoryEntry = { ref: 'keep', originalName: 'a.gh', archivedAt: '2024-01-01T00:00:00.000Z' };
-			const drop: HistoryEntry = { ref: 'drop', originalName: 'b.gh', archivedAt: '2024-01-02T00:00:00.000Z' };
-			await store.create(ctx(scope.ownerId), record(scope, { guid, history: [drop, entry] }));
+			await store.create(ctx(scope.ownerId), record(scope, { guid }));
+			const v1 = version(guid, 1, scope.ownerId);
+			await store.createVersion(ctx(scope.ownerId), v1);
 
-			await store.removeHistoryEntry(ctx(scope.ownerId), guid, 'drop');
-			const got = await store.get(ctx(scope.ownerId), guid);
-			expect(got!.history.map((h) => h.ref)).toEqual(['keep']);
+			const got = await store.getVersion(ctx(scope.ownerId), v1.id);
+			expect(got?.id).toBe(v1.id);
+			expect(got?.versionNumber).toBe(1);
+		});
+
+		it('setLiveVersion + setDraftVersion repoint channels', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid }));
+			const v1 = version(guid, 1, scope.ownerId);
+			const v2 = version(guid, 2, scope.ownerId);
+			await store.createVersion(ctx(scope.ownerId), v1);
+			await store.createVersion(ctx(scope.ownerId), v2);
+
+			await store.setDraftVersion(ctx(scope.ownerId), guid, v2.id);
+			let got = await store.get(ctx(scope.ownerId), guid);
+			expect(got?.draftVersionId).toBe(v2.id);
+			expect(got?.liveVersionId).toBeNull();
+
+			await store.setLiveVersion(ctx(scope.ownerId), guid, v1.id);
+			got = await store.get(ctx(scope.ownerId), guid);
+			expect(got?.liveVersionId).toBe(v1.id);
+			expect(got?.draftVersionId).toBe(v2.id);
+		});
+
+		it('setLiveVersion rejects a version belonging to another definition', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guidA = makeUuid();
+			const guidB = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid: guidA }));
+			await store.create(ctx(scope.ownerId), record(scope, { guid: guidB }));
+			const vForB = version(guidB, 1, scope.ownerId);
+			await store.createVersion(ctx(scope.ownerId), vForB);
+
+			let thrown: unknown;
+			try {
+				await store.setLiveVersion(ctx(scope.ownerId), guidA, vForB.id);
+			} catch (err) {
+				thrown = err;
+			}
+			expect((thrown as { statusCode?: number })?.statusCode).toBe(404);
+		});
+
+		it('deleteVersion: succeeds when not referenced by live or draft', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid }));
+			const v1 = version(guid, 1, scope.ownerId);
+			const v2 = version(guid, 2, scope.ownerId);
+			await store.createVersion(ctx(scope.ownerId), v1);
+			await store.createVersion(ctx(scope.ownerId), v2);
+			await store.setLiveVersion(ctx(scope.ownerId), guid, v2.id);
+			await store.setDraftVersion(ctx(scope.ownerId), guid, v2.id);
+
+			await store.deleteVersion(ctx(scope.ownerId), v1.id);
+			const remaining = await store.listVersions(ctx(scope.ownerId), guid);
+			expect(remaining.items.map((v) => v.id)).toEqual([v2.id]);
+		});
+
+		it('deleteVersion: throws 409 when the version is referenced by liveVersionId', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid }));
+			const v1 = version(guid, 1, scope.ownerId);
+			await store.createVersion(ctx(scope.ownerId), v1);
+			await store.setLiveVersion(ctx(scope.ownerId), guid, v1.id);
+
+			let thrown: unknown;
+			try {
+				await store.deleteVersion(ctx(scope.ownerId), v1.id);
+			} catch (err) {
+				thrown = err;
+			}
+			expect((thrown as { statusCode?: number })?.statusCode).toBe(409);
 		});
 
 		it('delete removes the record', async () => {

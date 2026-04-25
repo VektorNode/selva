@@ -62,13 +62,12 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 				? org.filter((p) => MEMBER_ASSIGNABLE_PERMISSIONS.includes(p))
 				: [...DEFAULT_ORG_PERMISSIONS[role]];
 		if (existing) {
-			// Remove-then-add is a placeholder until we add a dedicated
-			// updateOrgMemberPermissions method to the store.
-			await orgs.removeOrgMember(SYSTEM_CONTEXT, orgId, id);
-			await orgs.addOrgMember(SYSTEM_CONTEXT, {
-				...existing,
-				permissions: resolvedPermissions(existing.role)
-			});
+			await orgs.updateOrgMemberPermissions(
+				SYSTEM_CONTEXT,
+				orgId,
+				id,
+				resolvedPermissions(existing.role)
+			);
 		} else {
 			// Promote to member with the requested org perms.
 			const joinedAt = new Date().toISOString();

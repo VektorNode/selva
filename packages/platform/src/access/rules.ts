@@ -111,3 +111,47 @@ export function canEditDefinition(input: DefinitionAccessInput): boolean {
 
 	return false;
 }
+
+export interface ReclaimAccessInput {
+	platformPermissions: readonly PlatformPermission[];
+	project: Project | null;
+	orgMember: OrgMember | null;
+	/** `ctx.actingOrgId` — must match the project's `orgId` to reclaim. */
+	actingOrgId: string | null;
+}
+
+/**
+ * Org leadership escape hatch (§5 `canReclaim`). Reclaim adds the actor as a
+ * co-owner; it does NOT demote the existing owner. Tenancy must match — an
+ * admin in another org cannot reclaim across tenants.
+ */
+export function canReclaim(input: ReclaimAccessInput): boolean {
+	const { project, orgMember, actingOrgId } = input;
+	if (!project || !actingOrgId) return false;
+	if (actingOrgId !== project.orgId) return false;
+	const role = orgMember?.role;
+	return role === 'owner' || role === 'admin';
+}
+
+export interface CreateProjectAccessInput {
+	platformPermissions: readonly PlatformPermission[];
+	orgPermissions: readonly OrgPermission[];
+	orgMember: OrgMember | null;
+	/** `ctx.actingOrgId` — must match the target org's `id`. */
+	actingOrgId: string | null;
+	targetOrgId: string;
+}
+
+/**
+ * §5 `canCreateProject`. Owner/admin can always create; a `member` needs the
+ * `manage_projects` org permission. Tenancy is enforced — an actor's
+ * `actingOrgId` must match the target org.
+ */
+export function canCreateProject(input: CreateProjectAccessInput): boolean {
+	const { orgMember, orgPermissions, actingOrgId, targetOrgId } = input;
+	if (actingOrgId !== targetOrgId) return false;
+	const role = orgMember?.role;
+	if (role === 'owner' || role === 'admin') return true;
+	if (role === 'member' && orgPermissions.includes('manage_projects')) return true;
+	return false;
+}

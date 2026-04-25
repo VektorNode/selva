@@ -3,7 +3,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { getProjectProvider } from '$lib/server/providers.server';
-import { requireManageProjects } from '$lib/server/access.server';
+import { requireCanCreateProject } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { slugify } from '$lib/server/slug';
 import { ProjectVisibilitySchema, ProviderError, type Project } from '@selva/platform';
@@ -46,9 +46,9 @@ export const GET: RequestHandler = async ({ locals }) => {
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-	requireManageProjects(locals);
 	const ctx = locals.ctx!;
 	if (!ctx.actingOrgId) throw error(400, 'No active organization');
+	await requireCanCreateProject(locals, ctx.actingOrgId);
 
 	const body = await request.json().catch(() => null);
 	const parsed = CreateProjectBody.safeParse(body);

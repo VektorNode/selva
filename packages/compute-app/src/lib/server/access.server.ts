@@ -6,7 +6,7 @@ import type {
 	Project,
 	RequestContext
 } from '@selva/platform';
-import { hasPermission } from '@selva/platform';
+import { hasPermission, canReclaim, canCreateProject } from '@selva/platform';
 import {
 	getProjectProvider,
 	getDefinitionMeta,
@@ -140,6 +140,62 @@ export async function requireTargetIsOrgMember(
 	if (!member) {
 		throw error(400, 'User must be a member of this organization to be added to a project.');
 	}
+}
+
+/**
+ * §5 `canReclaim` — org owner/admin escape hatch. Returns the project so the
+ * handler can use its `orgId` without re-fetching.
+ */
+export async function requireCanReclaim(
+	locals: Locals,
+	projectId: string
+): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
+	const { user, ctx } = requireAuthed(locals);
+	const project = await loadProjectOr404(ctx, projectId);
+	const allowed = await bypassOrRun(ctx, async () => {
+		const orgMember = await getOrganizationProvider().getOrgMember(
+			ctx,
+			project.orgId,
+			ctx.userId
+		);
+		return canReclaim({
+			platformPermissions: ctx.platformPermissions,
+			project,
+			orgMember,
+			actingOrgId: ctx.actingOrgId ?? null
+		});
+	});
+	if (!allowed) {
+		throw error(403, 'Only org owners or admins of this project’s org can reclaim it.');
+	}
+	return { user, ctx, project };
+}
+
+/**
+ * §5 `canCreateProject` — owner/admin always; member needs `manage_projects`.
+ * Tenancy is enforced via `actingOrgId`.
+ */
+export async function requireCanCreateProject(
+	locals: Locals,
+	targetOrgId: string
+): Promise<{ user: AuthUser; ctx: RequestContext }> {
+	const { user, ctx } = requireAuthed(locals);
+	const allowed = await bypassOrRun(ctx, async () => {
+		const orgMember = await getOrganizationProvider().getOrgMember(
+			ctx,
+			targetOrgId,
+			ctx.userId
+		);
+		return canCreateProject({
+			platformPermissions: ctx.platformPermissions,
+			orgPermissions: ctx.orgPermissions,
+			orgMember,
+			actingOrgId: ctx.actingOrgId ?? null,
+			targetOrgId
+		});
+	});
+	if (!allowed) throw error(403, 'You do not have permission to create projects in this org.');
+	return { user, ctx };
 }
 
 export async function requireCanManage(locals: Locals, projectId: string): Promise<AuthUser> {

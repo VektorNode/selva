@@ -1,20 +1,22 @@
+import { randomUUID } from 'node:crypto';
 import type {
 	IDataProvider,
 	IStorageProvider,
 	RequestContext,
 	DefinitionRecord,
 	DefinitionFileExt,
+	DefinitionVersion,
 	UpdateMetadataInput
 } from '@selva/platform';
 import { SYSTEM_CONTEXT, ProviderError, definitionPaths } from '@selva/platform';
 
 /**
  * Input passed to `DefinitionService.create`. Carries everything the service
- * needs to assemble a `DefinitionRecord` plus orchestrate the blob upload.
+ * needs to assemble a `DefinitionRecord` plus orchestrate the v1 upload.
  *
  * Distinct from `CreateDefinitionInputSchema` exported by
  * `@selva/platform/definitions/schemas`, which validates the user-facing
- * HTTP body (no guid/ownerId/fileExt — those are derived server-side).
+ * HTTP body (no guid/ownerId — those are derived server-side).
  */
 export interface CreateDefinitionRecord {
 	guid: string;
@@ -28,7 +30,6 @@ export interface CreateDefinitionRecord {
 	tags?: string[];
 	coverImage?: string;
 	computeServerId?: string;
-	maxHistory?: number;
 }
 
 /**
@@ -38,33 +39,30 @@ export interface CreateDefinitionRecord {
 const PENDING_GC_AGE_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
- * Orchestrates writes that span IDataProvider + IStorageProvider.
- *
- * Lives in compute-app (not @selva/platform) because it is application
- * orchestration, not platform contract — every method assumes the local
- * provider's no-transactions model. Once a transactional adapter (Supabase)
- * is wired up, the create-pending → upload → flip-to-ready dance should
- * move into `IDefinitionStore.create` so each adapter implements the
- * right semantics for its backend.
+ * Orchestrates writes that span IDataProvider + IStorageProvider for the
+ * spec §6 versioning model. Lives in compute-app (not @selva/platform)
+ * because it is application orchestration, not platform contract.
  *
  * Ordering rules:
  *
- *   create — metadata-first:
- *     1. Write record with status='pending'
- *     2. Upload blob
- *     3. Flip status to 'draft'
- *   If step 2 fails the record stays 'pending' with no blob. List queries
- *   filter 'pending' by default, so no consumer sees the half-written state.
- *   The janitor (gcStalePending) sweeps records older than PENDING_GC_AGE_MS.
+ *   create — metadata-first, then v1:
+ *     1. Write record with status='pending', both pointers null
+ *     2. Upload v1 blob to versions/v1.{ext}
+ *     3. Insert DefinitionVersion row v1
+ *     4. Set live + draft pointers to v1, flip status to 'draft'
+ *   If step 2 fails the record stays 'pending' with no blob; the janitor
+ *   sweeps stale pendings.
  *
- *   updateFile — best-effort with retry-safe shape:
- *     1. Archive current file to history blob
- *     2. Append history entry to record
- *     3. Write new file to the active blob path
- *     4. Prune history beyond maxHistory
- *   A failure between 2 and 3 leaves the record pointing at a missing active
- *   blob. The operation is idempotent — retrying with the same file restores
- *   a consistent state.
+ *   uploadVersion — append-only:
+ *     1. Resolve next versionNumber from the version list
+ *     2. Upload blob to versions/v{N}.{ext}
+ *     3. Insert DefinitionVersion row
+ *     4. Advance draft pointer (live unchanged)
+ *
+ *   publish — pointer flip only, no blob writes.
+ *
+ *   deleteVersion — store enforces "not referenced by live/draft"; on
+ *   success, delete the underlying blob.
  */
 export class DefinitionService {
 	constructor(
@@ -76,7 +74,7 @@ export class DefinitionService {
 		ctx: RequestContext,
 		input: CreateDefinitionRecord,
 		file: Uint8Array
-	): Promise<DefinitionRecord> {
+	): Promise<{ record: DefinitionRecord; version: DefinitionVersion }> {
 		const now = new Date().toISOString();
 		const actor = ctx.userId || input.ownerId;
 		const record: DefinitionRecord = {
@@ -85,16 +83,12 @@ export class DefinitionService {
 			ownerId: input.ownerId,
 			createdBy: actor,
 			updatedBy: actor,
-			fileExt: input.fileExt,
-			originalFilename: input.originalFilename,
 			displayName: input.displayName,
 			description: input.description,
 			category: input.category,
 			tags: input.tags,
 			coverImage: input.coverImage,
 			computeServerId: input.computeServerId,
-			history: [],
-			maxHistory: input.maxHistory ?? 10,
 			status: 'pending',
 			runCount: 0,
 			liveVersionId: null,
@@ -107,63 +101,113 @@ export class DefinitionService {
 		// 1. Metadata first — if this fails there's nothing to clean up.
 		await this.data.definitions.create(ctx, record);
 
-		// 2. Blob upload — if this fails the record stays 'pending' for the janitor.
-		await this.storage.put(
-			definitionPaths.file(input.guid, input.fileExt),
-			file,
-			'application/octet-stream'
-		);
+		// 2. v1 blob — if this fails the record stays 'pending' for the janitor.
+		const versionId = randomUUID();
+		const fileKey = definitionPaths.version(input.guid, 1, input.fileExt);
+		await this.storage.put(fileKey, file, 'application/octet-stream');
 
-		// 3. Flip to draft — the record is now visible to editors.
+		// 3. Version row.
+		const version: DefinitionVersion = {
+			id: versionId,
+			definitionId: input.guid,
+			versionNumber: 1,
+			fileExt: input.fileExt,
+			fileKey,
+			originalFilename: input.originalFilename,
+			uploadedBy: actor,
+			uploadedAt: now
+		};
+		await this.data.definitions.createVersion(ctx, version);
+
+		// 4. Point both channels at v1, flip out of pending.
+		await this.data.definitions.setLiveVersion(ctx, input.guid, versionId);
+		await this.data.definitions.setDraftVersion(ctx, input.guid, versionId);
 		await this.data.definitions.update(ctx, input.guid, { status: 'draft' });
 
-		return { ...record, status: 'draft' };
+		return {
+			record: { ...record, status: 'draft', liveVersionId: versionId, draftVersionId: versionId },
+			version
+		};
 	}
 
-	async updateFile(
+	/**
+	 * Upload a new version of an existing definition. Writes the blob, inserts
+	 * the version row, and advances the draft pointer. `live` is unchanged —
+	 * use `publish` to promote.
+	 */
+	async uploadVersion(
 		ctx: RequestContext,
 		guid: string,
 		file: Uint8Array,
 		ext: DefinitionFileExt,
 		originalName: string
-	): Promise<void> {
+	): Promise<DefinitionVersion> {
 		const existing = await this.data.definitions.get(ctx, guid);
 		if (!existing) throw new ProviderError(`Definition not found: ${guid}`, 404);
 
+		// Highest existing versionNumber + 1; covers gaps from deletions.
+		const versions = await this.data.definitions.listVersions(ctx, guid, { limit: 1 });
+		const next = (versions.items[0]?.versionNumber ?? 0) + 1;
+
+		const versionId = randomUUID();
+		const fileKey = definitionPaths.version(guid, next, ext);
+		await this.storage.put(fileKey, file, 'application/octet-stream');
+
 		const now = new Date().toISOString();
-		// UUID-based ref avoids collisions from identical timestamps or special chars in filenames.
-		const ref = `${crypto.randomUUID()}_${originalName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+		const actor = ctx.userId || existing.ownerId;
+		const version: DefinitionVersion = {
+			id: versionId,
+			definitionId: guid,
+			versionNumber: next,
+			fileExt: ext,
+			fileKey,
+			originalFilename: originalName,
+			uploadedBy: actor,
+			uploadedAt: now
+		};
+		await this.data.definitions.createVersion(ctx, version);
+		await this.data.definitions.setDraftVersion(ctx, guid, versionId);
 
-		// Archive the current file before overwriting
-		const currentFile = await this.storage.get(definitionPaths.file(guid, existing.fileExt));
-		if (currentFile) {
-			await this.storage.put(
-				definitionPaths.archive(guid, ref),
-				currentFile,
-				'application/octet-stream'
-			);
-			await this.data.definitions.addHistoryEntry(ctx, guid, {
-				ref,
-				originalName,
-				archivedAt: now
-			});
+		return version;
+	}
+
+	/**
+	 * Advance the live channel. If `versionId` is omitted, promotes the
+	 * current draft. Pass an arbitrary version id to roll forward/back —
+	 * spec §6 makes rollback a first-class operation.
+	 */
+	async publish(
+		ctx: RequestContext,
+		guid: string,
+		versionId?: string
+	): Promise<DefinitionVersion> {
+		const existing = await this.data.definitions.get(ctx, guid);
+		if (!existing) throw new ProviderError(`Definition not found: ${guid}`, 404);
+
+		const target = versionId ?? existing.draftVersionId;
+		if (!target) throw new ProviderError('No version to publish', 400);
+
+		const version = await this.data.definitions.getVersion(ctx, target);
+		if (!version || version.definitionId !== guid) {
+			throw new ProviderError(`Version '${target}' not found for this definition`, 404);
 		}
 
-		await this.storage.put(definitionPaths.file(guid, ext), file, 'application/octet-stream');
-		if (ext !== existing.fileExt) {
-			await this.storage.delete(definitionPaths.file(guid, existing.fileExt));
+		await this.data.definitions.setLiveVersion(ctx, guid, target);
+		// Flip status to 'published' the first time live moves off pending/draft.
+		if (existing.status === 'draft' || existing.status === 'pending') {
+			await this.data.definitions.update(ctx, guid, { status: 'published' });
 		}
-		await this.data.definitions.update(ctx, guid, { fileExt: ext, originalFilename: originalName });
+		return version;
+	}
 
-		// Prune history if maxHistory is set
-		const updated = await this.data.definitions.get(ctx, guid);
-		if (updated && updated.maxHistory > 0 && updated.history.length > updated.maxHistory) {
-			const toRemove = updated.history.slice(updated.maxHistory);
-			for (const entry of toRemove) {
-				await this.storage.delete(definitionPaths.archive(guid, entry.ref));
-				await this.data.definitions.removeHistoryEntry(ctx, guid, entry.ref);
-			}
+	async deleteVersion(ctx: RequestContext, guid: string, versionId: string): Promise<void> {
+		const version = await this.data.definitions.getVersion(ctx, versionId);
+		if (!version || version.definitionId !== guid) {
+			throw new ProviderError(`Version '${versionId}' not found for this definition`, 404);
 		}
+		// Store enforces the live/draft reference check; if it throws, blob stays.
+		await this.data.definitions.deleteVersion(ctx, versionId);
+		await this.storage.delete(version.fileKey);
 	}
 
 	async updateMeta(ctx: RequestContext, guid: string, patch: UpdateMetadataInput): Promise<void> {
@@ -178,26 +222,11 @@ export class DefinitionService {
 		return url;
 	}
 
-	async revertToVersion(ctx: RequestContext, guid: string, ref: string): Promise<void> {
-		const existing = await this.data.definitions.get(ctx, guid);
-		if (!existing) throw new ProviderError(`Definition not found: ${guid}`, 404);
-
-		const entry = existing.history.find((h) => h.ref === ref);
-		if (!entry) throw new ProviderError(`History entry not found: ${ref}`, 404);
-
-		const archived = await this.storage.get(definitionPaths.archive(guid, ref));
-		if (!archived) throw new ProviderError(`Archived file not found for ref: ${ref}`, 404);
-
-		// Archive the current file first, then restore the old one
-		await this.updateFile(ctx, guid, archived, existing.fileExt, entry.originalName);
-	}
-
 	async delete(ctx: RequestContext, guid: string): Promise<void> {
-		// Blobs first — if this fails, the record remains and retry is safe.
-		// Known gap: if blob deletion succeeds and record deletion fails, the
-		// record is orphaned (no blobs, status='draft'/'published') and the
-		// pending-only janitor will not reclaim it. Acceptable for now;
-		// revisit when a transactional adapter is wired up.
+		// Soft-delete metadata; wipe all blobs (versions + cover) under the
+		// guid prefix. Known gap: if blob deletion succeeds and record deletion
+		// fails, the record is orphaned. Acceptable for the local provider —
+		// transactional adapters should bundle these.
 		await this.storage.deletePrefix(definitionPaths.prefix(guid));
 		await this.data.definitions.delete(ctx, guid);
 	}
@@ -205,9 +234,6 @@ export class DefinitionService {
 	/**
 	 * Janitor — delete records stuck in 'pending' for longer than ageMs and
 	 * any blobs they may have written. Safe to run on a schedule.
-	 * Runs under SYSTEM_CONTEXT; callers don't pass one.
-	 *
-	 * @returns Number of records reclaimed.
 	 */
 	async gcStalePending(ageMs: number = PENDING_GC_AGE_MS): Promise<number> {
 		const cutoff = new Date(Date.now() - ageMs).toISOString();

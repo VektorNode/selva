@@ -1,13 +1,13 @@
 # Definitions Configuration
 
-Store your Grasshopper definitions in a local directory with a metadata config file.
+> **Provider note:** This guide describes the **local provider's** filesystem layout. With [`@selva/supabase-provider`](../../../packages/supabase-provider/README.md) definitions live in the `definitions` table + `selva-private` storage bucket — managed via the admin UI, not on disk.
 
 ## Setup
 
-Set `GH_DEFINITIONS_PATH` to a folder containing your `.gh` files and a `definitions-config.json`:
+Set `DATA_PATH` to a folder containing your `.gh` files and a `definitions-config.json`:
 
 ```
-definitions/
+$DATA_PATH/
 ├── definitions-config.json
 ├── solver_01.gh
 └── parametric_form.gh
@@ -52,7 +52,7 @@ definitions/
 
 | Issue                            | Solution                                                              |
 | -------------------------------- | --------------------------------------------------------------------- |
-| "No definitions found"           | Verify `GH_DEFINITIONS_PATH` exists and points to the right folder    |
+| "No definitions found"           | Verify `DATA_PATH` exists and points to the right folder              |
 | "Invalid config format"          | Ensure `definitions-config.json` has a top-level `definitions` object |
 | Definition not loading           | Filename in config must match the `.gh` file name (without extension) |
 | "No compute server configured"   | Register a Rhino.Compute server at `/admin/compute`                   |

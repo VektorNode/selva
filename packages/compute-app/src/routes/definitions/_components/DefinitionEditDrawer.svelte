@@ -11,7 +11,7 @@
 		Textarea,
 		toast
 	} from 'selva-shared';
-	import { History, Image, RotateCcw, Trash2, Upload, X } from '@lucide/svelte';
+	import { Image, Trash2, Upload, X } from '@lucide/svelte';
 	import ImageUploadField from '$lib/components/definitions/ImageUploadField.svelte';
 	import FileUploadField from '$lib/components/definitions/FileUploadField.svelte';
 	import type {
@@ -30,7 +30,6 @@
 		status: DefinitionStatus;
 		projectId?: string;
 		computeServerId: string | null;
-		maxHistory?: number;
 	}
 
 	interface Props {
@@ -62,10 +61,6 @@
 	let computeServerId = $state<string | null>(record.computeServerId ?? null);
 	/* svelte-ignore state_referenced_locally */
 	let status = $state<DefinitionStatus>(record.status as DefinitionStatus);
-	/* svelte-ignore state_referenced_locally */
-	let maxHistory = $state<number | undefined>(
-		record.maxHistory > 0 ? record.maxHistory : undefined
-	);
 	let userImageMode = $state<'url' | 'upload' | undefined>(undefined);
 	/* svelte-ignore state_referenced_locally */
 	let coverImageUrl = $state(record.coverImage ?? '');
@@ -81,27 +76,26 @@
 	let showFileUploadConfirm = $state(false);
 	let uploadingFile = $state(false);
 	let uploadingImage = $state(false);
-	let revertingRef = $state<string | null>(null);
-	let revertTarget = $state<{ ref: string; originalName: string } | null>(null);
 
 	const imageMode = $derived<'url' | 'upload'>(
 		userImageMode ?? (record.coverImage?.startsWith('/api/definitions/') ? 'upload' : 'url')
 	);
 
+	// Uploads a new version (spec §6). Server creates a DefinitionVersion row
+	// and advances the draft pointer; live is unchanged until publish.
 	async function confirmFileUpload() {
 		if (!fileInput?.files?.length) return;
 		uploadingFile = true;
 		const formData = new FormData();
 		formData.append('file', fileInput.files[0]);
-		formData.append('guid', record.guid);
 		try {
-			const res = await fetch('/api/definitions/upload', {
+			const res = await fetch(`/api/definitions/${record.guid}`, {
 				method: 'POST',
 				body: formData
 			});
 			if (res.ok) {
 				const result = await res.json();
-				toast.success(`"${result.filename}" uploaded`);
+				toast.success(`Version ${result.version?.versionNumber ?? '?'} uploaded`);
 				await invalidateAll();
 			} else {
 				const e = await res.json().catch(() => ({}));
@@ -114,31 +108,6 @@
 			showFileUploadConfirm = false;
 			if (fileInput) fileInput.value = '';
 			fileHasFile = false;
-		}
-	}
-
-	async function confirmRevert() {
-		if (!revertTarget) return;
-		const target = revertTarget;
-		revertingRef = target.ref;
-		try {
-			const res = await fetch(`/api/definitions/${record.guid}/revert`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ ref: target.ref })
-			});
-			if (res.ok) {
-				toast.success(`Restored "${target.originalName}"`);
-				await invalidateAll();
-			} else {
-				const e = await res.json().catch(() => ({}));
-				toast.error(e.message || 'Restore failed');
-			}
-		} catch {
-			toast.error('Restore failed');
-		} finally {
-			revertingRef = null;
-			revertTarget = null;
 		}
 	}
 
@@ -177,8 +146,7 @@
 			coverImage: coverImageUrl || undefined,
 			status,
 			projectId: projectId || undefined,
-			computeServerId,
-			maxHistory
+			computeServerId
 		});
 	}
 </script>
@@ -289,13 +257,8 @@
 		<div class="space-y-2">
 			<div class="flex items-center gap-2">
 				<Upload class="text-muted-foreground h-4 w-4" />
-				<Label>Grasshopper file</Label>
+				<Label>Grasshopper file (uploads as a new version)</Label>
 			</div>
-			{#if record.originalFilename}
-				<p class="text-muted-foreground font-mono text-xs">
-					Current: {record.originalFilename}
-				</p>
-			{/if}
 			<FileUploadField
 				id="edit-gh-{record.guid}"
 				accept=".gh,.ghx"
@@ -306,39 +269,6 @@
 				bind:inputRef={fileInput}
 			/>
 		</div>
-
-		{#if record.history && record.history.length > 0}
-			<div class="space-y-2">
-				<div class="flex items-center gap-2">
-					<History class="text-muted-foreground h-4 w-4" />
-					<Label>Version history</Label>
-					<span class="text-muted-foreground text-xs">({record.history.length})</span>
-				</div>
-				<div class="border-border divide-border divide-y rounded-md border">
-					{#each record.history as entry (entry.ref)}
-						<div class="flex items-center justify-between gap-2 px-3 py-2">
-							<div class="min-w-0 flex-1">
-								<p class="truncate font-mono text-xs">{entry.originalName}</p>
-								<p class="text-muted-foreground text-[10.5px]">
-									Archived {new Date(entry.archivedAt).toLocaleString()}
-								</p>
-							</div>
-							<Button
-								variant="outline"
-								size="sm"
-								disabled={revertingRef !== null}
-								onclick={() =>
-									(revertTarget = { ref: entry.ref, originalName: entry.originalName })}
-								class="h-7 gap-1 px-2 text-xs"
-							>
-								<RotateCcw class="h-3 w-3" />
-								{revertingRef === entry.ref ? 'Restoring…' : 'Restore'}
-							</Button>
-						</div>
-					{/each}
-				</div>
-			</div>
-		{/if}
 
 		{#if projects.length > 1 || computeServers.length > 1}
 			<div class="grid grid-cols-2 gap-3">
@@ -407,40 +337,19 @@
 	</AlertDialog.Content>
 </AlertDialog.Root>
 
-<AlertDialog.Root
-	open={revertTarget !== null}
-	onOpenChange={(o: boolean) => {
-		if (!o) revertTarget = null;
-	}}
->
-	<AlertDialog.Content>
-		<AlertDialog.Header>
-			<AlertDialog.Title>Restore "{revertTarget?.originalName}"?</AlertDialog.Title>
-			<AlertDialog.Description>
-				The current file will be archived and this version will become active.
-			</AlertDialog.Description>
-		</AlertDialog.Header>
-		<AlertDialog.Footer>
-			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-			<AlertDialog.Action onclick={confirmRevert} disabled={revertingRef !== null}>
-				{revertingRef !== null ? 'Restoring…' : 'Restore'}
-			</AlertDialog.Action>
-		</AlertDialog.Footer>
-	</AlertDialog.Content>
-</AlertDialog.Root>
-
 <AlertDialog.Root open={showFileUploadConfirm} onOpenChange={(o) => (showFileUploadConfirm = o)}>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
-			<AlertDialog.Title>Replace Grasshopper file?</AlertDialog.Title>
+			<AlertDialog.Title>Upload a new version?</AlertDialog.Title>
 			<AlertDialog.Description>
-				The current file will be archived. This cannot be undone.
+				The new upload becomes the next draft version. The live channel stays unchanged
+				until you publish it.
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
 			<AlertDialog.Action onclick={confirmFileUpload} disabled={uploadingFile}>
-				{uploadingFile ? 'Uploading…' : 'Replace'}
+				{uploadingFile ? 'Uploading…' : 'Upload'}
 			</AlertDialog.Action>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>

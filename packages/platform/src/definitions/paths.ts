@@ -15,18 +15,17 @@ function assertSafeKey(value: string, label: string): void {
 }
 
 export const definitionPaths = {
-	file: (guid: string, ext: DefinitionFileExt) => {
+	/** Per-version immutable blob (spec §6). versionNumber must be a positive int. */
+	version: (guid: string, versionNumber: number, ext: DefinitionFileExt) => {
 		assertSafeKey(guid, 'guid');
-		return `definitions/${guid}/definition.${ext}`;
+		if (!Number.isInteger(versionNumber) || versionNumber < 1) {
+			throw new Error(`Unsafe versionNumber: ${versionNumber}`);
+		}
+		return `definitions/${guid}/versions/v${versionNumber}.${ext}`;
 	},
 	image: (guid: string) => {
 		assertSafeKey(guid, 'guid');
 		return `definitions/${guid}/cover.webp`;
-	},
-	archive: (guid: string, ref: string) => {
-		assertSafeKey(guid, 'guid');
-		assertSafeKey(ref, 'ref');
-		return `definitions/${guid}/archive/${ref}`;
 	},
 	prefix: (guid: string) => {
 		assertSafeKey(guid, 'guid');

@@ -1,11 +1,11 @@
 <script lang="ts">
 	import type { UISchema, SupportedTypes } from '$lib/types/generated';
-	import AppLayout from '$lib/components/AppLayout.svelte';
-	import exampleSchema from '$lib/example-schema.json';
-	import exampleSchemaLeftOnly from '$lib/example-schema-left-only.json';
+	import AppLayout from '$lib/components/app-shell/AppLayout.svelte';
+	import exampleSchema from '../demo/example-schema.json';
+	import exampleSchemaLeftOnly from '../demo/example-schema-left-only.json';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import PageContainer from '$lib/components/layout/PageContainer.svelte';
-	import { cubeMesh, getParsedMeshes, dummyOutputValues } from '$lib/dummy-output-values';
+	import { cubeMesh, getParsedMeshes, dummyOutputValues } from '../demo/dummy-output-values';
 	import { APP_DEFAULTS } from '$lib/constants';
 
 	// Switch between left-only, right-only and full schema
