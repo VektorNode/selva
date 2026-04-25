@@ -10,6 +10,7 @@ import {
 import { getAuthProvider } from '$lib/server/auth.server';
 import {
 	getOrganizationProvider,
+	getPermissionStore,
 	getProjectProvider,
 	getUserProfileStore,
 	tenancy
@@ -26,17 +27,29 @@ function slugify(raw: string): string {
 		.slice(0, 63);
 }
 
-// Redirect away if users already exist — setup is only for a fresh install
+// Redirect away if a platform admin already exists — setup is only for a
+// fresh install. Uses the permission store directly (works for OIDC providers
+// that can't enumerate users via `listUsers`).
 export const load: PageServerLoad = async () => {
-	const page = await getAuthProvider().listUsers({ limit: 1 });
-	if (page === null) {
-		// Auth provider doesn't support user listing — setup not applicable
+	const hasAdmin = await getPermissionStore().hasInstanceAdmin(SYSTEM_CONTEXT);
+	if (hasAdmin) {
 		redirect(303, '/login');
 	}
-	if (page.items.length > 0) {
-		redirect(303, '/login');
-	}
-	return {};
+
+	const auth = getAuthProvider();
+	const supportsOAuth =
+		typeof (auth as { getOAuthAuthorizationUrl?: unknown }).getOAuthAuthorizationUrl === 'function';
+	const oauthProviders = supportsOAuth
+		? (process.env.SUPABASE_OAUTH_PROVIDERS ?? '')
+				.split(',')
+				.map((p) => p.trim())
+				.filter((p) => p.length > 0)
+		: [];
+
+	return {
+		hasPasswordAuth: Boolean(auth.passwordAuth),
+		oauthProviders
+	};
 };
 
 export const actions = {

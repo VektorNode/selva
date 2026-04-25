@@ -1,5 +1,5 @@
 import { redirect, fail } from '@sveltejs/kit';
-import type { Actions, RequestEvent } from './$types';
+import type { Actions, PageServerLoad, RequestEvent } from './$types';
 import {
 	setSessionCookie,
 	checkRateLimit,
@@ -7,6 +7,29 @@ import {
 	clearRateLimit
 } from '$lib/server/admin-auth.server';
 import { getAuthProvider } from '$lib/server/auth.server';
+
+/**
+ * Surface the auth capabilities the page should render: password form when
+ * `passwordAuth` is wired, OAuth buttons when the provider exposes the
+ * Supabase-style `getOAuthAuthorizationUrl`. Driven by env config — the
+ * SUPABASE_OAUTH_PROVIDERS env var is a comma-separated list of providers
+ * enabled in the Supabase dashboard. Nothing renders if neither is set up.
+ */
+export const load: PageServerLoad = async () => {
+	const auth = getAuthProvider();
+	const supportsOAuth =
+		typeof (auth as { getOAuthAuthorizationUrl?: unknown }).getOAuthAuthorizationUrl === 'function';
+	const oauthProviders = supportsOAuth
+		? (process.env.SUPABASE_OAUTH_PROVIDERS ?? '')
+				.split(',')
+				.map((p) => p.trim())
+				.filter((p) => p.length > 0)
+		: [];
+	return {
+		hasPasswordAuth: Boolean(auth.passwordAuth),
+		oauthProviders
+	};
+};
 
 export const actions = {
 	default: async (event: RequestEvent) => {

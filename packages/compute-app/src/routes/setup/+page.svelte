@@ -6,11 +6,34 @@
 		error?: string;
 	}
 
-	interface Props {
-		form?: ActionData;
+	interface PageData {
+		hasPasswordAuth: boolean;
+		oauthProviders: string[];
 	}
 
-	let { form }: Props = $props();
+	interface Props {
+		form?: ActionData;
+		data: PageData;
+	}
+
+	let { form, data }: Props = $props();
+
+	function oauthHref(provider: string): string {
+		// First-OAuth-signin-becomes-admin: the callback grants instance_admin
+		// when no admin exists yet.
+		const params = new URLSearchParams({ provider, redirectTo: '/admin' });
+		return `/auth/supabase/start?${params.toString()}`;
+	}
+
+	function providerLabel(p: string): string {
+		const labels: Record<string, string> = {
+			google: 'Google',
+			github: 'GitHub',
+			azure: 'Microsoft',
+			gitlab: 'GitLab'
+		};
+		return labels[p] ?? p;
+	}
 </script>
 
 <svelte:head>
@@ -26,57 +49,92 @@
 			</p>
 		</div>
 
-		<form method="POST" class="space-y-4">
-			{#if form?.error}
-				<Alert.Root variant="destructive">
-					<CircleAlert />
-					<Alert.Description>{form.error}</Alert.Description>
-				</Alert.Root>
-			{/if}
+		{#if form?.error}
+			<Alert.Root variant="destructive">
+				<CircleAlert />
+				<Alert.Description>{form.error}</Alert.Description>
+			</Alert.Root>
+		{/if}
 
+		{#if data.oauthProviders.length > 0}
 			<div class="space-y-2">
-				<Label for="companyName">Company name</Label>
-				<Input
-					id="companyName"
-					name="companyName"
-					type="text"
-					required
-					placeholder="Acme Corp"
-				/>
+				<p class="text-muted-foreground text-xs text-center">
+					The first user to sign in becomes the platform admin.
+				</p>
+				{#each data.oauthProviders as provider (provider)}
+					<a href={oauthHref(provider)} class="block">
+						<Button type="button" variant="outline" class="w-full">
+							Continue with {providerLabel(provider)}
+						</Button>
+					</a>
+				{/each}
 			</div>
+		{/if}
 
-			<div class="space-y-2">
-				<Label for="displayName">Display name</Label>
-				<Input
-					id="displayName"
-					name="displayName"
-					type="text"
-					placeholder="Jane Smith"
-				/>
+		{#if data.hasPasswordAuth && data.oauthProviders.length > 0}
+			<div class="text-muted-foreground flex items-center gap-2 text-xs uppercase">
+				<div class="bg-border h-px flex-1"></div>
+				<span>or</span>
+				<div class="bg-border h-px flex-1"></div>
 			</div>
+		{/if}
 
-			<div class="space-y-2">
-				<Label for="email">Email</Label>
-				<Input id="email" name="email" type="email" required placeholder="admin@example.com" />
-			</div>
+		{#if data.hasPasswordAuth}
+			<form method="POST" class="space-y-4">
+				<div class="space-y-2">
+					<Label for="companyName">Company name</Label>
+					<Input
+						id="companyName"
+						name="companyName"
+						type="text"
+						required
+						placeholder="Acme Corp"
+					/>
+				</div>
 
-			<div class="space-y-2">
-				<Label for="password">Password</Label>
-				<Input
-					id="password"
-					name="password"
-					type="password"
-					required
-					placeholder="Min. 8 characters"
-				/>
-			</div>
+				<div class="space-y-2">
+					<Label for="displayName">Display name</Label>
+					<Input
+						id="displayName"
+						name="displayName"
+						type="text"
+						placeholder="Jane Smith"
+					/>
+				</div>
 
-			<div class="space-y-2">
-				<Label for="confirm">Confirm Password</Label>
-				<Input id="confirm" name="confirm" type="password" required placeholder="Repeat password" />
-			</div>
+				<div class="space-y-2">
+					<Label for="email">Email</Label>
+					<Input id="email" name="email" type="email" required placeholder="admin@example.com" />
+				</div>
 
-			<Button type="submit" class="w-full">Create Account</Button>
-		</form>
+				<div class="space-y-2">
+					<Label for="password">Password</Label>
+					<Input
+						id="password"
+						name="password"
+						type="password"
+						required
+						placeholder="Min. 8 characters"
+					/>
+				</div>
+
+				<div class="space-y-2">
+					<Label for="confirm">Confirm Password</Label>
+					<Input id="confirm" name="confirm" type="password" required placeholder="Repeat password" />
+				</div>
+
+				<Button type="submit" class="w-full">Create Account</Button>
+			</form>
+		{/if}
+
+		{#if !data.hasPasswordAuth && data.oauthProviders.length === 0}
+			<Alert.Root variant="destructive">
+				<CircleAlert />
+				<Alert.Description>
+					No setup methods are configured. Configure password auth or OAuth providers
+					before bootstrapping the first admin.
+				</Alert.Description>
+			</Alert.Root>
+		{/if}
 	</div>
 </div>
