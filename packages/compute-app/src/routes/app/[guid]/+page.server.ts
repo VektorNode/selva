@@ -3,9 +3,13 @@ import { error } from '@sveltejs/kit';
 import { GrasshopperClient } from 'selva-compute/grasshopper';
 import { camelcaseKeys } from 'selva-compute/core';
 import type { UISchema } from 'selva-shared';
-import { getComputeServerConfigStore } from '$lib/server/providers.server';
-import { resolveComputeServer, SYSTEM_CONTEXT, type ComputeServerConfig } from '@selva/platform';
-import { getStorageProvider, getDefinitionMeta } from '$lib/server/providers.server';
+import type { ComputeServerConfig } from '@selva/platform';
+import {
+	getStorageProvider,
+	getDefinitionMeta,
+	getProjectProvider
+} from '$lib/server/providers.server';
+import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
 import { requireCanSolve } from '$lib/server/access.server';
 
 /**
@@ -53,18 +57,14 @@ async function fetchSchemaFromCompute(
 }
 
 export const load = (async ({ params, locals }) => {
-	const computeConfig = await getComputeServerConfigStore().getConfig(SYSTEM_CONTEXT);
-	if (computeConfig.servers.length === 0) {
-		throw error(503, 'No compute server configured. Ask an admin to add one in /admin/compute.');
-	}
-	const server = resolveComputeServer(computeConfig);
-
 	const storage = getStorageProvider();
 	const meta = getDefinitionMeta();
+	const projects = getProjectProvider();
 
 	const guid = params.guid;
 
 	let definitionSource: Uint8Array;
+	let server: ComputeServerConfig;
 	const clientDefUrl = `local:${guid}`;
 
 	try {
@@ -85,6 +85,15 @@ export const load = (async ({ params, locals }) => {
 		if (!bytes) throw new Error(`Definition file for '${guid}' not found on disk`);
 
 		definitionSource = bytes;
+
+		// §3 — route the schema fetch through the owning org's compute when BYO
+		// compute is configured; otherwise fall through to the instance pool.
+		const project = await projects.getProject(locals.ctx, record.projectId);
+		try {
+			server = await resolveServerForOrg(locals.ctx, project?.orgId ?? null);
+		} catch {
+			throw error(503, 'No compute server configured. Ask an admin to add one in /admin/compute.');
+		}
 	} catch (err) {
 		// Only wrap actual errors; let HttpError (from error() calls) bubble up
 		if (err instanceof Error && !('status' in err)) {

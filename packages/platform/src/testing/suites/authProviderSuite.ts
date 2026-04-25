@@ -18,11 +18,11 @@ export interface AuthProviderConformanceOptions {
 	/**
 	 * Factory returning a fresh provider configured with a known password.
 	 * `adminPassword` must work with `passwordAuth.verifyLogin(adminEmail, adminPassword)`
-	 * for password-capable providers.
+	 * for password-capable providers. The factory is responsible for seeding
+	 * the admin user (e.g. via `createUserWithPassword`) before returning.
 	 *
-	 * `adminEmail` defaults to `''` for providers that support password-only
-	 * mode (local single-password). Providers requiring a real email (Supabase,
-	 * Entra, Firebase) should return the seeded admin's email.
+	 * `adminEmail` defaults to `''` for legacy reasons; new providers should
+	 * always return the seeded admin's email.
 	 */
 	createProvider: () =>
 		| Promise<{ provider: IAuthProvider; adminPassword: string; adminEmail?: string }>

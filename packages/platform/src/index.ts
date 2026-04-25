@@ -20,11 +20,16 @@ export type {
 	Organization,
 	OrgRole,
 	OrgPermission,
-	OrgMember
+	OrgMember,
+	CreateOrgInput,
+	UpdateOrgInput
 } from './organizations/index.js';
 export {
 	OrgRoleSchema,
 	OrgPermissionSchema,
+	SlugSchema,
+	CreateOrgSchema,
+	UpdateOrgSchema,
 	ALL_ORG_PERMISSIONS,
 	DEFAULT_ORG_PERMISSIONS,
 	OWNER_ADMIN_ONLY_PERMISSIONS,
@@ -110,7 +115,12 @@ export { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from './pagination.js';
 
 // Compute server
 export type { ComputeServerConfig, ComputeConfig } from './computeServer/index.js';
-export { resolveComputeServer, resolveServerById } from './computeServer/index.js';
+export type { OrgComputeOptions } from './computeServer/index.js';
+export {
+	resolveComputeServer,
+	resolveServerById,
+	resolveComputeServerForOrg
+} from './computeServer/index.js';
 
 // Config
 export type { SelvaConfig, SelvaConfigFactory, SelvaFlags, TenancyMode } from './config.js';

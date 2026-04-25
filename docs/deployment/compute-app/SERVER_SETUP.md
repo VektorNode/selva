@@ -31,11 +31,11 @@ curl -fsSL https://raw.githubusercontent.com/VektorNode/selva/main/scripts/setup
 bash setup.sh
 
 # Non-interactive (CI/automation) — uses env vars / defaults
-ADMIN_PASSWORD=yourpassword \
 SESSION_SECRET=yoursecret \
 bash setup.sh --no-interactive
 
-# After setup, register your Rhino.Compute server in the admin dashboard at /admin/compute
+# After setup, create the first admin user via the in-app setup page,
+# then register your Rhino.Compute server at /admin/compute
 
 # Set up Caddy reverse proxy (run after setup.sh)
 bash setup-caddy.sh                           # HTTP on port 80
@@ -44,7 +44,7 @@ bash setup-caddy.sh --domain app.example.com  # HTTPS via Let's Encrypt
 
 ## Configuration Variables
 
-`setup.sh` defaults to the **local provider**. Provider-specific vars (`DATA_PATH`, `SESSION_SECRET`, `ADMIN_PASSWORD`) are documented in the [selva-local-provider README](../../../packages/local-provider/README.md). For Supabase, see the [@selva/supabase-provider README](../../../packages/supabase-provider/README.md).
+`setup.sh` defaults to the **local provider**. Provider-specific vars (`DATA_PATH`, `SESSION_SECRET`) are documented in the [selva-local-provider README](../../../packages/local-provider/README.md). For Supabase, see the [@selva/supabase-provider README](../../../packages/supabase-provider/README.md).
 
 Vars `setup.sh` itself reads:
 
@@ -52,7 +52,6 @@ Vars `setup.sh` itself reads:
 | --------------------- | ------------------------------------- | ----------------------------------------------------- |
 | `REPO_URL`            | `git@github.com:VektorNode/selva.git` | Repository SSH URL                                    |
 | `DATA_PATH`           | `./definitions`                       | Local provider data directory (the script also accepts `GH_DEFINITIONS_PATH` as an alias for now) |
-| `ADMIN_PASSWORD`      | —                                     | Admin panel password (local provider only)            |
 | `SESSION_SECRET`      | auto-generated                        | HMAC secret for session cookies (local provider only) |
 | `PORT`                | `3000`                                | Internal app port                                     |
 | `ORIGIN`              | `http://your-server-ip`               | Public-facing URL — no port suffix, no trailing slash |

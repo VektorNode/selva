@@ -112,6 +112,7 @@ interface ServerRow {
 function rowToServer(row: ServerRow): ComputeServerConfig {
 	return {
 		id: row.id,
+		orgId: row.org_id,
 		label: row.label,
 		serverUrl: row.server_url,
 		apiKey: row.api_key ?? undefined,

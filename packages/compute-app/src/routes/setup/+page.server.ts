@@ -29,7 +29,7 @@ function slugify(raw: string): string {
 export const load: PageServerLoad = async () => {
 	const page = await getAuthProvider().listUsers({ limit: 1 });
 	if (page === null) {
-		// Single-password mode — setup not applicable
+		// Auth provider doesn't support user listing — setup not applicable
 		redirect(303, '/login');
 	}
 	if (page.items.length > 0) {

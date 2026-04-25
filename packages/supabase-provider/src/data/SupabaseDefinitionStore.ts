@@ -4,9 +4,10 @@ import type {
 	DefinitionRecordPatch,
 	DefinitionStatus,
 	DefinitionFileExt,
-	HistoryEntry,
+	DefinitionVersion,
 	RequestContext,
 	DefinitionListOptions,
+	ListOptions,
 	Page
 } from '@selva/platform';
 import { ProviderError } from '@selva/platform';
@@ -14,16 +15,23 @@ import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
 
 /**
- * Definition metadata store backed by Postgres. The parent `definitions`
- * table holds the record; `definition_history` holds each historical version.
- * `get` / `list` stitch them together via a foreign-table select so callers
- * see the same `DefinitionRecord` shape as the local provider.
+ * Definition metadata + version store backed by Postgres. Spec §6 versioning:
+ * `definitions` carries the parent record and the `live`/`draft` channel
+ * pointers; `definition_versions` carries the immutable per-upload rows.
  *
- * `incrementRunCount` uses a dedicated RPC — atomic UPDATE in SQL. Closes
- * the read-modify-write race the local provider still has.
+ * Deletion protection (§6) is enforced by FK constraints — `live_version_id`
+ * and `draft_version_id` are ON DELETE RESTRICT. Trying to delete a
+ * referenced version raises 23503 which `mapError` turns into a 409.
+ *
+ * `incrementRunCount` uses a SQL function for atomic UPDATE — no
+ * read-modify-write race like the local provider has.
  */
 export class SupabaseDefinitionStore implements IDefinitionStore {
 	constructor(private readonly clients: ClientBundle) {}
+
+	// ============================================================================
+	// Definitions
+	// ============================================================================
 
 	async list(
 		ctx: RequestContext,
@@ -58,27 +66,24 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		let query = this.clients
 			.forRequest(ctx)
 			.from('definitions')
-			.select('*, history:definition_history(*)', { count: 'exact' });
+			.select('*', { count: 'exact' })
+			.is('deleted_at', null);
 
 		if (filter?.projectId) query = query.eq('project_id', filter.projectId);
 
 		if (filter?.publicOnly) {
-			// Filter to public projects via an inner join projection. PostgREST
-			// syntax: `project:projects!inner(visibility)` + eq on the joined
-			// column. The `!inner` is critical — without it the join doesn't
-			// filter, it just attaches.
 			query = this.clients
 				.forRequest(ctx)
 				.from('definitions')
-				.select('*, history:definition_history(*), project:projects!inner(visibility, org_id)', {
+				.select('*, project:projects!inner(visibility, org_id)', {
 					count: 'exact'
 				})
+				.is('deleted_at', null)
 				.eq('project.visibility', 'public');
 			if (filter.orgId) query = query.eq('project.org_id', filter.orgId);
 			if (filter.projectId) query = query.eq('project_id', filter.projectId);
 		}
 
-		// Status filter. Default hides `pending`.
 		if (opts?.statuses?.length) {
 			query = query.in('status', opts.statuses);
 		} else if (!opts?.includePending) {
@@ -99,25 +104,20 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('definitions')
-			.select('*, history:definition_history(*)')
+			.select('*')
 			.eq('guid', guid)
+			.is('deleted_at', null)
 			.maybeSingle();
 		if (error) throw mapError(error);
 		return data ? rowToRecord(data) : null;
 	}
 
 	async create(ctx: RequestContext, record: DefinitionRecord): Promise<void> {
-		const client = this.clients.forRequest(ctx);
-		const { error } = await client.from('definitions').insert(recordToRow(record));
+		const { error } = await this.clients
+			.forRequest(ctx)
+			.from('definitions')
+			.insert(recordToRow(record));
 		if (error) throw mapError(error);
-
-		// Seed any history entries the caller constructed up-front. Typical
-		// callers create with an empty history and append via addHistoryEntry.
-		if (record.history.length > 0) {
-			const rows = record.history.map((h) => historyToRow(record.guid, h));
-			const { error: histError } = await client.from('definition_history').insert(rows);
-			if (histError) throw mapError(histError);
-		}
 	}
 
 	async update(
@@ -133,48 +133,25 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.from('definitions')
 			.update(row)
 			.eq('guid', guid)
+			.is('deleted_at', null)
 			.select('guid');
 		if (error) throw mapError(error);
 		if (!data || data.length === 0) throw new ProviderError(`Definition '${guid}' not found`, 404);
 	}
 
-	async addHistoryEntry(
-		ctx: RequestContext,
-		guid: string,
-		entry: HistoryEntry
-	): Promise<void> {
-		const { error } = await this.clients
-			.forRequest(ctx)
-			.from('definition_history')
-			.insert(historyToRow(guid, entry));
-		if (error) throw mapError(error);
-	}
-
-	async removeHistoryEntry(
-		ctx: RequestContext,
-		guid: string,
-		ref: string
-	): Promise<void> {
-		const { error } = await this.clients
-			.forRequest(ctx)
-			.from('definition_history')
-			.delete()
-			.eq('definition_guid', guid)
-			.eq('ref', ref);
-		if (error) throw mapError(error);
-	}
-
 	async delete(ctx: RequestContext, guid: string): Promise<void> {
+		// Soft-delete (matches the local provider and spec §8). A retention
+		// sweep run as service-role hard-deletes later.
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('definitions')
-			.delete()
-			.eq('guid', guid);
+			.update({ deleted_at: new Date().toISOString() })
+			.eq('guid', guid)
+			.is('deleted_at', null);
 		if (error) throw mapError(error);
 	}
 
 	async incrementRunCount(ctx: RequestContext, guid: string): Promise<void> {
-		// Atomic UPDATE via a SQL function — no read-modify-write race.
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.rpc('increment_run_count', { g: guid });
@@ -185,18 +162,121 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		ctx: RequestContext,
 		olderThanIso: string
 	): Promise<DefinitionRecord[]> {
-		// System-only by contract. Force the service-role client so the
-		// RLS policies don't scope us down even if the caller forgets the
-		// `system: true` flag.
+		// System-only by contract; force the service-role client so RLS doesn't
+		// scope us down even if the caller forgets `system: true`.
 		const client = ctx.system ? this.clients.forRequest(ctx) : this.clients.serviceClient;
 		const { data, error } = await client
 			.from('definitions')
-			.select('*, history:definition_history(*)')
+			.select('*')
 			.eq('status', 'pending')
-			.lt('updated_at', olderThanIso);
+			.lt('updated_at', olderThanIso)
+			.is('deleted_at', null);
 		if (error) throw mapError(error);
 		return (data ?? []).map(rowToRecord);
 	}
+
+	// ============================================================================
+	// Versions (spec §6)
+	// ============================================================================
+
+	async createVersion(ctx: RequestContext, version: DefinitionVersion): Promise<void> {
+		const { error } = await this.clients
+			.forRequest(ctx)
+			.from('definition_versions')
+			.insert(versionToRow(version));
+		if (error) throw mapError(error);
+	}
+
+	async listVersions(
+		ctx: RequestContext,
+		definitionId: string,
+		opts?: ListOptions
+	): Promise<Page<DefinitionVersion>> {
+		const range = toRange(opts);
+		const { data, error, count } = await this.clients
+			.forRequest(ctx)
+			.from('definition_versions')
+			.select('*', { count: 'exact' })
+			.eq('definition_guid', definitionId)
+			.order('version_number', { ascending: false })
+			.range(range.from, range.to);
+		if (error) throw mapError(error);
+		const items = (data ?? []).map(rowToVersion);
+		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
+	}
+
+	async getVersion(ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null> {
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('definition_versions')
+			.select('*')
+			.eq('id', versionId)
+			.maybeSingle();
+		if (error) throw mapError(error);
+		return data ? rowToVersion(data) : null;
+	}
+
+	async deleteVersion(ctx: RequestContext, versionId: string): Promise<void> {
+		// FK enforcement at the DB layer: live_version_id / draft_version_id
+		// are ON DELETE RESTRICT. If the version is referenced by either
+		// channel, Postgres raises 23503 → mapError → ProviderError(409).
+		const { error } = await this.clients
+			.forRequest(ctx)
+			.from('definition_versions')
+			.delete()
+			.eq('id', versionId);
+		if (error) throw mapError(error);
+	}
+
+	async setLiveVersion(
+		ctx: RequestContext,
+		definitionId: string,
+		versionId: string
+	): Promise<void> {
+		await this.repointChannel(ctx, definitionId, versionId, 'live_version_id');
+	}
+
+	async setDraftVersion(
+		ctx: RequestContext,
+		definitionId: string,
+		versionId: string
+	): Promise<void> {
+		await this.repointChannel(ctx, definitionId, versionId, 'draft_version_id');
+	}
+
+	private async repointChannel(
+		ctx: RequestContext,
+		definitionId: string,
+		versionId: string,
+		column: 'live_version_id' | 'draft_version_id'
+	): Promise<void> {
+		const client = this.clients.forRequest(ctx);
+		// Validate the version belongs to this definition before repointing.
+		const { data: version, error: vError } = await client
+			.from('definition_versions')
+			.select('id, definition_guid')
+			.eq('id', versionId)
+			.maybeSingle();
+		if (vError) throw mapError(vError);
+		if (!version || version.definition_guid !== definitionId) {
+			throw new ProviderError(`Version '${versionId}' not found for this definition`, 404);
+		}
+
+		const { data, error } = await client
+			.from('definitions')
+			.update({ [column]: versionId })
+			.eq('guid', definitionId)
+			.is('deleted_at', null)
+			.select('guid');
+		if (error) throw mapError(error);
+		if (!data || data.length === 0) {
+			throw new ProviderError(`Definition '${definitionId}' not found`, 404);
+		}
+	}
+
+	// ============================================================================
+	// Access checks
+	// ============================================================================
 
 	async canEditDefinition(
 		ctx: RequestContext,
@@ -205,14 +285,12 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	): Promise<boolean> {
 		if (ctx.platformPermissions.includes('instance_admin')) return true;
 
-		// Load the parent project (visibility + commons flag) and the definition
-		// (owner_id) in one round trip each. Deleted rows return nothing thanks
-		// to RLS-side filters (once 0003/0004 ship the B3 column adds).
 		const { data: project } = await this.clients
 			.forRequest(ctx)
 			.from('projects')
 			.select('auto_join_on_upload')
 			.eq('id', projectId)
+			.is('deleted_at', null)
 			.maybeSingle();
 		if (!project) return false;
 
@@ -221,6 +299,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.from('definitions')
 			.select('owner_id')
 			.eq('guid', definitionGuid)
+			.is('deleted_at', null)
 			.maybeSingle();
 		if (!definition) return false;
 
@@ -230,12 +309,12 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.select('role')
 			.eq('project_id', projectId)
 			.eq('user_id', ctx.userId)
+			.is('deleted_at', null)
 			.maybeSingle();
 
 		const role = member?.role;
 		if (role === 'owner' || role === 'editor') return true;
 
-		// Commons carve-out: definition owner edits their own on commons projects.
 		if (project.auto_join_on_upload && ctx.userId === definition.owner_id) return true;
 
 		return false;
@@ -243,9 +322,6 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 }
 
 // ── Row ↔ domain mappers ────────────────────────────────────────────────
-//
-// Audit columns are nullable on the row type as a safety net for older DBs
-// — the mapper falls back to owner_id when `created_by`/`updated_by` are null.
 
 interface DefinitionRow {
 	guid: string;
@@ -254,56 +330,46 @@ interface DefinitionRow {
 	created_by?: string | null;
 	updated_by?: string | null;
 	compute_server_id: string | null;
-	file_ext: DefinitionFileExt;
-	original_filename: string | null;
 	display_name: string;
 	description: string | null;
 	category: string | null;
 	tags: string[] | null;
 	cover_image: string | null;
-	max_history: number;
 	status: DefinitionStatus;
-	run_count: number | string; // Postgres bigint round-trips as string under some drivers.
-	/** FK to definition_versions. Null until the publish flow is wired. */
-	live_version_id?: string | null;
-	draft_version_id?: string | null;
+	run_count: number | string;
+	live_version_id: string | null;
+	draft_version_id: string | null;
 	created_at: string;
 	updated_at: string;
 	deleted_at?: string | null;
-	history?: HistoryRow[];
 }
 
-interface HistoryRow {
+interface DefinitionVersionRow {
+	id: string;
 	definition_guid: string;
-	ref: string;
-	original_name: string;
-	archived_at: string;
-	uploaded_by: string | null;
-	note: string | null;
+	version_number: number;
+	file_ext: DefinitionFileExt;
+	file_key: string;
+	original_filename: string | null;
+	uploaded_by: string;
+	uploaded_at: string;
 }
 
 function rowToRecord(row: DefinitionRow): DefinitionRecord {
-	const history = (row.history ?? [])
-		.map(rowToHistory)
-		.sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
 	return {
 		guid: row.guid,
 		projectId: row.project_id,
 		ownerId: row.owner_id,
 		createdBy: row.created_by ?? row.owner_id,
 		updatedBy: row.updated_by ?? row.owner_id,
-		liveVersionId: row.live_version_id ?? null,
-		draftVersionId: row.draft_version_id ?? null,
+		liveVersionId: row.live_version_id,
+		draftVersionId: row.draft_version_id,
 		computeServerId: row.compute_server_id ?? undefined,
-		fileExt: row.file_ext,
-		originalFilename: row.original_filename ?? undefined,
 		displayName: row.display_name,
 		description: row.description ?? undefined,
 		category: row.category ?? undefined,
 		tags: row.tags ?? undefined,
 		coverImage: row.cover_image ?? undefined,
-		history,
-		maxHistory: row.max_history,
 		status: row.status,
 		runCount: typeof row.run_count === 'string' ? Number(row.run_count) : row.run_count,
 		createdAt: row.created_at,
@@ -312,45 +378,26 @@ function rowToRecord(row: DefinitionRow): DefinitionRecord {
 	};
 }
 
-function rowToHistory(row: HistoryRow): HistoryEntry {
-	return {
-		ref: row.ref,
-		originalName: row.original_name,
-		archivedAt: row.archived_at,
-		uploadedBy: row.uploaded_by ?? undefined,
-		note: row.note ?? undefined
-	};
-}
-
 function recordToRow(r: DefinitionRecord): Record<string, unknown> {
-	// Build the row without `null` for fields that have NOT NULL DEFAULT in SQL
-	// (e.g. `tags`). Send `undefined` for absent values so PostgREST lets the
-	// column default apply. `compute_server_id`, audit ids etc. are nullable —
-	// null is fine there.
 	const row: Record<string, unknown> = {
 		guid: r.guid,
 		project_id: r.projectId,
 		owner_id: r.ownerId,
 		created_by: r.createdBy,
 		updated_by: r.updatedBy,
-		live_version_id: r.liveVersionId ?? null,
-		draft_version_id: r.draftVersionId ?? null,
+		live_version_id: r.liveVersionId,
+		draft_version_id: r.draftVersionId,
 		compute_server_id: r.computeServerId ?? null,
-		file_ext: r.fileExt,
-		original_filename: r.originalFilename ?? null,
 		display_name: r.displayName,
 		description: r.description ?? null,
 		category: r.category ?? null,
 		cover_image: r.coverImage ?? null,
-		max_history: r.maxHistory,
 		status: r.status,
 		run_count: r.runCount,
 		created_at: r.createdAt,
 		updated_at: r.updatedAt,
 		deleted_at: r.deletedAt ?? null
 	};
-	// `tags` is NOT NULL DEFAULT '{}' — include it only when the caller gives
-	// us an array; otherwise let the default apply.
 	if (r.tags !== undefined) row.tags = r.tags;
 	return row;
 }
@@ -362,9 +409,6 @@ function patchToRow(patch: DefinitionRecordPatch): Record<string, unknown> {
 	if (patch.category !== undefined) row.category = patch.category;
 	if (patch.tags !== undefined) row.tags = patch.tags;
 	if (patch.coverImage !== undefined) row.cover_image = patch.coverImage;
-	if (patch.fileExt !== undefined) row.file_ext = patch.fileExt;
-	if (patch.originalFilename !== undefined) row.original_filename = patch.originalFilename;
-	if (patch.maxHistory !== undefined) row.max_history = patch.maxHistory;
 	if (patch.projectId !== undefined) row.project_id = patch.projectId;
 	if (patch.computeServerId !== undefined) row.compute_server_id = patch.computeServerId;
 	if (patch.status !== undefined) row.status = patch.status;
@@ -372,14 +416,29 @@ function patchToRow(patch: DefinitionRecordPatch): Record<string, unknown> {
 	return row;
 }
 
-function historyToRow(guid: string, h: HistoryEntry): HistoryRow {
+function rowToVersion(row: DefinitionVersionRow): DefinitionVersion {
 	return {
-		definition_guid: guid,
-		ref: h.ref,
-		original_name: h.originalName,
-		archived_at: h.archivedAt,
-		uploaded_by: h.uploadedBy ?? null,
-		note: h.note ?? null
+		id: row.id,
+		definitionId: row.definition_guid,
+		versionNumber: row.version_number,
+		fileExt: row.file_ext,
+		fileKey: row.file_key,
+		originalFilename: row.original_filename ?? undefined,
+		uploadedBy: row.uploaded_by,
+		uploadedAt: row.uploaded_at
+	};
+}
+
+function versionToRow(v: DefinitionVersion): Record<string, unknown> {
+	return {
+		id: v.id,
+		definition_guid: v.definitionId,
+		version_number: v.versionNumber,
+		file_ext: v.fileExt,
+		file_key: v.fileKey,
+		original_filename: v.originalFilename ?? null,
+		uploaded_by: v.uploadedBy,
+		uploaded_at: v.uploadedAt
 	};
 }
 
@@ -407,9 +466,6 @@ function mapError(e: unknown): Error {
 	if (pg?.code === '23505') return new ProviderError(pg.message ?? 'Duplicate record', 409);
 	if (pg?.code === '23503') return new ProviderError(pg.message ?? 'Foreign key violation', 409);
 	if (e instanceof Error) return e;
-	// PostgREST errors are plain objects (not Error instances). Preserve their
-	// shape so `message`/`code`/`details` propagate instead of becoming
-	// "[object Object]".
 	if (e && typeof e === 'object') {
 		const obj = e as { message?: string; details?: string; hint?: string; code?: string };
 		const msg = obj.message ?? obj.details ?? obj.hint ?? 'Unknown Postgres error';

@@ -19,7 +19,6 @@
  * Local provider env vars:
  *   DATA_PATH         — where users.json, orgs/projects/definitions JSON etc. live
  *   SESSION_SECRET    — HMAC secret for local session tokens
- *   (optional) ADMIN_PASSWORD — single-password fallback mode
  *
  * Supabase provider env vars:
  *   SUPABASE_URL                  — project URL (local: http://127.0.0.1:54321)

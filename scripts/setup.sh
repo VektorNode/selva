@@ -43,7 +43,6 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
 # definitions JSON, compute.config.json, and uploaded .gh files.
 # GH_DEFINITIONS_PATH is accepted as a legacy alias for backward compatibility.
 DATA_PATH="${DATA_PATH:-${GH_DEFINITIONS_PATH:-./definitions}}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 SESSION_SECRET="${SESSION_SECRET:-}"
 ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES:-}"  # auto-detected: true for http, false for https
 PORT="${PORT:-3000}"
@@ -224,9 +223,7 @@ if [ ! -f "$ENV_FILE" ] || ([ "$INTERACTIVE" = true ] && [[ $REPLY =~ ^[Yy]$ ]])
     DATA_PATH="${_INPUT:-$DATA_PATH}"
 
     print_step "Rhino.Compute URL + API key are configured post-install at /admin/compute."
-
-    read -p "Admin Password (optional, press Enter to skip) [${ADMIN_PASSWORD:-none}]: " _INPUT
-    ADMIN_PASSWORD="${_INPUT:-$ADMIN_PASSWORD}"
+    print_step "First admin user is created via the in-app setup page on first boot."
 
     read -p "Session Secret (optional, press Enter to auto-generate) [${SESSION_SECRET:-auto}]: " _INPUT
     SESSION_SECRET="${_INPUT:-$SESSION_SECRET}"
@@ -263,12 +260,7 @@ EOF
 
   # Rhino.Compute server URL + API key are configured post-install via /admin/compute
   # and persisted by the data provider — not written to .env.
-
-  if [ -n "$ADMIN_PASSWORD" ]; then
-    cat >> "$ENV_FILE" << EOF
-ADMIN_PASSWORD="${ADMIN_PASSWORD}"
-EOF
-  fi
+  # First admin user is created via the in-app setup page on first boot.
 
   # Auto-generate SESSION_SECRET if not provided
   if [ -z "$SESSION_SECRET" ]; then
@@ -355,7 +347,6 @@ if [ "$SKIP_PM2" = false ]; then
   # Re-read vars from .env in case we skipped the config step (file already existed)
   PORT=$(grep "^PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ' || echo "$PORT")
   ORIGIN=$(grep "^ORIGIN=" "$ENV_FILE" | cut -d'"' -f2 || echo "$ORIGIN")
-  ADMIN_PASSWORD=$(grep "^ADMIN_PASSWORD=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$ADMIN_PASSWORD")
   SESSION_SECRET=$(grep "^SESSION_SECRET=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$SESSION_SECRET")
   ALLOW_INSECURE_COOKIES=$(grep "^ALLOW_INSECURE_COOKIES=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$ALLOW_INSECURE_COOKIES")
   DATA_PATH=$(grep "^DATA_PATH=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$DATA_PATH")
@@ -371,9 +362,6 @@ if [ "$SKIP_PM2" = false ]; then
   else
     ABS_DATA_PATH="$DATA_PATH"
   fi
-
-  OPT_ADMIN_PASSWORD=""
-  [ -n "$ADMIN_PASSWORD" ] && OPT_ADMIN_PASSWORD="				ADMIN_PASSWORD: '$ADMIN_PASSWORD',"
 
   cat > "$CONFIG_FILE" << EOF
 // This file is used by PM2 to manage the compute app process.
@@ -395,7 +383,6 @@ module.exports = {
 				BODY_SIZE_LIMIT: 'Infinity',
 				SELVA_PROVIDER: 'local',
 				DATA_PATH: '$ABS_DATA_PATH',
-$OPT_ADMIN_PASSWORD
 				SESSION_SECRET: '$SESSION_SECRET',
 				ALLOW_INSECURE_COOKIES: '$ALLOW_INSECURE_COOKIES',
 				NODE_ENV: 'production'

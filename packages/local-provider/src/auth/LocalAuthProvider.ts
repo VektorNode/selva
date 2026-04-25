@@ -1,4 +1,3 @@
-import { timingSafeEqual } from 'node:crypto';
 import * as path from 'node:path';
 import type {
 	IAuthProvider,
@@ -10,15 +9,13 @@ import type {
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { ALL_PLATFORM_PERMISSIONS, ProviderError } from '@selva/platform';
+import { ProviderError } from '@selva/platform';
 import { signHmacToken, verifyHmacToken } from './hmac.js';
 import { verifyPasswordHash, createLocalUserMetaProvider } from './users.js';
 import type { LocalUserMetaProvider, StoredUser } from './users.js';
 import { paginate } from '../data/pagination.js';
 
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
-
-const FALLBACK_ADMIN_ID = 'local-admin';
 
 function toAuthUser(
 	u: Pick<
@@ -36,61 +33,34 @@ function toAuthUser(
 	};
 }
 
-function fallbackAdmin(): AuthUser {
-	return {
-		id: FALLBACK_ADMIN_ID,
-		platformPermissions: [...ALL_PLATFORM_PERMISSIONS]
-	};
-}
-
 export interface LocalAuthProviderConfig {
 	/** HMAC signing secret. Pass from env (SESSION_SECRET). */
 	hmacSecret: string;
 	/**
 	 * Absolute path to users.json.
-	 * When provided, login authenticates against users in this file.
-	 * When omitted, only fallbackAdminPassword is checked.
+	 * Login authenticates against users in this file. Bootstrap the first user
+	 * via the in-app setup page.
 	 */
 	usersFilePath?: string;
-	/**
-	 * Single-user fallback password (plain text).
-	 * Used when usersFilePath is not set or no matching user is found.
-	 */
-	fallbackAdminPassword?: string;
 }
 
 class LocalPasswordAuth implements IPasswordAuth {
 	constructor(
 		private readonly users: LocalUserMetaProvider | undefined,
-		private readonly fallbackAdminPassword: string | undefined,
 		private readonly mintToken: (user: AuthUser) => string
 	) {}
 
 	async verifyLogin(email: string, password: string): Promise<LoginResult> {
-		if (this.users) {
-			const user = await this.users.findByEmail(email);
-			if (!user) {
-				// Fall through to fallback-admin password below.
-			} else if (user.disabled) {
-				return { kind: 'failed', reason: 'disabled' };
-			} else if (
-				user.passwordHash &&
-				(await verifyPasswordHash(password, user.passwordHash))
-			) {
-				await this.users.touchLastLogin(user.id).catch(() => {});
-				const auth = toAuthUser(user);
-				return { kind: 'success', user: auth, sessionToken: this.mintToken(auth) };
-			}
+		if (!this.users) return { kind: 'failed', reason: 'invalid_credentials' };
+		const user = await this.users.findByEmail(email);
+		if (!user) return { kind: 'failed', reason: 'invalid_credentials' };
+		if (user.disabled) return { kind: 'failed', reason: 'disabled' };
+		if (!user.passwordHash || !(await verifyPasswordHash(password, user.passwordHash))) {
+			return { kind: 'failed', reason: 'invalid_credentials' };
 		}
-		if (this.fallbackAdminPassword) {
-			const a = Buffer.from(password);
-			const b = Buffer.from(this.fallbackAdminPassword);
-			if (a.length === b.length && timingSafeEqual(a, b)) {
-				const auth = fallbackAdmin();
-				return { kind: 'success', user: auth, sessionToken: this.mintToken(auth) };
-			}
-		}
-		return { kind: 'failed', reason: 'invalid_credentials' };
+		await this.users.touchLastLogin(user.id).catch(() => {});
+		const auth = toAuthUser(user);
+		return { kind: 'success', user: auth, sessionToken: this.mintToken(auth) };
 	}
 
 	async createUserWithPassword(
@@ -125,21 +95,17 @@ export class LocalAuthProvider implements IAuthProvider {
 		if (config.usersFilePath) {
 			this.users = createLocalUserMetaProvider(config.usersFilePath);
 		}
-		this.passwordAuth = new LocalPasswordAuth(
-			this.users,
-			config.fallbackAdminPassword,
-			(user) => signHmacToken(this.hmacSecret, user.id, SESSION_MAX_AGE_MS)
+		this.passwordAuth = new LocalPasswordAuth(this.users, (user) =>
+			signHmacToken(this.hmacSecret, user.id, SESSION_MAX_AGE_MS)
 		);
 	}
 
 	static fromEnv(env: Record<string, string | undefined>): LocalAuthProvider {
-		const hmacSecret = env.SESSION_SECRET || env.ADMIN_PASSWORD;
-		if (!hmacSecret)
-			throw new Error('Missing required env var: SESSION_SECRET (or ADMIN_PASSWORD for dev)');
+		const hmacSecret = env.SESSION_SECRET;
+		if (!hmacSecret) throw new Error('Missing required env var: SESSION_SECRET');
 		return new LocalAuthProvider({
 			hmacSecret,
-			usersFilePath: env.DATA_PATH ? path.join(env.DATA_PATH, 'users.json') : undefined,
-			fallbackAdminPassword: env.ADMIN_PASSWORD
+			usersFilePath: env.DATA_PATH ? path.join(env.DATA_PATH, 'users.json') : undefined
 		});
 	}
 
@@ -147,17 +113,11 @@ export class LocalAuthProvider implements IAuthProvider {
 	async verifyToken(token: string): Promise<AuthUser | null> {
 		const { valid, userId } = verifyHmacToken(token, this.hmacSecret);
 		if (!valid) return null;
-
-		if (userId === FALLBACK_ADMIN_ID) return fallbackAdmin();
-
-		if (this.users) {
-			const u = await this.users.findById(userId);
-			if (u && !u.disabled) {
-				await this.users.touchLastLogin(u.id).catch(() => {});
-				return toAuthUser(u);
-			}
-		}
-		return null;
+		if (!this.users) return null;
+		const u = await this.users.findById(userId);
+		if (!u || u.disabled) return null;
+		await this.users.touchLastLogin(u.id).catch(() => {});
+		return toAuthUser(u);
 	}
 
 	async touchLastLogin(id: string): Promise<void> {
@@ -166,12 +126,9 @@ export class LocalAuthProvider implements IAuthProvider {
 	}
 
 	async getUser(id: string): Promise<AuthUser | null> {
-		if (this.users) {
-			const u = await this.users.findById(id);
-			if (u) return toAuthUser(u);
-		}
-		if (id === FALLBACK_ADMIN_ID) return fallbackAdmin();
-		return null;
+		if (!this.users) return null;
+		const u = await this.users.findById(id);
+		return u ? toAuthUser(u) : null;
 	}
 
 	async listUsers(opts?: ListOptions): Promise<Page<AuthUser> | null> {

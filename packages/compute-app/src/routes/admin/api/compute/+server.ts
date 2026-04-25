@@ -2,22 +2,32 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getComputeServerConfigStore } from '$lib/server/providers.server';
 import { requireManageCompute } from '$lib/server/access.server';
-import type { ComputeConfig, ComputeServerConfig } from '@selva/platform';
+import type { ComputeConfig, ComputeServerConfig, RequestContext } from '@selva/platform';
 
 type ServerWithKeyFlag = Omit<ComputeServerConfig, 'apiKey'> & { hasApiKey: boolean };
 
-type IncomingServer = Omit<ComputeServerConfig, 'apiKey'> & { apiKey?: string | null };
+type IncomingServer = Omit<ComputeServerConfig, 'apiKey' | 'orgId'> & { apiKey?: string | null };
 
 interface IncomingConfig {
 	servers: IncomingServer[];
 	defaultServerId?: string;
 }
 
+/**
+ * Build a ctx scoped to the instance pool — the admin compute route manages
+ * the instance-wide servers (org_id NULL), never the user's actingOrg. We
+ * strip `actingOrgId` from the user's ctx so the store reads/writes the
+ * right scope.
+ */
+function instanceCtx(ctx: RequestContext): RequestContext {
+	return { ...ctx, actingOrgId: undefined, orgPermissions: [] };
+}
+
 // GET — return compute config with API keys stripped and replaced by hasApiKey flag
 export const GET: RequestHandler = async ({ locals }) => {
 	requireManageCompute(locals);
 	try {
-		const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
+		const config = await getComputeServerConfigStore().getConfig(instanceCtx(locals.ctx!));
 		return json({
 			...config,
 			servers: config.servers.map(
@@ -62,7 +72,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		const provider = getComputeServerConfigStore();
-		const ctx = locals.ctx!;
+		const ctx = instanceCtx(locals.ctx!);
 		const existing = await provider.getConfig(ctx);
 
 		// Build a lookup map from serverUrl → stored apiKey for stable key preservation.
@@ -72,6 +82,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 			...incoming,
 			servers: incoming.servers.map(({ apiKey, ...s }) => ({
 				...s,
+				orgId: null,
 				apiKey:
 					apiKey === null
 						? undefined // explicit clear

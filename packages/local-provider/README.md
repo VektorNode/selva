@@ -43,8 +43,9 @@ Set these in the compute-app's `.env` (see [`packages/compute-app/.env.example`]
 | Variable | Required | Description |
 |---|---|---|
 | `DATA_PATH` | ✅ | Directory the provider reads/writes. Holds `users.json`, `orgs/`, `projects/`, `definitions/`, `compute.config.json`, and uploaded blobs. Created on first write if missing. |
-| `SESSION_SECRET` | ✅ (prod) | HMAC secret used to sign session cookies. Must be stable across restarts. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Falls back to `ADMIN_PASSWORD` if unset — fine for dev, **not** for prod. |
-| `ADMIN_PASSWORD` | optional | Single-password fallback admin login. Useful for first-boot bootstrap before a real user exists in `users.json`. Leave unset once you have proper users. |
+| `SESSION_SECRET` | ✅ | HMAC secret used to sign session cookies. Must be stable across restarts. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. |
+
+The first admin user is created through the in-app setup page on first boot — there is no env-var fallback login.
 
 Rhino.Compute server URL + API key are configured in `/admin/compute` and persisted to `compute.config.json` — not env vars.
 
@@ -107,10 +108,7 @@ To switch to Supabase, see [`@selva/supabase-provider`](../supabase-provider/REA
 
 `LocalAuthProvider` issues HMAC-signed session tokens (no JWT library; see [`auth/`](src/auth/)). Tokens carry `{ userId, expiresAt }` and are verified on every request.
 
-Two backends, picked at construction:
-
-- **`users.json`** — full user records with `argon2id` password hashes and platform permissions
-- **Single-password fallback** — when `ADMIN_PASSWORD` is set and `users.json` is missing or empty, any login as `admin` with that password succeeds. Used for first boot.
+Users live in `users.json` with `argon2id` password hashes and platform permissions. The first admin is bootstrapped through the in-app setup page on a fresh install.
 
 ### Data
 
