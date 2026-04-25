@@ -2,11 +2,8 @@ import { z } from 'zod';
 import { OrgRoleSchema, OrgPermissionSchema } from '../organizations/schemas.js';
 
 export const CreateInviteInputSchema = z.object({
-	email: z
-		.string()
-		.email('Valid email is required')
-		.transform((s) => s.toLowerCase()),
-	orgId: z.string().uuid(),
+	email: z.email('Valid email is required').transform((s) => s.toLowerCase()),
+	orgId: z.uuid(),
 	orgRole: OrgRoleSchema,
 	orgPermissions: z.array(OrgPermissionSchema).default([])
 });

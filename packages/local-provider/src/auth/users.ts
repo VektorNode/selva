@@ -76,44 +76,10 @@ export async function verifyPasswordHash(password: string, storedHash: string): 
 
 // ── CRUD ────────────────────────────────────────────────────────────────────
 
-const EMPTY_USERS: UsersFile = { users: [] };
-
-/**
- * Legacy shape — a flat `permissions` array at the user level. Migrated on
- * read: split into platform + org buckets, the org entries stashed on
- * `legacyOrgPermissions` so `LocalOrgStoreLoader` can apply them to the
- * default-org membership on first run.
- */
-interface LegacyStoredUser {
-	permissions?: string[];
-	platformPermissions?: PlatformPermission[];
-	legacyOrgPermissions?: string[];
-}
-
-const PLATFORM_PERMS = new Set<string>([
-	'instance_admin',
-	'manage_compute',
-	'manage_instance_users',
-	'manage_updates'
-]);
-
-function migrateUser(u: StoredUser & LegacyStoredUser): StoredUser {
-	if (!u.starredDefinitions) u.starredDefinitions = [];
-	if (!u.recentRuns) u.recentRuns = [];
-	if (!u.platformPermissions) {
-		const legacy = u.permissions ?? [];
-		const platform: PlatformPermission[] = [];
-		const org: string[] = [];
-		for (const p of legacy) {
-			if (PLATFORM_PERMS.has(p)) platform.push(p as PlatformPermission);
-			else org.push(p);
-		}
-		u.platformPermissions = platform;
-		if (org.length > 0) u.legacyOrgPermissions = org;
-		delete u.permissions;
-	}
-	return u;
-}
+// Fresh object per call — `readJsonFile` returns its fallback by reference
+// when the file is missing, so a shared singleton would let one test (or
+// one process write) mutate state visible to the next read.
+const empty = (): UsersFile => ({ users: [] });
 
 export interface LocalUserMetaProvider {
 	findByEmail(email: string): Promise<StoredUser | null>;
@@ -134,34 +100,27 @@ export interface LocalUserMetaProvider {
 	unstarDefinition(id: string, definitionId: string): Promise<void>;
 	recordRun(id: string, run: import('@selva/platform').RecentRun): Promise<void>;
 	deleteUser(id: string): Promise<void>;
-	/** Consume legacy org permissions for the given user — used by LocalOrgStoreLoader bootstrap. */
-	consumeLegacyOrgPermissions(id: string): Promise<string[] | null>;
 }
 
 export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMetaProvider {
 	return {
 		async findByEmail(email) {
-			const { users } = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
-			const u = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-			return u ? migrateUser(u) : null;
+			const { users } = await readJsonFile<UsersFile>(usersFilePath, empty());
+			return users.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? null;
 		},
 
 		async findById(id) {
-			const { users } = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
-			const u = users.find((u) => u.id === id);
-			return u ? migrateUser(u) : null;
+			const { users } = await readJsonFile<UsersFile>(usersFilePath, empty());
+			return users.find((u) => u.id === id) ?? null;
 		},
 
 		async listUsers() {
-			const { users } = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
-			return users.map((u) => {
-				const { passwordHash: _ph, ...rest } = migrateUser(u);
-				return rest;
-			});
+			const { users } = await readJsonFile<UsersFile>(usersFilePath, empty());
+			return users.map(({ passwordHash: _ph, ...rest }) => rest);
 		},
 
 		async createUser(email, password, platformPermissions, displayName?) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
+			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
 			if (file.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
 				throw new ProviderError(`User with email "${email}" already exists`, 409);
 			}
@@ -181,7 +140,7 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 		},
 
 		async updatePlatformPermissions(id, platformPermissions) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
+			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
 			user.platformPermissions = platformPermissions;
@@ -189,7 +148,7 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 		},
 
 		async updateProfile(id, patch) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
+			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
 			if (patch.displayName !== undefined) user.displayName = patch.displayName;
@@ -197,7 +156,7 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 		},
 
 		async setDisabled(id, disabled) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
+			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
 			user.disabled = disabled;
@@ -205,7 +164,7 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 		},
 
 		async touchLastLogin(id) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
+			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
 			const user = file.users.find((u) => u.id === id);
 			if (!user) return;
 			const now = Date.now();
@@ -218,10 +177,9 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 		},
 
 		async starDefinition(id, definitionId) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
+			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
-			if (!user.starredDefinitions) user.starredDefinitions = [];
 			if (!user.starredDefinitions.includes(definitionId)) {
 				user.starredDefinitions.push(definitionId);
 				await writeJsonFile(usersFilePath, file);
@@ -229,18 +187,17 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 		},
 
 		async unstarDefinition(id, definitionId) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
+			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
-			user.starredDefinitions = (user.starredDefinitions ?? []).filter((d) => d !== definitionId);
+			user.starredDefinitions = user.starredDefinitions.filter((d) => d !== definitionId);
 			await writeJsonFile(usersFilePath, file);
 		},
 
 		async recordRun(id, run) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
+			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
-			if (!user.recentRuns) user.recentRuns = [];
 			// Remove older entry for same definition, then prepend newest
 			user.recentRuns = [
 				run,
@@ -250,22 +207,11 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 		},
 
 		async deleteUser(id) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
+			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
 			const before = file.users.length;
 			file.users = file.users.filter((u) => u.id !== id);
 			if (file.users.length === before) throw new ProviderError(`User "${id}" not found`, 404);
 			await writeJsonFile(usersFilePath, file);
-		},
-
-		async consumeLegacyOrgPermissions(id) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, EMPTY_USERS);
-			const user = file.users.find((u) => u.id === id) as (StoredUser & LegacyStoredUser) | undefined;
-			if (!user) return null;
-			const legacy = user.legacyOrgPermissions;
-			if (!legacy || legacy.length === 0) return null;
-			delete user.legacyOrgPermissions;
-			await writeJsonFile(usersFilePath, file);
-			return legacy;
 		}
 	};
 }

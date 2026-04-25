@@ -47,7 +47,7 @@ Legend:
   configured" panel so an admin can tell at a glance why a feature is disabled.
 
 ### 1.4 Updates
-- **CHANGED** — `/admin/api/update` still exists; gate it on `manage_updates`
+- **CHANGED** — `/admin/api/system/update` still exists; gate it on `manage_updates`
   (was `platform_admin`). Update the UI nav/visibility accordingly.
 
 ### 1.5 Instance user management

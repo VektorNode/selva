@@ -35,6 +35,13 @@ export interface ProjectAccessInput {
 	project: Project | null;
 	member: ProjectMember | null;
 	orgMember: OrgMember | null;
+	/**
+	 * Resolved `ALLOW_CROSS_ORG_PUBLIC` platform flag. When false, `public`
+	 * visibility is downgraded to "within-org public" — only members of the
+	 * project's parent org can view it. Spec §4: single-tenant instances leave
+	 * this off; `public` then means "everyone in the one org."
+	 */
+	allowCrossOrgPublic: boolean;
 }
 
 /**
@@ -43,12 +50,12 @@ export interface ProjectAccessInput {
  * rule runs and skips it. This rule reasons about authenticated users only.
  */
 export function canView(input: ProjectAccessInput): boolean {
-	const { project, member, orgMember } = input;
+	const { project, member, orgMember, allowCrossOrgPublic } = input;
 	if (!project) return false;
 
 	if (project.visibility === 'private') return member !== null;
 	if (project.visibility === 'org') return orgMember !== null;
-	if (project.visibility === 'public') return true;
+	if (project.visibility === 'public') return allowCrossOrgPublic ? true : orgMember !== null;
 	return false;
 }
 
@@ -76,12 +83,16 @@ export function canEditProjectSettings(input: ProjectAccessInput): boolean {
 export interface VisibilityChangeInput {
 	platformPermissions: readonly PlatformPermission[];
 	orgMember: OrgMember | null;
-	/** Resolved `ALLOW_CROSS_ORG_PUBLIC` platform flag. */
-	allowCrossOrgPublic: boolean;
 }
 
+/**
+ * Authorization to flip a project to `public`. The `ALLOW_CROSS_ORG_PUBLIC`
+ * platform flag does NOT gate this rule — it only changes what `public` means
+ * post-flip (cross-org reach vs within-org reach). That semantics is enforced
+ * by `canView`. Spec §4 line 211: with the flag off, "`public` then means
+ * 'everyone in the one org'" — the flip is still allowed.
+ */
 export function canChangeVisibilityToPublic(input: VisibilityChangeInput): boolean {
-	if (!input.allowCrossOrgPublic) return false;
 	const role = input.orgMember?.role;
 	return role === 'owner' || role === 'admin';
 }

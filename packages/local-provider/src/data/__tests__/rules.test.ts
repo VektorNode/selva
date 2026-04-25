@@ -100,7 +100,8 @@ describe('canView', () => {
 				orgPermissions: [],
 				project: project({ visibility: 'private' }),
 				member: null,
-				orgMember: null
+				orgMember: null,
+				allowCrossOrgPublic: true
 			})
 		).toBe(false);
 	});
@@ -112,7 +113,8 @@ describe('canView', () => {
 				orgPermissions: [],
 				project: project({ visibility: 'private' }),
 				member: member('viewer'),
-				orgMember: null
+				orgMember: null,
+				allowCrossOrgPublic: true
 			})
 		).toBe(true);
 	});
@@ -125,7 +127,8 @@ describe('canView', () => {
 				orgPermissions: [],
 				project: pub,
 				member: null,
-				orgMember: orgMember('member')
+				orgMember: orgMember('member'),
+				allowCrossOrgPublic: true
 			})
 		).toBe(true);
 		expect(
@@ -134,21 +137,47 @@ describe('canView', () => {
 				orgPermissions: [],
 				project: pub,
 				member: null,
-				orgMember: null
+				orgMember: null,
+				allowCrossOrgPublic: true
 			})
 		).toBe(false);
 	});
 
-	it('public: any authenticated user passes', () => {
+	it('public + cross-org flag on: any authenticated user passes', () => {
 		expect(
 			canView({
 				platformPermissions: noPerms,
 				orgPermissions: [],
 				project: project({ visibility: 'public' }),
 				member: null,
-				orgMember: null
+				orgMember: null,
+				allowCrossOrgPublic: true
 			})
 		).toBe(true);
+	});
+
+	it('public + cross-org flag off: requires org membership (within-org public)', () => {
+		const pub = project({ visibility: 'public' });
+		expect(
+			canView({
+				platformPermissions: noPerms,
+				orgPermissions: [],
+				project: pub,
+				member: null,
+				orgMember: orgMember('member'),
+				allowCrossOrgPublic: false
+			})
+		).toBe(true);
+		expect(
+			canView({
+				platformPermissions: noPerms,
+				orgPermissions: [],
+				project: pub,
+				member: null,
+				orgMember: null,
+				allowCrossOrgPublic: false
+			})
+		).toBe(false);
 	});
 
 	it('null project denies', () => {
@@ -158,7 +187,8 @@ describe('canView', () => {
 				orgPermissions: [],
 				project: null,
 				member: null,
-				orgMember: null
+				orgMember: null,
+				allowCrossOrgPublic: true
 			})
 		).toBe(false);
 	});
@@ -174,7 +204,8 @@ describe('canSolve', () => {
 				orgPermissions: [],
 				project: project({ visibility: v }),
 				member: v === 'private' ? member('viewer') : null,
-				orgMember: v === 'org' ? orgMember('member') : null
+				orgMember: v === 'org' ? orgMember('member') : null,
+				allowCrossOrgPublic: true
 			};
 			expect(canSolve(input)).toBe(canView(input));
 		}
@@ -189,7 +220,8 @@ describe('canEdit', () => {
 			platformPermissions: noPerms,
 			orgPermissions: [],
 			project: project(),
-			orgMember: null
+			orgMember: null,
+			allowCrossOrgPublic: true
 		};
 		expect(canEdit({ ...base, member: member('owner') })).toBe(true);
 		expect(canEdit({ ...base, member: member('editor') })).toBe(true);
@@ -204,7 +236,8 @@ describe('canEdit', () => {
 				orgPermissions: ['manage_definitions'],
 				project: project({ visibility: 'public' }),
 				member: null,
-				orgMember: orgMember('member')
+				orgMember: orgMember('member'),
+				allowCrossOrgPublic: true
 			})
 		).toBe(false);
 	});
@@ -215,7 +248,8 @@ describe('canEditProjectSettings', () => {
 		const base = {
 			platformPermissions: noPerms,
 			project: project(),
-			orgMember: null
+			orgMember: null,
+			allowCrossOrgPublic: true
 		};
 		expect(
 			canEditProjectSettings({ ...base, orgPermissions: [], member: member('owner') })
@@ -236,7 +270,8 @@ describe('canManage', () => {
 			platformPermissions: noPerms,
 			orgPermissions: [],
 			project: project(),
-			orgMember: null
+			orgMember: null,
+			allowCrossOrgPublic: true
 		};
 		expect(canManage({ ...base, member: member('owner') })).toBe(true);
 		expect(canManage({ ...base, member: member('editor') })).toBe(false);
@@ -247,41 +282,39 @@ describe('canManage', () => {
 // ── canChangeVisibilityToPublic ───────────────────────────────────────────
 
 describe('canChangeVisibilityToPublic', () => {
-	it('org owner/admin can flip when flag is on', () => {
+	it('org owner/admin can flip', () => {
 		expect(
 			canChangeVisibilityToPublic({
 				platformPermissions: noPerms,
-				orgMember: orgMember('owner'),
-				allowCrossOrgPublic: true
+				orgMember: orgMember('owner')
 			})
 		).toBe(true);
 		expect(
 			canChangeVisibilityToPublic({
 				platformPermissions: noPerms,
-				orgMember: orgMember('admin'),
-				allowCrossOrgPublic: true
+				orgMember: orgMember('admin')
 			})
 		).toBe(true);
 	});
 
-	it('member cannot even with flag on', () => {
+	it('member cannot flip', () => {
 		expect(
 			canChangeVisibilityToPublic({
 				platformPermissions: noPerms,
-				orgMember: orgMember('member'),
-				allowCrossOrgPublic: true
+				orgMember: orgMember('member')
 			})
 		).toBe(false);
 	});
 
-	it('denied when platform flag is off regardless of role', () => {
+	it('cross-org-public flag does NOT gate the flip — only canView post-flip', () => {
+		// Spec §4 line 211: with the flag off, public still flips; the meaning of
+		// public narrows to within-org. The flag belongs in canView, not here.
 		expect(
 			canChangeVisibilityToPublic({
 				platformPermissions: noPerms,
-				orgMember: orgMember('owner'),
-				allowCrossOrgPublic: false
+				orgMember: orgMember('owner')
 			})
-		).toBe(false);
+		).toBe(true);
 	});
 });
 

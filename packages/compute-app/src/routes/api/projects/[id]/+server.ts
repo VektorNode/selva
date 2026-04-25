@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { z } from 'zod';
-import { getOrganizationProvider, getProjectProvider, flag } from '$lib/server/providers.server';
+import { getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
 import { requireManageProjects, requireCanManage } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { slugify } from '$lib/server/slug';
@@ -51,17 +51,11 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		const passes = withAdminBypass(ctx.platformPermissions, () =>
 			canChangeVisibilityToPublic({
 				platformPermissions: ctx.platformPermissions,
-				orgMember,
-				allowCrossOrgPublic: flag('ALLOW_CROSS_ORG_PUBLIC')
+				orgMember
 			})
 		);
 		if (!passes) {
-			throw error(
-				403,
-				flag('ALLOW_CROSS_ORG_PUBLIC')
-					? 'Only org owners or admins can make a project public.'
-					: 'Cross-org public projects are disabled on this instance.'
-			);
+			throw error(403, 'Only org owners or admins can make a project public.');
 		}
 	}
 

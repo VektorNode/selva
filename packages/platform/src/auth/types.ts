@@ -55,8 +55,10 @@ export interface AuthUser {
  * - 'ok'            — succeeded
  * - 'not_found'     — target user doesn't exist
  * - 'not_supported' — provider doesn't implement user management
+ * - 'last_admin'    — refused; would leave the instance with zero `instance_admin` users.
+ *                     See Permissions.md §2 invariant + §10 sole-admin offboarding rule.
  */
-export type UserManagementResult = 'ok' | 'not_found' | 'not_supported';
+export type UserManagementResult = 'ok' | 'not_found' | 'not_supported' | 'last_admin';
 
 /**
  * Provider-specific MFA factor. Providers that don't support MFA never emit

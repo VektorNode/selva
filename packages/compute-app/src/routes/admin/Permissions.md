@@ -37,6 +37,8 @@ One role, four permissions. All instance-wide.
 >
 > **`manage_users` renamed to `manage_instance_users`** — symmetric with org-scope `manage_org_members`, no collision possible.
 
+**Invariant: at least one user holds `instance_admin`.** Any operation that would leave the instance with zero `instance_admin`s — revoking the permission, deleting the user, disabling the user — is rejected by the auth provider. Mirrored in the admin UI by disabling the relevant control on the sole admin. See §10 for the offboarding pattern; §12 for break-glass recovery if the invariant is ever bypassed.
+
 **Deployment modes:**
 
 - **Self-hosted / single-tenant.** One org exists, provisioned at install time. The `instance_admin` is typically also the org owner. UI merges the two views.
@@ -79,14 +81,15 @@ Each instance has a default compute pool configured by `instance_admin` (§2). O
 - **Override:** org `owner`/`admin` with `manage_org_compute` configures a custom Rhino.Compute URL + key → the org's solves route there instead.
 - **Platform gate:** overrides only work when `ALLOW_ORG_COMPUTE_OVERRIDE=true` at the platform level. Self-hosted single-tenant and early SaaS can leave this off — everyone shares the one pool.
 
-**Resolution order** (pure function, no I/O):
+**Resolution order** (pure function, no I/O), narrowest wins:
 
-1. If the project's org has a compute override **and** the platform flag is on → use the override.
-2. Otherwise → use the instance default pool.
+1. If the definition has `computeServerId` set → use that server. Lets a single heavy definition route to beefier hardware while light ones stay on cheap servers.
+2. Else, if the project's org has a compute override **and** the platform flag is on → use the override.
+3. Otherwise → use the instance default pool.
 
 The override is never instance-wide. An org misconfiguring their compute (wrong URL, bad key) only affects that org's solves. The instance pool is the `instance_admin`'s domain and cannot be touched by org admins under any circumstance.
 
-`ComputeServerConfig` carries an optional `orgId` field: null rows are instance-pool servers, non-null rows are that org's override. Stores filter by scope on read; the `resolveComputeServerForOrg(instance, org, opts)` helper applies the precedence rule with the platform flag.
+`ComputeServerConfig` carries an optional `orgId` field: null rows are instance-pool servers, non-null rows are that org's override. `Definition.computeServerId` is an optional per-definition pin to one of those rows. Stores filter by scope on read; the `resolveComputeServerForOrg(instance, org, opts)` helper applies the precedence rule with the platform flag.
 
 ---
 
@@ -153,6 +156,8 @@ The distinction protects the Alice/Peter case: on a commons project, Peter canno
 
 The pure access-control functions live in [rules.ts](../../../../../platform/src/access/rules.ts). They take already-resolved entities as input and return booleans. Adapters do the lookup; rules do the logic.
 
+> **Implementation drift (deferred to post-freeze).** Today `canView` and `canSolve` exist in `rules.ts` but the route layer (`access.server.ts → requireCanViewProject` / `requireCanSolve`) inlines an equivalent predicate rather than calling the pure rule, to avoid an extra fetch round-trip. Both copies are kept in sync by hand. Consolidation is tracked as tech debt; the rule in `rules.ts` remains the canonical specification when the two disagree.
+
 ### The `instance_admin` bypass lives in one place
 
 Rather than every rule starting with `if (instance_admin) return true`, the bypass is centralized in a single wrapper applied at the rule-call site (in [access.server.ts](../../lib/server/access.server.ts) or the adapter layer). The pure rules below reason about **normal users only.**
@@ -167,7 +172,7 @@ A request authenticated by a valid share-link token (§7) is granted access to *
 
 - `private` → yes iff user is a project member (any role)
 - `org` → yes iff `ctx.actingOrgId === project.orgId` **and** user is a member of that org
-- `public` → yes iff user is authenticated on the instance
+- `public` → yes iff user is authenticated on the instance, **and** either `ALLOW_CROSS_ORG_PUBLIC=true` OR the user is a member of the project's parent org. With the flag off, `public` narrows to "everyone in the publishing org" — the visibility flip is still allowed (see `canChangeVisibilityToPublic`), but the reach is the org rather than the instance.
 
 ### `canSolve(project, user, ctx) → bool`
 
@@ -206,7 +211,7 @@ Flipping a project **to** `public` is a disclosure action and requires stricter 
 - Org `owner` or `admin` → yes
 - Otherwise → no
 
-Additionally, cross-org public publishing requires a platform-level opt-in (`ALLOW_CROSS_ORG_PUBLIC=true`). Self-hosted single-tenant instances can leave this off — `public` then means "everyone in the one org."
+The `ALLOW_CROSS_ORG_PUBLIC` platform flag does **not** gate this rule — it only changes what `public` means post-flip. With the flag on, `public` reaches any authenticated user on the instance (cross-org). With the flag off, `public` narrows to members of the publishing org (within-org). That semantic switch is enforced by `canView`, not here. Self-hosted single-tenant instances can leave the flag off — the flip still works; the reach matches their tenancy model.
 
 ### `canManage(project, user) → bool` — delete project, manage members
 
@@ -271,7 +276,7 @@ Versions are immutable. A `DefinitionVersion` **cannot be deleted** while refere
 ### Why
 
 - Embedded consumers never break from an upstream edit.
-- "In review" and "live" are first-class, not hacked through naming.
+- `draft` and `live` are first-class channels, not hacked through naming.
 - Rollback is trivial.
 - No UI ceremony required for basic use — upload + publish is one action.
 
@@ -386,7 +391,7 @@ Instance-level only. Denial returns **403** (not redirect).
 | `/admin/api/users`          | `*`    | `manage_instance_users` |
 | `/admin/api/compute`        | `*`    | `manage_compute`        |
 | `/admin/api/compute/status` | `GET`  | `manage_compute`        |
-| `/admin/api/update`         | `POST` | `manage_updates`        |
+| `/admin/api/system/update`  | `POST` | `manage_updates`        |
 | `/admin/api/orgs`           | `*`    | `instance_admin`        |
 | `/admin/api/orgs/[id]`      | `*`    | `instance_admin`        |
 
@@ -453,6 +458,7 @@ Every successful mutation emits an internal domain event (`project.created`, `de
 - **Disable user (instance-wide):** `manage_instance_users` sets `disabled=true`. Sessions invalidated; identity and attribution preserved.
 - **Remove user from org:** org `owner`/`admin` or `manage_org_members`. User loses all project memberships in that org. Still exists on the instance.
 - **Sole-owner projects on offboarding:** removal is **blocked** until a new owner is assigned (manual step). No silent reassignment. If the original owner is unreachable, org `owner`/`admin` uses **Reclaim** (§5 `canReclaim`) to become co-owner first, then proceeds with removal — that's the explicit escape hatch.
+- **Sole instance admin:** revoking `instance_admin`, deleting, or disabling the last user holding `instance_admin` is **blocked** at the auth provider — the operation returns `last_admin`, which the API surfaces as **409 Conflict** with an actionable message ("Promote another user to instance admin first"). The admin UI mirrors the lock by disabling the relevant control on the sole admin and surfacing the reason. Symmetric with sole-owner project removal above; the auth provider is the load-bearing layer because the same invariant must hold across permission edits, deletes, and disables. Recovery for non-runtime corruption (manual DB edits, bad migrations) is deferred — see §12.
 - **Delete user (hard):** admin-initiated only. Goes through the auth provider. Selva's references resolve to "Deleted user." Share links the user minted are unaffected (they belong to the definition, not the creator).
 - **Org ownership transfer:** explicit action by the current org owner. `instance_admin` can force-transfer as a break-glass.
 
@@ -490,6 +496,8 @@ Walk through these to confirm the model behaves as expected.
 | Alice deletes the definition that a share link points at.                                                                     | Token resolution fails closed (`def.deletedAt IS NULL` check). Hard delete cascades the link out.                                                                             |
 | Acme org configures a BYO compute server; instance has `ALLOW_ORG_COMPUTE_OVERRIDE=true`.                                     | Solves on Acme projects route to Acme's compute. Solves on other orgs' projects continue to use the instance pool.                                                            |
 | `instance_admin` edits compute config in their personal org context.                                                          | Edits the **instance pool** regardless of `actingOrgId` — the `/admin/api/compute` route explicitly scopes to instance.                                                       |
+| Sole `instance_admin` unchecks their own `Instance Admin (all)` checkbox.                                                     | **409.** Auth provider returns `last_admin`; UI mirror disables the checkbox preemptively. Promote another user first, then demote.                                           |
+| `instance_admin` deletes the only other user, who also holds `instance_admin`.                                                | Allowed — the actor still holds it. Reverse case (deleting self while sole admin) is blocked the same way as the checkbox case.                                               |
 
 ---
 
@@ -505,6 +513,7 @@ Designed-for but not implemented. Each can ship later without breaking the model
 - Webhooks (events emit; dispatcher is later)
 - Per-org data residency / storage backends
 - Project templates / bulk member operations (pressure valve for flat ACLs at scale)
+- Break-glass recovery for zero-`instance_admin` state (e.g., `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` env var auto-promoting on startup, or a `pnpm selva grant-admin <email>` CLI). The §2 invariant prevents this case at runtime; the recovery path is for non-runtime corruption only (manual DB edits, bad migrations, restoring from a backup that pre-dates the invariant).
 
 ---
 

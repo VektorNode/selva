@@ -102,7 +102,7 @@ export const actions = {
 				};
 				// SYSTEM_CONTEXT bypasses RLS — needed because the new user has no
 				// session yet. createOrg seeds the owner membership row in the same
-				// call (see SupabaseOrgStore.createOrg / LocalOrganizationProvider).
+				// call (see SupabaseOrgStore.createOrg / LocalOrgStore.createOrg).
 				await orgs.createOrg(SYSTEM_CONTEXT, org);
 
 				const project: Project = {

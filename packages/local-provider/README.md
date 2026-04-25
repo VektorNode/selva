@@ -6,6 +6,8 @@ The default provider for development and small single-instance deployments. All 
 
 For production-scale or multi-instance deployments, use [`@selva/supabase-provider`](../supabase-provider/README.md) instead.
 
+For testing multi-org tenancy on this provider, see [docs/MultiOrg-LocalDev.md](../../docs/MultiOrg-LocalDev.md).
+
 ---
 
 ## Table of contents
@@ -38,12 +40,7 @@ Pick [Supabase](../supabase-provider/README.md) when:
 
 ## Environment variables
 
-Set these in the compute-app's `.env` (see [`packages/compute-app/.env.example`](../compute-app/.env.example)):
-
-| Variable | Required | Description |
-|---|---|---|
-| `DATA_PATH` | ✅ | Directory the provider reads/writes. Holds `users.json`, `orgs/`, `projects/`, `definitions/`, `compute.config.json`, and uploaded blobs. Created on first write if missing. |
-| `SESSION_SECRET` | ✅ | HMAC secret used to sign session cookies. Must be stable across restarts. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. |
+All env vars are documented in [`packages/compute-app/.env.example`](../compute-app/.env.example) — copy that file to `.env` and edit it. The local provider reads `DATA_PATH` and `SESSION_SECRET` from there.
 
 The first admin user is created through the in-app setup page on first boot — there is no env-var fallback login.
 

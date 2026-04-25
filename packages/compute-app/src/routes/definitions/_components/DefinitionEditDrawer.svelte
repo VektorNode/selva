@@ -183,9 +183,7 @@
 				class="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
 			>
 				<option value="draft">Draft — work in progress</option>
-				<option value="review">Review — submitted for review</option>
 				<option value="published">Published — live and visible to runners</option>
-				<option value="archived">Archived — retired, hidden from runners</option>
 			</select>
 		</div>
 

@@ -3,7 +3,7 @@ import { error } from '@sveltejs/kit';
 import { GrasshopperClient } from 'selva-compute/grasshopper';
 import { camelcaseKeys } from 'selva-compute/core';
 import type { UISchema } from 'selva-shared';
-import type { ComputeServerConfig } from '@selva/platform';
+import type { ComputeServerConfig, RequestContext } from '@selva/platform';
 import {
 	getStorageProvider,
 	getDefinitionMeta,
@@ -11,6 +11,7 @@ import {
 } from '$lib/server/providers.server';
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
 import { requireCanSolve } from '$lib/server/access.server';
+import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
 
 /**
  * Fetch UI schema from Rhino Compute's /grasshopper/schema endpoint (no solve required).
@@ -56,7 +57,7 @@ async function fetchSchemaFromCompute(
 	return schemas[0];
 }
 
-export const load = (async ({ params, locals }) => {
+export const load = (async ({ params, locals, request, url }) => {
 	const storage = getStorageProvider();
 	const meta = getDefinitionMeta();
 	const projects = getProjectProvider();
@@ -66,20 +67,34 @@ export const load = (async ({ params, locals }) => {
 	let definitionSource: Uint8Array;
 	let server: ComputeServerConfig;
 	const clientDefUrl = `local:${guid}`;
+	// `shareToken` is forwarded to the page so the client can include it on
+	// subsequent /api/compute/solve calls. null = user-authenticated session.
+	let shareToken: string | null = null;
 
 	try {
-		if (!locals.ctx || !locals.user) {
+		// Spec §7 — try a share-link token first. App loader always serves the
+		// `live` channel (preview-of-published embed). Schema fetch is view-only,
+		// so we don't require `allowSolve` here; the solve route enforces that.
+		const sharedAccess = await tryResolveShareToken(request, url, guid, 'live', {
+			requireSolve: false
+		});
+		if (sharedAccess) {
+			shareToken = url.searchParams.get('token');
+		} else if (!locals.ctx || !locals.user) {
 			throw error(401, 'Unauthorized: You must be logged in to access definitions');
 		}
 
-		const record = await meta.get(locals.ctx, guid);
+		const ctx: RequestContext = sharedAccess?.ctx ?? locals.ctx!;
+
+		const record = await meta.get(ctx, guid);
 		if (!record) throw new Error(`Definition '${guid}' not found`);
 
-		await requireCanSolve(locals, record.projectId);
+		// User-auth path needs the canSolve gate; token-auth was already gated.
+		if (!sharedAccess) await requireCanSolve(locals, record.projectId);
 
 		// §6 — the schema page always reflects the live channel.
 		if (!record.liveVersionId) throw new Error(`Definition '${guid}' has no live version`);
-		const version = await meta.getVersion(locals.ctx, record.liveVersionId);
+		const version = await meta.getVersion(ctx, record.liveVersionId);
 		if (!version) throw new Error(`Live version missing for '${guid}'`);
 		const bytes = await storage.get(version.fileKey);
 		if (!bytes) throw new Error(`Definition file for '${guid}' not found on disk`);
@@ -88,9 +103,9 @@ export const load = (async ({ params, locals }) => {
 
 		// §3 — route the schema fetch through the owning org's compute when BYO
 		// compute is configured; otherwise fall through to the instance pool.
-		const project = await projects.getProject(locals.ctx, record.projectId);
+		const project = await projects.getProject(ctx, record.projectId);
 		try {
-			server = await resolveServerForOrg(locals.ctx, project?.orgId ?? null);
+			server = await resolveServerForOrg(ctx, project?.orgId ?? null);
 		} catch {
 			throw error(503, 'No compute server configured. Ask an admin to add one in /admin/compute.');
 		}
@@ -159,7 +174,10 @@ export const load = (async ({ params, locals }) => {
 			schema,
 			ghDefinition: clientDefUrl,
 			currentDefinition: guid,
-			serverLabel: server.label
+			serverLabel: server.label,
+			// Forward to the client so /api/compute/solve calls can include it.
+			// Null when the request was user-authenticated (session cookie carries auth).
+			shareToken
 		};
 	} catch (err) {
 		const errorMessage = err instanceof Error ? err.message : String(err);

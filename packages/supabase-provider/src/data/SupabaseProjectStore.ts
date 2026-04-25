@@ -257,7 +257,10 @@ export class SupabaseProjectStore implements IProjectStore {
 
 // ── Row ↔ domain mappers ────────────────────────────────────────────────
 //
-// Audit columns are nullable on the row types as a safety net for older DBs
+// Audit columns (`created_by` / `updated_by`) FK to `auth.users(id)` with
+// `ON DELETE SET NULL`; they can legitimately become NULL when the user is
+// deleted (spec §8). Mappers fall back to `owner_id` so the domain type
+// stays non-nullable. Also true for ProjectMember audit columns below.
 // that haven't applied the latest migration — the mapper falls back to
 // owner_id / user_id / joined_at in those cases.
 

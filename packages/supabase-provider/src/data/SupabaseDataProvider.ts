@@ -6,6 +6,7 @@ import { SupabaseProjectStore } from './SupabaseProjectStore.js';
 import { SupabaseDefinitionStore } from './SupabaseDefinitionStore.js';
 import { SupabaseInviteStore } from './SupabaseInviteStore.js';
 import { SupabaseComputeServerStore } from './SupabaseComputeServerStore.js';
+import { SupabaseShareLinkStore } from './SupabaseShareLinkStore.js';
 
 /**
  * Composition of every data store for the Supabase backend. Instantiates one
@@ -18,6 +19,7 @@ export class SupabaseDataProvider implements IDataProvider {
 	readonly definitions: SupabaseDefinitionStore;
 	readonly invites: SupabaseInviteStore;
 	readonly computeServer: SupabaseComputeServerStore;
+	readonly shareLinks: SupabaseShareLinkStore;
 
 	private constructor(private readonly clients: ClientBundle) {
 		this.orgs = new SupabaseOrgStore(clients);
@@ -25,6 +27,7 @@ export class SupabaseDataProvider implements IDataProvider {
 		this.definitions = new SupabaseDefinitionStore(clients);
 		this.invites = new SupabaseInviteStore(clients);
 		this.computeServer = new SupabaseComputeServerStore(clients);
+		this.shareLinks = new SupabaseShareLinkStore(clients);
 	}
 
 	static fromEnv(env: Record<string, string | undefined>): SupabaseDataProvider {

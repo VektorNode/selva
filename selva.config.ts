@@ -1,33 +1,14 @@
 /**
- * Selva provider wiring.
+ * Selva provider wiring — the single DI point that picks which provider
+ * backs auth / data / storage / userProfile, plus tenancy and platform flags.
  *
- * Switches the backend between the filesystem/JSON-based local provider and
- * the Supabase provider based on the `SELVA_PROVIDER` env var:
+ * Configuration is env-driven. Every var read here is documented in
+ * packages/compute-app/.env.example — that file is the authoritative
+ * reference. Don't duplicate env documentation in this header; keep it there.
  *
- *   SELVA_PROVIDER=local      (default)  — local JSON + filesystem storage
- *   SELVA_PROVIDER=supabase              — Supabase Auth + Postgres + Storage
- *
- * Tenancy:
- *   SELVA_TENANCY=single   (default)  — one org per deployment
- *   SELVA_TENANCY=multi               — orgs are first-class, created post-setup
- *
- * Platform feature flags (all default to false / off):
- *   ALLOW_CROSS_ORG_PUBLIC=true          — `public` projects visible across orgs
- *   ALLOW_ORG_COMPUTE_OVERRIDE=true      — orgs can BYO their own Rhino.Compute
- *   ALLOW_ORG_CREATION=true              — authenticated users can create orgs
- *
- * Local provider env vars:
- *   DATA_PATH         — where users.json, orgs/projects/definitions JSON etc. live
- *   SESSION_SECRET    — HMAC secret for local session tokens
- *
- * Supabase provider env vars:
- *   SUPABASE_URL                  — project URL (local: http://127.0.0.1:54321)
- *   SUPABASE_ANON_KEY             — "Publishable" key (sb_publishable_… on v2.95+)
- *   SUPABASE_SERVICE_ROLE_KEY     — "Secret" key (sb_secret_… on v2.95+)
- *   (optional) SUPABASE_PUBLIC_BUCKET, SUPABASE_PRIVATE_BUCKET, SUPABASE_PRIVATE_URL_PREFIX
- *   (optional) SUPABASE_ENABLE_SELF_SIGNUP=true
- *
- * See packages/supabase-provider/README.md for full deployment guide.
+ * Setup guide:    docs/QuickStart.md
+ * Provider depth: packages/local-provider/README.md
+ *                 packages/supabase-provider/README.md
  */
 
 import { defineConfig, type SelvaFlags, type TenancyMode } from '@selva/platform/config';

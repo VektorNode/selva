@@ -3,6 +3,7 @@
 ## Getting Started
 
 - **[QuickStart.md](QuickStart.md)** — Setup, development, and initial configuration
+- **[MultiOrg-LocalDev.md](MultiOrg-LocalDev.md)** — Test multi-org / multi-tenant locally (works with either provider)
 
 ## Backend Providers
 

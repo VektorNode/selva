@@ -149,6 +149,16 @@ export interface IAuthProvider {
 	deleteUser(id: string): Promise<UserManagementResult>;
 
 	/**
+	 * Disable a user. Sessions become invalid; identity and attribution are
+	 * preserved (preferred over deletion for offboarding). Returns 'last_admin'
+	 * when this would leave the instance with zero enabled `instance_admin`s —
+	 * the §2 invariant is enforced here (same load-bearing layer as revoke /
+	 * delete). Returns 'not_supported' on providers that cannot persist a
+	 * disabled flag.
+	 */
+	disableUser(id: string): Promise<UserManagementResult>;
+
+	/**
 	 * Stamp the user's `lastLoginAt` to now. Called by the auth entry points
 	 * (`verifyLogin` and `verifyToken`) on success. Best-effort — failure
 	 * MUST NOT block auth. Adapters MAY debounce (e.g. skip if the existing

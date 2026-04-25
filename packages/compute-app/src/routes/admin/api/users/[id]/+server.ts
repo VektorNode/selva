@@ -49,6 +49,11 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	if (platformResult === 'not_found') throw error(404, 'User not found');
 	if (platformResult === 'not_supported')
 		throw error(501, 'Platform permission updates not supported by this auth provider');
+	if (platformResult === 'last_admin')
+		throw error(
+			409,
+			'Cannot remove the last instance admin. Promote another user to instance admin first.'
+		);
 
 	const orgId = locals.ctx?.actingOrgId;
 	if (orgId) {
@@ -93,8 +98,14 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const { id } = params;
 	if (!id) throw error(400, 'Missing user ID');
 
-	const ok = await getAuthProvider().deleteUser(id);
-	if (!ok) throw error(404, 'User not found or operation not supported');
+	const result = await getAuthProvider().deleteUser(id);
+	if (result === 'not_found') throw error(404, 'User not found');
+	if (result === 'not_supported') throw error(501, 'User deletion not supported by this auth provider');
+	if (result === 'last_admin')
+		throw error(
+			409,
+			'Cannot delete the last instance admin. Promote another user to instance admin first.'
+		);
 
 	return json({ success: true });
 };
