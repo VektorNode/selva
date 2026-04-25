@@ -116,9 +116,12 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		// Make the authenticated user + profile + request context available to route loaders.
 		// The profile lookup is one extra read per authed request; local reads `users.json`
 		// already cached by the auth flow, Supabase will hit the user_profiles table.
+		// Use SYSTEM_CONTEXT for the profile load — ctx itself isn't built yet,
+		// and the user is loading their own profile during request bootstrap.
 		event.locals.user = user;
 		event.locals.profile =
-			(await providers.userProfile.getProfile(user.id)) ?? emptyProfile(user.id);
+			(await providers.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ??
+			emptyProfile(user.id);
 		event.locals.ctx = await buildContext(user, token);
 	}
 

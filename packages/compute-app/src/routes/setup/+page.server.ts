@@ -80,7 +80,8 @@ export const actions = {
 				...ALL_PLATFORM_PERMISSIONS
 			]);
 			if (displayName) {
-				await getUserProfileStore().updateProfile(user.id, { displayName });
+				// First-run bootstrap; no authenticated ctx exists yet.
+				await getUserProfileStore().updateProfile(SYSTEM_CONTEXT, user.id, { displayName });
 			}
 
 			if (tenancy === 'single') {

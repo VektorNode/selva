@@ -102,7 +102,9 @@ export const actions = {
 		// Best-effort display name update — never blocks the signup
 		if (displayName) {
 			try {
-				await getUserProfileStore().updateProfile(user.id, { displayName });
+				// User has just been created and isn't yet logged in — no ctx available.
+				// SYSTEM_CONTEXT is the right shape for an internal post-signup write.
+				await getUserProfileStore().updateProfile(SYSTEM_CONTEXT, user.id, { displayName });
 			} catch {
 				// Non-fatal
 			}
