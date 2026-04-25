@@ -112,8 +112,9 @@ export class LocalOrgStoreLoader {
 				p.autoJoinOnUpload = false;
 				changed = true;
 			}
-			if (p.allowAnonymous === undefined) {
-				p.allowAnonymous = false;
+			// Strip the dropped allowAnonymous flag if present in legacy on-disk data.
+			if (p.allowAnonymous !== undefined) {
+				delete p.allowAnonymous;
 				changed = true;
 			}
 		}

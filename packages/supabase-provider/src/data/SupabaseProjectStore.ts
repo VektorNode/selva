@@ -90,7 +90,7 @@ export class SupabaseProjectStore implements IProjectStore {
 		patch: Partial<
 			Pick<
 				Project,
-				'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload' | 'allowAnonymous'
+				'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload'
 			>
 		>
 	): Promise<void> {
@@ -100,7 +100,6 @@ export class SupabaseProjectStore implements IProjectStore {
 		if (patch.description !== undefined) row.description = patch.description;
 		if (patch.visibility !== undefined) row.visibility = patch.visibility;
 		if (patch.autoJoinOnUpload !== undefined) row.auto_join_on_upload = patch.autoJoinOnUpload;
-		if (patch.allowAnonymous !== undefined) row.allow_anonymous = patch.allowAnonymous;
 		if (Object.keys(row).length === 0) return;
 
 		const { data, error } = await this.clients
@@ -273,7 +272,6 @@ interface ProjectRow {
 	created_by?: string | null;
 	updated_by?: string | null;
 	auto_join_on_upload?: boolean | null;
-	allow_anonymous?: boolean | null;
 	created_at: string;
 	updated_at: string;
 	deleted_at?: string | null;
@@ -301,7 +299,6 @@ function rowToProject(row: ProjectRow): Project {
 		createdBy: row.created_by ?? row.owner_id,
 		updatedBy: row.updated_by ?? row.owner_id,
 		autoJoinOnUpload: row.auto_join_on_upload ?? false,
-		allowAnonymous: row.allow_anonymous ?? false,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		deletedAt: row.deleted_at ?? null
@@ -320,7 +317,6 @@ function projectToRow(p: Project): ProjectRow {
 		created_by: p.createdBy,
 		updated_by: p.updatedBy,
 		auto_join_on_upload: p.autoJoinOnUpload,
-		allow_anonymous: p.allowAnonymous,
 		created_at: p.createdAt,
 		updated_at: p.updatedAt,
 		deleted_at: p.deletedAt ?? null

@@ -35,24 +35,20 @@ export interface ProjectAccessInput {
 	project: Project | null;
 	member: ProjectMember | null;
 	orgMember: OrgMember | null;
-	/** Unauthenticated visitor. Only passes on `public` + `allowAnonymous`. */
-	anonymous?: boolean;
 }
 
+/**
+ * User-based view rule. Anonymous access is delivered out-of-band via §7
+ * share-link tokens — the route layer resolves a valid token before this
+ * rule runs and skips it. This rule reasons about authenticated users only.
+ */
 export function canView(input: ProjectAccessInput): boolean {
 	const { project, member, orgMember } = input;
 	if (!project) return false;
 
-	if (project.visibility === 'private') {
-		return member !== null;
-	}
-	if (project.visibility === 'org') {
-		return orgMember !== null;
-	}
-	if (project.visibility === 'public') {
-		if (input.anonymous) return Boolean(project.allowAnonymous);
-		return true;
-	}
+	if (project.visibility === 'private') return member !== null;
+	if (project.visibility === 'org') return orgMember !== null;
+	if (project.visibility === 'public') return true;
 	return false;
 }
 

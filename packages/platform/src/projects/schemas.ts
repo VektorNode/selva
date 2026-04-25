@@ -15,8 +15,7 @@ export const CreateProjectSchema = z
 		slug: SlugSchema,
 		description: z.string().max(2000).optional(),
 		visibility: ProjectVisibilitySchema,
-		autoJoinOnUpload: z.boolean().default(false),
-		allowAnonymous: z.boolean().default(false)
+		autoJoinOnUpload: z.boolean().default(false)
 	})
 	.superRefine((v, ctx) => {
 		if (v.autoJoinOnUpload && v.visibility !== 'public') {
@@ -24,13 +23,6 @@ export const CreateProjectSchema = z
 				code: z.ZodIssueCode.custom,
 				path: ['autoJoinOnUpload'],
 				message: 'autoJoinOnUpload requires visibility=public'
-			});
-		}
-		if (v.allowAnonymous && v.visibility !== 'public') {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				path: ['allowAnonymous'],
-				message: 'allowAnonymous requires visibility=public'
 			});
 		}
 	});
@@ -50,8 +42,7 @@ export const UpdateProjectSchema = z
 			.nullish()
 			.transform((v) => v ?? undefined),
 		visibility: ProjectVisibilitySchema,
-		autoJoinOnUpload: z.boolean(),
-		allowAnonymous: z.boolean()
+		autoJoinOnUpload: z.boolean()
 	})
 	.partial();
 
@@ -59,19 +50,12 @@ export const UpdateProjectSchema = z
 export function validateProjectFlags(merged: {
 	visibility: ProjectVisibility;
 	autoJoinOnUpload?: boolean;
-	allowAnonymous?: boolean;
 }): { path: string; message: string }[] {
 	const issues: { path: string; message: string }[] = [];
 	if (merged.autoJoinOnUpload && merged.visibility !== 'public') {
 		issues.push({
 			path: 'autoJoinOnUpload',
 			message: 'autoJoinOnUpload requires visibility=public'
-		});
-	}
-	if (merged.allowAnonymous && merged.visibility !== 'public') {
-		issues.push({
-			path: 'allowAnonymous',
-			message: 'allowAnonymous requires visibility=public'
 		});
 	}
 	return issues;

@@ -87,7 +87,7 @@ export interface IProjectStore {
 		patch: Partial<
 			Pick<
 				Project,
-				'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload' | 'allowAnonymous'
+				'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload'
 			>
 		>
 	): Promise<void>;

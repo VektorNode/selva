@@ -17,8 +17,7 @@ const UpdateProjectBody = z
 		name: z.string().min(1).max(128).trim(),
 		description: z.string().max(2000).nullish(),
 		visibility: ProjectVisibilitySchema,
-		autoJoinOnUpload: z.boolean(),
-		allowAnonymous: z.boolean()
+		autoJoinOnUpload: z.boolean()
 	})
 	.partial();
 
@@ -70,11 +69,9 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	// updates are validated correctly.
 	const mergedVisibility = parsed.data.visibility ?? existing.visibility;
 	const mergedAutoJoin = parsed.data.autoJoinOnUpload ?? existing.autoJoinOnUpload;
-	const mergedAllowAnon = parsed.data.allowAnonymous ?? existing.allowAnonymous;
 	const flagIssues = validateProjectFlags({
 		visibility: mergedVisibility,
-		autoJoinOnUpload: mergedAutoJoin,
-		allowAnonymous: mergedAllowAnon
+		autoJoinOnUpload: mergedAutoJoin
 	});
 	if (flagIssues.length > 0) {
 		throw error(400, flagIssues.map((i) => `${i.path}: ${i.message}`).join('; '));
@@ -86,7 +83,6 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		description?: string;
 		visibility?: 'public' | 'org' | 'private';
 		autoJoinOnUpload?: boolean;
-		allowAnonymous?: boolean;
 	} = {};
 	if (parsed.data.name !== undefined) {
 		patch.name = parsed.data.name;
@@ -98,9 +94,6 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	if (parsed.data.visibility !== undefined) patch.visibility = parsed.data.visibility;
 	if (parsed.data.autoJoinOnUpload !== undefined) {
 		patch.autoJoinOnUpload = parsed.data.autoJoinOnUpload;
-	}
-	if (parsed.data.allowAnonymous !== undefined) {
-		patch.allowAnonymous = parsed.data.allowAnonymous;
 	}
 
 	try {
