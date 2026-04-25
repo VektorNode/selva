@@ -11,7 +11,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { DEFAULT_ORG_PERMISSIONS, ProviderError } from '@selva/platform';
+import { DEFAULT_ORG_PERMISSIONS, ProviderError, auditUpdate, auditSoftDelete } from '@selva/platform';
 import { paginate, applyOrder } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 
@@ -103,8 +103,7 @@ export class LocalOrgStore implements IOrgStore {
 			role: 'owner',
 			permissions: [...DEFAULT_ORG_PERMISSIONS.owner],
 			joinedAt: now,
-			updatedAt: now,
-			updatedBy: ctx.userId || org.ownerId,
+			...auditUpdate(ctx, org.ownerId),
 			deletedAt: null
 		});
 		await this.loader.write(store);
@@ -126,8 +125,7 @@ export class LocalOrgStore implements IOrgStore {
 		store.orgs[idx] = {
 			...store.orgs[idx],
 			...patch,
-			updatedAt: new Date().toISOString(),
-			updatedBy: ctx.userId || store.orgs[idx].updatedBy
+			...auditUpdate(ctx, store.orgs[idx].updatedBy ?? store.orgs[idx].ownerId)
 		};
 		await this.loader.write(store);
 	}
@@ -136,30 +134,20 @@ export class LocalOrgStore implements IOrgStore {
 		const store = await this.loader.get();
 		const idx = store.orgs.findIndex((o) => o.id === id && isLive(o));
 		if (idx === -1) throw new ProviderError(`Org '${id}' not found`, 404);
-		const now = new Date().toISOString();
-		const actor = ctx.userId || store.orgs[idx].updatedBy;
+		const stamp = auditSoftDelete(ctx, store.orgs[idx].updatedBy ?? store.orgs[idx].ownerId);
 		// Cascade soft-delete into members, projects, and project members.
-		store.orgs[idx] = {
-			...store.orgs[idx],
-			deletedAt: now,
-			updatedAt: now,
-			updatedBy: actor
-		};
+		store.orgs[idx] = { ...store.orgs[idx], ...stamp };
 		store.orgMembers = store.orgMembers.map((m) =>
-			m.orgId === id && isLive(m) ? { ...m, deletedAt: now, updatedAt: now, updatedBy: actor } : m
+			m.orgId === id && isLive(m) ? { ...m, ...stamp } : m
 		);
 		const orgProjectIds = new Set(
 			store.projects.filter((p) => p.orgId === id && isLive(p)).map((p) => p.id)
 		);
 		store.projects = store.projects.map((p) =>
-			p.orgId === id && isLive(p)
-				? { ...p, deletedAt: now, updatedAt: now, updatedBy: actor }
-				: p
+			p.orgId === id && isLive(p) ? { ...p, ...stamp } : p
 		);
 		store.projectMembers = store.projectMembers.map((m) =>
-			orgProjectIds.has(m.projectId) && isLive(m)
-				? { ...m, deletedAt: now, updatedAt: now, updatedBy: actor }
-				: m
+			orgProjectIds.has(m.projectId) && isLive(m) ? { ...m, ...stamp } : m
 		);
 		await this.loader.write(store);
 	}
@@ -185,16 +173,13 @@ export class LocalOrgStore implements IOrgStore {
 
 	async addOrgMember(ctx: RequestContext, member: OrgMember): Promise<void> {
 		const store = await this.loader.get();
-		const now = new Date().toISOString();
-		const actor = ctx.userId || member.userId;
 		// Reactivate a prior soft-deleted row rather than piling rows up.
 		const existing = store.orgMembers.find(
 			(m) => m.orgId === member.orgId && m.userId === member.userId
 		);
 		if (existing) {
 			Object.assign(existing, member, {
-				updatedAt: now,
-				updatedBy: actor,
+				...auditUpdate(ctx, member.userId),
 				deletedAt: null
 			});
 		} else {
@@ -218,8 +203,7 @@ export class LocalOrgStore implements IOrgStore {
 		// Role change re-seeds the permission defaults. To preserve a custom
 		// OrgPermission set, call updateOrgMemberPermissions after the role change.
 		m.permissions = [...DEFAULT_ORG_PERMISSIONS[role]];
-		m.updatedAt = new Date().toISOString();
-		m.updatedBy = ctx.userId || m.updatedBy;
+		Object.assign(m, auditUpdate(ctx, m.updatedBy));
 		await this.loader.write(store);
 	}
 
@@ -235,8 +219,7 @@ export class LocalOrgStore implements IOrgStore {
 		);
 		if (!m) throw new ProviderError(`Org member '${userId}' not found`, 404);
 		m.permissions = [...permissions];
-		m.updatedAt = new Date().toISOString();
-		m.updatedBy = ctx.userId || m.updatedBy;
+		Object.assign(m, auditUpdate(ctx, m.updatedBy));
 		await this.loader.write(store);
 	}
 
@@ -246,11 +229,8 @@ export class LocalOrgStore implements IOrgStore {
 			(m) => m.orgId === orgId && m.userId === userId && isLive(m)
 		);
 		if (!m) return;
-		const now = new Date().toISOString();
-		const actor = ctx.userId || m.updatedBy;
-		m.deletedAt = now;
-		m.updatedAt = now;
-		m.updatedBy = actor;
+		const stamp = auditSoftDelete(ctx, m.updatedBy);
+		Object.assign(m, stamp);
 
 		// §9: losing org membership ends every project membership scoped to
 		// that tenant. Cascading here keeps the "members ⊂ org members"
@@ -260,7 +240,7 @@ export class LocalOrgStore implements IOrgStore {
 		);
 		store.projectMembers = store.projectMembers.map((pm) =>
 			pm.userId === userId && projectIdsInOrg.has(pm.projectId) && isLive(pm)
-				? { ...pm, deletedAt: now, updatedAt: now, updatedBy: actor }
+				? { ...pm, ...stamp }
 				: pm
 		);
 

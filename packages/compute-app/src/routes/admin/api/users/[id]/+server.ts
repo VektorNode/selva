@@ -14,6 +14,7 @@ import {
 	hasPermission
 } from '@selva/platform';
 import { splitFlatPermissions } from '$lib/server/permissions-compat.server';
+import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 
 const FlatPermissionSchema = z.union([PlatformPermissionSchema, OrgPermissionSchema]);
 
@@ -45,7 +46,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		throw error(403, 'Only a platform admin can change platform-scope permissions');
 	}
 
-	const platformResult = await getAuthProvider().updateUserPlatformPermissions(id, platform);
+	const platformResult = await setUserPlatformPermissions(id, platform);
 	if (platformResult === 'not_found') throw error(404, 'User not found');
 	if (platformResult === 'not_supported')
 		throw error(501, 'Platform permission updates not supported by this auth provider');

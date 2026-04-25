@@ -66,6 +66,10 @@
 		"./testing": {
 			"types": "./dist/testing/index.d.ts",
 			"import": "./dist/testing/index.js"
+		},
+		"./utils": {
+			"types": "./dist/utils/index.d.ts",
+			"import": "./dist/utils/index.js"
 		}
 	},
 	"files": [

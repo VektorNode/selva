@@ -6,10 +6,15 @@ import { randomUUID } from 'node:crypto';
 import {
 	ALL_ORG_PERMISSIONS,
 	ALL_PLATFORM_PERMISSIONS,
-	type RequestContext
+	SYSTEM_CONTEXT,
+	type RequestContext,
+	type DefinitionRecord,
+	type ShareLink
 } from '@selva/platform';
 import { LocalOrgStore, LocalOrgStoreLoader } from '../LocalOrgStore.js';
 import { LocalProjectStore } from '../LocalProjectStore.js';
+import { LocalDefinitionStore } from '../LocalDefinitionStore.js';
+import { LocalShareLinkStore } from '../LocalShareLinkStore.js';
 
 /**
  * Cross-store cascade behavior. Lives outside the per-store conformance suites
@@ -192,5 +197,91 @@ describe('Cross-store cascade', () => {
 		// Org B membership and its project membership are untouched.
 		expect(await orgs.getOrgMember(ctxFor(ownerBId), orgBId, memberId)).not.toBeNull();
 		expect(await projects.getProjectMember(ctxFor(ownerBId), projectBId, memberId)).not.toBeNull();
+	});
+
+	it('share-link getByTokenHash returns null when parent definition is soft-deleted (§7)', async () => {
+		// §7: token resolution MUST fail closed when its parent definition is
+		// soft-deleted. Supabase enforces this via JOIN; the local store gets
+		// the same behavior by injecting a definition provider through the
+		// LocalDataProvider wiring (see LocalShareLinkStore.setDefinitionProvider).
+		const ownerId = randomUUID();
+		const orgId = randomUUID();
+		const projectId = randomUUID();
+		const definitionId = randomUUID();
+		const linkId = randomUUID();
+		const tokenHash = `hash-${randomUUID()}`;
+		const now = new Date().toISOString();
+		const ownerCtx = ctxFor(ownerId);
+
+		await orgs.createOrg(ownerCtx, {
+			id: orgId,
+			name: 'Acme',
+			slug: 'acme',
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+		await projects.createProject(ownerCtx, {
+			id: projectId,
+			orgId,
+			ownerId,
+			name: 'P',
+			slug: 'p',
+			visibility: 'private',
+			autoJoinOnUpload: false,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+
+		const definitions = new LocalDefinitionStore(tempDir);
+		const shareLinks = new LocalShareLinkStore(path.join(tempDir, 'share-links.json'));
+		shareLinks.setDefinitionProvider(definitions);
+
+		const definition: DefinitionRecord = {
+			guid: definitionId,
+			projectId,
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			displayName: 'Def',
+			status: 'published',
+			runCount: 0,
+			liveVersionId: null,
+			draftVersionId: null,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		};
+		await definitions.create(ownerCtx, definition);
+
+		const link: ShareLink = {
+			id: linkId,
+			definitionId,
+			channel: 'live',
+			tokenHash,
+			createdBy: ownerId,
+			createdAt: now,
+			expiresAt: null,
+			revokedAt: null,
+			allowSolve: true,
+			maxSolves: null,
+			solveCount: 0
+		};
+		await shareLinks.create(SYSTEM_CONTEXT, link);
+
+		// Sanity: token resolves while parent is live.
+		expect(await shareLinks.getByTokenHash(SYSTEM_CONTEXT, tokenHash)).not.toBeNull();
+
+		// Soft-delete the parent definition.
+		await definitions.delete(ownerCtx, definitionId);
+
+		// Cascade contract: token resolution must now fail closed.
+		expect(await shareLinks.getByTokenHash(SYSTEM_CONTEXT, tokenHash)).toBeNull();
 	});
 });

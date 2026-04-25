@@ -50,6 +50,11 @@ async function buildContext(
 		if (firstOrg) actingOrgId = firstOrg.id;
 	}
 
+	// Composition seam — `platformPermissions` come from the auth provider today
+	// (baked into `AuthUser`). Future Eterna refactor will source them from a
+	// data-layer permission store instead so external IdPs don't need to own
+	// Selva-specific authorization. When that lands, this is the one line that
+	// changes here; writes funnel through `lib/server/permissions.server.ts`.
 	return {
 		userId: user.id,
 		actingOrgId,

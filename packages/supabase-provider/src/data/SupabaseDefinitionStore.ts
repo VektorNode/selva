@@ -10,7 +10,12 @@ import type {
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { ProviderError } from '@selva/platform';
+import {
+	ProviderError,
+	auditSoftDelete,
+	hasPermission,
+	canEditDefinition as ruleCanEditDefinition
+} from '@selva/platform';
 import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
 
@@ -127,6 +132,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	): Promise<void> {
 		const row = patchToRow(patch);
 		if (Object.keys(row).length === 0) return;
+		if (ctx.userId) row.updated_by = ctx.userId;
 
 		const { data, error } = await this.clients
 			.forRequest(ctx)
@@ -140,12 +146,19 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	}
 
 	async delete(ctx: RequestContext, guid: string): Promise<void> {
-		// Soft-delete (matches the local provider and spec §8). A retention
-		// sweep run as service-role hard-deletes later.
+		// Soft-delete (matches the local provider and spec §9). A retention
+		// sweep running as service-role hard-deletes later, which cascades
+		// versions + share_links via FK.
+		const stamp = auditSoftDelete(ctx, ctx.userId);
+		const row: Record<string, unknown> = {
+			deleted_at: stamp.deletedAt,
+			updated_at: stamp.updatedAt
+		};
+		if (stamp.updatedBy) row.updated_by = stamp.updatedBy;
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('definitions')
-			.update({ deleted_at: new Date().toISOString() })
+			.update(row)
 			.eq('guid', guid)
 			.is('deleted_at', null);
 		if (error) throw mapError(error);
@@ -262,9 +275,11 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			throw new ProviderError(`Version '${versionId}' not found for this definition`, 404);
 		}
 
+		const row: Record<string, unknown> = { [column]: versionId };
+		if (ctx.userId) row.updated_by = ctx.userId;
 		const { data, error } = await client
 			.from('definitions')
-			.update({ [column]: versionId })
+			.update(row)
 			.eq('guid', definitionId)
 			.is('deleted_at', null)
 			.select('guid');
@@ -283,41 +298,74 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		projectId: string,
 		definitionGuid: string
 	): Promise<boolean> {
-		if (ctx.platformPermissions.includes('instance_admin')) return true;
+		if (hasPermission(ctx, 'instance_admin')) return true;
+		const client = this.clients.forRequest(ctx);
 
-		const { data: project } = await this.clients
-			.forRequest(ctx)
-			.from('projects')
-			.select('auto_join_on_upload')
-			.eq('id', projectId)
-			.is('deleted_at', null)
-			.maybeSingle();
-		if (!project) return false;
+		const [{ data: projectRow }, { data: definitionRow }, { data: memberRow }] =
+			await Promise.all([
+				client
+					.from('projects')
+					.select('id, auto_join_on_upload, visibility, owner_id, org_id')
+					.eq('id', projectId)
+					.is('deleted_at', null)
+					.maybeSingle(),
+				client
+					.from('definitions')
+					.select('guid, owner_id, project_id')
+					.eq('guid', definitionGuid)
+					.is('deleted_at', null)
+					.maybeSingle(),
+				client
+					.from('project_members')
+					.select('role')
+					.eq('project_id', projectId)
+					.eq('user_id', ctx.userId)
+					.is('deleted_at', null)
+					.maybeSingle()
+			]);
 
-		const { data: definition } = await this.clients
-			.forRequest(ctx)
-			.from('definitions')
-			.select('owner_id')
-			.eq('guid', definitionGuid)
-			.is('deleted_at', null)
-			.maybeSingle();
-		if (!definition) return false;
-
-		const { data: member } = await this.clients
-			.forRequest(ctx)
-			.from('project_members')
-			.select('role')
-			.eq('project_id', projectId)
-			.eq('user_id', ctx.userId)
-			.is('deleted_at', null)
-			.maybeSingle();
-
-		const role = member?.role;
-		if (role === 'owner' || role === 'editor') return true;
-
-		if (project.auto_join_on_upload && ctx.userId === definition.owner_id) return true;
-
-		return false;
+		// Build minimal Project / Definition / Member shapes the pure rule needs.
+		// `canEditDefinition` consults: project.autoJoinOnUpload, definition.ownerId,
+		// member.role. Other fields aren't read; we leave them as best-effort
+		// defaults rather than re-fetching the full rows.
+		return ruleCanEditDefinition({
+			platformPermissions: ctx.platformPermissions,
+			project: projectRow
+				? {
+						id: projectRow.id,
+						orgId: projectRow.org_id,
+						name: '',
+						slug: '',
+						visibility: projectRow.visibility,
+						ownerId: projectRow.owner_id,
+						createdBy: projectRow.owner_id,
+						updatedBy: projectRow.owner_id,
+						autoJoinOnUpload: projectRow.auto_join_on_upload ?? false,
+						createdAt: '',
+						updatedAt: '',
+						deletedAt: null
+					}
+				: null,
+			definition: definitionRow
+				? ({
+						guid: definitionRow.guid,
+						ownerId: definitionRow.owner_id,
+						projectId: definitionRow.project_id
+					} as DefinitionRecord)
+				: null,
+			member: memberRow
+				? {
+						projectId,
+						userId: ctx.userId,
+						role: memberRow.role,
+						joinedAt: '',
+						updatedAt: '',
+						updatedBy: ctx.userId,
+						deletedAt: null
+					}
+				: null,
+			userId: ctx.userId
+		});
 	}
 }
 

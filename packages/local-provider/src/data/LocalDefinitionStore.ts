@@ -10,7 +10,13 @@ import type {
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { ProviderError, hasPermission } from '@selva/platform';
+import {
+	ProviderError,
+	hasPermission,
+	auditUpdate,
+	auditSoftDelete,
+	canEditDefinition as ruleCanEditDefinition
+} from '@selva/platform';
 import { paginate, applyOrder } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 
@@ -171,8 +177,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			}),
 			...(patch.status !== undefined && { status: patch.status }),
 			...(patch.ownerId !== undefined && { ownerId: patch.ownerId }),
-			updatedAt: new Date().toISOString(),
-			updatedBy: ctx.userId || existing.updatedBy
+			...auditUpdate(ctx, existing.updatedBy ?? existing.ownerId)
 		};
 		await this.writeConfig(config);
 	}
@@ -181,10 +186,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		const config = await this.readConfig();
 		const existing = config.definitions[guid];
 		if (!this.live(existing)) return;
-		const now = new Date().toISOString();
-		existing.deletedAt = now;
-		existing.updatedAt = now;
-		existing.updatedBy = ctx.userId || existing.updatedBy;
+		Object.assign(existing, auditSoftDelete(ctx, existing.updatedBy ?? existing.ownerId));
 		await this.writeConfig(config);
 	}
 
@@ -295,8 +297,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		}
 		if (channel === 'live') record.liveVersionId = versionId;
 		else record.draftVersionId = versionId;
-		record.updatedAt = new Date().toISOString();
-		record.updatedBy = ctx.userId || record.updatedBy;
+		Object.assign(record, auditUpdate(ctx, record.updatedBy ?? record.ownerId));
 		await this.writeConfig(config);
 	}
 
@@ -308,18 +309,18 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		if (!this.projectProvider) return false;
 		if (hasPermission(ctx, 'instance_admin')) return true;
 
-		const project = await this.projectProvider.getProject(ctx, projectId);
-		if (!project) return false;
+		const [project, definition, member] = await Promise.all([
+			this.projectProvider.getProject(ctx, projectId),
+			this.get(ctx, definitionGuid),
+			this.projectProvider.getProjectMember(ctx, projectId, ctx.userId)
+		]);
 
-		const definition = await this.get(ctx, definitionGuid);
-		if (!definition) return false;
-
-		const member = await this.projectProvider.getProjectMember(ctx, projectId, ctx.userId);
-		const role = member?.role;
-
-		if (role === 'owner' || role === 'editor') return true;
-		if (project.autoJoinOnUpload && ctx.userId === definition.ownerId) return true;
-
-		return false;
+		return ruleCanEditDefinition({
+			platformPermissions: ctx.platformPermissions,
+			project,
+			definition,
+			member,
+			userId: ctx.userId
+		});
 	}
 }

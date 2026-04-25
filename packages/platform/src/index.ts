@@ -137,6 +137,10 @@ export { defineConfig, isFlagEnabled } from './config.js';
 // Errors
 export { ProviderError } from './errors.js';
 
+// Audit-field stamping helpers (Permissions.md §9)
+export type { AuditUpdate, AuditSoftDelete } from './utils/index.js';
+export { auditUpdate, auditSoftDelete } from './utils/index.js';
+
 // Access control (UI-gating rules — mutating stores re-enforce independently)
 export type {
 	ProjectAccessInput,
