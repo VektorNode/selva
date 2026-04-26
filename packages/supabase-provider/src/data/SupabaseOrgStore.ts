@@ -245,6 +245,39 @@ export class SupabaseOrgStore implements IOrgStore {
 		return data ? rowToOrgMember(data) : null;
 	}
 
+	async findUserMembership(
+		ctx: RequestContext,
+		userId: string
+	): Promise<{ org: Organization; member: OrgMember } | null> {
+		// One round-trip: join org_members → orgs and filter live rows on
+		// both sides. PostgREST `!inner` on the join keeps it a single SELECT,
+		// avoiding the listOrgs + getOrgMember-per-org N+1 the bootstrap path
+		// used to do. RLS still scopes by ctx; service-role sees all.
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('org_members')
+			.select('*, org:orgs!inner(*)')
+			.eq('user_id', userId)
+			.is('deleted_at', null)
+			.is('org.deleted_at', null)
+			.order('joined_at', { ascending: true })
+			.limit(1)
+			.maybeSingle();
+		if (error) throw mapError(error);
+		if (!data) return null;
+
+		// PostgREST embeds the related row as `org` per the alias above. Strip
+		// it off the member row before mapping so OrgMember stays clean.
+		const row = data as OrgMemberRow & { org: OrgRow | OrgRow[] };
+		const orgRow = Array.isArray(row.org) ? row.org[0] : row.org;
+		if (!orgRow) return null;
+		const { org: _omit, ...memberRow } = row;
+		return {
+			org: rowToOrg(orgRow),
+			member: rowToOrgMember(memberRow as OrgMemberRow)
+		};
+	}
+
 	async addOrgMember(ctx: RequestContext, member: OrgMember): Promise<void> {
 		// Upsert so a prior soft-deleted row is reactivated rather than throwing
 		// a duplicate-key error. Mirrors LocalOrgStore.addOrgMember.

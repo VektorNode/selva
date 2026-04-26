@@ -216,6 +216,23 @@ export class LocalOrgStore implements IOrgStore {
 		return m && isLive(m) ? m : null;
 	}
 
+	async findUserMembership(
+		_ctx: RequestContext,
+		userId: string
+	): Promise<{ org: Organization; member: OrgMember } | null> {
+		// Single pass over org_members for this user (filesystem JSON, so the
+		// file IS the index). Pick the first live membership; ordering follows
+		// insertion order in the JSON file, stable across reads.
+		const store = await this.loader.get();
+		const member = store.orgMembers.find((m) => m.userId === userId && isLive(m));
+		if (!member) return null;
+		const org = store.orgs.find((o) => o.id === member.orgId);
+		// A membership pointing at a soft-deleted org is treated as gone — same
+		// invariant the SQL adapter gets via FK + RLS on `orgs.deleted_at`.
+		if (!org || !isLive(org)) return null;
+		return { org, member };
+	}
+
 	async addOrgMember(ctx: RequestContext, member: OrgMember): Promise<void> {
 		const store = await this.loader.get();
 		// Reactivate a prior soft-deleted row rather than piling rows up.

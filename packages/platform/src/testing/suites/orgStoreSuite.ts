@@ -16,6 +16,7 @@ import type {
 	ComputeServerConfig
 } from '../../index.js';
 import { DEFAULT_ORG_PERMISSIONS } from '../../organizations/schemas.js';
+import { SYSTEM_CONTEXT } from '../../context.js';
 import { makeCtx, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
 
 export interface OrgStoreConformanceOptions {
@@ -220,6 +221,52 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 			expect(got).toBeNull();
 		});
 
+		it('findUserMembership returns one (org, member) for a member', async () => {
+			const store = await createStore();
+			const { u1, orgId } = await setupOrg(store);
+			const u2 = await seed();
+			await store.addOrgMember(ctx(u1), member(orgId, u2));
+
+			// Looked up via SYSTEM_CONTEXT — the bootstrap path is the primary
+			// caller and runs before a per-user ctx exists.
+			const found = await store.findUserMembership(SYSTEM_CONTEXT, u2);
+			expect(found).not.toBeNull();
+			expect(found!.org.id).toBe(orgId);
+			expect(found!.member.userId).toBe(u2);
+			expect(found!.member.role).toBe('member');
+		});
+
+		it('findUserMembership returns null for a user with no memberships', async () => {
+			const store = await createStore();
+			await setupOrg(store); // ensure at least one org exists
+			const stranger = await seed();
+
+			const found = await store.findUserMembership(SYSTEM_CONTEXT, stranger);
+			expect(found).toBeNull();
+		});
+
+		it('findUserMembership skips soft-deleted memberships', async () => {
+			const store = await createStore();
+			const { u1, orgId } = await setupOrg(store);
+			const u2 = await seed();
+			await store.addOrgMember(ctx(u1), member(orgId, u2));
+			await store.removeOrgMember(ctx(u1), orgId, u2);
+
+			const found = await store.findUserMembership(SYSTEM_CONTEXT, u2);
+			expect(found).toBeNull();
+		});
+
+		it('findUserMembership skips memberships in soft-deleted orgs', async () => {
+			const store = await createStore();
+			const { u1, orgId } = await setupOrg(store);
+			// u1 is a member of `orgId` — kill the org and verify the lookup
+			// returns null (membership in a dead org should not surface).
+			await store.deleteOrg(ctx(u1), orgId);
+
+			const found = await store.findUserMembership(SYSTEM_CONTEXT, u1);
+			expect(found).toBeNull();
+		});
+
 		it('listOrgMembers returns members with pagination', async () => {
 			const store = await createStore();
 			const { u1, orgId } = await setupOrg(store);
@@ -294,7 +341,7 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 					// Pending invite + org compute override.
 					const invite: Invite = {
 						id: makeUuid(),
-						token: `tok-${makeUuid()}`,
+						tokenHash: `hash-${makeUuid()}`,
 						email: 'pending@example.com',
 						orgId,
 						orgRole: 'member',
@@ -319,7 +366,7 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 
 					await store.deleteOrg(ctx(u1), orgId);
 
-					expect(await invites.getByToken(ctx(u1), invite.token)).toBeNull();
+					expect(await invites.getByTokenHash(ctx(u1), invite.tokenHash)).toBeNull();
 					const remainingConfig = await computeServer.getConfig(orgCtx);
 					expect(remainingConfig.servers).toEqual([]);
 					expect(remainingConfig.defaultServerId).toBeUndefined();

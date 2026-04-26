@@ -627,9 +627,14 @@ with check (
 -- The standard `deleteOrg` path is a soft-delete (UPDATE deleted_at), so the
 -- SupabaseOrgStore.deleteOrg cascade explicitly DELETEs invites for the org;
 -- see SupabaseOrgStore.ts. Same pattern for compute_servers below.
+-- Invite tokens are HMAC-hashed at the route layer (compute-app's
+-- `lib/server/invites/token.server.ts`) before reaching the store — the raw
+-- token is shown to the admin once and never persisted. A DB-only leak
+-- therefore can't be replayed without the instance's INVITE_TOKEN_SECRET.
+-- Mirrors the share-link design (`share_links.token_hash`).
 create table if not exists public.invites (
 	id uuid primary key,
-	token text not null unique,
+	token_hash text not null unique,
 	email text not null,
 	org_id uuid not null references public.orgs(id) on delete cascade,
 	org_role text not null check (org_role in ('owner', 'admin', 'member')),
@@ -666,20 +671,22 @@ on public.invites for delete
 to authenticated
 using (public.has_org_permission(org_id, 'manage_org_members'));
 
--- Token-gated read via SECURITY DEFINER so the token itself is the capability.
--- Returns SETOF so a missing match becomes an empty array (not a composite of nulls).
-create or replace function public.get_invite_by_token(t text)
+-- Hash-gated read via SECURITY DEFINER so the token itself is the capability.
+-- Caller hashes the raw URL token at the route layer and passes the digest;
+-- the function just looks up the row. Returns SETOF so a missing match
+-- becomes an empty array (not a composite of nulls).
+create or replace function public.get_invite_by_token_hash(h text)
 returns setof public.invites
 language sql stable security definer set search_path = public
 as $$
 	select *
 	from public.invites
-	where token = t
+	where token_hash = h
 	and accepted_at is null
 	and expires_at > now()
 	limit 1;
 $$;
-grant execute on function public.get_invite_by_token(text) to anon, authenticated, service_role;
+grant execute on function public.get_invite_by_token_hash(text) to anon, authenticated, service_role;
 
 
 -- ============================================================================

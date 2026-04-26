@@ -39,9 +39,10 @@ function migrateInvite(i: Invite & { permissions?: string[] }): Invite {
 
 /**
  * Filesystem-backed invite store. No per-call scoping by ctx.userId — the
- * route layer gates admin actions. `getByToken` is the sole unauthenticated
- * read and is scoped by the secret token itself; it hides expired and
- * already-accepted invites so a reused link surfaces a clean error.
+ * route layer gates admin actions. `getByTokenHash` is the sole unauthenticated
+ * read and is scoped by the hashed token (caller hashes the raw URL token
+ * before lookup); it hides expired and already-accepted invites so a reused
+ * link surfaces a clean error.
  */
 export class LocalInviteStore implements IInviteStore {
 	private readonly filePath: string;
@@ -82,9 +83,9 @@ export class LocalInviteStore implements IInviteStore {
 		});
 	}
 
-	async getByToken(_ctx: RequestContext, token: string): Promise<Invite | null> {
+	async getByTokenHash(_ctx: RequestContext, tokenHash: string): Promise<Invite | null> {
 		const { invites } = await this.load();
-		const invite = invites.find((i) => i.token === token);
+		const invite = invites.find((i) => i.tokenHash === tokenHash);
 		if (!invite) return null;
 		if (invite.acceptedAt) return null;
 		if (Date.parse(invite.expiresAt) <= Date.now()) return null;

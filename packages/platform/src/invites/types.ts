@@ -1,17 +1,26 @@
 import type { OrgRole, OrgPermission } from '../organizations/schemas.js';
 
 /**
- * "The holder of `token` may join `orgId` at `orgRole` with these org
- * permissions." Accepting creates the user (if needed), the org membership,
- * and marks the invite consumed.
+ * "The holder of the raw token whose hash is `tokenHash` may join `orgId` at
+ * `orgRole` with these org permissions." Accepting creates the user (if
+ * needed), the org membership, and marks the invite consumed.
  *
- * The `token` is the shared secret embedded in the accept URL — knowing it
- * is the auth, so `getByToken` is callable without a session.
+ * The raw token is shown to the admin once at mint time and embedded in the
+ * accept URL; the store sees only `HMAC-SHA256(secret, rawToken)`. A DB-only
+ * leak therefore can't be replayed — the attacker would need the instance
+ * secret too. Mirrors the share-link design (`ShareLink.tokenHash`).
+ *
+ * `getByTokenHash` is callable without a session — knowing a valid token
+ * (and therefore being able to hash it) is the auth.
  */
 export interface Invite {
 	id: string;
-	/** URL-safe random string. Shown only in the accept link. */
-	token: string;
+	/**
+	 * `HMAC-SHA256(INVITE_TOKEN_SECRET, rawToken)` — base64url. The raw token
+	 * never crosses the store boundary; the route layer hashes inbound tokens
+	 * before lookup.
+	 */
+	tokenHash: string;
 	/** Lowercase email the invite was issued for. */
 	email: string;
 	orgId: string;

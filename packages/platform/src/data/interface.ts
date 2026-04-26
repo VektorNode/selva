@@ -47,6 +47,23 @@ export interface IOrgStore {
 	// Org members
 	listOrgMembers(ctx: RequestContext, orgId: string, opts?: ListOptions): Promise<Page<OrgMember>>;
 	getOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<OrgMember | null>;
+	/**
+	 * Find ONE org membership for the user. Used by the request-bootstrap
+	 * path to resolve `actingOrgId` without N+1-ing over `listOrgs`.
+	 *
+	 * Returns `null` when the user has no live membership. When the user has
+	 * multiple memberships (multi-tenant deployments), the choice between
+	 * them is adapter-defined — single-tenant deployments have exactly one,
+	 * and multi-tenant deployments will eventually use a URL prefix
+	 * (`/o/{slug}/...`) to pick explicitly. Soft-deleted memberships are
+	 * excluded.
+	 *
+	 * Both `org` and `member` are scoped by `ctx` (RLS-aware on Supabase).
+	 */
+	findUserMembership(
+		ctx: RequestContext,
+		userId: string
+	): Promise<{ org: Organization; member: OrgMember } | null>;
 	addOrgMember(ctx: RequestContext, member: OrgMember): Promise<void>;
 	updateOrgMemberRole(
 		ctx: RequestContext,

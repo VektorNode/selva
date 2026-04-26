@@ -518,19 +518,17 @@ export async function actAs(
 	};
 
 	const platformPermissions = await tp.config.permissions.getFor(SYSTEM_CONTEXT, user.id);
-	const orgsPage = await tp.config.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 50 });
-	let actingOrgId: string | undefined;
-	let orgPermissions: OrgPermission[] = [];
-	for (const org of orgsPage.items) {
-		const member = await tp.config.data.orgs.getOrgMember(SYSTEM_CONTEXT, org.id, user.id);
-		if (member) {
-			actingOrgId = org.id;
-			orgPermissions = member.permissions;
-			break;
-		}
-	}
+	// Mirror the production bootstrap path (hooks.server.ts) — single
+	// `findUserMembership` lookup, with the instance-admin fallback to the
+	// first listed org for admins not in any org. Keeping this aligned with
+	// production behavior is the whole point of testing routes through real
+	// stores instead of mocks.
+	const membership = await tp.config.data.orgs.findUserMembership(SYSTEM_CONTEXT, user.id);
+	let actingOrgId: string | undefined = membership?.org.id;
+	let orgPermissions: OrgPermission[] = membership ? [...membership.member.permissions] : [];
 	if (!actingOrgId && platformPermissions.includes('instance_admin')) {
-		actingOrgId = orgsPage.items[0]?.id;
+		const firstOrgPage = await tp.config.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
+		actingOrgId = firstOrgPage.items[0]?.id;
 	}
 
 	const ctx: RequestContext = {

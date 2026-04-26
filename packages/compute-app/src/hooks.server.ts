@@ -64,22 +64,22 @@ async function buildContext(
 	// own ctx isn't built yet).
 	const platformPermissions = await providers.permissions.getFor(SYSTEM_CONTEXT, user.id);
 
-	// Look up the user's org membership to resolve `actingOrgId`.
-	const orgsPage = await providers.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 50 });
-
-	for (const org of orgsPage.items) {
-		const member = await providers.data.orgs.getOrgMember(SYSTEM_CONTEXT, org.id, user.id);
-		if (member) {
-			actingOrgId = org.id;
-			orgPermissions = member.permissions;
-			break;
-		}
+	// Single round-trip via `findUserMembership` (one indexed lookup against
+	// `org_members`). Replaces the prior `listOrgs(50) + getOrgMember-per-org`
+	// loop, which N+1'd on every authed request and silently truncated past
+	// 50 orgs.
+	const membership = await providers.data.orgs.findUserMembership(SYSTEM_CONTEXT, user.id);
+	if (membership) {
+		actingOrgId = membership.org.id;
+		orgPermissions = membership.member.permissions;
 	}
 
 	if (!actingOrgId && platformPermissions.includes('instance_admin')) {
 		// Instance admins without an explicit membership row fall back to the
 		// first org so admin tooling stays usable before a switcher exists.
-		const firstOrg = orgsPage.items[0];
+		// Tracked as M16 in the audit — to be revisited when the switcher lands.
+		const firstOrgPage = await providers.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
+		const firstOrg = firstOrgPage.items[0];
 		if (firstOrg) actingOrgId = firstOrg.id;
 	}
 
