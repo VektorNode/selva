@@ -278,6 +278,47 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		await this.repointChannel(ctx, definitionId, versionId, 'draft_version_id');
 	}
 
+	async attachInitialVersion(
+		ctx: RequestContext,
+		definitionId: string,
+		versionId: string
+	): Promise<void> {
+		const client = this.clients.forRequest(ctx);
+		// Validate the version belongs to this definition before repointing —
+		// matches `repointChannel` so the bootstrap surface enforces the same
+		// invariant.
+		const { data: version, error: vError } = await client
+			.from('definition_versions')
+			.select('id, definition_guid')
+			.eq('id', versionId)
+			.maybeSingle();
+		if (vError) throw mapError(vError);
+		if (!version || version.definition_guid !== definitionId) {
+			throw new ProviderError(`Version '${versionId}' not found for this definition`, 404);
+		}
+
+		// Single UPDATE — both channel pointers and status flip in one row
+		// write, so a mid-flight failure can't leave a half-promoted record.
+		const row: Record<string, unknown> = {
+			live_version_id: versionId,
+			draft_version_id: versionId,
+			status: 'draft'
+		};
+		if (ctx.userId) row.updated_by = ctx.userId;
+
+		const { data, error } = await client
+			.from('definitions')
+			.update(row)
+			.eq('guid', definitionId)
+			.is('deleted_at', null)
+			.select('guid');
+		if (error) throw mapError(error);
+		if (!data || data.length === 0) {
+			throw new ProviderError(`Definition '${definitionId}' not found`, 404);
+		}
+		// No `definition.published` event — see interface doc.
+	}
+
 	private async repointChannel(
 		ctx: RequestContext,
 		definitionId: string,

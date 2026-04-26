@@ -313,6 +313,49 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(got?.draftVersionId).toBe(v2.id);
 		});
 
+		it('attachInitialVersion: bootstraps both pointers + status atomically', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			// Mirrors what DefinitionService.create writes: status='pending',
+			// no pointers — the state attachInitialVersion is meant to advance.
+			await store.create(ctx(scope.ownerId), record(scope, { guid, status: 'pending' }));
+			const v1 = version(guid, 1, scope.ownerId);
+			await store.createVersion(ctx(scope.ownerId), v1);
+
+			await store.attachInitialVersion(ctx(scope.ownerId), guid, v1.id);
+
+			const got = await store.get(ctx(scope.ownerId), guid);
+			expect(got?.status).toBe('draft');
+			expect(got?.liveVersionId).toBe(v1.id);
+			expect(got?.draftVersionId).toBe(v1.id);
+		});
+
+		it('attachInitialVersion: rejects a version belonging to another definition', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guidA = makeUuid();
+			const guidB = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid: guidA, status: 'pending' }));
+			await store.create(ctx(scope.ownerId), record(scope, { guid: guidB, status: 'pending' }));
+			const vForB = version(guidB, 1, scope.ownerId);
+			await store.createVersion(ctx(scope.ownerId), vForB);
+
+			let thrown: unknown;
+			try {
+				await store.attachInitialVersion(ctx(scope.ownerId), guidA, vForB.id);
+			} catch (err) {
+				thrown = err;
+			}
+			expect((thrown as { statusCode?: number })?.statusCode).toBe(404);
+
+			// And A's state must still be the bootstrap-pending shape.
+			const got = await store.get(ctx(scope.ownerId), guidA);
+			expect(got?.status).toBe('pending');
+			expect(got?.liveVersionId).toBeNull();
+			expect(got?.draftVersionId).toBeNull();
+		});
+
 		it('setLiveVersion rejects a version belonging to another definition', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();

@@ -162,6 +162,26 @@ export interface IDefinitionStore {
 	/** Atomically point `liveVersionId` at a target version of this definition. */
 	setLiveVersion(ctx: RequestContext, definitionId: string, versionId: string): Promise<void>;
 	setDraftVersion(ctx: RequestContext, definitionId: string, versionId: string): Promise<void>;
+
+	/**
+	 * Atomic `'pending'` → `'draft'` bootstrap. Sets BOTH `liveVersionId` and
+	 * `draftVersionId` to `versionId` and flips `status` to `'draft'` in a
+	 * single update — used by the create flow so a mid-flight failure can't
+	 * leave the record half-promoted (status='draft' with a null channel
+	 * pointer, or status='pending' with channels set).
+	 *
+	 * Validates that `versionId` belongs to `definitionId` (404 if not).
+	 *
+	 * Does NOT emit `definition.published`. The bootstrap is covered by the
+	 * parent's `definition.created` + `definition_version.created` pair;
+	 * `definition.published` is reserved for explicit publish ops via
+	 * `setLiveVersion`.
+	 */
+	attachInitialVersion(
+		ctx: RequestContext,
+		definitionId: string,
+		versionId: string
+	): Promise<void>;
 }
 
 /**

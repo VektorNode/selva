@@ -49,9 +49,12 @@ const PENDING_GC_AGE_MS = 30 * 60 * 1000; // 30 minutes
  *     1. Write record with status='pending', both pointers null
  *     2. Upload v1 blob to versions/v1.{ext}
  *     3. Insert DefinitionVersion row v1
- *     4. Set live + draft pointers to v1, flip status to 'draft'
- *   If step 2 fails the record stays 'pending' with no blob; the janitor
- *   sweeps stale pendings.
+ *     4. `attachInitialVersion` — atomically set live + draft pointers and
+ *        flip status to 'draft' in a single store operation.
+ *   Step 4 is one round-trip so a mid-flight failure can't leave a partial
+ *   state (status='draft' with null pointers, or status='pending' with
+ *   pointers set). If step 2 fails the record stays 'pending' with no
+ *   blob; the janitor sweeps stale pendings.
  *
  *   uploadVersion — append-only:
  *     1. Resolve next versionNumber from the version list
@@ -119,10 +122,11 @@ export class DefinitionService {
 		};
 		await this.data.definitions.createVersion(ctx, version);
 
-		// 4. Point both channels at v1, flip out of pending.
-		await this.data.definitions.setLiveVersion(ctx, input.guid, versionId);
-		await this.data.definitions.setDraftVersion(ctx, input.guid, versionId);
-		await this.data.definitions.update(ctx, input.guid, { status: 'draft' });
+		// 4. Atomically point both channels at v1 and flip status='draft' in a
+		//    single store operation. Replaces three separate writes
+		//    (setLiveVersion + setDraftVersion + update) — see the class
+		//    header for why ordering matters here.
+		await this.data.definitions.attachInitialVersion(ctx, input.guid, versionId);
 
 		return {
 			record: { ...record, status: 'draft', liveVersionId: versionId, draftVersionId: versionId },
@@ -221,12 +225,18 @@ export class DefinitionService {
 	}
 
 	async delete(ctx: RequestContext, guid: string): Promise<void> {
-		// Soft-delete metadata; wipe all blobs (versions + cover) under the
-		// guid prefix. Known gap: if blob deletion succeeds and record deletion
-		// fails, the record is orphaned. Acceptable for the local provider —
-		// transactional adapters should bundle these.
-		await this.storage.deletePrefix(definitionPaths.prefix(guid));
+		// CONTRACT (spec §9): metadata is soft-deleted (preserved for audit,
+		// restorable by clearing `deleted_at`); blobs are HARD-deleted. The
+		// record is the audit trail; the blobs are storage cost.
+		//
+		// Order matters. Metadata first so the API immediately hides the
+		// record (RLS / `deleted_at IS NULL` filter). If the blob wipe then
+		// fails, the orphan storage is unreachable through the API — a
+		// retention sweep can clean it up later. The reverse order leaves a
+		// window where the record is still alive but its blobs are gone — a
+		// 404 source for any in-flight reader.
 		await this.data.definitions.delete(ctx, guid);
+		await this.storage.deletePrefix(definitionPaths.prefix(guid));
 	}
 
 	/**

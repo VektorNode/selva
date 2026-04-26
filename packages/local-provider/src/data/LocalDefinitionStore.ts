@@ -316,6 +316,31 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		await this.repoint('draft', ctx, definitionId, versionId);
 	}
 
+	async attachInitialVersion(
+		ctx: RequestContext,
+		definitionId: string,
+		versionId: string
+	): Promise<void> {
+		// Single read-modify-write pass: both pointers + status updated together.
+		// `writeConfig` is one fs operation, so the 'pending' → 'draft'
+		// transition is atomic from any subsequent reader's perspective.
+		const config = await this.readConfig();
+		const record = config.definitions[definitionId];
+		if (!this.live(record)) throw new ProviderError(`Definition '${definitionId}' not found`, 404);
+		const version = config.definitionVersions[versionId];
+		if (!version || version.definitionId !== definitionId) {
+			throw new ProviderError(`Version '${versionId}' not found for this definition`, 404);
+		}
+		record.liveVersionId = versionId;
+		record.draftVersionId = versionId;
+		record.status = 'draft';
+		Object.assign(record, auditUpdate(ctx, record.updatedBy ?? record.ownerId));
+		await this.writeConfig(config);
+		// No `definition.published` event — see interface doc. The parent's
+		// `definition.created` + `definition_version.created` (emitted earlier
+		// in this transaction) cover the bootstrap.
+	}
+
 	private async repoint(
 		channel: 'live' | 'draft',
 		ctx: RequestContext,
