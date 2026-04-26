@@ -12,6 +12,7 @@ import {
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
 import { requireCanSolve } from '$lib/server/access.server';
 import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
+import { MAX_SOLVE_DURATION_MS } from '$lib/server/computeLimits';
 
 /**
  * Fetch UI schema from Rhino Compute's /grasshopper/schema endpoint (no solve required).
@@ -177,7 +178,10 @@ export const load = (async ({ params, locals, request, url }) => {
 			serverLabel: server.label,
 			// Forward to the client so /api/compute/solve calls can include it.
 			// Null when the request was user-authenticated (session cookie carries auth).
-			shareToken
+			shareToken,
+			// Same deadline the server enforces on /api/compute, so the client's
+			// AbortController matches the server's Promise.race.
+			solveTimeoutMs: MAX_SOLVE_DURATION_MS
 		};
 	} catch (err) {
 		const errorMessage = err instanceof Error ? err.message : String(err);

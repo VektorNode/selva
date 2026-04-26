@@ -270,7 +270,6 @@ describe('§11 — project edit gates', () => {
 			bob.id
 		);
 		const allowed = canEditProjectSettings({
-			platformPermissions: bobCtx.platformPermissions,
 			orgPermissions: bobCtx.orgPermissions,
 			project: alicesPrivate,
 			member,
@@ -412,7 +411,6 @@ describe('§11 — visibility flips', () => {
 	it('canChangeVisibilityToPublic: org admin allowed', async () => {
 		expect(
 			canChangeVisibilityToPublic({
-				platformPermissions: [],
 				orgMember: {
 					orgId: 'o1',
 					userId: 'u1',
@@ -430,7 +428,6 @@ describe('§11 — visibility flips', () => {
 	it('canChangeVisibilityToPublic: org member rejected', async () => {
 		expect(
 			canChangeVisibilityToPublic({
-				platformPermissions: [],
 				orgMember: {
 					orgId: 'o1',
 					userId: 'u1',
@@ -462,7 +459,6 @@ describe('§11 — visibility flips', () => {
 		};
 		expect(
 			canView({
-				platformPermissions: [],
 				orgPermissions: [],
 				project,
 				member: null,
@@ -500,7 +496,6 @@ describe('§11 — visibility flips', () => {
 		// Non-org user: orgMember=null, flag=false → blocked
 		expect(
 			canView({
-				platformPermissions: [],
 				orgPermissions: [],
 				project,
 				member: null,
@@ -511,7 +506,6 @@ describe('§11 — visibility flips', () => {
 		// Org member: orgMember set, flag=false → allowed (within-org public)
 		expect(
 			canView({
-				platformPermissions: [],
 				orgPermissions: [],
 				project,
 				member: null,

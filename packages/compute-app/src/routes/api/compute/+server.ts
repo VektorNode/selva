@@ -13,6 +13,13 @@ import type { ComputeServerConfig, RequestContext } from '@selva/platform';
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
 import { isSafeRemoteDefinitionUrl } from '$lib/server/compute/safe-url';
 import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
+import {
+	COMPUTE_REQUEST_MAX_BYTES,
+	DEFINITION_CACHE_TTL_MS,
+	MAX_SOLVE_DURATION_MS,
+	REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
+	REMOTE_DEFINITION_MAX_BYTES
+} from '$lib/server/computeLimits';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
 import { getStorageProvider, providers } from '$lib/server/providers.server';
 import { requireCanSolve, requireCanEditDefinition } from '$lib/server/access.server';
@@ -30,28 +37,8 @@ interface ComputeRequest {
 // Caching infrastructure
 // -----------------------------
 
-/** Cache for remote definitions (URL -> bytes) */
+/** Cache for remote definitions (URL -> bytes). TTL/caps come from computeLimits. */
 const definitionCache = new Map<string, { data: Uint8Array; fetchedAt: number }>();
-
-/** Cache TTL: 5 minutes */
-const DEFINITION_CACHE_TTL = 5 * 60 * 1000;
-
-/** Hard cap on remote definition fetches. Tracks `MAX_GH_FILE_SIZE` for uploads. */
-const REMOTE_DEFINITION_MAX_BYTES = 50 * 1024 * 1024;
-/** Per-request fetch deadline. */
-const REMOTE_DEFINITION_FETCH_TIMEOUT_MS = 30_000;
-
-/**
- * Per-route body cap. Solve requests carry inputs + values JSON — typical
- * payloads are well under a hundred KB. 5 MB is generous headroom; anything
- * larger is almost certainly abuse or misconfiguration.
- *
- * The global `BODY_SIZE_LIMIT` env is sized for `.gh` uploads (~50 MB), so
- * without this cap a malicious client could POST a 50 MB JSON body to /api/
- * compute and we'd buffer it before parsing. `requireMaxBodySize` rejects
- * the request via Content-Length BEFORE we touch the body.
- */
-const COMPUTE_REQUEST_MAX_BYTES = 5 * 1024 * 1024;
 
 /** Singleton GrasshopperClient instance */
 let cachedClient: GrasshopperClient | null = null;
@@ -104,7 +91,7 @@ async function loadRemoteDefinition(url: string): Promise<Uint8Array> {
 	const cached = definitionCache.get(url);
 
 	// Return cached if still fresh
-	if (cached && now - cached.fetchedAt < DEFINITION_CACHE_TTL) {
+	if (cached && now - cached.fetchedAt < DEFINITION_CACHE_TTL_MS) {
 		return cached.data;
 	}
 
@@ -249,7 +236,20 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			: `user:${locals.user!.id}`;
 		const rateLimit = checkComputeRateLimit(rateLimitKey);
 		if (!rateLimit.allowed) {
-			throw error(429, `Too many compute requests. Retry in ${rateLimit.retryAfter}s.`);
+			const retryAfter = rateLimit.retryAfter ?? 1;
+			return new Response(
+				JSON.stringify({
+					message: `Too many compute requests. Retry in ${retryAfter}s.`,
+					retryAfter
+				}),
+				{
+					status: 429,
+					headers: {
+						'Content-Type': 'application/json',
+						'Retry-After': String(retryAfter)
+					}
+				}
+			);
 		}
 
 		if (isLocal && guid) {
@@ -325,7 +325,35 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 
 		const serverConfig = await resolveServerForOrg(solveCtx, solveOrgId);
 		const client = await getClient(serverConfig);
-		const solvedDefinition = await client.solve(definitionSource, inputTree);
+
+		// Soft deadline: selva-compute's solve() doesn't accept an AbortSignal
+		// (yet), so we race against a timer. On overrun we return 504 — the
+		// orphan solve keeps running on the Rhino.Compute server until it
+		// finishes, but our HTTP handler stops holding the connection open.
+		// MAX_SOLVE_DURATION_MS is the single source of truth for "longest
+		// solve we'll wait for" and is also forwarded to the client.
+		const SOLVE_TIMEOUT = Symbol('solve-timeout');
+		let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+		const timeoutPromise = new Promise<typeof SOLVE_TIMEOUT>((resolve) => {
+			timeoutHandle = setTimeout(() => resolve(SOLVE_TIMEOUT), MAX_SOLVE_DURATION_MS);
+		});
+
+		let solvedDefinition;
+		try {
+			const result = await Promise.race([
+				client.solve(definitionSource, inputTree),
+				timeoutPromise
+			]);
+			if (result === SOLVE_TIMEOUT) {
+				throw error(
+					504,
+					`Solve exceeded the ${Math.round(MAX_SOLVE_DURATION_MS / 1000)}s deadline.`
+				);
+			}
+			solvedDefinition = result;
+		} finally {
+			if (timeoutHandle) clearTimeout(timeoutHandle);
+		}
 
 		return json(solvedDefinition);
 	} catch (err) {

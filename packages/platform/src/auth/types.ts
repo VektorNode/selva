@@ -23,18 +23,10 @@ export interface AuthUser {
  */
 export type UserManagementResult = 'ok' | 'not_found' | 'not_supported' | 'last_admin';
 
-export interface MfaFactor {
-	id: string;
-	type: 'totp' | 'phone';
-	friendlyName?: string;
-}
-
 /**
  * - `success` — credentials valid; includes session token the provider minted.
- * - `mfa_required` — credentials valid but MFA enrolled; caller invokes `verifyMfaChallenge`.
  * - `failed` — credentials invalid, user disabled, or rate-limited.
  */
 export type LoginResult =
 	| { kind: 'success'; user: AuthUser; sessionToken: string }
-	| { kind: 'mfa_required'; challengeToken: string; factors: MfaFactor[] }
 	| { kind: 'failed'; reason?: 'invalid_credentials' | 'disabled' | 'rate_limited' };

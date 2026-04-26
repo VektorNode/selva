@@ -16,7 +16,6 @@ import {
 	withAdminBypass,
 	type DefinitionRecord,
 	type OrgMember,
-	type PlatformPermission,
 	type Project,
 	type ProjectMember
 } from '@selva/platform';
@@ -89,15 +88,12 @@ function def(overrides: Partial<DefinitionRecord> = {}): DefinitionRecord {
 	};
 }
 
-const noPerms: readonly PlatformPermission[] = [];
-
 // ── canView ────────────────────────────────────────────────────────────────
 
 describe('canView', () => {
 	it('private: returns false without a project member', () => {
 		expect(
 			canView({
-				platformPermissions: noPerms,
 				orgPermissions: [],
 				project: project({ visibility: 'private' }),
 				member: null,
@@ -110,7 +106,6 @@ describe('canView', () => {
 	it('private: viewer role is sufficient', () => {
 		expect(
 			canView({
-				platformPermissions: noPerms,
 				orgPermissions: [],
 				project: project({ visibility: 'private' }),
 				member: member('viewer'),
@@ -124,7 +119,6 @@ describe('canView', () => {
 		const pub = project({ visibility: 'org' });
 		expect(
 			canView({
-				platformPermissions: noPerms,
 				orgPermissions: [],
 				project: pub,
 				member: null,
@@ -134,7 +128,6 @@ describe('canView', () => {
 		).toBe(true);
 		expect(
 			canView({
-				platformPermissions: noPerms,
 				orgPermissions: [],
 				project: pub,
 				member: null,
@@ -147,7 +140,6 @@ describe('canView', () => {
 	it('public + cross-org flag on: any authenticated user passes', () => {
 		expect(
 			canView({
-				platformPermissions: noPerms,
 				orgPermissions: [],
 				project: project({ visibility: 'public' }),
 				member: null,
@@ -161,7 +153,6 @@ describe('canView', () => {
 		const pub = project({ visibility: 'public' });
 		expect(
 			canView({
-				platformPermissions: noPerms,
 				orgPermissions: [],
 				project: pub,
 				member: null,
@@ -171,7 +162,6 @@ describe('canView', () => {
 		).toBe(true);
 		expect(
 			canView({
-				platformPermissions: noPerms,
 				orgPermissions: [],
 				project: pub,
 				member: null,
@@ -184,7 +174,6 @@ describe('canView', () => {
 	it('null project denies', () => {
 		expect(
 			canView({
-				platformPermissions: noPerms,
 				orgPermissions: [],
 				project: null,
 				member: null,
@@ -201,7 +190,6 @@ describe('canSolve', () => {
 	it('matches canView for every visibility', () => {
 		for (const v of ['public', 'org', 'private'] as const) {
 			const input = {
-				platformPermissions: noPerms,
 				orgPermissions: [],
 				project: project({ visibility: v }),
 				member: v === 'private' ? member('viewer') : null,
@@ -218,7 +206,6 @@ describe('canSolve', () => {
 describe('canEdit', () => {
 	it('project owner/editor yes; viewer no', () => {
 		const base = {
-			platformPermissions: noPerms,
 			orgPermissions: [],
 			project: project(),
 			orgMember: null,
@@ -233,7 +220,6 @@ describe('canEdit', () => {
 	it('manage_definitions org-perm does not grant edit', () => {
 		expect(
 			canEdit({
-				platformPermissions: noPerms,
 				orgPermissions: ['manage_definitions'],
 				project: project({ visibility: 'public' }),
 				member: null,
@@ -247,7 +233,6 @@ describe('canEdit', () => {
 describe('canEditProjectSettings', () => {
 	it('project owner yes; editor no', () => {
 		const base = {
-			platformPermissions: noPerms,
 			project: project(),
 			orgMember: null,
 			allowCrossOrgPublic: true
@@ -268,7 +253,6 @@ describe('canEditProjectSettings', () => {
 describe('canManage', () => {
 	it('only project owner passes', () => {
 		const base = {
-			platformPermissions: noPerms,
 			orgPermissions: [],
 			project: project(),
 			orgMember: null,
@@ -286,13 +270,11 @@ describe('canChangeVisibilityToPublic', () => {
 	it('org owner/admin can flip', () => {
 		expect(
 			canChangeVisibilityToPublic({
-				platformPermissions: noPerms,
 				orgMember: orgMember('owner')
 			})
 		).toBe(true);
 		expect(
 			canChangeVisibilityToPublic({
-				platformPermissions: noPerms,
 				orgMember: orgMember('admin')
 			})
 		).toBe(true);
@@ -301,7 +283,6 @@ describe('canChangeVisibilityToPublic', () => {
 	it('member cannot flip', () => {
 		expect(
 			canChangeVisibilityToPublic({
-				platformPermissions: noPerms,
 				orgMember: orgMember('member')
 			})
 		).toBe(false);
@@ -312,7 +293,6 @@ describe('canChangeVisibilityToPublic', () => {
 		// public narrows to within-org. The flag belongs in canView, not here.
 		expect(
 			canChangeVisibilityToPublic({
-				platformPermissions: noPerms,
 				orgMember: orgMember('owner')
 			})
 		).toBe(true);
@@ -326,7 +306,6 @@ describe('canEditDefinition', () => {
 		const p = project({ visibility: 'public', autoJoinOnUpload: false });
 		expect(
 			canEditDefinition({
-				platformPermissions: noPerms,
 				project: p,
 				definition: def({ ownerId: 'u-alice' }),
 				member: member('editor', 'u-editor'),
@@ -336,7 +315,6 @@ describe('canEditDefinition', () => {
 		// Uploader who isn't a project member: denied on a container project.
 		expect(
 			canEditDefinition({
-				platformPermissions: noPerms,
 				project: p,
 				definition: def({ ownerId: 'u-alice' }),
 				member: null,
@@ -349,7 +327,6 @@ describe('canEditDefinition', () => {
 		const p = project({ visibility: 'public', autoJoinOnUpload: true });
 		expect(
 			canEditDefinition({
-				platformPermissions: noPerms,
 				project: p,
 				definition: def({ ownerId: 'u-alice' }),
 				member: null,
@@ -362,7 +339,6 @@ describe('canEditDefinition', () => {
 		const p = project({ visibility: 'public', autoJoinOnUpload: true });
 		expect(
 			canEditDefinition({
-				platformPermissions: noPerms,
 				project: p,
 				definition: def({ ownerId: 'u-alice' }),
 				member: null,
@@ -375,7 +351,6 @@ describe('canEditDefinition', () => {
 		const p = project({ visibility: 'public', autoJoinOnUpload: true });
 		expect(
 			canEditDefinition({
-				platformPermissions: noPerms,
 				project: p,
 				definition: def({ ownerId: 'u-alice' }),
 				member: member('editor', 'u-mod'),

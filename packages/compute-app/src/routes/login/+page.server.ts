@@ -61,10 +61,6 @@ export const actions = {
 			case 'failed':
 				recordFailedAttempt(ip);
 				return fail(401, { error: 'Invalid credentials' });
-			case 'mfa_required':
-				// §1f: MFA challenge flow lives in a follow-up UI. For now, fail
-				// closed — we never emit this kind in the local provider today.
-				return fail(501, { error: 'MFA challenge flow is not yet implemented' });
 			case 'success': {
 				clearRateLimit(ip);
 				setSessionCookie(cookies, result.sessionToken);

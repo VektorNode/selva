@@ -45,10 +45,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	) {
 		const orgMember = await getOrganizationProvider().getOrgMember(ctx, existing.orgId, ctx.userId);
 		const passes = withAdminBypass(ctx.platformPermissions, () =>
-			canChangeVisibilityToPublic({
-				platformPermissions: ctx.platformPermissions,
-				orgMember
-			})
+			canChangeVisibilityToPublic({ orgMember })
 		);
 		if (!passes) {
 			throw error(403, 'Only org owners or admins can make a project public.');
