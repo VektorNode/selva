@@ -1,3 +1,2 @@
 export type { DomainEvent, DomainEventType, IEventSink } from './interface.js';
-export { actorFrom } from './interface.js';
-export { NoopEventSink } from './NoopEventSink.js';
+export { actorFrom, NoopEventSink } from './interface.js';

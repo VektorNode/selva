@@ -1,12 +1,9 @@
 /**
- * Thrown by provider implementations to signal an expected failure that the
- * API layer should forward to the client with a specific status. Unknown /
- * unexpected errors should propagate as plain Error and become generic 500s.
+ * Thrown by providers to signal an expected failure that the API layer
+ * should forward with a specific status. Unknown errors should propagate as
+ * plain `Error` and become 500s.
  *
- * Conventional values: 400 (bad input), 401 (unauthenticated), 403 (forbidden),
- * 404 (not found), 409 (conflict), 422 (unprocessable), 429 (rate limited),
- * 500 (broken invariant the adapter can describe). Other HTTP status numbers
- * are accepted but discouraged.
+ * Conventional values: 400, 401, 403, 404, 409, 422, 429, 500.
  */
 export class ProviderError extends Error {
 	readonly statusCode: number;
@@ -17,4 +14,3 @@ export class ProviderError extends Error {
 		this.statusCode = statusCode;
 	}
 }
-

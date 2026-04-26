@@ -11,7 +11,7 @@
  *                 packages/supabase-provider/README.md
  */
 
-import { defineConfig, type SelvaFlags, type TenancyMode } from '@selva/platform/config';
+import { defineConfig, type SelvaFlags, type TenancyMode } from '@selva/platform';
 import * as local from 'selva-local-provider';
 import * as supa from '@selva/supabase-provider';
 

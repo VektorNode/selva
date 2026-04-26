@@ -156,13 +156,13 @@ The distinction protects the Alice/Peter case: on a commons project, Peter canno
 
 ## 5. Rules
 
-The pure access-control functions live in [rules.ts](../../../../../platform/src/access/rules.ts). They take already-resolved entities as input and return booleans. Adapters do the lookup; rules do the logic.
+The pure access-control functions live in [rules.ts](../../platform/src/access/rules.ts). They take already-resolved entities as input and return booleans. Adapters do the lookup; rules do the logic.
 
 > **Single source of truth.** Every gate — adapter `can*` methods, route-layer `requireCan*` helpers — funnels through `rules.ts`. No predicate is duplicated; the route layer pre-loads the membership rows the rule needs and calls it directly. Cross-org-public visibility short-circuits the fetch so the hot path stays cheap.
 
 ### The `instance_admin` bypass lives in one place
 
-Rather than every rule starting with `if (instance_admin) return true`, the bypass is centralized in a single wrapper applied at the rule-call site (in [access.server.ts](../../lib/server/access.server.ts) or the adapter layer). The pure rules below reason about **normal users only.**
+Rather than every rule starting with `if (instance_admin) return true`, the bypass is centralized in a single wrapper applied at the rule-call site (in [access.server.ts](../src/lib/server/access.server.ts) or the adapter layer). The pure rules below reason about **normal users only.**
 
 This matters for two reasons: (1) a bug in a rule doesn't become a bug in god-mode, and (2) the wrapper is the future hook point for audit logging instance-admin access to foreign org data. Today the hook is a no-op; when audit ships, every cross-tenant admin access records automatically without touching rule bodies.
 

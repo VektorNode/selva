@@ -8,7 +8,8 @@
 
 import { describe, it, expect } from 'vitest';
 import type { IUserProfileStore } from '../../userProfile/interface.js';
-import type { AuthUser, RecentRun } from '../../auth/index.js';
+import type { AuthUser } from '../../auth/index.js';
+import type { RecentRun } from '../../userProfile/index.js';
 import { SYSTEM_CONTEXT } from '../../context.js';
 import { makeUuid } from './helpers.js';
 

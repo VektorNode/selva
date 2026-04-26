@@ -29,8 +29,8 @@ export const CreateProjectSchema = z
 
 /**
  * PATCH shape-only. The flag/visibility invariant is cross-field on the
- * *merged* shape; handlers must call `validateProjectFlags` after applying
- * the patch to the current project.
+ * *merged* shape; handlers MUST call `validateProjectFlags` after applying
+ * the patch.
  */
 export const UpdateProjectSchema = z
 	.object({

@@ -1,17 +1,10 @@
 /**
- * Domain-event sink (Permissions.md §9). Every successful mutation in a data
- * store emits one event. Today the only implementation is `NoopEventSink`;
- * future webhook dispatch, audit-log writers, and analytics consumers plug
- * in by swapping the implementation in `SelvaConfig`.
+ * Domain-event sink. Stores call `emit` AFTER a successful mutation; failed
+ * writes do not emit. `emit` MUST NOT throw — failures are the sink's
+ * problem to log and swallow.
  *
- * ## Contract
- *
- * - Stores call `emit` AFTER the write succeeds. A failed write must not emit.
- * - `emit` MUST NOT throw — failures are the sink's problem (log + swallow).
- *   The user-facing operation already succeeded.
- * - `actorId` is the user who triggered the change. For system-context
- *   mutations (bootstrap, janitor, migrations) the literal string `'system'`
- *   is used so consumers can filter or attribute appropriately.
+ * `actorId` is the user who triggered the change, or `'system'` for
+ * SYSTEM_CONTEXT mutations (bootstrap, janitor, migrations).
  */
 
 export type DomainEvent =
@@ -45,4 +38,9 @@ export interface IEventSink {
 /** Resolve the actor id from a RequestContext, falling back to `'system'`. */
 export function actorFrom(ctx: { userId: string; system?: boolean }): string {
 	return ctx.userId || 'system';
+}
+
+/** Default sink — does nothing. Swap in a real dispatcher via `SelvaConfig.events`. */
+export class NoopEventSink implements IEventSink {
+	async emit(_event: DomainEvent): Promise<void> {}
 }

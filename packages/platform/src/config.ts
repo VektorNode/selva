@@ -9,15 +9,11 @@ import type { IPlatformPermissionStore } from './permissions/interface.js';
  * - `single`: one org per deployment. Setup creates it; `ctx.actingOrgId`
  *   resolves to that org for every authenticated user.
  * - `multi`: orgs are first-class. Setup creates only a platform admin; orgs
- *   are created later by users. `ctx.actingOrgId` resolves per-request from
- *   the URL prefix or session.
+ *   are created by users. `ctx.actingOrgId` resolves per-request.
  */
 export type TenancyMode = 'single' | 'multi';
 
-/**
- * Opt-in platform features. All default false when absent — the safer posture.
- * Read via `isFlagEnabled` so missing blocks resolve correctly.
- */
+/** Opt-in platform features. All default false when absent. */
 export interface SelvaFlags {
 	/** Projects with `visibility='public'` visible across orgs on the instance. */
 	ALLOW_CROSS_ORG_PUBLIC?: boolean;
@@ -35,24 +31,14 @@ export interface SelvaConfig {
 	data: IDataProvider;
 	/** Blob storage — .gh/.ghx files, archived versions, images. */
 	storage: IStorageProvider;
-	/**
-	 * Kept separate from `auth` so OIDC providers don't have to stub out
-	 * profile state — identity from IdP, profile state from DB.
-	 */
+	/** Identity from the IdP, profile state from your DB. */
 	userProfile: IUserProfileStore;
 	/**
-	 * Per-user platform permissions (Selva-staff/instance operator grants).
-	 * Lives outside `auth` so external IdPs don't need to own Selva-specific
-	 * authorization. The §2 sole-`instance_admin` invariant is enforced by
-	 * this store; `auth.deleteUser` / `disableUser` consult it before any
-	 * destructive op. Required.
+	 * Per-user platform permissions. Required — the sole-`instance_admin`
+	 * invariant lives here.
 	 */
 	permissions: IPlatformPermissionStore;
-	/**
-	 * Domain-event sink (Permissions.md §9). Optional; if absent, providers
-	 * default to `NoopEventSink`. Wire a real implementation to enable
-	 * webhooks, audit logging, or analytics dispatch.
-	 */
+	/** Optional. Defaults to `NoopEventSink`. */
 	events?: IEventSink;
 }
 

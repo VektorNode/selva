@@ -1,6 +1,6 @@
 # Selva — Architecture Spec
 
-> **Purpose.** Internal reference for checking code against intended design. When a route, store, or rule looks suspicious, this is the document you verify against. Companion to [Access Control](../packages/compute-app/src/routes/admin/Permissions.md), which owns *who can do what*; this document owns *what exists and how it fits together*.
+> **Purpose.** Internal reference for checking code against intended design. When a route, store, or rule looks suspicious, this is the document you verify against. Companion to [Access Control](./Permissions.md), which owns *who can do what*; this document owns *what exists and how it fits together*.
 >
 > **Audience.** Selva contributors. Not aimed at integrators or evaluators.
 >
@@ -15,7 +15,7 @@ Selva is a system for taking a Grasshopper definition (a parametric model author
 - **Builder mode** (`@selva/builder-app`) — the designer's local-development companion. Lives next to a running Grasshopper instance, talks to it over WebSocket, hot-reloads as the schema is edited.
 - **Compute mode** (`@selva/compute-app`) — the deployed product. A standalone web app that solves definitions through Rhino.Compute. Multi-user, account-backed, hostable.
 
-A single `ui-schema.json` ([packages/schemas/ui-schema.json](../packages/schemas/ui-schema.json)) is the source contract: it generates TypeScript for the web stack and C# for the plugin. UI shapes and parameter shapes cannot drift.
+A single `ui-schema.json` ([packages/schemas/ui-schema.json](../../schemas/ui-schema.json)) is the source contract: it generates TypeScript for the web stack and C# for the plugin. UI shapes and parameter shapes cannot drift.
 
 ---
 
@@ -78,8 +78,10 @@ The plugin and the deployed compute app are **independent runtimes**. They commu
 ```
 Instance (one Selva deployment)
  ├── User (identity, owned by IAuthProvider)
- │    ├── platformPermissions[]  (instance_admin, manage_compute, …)
  │    └── UserProfile (displayName, starredDefinitions, recentRuns)
+ │
+ ├── PlatformPermission(userId, permission)      ← IPlatformPermissionStore
+ │                                                  (instance_admin, manage_compute, …)
  │
  ├── Organization                                ← hard tenancy boundary
  │    ├── OrgMember (User × Org)
@@ -131,7 +133,7 @@ Instance (one Selva deployment)
 - Owned by `IAuthProvider`, **not** by the data layer. This means user identity, credentials, MFA, and PII never live in Selva's stores — they live in whatever provider you plug in (local HMAC, Supabase Auth, future: Entra/Firebase/OIDC).
 - The data layer references users only by opaque `userId` strings.
 - Selva-side state about a user (display name, starred definitions, recent runs) lives in `UserProfile`, owned by `IUserProfileStore`. The split keeps OIDC-only providers honest — they don't have to stub out fields they don't own.
-- Platform-level permissions (`instance_admin`, `manage_compute`, `manage_instance_users`, `manage_updates`) are held on `AuthUser`. See [Permissions.md §2](../packages/compute-app/src/routes/admin/Permissions.md#2-platform-scope).
+- Platform-level permissions (`instance_admin`, `manage_compute`, `manage_instance_users`, `manage_updates`) live in `IPlatformPermissionStore`, separate from `AuthUser`. The auth provider owns identity; Selva owns authorization, so external IdPs (Supabase Auth, OIDC) don't have to model anything Selva-specific. See [Permissions.md §2](./Permissions.md#2-platform-scope).
 - **Invariant:** at least one user always holds `instance_admin`. The auth provider rejects the operation that would zero this out.
 
 ### 4.2 Organization
@@ -154,7 +156,7 @@ Instance (one Selva deployment)
 - **Two project models** selected per-project by `autoJoinOnUpload`:
   - **Container** (default, `false`): project role is authoritative. Only `owner`/`editor` can upload or edit anything. `Definition.ownerId` is display-only.
   - **Commons** (`true`, only on `public` projects): anyone authenticated can upload a *new* definition and becomes its owner. They cannot modify other people's definitions. Project owner/editor retain moderation authority.
-  - Full semantics in [Permissions.md §4](../packages/compute-app/src/routes/admin/Permissions.md#4-project-scope).
+  - Full semantics in [Permissions.md §4](./Permissions.md#4-project-scope).
 - **Reclaim:** org owner/admin can add themselves as co-owner of any project in their org as an escape hatch when the original owner is unreachable. Does not demote the original owner — leaves an audit trail.
 
 ### 4.4 Definition
@@ -166,7 +168,7 @@ A Grasshopper definition (`.gh` or `.ghx`) plus its metadata.
 - `ownerId` set at creation, never changes. In container mode it's display metadata; in commons mode it's an access input.
 - `status`: `pending | draft | published`. `pending` is internal — covers the window between metadata-write and blob-upload-complete; janitor sweeps stale rows; filtered out of list endpoints by default. `draft` and `published` are the editorial states. Add more states later if a real workflow needs them.
 - `runCount` increments atomically per solve. `liveVersionId` and `draftVersionId` point at version rows (see §4.5).
-- `coverImage` is a public URL; uploads are unconditionally transcoded to WebP, max 1200px, q=85 (see [storage/image.ts](../packages/platform/src/storage/image.ts)).
+- `coverImage` is a public URL; uploads are unconditionally transcoded to WebP, max 1200px, q=85 (see [storage/image.ts](../../platform/src/storage/image.ts)).
 - `computeServerId` optional override — falls back to org default, then instance default.
 
 ### 4.5 DefinitionVersion
@@ -188,14 +190,14 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
 - Resolution: HMAC the supplied token, look up by hash, check revocation/expiry/cap/parent-status, build a synthetic `RequestContext` scoped to the token, skip user-based rules.
 - Default cap: `maxSolves = 1000` (a denial-of-wallet protection, since iframe-embedded tokens are publicly visible by design).
 - Cascades: definition soft-delete → tokens fail closed; definition hard-delete → tokens FK-cascade.
-- Full design in [Permissions.md §7](../packages/compute-app/src/routes/admin/Permissions.md#7-share-links).
+- Full design in [Permissions.md §7](./Permissions.md#7-share-links).
 
 ### 4.7 Invite
 
 - Org-scoped only. You invite to an org; project membership is managed within-org.
 - `(id, token, email, orgId, orgRole, orgPermissions[], invitedBy, expiresAt, acceptedAt?, acceptedByUserId?)`.
 - Token is the capability — `getByToken` and `markAccepted` accept `SYSTEM_CONTEXT` (the public `/accept-invite` page is unauthenticated by design).
-- **Cross-org project guests are deferred** ([Permissions.md §12](../packages/compute-app/src/routes/admin/Permissions.md#12-deferred-tracked-not-built)).
+- **Cross-org project guests are deferred** ([Permissions.md §12](./Permissions.md#12-deferred-tracked-not-built)).
 
 ### 4.8 ComputeServerConfig
 
@@ -205,7 +207,7 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
   2. **Per-org** override (`ComputeServerConfig.orgId = <org>`) — for the future SaaS deployment where companies bring their own servers alongside Selva's defaults. Configured by org owner/admin with `manage_org_compute`.
   3. **Instance pool** (`ComputeServerConfig.orgId = null`) — configured by `instance_admin`. Always the fallback.
 - The override can never affect the instance pool. An org misconfiguring their compute only breaks their own solves.
-- **`ALLOW_ORG_COMPUTE_OVERRIDE` flag** is in the design (Permissions.md §3) but **not yet enforced in code**. With single-tenant self-hosted as the current target, the flag is moot today — it becomes load-bearing when SaaS multi-tenant ships and you need to gate which orgs are allowed to BYO compute.
+- **`ALLOW_ORG_COMPUTE_OVERRIDE` flag** is enforced in two places: [`resolve.server.ts`](../src/lib/server/compute/resolve.server.ts) skips the per-org override during resolution when the flag is off, and [`/api/org/compute`](../src/routes/api/org/compute/+server.ts) returns 403 when callers try to configure one. With single-tenant self-hosted as the current target the flag is typically off, collapsing to the instance pool; flipping it on is what unlocks BYO compute.
 
 ### 4.9 UserProfile
 
@@ -232,12 +234,15 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
 
 | Interface | Location |
 |---|---|
-| `IAuthProvider` | [`@selva/platform/auth`](../packages/platform/src/auth/interface.ts) |
-| `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IComputeServerStore`, `IShareLinkStore` | [`@selva/platform/data`](../packages/platform/src/data/interface.ts) |
-| `IInviteStore` | [`@selva/platform/invites`](../packages/platform/src/invites/interface.ts) |
-| `IStorageProvider` | [`@selva/platform/storage`](../packages/platform/src/storage/interface.ts) |
-| `IUserProfileStore` | [`@selva/platform/userProfile`](../packages/platform/src/userProfile/interface.ts) |
-| `DefinitionService` (orchestration) | [`@selva/platform/definitions`](../packages/platform/src/definitions/) |
+| `IAuthProvider` | [`@selva/platform/auth`](../../platform/src/auth/interface.ts) |
+| `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IComputeServerStore`, `IShareLinkStore` | [`@selva/platform/data`](../../platform/src/data/interface.ts) |
+| `IInviteStore` | [`@selva/platform/invites`](../../platform/src/invites/interface.ts) |
+| `IStorageProvider` | [`@selva/platform/storage`](../../platform/src/storage/interface.ts) |
+| `IUserProfileStore` | [`@selva/platform/userProfile`](../../platform/src/userProfile/interface.ts) |
+| `IPlatformPermissionStore` | [`@selva/platform/permissions`](../../platform/src/permissions/interface.ts) |
+| `IEventSink` | [`@selva/platform/events`](../../platform/src/events/interface.ts) |
+
+Orchestration (cross-store flows that aren't part of the provider contract) lives in compute-app, not platform — e.g. [`DefinitionService`](../src/lib/server/definitions/DefinitionService.ts) coordinates `IDefinitionStore` + `IStorageProvider` for upload/publish.
 
 **Conformance:** `@selva/platform/testing` exports framework-agnostic conformance suites that every provider runs against. New providers must pass these to be considered drop-in.
 
@@ -264,7 +269,7 @@ Every authenticated request flows through `hooks.server.ts`:
 
 ## 7. Storage paths and safety
 
-Storage paths are constructed via immutable helpers in [`@selva/platform/definitions/paths.ts`](../packages/platform/src/definitions/paths.ts) — never string-built ad hoc:
+Storage paths are constructed via immutable helpers in [`@selva/platform/definitions/paths.ts`](../../platform/src/definitions/paths.ts) — never string-built ad hoc:
 
 | Path | Purpose |
 |---|---|
@@ -302,9 +307,9 @@ Workflow: edit `ui-schema.json` → run `pnpm generate:all` → both sides see t
 ### Compute app (deployed product)
 
 - Standalone SvelteKit deployment.
-- Required env: `PORT`, `GH_DEFINITIONS_PATH`. Provider selection (local vs Supabase) is env-driven.
+- Provider selection is env-driven: `SELVA_PROVIDER=local` (default) or `SELVA_PROVIDER=supabase`. Local needs `DATA_PATH` + `SESSION_SECRET`; Supabase needs `SUPABASE_URL` + `SUPABASE_ANON_KEY` + `SUPABASE_SERVICE_ROLE_KEY`. `PORT` defaults to 3000. The authoritative reference is [.env.example](../.env.example) — every var the app reads is documented inline there.
 - Compute server URL/key configured in the admin UI (`/admin/compute`), persisted via `IComputeServerStore`. **Never** an env var.
-- Example PM2 config: `example.ecosystem.config.cjs`.
+- Example PM2 config: [`example.ecosystem.config.cjs`](../../../example.ecosystem.config.cjs).
 
 ---
 
@@ -320,7 +325,7 @@ This means Selva itself has zero exposure to GDPR-class data — the auth provid
 
 ## 11. What this spec deliberately does not cover
 
-- **Access control rules** — see [Permissions.md](../packages/compute-app/src/routes/admin/Permissions.md). It is the authority on `canView`/`canEdit`/`canSolve`/etc.
+- **Access control rules** — see [Permissions.md](./Permissions.md). It is the authority on `canView`/`canEdit`/`canSolve`/etc.
 - **The Grasshopper plugin internals** (component anatomy, schema-link protocol, embedded HTTP server). Out of scope here; would belong in a `Plugin/ARCHITECTURE.md`.
 - **Frontend component architecture** (Svelte stores, theming, shared UI library). Out of scope; tracked in `packages/compute-app/UI_INVENTORY.md` and `@selva/shared`.
 - **Rhino.Compute server topology** (single instance vs pool vs ours-vs-theirs). See `docs/RHINO_COMPUTE.md`.
@@ -334,10 +339,11 @@ Things the architecture supports today but no code path exercises yet. These are
 | Item | What's missing | Becomes load-bearing when |
 |---|---|---|
 | **Channel UX in compute-app** | Editors can't toggle live/draft in the UI; share-link minter UI doesn't pin channel | Editors need to test draft solves in-app |
-| **`ALLOW_ORG_COMPUTE_OVERRIDE` enforcement** | Platform flag exists in spec; no code reads it | SaaS multi-tenant ships and BYO compute gating matters |
+| **`ALLOW_ORG_CREATION` enforcement** | Platform flag exists in `SelvaFlags`; no route consults it | SaaS multi-tenant ships and self-service org creation lands |
 | **Multi-tenant `actingOrgId` resolution** | Today resolves to first membership; no URL-prefix / subdomain / org-switcher UX | A user can belong to >1 org in a real deployment |
 | **Self-service org creation** | `/admin/api/orgs` exists for instance-admin; no end-user create flow | SaaS multi-tenant ships |
 | **Cross-org guests on private projects** | Permissions.md §12 deferred | First customer asks for it |
+| **Audit-log viewer UI** | `SupabaseEventSink` already persists every domain event to `public.audit_events`; operator-facing browser UI not built | Operators need to read the trail without opening the DB |
 
 > Pre-release: trimming any of these from code is free. There is no installed base to maintain compatibility with.
 

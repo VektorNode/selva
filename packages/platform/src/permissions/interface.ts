@@ -1,56 +1,42 @@
-import type { PlatformPermission, UserManagementResult } from '../auth/types.js';
+import type { UserManagementResult } from '../auth/types.js';
 import type { RequestContext } from '../context.js';
+import type { PlatformPermission } from './types.js';
 
 /**
- * Data-layer store for per-user platform permissions.
+ * Per-user platform permissions. Lives at the data layer (not on
+ * `IAuthProvider`) so external IdPs don't need to model Selva-specific
+ * authorization.
  *
- * **Why this is separate from `IAuthProvider`.** Identity (who you are) belongs
- * to the auth backend. Authorization (what you can do *here*) belongs to
- * Selva. External IdPs (OIDC, SAML, hosted auth) can't store Selva-specific
- * permissions; the data layer can. Selva-staff/instance operators are still
- * managed via this store regardless of which auth provider issues the user.
+ * **The sole-`instance_admin` invariant is enforced here.** Any operation
+ * that would leave zero users holding `instance_admin` MUST return
+ * `'last_admin'`. Auth providers consult `countInstanceAdminsExcluding`
+ * before any destructive op so the invariant holds across edits, deletes,
+ * and disables.
  *
- * **The §2 sole-`instance_admin` invariant lives here** (Permissions.md §10).
- * Any operation that would leave zero users holding `instance_admin` MUST
- * return `'last_admin'`. The auth provider's `deleteUser` / `disableUser` ask
- * `countInstanceAdminsExcluding(userId)` before performing the destructive
- * op so the invariant holds across permission edits, deletes, and disables.
- *
- * **Auth boundary.** Reads scoped to "self or admin"; writes restricted to
- * `instance_admin`. Adapters enforce in `set` / `getFor`. Pass `SYSTEM_CONTEXT`
- * for trusted server-side flows (hooks `buildContext`, setup bootstrap).
+ * Reads are scoped to "self or admin"; writes restricted to `instance_admin`.
+ * Pass `SYSTEM_CONTEXT` for trusted server flows (bootstrap, hooks).
  */
 export interface IPlatformPermissionStore {
 	/**
-	 * Read the platform permissions for a single user. Returns an empty array
-	 * for users with no admin grants (the common case). Adapters MUST scope by
-	 * `ctx`: a non-admin caller may only read their own permissions.
+	 * Read permissions for a single user. Empty array for users with no
+	 * admin grants (the common case). Non-admin callers may only read self.
 	 */
 	getFor(ctx: RequestContext, userId: string): Promise<PlatformPermission[]>;
 
-	/**
-	 * Batch-read for the admin user list. Returns a map keyed by `userId`;
-	 * users with no row resolve to an empty array on the consumer side.
-	 * Admin-only — adapters enforce.
-	 */
+	/** Batch-read for the admin user list. Admin-only. */
 	getForBatch(
 		ctx: RequestContext,
 		userIds: readonly string[]
 	): Promise<Map<string, PlatformPermission[]>>;
 
 	/**
-	 * Replace the user's platform permissions. Returns:
+	 * Replace the user's permissions. Idempotent. Returns:
+	 * - `ok` — succeeded
+	 * - `not_found` — target user doesn't exist
+	 * - `last_admin` — refused; would leave zero `instance_admin` users
 	 *
-	 * - `'ok'` — succeeded
-	 * - `'not_found'` — target user doesn't exist (in the underlying store)
-	 * - `'last_admin'` — refused; would leave zero `instance_admin` users
-	 *
-	 * Idempotent: setting the same array twice is a no-op (and never reports
-	 * `'last_admin'` unless the second call would actually drop the count).
-	 *
-	 * `'not_supported'` is intentionally absent — every Selva deployment must
-	 * provide a permission store. Auth providers are pluggable; permissions
-	 * are not.
+	 * `not_supported` is intentionally absent — every deployment must provide
+	 * a permission store.
 	 */
 	set(
 		ctx: RequestContext,
@@ -59,31 +45,16 @@ export interface IPlatformPermissionStore {
 	): Promise<UserManagementResult>;
 
 	/**
-	 * Returns true if at least one *enabled* user holds `instance_admin`.
-	 * Used by:
-	 *   - first-run detection in `hooks.server.ts` (replaces the
-	 *     `auth.listUsers().length === 0` heuristic, which doesn't work for
-	 *     OIDC providers that can't enumerate users)
-	 *   - the auth provider's `deleteUser` / `disableUser` invariant check
-	 *     (in conjunction with `countInstanceAdminsExcluding`)
-	 *
-	 * "Enabled" means the user is not disabled in the auth backend; adapters
-	 * may need to cross-reference auth-side state. The `auth` parameter (when
-	 * provided) lets the store consult the auth backend for disabled-status;
-	 * if omitted the store may approximate (better to over-count than to
-	 * accidentally allow zero admins).
+	 * True if at least one *enabled* user holds `instance_admin`. Used by
+	 * first-run detection and the destructive-op invariant check. Adapters
+	 * MUST exclude disabled users (over-count is safer than under-count).
 	 */
 	hasInstanceAdmin(ctx: RequestContext): Promise<boolean>;
 
 	/**
-	 * Count *other* users (not `excludeUserId`) currently holding
-	 * `instance_admin`. The `deleteUser` / `disableUser` flows call this
-	 * BEFORE the destructive op:
-	 *   - `count === 0` → return `'last_admin'`
-	 *   - `count >= 1`  → proceed
-	 *
-	 * Like `hasInstanceAdmin`, MUST exclude disabled users to match §10's
-	 * "enabled instance_admin" semantics.
+	 * Count *other* users holding `instance_admin`. `deleteUser` / `disableUser`
+	 * call this BEFORE the destructive op — `count === 0` ⇒ `'last_admin'`.
+	 * MUST exclude disabled users.
 	 */
 	countInstanceAdminsExcluding(
 		ctx: RequestContext,
