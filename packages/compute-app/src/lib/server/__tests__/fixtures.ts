@@ -31,6 +31,7 @@ import {
 	type AuthUser,
 	type DefinitionRecord,
 	type DefinitionVersion,
+	type IOAuthAuth,
 	type OrgPermission,
 	type Organization,
 	type OrgMember,
@@ -321,39 +322,51 @@ export async function grantPlatformPermissions(
 }
 
 /**
- * Augment the test's auth provider with an `exchangeOAuthCode` method that
- * returns a synthetic session for the given email. The Supabase auth provider
- * exposes this method in production; the local one doesn't, so OAuth-callback
- * tests inject a shim. The shim creates the user in usersFile if missing
- * (matching real Supabase behavior on first sign-in).
+ * Augment the test's auth provider with an `oauth` capability that returns
+ * a synthetic session for the given email. The Supabase auth provider
+ * exposes `IOAuthAuth` in production; the local one doesn't, so
+ * OAuth-callback tests inject this typed shim. `exchangeOAuthCode`
+ * creates the user in usersFile if missing (matching real Supabase
+ * behavior on first sign-in); the other two methods throw because no
+ * existing test path exercises them.
  */
 export function installOAuthShim(
 	tp: TestProviders,
 	opts: { email: string; userId?: string }
 ): { calls: number } {
 	const state = { calls: 0 };
-	const userId = opts.userId ?? randomUUID();
-	const auth = tp.config.auth as unknown as Record<string, unknown>;
-	auth.exchangeOAuthCode = async (_code: string) => {
-		state.calls++;
-		// Ensure the user exists so downstream calls (hasInstanceAdmin, getProfile)
-		// see a real row.
-		const existing = await tp.usersFile.findByEmail(opts.email);
-		const user = existing ?? (await tp.usersFile.createUser(opts.email, null, []));
-		const finalId = existing ? existing.id : user.id;
-		return {
-			user: {
-				id: finalId,
-				email: user.email,
-				createdAt: user.createdAt,
-				lastLoginAt: user.lastLoginAt,
-				disabled: user.disabled
-			} as AuthUser,
-			sessionToken: 'test-session-' + finalId,
-			refreshToken: 'test-refresh-' + finalId
-		};
+	void opts.userId; // reserved for future tests that need a deterministic id
+	const shim: IOAuthAuth = {
+		async exchangeOAuthCode(_code: string) {
+			state.calls++;
+			// Ensure the user exists so downstream calls (hasInstanceAdmin,
+			// getProfile) see a real row.
+			const existing = await tp.usersFile.findByEmail(opts.email);
+			const user = existing ?? (await tp.usersFile.createUser(opts.email, null, []));
+			const finalId = existing ? existing.id : user.id;
+			return {
+				user: {
+					id: finalId,
+					email: user.email,
+					createdAt: user.createdAt,
+					lastLoginAt: user.lastLoginAt,
+					disabled: user.disabled
+				} as AuthUser,
+				sessionToken: 'test-session-' + finalId,
+				refreshToken: 'test-refresh-' + finalId
+			};
+		},
+		async getOAuthAuthorizationUrl() {
+			throw new Error('OAuth shim: getOAuthAuthorizationUrl not implemented for tests');
+		},
+		async refreshSession() {
+			throw new Error('OAuth shim: refreshSession not implemented for tests');
+		}
 	};
-	void userId;
+	// `oauth` on IAuthProvider is `readonly` — we're patching the test
+	// provider's identity at runtime, which is exactly the seam the cast was
+	// papering over. The shim itself is now fully typed.
+	(tp.config.auth as { oauth?: IOAuthAuth }).oauth = shim;
 	return state;
 }
 

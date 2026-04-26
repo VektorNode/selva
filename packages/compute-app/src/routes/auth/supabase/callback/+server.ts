@@ -28,16 +28,11 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	const code = url.searchParams.get('code');
 	if (!code) throw error(400, 'Missing authorization code');
 
-	const auth = getAuthProvider();
-	if (typeof (auth as { exchangeOAuthCode?: unknown }).exchangeOAuthCode !== 'function') {
+	const oauth = getAuthProvider().oauth;
+	if (!oauth) {
 		throw error(501, 'OAuth is not supported by the configured auth provider.');
 	}
 
-	const oauth = auth as unknown as {
-		exchangeOAuthCode: (
-			code: string
-		) => Promise<{ user: AuthUser; sessionToken: string; refreshToken: string } | null>;
-	};
 	const result = await oauth.exchangeOAuthCode(code);
 	if (!result) throw error(401, 'OAuth exchange failed');
 

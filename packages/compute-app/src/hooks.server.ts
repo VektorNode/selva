@@ -92,48 +92,105 @@ async function buildContext(
 	};
 }
 
+// ── Route classification ─────────────────────────────────────────────────────
+//
+// Auth gating is **deny-by-default**. Every request goes through `needsAuth`
+// unless its path matches one of the explicit allowlists below. Adding a new
+// top-level route is therefore safe — forgetting to update these lists makes
+// it gated (a loud 401/redirect), not silently public.
+
+/** Exact-match public pages — no session needed. */
+const PUBLIC_PAGE_ROUTES: ReadonlySet<string> = new Set([
+	'/', // landing — guests see it; authed users get redirected by +page.server.ts
+	'/login',
+	'/setup',
+	'/accept-invite'
+]);
+
+/**
+ * Public path *prefixes*. `/auth/` covers the OAuth start + callback flow
+ * (the user has no session yet by definition). `/logout` is a form-action
+ * page — the action destroys the session, then redirects.
+ */
+const PUBLIC_PATH_PREFIXES: readonly string[] = ['/auth/', '/logout'];
+
+/**
+ * API endpoints that must answer without a session — currently just the
+ * load-balancer health probe. Anything added here must be safe to expose
+ * to anonymous callers.
+ */
+const PUBLIC_API_ROUTES: ReadonlySet<string> = new Set(['/api/health']);
+
+/**
+ * Static-asset paths the SvelteKit/adapter-node serves directly. We
+ * recognize them so the auth gate doesn't trip and we can apply
+ * cache-control headers.
+ */
+const STATIC_ASSET_PREFIXES: readonly string[] = ['/_app/', '/favicon/'];
+const STATIC_ASSET_PATHS: ReadonlySet<string> = new Set(['/favicon.svg', '/robots.txt']);
+
+// Exported for tests so the auth-gate boundary has regression coverage —
+// these predicates are the deny-by-default policy and a bug in either is
+// security-relevant.
+export function isStaticAsset(pathname: string): boolean {
+	if (STATIC_ASSET_PATHS.has(pathname)) return true;
+	return STATIC_ASSET_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
+export function isPublicRoute(pathname: string): boolean {
+	if (PUBLIC_PAGE_ROUTES.has(pathname)) return true;
+	if (PUBLIC_API_ROUTES.has(pathname)) return true;
+	return PUBLIC_PATH_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
 export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve }) => {
 	event.locals.providers = providers;
 
 	const { pathname } = event.url;
 
-	const isPublicRoute =
-		pathname === '/login' ||
-		pathname === '/setup' ||
-		pathname === '/accept-invite' ||
-		pathname.startsWith('/logout');
-
-	const isAdminRoute = pathname.startsWith('/admin');
-	const isApiRoute = pathname.startsWith('/api/');
-	const isDefinitionsRoute = pathname.startsWith('/definitions');
-	const isAppRoute = pathname.startsWith('/app');
-
-	const isJsonApiRoute = isApiRoute || pathname.startsWith('/admin/api/');
+	// Static assets bypass every gate below — no auth, no first-run check,
+	// just resolve and let the cache-control headers below handle them.
+	if (isStaticAsset(pathname)) {
+		return applySecurityHeaders(await resolve(event), pathname);
+	}
 
 	// `/api/health` is a load-balancer probe — must answer without auth or
 	// first-run gating. Short-circuit before any of the gates below run.
 	if (pathname === '/api/health') {
-		return resolve(event);
+		return applySecurityHeaders(await resolve(event), pathname);
 	}
 
-	// On first run (no users yet), redirect all admin traffic to /setup. The
-	// answer is cached: first-run is a one-way transition, so subsequent
-	// requests skip the listUsers DB hit entirely.
-	if (isAdminRoute || isApiRoute) {
+	const publicRoute = isPublicRoute(pathname);
+	// Distinguish JSON API routes from page routes for response-shape choices
+	// (401 JSON vs 303 redirect). Both `/api/*` and `/admin/api/*` qualify.
+	const isJsonApiRoute = pathname.startsWith('/api/') || pathname.startsWith('/admin/api/');
+
+	// On first run (no users yet), redirect non-public traffic to /setup so a
+	// fresh deployment lands on the bootstrap flow rather than a dead login
+	// page. Public routes (/, /login, /setup itself, /auth, /accept-invite,
+	// /logout) pass through — /setup needs to render, /login is harmless to
+	// show, /auth callback shouldn't fire on a fresh install. The answer is
+	// cached: first-run is a one-way transition so subsequent requests skip
+	// the listUsers DB hit entirely.
+	if (!publicRoute) {
 		if (await isFirstRun()) {
 			if (isJsonApiRoute) {
-				return new Response(JSON.stringify({ error: 'Setup required' }), {
-					status: 503,
-					headers: { 'Content-Type': 'application/json' }
-				});
+				return applySecurityHeaders(
+					new Response(JSON.stringify({ error: 'Setup required' }), {
+						status: 503,
+						headers: { 'Content-Type': 'application/json' }
+					}),
+					pathname
+				);
 			}
 			redirect(303, '/setup');
 		}
 	}
 
-	// Guard admin, api, definitions, and /app routes
-	const needsAuth =
-		(isAdminRoute || isApiRoute || isDefinitionsRoute || isAppRoute) && !isPublicRoute;
+	// Deny-by-default: any non-public, non-static path requires a valid
+	// session. New top-level routes inherit "gated" automatically — the
+	// only way to make something public is to add it to the lists above.
+	const needsAuth = !publicRoute;
 	if (needsAuth) {
 		let token = event.cookies.get('admin_session') ?? '';
 		let user = await providers.auth.verifyToken(token);
@@ -144,13 +201,9 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		// refresh cookie, so this branch is a no-op there.
 		if (!user) {
 			const refreshToken = getRefreshToken(event.cookies);
-			const refresher = providers.auth as unknown as {
-				refreshSession?: (
-					rt: string
-				) => Promise<{ sessionToken: string; refreshToken: string } | null>;
-			};
-			if (refreshToken && typeof refresher.refreshSession === 'function') {
-				const refreshed = await refresher.refreshSession(refreshToken);
+			const oauth = providers.auth.oauth;
+			if (refreshToken && oauth) {
+				const refreshed = await oauth.refreshSession(refreshToken);
 				if (refreshed) {
 					setSessionCookie(event.cookies, refreshed.sessionToken);
 					setRefreshCookie(event.cookies, refreshed.refreshToken);
@@ -166,10 +219,13 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 
 		if (!user) {
 			if (isJsonApiRoute) {
-				return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-					status: 401,
-					headers: { 'Content-Type': 'application/json' }
-				});
+				return applySecurityHeaders(
+					new Response(JSON.stringify({ error: 'Unauthorized' }), {
+						status: 401,
+						headers: { 'Content-Type': 'application/json' }
+					}),
+					pathname
+				);
 			}
 			redirect(303, `/login?redirectTo=${encodeURIComponent(pathname)}`);
 		}
@@ -185,15 +241,46 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		event.locals.ctx = await buildContext(user, token);
 	}
 
-	const response = await resolve(event);
+	return applySecurityHeaders(await resolve(event), pathname);
+};
 
-	// Hashed build assets (immutable — filename changes on content change)
-	if (pathname.startsWith('/_app/')) {
-		response.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+// ── Response headers ─────────────────────────────────────────────────────────
+//
+// Applied to every response we produce — both successful resolves and the
+// 401/503 short-circuits above. Cheap browser hardening that doesn't
+// require UI verification:
+//
+//   - X-Content-Type-Options: nosniff — disables MIME sniffing.
+//   - Referrer-Policy: strict-origin-when-cross-origin — strips the path
+//     and query from cross-origin Referer headers; matches modern browser
+//     defaults but pins the behavior in case the default ever drifts.
+//   - Permissions-Policy: opt out of browser APIs we don't use, so XSS
+//     can't enable them.
+//   - HSTS in production only — locking dev (http://localhost) into HTTPS
+//     would brick local development across the org.
+//
+// **Intentionally NOT set here** (deferred to the UI freeze):
+//   - Content-Security-Policy + frame-ancestors. The compute-app is built
+//     for iframe embedding (per its own package description), so a strict
+//     CSP needs UI-phase validation against real consumer sites before
+//     it can ship. Tracked alongside M15.
+//   - X-Frame-Options. Same iframe-embedding constraint.
+function applySecurityHeaders(response: Response, pathname: string): Response {
+	response.headers.set('X-Content-Type-Options', 'nosniff');
+	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+	response.headers.set(
+		'Permissions-Policy',
+		'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()'
+	);
+	if (process.env.NODE_ENV === 'production') {
+		response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
 	}
 
-	// Static assets (favicon, robots.txt, etc.)
-	if (
+	// Cache-control: hashed build assets are immutable; other static assets
+	// get a short TTL.
+	if (pathname.startsWith('/_app/')) {
+		response.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+	} else if (
 		pathname.startsWith('/favicon/') ||
 		pathname === '/favicon.svg' ||
 		pathname === '/robots.txt'
@@ -202,7 +289,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	}
 
 	return response;
-};
+}
 
 export const handleError: import('@sveltejs/kit').HandleServerError = ({ error, status }) => {
 	// For expected HTTP errors (thrown with error(4xx, message)), pass the message through as-is.

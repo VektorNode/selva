@@ -37,9 +37,7 @@ export const load: PageServerLoad = async () => {
 	}
 
 	const auth = getAuthProvider();
-	const supportsOAuth =
-		typeof (auth as { getOAuthAuthorizationUrl?: unknown }).getOAuthAuthorizationUrl === 'function';
-	const oauthProviders = supportsOAuth
+	const oauthProviders = auth.oauth
 		? (process.env.SUPABASE_OAUTH_PROVIDERS ?? '')
 				.split(',')
 				.map((p) => p.trim())
