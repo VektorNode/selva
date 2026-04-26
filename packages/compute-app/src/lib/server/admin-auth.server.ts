@@ -1,4 +1,4 @@
-import type { Cookies } from '@sveltejs/kit';
+import { error, type Cookies } from '@sveltejs/kit';
 
 const SESSION_COOKIE_NAME = 'admin_session';
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
@@ -98,6 +98,29 @@ export function getRefreshToken(cookies: Cookies): string | undefined {
 
 export function clearRefreshCookie(cookies: Cookies): void {
 	cookies.delete(REFRESH_COOKIE_NAME, { path: '/' });
+}
+
+// ── Request body size guard ──────────────────────────────────────────────────
+
+/**
+ * Reject a request whose declared `Content-Length` exceeds `maxBytes`. Throws
+ * 413 BEFORE the body is read so a malicious client can't burn memory by
+ * sending a huge JSON payload to a small-body endpoint.
+ *
+ * Background: the global `BODY_SIZE_LIMIT` env var is enforced by adapter-node
+ * for every route — but we want it set high enough to accept the largest
+ * legitimate upload (50MB .gh files), which means the smaller JSON endpoints
+ * inherit that ceiling by default. This helper is the per-route lower bound.
+ *
+ * Caveat: requests without `Content-Length` (chunked transfer encoding) bypass
+ * this check. Most browsers and HTTP clients send Content-Length on POST/PUT.
+ * The global `BODY_SIZE_LIMIT` is the backstop for those.
+ */
+export function requireMaxBodySize(request: Request, maxBytes: number): void {
+	const declared = Number(request.headers.get('content-length'));
+	if (Number.isFinite(declared) && declared > maxBytes) {
+		throw error(413, `Request body exceeds the limit for this endpoint.`);
+	}
 }
 
 // ── Redirect target validation ───────────────────────────────────────────────

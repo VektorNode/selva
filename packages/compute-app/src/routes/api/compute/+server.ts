@@ -12,6 +12,8 @@ import { error, json, isHttpError } from '@sveltejs/kit';
 import type { ComputeServerConfig, RequestContext } from '@selva/platform';
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
 import { isSafeRemoteDefinitionUrl } from '$lib/server/compute/safe-url';
+import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
+import { requireMaxBodySize } from '$lib/server/admin-auth.server';
 import { getStorageProvider, providers } from '$lib/server/providers.server';
 import { requireCanSolve, requireCanEditDefinition } from '$lib/server/access.server';
 import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
@@ -38,6 +40,18 @@ const DEFINITION_CACHE_TTL = 5 * 60 * 1000;
 const REMOTE_DEFINITION_MAX_BYTES = 50 * 1024 * 1024;
 /** Per-request fetch deadline. */
 const REMOTE_DEFINITION_FETCH_TIMEOUT_MS = 30_000;
+
+/**
+ * Per-route body cap. Solve requests carry inputs + values JSON — typical
+ * payloads are well under a hundred KB. 5 MB is generous headroom; anything
+ * larger is almost certainly abuse or misconfiguration.
+ *
+ * The global `BODY_SIZE_LIMIT` env is sized for `.gh` uploads (~50 MB), so
+ * without this cap a malicious client could POST a 50 MB JSON body to /api/
+ * compute and we'd buffer it before parsing. `requireMaxBodySize` rejects
+ * the request via Content-Length BEFORE we touch the body.
+ */
+const COMPUTE_REQUEST_MAX_BYTES = 5 * 1024 * 1024;
 
 /** Singleton GrasshopperClient instance */
 let cachedClient: GrasshopperClient | null = null;
@@ -181,6 +195,11 @@ function transformInputParameter(
 export const POST: RequestHandler = async ({ request, locals, url }) => {
 	const storage = getStorageProvider();
 
+	// Per-route body cap — see `COMPUTE_REQUEST_MAX_BYTES` for rationale.
+	// Runs BEFORE `request.json()` so a too-large declared payload is
+	// rejected without buffering.
+	requireMaxBodySize(request, COMPUTE_REQUEST_MAX_BYTES);
+
 	try {
 		const body: ComputeRequest = await request.json();
 
@@ -219,6 +238,19 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		// `solveCtx` is the data-layer context — synthetic when token-resolved,
 		// the user's ctx otherwise. Used for definition + version + project reads.
 		const solveCtx: RequestContext = sharedAccess?.ctx ?? locals.ctx!;
+
+		// Per-key rate limit. `share:{linkId}` for token-credentialed solves
+		// (each link has its own bucket so anonymous consumers of one link
+		// don't share quota with the link's owner); `user:{userId}` otherwise.
+		// Runs BEFORE definition + version reads so we don't burn DB on
+		// already-throttled callers.
+		const rateLimitKey = sharedAccess
+			? `share:${sharedAccess.link.id}`
+			: `user:${locals.user!.id}`;
+		const rateLimit = checkComputeRateLimit(rateLimitKey);
+		if (!rateLimit.allowed) {
+			throw error(429, `Too many compute requests. Retry in ${rateLimit.retryAfter}s.`);
+		}
 
 		if (isLocal && guid) {
 			let record;
