@@ -2,6 +2,7 @@
 	import { PageHeader, PageContent, SubNav, type SubNavItem } from '@selvajs/shared';
 	import { Gauge, Building2, Users, RotateCcw, Server, Settings, ScrollText } from '@lucide/svelte';
 	import UserChip from '$lib/components/UserChip.svelte';
+	import MainNav from '$lib/components/MainNav.svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 
 	interface LayoutData {
@@ -70,7 +71,13 @@
 	);
 </script>
 
-<PageHeader title="Admin">
+<PageHeader homeUrl="/app">
+	{#snippet navItems()}
+		<MainNav
+			platformPermissions={data.platformPermissions}
+			orgPermissions={data.orgPermissions}
+		/>
+	{/snippet}
 	{#snippet rightContent()}
 		<UserChip />
 	{/snippet}

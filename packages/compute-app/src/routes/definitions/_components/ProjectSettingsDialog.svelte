@@ -3,6 +3,8 @@
 	import { Trash2, UserPlus, Users, X } from '@lucide/svelte';
 	import type { ProjectWithMembers, UserListItem } from '../+page.server';
 	import type { ProjectRole, ProjectVisibility } from '@selvajs/platform/projects';
+	import UserAvatar from '$lib/components/UserAvatar.svelte';
+	import AddMemberPicker from './AddMemberPicker.svelte';
 
 	interface Props {
 		project: ProjectWithMembers;
@@ -42,14 +44,16 @@
 	let saving = $state(false);
 
 	let showAddForm = $state(false);
-	let newMemberUserId = $state('');
-	let newMemberRole = $state<ProjectRole>('viewer');
 	let adding = $state(false);
 	let removing = $state<string | null>(null);
 
 	function userLabel(userId: string) {
 		const u = users.find((u) => u.id === userId);
 		return u?.displayName ?? u?.email ?? userId.slice(0, 8);
+	}
+
+	function userEmail(userId: string) {
+		return users.find((u) => u.id === userId)?.email;
 	}
 
 	const availableUsers = $derived.by(() => {
@@ -66,13 +70,10 @@
 		}
 	}
 
-	async function add() {
-		if (!newMemberUserId) return;
+	async function add(userId: string, role: ProjectRole) {
 		adding = true;
 		try {
-			await onAddMember(project.id, newMemberUserId, newMemberRole);
-			newMemberUserId = '';
-			newMemberRole = 'viewer';
+			await onAddMember(project.id, userId, role);
 			showAddForm = false;
 		} finally {
 			adding = false;
@@ -149,24 +150,29 @@
 			<Tabs.Content value="members" class="mt-4 space-y-3">
 				{#if project.members.length === 0 && !showAddForm}
 					<div
-						class="border-border flex flex-col items-center justify-center rounded-xl border border-dashed py-10 text-center"
+						class="flex flex-col items-center justify-center rounded-md border-2 border-dashed border-border py-10 text-center"
 					>
-						<Users class="text-muted-foreground mb-2 h-7 w-7" />
+						<Users class="mb-2 h-7 w-7 text-muted-foreground" />
 						<p class="text-sm font-medium">No members yet</p>
-						<p class="text-muted-foreground mt-1 text-xs">
+						<p class="mt-1 text-xs text-muted-foreground">
 							Add members to control who can edit this project.
 						</p>
 					</div>
-				{:else}
-					<div class="border-border bg-card overflow-hidden rounded-xl border">
+				{:else if project.members.length > 0}
+					<div class="overflow-hidden rounded-md border border-border bg-card">
 						{#each project.members as member (`${member.projectId}:${member.userId}`)}
-							<div class="border-border flex items-center gap-3 border-b px-3 py-2.5 last:border-0">
-								<div
-									class="bg-muted flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-semibold"
-								>
-									{userLabel(member.userId)[0]?.toUpperCase() ?? '?'}
+							<div
+								class="flex items-center gap-3 border-b border-border px-3 py-2.5 last:border-0"
+							>
+								<UserAvatar name={userLabel(member.userId)} size="sm" />
+								<div class="min-w-0 flex-1">
+									<p class="truncate text-sm font-medium">{userLabel(member.userId)}</p>
+									{#if userEmail(member.userId) && userEmail(member.userId) !== userLabel(member.userId)}
+										<p class="truncate font-mono text-xs text-muted-foreground">
+											{userEmail(member.userId)}
+										</p>
+									{/if}
 								</div>
-								<span class="flex-1 truncate text-sm">{userLabel(member.userId)}</span>
 								<select
 									value={member.role}
 									onchange={(e) =>
@@ -175,7 +181,7 @@
 											member.userId,
 											(e.target as HTMLSelectElement).value as ProjectRole
 										)}
-									class="border-input bg-background rounded-md border px-2 py-1 text-xs outline-none"
+									class="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none"
 								>
 									<option value="owner">Owner</option>
 									<option value="editor">Editor</option>
@@ -186,7 +192,7 @@
 									disabled={removing === member.userId}
 									variant="ghost"
 									size="icon"
-									class="text-muted-foreground hover:text-destructive h-7 w-7"
+									class="h-7 w-7 text-muted-foreground hover:text-destructive"
 								>
 									<X class="h-3.5 w-3.5" />
 								</Button>
@@ -196,43 +202,15 @@
 				{/if}
 
 				{#if showAddForm}
-					<div class="border-border bg-card flex items-center gap-2 rounded-xl border p-2.5">
-						<select
-							bind:value={newMemberUserId}
-							class="border-input bg-background min-w-0 flex-1 rounded-md border px-2 py-1.5 text-sm outline-none"
-						>
-							<option value="">Select user…</option>
-							{#each availableUsers as u (u.id)}
-								<option value={u.id}>{u.email ?? u.id}</option>
-							{/each}
-						</select>
-						<select
-							bind:value={newMemberRole}
-							class="border-input bg-background rounded-md border px-2 py-1.5 text-sm outline-none"
-						>
-							<option value="owner">Owner</option>
-							<option value="editor">Editor</option>
-							<option value="viewer">Viewer</option>
-						</select>
-						<Button onclick={add} disabled={adding || !newMemberUserId} size="sm">
-							{adding ? '…' : 'Add'}
-						</Button>
-						<Button
-							onclick={() => (showAddForm = false)}
-							variant="ghost"
-							size="icon"
-							class="text-muted-foreground h-8 w-8"
-						>
-							<X class="h-4 w-4" />
-						</Button>
-					</div>
+					<AddMemberPicker
+						{availableUsers}
+						{adding}
+						onAdd={add}
+						onCancel={() => (showAddForm = false)}
+					/>
 				{:else}
 					<Button
-						onclick={() => {
-							showAddForm = true;
-							newMemberUserId = '';
-							newMemberRole = 'viewer';
-						}}
+						onclick={() => (showAddForm = true)}
 						variant="outline"
 						size="sm"
 						class="gap-1.5"

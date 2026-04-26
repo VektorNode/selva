@@ -9,6 +9,7 @@
 		OWNER_ADMIN_ONLY_PERMISSIONS
 	} from '@selvajs/platform';
 	import type { UserRow } from './+page.server';
+	import UserListItem from './_components/UserListItem.svelte';
 
 	// One flat list today; scoped Platform-admin + Org-member views come later.
 	type FlatPermission = PlatformPermission | OrgPermission;
@@ -81,6 +82,7 @@
 	// Per-user loading state
 	let deletingId = $state<string | null>(null);
 	let updatingId = $state<string | null>(null);
+	let expandedUserId = $state<string | null>(null);
 
 	// Permissions.md §2 invariant mirror: if only one enabled user holds
 	// instance_admin, lock the checkbox and delete button on that row. The
@@ -450,88 +452,23 @@
 			{:else}
 				<div class="divide-y rounded-lg border">
 					{#each data.users as user (user.id)}
-						{@const isOwnerOrAdmin = user.orgRole === 'owner' || user.orgRole === 'admin'}
-						{@const soleAdmin = isSoleInstanceAdmin(user)}
-						<div class="px-4 py-3">
-							<div class="flex items-start justify-between gap-4">
-								<div class="min-w-0 flex-1">
-									<div class="flex items-center gap-2">
-										<p class="truncate text-sm font-medium">{user.email ?? user.id}</p>
-										{#if user.orgRole}
-											<span
-												class="rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase {user.orgRole ===
-												'owner'
-													? 'border-amber-500/40 text-amber-600 dark:text-amber-400'
-													: user.orgRole === 'admin'
-														? 'border-blue-500/40 text-blue-600 dark:text-blue-400'
-														: 'border-border text-muted-foreground'}"
-											>
-												{user.orgRole}
-											</span>
-										{/if}
-									</div>
-									<p class="text-muted-foreground text-xs">{user.id}</p>
-								</div>
-								<Button
-									variant="ghost"
-									size="sm"
-									disabled={deletingId === user.id || soleAdmin}
-									onclick={() => deleteUser(user.id, user.email ?? user.id)}
-									title={soleAdmin
-										? 'Cannot delete the only instance admin. Promote another user first.'
-										: undefined}
-									class="text-destructive hover:text-destructive h-8 w-8 shrink-0 p-0"
-								>
-									<Trash2 class="h-4 w-4" />
-								</Button>
-							</div>
-							<div class="mt-2 flex flex-wrap gap-3">
-								{#each ALL_FLAT_PERMISSIONS as p (p)}
-									{@const isPlatformScope = (
-										ALL_PLATFORM_PERMISSIONS as readonly FlatPermission[]
-									).includes(p)}
-									{@const isOwnerAdminOnly = (
-										OWNER_ADMIN_ONLY_PERMISSIONS as readonly FlatPermission[]
-									).includes(p)}
-									{@const platformLocked = isPlatformScope && !data.isPlatformAdmin}
-									{@const soleAdminLock = p === 'instance_admin' && soleAdmin}
-									<!--
-										Visibility per row, by relevance to the user/role:
-										- Platform-scope: viewer needs to be platform admin to toggle;
-										  otherwise show only if the user actually holds it (audit view).
-										- Owner/admin rows: org perms are implicit in the role badge — hide.
-										- Member rows: hide owner-admin-only org perms (never grantable).
-									-->
-									{#if isPlatformScope ? !platformLocked || user.permissions.includes(p) : !isOwnerOrAdmin && !(isOwnerAdminOnly && user.orgRole !== undefined)}
-										{@const locked = platformLocked || soleAdminLock}
-										<label
-											class="flex items-center gap-1.5 text-xs {locked
-												? 'cursor-not-allowed opacity-60'
-												: 'cursor-pointer'}"
-											title={soleAdminLock
-												? 'Cannot remove the only instance admin. Promote another user first.'
-												: platformLocked
-													? 'Only a platform admin can change this'
-													: undefined}
-										>
-											<input
-												type="checkbox"
-												checked={user.permissions.includes(p)}
-												disabled={updatingId === user.id || locked}
-												onchange={async (e) => {
-													const checked = (e.target as HTMLInputElement).checked;
-													const next = checked
-														? [...user.permissions, p]
-														: user.permissions.filter((x) => x !== p);
-													await updatePermissions(user.id, next);
-												}}
-											/>
-											{PERMISSION_LABELS[p]}
-										</label>
-									{/if}
-								{/each}
-							</div>
-						</div>
+						<UserListItem
+							{user}
+							expanded={expandedUserId === user.id}
+							isPlatformAdmin={data.isPlatformAdmin}
+							soleInstanceAdmin={isSoleInstanceAdmin(user)}
+							updating={updatingId === user.id}
+							deleting={deletingId === user.id}
+							onToggleExpand={() =>
+								(expandedUserId = expandedUserId === user.id ? null : user.id)}
+							onTogglePermission={async (perm, checked) => {
+								const next = checked
+									? [...user.permissions, perm]
+									: user.permissions.filter((x) => x !== perm);
+								await updatePermissions(user.id, next);
+							}}
+							onDelete={() => deleteUser(user.id, user.email ?? user.id)}
+						/>
 					{/each}
 				</div>
 			{/if}

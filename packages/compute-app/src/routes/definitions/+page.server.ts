@@ -102,17 +102,25 @@ export const load: PageServerLoad = async ({ locals }) => {
 			projects = accessibleProjects.map((p) => ({ ...p, members: [] }));
 		}
 
-		// Load users for member management, with display names joined from profiles.
+		// Load users for member management — scoped to members of the active org.
+		// Cross-org users are not addable to projects (cross-org guests are a
+		// deferred feature with its own flow), so the picker only sees this org's
+		// roster. This holds for instance admins too, who'd otherwise see the
+		// entire instance roster from `auth.listUsers()`.
 		let users: UserListItem[] = [];
-		if (canManageProjects || isPlatformAdmin) {
-			const usersPage = await getAuthProvider().listUsers({ limit: 200 });
-			const authUsers = usersPage?.items ?? [];
-			const profiles = await getUserProfileStore().getProfiles(
-				ctx,
-				authUsers.map((u) => u.id)
-			);
+		if ((canManageProjects || isPlatformAdmin) && ctx.actingOrgId) {
+			const memberPage = await getOrganizationProvider().listOrgMembers(ctx, ctx.actingOrgId, {
+				limit: 500
+			});
+			const memberIds = memberPage.items.map((m) => m.userId);
+			const [authUsers, profiles] = await Promise.all([
+				Promise.all(memberIds.map((id) => getAuthProvider().getUser(id).catch(() => null))),
+				getUserProfileStore().getProfiles(ctx, memberIds)
+			]);
 			const displayById = new Map(profiles.map((p) => [p.userId, p.displayName]));
-			users = authUsers.map((u) => ({ ...u, displayName: displayById.get(u.id) }));
+			users = authUsers
+				.filter((u): u is NonNullable<typeof u> => !!u)
+				.map((u) => ({ ...u, displayName: displayById.get(u.id) }));
 		}
 
 		return {
