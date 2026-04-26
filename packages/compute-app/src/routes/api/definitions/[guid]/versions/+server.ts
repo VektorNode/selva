@@ -4,8 +4,7 @@ import { getDefinitionMeta } from '$lib/server/providers.server';
 import { handleApiError } from '$lib/server/api-errors';
 import { requireCanViewProject } from '$lib/server/access.server';
 import { GuidSchema } from '@selva/platform/definitions/schemas';
-
-const MAX_LIMIT = 200;
+import { MAX_PAGE_LIMIT } from '@selva/platform';
 
 export const GET: RequestHandler = async ({ params, locals, url }) => {
 	const guidParsed = GuidSchema.safeParse(params.guid);
@@ -13,7 +12,7 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 	if (!locals.ctx) throw error(401, 'Unauthorized');
 
 	const rawLimit = Number(url.searchParams.get('limit') ?? 50);
-	const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), MAX_LIMIT) : 50;
+	const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), MAX_PAGE_LIMIT) : 50;
 	const cursor = url.searchParams.get('cursor') ?? undefined;
 
 	try {

@@ -72,25 +72,37 @@ export const actions = {
 			return fail(400, { error: 'Passwords do not match' });
 		}
 
-		try {
-			const passwordAuth = getAuthProvider().passwordAuth;
-			if (!passwordAuth) {
-				return fail(501, { error: 'Password-based setup is not supported by this provider' });
-			}
-			// First-run setup creates the identity, then grants every platform
-			// permission via the data-layer store. Later deployments will
-			// bootstrap the platform admin from an env var instead so setup
-			// can be constrained to org-owner rights.
-			const user = await passwordAuth.createUserWithPassword(email, password);
-			await setUserPlatformPermissions(SYSTEM_CONTEXT, user.id, [...ALL_PLATFORM_PERMISSIONS]);
-			if (displayName) {
-				// First-run bootstrap; no authenticated ctx exists yet.
-				await getUserProfileStore().updateProfile(SYSTEM_CONTEXT, user.id, { displayName });
-			}
+		const passwordAuth = getAuthProvider().passwordAuth;
+		if (!passwordAuth) {
+			return fail(501, { error: 'Password-based setup is not supported by this provider' });
+		}
 
-			if (tenancy === 'single') {
-				// Explicitly bootstrap the single org and a default project. Adapters
-				// are pure stores — they no longer auto-seed on read.
+		// Identity + admin grant must succeed together — without admin perms the
+		// new user can't recover, and `hasInstanceAdmin` returning false would
+		// allow setup to be re-run with a duplicate email.
+		let user;
+		try {
+			user = await passwordAuth.createUserWithPassword(email, password);
+			await setUserPlatformPermissions(SYSTEM_CONTEXT, user.id, [...ALL_PLATFORM_PERMISSIONS]);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			return fail(500, { error: msg });
+		}
+
+		// Everything below is best-effort: once the admin exists, `load()` will
+		// redirect future visitors away from /setup, so we must finish the flow
+		// even if a single step fails. Failures are logged; the admin can fix
+		// missing pieces from /admin after signing in.
+		if (displayName) {
+			try {
+				await getUserProfileStore().updateProfile(SYSTEM_CONTEXT, user.id, { displayName });
+			} catch (err) {
+				console.error('[setup] display name update failed:', err);
+			}
+		}
+
+		if (tenancy === 'single') {
+			try {
 				const orgs = getOrganizationProvider();
 				const projects = getProjectProvider();
 				const now = new Date().toISOString();
@@ -105,9 +117,6 @@ export const actions = {
 					updatedAt: now,
 					deletedAt: null
 				};
-				// SYSTEM_CONTEXT bypasses RLS — needed because the new user has no
-				// session yet. createOrg seeds the owner membership row in the same
-				// call (see SupabaseOrgStore.createOrg / LocalOrgStore.createOrg).
 				await orgs.createOrg(SYSTEM_CONTEXT, org);
 
 				const project: Project = {
@@ -134,21 +143,18 @@ export const actions = {
 					updatedBy: user.id,
 					deletedAt: null
 				});
+			} catch (err) {
+				console.error('[setup] org/project bootstrap failed:', err);
 			}
-			// In multi-tenant mode no org is created here; the user lands on a
-			// "create your organization" flow after sign-in.
-
-			// §1a: `createUserWithPassword` doesn't return a session — matches
-			// Supabase's admin.createUser contract. Sign in to mint one.
-			const loginResult = await passwordAuth.verifyLogin(email, password);
-			if (loginResult.kind !== 'success') {
-				return fail(500, { error: 'Account created but login failed. Please sign in manually.' });
-			}
-			setSessionCookie(cookies, loginResult.sessionToken);
-		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err);
-			return fail(500, { error: msg });
 		}
+
+		// §1a: `createUserWithPassword` doesn't return a session — matches
+		// Supabase's admin.createUser contract. Sign in to mint one.
+		const loginResult = await passwordAuth.verifyLogin(email, password);
+		if (loginResult.kind !== 'success') {
+			return fail(500, { error: 'Account created but login failed. Please sign in manually.' });
+		}
+		setSessionCookie(cookies, loginResult.sessionToken);
 
 		redirect(303, '/admin');
 	}
