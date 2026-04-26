@@ -374,6 +374,7 @@
 		onClose={() => (editingDefinitionId = null)}
 		onSave={saveDefinition}
 		onDelete={deleteDefinition}
+		onOpenRunner={(guid) => goto(`/app/${guid}`)}
 	/>
 {/if}
 
