@@ -16,7 +16,8 @@ export const DefinitionVersionSchema = z.object({
 	fileKey: z.string().min(1),
 	originalFilename: z.string().max(256).optional(),
 	uploadedBy: z.string().min(1),
-	uploadedAt: z.string()
+	uploadedAt: z.string(),
+	changeNote: z.string().max(1000).optional()
 });
 
 export const DefinitionChannelSchema = z.enum(['live', 'draft']);

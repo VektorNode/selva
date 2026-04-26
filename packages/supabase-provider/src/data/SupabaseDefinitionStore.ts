@@ -344,6 +344,7 @@ interface DefinitionVersionRow {
 	original_filename: string | null;
 	uploaded_by: string;
 	uploaded_at: string;
+	change_note?: string | null;
 }
 
 function rowToRecord(row: DefinitionRow): DefinitionRecord {
@@ -416,12 +417,13 @@ function rowToVersion(row: DefinitionVersionRow): DefinitionVersion {
 		fileKey: row.file_key,
 		originalFilename: row.original_filename ?? undefined,
 		uploadedBy: row.uploaded_by,
-		uploadedAt: row.uploaded_at
+		uploadedAt: row.uploaded_at,
+		changeNote: row.change_note ?? undefined
 	};
 }
 
 function versionToRow(v: DefinitionVersion): Record<string, unknown> {
-	return {
+	const row: Record<string, unknown> = {
 		id: v.id,
 		definition_guid: v.definitionId,
 		version_number: v.versionNumber,
@@ -431,6 +433,8 @@ function versionToRow(v: DefinitionVersion): Record<string, unknown> {
 		uploaded_by: v.uploadedBy,
 		uploaded_at: v.uploadedAt
 	};
+	if (v.changeNote !== undefined) row.change_note = v.changeNote;
+	return row;
 }
 
 function definitionOrderColumn(orderBy: DefinitionListOptions['orderBy'] | undefined): string {

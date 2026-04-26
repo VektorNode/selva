@@ -66,6 +66,7 @@
 	let imageHasFile = $state(false);
 	let fileInput = $state<HTMLInputElement>();
 	let fileHasFile = $state(false);
+	let changeNote = $state('');
 
 	// Dialog state
 	let showDeleteConfirm = $state(false);
@@ -84,6 +85,7 @@
 		uploadingFile = true;
 		const formData = new FormData();
 		formData.append('file', fileInput.files[0]);
+		if (changeNote.trim()) formData.append('changeNote', changeNote.trim());
 		try {
 			const res = await fetch(`/api/definitions/${record.guid}`, {
 				method: 'POST',
@@ -104,6 +106,7 @@
 			showFileUploadConfirm = false;
 			if (fileInput) fileInput.value = '';
 			fileHasFile = false;
+			changeNote = '';
 		}
 	}
 
@@ -260,6 +263,18 @@
 				onUpload={() => (showFileUploadConfirm = true)}
 				bind:inputRef={fileInput}
 			/>
+			{#if fileHasFile}
+				<div class="space-y-1.5 pt-1">
+					<Label for="edit-change-note">What changed? <span class="text-muted-foreground font-normal">(optional)</span></Label>
+					<Textarea
+						id="edit-change-note"
+						rows={2}
+						maxlength={1000}
+						placeholder="e.g. Fixed wall thickness calculation"
+						bind:value={changeNote}
+					/>
+				</div>
+			{/if}
 		</div>
 
 		{#if projects.length > 1 || computeServers.length > 1}

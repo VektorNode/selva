@@ -140,7 +140,8 @@ export class DefinitionService {
 		guid: string,
 		file: Uint8Array,
 		ext: DefinitionFileExt,
-		originalName: string
+		originalName: string,
+		changeNote?: string
 	): Promise<DefinitionVersion> {
 		const existing = await this.data.definitions.get(ctx, guid);
 		if (!existing) throw new ProviderError(`Definition not found: ${guid}`, 404);
@@ -163,7 +164,8 @@ export class DefinitionService {
 			fileKey,
 			originalFilename: originalName,
 			uploadedBy: actor,
-			uploadedAt: now
+			uploadedAt: now,
+			changeNote: changeNote?.trim() || undefined
 		};
 		await this.data.definitions.createVersion(ctx, version);
 		await this.data.definitions.setDraftVersion(ctx, guid, versionId);

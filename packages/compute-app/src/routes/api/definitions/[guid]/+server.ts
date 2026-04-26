@@ -16,6 +16,9 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const file = formData.get('file');
 	if (!(file instanceof File)) throw error(400, 'A Grasshopper (.gh or .ghx) file is required');
 
+	const changeNoteRaw = formData.get('changeNote');
+	const changeNote = typeof changeNoteRaw === 'string' ? changeNoteRaw.slice(0, 1000) : undefined;
+
 	const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
 	if (!GH_EXTENSIONS.includes(ext)) {
 		throw error(400, `File type not allowed. Allowed: ${GH_EXTENSIONS.join(', ')}`);
@@ -34,7 +37,8 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 			guidParsed.data,
 			data,
 			fileExt,
-			file.name
+			file.name,
+			changeNote
 		);
 		return json({ success: true, version });
 	} catch (err) {
