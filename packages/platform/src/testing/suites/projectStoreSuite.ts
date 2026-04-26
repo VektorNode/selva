@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import type { IProjectStore } from '../../data/interface.js';
 import type { Project, ProjectMember } from '../../index.js';
-import { makeCtx, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
+import { makeSeedHelpers, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
 
 export interface ProjectStoreConformanceOptions {
 	/** Name to show in test output (e.g. "local-provider"). */
@@ -17,8 +17,17 @@ export interface ProjectStoreConformanceOptions {
 	 * Factory that returns a fresh store, the orgId to use for projects, and
 	 * the userId that owns the org (used to scope project ownership).
 	 * In single-org mode, return the pre-existing org's id.
+	 *
+	 * `ownerSessionToken` is optional — adapters that enforce auth at the DB
+	 * layer (Supabase RLS) must include it so `ctx(ownerId)` runs the call as
+	 * that authenticated user. Local providers can omit it.
 	 */
-	createStore: () => Promise<{ store: IProjectStore; orgId: string; ownerId: string }>;
+	createStore: () => Promise<{
+		store: IProjectStore;
+		orgId: string;
+		ownerId: string;
+		ownerSessionToken?: string;
+	}>;
 	/**
 	 * Hook adapters with user FK constraints use to seed `auth.users` before
 	 * a conformance test references a user id. Returns the id the adapter
@@ -28,8 +37,6 @@ export interface ProjectStoreConformanceOptions {
 	/** If true, run ctx-isolation tests (adapters with row-level security). */
 	ctxIsolation?: boolean;
 }
-
-const ctx = makeCtx;
 
 function project(orgId: string, ownerId: string, overrides: Partial<Project> = {}): Project {
 	const now = new Date().toISOString();
@@ -64,8 +71,13 @@ function member(projectId: string, userId: string, role: ProjectMember['role']):
 }
 
 export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions): void {
-	const { name, createStore, seedUser = noopSeedUser, ctxIsolation = false } = opts;
-	const seed = () => seedUser(makeUuid());
+	const { name, createStore: rawCreateStore, seedUser = noopSeedUser, ctxIsolation = false } = opts;
+	const { seed, ctx, registerToken } = makeSeedHelpers(seedUser);
+	const createStore = async () => {
+		const result = await rawCreateStore();
+		if (result.ownerSessionToken) registerToken(result.ownerId, result.ownerSessionToken);
+		return result;
+	};
 
 	describe(`IProjectStore conformance: ${name}`, () => {
 		// ============================================================================

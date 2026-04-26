@@ -1,7 +1,7 @@
 import { describe, beforeEach, it } from 'vitest';
 import { runPlatformPermissionStoreConformance } from '@selvajs/platform/testing';
 import { SupabasePlatformPermissionStore } from '../SupabasePlatformPermissionStore.js';
-import { readEnv, resetAllData, seedUser } from '../../data/__tests__/test-helpers.js';
+import { readEnv, resetAllData, seedPlainUser } from '../../data/__tests__/test-helpers.js';
 
 const envCtx = readEnv();
 
@@ -20,7 +20,7 @@ if (!envCtx) {
 			createStore: async () => {
 				return {
 					store: new SupabasePlatformPermissionStore(envCtx.bundle),
-					seedUser: () => seedUser(envCtx, '')
+					seedUser: async () => (await seedPlainUser(envCtx, '')).userId
 				};
 			}
 		});

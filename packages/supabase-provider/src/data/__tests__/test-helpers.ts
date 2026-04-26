@@ -96,22 +96,77 @@ async function deleteAllAuthUsers(ctx: TestContext): Promise<void> {
 }
 
 /**
- * Seed an `auth.users` row and return the real id the DB assigned.
+ * Seed an `auth.users` row, mark the user as `instance_admin`, sign in, and
+ * return the real id + access token. `auth.admin.createUser` doesn't accept a
+ * caller-supplied id — Supabase generates one. The conformance suite calls us
+ * with a *suggested* id (for adapters that honor it); we ignore it and return
+ * GoTrue's real id.
  *
- * `auth.admin.createUser` doesn't accept a caller-supplied id — Supabase
- * generates one. The conformance suite calls us with a *suggested* id (for
- * adapters that honor it) and uses whatever we return. For Supabase we
- * ignore the suggestion and return GoTrue's real id.
+ * The instance_admin grant is what makes RLS open up for the conformance
+ * tests: every policy in the schema accepts `is_instance_admin()` as a
+ * universal pass, mirroring the `instance_admin` default in `makeCtx`.
+ *
+ * The session token is what makes RLS *see* the user at all. Without it, the
+ * Supabase client falls back to the anon role and every write fails.
  */
-export async function seedUser(ctx: TestContext, _suggestedId: string): Promise<string> {
+export async function seedUser(
+	ctx: TestContext,
+	suggestedId: string
+): Promise<{ userId: string; sessionToken: string }> {
+	return seedUserCore(ctx, suggestedId, { promoteToInstanceAdmin: true });
+}
+
+/**
+ * Variant of `seedUser` that leaves `platform_permissions` empty. Use this
+ * when a test specifically asserts on a fresh user's permission state (e.g.
+ * the platform-permission store conformance suite).
+ */
+export async function seedPlainUser(
+	ctx: TestContext,
+	suggestedId: string
+): Promise<{ userId: string; sessionToken: string }> {
+	return seedUserCore(ctx, suggestedId, { promoteToInstanceAdmin: false });
+}
+
+async function seedUserCore(
+	ctx: TestContext,
+	_suggestedId: string,
+	opts: { promoteToInstanceAdmin: boolean }
+): Promise<{ userId: string; sessionToken: string }> {
 	// Unique email per seed so repeated calls don't collide. GoTrue requires
 	// an email even for password-less users.
 	const email = `conformance-${crypto.randomUUID()}@conformance.test`;
+	const password = 'conformance-test-password-1234';
 	const { data, error } = await ctx.adminClient.auth.admin.createUser({
 		email,
-		password: 'conformance-test-password-1234',
+		password,
 		email_confirm: true
 	});
 	if (error) throw error;
-	return data.user.id;
+	const userId = data.user.id;
+
+	if (opts.promoteToInstanceAdmin) {
+		// Trigger auto-created the user_profiles row; promote to instance_admin
+		// so every RLS policy treats this user as fully authorized. Mirrors the
+		// `instance_admin` default in `makeCtx`.
+		const { error: promoteError } = await ctx.adminClient
+			.from('user_profiles')
+			.update({ platform_permissions: ['instance_admin'] })
+			.eq('user_id', userId);
+		if (promoteError) throw promoteError;
+	}
+
+	// Sign in to get an access token. The conformance suite stuffs this into
+	// `adapterContext.sessionToken` and our client.ts uses it to scope the
+	// request to this user instead of falling back to anon.
+	const signInClient = createClient(ctx.url, ctx.anonKey, {
+		auth: { persistSession: false, autoRefreshToken: false }
+	});
+	const { data: session, error: signInError } = await signInClient.auth.signInWithPassword({
+		email,
+		password
+	});
+	if (signInError) throw signInError;
+	if (!session.session) throw new Error('seedUser: signInWithPassword returned no session');
+	return { userId, sessionToken: session.session.access_token };
 }

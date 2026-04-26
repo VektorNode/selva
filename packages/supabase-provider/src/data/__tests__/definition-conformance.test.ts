@@ -22,8 +22,9 @@ if (!envCtx) {
 			createScope: async () => {
 				// Seed: 1 owner + 1 secondary user + 1 org + 2 projects. Definitions
 				// created in the suite FK to one of those two projects.
-				const ownerId = await seedUser(envCtx, '');
-				const secondaryUserId = await seedUser(envCtx, '');
+				const { userId: ownerId, sessionToken: ownerSessionToken } = await seedUser(envCtx, '');
+				const { userId: secondaryUserId, sessionToken: secondaryUserSessionToken } =
+					await seedUser(envCtx, '');
 				const orgId = crypto.randomUUID();
 				const projectId = crypto.randomUUID();
 				const secondaryProjectId = crypto.randomUUID();
@@ -72,7 +73,14 @@ if (!envCtx) {
 				]);
 				if (p1Error) throw p1Error;
 
-				return { ownerId, projectId, secondaryProjectId, secondaryUserId };
+				return {
+					ownerId,
+					ownerSessionToken,
+					projectId,
+					secondaryProjectId,
+					secondaryUserId,
+					secondaryUserSessionToken
+				};
 			}
 		});
 	});

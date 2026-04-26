@@ -17,7 +17,7 @@ import type {
 } from '../../index.js';
 import { DEFAULT_ORG_PERMISSIONS } from '../../organizations/schemas.js';
 import { SYSTEM_CONTEXT } from '../../context.js';
-import { makeCtx, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
+import { makeSeedHelpers, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
 
 export interface OrgStoreConformanceOptions {
 	/** Name to show in test output (e.g. "local-provider"). */
@@ -45,8 +45,6 @@ export interface OrgStoreConformanceOptions {
 		| Promise<{ invites: IInviteStore; computeServer: IComputeServerStore }>
 		| { invites: IInviteStore; computeServer: IComputeServerStore };
 }
-
-const ctx = makeCtx;
 
 function org(ownerId: string, overrides: Partial<Organization> = {}): Organization {
 	const now = new Date().toISOString();
@@ -87,7 +85,7 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 		ctxIsolation = false,
 		createCompanionStores
 	} = opts;
-	const seed = () => seedUser(makeUuid());
+	const { seed, ctx } = makeSeedHelpers(seedUser);
 
 	describe(`IOrgStore conformance: ${name}`, () => {
 		// ============================================================================

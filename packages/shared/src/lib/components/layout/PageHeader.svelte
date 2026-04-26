@@ -8,6 +8,7 @@
 		logo?: string;
 		navItems?: Snippet;
 		rightContent?: Snippet;
+		subnav?: Snippet;
 		showModeToggle?: boolean;
 		class?: string;
 	}
@@ -18,6 +19,7 @@
 		logo = '/favicon/favicon.svg',
 		navItems,
 		rightContent,
+		subnav,
 		showModeToggle = true,
 		class: className = ''
 	}: PageHeaderProps = $props();
@@ -56,4 +58,10 @@
 			{/if}
 		</div>
 	</div>
+
+	{#if subnav}
+		<div class="h-10 px-6 flex items-center border-t border-border/60">
+			{@render subnav()}
+		</div>
+	{/if}
 </header>

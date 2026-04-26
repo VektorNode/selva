@@ -528,5 +528,13 @@ function mapError(e: unknown): Error {
 	if (pg?.code === '23503') {
 		return new ProviderError(pg.message ?? 'Foreign key violation', 409);
 	}
-	return e instanceof Error ? e : new Error(String(e));
+	if (e instanceof Error) return e;
+	if (e && typeof e === 'object') {
+		const obj = e as { message?: string; details?: string; hint?: string; code?: string };
+		const msg = obj.message ?? obj.details ?? obj.hint ?? 'Unknown Postgres error';
+		const err = new Error(obj.code ? `[${obj.code}] ${msg}` : msg);
+		Object.assign(err, obj);
+		return err;
+	}
+	return new Error(String(e));
 }

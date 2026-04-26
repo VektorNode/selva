@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import { PageHeader, PageContent } from '@selvajs/shared';
+	import { PageHeader, PageContent, SubNav, type SubNavItem } from '@selvajs/shared';
+	import { Gauge, Building2, Users, RotateCcw, Server, Settings, ScrollText } from '@lucide/svelte';
 	import UserChip from '$lib/components/UserChip.svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 
@@ -21,32 +21,61 @@
 		return data.orgPermissions.includes(p as OrgPermission);
 	};
 
-	const adminNavItems = $derived(
+	const adminTabs = $derived(
 		[
-			{ href: '/admin', label: 'General', show: true },
-			{ href: '/admin/users', label: 'Users', show: can('manage_instance_users') },
-			{ href: '/admin/compute', label: 'Compute', show: can('manage_compute') }
-		].filter((i) => i.show)
+			{ href: '/admin', label: 'General', icon: Gauge, show: true },
+			{
+				href: '/admin/organizations',
+				label: 'Organizations',
+				icon: Building2,
+				match: 'prefix' as const,
+				show: can('instance_admin')
+			},
+			{
+				href: '/admin/users',
+				label: 'Users',
+				icon: Users,
+				match: 'prefix' as const,
+				show: can('manage_instance_users')
+			},
+			{
+				href: '/admin/reclaim',
+				label: 'Reclaim',
+				icon: RotateCcw,
+				match: 'prefix' as const,
+				show: can('instance_admin')
+			},
+			{
+				href: '/admin/compute',
+				label: 'Compute',
+				icon: Server,
+				match: 'prefix' as const,
+				show: can('manage_compute')
+			},
+			{
+				href: '/admin/system',
+				label: 'System',
+				icon: Settings,
+				match: 'prefix' as const,
+				show: can('instance_admin')
+			},
+			{
+				href: '/admin/audit',
+				label: 'Audit log',
+				icon: ScrollText,
+				match: 'prefix' as const,
+				show: can('instance_admin')
+			}
+		].filter((i) => i.show) satisfies (SubNavItem & { show: boolean })[]
 	);
-
-	const isActive = (href: string) =>
-		href === '/admin' ? page.url.pathname === '/admin' : page.url.pathname.startsWith(href);
 </script>
 
 <PageHeader title="Admin">
-	{#snippet navItems()}
-		{#each adminNavItems as item (item.href)}
-			<a
-				href={item.href}
-				class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors
-					{isActive(item.href) ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}"
-			>
-				{item.label}
-			</a>
-		{/each}
-	{/snippet}
 	{#snippet rightContent()}
 		<UserChip />
+	{/snippet}
+	{#snippet subnav()}
+		<SubNav items={adminTabs} />
 	{/snippet}
 </PageHeader>
 

@@ -106,12 +106,18 @@ if (!liveStackAvailable) {
 			it('cover images land in the public bucket', async () => {
 				const guid = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 				const path = definitionPaths.image(guid);
-				// Pre-transcoded webp bytes — a real upload would go through
-				// transcodeImageIfNeeded; we're testing routing, not transcode.
-				const webpHeader = Uint8Array.from([
-					0x52, 0x49, 0x46, 0x46, 0x1a, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50
+				// Real 1×1 transparent PNG. The provider runs every image through
+				// transcodeImageIfNeeded → sharp, so a hand-crafted byte stub
+				// would fail the decode. Routing (the test's actual concern) is
+				// independent of which format the input arrives in.
+				const tinyPng = Uint8Array.from([
+					137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0,
+					0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 9, 112, 72, 89, 115, 0, 0,
+					3, 232, 0, 0, 3, 232, 1, 181, 123, 82, 107, 0, 0, 0, 13, 73, 68, 65, 84, 120,
+					156, 99, 96, 96, 96, 96, 0, 0, 0, 5, 0, 1, 165, 246, 69, 64, 0, 0, 0, 0, 73,
+					69, 78, 68, 174, 66, 96, 130
 				]);
-				await storage.put(path, webpHeader, 'image/webp');
+				await storage.put(path, tinyPng, 'image/png');
 				expect(await existsInBucket(PUBLIC_BUCKET, path)).toBe(true);
 				expect(await existsInBucket(PRIVATE_BUCKET, path)).toBe(false);
 			});
