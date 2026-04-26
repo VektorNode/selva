@@ -12,8 +12,9 @@
 		Textarea,
 		toast
 	} from '@selvajs/shared';
-	import { Image, Trash2, X } from '@lucide/svelte';
+	import { ArrowLeft, Image, Trash2, X } from '@lucide/svelte';
 	import ImageUploadField from '$lib/components/definitions/ImageUploadField.svelte';
+	import ProjectPicker from '$lib/components/definitions/ProjectPicker.svelte';
 	import type { DefinitionRecord, ProjectWithMembers, ComputeServerConfig } from '../+page.server';
 	import type { DefinitionStatus } from '@selvajs/platform';
 	import VersionsSection from './VersionsSection.svelte';
@@ -39,6 +40,8 @@
 		onSave: (guid: string, patch: EditPatch) => Promise<void>;
 		onDelete: (guid: string) => Promise<void>;
 		onOpenRunner: (guid: string) => void;
+		/** Optional — when set, surfaces a Back link to return to the detail view. */
+		onBack?: () => void;
 	}
 
 	let {
@@ -49,7 +52,8 @@
 		onClose,
 		onSave,
 		onDelete,
-		onOpenRunner
+		onOpenRunner,
+		onBack
 	}: Props = $props();
 
 	let activeTab = $state<'versions' | 'details' | 'shares'>('versions');
@@ -82,6 +86,26 @@
 	// Dialog state
 	let showDeleteConfirm = $state(false);
 	let uploadingImage = $state(false);
+	let pendingProjectId = $state<string | null>(null);
+
+	const pendingProject = $derived(
+		pendingProjectId ? (projects.find((p) => p.id === pendingProjectId) ?? null) : null
+	);
+	const currentProject = $derived(projects.find((p) => p.id === projectId) ?? null);
+
+	function handleProjectChange(nextId: string) {
+		if (nextId === projectId) return;
+		pendingProjectId = nextId;
+	}
+
+	function confirmProjectChange() {
+		if (pendingProjectId) projectId = pendingProjectId;
+		pendingProjectId = null;
+	}
+
+	function cancelProjectChange() {
+		pendingProjectId = null;
+	}
 
 	const imageMode = $derived<'url' | 'upload'>(
 		userImageMode ?? (record.coverImage?.startsWith('/api/definitions/') ? 'upload' : 'url')
@@ -138,8 +162,19 @@
 		</Button>
 	</div>
 
+	{#if onBack}
+		<button
+			type="button"
+			onclick={onBack}
+			class="mx-6 mt-4 inline-flex items-center gap-1.5 self-start text-xs text-muted-foreground transition-colors hover:text-foreground"
+		>
+			<ArrowLeft class="h-3 w-3" />
+			Back to definition
+		</button>
+	{/if}
+
 	<Tabs.Root bind:value={activeTab} class="flex flex-1 flex-col overflow-hidden">
-		<Tabs.List class="mx-6 mt-4 grid w-auto grid-cols-3">
+		<Tabs.List class={`mx-6 grid w-auto grid-cols-3 ${onBack ? 'mt-2' : 'mt-4'}`}>
 			<Tabs.Trigger value="versions">Versions</Tabs.Trigger>
 			<Tabs.Trigger value="details">Details</Tabs.Trigger>
 			<Tabs.Trigger value="shares">Share links</Tabs.Trigger>
@@ -242,13 +277,12 @@
 					{#if projects.length > 1}
 						<div class="space-y-1.5">
 							<Label for="edit-proj">Project</Label>
-							<select
+							<ProjectPicker
 								id="edit-proj"
-								bind:value={projectId}
-								class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-							>
-								{#each projects as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
-							</select>
+								{projects}
+								value={projectId}
+								onChange={handleProjectChange}
+							/>
 						</div>
 					{/if}
 					{#if computeServers.length > 1}
@@ -307,6 +341,29 @@
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
 			<AlertDialog.Action onclick={() => onDelete(record.guid)}>Delete</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>
+
+<AlertDialog.Root
+	open={pendingProjectId !== null}
+	onOpenChange={(o) => {
+		if (!o) cancelProjectChange();
+	}}
+>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>Move to a different project?</AlertDialog.Title>
+			<AlertDialog.Description>
+				<strong>{record.displayName}</strong> will move from
+				<strong>{currentProject?.name ?? '—'}</strong>
+				to <strong>{pendingProject?.name ?? '—'}</strong>. Project members and visibility may change
+				accordingly. Existing share links keep working.
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel onclick={cancelProjectChange}>Cancel</AlertDialog.Cancel>
+			<AlertDialog.Action onclick={confirmProjectChange}>Move</AlertDialog.Action>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>

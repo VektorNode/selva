@@ -2,6 +2,7 @@
 	import { Button, Dialog, Input, Label, Textarea, toast, Badge } from '@selvajs/shared';
 	import { X } from '@lucide/svelte';
 	import ImageUploadField from './ImageUploadField.svelte';
+	import ProjectPicker from './ProjectPicker.svelte';
 
 	interface Project {
 		id: string;
@@ -195,15 +196,12 @@
 					{#if showProjectDropdown}
 						<div class="space-y-1">
 							<Label for="new-project">Project</Label>
-							<select
+							<ProjectPicker
 								id="new-project"
-								bind:value={selectedProjectId}
-								class="border-input bg-background focus-visible:ring-ring h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
-							>
-								{#each projects as project (project.id)}
-									<option value={project.id}>{project.name}</option>
-								{/each}
-							</select>
+								{projects}
+								value={selectedProjectId}
+								onChange={(id) => (selectedProjectId = id)}
+							/>
 						</div>
 					{:else if defaultProjectId}
 						{@const selectedProject = projects.find((p) => p.id === defaultProjectId)}
