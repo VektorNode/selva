@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { getOrganizationProvider } from '$lib/server/providers.server';
 import { requireInstanceAdmin } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
-import { CreateOrgSchema, ProviderError, type Organization } from '@selva/platform';
+import { CreateOrgSchema, MAX_PAGE_LIMIT, ProviderError, type Organization } from '@selva/platform';
 
 /**
  * Spec §7 — instance-admin-only org management. Multi-tenant deployments use
@@ -16,7 +16,8 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	requireInstanceAdmin(locals);
 	const ctx = locals.ctx!;
 
-	const limit = Number(url.searchParams.get('limit') ?? 200);
+	const rawLimit = Number(url.searchParams.get('limit') ?? 200);
+	const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), MAX_PAGE_LIMIT) : 200;
 	const cursor = url.searchParams.get('cursor') ?? undefined;
 
 	try {

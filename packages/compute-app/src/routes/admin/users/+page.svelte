@@ -196,16 +196,6 @@
 		}
 	}
 
-	async function copyInviteLink(token: string) {
-		const url = `${window.location.origin}/accept-invite?token=${token}`;
-		try {
-			await navigator.clipboard.writeText(url);
-			toast.success('Invite link copied');
-		} catch {
-			toast.error('Could not copy to clipboard');
-		}
-	}
-
 	async function revokeInvite(id: string, email: string) {
 		if (!confirm(`Revoke invite for "${email}"?`)) return;
 		revokingId = id;
@@ -580,10 +570,6 @@
 								</p>
 							</div>
 							{#if !invite.acceptedAt && !expired}
-								<Button size="sm" variant="outline" onclick={() => copyInviteLink(invite.token)}>
-									<Copy class="mr-1.5 h-3.5 w-3.5" />
-									Copy link
-								</Button>
 								<Button
 									size="sm"
 									variant="ghost"
