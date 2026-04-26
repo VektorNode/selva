@@ -275,10 +275,18 @@ $$;
 
 alter table public.orgs enable row level security;
 
+-- RLS gates "may this principal touch this row?", not "is the row in a state
+-- worth showing?". Soft-delete filtering (`deleted_at is null`) belongs at the
+-- query layer — every store already issues `.is('deleted_at', null)` on
+-- user-facing reads. Putting the lifecycle check in the USING clause breaks
+-- the soft-delete write itself: `UPDATE ... SET deleted_at = now() RETURNING`
+-- triggers a PostgREST re-read against the SELECT policy, which then filters
+-- out the just-tombstoned row and surfaces as "new row violates RLS". Same
+-- trap for `revoked_at` on share_links below.
 create policy "orgs: members and instance admins can read"
 on public.orgs for select
 to authenticated
-using (deleted_at is null and (public.is_instance_admin() or public.is_org_member(id)));
+using (public.is_instance_admin() or public.is_org_member(id));
 
 create policy "orgs: authenticated can create their own"
 on public.orgs for insert
@@ -288,7 +296,7 @@ with check (public.is_instance_admin() or owner_id = auth.uid());
 create policy "orgs: owners and instance admins can update"
 on public.orgs for update
 to authenticated
-using (deleted_at is null and (public.is_instance_admin() or public.is_org_owner(id)))
+using (public.is_instance_admin() or public.is_org_owner(id))
 with check (public.is_instance_admin() or public.is_org_owner(id));
 
 create policy "orgs: owners and instance admins can delete"
@@ -301,7 +309,7 @@ alter table public.org_members enable row level security;
 create policy "org_members: org members can read roster"
 on public.org_members for select
 to authenticated
-using (deleted_at is null and (public.is_instance_admin() or public.is_org_member(org_id)));
+using (public.is_instance_admin() or public.is_org_member(org_id));
 
 create policy "org_members: admins can insert"
 on public.org_members for insert
@@ -311,7 +319,7 @@ with check (public.is_instance_admin() or public.is_org_admin(org_id));
 create policy "org_members: admins can update"
 on public.org_members for update
 to authenticated
-using (deleted_at is null and (public.is_instance_admin() or public.is_org_admin(org_id)))
+using (public.is_instance_admin() or public.is_org_admin(org_id))
 with check (public.is_instance_admin() or public.is_org_admin(org_id));
 
 create policy "org_members: admins can delete"
@@ -324,7 +332,7 @@ alter table public.projects enable row level security;
 create policy "projects: visible to members"
 on public.projects for select
 to authenticated
-using (deleted_at is null and public.visible_project(id));
+using (public.visible_project(id));
 
 create policy "projects: manage_projects can create"
 on public.projects for insert
@@ -335,9 +343,7 @@ with check (public.has_org_permission(org_id, 'manage_projects'));
 create policy "projects: owners can update"
 on public.projects for update
 to authenticated
-using (
-	deleted_at is null and (public.is_instance_admin() or owner_id = auth.uid())
-)
+using (public.is_instance_admin() or owner_id = auth.uid())
 with check (public.is_instance_admin() or owner_id = auth.uid());
 
 create policy "projects: owners can delete"
@@ -350,7 +356,7 @@ alter table public.project_members enable row level security;
 create policy "project_members: visible to project members"
 on public.project_members for select
 to authenticated
-using (deleted_at is null and (public.is_instance_admin() or public.visible_project(project_id)));
+using (public.is_instance_admin() or public.visible_project(project_id));
 
 -- canManage (§5) collapses to owner-only; org admins no longer silently
 -- manage project members.
@@ -369,12 +375,10 @@ create policy "project_members: managers can update"
 on public.project_members for update
 to authenticated
 using (
-	deleted_at is null and (
-		public.is_instance_admin()
-		or exists (
-			select 1 from public.projects p
-			where p.id = project_id and p.deleted_at is null and p.owner_id = auth.uid()
-		)
+	public.is_instance_admin()
+	or exists (
+		select 1 from public.projects p
+		where p.id = project_id and p.deleted_at is null and p.owner_id = auth.uid()
 	)
 )
 with check (
@@ -486,7 +490,7 @@ alter table public.definitions enable row level security;
 create policy "definitions: visible via project"
 on public.definitions for select
 to authenticated
-using (deleted_at is null and public.visible_project(project_id));
+using (public.visible_project(project_id));
 
 create policy "definitions: editors can insert"
 on public.definitions for insert
@@ -517,22 +521,20 @@ create policy "definitions: editors can update"
 on public.definitions for update
 to authenticated
 using (
-	deleted_at is null and (
-		public.is_instance_admin()
-		or exists (
-			select 1 from public.project_members m
-			where m.project_id = definitions.project_id
-			and m.user_id = auth.uid()
-			and m.deleted_at is null
-			and m.role in ('owner', 'editor')
-		)
-		or exists (
-			select 1 from public.projects p
-			where p.id = definitions.project_id
-			and p.deleted_at is null
-			and p.auto_join_on_upload = true
-			and definitions.owner_id = auth.uid()
-		)
+	public.is_instance_admin()
+	or exists (
+		select 1 from public.project_members m
+		where m.project_id = definitions.project_id
+		and m.user_id = auth.uid()
+		and m.deleted_at is null
+		and m.role in ('owner', 'editor')
+	)
+	or exists (
+		select 1 from public.projects p
+		where p.id = definitions.project_id
+		and p.deleted_at is null
+		and p.auto_join_on_upload = true
+		and definitions.owner_id = auth.uid()
 	)
 )
 with check (
@@ -615,6 +617,38 @@ with check (
 		and p.auto_join_on_upload = true
 		and d.owner_id = auth.uid()
 		and definition_versions.uploaded_by = auth.uid()
+	)
+);
+
+-- Without an explicit DELETE policy, RLS silently affects 0 rows on every
+-- `delete from definition_versions` — `SupabaseDefinitionStore.deleteVersion`
+-- returns success without removing anything, and the FK ON DELETE RESTRICT on
+-- `definitions.live_version_id` / `draft_version_id` never gets a chance to
+-- raise the 23503 the store maps to a 409. Same authority as INSERT.
+create policy "definition_versions: editors can delete"
+on public.definition_versions for delete
+to authenticated
+using (
+	public.is_instance_admin()
+	or exists (
+		select 1
+		from public.definitions d
+		join public.project_members m on m.project_id = d.project_id
+		where d.guid = definition_versions.definition_guid
+		and d.deleted_at is null
+		and m.user_id = auth.uid()
+		and m.deleted_at is null
+		and m.role in ('owner', 'editor')
+	)
+	or exists (
+		select 1
+		from public.definitions d
+		join public.projects p on p.id = d.project_id
+		where d.guid = definition_versions.definition_guid
+		and d.deleted_at is null
+		and p.deleted_at is null
+		and p.auto_join_on_upload = true
+		and d.owner_id = auth.uid()
 	)
 );
 
@@ -842,28 +876,26 @@ create policy "share_links: editors can read"
 on public.share_links for select
 to authenticated
 using (
-	revoked_at is null and (
-		public.is_instance_admin()
-		or exists (
-			select 1
-			from public.definitions d
-			join public.project_members m on m.project_id = d.project_id
-			where d.guid = share_links.definition_guid
-			and d.deleted_at is null
-			and m.user_id = auth.uid()
-			and m.deleted_at is null
-			and m.role in ('owner', 'editor')
-		)
-		or exists (
-			select 1
-			from public.definitions d
-			join public.projects p on p.id = d.project_id
-			where d.guid = share_links.definition_guid
-			and d.deleted_at is null
-			and p.deleted_at is null
-			and p.auto_join_on_upload = true
-			and d.owner_id = auth.uid()
-		)
+	public.is_instance_admin()
+	or exists (
+		select 1
+		from public.definitions d
+		join public.project_members m on m.project_id = d.project_id
+		where d.guid = share_links.definition_guid
+		and d.deleted_at is null
+		and m.user_id = auth.uid()
+		and m.deleted_at is null
+		and m.role in ('owner', 'editor')
+	)
+	or exists (
+		select 1
+		from public.definitions d
+		join public.projects p on p.id = d.project_id
+		where d.guid = share_links.definition_guid
+		and d.deleted_at is null
+		and p.deleted_at is null
+		and p.auto_join_on_upload = true
+		and d.owner_id = auth.uid()
 	)
 );
 
