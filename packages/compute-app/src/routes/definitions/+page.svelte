@@ -46,12 +46,6 @@
 	let addingDefinition = $state(false);
 	let savingDefinitionId = $state<string | null>(null);
 
-	$effect(() => {
-		if (data.projects.length > 0 && activeProjectId === null) {
-			activeProjectId = data.projects[0]?.id ?? null;
-		}
-	});
-
 	const filtered = $derived.by(() => {
 		let records = data.records;
 		if (activeProjectId) records = records.filter((r) => r.projectId === activeProjectId);
@@ -246,7 +240,7 @@
 </script>
 
 <svelte:head>
-	<title>Definitions – Selva</title>
+	<title>Definitions</title>
 </svelte:head>
 
 <div class="flex h-[calc(100vh-3.5rem)] overflow-hidden">
@@ -260,29 +254,37 @@
 	/>
 
 	<div class="flex flex-1 flex-col overflow-hidden">
-		<div class="border-border bg-background shrink-0 border-b px-6 pt-6 pb-3">
-			<div class="flex items-end justify-between gap-4">
-				<div>
-					{#if activeProject}
-						<p class="text-muted-foreground font-mono text-[11px] tracking-widest uppercase">
-							{activeProject.name}
+		<div class="shrink-0 border-b border-border bg-background px-6 py-5">
+			<div class="flex items-start justify-between gap-4">
+				<div class="min-w-0">
+					<p class="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+						{activeProject ? activeProject.name : 'All projects'}
+					</p>
+					<h1 class="text-xl font-semibold tracking-tight text-foreground">Definitions</h1>
+					{#if activeProject?.description}
+						<p class="mt-1 max-w-xl text-sm text-muted-foreground">
+							{activeProject.description}
+						</p>
+					{:else if !activeProject}
+						<p class="mt-1 max-w-xl text-sm text-muted-foreground">
+							Definitions across every project in this organization.
 						</p>
 					{/if}
-					<h1 class="mt-1.5 text-2xl font-semibold tracking-tight">Definitions</h1>
 				</div>
-				<div class="flex shrink-0 items-center gap-2 pb-0.5">
+				<div class="flex shrink-0 items-center gap-2">
 					{#if data.canManageProjects && activeProject}
 						<Button
 							variant="outline"
 							size="sm"
 							onclick={() => (editingProjectId = activeProject.id)}
-							class="gap-1.5"
 						>
-							<Settings class="h-3.5 w-3.5" /> Project settings
+							<Settings class="mr-1.5 h-3.5 w-3.5" />
+							Project settings
 						</Button>
 					{/if}
-					<Button size="sm" onclick={() => (showAddModal = true)} class="gap-1.5">
-						<Plus class="h-3.5 w-3.5" /> Add definition
+					<Button size="sm" onclick={() => (showAddModal = true)}>
+						<Plus class="mr-1.5 h-3.5 w-3.5" />
+						Add definition
 					</Button>
 				</div>
 			</div>
@@ -297,15 +299,13 @@
 						clearable
 					/>
 				</div>
-				<span class="text-muted-foreground font-mono text-[12px]">
+				<span class="font-mono text-xs text-muted-foreground tabular-nums">
 					{filtered.length} definition{filtered.length === 1 ? '' : 's'}
 				</span>
-				<div class="border-border ml-auto flex overflow-hidden rounded-lg border">
+				<div class="ml-auto flex overflow-hidden rounded-md border border-border">
 					<button
 						onclick={() => (viewMode = 'grid')}
-						class="p-1.5 transition-colors {viewMode === 'grid'
-							? 'bg-muted'
-							: 'bg-card hover:bg-muted/60'}"
+						class={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-accent text-accent-foreground' : 'bg-card text-muted-foreground hover:bg-muted/60'}`}
 						title="Grid view"
 						aria-label="Grid view"
 					>
@@ -313,9 +313,7 @@
 					</button>
 					<button
 						onclick={() => (viewMode = 'list')}
-						class="border-border border-l p-1.5 transition-colors {viewMode === 'list'
-							? 'bg-muted'
-							: 'bg-card hover:bg-muted/60'}"
+						class={`border-l border-border p-1.5 transition-colors ${viewMode === 'list' ? 'bg-accent text-accent-foreground' : 'bg-card text-muted-foreground hover:bg-muted/60'}`}
 						title="List view"
 						aria-label="List view"
 					>
@@ -326,17 +324,21 @@
 
 			{#if filtered.length === 0}
 				<div
-					class="border-border flex flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center"
+					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border py-20 text-center"
 				>
 					<p class="text-sm font-medium">No definitions found</p>
-					<p class="text-muted-foreground mt-1 text-xs">
+					<p class="mt-1 text-xs text-muted-foreground">
 						{searchQuery ? 'Try adjusting your search' : 'Add your first definition to get started'}
 					</p>
 				</div>
 			{:else if viewMode === 'grid'}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 					{#each filtered as record (record.guid)}
-						<DefinitionGridCard {record} onOpen={(r) => (drawerRecord = r)} />
+						<DefinitionGridCard
+							{record}
+							onOpen={(r) => (drawerRecord = r)}
+							projectName={activeProjectId === null ? projectName(record.projectId) : undefined}
+						/>
 					{/each}
 				</div>
 			{:else}

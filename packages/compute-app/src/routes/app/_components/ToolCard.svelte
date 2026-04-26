@@ -9,11 +9,12 @@
 		starred: boolean;
 		loading: boolean;
 		starBusy: boolean;
+		projectName?: string;
 		onOpen: (guid: string) => void;
 		onToggleStar: (guid: string) => void;
 	}
 
-	let { record, starred, loading, starBusy, onOpen, onToggleStar }: Props = $props();
+	let { record, starred, loading, starBusy, projectName, onOpen, onToggleStar }: Props = $props();
 </script>
 
 <button
@@ -46,6 +47,16 @@
 			variant="overlay"
 			onToggle={() => onToggleStar(record.guid)}
 		/>
+
+		{#if projectName}
+			<div class="absolute top-2.5 left-2.5">
+				<span
+					class="rounded-full bg-background/85 px-2 py-0.5 font-mono text-[10px] text-foreground backdrop-blur-sm"
+				>
+					{projectName}
+				</span>
+			</div>
+		{/if}
 
 		{#if loading}
 			<div class="absolute inset-0 flex items-center justify-center bg-black/25">

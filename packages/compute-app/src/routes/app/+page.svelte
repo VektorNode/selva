@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-	import { Search, toast, PageHeader, PageContent } from '@selvajs/shared';
-	import { ArrowRight, ChevronDown } from '@lucide/svelte';
+	import { Search, toast, PageHeader, PageContent, SectionHeader } from '@selvajs/shared';
+	import { ArrowRight, Filter as FilterIcon, X } from '@lucide/svelte';
 	import type { DefinitionRecord } from '@selvajs/platform';
 	import type { PageData } from './$types';
 	import ToolCard from './_components/ToolCard.svelte';
@@ -10,6 +9,7 @@
 	import ViewToggle from './_components/ViewToggle.svelte';
 	import { formatRelative } from './_components/toolStyles';
 	import UserChip from '$lib/components/UserChip.svelte';
+	import MainNav from '$lib/components/MainNav.svelte';
 
 	type ViewMode = 'grid' | 'list';
 
@@ -23,11 +23,9 @@
 	let activeCategory = $state<string | null>(null);
 	let activeTag = $state<string | null>(null);
 	let viewMode = $state<ViewMode>('grid');
-	let expandedProjects = $state<Set<string>>(new Set());
 	let loadingGuid = $state<string | null>(null);
 	let starBusyGuid = $state<string | null>(null);
-
-	const PREVIEW_COUNT = 4;
+	let showFilters = $state(false);
 
 	// Client-side starred set so optimistic toggles feel instant.
 	const starredIds = $derived(new Set(data.starredRecords.map((r) => r.guid)));
@@ -51,6 +49,10 @@
 		Array.from(new Set(allRecords.flatMap((r) => r.tags ?? []))).sort()
 	);
 
+	function projectName(id: string) {
+		return data.projects[id]?.name ?? '';
+	}
+
 	function matches(r: DefinitionRecord): boolean {
 		if (activeProjectId && r.projectId !== activeProjectId) return false;
 		if (activeCategory && r.category !== activeCategory) return false;
@@ -68,35 +70,10 @@
 
 	const filteredRecords = $derived(allRecords.filter(matches));
 
-	const hasAnyFilter = $derived(
-		searchQuery.trim() !== '' ||
-			activeProjectId !== null ||
-			activeCategory !== null ||
-			activeTag !== null
+	const activeFilterCount = $derived(
+		[activeProjectId, activeCategory, activeTag].filter((v) => v !== null).length
 	);
-
-	// Group by project, keeping only projects with at least one matching record.
-	const grouped = $derived.by(() => {
-		const byProject = new SvelteMap<string, DefinitionRecord[]>();
-		for (const r of filteredRecords) {
-			const list = byProject.get(r.projectId);
-			if (list) list.push(r);
-			else byProject.set(r.projectId, [r]);
-		}
-		// Order projects by the order they appear in data.projects, unknown ids last.
-		const ordered: { id: string; name: string; records: DefinitionRecord[] }[] = [];
-		for (const p of projectList) {
-			const records = byProject.get(p.id);
-			if (records && records.length > 0) {
-				ordered.push({ id: p.id, name: p.name, records });
-				byProject.delete(p.id);
-			}
-		}
-		for (const [id, records] of byProject) {
-			ordered.push({ id, name: data.projects[id]?.name ?? 'Unknown project', records });
-		}
-		return ordered;
-	});
+	const hasAnyFilter = $derived(searchQuery.trim() !== '' || activeFilterCount > 0);
 
 	// ============================================================================
 	// Actions
@@ -124,136 +101,171 @@
 		}
 	}
 
-	function toggleExpanded(projectId: string) {
-		const next = new SvelteSet(expandedProjects);
-		if (next.has(projectId)) next.delete(projectId);
-		else next.add(projectId);
-		expandedProjects = next;
-	}
-
 	function clearFilters() {
 		searchQuery = '';
 		activeProjectId = null;
 		activeCategory = null;
 		activeTag = null;
+		showFilters = false;
 	}
 </script>
 
-<PageHeader>
+<PageHeader homeUrl="/app">
+	{#snippet navItems()}
+		<MainNav
+			platformPermissions={data.user?.platformPermissions ?? []}
+			orgPermissions={data.ctx?.orgPermissions ?? []}
+		/>
+	{/snippet}
 	{#snippet rightContent()}
 		<UserChip />
 	{/snippet}
 </PageHeader>
 
 <PageContent>
-	<div class="mx-auto max-w-6xl px-6 pt-6 pb-20">
-		<!-- ── Header ───────────────────────────────────────────────────── -->
-		<div class="flex flex-wrap items-center gap-3">
-			<h1 class="text-lg font-semibold">Tools</h1>
-			<span class="text-muted-foreground text-[12px]">
-				{filteredRecords.length}
-				{filteredRecords.length === 1 ? 'tool' : 'tools'}
-				{#if hasAnyFilter}<button
-						class="hover:text-foreground ml-2 underline underline-offset-2"
-						onclick={clearFilters}>clear filters</button
-					>{/if}
-			</span>
-			<div class="ml-auto">
+	<div class="space-y-6">
+		<SectionHeader
+			eyebrow="Workspace"
+			title="Tools"
+			description={`${filteredRecords.length} tool${filteredRecords.length === 1 ? '' : 's'}${
+				projectList.length > 0
+					? ` across ${projectList.length} project${projectList.length === 1 ? '' : 's'}`
+					: ''
+			}.`}
+		>
+			{#snippet actions()}
 				<ViewToggle mode={viewMode} onChange={(m) => (viewMode = m)} />
+			{/snippet}
+		</SectionHeader>
+
+		<!-- Search + filter bar -->
+		<div class="flex flex-wrap items-center gap-2">
+			<div class="min-w-60 flex-1">
+				<Search
+					bind:value={searchQuery}
+					placeholder="Search tools, descriptions, tags…"
+					clearable
+					class="h-9 rounded-md text-sm"
+				/>
 			</div>
-		</div>
 
-		<!-- ── Search + filter row ──────────────────────────────────────── -->
-		<div class="mt-4 flex flex-wrap items-center gap-2">
-			<Search
-				bind:value={searchQuery}
-				placeholder="Search tools, descriptions, tags…"
-				clearable
-				containerClass="min-w-[240px] flex-1"
-				class="h-9 rounded-lg text-[13px]"
-			/>
-
-			{#if availableCategories.length > 1}
-				<div class="relative">
-					<select
-						bind:value={activeCategory}
-						class="border-border bg-card h-9 appearance-none rounded-lg border py-1 pr-8 pl-3 text-[13px]"
-					>
-						<option value={null}>All categories</option>
-						{#each availableCategories as cat (cat)}
-							<option value={cat}>{cat}</option>
-						{/each}
-					</select>
-					<ChevronDown
-						class="text-muted-foreground pointer-events-none absolute top-1/2 right-2 h-4 w-4 -translate-y-1/2"
-					/>
-				</div>
-			{/if}
-
-			{#if availableTags.length > 1}
-				<div class="relative">
-					<select
-						bind:value={activeTag}
-						class="border-border bg-card h-9 appearance-none rounded-lg border py-1 pr-8 pl-3 text-[13px]"
-					>
-						<option value={null}>All tags</option>
-						{#each availableTags as tag (tag)}
-							<option value={tag}>#{tag}</option>
-						{/each}
-					</select>
-					<ChevronDown
-						class="text-muted-foreground pointer-events-none absolute top-1/2 right-2 h-4 w-4 -translate-y-1/2"
-					/>
-				</div>
-			{/if}
-		</div>
-
-		<!-- ── Project pills ────────────────────────────────────────────── -->
-		{#if projectList.length > 1}
-			<div class="mt-3 flex flex-wrap gap-1.5">
+			{#if availableCategories.length > 0 || availableTags.length > 0 || projectList.length > 1}
 				<button
-					onclick={() => (activeProjectId = null)}
-					class="rounded-full px-3 py-1 text-[12px] transition-colors {activeProjectId === null
-						? 'bg-foreground text-background'
-						: 'bg-muted text-muted-foreground hover:text-foreground'}"
+					type="button"
+					onclick={() => (showFilters = !showFilters)}
+					class={`relative inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors ${
+						showFilters || activeFilterCount > 0
+							? 'border-border bg-accent text-accent-foreground'
+							: 'border-input bg-background text-foreground hover:bg-muted/40'
+					}`}
 				>
-					All projects
+					<FilterIcon class="h-3.5 w-3.5" />
+					Filters
+					{#if activeFilterCount > 0}
+						<span
+							class="rounded-full bg-primary px-1.5 py-px font-mono text-[10px] text-primary-foreground"
+						>
+							{activeFilterCount}
+						</span>
+					{/if}
 				</button>
-				{#each projectList as p (p.id)}
-					<button
-						onclick={() => (activeProjectId = activeProjectId === p.id ? null : p.id)}
-						class="rounded-full px-3 py-1 text-[12px] transition-colors {activeProjectId === p.id
-							? 'bg-foreground text-background'
-							: 'bg-muted text-muted-foreground hover:text-foreground'}"
-					>
-						{p.name}
-					</button>
-				{/each}
+			{/if}
+
+			{#if hasAnyFilter}
+				<button
+					type="button"
+					onclick={clearFilters}
+					class="inline-flex h-9 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+				>
+					<X class="h-3 w-3" />
+					Clear
+				</button>
+			{/if}
+		</div>
+
+		{#if showFilters}
+			<div class="rounded-md border border-border bg-card p-4">
+				<div class="grid gap-4 sm:grid-cols-3">
+					{#if projectList.length > 1}
+						<div class="space-y-1.5">
+							<label class="text-xs font-medium text-muted-foreground" for="filter-project">
+								Project
+							</label>
+							<select
+								id="filter-project"
+								bind:value={activeProjectId}
+								class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+							>
+								<option value={null}>All projects</option>
+								{#each projectList as p (p.id)}
+									<option value={p.id}>{p.name}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+
+					{#if availableCategories.length > 0}
+						<div class="space-y-1.5">
+							<label class="text-xs font-medium text-muted-foreground" for="filter-category">
+								Category
+							</label>
+							<select
+								id="filter-category"
+								bind:value={activeCategory}
+								class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+							>
+								<option value={null}>All categories</option>
+								{#each availableCategories as cat (cat)}
+									<option value={cat}>{cat}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+
+					{#if availableTags.length > 0}
+						<div class="space-y-1.5">
+							<label class="text-xs font-medium text-muted-foreground" for="filter-tag">
+								Tag
+							</label>
+							<select
+								id="filter-tag"
+								bind:value={activeTag}
+								class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+							>
+								<option value={null}>All tags</option>
+								{#each availableTags as tag (tag)}
+									<option value={tag}>#{tag}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+				</div>
 			</div>
 		{/if}
 
-		<!-- ── Recent runs (only with no filters) ───────────────────────── -->
+		<!-- Recent runs (only with no filters) -->
 		{#if data.recentRuns.length > 0 && !hasAnyFilter}
-			<section class="mt-10">
+			<section>
 				<div class="mb-3 flex items-baseline justify-between">
-					<span class="text-muted-foreground font-mono text-[11px] tracking-widest uppercase">
+					<span class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
 						Recent runs
 					</span>
-					<span class="text-muted-foreground text-[12px]">Resume where you left off</span>
+					<span class="text-xs text-muted-foreground">Resume where you left off</span>
 				</div>
-				<div class="border-border bg-card overflow-hidden rounded-xl border">
+				<div class="overflow-hidden rounded-md border border-border bg-card">
 					{#each data.recentRuns.slice(0, 5) as run, i (run.runId)}
 						<button
 							onclick={() => open(run.definitionId)}
 							disabled={loadingGuid === run.definitionId}
-							class="hover:bg-muted/40 group grid w-full items-center gap-4 px-4 py-3 text-left text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-60
-							{i < Math.min(data.recentRuns.length, 5) - 1 ? 'border-border border-b' : ''}"
+							class={`group grid w-full items-center gap-4 px-4 py-3 text-left text-sm transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60 ${
+								i < Math.min(data.recentRuns.length, 5) - 1 ? 'border-b border-border' : ''
+							}`}
 							style="grid-template-columns: 1fr 120px auto"
 						>
-							<span class="truncate font-semibold">{run.definitionName}</span>
-							<span class="text-muted-foreground font-mono text-[12px]"
-								>{formatRelative(run.timestamp)}</span
-							>
+							<span class="truncate font-medium">{run.definitionName}</span>
+							<span class="font-mono text-xs text-muted-foreground">
+								{formatRelative(run.timestamp)}
+							</span>
 							<span
 								class="flex items-center gap-1 text-xs font-medium opacity-0 transition-opacity group-hover:opacity-100"
 							>
@@ -265,81 +277,48 @@
 			</section>
 		{/if}
 
-		<!-- ── Grouped project sections ─────────────────────────────────── -->
-		{#if grouped.length > 0}
-			<div class="mt-10 space-y-10">
-				{#each grouped as group (group.id)}
-					{@const expanded = expandedProjects.has(group.id)}
-					{@const visible = expanded ? group.records : group.records.slice(0, PREVIEW_COUNT)}
-					{@const hidden = group.records.length - visible.length}
-
-					<section>
-						<div class="mb-3 flex items-baseline justify-between">
-							<div class="flex items-baseline gap-2">
-								<span class="text-[15px] font-semibold">{group.name}</span>
-								<span class="text-muted-foreground text-[12px]">
-									{group.records.length}
-									{group.records.length === 1 ? 'tool' : 'tools'}
-								</span>
-							</div>
-						</div>
-
-						{#if viewMode === 'grid'}
-							<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-								{#each visible as record (record.guid)}
-									<ToolCard
-										{record}
-										starred={starredIds.has(record.guid)}
-										loading={loadingGuid === record.guid}
-										starBusy={starBusyGuid === record.guid}
-										onOpen={open}
-										onToggleStar={toggleStar}
-									/>
-								{/each}
-							</div>
-						{:else}
-							<ToolListView
-								records={visible}
-								{starredIds}
-								{loadingGuid}
-								{starBusyGuid}
-								onOpen={open}
-								onToggleStar={toggleStar}
-							/>
-						{/if}
-
-						{#if hidden > 0 || expanded}
-							<div class="mt-3 flex justify-center">
-								<button
-									onclick={() => toggleExpanded(group.id)}
-									class="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-medium transition-colors"
-								>
-									{#if expanded}
-										Show less
-									{:else}
-										Show all {group.records.length}
-										<ArrowRight class="h-3 w-3" />
-									{/if}
-								</button>
-							</div>
-						{/if}
-					</section>
-				{/each}
-			</div>
+		<!-- Tool grid (flat — no per-project sectioning) -->
+		{#if filteredRecords.length > 0}
+			{#if viewMode === 'grid'}
+				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+					{#each filteredRecords as record (record.guid)}
+						<ToolCard
+							{record}
+							starred={starredIds.has(record.guid)}
+							loading={loadingGuid === record.guid}
+							starBusy={starBusyGuid === record.guid}
+							projectName={projectList.length > 1 ? projectName(record.projectId) : undefined}
+							onOpen={open}
+							onToggleStar={toggleStar}
+						/>
+					{/each}
+				</div>
+			{:else}
+				<ToolListView
+					records={filteredRecords}
+					{starredIds}
+					{loadingGuid}
+					{starBusyGuid}
+					onOpen={open}
+					onToggleStar={toggleStar}
+				/>
+			{/if}
 		{:else}
-			<!-- ── Empty state ─────────────────────────────────────────────── -->
-			<div class="flex flex-col items-center justify-center py-24 text-center">
+			<!-- Empty state -->
+			<div
+				class="flex flex-col items-center justify-center rounded-md border-2 border-dashed border-border py-20 text-center"
+			>
 				{#if hasAnyFilter}
 					<p class="text-sm font-medium">No tools match your filters</p>
 					<button
-						class="text-muted-foreground hover:text-foreground mt-2 text-xs underline underline-offset-2"
+						class="mt-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
 						onclick={clearFilters}
 					>
 						Clear all filters
 					</button>
 				{:else}
 					<p class="text-sm font-medium">No tools available yet</p>
-					<p class="text-muted-foreground mt-1 text-xs">
+					<p class="mt-1 text-xs text-muted-foreground">
 						Ask an admin to publish a Grasshopper definition.
 					</p>
 				{/if}

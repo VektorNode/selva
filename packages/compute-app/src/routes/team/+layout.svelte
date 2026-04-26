@@ -2,10 +2,14 @@
 	import { PageHeader, PageContent, SubNav, type SubNavItem } from '@selvajs/shared';
 	import { Gauge, Users, FolderKanban, Activity, Link2, SlidersHorizontal } from '@lucide/svelte';
 	import UserChip from '$lib/components/UserChip.svelte';
-	import type { OrgPermission } from '@selvajs/platform';
+	import MainNav from '$lib/components/MainNav.svelte';
+	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 
 	interface LayoutProps {
-		data: { ctx: { orgPermissions: OrgPermission[] } | null };
+		data: {
+			user?: { platformPermissions?: PlatformPermission[] } | null;
+			ctx: { orgPermissions: OrgPermission[] } | null;
+		};
 		children?: import('svelte').Snippet;
 	}
 	let { data, children }: LayoutProps = $props();
@@ -55,7 +59,13 @@
 	);
 </script>
 
-<PageHeader title="Team">
+<PageHeader homeUrl="/app">
+	{#snippet navItems()}
+		<MainNav
+			platformPermissions={data.user?.platformPermissions ?? []}
+			orgPermissions={orgPerms}
+		/>
+	{/snippet}
 	{#snippet rightContent()}
 		<UserChip />
 	{/snippet}

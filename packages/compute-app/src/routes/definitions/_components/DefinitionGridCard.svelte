@@ -7,9 +7,10 @@
 	interface Props {
 		record: DefinitionRecord;
 		onOpen: (record: DefinitionRecord) => void;
+		projectName?: string;
 	}
 
-	let { record, onOpen }: Props = $props();
+	let { record, onOpen, projectName }: Props = $props();
 </script>
 
 <button
@@ -27,6 +28,15 @@
 		<div class="absolute top-2.5 left-2.5">
 			<StatusBadge status={record.status} />
 		</div>
+		{#if projectName}
+			<div class="absolute top-2.5 right-2.5">
+				<span
+					class="rounded-full bg-background/85 px-2 py-0.5 font-mono text-[10px] text-foreground backdrop-blur-sm"
+				>
+					{projectName}
+				</span>
+			</div>
+		{/if}
 	</div>
 	<div class="p-3.5">
 		<p class="truncate text-[13.5px] font-semibold">{record.displayName}</p>
