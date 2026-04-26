@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import type { IComputeServerStore } from '../../data/interface.js';
 import type { ComputeServerConfig } from '../../computeServer/types.js';
 import { SYSTEM_CONTEXT, type RequestContext } from '../../context.js';
-import { ALL_PLATFORM_PERMISSIONS } from '../../auth/types.js';
+import { ALL_PLATFORM_PERMISSIONS } from '../../permissions/types.js';
 import { ALL_ORG_PERMISSIONS } from '../../organizations/schemas.js';
 import { makeUuid } from './helpers.js';
 

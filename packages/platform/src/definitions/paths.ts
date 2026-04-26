@@ -1,12 +1,10 @@
 import type { DefinitionFileExt } from './types.js';
 
 /**
- * Path-segment safety check. Blocks traversal (`..`), absolute markers,
- * separators, NUL, and empty segments. Keep the allowed alphabet tight —
- * GUIDs and sanitized refs both satisfy `[A-Za-z0-9._-]+`.
- *
- * Called by every helper below so a malicious `guid` or `ref` can never
- * escape the `definitions/` prefix regardless of where it originated.
+ * Path-segment safety check. Blocks traversal, separators, NUL, and empty
+ * segments. Allowed alphabet `[A-Za-z0-9._-]+` covers GUIDs and sanitized
+ * refs. Called by every helper so a malicious `guid` can't escape the
+ * `definitions/` prefix.
  */
 function assertSafeKey(value: string, label: string): void {
 	if (!value || !/^[A-Za-z0-9._-]+$/.test(value) || value === '.' || value === '..') {
@@ -15,7 +13,6 @@ function assertSafeKey(value: string, label: string): void {
 }
 
 export const definitionPaths = {
-	/** Per-version immutable blob (spec §6). versionNumber must be a positive int. */
 	version: (guid: string, versionNumber: number, ext: DefinitionFileExt) => {
 		assertSafeKey(guid, 'guid');
 		if (!Number.isInteger(versionNumber) || versionNumber < 1) {

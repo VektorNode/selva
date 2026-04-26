@@ -1,10 +1,6 @@
 import { z } from 'zod';
 
-/**
- * URL-safe slug: lowercase alphanumeric with hyphens allowed in the middle.
- * 3–63 characters. No leading/trailing/consecutive hyphens.
- * Examples: "acme-corp", "my-project", "abc"
- */
+/** Lowercase alphanumeric with internal hyphens, 3–63 chars. */
 export const SlugSchema = z
 	.string()
 	.min(3, 'Slug must be at least 3 characters')
@@ -17,10 +13,7 @@ export const SlugSchema = z
 export const OrgRoleSchema = z.enum(['owner', 'admin', 'member']);
 export type OrgRole = z.infer<typeof OrgRoleSchema>;
 
-/**
- * Org-scope permissions. Apply within a single organization only; a user may
- * hold different ones in different orgs they belong to.
- */
+/** Org-scope permissions. A user may hold different sets in different orgs. */
 export const OrgPermissionSchema = z.enum([
 	'manage_org_members',
 	'manage_org_compute',
@@ -41,10 +34,7 @@ export const MEMBER_ASSIGNABLE_PERMISSIONS: readonly OrgPermission[] = ALL_ORG_P
 	(p) => !OWNER_ADMIN_ONLY_PERMISSIONS.includes(p)
 );
 
-/**
- * Applied when adding a member without an explicit permissions list. Roles
- * are the user-facing primitive; permissions are what adapters check.
- */
+/** Applied when adding a member without an explicit permissions list. */
 export const DEFAULT_ORG_PERMISSIONS: Record<OrgRole, readonly OrgPermission[]> = {
 	owner: [...ALL_ORG_PERMISSIONS],
 	admin: [...ALL_ORG_PERMISSIONS],

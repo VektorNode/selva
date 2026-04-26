@@ -14,29 +14,17 @@ import type { IInviteStore } from '../invites/interface.js';
 import type { ShareLink } from '../shareLinks/types.js';
 
 /**
- * ## Auth boundary contract (applies to IOrgStore and IProjectStore)
+ * Auth boundary contract for every store below.
  *
- * Every method takes a RequestContext as its first argument. **The query
- * itself is the security boundary** — adapters MUST scope reads and writes
- * by `ctx` so that an unauthorized caller receives either an empty result
- * or a ProviderError (403/404). Never rely on callers to check permissions
- * before querying.
+ * Every method takes a `RequestContext` first. **The query itself is the
+ * security boundary** — adapters MUST scope reads/writes by `ctx`. An
+ * unauthorized caller sees an empty page, `null`, or a `ProviderError`.
  *
- * The `can*` helpers on IProjectStore are a **UI convenience only**, used to
- * gate affordances ("show the Edit button?"). They are NOT a prerequisite for
- * calling the mutating methods — a well-behaved adapter must remain safe
- * even if a caller skips `canEdit` and calls `updateProject` directly.
- *
- * Rationale: SQL adapters using row-level security (Supabase, Postgres RLS)
- * enforce auth inside the query. Forcing a pre-flight `can*` check in every
- * route would double the round-trips for no security benefit. Adapters that
- * lack RLS (e.g. the local JSON adapter) must replicate the same effect in
- * application code.
+ * `can*` helpers are UI-gating only ("show the Edit button?"). Mutating
+ * methods MUST re-enforce the same predicate independently.
  */
 export interface IOrgStore {
-	// ============================================================================
 	// Organizations
-	// ============================================================================
 	listOrgs(ctx: RequestContext, opts?: ListOptions): Promise<Page<Organization>>;
 	getOrg(ctx: RequestContext, id: string): Promise<Organization | null>;
 	getOrgBySlug(ctx: RequestContext, slug: string): Promise<Organization | null>;
@@ -47,24 +35,14 @@ export interface IOrgStore {
 		patch: Partial<Pick<Organization, 'name' | 'slug'>>
 	): Promise<void>;
 	/**
-	 * Soft-delete the org (sets `deletedAt`). Cascades soft-delete to:
-	 * - Org members (`OrgMember.deletedAt`)
-	 * - Projects in the org (`Project.deletedAt`) and their project members
-	 *
-	 * Definitions and share links cascade through the project deletion above —
-	 * see `IProjectStore.deleteProject`. Invites and the org's compute-server
-	 * override (if any) are NOT cascaded by this method; callers must clean
-	 * them up explicitly if needed.
-	 *
-	 * Adapters with FK constraints (Postgres `ON DELETE` on the soft-delete
-	 * predicate, RLS) get the cascade for free; document-store adapters must
-	 * replicate it in application code.
+	 * Soft-delete the org. Cascades soft-delete to org members, projects in the
+	 * org, and project members. Definitions and share links cascade through the
+	 * project deletion. Invites and the org compute-server override are NOT
+	 * cascaded — clean those up explicitly if needed.
 	 */
 	deleteOrg(ctx: RequestContext, id: string): Promise<void>;
 
-	// ============================================================================
 	// Org members
-	// ============================================================================
 	listOrgMembers(ctx: RequestContext, orgId: string, opts?: ListOptions): Promise<Page<OrgMember>>;
 	getOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<OrgMember | null>;
 	addOrgMember(ctx: RequestContext, member: OrgMember): Promise<void>;
@@ -75,9 +53,9 @@ export interface IOrgStore {
 		role: OrgRole
 	): Promise<void>;
 	/**
-	 * Replace the member's `OrgPermission` set without changing role. Use this
-	 * for permission edits — going through `removeOrgMember` + `addOrgMember`
-	 * cascades the org-removal soft-delete into project memberships (§9).
+	 * Replace `OrgPermission` set without changing role. Use this for
+	 * permission edits — round-tripping through remove + add cascades the
+	 * org-removal soft-delete into project memberships.
 	 */
 	updateOrgMemberPermissions(
 		ctx: RequestContext,
@@ -89,9 +67,7 @@ export interface IOrgStore {
 }
 
 export interface IProjectStore {
-	// ============================================================================
 	// Projects
-	// ============================================================================
 	listProjects(ctx: RequestContext, orgId: string, opts?: ListOptions): Promise<Page<Project>>;
 	getProject(ctx: RequestContext, id: string): Promise<Project | null>;
 	getProjectBySlug(ctx: RequestContext, orgId: string, slug: string): Promise<Project | null>;
@@ -100,25 +76,16 @@ export interface IProjectStore {
 		ctx: RequestContext,
 		id: string,
 		patch: Partial<
-			Pick<
-				Project,
-				'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload'
-			>
+			Pick<Project, 'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload'>
 		>
 	): Promise<void>;
 	/**
-	 * Soft-delete the project (sets `deletedAt`). Cascades soft-delete to:
-	 * - Project members (`ProjectMember.deletedAt`)
-	 * - Definitions in the project (`DefinitionRecord.deletedAt`)
-	 *
-	 * Definition versions and share links cascade through the definition
-	 * deletion (`IDefinitionStore.delete` / FK CASCADE).
+	 * Soft-delete the project. Cascades to project members and definitions.
+	 * Definition versions and share links cascade through the definition delete.
 	 */
 	deleteProject(ctx: RequestContext, id: string): Promise<void>;
 
-	// ============================================================================
 	// Project members
-	// ============================================================================
 	listProjectMembers(
 		ctx: RequestContext,
 		projectId: string,
@@ -138,27 +105,19 @@ export interface IProjectStore {
 	): Promise<void>;
 	removeProjectMember(ctx: RequestContext, projectId: string, userId: string): Promise<void>;
 
-	// ============================================================================
-	// Access checks (UI gating — NOT the security boundary)
-	// ============================================================================
-	// These answer "should the UI show this affordance?" — a single role lookup
-	// or, in SQL, a single `select has_permission(...)` call. The mutating
-	// methods above enforce the same rule independently; these helpers are never
-	// a prerequisite for calling them.
+	// UI-gating access checks
 	canEdit(ctx: RequestContext, projectId: string): Promise<boolean>;
 	canEditProjectSettings(ctx: RequestContext, projectId: string): Promise<boolean>;
 	canManage(ctx: RequestContext, projectId: string): Promise<boolean>;
 }
 
 /**
- * Definition metadata + version store. Blob contents live in IStorageProvider;
- * this interface tracks the parent record plus its immutable `DefinitionVersion`
- * rows and the `live`/`draft` channel pointers (spec §6).
+ * Definition metadata + version store. Blob contents live in `IStorageProvider`;
+ * this interface tracks the parent record plus immutable version rows and the
+ * `live` / `draft` channel pointers.
  */
 export interface IDefinitionStore {
-	// ============================================================================
 	// Definitions
-	// ============================================================================
 	list(ctx: RequestContext, opts?: DefinitionListOptions): Promise<Page<DefinitionRecord>>;
 	listByProject(
 		ctx: RequestContext,
@@ -167,17 +126,8 @@ export interface IDefinitionStore {
 	): Promise<Page<DefinitionRecord>>;
 	/**
 	 * List definitions whose parent project has `visibility === 'public'`.
-	 *
-	 * Scope:
-	 * - When `orgId` is provided, restrict to public projects in that org.
-	 * - When `orgId` is omitted, list public projects across every org on
-	 *   the instance. Adapters with tenant isolation (RLS) MUST still apply
-	 *   whatever cross-org rules they enforce — `public` means "publicly
-	 *   visible within the tenant boundary the query already respects",
-	 *   not "bypass all auth."
-	 *
-	 * Filtering by definition `status` uses `opts.statuses` as usual;
-	 * `includePending` still hides `pending` records by default.
+	 * Pass `orgId` to restrict to one org; omit for cross-org listing within
+	 * whatever tenant boundary the adapter already enforces.
 	 */
 	listPublic(
 		ctx: RequestContext,
@@ -188,25 +138,18 @@ export interface IDefinitionStore {
 	update(ctx: RequestContext, guid: string, patch: DefinitionRecordPatch): Promise<void>;
 	delete(ctx: RequestContext, guid: string): Promise<void>;
 
-	/**
-	 * Atomically increment the run counter for a definition.
-	 * Called after each successful solve. No-op if the record doesn't exist.
-	 */
+	/** Atomic +1 on the run counter. No-op if the record doesn't exist. */
 	incrementRunCount(ctx: RequestContext, guid: string): Promise<void>;
 
 	/**
-	 * Return records stuck in status='pending' older than the given ISO timestamp.
-	 * Used by the janitor to GC records whose blob upload failed mid-flight.
-	 * System-context only — never exposed to end users.
+	 * Records stuck in `pending` older than `olderThanIso` — for the janitor
+	 * that GCs records whose blob upload failed. SYSTEM_CONTEXT only.
 	 */
 	listStalePending(ctx: RequestContext, olderThanIso: string): Promise<DefinitionRecord[]>;
 
-	// ============================================================================
-	// Versions (spec §6 — immutable rows)
-	// ============================================================================
-	/** Insert a new immutable version row. */
+	// Versions (immutable rows)
 	createVersion(ctx: RequestContext, version: DefinitionVersion): Promise<void>;
-	/** Newest first by `versionNumber`. Definition must be live. */
+	/** Newest first by `versionNumber`. */
 	listVersions(
 		ctx: RequestContext,
 		definitionId: string,
@@ -214,38 +157,29 @@ export interface IDefinitionStore {
 	): Promise<Page<DefinitionVersion>>;
 	getVersion(ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null>;
 	/**
-	 * Delete a version row. Spec §6 deletion protection: throws 409 if the
-	 * version is referenced by its parent's `liveVersionId` or `draftVersionId`.
-	 * Caller deletes the blob separately.
+	 * Throws 409 if the version is referenced by `liveVersionId` or
+	 * `draftVersionId`. Caller deletes the blob separately.
 	 */
 	deleteVersion(ctx: RequestContext, versionId: string): Promise<void>;
 
-	/**
-	 * Atomically point the parent's `liveVersionId` at a target version. The
-	 * adapter validates that the version belongs to this definition.
-	 */
+	/** Atomically point `liveVersionId` at a target version of this definition. */
 	setLiveVersion(ctx: RequestContext, definitionId: string, versionId: string): Promise<void>;
-	/** Same as `setLiveVersion` but for `draftVersionId`. */
 	setDraftVersion(ctx: RequestContext, definitionId: string, versionId: string): Promise<void>;
 
-	// ============================================================================
-	// Access checks (UI gating — NOT the security boundary)
-	// ============================================================================
 	/**
-	 * Resolve the project + definition and apply `canEditDefinition` from
-	 * `@selva/platform/access`. Returns false when either entity is missing
-	 * (soft-deleted or never existed) so callers don't need to pre-fetch.
+	 * Resolve project + definition and apply `canEditDefinition` from
+	 * `@selva/platform/access`. Returns false when either entity is missing.
 	 */
-	canEditDefinition(ctx: RequestContext, projectId: string, definitionGuid: string): Promise<boolean>;
+	canEditDefinition(
+		ctx: RequestContext,
+		projectId: string,
+		definitionGuid: string
+	): Promise<boolean>;
 }
 
 /**
- * Compute-server configuration store.
- *
- * Currently global in the local provider. Once Supabase + multi-tenant Entra
- * land, "platform admin" becomes per-org and the adapter will need `ctx`
- * to authorize writes; passing it now means consumers don't have to be
- * touched again at that point.
+ * Compute-server configuration. Currently global; `ctx` is reserved for
+ * future per-org authorization without breaking signatures.
  */
 export interface IComputeServerStore {
 	getConfig(ctx: RequestContext): Promise<ComputeConfig>;
@@ -253,16 +187,14 @@ export interface IComputeServerStore {
 }
 
 /**
- * Spec §7 — share-link store. Per-definition tokens granting unauthenticated
- * access to one (definitionId, channel). The store sees only the HMAC hash
- * of each token; the raw token is generated and shown to the minter at the
- * route layer and never reaches the store.
+ * Per-definition tokens granting unauthenticated access to one
+ * (definitionId, channel). The store sees only the HMAC hash; the raw token
+ * is generated and shown to the minter at the route layer.
  *
- * Reads filter `revokedAt IS NULL` defensively. Resolution is by `tokenHash`
- * because the route can hash the supplied token and look up by exact match.
+ * Reads filter `revokedAt IS NULL` defensively.
  */
 export interface IShareLinkStore {
-	/** Insert a new link. The caller has already hashed the raw token. */
+	/** Insert a new link. Caller has already hashed the raw token. */
 	create(ctx: RequestContext, link: ShareLink): Promise<void>;
 	/** Newest first by `createdAt`. Excludes revoked links. */
 	listByDefinition(
@@ -273,27 +205,19 @@ export interface IShareLinkStore {
 	getById(ctx: RequestContext, id: string): Promise<ShareLink | null>;
 	/**
 	 * Lookup by HMAC hash. Returns null when the link doesn't exist OR is
-	 * revoked OR its parent definition is soft-deleted — token resolution
-	 * MUST NOT see expired/revoked rows even by accident.
+	 * revoked OR its parent definition is soft-deleted.
 	 */
 	getByTokenHash(ctx: RequestContext, tokenHash: string): Promise<ShareLink | null>;
-	/** Soft-delete (set revokedAt). Idempotent. */
+	/** Soft-delete (set `revokedAt`). Idempotent. */
 	revoke(ctx: RequestContext, id: string): Promise<void>;
 	/**
-	 * Atomic check-and-increment. Returns the new `solveCount` on success.
-	 * Returns null when the cap was already reached (no row updated). Adapters
-	 * MUST do this in a single statement: a read-then-write pattern races
-	 * under load and lets the cap be exceeded.
-	 *
-	 * `null` maxSolves means uncapped — always increment.
+	 * Atomic check-and-increment. Returns the new `solveCount`, or null when
+	 * the cap was reached. MUST be a single statement — read-then-write races
+	 * under load. `null` maxSolves means uncapped.
 	 */
 	tryIncrementSolveCount(ctx: RequestContext, id: string): Promise<number | null>;
 }
 
-/**
- * Aggregate data provider — a composition of the stores above.
- * Adapters typically implement one class per store and compose them here.
- */
 export interface IDataProvider {
 	orgs: IOrgStore;
 	projects: IProjectStore;

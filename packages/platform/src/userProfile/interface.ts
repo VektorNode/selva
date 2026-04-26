@@ -1,56 +1,39 @@
-import type { RecentRun, UserManagementResult } from '../auth/types.js';
+import type { UserManagementResult } from '../auth/types.js';
 import type { RequestContext } from '../context.js';
-import type { UserProfile } from './types.js';
+import type { RecentRun, UserProfile } from './types.js';
 
 /**
- * User-profile data store. Owns mutable profile state (display name,
- * starred definitions, recent run history) — distinct from `IAuthProvider`,
- * which owns identity verification and permissions.
+ * Mutable per-user profile state — separate from `IAuthProvider` so OAuth
+ * providers (Entra, Supabase Auth) don't have to model fields they can't
+ * persist.
  *
- * Lives separately so OAuth providers (Entra, Supabase Auth) don't have to
- * stub out profile methods: identity comes from the OIDC provider, profile
- * state from your DB.
- *
- * ## Auth boundary
- *
- * Every method takes a `RequestContext` as its first argument. **The query
- * itself is the security boundary** — adapters MUST scope reads/writes by
- * `ctx` so that a caller cannot read or modify another user's profile via
- * the `userId` argument. SQL adapters delegate to RLS via the user-scoped
- * client; document-store adapters check `ctx.userId === userId` (or
- * `ctx.platformPermissions.includes('instance_admin')` for admin tooling).
- *
- * Pass `SYSTEM_CONTEXT` for trusted server-side flows (auto-seed on signup,
- * background janitors). Never derive a fresh `ctx` from a route param.
+ * Adapters MUST scope by `ctx`: a caller cannot read or modify another
+ * user's profile via the `userId` argument. SQL adapters delegate to RLS;
+ * document-store adapters check `ctx.userId === userId` (or
+ * `instance_admin` for admin tooling). Pass `SYSTEM_CONTEXT` for trusted
+ * server flows (auto-seed on signup, janitors).
  */
 export interface IUserProfileStore {
-	/**
-	 * Read a profile by user id. Returns null when no profile row exists
-	 * (callers can treat this as the same as an empty profile via `emptyProfile(id)`).
-	 */
+	/** Returns null when no profile row exists — treat as `emptyProfile(id)`. */
 	getProfile(ctx: RequestContext, userId: string): Promise<UserProfile | null>;
 
-	/**
-	 * Batch-read profiles for a set of user ids. Missing users are simply
-	 * omitted from the result. Order is not guaranteed.
-	 */
+	/** Missing users are omitted; order is not guaranteed. */
 	getProfiles(ctx: RequestContext, userIds: readonly string[]): Promise<UserProfile[]>;
 
-	/** Update mutable profile fields (display name, etc.). */
 	updateProfile(
 		ctx: RequestContext,
 		userId: string,
 		patch: { displayName?: string }
 	): Promise<UserManagementResult>;
 
-	/** Star (pin) a definition for quick access. No-op if already starred. */
+	/** No-op if already starred. */
 	starDefinition(
 		ctx: RequestContext,
 		userId: string,
 		definitionId: string
 	): Promise<UserManagementResult>;
 
-	/** Unstar a definition. No-op if not starred. */
+	/** No-op if not starred. */
 	unstarDefinition(
 		ctx: RequestContext,
 		userId: string,
@@ -58,8 +41,8 @@ export interface IUserProfileStore {
 	): Promise<UserManagementResult>;
 
 	/**
-	 * Record a solve run for this user. Implementations should cap the list
-	 * to a recent window (e.g. 20 entries) and dedupe by `definitionId`.
+	 * Record a solve run. Adapters cap the list (e.g. 20) and dedupe by
+	 * `definitionId`.
 	 */
 	recordRun(
 		ctx: RequestContext,

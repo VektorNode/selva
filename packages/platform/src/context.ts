@@ -1,20 +1,18 @@
-import type { PlatformPermission } from './auth/types.js';
-import { ALL_PLATFORM_PERMISSIONS } from './auth/types.js';
+import type { PlatformPermission } from './permissions/types.js';
+import { ALL_PLATFORM_PERMISSIONS } from './permissions/types.js';
 import type { OrgPermission } from './organizations/schemas.js';
 import { ALL_ORG_PERMISSIONS } from './organizations/schemas.js';
 
 /**
- * Per-request identity + scope passed as the first argument to every data
- * provider call. Built once per HTTP request in hooks.server.ts.
+ * Per-request identity + scope passed to every data provider call. Built
+ * once per HTTP request from the authenticated session.
  *
  * `actingOrgId` is the org the user is currently acting as — NOT "an org the
- * user is a member of." Tenancy checks compare `ctx.actingOrgId` to the
- * resource's `orgId`; anything else can leak across orgs when a user belongs
- * to multiple.
+ * user is a member of." Tenancy checks compare it to the resource's `orgId`.
  *
- * `instance_admin` implies every other permission, everywhere. `hasPermission`
- * encodes that. A `system: true` ctx is a trusted server-internal call
- * (bootstrap, janitors) — adapters with RLS must treat it as fully authorized.
+ * `instance_admin` implies every other permission, everywhere — encoded by
+ * `hasPermission`. `system: true` is a trusted server-internal call;
+ * adapters with RLS treat it as fully authorized.
  */
 export interface RequestContext {
 	/** Empty string for system contexts. */
@@ -27,16 +25,15 @@ export interface RequestContext {
 	/** Never derive from a user session. */
 	system?: true;
 	/**
-	 * Opaque adapter payload. The Supabase adapter uses this to pass the user
-	 * JWT through so RLS policies can resolve `auth.uid()`; local ignores it.
+	 * Opaque adapter payload. The Supabase adapter passes the user JWT through
+	 * for RLS; local ignores it.
 	 */
 	adapterContext?: unknown;
 }
 
 /**
  * For server-internal operations outside any HTTP request (bootstrap,
- * janitors, migrations, cross-tenant elevated reads). Treated as fully
- * authorized; never derive from a user session.
+ * janitors, migrations). Treated as fully authorized.
  */
 export const SYSTEM_CONTEXT: RequestContext = {
 	userId: '',
@@ -46,7 +43,7 @@ export const SYSTEM_CONTEXT: RequestContext = {
 };
 
 /**
- * Does NOT cross-check `ctx.actingOrgId`: the caller builds a context scoped
+ * Does NOT cross-check `ctx.actingOrgId` — the caller builds a context scoped
  * to the org they're acting on. An org permission against a ctx without
  * `actingOrgId` returns false unless `instance_admin` or `system`.
  */

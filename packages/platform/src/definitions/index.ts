@@ -13,3 +13,15 @@ export {
 	COVER_IMAGE_CONTENT_TYPES
 } from './types.js';
 export { definitionPaths } from './paths.js';
+export type { UpdateMetadataInput } from './schemas.js';
+export {
+	DefinitionVersionSchema,
+	DefinitionChannelSchema,
+	DefinitionFileExtSchema,
+	DefinitionStatusSchema,
+	PublishVersionInputSchema,
+	CreateDefinitionInputSchema,
+	UpdateMetadataInputSchema,
+	GuidSchema,
+	UUID_REGEX
+} from './schemas.js';

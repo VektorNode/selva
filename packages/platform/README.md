@@ -1,6 +1,6 @@
 # @selva/platform
 
-Pure TypeScript interfaces that define the Selva platform's contract with its backends. No runtime dependencies on a specific database, storage, or auth service — every concrete adapter (local filesystem, Supabase, Azure, ...) lives in its own package and implements these interfaces.
+Pure TypeScript interfaces that define Selva's contract with its backends. No runtime dependencies on a specific database, storage, or auth service — every concrete adapter (local filesystem, Supabase, Azure, ...) lives in its own package and implements these interfaces.
 
 This README is the contract. Read it before writing an adapter.
 
@@ -10,36 +10,35 @@ This README is the contract. Read it before writing an adapter.
 
 | Interface | Purpose | Scoped by `RequestContext`? |
 | --- | --- | --- |
-| `IAuthProvider` | Verify tokens, manage users, issue sessions. Optional `passwordAuth?` capability for credential-based providers. | No — the auth provider *produces* the identity that fills the context. |
+| `IAuthProvider` | Verify tokens, manage users, issue sessions. Optional `passwordAuth?` capability. | No — the auth provider produces the identity that fills the context. |
+| `IPlatformPermissionStore` | Per-user platform permissions; owns the sole-`instance_admin` invariant. | Yes — every method. |
+| `IUserProfileStore` | Per-user profile (display name, starred definitions, recent runs). | Yes — adapters scope by `ctx.userId`. |
 | `IOrgStore` | Orgs and org memberships. | Yes — every method. |
 | `IProjectStore` | Projects and project memberships. | Yes — every method. |
 | `IDefinitionStore` | Definition metadata records + version history. | Yes — every method. |
 | `IShareLinkStore` | Per-definition anonymous-access tokens. | Yes — every method. |
 | `IInviteStore` | Pending org-membership invitations. | Yes — every method. |
 | `IComputeServerStore` | Global + per-org compute-server config. | No — not tenant-scoped. |
-| `IStorageProvider` | Path-based blob storage. Authorization is the caller's responsibility — paths must be constructed within already-authorized scope. | No — callers pass already-scoped paths. |
-| `IUserProfileStore` | Per-user profile metadata (display name, starred definitions, recent runs). | No — the user IS the scope; callers MUST authorize before invocation. |
+| `IStorageProvider` | Path-based blob storage. Authorization is the caller's responsibility. | No — callers pass already-authorized paths. |
 
-`IDataProvider` is the composition over the data stores: `{ orgs, projects, definitions, shareLinks, invites, computeServer }`. An adapter typically implements one class per store and aggregates them.
+`IDataProvider` composes the data stores: `{ orgs, projects, definitions, shareLinks, invites, computeServer }`. An adapter typically implements one class per store and aggregates them.
 
 ---
 
 ## RequestContext rules
 
-`RequestContext` carries the caller's identity and active scope. It is built once per HTTP request in `hooks.server.ts` from the authenticated session.
-
-**Rules:**
+`RequestContext` carries the caller's identity and active scope. Built once per HTTP request in `hooks.server.ts` from the authenticated session.
 
 1. **The query is the security boundary.** Adapters MUST filter reads and writes by `ctx`. An unauthorized caller gets an empty page, `null`, or a `ProviderError` — never someone else's data.
 2. **Never trust a caller's pre-flight check.** `canSolve` / `canEdit` / `canManage` are UI-gating conveniences. A mutating method must remain safe even if the caller skipped them.
-3. **Extend `RequestContext`, not method signatures.** When you need a new dimension (e.g. `tenantId`, `impersonatedBy`), add a field to the interface. Do not thread it through every call.
+3. **Extend `RequestContext`, not method signatures.** Add a field to the interface for new dimensions (e.g. `tenantId`); don't thread it through every call.
 4. **`SYSTEM_CONTEXT` is for trusted server code only.** Bootstrap, scheduled janitors, migrations, test setup. Never derive it from a user session.
 
 ---
 
 ## Transaction ordering rules
 
-Providers are two-phase: a metadata store (`IDataProvider`) and a blob store (`IStorageProvider`). They have no shared transaction. The consumer's orchestration layer (`DefinitionService` in compute-app) composes them using a fixed ordering so that a partial failure is recoverable.
+Providers are two-phase: a metadata store (`IDataProvider`) and a blob store (`IStorageProvider`). They have no shared transaction. The consumer's orchestration layer (`DefinitionService` in compute-app) composes them with fixed ordering so partial failure is recoverable.
 
 **Create — metadata-first with `pending` → `ready`:**
 
@@ -47,55 +46,44 @@ Providers are two-phase: a metadata store (`IDataProvider`) and a blob store (`I
 2. Upload the blob.
 3. Flip `status` to `'ready'`.
 
-List queries filter `'pending'` by default (`ListOptions.includePending` opts in). If step 2 fails, the record is invisible to consumers. `DefinitionService.gcStalePending` sweeps records older than `PENDING_GC_AGE_MS` (30 min).
+List queries filter `'pending'` by default (`ListOptions.includePending` opts in). If step 2 fails, the record is invisible to consumers. `DefinitionService.gcStalePending` sweeps records older than 30 min.
 
 **Delete — blob-first:**
 
 1. `storage.deletePrefix(prefix)`.
 2. `data.delete(guid)`.
 
-If step 2 fails, a retry re-deletes blobs (no-op) and succeeds. The record never points at live blobs it shouldn't.
+If step 2 fails, a retry re-deletes blobs (no-op) and succeeds.
 
 **Update-file — best-effort, retry-safe:**
 
-Archive current → append history → write new → prune history. Not fully atomic; retrying the same file converges. Documented limitation (see `DefinitionService.updateFile` in compute-app).
+Archive current → append history → write new → prune history. Not atomic; retrying the same file converges.
 
 ---
 
-## A minimal adapter (30 lines)
+## A minimal adapter
 
 ```ts
 import type {
   IDefinitionStore, DefinitionRecord, DefinitionRecordPatch,
-  HistoryEntry, RequestContext, ListOptions, Page
+  RequestContext, ListOptions, Page
 } from '@selva/platform';
 
 export class MyDefinitionStore implements IDefinitionStore {
   async list(ctx: RequestContext, opts?: ListOptions): Promise<Page<DefinitionRecord>> {
     // Filter by ctx.actingOrgId; exclude status='pending' unless opts.includePending.
-    // Return { items, nextCursor } honoring opts.limit / opts.cursor.
   }
-  async listByProject(ctx, projectId, opts) { /* ... */ }
-  async listPublic(ctx, opts) { /* ... */ }
-  async get(ctx, guid) { /* ... */ }
-  async create(ctx, record) { /* ... */ }
-  async update(ctx, guid, patch) { /* ... */ }
-  async addHistoryEntry(ctx, guid, entry) { /* ... */ }
-  async removeHistoryEntry(ctx, guid, ref) { /* ... */ }
-  async delete(ctx, guid) { /* ... */ }
-  async listStalePending(ctx, olderThanIso) {
-    // SYSTEM_CONTEXT only. Return records with status='pending' and createdAt <= cutoff.
-  }
+  // ... etc
 }
 ```
 
-Wire it into a `SelvaConfig` via `defineConfig({ auth, data, storage })`.
+Wire it into a `SelvaConfig` via `defineConfig({ auth, data, storage, userProfile, permissions })`.
 
 ---
 
 ## Testing your adapter
 
-This package ships a conformance suite at `@selva/platform/testing`. Every adapter imports it and runs it against its own instance. If your adapter passes, it behaves the same as the in-memory reference and will drop into the compute-app without surprises.
+`@selva/platform/testing` ships a conformance suite per store. Adapters import it and run it against their own instance — passing means the adapter behaves the same as the in-memory reference.
 
 ```ts
 import { runDefinitionStoreConformance } from '@selva/platform/testing';
@@ -107,63 +95,25 @@ runDefinitionStoreConformance({
 });
 ```
 
-The suite covers: `ctx` scoping, `pending` filtering, `includePending` opt-in, `listStalePending` cutoff behavior, history pruning, and `ProviderError` shapes on missing records. It does not cover performance or concurrency — those are the adapter's responsibility.
-
----
-
-## Data Privacy & Security
-
-**User data isolation is by design.** All authentication, credentials, and personally identifiable information (PII) are owned exclusively by the auth provider. Selva stores only:
-
-- Opaque session tokens (in cookies)
-- User ID and permissions (minimal authorization data)
-- Optional provider-specific metadata (non-sensitive only)
-
-**Selva has zero exposure to:**
-- EU GDPR, CCPA, or other data residency regulations (provider's responsibility)
-- User credentials, passwords, or OAuth tokens (provider manages these)
-- Company user records or sensitive employee data (provider owns this)
-
-### Auth Provider Contract
-
-`IAuthProvider` is the trust boundary. The provider is responsible for:
-
-1. **Token generation & validation** — Format is provider-specific (HMAC, JWT, OAuth, OIDC, etc.)
-2. **Credential management** — Passwords, OAuth tokens, MFA secrets
-3. **User lifecycle** — Creation, password resets, account deletion
-4. **Data residency & retention** — Where user data lives, how long it's kept, GDPR compliance
-5. **Password reset flows** — Email tokens, validation, expiration (via `requestPasswordReset` / `completePasswordReset`)
-
-Selva never stores, logs, or processes raw credentials. For password resets:
-- OAuth providers return `'not_supported'` (reset handled by OAuth platform)
-- Local/email-based providers implement token generation, email delivery, and validation
-- Selva only receives the final `AuthUser` object after reset completes
-
-### RequestContext Security
-
-Every data store method receives a `RequestContext` containing the authenticated user and their active scope. The adapter MUST enforce access control:
-
-```ts
-async list(ctx: RequestContext, opts?: ListOptions): Promise<Page<DefinitionRecord>> {
-  // Filter by ctx.actingOrgId — never leak data from other orgs
-  // Respect ctx.permissions for visibility rules
-  // Return empty page for unauthorized callers
-}
-```
-
-See [RequestContext rules](#requestcontext-rules) for the full contract.
+The suites cover `ctx` scoping, `pending` filtering, `includePending` opt-in, `listStalePending` cutoff behavior, history pruning, and `ProviderError` shapes. They do not cover performance or concurrency.
 
 ---
 
 ## Errors
 
-Throw `ProviderError` for user-facing failures (`new ProviderError('...', 404)`). Everything else should propagate as a raw `Error` — the compute-app will render it as a 500.
+Throw `ProviderError` for user-facing failures (`new ProviderError('...', 404)`). Everything else propagates as a raw `Error` and becomes a 500.
+
+---
+
+## Data privacy
+
+User identity, credentials, and PII are owned by the auth provider. Selva stores only opaque session tokens, user IDs, and authorization metadata. See the root `CLAUDE.md` for the full data-privacy posture.
 
 ---
 
 ## What not to put in this package
 
 - No runtime dependencies on databases, ORMs, auth SDKs, or HTTP frameworks.
-- No concrete adapters. They live in their own packages (`selva-local-provider`, `selva-supabase-provider`, ...).
-- No service orchestration. Multi-step workflows that compose data + storage (e.g. `DefinitionService`) live in the consuming app, not here.
-- No HTTP-boundary concerns. Zod request schemas and access checks belong in the consuming app's route handlers.
+- No concrete adapters. They live in their own packages.
+- No service orchestration. Multi-step workflows that compose data + storage live in the consuming app.
+- No HTTP-boundary concerns. Zod request schemas and access checks belong in route handlers.

@@ -1,20 +1,16 @@
-import type { PlatformPermission } from '../auth/types.js';
+import type { PlatformPermission } from '../permissions/types.js';
 import type { OrgPermission } from '../organizations/schemas.js';
 import type { Project, ProjectMember } from '../projects/types.js';
 import type { OrgMember } from '../organizations/types.js';
 import type { DefinitionRecord } from '../definitions/types.js';
 
 /**
- * Pure access-control rules shared across every adapter. Adapters resolve
- * entities and call these rules; the rules do the logic. Single source of
- * truth prevents adapter drift on policy changes.
+ * Pure access-control rules — single source of truth for UI gating across
+ * adapters. Mutating store methods MUST re-enforce the same predicate
+ * independently (RLS in SQL, code in local/JSON).
  *
- * These are UI-gating rules — every mutating store method MUST re-enforce
- * the same predicate independently (RLS in SQL, code in local/JSON).
- *
- * `instance_admin` bypass is NOT baked into rule bodies. Wrap calls with
- * `withAdminBypass` at the call site; the pure rules reason about normal
- * users only. The wrapper is the future audit-log hook point.
+ * `instance_admin` bypass is NOT baked into rule bodies — wrap calls with
+ * `withAdminBypass` at the call site.
  */
 
 function isInstanceAdmin(platformPermissions: readonly PlatformPermission[]): boolean {
@@ -36,18 +32,15 @@ export interface ProjectAccessInput {
 	member: ProjectMember | null;
 	orgMember: OrgMember | null;
 	/**
-	 * Resolved `ALLOW_CROSS_ORG_PUBLIC` platform flag. When false, `public`
-	 * visibility is downgraded to "within-org public" — only members of the
-	 * project's parent org can view it. Spec §4: single-tenant instances leave
-	 * this off; `public` then means "everyone in the one org."
+	 * `ALLOW_CROSS_ORG_PUBLIC` flag. When false, `public` visibility means
+	 * "everyone in the parent org" rather than "everyone on the instance".
 	 */
 	allowCrossOrgPublic: boolean;
 }
 
 /**
- * User-based view rule. Anonymous access is delivered out-of-band via §7
- * share-link tokens — the route layer resolves a valid token before this
- * rule runs and skips it. This rule reasons about authenticated users only.
+ * Authenticated-user view rule. Anonymous access is delivered via share-link
+ * tokens — the route resolves a valid token before this rule runs.
  */
 export function canView(input: ProjectAccessInput): boolean {
 	const { project, member, orgMember, allowCrossOrgPublic } = input;
@@ -59,10 +52,7 @@ export function canView(input: ProjectAccessInput): boolean {
 	return false;
 }
 
-/**
- * Same body as `canView` today. Kept distinct so future cost gating (quotas,
- * rate limits) lands here without touching view semantics.
- */
+/** Same as `canView` today — kept distinct for future cost gating. */
 export function canSolve(input: ProjectAccessInput): boolean {
 	return canView(input);
 }
@@ -87,10 +77,8 @@ export interface VisibilityChangeInput {
 
 /**
  * Authorization to flip a project to `public`. The `ALLOW_CROSS_ORG_PUBLIC`
- * platform flag does NOT gate this rule — it only changes what `public` means
- * post-flip (cross-org reach vs within-org reach). That semantics is enforced
- * by `canView`. Spec §4 line 211: with the flag off, "`public` then means
- * 'everyone in the one org'" — the flip is still allowed.
+ * flag only changes what `public` means post-flip; the flip itself is gated
+ * by org owner/admin role.
  */
 export function canChangeVisibilityToPublic(input: VisibilityChangeInput): boolean {
 	const role = input.orgMember?.role;
@@ -106,7 +94,7 @@ export interface DefinitionAccessInput {
 }
 
 /**
- * Project editor/owner always can (moderation). On commons projects
+ * Project editor/owner can always edit (moderation). On commons projects
  * (`autoJoinOnUpload=true`) the definition owner can edit their own.
  */
 export function canEditDefinition(input: DefinitionAccessInput): boolean {
@@ -123,14 +111,13 @@ export interface ReclaimAccessInput {
 	platformPermissions: readonly PlatformPermission[];
 	project: Project | null;
 	orgMember: OrgMember | null;
-	/** `ctx.actingOrgId` — must match the project's `orgId` to reclaim. */
+	/** `ctx.actingOrgId` — must match `project.orgId`. */
 	actingOrgId: string | null;
 }
 
 /**
- * Org leadership escape hatch (§5 `canReclaim`). Reclaim adds the actor as a
- * co-owner; it does NOT demote the existing owner. Tenancy must match — an
- * admin in another org cannot reclaim across tenants.
+ * Org leadership escape hatch. Reclaim adds the actor as co-owner; it does
+ * NOT demote the existing owner. Tenancy must match.
  */
 export function canReclaim(input: ReclaimAccessInput): boolean {
 	const { project, orgMember, actingOrgId } = input;
@@ -144,15 +131,13 @@ export interface CreateProjectAccessInput {
 	platformPermissions: readonly PlatformPermission[];
 	orgPermissions: readonly OrgPermission[];
 	orgMember: OrgMember | null;
-	/** `ctx.actingOrgId` — must match the target org's `id`. */
 	actingOrgId: string | null;
 	targetOrgId: string;
 }
 
 /**
- * §5 `canCreateProject`. Owner/admin can always create; a `member` needs the
- * `manage_projects` org permission. Tenancy is enforced — an actor's
- * `actingOrgId` must match the target org.
+ * Owner/admin can always create. A `member` needs `manage_projects` org
+ * permission. Tenancy is enforced.
  */
 export function canCreateProject(input: CreateProjectAccessInput): boolean {
 	const { orgMember, orgPermissions, actingOrgId, targetOrgId } = input;
@@ -164,17 +149,14 @@ export function canCreateProject(input: CreateProjectAccessInput): boolean {
 }
 
 /**
- * Pre-flight check for project-owner removal (Permissions.md §5, §10). Pure
- * function over already-loaded membership rows so the route handler can call
- * it after the standard `canManage` gate. Returns:
+ * Pre-flight check for project-owner removal. Pure function over already-
+ * loaded membership rows so route handlers can call it after `canManage`.
  *
- * - `'ok'` — proceed with the removal
- * - `'sole_owner'` — last owner; route must surface 409 + suggest reclaim
- * - `'needs_confirm'` — owner-on-owner removal without `?confirm=true`; route
- *   surfaces 409 + asks the client to retry with confirmation
+ * - `ok` — proceed
+ * - `sole_owner` — last owner; route surfaces 409 + suggests reclaim
+ * - `needs_confirm` — owner-on-owner removal without `?confirm=true`
  *
- * Only meaningful when `target.role === 'owner'` — non-owner targets always
- * return `'ok'` (the standard gate already authorized).
+ * Non-owner targets always return `ok`.
  */
 export type OwnerRemovalCheck = 'ok' | 'sole_owner' | 'needs_confirm';
 
