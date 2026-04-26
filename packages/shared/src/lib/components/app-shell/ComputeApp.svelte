@@ -9,7 +9,6 @@
 	import { createSolvingIndicator } from '../../utils/solving.svelte';
 	import { useFooterItem } from '../../composables/useFooterItem.svelte';
 	import { hexToOklch } from '../../utils/color';
-	import { APP_DEFAULTS } from '../../constants';
 	import PageContainer from '../layout/PageContainer.svelte';
 	import PageHeader from '../layout/PageHeader.svelte';
 	import AppLayout from './AppLayout.svelte';
@@ -28,7 +27,7 @@
 		panelActions?: ActionButton[];
 		showSaveButton?: boolean;
 		showLoadButton?: boolean;
-		/** Per-solve abort timeout (ms). Falls back to APP_DEFAULTS.TIMEOUTS.COMPUTE_TIMEOUT. */
+		/** Per-solve abort timeout (ms). Falls back to createComputeThrottle's default. */
 		solveTimeoutMs?: number;
 		footerComponent?: any;
 		footerComponentProps?: () => Record<string, unknown>;
@@ -112,7 +111,7 @@
 
 	// svelte-ignore state_referenced_locally
 	const computeThrottle = createComputeThrottle<Record<string, unknown>>(performSolveInternal, {
-		timeout: solveTimeoutMs ?? APP_DEFAULTS.TIMEOUTS.COMPUTE_TIMEOUT
+		timeout: solveTimeoutMs
 	});
 
 	let solving = $derived(computeThrottle.isComputing);

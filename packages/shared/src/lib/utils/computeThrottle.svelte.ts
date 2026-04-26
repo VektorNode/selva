@@ -1,5 +1,3 @@
-import { APP_DEFAULTS } from '../constants';
-
 /**
  * Compute throttle utility for managing async compute requests.
  *
@@ -11,6 +9,14 @@ import { APP_DEFAULTS } from '../constants';
 interface ComputeThrottleOptions {
 	timeout?: number;
 }
+
+/**
+ * Fallback per-solve abort timeout (ms) when the caller doesn't pass one.
+ * Used only by callers without a deployment-specific limit (e.g. builder-app
+ * over WebSocket); compute-app supplies `MAX_SOLVE_DURATION_MS` from its
+ * server config via `ComputeApp`'s `solveTimeoutMs` prop.
+ */
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 /**
  * Creates a throttled compute handler that ensures only one request is in-flight at a time.
@@ -26,7 +32,7 @@ export function createComputeThrottle<T>(
 	readonly hasPending: boolean;
 	cancel: () => void;
 } {
-	const { timeout = APP_DEFAULTS.TIMEOUTS.COMPUTE_TIMEOUT } = options;
+	const { timeout = DEFAULT_TIMEOUT_MS } = options;
 
 	let isComputing = $state(false);
 	let pendingValues = $state<T | null>(null);
