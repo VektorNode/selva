@@ -37,6 +37,8 @@ export interface DefinitionVersion {
 	originalFilename?: string;
 	uploadedBy: string;
 	uploadedAt: string;
+	/** Free-form note describing what changed in this version. */
+	changeNote?: string;
 }
 
 export interface DefinitionRecord {
