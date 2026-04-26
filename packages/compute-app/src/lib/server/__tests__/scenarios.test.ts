@@ -26,20 +26,25 @@ import {
 	requireCanViewProject
 } from '../access.server.js';
 import {
+	call,
 	freshProviders,
 	seedAcme,
 	seedBigClient,
 	seedCommons,
 	seedDefinition,
+	seedOrgMember,
+	seedProject,
 	seedProjectMember,
 	seedShareLink,
 	seedThirdOrg,
+	seedUser,
 	grantPlatformPermissions,
 	actAs,
 	expectHttpError,
 	type TestProviders
 } from './fixtures.js';
 import { POST as reclaimPOST } from '../../../routes/api/projects/[id]/reclaim/+server.js';
+import { PATCH as projectPATCH } from '../../../routes/api/projects/[id]/+server.js';
 
 let tp: TestProviders | null = null;
 
@@ -273,6 +278,40 @@ describe('§11 — project edit gates', () => {
 			allowCrossOrgPublic: false
 		});
 		expect(allowed).toBe(false);
+	});
+
+	it('Plain org member who owns a project can edit its settings — regression for H6', async () => {
+		// Regression: PATCH /api/projects/[id] used to require BOTH the
+		// platform-scope `manage_projects` permission AND project-owner role.
+		// A plain org member (no `manage_projects`) who happened to own a
+		// project would get 403 on their own project's settings.
+		tp = await freshProviders();
+		const acme = await seedAcme(tp);
+
+		// Mallory is a plain Acme member — no platform permissions, no
+		// `manage_projects`. We give her her own project and make her owner.
+		const mallory = await seedUser(tp, 'mallory@acme.test');
+		await seedOrgMember(tp, {
+			orgId: acme.acme.id,
+			userId: mallory.id,
+			role: 'member',
+			permissions: [] // explicitly nothing — *not* the role default
+		});
+		const mallorysProject = await seedProject(tp, {
+			orgId: acme.acme.id,
+			name: 'Mallory Private',
+			slug: 'mallory-private',
+			ownerId: mallory.id,
+			visibility: 'private'
+		});
+
+		const locals = await actAs(tp, mallory.id);
+		const res = await call(projectPATCH, {
+			locals,
+			params: { id: mallorysProject.id },
+			body: { description: 'updated by owner' }
+		});
+		expect(res.status).toBe(200);
 	});
 
 	it('Project viewer tries to delete a definition — 403', async () => {

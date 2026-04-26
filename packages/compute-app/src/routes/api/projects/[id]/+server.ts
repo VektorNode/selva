@@ -2,11 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { z } from 'zod';
 import { getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
-import {
-	requireManageProjects,
-	requireCanManage,
-	requireCanEditProjectSettings
-} from '$lib/server/access.server';
+import { requireCanManage, requireCanEditProjectSettings } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { slugify } from '$lib/server/slug';
 import {
@@ -29,7 +25,12 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	const { id } = params;
 	if (!id) throw error(400, 'Missing project ID');
 
-	requireManageProjects(locals);
+	// `requireCanEditProjectSettings` is owner-only at the project level — that
+	// IS the gate for editing settings. The platform-scope `manage_projects`
+	// check that used to live here was redundant for org owners/admins (they
+	// always carry it via DEFAULT_ORG_PERMISSIONS) and a regression for plain
+	// org members who happened to own a project — they'd hit 403 on their own
+	// project's settings.
 	const { ctx, project: existing } = await requireCanEditProjectSettings(locals, id);
 
 	const body = await request.json().catch(() => null);
