@@ -77,7 +77,6 @@ async function buildContext(
 	if (!actingOrgId && platformPermissions.includes('instance_admin')) {
 		// Instance admins without an explicit membership row fall back to the
 		// first org so admin tooling stays usable before a switcher exists.
-		// Tracked as M16 in the audit — to be revisited when the switcher lands.
 		const firstOrgPage = await providers.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
 		const firstOrg = firstOrgPage.items[0];
 		if (firstOrg) actingOrgId = firstOrg.id;
@@ -92,7 +91,9 @@ async function buildContext(
 	};
 }
 
-// ── Route classification ─────────────────────────────────────────────────────
+// ============================================================================
+// Route classification
+// ============================================================================
 //
 // Auth gating is **deny-by-default**. Every request goes through `needsAuth`
 // unless its path matches one of the explicit allowlists below. Adding a new
@@ -244,7 +245,9 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	return applySecurityHeaders(await resolve(event), pathname);
 };
 
-// ── Response headers ─────────────────────────────────────────────────────────
+// ============================================================================
+// Response headers
+// ============================================================================
 //
 // Applied to every response we produce — both successful resolves and the
 // 401/503 short-circuits above. Cheap browser hardening that doesn't
@@ -263,7 +266,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 //   - Content-Security-Policy + frame-ancestors. The compute-app is built
 //     for iframe embedding (per its own package description), so a strict
 //     CSP needs UI-phase validation against real consumer sites before
-//     it can ship. Tracked alongside M15.
+//     it can ship.
 //   - X-Frame-Options. Same iframe-embedding constraint.
 function applySecurityHeaders(response: Response, pathname: string): Response {
 	response.headers.set('X-Content-Type-Options', 'nosniff');

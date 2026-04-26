@@ -155,12 +155,6 @@ export interface IDefinitionStore {
 	/** Atomic +1 on the run counter. No-op if the record doesn't exist. */
 	incrementRunCount(ctx: RequestContext, guid: string): Promise<void>;
 
-	/**
-	 * Records stuck in `pending` older than `olderThanIso` — for the janitor
-	 * that GCs records whose blob upload failed. SYSTEM_CONTEXT only.
-	 */
-	listStalePending(ctx: RequestContext, olderThanIso: string): Promise<DefinitionRecord[]>;
-
 	// Versions (immutable rows)
 	createVersion(ctx: RequestContext, version: DefinitionVersion): Promise<void>;
 	/** Newest first by `versionNumber`. */

@@ -176,20 +176,6 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		if (error) throw mapError(error);
 	}
 
-	async listStalePending(ctx: RequestContext, olderThanIso: string): Promise<DefinitionRecord[]> {
-		// System-only by contract; force the service-role client so RLS doesn't
-		// scope us down even if the caller forgets `system: true`.
-		const client = ctx.system ? this.clients.forRequest(ctx) : this.clients.serviceClient;
-		const { data, error } = await client
-			.from('definitions')
-			.select('*')
-			.eq('status', 'pending')
-			.lt('updated_at', olderThanIso)
-			.is('deleted_at', null);
-		if (error) throw mapError(error);
-		return (data ?? []).map(rowToRecord);
-	}
-
 	// ============================================================================
 	// Versions (spec §6)
 	// ============================================================================
@@ -353,8 +339,9 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 
 }
 
-// ── Row ↔ domain mappers ────────────────────────────────────────────────
-
+// ============================================================================
+// Row ↔ domain mappers
+// ============================================================================
 interface DefinitionRow {
 	guid: string;
 	project_id: string;

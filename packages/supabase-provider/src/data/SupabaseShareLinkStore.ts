@@ -118,8 +118,9 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 	}
 }
 
-// ── Row ↔ domain mappers ────────────────────────────────────────────────
-
+// ============================================================================
+// Row ↔ domain mappers
+// ============================================================================
 interface ShareLinkRow {
 	id: string;
 	definition_guid: string;

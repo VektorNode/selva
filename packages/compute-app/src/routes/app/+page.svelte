@@ -15,7 +15,9 @@
 
 	let { data }: { data: PageData } = $props();
 
-	// ── State ─────────────────────────────────────────────────────────────
+	// ============================================================================
+	// State
+	// ============================================================================
 	let searchQuery = $state('');
 	let activeProjectId = $state<string | null>(null);
 	let activeCategory = $state<string | null>(null);
@@ -30,7 +32,9 @@
 	// Client-side starred set so optimistic toggles feel instant.
 	const starredIds = $derived(new Set(data.starredRecords.map((r) => r.guid)));
 
-	// ── Derived lists ─────────────────────────────────────────────────────
+	// ============================================================================
+	// Derived lists
+	// ============================================================================
 	const allRecords = $derived<DefinitionRecord[]>([...data.starredRecords, ...data.records]);
 
 	const projectsWithDefinitions = $derived(new Set(allRecords.map((r) => r.projectId)));
@@ -94,7 +98,9 @@
 		return ordered;
 	});
 
-	// ── Actions ───────────────────────────────────────────────────────────
+	// ============================================================================
+	// Actions
+	// ============================================================================
 	function open(guid: string) {
 		loadingGuid = guid;
 		goto(`/app/${guid}`).catch(() => {

@@ -207,8 +207,9 @@ export class SupabaseOrgStore implements IOrgStore {
 		await this.events.emit({ type: 'org.deleted', orgId: id, actorId: actorFrom(ctx) });
 	}
 
-	// ── Org members ──────────────────────────────────────────────────────────
-
+	// ============================================================================
+	// Org members
+	// ============================================================================
 	async listOrgMembers(
 		ctx: RequestContext,
 		orgId: string,
@@ -426,7 +427,9 @@ function stampToRow(stamp: {
 	return row;
 }
 
-// ── Row ↔ domain mappers ────────────────────────────────────────────────
+// ============================================================================
+// Row ↔ domain mappers
+// ============================================================================
 //
 // Audit columns (`created_by` / `updated_by`) FK to `auth.users(id)` with
 // `ON DELETE SET NULL`, so they can legitimately become NULL when the
@@ -508,8 +511,9 @@ function memberToRow(m: OrgMember): OrgMemberRow {
 	};
 }
 
-// ── Error translation ───────────────────────────────────────────────────
-
+// ============================================================================
+// Error translation
+// ============================================================================
 interface PostgrestError {
 	code?: string;
 	message?: string;

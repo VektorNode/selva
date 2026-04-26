@@ -169,8 +169,9 @@ export class SupabaseProjectStore implements IProjectStore {
 		await this.events.emit({ type: 'project.deleted', projectId: id, actorId: actorFrom(ctx) });
 	}
 
-	// ── Project members ──────────────────────────────────────────────────────
-
+	// ============================================================================
+	// Project members
+	// ============================================================================
 	async listProjectMembers(
 		ctx: RequestContext,
 		projectId: string,
@@ -276,7 +277,9 @@ export class SupabaseProjectStore implements IProjectStore {
 
 }
 
-// ── Row ↔ domain mappers ────────────────────────────────────────────────
+// ============================================================================
+// Row ↔ domain mappers
+// ============================================================================
 //
 // Audit columns (`created_by` / `updated_by`) FK to `auth.users(id)` with
 // `ON DELETE SET NULL`; they can legitimately become NULL when the user is
@@ -368,8 +371,9 @@ function projectMemberToRow(m: ProjectMember): ProjectMemberRow {
 	};
 }
 
-// ── Error translation ───────────────────────────────────────────────────
-
+// ============================================================================
+// Error translation
+// ============================================================================
 interface PostgrestError {
 	code?: string;
 	message?: string;

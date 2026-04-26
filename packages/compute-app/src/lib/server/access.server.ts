@@ -64,7 +64,6 @@ export function assertPagePermission(locals: Locals, permission: AnyPermission):
 export const requireManageInstanceUsers = (locals: Locals) =>
 	requirePermission(locals, 'manage_instance_users');
 export const requireManageCompute = (locals: Locals) => requirePermission(locals, 'manage_compute');
-export const requireManageUpdates = (locals: Locals) => requirePermission(locals, 'manage_updates');
 export const requireManageOrgMembers = (locals: Locals) =>
 	requirePermission(locals, 'manage_org_members');
 export const requireManageOrgCompute = (locals: Locals) =>
@@ -78,8 +77,6 @@ export const assertManageInstanceUsers = (locals: Locals) =>
 	assertPagePermission(locals, 'manage_instance_users');
 export const assertManageCompute = (locals: Locals) =>
 	assertPagePermission(locals, 'manage_compute');
-export const assertManageUpdates = (locals: Locals) =>
-	assertPagePermission(locals, 'manage_updates');
 export const assertManageDefinitions = (locals: Locals) =>
 	assertPagePermission(locals, 'manage_definitions');
 export const assertManageProjects = (locals: Locals) =>

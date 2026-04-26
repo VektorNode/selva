@@ -259,8 +259,9 @@ export function runEventSinkConformance(opts: EventSinkConformanceOptions): void
 	});
 }
 
-// ── Test data helpers ──────────────────────────────────────────────────
-
+// ============================================================================
+// Test data helpers
+// ============================================================================
 function nowIso(): string {
 	return new Date().toISOString();
 }

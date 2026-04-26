@@ -7,8 +7,7 @@
  * enough for the volumes Selva deals with (admin/definition lists are
  * bounded; nothing is infinite scroll over millions of rows).
  *
- * Keyset pagination would be faster at scale — documented as a future
- * upgrade in FINDINGS.md if it ever matters.
+ * Keyset pagination would be faster at scale if it ever matters.
  */
 
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@selva/platform';
