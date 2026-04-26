@@ -1,8 +1,5 @@
 import { describe, beforeEach, it } from 'vitest';
-import {
-	runEventSinkConformance,
-	type RecordingEventSink
-} from '@selva/platform/testing';
+import { runEventSinkConformance, type RecordingEventSink } from '@selva/platform/testing';
 import { SupabaseDataProvider } from '../SupabaseDataProvider.js';
 import { readEnv, resetAllData, seedUser } from './test-helpers.js';
 

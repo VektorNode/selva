@@ -90,7 +90,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		} else if (auth.createUser) {
 			user = await auth.createUser(email);
 		} else {
-			throw error(501, `User creation is not supported by ${auth.name}. Users are managed externally.`);
+			throw error(
+				501,
+				`User creation is not supported by ${auth.name}. Users are managed externally.`
+			);
 		}
 
 		// Grant platform permissions out-of-band via the data-layer store.

@@ -39,10 +39,7 @@ const DEFAULT_SCOPE: ShareLinkTestScope = {
 	otherDefinitionId: 'def-2'
 };
 
-function link(
-	scope: ShareLinkTestScope,
-	overrides: Partial<ShareLink> = {}
-): ShareLink {
+function link(scope: ShareLinkTestScope, overrides: Partial<ShareLink> = {}): ShareLink {
 	const now = new Date().toISOString();
 	return {
 		id: overrides.id ?? makeUuid(),

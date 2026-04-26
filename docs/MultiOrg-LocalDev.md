@@ -8,10 +8,10 @@ This guide covers both backends — the wiring is provider-agnostic; only the "w
 
 Set in `.env`, read in [selva.config.ts:54](../selva.config.ts#L54):
 
-| `SELVA_TENANCY` | Setup creates… | Use when |
-|---|---|---|
-| `single` (default) | One org + the first user as its owner | Single-tenant deploy |
-| `multi` | Only the platform admin user; no org | Testing multi-org, or multi-tenant deploy |
+| `SELVA_TENANCY`    | Setup creates…                        | Use when                                  |
+| ------------------ | ------------------------------------- | ----------------------------------------- |
+| `single` (default) | One org + the first user as its owner | Single-tenant deploy                      |
+| `multi`            | Only the platform admin user; no org  | Testing multi-org, or multi-tenant deploy |
 
 `/setup` branches on this — see [setup/+page.server.ts:86](../packages/compute-app/src/routes/setup/+page.server.ts#L86). In `multi` mode the user lands in the admin without an `actingOrgId` until they're a member of an org.
 
@@ -75,7 +75,7 @@ Each call seeds the caller as the org's `owner` member. Slug must be ≥3 chars,
 
 ## Step 4 — Add more users into specific orgs
 
-You want users that are members of *one* org each, so you can verify isolation by logging in as them.
+You want users that are members of _one_ org each, so you can verify isolation by logging in as them.
 
 ### Create the users
 
@@ -89,14 +89,14 @@ This is where the two backends diverge.
 
 ```json
 {
-  "orgId": "<acme-uuid>",
-  "userId": "<alice-uuid>",
-  "role": "member",
-  "permissions": [],
-  "joinedAt": "2026-04-25T00:00:00.000Z",
-  "updatedAt": "2026-04-25T00:00:00.000Z",
-  "updatedBy": "<admin-uuid>",
-  "deletedAt": null
+	"orgId": "<acme-uuid>",
+	"userId": "<alice-uuid>",
+	"role": "member",
+	"permissions": [],
+	"joinedAt": "2026-04-25T00:00:00.000Z",
+	"updatedAt": "2026-04-25T00:00:00.000Z",
+	"updatedBy": "<admin-uuid>",
+	"deletedAt": null
 }
 ```
 
@@ -123,7 +123,7 @@ Open separate browser profiles (or incognito windows):
 - `alice@acme` → only Acme; should not see Globex's projects/definitions
 - `bob@globex` → only Globex
 
-The rule layer documented in [Permissions.md](../packages/compute-app/src/routes/admin/Permissions.md) is what you're testing. The conformance suites in [packages/local-provider/src/data/__tests__/rules.test.ts](../packages/local-provider/src/data/__tests__/rules.test.ts) cover the same surface programmatically.
+The rule layer documented in [Permissions.md](../packages/compute-app/src/routes/admin/Permissions.md) is what you're testing. The conformance suites in [packages/local-provider/src/data/**tests**/rules.test.ts](../packages/local-provider/src/data/__tests__/rules.test.ts) cover the same surface programmatically.
 
 ## Caveat: there's no org switcher yet
 

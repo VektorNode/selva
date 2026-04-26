@@ -35,7 +35,9 @@
 </script>
 
 <div class={cn('relative w-full', containerClass)}>
-	<SearchIcon class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2" />
+	<SearchIcon
+		class="left-3 h-3.5 w-3.5 pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground"
+	/>
 	<Input
 		bind:this={ref}
 		bind:value
@@ -47,7 +49,7 @@
 		<button
 			type="button"
 			onclick={handleClear}
-			class="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+			class="right-3 absolute top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
 			aria-label="Clear search"
 		>
 			<XIcon class="h-4 w-4" />
@@ -55,14 +57,14 @@
 	{:else if badge !== undefined}
 		<span
 			class={cn(
-				'text-muted-foreground absolute top-1/2 right-3 -translate-y-1/2 font-mono text-[12px]',
+				'right-3 font-mono absolute top-1/2 -translate-y-1/2 text-[12px] text-muted-foreground',
 				badgeClass
 			)}
 		>
 			{badge}
 		</span>
 	{:else if children}
-		<div class="absolute top-1/2 right-3 -translate-y-1/2 pointer-events-none">
+		<div class="right-3 pointer-events-none absolute top-1/2 -translate-y-1/2">
 			{@render children()}
 		</div>
 	{/if}

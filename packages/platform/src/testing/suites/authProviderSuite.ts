@@ -107,10 +107,7 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 			it('passwordAuth.createUserWithPassword + getUser returns the created user', async () => {
 				const { provider } = await createProvider();
 				const email = `test-${makeUuid()}@example.com`;
-				const created = await provider.passwordAuth!.createUserWithPassword(
-					email,
-					'password1234'
-				);
+				const created = await provider.passwordAuth!.createUserWithPassword(email, 'password1234');
 				expect(created).toBeTruthy();
 				const fetched = await provider.getUser(created.id);
 				expect(fetched?.id).toBe(created.id);
@@ -143,10 +140,7 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 			it('deleteUser removes the user', async () => {
 				const { provider } = await createProvider();
 				const email = `del-${makeUuid()}@example.com`;
-				const created = await provider.passwordAuth!.createUserWithPassword(
-					email,
-					'pass12345678'
-				);
+				const created = await provider.passwordAuth!.createUserWithPassword(email, 'pass12345678');
 				const result = await provider.deleteUser(created.id);
 				expect(result).toBe('ok');
 				const fetched = await provider.getUser(created.id);
@@ -175,10 +169,14 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 				// §1e: profile state (starred, recentRuns, displayName) lives on
 				// IUserProfileStore. Platform permissions live on
 				// IPlatformPermissionStore. AuthUser is identity-only.
-				expect((user as unknown as { starredDefinitions?: unknown }).starredDefinitions).toBeUndefined();
+				expect(
+					(user as unknown as { starredDefinitions?: unknown }).starredDefinitions
+				).toBeUndefined();
 				expect((user as unknown as { recentRuns?: unknown }).recentRuns).toBeUndefined();
 				expect((user as unknown as { displayName?: unknown }).displayName).toBeUndefined();
-				expect((user as unknown as { platformPermissions?: unknown }).platformPermissions).toBeUndefined();
+				expect(
+					(user as unknown as { platformPermissions?: unknown }).platformPermissions
+				).toBeUndefined();
 			});
 
 			it('disableUser disables a user', async () => {

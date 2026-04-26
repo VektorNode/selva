@@ -8,18 +8,18 @@ This README is the contract. Read it before writing an adapter.
 
 ## Interfaces at a glance
 
-| Interface | Purpose | Scoped by `RequestContext`? |
-| --- | --- | --- |
-| `IAuthProvider` | Verify tokens, manage users, issue sessions. Optional `passwordAuth?` capability. | No — the auth provider produces the identity that fills the context. |
-| `IPlatformPermissionStore` | Per-user platform permissions; owns the sole-`instance_admin` invariant. | Yes — every method. |
-| `IUserProfileStore` | Per-user profile (display name, starred definitions, recent runs). | Yes — adapters scope by `ctx.userId`. |
-| `IOrgStore` | Orgs and org memberships. | Yes — every method. |
-| `IProjectStore` | Projects and project memberships. | Yes — every method. |
-| `IDefinitionStore` | Definition metadata records + version history. | Yes — every method. |
-| `IShareLinkStore` | Per-definition anonymous-access tokens. | Yes — every method. |
-| `IInviteStore` | Pending org-membership invitations. | Yes — every method. |
-| `IComputeServerStore` | Global + per-org compute-server config. | No — not tenant-scoped. |
-| `IStorageProvider` | Path-based blob storage. Authorization is the caller's responsibility. | No — callers pass already-authorized paths. |
+| Interface                  | Purpose                                                                           | Scoped by `RequestContext`?                                          |
+| -------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `IAuthProvider`            | Verify tokens, manage users, issue sessions. Optional `passwordAuth?` capability. | No — the auth provider produces the identity that fills the context. |
+| `IPlatformPermissionStore` | Per-user platform permissions; owns the sole-`instance_admin` invariant.          | Yes — every method.                                                  |
+| `IUserProfileStore`        | Per-user profile (display name, starred definitions, recent runs).                | Yes — adapters scope by `ctx.userId`.                                |
+| `IOrgStore`                | Orgs and org memberships.                                                         | Yes — every method.                                                  |
+| `IProjectStore`            | Projects and project memberships.                                                 | Yes — every method.                                                  |
+| `IDefinitionStore`         | Definition metadata records + version history.                                    | Yes — every method.                                                  |
+| `IShareLinkStore`          | Per-definition anonymous-access tokens.                                           | Yes — every method.                                                  |
+| `IInviteStore`             | Pending org-membership invitations.                                               | Yes — every method.                                                  |
+| `IComputeServerStore`      | Global + per-org compute-server config.                                           | No — not tenant-scoped.                                              |
+| `IStorageProvider`         | Path-based blob storage. Authorization is the caller's responsibility.            | No — callers pass already-authorized paths.                          |
 
 `IDataProvider` composes the data stores: `{ orgs, projects, definitions, shareLinks, invites, computeServer }`. An adapter typically implements one class per store and aggregates them.
 
@@ -65,15 +65,19 @@ Archive current → append history → write new → prune history. Not atomic; 
 
 ```ts
 import type {
-  IDefinitionStore, DefinitionRecord, DefinitionRecordPatch,
-  RequestContext, ListOptions, Page
+	IDefinitionStore,
+	DefinitionRecord,
+	DefinitionRecordPatch,
+	RequestContext,
+	ListOptions,
+	Page
 } from '@selva/platform';
 
 export class MyDefinitionStore implements IDefinitionStore {
-  async list(ctx: RequestContext, opts?: ListOptions): Promise<Page<DefinitionRecord>> {
-    // Filter by ctx.actingOrgId; exclude status='pending' unless opts.includePending.
-  }
-  // ... etc
+	async list(ctx: RequestContext, opts?: ListOptions): Promise<Page<DefinitionRecord>> {
+		// Filter by ctx.actingOrgId; exclude status='pending' unless opts.includePending.
+	}
+	// ... etc
 }
 ```
 
@@ -90,8 +94,8 @@ import { runDefinitionStoreConformance } from '@selva/platform/testing';
 import { MyDefinitionStore } from './MyDefinitionStore.js';
 
 runDefinitionStoreConformance({
-  name: 'my-adapter',
-  createStore: async () => new MyDefinitionStore(/* ... */)
+	name: 'my-adapter',
+	createStore: async () => new MyDefinitionStore(/* ... */)
 });
 ```
 

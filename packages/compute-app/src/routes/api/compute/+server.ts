@@ -211,8 +211,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 				}
 			}
 
-			const versionId =
-				channel === 'live' ? record.liveVersionId : record.draftVersionId;
+			const versionId = channel === 'live' ? record.liveVersionId : record.draftVersionId;
 			if (!versionId) {
 				throw error(404, `Definition '${guid}' has no ${channel} version yet`);
 			}

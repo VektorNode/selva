@@ -121,10 +121,7 @@ export class SupabaseProjectStore implements IProjectStore {
 		ctx: RequestContext,
 		id: string,
 		patch: Partial<
-			Pick<
-				Project,
-				'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload'
-			>
+			Pick<Project, 'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload'>
 		>
 	): Promise<void> {
 		const row: Record<string, unknown> = {};
@@ -268,11 +265,7 @@ export class SupabaseProjectStore implements IProjectStore {
 		});
 	}
 
-	async removeProjectMember(
-		ctx: RequestContext,
-		projectId: string,
-		userId: string
-	): Promise<void> {
+	async removeProjectMember(ctx: RequestContext, projectId: string, userId: string): Promise<void> {
 		const stamp = auditSoftDelete(ctx, ctx.userId);
 		const { error } = await this.clients
 			.forRequest(ctx)
@@ -444,7 +437,11 @@ interface PostgrestError {
  * `updated_at`, but for soft-delete we set it explicitly so it matches
  * `deleted_at` (single timestamp for the deletion event).
  */
-function stampToRow(stamp: { updatedAt: string; updatedBy: string; deletedAt: string }): Record<string, unknown> {
+function stampToRow(stamp: {
+	updatedAt: string;
+	updatedBy: string;
+	deletedAt: string;
+}): Record<string, unknown> {
 	const row: Record<string, unknown> = {
 		deleted_at: stamp.deletedAt,
 		updated_at: stamp.updatedAt

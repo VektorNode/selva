@@ -34,11 +34,9 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	const { ctx } = await requireEditableDefinition(locals, guidParsed.data);
 
 	try {
-		const page = await providers.data.shareLinks.listByDefinition(
-			ctx,
-			guidParsed.data,
-			{ limit: 200 }
-		);
+		const page = await providers.data.shareLinks.listByDefinition(ctx, guidParsed.data, {
+			limit: 200
+		});
 		return json({
 			links: page.items.map(strip),
 			nextCursor: page.nextCursor
@@ -74,9 +72,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		// Default applied only when the field is absent. `null` is a deliberate
 		// "uncap" choice and is preserved.
 		maxSolves:
-			parsed.data.maxSolves === undefined
-				? DEFAULT_SHARE_LINK_MAX_SOLVES
-				: parsed.data.maxSolves,
+			parsed.data.maxSolves === undefined ? DEFAULT_SHARE_LINK_MAX_SOLVES : parsed.data.maxSolves,
 		solveCount: 0
 	};
 

@@ -364,7 +364,11 @@ export class SupabaseOrgStore implements IOrgStore {
  * `updated_at`, but for soft-delete we set it explicitly so it matches
  * `deleted_at` (single timestamp for the deletion event).
  */
-function stampToRow(stamp: { updatedAt: string; updatedBy: string; deletedAt: string }): Record<string, unknown> {
+function stampToRow(stamp: {
+	updatedAt: string;
+	updatedBy: string;
+	deletedAt: string;
+}): Record<string, unknown> {
 	const row: Record<string, unknown> = {
 		deleted_at: stamp.deletedAt,
 		updated_at: stamp.updatedAt

@@ -69,7 +69,10 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		await writeJsonFile(this.configPath, config);
 	}
 
-	private sortedRecords(records: DefinitionRecord[], opts?: DefinitionListOptions): DefinitionRecord[] {
+	private sortedRecords(
+		records: DefinitionRecord[],
+		opts?: DefinitionListOptions
+	): DefinitionRecord[] {
 		const defaulted: DefinitionListOptions = {
 			...opts,
 			orderBy: opts?.orderBy ?? 'name',
@@ -82,7 +85,10 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		});
 	}
 
-	private visibleRecords(records: DefinitionRecord[], opts?: DefinitionListOptions): DefinitionRecord[] {
+	private visibleRecords(
+		records: DefinitionRecord[],
+		opts?: DefinitionListOptions
+	): DefinitionRecord[] {
 		const filtered = records.filter((r) => r?.displayName && this.live(r));
 		if (opts?.statuses?.length) {
 			const allowed = new Set(opts.statuses);
@@ -182,10 +188,16 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		config.definitions[guid] = {
 			...existing,
 			...(patch.displayName !== undefined && { displayName: patch.displayName }),
-			...(patch.description !== undefined && { description: clearable(patch.description) as string | undefined }),
-			...(patch.category !== undefined && { category: clearable(patch.category) as string | undefined }),
+			...(patch.description !== undefined && {
+				description: clearable(patch.description) as string | undefined
+			}),
+			...(patch.category !== undefined && {
+				category: clearable(patch.category) as string | undefined
+			}),
 			...(patch.tags !== undefined && { tags: clearable(patch.tags) as string[] | undefined }),
-			...(patch.coverImage !== undefined && { coverImage: clearable(patch.coverImage) as string | undefined }),
+			...(patch.coverImage !== undefined && {
+				coverImage: clearable(patch.coverImage) as string | undefined
+			}),
 			...(patch.projectId !== undefined && { projectId: patch.projectId }),
 			...(patch.computeServerId !== undefined && {
 				computeServerId: clearable(patch.computeServerId) as string | undefined
@@ -219,14 +231,10 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		await this.writeConfig(config);
 	}
 
-	async listStalePending(
-		_ctx: RequestContext,
-		olderThanIso: string
-	): Promise<DefinitionRecord[]> {
+	async listStalePending(_ctx: RequestContext, olderThanIso: string): Promise<DefinitionRecord[]> {
 		const config = await this.readConfig();
 		return Object.values(config.definitions).filter(
-			(r) =>
-				this.live(r) && r.status === ('pending' as string) && r.createdAt <= olderThanIso
+			(r) => this.live(r) && r.status === ('pending' as string) && r.createdAt <= olderThanIso
 		);
 	}
 
@@ -279,10 +287,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		const parent = config.definitions[version.definitionId];
 		// §6 deletion protection — cannot delete a version while it's serving
 		// either channel. Caller must repoint live/draft first.
-		if (
-			parent &&
-			(parent.liveVersionId === versionId || parent.draftVersionId === versionId)
-		) {
+		if (parent && (parent.liveVersionId === versionId || parent.draftVersionId === versionId)) {
 			throw new ProviderError(
 				`Version '${versionId}' is referenced by liveVersionId or draftVersionId`,
 				409

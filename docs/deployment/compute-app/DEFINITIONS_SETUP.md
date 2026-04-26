@@ -50,9 +50,9 @@ $DATA_PATH/
 
 ## Troubleshooting
 
-| Issue                            | Solution                                                              |
-| -------------------------------- | --------------------------------------------------------------------- |
-| "No definitions found"           | Verify `DATA_PATH` exists and points to the right folder              |
-| "Invalid config format"          | Ensure `definitions-config.json` has a top-level `definitions` object |
-| Definition not loading           | Filename in config must match the `.gh` file name (without extension) |
-| "No compute server configured"   | Register a Rhino.Compute server at `/admin/compute`                   |
+| Issue                          | Solution                                                              |
+| ------------------------------ | --------------------------------------------------------------------- |
+| "No definitions found"         | Verify `DATA_PATH` exists and points to the right folder              |
+| "Invalid config format"        | Ensure `definitions-config.json` has a top-level `definitions` object |
+| Definition not loading         | Filename in config must match the `.gh` file name (without extension) |
+| "No compute server configured" | Register a Rhino.Compute server at `/admin/compute`                   |

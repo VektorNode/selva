@@ -227,9 +227,7 @@ export function runEventSinkConformance(opts: EventSinkConformanceOptions): void
 			);
 			await provider.shareLinks.revoke(ctx, linkId);
 
-			expect(sink.ofType('share_link.minted')).toMatchObject([
-				{ linkId, definitionId, actorId }
-			]);
+			expect(sink.ofType('share_link.minted')).toMatchObject([{ linkId, definitionId, actorId }]);
 			expect(sink.ofType('share_link.revoked')).toMatchObject([{ linkId, actorId }]);
 		});
 

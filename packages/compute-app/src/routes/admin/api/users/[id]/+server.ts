@@ -37,10 +37,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	// Granting or revoking platform-scope permissions requires the caller to
 	// already hold instance_admin. Without this, any org admin with
 	// manage_instance_users could self-elevate to instance_admin.
-	const existingPlatform: PlatformPermission[] = await getPermissionStore().getFor(
-		locals.ctx!,
-		id
-	);
+	const existingPlatform: PlatformPermission[] = await getPermissionStore().getFor(locals.ctx!, id);
 	const platformChanged =
 		platform.length !== existingPlatform.length ||
 		platform.some((p: PlatformPermission) => !existingPlatform.includes(p)) ||

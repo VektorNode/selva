@@ -150,8 +150,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		// and the user is loading their own profile during request bootstrap.
 		event.locals.user = user;
 		event.locals.profile =
-			(await providers.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ??
-			emptyProfile(user.id);
+			(await providers.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ?? emptyProfile(user.id);
 		event.locals.ctx = await buildContext(user, token);
 	}
 

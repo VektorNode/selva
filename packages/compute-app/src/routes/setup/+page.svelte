@@ -58,7 +58,7 @@
 
 		{#if data.oauthProviders.length > 0}
 			<div class="space-y-2">
-				<p class="text-muted-foreground text-xs text-center">
+				<p class="text-muted-foreground text-center text-xs">
 					The first user to sign in becomes the platform admin.
 				</p>
 				{#each data.oauthProviders as provider (provider)}
@@ -83,23 +83,12 @@
 			<form method="POST" class="space-y-4">
 				<div class="space-y-2">
 					<Label for="companyName">Company name</Label>
-					<Input
-						id="companyName"
-						name="companyName"
-						type="text"
-						required
-						placeholder="Acme Corp"
-					/>
+					<Input id="companyName" name="companyName" type="text" required placeholder="Acme Corp" />
 				</div>
 
 				<div class="space-y-2">
 					<Label for="displayName">Display name</Label>
-					<Input
-						id="displayName"
-						name="displayName"
-						type="text"
-						placeholder="Jane Smith"
-					/>
+					<Input id="displayName" name="displayName" type="text" placeholder="Jane Smith" />
 				</div>
 
 				<div class="space-y-2">
@@ -120,7 +109,13 @@
 
 				<div class="space-y-2">
 					<Label for="confirm">Confirm Password</Label>
-					<Input id="confirm" name="confirm" type="password" required placeholder="Repeat password" />
+					<Input
+						id="confirm"
+						name="confirm"
+						type="password"
+						required
+						placeholder="Repeat password"
+					/>
 				</div>
 
 				<Button type="submit" class="w-full">Create Account</Button>
@@ -131,8 +126,8 @@
 			<Alert.Root variant="destructive">
 				<CircleAlert />
 				<Alert.Description>
-					No setup methods are configured. Configure password auth or OAuth providers
-					before bootstrapping the first admin.
+					No setup methods are configured. Configure password auth or OAuth providers before
+					bootstrapping the first admin.
 				</Alert.Description>
 			</Alert.Root>
 		{/if}

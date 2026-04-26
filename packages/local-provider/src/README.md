@@ -25,6 +25,7 @@ await writeJsonFile(path, { users: [...] });
 ### Why this exists
 
 All stores follow a read-modify-write pattern on small JSON files. Centralizing it means:
+
 - One place to get atomicity right (no partial writes on crash)
 - One place to handle "file doesn't exist yet" (fallback instead of try/catch everywhere)
 - Tab-indented JSON output for readable diffs when data dirs are checked into git

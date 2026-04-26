@@ -43,11 +43,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		parsed.data.visibility === 'public' &&
 		existing.visibility !== 'public'
 	) {
-		const orgMember = await getOrganizationProvider().getOrgMember(
-			ctx,
-			existing.orgId,
-			ctx.userId
-		);
+		const orgMember = await getOrganizationProvider().getOrgMember(ctx, existing.orgId, ctx.userId);
 		const passes = withAdminBypass(ctx.platformPermissions, () =>
 			canChangeVisibilityToPublic({
 				platformPermissions: ctx.platformPermissions,

@@ -43,6 +43,7 @@ Rhino.Compute URL + API key are configured in `/admin/compute` and persisted in 
 ### Finding the keys
 
 **Local (`npx supabase status`):**
+
 ```
 ╭──────────────────────────────────────────────────╮
 │ 🔑 Authentication Keys                            │
@@ -137,8 +138,8 @@ export default defineConfig((env) => {
 
 The `supabase/migrations/` directory holds a single bootstrap file that installs the entire schema in one pass:
 
-| File | What it installs |
-|---|---|
+| File               | What it installs                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `0001_initial.sql` | Everything: `user_profiles` (+ auto-seed trigger), `orgs` / `org_members` / `projects` / `project_members` (+ RLS helpers), `definitions` / `definition_versions` (+ deletion-protection FKs and the atomic `increment_run_count` RPC), `invites` (+ `get_invite_by_token` RPC), `compute_servers` (+ per-org/instance defaults, spec §3 BYO compute), `share_links` (+ `try_increment_share_link_solve_count` RPC, spec §7), and the `selva-public` / `selva-private` storage policies. |
 
 Future schema changes go in numbered files (`0002_…`, `0003_…`).
@@ -272,6 +273,7 @@ The suite wipes every table and every auth user between tests — **do not point
 ### Storage
 
 Two buckets:
+
 - **`selva-public`** (public) — covers, archives. `getPublicUrl` returns the direct CDN URL.
 - **`selva-private`** (private) — `.gh` / `.ghx` files. `getPublicUrl` returns `/api/files/{path}` which the compute-app's route handler must proxy after an auth check.
 

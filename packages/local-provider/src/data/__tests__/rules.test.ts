@@ -252,9 +252,9 @@ describe('canEditProjectSettings', () => {
 			orgMember: null,
 			allowCrossOrgPublic: true
 		};
-		expect(
-			canEditProjectSettings({ ...base, orgPermissions: [], member: member('owner') })
-		).toBe(true);
+		expect(canEditProjectSettings({ ...base, orgPermissions: [], member: member('owner') })).toBe(
+			true
+		);
 		expect(
 			canEditProjectSettings({
 				...base,

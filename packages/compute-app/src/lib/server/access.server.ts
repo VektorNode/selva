@@ -58,8 +58,7 @@ export function assertPagePermission(locals: Locals, permission: AnyPermission):
 export const requireManageInstanceUsers = (locals: Locals) =>
 	requirePermission(locals, 'manage_instance_users');
 export const requireManageCompute = (locals: Locals) => requirePermission(locals, 'manage_compute');
-export const requireManageUpdates = (locals: Locals) =>
-	requirePermission(locals, 'manage_updates');
+export const requireManageUpdates = (locals: Locals) => requirePermission(locals, 'manage_updates');
 export const requireManageOrgMembers = (locals: Locals) =>
 	requirePermission(locals, 'manage_org_members');
 export const requireManageOrgCompute = (locals: Locals) =>
@@ -80,8 +79,7 @@ export const assertManageDefinitions = (locals: Locals) =>
 export const assertManageProjects = (locals: Locals) =>
 	assertPagePermission(locals, 'manage_projects');
 
-export const requireInstanceAdmin = (locals: Locals) =>
-	requirePermission(locals, 'instance_admin');
+export const requireInstanceAdmin = (locals: Locals) => requirePermission(locals, 'instance_admin');
 
 /**
  * Gate for routes that may be reached by any platform-class permission holder
@@ -111,10 +109,7 @@ export function assertAnyPlatformPermission(locals: Locals): AuthUser {
  * Every project/definition gate funnels through this so the `instance_admin`
  * bypass lives in one place — the future audit-log hook point.
  */
-async function bypassOrRun(
-	ctx: RequestContext,
-	check: () => Promise<boolean>
-): Promise<boolean> {
+async function bypassOrRun(ctx: RequestContext, check: () => Promise<boolean>): Promise<boolean> {
 	if (hasPermission(ctx, 'instance_admin')) return true;
 	return await check();
 }
@@ -185,11 +180,7 @@ export async function requireCanReclaim(
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId);
 	const allowed = await bypassOrRun(ctx, async () => {
-		const orgMember = await getOrganizationProvider().getOrgMember(
-			ctx,
-			project.orgId,
-			ctx.userId
-		);
+		const orgMember = await getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId);
 		return canReclaim({
 			platformPermissions: ctx.platformPermissions,
 			project,
@@ -213,11 +204,7 @@ export async function requireCanCreateProject(
 ): Promise<{ user: AuthUser; ctx: RequestContext }> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await bypassOrRun(ctx, async () => {
-		const orgMember = await getOrganizationProvider().getOrgMember(
-			ctx,
-			targetOrgId,
-			ctx.userId
-		);
+		const orgMember = await getOrganizationProvider().getOrgMember(ctx, targetOrgId, ctx.userId);
 		return canCreateProject({
 			platformPermissions: ctx.platformPermissions,
 			orgPermissions: ctx.orgPermissions,
@@ -232,9 +219,7 @@ export async function requireCanCreateProject(
 
 export async function requireCanManage(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	const allowed = await bypassOrRun(ctx, () =>
-		getProjectProvider().canManage(ctx, projectId)
-	);
+	const allowed = await bypassOrRun(ctx, () => getProjectProvider().canManage(ctx, projectId));
 	if (!allowed) throw error(403, 'Only project owners can manage this project.');
 	return user;
 }
@@ -244,9 +229,7 @@ export async function requireCanManageMembers(
 	projectId: string
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	const allowed = await bypassOrRun(ctx, () =>
-		getProjectProvider().canManage(ctx, projectId)
-	);
+	const allowed = await bypassOrRun(ctx, () => getProjectProvider().canManage(ctx, projectId));
 	if (!allowed) throw error(403, 'Only project owners can manage members.');
 	return user;
 }
@@ -261,10 +244,7 @@ export async function requireCanManageMembers(
  * `rules.ts`; the route layer used to inline its own predicate but now
  * funnels through the same rule.
  */
-async function loadAndCheckView(
-	ctx: RequestContext,
-	project: Project
-): Promise<boolean> {
+async function loadAndCheckView(ctx: RequestContext, project: Project): Promise<boolean> {
 	const allowCrossOrgPublic = flag('ALLOW_CROSS_ORG_PUBLIC');
 	// Cross-org public bypass: no membership fetch needed.
 	if (project.visibility === 'public' && allowCrossOrgPublic) {
@@ -297,10 +277,7 @@ async function loadAndCheckView(
 	});
 }
 
-export async function requireCanViewProject(
-	locals: Locals,
-	projectId: string
-): Promise<AuthUser> {
+export async function requireCanViewProject(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await bypassOrRun(ctx, async () => {
 		const project = await loadProjectOr404(ctx, projectId);

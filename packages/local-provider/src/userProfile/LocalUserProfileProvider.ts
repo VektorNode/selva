@@ -10,7 +10,9 @@ import { ProviderError, hasPermission } from '@selva/platform';
 import { createLocalUserMetaProvider } from '../auth/users.js';
 import type { LocalUserMetaProvider, StoredUser } from '../auth/users.js';
 
-function toProfile(u: Pick<StoredUser, 'id' | 'displayName' | 'starredDefinitions' | 'recentRuns'>): UserProfile {
+function toProfile(
+	u: Pick<StoredUser, 'id' | 'displayName' | 'starredDefinitions' | 'recentRuns'>
+): UserProfile {
 	return {
 		userId: u.id,
 		displayName: u.displayName,

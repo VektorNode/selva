@@ -23,7 +23,9 @@ export const GET: RequestHandler = async ({ url }) => {
 	}
 
 	const auth = getAuthProvider();
-	if (typeof (auth as { getOAuthAuthorizationUrl?: unknown }).getOAuthAuthorizationUrl !== 'function') {
+	if (
+		typeof (auth as { getOAuthAuthorizationUrl?: unknown }).getOAuthAuthorizationUrl !== 'function'
+	) {
 		throw error(501, 'OAuth is not supported by the configured auth provider.');
 	}
 

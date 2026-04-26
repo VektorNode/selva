@@ -24,28 +24,30 @@
 </script>
 
 <!-- Sticky top bar -->
-<header class={`sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-sm ${className}`}>
-	<div class="flex h-14 items-center gap-5 px-6">
+<header
+	class={`top-0 backdrop-blur-sm sticky z-40 border-b border-border bg-background/90 ${className}`}
+>
+	<div class="h-14 gap-5 px-6 flex items-center">
 		<!-- Logo -->
-		<a href={homeUrl} class="flex items-center gap-2 shrink-0">
+		<a href={homeUrl} class="gap-2 flex shrink-0 items-center">
 			<img src={logo} alt="" aria-hidden="true" class="h-5 w-5" />
 			<span class="font-semibold text-sm tracking-tight">Selva</span>
 		</a>
 
 		{#if title}
-			<span class="text-border text-sm">/</span>
+			<span class="text-sm text-border">/</span>
 			<span class="text-sm font-medium text-muted-foreground">{title}</span>
 		{/if}
 
 		<!-- Nav items -->
 		{#if navItems}
-			<nav class="ml-5 flex gap-1">
+			<nav class="ml-5 gap-1 flex">
 				{@render navItems()}
 			</nav>
 		{/if}
 
 		<!-- Right content -->
-		<div class="ml-auto flex items-center gap-2">
+		<div class="gap-2 ml-auto flex items-center">
 			{#if rightContent}
 				{@render rightContent()}
 			{/if}

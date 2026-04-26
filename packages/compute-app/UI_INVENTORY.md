@@ -4,11 +4,12 @@ What the backend can now express that the UI doesn't yet expose. Organized by
 the role doing the thing, not by the table. Spec source of truth:
 [packages/compute-app/src/routes/admin/Permissions.md](../packages/compute-app/src/routes/admin/Permissions.md).
 
-This is a *functional* inventory — what actions a user needs to perform and
+This is a _functional_ inventory — what actions a user needs to perform and
 what information they need to see. Layout, copy, and component choice are
 explicitly out of scope.
 
 Legend:
+
 - **NEW** — functionality the backend now supports but UI doesn't reach at all.
 - **CHANGED** — UI exists but its rules or inputs have shifted.
 - **CORRECTNESS** — UI is outdated or wrong vs. the new rules.
@@ -21,6 +22,7 @@ Legend:
 > the UI should merge views where that's true.
 
 ### 1.1 Platform permission management
+
 - **CHANGED** — The admin-users page shows instance-scope permissions to grant.
   The label list was `[platform_admin, manage_users, manage_compute]`; it's now
   `[instance_admin, manage_compute, manage_instance_users, manage_updates]`.
@@ -31,6 +33,7 @@ Legend:
   is a per-org permission not granted through this page.
 
 ### 1.2 Instance-wide compute pool
+
 - **CHANGED** — `/admin/compute` already configures the instance compute servers.
   The semantics are now explicitly "instance pool," to distinguish from per-org
   overrides (see 2.7). A small badge or heading clarifying "Instance pool —
@@ -41,16 +44,19 @@ Legend:
   but the visibility itself is missing.
 
 ### 1.3 Platform flags dashboard
+
 - **NEW** — A read-only surface showing the resolved state of the three platform
   flags: `ALLOW_CROSS_ORG_PUBLIC`, `ALLOW_ORG_COMPUTE_OVERRIDE`, `ALLOW_ORG_CREATION`.
-  The flags come from env, so this isn't an *editor* — it's a "what's actually
+  The flags come from env, so this isn't an _editor_ — it's a "what's actually
   configured" panel so an admin can tell at a glance why a feature is disabled.
 
 ### 1.4 Updates
+
 - **CHANGED** — `/admin/api/system/update` still exists; gate it on `manage_updates`
   (was `platform_admin`). Update the UI nav/visibility accordingly.
 
 ### 1.5 Instance user management
+
 - **CHANGED** — The "disable user" action (`AuthUser.disabled`) already exists
   in the backend. UI should let `manage_instance_users` holders disable/enable
   any user on the instance, regardless of org membership. Today the admin users
@@ -62,6 +68,7 @@ Legend:
   permanent + irreversible).
 
 ### 1.6 Reclaim escape hatch (covered under org owner/admin, §2.8)
+
 - Instance admin gets all the same affordances as the strictest org owner, via
   the centralized bypass. No new UI beyond what §2.8 needs.
 
@@ -74,6 +81,7 @@ Legend:
 > `actingOrgId`.
 
 ### 2.0 Platform vs. org admin — surface split
+
 - **STATUS** — Backend leak is **fixed**. The original bug:
   [admin/+layout.server.ts](src/routes/admin/+layout.server.ts) admitted
   anyone holding any of eight admin-class perms (including org-scope ones
@@ -117,13 +125,15 @@ Legend:
   call when scaffolding.
 
 ### 2.1 Acting-org switcher
+
 - **NEW** — The UI currently assumes one active org. With multi-tenant on the
   horizon, a user may belong to several orgs. Need: a picker (top bar / account
   menu) that sets `ctx.actingOrgId`, and every listing + action downstream
-  reflects that choice. Spec §1 + §8 reinforce this is the *only* correct
+  reflects that choice. Spec §1 + §8 reinforce this is the _only_ correct
   tenancy check primitive.
 
 ### 2.2 Org roster + role management
+
 - **CHANGED** — Role options are `owner / admin / member` (unchanged), but the
   per-role default permissions have renamed: `manage_org_members`,
   `manage_org_compute`, `manage_definitions`, `manage_projects`. The UI should
@@ -135,12 +145,14 @@ Legend:
   to submit if they're checked.
 
 ### 2.3 Invites
+
 - **CHANGED** — Invite management is gated on `manage_org_members` (was
   `manage_users`). The existing invite UI works; just needs the gate update.
 - **NEW** — Spec §11 tracks "cross-org guest on a private project" as deferred.
   Nothing to do yet; flag this in UI only if/when we build it.
 
 ### 2.4 Create / edit / delete org
+
 - **NEW** — `ALLOW_ORG_CREATION` flag decides whether signed-in users see a
   "Create organization" action. When off (self-hosted default), the action
   should not appear. When on, a simple create flow sets the caller as `owner`.
@@ -151,6 +163,7 @@ Legend:
   ownership" affordance on the org settings page.
 
 ### 2.5 Offboarding a user from the org
+
 - **NEW** — Remove member flow should surface the sole-owner-of-project block
   (spec §9). When the removal would orphan projects, the UI must:
   1. Block the removal.
@@ -160,11 +173,13 @@ Legend:
      we locked in.
 
 ### 2.6 Disable vs. remove
+
 - **CORRECTNESS** — Org admins **cannot** disable a user (that's instance-wide
-  per §2/§9). They can remove from *their* org. The UI must not expose a
+  per §2/§9). They can remove from _their_ org. The UI must not expose a
   "disable" button on the org member list.
 
 ### 2.7 Per-org compute override (BYO compute)
+
 - **NEW** — When `ALLOW_ORG_COMPUTE_OVERRIDE` is on at the platform level,
   holders of `manage_org_compute` see a "Compute server" section in org
   settings letting them configure:
@@ -177,6 +192,7 @@ Legend:
   permission is inert.
 
 ### 2.8 Project reclaim
+
 - **NEW** — On any project in the org, org owner/admin see a **"Reclaim"**
   action (spec §5 `canReclaim`). Semantics:
   - Adds the actor as co-owner of the project.
@@ -192,6 +208,7 @@ Legend:
 > project and may or may not hold broader org authority.
 
 ### 3.1 Project settings
+
 - **CHANGED** — Settings page now has strictly owner-only editability (spec §5,
   `canEditProjectSettings`). The old "project editor + manage_definitions can
   edit" affordance is gone. UI must hide the edit controls for non-owners.
@@ -214,6 +231,7 @@ Legend:
      committing.
 
 ### 3.2 Project deletion
+
 - **CORRECTNESS** — Only owner and instance_admin can delete. UI hides the
   button otherwise.
 - **NEW** — Delete is now **soft** — a retention sweep hard-deletes later. The
@@ -221,6 +239,7 @@ Legend:
   deletion in N days" (honest UI; matches the data layer).
 
 ### 3.3 Project members
+
 - **CHANGED** — Add-member dialog: the target user **must be an org member
   first** (spec §4). The UI should search the org roster, not accept free-form
   emails. Cross-org guests are deferred (§11); don't expose that path.
@@ -235,6 +254,7 @@ Legend:
   they want co-ownership).
 
 ### 3.4 Sole-owner offboarding (interaction with org roster)
+
 - **NEW** — If the project owner is about to be removed from the parent org
   (via §2.5), the project UI should surface the pending-removal state so the
   owner knows what's coming. Optional polish.
@@ -289,13 +309,15 @@ as before. Just two cleanups:
 > acceptance scenario (spec §10).
 
 ### 7.1 Upload flow
-- **NEW** — On a commons project, the **Upload** button is visible to *any
-  authenticated user* on the instance. The button should label/hint explain
+
+- **NEW** — On a commons project, the **Upload** button is visible to _any
+  authenticated user_ on the instance. The button should label/hint explain
   "Create a new shared script — you'll be its owner and can edit/delete it."
 - **NEW** — After upload, the user sees their own definition listed with
   "Owned by me" indicator; commons ownership is first-class here.
 
 ### 7.2 Per-definition edit rights
+
 - **CHANGED** — Every definition in a commons project shows its `ownerId`. Edit
   and delete affordances appear **only** on definitions the current user owns
   (+ to project editors as moderators).
@@ -304,8 +326,9 @@ as before. Just two cleanups:
   editors can change it").
 
 ### 7.3 Moderation (project editor view)
+
 - **NEW** — Project editors in a commons project should see an admin-style
-  indicator on *everyone's* definitions: "You can moderate this" + a Delete
+  indicator on _everyone's_ definitions: "You can moderate this" + a Delete
   button. Distinguishes moderation intent from ownership-edit.
 
 ---
@@ -322,6 +345,7 @@ embed" use cases. Authorization to mint mirrors `canEditDefinition` —
 container-mode editors and commons-mode definition owners both qualify.
 
 ### 8.1 Mint a share link
+
 - **NEW** — On any definition the current user can edit, surface a "Share"
   action that opens a mint dialog with:
   - **Channel** picker — `live` (default) or `draft`. `draft` warns "reviewers
@@ -338,9 +362,10 @@ container-mode editors and commons-mode definition owners both qualify.
   backend hashes on store; we genuinely cannot re-derive it.
 
 ### 8.2 List existing links per definition
+
 - **NEW** — Tab or panel on the definition detail page showing every active
-  + revoked link: label, channel, allow-solve flag, cap, current count,
-  expiry, mint date, mint user. No raw token.
+  - revoked link: label, channel, allow-solve flag, cap, current count,
+    expiry, mint date, mint user. No raw token.
 - **NEW** — Per-row affordances:
   - **Revoke** — soft-delete (sets `revokedAt`); cannot be undone.
   - **Copy URL** — re-derives the share URL from the link id (sans token —
@@ -348,6 +373,7 @@ container-mode editors and commons-mode definition owners both qualify.
     only shown at mint.
 
 ### 8.3 Anonymous iframe embed
+
 - **NEW** — On the same definition page, an "Embed" affordance that mints a
   share link (or selects an existing one) and produces a copy-pasteable
   iframe snippet pre-filled with `?token=…`. Flag the snippet with a
@@ -355,6 +381,7 @@ container-mode editors and commons-mode definition owners both qualify.
   receives it; revoke immediately if compromised."
 
 ### 8.4 Cap-reached and revoked states for consumers
+
 - **NEW** — When a token-resolved request returns 429 (cap reached) or 401
   (revoked / expired), the embedded solve page should render a clear,
   branded "this share link is no longer active" state rather than a raw
@@ -383,15 +410,17 @@ container-mode editors and commons-mode definition owners both qualify.
 ## 10. Solve / view (the consumer-facing app)
 
 ### 9.1 Visibility-aware listing
+
 - **CORRECTNESS** — The `/app` home lists definitions. The list must reflect
   `canView` correctly — including rejecting private projects the user isn't a
-  member of, which the existing UI already does. No change *if* it was right
+  member of, which the existing UI already does. No change _if_ it was right
   before; worth an audit pass now that `canSolve` actually enforces visibility.
 - **NEW** — When no projects are accessible (e.g., a brand-new user on a
   multi-tenant instance), an empty state explaining "You're not in any
   project yet — ask an admin for access" with next-step copy.
 
 ### 9.2 Solving private/org projects
+
 - **CHANGED** — The solve endpoint now rejects unauthenticated and
   out-of-scope callers correctly (A1/A2). No UI change needed, but:
 - **NEW** — A 403 from `/api/compute` should surface cleanly in the solve UI
@@ -400,6 +429,7 @@ container-mode editors and commons-mode definition owners both qualify.
   client probably needs copy improvements.
 
 ### 9.3 Anonymous iframe embeds
+
 - Delivered via per-definition share links (Permissions.md §7). The minter
   pastes the link's URL into an iframe; the token in the URL authenticates
   the embed. Caps and revocation are the load-bearing protections. All UI

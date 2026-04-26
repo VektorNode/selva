@@ -68,9 +68,7 @@
 	});
 
 	const editingRecord = $derived(
-		editingDefinitionId
-			? (data.records.find((r) => r.guid === editingDefinitionId) ?? null)
-			: null
+		editingDefinitionId ? (data.records.find((r) => r.guid === editingDefinitionId) ?? null) : null
 	);
 	const activeProject = $derived(
 		activeProjectId ? (data.projects.find((p) => p.id === activeProjectId) ?? null) : null
@@ -326,9 +324,7 @@
 				>
 					<p class="text-sm font-medium">No definitions found</p>
 					<p class="text-muted-foreground mt-1 text-xs">
-						{searchQuery
-							? 'Try adjusting your search'
-							: 'Add your first definition to get started'}
+						{searchQuery ? 'Try adjusting your search' : 'Add your first definition to get started'}
 					</p>
 				</div>
 			{:else if viewMode === 'grid'}

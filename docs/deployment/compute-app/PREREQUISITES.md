@@ -10,10 +10,10 @@
 
 ## 2. External dependencies
 
-| Dependency | Setup |
-|---|---|
-| Rhino.Compute server | [Rhino Compute Setup](../../RHINO_COMPUTE.md) |
-| Grasshopper definitions | [Definitions Setup](./DEFINITIONS_SETUP.md) |
+| Dependency              | Setup                                         |
+| ----------------------- | --------------------------------------------- |
+| Rhino.Compute server    | [Rhino Compute Setup](../../RHINO_COMPUTE.md) |
+| Grasshopper definitions | [Definitions Setup](./DEFINITIONS_SETUP.md)   |
 
 The server URL + API key are registered post-install via `/admin/compute` — not env vars.
 
@@ -21,10 +21,10 @@ The server URL + API key are registered post-install via `/admin/compute` — no
 
 Selva's auth, data, and storage are pluggable. Pick one before configuring the app:
 
-| Provider | When to use | Setup |
-|---|---|---|
-| **Local** (default) | Single-instance deployments, dev, evaluation. Filesystem + JSON. | [selva-local-provider README](../../../packages/local-provider/README.md) |
-| **Supabase** | Multi-instance, managed auth + Postgres + storage, RLS. | [@selva/supabase-provider README](../../../packages/supabase-provider/README.md) |
+| Provider            | When to use                                                      | Setup                                                                            |
+| ------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **Local** (default) | Single-instance deployments, dev, evaluation. Filesystem + JSON. | [selva-local-provider README](../../../packages/local-provider/README.md)        |
+| **Supabase**        | Multi-instance, managed auth + Postgres + storage, RLS.          | [@selva/supabase-provider README](../../../packages/supabase-provider/README.md) |
 
 The provider you pick determines the env vars the app needs at runtime — see the provider's README.
 
@@ -34,11 +34,11 @@ The provider you pick determines the env vars the app needs at runtime — see t
 
 The app is designed to run behind a reverse proxy:
 
-| Scenario | Setup | Firewall |
-|---|---|---|
+| Scenario                 | Setup                               | Firewall                                             |
+| ------------------------ | ----------------------------------- | ---------------------------------------------------- |
 | Production (recommended) | Caddy/nginx on 80/443 → app on 3000 | Allow 80/443 externally; restrict 3000 to proxy only |
-| Direct exposure | `http://yourip:3000` | Allow 3000; no SSL/DDoS protection |
-| Development | `http://localhost:3000` | None |
+| Direct exposure          | `http://yourip:3000`                | Allow 3000; no SSL/DDoS protection                   |
+| Development              | `http://localhost:3000`             | None                                                 |
 
 When behind a proxy, set `ORIGIN` to the public URL (no trailing slash) — SvelteKit's CSRF check uses it.
 
@@ -46,11 +46,11 @@ When behind a proxy, set `ORIGIN` to the public URL (no trailing slash) — Svel
 
 These apply regardless of provider:
 
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `3000` | Server port |
-| `HOST` | `0.0.0.0` | Bind address |
-| `NODE_ENV` | `development` | Set `production` to hide stack traces |
-| `ORIGIN` | — | Public URL — **required behind a reverse proxy** |
-| `BODY_SIZE_LIMIT` | `512kb` | Increase for large geometry uploads (`Infinity` works) |
-| `ALLOW_INSECURE_COOKIES` | — | Set `true` for HTTP-only deployments (dev/testing) |
+| Variable                 | Default       | Description                                            |
+| ------------------------ | ------------- | ------------------------------------------------------ |
+| `PORT`                   | `3000`        | Server port                                            |
+| `HOST`                   | `0.0.0.0`     | Bind address                                           |
+| `NODE_ENV`               | `development` | Set `production` to hide stack traces                  |
+| `ORIGIN`                 | —             | Public URL — **required behind a reverse proxy**       |
+| `BODY_SIZE_LIMIT`        | `512kb`       | Increase for large geometry uploads (`Infinity` works) |
+| `ALLOW_INSECURE_COOKIES` | —             | Set `true` for HTTP-only deployments (dev/testing)     |

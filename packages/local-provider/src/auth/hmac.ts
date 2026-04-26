@@ -9,7 +9,11 @@ const DEFAULT_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
  * (and therefore always reflect the current permissions, not stale ones
  * baked into the token at login time).
  */
-export function signHmacToken(secret: string, userId: string, maxAgeMs = DEFAULT_MAX_AGE_MS): string {
+export function signHmacToken(
+	secret: string,
+	userId: string,
+	maxAgeMs = DEFAULT_MAX_AGE_MS
+): string {
 	const expiry = Date.now() + maxAgeMs;
 	const payload = Buffer.from(`${userId}:${expiry}`).toString('base64url');
 	const sig = createHmac('sha256', secret).update(payload).digest('base64url');

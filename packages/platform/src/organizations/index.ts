@@ -1,10 +1,5 @@
 export type { Organization, OrgMember } from './types.js';
-export type {
-	OrgRole,
-	OrgPermission,
-	CreateOrgInput,
-	UpdateOrgInput
-} from './schemas.js';
+export type { OrgRole, OrgPermission, CreateOrgInput, UpdateOrgInput } from './schemas.js';
 export {
 	OrgRoleSchema,
 	OrgPermissionSchema,

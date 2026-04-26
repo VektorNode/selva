@@ -39,10 +39,12 @@ export const GET: RequestHandler = async ({ locals }) => {
 	const config = await getComputeServerConfigStore().getConfig(ctx);
 	return json({
 		...config,
-		servers: config.servers.map(({ apiKey, ...rest }): ServerWithKeyFlag => ({
-			...rest,
-			hasApiKey: !!apiKey
-		}))
+		servers: config.servers.map(
+			({ apiKey, ...rest }): ServerWithKeyFlag => ({
+				...rest,
+				hasApiKey: !!apiKey
+			})
+		)
 	});
 };
 
@@ -84,12 +86,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		servers: incoming.servers.map(({ apiKey, ...s }) => ({
 			...s,
 			orgId: ctx.actingOrgId,
-			apiKey:
-				apiKey === null
-					? undefined
-					: apiKey
-						? apiKey
-						: storedKeyMap.get(s.serverUrl)
+			apiKey: apiKey === null ? undefined : apiKey ? apiKey : storedKeyMap.get(s.serverUrl)
 		}))
 	};
 

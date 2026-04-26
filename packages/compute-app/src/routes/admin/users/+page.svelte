@@ -256,7 +256,8 @@
 					<Card.Title>User Management</Card.Title>
 					<Card.Description>
 						{#if data.users === null}
-							The current auth provider does not expose a user store. Configure DATA_PATH (local provider) or check your provider wiring.
+							The current auth provider does not expose a user store. Configure DATA_PATH (local
+							provider) or check your provider wiring.
 						{:else}
 							{data.users.length} user{data.users.length === 1 ? '' : 's'}
 						{/if}
@@ -297,8 +298,8 @@
 				<div class="bg-muted/40 space-y-3 rounded-lg border p-4">
 					<p class="text-sm font-medium">Invite user</p>
 					<p class="text-muted-foreground text-xs">
-						The invitee sets their own password when they open the link. No password leaves
-						your machine.
+						The invitee sets their own password when they open the link. No password leaves your
+						machine.
 					</p>
 					<div class="grid gap-3 sm:grid-cols-2">
 						<Input type="email" placeholder="Email" bind:value={inviteEmail} />
@@ -349,7 +350,9 @@
 			{/if}
 
 			{#if lastInviteLink}
-				<div class="flex items-start gap-3 rounded-lg border border-green-500/30 bg-green-500/5 p-4">
+				<div
+					class="flex items-start gap-3 rounded-lg border border-green-500/30 bg-green-500/5 p-4"
+				>
 					<div class="min-w-0 flex-1">
 						<p class="text-sm font-medium">Invite ready — copy the link and share it</p>
 						<p class="text-muted-foreground mt-1 truncate font-mono text-xs">{lastInviteLink}</p>
@@ -382,7 +385,11 @@
 					<div class="grid gap-3 sm:grid-cols-2">
 						<Input type="email" placeholder="Email" bind:value={newEmail} />
 						{#if data.provider.userCreation === 'email-password'}
-							<Input type="password" placeholder="Password (min 8 chars)" bind:value={newPassword} />
+							<Input
+								type="password"
+								placeholder="Password (min 8 chars)"
+								bind:value={newPassword}
+							/>
 						{/if}
 					</div>
 					{#if data.provider.userCreation === 'email-only'}
@@ -398,8 +405,12 @@
 						</p>
 						<div class="flex flex-wrap gap-3">
 							{#each assignablePermissions as p (p)}
-								{@const isOwnerAdminOnly = (OWNER_ADMIN_ONLY_PERMISSIONS as readonly FlatPermission[]).includes(p)}
-								{@const isPlatformScope = (ALL_PLATFORM_PERMISSIONS as readonly FlatPermission[]).includes(p)}
+								{@const isOwnerAdminOnly = (
+									OWNER_ADMIN_ONLY_PERMISSIONS as readonly FlatPermission[]
+								).includes(p)}
+								{@const isPlatformScope = (
+									ALL_PLATFORM_PERMISSIONS as readonly FlatPermission[]
+								).includes(p)}
 								{@const memberExcluded = isOwnerAdminOnly && !isPlatformScope}
 								<label
 									class="flex items-center gap-1.5 text-xs {memberExcluded
@@ -423,7 +434,9 @@
 					<div class="flex gap-2">
 						<Button
 							onclick={addUser}
-							disabled={adding || !newEmail || (data.provider.userCreation === 'email-password' && !newPassword)}
+							disabled={adding ||
+								!newEmail ||
+								(data.provider.userCreation === 'email-password' && !newPassword)}
 						>
 							{adding ? 'Creating…' : 'Create User'}
 						</Button>
@@ -491,8 +504,12 @@
 							</div>
 							<div class="mt-2 flex flex-wrap gap-3">
 								{#each ALL_FLAT_PERMISSIONS as p (p)}
-									{@const isPlatformScope = (ALL_PLATFORM_PERMISSIONS as readonly FlatPermission[]).includes(p)}
-									{@const isOwnerAdminOnly = (OWNER_ADMIN_ONLY_PERMISSIONS as readonly FlatPermission[]).includes(p)}
+									{@const isPlatformScope = (
+										ALL_PLATFORM_PERMISSIONS as readonly FlatPermission[]
+									).includes(p)}
+									{@const isOwnerAdminOnly = (
+										OWNER_ADMIN_ONLY_PERMISSIONS as readonly FlatPermission[]
+									).includes(p)}
 									{@const platformLocked = isPlatformScope && !data.isPlatformAdmin}
 									{@const soleAdminLock = p === 'instance_admin' && soleAdmin}
 									<!--
@@ -552,11 +569,7 @@
 				<div class="divide-y rounded-lg border">
 					{#each data.invites as invite (invite.id)}
 						{@const expired = Date.parse(invite.expiresAt) <= Date.now()}
-						{@const status = invite.acceptedAt
-							? 'Accepted'
-							: expired
-								? 'Expired'
-								: 'Pending'}
+						{@const status = invite.acceptedAt ? 'Accepted' : expired ? 'Expired' : 'Pending'}
 						<div class="flex items-center justify-between gap-4 px-4 py-3">
 							<div class="min-w-0 flex-1">
 								<p class="truncate text-sm font-medium">{invite.email}</p>
@@ -567,11 +580,7 @@
 								</p>
 							</div>
 							{#if !invite.acceptedAt && !expired}
-								<Button
-									size="sm"
-									variant="outline"
-									onclick={() => copyInviteLink(invite.token)}
-								>
+								<Button size="sm" variant="outline" onclick={() => copyInviteLink(invite.token)}>
 									<Copy class="mr-1.5 h-3.5 w-3.5" />
 									Copy link
 								</Button>

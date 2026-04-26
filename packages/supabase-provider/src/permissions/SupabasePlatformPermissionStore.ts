@@ -104,10 +104,7 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 		return false;
 	}
 
-	async countInstanceAdminsExcluding(
-		_ctx: RequestContext,
-		excludeUserId: string
-	): Promise<number> {
+	async countInstanceAdminsExcluding(_ctx: RequestContext, excludeUserId: string): Promise<number> {
 		return this.countOtherEnabledAdmins(excludeUserId);
 	}
 
@@ -130,9 +127,7 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 }
 
 function filterValid(raw: readonly string[]): PlatformPermission[] {
-	return raw.filter(
-		(p): p is PlatformPermission => PlatformPermissionSchema.safeParse(p).success
-	);
+	return raw.filter((p): p is PlatformPermission => PlatformPermissionSchema.safeParse(p).success);
 }
 
 function assertCanRead(ctx: RequestContext, userId: string): void {
@@ -160,7 +155,7 @@ function mapError(e: unknown): Error {
 	if (e instanceof Error) return e;
 	if (e && typeof e === 'object') {
 		const obj = e as { message?: string; code?: string };
-		return new Error(obj.code ? `[${obj.code}] ${obj.message ?? ''}` : obj.message ?? String(e));
+		return new Error(obj.code ? `[${obj.code}] ${obj.message ?? ''}` : (obj.message ?? String(e)));
 	}
 	return new Error(String(e));
 }

@@ -22,7 +22,10 @@ export class SupabaseDataProvider implements IDataProvider {
 	readonly computeServer: SupabaseComputeServerStore;
 	readonly shareLinks: SupabaseShareLinkStore;
 
-	private constructor(private readonly clients: ClientBundle, events: IEventSink) {
+	private constructor(
+		private readonly clients: ClientBundle,
+		events: IEventSink
+	) {
 		this.orgs = new SupabaseOrgStore(clients, events);
 		this.projects = new SupabaseProjectStore(clients, events);
 		this.definitions = new SupabaseDefinitionStore(clients, events);

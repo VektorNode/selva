@@ -48,10 +48,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	// Definitions
 	// ============================================================================
 
-	async list(
-		ctx: RequestContext,
-		opts?: DefinitionListOptions
-	): Promise<Page<DefinitionRecord>> {
+	async list(ctx: RequestContext, opts?: DefinitionListOptions): Promise<Page<DefinitionRecord>> {
 		return this.runList(ctx, undefined, opts);
 	}
 
@@ -141,11 +138,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		});
 	}
 
-	async update(
-		ctx: RequestContext,
-		guid: string,
-		patch: DefinitionRecordPatch
-	): Promise<void> {
+	async update(ctx: RequestContext, guid: string, patch: DefinitionRecordPatch): Promise<void> {
 		const row = patchToRow(patch);
 		if (Object.keys(row).length === 0) return;
 		if (ctx.userId) row.updated_by = ctx.userId;
@@ -186,16 +179,11 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	}
 
 	async incrementRunCount(ctx: RequestContext, guid: string): Promise<void> {
-		const { error } = await this.clients
-			.forRequest(ctx)
-			.rpc('increment_run_count', { g: guid });
+		const { error } = await this.clients.forRequest(ctx).rpc('increment_run_count', { g: guid });
 		if (error) throw mapError(error);
 	}
 
-	async listStalePending(
-		ctx: RequestContext,
-		olderThanIso: string
-	): Promise<DefinitionRecord[]> {
+	async listStalePending(ctx: RequestContext, olderThanIso: string): Promise<DefinitionRecord[]> {
 		// System-only by contract; force the service-role client so RLS doesn't
 		// scope us down even if the caller forgets `system: true`.
 		const client = ctx.system ? this.clients.forRequest(ctx) : this.clients.serviceClient;
@@ -341,28 +329,27 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		if (hasPermission(ctx, 'instance_admin')) return true;
 		const client = this.clients.forRequest(ctx);
 
-		const [{ data: projectRow }, { data: definitionRow }, { data: memberRow }] =
-			await Promise.all([
-				client
-					.from('projects')
-					.select('id, auto_join_on_upload, visibility, owner_id, org_id')
-					.eq('id', projectId)
-					.is('deleted_at', null)
-					.maybeSingle(),
-				client
-					.from('definitions')
-					.select('guid, owner_id, project_id')
-					.eq('guid', definitionGuid)
-					.is('deleted_at', null)
-					.maybeSingle(),
-				client
-					.from('project_members')
-					.select('role')
-					.eq('project_id', projectId)
-					.eq('user_id', ctx.userId)
-					.is('deleted_at', null)
-					.maybeSingle()
-			]);
+		const [{ data: projectRow }, { data: definitionRow }, { data: memberRow }] = await Promise.all([
+			client
+				.from('projects')
+				.select('id, auto_join_on_upload, visibility, owner_id, org_id')
+				.eq('id', projectId)
+				.is('deleted_at', null)
+				.maybeSingle(),
+			client
+				.from('definitions')
+				.select('guid, owner_id, project_id')
+				.eq('guid', definitionGuid)
+				.is('deleted_at', null)
+				.maybeSingle(),
+			client
+				.from('project_members')
+				.select('role')
+				.eq('project_id', projectId)
+				.eq('user_id', ctx.userId)
+				.is('deleted_at', null)
+				.maybeSingle()
+		]);
 
 		// Build minimal Project / Definition / Member shapes the pure rule needs.
 		// `canEditDefinition` consults: project.autoJoinOnUpload, definition.ownerId,

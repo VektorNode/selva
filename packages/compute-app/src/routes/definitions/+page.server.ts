@@ -17,7 +17,14 @@ import type {
 } from '@selva/platform';
 import type { PageServerLoad } from './$types';
 
-export type { DefinitionRecord, DefinitionVersion, Project, ProjectMember, ComputeServerConfig, AuthUser };
+export type {
+	DefinitionRecord,
+	DefinitionVersion,
+	Project,
+	ProjectMember,
+	ComputeServerConfig,
+	AuthUser
+};
 
 export interface ProjectWithMembers extends Project {
 	members: ProjectMember[];
@@ -29,7 +36,15 @@ export interface UserListItem extends AuthUser {
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) return { projects: [], records: [], computeServers: [], users: [], canManageProjects: false, isPlatformAdmin: false };
+	if (!locals.user)
+		return {
+			projects: [],
+			records: [],
+			computeServers: [],
+			users: [],
+			canManageProjects: false,
+			isPlatformAdmin: false
+		};
 
 	const ctx = locals.ctx!;
 	const canManageProjects = hasPermission(ctx, 'manage_projects');
@@ -49,7 +64,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const allProjects: Project[] = projectPages.flatMap((p) => p.items);
 
 		// Filter to projects the current user can actually edit
-		const editableFlags = await Promise.all(allProjects.map((p) => projectStore.canEdit(ctx, p.id)));
+		const editableFlags = await Promise.all(
+			allProjects.map((p) => projectStore.canEdit(ctx, p.id))
+		);
 		const accessibleProjects = isPlatformAdmin
 			? allProjects
 			: allProjects.filter((_, i) => editableFlags[i]);

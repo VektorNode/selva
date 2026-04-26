@@ -48,14 +48,14 @@ bash setup-caddy.sh --domain app.example.com  # HTTPS via Let's Encrypt
 
 Vars `setup.sh` itself reads:
 
-| Variable              | Default                               | Description                                           |
-| --------------------- | ------------------------------------- | ----------------------------------------------------- |
-| `REPO_URL`            | `git@github.com:VektorNode/selva.git` | Repository SSH URL                                    |
-| `DATA_PATH`           | `./definitions`                       | Local provider data directory (the script also accepts `GH_DEFINITIONS_PATH` as an alias for now) |
-| `SESSION_SECRET`      | auto-generated                        | HMAC secret for session cookies (local provider only) |
-| `PORT`                | `3000`                                | Internal app port                                     |
-| `ORIGIN`              | `http://your-server-ip`               | Public-facing URL — no port suffix, no trailing slash |
-| `INSTALL_DIR`         | `~/selva`                             | Install directory                                     |
+| Variable         | Default                               | Description                                                                                       |
+| ---------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `REPO_URL`       | `git@github.com:VektorNode/selva.git` | Repository SSH URL                                                                                |
+| `DATA_PATH`      | `./definitions`                       | Local provider data directory (the script also accepts `GH_DEFINITIONS_PATH` as an alias for now) |
+| `SESSION_SECRET` | auto-generated                        | HMAC secret for session cookies (local provider only)                                             |
+| `PORT`           | `3000`                                | Internal app port                                                                                 |
+| `ORIGIN`         | `http://your-server-ip`               | Public-facing URL — no port suffix, no trailing slash                                             |
+| `INSTALL_DIR`    | `~/selva`                             | Install directory                                                                                 |
 
 Rhino.Compute URL + API key are configured post-install via the admin dashboard
 (`/admin/compute`), not env vars.

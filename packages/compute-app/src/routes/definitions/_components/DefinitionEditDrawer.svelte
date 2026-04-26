@@ -14,11 +14,7 @@
 	import { Image, Trash2, Upload, X } from '@lucide/svelte';
 	import ImageUploadField from '$lib/components/definitions/ImageUploadField.svelte';
 	import FileUploadField from '$lib/components/definitions/FileUploadField.svelte';
-	import type {
-		DefinitionRecord,
-		ProjectWithMembers,
-		ComputeServerConfig
-	} from '../+page.server';
+	import type { DefinitionRecord, ProjectWithMembers, ComputeServerConfig } from '../+page.server';
 	import type { DefinitionStatus } from '@selva/platform';
 
 	export interface EditPatch {
@@ -154,9 +150,7 @@
 <Drawer {onClose} ariaLabel="Close edit drawer">
 	<div class="border-border flex shrink-0 items-center justify-between border-b px-6 py-4">
 		<div>
-			<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">
-				Editing
-			</p>
+			<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">Editing</p>
 			<h2 class="mt-0.5 text-base font-semibold">{record.displayName}</h2>
 		</div>
 		<Button variant="ghost" size="icon" onclick={onClose} class="h-8 w-8 shrink-0">
@@ -340,8 +334,8 @@
 		<AlertDialog.Header>
 			<AlertDialog.Title>Upload a new version?</AlertDialog.Title>
 			<AlertDialog.Description>
-				The new upload becomes the next draft version. The live channel stays unchanged
-				until you publish it.
+				The new upload becomes the next draft version. The live channel stays unchanged until you
+				publish it.
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>

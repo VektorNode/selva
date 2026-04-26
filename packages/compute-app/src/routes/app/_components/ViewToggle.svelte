@@ -10,8 +10,7 @@
 
 	let { mode, onChange }: Props = $props();
 
-	const baseClass =
-		'flex h-8 w-8 items-center justify-center rounded-md transition-colors';
+	const baseClass = 'flex h-8 w-8 items-center justify-center rounded-md transition-colors';
 </script>
 
 <div class="border-border bg-card inline-flex gap-0.5 rounded-md border p-0.5">
