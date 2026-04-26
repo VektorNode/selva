@@ -1,5 +1,5 @@
-import type { IDataProvider, IEventSink } from '@selva/platform';
-import { NoopEventSink } from '@selva/platform';
+import type { IDataProvider, IEventSink } from '@selvajs/platform';
+import { NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle, BuildClientOptions } from './client.js';
 import { buildClientBundle } from './client.js';
 import { SupabaseOrgStore } from './SupabaseOrgStore.js';

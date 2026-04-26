@@ -2,7 +2,7 @@ import { describe, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { runDefinitionStoreConformance } from '@selva/platform/testing';
+import { runDefinitionStoreConformance } from '@selvajs/platform/testing';
 import { LocalDefinitionStore } from '../LocalDefinitionStore.js';
 
 describe('LocalDefinitionStore', () => {

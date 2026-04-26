@@ -4,7 +4,7 @@ import {
 	type ListOptions,
 	type DefinitionListOptions,
 	type Page
-} from '@selva/platform';
+} from '@selvajs/platform';
 
 type AnyListOptions = ListOptions | DefinitionListOptions;
 

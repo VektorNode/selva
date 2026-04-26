@@ -10,12 +10,12 @@
 		Separator,
 		Textarea,
 		toast
-	} from 'selva-shared';
+	} from '@selvajs/shared';
 	import { Image, Trash2, Upload, X } from '@lucide/svelte';
 	import ImageUploadField from '$lib/components/definitions/ImageUploadField.svelte';
 	import FileUploadField from '$lib/components/definitions/FileUploadField.svelte';
 	import type { DefinitionRecord, ProjectWithMembers, ComputeServerConfig } from '../+page.server';
-	import type { DefinitionStatus } from '@selva/platform';
+	import type { DefinitionStatus } from '@selvajs/platform';
 
 	export interface EditPatch {
 		displayName: string;

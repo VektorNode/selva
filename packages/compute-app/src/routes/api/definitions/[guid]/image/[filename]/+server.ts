@@ -2,9 +2,9 @@ import { error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getStorageProvider, getDefinitionMeta } from '$lib/server/providers.server';
 import { requireCanViewProject } from '$lib/server/access.server';
-import { GuidSchema } from '@selva/platform/definitions/schemas';
+import { GuidSchema } from '@selvajs/platform/definitions/schemas';
 import { IMAGE_CONTENT_TYPES } from '$lib/server/admin-config';
-import { definitionPaths } from '@selva/platform';
+import { definitionPaths } from '@selvajs/platform';
 
 // GET /api/definitions/{guid}/image/{filename} — serve a stored cover image
 export const GET: RequestHandler = async ({ params, locals }) => {

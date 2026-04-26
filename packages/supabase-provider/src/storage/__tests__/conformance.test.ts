@@ -1,7 +1,7 @@
 import { describe, beforeEach, it, expect } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
-import { runStorageProviderConformance } from '@selva/platform/testing';
-import { definitionPaths } from '@selva/platform';
+import { runStorageProviderConformance } from '@selvajs/platform/testing';
+import { definitionPaths } from '@selvajs/platform';
 import { SupabaseStorageProvider } from '../SupabaseStorageProvider.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;

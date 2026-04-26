@@ -9,8 +9,8 @@
 
 Selva's auth, data, and storage are pluggable. Pick one when configuring the compute-app:
 
-- **[selva-local-provider](../packages/local-provider/README.md)** — Filesystem + JSON + HMAC. Default. Single-instance.
-- **[@selva/supabase-provider](../packages/supabase-provider/README.md)** — Supabase Auth + Postgres + Storage. Multi-instance, RLS.
+- **[@selvajs/local-provider](../packages/local-provider/README.md)** — Filesystem + JSON + HMAC. Default. Single-instance.
+- **[@selvajs/supabase-provider](../packages/supabase-provider/README.md)** — Supabase Auth + Postgres + Storage. Multi-instance, RLS.
 
 ## Deployment
 

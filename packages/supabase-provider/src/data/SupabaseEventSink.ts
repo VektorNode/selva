@@ -1,4 +1,4 @@
-import type { DomainEvent, IEventSink } from '@selva/platform';
+import type { DomainEvent, IEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 
 /**

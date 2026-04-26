@@ -1,6 +1,6 @@
 # local-provider
 
-Filesystem implementation of `@selva/platform` interfaces. Each subfolder implements one provider (auth, data, storage, organizations, projects, definitions, computeServer).
+Filesystem implementation of `@selvajs/platform` interfaces. Each subfolder implements one provider (auth, data, storage, organizations, projects, definitions, computeServer).
 
 ## fsJson.ts
 

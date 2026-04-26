@@ -2,7 +2,7 @@ import { describe, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { runStorageProviderConformance } from '@selva/platform/testing';
+import { runStorageProviderConformance } from '@selvajs/platform/testing';
 import { LocalStorageProvider } from '../LocalStorageProvider.js';
 
 describe('LocalStorageProvider', () => {

@@ -3,7 +3,7 @@ import {
 	type ComputeConfig,
 	type ComputeServerConfig,
 	type RequestContext
-} from '@selva/platform';
+} from '@selvajs/platform';
 import { flag, getComputeServerConfigStore } from '../providers.server';
 
 /**

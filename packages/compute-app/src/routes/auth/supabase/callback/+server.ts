@@ -1,7 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { ALL_PLATFORM_PERMISSIONS, SYSTEM_CONTEXT, type AuthUser } from '@selva/platform';
+import { ALL_PLATFORM_PERMISSIONS, SYSTEM_CONTEXT, type AuthUser } from '@selvajs/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { getPermissionStore } from '$lib/server/providers.server';
 import {

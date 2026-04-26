@@ -12,7 +12,7 @@ import {
 	DEFAULT_ORG_PERMISSIONS,
 	MEMBER_ASSIGNABLE_PERMISSIONS,
 	type Invite
-} from '@selva/platform';
+} from '@selvajs/platform';
 import { splitFlatPermissions } from '$lib/server/permissions-compat.server';
 import { hashToken, mintRawToken } from '$lib/server/invites/token.server';
 

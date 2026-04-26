@@ -17,13 +17,13 @@ This is a monorepo with two distinct stacks:
 ### TypeScript/JavaScript Workspace (`packages/`)
 
 - [selva-compute](https://www.npmjs.com/package/selva-compute) - (External npm package) Type-safe Rhino Compute client, Three.js helpers, file utilities
-- **`@selva/config`** - Shared ESLint, Vite, and Prettier configuration
-- **`@selva/builder-app`** - Schema designer connected to Grasshopper via WebSocket (local dev mode)
-- **`@selva/compute-app`** - Standalone app for solving Grasshopper definitions via Rhino.Compute (cloud mode)
-- **`@selva/shared`** - Shared Svelte components, utilities, and theme styles (CSS + theme utilities)
-- **`@selva/schemas`** - Schema definitions and code generators (TypeScript + C#)
-- **`@selva/platform`** - Pure TypeScript interfaces for platform providers (auth, definitions, compute, storage, organizations, projects) with conformance test suites
-- **`selva-local-provider`** - Filesystem/JSON/HMAC implementations of `@selva/platform` interfaces for local development
+- **`@selvajs/config`** - Shared ESLint, Vite, and Prettier configuration
+- **`@selvajs/builder-app`** - Schema designer connected to Grasshopper via WebSocket (local dev mode)
+- **`@selvajs/compute-app`** - Standalone app for solving Grasshopper definitions via Rhino.Compute (cloud mode)
+- **`@selvajs/shared`** - Shared Svelte components, utilities, and theme styles (CSS + theme utilities)
+- **`@selvajs/schemas`** - Schema definitions and code generators (TypeScript + C#)
+- **`@selvajs/platform`** - Pure TypeScript interfaces for platform providers (auth, definitions, compute, storage, organizations, projects) with conformance test suites
+- **`@selvajs/local-provider`** - Filesystem/JSON/HMAC implementations of `@selvajs/platform` interfaces for local development
 
 ### .NET Workspace (`Plugin/`)
 
@@ -120,7 +120,7 @@ The web application supports two runtime modes:
 
 The production build creates a **fully self-contained** `.gha` file:
 
-1. Builds `@selva/builder-app` web assets
+1. Builds `@selvajs/builder-app` web assets
 2. Copies built assets to `Plugin/Selva.GH/EmbeddedAssets/web/`
 3. Embeds all web assets as `EmbeddedResource` in the plugin
 4. Builds multi-targeted plugin (net48 for Rhino 7, net7.0 for Rhino 8)
@@ -236,22 +236,22 @@ The builder app needs no env vars (WebSocket on port 8765 by default).
 
 Rhino.Compute server URL + API key are configured in `/admin/compute` and persisted via `IComputeServerStore` — not env vars.
 
-### Platform Package (`@selva/platform`)
+### Platform Package (`@selvajs/platform`)
 
 Core provider interfaces for Selva's pluggable architecture. All modules support Zod schema validation and are granular exports for tree-shaking.
 
 | Module                          | Exports                                                                                                                     | Purpose                                                                                                                                  |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `@selva/platform/auth`          | `IAuthProvider`, `IPasswordAuth`                                                                                            | Identity verification, optional password capability, user management                                                                     |
-| `@selva/platform/data`          | `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IShareLinkStore`, `IInviteStore`, `IComputeServerStore` | Structured data storage (all methods take `RequestContext`)                                                                              |
-| `@selva/platform/storage`       | `IStorageProvider`                                                                                                          | Blob storage (get, put, delete, getPublicUrl)                                                                                            |
-| `@selva/platform/definitions`   | Types, schemas, `definitionPaths`                                                                                           | Definition record types + path helpers. (Service orchestration lives in compute-app; see `lib/server/definitions/DefinitionService.ts`.) |
-| `@selva/platform/organizations` | —                                                                                                                           | `Organization`, `OrgMember`, `OrgRole` types + Zod schemas                                                                               |
-| `@selva/platform/projects`      | —                                                                                                                           | `Project`, `ProjectMember`, `ProjectRole`, `ProjectVisibility` types + schemas                                                           |
-| `@selva/platform/computeServer` | —                                                                                                                           | `ComputeServerConfig`, `resolveComputeServer()` helpers                                                                                  |
-| `@selva/platform/testing`       | `runXxxConformance` functions (one per store)                                                                               | Vitest-based conformance suites for all stores                                                                                           |
+| `@selvajs/platform/auth`          | `IAuthProvider`, `IPasswordAuth`                                                                                            | Identity verification, optional password capability, user management                                                                     |
+| `@selvajs/platform/data`          | `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IShareLinkStore`, `IInviteStore`, `IComputeServerStore` | Structured data storage (all methods take `RequestContext`)                                                                              |
+| `@selvajs/platform/storage`       | `IStorageProvider`                                                                                                          | Blob storage (get, put, delete, getPublicUrl)                                                                                            |
+| `@selvajs/platform/definitions`   | Types, schemas, `definitionPaths`                                                                                           | Definition record types + path helpers. (Service orchestration lives in compute-app; see `lib/server/definitions/DefinitionService.ts`.) |
+| `@selvajs/platform/organizations` | —                                                                                                                           | `Organization`, `OrgMember`, `OrgRole` types + Zod schemas                                                                               |
+| `@selvajs/platform/projects`      | —                                                                                                                           | `Project`, `ProjectMember`, `ProjectRole`, `ProjectVisibility` types + schemas                                                           |
+| `@selvajs/platform/computeServer` | —                                                                                                                           | `ComputeServerConfig`, `resolveComputeServer()` helpers                                                                                  |
+| `@selvajs/platform/testing`       | `runXxxConformance` functions (one per store)                                                                               | Vitest-based conformance suites for all stores                                                                                           |
 
-**Local provider** (`selva-local-provider`) implements all interfaces using the filesystem:
+**Local provider** (`@selvajs/local-provider`) implements all interfaces using the filesystem:
 
 - `LocalAuthProvider` — HMAC tokens + optional `users.json`
 - `LocalDataProvider` — Wires all stores; reads/writes JSON config files

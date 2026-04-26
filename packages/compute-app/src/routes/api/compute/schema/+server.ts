@@ -3,7 +3,7 @@ import { requireCanCreateDefinition } from '$lib/server/access.server';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { camelcaseKeys } from 'selva-compute/core';
-import type { UISchema } from 'selva-shared';
+import type { UISchema } from '@selvajs/shared';
 
 export const POST: RequestHandler = async ({ request, locals, url }) => {
 	const projectId = url.searchParams.get('projectId');

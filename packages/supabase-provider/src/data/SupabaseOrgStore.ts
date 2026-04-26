@@ -8,14 +8,14 @@ import type {
 	RequestContext,
 	ListOptions,
 	Page
-} from '@selva/platform';
+} from '@selvajs/platform';
 import {
 	DEFAULT_ORG_PERMISSIONS,
 	ProviderError,
 	auditSoftDelete,
 	actorFrom,
 	NoopEventSink
-} from '@selva/platform';
+} from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
 

@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { runEventSinkConformance, type RecordingEventSink } from '@selva/platform/testing';
+import { runEventSinkConformance, type RecordingEventSink } from '@selvajs/platform/testing';
 import { LocalDataProvider } from '../LocalDataProvider.js';
 
 const tempDirs: string[] = [];

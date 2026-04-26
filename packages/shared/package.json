@@ -1,5 +1,5 @@
 {
-	"name": "selva-shared",
+	"name": "@selvajs/shared",
 	"version": "0.9.0",
 	"description": "Shared UI components and utilities for Selva applications",
 	"license": "MIT",
@@ -65,7 +65,7 @@
 	},
 	"devDependencies": {
 		"@internationalized/date": "^3.10.1",
-		"@selva/config": "workspace:*",
+		"@selvajs/config": "workspace:*",
 		"@sveltejs/kit": "catalog:",
 		"@types/three": "catalog:",
 		"bits-ui": "^2.15.4",

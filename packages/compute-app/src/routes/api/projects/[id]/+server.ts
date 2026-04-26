@@ -10,7 +10,7 @@ import {
 	canChangeVisibilityToPublic,
 	validateProjectFlags,
 	withAdminBypass
-} from '@selva/platform';
+} from '@selvajs/platform';
 
 const UpdateProjectBody = z
 	.object({

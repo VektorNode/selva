@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { SYSTEM_CONTEXT } from '@selva/platform';
+import { SYSTEM_CONTEXT } from '@selvajs/platform';
 import {
 	freshProviders,
 	seedAcme,

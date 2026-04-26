@@ -5,8 +5,8 @@ import {
 	getOrganizationProvider,
 	getProjectProvider
 } from '$lib/server/providers.server';
-import { SYSTEM_CONTEXT } from '@selva/platform';
-import type { DefinitionRecord, Project } from '@selva/platform';
+import { SYSTEM_CONTEXT } from '@selvajs/platform';
+import type { DefinitionRecord, Project } from '@selvajs/platform';
 
 export type { DefinitionRecord, Project };
 

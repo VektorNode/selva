@@ -5,8 +5,8 @@
  * scoped Platform-admin + Org-member views.
  */
 
-import type { OrgPermission, PlatformPermission } from '@selva/platform';
-import { ALL_ORG_PERMISSIONS, ALL_PLATFORM_PERMISSIONS } from '@selva/platform';
+import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
+import { ALL_ORG_PERMISSIONS, ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 
 const PLATFORM_SET: ReadonlySet<string> = new Set(ALL_PLATFORM_PERMISSIONS);
 const ORG_SET: ReadonlySet<string> = new Set(ALL_ORG_PERMISSIONS);

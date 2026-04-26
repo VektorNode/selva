@@ -12,7 +12,7 @@ import {
 	SYSTEM_CONTEXT,
 	hasPermission,
 	MEMBER_ASSIGNABLE_PERMISSIONS
-} from '@selva/platform';
+} from '@selvajs/platform';
 import { splitFlatPermissions, flattenPermissions } from '$lib/server/permissions-compat.server';
 
 // Admin UI sends a flat permission list; we split into platform + default-org

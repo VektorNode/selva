@@ -13,7 +13,7 @@ import {
 	MEMBER_ASSIGNABLE_PERMISSIONS,
 	type PlatformPermission,
 	hasPermission
-} from '@selva/platform';
+} from '@selvajs/platform';
 import { splitFlatPermissions } from '$lib/server/permissions-compat.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 

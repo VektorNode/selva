@@ -7,15 +7,15 @@ import type {
 	DefinitionFileExt,
 	DefinitionVersion,
 	UpdateMetadataInput
-} from '@selva/platform';
-import { ProviderError, definitionPaths } from '@selva/platform';
+} from '@selvajs/platform';
+import { ProviderError, definitionPaths } from '@selvajs/platform';
 
 /**
  * Input passed to `DefinitionService.create`. Carries everything the service
  * needs to assemble a `DefinitionRecord` plus orchestrate the v1 upload.
  *
  * Distinct from `CreateDefinitionInputSchema` exported by
- * `@selva/platform/definitions/schemas`, which validates the user-facing
+ * `@selvajs/platform/definitions/schemas`, which validates the user-facing
  * HTTP body (no guid/ownerId — those are derived server-side).
  */
 export interface CreateDefinitionRecord {
@@ -39,7 +39,7 @@ export interface CreateDefinitionRecord {
 
 /**
  * Orchestrates writes that span IDataProvider + IStorageProvider for the
- * spec §6 versioning model. Lives in compute-app (not @selva/platform)
+ * spec §6 versioning model. Lives in compute-app (not @selvajs/platform)
  * because it is application orchestration, not platform contract.
  *
  * Ordering rules:

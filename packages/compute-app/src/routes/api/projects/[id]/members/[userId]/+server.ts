@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getProjectProvider } from '$lib/server/providers.server';
 import { requireCanManageMembers } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
-import { ProjectRoleSchema, checkOwnerRemoval } from '@selva/platform';
+import { ProjectRoleSchema, checkOwnerRemoval } from '@selvajs/platform';
 
 const UpdateRoleSchema = z.object({ role: ProjectRoleSchema });
 

@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { definitionPaths } from '@selva/platform';
+import { definitionPaths } from '@selvajs/platform';
 import {
 	freshProviders,
 	seedAcme,

@@ -8,7 +8,7 @@ import {
 	WEBSOCKET_RECONNECT_INTERVAL,
 	DEFAULT_WEBSOCKET_PORT
 } from '$lib/app.config';
-import type { UISchema } from 'selva-shared';
+import type { UISchema } from '@selvajs/shared';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
 export type MessageHandler = (data: unknown) => void;

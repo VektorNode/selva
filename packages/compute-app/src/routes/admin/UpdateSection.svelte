@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Card, AlertDialog } from 'selva-shared';
+	import { Button, Card, AlertDialog } from '@selvajs/shared';
 	import { RefreshCw } from '@lucide/svelte';
 
 	interface Props {

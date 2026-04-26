@@ -1,4 +1,4 @@
-import { createViteConfig } from '@selva/config/vite';
+import { createViteConfig } from '@selvajs/config/vite';
 import { execSync } from 'child_process';
 
 function getGitInfo() {

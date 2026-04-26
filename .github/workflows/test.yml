@@ -32,6 +32,6 @@ jobs:
       # condition (vitest.config.ts `resolve.conditions: ['source']`), so no
       # platform pre-build step is needed here.
       #
-      # Excludes @selva/supabase-provider — needs a live stack with secrets.
+      # Excludes @selvajs/supabase-provider — needs a live stack with secrets.
       # Add a separate workflow with environment secrets when ready.
-      - run: pnpm -r --filter '!@selva/supabase-provider' test
+      - run: pnpm -r --filter '!@selvajs/supabase-provider' test

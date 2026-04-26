@@ -22,7 +22,7 @@ import {
 } from '$lib/server/__tests__/fixtures.js';
 import { GET, POST } from '../+server.js';
 import { DELETE } from '../[linkId]/+server.js';
-import { DEFAULT_SHARE_LINK_MAX_SOLVES } from '@selva/platform';
+import { DEFAULT_SHARE_LINK_MAX_SOLVES } from '@selvajs/platform';
 
 let tp: TestProviders | null = null;
 

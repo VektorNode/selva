@@ -2,7 +2,7 @@ import { describe, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { runAuthProviderConformance } from '@selva/platform/testing';
+import { runAuthProviderConformance } from '@selvajs/platform/testing';
 import { LocalAuthProvider } from '../LocalAuthProvider.js';
 
 const TEST_SECRET = 'test-hmac-secret-for-conformance';

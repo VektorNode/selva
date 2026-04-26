@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Button, Card, Input, toast } from 'selva-shared';
+	import { Button, Card, Input, toast } from '@selvajs/shared';
 	import { Circle, Server, Plus, Trash2, Star, ChevronDown, ChevronUp } from '@lucide/svelte';
-	import type { ComputeServerConfig } from '@selva/platform/computeServer';
+	import type { ComputeServerConfig } from '@selvajs/platform/computeServer';
 	import { useServerHealth } from '$lib/composables/useServerHealth.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { onMount } from 'svelte';

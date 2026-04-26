@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
-import type { DefinitionChannel, RequestContext, ShareLink } from '@selva/platform';
-import { SYSTEM_CONTEXT } from '@selva/platform';
+import type { DefinitionChannel, RequestContext, ShareLink } from '@selvajs/platform';
+import { SYSTEM_CONTEXT } from '@selvajs/platform';
 import { getDefinitionMeta, getProjectProvider, providers } from '../providers.server';
 import { hashToken, looksLikeShareToken } from './token.server';
 

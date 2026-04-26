@@ -4,8 +4,8 @@ import type {
 	RequestContext,
 	UserManagementResult,
 	UserProfile
-} from '@selva/platform';
-import { ProviderError, hasPermission } from '@selva/platform';
+} from '@selvajs/platform';
+import { ProviderError, hasPermission } from '@selvajs/platform';
 import type { ClientBundle } from '../data/client.js';
 
 /**

@@ -6,7 +6,7 @@ import {
 	SYSTEM_CONTEXT,
 	type Organization,
 	type Project
-} from '@selva/platform';
+} from '@selvajs/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
 import {
 	getOrganizationProvider,

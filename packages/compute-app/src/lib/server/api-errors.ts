@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { ProviderError } from '@selva/platform';
+import { ProviderError } from '@selvajs/platform';
 import type { ZodError } from 'zod';
 
 function isSvelteKitError(err: unknown): err is { status: number; body: unknown } {

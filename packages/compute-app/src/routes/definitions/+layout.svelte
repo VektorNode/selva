@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { PageHeader, PageContent } from 'selva-shared';
+	import { PageHeader, PageContent } from '@selvajs/shared';
 	import UserChip from '$lib/components/UserChip.svelte';
 
 	interface LayoutProps {

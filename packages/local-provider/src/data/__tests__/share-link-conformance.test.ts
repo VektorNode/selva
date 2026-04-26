@@ -2,7 +2,7 @@ import { describe, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { runShareLinkStoreConformance } from '@selva/platform/testing';
+import { runShareLinkStoreConformance } from '@selvajs/platform/testing';
 import { LocalShareLinkStore } from '../LocalShareLinkStore.js';
 
 describe('LocalShareLinkStore', () => {

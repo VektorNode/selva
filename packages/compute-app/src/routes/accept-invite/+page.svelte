@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Input, Label, Alert } from 'selva-shared';
+	import { Button, Input, Label, Alert } from '@selvajs/shared';
 	import { CircleAlert } from '@lucide/svelte';
 	import type { PageData } from './$types';
 

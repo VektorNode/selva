@@ -7,8 +7,8 @@ import type {
 	RequestContext,
 	ListOptions,
 	Page
-} from '@selva/platform';
-import { ProviderError, SYSTEM_CONTEXT, actorFrom, NoopEventSink } from '@selva/platform';
+} from '@selvajs/platform';
+import { ProviderError, SYSTEM_CONTEXT, actorFrom, NoopEventSink } from '@selvajs/platform';
 import { paginate } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 

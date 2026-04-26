@@ -4,8 +4,8 @@
 		DiscoveredOutput,
 		GrasshopperParamType,
 		TabConfig
-	} from 'selva-shared';
-	import { StateDisplay, Input, Select } from 'selva-shared';
+	} from '@selvajs/shared';
+	import { StateDisplay, Input, Select } from '@selvajs/shared';
 	import DraggableItem from './DraggableItem.svelte';
 	import { Search, X } from '@lucide/svelte';
 

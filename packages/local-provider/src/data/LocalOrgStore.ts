@@ -13,7 +13,7 @@ import type {
 	RequestContext,
 	ListOptions,
 	Page
-} from '@selva/platform';
+} from '@selvajs/platform';
 import {
 	DEFAULT_ORG_PERMISSIONS,
 	ProviderError,
@@ -21,7 +21,7 @@ import {
 	auditSoftDelete,
 	actorFrom,
 	NoopEventSink
-} from '@selva/platform';
+} from '@selvajs/platform';
 import { paginate, applyOrder } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 import { LocalInviteStore } from './LocalInviteStore.js';

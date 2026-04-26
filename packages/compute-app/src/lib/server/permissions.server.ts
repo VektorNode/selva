@@ -1,4 +1,4 @@
-import type { PlatformPermission, RequestContext, UserManagementResult } from '@selva/platform';
+import type { PlatformPermission, RequestContext, UserManagementResult } from '@selvajs/platform';
 import { getPermissionStore } from './providers.server.js';
 
 /**

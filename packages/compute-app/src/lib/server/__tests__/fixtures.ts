@@ -22,7 +22,7 @@ import {
 	LocalUserProfileProvider,
 	LocalPlatformPermissionStore,
 	createLocalUserMetaProvider
-} from 'selva-local-provider';
+} from '@selvajs/local-provider';
 import {
 	NoopEventSink,
 	SYSTEM_CONTEXT,
@@ -46,7 +46,7 @@ import {
 	type SelvaFlags,
 	type ShareLink,
 	type TenancyMode
-} from '@selva/platform';
+} from '@selvajs/platform';
 import {
 	DefinitionService,
 	type CreateDefinitionRecord
@@ -538,7 +538,7 @@ export async function actAs(
 	// stores instead of mocks.
 	const membership = await tp.config.data.orgs.findUserMembership(SYSTEM_CONTEXT, user.id);
 	let actingOrgId: string | undefined = membership?.org.id;
-	let orgPermissions: OrgPermission[] = membership ? [...membership.member.permissions] : [];
+	const orgPermissions: OrgPermission[] = membership ? [...membership.member.permissions] : [];
 	if (!actingOrgId && platformPermissions.includes('instance_admin')) {
 		const firstOrgPage = await tp.config.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
 		actingOrgId = firstOrgPage.items[0]?.id;

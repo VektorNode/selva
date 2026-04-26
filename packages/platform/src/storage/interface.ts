@@ -5,7 +5,7 @@
  * **Authorization is the caller's responsibility.** Methods do NOT take a
  * `RequestContext` — the path itself names the resource, and constructing it
  * requires already-authorized scope. Routes/services MUST authorize against
- * `@selva/platform/access` BEFORE constructing the path.
+ * `@selvajs/platform/access` BEFORE constructing the path.
  */
 export interface IStorageProvider {
 	/** Returns null if the path does not exist. */

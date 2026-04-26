@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Separator } from 'selva-shared';
+	import { Separator } from '@selvajs/shared';
 	import type { DefinitionRecord } from '../+page.server';
 	import StatusBadge from './StatusBadge.svelte';
 	import { formatUpdated } from './statusStyles';

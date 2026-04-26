@@ -3,7 +3,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { getOrganizationProvider } from '$lib/server/providers.server';
 import { requireInstanceAdmin } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
-import { UpdateOrgSchema, ProviderError } from '@selva/platform';
+import { UpdateOrgSchema, ProviderError } from '@selvajs/platform';
 
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	requireInstanceAdmin(locals);

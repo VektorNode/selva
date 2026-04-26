@@ -1,6 +1,6 @@
 import { describe, beforeEach, it } from 'vitest';
-import { runDefinitionStoreConformance } from '@selva/platform/testing';
-import { DEFAULT_ORG_PERMISSIONS } from '@selva/platform';
+import { runDefinitionStoreConformance } from '@selvajs/platform/testing';
+import { DEFAULT_ORG_PERMISSIONS } from '@selvajs/platform';
 import { SupabaseDefinitionStore } from '../SupabaseDefinitionStore.js';
 import { readEnv, resetAllData, seedUser } from './test-helpers.js';
 

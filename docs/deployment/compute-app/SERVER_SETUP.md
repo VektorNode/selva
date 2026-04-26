@@ -44,7 +44,7 @@ bash setup-caddy.sh --domain app.example.com  # HTTPS via Let's Encrypt
 
 ## Configuration Variables
 
-`setup.sh` defaults to the **local provider**. Provider-specific vars (`DATA_PATH`, `SESSION_SECRET`) are documented in the [selva-local-provider README](../../../packages/local-provider/README.md). For Supabase, see the [@selva/supabase-provider README](../../../packages/supabase-provider/README.md).
+`setup.sh` defaults to the **local provider**. Provider-specific vars (`DATA_PATH`, `SESSION_SECRET`) are documented in the [@selvajs/local-provider README](../../../packages/local-provider/README.md). For Supabase, see the [@selvajs/supabase-provider README](../../../packages/supabase-provider/README.md).
 
 Vars `setup.sh` itself reads:
 

@@ -7,8 +7,8 @@ import type {
 	RequestContext,
 	ListOptions,
 	Page
-} from '@selva/platform';
-import { ProviderError, auditSoftDelete, actorFrom, NoopEventSink } from '@selva/platform';
+} from '@selvajs/platform';
+import { ProviderError, auditSoftDelete, actorFrom, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
 
@@ -16,7 +16,7 @@ import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
  * Project + project-membership store backed by Postgres. Visibility semantics
  * (public / org / private) are enforced by the `visible_project()` helper in
  * RLS. Access predicates (canEdit / canManage / canView etc.) live as pure
- * functions in `@selva/platform/access`; the route layer composes them with
+ * functions in `@selvajs/platform/access`; the route layer composes them with
  * pre-loaded entities. See `compute-app/src/lib/server/access.server.ts`.
  *
  * `createProject` atomically seeds the creator as the project `owner` in
@@ -403,5 +403,13 @@ function mapError(e: unknown): Error {
 	const pg = e as PostgrestError;
 	if (pg?.code === '23505') return new ProviderError(pg.message ?? 'Duplicate record', 409);
 	if (pg?.code === '23503') return new ProviderError(pg.message ?? 'Foreign key violation', 409);
-	return e instanceof Error ? e : new Error(String(e));
+	if (e instanceof Error) return e;
+	if (e && typeof e === 'object') {
+		const obj = e as { message?: string; details?: string; hint?: string; code?: string };
+		const msg = obj.message ?? obj.details ?? obj.hint ?? 'Unknown Postgres error';
+		const err = new Error(obj.code ? `[${obj.code}] ${msg}` : msg);
+		Object.assign(err, obj);
+		return err;
+	}
+	return new Error(String(e));
 }

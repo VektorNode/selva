@@ -4,7 +4,7 @@ import type {
 	ComputeConfig,
 	ComputeServerConfig,
 	RequestContext
-} from '@selva/platform';
+} from '@selvajs/platform';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 
 /**

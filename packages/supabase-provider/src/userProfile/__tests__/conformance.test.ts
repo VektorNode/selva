@@ -1,6 +1,6 @@
 import { describe, beforeEach, it } from 'vitest';
-import { runUserProfileStoreConformance } from '@selva/platform/testing';
-import type { AuthUser } from '@selva/platform';
+import { runUserProfileStoreConformance } from '@selvajs/platform/testing';
+import type { AuthUser } from '@selvajs/platform';
 import { SupabaseUserProfileProvider } from '../SupabaseUserProfileProvider.js';
 import { readEnv, resetAllData } from '../../data/__tests__/test-helpers.js';
 

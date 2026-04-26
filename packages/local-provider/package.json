@@ -1,7 +1,7 @@
 {
-	"name": "selva-local-provider",
+	"name": "@selvajs/local-provider",
 	"version": "0.1.0",
-	"description": "Local filesystem, JSON, and HMAC implementations of @selva/platform interfaces",
+	"description": "Local filesystem, JSON, and HMAC implementations of @selvajs/platform interfaces",
 	"private": true,
 	"type": "module",
 	"main": "./dist/index.js",
@@ -40,7 +40,7 @@
 		"test:watch": "vitest"
 	},
 	"dependencies": {
-		"@selva/platform": "workspace:*",
+		"@selvajs/platform": "workspace:*",
 		"sharp": "^0.34.5",
 		"zod": "^4.3.6"
 	},

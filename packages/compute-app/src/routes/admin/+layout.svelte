@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { PageHeader, PageContent } from 'selva-shared';
+	import { PageHeader, PageContent } from '@selvajs/shared';
 	import UserChip from '$lib/components/UserChip.svelte';
-	import type { OrgPermission, PlatformPermission } from '@selva/platform';
+	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 
 	interface LayoutData {
 		platformPermissions: PlatformPermission[];

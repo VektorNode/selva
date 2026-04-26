@@ -1,7 +1,7 @@
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
-import { ProviderError } from '@selva/platform';
-import type { PlatformPermission } from '@selva/platform';
+import { ProviderError } from '@selvajs/platform';
+import type { PlatformPermission } from '@selvajs/platform';
 import { readJsonFile, writeJsonFile } from '../data/fsJson.js';
 
 export type { PlatformPermission };
@@ -23,7 +23,7 @@ export interface StoredUser {
 	/** Definition GUIDs pinned by this user. */
 	starredDefinitions: string[];
 	/** Last N solve runs, newest first. Capped at MAX_RECENT_RUNS. */
-	recentRuns: import('@selva/platform').RecentRun[];
+	recentRuns: import('@selvajs/platform').RecentRun[];
 	createdAt: string; // ISO 8601
 	/** ISO 8601 — most recent successful credential login or token verification. */
 	lastLoginAt?: string;
@@ -100,7 +100,7 @@ export interface LocalUserMetaProvider {
 	touchLastLogin(id: string): Promise<void>;
 	starDefinition(id: string, definitionId: string): Promise<void>;
 	unstarDefinition(id: string, definitionId: string): Promise<void>;
-	recordRun(id: string, run: import('@selva/platform').RecentRun): Promise<void>;
+	recordRun(id: string, run: import('@selvajs/platform').RecentRun): Promise<void>;
 	deleteUser(id: string): Promise<void>;
 }
 

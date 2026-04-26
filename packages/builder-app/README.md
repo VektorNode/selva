@@ -1,4 +1,4 @@
-# @selva/frontend
+# @selvajs/builder-app
 
 SvelteKit web application for building and deploying Grasshopper UIs. Works in two modes: **local** (with Grasshopper via WebSocket) or **cloud** (standalone app with Rhino Compute integration).
 
@@ -31,7 +31,7 @@ Standalone web app deployed independently (Vercel, Netlify, etc):
 
 - **Routes:**
   - `/app` — Grasshopper solver interface using `selva-compute`
-  - Uses generated schemas from `@selva/schemas`
+  - Uses generated schemas from `@selvajs/schemas`
   - Calls Rhino Compute servers via `selva-compute` client
 
 - **How it works:**
@@ -57,6 +57,6 @@ pnpm run dev           # http://localhost:5173 (dev server)
 ## Related
 
 - [`selva-compute`](../compute) — Rhino Compute client (used in cloud mode)
-- [`@selva/svelte-ui`](../svelte-ui) — Component library used in UI builder
-- [`@selva/schemas`](../schemas) — Schema generators (produces types for this app)
+- [`@selvajs/shared`](../shared) — Shared Svelte components and theme used by this app
+- [`@selvajs/schemas`](../schemas) — Schema generators (produces types for this app)
 - [Selva.gha Plugin](../../Plugin) — Grasshopper bridge (used in local mode)

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { ArrowRight } from '@lucide/svelte';
-	import type { DefinitionRecord } from '@selva/platform';
+	import type { DefinitionRecord } from '@selvajs/platform';
 	import StarButton from './StarButton.svelte';
 	import { gradientFor, monogram } from './toolStyles';
 

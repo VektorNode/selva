@@ -2,8 +2,8 @@
 
 **Prerequisites:** Complete [SERVER_SETUP.md](./SERVER_SETUP.md) first, then pick a backend provider:
 
-- [selva-local-provider](../../../packages/local-provider/README.md) — filesystem (default, single instance)
-- [@selva/supabase-provider](../../../packages/supabase-provider/README.md) — Supabase Auth + Postgres + Storage
+- [@selvajs/local-provider](../../../packages/local-provider/README.md) — filesystem (default, single instance)
+- [@selvajs/supabase-provider](../../../packages/supabase-provider/README.md) — Supabase Auth + Postgres + Storage
 
 ---
 
@@ -29,7 +29,7 @@ Test: `curl http://localhost:3000/api/health`
 
 ## ecosystem.config.cjs
 
-The example below assumes the **local provider**. Swap the `DATA_PATH` / `SESSION_SECRET` block for the corresponding Supabase vars when using `@selva/supabase-provider` (see that package's README).
+The example below assumes the **local provider**. Swap the `DATA_PATH` / `SESSION_SECRET` block for the corresponding Supabase vars when using `@selvajs/supabase-provider` (see that package's README).
 
 ```javascript
 env: {

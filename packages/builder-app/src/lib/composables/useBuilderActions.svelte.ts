@@ -1,5 +1,5 @@
-import { toast } from 'selva-shared';
-import type { DiscoveredInput, DiscoveredOutput, GroupConfig, LayoutItem } from 'selva-shared';
+import { toast } from '@selvajs/shared';
+import type { DiscoveredInput, DiscoveredOutput, GroupConfig, LayoutItem } from '@selvajs/shared';
 import {
 	handleItemDrop,
 	addTab,

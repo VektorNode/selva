@@ -1,6 +1,6 @@
 import { describe, beforeEach, it } from 'vitest';
-import { runInviteStoreConformance } from '@selva/platform/testing';
-import { DEFAULT_ORG_PERMISSIONS } from '@selva/platform';
+import { runInviteStoreConformance } from '@selvajs/platform/testing';
+import { DEFAULT_ORG_PERMISSIONS } from '@selvajs/platform';
 import { SupabaseInviteStore } from '../SupabaseInviteStore.js';
 import { readEnv, resetAllData, seedUser } from './test-helpers.js';
 

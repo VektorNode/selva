@@ -7,8 +7,8 @@ import type {
 	UserManagementResult,
 	ListOptions,
 	Page
-} from '@selva/platform';
-import { ProviderError } from '@selva/platform';
+} from '@selvajs/platform';
+import { ProviderError } from '@selvajs/platform';
 import { signHmacToken, verifyHmacToken } from './hmac.js';
 import { verifyPasswordHash, createLocalUserMetaProvider } from './users.js';
 import type { LocalUserMetaProvider, StoredUser } from './users.js';

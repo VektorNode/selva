@@ -1,7 +1,7 @@
 # Supabase provider — findings
 
 Living log of friction points hit while implementing the Supabase provider
-against the `@selva/platform` contracts. Each entry is either:
+against the `@selvajs/platform` contracts. Each entry is either:
 
 - a genuine cloud-reality gap the abstraction needs to accept
 - a contract ambiguity we can sharpen without breaking the local provider
@@ -60,7 +60,7 @@ providers. Small gap in the original coverage; harmless once filled.
 
 ### Conformance suites used string ids like `'p1'` and `'u1'` directly
 
-The org/project/definition conformance suites in `@selva/platform/testing`
+The org/project/definition conformance suites in `@selvajs/platform/testing`
 were written for a JSON-file adapter and constructed records with short
 non-UUID ids (`'p1'`, `'u1'`, `'p-a'`). Postgres columns declared as
 `uuid primary key` reject these with `invalid input syntax for type uuid`.
