@@ -6,6 +6,12 @@ import { defineConfig } from 'vitest/config';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+	resolve: {
+		// Read @selva/platform source directly via the `"source"` export
+		// condition — no `pnpm build:platform` between editing a rule and
+		// running these tests.
+		conditions: ['source']
+	},
 	test: {
 		// Conformance tests hit a live local Supabase stack — give the network
 		// room to breathe (bucket listing, cleanup between tests).

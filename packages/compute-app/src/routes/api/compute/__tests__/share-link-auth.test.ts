@@ -15,8 +15,8 @@ import {
 	seedDefinition,
 	seedShareLink,
 	type TestProviders
-} from '../../../../lib/server/__tests__/fixtures.js';
-import { tryResolveShareToken } from '../../../../lib/server/shareLinks/resolve.server.js';
+} from '$lib/server/__tests__/fixtures.js';
+import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server.js';
 import { SYSTEM_CONTEXT } from '@selva/platform';
 
 let tp: TestProviders | null = null;

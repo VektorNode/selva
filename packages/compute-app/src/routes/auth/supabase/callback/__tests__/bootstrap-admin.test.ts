@@ -15,9 +15,8 @@ import {
 	freshProviders,
 	installOAuthShim,
 	setEnv,
-	grantPlatformPermissions,
 	type TestProviders
-} from '../../../../../lib/server/__tests__/fixtures.js';
+} from '$lib/server/__tests__/fixtures.js';
 import { GET } from '../+server.js';
 
 let tp: TestProviders | null = null;
@@ -63,9 +62,7 @@ async function callback(opts: { code: string }): Promise<{
 		return {
 			status: result.status,
 			location: result.headers.get('location') ?? undefined,
-			json: result.headers.get('content-type')?.includes('json')
-				? await result.json()
-				: undefined
+			json: result.headers.get('content-type')?.includes('json') ? await result.json() : undefined
 		};
 	} catch (err) {
 		const e = err as { status?: number; location?: string; body?: unknown };

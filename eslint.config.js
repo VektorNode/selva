@@ -23,7 +23,10 @@ export default [
 			'**/Generated/**',
 			'packages/schemas/generate-*.js',
 			'**/*.d.ts',
-			'Plugin/Selva.GH/EmbeddedAssets/web'
+			'Plugin/Selva.GH/EmbeddedAssets/web',
+			// Config files at package root — not in any tsconfig include, and
+			// they don't need application linting.
+			'packages/*/vitest.config.ts'
 		]
 	},
 	{

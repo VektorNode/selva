@@ -8,34 +8,22 @@
 	"types": "./dist/index.d.ts",
 	"exports": {
 		".": {
+			"source": "./src/index.ts",
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
 		},
 		"./auth": {
+			"source": "./src/auth/index.ts",
 			"types": "./dist/auth/index.d.ts",
 			"import": "./dist/auth/index.js"
 		},
-		"./organizations": {
-			"types": "./dist/organizations/index.d.ts",
-			"import": "./dist/organizations/index.js"
-		},
-		"./projects": {
-			"types": "./dist/projects/index.d.ts",
-			"import": "./dist/projects/index.js"
-		},
-		"./definitions": {
-			"types": "./dist/definitions/index.d.ts",
-			"import": "./dist/definitions/index.js"
-		},
 		"./storage": {
+			"source": "./src/storage/index.ts",
 			"types": "./dist/storage/index.d.ts",
 			"import": "./dist/storage/index.js"
 		},
-		"./computeServer": {
-			"types": "./dist/computeServer/index.d.ts",
-			"import": "./dist/computeServer/index.js"
-		},
 		"./data": {
+			"source": "./src/data/index.ts",
 			"types": "./dist/data/index.d.ts",
 			"import": "./dist/data/index.js"
 		}
@@ -59,6 +47,6 @@
 	"devDependencies": {
 		"@types/node": "catalog:",
 		"typescript": "catalog:",
-		"vitest": "^2.1.8"
+		"vitest": "catalog:"
 	}
 }
