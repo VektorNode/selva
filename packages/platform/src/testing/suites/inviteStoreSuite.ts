@@ -5,7 +5,9 @@
  * an account + an org membership". The contract is small but there are a few
  * state-machine rules adapters must honor:
  *
- * - `getByToken` returns null for missing, expired, or already-consumed tokens.
+ * - `getByTokenHash` returns null for missing, expired, or already-consumed
+ *   invites. The store sees only HMAC digests; the route layer hashes raw
+ *   tokens before lookup.
  * - `markAccepted` is idempotent (no-op if already accepted).
  * - `revoke` removes pending invites but must not un-consume accepted ones.
  */
@@ -34,7 +36,12 @@ function invite(scope: InviteTestScope, overrides: Partial<Invite> = {}): Invite
 	const now = new Date();
 	return {
 		id: overrides.id ?? makeUuid(),
-		token: overrides.token ?? `tok-${makeUuid()}-${Math.random().toString(36).slice(2, 8)}`,
+		// Conformance treats `tokenHash` as opaque — the suite stores whatever
+		// the adapter receives and looks it up by the same value. The route
+		// layer is the one that mints raw tokens and HMACs them; the store
+		// contract is "lookup by stored digest".
+		tokenHash:
+			overrides.tokenHash ?? `hash-${makeUuid()}-${Math.random().toString(36).slice(2, 8)}`,
 		email: overrides.email ?? `invitee-${Math.random().toString(36).slice(2, 6)}@test.local`,
 		orgId: overrides.orgId ?? scope.orgId,
 		orgRole: overrides.orgRole ?? 'member',
@@ -60,41 +67,41 @@ export function runInviteStoreConformance(opts: InviteStoreConformanceOptions): 
 		createScope ? await createScope() : DEFAULT_SCOPE;
 
 	describe(`IInviteStore conformance: ${name}`, () => {
-		it('create + getByToken round-trips', async () => {
+		it('create + getByTokenHash round-trips', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const inv = invite(scope);
 			await store.create(ctx(scope.adminId), inv);
-			const got = await store.getByToken(SYSTEM_CONTEXT, inv.token);
+			const got = await store.getByTokenHash(SYSTEM_CONTEXT, inv.tokenHash);
 			expect(got?.id).toBe(inv.id);
 			expect(got?.email).toBe(inv.email);
 		});
 
-		it('getByToken returns null for unknown token', async () => {
+		it('getByTokenHash returns null for unknown hash', async () => {
 			const store = await createStore();
-			const got = await store.getByToken(SYSTEM_CONTEXT, 'nope-' + makeUuid());
+			const got = await store.getByTokenHash(SYSTEM_CONTEXT, 'nope-' + makeUuid());
 			expect(got).toBeNull();
 		});
 
-		it('getByToken returns null for expired invite', async () => {
+		it('getByTokenHash returns null for expired invite', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const inv = invite(scope, {
 				expiresAt: new Date(Date.now() - 60_000).toISOString()
 			});
 			await store.create(ctx(scope.adminId), inv);
-			const got = await store.getByToken(SYSTEM_CONTEXT, inv.token);
+			const got = await store.getByTokenHash(SYSTEM_CONTEXT, inv.tokenHash);
 			expect(got).toBeNull();
 		});
 
-		it('markAccepted sets acceptedAt + acceptedByUserId; getByToken then returns null', async () => {
+		it('markAccepted sets acceptedAt + acceptedByUserId; getByTokenHash then returns null', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const acceptor = await seedUser(makeUuid());
 			const inv = invite(scope);
 			await store.create(ctx(scope.adminId), inv);
 			await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor);
-			const got = await store.getByToken(SYSTEM_CONTEXT, inv.token);
+			const got = await store.getByTokenHash(SYSTEM_CONTEXT, inv.tokenHash);
 			expect(got).toBeNull();
 		});
 
@@ -122,7 +129,7 @@ export function runInviteStoreConformance(opts: InviteStoreConformanceOptions): 
 			const inv = invite(scope);
 			await store.create(ctx(scope.adminId), inv);
 			await store.revoke(ctx(scope.adminId), inv.id);
-			const got = await store.getByToken(SYSTEM_CONTEXT, inv.token);
+			const got = await store.getByTokenHash(SYSTEM_CONTEXT, inv.tokenHash);
 			expect(got).toBeNull();
 		});
 	});

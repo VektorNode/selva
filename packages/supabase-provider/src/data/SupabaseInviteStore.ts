@@ -11,10 +11,12 @@ import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
 
 /**
- * Invite store. `getByToken` and `accept` route through SECURITY DEFINER
- * RPCs so unauthenticated / just-signed-up callers can validate and consume
- * the invite without RLS blocking them. Other operations (create, list,
- * revoke) go through the normal REST API with RLS enforcing `manage_org_members`.
+ * Invite store. `getByTokenHash` routes through a SECURITY DEFINER RPC so
+ * unauthenticated / just-signed-up callers can validate and consume the
+ * invite without RLS blocking them. The raw token is hashed at the route
+ * layer (compute-app's `invites/token.server.ts`); the store sees only the
+ * HMAC digest. Other operations (create, list, revoke) go through the normal
+ * REST API with RLS enforcing `manage_org_members`.
  */
 export class SupabaseInviteStore implements IInviteStore {
 	constructor(
@@ -37,12 +39,14 @@ export class SupabaseInviteStore implements IInviteStore {
 		});
 	}
 
-	async getByToken(ctx: RequestContext, token: string): Promise<Invite | null> {
+	async getByTokenHash(ctx: RequestContext, tokenHash: string): Promise<Invite | null> {
 		// Use the SECURITY DEFINER RPC so the token itself is the capability —
-		// unauthenticated callers visiting /accept-invite can resolve it.
+		// unauthenticated callers visiting /accept-invite can resolve it. The
+		// caller has already hashed the raw URL token; the RPC just looks up
+		// the row by digest.
 		const { data, error } = await this.clients
 			.forRequest(ctx)
-			.rpc('get_invite_by_token', { t: token });
+			.rpc('get_invite_by_token_hash', { h: tokenHash });
 		if (error) throw mapError(error);
 		// rpc returns the matching row (or null). PostgREST may wrap it in
 		// an array depending on the signature — normalize both shapes.
@@ -117,7 +121,7 @@ export class SupabaseInviteStore implements IInviteStore {
 
 interface InviteRow {
 	id: string;
-	token: string;
+	token_hash: string;
 	email: string;
 	org_id: string;
 	org_role: Invite['orgRole'];
@@ -132,7 +136,7 @@ interface InviteRow {
 function rowToInvite(row: InviteRow): Invite {
 	return {
 		id: row.id,
-		token: row.token,
+		tokenHash: row.token_hash,
 		email: row.email,
 		orgId: row.org_id,
 		orgRole: row.org_role,
@@ -148,7 +152,7 @@ function rowToInvite(row: InviteRow): Invite {
 function inviteToRow(i: Invite): InviteRow {
 	return {
 		id: i.id,
-		token: i.token,
+		token_hash: i.tokenHash,
 		email: i.email,
 		org_id: i.orgId,
 		org_role: i.orgRole,

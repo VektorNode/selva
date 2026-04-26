@@ -8,11 +8,15 @@ import {
 } from '$lib/server/providers.server';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
+import { hashToken } from '$lib/server/invites/token.server';
 
 /**
  * Public page — the invite token is the capability. `SYSTEM_CONTEXT` is
  * passed to the invite store because there is no user session at this point;
- * the store treats an unknown/expired/consumed token as a miss regardless.
+ * the store treats an unknown/expired/consumed invite as a miss regardless.
+ *
+ * The raw URL token is HMAC-hashed before lookup — the store sees only the
+ * digest. Mirrors the share-link flow.
  */
 export const load: PageServerLoad = async ({ url }) => {
 	const token = url.searchParams.get('token')?.trim();
@@ -20,7 +24,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		return { ok: false as const, reason: 'This invite link is missing a token.' };
 	}
 
-	const invite = await getInviteStore().getByToken(SYSTEM_CONTEXT, token);
+	const invite = await getInviteStore().getByTokenHash(SYSTEM_CONTEXT, hashToken(token));
 	if (!invite) {
 		return { ok: false as const, reason: 'This invite link is invalid or has expired.' };
 	}
@@ -54,7 +58,7 @@ export const actions = {
 
 		let invite: Invite | null;
 		try {
-			invite = await getInviteStore().getByToken(SYSTEM_CONTEXT, token);
+			invite = await getInviteStore().getByTokenHash(SYSTEM_CONTEXT, hashToken(token));
 		} catch {
 			return fail(500, { error: 'Could not validate the invite. Please try again.' });
 		}

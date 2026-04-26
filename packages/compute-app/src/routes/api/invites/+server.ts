@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { getInviteStore } from '$lib/server/providers.server';
 import { requireManageOrgMembers } from '$lib/server/access.server';
@@ -14,6 +14,7 @@ import {
 	type Invite
 } from '@selva/platform';
 import { splitFlatPermissions } from '$lib/server/permissions-compat.server';
+import { hashToken, mintRawToken } from '$lib/server/invites/token.server';
 
 // Accept a flat `permissions[]` from the UI; platform-scope entries are
 // silently dropped since invites only grant org rights.
@@ -30,10 +31,6 @@ const CreateBody = z.object({
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-function generateToken(): string {
-	return randomBytes(32).toString('base64url');
-}
-
 // GET — list pending (and recently accepted) invites for the active org
 export const GET: RequestHandler = async ({ locals }) => {
 	requireManageOrgMembers(locals);
@@ -41,7 +38,11 @@ export const GET: RequestHandler = async ({ locals }) => {
 	if (!ctx.actingOrgId) throw error(400, 'No active organization');
 	try {
 		const page = await getInviteStore().listByOrg(ctx, ctx.actingOrgId, { limit: 200 });
-		return json(page.items);
+		// Strip `tokenHash` from the listing — it's the server-side lookup
+		// key and an admin in the pending-invites UI has no use for it
+		// (the raw token was shown to them once at mint time).
+		const items = page.items.map(({ tokenHash: _omit, ...rest }) => rest);
+		return json(items);
 	} catch (err) {
 		handleApiError(err, 'Failed to list invites');
 	}
@@ -69,10 +70,15 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 				? submittedOrgPerms.filter((p) => MEMBER_ASSIGNABLE_PERMISSIONS.includes(p))
 				: [...DEFAULT_ORG_PERMISSIONS[parsed.data.orgRole]];
 
+		// Mint the raw token + its HMAC digest. The store sees only the digest;
+		// the raw token is returned ONCE in this response (embedded in
+		// `acceptUrl`) and never persisted server-side. A leak of `invites`
+		// rows therefore can't be replayed without the instance secret.
+		const rawToken = mintRawToken();
 		const now = new Date();
 		const invite: Invite = {
 			id: randomUUID(),
-			token: generateToken(),
+			tokenHash: hashToken(rawToken),
 			email: parsed.data.email,
 			orgId: ctx.actingOrgId,
 			orgRole: parsed.data.orgRole,
@@ -83,8 +89,13 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		};
 		await getInviteStore().create(ctx, invite);
 
-		const acceptUrl = `${url.origin}/accept-invite?token=${invite.token}`;
-		return json({ invite, acceptUrl }, { status: 201 });
+		const acceptUrl = `${url.origin}/accept-invite?token=${rawToken}`;
+		// Don't echo the hash back to the caller — it's an opaque server-side
+		// identifier with no client use. The acceptUrl is the only thing
+		// callers need; the rest of the invite (id, email, orgRole, ...) is
+		// useful for the admin UI's pending-invites table.
+		const { tokenHash: _omit, ...inviteForClient } = invite;
+		return json({ invite: inviteForClient, acceptUrl }, { status: 201 });
 	} catch (err) {
 		handleApiError(err, 'Failed to create invite');
 	}

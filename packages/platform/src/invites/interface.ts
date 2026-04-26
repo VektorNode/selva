@@ -6,15 +6,20 @@ import type { Invite } from './types.js';
  * "Admin invites a user, user clicks link and joins" flow. Decoupled from
  * `IAuthProvider` so accept works regardless of how credentials are owned.
  *
- * Mutations require a session (gated by route layer). `getByToken` and
+ * Mutations require a session (gated by route layer). `getByTokenHash` and
  * `markAccepted` accept `SYSTEM_CONTEXT` because the token is the capability
  * — the public /accept-invite page has no session yet.
  */
 export interface IInviteStore {
 	create(ctx: RequestContext, invite: Invite): Promise<void>;
 
-	/** Returns null for unknown, expired, or consumed invites. */
-	getByToken(ctx: RequestContext, token: string): Promise<Invite | null>;
+	/**
+	 * Lookup by HMAC hash of the raw token. Caller hashes the inbound token
+	 * (e.g. via `compute-app/src/lib/server/invites/token.server.ts`) and
+	 * passes the digest here. Returns null for unknown, expired, or
+	 * consumed invites.
+	 */
+	getByTokenHash(ctx: RequestContext, tokenHash: string): Promise<Invite | null>;
 
 	listByOrg(ctx: RequestContext, orgId: string, opts?: ListOptions): Promise<Page<Invite>>;
 
