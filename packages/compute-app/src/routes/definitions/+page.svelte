@@ -41,6 +41,8 @@
 	let editingProjectId = $state<string | null>(null);
 	let deletingProjectId = $state<string | null>(null);
 	let showAddModal = $state(false);
+	// True when edit was opened from the detail drawer — surfaces a Back link.
+	let editCameFromDetail = $state(false);
 
 	// In-flight flags
 	let addingDefinition = $state(false);
@@ -359,6 +361,7 @@
 		onClose={() => (drawerRecord = null)}
 		onEdit={(r) => {
 			editingDefinitionId = r.guid;
+			editCameFromDetail = true;
 			drawerRecord = null;
 		}}
 		onOpenRunner={(guid) => goto(`/app/${guid}`)}
@@ -371,7 +374,17 @@
 		projects={data.projects}
 		computeServers={data.computeServers}
 		isSaving={savingDefinitionId === editingRecord.guid}
-		onClose={() => (editingDefinitionId = null)}
+		onClose={() => {
+			editingDefinitionId = null;
+			editCameFromDetail = false;
+		}}
+		onBack={editCameFromDetail
+			? () => {
+					drawerRecord = editingRecord;
+					editingDefinitionId = null;
+					editCameFromDetail = false;
+				}
+			: undefined}
 		onSave={saveDefinition}
 		onDelete={deleteDefinition}
 		onOpenRunner={(guid) => goto(`/app/${guid}`)}
