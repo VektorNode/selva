@@ -7,7 +7,9 @@ const REFRESH_COOKIE_NAME = 'admin_refresh';
 // can mint new access tokens silently. 30 days matches Supabase's default.
 const REFRESH_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-// ── Rate limiter ─────────────────────────────────────────────────────────────
+// ============================================================================
+// Rate limiter
+// ============================================================================
 // Process-local state — not a provider concern.
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -50,8 +52,9 @@ export function clearRateLimit(ip: string): void {
 	rateLimitStore.delete(ip);
 }
 
-// ── Session management (cookie I/O — SvelteKit transport layer) ──────────────
-
+// ============================================================================
+// Session management (cookie I/O — SvelteKit transport layer)
+// ============================================================================
 /**
  * Set the session cookie using a token produced by the auth provider. §1a:
  * the token is always minted by the provider (local = HMAC, Supabase = JWT)
@@ -100,8 +103,9 @@ export function clearRefreshCookie(cookies: Cookies): void {
 	cookies.delete(REFRESH_COOKIE_NAME, { path: '/' });
 }
 
-// ── Request body size guard ──────────────────────────────────────────────────
-
+// ============================================================================
+// Request body size guard
+// ============================================================================
 /**
  * Reject a request whose declared `Content-Length` exceeds `maxBytes`. Throws
  * 413 BEFORE the body is read so a malicious client can't burn memory by
@@ -123,8 +127,9 @@ export function requireMaxBodySize(request: Request, maxBytes: number): void {
 	}
 }
 
-// ── Redirect target validation ───────────────────────────────────────────────
-
+// ============================================================================
+// Redirect target validation
+// ============================================================================
 /**
  * Validate a user-supplied post-login redirect target. Accepts only same-origin
  * relative paths starting with `/` followed by a non-`/` character, so

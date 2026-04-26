@@ -40,8 +40,9 @@ export interface UsersFile {
 	users: StoredUser[];
 }
 
-// ── PBKDF2 password hashing ───────────────────────────────────────────────
-
+// ============================================================================
+// PBKDF2 password hashing
+// ============================================================================
 const PBKDF2_ITERATIONS = 100_000;
 const PBKDF2_KEYLEN = 32;
 const PBKDF2_DIGEST = 'sha256';
@@ -74,8 +75,9 @@ export async function verifyPasswordHash(password: string, storedHash: string): 
 	return crypto.timingSafeEqual(actual, expected);
 }
 
-// ── CRUD ────────────────────────────────────────────────────────────────────
-
+// ============================================================================
+// CRUD
+// ============================================================================
 // Fresh object per call — `readJsonFile` returns its fallback by reference
 // when the file is missing, so a shared singleton would let one test (or
 // one process write) mutate state visible to the next read.

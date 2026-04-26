@@ -17,15 +17,7 @@ import {
 } from '$lib/server/providers.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
-
-function slugify(raw: string): string {
-	return raw
-		.toLowerCase()
-		.trim()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-+|-+$/g, '')
-		.slice(0, 63);
-}
+import { slugify } from '$lib/server/slug';
 
 // Redirect away if a platform admin already exists — setup is only for a
 // fresh install. Uses the permission store directly (works for OIDC providers

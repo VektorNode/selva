@@ -8,7 +8,7 @@ import type {
 	DefinitionVersion,
 	UpdateMetadataInput
 } from '@selva/platform';
-import { SYSTEM_CONTEXT, ProviderError, definitionPaths } from '@selva/platform';
+import { ProviderError, definitionPaths } from '@selva/platform';
 
 /**
  * Input passed to `DefinitionService.create`. Carries everything the service
@@ -36,7 +36,6 @@ export interface CreateDefinitionRecord {
  * Default age threshold after which a 'pending' record is considered stale.
  * Conservative — covers slow uploads over weak connections.
  */
-const PENDING_GC_AGE_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
  * Orchestrates writes that span IDataProvider + IStorageProvider for the
@@ -237,19 +236,5 @@ export class DefinitionService {
 		// 404 source for any in-flight reader.
 		await this.data.definitions.delete(ctx, guid);
 		await this.storage.deletePrefix(definitionPaths.prefix(guid));
-	}
-
-	/**
-	 * Janitor — delete records stuck in 'pending' for longer than ageMs and
-	 * any blobs they may have written. Safe to run on a schedule.
-	 */
-	async gcStalePending(ageMs: number = PENDING_GC_AGE_MS): Promise<number> {
-		const cutoff = new Date(Date.now() - ageMs).toISOString();
-		const stale = await this.data.definitions.listStalePending(SYSTEM_CONTEXT, cutoff);
-		for (const record of stale) {
-			await this.storage.deletePrefix(definitionPaths.prefix(record.guid));
-			await this.data.definitions.delete(SYSTEM_CONTEXT, record.guid);
-		}
-		return stale.length;
 	}
 }

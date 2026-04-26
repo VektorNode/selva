@@ -143,18 +143,14 @@ export class WebSocketState {
 
 				this.socket.onmessage = (event) => {
 					try {
-						// Skip empty messages (note: server no longer sends ping messages)
 						if (!event.data || typeof event.data !== 'string' || event.data.trim() === '') {
-							return; // Silently ignore empty messages
+							return;
 						}
 
 						const message = JSON.parse(event.data);
 						this.handleMessage(message);
 					} catch (error) {
-						// Log the raw message for debugging, but truncate if too long
-						// const rawData = event.data?.toString() || '';
 						console.error('[WebSocket] Failed to parse message:', error);
-						// console.debug('[WebSocket] Raw message data:', preview);
 					}
 				};
 
@@ -165,7 +161,6 @@ export class WebSocketState {
 				};
 
 				this.socket.onclose = () => {
-					// console.log('[WebSocket] Disconnected');
 					this.isConnecting = false;
 					this.socket = null;
 					this.connected = false;

@@ -229,13 +229,6 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		await this.writeConfig(config);
 	}
 
-	async listStalePending(_ctx: RequestContext, olderThanIso: string): Promise<DefinitionRecord[]> {
-		const config = await this.readConfig();
-		return Object.values(config.definitions).filter(
-			(r) => this.live(r) && r.status === ('pending' as string) && r.createdAt <= olderThanIso
-		);
-	}
-
 	// ============================================================================
 	// Versions (spec §6)
 	// ============================================================================

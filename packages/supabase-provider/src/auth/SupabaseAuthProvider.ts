@@ -162,8 +162,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	}
 
 	async touchLastLogin(id: string): Promise<void> {
-		// 60-second debounce. Matches the local provider and GoTrue's own
-		// audit cadence.
+		// 60-second debounce. Matches the local provider.
 		const { data, error } = await this.admin
 			.from('user_profiles')
 			.select('last_login_at')
@@ -184,8 +183,9 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	// OAuth lives on `this.oauth` (typed `IOAuthAuth`); see `SupabaseOAuthAuth`
 	// below. Mirrors the `passwordAuth` capability split.
 
-	// ── Internals ─────────────────────────────────────────────────────────────
-
+	// ============================================================================
+	// Internals
+	// ============================================================================
 	/**
 	 * Sign in via GoTrue. Returns the access token string and the hydrated
 	 * user. Called by `SupabasePasswordAuth.verifyLogin` — kept on the

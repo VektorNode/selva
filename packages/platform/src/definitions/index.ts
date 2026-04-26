@@ -15,10 +15,7 @@ export {
 export { definitionPaths } from './paths.js';
 export type { UpdateMetadataInput } from './schemas.js';
 export {
-	DefinitionVersionSchema,
 	DefinitionChannelSchema,
-	DefinitionFileExtSchema,
-	DefinitionStatusSchema,
 	PublishVersionInputSchema,
 	CreateDefinitionInputSchema,
 	UpdateMetadataInputSchema,

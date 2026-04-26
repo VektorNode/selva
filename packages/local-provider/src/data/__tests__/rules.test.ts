@@ -20,8 +20,9 @@ import {
 	type ProjectMember
 } from '@selva/platform';
 
-// ── helpers ────────────────────────────────────────────────────────────────
-
+// ============================================================================
+// helpers
+// ============================================================================
 function project(overrides: Partial<Project> = {}): Project {
 	const now = new Date().toISOString();
 	return {
@@ -88,8 +89,9 @@ function def(overrides: Partial<DefinitionRecord> = {}): DefinitionRecord {
 	};
 }
 
-// ── canView ────────────────────────────────────────────────────────────────
-
+// ============================================================================
+// canView
+// ============================================================================
 describe('canView', () => {
 	it('private: returns false without a project member', () => {
 		expect(
@@ -184,8 +186,9 @@ describe('canView', () => {
 	});
 });
 
-// ── canSolve equals canView today ─────────────────────────────────────────
-
+// ============================================================================
+// canSolve equals canView today
+// ============================================================================
 describe('canSolve', () => {
 	it('matches canView for every visibility', () => {
 		for (const v of ['public', 'org', 'private'] as const) {
@@ -201,8 +204,9 @@ describe('canSolve', () => {
 	});
 });
 
-// ── canEdit / canManage / canEditProjectSettings ──────────────────────────
-
+// ============================================================================
+// canEdit / canManage / canEditProjectSettings
+// ============================================================================
 describe('canEdit', () => {
 	it('project owner/editor yes; viewer no', () => {
 		const base = {
@@ -264,8 +268,9 @@ describe('canManage', () => {
 	});
 });
 
-// ── canChangeVisibilityToPublic ───────────────────────────────────────────
-
+// ============================================================================
+// canChangeVisibilityToPublic
+// ============================================================================
 describe('canChangeVisibilityToPublic', () => {
 	it('org owner/admin can flip', () => {
 		expect(
@@ -299,8 +304,9 @@ describe('canChangeVisibilityToPublic', () => {
 	});
 });
 
-// ── canEditDefinition ─────────────────────────────────────────────────────
-
+// ============================================================================
+// canEditDefinition
+// ============================================================================
 describe('canEditDefinition', () => {
 	it('container project: only project editors/owners', () => {
 		const p = project({ visibility: 'public', autoJoinOnUpload: false });
@@ -360,8 +366,9 @@ describe('canEditDefinition', () => {
 	});
 });
 
-// ── withAdminBypass wrapper ───────────────────────────────────────────────
-
+// ============================================================================
+// withAdminBypass wrapper
+// ============================================================================
 describe('withAdminBypass', () => {
 	it('short-circuits true for instance_admin', () => {
 		let invoked = false;
@@ -384,8 +391,9 @@ describe('withAdminBypass', () => {
 	});
 });
 
-// ── checkOwnerRemoval (Permissions.md §5, §10) ─────────────────────────────
-
+// ============================================================================
+// checkOwnerRemoval (Permissions.md §5, §10)
+// ============================================================================
 describe('checkOwnerRemoval', () => {
 	it('returns ok for non-owner targets regardless of confirmation', () => {
 		expect(

@@ -2,14 +2,13 @@
  * Adapter conformance suite for IDefinitionStore.
  *
  * The goal is to prove every adapter behaves identically from the consuming
- * app's perspective — `ctx` scoping, `pending` filtering, `listStalePending`
- * cutoff, version CRUD + reference protection (spec §6), and error shapes.
+ * app's perspective — `ctx` scoping, `pending` filtering, version CRUD +
+ * reference protection (spec §6), and error shapes.
  */
 
 import { describe, it, expect } from 'vitest';
 import type { IDefinitionStore } from '../../data/interface.js';
 import type { DefinitionRecord, DefinitionVersion } from '../../definitions/types.js';
-import { SYSTEM_CONTEXT } from '../../context.js';
 import { makeCtx, makeUuid } from './helpers.js';
 
 /**
@@ -472,41 +471,6 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			const page = await store.listPublic(ctx(scope.ownerId));
 			expect(page.items.map((r) => r.guid)).toContain(pub);
 			expect(page.items.map((r) => r.guid)).not.toContain(pend);
-		});
-
-		it('listStalePending returns only pending + older than cutoff', async () => {
-			const store = await createStore();
-			const scope = await scopeFor();
-			const oldISO = '2024-01-01T00:00:00.000Z';
-			const recentISO = new Date().toISOString();
-
-			const oldPending = makeUuid();
-			const newPending = makeUuid();
-			const oldReady = makeUuid();
-			await store.create(
-				ctx(scope.ownerId),
-				record(scope, { guid: oldPending, status: 'pending', createdAt: oldISO, updatedAt: oldISO })
-			);
-			await store.create(
-				ctx(scope.ownerId),
-				record(scope, {
-					guid: newPending,
-					status: 'pending',
-					createdAt: recentISO,
-					updatedAt: recentISO
-				})
-			);
-			await store.create(
-				ctx(scope.ownerId),
-				record(scope, { guid: oldReady, status: 'published', createdAt: oldISO, updatedAt: oldISO })
-			);
-
-			const cutoff = '2024-06-01T00:00:00.000Z';
-			const stale = await store.listStalePending(SYSTEM_CONTEXT, cutoff);
-			const guids = stale.map((r) => r.guid);
-			expect(guids).toContain(oldPending);
-			expect(guids).not.toContain(newPending);
-			expect(guids).not.toContain(oldReady);
 		});
 
 		it('pagination respects limit and nextCursor', async () => {
