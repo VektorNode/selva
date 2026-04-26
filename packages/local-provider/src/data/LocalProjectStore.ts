@@ -236,6 +236,13 @@ export class LocalProjectStore implements IProjectStore {
 		m.role = role;
 		Object.assign(m, auditUpdate(ctx, m.updatedBy));
 		await this.loader.write(store);
+		await this.events.emit({
+			type: 'project_member.role_changed',
+			projectId,
+			userId,
+			role,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async removeProjectMember(

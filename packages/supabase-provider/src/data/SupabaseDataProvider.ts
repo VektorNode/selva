@@ -26,7 +26,7 @@ export class SupabaseDataProvider implements IDataProvider {
 		this.orgs = new SupabaseOrgStore(clients, events);
 		this.projects = new SupabaseProjectStore(clients, events);
 		this.definitions = new SupabaseDefinitionStore(clients, events);
-		this.invites = new SupabaseInviteStore(clients);
+		this.invites = new SupabaseInviteStore(clients, events);
 		this.computeServer = new SupabaseComputeServerStore(clients);
 		this.shareLinks = new SupabaseShareLinkStore(clients, events);
 	}

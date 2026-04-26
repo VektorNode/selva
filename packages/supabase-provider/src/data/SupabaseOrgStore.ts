@@ -273,6 +273,13 @@ export class SupabaseOrgStore implements IOrgStore {
 		if (error) throw mapError(error);
 		if (!data || data.length === 0)
 			throw new ProviderError(`Org member '${userId}' not found`, 404);
+		await this.events.emit({
+			type: 'org_member.role_changed',
+			orgId,
+			userId,
+			role,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async updateOrgMemberPermissions(
@@ -297,6 +304,13 @@ export class SupabaseOrgStore implements IOrgStore {
 		if (error) throw mapError(error);
 		if (!data || data.length === 0)
 			throw new ProviderError(`Org member '${userId}' not found`, 404);
+		await this.events.emit({
+			type: 'org_member.permissions_changed',
+			orgId,
+			userId,
+			permissions: [...permissions],
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async removeOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<void> {

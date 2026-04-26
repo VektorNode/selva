@@ -53,7 +53,7 @@ export class LocalDataProvider implements IDataProvider {
 			projects,
 			definitions,
 			LocalComputeServerStore.fromEnv(env),
-			LocalInviteStore.fromEnv(env),
+			LocalInviteStore.fromEnv(env, events),
 			shareLinks
 		);
 	}

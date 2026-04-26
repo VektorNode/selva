@@ -347,12 +347,12 @@ Tokens are issued with a default `maxSolves` cap on creation. The minter may rai
 When a request to a definition-scoped route (`/api/compute/solve`, `/app/[guid]`, schema fetch) carries `?token=…` (or `Authorization: Bearer …`):
 
 1. HMAC the supplied token; look up `tokenHash`.
-2. Token must exist; `revokedAt IS NULL`; `expiresAt IS NULL OR expiresAt > now()`; `maxSolves IS NULL OR solveCount < maxSolves`; parent definition must itself be live (`deletedAt IS NULL`).
+2. Token must exist; `revokedAt IS NULL`; `expiresAt IS NULL OR expiresAt > now()`; parent definition must itself be live (`deletedAt IS NULL`).
 3. Token's `definitionId` must equal the requested definition; token's `channel` must equal the requested channel. Both strict equality.
 4. For solve routes, token must have `allowSolve = true`.
 5. Build a synthetic `RequestContext` scoped to the token: no user identity, tenancy = the project's `orgId`, no platform/org permissions.
 6. Skip `canSolve` / `canView`. Authorization is the token.
-7. On a successful solve, atomically increment `solveCount`. (Postgres: `UPDATE … SET solve_count = solve_count + 1 WHERE solve_count < max_solves OR max_solves IS NULL RETURNING …` — atomic check-and-increment. Local: read-modify-write; race acceptable at single-node scale.)
+7. On a solve, atomically check-and-increment `solveCount`. The cap is enforced **here**, not at resolution: a check at resolution would race with concurrent solves. Postgres: `UPDATE … SET solve_count = solve_count + 1 WHERE solve_count < max_solves OR max_solves IS NULL RETURNING …` — single statement, returns nothing if cap is hit (route surfaces 429). Local: read-modify-write; race acceptable at single-node scale.
 
 If any check fails, the route falls through to the existing user-based auth. A request without a valid token AND without a user session ends with 401 as today.
 
@@ -523,7 +523,6 @@ Walk through these to confirm the model behaves as expected.
 | Alice (project `viewer`) tries to delete a definition.                                                                        | **403.** Viewers cannot edit.                                                                                                                                                 |
 | Project owner leaves Acme. Org owner opens the project.                                                                       | Uses **Reclaim** → becomes co-owner. Original owner not demoted. Audit entry (future).                                                                                        |
 | Reclaim done; co-owner tries to remove the original owner.                                                                    | Handler surfaces owner-on-owner confirm step (`?confirm=true`) before proceeding.                                                                                             |
-| Last Acme member is removed while sole-owning 3 projects.                                                                     | **Blocked.** Reclaim or manual "assign owner" flow runs first.                                                                                                                |
 | Alice flips a `private` project to `public`.                                                                                  | Requires org `owner`/`admin` (Alice qualifies as `admin`). If cross-org public is off at platform level, flip is rejected.                                                    |
 | `instance_admin` views Acme data.                                                                                             | **OK.** Centralized bypass wrapper records the access (future audit hook).                                                                                                    |
 | Alice mints a `live`-channel share link for her definition with a 1000-solve cap. Bob (no account) solves 999 times via the link; the 1000th request hits 429. | **OK.** Cap enforced by atomic increment. Alice raises the cap, removes it, or revokes. |

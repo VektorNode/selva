@@ -259,6 +259,13 @@ export class SupabaseProjectStore implements IProjectStore {
 		if (error) throw mapError(error);
 		if (!data || data.length === 0)
 			throw new ProviderError(`Project member '${userId}' not found`, 404);
+		await this.events.emit({
+			type: 'project_member.role_changed',
+			projectId,
+			userId,
+			role,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async removeProjectMember(

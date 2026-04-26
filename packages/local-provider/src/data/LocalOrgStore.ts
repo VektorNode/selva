@@ -223,6 +223,13 @@ export class LocalOrgStore implements IOrgStore {
 		m.permissions = [...DEFAULT_ORG_PERMISSIONS[role]];
 		Object.assign(m, auditUpdate(ctx, m.updatedBy));
 		await this.loader.write(store);
+		await this.events.emit({
+			type: 'org_member.role_changed',
+			orgId,
+			userId,
+			role,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async updateOrgMemberPermissions(
@@ -239,6 +246,13 @@ export class LocalOrgStore implements IOrgStore {
 		m.permissions = [...permissions];
 		Object.assign(m, auditUpdate(ctx, m.updatedBy));
 		await this.loader.write(store);
+		await this.events.emit({
+			type: 'org_member.permissions_changed',
+			orgId,
+			userId,
+			permissions: [...permissions],
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async removeOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<void> {

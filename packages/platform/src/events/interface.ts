@@ -12,10 +12,31 @@ export type DomainEvent =
 	| { type: 'org.deleted'; orgId: string; actorId: string }
 	| { type: 'org_member.added'; orgId: string; userId: string; actorId: string }
 	| { type: 'org_member.removed'; orgId: string; userId: string; actorId: string }
+	| {
+			type: 'org_member.role_changed';
+			orgId: string;
+			userId: string;
+			role: string;
+			actorId: string;
+	  }
+	| {
+			type: 'org_member.permissions_changed';
+			orgId: string;
+			userId: string;
+			permissions: readonly string[];
+			actorId: string;
+	  }
 	| { type: 'project.created'; projectId: string; orgId: string; actorId: string }
 	| { type: 'project.deleted'; projectId: string; actorId: string }
 	| { type: 'project_member.added'; projectId: string; userId: string; actorId: string }
 	| { type: 'project_member.removed'; projectId: string; userId: string; actorId: string }
+	| {
+			type: 'project_member.role_changed';
+			projectId: string;
+			userId: string;
+			role: string;
+			actorId: string;
+	  }
 	| { type: 'definition.created'; definitionId: string; projectId: string; actorId: string }
 	| { type: 'definition.deleted'; definitionId: string; actorId: string }
 	| { type: 'definition.published'; definitionId: string; versionId: string; actorId: string }
@@ -27,7 +48,16 @@ export type DomainEvent =
 	  }
 	| { type: 'definition_version.deleted'; versionId: string; actorId: string }
 	| { type: 'share_link.minted'; linkId: string; definitionId: string; actorId: string }
-	| { type: 'share_link.revoked'; linkId: string; actorId: string };
+	| { type: 'share_link.revoked'; linkId: string; actorId: string }
+	| {
+			type: 'invite.created';
+			inviteId: string;
+			orgId: string;
+			email: string;
+			actorId: string;
+	  }
+	| { type: 'invite.accepted'; inviteId: string; orgId: string; userId: string; actorId: string }
+	| { type: 'invite.revoked'; inviteId: string; orgId: string; actorId: string };
 
 export type DomainEventType = DomainEvent['type'];
 
