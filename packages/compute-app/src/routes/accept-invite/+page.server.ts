@@ -1,6 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { SYSTEM_CONTEXT, type Invite } from '@selva/platform';
+import { SYSTEM_CONTEXT, type Invite } from '@selvajs/platform';
 import {
 	getInviteStore,
 	getOrganizationProvider,

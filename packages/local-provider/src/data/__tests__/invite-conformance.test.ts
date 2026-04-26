@@ -2,7 +2,7 @@ import { describe, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { runInviteStoreConformance } from '@selva/platform/testing';
+import { runInviteStoreConformance } from '@selvajs/platform/testing';
 import { LocalInviteStore } from '../LocalInviteStore.js';
 
 describe('LocalInviteStore', () => {

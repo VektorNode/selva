@@ -10,7 +10,7 @@ import {
 	type RequestContext,
 	type DefinitionRecord,
 	type ShareLink
-} from '@selva/platform';
+} from '@selvajs/platform';
 import { LocalOrgStore, LocalOrgStoreLoader } from '../LocalOrgStore.js';
 import { LocalProjectStore } from '../LocalProjectStore.js';
 import { LocalDefinitionStore } from '../LocalDefinitionStore.js';

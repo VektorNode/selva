@@ -4,12 +4,12 @@ import { randomUUID } from 'node:crypto';
 import { providers } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
-import { GuidSchema } from '@selva/platform/definitions/schemas';
+import { GuidSchema } from '@selvajs/platform/definitions/schemas';
 import {
 	CreateShareLinkInputSchema,
 	DEFAULT_SHARE_LINK_MAX_SOLVES,
 	type ShareLink
-} from '@selva/platform';
+} from '@selvajs/platform';
 import { hashToken, mintRawToken } from '$lib/server/shareLinks/token.server';
 
 /**

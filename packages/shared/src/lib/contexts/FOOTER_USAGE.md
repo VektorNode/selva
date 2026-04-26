@@ -17,7 +17,7 @@ In any page component that's wrapped by `PageContainer`:
 
 ```svelte
 <script lang="ts">
-	import { useFooterItem } from 'selva-shared';
+	import { useFooterItem } from '@selvajs/shared';
 
 	let currentStep = $state(1);
 
@@ -39,7 +39,7 @@ Register multiple items and update them reactively:
 
 ```svelte
 <script lang="ts">
-	import { useFooterItem } from 'selva-shared';
+	import { useFooterItem } from '@selvajs/shared';
 
 	let solveCount = $state(0);
 	let lastSolveTime = $state<string | null>(null);
@@ -60,7 +60,7 @@ Since snippets are defined in the template in Svelte 5, you can also register th
 
 ```svelte
 <script lang="ts">
-	import { useFooter } from 'selva-shared';
+	import { useFooter } from '@selvajs/shared';
 
 	const footer = useFooter();
 
@@ -160,7 +160,7 @@ Priority -1 → renders last
 ```svelte
 <!-- Child component can now add footer items -->
 <script lang="ts">
-	import { useFooterItem } from 'selva-shared';
+	import { useFooterItem } from '@selvajs/shared';
 	useFooterItem('my-item', mySnippet);
 </script>
 

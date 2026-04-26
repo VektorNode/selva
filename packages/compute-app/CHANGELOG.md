@@ -1,11 +1,11 @@
-# selva-compute-app
+# @selvajs/compute-app
 
 ## 0.9.0
 
 ### Patch Changes
 
 - Updated dependencies
-  - selva-shared@0.9.0
+  - @selvajs/shared@0.9.0
 
 ## 0.8.4
 
@@ -20,14 +20,14 @@
   - Slim `compute-app/+page.svelte` from ~280 lines to ~58 lines
 
 - Updated dependencies
-  - selva-shared@0.8.4
+  - @selvajs/shared@0.8.4
 
 ## 0.8.3
 
 ### Patch Changes
 
 - Updated dependencies
-  - selva-shared@0.8.3
+  - @selvajs/shared@0.8.3
 
 ## 0.4.1
 

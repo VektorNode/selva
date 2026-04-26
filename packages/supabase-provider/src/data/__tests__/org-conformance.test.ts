@@ -1,5 +1,5 @@
 import { describe, beforeEach, it } from 'vitest';
-import { runOrgStoreConformance } from '@selva/platform/testing';
+import { runOrgStoreConformance } from '@selvajs/platform/testing';
 import { SupabaseOrgStore } from '../SupabaseOrgStore.js';
 import { SupabaseInviteStore } from '../SupabaseInviteStore.js';
 import { SupabaseComputeServerStore } from '../SupabaseComputeServerStore.js';

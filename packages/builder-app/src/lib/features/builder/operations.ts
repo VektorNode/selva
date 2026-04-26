@@ -8,9 +8,9 @@ import type {
 	LayoutItem,
 	InputLayoutItem,
 	OutputLayoutItem
-} from 'selva-shared';
+} from '@selvajs/shared';
 import { mapParamTypeToWidgetType, createDefaultWidgetConfig } from './widget-config';
-import { toast } from 'selva-shared';
+import { toast } from '@selvajs/shared';
 
 export function isItemUsedInLayout(schema: UISchema | null, paramId: string): boolean {
 	if (!schema?.layout) return false;

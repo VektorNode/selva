@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getProjectProvider } from '$lib/server/providers.server';
 import { requireCanManageMembers, requireTargetIsOrgMember } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
-import { ProjectRoleSchema, type ProjectMember } from '@selva/platform';
+import { ProjectRoleSchema, type ProjectMember } from '@selvajs/platform';
 
 const AddMemberSchema = z.object({
 	userId: z.string().min(1, 'userId is required'),

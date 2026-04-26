@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import { isHttpError } from '@sveltejs/kit';
-import type { AuthUser, RequestContext } from '@selva/platform';
-import { SYSTEM_CONTEXT, emptyProfile } from '@selva/platform';
+import type { AuthUser, RequestContext } from '@selvajs/platform';
+import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
 import { providers } from '$lib/server/providers.server';
 import {
 	getRefreshToken,

@@ -8,7 +8,7 @@ import type {
 	UserManagementResult,
 	ListOptions,
 	Page
-} from '@selva/platform';
+} from '@selvajs/platform';
 
 /**
  * Auth backed by Supabase Auth (GoTrue).

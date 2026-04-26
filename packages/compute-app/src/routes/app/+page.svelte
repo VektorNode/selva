@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-	import { Search, toast, PageHeader, PageContent } from 'selva-shared';
+	import { Search, toast, PageHeader, PageContent } from '@selvajs/shared';
 	import { ArrowRight, ChevronDown } from '@lucide/svelte';
-	import type { DefinitionRecord } from '@selva/platform';
+	import type { DefinitionRecord } from '@selvajs/platform';
 	import type { PageData } from './$types';
 	import ToolCard from './_components/ToolCard.svelte';
 	import ToolListView from './_components/ToolListView.svelte';

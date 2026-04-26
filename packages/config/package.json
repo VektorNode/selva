@@ -1,5 +1,5 @@
 {
-	"name": "@selva/config",
+	"name": "@selvajs/config",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",

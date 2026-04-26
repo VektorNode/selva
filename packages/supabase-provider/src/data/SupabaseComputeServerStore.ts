@@ -3,8 +3,8 @@ import type {
 	ComputeConfig,
 	ComputeServerConfig,
 	RequestContext
-} from '@selva/platform';
-import { ProviderError } from '@selva/platform';
+} from '@selvajs/platform';
+import { ProviderError } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 
 /**

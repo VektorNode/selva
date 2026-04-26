@@ -1,5 +1,5 @@
 /**
- * Pure-rule tests for @selva/platform/access — exercised directly with
+ * Pure-rule tests for @selvajs/platform/access — exercised directly with
  * constructed inputs. Lives here because the platform package doesn't run
  * its own vitest.
  */
@@ -18,7 +18,7 @@ import {
 	type OrgMember,
 	type Project,
 	type ProjectMember
-} from '@selva/platform';
+} from '@selvajs/platform';
 
 // ============================================================================
 // helpers

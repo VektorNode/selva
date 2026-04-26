@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { Button, Input } from 'selva-shared';
+	import { Button, Input } from '@selvajs/shared';
 	import { Plus, X } from '@lucide/svelte';
 	import type { ProjectWithMembers, DefinitionRecord } from '../+page.server';
-	import type { ProjectVisibility } from '@selva/platform/projects';
+	import type { ProjectVisibility } from '@selvajs/platform/projects';
 	import { projectColor } from './statusStyles';
 
 	interface Props {

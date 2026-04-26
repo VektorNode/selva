@@ -8,6 +8,6 @@ export {
 	COVER_IMAGE_EXTENSIONS as IMAGE_EXTENSIONS,
 	ALLOWED_UPLOAD_EXTENSIONS,
 	COVER_IMAGE_CONTENT_TYPES as IMAGE_CONTENT_TYPES
-} from '@selva/platform';
+} from '@selvajs/platform';
 
 export { MAX_GH_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from './computeLimits';

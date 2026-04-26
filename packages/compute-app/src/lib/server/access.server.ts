@@ -7,7 +7,7 @@ import type {
 	ProjectAccessInput,
 	ProjectMember,
 	RequestContext
-} from '@selva/platform';
+} from '@selvajs/platform';
 import {
 	ALL_PLATFORM_PERMISSIONS,
 	hasPermission,
@@ -19,7 +19,7 @@ import {
 	canManage,
 	canEditProjectSettings,
 	canEditDefinition
-} from '@selva/platform';
+} from '@selvajs/platform';
 import {
 	getProjectProvider,
 	getDefinitionMeta,

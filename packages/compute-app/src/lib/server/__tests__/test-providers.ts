@@ -8,7 +8,7 @@
  * import any module that uses `vi`, since `vi.mock` is hoisted above imports.
  */
 
-import type { SelvaConfig, SelvaFlags, TenancyMode } from '@selva/platform';
+import type { SelvaConfig, SelvaFlags, TenancyMode } from '@selvajs/platform';
 import type { DefinitionService } from '../definitions/DefinitionService.js';
 
 export interface TestProviderHandle {

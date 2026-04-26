@@ -38,7 +38,7 @@ cp packages/compute-app/.env.example packages/compute-app/.env
 [`.env.example`](../packages/compute-app/.env.example) is the **single authoritative reference** for every env var Selva reads — provider choice, tenancy, platform flags, secrets. Open it and:
 
 - Set `SESSION_SECRET` (instructions inline). For local provider this is enough.
-- For Supabase, follow the inline pointers and set `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — see [@selva/supabase-provider](../packages/supabase-provider/README.md#development--local-supabase-stack) for the `npx supabase start` flow that produces those keys.
+- For Supabase, follow the inline pointers and set `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — see [@selvajs/supabase-provider](../packages/supabase-provider/README.md#development--local-supabase-stack) for the `npx supabase start` flow that produces those keys.
 - For multi-org testing, set `SELVA_TENANCY=multi` and follow [MultiOrg-LocalDev.md](MultiOrg-LocalDev.md).
 
 You shouldn't need to read any other env-var documentation.
@@ -73,8 +73,8 @@ The builder app needs no env vars.
 
 - **[Architecture.md](Architecture.md)** — how the providers, tenancy, and access rules fit together
 - **[MultiOrg-LocalDev.md](MultiOrg-LocalDev.md)** — testing multi-org / multi-tenant locally
-- **[selva-local-provider](../packages/local-provider/README.md)** — on-disk layout, backups, caveats
-- **[@selva/supabase-provider](../packages/supabase-provider/README.md)** — schema, RLS, hosted setup
+- **[@selvajs/local-provider](../packages/local-provider/README.md)** — on-disk layout, backups, caveats
+- **[@selvajs/supabase-provider](../packages/supabase-provider/README.md)** — schema, RLS, hosted setup
 - **[Compute App Deployment](deployment/compute-app/README.md)** — production deploy
 - **[RHINO_COMPUTE.md](RHINO_COMPUTE.md)** — set up the Rhino.Compute server
 

@@ -1,6 +1,6 @@
-# @selva/supabase-provider
+# @selvajs/supabase-provider
 
-Supabase (Auth + Postgres + Storage) implementation of the `@selva/platform` interfaces.
+Supabase (Auth + Postgres + Storage) implementation of the `@selvajs/platform` interfaces.
 
 Runs the Selva backend against **either** a managed Supabase project (production) or a local Supabase CLI stack in Docker (development). Same code — different `SUPABASE_URL` and keys.
 
@@ -66,13 +66,13 @@ The repo's [`selva.config.ts`](../../selva.config.ts) is the single DI point —
 **Development (local-provider, default):**
 
 ```ts
-import { defineConfig } from '@selva/platform/config';
+import { defineConfig } from '@selvajs/platform/config';
 import {
 	LocalAuthProvider,
 	LocalDataProvider,
 	LocalStorageProvider,
 	LocalUserProfileProvider
-} from 'selva-local-provider';
+} from '@selvajs/local-provider';
 
 export default defineConfig((env) => ({
 	auth: LocalAuthProvider.fromEnv(env),
@@ -85,13 +85,13 @@ export default defineConfig((env) => ({
 **Production or Supabase dev:**
 
 ```ts
-import { defineConfig } from '@selva/platform/config';
+import { defineConfig } from '@selvajs/platform/config';
 import {
 	SupabaseAuthProvider,
 	SupabaseDataProvider,
 	SupabaseStorageProvider,
 	SupabaseUserProfileProvider
-} from '@selva/supabase-provider';
+} from '@selvajs/supabase-provider';
 
 export default defineConfig((env) => {
 	const data = SupabaseDataProvider.fromEnv(env);
@@ -109,9 +109,9 @@ export default defineConfig((env) => {
 **Environment-switched (pick at runtime):**
 
 ```ts
-import { defineConfig } from '@selva/platform/config';
-import * as local from 'selva-local-provider';
-import * as supa from '@selva/supabase-provider';
+import { defineConfig } from '@selvajs/platform/config';
+import * as local from '@selvajs/local-provider';
+import * as supa from '@selvajs/supabase-provider';
 
 export default defineConfig((env) => {
 	if (env.SELVA_PROVIDER === 'supabase') {
@@ -226,7 +226,7 @@ Studio is a full admin UI at `http://127.0.0.1:54323`. Use it to inspect tables,
    SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
    ```
    After deploying, register your Rhino.Compute server URL (+ optional API key) via `/admin/compute`.
-6. Deploy the compute-app with `selva.config.ts` wired to `@selva/supabase-provider`.
+6. Deploy the compute-app with `selva.config.ts` wired to `@selvajs/supabase-provider`.
 7. Bootstrap the first user:
    - Open `/setup` once — creates the first admin with `instance_admin`.
    - Or manually: Dashboard → **Authentication** → **Add user**, then in the SQL Editor: `UPDATE public.user_profiles SET platform_permissions = ARRAY['instance_admin']::text[] WHERE user_id = '<uuid>';`
@@ -277,7 +277,7 @@ Two buckets:
 - **`selva-public`** (public) — covers, archives. `getPublicUrl` returns the direct CDN URL.
 - **`selva-private`** (private) — `.gh` / `.ghx` files. `getPublicUrl` returns `/api/files/{path}` which the compute-app's route handler must proxy after an auth check.
 
-Images are transcoded to WebP (1200px cap, quality 85) via the shared `transcodeImageIfNeeded` helper from `@selva/platform/storage`. Same bytes out of both providers.
+Images are transcoded to WebP (1200px cap, quality 85) via the shared `transcodeImageIfNeeded` helper from `@selvajs/platform/storage`. Same bytes out of both providers.
 
 ### Auth
 
@@ -311,7 +311,7 @@ Every abstraction-pressure point hit during implementation is logged in [FINDING
 
 ## Status
 
-Every interface from `@selva/platform` is implemented with passing conformance tests:
+Every interface from `@selvajs/platform` is implemented with passing conformance tests:
 
 - [x] `SupabaseStorageProvider` — 15 tests
 - [x] `SupabaseAuthProvider` — 15 tests (incl. MFA-ready `LoginResult`)

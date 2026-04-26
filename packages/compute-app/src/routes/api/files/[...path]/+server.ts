@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { GuidSchema } from '@selva/platform/definitions/schemas';
-import { definitionPaths } from '@selva/platform';
+import { GuidSchema } from '@selvajs/platform/definitions/schemas';
+import { definitionPaths } from '@selvajs/platform';
 import { getDefinitionMeta, getStorageProvider } from '$lib/server/providers.server';
 import { requireCanViewProject } from '$lib/server/access.server';
 

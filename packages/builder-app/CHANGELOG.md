@@ -1,4 +1,4 @@
-# @selva/builder-app
+# @selvajs/builder-app
 
 ## 0.9.0
 
@@ -44,21 +44,21 @@
 ### Patch Changes
 
 - Updated dependencies
-  - selva-shared@0.9.0
+  - @selvajs/shared@0.9.0
 
 ## 0.8.4
 
 ### Patch Changes
 
 - Updated dependencies
-  - selva-shared@0.8.4
+  - @selvajs/shared@0.8.4
 
 ## 0.8.3
 
 ### Patch Changes
 
 - Updated dependencies
-  - selva-shared@0.8.3
+  - @selvajs/shared@0.8.3
 
 ## 0.4.1
 

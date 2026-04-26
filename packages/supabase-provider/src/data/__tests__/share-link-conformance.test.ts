@@ -1,6 +1,6 @@
 import { describe, beforeEach, it } from 'vitest';
-import { runShareLinkStoreConformance } from '@selva/platform/testing';
-import { DEFAULT_ORG_PERMISSIONS } from '@selva/platform';
+import { runShareLinkStoreConformance } from '@selvajs/platform/testing';
+import { DEFAULT_ORG_PERMISSIONS } from '@selvajs/platform';
 import { SupabaseShareLinkStore } from '../SupabaseShareLinkStore.js';
 import { readEnv, resetAllData, seedUser } from './test-helpers.js';
 

@@ -1,5 +1,5 @@
 import { describe, beforeEach, it } from 'vitest';
-import { runPlatformPermissionStoreConformance } from '@selva/platform/testing';
+import { runPlatformPermissionStoreConformance } from '@selvajs/platform/testing';
 import { SupabasePlatformPermissionStore } from '../SupabasePlatformPermissionStore.js';
 import { readEnv, resetAllData, seedUser } from '../../data/__tests__/test-helpers.js';
 

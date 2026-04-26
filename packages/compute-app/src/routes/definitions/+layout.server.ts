@@ -1,6 +1,6 @@
 import type { LayoutServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
-import { hasPermission } from '@selva/platform';
+import { hasPermission } from '@selvajs/platform';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
 	if (!locals.user || !locals.ctx) redirect(303, '/login?redirectTo=/definitions');

@@ -20,7 +20,7 @@ import type { ShareLink } from '../shareLinks/types.js';
  * security boundary** — adapters MUST scope reads/writes by `ctx`. An
  * unauthorized caller sees an empty page, `null`, or a `ProviderError`.
  *
- * Access-control predicates live in `@selva/platform/access` (pure rules).
+ * Access-control predicates live in `@selvajs/platform/access` (pure rules).
  * Stores do storage; rules do rules. The route layer composes both: load
  * the entities the rule needs, then call the rule. See `access.server.ts`
  * in the compute-app for the canonical pattern.

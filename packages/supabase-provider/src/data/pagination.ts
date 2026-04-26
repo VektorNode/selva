@@ -10,8 +10,8 @@
  * Keyset pagination would be faster at scale if it ever matters.
  */
 
-import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@selva/platform';
-import type { ListOptions } from '@selva/platform';
+import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@selvajs/platform';
+import type { ListOptions } from '@selvajs/platform';
 
 export interface RangeSpec {
 	from: number;

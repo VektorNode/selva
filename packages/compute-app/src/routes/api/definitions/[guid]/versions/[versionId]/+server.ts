@@ -3,7 +3,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { definitionService } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
 import { handleApiError } from '$lib/server/api-errors';
-import { GuidSchema } from '@selva/platform/definitions/schemas';
+import { GuidSchema } from '@selvajs/platform/definitions/schemas';
 
 /**
  * DELETE /api/definitions/[guid]/versions/[versionId] — delete an old version.

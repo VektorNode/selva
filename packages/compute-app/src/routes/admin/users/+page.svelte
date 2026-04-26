@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { Button, Card, Input, toast } from 'selva-shared';
+	import { Button, Card, Input, toast } from '@selvajs/shared';
 	import { Plus, Trash2, ShieldCheck, Mail, Copy, X } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
-	import type { Invite, OrgPermission, OrgRole, PlatformPermission } from '@selva/platform';
+	import type { Invite, OrgPermission, OrgRole, PlatformPermission } from '@selvajs/platform';
 	import {
 		ALL_ORG_PERMISSIONS,
 		ALL_PLATFORM_PERMISSIONS,
 		OWNER_ADMIN_ONLY_PERMISSIONS
-	} from '@selva/platform';
+	} from '@selvajs/platform';
 	import type { UserRow } from './+page.server';
 
 	// One flat list today; scoped Platform-admin + Org-member views come later.

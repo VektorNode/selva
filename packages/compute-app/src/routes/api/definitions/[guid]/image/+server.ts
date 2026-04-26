@@ -3,7 +3,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { definitionService } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
 import { handleApiError } from '$lib/server/api-errors';
-import { GuidSchema } from '@selva/platform/definitions/schemas';
+import { GuidSchema } from '@selvajs/platform/definitions/schemas';
 import { MAX_IMAGE_FILE_SIZE } from '$lib/server/admin-config';
 
 // POST /api/definitions/{guid}/image — upload a cover image

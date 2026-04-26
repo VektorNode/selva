@@ -7,8 +7,8 @@ import type {
 	IInviteStore,
 	IShareLinkStore,
 	IEventSink
-} from '@selva/platform';
-import { NoopEventSink } from '@selva/platform';
+} from '@selvajs/platform';
+import { NoopEventSink } from '@selvajs/platform';
 import * as path from 'node:path';
 import { LocalOrgStore, LocalOrgStoreLoader } from './LocalOrgStore.js';
 import { LocalProjectStore } from './LocalProjectStore.js';

@@ -1,5 +1,5 @@
 {
-	"name": "@selva/builder-app",
+	"name": "@selvajs/builder-app",
 	"description": "Selva Schema Builder and Preview Application",
 	"private": true,
 	"version": "0.9.0",
@@ -16,7 +16,7 @@
 	},
 	"devDependencies": {
 		"@lucide/svelte": "catalog:",
-		"@selva/config": "workspace:*",
+		"@selvajs/config": "workspace:*",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@types/three": "catalog:",
 		"tw-animate-css": "catalog:"
@@ -24,7 +24,7 @@
 	"dependencies": {
 		"@iconify/svelte": "catalog:",
 		"bits-ui": "^2.15.4",
-		"selva-shared": "workspace:*",
+		"@selvajs/shared": "workspace:*",
 		"mode-watcher": "catalog:",
 		"selva-compute": "catalog:",
 		"svelte-dnd-action": "^0.9.69",

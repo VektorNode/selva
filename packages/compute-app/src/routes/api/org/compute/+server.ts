@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { flag, getComputeServerConfigStore } from '$lib/server/providers.server';
 import { requireManageOrgCompute } from '$lib/server/access.server';
-import type { ComputeConfig, ComputeServerConfig } from '@selva/platform';
+import type { ComputeConfig, ComputeServerConfig } from '@selvajs/platform';
 
 /**
  * Spec §3 — per-org BYO compute override. Reads/writes the calling org's

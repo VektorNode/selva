@@ -3,7 +3,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { getProjectProvider } from '$lib/server/providers.server';
 import { requireCanReclaim } from '$lib/server/access.server';
 import { handleApiError } from '$lib/server/api-errors';
-import type { ProjectMember } from '@selva/platform';
+import type { ProjectMember } from '@selvajs/platform';
 
 /**
  * §5 / §7 — org owner/admin escape hatch. Adds the actor as a co-owner; does

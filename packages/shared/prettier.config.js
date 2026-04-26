@@ -1,4 +1,4 @@
-import sharedConfig from '@selva/config/prettier';
+import sharedConfig from '@selvajs/config/prettier';
 
 /** @type {import('prettier').Config} */
 export default {

@@ -35,6 +35,9 @@ _ReSharper*/
 *.[Rr]e[Ss]harper
 *.DotSettings.user
 
+# Needs to be deleted
+*/**/Selva_UI/
+
 # JetBrains Rider
 .idea/
 *.sln.iml

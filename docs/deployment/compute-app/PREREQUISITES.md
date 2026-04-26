@@ -23,8 +23,8 @@ Selva's auth, data, and storage are pluggable. Pick one before configuring the a
 
 | Provider            | When to use                                                      | Setup                                                                            |
 | ------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| **Local** (default) | Single-instance deployments, dev, evaluation. Filesystem + JSON. | [selva-local-provider README](../../../packages/local-provider/README.md)        |
-| **Supabase**        | Multi-instance, managed auth + Postgres + storage, RLS.          | [@selva/supabase-provider README](../../../packages/supabase-provider/README.md) |
+| **Local** (default) | Single-instance deployments, dev, evaluation. Filesystem + JSON. | [@selvajs/local-provider README](../../../packages/local-provider/README.md)        |
+| **Supabase**        | Multi-instance, managed auth + Postgres + storage, RLS.          | [@selvajs/supabase-provider README](../../../packages/supabase-provider/README.md) |
 
 The provider you pick determines the env vars the app needs at runtime — see the provider's README.
 

@@ -1,6 +1,6 @@
 import { describe, beforeEach, it } from 'vitest';
-import { runProjectStoreConformance } from '@selva/platform/testing';
-import { DEFAULT_ORG_PERMISSIONS } from '@selva/platform';
+import { runProjectStoreConformance } from '@selvajs/platform/testing';
+import { DEFAULT_ORG_PERMISSIONS } from '@selvajs/platform';
 import { SupabaseProjectStore } from '../SupabaseProjectStore.js';
 import { readEnv, resetAllData, seedUser } from './test-helpers.js';
 

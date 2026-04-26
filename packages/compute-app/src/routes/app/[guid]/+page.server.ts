@@ -2,8 +2,8 @@ import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
 import { GrasshopperClient } from 'selva-compute/grasshopper';
 import { camelcaseKeys } from 'selva-compute/core';
-import type { UISchema } from 'selva-shared';
-import type { ComputeServerConfig, RequestContext } from '@selva/platform';
+import type { UISchema } from '@selvajs/shared';
+import type { ComputeServerConfig, RequestContext } from '@selvajs/platform';
 import {
 	getStorageProvider,
 	getDefinitionMeta,

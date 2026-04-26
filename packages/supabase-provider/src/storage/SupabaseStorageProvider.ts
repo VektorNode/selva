@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@supabase/supabase-js';
-import { transcodeImageIfNeeded } from '@selva/platform/storage';
-import type { IStorageProvider } from '@selva/platform/storage';
+import { transcodeImageIfNeeded } from '@selvajs/platform/storage';
+import type { IStorageProvider } from '@selvajs/platform/storage';
 
 /**
  * Storage backend for Selva on Supabase Storage.
@@ -16,7 +16,7 @@ import type { IStorageProvider } from '@selva/platform/storage';
  *
  * Path routing: any path whose basename matches `definition.{ext}` is
  * considered private. Covers (`cover.webp`) and archives (`archive/{ref}`)
- * stay public. `definitionPaths` from @selva/platform produces exactly these
+ * stay public. `definitionPaths` from @selvajs/platform produces exactly these
  * names, so the routing is implicit — no caller has to think about buckets.
  */
 export interface SupabaseStorageProviderConfig {

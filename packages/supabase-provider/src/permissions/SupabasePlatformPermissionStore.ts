@@ -3,8 +3,8 @@ import type {
 	PlatformPermission,
 	RequestContext,
 	UserManagementResult
-} from '@selva/platform';
-import { ProviderError, hasPermission, PlatformPermissionSchema } from '@selva/platform';
+} from '@selvajs/platform';
+import { ProviderError, hasPermission, PlatformPermissionSchema } from '@selvajs/platform';
 import type { ClientBundle } from '../data/client.js';
 
 /**

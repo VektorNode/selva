@@ -1,5 +1,5 @@
 import { describe, beforeEach, it } from 'vitest';
-import { runAuthProviderConformance } from '@selva/platform/testing';
+import { runAuthProviderConformance } from '@selvajs/platform/testing';
 import { SupabaseAuthProvider } from '../SupabaseAuthProvider.js';
 import { readEnv, resetAllData } from '../../data/__tests__/test-helpers.js';
 

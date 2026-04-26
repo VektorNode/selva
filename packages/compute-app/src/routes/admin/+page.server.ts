@@ -1,5 +1,5 @@
 import { getAuthProvider } from '$lib/server/auth.server';
-import { hasPermission } from '@selva/platform';
+import { hasPermission } from '@selvajs/platform';
 import type { PageServerLoad } from './$types';
 
 /**

@@ -11,7 +11,7 @@
  * glance.
  *
  * Client-side counterparts (debounce, throttle timeout) live in
- * `selva-shared/lib/constants.ts` — they are bundled into the client and
+ * `@selvajs/shared/lib/constants.ts` — they are bundled into the client and
  * cannot read process.env. Cross-reference comments are placed at both ends.
  */
 

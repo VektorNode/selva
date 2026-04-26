@@ -10,8 +10,8 @@ import type {
 	DefinitionListOptions,
 	ListOptions,
 	Page
-} from '@selva/platform';
-import { ProviderError, auditSoftDelete, actorFrom, NoopEventSink } from '@selva/platform';
+} from '@selvajs/platform';
+import { ProviderError, auditSoftDelete, actorFrom, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
 

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { transcodeImageIfNeeded } from '@selva/platform/storage';
-import type { IStorageProvider } from '@selva/platform/storage';
+import { transcodeImageIfNeeded } from '@selvajs/platform/storage';
+import type { IStorageProvider } from '@selvajs/platform/storage';
 
 /**
  * Filesystem implementation of IStorageProvider.

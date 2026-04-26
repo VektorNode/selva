@@ -7,14 +7,14 @@ import type {
 	RequestContext,
 	ListOptions,
 	Page
-} from '@selva/platform';
+} from '@selvajs/platform';
 import {
 	ProviderError,
 	auditUpdate,
 	auditSoftDelete,
 	actorFrom,
 	NoopEventSink
-} from '@selva/platform';
+} from '@selvajs/platform';
 import { paginate, applyOrder } from './pagination.js';
 import type { LocalOrgStoreLoader } from './LocalOrgStore.js';
 

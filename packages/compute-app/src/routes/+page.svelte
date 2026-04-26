@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, PageHeader } from 'selva-shared';
+	import { Button, PageHeader } from '@selvajs/shared';
 </script>
 
 <svelte:head>

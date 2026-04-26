@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Dialog, Input, Label, Textarea, toast, Badge } from 'selva-shared';
+	import { Button, Dialog, Input, Label, Textarea, toast, Badge } from '@selvajs/shared';
 	import { X } from '@lucide/svelte';
 	import ImageUploadField from './ImageUploadField.svelte';
 

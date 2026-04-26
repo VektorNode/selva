@@ -18,7 +18,7 @@ import {
 	canView,
 	checkOwnerRemoval,
 	SYSTEM_CONTEXT
-} from '@selva/platform';
+} from '@selvajs/platform';
 import {
 	requireCanCreateDefinition,
 	requireCanEditDefinition,

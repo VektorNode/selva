@@ -7,9 +7,9 @@ import {
 	TreeBuilder,
 	GrasshopperClient
 } from 'selva-compute';
-import type { SchemaInput } from 'selva-shared';
+import type { SchemaInput } from '@selvajs/shared';
 import { error, json, isHttpError } from '@sveltejs/kit';
-import type { ComputeServerConfig, RequestContext } from '@selva/platform';
+import type { ComputeServerConfig, RequestContext } from '@selvajs/platform';
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
 import { isSafeRemoteDefinitionUrl } from '$lib/server/compute/safe-url';
 import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';

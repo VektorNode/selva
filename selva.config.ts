@@ -11,9 +11,9 @@
  *                 packages/supabase-provider/README.md
  */
 
-import { defineConfig, type SelvaFlags, type TenancyMode } from '@selva/platform';
-import * as local from 'selva-local-provider';
-import * as supa from '@selva/supabase-provider';
+import { defineConfig, type SelvaFlags, type TenancyMode } from '@selvajs/platform';
+import * as local from '@selvajs/local-provider';
+import * as supa from '@selvajs/supabase-provider';
 
 function resolveTenancy(env: Record<string, string | undefined>): TenancyMode {
 	return env.SELVA_TENANCY === 'multi' ? 'multi' : 'single';

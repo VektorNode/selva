@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { Button, Dialog, Input, Label, Tabs, Textarea } from 'selva-shared';
+	import { Button, Dialog, Input, Label, Tabs, Textarea } from '@selvajs/shared';
 	import { Trash2, UserPlus, Users, X } from '@lucide/svelte';
 	import type { ProjectWithMembers, UserListItem } from '../+page.server';
-	import type { ProjectRole, ProjectVisibility } from '@selva/platform/projects';
+	import type { ProjectRole, ProjectVisibility } from '@selvajs/platform/projects';
 
 	interface Props {
 		project: ProjectWithMembers;

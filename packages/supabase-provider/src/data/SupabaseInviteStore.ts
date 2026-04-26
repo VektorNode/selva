@@ -5,8 +5,8 @@ import type {
 	RequestContext,
 	ListOptions,
 	Page
-} from '@selva/platform';
-import { NoopEventSink, ProviderError, actorFrom } from '@selva/platform';
+} from '@selvajs/platform';
+import { NoopEventSink, ProviderError, actorFrom } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
 

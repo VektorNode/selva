@@ -1,6 +1,6 @@
 <script>
 	import { page } from '$app/state';
-	import { ErrorScreen } from 'selva-shared';
+	import { ErrorScreen } from '@selvajs/shared';
 </script>
 
 <ErrorScreen

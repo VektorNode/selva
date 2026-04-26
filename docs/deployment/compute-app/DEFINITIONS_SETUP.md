@@ -1,6 +1,6 @@
 # Definitions Configuration
 
-> **Provider note:** This guide describes the **local provider's** filesystem layout. With [`@selva/supabase-provider`](../../../packages/supabase-provider/README.md) definitions live in the `definitions` table + `selva-private` storage bucket — managed via the admin UI, not on disk.
+> **Provider note:** This guide describes the **local provider's** filesystem layout. With [`@selvajs/supabase-provider`](../../../packages/supabase-provider/README.md) definitions live in the `definitions` table + `selva-private` storage bucket — managed via the admin UI, not on disk.
 
 ## Setup
 

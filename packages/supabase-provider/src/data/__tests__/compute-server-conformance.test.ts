@@ -1,5 +1,5 @@
 import { describe, beforeEach, it } from 'vitest';
-import { runComputeServerStoreConformance } from '@selva/platform/testing';
+import { runComputeServerStoreConformance } from '@selvajs/platform/testing';
 import { SupabaseComputeServerStore } from '../SupabaseComputeServerStore.js';
 import { readEnv, resetAllData } from './test-helpers.js';
 

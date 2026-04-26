@@ -1,7 +1,7 @@
 {
-	"name": "@selva/supabase-provider",
+	"name": "@selvajs/supabase-provider",
 	"version": "0.1.0",
-	"description": "Supabase (Auth + Postgres + Storage) implementations of @selva/platform interfaces",
+	"description": "Supabase (Auth + Postgres + Storage) implementations of @selvajs/platform interfaces",
 	"private": true,
 	"type": "module",
 	"main": "./dist/index.js",
@@ -44,7 +44,7 @@
 		"supabase:reset": "supabase db reset"
 	},
 	"dependencies": {
-		"@selva/platform": "workspace:*",
+		"@selvajs/platform": "workspace:*",
 		"@supabase/supabase-js": "^2.47.0",
 		"sharp": "^0.34.5"
 	},

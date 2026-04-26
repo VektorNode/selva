@@ -5,8 +5,8 @@ import type {
 	RequestContext,
 	UserManagementResult,
 	UserProfile
-} from '@selva/platform';
-import { ProviderError, hasPermission } from '@selva/platform';
+} from '@selvajs/platform';
+import { ProviderError, hasPermission } from '@selvajs/platform';
 import { createLocalUserMetaProvider } from '../auth/users.js';
 import type { LocalUserMetaProvider, StoredUser } from '../auth/users.js';
 

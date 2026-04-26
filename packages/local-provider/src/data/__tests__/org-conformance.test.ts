@@ -2,7 +2,7 @@ import { describe, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { runOrgStoreConformance } from '@selva/platform/testing';
+import { runOrgStoreConformance } from '@selvajs/platform/testing';
 import { LocalOrgStore, LocalOrgStoreLoader } from '../LocalOrgStore.js';
 import { LocalInviteStore } from '../LocalInviteStore.js';
 import { LocalComputeServerStore } from '../LocalComputeServerStore.js';

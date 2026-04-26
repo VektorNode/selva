@@ -1,8 +1,11 @@
 {
-	"name": "@selva/platform",
+	"name": "@selvajs/platform",
 	"version": "0.1.0",
 	"description": "Pure TypeScript interfaces for Selva platform providers (auth, definitions, compute)",
 	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",

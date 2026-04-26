@@ -1,4 +1,4 @@
-# Supabase local stack for @selva/supabase-provider.
+# Supabase local stack for @selvajs/supabase-provider.
 # Run from the package root: `npx supabase start` (Docker Desktop required).
 # The output prints SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY
 # — copy those into `.env.test` for the conformance tests.

@@ -3,7 +3,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { definitionService } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
-import { GuidSchema, UpdateMetadataInputSchema } from '@selva/platform/definitions/schemas';
+import { GuidSchema, UpdateMetadataInputSchema } from '@selvajs/platform/definitions/schemas';
 import { GH_EXTENSIONS, MAX_GH_FILE_SIZE } from '$lib/server/admin-config';
 
 // POST — upload a *new version* of an existing definition (spec §6).

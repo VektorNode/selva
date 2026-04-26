@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getComputeServerConfigStore } from '$lib/server/providers.server';
 import { requireManageCompute } from '$lib/server/access.server';
-import type { ComputeConfig, ComputeServerConfig, RequestContext } from '@selva/platform';
+import type { ComputeConfig, ComputeServerConfig, RequestContext } from '@selvajs/platform';
 
 type ServerWithKeyFlag = Omit<ComputeServerConfig, 'apiKey'> & { hasApiKey: boolean };
 

@@ -981,7 +981,7 @@ using (bucket_id = 'selva-private');
 
 -- ============================================================================
 -- 12. audit_events
--- Persistent sink for the domain events defined in `@selva/platform/events`.
+-- Persistent sink for the domain events defined in `@selvajs/platform/events`.
 -- Every successful mutation in a data store emits one row here via
 -- `SupabaseEventSink`. Read-only from the application's point of view —
 -- mutations come exclusively from the sink writer.

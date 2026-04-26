@@ -1,11 +1,11 @@
-# selva-shared
+# @selvajs/shared
 
 Shared Svelte components, utilities, and theme system for Selva applications.
 
 ## Installation
 
 ```bash
-pnpm add selva-shared
+pnpm add @selvajs/shared
 ```
 
 Peer dependencies required: `svelte ^5`, `@sveltejs/kit ^2`, `bits-ui ^2`, `tailwind-variants ^3`, `selva-compute ^1`
@@ -14,12 +14,12 @@ Peer dependencies required: `svelte ^5`, `@sveltejs/kit ^2`, `bits-ui ^2`, `tail
 
 ```svelte
 <script lang="ts">
-	import { Button, Card, Input } from 'selva-shared';
+	import { Button, Card, Input } from '@selvajs/shared';
 </script>
 ```
 
 ```typescript
-import { cn, debounce, themeStore } from 'selva-shared';
+import { cn, debounce, themeStore } from '@selvajs/shared';
 ```
 
 ## Styles
@@ -27,15 +27,15 @@ import { cn, debounce, themeStore } from 'selva-shared';
 In your `app.css`:
 
 ```css
-@import 'selva-shared/styles/base.css';
+@import '@selvajs/shared/styles/base.css';
 ```
 
-Themes are available under `selva-shared/styles/themes/*`.
+Themes are available under `@selvajs/shared/styles/themes/*`.
 
 ## Generated Types
 
 ```typescript
-import type { UISchema } from 'selva-shared';
+import type { UISchema } from '@selvajs/shared';
 ```
 
 Types are generated from `packages/schemas/ui-schema.json`. After modifying the schema, run:

@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { RequestContext } from '@selva/platform';
+import type { RequestContext } from '@selvajs/platform';
 
 /**
  * Build a Supabase client for a given `RequestContext`.

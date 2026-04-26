@@ -12,8 +12,8 @@
 
 Selva is a system for taking a Grasshopper definition (a parametric model authored by a designer in Rhino/Grasshopper) and exposing it as a configurable web application — schema-driven UI on top, Rhino.Compute solving on the backend. Two interchangeable runtime modes share one schema:
 
-- **Builder mode** (`@selva/builder-app`) — the designer's local-development companion. Lives next to a running Grasshopper instance, talks to it over WebSocket, hot-reloads as the schema is edited.
-- **Compute mode** (`@selva/compute-app`) — the deployed product. A standalone web app that solves definitions through Rhino.Compute. Multi-user, account-backed, hostable.
+- **Builder mode** (`@selvajs/builder-app`) — the designer's local-development companion. Lives next to a running Grasshopper instance, talks to it over WebSocket, hot-reloads as the schema is edited.
+- **Compute mode** (`@selvajs/compute-app`) — the deployed product. A standalone web app that solves definitions through Rhino.Compute. Multi-user, account-backed, hostable.
 
 A single `ui-schema.json` ([packages/schemas/ui-schema.json](../../schemas/ui-schema.json)) is the source contract: it generates TypeScript for the web stack and C# for the plugin. UI shapes and parameter shapes cannot drift.
 
@@ -50,13 +50,13 @@ A single `ui-schema.json` ([packages/schemas/ui-schema.json](../../schemas/ui-sc
 │            │                                                    │
 │            ▼                                                    │
 │  ┌───────────────────────────────────────────────┐              │
-│  │  @selva/platform — provider INTERFACES        │              │
+│  │  @selvajs/platform — provider INTERFACES        │              │
 │  │  IAuthProvider, IDataProvider, IStorage, …    │              │
 │  └───────────────────────────────────────────────┘              │
 │            │                                                    │
 │  ┌─────────┴──────────────┐                                     │
 │  ▼                        ▼                                     │
-│  selva-local-provider     @selva/supabase-provider              │
+│  @selvajs/local-provider     @selvajs/supabase-provider              │
 │  (FS + JSON, single-     (Postgres + RLS + storage              │
 │   tenant, self-hosted)    bucket, multi-tenant SaaS)            │
 └─────────────────────────────────────────────────────────────────┘
@@ -219,9 +219,9 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
 
 ## 5. Provider abstraction
 
-`@selva/platform` defines _only_ TypeScript interfaces, Zod schemas, pure rule functions, and shared utilities. No I/O. Two providers implement the contract today:
+`@selvajs/platform` defines _only_ TypeScript interfaces, Zod schemas, pure rule functions, and shared utilities. No I/O. Two providers implement the contract today:
 
-|                     | `selva-local-provider`                                 | `@selva/supabase-provider`                      |
+|                     | `@selvajs/local-provider`                                 | `@selvajs/supabase-provider`                      |
 | ------------------- | ------------------------------------------------------ | ----------------------------------------------- |
 | Identity            | `LocalAuthProvider` (HMAC sessions, optional password) | `SupabaseAuthProvider` (JWT, MFA-capable)       |
 | Data                | JSON files under `DATA_PATH/`                          | Postgres + RLS                                  |
@@ -234,17 +234,17 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
 
 | Interface                                                                                                   | Location                                                                     |
 | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `IAuthProvider`                                                                                             | [`@selva/platform/auth`](../../platform/src/auth/interface.ts)               |
-| `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IComputeServerStore`, `IShareLinkStore` | [`@selva/platform/data`](../../platform/src/data/interface.ts)               |
-| `IInviteStore`                                                                                              | [`@selva/platform/invites`](../../platform/src/invites/interface.ts)         |
-| `IStorageProvider`                                                                                          | [`@selva/platform/storage`](../../platform/src/storage/interface.ts)         |
-| `IUserProfileStore`                                                                                         | [`@selva/platform/userProfile`](../../platform/src/userProfile/interface.ts) |
-| `IPlatformPermissionStore`                                                                                  | [`@selva/platform/permissions`](../../platform/src/permissions/interface.ts) |
-| `IEventSink`                                                                                                | [`@selva/platform/events`](../../platform/src/events/interface.ts)           |
+| `IAuthProvider`                                                                                             | [`@selvajs/platform/auth`](../../platform/src/auth/interface.ts)               |
+| `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IComputeServerStore`, `IShareLinkStore` | [`@selvajs/platform/data`](../../platform/src/data/interface.ts)               |
+| `IInviteStore`                                                                                              | [`@selvajs/platform/invites`](../../platform/src/invites/interface.ts)         |
+| `IStorageProvider`                                                                                          | [`@selvajs/platform/storage`](../../platform/src/storage/interface.ts)         |
+| `IUserProfileStore`                                                                                         | [`@selvajs/platform/userProfile`](../../platform/src/userProfile/interface.ts) |
+| `IPlatformPermissionStore`                                                                                  | [`@selvajs/platform/permissions`](../../platform/src/permissions/interface.ts) |
+| `IEventSink`                                                                                                | [`@selvajs/platform/events`](../../platform/src/events/interface.ts)           |
 
 Orchestration (cross-store flows that aren't part of the provider contract) lives in compute-app, not platform — e.g. [`DefinitionService`](../src/lib/server/definitions/DefinitionService.ts) coordinates `IDefinitionStore` + `IStorageProvider` for upload/publish.
 
-**Conformance:** `@selva/platform/testing` exports framework-agnostic conformance suites that every provider runs against. New providers must pass these to be considered drop-in.
+**Conformance:** `@selvajs/platform/testing` exports framework-agnostic conformance suites that every provider runs against. New providers must pass these to be considered drop-in.
 
 **Provider selection** happens at compute-app startup via `$lib/server/providers.server.ts` — the choice is environment-driven, not runtime-switchable per request.
 
@@ -269,7 +269,7 @@ Every authenticated request flows through `hooks.server.ts`:
 
 ## 7. Storage paths and safety
 
-Storage paths are constructed via immutable helpers in [`@selva/platform/definitions/paths.ts`](../../platform/src/definitions/paths.ts) — never string-built ad hoc:
+Storage paths are constructed via immutable helpers in [`@selvajs/platform/definitions/paths.ts`](../../platform/src/definitions/paths.ts) — never string-built ad hoc:
 
 | Path                                     | Purpose                                     |
 | ---------------------------------------- | ------------------------------------------- |
@@ -327,7 +327,7 @@ This means Selva itself has zero exposure to GDPR-class data — the auth provid
 
 - **Access control rules** — see [Permissions.md](./Permissions.md). It is the authority on `canView`/`canEdit`/`canSolve`/etc.
 - **The Grasshopper plugin internals** (component anatomy, schema-link protocol, embedded HTTP server). Out of scope here; would belong in a `Plugin/ARCHITECTURE.md`.
-- **Frontend component architecture** (Svelte stores, theming, shared UI library). Out of scope; tracked in `packages/compute-app/UI_INVENTORY.md` and `@selva/shared`.
+- **Frontend component architecture** (Svelte stores, theming, shared UI library). Out of scope; tracked in `packages/compute-app/UI_INVENTORY.md` and `@selvajs/shared`.
 - **Rhino.Compute server topology** (single instance vs pool vs ours-vs-theirs). See `docs/RHINO_COMPUTE.md`.
 
 ---
@@ -353,7 +353,7 @@ Things the architecture supports today but no code path exercises yet. These are
 
 For grounding — these exist but live outside this document:
 
-- **`@selva/builder-app`** — designer's local schema editor, embedded as a website inside the Grasshopper plugin. Hosted and maintained by Selva internally; not a deployable product.
+- **`@selvajs/builder-app`** — designer's local schema editor, embedded as a website inside the Grasshopper plugin. Hosted and maintained by Selva internally; not a deployable product.
 - **`selva-compute`** (external npm package) — author's helper library for working with Rhino.Compute and Three.js. A dependency Selva uses, not a Selva component.
 - **Plugin internals** (`Plugin/Selva.GH`) — components, schema-link WebSocket protocol, embedded HTTP server. Lives in the .NET workspace; would deserve its own `Plugin/ARCHITECTURE.md`.
-- **Frontend component architecture** — Svelte stores, theming, the `@selva/shared` library. Tracked in `packages/compute-app/UI_INVENTORY.md`.
+- **Frontend component architecture** — Svelte stores, theming, the `@selvajs/shared` library. Tracked in `packages/compute-app/UI_INVENTORY.md`.

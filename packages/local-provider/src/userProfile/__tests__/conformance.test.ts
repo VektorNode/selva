@@ -2,7 +2,7 @@ import { describe, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { runUserProfileStoreConformance } from '@selva/platform/testing';
+import { runUserProfileStoreConformance } from '@selvajs/platform/testing';
 import { LocalAuthProvider } from '../../auth/LocalAuthProvider.js';
 import { LocalUserProfileProvider } from '../LocalUserProfileProvider.js';
 

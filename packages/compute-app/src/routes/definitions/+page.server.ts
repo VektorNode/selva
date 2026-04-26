@@ -6,7 +6,7 @@ import {
 	getAuthProvider,
 	getUserProfileStore
 } from '$lib/server/providers.server';
-import { hasPermission, canEdit } from '@selva/platform';
+import { hasPermission, canEdit } from '@selvajs/platform';
 import type {
 	DefinitionRecord,
 	DefinitionVersion,
@@ -14,7 +14,7 @@ import type {
 	ProjectMember,
 	ComputeServerConfig,
 	AuthUser
-} from '@selva/platform';
+} from '@selvajs/platform';
 import type { PageServerLoad } from './$types';
 
 export type {

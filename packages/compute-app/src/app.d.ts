@@ -8,20 +8,20 @@ declare global {
 		}
 		interface Locals {
 			/** Authenticated user identity, set by hooks.server.ts for protected routes */
-			user?: import('@selva/platform').AuthUser;
+			user?: import('@selvajs/platform').AuthUser;
 			/**
 			 * Profile state (displayName, starred, recentRuns) for `user`. Loaded
 			 * by hooks.server.ts alongside `user`; never from an OIDC IdP directly.
 			 * Always present when `user` is present — falls back to `emptyProfile`.
 			 */
-			profile?: import('@selva/platform').UserProfile;
+			profile?: import('@selvajs/platform').UserProfile;
 			/**
 			 * Per-request identity + scope for data provider calls.
 			 * Set by hooks.server.ts whenever a user is authenticated.
 			 */
-			ctx?: import('@selva/platform').RequestContext;
+			ctx?: import('@selvajs/platform').RequestContext;
 			/** Resolved provider instances, attached on every request by hooks.server.ts */
-			providers: import('@selva/platform').SelvaConfig;
+			providers: import('@selvajs/platform').SelvaConfig;
 		}
 		// interface PageData {}
 		// interface PageState {}

@@ -2,7 +2,7 @@ import { describe, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { runComputeServerStoreConformance } from '@selva/platform/testing';
+import { runComputeServerStoreConformance } from '@selvajs/platform/testing';
 import { LocalComputeServerStore } from '../LocalComputeServerStore.js';
 
 describe('LocalComputeServerStore', () => {

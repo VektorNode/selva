@@ -1,4 +1,4 @@
-# @selva/platform
+# @selvajs/platform
 
 Pure TypeScript interfaces that define Selva's contract with its backends. No runtime dependencies on a specific database, storage, or auth service — every concrete adapter (local filesystem, Supabase, Azure, ...) lives in its own package and implements these interfaces.
 
@@ -71,7 +71,7 @@ import type {
 	RequestContext,
 	ListOptions,
 	Page
-} from '@selva/platform';
+} from '@selvajs/platform';
 
 export class MyDefinitionStore implements IDefinitionStore {
 	async list(ctx: RequestContext, opts?: ListOptions): Promise<Page<DefinitionRecord>> {
@@ -87,10 +87,10 @@ Wire it into a `SelvaConfig` via `defineConfig({ auth, data, storage, userProfil
 
 ## Testing your adapter
 
-`@selva/platform/testing` ships a conformance suite per store. Adapters import it and run it against their own instance — passing means the adapter behaves the same as the in-memory reference.
+`@selvajs/platform/testing` ships a conformance suite per store. Adapters import it and run it against their own instance — passing means the adapter behaves the same as the in-memory reference.
 
 ```ts
-import { runDefinitionStoreConformance } from '@selva/platform/testing';
+import { runDefinitionStoreConformance } from '@selvajs/platform/testing';
 import { MyDefinitionStore } from './MyDefinitionStore.js';
 
 runDefinitionStoreConformance({

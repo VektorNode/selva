@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getComputeServerConfigStore } from '$lib/server/providers.server';
-import { resolveServerById } from '@selva/platform';
+import { resolveServerById } from '@selvajs/platform';
 import { requireManageCompute } from '$lib/server/access.server';
 
 const TIMEOUT_MS = 8000;

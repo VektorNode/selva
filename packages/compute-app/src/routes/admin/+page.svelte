@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Card } from 'selva-shared';
+	import { Card } from '@selvajs/shared';
 	import { Users, Server, LayoutDashboard, ArrowRight } from '@lucide/svelte';
 	import UpdateSection from './UpdateSection.svelte';
 

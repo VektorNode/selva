@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { getOrganizationProvider } from '$lib/server/providers.server';
 import { requireInstanceAdmin } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
-import { CreateOrgSchema, MAX_PAGE_LIMIT, ProviderError, type Organization } from '@selva/platform';
+import { CreateOrgSchema, MAX_PAGE_LIMIT, ProviderError, type Organization } from '@selvajs/platform';
 
 /**
  * Spec §7 — instance-admin-only org management. Multi-tenant deployments use
