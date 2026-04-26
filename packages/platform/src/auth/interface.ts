@@ -1,4 +1,4 @@
-import type { AuthUser, LoginResult, MfaFactor, UserManagementResult } from './types.js';
+import type { AuthUser, LoginResult, UserManagementResult } from './types.js';
 import type { ListOptions, Page } from '../pagination.js';
 
 /**
@@ -21,31 +21,6 @@ export interface IPasswordAuth {
 
 	/** Self-service registration. Return null when self-registration is disabled. */
 	registerUser?(email: string, password: string): Promise<AuthUser | null>;
-
-	requestPasswordReset?(email: string): Promise<UserManagementResult>;
-	completePasswordReset?(token: string, newPassword: string): Promise<UserManagementResult>;
-
-	// MFA — providers that don't support MFA leave every method below undefined.
-
-	/** Complete login after `verifyLogin` returned `mfa_required`. */
-	verifyMfaChallenge?(
-		challengeToken: string,
-		factorId: string,
-		code: string
-	): Promise<{ user: AuthUser; sessionToken: string } | null>;
-
-	/**
-	 * Start enrolling a factor. `qrCodeUrl` is the `otpauth://` URI for TOTP;
-	 * `secret` is the same secret base32-encoded for manual entry.
-	 */
-	enrollMfa?(
-		userId: string,
-		type: 'totp' | 'phone'
-	): Promise<{ factorId: string; qrCodeUrl?: string; secret?: string }>;
-
-	confirmMfaEnrollment?(factorId: string, code: string): Promise<UserManagementResult>;
-	unenrollMfa?(userId: string, factorId: string): Promise<UserManagementResult>;
-	listMfaFactors?(userId: string): Promise<MfaFactor[]>;
 }
 
 /**

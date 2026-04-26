@@ -26,7 +26,6 @@ export function withAdminBypass(
 }
 
 export interface ProjectAccessInput {
-	platformPermissions: readonly PlatformPermission[];
 	orgPermissions: readonly OrgPermission[];
 	project: Project | null;
 	member: ProjectMember | null;
@@ -71,7 +70,6 @@ export function canEditProjectSettings(input: ProjectAccessInput): boolean {
 }
 
 export interface VisibilityChangeInput {
-	platformPermissions: readonly PlatformPermission[];
 	orgMember: OrgMember | null;
 }
 
@@ -86,7 +84,6 @@ export function canChangeVisibilityToPublic(input: VisibilityChangeInput): boole
 }
 
 export interface DefinitionAccessInput {
-	platformPermissions: readonly PlatformPermission[];
 	project: Project | null;
 	definition: DefinitionRecord | null;
 	member: ProjectMember | null;
@@ -108,7 +105,6 @@ export function canEditDefinition(input: DefinitionAccessInput): boolean {
 }
 
 export interface ReclaimAccessInput {
-	platformPermissions: readonly PlatformPermission[];
 	project: Project | null;
 	orgMember: OrgMember | null;
 	/** `ctx.actingOrgId` — must match `project.orgId`. */
@@ -128,7 +124,6 @@ export function canReclaim(input: ReclaimAccessInput): boolean {
 }
 
 export interface CreateProjectAccessInput {
-	platformPermissions: readonly PlatformPermission[];
 	orgPermissions: readonly OrgPermission[];
 	orgMember: OrgMember | null;
 	actingOrgId: string | null;

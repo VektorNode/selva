@@ -44,10 +44,16 @@ function isLive<T extends { deletedAt?: string | null }>(row: T): boolean {
  * Shared by LocalOrgStore and LocalProjectStore — one instance so all
  * reads/writes go through one cache and one atomic write path. The store
  * starts empty; orgs are created explicitly via `createOrg`.
+ *
+ * Concurrent first-callers share a single in-flight read promise so they
+ * end up with the same cached object reference. Mutations after that point
+ * stack on the shared object, and `writeJsonFile`'s temp+rename keeps the
+ * on-disk view atomic.
  */
 export class LocalOrgStoreLoader {
 	readonly storePath: string;
 	private store: LocalOrgStoreData | null = null;
+	private loading: Promise<LocalOrgStoreData> | null = null;
 
 	constructor(dataPath: string) {
 		this.storePath = path.join(dataPath, 'local-org.json');
@@ -55,13 +61,17 @@ export class LocalOrgStoreLoader {
 
 	async get(): Promise<LocalOrgStoreData> {
 		if (this.store) return this.store;
-		this.store = await readJsonFile<LocalOrgStoreData>(this.storePath, {
+		this.loading ??= readJsonFile<LocalOrgStoreData>(this.storePath, {
 			orgs: [],
 			projects: [],
 			orgMembers: [],
 			projectMembers: []
+		}).then((data) => {
+			this.store = data;
+			this.loading = null;
+			return data;
 		});
-		return this.store;
+		return this.loading;
 	}
 
 	async write(store: LocalOrgStoreData): Promise<void> {

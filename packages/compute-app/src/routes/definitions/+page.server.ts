@@ -76,7 +76,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 			);
 			accessibleProjects = allProjects.filter((project, i) =>
 				canEdit({
-					platformPermissions: ctx.platformPermissions,
 					orgPermissions: ctx.orgPermissions,
 					project,
 					member: memberships[i],

@@ -142,7 +142,6 @@ async function projectAccessInput(
 		ctx.userId
 	);
 	return {
-		platformPermissions: ctx.platformPermissions,
 		orgPermissions: ctx.orgPermissions,
 		project,
 		member,
@@ -213,7 +212,6 @@ export async function requireCanReclaim(
 	const allowed = await bypassOrRun(ctx, async () => {
 		const orgMember = await getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId);
 		return canReclaim({
-			platformPermissions: ctx.platformPermissions,
 			project,
 			orgMember,
 			actingOrgId: ctx.actingOrgId ?? null
@@ -237,7 +235,6 @@ export async function requireCanCreateProject(
 	const allowed = await bypassOrRun(ctx, async () => {
 		const orgMember = await getOrganizationProvider().getOrgMember(ctx, targetOrgId, ctx.userId);
 		return canCreateProject({
-			platformPermissions: ctx.platformPermissions,
 			orgPermissions: ctx.orgPermissions,
 			orgMember,
 			actingOrgId: ctx.actingOrgId ?? null,
@@ -304,7 +301,6 @@ async function loadAndCheckView(ctx: RequestContext, project: Project): Promise<
 	// Cross-org public bypass: no membership fetch needed.
 	if (project.visibility === 'public' && allowCrossOrgPublic) {
 		return canView({
-			platformPermissions: ctx.platformPermissions,
 			orgPermissions: ctx.orgPermissions,
 			project,
 			member: null,
@@ -323,7 +319,6 @@ async function loadAndCheckView(ctx: RequestContext, project: Project): Promise<
 			: Promise.resolve(null)
 	]);
 	return canView({
-		platformPermissions: ctx.platformPermissions,
 		orgPermissions: ctx.orgPermissions,
 		project,
 		member,
@@ -358,7 +353,6 @@ export async function requireCanSolve(
 		const allowCrossOrgPublic = flag('ALLOW_CROSS_ORG_PUBLIC');
 		if (project.visibility === 'public' && allowCrossOrgPublic) {
 			return canSolve({
-				platformPermissions: ctx.platformPermissions,
 				orgPermissions: ctx.orgPermissions,
 				project,
 				member: null,
@@ -375,7 +369,6 @@ export async function requireCanSolve(
 				: Promise.resolve(null)
 		]);
 		return canSolve({
-			platformPermissions: ctx.platformPermissions,
 			orgPermissions: ctx.orgPermissions,
 			project,
 			member,
@@ -398,7 +391,6 @@ export async function requireEditableDefinition(locals: Locals, guid: string) {
 			getProjectProvider().getProjectMember(ctx, record.projectId, ctx.userId)
 		]);
 		return canEditDefinition({
-			platformPermissions: ctx.platformPermissions,
 			project,
 			definition: record,
 			member,
@@ -422,7 +414,6 @@ export async function requireCanEditDefinition(
 			getProjectProvider().getProjectMember(ctx, projectId, ctx.userId)
 		]);
 		return canEditDefinition({
-			platformPermissions: ctx.platformPermissions,
 			project,
 			definition,
 			member,

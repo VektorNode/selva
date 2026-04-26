@@ -26,7 +26,7 @@ export function createComputeThrottle<T>(
 	readonly hasPending: boolean;
 	cancel: () => void;
 } {
-	const { timeout = APP_DEFAULTS.TIMEOUTS.COMPUTE_THROTTLE } = options;
+	const { timeout = APP_DEFAULTS.TIMEOUTS.COMPUTE_TIMEOUT } = options;
 
 	let isComputing = $state(false);
 	let pendingValues = $state<T | null>(null);

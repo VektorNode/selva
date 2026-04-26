@@ -16,12 +16,13 @@
  *    `share:{linkId}` for share-token solves so anonymous consumers of one
  *    link don't share a bucket with the link's owner.
  *
- * Defaults are conservative; the audit recommended "even crude" as a
- * starting point. Tune via env later if real traffic warrants it.
+ * Tunables (window + cap) live in `computeLimits.ts` and read env overrides.
  */
 
-const WINDOW_MS = 60_000;
-const MAX_PER_WINDOW = 30;
+import { RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS } from './computeLimits';
+
+const WINDOW_MS = RATE_LIMIT_WINDOW_MS;
+const MAX_PER_WINDOW = RATE_LIMIT_MAX_REQUESTS;
 
 interface BucketEntry {
 	count: number;

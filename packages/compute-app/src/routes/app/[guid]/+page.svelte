@@ -7,7 +7,20 @@
 
 	let { data }: PageProps = $props();
 
+	// Soft cooldown after a 429: until this timestamp elapses, short-circuit
+	// new solves so dragging a slider during the rate-limit window doesn't
+	// generate a flood of doomed requests. The user-visible error message
+	// stays until the next successful solve replaces it.
+	let cooldownUntil = 0;
+
 	const onSolve: SolveFn = async (values, signal) => {
+		const remainingMs = cooldownUntil - Date.now();
+		if (remainingMs > 0) {
+			throw new Error(
+				`Rate limit reached. Try again in ${Math.ceil(remainingMs / 1000)}s.`
+			);
+		}
+
 		const res = await fetch('/api/compute', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -24,6 +37,15 @@
 		if (!res.ok) {
 			if (res.status === 503) {
 				throw new Error('Compute server is offline or unreachable. Please try again later.');
+			}
+			if (res.status === 429) {
+				const d = await res.json().catch(() => ({}));
+				const retryAfter =
+					Number(res.headers.get('Retry-After')) || Number(d.retryAfter) || 5;
+				cooldownUntil = Date.now() + retryAfter * 1000;
+				throw new Error(
+					d.message || `Rate limit reached. Try again in ${retryAfter}s.`
+				);
 			}
 			const d = await res.json().catch(() => ({}));
 			throw new Error(d.message || 'Compute error');
@@ -59,6 +81,7 @@
 	definitionKey={data.currentDefinition}
 	title={data.schema?.description || data.schema.name}
 	showModeToggle={true}
+	solveTimeoutMs={data.solveTimeoutMs}
 	footerComponent={ServerFooter}
 	footerComponentProps={() => ({ label: data.serverLabel })}
 >
