@@ -36,13 +36,11 @@
 		"changeset": "changeset",
 		"release": "pnpm build:all && changeset publish"
 	},
-	"dependencies": {
-		"@selva/platform": "workspace:*",
-		"@selva/supabase-provider": "workspace:*",
-		"selva-local-provider": "workspace:*"
-	},
 	"devDependencies": {
 		"@changesets/cli": "^2.30.0",
+		"@selva/platform": "workspace:*",
+		"@selva/supabase-provider": "workspace:*",
+		"selva-local-provider": "workspace:*",
 		"@eslint/compat": "^2.0.5",
 		"@eslint/js": "^9.39.4",
 		"@sveltejs/adapter-auto": "catalog:",
