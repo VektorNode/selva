@@ -20,8 +20,10 @@ import type { ShareLink } from '../shareLinks/types.js';
  * security boundary** — adapters MUST scope reads/writes by `ctx`. An
  * unauthorized caller sees an empty page, `null`, or a `ProviderError`.
  *
- * `can*` helpers are UI-gating only ("show the Edit button?"). Mutating
- * methods MUST re-enforce the same predicate independently.
+ * Access-control predicates live in `@selva/platform/access` (pure rules).
+ * Stores do storage; rules do rules. The route layer composes both: load
+ * the entities the rule needs, then call the rule. See `access.server.ts`
+ * in the compute-app for the canonical pattern.
  */
 export interface IOrgStore {
 	// Organizations
@@ -104,11 +106,6 @@ export interface IProjectStore {
 		role: ProjectRole
 	): Promise<void>;
 	removeProjectMember(ctx: RequestContext, projectId: string, userId: string): Promise<void>;
-
-	// UI-gating access checks
-	canEdit(ctx: RequestContext, projectId: string): Promise<boolean>;
-	canEditProjectSettings(ctx: RequestContext, projectId: string): Promise<boolean>;
-	canManage(ctx: RequestContext, projectId: string): Promise<boolean>;
 }
 
 /**
@@ -165,25 +162,22 @@ export interface IDefinitionStore {
 	/** Atomically point `liveVersionId` at a target version of this definition. */
 	setLiveVersion(ctx: RequestContext, definitionId: string, versionId: string): Promise<void>;
 	setDraftVersion(ctx: RequestContext, definitionId: string, versionId: string): Promise<void>;
-
-	/**
-	 * Resolve project + definition and apply `canEditDefinition` from
-	 * `@selva/platform/access`. Returns false when either entity is missing.
-	 */
-	canEditDefinition(
-		ctx: RequestContext,
-		projectId: string,
-		definitionGuid: string
-	): Promise<boolean>;
 }
 
 /**
- * Compute-server configuration. Currently global; `ctx` is reserved for
- * future per-org authorization without breaking signatures.
+ * Compute-server configuration. Scope is determined by `ctx.actingOrgId`:
+ * unset → instance pool (admin only); set → that org's override (gated by
+ * the `ALLOW_ORG_COMPUTE_OVERRIDE` platform flag at the route layer).
  */
 export interface IComputeServerStore {
 	getConfig(ctx: RequestContext): Promise<ComputeConfig>;
 	saveConfig(ctx: RequestContext, config: ComputeConfig): Promise<void>;
+	/**
+	 * Hard-delete this org's compute override rows (servers + defaults). No-op
+	 * when none exist. Called from `deleteOrg` so soft-deleting an org does
+	 * not leave its operational config behind.
+	 */
+	deleteByOrg(ctx: RequestContext, orgId: string): Promise<void>;
 }
 
 /**

@@ -126,4 +126,12 @@ export class LocalInviteStore implements IInviteStore {
 			actorId: actorFrom(ctx)
 		});
 	}
+
+	async deleteByOrg(_ctx: RequestContext, orgId: string): Promise<void> {
+		const file = await this.load();
+		const before = file.invites.length;
+		file.invites = file.invites.filter((i) => i.orgId !== orgId);
+		if (file.invites.length === before) return;
+		await this.save(file);
+	}
 }

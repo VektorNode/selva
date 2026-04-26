@@ -4,6 +4,8 @@ import type {
 	OrgPermission,
 	PlatformPermission,
 	Project,
+	ProjectAccessInput,
+	ProjectMember,
 	RequestContext
 } from '@selva/platform';
 import {
@@ -12,7 +14,11 @@ import {
 	canReclaim,
 	canCreateProject,
 	canView,
-	canSolve
+	canSolve,
+	canEdit,
+	canManage,
+	canEditProjectSettings,
+	canEditDefinition
 } from '@selva/platform';
 import {
 	getProjectProvider,
@@ -120,11 +126,36 @@ async function loadProjectOr404(ctx: RequestContext, projectId: string): Promise
 	return project;
 }
 
+/**
+ * Build the rule input for project-role gates (`canEdit`, `canManage`,
+ * `canEditProjectSettings`). Loads the caller's project membership row;
+ * `orgMember` and `allowCrossOrgPublic` are unused by these rules so we
+ * pass placeholders.
+ */
+async function projectAccessInput(
+	ctx: RequestContext,
+	project: Project
+): Promise<ProjectAccessInput> {
+	const member: ProjectMember | null = await getProjectProvider().getProjectMember(
+		ctx,
+		project.id,
+		ctx.userId
+	);
+	return {
+		platformPermissions: ctx.platformPermissions,
+		orgPermissions: ctx.orgPermissions,
+		project,
+		member,
+		orgMember: null,
+		allowCrossOrgPublic: false
+	};
+}
+
 export async function requireCanEdit(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await bypassOrRun(ctx, async () => {
-		await loadProjectOr404(ctx, projectId);
-		return await getProjectProvider().canEdit(ctx, projectId);
+		const project = await loadProjectOr404(ctx, projectId);
+		return canEdit(await projectAccessInput(ctx, project));
 	});
 	if (!allowed) throw error(403, 'You do not have permission to edit this project.');
 	return user;
@@ -144,7 +175,7 @@ export async function requireCanCreateDefinition(
 	const project = await loadProjectOr404(ctx, projectId);
 	const allowed = await bypassOrRun(ctx, async () => {
 		if (project.autoJoinOnUpload) return true;
-		return await getProjectProvider().canEdit(ctx, projectId);
+		return canEdit(await projectAccessInput(ctx, project));
 	});
 	if (!allowed) {
 		throw error(403, 'You do not have permission to upload definitions to this project.');
@@ -219,7 +250,10 @@ export async function requireCanCreateProject(
 
 export async function requireCanManage(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	const allowed = await bypassOrRun(ctx, () => getProjectProvider().canManage(ctx, projectId));
+	const allowed = await bypassOrRun(ctx, async () => {
+		const project = await loadProjectOr404(ctx, projectId);
+		return canManage(await projectAccessInput(ctx, project));
+	});
 	if (!allowed) throw error(403, 'Only project owners can manage this project.');
 	return user;
 }
@@ -229,9 +263,30 @@ export async function requireCanManageMembers(
 	projectId: string
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	const allowed = await bypassOrRun(ctx, () => getProjectProvider().canManage(ctx, projectId));
+	const allowed = await bypassOrRun(ctx, async () => {
+		const project = await loadProjectOr404(ctx, projectId);
+		return canManage(await projectAccessInput(ctx, project));
+	});
 	if (!allowed) throw error(403, 'Only project owners can manage members.');
 	return user;
+}
+
+/**
+ * Owner-only gate for project settings. Centralized so PATCH /api/projects/[id]
+ * matches the rest of the access layer (one place loads the entities + calls
+ * the rule).
+ */
+export async function requireCanEditProjectSettings(
+	locals: Locals,
+	projectId: string
+): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
+	const { user, ctx } = requireAuthed(locals);
+	const project = await loadProjectOr404(ctx, projectId);
+	const allowed = await bypassOrRun(ctx, async () =>
+		canEditProjectSettings(await projectAccessInput(ctx, project))
+	);
+	if (!allowed) throw error(403, 'Only project owners can edit project settings.');
+	return { user, ctx, project };
 }
 
 /**
@@ -337,9 +392,19 @@ export async function requireEditableDefinition(locals: Locals, guid: string) {
 	const { ctx } = requireAuthed(locals);
 	const record = await getDefinitionMeta().get(ctx, guid);
 	if (!record) throw error(404, 'Definition not found');
-	const allowed = await bypassOrRun(ctx, () =>
-		getDefinitionMeta().canEditDefinition(ctx, record.projectId, record.guid)
-	);
+	const allowed = await bypassOrRun(ctx, async () => {
+		const [project, member] = await Promise.all([
+			getProjectProvider().getProject(ctx, record.projectId),
+			getProjectProvider().getProjectMember(ctx, record.projectId, ctx.userId)
+		]);
+		return canEditDefinition({
+			platformPermissions: ctx.platformPermissions,
+			project,
+			definition: record,
+			member,
+			userId: ctx.userId
+		});
+	});
 	if (!allowed) throw error(403, 'You do not have permission to edit this definition.');
 	return { record, ctx };
 }
@@ -350,9 +415,20 @@ export async function requireCanEditDefinition(
 	definitionGuid: string
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	const allowed = await bypassOrRun(ctx, () =>
-		getDefinitionMeta().canEditDefinition(ctx, projectId, definitionGuid)
-	);
+	const allowed = await bypassOrRun(ctx, async () => {
+		const [project, definition, member] = await Promise.all([
+			getProjectProvider().getProject(ctx, projectId),
+			getDefinitionMeta().get(ctx, definitionGuid),
+			getProjectProvider().getProjectMember(ctx, projectId, ctx.userId)
+		]);
+		return canEditDefinition({
+			platformPermissions: ctx.platformPermissions,
+			project,
+			definition,
+			member,
+			userId: ctx.userId
+		});
+	});
 	if (!allowed) throw error(403, 'You do not have permission to edit this definition.');
 	return user;
 }

@@ -10,14 +10,10 @@ import type {
 } from '@selva/platform';
 import {
 	ProviderError,
-	hasPermission,
 	auditUpdate,
 	auditSoftDelete,
 	actorFrom,
-	NoopEventSink,
-	canEdit,
-	canEditProjectSettings,
-	canManage
+	NoopEventSink
 } from '@selva/platform';
 import { paginate, applyOrder } from './pagination.js';
 import type { LocalOrgStoreLoader } from './LocalOrgStore.js';
@@ -259,45 +255,4 @@ export class LocalProjectStore implements IProjectStore {
 		});
 	}
 
-	async canEdit(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (hasPermission(ctx, 'instance_admin')) return true;
-		return canEdit(await this.loadAccessInput(ctx, projectId));
-	}
-
-	async canManage(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (hasPermission(ctx, 'instance_admin')) return true;
-		return canManage(await this.loadAccessInput(ctx, projectId));
-	}
-
-	async canEditProjectSettings(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (hasPermission(ctx, 'instance_admin')) return true;
-		return canEditProjectSettings(await this.loadAccessInput(ctx, projectId));
-	}
-
-	private async loadAccessInput(
-		ctx: RequestContext,
-		projectId: string
-	): Promise<{
-		platformPermissions: RequestContext['platformPermissions'];
-		orgPermissions: RequestContext['orgPermissions'];
-		project: Project | null;
-		member: ProjectMember | null;
-		orgMember: null;
-		allowCrossOrgPublic: boolean;
-	}> {
-		const { projects, projectMembers } = await this.loader.get();
-		const project = projects.find((p) => p.id === projectId && isLive(p)) ?? null;
-		const member =
-			projectMembers.find(
-				(m) => m.projectId === projectId && m.userId === ctx.userId && isLive(m)
-			) ?? null;
-		return {
-			platformPermissions: ctx.platformPermissions,
-			orgPermissions: ctx.orgPermissions,
-			project,
-			member,
-			orgMember: null,
-			allowCrossOrgPublic: false
-		};
-	}
 }

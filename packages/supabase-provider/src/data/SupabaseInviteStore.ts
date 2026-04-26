@@ -104,6 +104,15 @@ export class SupabaseInviteStore implements IInviteStore {
 			actorId: actorFrom(ctx)
 		});
 	}
+
+	async deleteByOrg(ctx: RequestContext, orgId: string): Promise<void> {
+		const { error } = await this.clients
+			.forRequest(ctx)
+			.from('invites')
+			.delete()
+			.eq('org_id', orgId);
+		if (error) throw mapError(error);
+	}
 }
 
 interface InviteRow {

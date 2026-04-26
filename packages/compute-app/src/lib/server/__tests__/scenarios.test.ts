@@ -14,6 +14,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
 	canChangeVisibilityToPublic,
+	canEditProjectSettings,
 	canView,
 	checkOwnerRemoval,
 	SYSTEM_CONTEXT
@@ -258,7 +259,19 @@ describe('§11 — project edit gates', () => {
 		});
 		const bobCtx = (await actAs(tp, bob.id)).ctx;
 
-		const allowed = await tp.config.data.projects.canEditProjectSettings(bobCtx, alicesPrivate.id);
+		const member = await tp.config.data.projects.getProjectMember(
+			bobCtx,
+			alicesPrivate.id,
+			bob.id
+		);
+		const allowed = canEditProjectSettings({
+			platformPermissions: bobCtx.platformPermissions,
+			orgPermissions: bobCtx.orgPermissions,
+			project: alicesPrivate,
+			member,
+			orgMember: null,
+			allowCrossOrgPublic: false
+		});
 		expect(allowed).toBe(false);
 	});
 

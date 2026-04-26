@@ -15,6 +15,8 @@ import { LocalOrgStore, LocalOrgStoreLoader } from '../LocalOrgStore.js';
 import { LocalProjectStore } from '../LocalProjectStore.js';
 import { LocalDefinitionStore } from '../LocalDefinitionStore.js';
 import { LocalShareLinkStore } from '../LocalShareLinkStore.js';
+import { LocalInviteStore } from '../LocalInviteStore.js';
+import { LocalComputeServerStore } from '../LocalComputeServerStore.js';
 
 /**
  * Cross-store cascade behavior. Lives outside the per-store conformance suites
@@ -28,7 +30,9 @@ describe('Cross-store cascade', () => {
 	beforeEach(async () => {
 		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'selva-test-'));
 		const loader = new LocalOrgStoreLoader(tempDir);
-		orgs = new LocalOrgStore(loader);
+		const invites = new LocalInviteStore(tempDir);
+		const computeServer = new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'));
+		orgs = new LocalOrgStore(loader, invites, computeServer);
 		projects = new LocalProjectStore(loader);
 	});
 

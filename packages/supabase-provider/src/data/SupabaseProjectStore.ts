@@ -8,25 +8,16 @@ import type {
 	ListOptions,
 	Page
 } from '@selva/platform';
-import {
-	ProviderError,
-	auditSoftDelete,
-	hasPermission,
-	actorFrom,
-	NoopEventSink,
-	canEdit,
-	canEditProjectSettings,
-	canManage
-} from '@selva/platform';
+import { ProviderError, auditSoftDelete, actorFrom, NoopEventSink } from '@selva/platform';
 import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
 
 /**
  * Project + project-membership store backed by Postgres. Visibility semantics
  * (public / org / private) are enforced by the `visible_project()` helper in
- * RLS. The `canEdit` / `canEditProjectSettings` / `canManage` methods delegate
- * to the canonical pure rules in `@selva/platform/access` so UI gating matches
- * the documented policy exactly (Permissions.md §5).
+ * RLS. Access predicates (canEdit / canManage / canView etc.) live as pure
+ * functions in `@selva/platform/access`; the route layer composes them with
+ * pre-loaded entities. See `compute-app/src/lib/server/access.server.ts`.
  *
  * `createProject` atomically seeds the creator as the project `owner` in
  * `project_members` so subsequent user-scoped reads can see it.
@@ -283,52 +274,6 @@ export class SupabaseProjectStore implements IProjectStore {
 		});
 	}
 
-	// ── Access checks (UI gating — delegate to canonical pure rules in
-	// @selva/platform/access; mutating methods are the real boundary) ──
-
-	async canEdit(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (hasPermission(ctx, 'instance_admin')) return true;
-		return canEdit(await this.loadAccessInput(ctx, projectId));
-	}
-
-	async canEditProjectSettings(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (hasPermission(ctx, 'instance_admin')) return true;
-		return canEditProjectSettings(await this.loadAccessInput(ctx, projectId));
-	}
-
-	async canManage(ctx: RequestContext, projectId: string): Promise<boolean> {
-		if (hasPermission(ctx, 'instance_admin')) return true;
-		return canManage(await this.loadAccessInput(ctx, projectId));
-	}
-
-	/** Load the inputs that the pure project-access rules need. */
-	private async loadAccessInput(
-		ctx: RequestContext,
-		projectId: string
-	): Promise<{
-		platformPermissions: RequestContext['platformPermissions'];
-		orgPermissions: RequestContext['orgPermissions'];
-		project: Project | null;
-		member: ProjectMember | null;
-		orgMember: null;
-		allowCrossOrgPublic: boolean;
-	}> {
-		// Pure project-edit/manage/settings rules don't consult orgMember or the
-		// cross-org-public flag, so we don't pay for those fetches here. Future
-		// rules that do (e.g. `canView`, `canSolve`) will need them.
-		const [project, member] = await Promise.all([
-			this.getProject(ctx, projectId),
-			this.getProjectMember(ctx, projectId, ctx.userId)
-		]);
-		return {
-			platformPermissions: ctx.platformPermissions,
-			orgPermissions: ctx.orgPermissions,
-			project,
-			member,
-			orgMember: null,
-			allowCrossOrgPublic: false
-		};
-	}
 }
 
 // ── Row ↔ domain mappers ────────────────────────────────────────────────

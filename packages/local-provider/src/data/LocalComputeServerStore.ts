@@ -90,4 +90,18 @@ export class LocalComputeServerStore implements IComputeServerStore {
 			defaultServerId: config.defaultServerId
 		});
 	}
+
+	async deleteByOrg(_ctx: RequestContext, orgId: string): Promise<void> {
+		const all = await this.readAll();
+		const servers = all.servers.filter((s) => s.orgId !== orgId);
+		const orgDefaults = { ...(all.orgDefaults ?? {}) };
+		const hadDefault = orgId in orgDefaults;
+		delete orgDefaults[orgId];
+		if (servers.length === all.servers.length && !hadDefault) return;
+		await writeJsonFile<OnDiskShape>(this.configFilePath, {
+			...all,
+			servers,
+			orgDefaults
+		});
+	}
 }

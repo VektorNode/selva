@@ -623,6 +623,10 @@ with check (
 -- 8. invites
 -- ============================================================================
 
+-- `org_id ... on delete cascade` only fires when the org is HARD-deleted.
+-- The standard `deleteOrg` path is a soft-delete (UPDATE deleted_at), so the
+-- SupabaseOrgStore.deleteOrg cascade explicitly DELETEs invites for the org;
+-- see SupabaseOrgStore.ts. Same pattern for compute_servers below.
 create table if not exists public.invites (
 	id uuid primary key,
 	token text not null unique,
@@ -690,6 +694,12 @@ grant execute on function public.get_invite_by_token(text) to anon, authenticate
 -- The platform flag ALLOW_ORG_COMPUTE_OVERRIDE gates org-row writes at the
 -- TS layer. The DB policy still accepts them so flipping the flag on
 -- doesn't require a policy change.
+--
+-- Cascade note: the `org_id` FK below is `on delete cascade`, but `deleteOrg`
+-- is a soft-delete and never triggers it. SupabaseOrgStore.deleteOrg
+-- explicitly DELETEs from `compute_server_defaults` and `compute_servers`
+-- for the org. The FK cascade only matters for the eventual hard-delete
+-- janitor.
 -- ============================================================================
 
 create table if not exists public.compute_servers (

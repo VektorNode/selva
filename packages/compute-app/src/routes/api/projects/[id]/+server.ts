@@ -2,7 +2,11 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { z } from 'zod';
 import { getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
-import { requireManageProjects, requireCanManage } from '$lib/server/access.server';
+import {
+	requireManageProjects,
+	requireCanManage,
+	requireCanEditProjectSettings
+} from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { slugify } from '$lib/server/slug';
 import {
@@ -26,16 +30,11 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	if (!id) throw error(400, 'Missing project ID');
 
 	requireManageProjects(locals);
-	const ctx = locals.ctx!;
-	const allowed = await getProjectProvider().canEditProjectSettings(ctx, id);
-	if (!allowed) throw error(403, 'You do not have permission to edit this project.');
+	const { ctx, project: existing } = await requireCanEditProjectSettings(locals, id);
 
 	const body = await request.json().catch(() => null);
 	const parsed = UpdateProjectBody.safeParse(body);
 	if (!parsed.success) throwZodError(parsed.error);
-
-	const existing = await getProjectProvider().getProject(ctx, id);
-	if (!existing) throw error(404, 'Project not found');
 
 	// Flipping *to* public is a disclosure action — stricter gate than a normal edit.
 	if (

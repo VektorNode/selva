@@ -6,7 +6,7 @@ import {
 	getAuthProvider,
 	getUserProfileStore
 } from '$lib/server/providers.server';
-import { hasPermission } from '@selva/platform';
+import { hasPermission, canEdit } from '@selva/platform';
 import type {
 	DefinitionRecord,
 	DefinitionVersion,
@@ -63,13 +63,28 @@ export const load: PageServerLoad = async ({ locals }) => {
 		);
 		const allProjects: Project[] = projectPages.flatMap((p) => p.items);
 
-		// Filter to projects the current user can actually edit
-		const editableFlags = await Promise.all(
-			allProjects.map((p) => projectStore.canEdit(ctx, p.id))
-		);
-		const accessibleProjects = isPlatformAdmin
-			? allProjects
-			: allProjects.filter((_, i) => editableFlags[i]);
+		// Filter to projects the current user can actually edit. Pure-rule path
+		// (Permissions.md §5): fetch each project's membership row once and let
+		// `canEdit` decide. We were previously calling `projectStore.canEdit`
+		// per project which re-fetched the project AND the member row — N+1.
+		let accessibleProjects: Project[];
+		if (isPlatformAdmin) {
+			accessibleProjects = allProjects;
+		} else {
+			const memberships = await Promise.all(
+				allProjects.map((p) => projectStore.getProjectMember(ctx, p.id, ctx.userId))
+			);
+			accessibleProjects = allProjects.filter((project, i) =>
+				canEdit({
+					platformPermissions: ctx.platformPermissions,
+					orgPermissions: ctx.orgPermissions,
+					project,
+					member: memberships[i],
+					orgMember: null,
+					allowCrossOrgPublic: false
+				})
+			);
+		}
 
 		// Only show definitions belonging to accessible projects
 		const projectIds = new Set(accessibleProjects.map((p) => p.id));

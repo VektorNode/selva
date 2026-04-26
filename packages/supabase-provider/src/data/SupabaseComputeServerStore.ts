@@ -97,6 +97,22 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			if (error) throw mapError(error);
 		}
 	}
+
+	async deleteByOrg(ctx: RequestContext, orgId: string): Promise<void> {
+		const client = this.clients.forRequest(ctx);
+		// Defaults first — its FK references compute_servers with ON DELETE SET
+		// NULL, but we delete the row outright so the column becomes irrelevant.
+		const { error: defErr } = await client
+			.from('compute_server_defaults')
+			.delete()
+			.eq('org_id', orgId);
+		if (defErr) throw mapError(defErr);
+		const { error: srvErr } = await client
+			.from('compute_servers')
+			.delete()
+			.eq('org_id', orgId);
+		if (srvErr) throw mapError(srvErr);
+	}
 }
 
 interface ServerRow {

@@ -13,12 +13,10 @@ import type {
 } from '@selva/platform';
 import {
 	ProviderError,
-	hasPermission,
 	auditUpdate,
 	auditSoftDelete,
 	actorFrom,
-	NoopEventSink,
-	canEditDefinition
+	NoopEventSink
 } from '@selva/platform';
 import { paginate, applyOrder } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
@@ -348,26 +346,4 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		}
 	}
 
-	async canEditDefinition(
-		ctx: RequestContext,
-		projectId: string,
-		definitionGuid: string
-	): Promise<boolean> {
-		if (!this.projectProvider) return false;
-		if (hasPermission(ctx, 'instance_admin')) return true;
-
-		const [project, definition, member] = await Promise.all([
-			this.projectProvider.getProject(ctx, projectId),
-			this.get(ctx, definitionGuid),
-			this.projectProvider.getProjectMember(ctx, projectId, ctx.userId)
-		]);
-
-		return canEditDefinition({
-			platformPermissions: ctx.platformPermissions,
-			project,
-			definition,
-			member,
-			userId: ctx.userId
-		});
-	}
 }

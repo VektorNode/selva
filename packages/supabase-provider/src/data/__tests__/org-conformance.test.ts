@@ -1,6 +1,8 @@
 import { describe, beforeEach, it } from 'vitest';
 import { runOrgStoreConformance } from '@selva/platform/testing';
 import { SupabaseOrgStore } from '../SupabaseOrgStore.js';
+import { SupabaseInviteStore } from '../SupabaseInviteStore.js';
+import { SupabaseComputeServerStore } from '../SupabaseComputeServerStore.js';
 import { readEnv, resetAllData, seedUser } from './test-helpers.js';
 
 const envCtx = readEnv();
@@ -18,7 +20,11 @@ if (!envCtx) {
 		runOrgStoreConformance({
 			name: 'SupabaseOrgStore',
 			createStore: () => new SupabaseOrgStore(envCtx.bundle),
-			seedUser: (id) => seedUser(envCtx, id)
+			seedUser: (id) => seedUser(envCtx, id),
+			createCompanionStores: () => ({
+				invites: new SupabaseInviteStore(envCtx.bundle),
+				computeServer: new SupabaseComputeServerStore(envCtx.bundle)
+			})
 		});
 	});
 }

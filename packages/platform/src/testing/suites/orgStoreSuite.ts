@@ -6,8 +6,15 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { IOrgStore } from '../../data/interface.js';
-import type { Organization, OrgMember, OrgRole } from '../../index.js';
+import type { IOrgStore, IComputeServerStore } from '../../data/interface.js';
+import type { IInviteStore } from '../../invites/interface.js';
+import type {
+	Organization,
+	OrgMember,
+	OrgRole,
+	Invite,
+	ComputeServerConfig
+} from '../../index.js';
 import { DEFAULT_ORG_PERMISSIONS } from '../../organizations/schemas.js';
 import { makeCtx, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
 
@@ -26,6 +33,16 @@ export interface OrgStoreConformanceOptions {
 	singleOrgMode?: boolean;
 	/** If true, run ctx-isolation tests (adapters with row-level security). */
 	ctxIsolation?: boolean;
+	/**
+	 * When supplied, an extra `deleteOrg` cascade test runs that asserts
+	 * pending invites and the org's compute override are cleaned up too.
+	 * The factories must return stores wired to the same underlying state
+	 * as `createStore` (i.e. the same data provider instance for local,
+	 * the same Supabase project for the remote adapter).
+	 */
+	createCompanionStores?: () =>
+		| Promise<{ invites: IInviteStore; computeServer: IComputeServerStore }>
+		| { invites: IInviteStore; computeServer: IComputeServerStore };
 }
 
 const ctx = makeCtx;
@@ -66,7 +83,8 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 		createStore,
 		seedUser = noopSeedUser,
 		singleOrgMode = false,
-		ctxIsolation = false
+		ctxIsolation = false,
+		createCompanionStores
 	} = opts;
 	const seed = () => seedUser(makeUuid());
 
@@ -264,6 +282,49 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 				await store.deleteOrg(ctx(u1), orgId);
 				expect(await store.getOrgMember(ctx(u1), orgId, u2)).toBeNull();
 			});
+
+			if (createCompanionStores) {
+				it('deleteOrg cascades into invites and the org compute override', async () => {
+					const store = await createStore();
+					const { invites, computeServer } = await createCompanionStores();
+					const u1 = await seed();
+					const orgId = makeUuid();
+					await store.createOrg(ctx(u1), org(u1, { id: orgId, slug: `cc-${orgId.slice(0, 8)}` }));
+
+					// Pending invite + org compute override.
+					const invite: Invite = {
+						id: makeUuid(),
+						token: `tok-${makeUuid()}`,
+						email: 'pending@example.com',
+						orgId,
+						orgRole: 'member',
+						orgPermissions: [],
+						invitedBy: u1,
+						createdAt: new Date().toISOString(),
+						expiresAt: new Date(Date.now() + 86_400_000).toISOString()
+					};
+					await invites.create(ctx(u1), invite);
+					const orgCtx = { ...ctx(u1), actingOrgId: orgId };
+					const server: ComputeServerConfig = {
+						id: makeUuid(),
+						orgId,
+						label: 'BYO',
+						serverUrl: 'https://compute.example.com',
+						apiKey: 'secret'
+					};
+					await computeServer.saveConfig(orgCtx, {
+						servers: [server],
+						defaultServerId: server.id
+					});
+
+					await store.deleteOrg(ctx(u1), orgId);
+
+					expect(await invites.getByToken(ctx(u1), invite.token)).toBeNull();
+					const remainingConfig = await computeServer.getConfig(orgCtx);
+					expect(remainingConfig.servers).toEqual([]);
+					expect(remainingConfig.defaultServerId).toBeUndefined();
+				});
+			}
 		}
 
 		it('removeOrgMember soft-deletes — the member stops appearing in reads', async () => {

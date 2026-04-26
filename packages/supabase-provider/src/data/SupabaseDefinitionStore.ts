@@ -11,14 +11,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selva/platform';
-import {
-	ProviderError,
-	auditSoftDelete,
-	hasPermission,
-	actorFrom,
-	NoopEventSink,
-	canEditDefinition
-} from '@selva/platform';
+import { ProviderError, auditSoftDelete, actorFrom, NoopEventSink } from '@selva/platform';
 import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
 
@@ -317,83 +310,6 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		}
 	}
 
-	// ============================================================================
-	// Access checks
-	// ============================================================================
-
-	async canEditDefinition(
-		ctx: RequestContext,
-		projectId: string,
-		definitionGuid: string
-	): Promise<boolean> {
-		if (hasPermission(ctx, 'instance_admin')) return true;
-		const client = this.clients.forRequest(ctx);
-
-		const [{ data: projectRow }, { data: definitionRow }, { data: memberRow }] = await Promise.all([
-			client
-				.from('projects')
-				.select('id, auto_join_on_upload, visibility, owner_id, org_id')
-				.eq('id', projectId)
-				.is('deleted_at', null)
-				.maybeSingle(),
-			client
-				.from('definitions')
-				.select('guid, owner_id, project_id')
-				.eq('guid', definitionGuid)
-				.is('deleted_at', null)
-				.maybeSingle(),
-			client
-				.from('project_members')
-				.select('role')
-				.eq('project_id', projectId)
-				.eq('user_id', ctx.userId)
-				.is('deleted_at', null)
-				.maybeSingle()
-		]);
-
-		// Build minimal Project / Definition / Member shapes the pure rule needs.
-		// `canEditDefinition` consults: project.autoJoinOnUpload, definition.ownerId,
-		// member.role. Other fields aren't read; we leave them as best-effort
-		// defaults rather than re-fetching the full rows.
-		return canEditDefinition({
-			platformPermissions: ctx.platformPermissions,
-			project: projectRow
-				? {
-						id: projectRow.id,
-						orgId: projectRow.org_id,
-						name: '',
-						slug: '',
-						visibility: projectRow.visibility,
-						ownerId: projectRow.owner_id,
-						createdBy: projectRow.owner_id,
-						updatedBy: projectRow.owner_id,
-						autoJoinOnUpload: projectRow.auto_join_on_upload ?? false,
-						createdAt: '',
-						updatedAt: '',
-						deletedAt: null
-					}
-				: null,
-			definition: definitionRow
-				? ({
-						guid: definitionRow.guid,
-						ownerId: definitionRow.owner_id,
-						projectId: definitionRow.project_id
-					} as DefinitionRecord)
-				: null,
-			member: memberRow
-				? {
-						projectId,
-						userId: ctx.userId,
-						role: memberRow.role,
-						joinedAt: '',
-						updatedAt: '',
-						updatedBy: ctx.userId,
-						deletedAt: null
-					}
-				: null,
-			userId: ctx.userId
-		});
-	}
 }
 
 // ── Row ↔ domain mappers ────────────────────────────────────────────────
