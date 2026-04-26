@@ -52,6 +52,6 @@
 		"@types/node": "catalog:",
 		"supabase": "^2.0.0",
 		"typescript": "catalog:",
-		"vitest": "^2.1.8"
+		"vitest": "catalog:"
 	}
 }

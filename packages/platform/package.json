@@ -8,30 +8,37 @@
 	"types": "./dist/index.d.ts",
 	"exports": {
 		".": {
+			"source": "./src/index.ts",
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
 		},
 		"./auth": {
+			"source": "./src/auth/index.ts",
 			"types": "./dist/auth/index.d.ts",
 			"import": "./dist/auth/index.js"
 		},
 		"./projects": {
+			"source": "./src/projects/index.ts",
 			"types": "./dist/projects/index.d.ts",
 			"import": "./dist/projects/index.js"
 		},
 		"./definitions/schemas": {
+			"source": "./src/definitions/schemas.ts",
 			"types": "./dist/definitions/schemas.d.ts",
 			"import": "./dist/definitions/schemas.js"
 		},
 		"./storage": {
+			"source": "./src/storage/index.ts",
 			"types": "./dist/storage/index.d.ts",
 			"import": "./dist/storage/index.js"
 		},
 		"./computeServer": {
+			"source": "./src/computeServer/index.ts",
 			"types": "./dist/computeServer/index.d.ts",
 			"import": "./dist/computeServer/index.js"
 		},
 		"./testing": {
+			"source": "./src/testing/index.ts",
 			"types": "./dist/testing/index.d.ts",
 			"import": "./dist/testing/index.js"
 		}
@@ -63,6 +70,6 @@
 	"devDependencies": {
 		"sharp": "^0.34.5",
 		"typescript": "catalog:",
-		"vitest": "^2.1.8"
+		"vitest": "catalog:"
 	}
 }

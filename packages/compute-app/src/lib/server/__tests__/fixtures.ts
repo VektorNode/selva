@@ -46,7 +46,10 @@ import {
 	type ShareLink,
 	type TenancyMode
 } from '@selva/platform';
-import { DefinitionService, type CreateDefinitionRecord } from '../definitions/DefinitionService.js';
+import {
+	DefinitionService,
+	type CreateDefinitionRecord
+} from '../definitions/DefinitionService.js';
 import { hashToken, mintRawToken } from '../shareLinks/token.server.js';
 import { setTestProviders, clearTestProviders } from './test-providers.js';
 
@@ -603,8 +606,7 @@ export async function call(handler: AnyHandler, opts: CallOpts): Promise<CallRes
 			get: (name: string) => cookieMap.get(name),
 			set: (name: string, value: string) => cookieMap.set(name, value),
 			delete: (name: string) => cookieMap.delete(name),
-			getAll: () =>
-				Array.from(cookieMap.entries()).map(([name, value]) => ({ name, value }))
+			getAll: () => Array.from(cookieMap.entries()).map(([name, value]) => ({ name, value }))
 		},
 		setHeaders: () => {},
 		fetch,
@@ -671,9 +673,7 @@ export async function expectHttpError(
 		if (!httpErr) throw err;
 		if (httpErr.status !== expectedStatus) {
 			throw new Error(
-				`Expected HTTP ${expectedStatus} but got ${httpErr.status}: ${
-					JSON.stringify(httpErr.body)
-				}`
+				`Expected HTTP ${expectedStatus} but got ${httpErr.status}: ${JSON.stringify(httpErr.body)}`
 			);
 		}
 		return httpErr.body ?? {};
@@ -690,7 +690,10 @@ interface HttpErrorLike {
 function asHttpErrorLike(err: unknown): HttpErrorLike | null {
 	if (!err || typeof err !== 'object') return null;
 	const e = err as Record<string, unknown>;
-	if (typeof e.status === 'number' && (typeof e.body === 'object' || typeof e.location === 'string')) {
+	if (
+		typeof e.status === 'number' &&
+		(typeof e.body === 'object' || typeof e.location === 'string')
+	) {
 		return {
 			status: e.status,
 			body: e.body as { message?: string } | undefined,

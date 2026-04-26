@@ -34,7 +34,7 @@ describe('smoke: test infrastructure', () => {
 		expect(locals.ctx.orgPermissions.length).toBeGreaterThan(0); // admin gets all
 	});
 
-	it('GET /api/projects via call() returns the seeded org\'s projects', async () => {
+	it("GET /api/projects via call() returns the seeded org's projects", async () => {
 		tp = await freshProviders();
 		const { alice } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
@@ -75,5 +75,4 @@ describe('smoke: test infrastructure', () => {
 		expect(created.name).toBe('Alice New Project');
 		expect(created.ownerId).toBe(alice.id);
 	});
-
 });

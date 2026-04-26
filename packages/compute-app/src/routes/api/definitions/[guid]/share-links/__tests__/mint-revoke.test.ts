@@ -19,7 +19,7 @@ import {
 	actAs,
 	call,
 	type TestProviders
-} from '../../../../../../lib/server/__tests__/fixtures.js';
+} from '$lib/server/__tests__/fixtures.js';
 import { GET, POST } from '../+server.js';
 import { DELETE } from '../[linkId]/+server.js';
 import { DEFAULT_SHARE_LINK_MAX_SOLVES } from '@selva/platform';
@@ -118,7 +118,7 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 		expect(res.status).toBe(201);
 	});
 
-	it('Commons mode: Peter (random user) cannot mint on Alice\'s def', async () => {
+	it("Commons mode: Peter (random user) cannot mint on Alice's def", async () => {
 		tp = await freshProviders();
 		const { acme, alice } = await seedAcme(tp);
 		const { alicesCommonsDef, peter } = await seedCommons(tp, {

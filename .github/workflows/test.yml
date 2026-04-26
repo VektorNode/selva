@@ -20,10 +20,18 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Build platform packages so workspace `selva-local-provider` consumers
-      # (compute-app tests) have the compiled `dist/` to import from.
-      - run: pnpm build:platform
+      # Lint before tests so style failures fail fast without spending the
+      # longer test pass first.
+      #
+      # `pnpm format:check` is NOT in CI yet — the codebase has ~94 pre-existing
+      # format drifts (pre-Prettier-config-change). Run `pnpm format` once,
+      # commit the result, then add format:check here.
+      - run: pnpm lint
 
+      # Tests read workspace-package source directly via the `"source"` export
+      # condition (vitest.config.ts `resolve.conditions: ['source']`), so no
+      # platform pre-build step is needed here.
+      #
       # Excludes @selva/supabase-provider — needs a live stack with secrets.
       # Add a separate workflow with environment secrets when ready.
       - run: pnpm -r --filter '!@selva/supabase-provider' test

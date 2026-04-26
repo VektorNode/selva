@@ -88,10 +88,7 @@ describe('§11 — visibility & cross-org', () => {
 		});
 		const bobLocals = await actAs(tp, bob.id);
 
-		await expectHttpError(
-			requireCanEditDefinition(bobLocals, acmeOrg.id, def.record.guid),
-			403
-		);
+		await expectHttpError(requireCanEditDefinition(bobLocals, acmeOrg.id, def.record.guid), 403);
 	});
 
 	it('Dave (any org) views Acme public project — OK with cross-org flag on', async () => {
@@ -312,7 +309,10 @@ describe('§11 — reclaim & owner removal', () => {
 			alicesPrivate.id,
 			{ limit: 50 }
 		);
-		const ownerIds = owners.items.filter((m) => m.role === 'owner').map((m) => m.userId).sort();
+		const ownerIds = owners.items
+			.filter((m) => m.role === 'owner')
+			.map((m) => m.userId)
+			.sort();
 		expect(ownerIds).toEqual([alice.id, bob.id].sort());
 	});
 
