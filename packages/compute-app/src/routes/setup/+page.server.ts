@@ -92,9 +92,7 @@ export const actions = {
 			// bootstrap the platform admin from an env var instead so setup
 			// can be constrained to org-owner rights.
 			const user = await passwordAuth.createUserWithPassword(email, password);
-			await setUserPlatformPermissions(SYSTEM_CONTEXT, user.id, [
-				...ALL_PLATFORM_PERMISSIONS
-			]);
+			await setUserPlatformPermissions(SYSTEM_CONTEXT, user.id, [...ALL_PLATFORM_PERMISSIONS]);
 			if (displayName) {
 				// First-run bootstrap; no authenticated ctx exists yet.
 				await getUserProfileStore().updateProfile(SYSTEM_CONTEXT, user.id, { displayName });

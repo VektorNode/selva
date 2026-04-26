@@ -5,9 +5,7 @@ export function resolveComputeServer(config: ComputeConfig): ComputeServerConfig
 	if (config.defaultServerId) {
 		const found = config.servers.find((s) => s.id === config.defaultServerId);
 		if (!found)
-			throw new Error(
-				`defaultServerId "${config.defaultServerId}" not found in servers list`
-			);
+			throw new Error(`defaultServerId "${config.defaultServerId}" not found in servers list`);
 		return found;
 	}
 

@@ -120,7 +120,9 @@
 					<div>
 						<p class="text-2xl font-bold">{data.stats.users ?? '—'}</p>
 						<p class="text-muted-foreground text-sm">
-							{data.stats.users === null ? 'User store unavailable' : `User${data.stats.users === 1 ? '' : 's'}`}
+							{data.stats.users === null
+								? 'User store unavailable'
+								: `User${data.stats.users === 1 ? '' : 's'}`}
 						</p>
 					</div>
 				</Card.Content>

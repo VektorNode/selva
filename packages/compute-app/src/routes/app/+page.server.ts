@@ -1,6 +1,10 @@
 import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
-import { getDefinitionMeta, getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
+import {
+	getDefinitionMeta,
+	getOrganizationProvider,
+	getProjectProvider
+} from '$lib/server/providers.server';
 import { SYSTEM_CONTEXT } from '@selva/platform';
 import type { DefinitionRecord, Project } from '@selva/platform';
 
@@ -43,9 +47,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			})
 		);
 
-		const accessibleProjectIds = new Set(
-			accessibleProjects.filter(Boolean).map((p) => p!.id)
-		);
+		const accessibleProjectIds = new Set(accessibleProjects.filter(Boolean).map((p) => p!.id));
 
 		// Only show published definitions in accessible projects
 		const visibleRecords = recordsPage.items.filter((r) => accessibleProjectIds.has(r.projectId));

@@ -44,9 +44,5 @@ export interface IUserProfileStore {
 	 * Record a solve run. Adapters cap the list (e.g. 20) and dedupe by
 	 * `definitionId`.
 	 */
-	recordRun(
-		ctx: RequestContext,
-		userId: string,
-		run: RecentRun
-	): Promise<UserManagementResult>;
+	recordRun(ctx: RequestContext, userId: string, run: RecentRun): Promise<UserManagementResult>;
 }

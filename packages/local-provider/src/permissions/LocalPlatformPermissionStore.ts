@@ -80,20 +80,19 @@ export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 		return all.some((u) => !u.disabled && u.platformPermissions.includes('instance_admin'));
 	}
 
-	async countInstanceAdminsExcluding(
-		_ctx: RequestContext,
-		excludeUserId: string
-	): Promise<number> {
+	async countInstanceAdminsExcluding(_ctx: RequestContext, excludeUserId: string): Promise<number> {
 		const all = await this.users.listUsers();
 		return all.filter(
-			(u) => u.id !== excludeUserId && !u.disabled && u.platformPermissions.includes('instance_admin')
+			(u) =>
+				u.id !== excludeUserId && !u.disabled && u.platformPermissions.includes('instance_admin')
 		).length;
 	}
 
 	private async countOtherEnabledAdmins(excludeUserId: string): Promise<number> {
 		const all = await this.users.listUsers();
 		return all.filter(
-			(u) => u.id !== excludeUserId && !u.disabled && u.platformPermissions.includes('instance_admin')
+			(u) =>
+				u.id !== excludeUserId && !u.disabled && u.platformPermissions.includes('instance_admin')
 		).length;
 	}
 }

@@ -13,14 +13,7 @@
 		onToggleStar: (guid: string) => void;
 	}
 
-	let {
-		records,
-		starredIds,
-		loadingGuid,
-		starBusyGuid,
-		onOpen,
-		onToggleStar
-	}: Props = $props();
+	let { records, starredIds, loadingGuid, starBusyGuid, onOpen, onToggleStar }: Props = $props();
 
 	const gridTemplate = 'grid-template-columns: 40px minmax(0, 1.7fr) minmax(0, 1fr) 90px 36px';
 </script>
@@ -40,11 +33,7 @@
 				style:background={record.coverImage ? undefined : gradientFor(record.guid)}
 			>
 				{#if record.coverImage}
-					<img
-						src={record.coverImage}
-						alt=""
-						class="h-full w-full object-cover"
-					/>
+					<img src={record.coverImage} alt="" class="h-full w-full object-cover" />
 				{:else}
 					<span class="text-muted-foreground/70 text-base font-semibold">
 						{monogram(record.displayName)}

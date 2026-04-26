@@ -17,10 +17,7 @@ export { runUserProfileStoreConformance } from './suites/userProfileStoreSuite.j
 export type { UserProfileStoreConformanceOptions } from './suites/userProfileStoreSuite.js';
 
 export { runInviteStoreConformance } from './suites/inviteStoreSuite.js';
-export type {
-	InviteStoreConformanceOptions,
-	InviteTestScope
-} from './suites/inviteStoreSuite.js';
+export type { InviteStoreConformanceOptions, InviteTestScope } from './suites/inviteStoreSuite.js';
 
 export { runComputeServerStoreConformance } from './suites/computeServerStoreSuite.js';
 export type { ComputeServerStoreConformanceOptions } from './suites/computeServerStoreSuite.js';

@@ -56,8 +56,5 @@ export interface IPlatformPermissionStore {
 	 * call this BEFORE the destructive op — `count === 0` ⇒ `'last_admin'`.
 	 * MUST exclude disabled users.
 	 */
-	countInstanceAdminsExcluding(
-		ctx: RequestContext,
-		excludeUserId: string
-	): Promise<number>;
+	countInstanceAdminsExcluding(ctx: RequestContext, excludeUserId: string): Promise<number>;
 }

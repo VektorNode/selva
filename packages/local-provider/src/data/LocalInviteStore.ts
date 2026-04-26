@@ -91,11 +91,7 @@ export class LocalInviteStore implements IInviteStore {
 		return migrateInvite(invite);
 	}
 
-	async listByOrg(
-		_ctx: RequestContext,
-		orgId: string,
-		opts?: ListOptions
-	): Promise<Page<Invite>> {
+	async listByOrg(_ctx: RequestContext, orgId: string, opts?: ListOptions): Promise<Page<Invite>> {
 		const { invites } = await this.load();
 		const filtered = invites.filter((i) => i.orgId === orgId).map(migrateInvite);
 		return paginate(applyOrder(filtered, opts), opts);

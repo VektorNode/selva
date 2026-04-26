@@ -176,11 +176,7 @@ export class DefinitionService {
 	 * current draft. Pass an arbitrary version id to roll forward/back —
 	 * spec §6 makes rollback a first-class operation.
 	 */
-	async publish(
-		ctx: RequestContext,
-		guid: string,
-		versionId?: string
-	): Promise<DefinitionVersion> {
+	async publish(ctx: RequestContext, guid: string, versionId?: string): Promise<DefinitionVersion> {
 		const existing = await this.data.definitions.get(ctx, guid);
 		if (!existing) throw new ProviderError(`Definition not found: ${guid}`, 404);
 

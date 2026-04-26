@@ -69,9 +69,7 @@
 				<p class="mt-1 text-[13.5px]">{formatUpdated(record.updatedAt)} ago</p>
 			</div>
 			<div>
-				<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">
-					Runs
-				</p>
+				<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">Runs</p>
 				<p class="mt-1 text-[13.5px]">{record.runCount.toLocaleString()}</p>
 			</div>
 			<div>
@@ -98,8 +96,7 @@
 				</p>
 				<div class="flex flex-wrap gap-1.5">
 					{#each record.tags as tag (tag)}
-						<span
-							class="bg-muted text-muted-foreground rounded px-2 py-0.5 font-mono text-[11px]"
+						<span class="bg-muted text-muted-foreground rounded px-2 py-0.5 font-mono text-[11px]"
 							>#{tag}</span
 						>
 					{/each}

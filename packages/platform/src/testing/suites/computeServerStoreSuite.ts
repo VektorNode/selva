@@ -41,9 +41,7 @@ function orgCtx(orgId: string): RequestContext {
 	};
 }
 
-export function runComputeServerStoreConformance(
-	opts: ComputeServerStoreConformanceOptions
-): void {
+export function runComputeServerStoreConformance(opts: ComputeServerStoreConformanceOptions): void {
 	const { name, createStore } = opts;
 
 	describe(`IComputeServerStore conformance: ${name}`, () => {
@@ -85,7 +83,10 @@ export function runComputeServerStoreConformance(
 			const store = await createStore();
 			const orgId = makeUuid();
 			const orgServer = server({ label: "Org's BYO" });
-			await store.saveConfig(orgCtx(orgId), { servers: [orgServer], defaultServerId: orgServer.id });
+			await store.saveConfig(orgCtx(orgId), {
+				servers: [orgServer],
+				defaultServerId: orgServer.id
+			});
 
 			const instance = await store.getConfig(SYSTEM_CONTEXT);
 			expect(instance.servers.map((s) => s.id)).not.toContain(orgServer.id);
@@ -95,7 +96,10 @@ export function runComputeServerStoreConformance(
 			const store = await createStore();
 			const orgId = makeUuid();
 			const orgServer = server({ label: "Org's BYO" });
-			await store.saveConfig(orgCtx(orgId), { servers: [orgServer], defaultServerId: orgServer.id });
+			await store.saveConfig(orgCtx(orgId), {
+				servers: [orgServer],
+				defaultServerId: orgServer.id
+			});
 
 			const got = await store.getConfig(orgCtx(orgId));
 			expect(got.servers.map((s) => s.id)).toEqual([orgServer.id]);

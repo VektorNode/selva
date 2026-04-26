@@ -17,4 +17,5 @@ export const PlatformPermissionSchema = z.enum([
 ]);
 export type PlatformPermission = z.infer<typeof PlatformPermissionSchema>;
 
-export const ALL_PLATFORM_PERMISSIONS: readonly PlatformPermission[] = PlatformPermissionSchema.options;
+export const ALL_PLATFORM_PERMISSIONS: readonly PlatformPermission[] =
+	PlatformPermissionSchema.options;

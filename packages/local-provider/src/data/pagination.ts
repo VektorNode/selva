@@ -1,4 +1,10 @@
-import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, type ListOptions, type DefinitionListOptions, type Page } from '@selva/platform';
+import {
+	DEFAULT_PAGE_LIMIT,
+	MAX_PAGE_LIMIT,
+	type ListOptions,
+	type DefinitionListOptions,
+	type Page
+} from '@selva/platform';
 
 type AnyListOptions = ListOptions | DefinitionListOptions;
 

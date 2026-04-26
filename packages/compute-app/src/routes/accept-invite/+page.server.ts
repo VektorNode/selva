@@ -95,7 +95,8 @@ export const actions = {
 			// The user account exists; surface a softer failure rather than a
 			// blank 500. They can still log in — an admin can add membership.
 			return fail(500, {
-				error: 'Your account was created, but we could not finish joining the organization. Please contact your admin.'
+				error:
+					'Your account was created, but we could not finish joining the organization. Please contact your admin.'
 			});
 		}
 

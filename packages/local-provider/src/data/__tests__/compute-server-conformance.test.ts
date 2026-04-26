@@ -18,7 +18,6 @@ describe('LocalComputeServerStore', () => {
 
 	runComputeServerStoreConformance({
 		name: 'LocalComputeServerStore',
-		createStore: () =>
-			new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'))
+		createStore: () => new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'))
 	});
 });

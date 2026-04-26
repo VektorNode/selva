@@ -1,6 +1,6 @@
 # Selva — Architecture Spec
 
-> **Purpose.** Internal reference for checking code against intended design. When a route, store, or rule looks suspicious, this is the document you verify against. Companion to [Access Control](./Permissions.md), which owns *who can do what*; this document owns *what exists and how it fits together*.
+> **Purpose.** Internal reference for checking code against intended design. When a route, store, or rule looks suspicious, this is the document you verify against. Companion to [Access Control](./Permissions.md), which owns _who can do what_; this document owns _what exists and how it fits together_.
 >
 > **Audience.** Selva contributors. Not aimed at integrators or evaluators.
 >
@@ -143,7 +143,7 @@ Instance (one Selva deployment)
   - Roles: `owner`, `admin`, `member`. Owner/admin get all org permissions by default; `member` gets none and can be granted `manage_definitions` and/or `manage_projects`.
   - `manage_org_members` and `manage_org_compute` are owner/admin-only and not grantable to `member`.
 - **First release is single-tenant self-hosted.** One org provisioned at install time; the instance admin is typically also the org owner, and the UI merges the two views.
-- **Multi-tenant SaaS (hosted by Selva) is a planned future deployment**, not a current one. The data model, provider abstraction, RLS-ready tenancy boundaries, and `IOrgStore` are all already in place to support it without a schema migration. What's *not* yet wired: self-service org creation UX, URL-based org routing, the `ALLOW_ORG_CREATION` flag enforcement.
+- **Multi-tenant SaaS (hosted by Selva) is a planned future deployment**, not a current one. The data model, provider abstraction, RLS-ready tenancy boundaries, and `IOrgStore` are all already in place to support it without a schema migration. What's _not_ yet wired: self-service org creation UX, URL-based org routing, the `ALLOW_ORG_CREATION` flag enforcement.
 
 ### 4.3 Project
 
@@ -155,7 +155,7 @@ Instance (one Selva deployment)
   - `viewer` exists for stakeholders/clients/auditors who solve and download but cannot modify.
 - **Two project models** selected per-project by `autoJoinOnUpload`:
   - **Container** (default, `false`): project role is authoritative. Only `owner`/`editor` can upload or edit anything. `Definition.ownerId` is display-only.
-  - **Commons** (`true`, only on `public` projects): anyone authenticated can upload a *new* definition and becomes its owner. They cannot modify other people's definitions. Project owner/editor retain moderation authority.
+  - **Commons** (`true`, only on `public` projects): anyone authenticated can upload a _new_ definition and becomes its owner. They cannot modify other people's definitions. Project owner/editor retain moderation authority.
   - Full semantics in [Permissions.md §4](./Permissions.md#4-project-scope).
 - **Reclaim:** org owner/admin can add themselves as co-owner of any project in their org as an escape hatch when the original owner is unreachable. Does not demote the original owner — leaves an audit trail.
 
@@ -219,28 +219,28 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
 
 ## 5. Provider abstraction
 
-`@selva/platform` defines *only* TypeScript interfaces, Zod schemas, pure rule functions, and shared utilities. No I/O. Two providers implement the contract today:
+`@selva/platform` defines _only_ TypeScript interfaces, Zod schemas, pure rule functions, and shared utilities. No I/O. Two providers implement the contract today:
 
-| | `selva-local-provider` | `@selva/supabase-provider` |
-|---|---|---|
-| Identity | `LocalAuthProvider` (HMAC sessions, optional password) | `SupabaseAuthProvider` (JWT, MFA-capable) |
-| Data | JSON files under `DATA_PATH/` | Postgres + RLS |
-| Blobs | Filesystem under `DATA_PATH/` | Supabase Storage bucket |
-| User profile | JSON file | `user_profiles` table |
-| Tenancy enforcement | Code-level scoping in store methods | RLS policies, scoped via `adapterContext` (JWT) |
-| Use case | Self-hosted single-tenant, dev, embedded | Multi-tenant SaaS, managed |
+|                     | `selva-local-provider`                                 | `@selva/supabase-provider`                      |
+| ------------------- | ------------------------------------------------------ | ----------------------------------------------- |
+| Identity            | `LocalAuthProvider` (HMAC sessions, optional password) | `SupabaseAuthProvider` (JWT, MFA-capable)       |
+| Data                | JSON files under `DATA_PATH/`                          | Postgres + RLS                                  |
+| Blobs               | Filesystem under `DATA_PATH/`                          | Supabase Storage bucket                         |
+| User profile        | JSON file                                              | `user_profiles` table                           |
+| Tenancy enforcement | Code-level scoping in store methods                    | RLS policies, scoped via `adapterContext` (JWT) |
+| Use case            | Self-hosted single-tenant, dev, embedded               | Multi-tenant SaaS, managed                      |
 
 **Interfaces:**
 
-| Interface | Location |
-|---|---|
-| `IAuthProvider` | [`@selva/platform/auth`](../../platform/src/auth/interface.ts) |
-| `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IComputeServerStore`, `IShareLinkStore` | [`@selva/platform/data`](../../platform/src/data/interface.ts) |
-| `IInviteStore` | [`@selva/platform/invites`](../../platform/src/invites/interface.ts) |
-| `IStorageProvider` | [`@selva/platform/storage`](../../platform/src/storage/interface.ts) |
-| `IUserProfileStore` | [`@selva/platform/userProfile`](../../platform/src/userProfile/interface.ts) |
-| `IPlatformPermissionStore` | [`@selva/platform/permissions`](../../platform/src/permissions/interface.ts) |
-| `IEventSink` | [`@selva/platform/events`](../../platform/src/events/interface.ts) |
+| Interface                                                                                                   | Location                                                                     |
+| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `IAuthProvider`                                                                                             | [`@selva/platform/auth`](../../platform/src/auth/interface.ts)               |
+| `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IComputeServerStore`, `IShareLinkStore` | [`@selva/platform/data`](../../platform/src/data/interface.ts)               |
+| `IInviteStore`                                                                                              | [`@selva/platform/invites`](../../platform/src/invites/interface.ts)         |
+| `IStorageProvider`                                                                                          | [`@selva/platform/storage`](../../platform/src/storage/interface.ts)         |
+| `IUserProfileStore`                                                                                         | [`@selva/platform/userProfile`](../../platform/src/userProfile/interface.ts) |
+| `IPlatformPermissionStore`                                                                                  | [`@selva/platform/permissions`](../../platform/src/permissions/interface.ts) |
+| `IEventSink`                                                                                                | [`@selva/platform/events`](../../platform/src/events/interface.ts)           |
 
 Orchestration (cross-store flows that aren't part of the provider contract) lives in compute-app, not platform — e.g. [`DefinitionService`](../src/lib/server/definitions/DefinitionService.ts) coordinates `IDefinitionStore` + `IStorageProvider` for upload/publish.
 
@@ -271,11 +271,11 @@ Every authenticated request flows through `hooks.server.ts`:
 
 Storage paths are constructed via immutable helpers in [`@selva/platform/definitions/paths.ts`](../../platform/src/definitions/paths.ts) — never string-built ad hoc:
 
-| Path | Purpose |
-|---|---|
-| `definitions/{guid}/versions/v{n}.{ext}` | A definition file |
-| `definitions/{guid}/cover.webp` | Cover image (always WebP after transcoding) |
-| `definitions/{guid}/` | Cascade-delete prefix on definition removal |
+| Path                                     | Purpose                                     |
+| ---------------------------------------- | ------------------------------------------- |
+| `definitions/{guid}/versions/v{n}.{ext}` | A definition file                           |
+| `definitions/{guid}/cover.webp`          | Cover image (always WebP after transcoding) |
+| `definitions/{guid}/`                    | Cascade-delete prefix on definition removal |
 
 `assertSafeKey()` rejects `..`, absolute markers, separators, NUL — defense against path traversal. Image transcoding is unified across providers in `storage/image.ts`.
 
@@ -336,14 +336,14 @@ This means Selva itself has zero exposure to GDPR-class data — the auth provid
 
 Things the architecture supports today but no code path exercises yet. These are deliberate gaps, not oversights — backend was finalized first.
 
-| Item | What's missing | Becomes load-bearing when |
-|---|---|---|
-| **Channel UX in compute-app** | Editors can't toggle live/draft in the UI; share-link minter UI doesn't pin channel | Editors need to test draft solves in-app |
-| **`ALLOW_ORG_CREATION` enforcement** | Platform flag exists in `SelvaFlags`; no route consults it | SaaS multi-tenant ships and self-service org creation lands |
-| **Multi-tenant `actingOrgId` resolution** | Today resolves to first membership; no URL-prefix / subdomain / org-switcher UX | A user can belong to >1 org in a real deployment |
-| **Self-service org creation** | `/admin/api/orgs` exists for instance-admin; no end-user create flow | SaaS multi-tenant ships |
-| **Cross-org guests on private projects** | Permissions.md §12 deferred | First customer asks for it |
-| **Audit-log viewer UI** | `SupabaseEventSink` already persists every domain event to `public.audit_events`; operator-facing browser UI not built | Operators need to read the trail without opening the DB |
+| Item                                      | What's missing                                                                                                         | Becomes load-bearing when                                   |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **Channel UX in compute-app**             | Editors can't toggle live/draft in the UI; share-link minter UI doesn't pin channel                                    | Editors need to test draft solves in-app                    |
+| **`ALLOW_ORG_CREATION` enforcement**      | Platform flag exists in `SelvaFlags`; no route consults it                                                             | SaaS multi-tenant ships and self-service org creation lands |
+| **Multi-tenant `actingOrgId` resolution** | Today resolves to first membership; no URL-prefix / subdomain / org-switcher UX                                        | A user can belong to >1 org in a real deployment            |
+| **Self-service org creation**             | `/admin/api/orgs` exists for instance-admin; no end-user create flow                                                   | SaaS multi-tenant ships                                     |
+| **Cross-org guests on private projects**  | Permissions.md §12 deferred                                                                                            | First customer asks for it                                  |
+| **Audit-log viewer UI**                   | `SupabaseEventSink` already persists every domain event to `public.audit_events`; operator-facing browser UI not built | Operators need to read the trail without opening the DB     |
 
 > Pre-release: trimming any of these from code is free. There is no installed base to maintain compatibility with.
 

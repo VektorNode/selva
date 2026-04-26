@@ -35,7 +35,7 @@ No abstraction impact, but devs pairing docs with the CLI output get confused:
 
 A SECURITY DEFINER function declared as `RETURNS public.invites` and called
 via `rpc()` with no matching row returns a composite with every field set to
-SQL NULL — *not* a JavaScript null. PostgREST faithfully serializes the
+SQL NULL — _not_ a JavaScript null. PostgREST faithfully serializes the
 composite; the client sees `{ id: null, token: null, … }` and treats it as
 "data found."
 

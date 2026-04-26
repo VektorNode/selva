@@ -1,11 +1,6 @@
 import { env } from '$env/dynamic/private';
 import rawConfig from '../../../../../selva.config.js';
-import type {
-	SelvaConfig,
-	SelvaConfigFactory,
-	SelvaFlags,
-	TenancyMode
-} from '@selva/platform';
+import type { SelvaConfig, SelvaConfigFactory, SelvaFlags, TenancyMode } from '@selva/platform';
 import { isFlagEnabled } from '@selva/platform';
 import { DefinitionService } from './definitions/DefinitionService.js';
 

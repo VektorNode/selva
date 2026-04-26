@@ -160,9 +160,7 @@
 				{:else}
 					<div class="border-border bg-card overflow-hidden rounded-xl border">
 						{#each project.members as member (`${member.projectId}:${member.userId}`)}
-							<div
-								class="border-border flex items-center gap-3 border-b px-3 py-2.5 last:border-0"
-							>
+							<div class="border-border flex items-center gap-3 border-b px-3 py-2.5 last:border-0">
 								<div
 									class="bg-muted flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-semibold"
 								>

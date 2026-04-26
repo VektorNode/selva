@@ -131,9 +131,7 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 			const b = project(orgId, ownerId, { name: 'Beta' });
 			await store.createProject(ctx(ownerId), a);
 			await store.createProject(ctx(ownerId), b);
-			await expect(
-				store.updateProject(ctx(ownerId), b.id, { name: 'ALPHA' })
-			).rejects.toThrow();
+			await expect(store.updateProject(ctx(ownerId), b.id, { name: 'ALPHA' })).rejects.toThrow();
 		});
 
 		it('deleteProject removes the project', async () => {

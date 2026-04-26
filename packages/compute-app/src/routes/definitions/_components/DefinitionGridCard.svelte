@@ -38,17 +38,14 @@
 		{#if record.tags?.length}
 			<div class="mt-2.5 flex flex-wrap gap-1">
 				{#each record.tags.slice(0, 3) as tag (tag)}
-					<span
-						class="bg-muted text-muted-foreground rounded px-1.5 py-px font-mono text-[10.5px]"
+					<span class="bg-muted text-muted-foreground rounded px-1.5 py-px font-mono text-[10.5px]"
 						>#{tag}</span
 					>
 				{/each}
 			</div>
 		{/if}
 		<Separator class="my-3" />
-		<div
-			class="text-muted-foreground flex items-center justify-between font-mono text-[11.5px]"
-		>
+		<div class="text-muted-foreground flex items-center justify-between font-mono text-[11.5px]">
 			<span>{formatUpdated(record.updatedAt)} ago</span>
 			<span>{record.runCount.toLocaleString()} runs</span>
 		</div>

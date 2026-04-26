@@ -43,7 +43,10 @@ export class LocalProjectStore implements IProjectStore {
 	): Promise<Page<Project>> {
 		const { projects } = await this.loader.get();
 		return paginate(
-			applyOrder(projects.filter((p) => p.orgId === orgId && isLive(p)), opts),
+			applyOrder(
+				projects.filter((p) => p.orgId === orgId && isLive(p)),
+				opts
+			),
 			opts
 		);
 	}
@@ -81,9 +84,7 @@ export class LocalProjectStore implements IProjectStore {
 			throw new ProviderError('projects_org_name_unique: project name already in use', 409);
 		}
 		if (
-			store.projects.some(
-				(p) => p.orgId === project.orgId && isLive(p) && p.slug === project.slug
-			)
+			store.projects.some((p) => p.orgId === project.orgId && isLive(p) && p.slug === project.slug)
 		) {
 			throw new ProviderError('projects_org_id_slug_key: project slug already in use', 409);
 		}
@@ -110,10 +111,7 @@ export class LocalProjectStore implements IProjectStore {
 		ctx: RequestContext,
 		id: string,
 		patch: Partial<
-			Pick<
-				Project,
-				'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload'
-			>
+			Pick<Project, 'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload'>
 		>
 	): Promise<void> {
 		const store = await this.loader.get();
@@ -245,11 +243,7 @@ export class LocalProjectStore implements IProjectStore {
 		});
 	}
 
-	async removeProjectMember(
-		ctx: RequestContext,
-		projectId: string,
-		userId: string
-	): Promise<void> {
+	async removeProjectMember(ctx: RequestContext, projectId: string, userId: string): Promise<void> {
 		const store = await this.loader.get();
 		const m = store.projectMembers.find(
 			(m) => m.projectId === projectId && m.userId === userId && isLive(m)

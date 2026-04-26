@@ -32,9 +32,7 @@ export function encodeCursor(offset: number): string {
 }
 
 /** Clamp limit + compute the PostgREST `range(from, to)` bounds. */
-export function toRange(
-	opts: Pick<ListOptions, 'limit' | 'cursor'> | undefined
-): RangeSpec {
+export function toRange(opts: Pick<ListOptions, 'limit' | 'cursor'> | undefined): RangeSpec {
 	const limit = Math.min(Math.max(opts?.limit ?? DEFAULT_PAGE_LIMIT, 1), MAX_PAGE_LIMIT);
 	const from = decodeCursor(opts?.cursor);
 	return { from, to: from + limit - 1, limit };

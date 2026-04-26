@@ -446,7 +446,12 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			);
 			await store.create(
 				ctx(scope.ownerId),
-				record(scope, { guid: newPending, status: 'pending', createdAt: recentISO, updatedAt: recentISO })
+				record(scope, {
+					guid: newPending,
+					status: 'pending',
+					createdAt: recentISO,
+					updatedAt: recentISO
+				})
 			);
 			await store.create(
 				ctx(scope.ownerId),

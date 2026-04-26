@@ -106,9 +106,7 @@
 					? 'bg-muted text-foreground'
 					: 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'}"
 			>
-				<span
-					class="h-4 w-4 shrink-0 rounded"
-					style="background-color: {projectColor(project.id)}"
+				<span class="h-4 w-4 shrink-0 rounded" style="background-color: {projectColor(project.id)}"
 				></span>
 				<span class="flex-1 truncate text-sm font-medium">{project.name}</span>
 				<span class="shrink-0 font-mono text-[11px] opacity-60">{defCount}</span>

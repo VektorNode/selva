@@ -13,9 +13,7 @@
 	const user = $derived(pageData.user ?? null);
 	const profile = $derived(pageData.profile ?? null);
 
-	const label = $derived(
-		profile?.displayName ?? user?.email?.split('@')[0] ?? user?.id ?? ''
-	);
+	const label = $derived(profile?.displayName ?? user?.email?.split('@')[0] ?? user?.id ?? '');
 
 	const initial = $derived(label[0]?.toUpperCase() ?? '');
 
@@ -26,11 +24,15 @@
 
 {#if user}
 	<div class="border-border bg-card flex items-center gap-px rounded-full border shadow-sm">
-		<div class="flex items-center gap-2 py-1 pl-1 pr-3">
-			<div class="bg-primary text-primary-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+		<div class="flex items-center gap-2 py-1 pr-3 pl-1">
+			<div
+				class="bg-primary text-primary-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+			>
 				{initial}
 			</div>
-			<span class="text-foreground hidden max-w-32 truncate text-sm font-medium sm:block">{label}</span>
+			<span class="text-foreground hidden max-w-32 truncate text-sm font-medium sm:block"
+				>{label}</span
+			>
 		</div>
 		<div class="bg-border w-px self-stretch"></div>
 		<form method="POST" action="/logout" use:enhance>

@@ -80,10 +80,10 @@ pm2 restart selva-compute --update-env
 
 ## Troubleshooting
 
-| Issue                    | Fix                                                                         |
-| ------------------------ | --------------------------------------------------------------------------- |
-| Port in use              | `lsof -i :3000` → change `PORT` in config                                   |
-| Can't reach Compute      | `curl http://YOUR-COMPUTE/health` → verify the URL in `/admin/compute` and firewall |
-| Definitions not loading  | `ls $DATA_PATH/` → verify filenames match `?gh=` param                      |
-| Body size limit exceeded | Set `BODY_SIZE_LIMIT: 'Infinity'` and restart with `--update-env`           |
-| `Missing required env var: DATA_PATH` | Local provider can't find the data dir — set `DATA_PATH` to an absolute path |
+| Issue                                 | Fix                                                                                 |
+| ------------------------------------- | ----------------------------------------------------------------------------------- |
+| Port in use                           | `lsof -i :3000` → change `PORT` in config                                           |
+| Can't reach Compute                   | `curl http://YOUR-COMPUTE/health` → verify the URL in `/admin/compute` and firewall |
+| Definitions not loading               | `ls $DATA_PATH/` → verify filenames match `?gh=` param                              |
+| Body size limit exceeded              | Set `BODY_SIZE_LIMIT: 'Infinity'` and restart with `--update-env`                   |
+| `Missing required env var: DATA_PATH` | Local provider can't find the data dir — set `DATA_PATH` to an absolute path        |

@@ -50,11 +50,7 @@ export class SupabaseInviteStore implements IInviteStore {
 		return row ? rowToInvite(row as InviteRow) : null;
 	}
 
-	async listByOrg(
-		ctx: RequestContext,
-		orgId: string,
-		opts?: ListOptions
-	): Promise<Page<Invite>> {
+	async listByOrg(ctx: RequestContext, orgId: string, opts?: ListOptions): Promise<Page<Invite>> {
 		const range = toRange(opts);
 		const { data, error, count } = await this.clients
 			.forRequest(ctx)
@@ -168,7 +164,7 @@ function mapError(e: unknown): Error {
 	if (e instanceof Error) return e;
 	if (e && typeof e === 'object') {
 		const obj = e as { message?: string; code?: string };
-		return new Error(obj.code ? `[${obj.code}] ${obj.message ?? ''}` : obj.message ?? String(e));
+		return new Error(obj.code ? `[${obj.code}] ${obj.message ?? ''}` : (obj.message ?? String(e)));
 	}
 	return new Error(String(e));
 }

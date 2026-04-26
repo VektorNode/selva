@@ -49,7 +49,9 @@
 				{/if}
 
 				<div class="space-y-2">
-					<Label for="displayName">Display name <span class="text-muted-foreground">(optional)</span></Label>
+					<Label for="displayName"
+						>Display name <span class="text-muted-foreground">(optional)</span></Label
+					>
 					<Input id="displayName" name="displayName" type="text" placeholder="Your name" />
 				</div>
 
@@ -66,7 +68,13 @@
 
 				<div class="space-y-2">
 					<Label for="confirm">Confirm password</Label>
-					<Input id="confirm" name="confirm" type="password" required placeholder="Repeat password" />
+					<Input
+						id="confirm"
+						name="confirm"
+						type="password"
+						required
+						placeholder="Repeat password"
+					/>
 				</div>
 
 				<Button type="submit" class="w-full">Create account</Button>

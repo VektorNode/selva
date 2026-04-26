@@ -89,9 +89,7 @@ export function runPlatformPermissionStoreConformance(
 			const { store, seedUser } = await createStore();
 			const target = await seedUser();
 			const attacker = await seedUser();
-			await expect(
-				store.set(selfCtx(attacker), target, ['instance_admin'])
-			).rejects.toThrow();
+			await expect(store.set(selfCtx(attacker), target, ['instance_admin'])).rejects.toThrow();
 		});
 
 		it('non-admin caller cannot read another user’s permissions', async () => {
