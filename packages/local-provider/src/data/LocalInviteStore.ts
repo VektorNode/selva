@@ -1,11 +1,13 @@
 import * as path from 'node:path';
 import type {
 	IInviteStore,
+	IEventSink,
 	Invite,
 	RequestContext,
 	ListOptions,
 	Page
 } from '@selva/platform';
+import { NoopEventSink, actorFrom } from '@selva/platform';
 import { paginate, applyOrder } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 
@@ -44,12 +46,18 @@ function migrateInvite(i: Invite & { permissions?: string[] }): Invite {
 export class LocalInviteStore implements IInviteStore {
 	private readonly filePath: string;
 
-	static fromEnv(env: Record<string, string | undefined>): LocalInviteStore {
+	static fromEnv(
+		env: Record<string, string | undefined>,
+		events: IEventSink = new NoopEventSink()
+	): LocalInviteStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
-		return new LocalInviteStore(env.DATA_PATH);
+		return new LocalInviteStore(env.DATA_PATH, events);
 	}
 
-	constructor(dataPath: string) {
+	constructor(
+		dataPath: string,
+		private readonly events: IEventSink = new NoopEventSink()
+	) {
 		this.filePath = path.join(dataPath, 'invites.json');
 	}
 
@@ -61,10 +69,17 @@ export class LocalInviteStore implements IInviteStore {
 		await writeJsonFile(this.filePath, file);
 	}
 
-	async create(_ctx: RequestContext, invite: Invite): Promise<void> {
+	async create(ctx: RequestContext, invite: Invite): Promise<void> {
 		const file = await this.load();
 		file.invites.push(invite);
 		await this.save(file);
+		await this.events.emit({
+			type: 'invite.created',
+			inviteId: invite.id,
+			orgId: invite.orgId,
+			email: invite.email,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async getByToken(_ctx: RequestContext, token: string): Promise<Invite | null> {
@@ -86,19 +101,33 @@ export class LocalInviteStore implements IInviteStore {
 		return paginate(applyOrder(filtered, opts), opts);
 	}
 
-	async markAccepted(_ctx: RequestContext, id: string, userId: string): Promise<void> {
+	async markAccepted(ctx: RequestContext, id: string, userId: string): Promise<void> {
 		const file = await this.load();
 		const invite = file.invites.find((i) => i.id === id);
 		if (!invite || invite.acceptedAt) return;
 		invite.acceptedAt = new Date().toISOString();
 		invite.acceptedByUserId = userId;
 		await this.save(file);
+		await this.events.emit({
+			type: 'invite.accepted',
+			inviteId: invite.id,
+			orgId: invite.orgId,
+			userId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
-	async revoke(_ctx: RequestContext, id: string): Promise<void> {
+	async revoke(ctx: RequestContext, id: string): Promise<void> {
 		const file = await this.load();
-		const before = file.invites.length;
+		const target = file.invites.find((i) => i.id === id && !i.acceptedAt);
+		if (!target) return;
 		file.invites = file.invites.filter((i) => i.id !== id || i.acceptedAt);
-		if (file.invites.length !== before) await this.save(file);
+		await this.save(file);
+		await this.events.emit({
+			type: 'invite.revoked',
+			inviteId: id,
+			orgId: target.orgId,
+			actorId: actorFrom(ctx)
+		});
 	}
 }

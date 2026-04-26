@@ -1,11 +1,12 @@
 import type {
 	IInviteStore,
+	IEventSink,
 	Invite,
 	RequestContext,
 	ListOptions,
 	Page
 } from '@selva/platform';
-import { ProviderError } from '@selva/platform';
+import { NoopEventSink, ProviderError, actorFrom } from '@selva/platform';
 import type { ClientBundle } from './client.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
 
@@ -16,7 +17,10 @@ import { nextCursorFromRange, toRange } from './pagination.js';
  * revoke) go through the normal REST API with RLS enforcing `manage_org_members`.
  */
 export class SupabaseInviteStore implements IInviteStore {
-	constructor(private readonly clients: ClientBundle) {}
+	constructor(
+		private readonly clients: ClientBundle,
+		private readonly events: IEventSink = new NoopEventSink()
+	) {}
 
 	async create(ctx: RequestContext, invite: Invite): Promise<void> {
 		const { error } = await this.clients
@@ -24,6 +28,13 @@ export class SupabaseInviteStore implements IInviteStore {
 			.from('invites')
 			.insert(inviteToRow(invite));
 		if (error) throw mapError(error);
+		await this.events.emit({
+			type: 'invite.created',
+			inviteId: invite.id,
+			orgId: invite.orgId,
+			email: invite.email,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async getByToken(ctx: RequestContext, token: string): Promise<Invite | null> {
@@ -60,23 +71,42 @@ export class SupabaseInviteStore implements IInviteStore {
 	async markAccepted(ctx: RequestContext, id: string, userId: string): Promise<void> {
 		// Direct UPDATE — the caller is authenticated (they just signed up).
 		// `markAccepted` is idempotent so we don't error if no row matches.
-		const { error } = await this.clients
+		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('invites')
 			.update({ accepted_at: new Date().toISOString(), accepted_by_user_id: userId })
 			.eq('id', id)
-			.is('accepted_at', null);
+			.is('accepted_at', null)
+			.select('org_id');
 		if (error) throw mapError(error);
+		const row = data?.[0];
+		if (!row) return;
+		await this.events.emit({
+			type: 'invite.accepted',
+			inviteId: id,
+			orgId: (row as { org_id: string }).org_id,
+			userId,
+			actorId: actorFrom(ctx)
+		});
 	}
 
 	async revoke(ctx: RequestContext, id: string): Promise<void> {
-		const { error } = await this.clients
+		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('invites')
 			.delete()
 			.eq('id', id)
-			.is('accepted_at', null);
+			.is('accepted_at', null)
+			.select('org_id');
 		if (error) throw mapError(error);
+		const row = data?.[0];
+		if (!row) return;
+		await this.events.emit({
+			type: 'invite.revoked',
+			inviteId: id,
+			orgId: (row as { org_id: string }).org_id,
+			actorId: actorFrom(ctx)
+		});
 	}
 }
 
