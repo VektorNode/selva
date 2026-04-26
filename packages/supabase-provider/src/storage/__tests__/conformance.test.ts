@@ -1,6 +1,7 @@
-import { describe, beforeEach, it } from 'vitest';
+import { describe, beforeEach, it, expect } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { runStorageProviderConformance } from '@selva/platform/testing';
+import { definitionPaths } from '@selva/platform';
 import { SupabaseStorageProvider } from '../SupabaseStorageProvider.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -64,6 +65,69 @@ if (!liveStackAvailable) {
 					publicBucket: PUBLIC_BUCKET,
 					privateBucket: PRIVATE_BUCKET
 				})
+		});
+
+		// ============================================================================
+		// Bucket routing — Supabase-specific (the conformance suite is provider-
+		// agnostic and can't see which bucket a file lands in). Without these tests
+		// a regex regression in `bucketFor` could silently move .gh source files
+		// into the public/CDN bucket.
+		// ============================================================================
+		describe('bucket routing', () => {
+			const storage = new SupabaseStorageProvider({
+				supabaseUrl: SUPABASE_URL!,
+				serviceRoleKey: SERVICE_ROLE_KEY!,
+				publicBucket: PUBLIC_BUCKET,
+				privateBucket: PRIVATE_BUCKET
+			});
+
+			async function existsInBucket(bucket: string, path: string): Promise<boolean> {
+				const { data, error } = await adminClient.storage.from(bucket).download(path);
+				if (error) return false;
+				return Boolean(data);
+			}
+
+			it('versioned .gh files land in the private bucket', async () => {
+				const guid = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+				const path = definitionPaths.version(guid, 1, 'gh');
+				await storage.put(path, new TextEncoder().encode('GH_BYTES'));
+				expect(await existsInBucket(PRIVATE_BUCKET, path)).toBe(true);
+				expect(await existsInBucket(PUBLIC_BUCKET, path)).toBe(false);
+			});
+
+			it('versioned .ghx files land in the private bucket', async () => {
+				const guid = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+				const path = definitionPaths.version(guid, 3, 'ghx');
+				await storage.put(path, new TextEncoder().encode('GHX_BYTES'));
+				expect(await existsInBucket(PRIVATE_BUCKET, path)).toBe(true);
+				expect(await existsInBucket(PUBLIC_BUCKET, path)).toBe(false);
+			});
+
+			it('cover images land in the public bucket', async () => {
+				const guid = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+				const path = definitionPaths.image(guid);
+				// Pre-transcoded webp bytes — a real upload would go through
+				// transcodeImageIfNeeded; we're testing routing, not transcode.
+				const webpHeader = Uint8Array.from([
+					0x52, 0x49, 0x46, 0x46, 0x1a, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50
+				]);
+				await storage.put(path, webpHeader, 'image/webp');
+				expect(await existsInBucket(PUBLIC_BUCKET, path)).toBe(true);
+				expect(await existsInBucket(PRIVATE_BUCKET, path)).toBe(false);
+			});
+
+			it('getPublicUrl returns the proxy prefix for private files', () => {
+				const path = definitionPaths.version('guid-1', 1, 'gh');
+				const url = storage.getPublicUrl(path);
+				expect(url.startsWith('/api/files/')).toBe(true);
+				expect(url).not.toContain('/storage/v1/object/public/');
+			});
+
+			it('getPublicUrl returns the CDN URL for public files', () => {
+				const path = definitionPaths.image('guid-1');
+				const url = storage.getPublicUrl(path);
+				expect(url).toContain(`/storage/v1/object/public/${PUBLIC_BUCKET}/`);
+			});
 		});
 	});
 }

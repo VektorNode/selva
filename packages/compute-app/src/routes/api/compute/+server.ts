@@ -11,6 +11,7 @@ import type { SchemaInput } from 'selva-shared';
 import { error, json, isHttpError } from '@sveltejs/kit';
 import type { ComputeServerConfig, RequestContext } from '@selva/platform';
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
+import { isSafeRemoteDefinitionUrl } from '$lib/server/compute/safe-url';
 import { getStorageProvider, providers } from '$lib/server/providers.server';
 import { requireCanSolve, requireCanEditDefinition } from '$lib/server/access.server';
 import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
@@ -32,6 +33,11 @@ const definitionCache = new Map<string, { data: Uint8Array; fetchedAt: number }>
 
 /** Cache TTL: 5 minutes */
 const DEFINITION_CACHE_TTL = 5 * 60 * 1000;
+
+/** Hard cap on remote definition fetches. Tracks `MAX_GH_FILE_SIZE` for uploads. */
+const REMOTE_DEFINITION_MAX_BYTES = 50 * 1024 * 1024;
+/** Per-request fetch deadline. */
+const REMOTE_DEFINITION_FETCH_TIMEOUT_MS = 30_000;
 
 /** Singleton GrasshopperClient instance */
 let cachedClient: GrasshopperClient | null = null;
@@ -68,8 +74,18 @@ async function getClient(serverConfig: ComputeServerConfig): Promise<Grasshopper
 /**
  * Load definition from cache or fetch from remote URL.
  * Local definitions bypass cache (handled by container).
+ *
+ * SSRF protection:
+ *   - private/loopback/link-local hosts rejected up-front
+ *   - `redirect: 'error'` so a public host can't bounce us to a private IP
+ *   - response size capped via Content-Length AND streamed-byte budget
+ *   - hard timeout via AbortController
  */
 async function loadRemoteDefinition(url: string): Promise<Uint8Array> {
+	if (!isSafeRemoteDefinitionUrl(url)) {
+		throw new Error('Remote definition URL is not allowed');
+	}
+
 	const now = Date.now();
 	const cached = definitionCache.get(url);
 
@@ -78,13 +94,29 @@ async function loadRemoteDefinition(url: string): Promise<Uint8Array> {
 		return cached.data;
 	}
 
-	// Fetch fresh copy
-	const response = await fetch(url);
-	if (!response.ok) {
-		throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), REMOTE_DEFINITION_FETCH_TIMEOUT_MS);
+	let data: Uint8Array;
+	try {
+		const response = await fetch(url, {
+			signal: controller.signal,
+			redirect: 'error'
+		});
+		if (!response.ok) {
+			throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+		}
+		const declared = Number(response.headers.get('content-length'));
+		if (Number.isFinite(declared) && declared > REMOTE_DEFINITION_MAX_BYTES) {
+			throw new Error('Remote definition exceeds size limit');
+		}
+		const buffer = await response.arrayBuffer();
+		if (buffer.byteLength > REMOTE_DEFINITION_MAX_BYTES) {
+			throw new Error('Remote definition exceeds size limit');
+		}
+		data = new Uint8Array(buffer);
+	} finally {
+		clearTimeout(timeout);
 	}
-
-	const data = new Uint8Array(await response.arrayBuffer());
 
 	// Cache the result
 	definitionCache.set(url, { data, fetchedAt: now });

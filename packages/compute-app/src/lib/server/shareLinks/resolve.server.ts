@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import type { DefinitionChannel, RequestContext, ShareLink } from '@selva/platform';
+import { SYSTEM_CONTEXT } from '@selva/platform';
 import { getDefinitionMeta, getProjectProvider, providers } from '../providers.server';
 import { hashToken, looksLikeShareToken } from './token.server';
 
@@ -53,12 +54,11 @@ export async function tryResolveShareToken(
 	if (!raw) return null;
 
 	const tokenHash = hashToken(raw);
-	const link = await providers.data.shareLinks.getByTokenHash(
-		// System ctx for the lookup itself — the share-link store doesn't gate
-		// on user identity for token resolution; the token IS the credential.
-		{ userId: '', platformPermissions: [], orgPermissions: [], system: true },
-		tokenHash
-	);
+	// System ctx for every read on this path — the token IS the credential, and
+	// the synthetic ctx we hand back has no `auth.uid()`. Without `system: true`
+	// the Supabase adapter would fall back to the anon client and RLS would
+	// scope every downstream read to nothing.
+	const link = await providers.data.shareLinks.getByTokenHash(SYSTEM_CONTEXT, tokenHash);
 
 	if (!link) throw error(401, 'Invalid or revoked share token.');
 
@@ -78,23 +78,24 @@ export async function tryResolveShareToken(
 
 	// Verify the parent definition is still live; without this, a deleted
 	// definition with a leaked token would still return data via blob lookup.
-	const def = await getDefinitionMeta().get(
-		{ userId: '', platformPermissions: [], orgPermissions: [], system: true },
-		link.definitionId
-	);
+	const def = await getDefinitionMeta().get(SYSTEM_CONTEXT, link.definitionId);
 	if (!def) throw error(401, 'Share token target no longer exists.');
 
-	const project = await getProjectProvider().getProject(
-		{ userId: '', platformPermissions: [], orgPermissions: [], system: true },
-		def.projectId
-	);
+	const project = await getProjectProvider().getProject(SYSTEM_CONTEXT, def.projectId);
 	if (!project) throw error(401, 'Share token target no longer exists.');
 
+	// Synthetic ctx for the downstream solve. `system: true` so adapter dispatch
+	// uses the service-role client — no user JWT exists on a token-credentialed
+	// request, and we've already validated the token gates this exact
+	// (definition, channel) pair. Tenancy info (`actingOrgId`) is included so
+	// org-scoped lookups (e.g. compute server resolution) still target the
+	// right tenant.
 	const ctx: RequestContext = {
 		userId: '',
 		actingOrgId: project.orgId,
 		platformPermissions: [],
-		orgPermissions: []
+		orgPermissions: [],
+		system: true
 	};
 
 	return { link, ctx };

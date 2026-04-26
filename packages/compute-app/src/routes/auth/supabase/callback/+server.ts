@@ -4,7 +4,11 @@ import { env } from '$env/dynamic/private';
 import { ALL_PLATFORM_PERMISSIONS, SYSTEM_CONTEXT, type AuthUser } from '@selva/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { getPermissionStore } from '$lib/server/providers.server';
-import { setSessionCookie, setRefreshCookie } from '$lib/server/admin-auth.server';
+import {
+	safeRedirectTarget,
+	setSessionCookie,
+	setRefreshCookie
+} from '$lib/server/admin-auth.server';
 
 /**
  * GET /auth/supabase/callback?code=...&redirectTo=/app
@@ -46,8 +50,8 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	setSessionCookie(cookies, result.sessionToken);
 	setRefreshCookie(cookies, result.refreshToken);
 
-	const rawRedirect = url.searchParams.get('redirectTo');
-	const dest = rawRedirect && rawRedirect.startsWith('/') ? rawRedirect : '/app';
+	// Same-origin only — `//evil.com` and `/\evil.com` would otherwise pass.
+	const dest = safeRedirectTarget(url.searchParams.get('redirectTo'), '/app');
 	redirect(303, dest);
 };
 
