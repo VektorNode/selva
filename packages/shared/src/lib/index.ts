@@ -1,8 +1,5 @@
 // Layout components
-export { default as PageContainer } from './components/layout/PageContainer.svelte';
-export { default as PageHeader } from './components/layout/PageHeader.svelte';
-export { default as PageContent } from './components/layout/PageContent.svelte';
-export { default as PageFooter } from './components/layout/PageFooter.svelte';
+export * from './components/layout';
 // App shell (compose schema + viewer + layout into a runnable app)
 export { default as AppLayout } from './components/app-shell/AppLayout.svelte';
 export { default as ComputeApp } from './components/app-shell/ComputeApp.svelte';

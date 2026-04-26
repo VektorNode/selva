@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Card, Input, toast } from '@selvajs/shared';
+	import { Button, Card, Input, toast, SectionHeader } from '@selvajs/shared';
 	import { Plus, Trash2, ShieldCheck, Mail, Copy, X } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { Invite, OrgPermission, OrgRole, PlatformPermission } from '@selvajs/platform';
@@ -235,54 +235,47 @@
 </script>
 
 <svelte:head>
-	<title>Users - Selva Admin</title>
+	<title>Admin · Users</title>
 </svelte:head>
 
-<div class="w-full space-y-6 px-6 py-6">
-	<Card.Root>
-		<Card.Header>
-			<div class="flex items-center justify-between">
-				<div>
-					<Card.Title>User Management</Card.Title>
-					<Card.Description>
-						{#if data.users === null}
-							The current auth provider does not expose a user store. Configure DATA_PATH (local
-							provider) or check your provider wiring.
-						{:else}
-							{data.users.length} user{data.users.length === 1 ? '' : 's'}
-						{/if}
-					</Card.Description>
-				</div>
-				{#if data.users !== null && data.provider.userCreation !== 'none'}
-					<div class="flex gap-2">
-						{#if data.provider.userCreation === 'email-password'}
-							<Button
-								onclick={() => {
-									showInviteForm = !showInviteForm;
-									if (showInviteForm) showAddForm = false;
-								}}
-								variant={showInviteForm ? 'outline' : 'default'}
-							>
-								<Mail class="mr-2 h-4 w-4" />
-								Invite user
-							</Button>
-						{/if}
-						<Button
-							onclick={() => {
-								showAddForm = !showAddForm;
-								if (showAddForm) showInviteForm = false;
-							}}
-							variant={showAddForm ? 'outline' : 'secondary'}
-						>
-							<Plus class="mr-2 h-4 w-4" />
-							{data.provider.userCreation === 'email-only' ? 'Allowlist User' : 'Add User'}
-						</Button>
-					</div>
+<div class="space-y-6">
+	<SectionHeader
+		eyebrow="Admin"
+		title="Users"
+		description={data.users === null
+			? 'The current auth provider does not expose a user store. Configure DATA_PATH (local provider) or check your provider wiring.'
+			: `${data.users.length} user${data.users.length === 1 ? '' : 's'} on this instance.`}
+	>
+		{#snippet actions()}
+			{#if data.users !== null && data.provider.userCreation !== 'none'}
+				{#if data.provider.userCreation === 'email-password'}
+					<Button
+						onclick={() => {
+							showInviteForm = !showInviteForm;
+							if (showInviteForm) showAddForm = false;
+						}}
+						variant={showInviteForm ? 'outline' : 'default'}
+					>
+						<Mail class="mr-2 h-4 w-4" />
+						Invite user
+					</Button>
 				{/if}
-			</div>
-		</Card.Header>
+				<Button
+					onclick={() => {
+						showAddForm = !showAddForm;
+						if (showAddForm) showInviteForm = false;
+					}}
+					variant={showAddForm ? 'outline' : 'secondary'}
+				>
+					<Plus class="mr-2 h-4 w-4" />
+					{data.provider.userCreation === 'email-only' ? 'Allowlist user' : 'Add user'}
+				</Button>
+			{/if}
+		{/snippet}
+	</SectionHeader>
 
-		<Card.Content class="space-y-4">
+	<Card.Root>
+		<Card.Content class="space-y-4 pt-6">
 			<!-- Invite-user form -->
 			{#if showInviteForm}
 				<div class="bg-muted/40 space-y-3 rounded-lg border p-4">

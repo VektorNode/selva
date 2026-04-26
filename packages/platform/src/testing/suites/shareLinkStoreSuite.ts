@@ -11,12 +11,31 @@ import { describe, it, expect } from 'vitest';
 import type { IShareLinkStore } from '../../data/interface.js';
 import type { ShareLink } from '../../shareLinks/types.js';
 import { makeCtx, makeUuid } from './helpers.js';
+import type { RequestContext } from '../../context.js';
 
-const ctx = makeCtx;
+// Suite-wide token map. `scopeFor` populates it; `ctx` auto-attaches the
+// matching token so DB-side auth (Supabase RLS) sees the right user.
+const tokens = new Map<string, string>();
+
+function ctx(
+	userId: string,
+	opts: {
+		actingOrgId?: string;
+		platformPermissions?: RequestContext['platformPermissions'];
+		orgPermissions?: RequestContext['orgPermissions'];
+	} = {}
+): RequestContext {
+	return makeCtx(userId, { ...opts, sessionToken: tokens.get(userId) });
+}
 
 export interface ShareLinkTestScope {
 	/** Owner of the parent definition. Used as `createdBy`. */
 	ownerId: string;
+	/**
+	 * Optional access token for `ownerId`. Required for adapters with DB-side
+	 * auth (Supabase RLS); local providers ignore it.
+	 */
+	ownerSessionToken?: string;
 	/** Existing definition the conformance suite mints links against. */
 	definitionId: string;
 	/** A second definition id for cross-definition isolation tests. */
@@ -59,8 +78,11 @@ function link(scope: ShareLinkTestScope, overrides: Partial<ShareLink> = {}): Sh
 
 export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOptions): void {
 	const { name, createStore, createScope } = opts;
-	const scopeFor = async (): Promise<ShareLinkTestScope> =>
-		createScope ? await createScope() : DEFAULT_SCOPE;
+	const scopeFor = async (): Promise<ShareLinkTestScope> => {
+		const s = createScope ? await createScope() : DEFAULT_SCOPE;
+		if (s.ownerSessionToken) tokens.set(s.ownerId, s.ownerSessionToken);
+		return s;
+	};
 
 	describe(`IShareLinkStore conformance: ${name}`, () => {
 		it('create + getById round-trips', async () => {

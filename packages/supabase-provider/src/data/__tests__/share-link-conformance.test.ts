@@ -22,7 +22,7 @@ if (!envCtx) {
 			createScope: async () => {
 				// Seed: 1 owner + 1 org + 1 project + 2 definitions. Share links
 				// FK to definitions, definitions FK to projects, projects FK to orgs.
-				const ownerId = await seedUser(envCtx, '');
+				const { userId: ownerId, sessionToken: ownerSessionToken } = await seedUser(envCtx, '');
 				const orgId = crypto.randomUUID();
 				const projectId = crypto.randomUUID();
 				const definitionId = crypto.randomUUID();
@@ -80,7 +80,7 @@ if (!envCtx) {
 				]);
 				if (defError) throw defError;
 
-				return { ownerId, definitionId, otherDefinitionId };
+				return { ownerId, ownerSessionToken, definitionId, otherDefinitionId };
 			}
 		});
 	});

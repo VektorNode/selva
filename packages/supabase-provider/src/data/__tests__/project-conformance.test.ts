@@ -20,7 +20,7 @@ if (!envCtx) {
 			name: 'SupabaseProjectStore',
 			createStore: async () => {
 				// Seed an owner + an org so the project tests have an anchor.
-				const ownerId = await seedUser(envCtx, '');
+				const { userId: ownerId, sessionToken: ownerSessionToken } = await seedUser(envCtx, '');
 				const orgId = crypto.randomUUID();
 				const now = new Date().toISOString();
 				const admin = envCtx.adminClient;
@@ -34,9 +34,7 @@ if (!envCtx) {
 				});
 				if (orgError) throw orgError;
 				// And an owner membership with `manage_projects` so project
-				// creates pass the `has_org_permission` policy under RLS
-				// (though the conformance suite uses service-role, future
-				// RLS-verifying test runs rely on this being in place).
+				// creates pass the `has_org_permission` policy under RLS.
 				const { error: memberError } = await admin.from('org_members').insert({
 					org_id: orgId,
 					user_id: ownerId,
@@ -46,7 +44,12 @@ if (!envCtx) {
 				});
 				if (memberError) throw memberError;
 
-				return { store: new SupabaseProjectStore(envCtx.bundle), orgId, ownerId };
+				return {
+					store: new SupabaseProjectStore(envCtx.bundle),
+					orgId,
+					ownerId,
+					ownerSessionToken
+				};
 			},
 			seedUser: (id) => seedUser(envCtx, id)
 		});

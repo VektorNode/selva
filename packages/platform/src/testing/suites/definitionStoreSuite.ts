@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import type { IDefinitionStore } from '../../data/interface.js';
 import type { DefinitionRecord, DefinitionVersion } from '../../definitions/types.js';
 import { makeCtx, makeUuid } from './helpers.js';
+import type { RequestContext } from '../../context.js';
 
 /**
  * Scope the suite needs to reference from each test. Adapters that enforce
@@ -19,6 +20,11 @@ import { makeCtx, makeUuid } from './helpers.js';
 export interface DefinitionTestScope {
 	/** Primary owner. Every record and ctx in the suite uses this id. */
 	ownerId: string;
+	/**
+	 * Optional access token for `ownerId`. Required for adapters that enforce
+	 * auth at the DB layer (Supabase RLS); ignored by local providers.
+	 */
+	ownerSessionToken?: string;
 	/** Default project id. Returned by `primaryProjectId()` in the suite. */
 	projectId: string;
 	/**
@@ -28,6 +34,8 @@ export interface DefinitionTestScope {
 	secondaryProjectId: string;
 	/** Optional third user id for ctx-isolation tests. Required when ctxIsolation is set. */
 	secondaryUserId?: string;
+	/** Token for `secondaryUserId`, when used. */
+	secondaryUserSessionToken?: string;
 }
 
 export interface DefinitionStoreConformanceOptions {
@@ -55,7 +63,28 @@ const DEFAULT_SCOPE: DefinitionTestScope = {
 	secondaryUserId: 'user-b'
 };
 
-const ctx = makeCtx;
+// Suite-wide token map. `scopeFor` populates it from the scope; `ctx`
+// auto-attaches the matching token so adapters with DB-side auth (Supabase
+// RLS) run as the right user. Local providers ignore tokens entirely.
+const tokens = new Map<string, string>();
+
+function ctx(
+	userId: string,
+	opts: {
+		actingOrgId?: string;
+		platformPermissions?: RequestContext['platformPermissions'];
+		orgPermissions?: RequestContext['orgPermissions'];
+	} = {}
+): RequestContext {
+	return makeCtx(userId, { ...opts, sessionToken: tokens.get(userId) });
+}
+
+function recordTokensFromScope(scope: DefinitionTestScope): void {
+	if (scope.ownerSessionToken) tokens.set(scope.ownerId, scope.ownerSessionToken);
+	if (scope.secondaryUserId && scope.secondaryUserSessionToken) {
+		tokens.set(scope.secondaryUserId, scope.secondaryUserSessionToken);
+	}
+}
 
 function record(
 	scope: DefinitionTestScope,
@@ -101,8 +130,11 @@ function version(
 
 export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOptions): void {
 	const { name, createStore, createScope, ctxIsolation = false } = opts;
-	const scopeFor = async (): Promise<DefinitionTestScope> =>
-		createScope ? await createScope() : DEFAULT_SCOPE;
+	const scopeFor = async (): Promise<DefinitionTestScope> => {
+		const s = createScope ? await createScope() : DEFAULT_SCOPE;
+		recordTokensFromScope(s);
+		return s;
+	};
 
 	describe(`IDefinitionStore conformance: ${name}`, () => {
 		it('create + get returns the record', async () => {

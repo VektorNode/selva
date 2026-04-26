@@ -17,6 +17,12 @@ import { makeUuid } from './helpers.js';
 export interface ComputeServerStoreConformanceOptions {
 	name: string;
 	createStore: () => Promise<IComputeServerStore> | IComputeServerStore;
+	/**
+	 * Optional hook adapters with FK constraints use to seed an `orgs` row
+	 * before the suite writes an org-scoped compute config that FK-references
+	 * it. Adapters without org FKs (local JSON) can omit this.
+	 */
+	seedOrg?: (orgId: string) => Promise<void>;
 }
 
 function server(overrides: Partial<ComputeServerConfig> = {}): ComputeServerConfig {
@@ -42,7 +48,12 @@ function orgCtx(orgId: string): RequestContext {
 }
 
 export function runComputeServerStoreConformance(opts: ComputeServerStoreConformanceOptions): void {
-	const { name, createStore } = opts;
+	const { name, createStore, seedOrg } = opts;
+	const seed = async (): Promise<string> => {
+		const id = makeUuid();
+		if (seedOrg) await seedOrg(id);
+		return id;
+	};
 
 	describe(`IComputeServerStore conformance: ${name}`, () => {
 		it('saveConfig + getConfig round-trips servers and defaultServerId', async () => {
@@ -81,7 +92,7 @@ export function runComputeServerStoreConformance(opts: ComputeServerStoreConform
 
 		it('saveConfig in org scope is invisible to instance reads', async () => {
 			const store = await createStore();
-			const orgId = makeUuid();
+			const orgId = await seed();
 			const orgServer = server({ label: "Org's BYO" });
 			await store.saveConfig(orgCtx(orgId), {
 				servers: [orgServer],
@@ -94,7 +105,7 @@ export function runComputeServerStoreConformance(opts: ComputeServerStoreConform
 
 		it('saveConfig in org scope returns its own servers + default on read', async () => {
 			const store = await createStore();
-			const orgId = makeUuid();
+			const orgId = await seed();
 			const orgServer = server({ label: "Org's BYO" });
 			await store.saveConfig(orgCtx(orgId), {
 				servers: [orgServer],
@@ -108,7 +119,7 @@ export function runComputeServerStoreConformance(opts: ComputeServerStoreConform
 
 		it('saving the instance scope does not clobber org-scoped servers (and vice versa)', async () => {
 			const store = await createStore();
-			const orgId = makeUuid();
+			const orgId = await seed();
 			const instanceServer = server({ label: 'Instance Pool' });
 			const orgServer = server({ label: "Org's BYO" });
 

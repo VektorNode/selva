@@ -14,7 +14,7 @@ runEventSinkConformance({
 		tempDirs.push(tempDir);
 		return LocalDataProvider.fromEnv({ DATA_PATH: tempDir }, sink);
 	},
-	createActorId: () => randomUUID(),
+	createActorId: async () => ({ userId: randomUUID() }),
 	cleanup: async () => {
 		await Promise.all(tempDirs.map((d) => fs.rm(d, { recursive: true, force: true })));
 		tempDirs.length = 0;

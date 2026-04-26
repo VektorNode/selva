@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Card, Input, toast } from '@selvajs/shared';
+	import { Button, Card, Input, toast, SectionHeader } from '@selvajs/shared';
 	import { Circle, Server, Plus, Trash2, Star, ChevronDown, ChevronUp } from '@lucide/svelte';
 	import type { ComputeServerConfig } from '@selvajs/platform/computeServer';
 	import { useServerHealth } from '$lib/composables/useServerHealth.svelte';
@@ -150,7 +150,7 @@
 </script>
 
 <svelte:head>
-	<title>Compute - Selva Admin</title>
+	<title>Admin · Compute</title>
 </svelte:head>
 
 {#snippet serverCard(server: ServerEntry, i: number)}
@@ -336,27 +336,25 @@
 	</div>
 {/snippet}
 
-<div class="w-full space-y-6 px-6 py-6">
+<div class="space-y-6">
+	<SectionHeader
+		eyebrow="Admin"
+		title="Compute"
+		description="The instance compute pool \u2014 used by every org unless they configure a BYO override. Changes take effect immediately, no restart required."
+	>
+		{#snippet actions()}
+			<Button variant="outline" size="sm" onclick={addServer}>
+				<Plus class="mr-1.5 h-3.5 w-3.5" />
+				Add server
+			</Button>
+			<Button size="sm" onclick={save} disabled={saving || !dirty}>
+				{saving ? 'Saving\u2026' : 'Save'}
+			</Button>
+		{/snippet}
+	</SectionHeader>
+
 	<Card.Root>
-		<Card.Header>
-			<div class="flex items-center justify-between">
-				<div>
-					<Card.Title>Servers</Card.Title>
-					<Card.Description>Changes take effect immediately - no restart required.</Card.Description
-					>
-				</div>
-				<div class="flex gap-2">
-					<Button variant="outline" size="sm" onclick={addServer}>
-						<Plus class="mr-1.5 h-3.5 w-3.5" />
-						Add Server
-					</Button>
-					<Button size="sm" onclick={save} disabled={saving || !dirty}>
-						{saving ? 'Saving\u2026' : 'Save'}
-					</Button>
-				</div>
-			</div>
-		</Card.Header>
-		<Card.Content class="space-y-3">
+		<Card.Content class="space-y-3 pt-6">
 			{#if servers.length === 0}
 				<div
 					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"

@@ -16,11 +16,16 @@ import { describe, it, expect } from 'vitest';
 import type { IInviteStore } from '../../invites/interface.js';
 import type { Invite } from '../../invites/types.js';
 import { SYSTEM_CONTEXT } from '../../context.js';
-import { makeCtx, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
+import { makeSeedHelpers, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
 
 export interface InviteTestScope {
 	/** User that creates invites. Must be seeded + have `manage_org_members` in the org. */
 	adminId: string;
+	/**
+	 * Optional access token for `adminId`. Required for adapters with DB-side
+	 * auth (Supabase RLS); local providers ignore it.
+	 */
+	adminSessionToken?: string;
 	/** Org invites are issued for. Must be seeded with the admin as a member. */
 	orgId: string;
 }
@@ -59,12 +64,14 @@ const DEFAULT_SCOPE: InviteTestScope = {
 	orgId: 'org-1'
 };
 
-const ctx = makeCtx;
-
 export function runInviteStoreConformance(opts: InviteStoreConformanceOptions): void {
 	const { name, createStore, createScope, seedUser = noopSeedUser } = opts;
-	const scopeFor = async (): Promise<InviteTestScope> =>
-		createScope ? await createScope() : DEFAULT_SCOPE;
+	const { ctx, registerToken } = makeSeedHelpers(seedUser);
+	const scopeFor = async (): Promise<InviteTestScope> => {
+		const s = createScope ? await createScope() : DEFAULT_SCOPE;
+		if (s.adminSessionToken) registerToken(s.adminId, s.adminSessionToken);
+		return s;
+	};
 
 	describe(`IInviteStore conformance: ${name}`, () => {
 		it('create + getByTokenHash round-trips', async () => {
@@ -97,7 +104,7 @@ export function runInviteStoreConformance(opts: InviteStoreConformanceOptions): 
 		it('markAccepted sets acceptedAt + acceptedByUserId; getByTokenHash then returns null', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
-			const acceptor = await seedUser(makeUuid());
+			const { userId: acceptor } = await seedUser(makeUuid());
 			const inv = invite(scope);
 			await store.create(ctx(scope.adminId), inv);
 			await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor);
@@ -108,7 +115,7 @@ export function runInviteStoreConformance(opts: InviteStoreConformanceOptions): 
 		it('markAccepted is idempotent (second call is a no-op)', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
-			const acceptor = await seedUser(makeUuid());
+			const { userId: acceptor } = await seedUser(makeUuid());
 			const inv = invite(scope);
 			await store.create(ctx(scope.adminId), inv);
 			await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor);

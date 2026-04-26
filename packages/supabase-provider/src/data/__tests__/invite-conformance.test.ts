@@ -20,7 +20,7 @@ if (!envCtx) {
 			name: 'SupabaseInviteStore',
 			createStore: () => new SupabaseInviteStore(envCtx.bundle),
 			createScope: async () => {
-				const adminId = await seedUser(envCtx, '');
+				const { userId: adminId, sessionToken: adminSessionToken } = await seedUser(envCtx, '');
 				const orgId = crypto.randomUUID();
 				const now = new Date().toISOString();
 				await envCtx.adminClient.from('orgs').insert({
@@ -38,7 +38,7 @@ if (!envCtx) {
 					permissions: [...DEFAULT_ORG_PERMISSIONS.owner],
 					joined_at: now
 				});
-				return { adminId, orgId };
+				return { adminId, adminSessionToken, orgId };
 			},
 			seedUser: (id) => seedUser(envCtx, id)
 		});

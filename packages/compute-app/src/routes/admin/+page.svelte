@@ -1,11 +1,17 @@
 <script lang="ts">
-	import { Card } from '@selvajs/shared';
-	import { Users, Server, LayoutDashboard, ArrowRight } from '@lucide/svelte';
-	import UpdateSection from './UpdateSection.svelte';
+	import { Card, SectionHeader } from '@selvajs/shared';
+	import {
+		Users,
+		Server,
+		LayoutDashboard,
+		ArrowRight,
+		GitCommit,
+		Building2,
+		RotateCcw
+	} from '@lucide/svelte';
 
 	interface PageData {
 		stats: { users: number | null };
-		isPlatformAdmin: boolean;
 	}
 	interface Props {
 		data: PageData;
@@ -19,167 +25,89 @@
 		date: __GIT_DATE__
 	};
 
-	let updateRunning = $state(false);
-	let updateLogs = $state('');
-	let updateExitCode = $state<number | null>(null);
-	let updateRestarting = $state(false);
-
-	async function waitForAppRestart() {
-		updateLogs += '\nWaiting for app to come back online…\n';
-		await new Promise((r) => setTimeout(r, 3000));
-		for (let i = 0; i < 30; i++) {
-			try {
-				const res = await fetch('/api/health', { cache: 'no-store' });
-				if (res.ok) {
-					updateLogs += '✓ App is back online!\n';
-					updateExitCode = 0;
-					updateRunning = false;
-					updateRestarting = false;
-					return;
-				}
-			} catch {
-				// still down, keep polling
-			}
-			await new Promise((r) => setTimeout(r, 2000));
+	const tiles = $derived([
+		{
+			href: '/admin/users',
+			icon: Users,
+			value: data.stats.users ?? '—',
+			label:
+				data.stats.users === null
+					? 'User store unavailable'
+					: `User${data.stats.users === 1 ? '' : 's'}`
+		},
+		{
+			href: '/admin/organizations',
+			icon: Building2,
+			value: 'Organizations',
+			label: 'All orgs on this instance'
+		},
+		{
+			href: '/admin/compute',
+			icon: Server,
+			value: 'Compute',
+			label: 'Servers, status & config'
+		},
+		{
+			href: '/admin/reclaim',
+			icon: RotateCcw,
+			value: 'Reclaim',
+			label: 'Take ownership of any project'
+		},
+		{
+			href: '/definitions',
+			icon: LayoutDashboard,
+			value: 'Content',
+			label: 'Definitions & projects'
 		}
-		updateLogs += '⚠ App did not come back within 60s - check PM2 logs.\n';
-		updateRunning = false;
-		updateRestarting = false;
-	}
-
-	async function runUpdate() {
-		updateRunning = true;
-		updateRestarting = false;
-		updateLogs = '';
-		updateExitCode = null;
-		try {
-			const response = await fetch('/admin/api/system/update', { method: 'POST' });
-			if (!response.ok) {
-				updateLogs = 'Failed to start update process';
-				updateRunning = false;
-				return;
-			}
-			const reader = response.body?.getReader();
-			const decoder = new TextDecoder();
-			if (!reader) {
-				updateLogs = 'Failed to read response';
-				updateRunning = false;
-				return;
-			}
-			let buffer = '';
-			let gotExit = false;
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-				buffer += decoder.decode(value, { stream: true });
-				const parts = buffer.split('\n\n');
-				buffer = parts.pop()!;
-				for (const part of parts) {
-					if (!part.startsWith('data: ')) continue;
-					try {
-						const event = JSON.parse(part.slice(6));
-						if (event.type === 'log') updateLogs += event.data + '\n';
-						else if (event.type === 'restarting') {
-							updateLogs += event.data + '\n';
-							updateRestarting = true;
-						} else if (event.type === 'exit') {
-							gotExit = true;
-							updateExitCode = event.code;
-							updateRunning = false;
-						}
-					} catch {
-						// ignore malformed events
-					}
-				}
-			}
-			if (!gotExit) await waitForAppRestart();
-		} catch (err) {
-			if (updateRunning) {
-				await waitForAppRestart();
-			} else {
-				updateLogs += '\nError: ' + (err instanceof Error ? err.message : 'Unknown error');
-				updateRunning = false;
-			}
-		}
-	}
+	]);
 </script>
 
 <svelte:head>
-	<title>Admin - Selva</title>
+	<title>Admin · General</title>
 </svelte:head>
 
-<div class="w-full space-y-6 px-6 py-6">
-	<!-- Platform stats -->
-	<div class="grid gap-4 sm:grid-cols-3">
-		<a href="/admin/users">
-			<Card.Root class="hover:bg-muted/40 cursor-pointer transition-colors">
-				<Card.Content class="flex items-center gap-4 pt-6">
-					<div class="bg-primary/10 rounded-lg p-3">
-						<Users class="text-primary h-5 w-5" />
-					</div>
-					<div>
-						<p class="text-2xl font-bold">{data.stats.users ?? '—'}</p>
-						<p class="text-muted-foreground text-sm">
-							{data.stats.users === null
-								? 'User store unavailable'
-								: `User${data.stats.users === 1 ? '' : 's'}`}
-						</p>
-					</div>
-				</Card.Content>
-			</Card.Root>
-		</a>
+<div class="space-y-6">
+	<SectionHeader
+		eyebrow="Admin"
+		title="General"
+		description="At-a-glance health of this Selva instance — users, compute, and content."
+	/>
 
-		<a href="/admin/compute">
-			<Card.Root class="hover:bg-muted/40 cursor-pointer transition-colors">
-				<Card.Content class="flex items-center gap-4 pt-6">
-					<div class="bg-primary/10 rounded-lg p-3">
-						<Server class="text-primary h-5 w-5" />
-					</div>
-					<div>
-						<p class="text-sm font-semibold">Compute Servers</p>
-						<p class="text-muted-foreground text-xs">Status &amp; config</p>
-					</div>
-				</Card.Content>
-			</Card.Root>
-		</a>
-
-		<a href="/definitions">
-			<Card.Root class="hover:bg-muted/40 cursor-pointer transition-colors">
-				<Card.Content class="flex items-center justify-between gap-4 pt-6">
-					<div class="flex items-center gap-4">
-						<div class="bg-primary/10 rounded-lg p-3">
-							<LayoutDashboard class="text-primary h-5 w-5" />
+	<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+		{#each tiles as tile (tile.href)}
+			{@const Icon = tile.icon}
+			<a href={tile.href} class="block">
+				<Card.Root class="h-full transition-colors hover:bg-accent/40">
+					<Card.Content class="flex items-center justify-between gap-4 pt-6">
+						<div class="flex items-center gap-4">
+							<div class="rounded-md bg-accent p-2.5 text-accent-foreground">
+								<Icon class="h-4 w-4" />
+							</div>
+							<div>
+								<p class="text-lg font-semibold leading-tight">{tile.value}</p>
+								<p class="text-xs text-muted-foreground">{tile.label}</p>
+							</div>
 						</div>
-						<div>
-							<p class="text-sm font-semibold">Content Dashboard</p>
-							<p class="text-muted-foreground text-xs">Definitions &amp; projects</p>
-						</div>
-					</div>
-					<ArrowRight class="text-muted-foreground h-4 w-4 shrink-0" />
-				</Card.Content>
-			</Card.Root>
-		</a>
+						<ArrowRight class="h-4 w-4 shrink-0 text-muted-foreground" />
+					</Card.Content>
+				</Card.Root>
+			</a>
+		{/each}
 	</div>
 
-	<!-- Build info -->
 	<Card.Root>
-		<Card.Content class="pt-6">
-			<p class="text-muted-foreground mb-2 text-xs">Web App Build</p>
-			<div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-				<code class="text-foreground font-mono text-xs" title={build.fullHash}>{build.hash}</code>
-				<span class="text-muted-foreground text-xs">{build.message}</span>
-				<span class="text-muted-foreground text-xs">{build.date}</span>
+		<Card.Header>
+			<Card.Title class="flex items-center gap-2 text-sm font-medium">
+				<GitCommit class="h-4 w-4 text-muted-foreground" />
+				Web app build
+			</Card.Title>
+		</Card.Header>
+		<Card.Content>
+			<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+				<code class="font-mono text-xs text-foreground" title={build.fullHash}>{build.hash}</code>
+				<span class="text-xs text-muted-foreground">{build.message}</span>
+				<span class="text-xs text-muted-foreground">{build.date}</span>
 			</div>
 		</Card.Content>
 	</Card.Root>
-
-	{#if data.isPlatformAdmin}
-		<UpdateSection
-			isRunning={updateRunning}
-			isRestarting={updateRestarting}
-			logs={updateLogs}
-			exitCode={updateExitCode}
-			onRun={runUpdate}
-		/>
-	{/if}
 </div>

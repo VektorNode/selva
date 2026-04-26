@@ -60,8 +60,11 @@ export interface EventSinkConformanceOptions {
 	 * The actor user id that mutations will be performed as. The suite needs
 	 * this to be a real id in the adapter's auth backend (Supabase has FK).
 	 * Local can return any uuid.
+	 *
+	 * `sessionToken` is required for adapters with DB-side auth (Supabase RLS)
+	 * so the per-test `ctx` runs as that authenticated user. Local can omit.
 	 */
-	createActorId: () => Promise<string> | string;
+	createActorId: () => Promise<{ userId: string; sessionToken?: string }>;
 	/**
 	 * Optional hook for cleaning up after the test (delete tempdir, truncate
 	 * Supabase tables, etc.). Called once at the end of each test.
@@ -81,11 +84,13 @@ export function runEventSinkConformance(opts: EventSinkConformanceOptions): void
 		beforeEach(async () => {
 			sink = new RecordingEventSink();
 			provider = await createProvider(sink);
-			actorId = await createActorId();
+			const seeded = await createActorId();
+			actorId = seeded.userId;
 			ctx = {
 				userId: actorId,
 				platformPermissions: [...ALL_PLATFORM_PERMISSIONS],
-				orgPermissions: [...ALL_ORG_PERMISSIONS]
+				orgPermissions: [...ALL_ORG_PERMISSIONS],
+				adapterContext: seeded.sessionToken ? { sessionToken: seeded.sessionToken } : undefined
 			};
 		});
 
@@ -116,7 +121,7 @@ export function runEventSinkConformance(opts: EventSinkConformanceOptions): void
 
 		it('addOrgMember emits org_member.added', async () => {
 			const orgId = makeUuid();
-			const newMemberId = await createActorId();
+			const { userId: newMemberId } = await createActorId();
 			await provider.orgs.createOrg(ctx, makeOrg({ id: orgId, ownerId: actorId }));
 			sink.clear();
 
@@ -129,7 +134,7 @@ export function runEventSinkConformance(opts: EventSinkConformanceOptions): void
 
 		it('removeOrgMember emits org_member.removed', async () => {
 			const orgId = makeUuid();
-			const newMemberId = await createActorId();
+			const { userId: newMemberId } = await createActorId();
 			await provider.orgs.createOrg(ctx, makeOrg({ id: orgId, ownerId: actorId }));
 			await provider.orgs.addOrgMember(ctx, makeOrgMember({ orgId, userId: newMemberId }));
 			sink.clear();
