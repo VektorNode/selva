@@ -5,6 +5,10 @@ import { getAuthProvider } from '$lib/server/auth.server';
 const ALLOWED_PROVIDERS = ['google', 'github', 'azure', 'gitlab'] as const;
 type AllowedProvider = (typeof ALLOWED_PROVIDERS)[number];
 
+function isAllowedProvider(value: string | null): value is AllowedProvider {
+	return value !== null && (ALLOWED_PROVIDERS as readonly string[]).includes(value);
+}
+
 /**
  * GET /auth/supabase/start?provider=google&redirectTo=/app
  *
@@ -18,14 +22,12 @@ type AllowedProvider = (typeof ALLOWED_PROVIDERS)[number];
  */
 export const GET: RequestHandler = async ({ url }) => {
 	const provider = url.searchParams.get('provider');
-	if (!provider || !ALLOWED_PROVIDERS.includes(provider as AllowedProvider)) {
+	if (!isAllowedProvider(provider)) {
 		throw error(400, `Invalid provider. Allowed: ${ALLOWED_PROVIDERS.join(', ')}`);
 	}
 
-	const auth = getAuthProvider();
-	if (
-		typeof (auth as { getOAuthAuthorizationUrl?: unknown }).getOAuthAuthorizationUrl !== 'function'
-	) {
+	const oauth = getAuthProvider().oauth;
+	if (!oauth) {
 		throw error(501, 'OAuth is not supported by the configured auth provider.');
 	}
 
@@ -37,9 +39,6 @@ export const GET: RequestHandler = async ({ url }) => {
 		callbackUrl.searchParams.set('redirectTo', redirectTo);
 	}
 
-	const oauth = auth as unknown as {
-		getOAuthAuthorizationUrl: (p: string, redirect: string) => Promise<string>;
-	};
 	const authorizationUrl = await oauth.getOAuthAuthorizationUrl(provider, callbackUrl.toString());
 	redirect(303, authorizationUrl);
 };
