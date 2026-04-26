@@ -9,13 +9,6 @@ export const APP_DEFAULTS = {
 	TIMEOUTS: {
 		/** Duration to show solving state (ms) */
 		SOLVE_STATE_DURATION: 3500,
-		/**
-		 * Default per-solve abort timeout (ms). Used as the fallback when a
-		 * caller doesn't supply one. The compute-app overrides this with
-		 * MAX_SOLVE_DURATION_MS from `computeLimits.ts`, plumbed through page
-		 * data so the client's AbortController matches the server's deadline.
-		 */
-		COMPUTE_TIMEOUT: 60000,
 		/** Parameter export callback delay (ms) */
 		PARAM_EXPORT_DELAY: 100,
 		/** Viewer initialization delay (ms) */
