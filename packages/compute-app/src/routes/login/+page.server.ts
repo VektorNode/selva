@@ -4,7 +4,8 @@ import {
 	setSessionCookie,
 	checkRateLimit,
 	recordFailedAttempt,
-	clearRateLimit
+	clearRateLimit,
+	safeRedirectTarget
 } from '$lib/server/admin-auth.server';
 import { getAuthProvider } from '$lib/server/auth.server';
 
@@ -70,12 +71,13 @@ export const actions = {
 				clearRateLimit(ip);
 				setSessionCookie(cookies, result.sessionToken);
 
+				// Same-origin only. Form value wins; query-string is the fallback.
+				const fromForm = typeof redirectTo === 'string' ? redirectTo : null;
+				const fromQuery = url.searchParams.get('redirectTo');
 				const destination =
-					typeof redirectTo === 'string' && redirectTo.startsWith('/')
-						? redirectTo
-						: (url.searchParams.get('redirectTo') ?? '/app');
+					safeRedirectTarget(fromForm, '') || safeRedirectTarget(fromQuery, '/app');
 
-				redirect(303, destination.startsWith('/') ? destination : '/app');
+				redirect(303, destination);
 			}
 		}
 	}

@@ -74,12 +74,14 @@ export class SupabaseStorageProvider implements IStorageProvider {
 	}
 
 	/**
-	 * Route a storage path to a bucket. Paths ending in `definition.gh` or
-	 * `definition.ghx` are private; everything else is public. This mirrors
-	 * what `definitionPaths.file(guid, ext)` produces.
+	 * Route a storage path to a bucket. Any `.gh`/`.ghx` source file is
+	 * private — confidentiality is determined by extension, not location, so
+	 * a path-scheme rename (e.g. `definition.gh` → `versions/v1.gh`) can't
+	 * silently move source files into the public bucket. Everything else
+	 * (covers, archives, thumbnails) is public.
 	 */
 	private bucketFor(storagePath: string): string {
-		return /\/definition\.(gh|ghx)$/i.test(storagePath) ? this.privateBucket : this.publicBucket;
+		return /\.(gh|ghx)$/i.test(storagePath) ? this.privateBucket : this.publicBucket;
 	}
 
 	async get(storagePath: string): Promise<Uint8Array | null> {

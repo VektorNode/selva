@@ -16,6 +16,30 @@ import {
 // is needed here.
 
 /**
+ * First-run state is a one-way transition (zero users → at least one user)
+ * that lasts the lifetime of the deployment. After we've seen at least one
+ * user, the answer is permanent — caching it eliminates a per-request DB
+ * read for every admin/api hit. The flag never goes back to true; that
+ * would require a destructive DB action well outside this code's view.
+ */
+let firstRunResolved = false;
+
+async function isFirstRun(): Promise<boolean> {
+	if (firstRunResolved) return false;
+	const usersPage = await providers.auth.listUsers({ limit: 1 });
+	if (usersPage === null) {
+		// Provider doesn't support listUsers (OIDC-only). The setup page uses
+		// `permissions.hasInstanceAdmin` instead — first-run gating doesn't
+		// apply to those deployments.
+		firstRunResolved = true;
+		return false;
+	}
+	if (usersPage.items.length === 0) return true;
+	firstRunResolved = true;
+	return false;
+}
+
+/**
  * Build a per-request context from an authenticated user. Resolves the
  * active-org membership and loads its OrgPermissions into the context.
  *
@@ -86,10 +110,17 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 
 	const isJsonApiRoute = isApiRoute || pathname.startsWith('/admin/api/');
 
-	// On first run (no users yet), redirect all admin traffic to /setup
+	// `/api/health` is a load-balancer probe — must answer without auth or
+	// first-run gating. Short-circuit before any of the gates below run.
+	if (pathname === '/api/health') {
+		return resolve(event);
+	}
+
+	// On first run (no users yet), redirect all admin traffic to /setup. The
+	// answer is cached: first-run is a one-way transition, so subsequent
+	// requests skip the listUsers DB hit entirely.
 	if (isAdminRoute || isApiRoute) {
-		const usersPage = await providers.auth.listUsers({ limit: 1 });
-		if (usersPage !== null && usersPage.items.length === 0) {
+		if (await isFirstRun()) {
 			if (isJsonApiRoute) {
 				return new Response(JSON.stringify({ error: 'Setup required' }), {
 					status: 503,
