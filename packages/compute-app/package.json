@@ -12,7 +12,9 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"type-check": "tsc --noEmit",
-		"lint": "eslint . --ext .js,.ts,.svelte"
+		"lint": "eslint . --ext .js,.ts,.svelte",
+		"test": "vitest run",
+		"test:watch": "vitest"
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",
@@ -31,6 +33,8 @@
 		"@sveltejs/adapter-auto": "catalog:",
 		"@sveltejs/adapter-node": "^5.5.1",
 		"@types/three": "catalog:",
-		"tw-animate-css": "catalog:"
+		"selva-local-provider": "workspace:*",
+		"tw-animate-css": "catalog:",
+		"vitest": "^2.1.8"
 	}
 }
