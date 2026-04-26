@@ -188,6 +188,22 @@ export class SupabaseOrgStore implements IOrgStore {
 			if (defErr) throw mapError(defErr);
 		}
 
+		// Hard-delete tables that have no `deleted_at` column. SQL CASCADE on
+		// the org FK only fires for hard org deletes; we soft-delete, so we
+		// clean these up here. Pending invites to a dead org are unredeemable;
+		// stale compute config is operational state with no audit need.
+		const { error: invErr } = await client.from('invites').delete().eq('org_id', id);
+		if (invErr) throw mapError(invErr);
+
+		const { error: cdErr } = await client
+			.from('compute_server_defaults')
+			.delete()
+			.eq('org_id', id);
+		if (cdErr) throw mapError(cdErr);
+
+		const { error: csErr } = await client.from('compute_servers').delete().eq('org_id', id);
+		if (csErr) throw mapError(csErr);
+
 		await this.events.emit({ type: 'org.deleted', orgId: id, actorId: actorFrom(ctx) });
 	}
 

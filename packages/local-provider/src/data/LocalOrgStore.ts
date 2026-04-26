@@ -1,6 +1,8 @@
 import * as path from 'node:path';
 import type {
 	IOrgStore,
+	IInviteStore,
+	IComputeServerStore,
 	IEventSink,
 	Organization,
 	OrgRole,
@@ -22,6 +24,8 @@ import {
 } from '@selva/platform';
 import { paginate, applyOrder } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
+import { LocalInviteStore } from './LocalInviteStore.js';
+import { LocalComputeServerStore } from './LocalComputeServerStore.js';
 
 /** Shape of the on-disk local-org.json file. */
 export interface LocalOrgStoreData {
@@ -69,14 +73,35 @@ export class LocalOrgStoreLoader {
 export class LocalOrgStore implements IOrgStore {
 	private readonly loader: LocalOrgStoreLoader;
 	private readonly events: IEventSink;
+	/**
+	 * Sibling stores wired in for the `deleteOrg` cascade. The local provider
+	 * splits invites and compute config into separate JSON files that the
+	 * loader can't reach — so they're injected here. Required, not optional:
+	 * an unwired cascade silently leaks invites and stale compute config,
+	 * exactly the footgun the cascade fix was meant to remove.
+	 */
+	private readonly invites: IInviteStore;
+	private readonly computeServer: IComputeServerStore;
 
 	static fromEnv(env: Record<string, string | undefined>): LocalOrgStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
-		return new LocalOrgStore(new LocalOrgStoreLoader(env.DATA_PATH));
+		const loader = new LocalOrgStoreLoader(env.DATA_PATH);
+		return new LocalOrgStore(
+			loader,
+			LocalInviteStore.fromEnv(env),
+			LocalComputeServerStore.fromEnv(env)
+		);
 	}
 
-	constructor(loader: LocalOrgStoreLoader, events: IEventSink = new NoopEventSink()) {
+	constructor(
+		loader: LocalOrgStoreLoader,
+		invites: IInviteStore,
+		computeServer: IComputeServerStore,
+		events: IEventSink = new NoopEventSink()
+	) {
 		this.loader = loader;
+		this.invites = invites;
+		this.computeServer = computeServer;
 		this.events = events;
 	}
 
@@ -161,6 +186,11 @@ export class LocalOrgStore implements IOrgStore {
 			orgProjectIds.has(m.projectId) && isLive(m) ? { ...m, ...stamp } : m
 		);
 		await this.loader.write(store);
+		// Cascade into hard-delete-only sibling stores. Pending invites and
+		// org compute config are operational, not user data — no audit trail
+		// to preserve, and leaving them behind only creates orphans.
+		await this.invites.deleteByOrg(ctx, id);
+		await this.computeServer.deleteByOrg(ctx, id);
 		await this.events.emit({ type: 'org.deleted', orgId: id, actorId: actorFrom(ctx) });
 	}
 

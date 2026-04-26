@@ -7,6 +7,8 @@ import { runProjectStoreConformance } from '@selva/platform/testing';
 import { ALL_PLATFORM_PERMISSIONS, ALL_ORG_PERMISSIONS } from '@selva/platform';
 import { LocalOrgStoreLoader, LocalOrgStore } from '../LocalOrgStore.js';
 import { LocalProjectStore } from '../LocalProjectStore.js';
+import { LocalInviteStore } from '../LocalInviteStore.js';
+import { LocalComputeServerStore } from '../LocalComputeServerStore.js';
 
 describe('LocalProjectStore', () => {
 	let tempDir: string;
@@ -23,7 +25,11 @@ describe('LocalProjectStore', () => {
 		name: 'LocalProjectStore',
 		createStore: async () => {
 			const loader = new LocalOrgStoreLoader(tempDir);
-			const orgs = new LocalOrgStore(loader);
+			const invites = new LocalInviteStore(tempDir);
+			const computeServer = new LocalComputeServerStore(
+				path.join(tempDir, 'compute.config.json')
+			);
+			const orgs = new LocalOrgStore(loader, invites, computeServer);
 			const store = new LocalProjectStore(loader);
 			// Explicitly create the host org for the project tests.
 			const ownerId = randomUUID();

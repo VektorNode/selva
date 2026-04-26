@@ -23,4 +23,11 @@ export interface IInviteStore {
 
 	/** No-op if already consumed or missing. */
 	revoke(ctx: RequestContext, id: string): Promise<void>;
+
+	/**
+	 * Hard-delete every invite belonging to an org. Called from `deleteOrg`
+	 * cascade — pending invites to a deleted org are unredeemable, so leaving
+	 * them behind only creates orphans.
+	 */
+	deleteByOrg(ctx: RequestContext, orgId: string): Promise<void>;
 }
