@@ -32,6 +32,7 @@
 		"format:check": "prettier --check \"**/*.{ts,tsx,svelte,json,yaml,md}\"",
 		"clean:reinstall": "pnpm clean && pnpm install && pnpm build:all",
 		"clean": "node scripts/clean.js",
+		"test": "pnpm -r --filter '!@selva/supabase-provider' test",
 		"changeset": "changeset",
 		"release": "pnpm build:all && changeset publish"
 	},
