@@ -16,9 +16,7 @@
 	const onSolve: SolveFn = async (values, signal) => {
 		const remainingMs = cooldownUntil - Date.now();
 		if (remainingMs > 0) {
-			throw new Error(
-				`Rate limit reached. Try again in ${Math.ceil(remainingMs / 1000)}s.`
-			);
+			throw new Error(`Rate limit reached. Try again in ${Math.ceil(remainingMs / 1000)}s.`);
 		}
 
 		const res = await fetch('/api/compute', {
@@ -40,12 +38,9 @@
 			}
 			if (res.status === 429) {
 				const d = await res.json().catch(() => ({}));
-				const retryAfter =
-					Number(res.headers.get('Retry-After')) || Number(d.retryAfter) || 5;
+				const retryAfter = Number(res.headers.get('Retry-After')) || Number(d.retryAfter) || 5;
 				cooldownUntil = Date.now() + retryAfter * 1000;
-				throw new Error(
-					d.message || `Rate limit reached. Try again in ${retryAfter}s.`
-				);
+				throw new Error(d.message || `Rate limit reached. Try again in ${retryAfter}s.`);
 			}
 			const d = await res.json().catch(() => ({}));
 			throw new Error(d.message || 'Compute error');

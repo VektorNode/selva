@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { TabConfig } from '$lib/types/generated';
+	import type { TabConfig } from '@selvajs/schemas';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import Icon from '@iconify/svelte';

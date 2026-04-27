@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SupportedTypes } from '$lib/types/generated';
+	import type { SupportedTypes } from '@selvajs/schemas';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Field from '$lib/components/ui/field';
 

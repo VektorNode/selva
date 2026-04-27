@@ -67,8 +67,8 @@
 		<Dialog.Header>
 			<Dialog.Title>Upload new version</Dialog.Title>
 			<Dialog.Description>
-				The upload becomes <strong>v{nextVersionNumber}</strong> as a draft. The live channel stays
-				unchanged until you publish.
+				The upload becomes <strong>v{nextVersionNumber}</strong> as a draft. The live channel stays unchanged
+				until you publish.
 			</Dialog.Description>
 		</Dialog.Header>
 
@@ -77,16 +77,16 @@
 				<Label for="upload-file">Grasshopper file</Label>
 				<label
 					for="upload-file"
-					class="flex cursor-pointer items-center gap-3 rounded-md border-2 border-dashed border-border px-4 py-5 transition-colors hover:bg-accent/30"
+					class="border-border hover:bg-accent/30 flex cursor-pointer items-center gap-3 rounded-md border-2 border-dashed px-4 py-5 transition-colors"
 				>
-					<FileUp class="h-5 w-5 shrink-0 text-muted-foreground" />
+					<FileUp class="text-muted-foreground h-5 w-5 shrink-0" />
 					<div class="min-w-0 flex-1">
 						{#if fileName}
 							<p class="truncate text-sm font-medium">{fileName}</p>
-							<p class="text-xs text-muted-foreground">Click to choose a different file</p>
+							<p class="text-muted-foreground text-xs">Click to choose a different file</p>
 						{:else}
 							<p class="text-sm font-medium">Pick a .gh or .ghx file</p>
-							<p class="text-xs text-muted-foreground">Becomes v{nextVersionNumber} draft</p>
+							<p class="text-muted-foreground text-xs">Becomes v{nextVersionNumber} draft</p>
 						{/if}
 					</div>
 				</label>
@@ -102,7 +102,7 @@
 
 			<div class="space-y-1.5">
 				<Label for="upload-note">
-					What changed? <span class="font-normal text-muted-foreground">(optional)</span>
+					What changed? <span class="text-muted-foreground font-normal">(optional)</span>
 				</Label>
 				<Textarea
 					id="upload-note"

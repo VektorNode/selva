@@ -28,11 +28,11 @@
 </script>
 
 <aside
-	class={`flex w-60 shrink-0 flex-col overflow-y-auto border-r border-border bg-background ${className}`}
+	class={`w-60 flex shrink-0 flex-col overflow-y-auto border-r border-border bg-background ${className}`}
 >
 	{#if eyebrow}
 		<div class="px-4 pt-5 pb-3">
-			<span class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+			<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase">
 				{eyebrow}
 			</span>
 		</div>
@@ -44,37 +44,34 @@
 		</div>
 	{/if}
 
-	<nav class="flex-1 space-y-px pb-4 pr-2">
+	<nav class="pb-4 pr-2 flex-1 space-y-px">
 		{#each items as item (item.href)}
 			{@const active = isActive(item)}
 			{@const Icon = item.icon}
 			<a
 				href={item.href}
-				class={`group relative flex w-full items-center gap-2 py-1.5 pr-2.5 text-left transition-colors ${
+				class={`group gap-2 py-1.5 pr-2.5 relative flex w-full items-center text-left transition-colors ${
 					active
-						? 'rounded-r-md bg-accent pl-4 text-accent-foreground'
-						: 'mx-2 rounded-md pl-2.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+						? 'pl-4 rounded-r-md bg-accent text-accent-foreground'
+						: 'mx-2 pl-2.5 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground'
 				}`}
 			>
 				{#if active}
-					<span
-						class="absolute left-0 top-0 bottom-0 w-0.75 bg-primary"
-						aria-hidden="true"
-					></span>
+					<span class="left-0 top-0 bottom-0 w-0.75 absolute bg-primary" aria-hidden="true"></span>
 				{/if}
 				{#if Icon}
 					<Icon class="h-3.5 w-3.5 shrink-0 opacity-70" />
 				{/if}
-				<span class="flex-1 truncate text-sm font-medium">{item.label}</span>
+				<span class="text-sm font-medium flex-1 truncate">{item.label}</span>
 				{#if item.badge !== undefined}
-					<span class="shrink-0 font-mono text-[11px] tabular-nums opacity-60">{item.badge}</span>
+					<span class="font-mono shrink-0 text-[11px] tabular-nums opacity-60">{item.badge}</span>
 				{/if}
 			</a>
 		{/each}
 	</nav>
 
 	{#if footer}
-		<div class="border-t border-border/60 px-3 py-3">
+		<div class="px-3 py-3 border-t border-border/60">
 			{@render footer()}
 		</div>
 	{/if}

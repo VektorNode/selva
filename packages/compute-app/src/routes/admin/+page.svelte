@@ -77,18 +77,18 @@
 		{#each tiles as tile (tile.href)}
 			{@const Icon = tile.icon}
 			<a href={tile.href} class="block">
-				<Card.Root class="h-full transition-colors hover:bg-accent/40">
+				<Card.Root class="hover:bg-accent/40 h-full transition-colors">
 					<Card.Content class="flex items-center justify-between gap-4 pt-6">
 						<div class="flex items-center gap-4">
-							<div class="rounded-md bg-accent p-2.5 text-accent-foreground">
+							<div class="bg-accent text-accent-foreground rounded-md p-2.5">
 								<Icon class="h-4 w-4" />
 							</div>
 							<div>
-								<p class="text-lg font-semibold leading-tight">{tile.value}</p>
-								<p class="text-xs text-muted-foreground">{tile.label}</p>
+								<p class="text-lg leading-tight font-semibold">{tile.value}</p>
+								<p class="text-muted-foreground text-xs">{tile.label}</p>
 							</div>
 						</div>
-						<ArrowRight class="h-4 w-4 shrink-0 text-muted-foreground" />
+						<ArrowRight class="text-muted-foreground h-4 w-4 shrink-0" />
 					</Card.Content>
 				</Card.Root>
 			</a>
@@ -98,15 +98,15 @@
 	<Card.Root>
 		<Card.Header>
 			<Card.Title class="flex items-center gap-2 text-sm font-medium">
-				<GitCommit class="h-4 w-4 text-muted-foreground" />
+				<GitCommit class="text-muted-foreground h-4 w-4" />
 				Web app build
 			</Card.Title>
 		</Card.Header>
 		<Card.Content>
 			<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-				<code class="font-mono text-xs text-foreground" title={build.fullHash}>{build.hash}</code>
-				<span class="text-xs text-muted-foreground">{build.message}</span>
-				<span class="text-xs text-muted-foreground">{build.date}</span>
+				<code class="text-foreground font-mono text-xs" title={build.fullHash}>{build.hash}</code>
+				<span class="text-muted-foreground text-xs">{build.message}</span>
+				<span class="text-muted-foreground text-xs">{build.date}</span>
 			</div>
 		</Card.Content>
 	</Card.Root>

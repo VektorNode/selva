@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { UISchema, SupportedTypes } from '$lib/types/generated';
+	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
 	import AppLayout from '$lib/components/app-shell/AppLayout.svelte';
 	import exampleSchema from '../demo/example-schema.json';
 	import exampleSchemaLeftOnly from '../demo/example-schema-left-only.json';

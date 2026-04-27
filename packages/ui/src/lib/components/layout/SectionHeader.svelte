@@ -9,17 +9,19 @@
 		class?: string;
 	}
 
-	let { eyebrow, title, description, actions, class: className = '' }: SectionHeaderProps = $props();
+	let {
+		eyebrow,
+		title,
+		description,
+		actions,
+		class: className = ''
+	}: SectionHeaderProps = $props();
 </script>
 
-<div
-	class={`mb-6 gap-5 flex items-start justify-between ${className}`}
->
+<div class={`mb-6 gap-5 flex items-start justify-between ${className}`}>
 	<div class="min-w-0">
 		{#if eyebrow}
-			<div
-				class="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground"
-			>
+			<div class="mb-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
 				{eyebrow}
 			</div>
 		{/if}

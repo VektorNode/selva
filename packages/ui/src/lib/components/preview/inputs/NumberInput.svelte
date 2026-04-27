@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { NumberWidgetConfig, SupportedTypes } from '$lib/types/generated';
+	import type { NumberWidgetConfig, SupportedTypes } from '@selvajs/schemas';
 	import { debounce } from '$lib/utils/debounce';
 	import { Input } from '$lib/components/ui/input';
 	import { Slider } from '$lib/components/ui/slider';

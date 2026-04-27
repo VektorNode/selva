@@ -134,7 +134,7 @@
 				<Card.Content class="space-y-3 pt-6">
 					<div>
 						<p class="text-sm font-medium">Invite member</p>
-						<p class="text-xs text-muted-foreground">
+						<p class="text-muted-foreground text-xs">
 							The invitee sets their own credentials when they open the link. No password leaves
 							your machine.
 						</p>
@@ -143,7 +143,7 @@
 						<Input type="email" placeholder="Email" bind:value={inviteEmail} />
 						<select
 							bind:value={inviteRole}
-							class="h-9 rounded-md border border-input bg-background px-3 text-sm"
+							class="border-input bg-background h-9 rounded-md border px-3 text-sm"
 						>
 							{#each ORG_ROLES as role (role)}
 								<option value={role}>{role}</option>
@@ -153,7 +153,7 @@
 					<div>
 						<p class="mb-2 text-xs font-medium">Permissions</p>
 						{#if inviteRole !== 'member'}
-							<p class="mb-2 text-xs text-muted-foreground">
+							<p class="text-muted-foreground mb-2 text-xs">
 								{inviteRole === 'owner' ? 'Owners' : 'Admins'} automatically receive all organization
 								permissions. Pick <span class="font-mono">member</span> to grant a custom subset.
 							</p>
@@ -187,12 +187,10 @@
 		{/if}
 
 		{#if lastInviteLink}
-			<div
-				class="flex items-start gap-3 rounded-lg border border-success/30 bg-success/5 p-4"
-			>
+			<div class="border-success/30 bg-success/5 flex items-start gap-3 rounded-lg border p-4">
 				<div class="min-w-0 flex-1">
 					<p class="text-sm font-medium">Invite ready — copy the link and share it</p>
-					<p class="mt-1 truncate font-mono text-xs text-muted-foreground">{lastInviteLink}</p>
+					<p class="text-muted-foreground mt-1 truncate font-mono text-xs">{lastInviteLink}</p>
 				</div>
 				<Button
 					size="sm"
@@ -228,9 +226,9 @@
 					<div
 						class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
 					>
-						<UserPlus class="mb-3 h-8 w-8 text-muted-foreground" />
+						<UserPlus class="text-muted-foreground mb-3 h-8 w-8" />
 						<p class="text-sm font-medium">No members yet</p>
-						<p class="mt-1 text-sm text-muted-foreground">Invite teammates to get started.</p>
+						<p class="text-muted-foreground mt-1 text-sm">Invite teammates to get started.</p>
 					</div>
 				{:else}
 					<div class="divide-y rounded-lg border">
@@ -243,12 +241,12 @@
 												{member.email ?? member.displayName ?? member.userId}
 											</p>
 											<span
-												class={`rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${ROLE_TONE[member.role]}`}
+												class={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${ROLE_TONE[member.role]}`}
 											>
 												{member.role}
 											</span>
 										</div>
-										<p class="text-xs text-muted-foreground">
+										<p class="text-muted-foreground text-xs">
 											Joined {new Date(member.joinedAt).toLocaleDateString()}
 										</p>
 									</div>
@@ -257,7 +255,7 @@
 									<div class="mt-2 flex flex-wrap gap-1.5">
 										{#each member.permissions as p (p)}
 											<span
-												class="rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
+												class="bg-muted text-muted-foreground rounded-full px-2 py-0.5 font-mono text-[10px]"
 											>
 												{PERMISSION_LABELS[p] ?? p}
 											</span>
@@ -290,7 +288,7 @@
 							<div class="flex items-center justify-between gap-4 px-4 py-3">
 								<div class="min-w-0 flex-1">
 									<p class="truncate text-sm font-medium">{invite.email}</p>
-									<p class="text-xs text-muted-foreground">
+									<p class="text-muted-foreground text-xs">
 										{status} · {invite.orgRole} · expires {new Date(
 											invite.expiresAt
 										).toLocaleDateString()}

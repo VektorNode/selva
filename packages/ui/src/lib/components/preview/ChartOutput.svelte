@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { OutputChartLayoutItem } from '$lib/types/generated';
+	import type { OutputChartLayoutItem } from '@selvajs/schemas';
 	import { onMount } from 'svelte';
 	import { Loader, Maximize, Minimize } from '@lucide/svelte';
 	import { Label } from '$lib/components/ui/label';

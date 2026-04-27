@@ -31,11 +31,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 						projects.items.map(async (project): Promise<ReclaimRow> => {
 							let memberCount = 0;
 							try {
-								const members = await projectStore.listProjectMembers(
-									SYSTEM_CONTEXT,
-									project.id,
-									{ limit: 200 }
-								);
+								const members = await projectStore.listProjectMembers(SYSTEM_CONTEXT, project.id, {
+									limit: 200
+								});
 								memberCount = members.items.length;
 							} catch {
 								// non-fatal

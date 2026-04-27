@@ -8,7 +8,7 @@ import {
 	GrasshopperClient,
 	type SolveScheduler
 } from '@selvajs/compute';
-import type { SchemaInput } from '@selvajs/ui';
+import type { SchemaInput } from '@selvajs/schemas';
 import { error, json, isHttpError } from '@sveltejs/kit';
 import type { ComputeServerConfig, RequestContext } from '@selvajs/platform';
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
@@ -245,9 +245,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		// don't share quota with the link's owner); `user:{userId}` otherwise.
 		// Runs BEFORE definition + version reads so we don't burn DB on
 		// already-throttled callers.
-		const rateLimitKey = sharedAccess
-			? `share:${sharedAccess.link.id}`
-			: `user:${locals.user!.id}`;
+		const rateLimitKey = sharedAccess ? `share:${sharedAccess.link.id}` : `user:${locals.user!.id}`;
 		const rateLimit = checkComputeRateLimit(rateLimitKey);
 		if (!rateLimit.allowed) {
 			const retryAfter = rateLimit.retryAfter ?? 1;

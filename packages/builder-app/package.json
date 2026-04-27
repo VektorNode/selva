@@ -24,6 +24,7 @@
 	"dependencies": {
 		"@iconify/svelte": "catalog:",
 		"@selvajs/compute": "catalog:",
+		"@selvajs/schemas": "workspace:*",
 		"@selvajs/ui": "workspace:*",
 		"bits-ui": "^2.18.0",
 		"mode-watcher": "catalog:",

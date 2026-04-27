@@ -100,7 +100,7 @@ A single schema (`packages/schemas/ui-schema.json`) generates both TypeScript ty
 
 **Generated files:**
 
-- TypeScript: `packages/ui/src/lib/types/generated/schema.ts`
+- TypeScript: `packages/schemas/src/generated/schema.ts`
 - C#: `Plugin/Selva.Core/Models/UISchema.Generated.cs`
 
 After modifying `ui-schema.json`, always run:
@@ -240,8 +240,8 @@ Rhino.Compute server URL + API key are configured in `/admin/compute` and persis
 
 Core provider interfaces for Selva's pluggable architecture. All modules support Zod schema validation and are granular exports for tree-shaking.
 
-| Module                          | Exports                                                                                                                     | Purpose                                                                                                                                  |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Module                            | Exports                                                                                                                     | Purpose                                                                                                                                  |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `@selvajs/platform/auth`          | `IAuthProvider`, `IPasswordAuth`                                                                                            | Identity verification, optional password capability, user management                                                                     |
 | `@selvajs/platform/data`          | `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IShareLinkStore`, `IInviteStore`, `IComputeServerStore` | Structured data storage (all methods take `RequestContext`)                                                                              |
 | `@selvajs/platform/storage`       | `IStorageProvider`                                                                                                          | Blob storage (get, put, delete, getPublicUrl)                                                                                            |

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { UISchema, SupportedTypes } from '../../types/generated';
+	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
 	import type { ActionButton } from '../../types/actionButton';
 	import { ChevronUp } from '@lucide/svelte';
 	import Viewer, { type ViewerConfig } from '../viewer/Viewer.svelte';

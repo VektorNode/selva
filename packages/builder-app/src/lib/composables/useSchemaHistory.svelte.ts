@@ -1,4 +1,4 @@
-import type { UISchema } from '@selvajs/ui';
+import type { UISchema } from '@selvajs/schemas';
 
 const LS_HISTORY_PREFIX = 'selva-schema-history:';
 const LS_CURRENT_PREFIX = 'selva-schema-current:';

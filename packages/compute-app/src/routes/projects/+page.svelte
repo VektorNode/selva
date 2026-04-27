@@ -256,19 +256,19 @@
 	/>
 
 	<div class="flex flex-1 flex-col overflow-hidden">
-		<div class="shrink-0 border-b border-border bg-background px-6 py-5">
+		<div class="border-border bg-background shrink-0 border-b px-6 py-5">
 			<div class="flex items-start justify-between gap-4">
 				<div class="min-w-0">
-					<p class="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+					<p class="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase">
 						{activeProject ? activeProject.name : 'All projects'}
 					</p>
-					<h1 class="text-xl font-semibold tracking-tight text-foreground">Definitions</h1>
+					<h1 class="text-foreground text-xl font-semibold tracking-tight">Definitions</h1>
 					{#if activeProject?.description}
-						<p class="mt-1 max-w-xl text-sm text-muted-foreground">
+						<p class="text-muted-foreground mt-1 max-w-xl text-sm">
 							{activeProject.description}
 						</p>
 					{:else if !activeProject}
-						<p class="mt-1 max-w-xl text-sm text-muted-foreground">
+						<p class="text-muted-foreground mt-1 max-w-xl text-sm">
 							Definitions across every project in this organization.
 						</p>
 					{/if}
@@ -301,10 +301,10 @@
 						clearable
 					/>
 				</div>
-				<span class="font-mono text-xs text-muted-foreground tabular-nums">
+				<span class="text-muted-foreground font-mono text-xs tabular-nums">
 					{filtered.length} definition{filtered.length === 1 ? '' : 's'}
 				</span>
-				<div class="ml-auto flex overflow-hidden rounded-md border border-border">
+				<div class="border-border ml-auto flex overflow-hidden rounded-md border">
 					<button
 						onclick={() => (viewMode = 'grid')}
 						class={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-accent text-accent-foreground' : 'bg-card text-muted-foreground hover:bg-muted/60'}`}
@@ -315,7 +315,7 @@
 					</button>
 					<button
 						onclick={() => (viewMode = 'list')}
-						class={`border-l border-border p-1.5 transition-colors ${viewMode === 'list' ? 'bg-accent text-accent-foreground' : 'bg-card text-muted-foreground hover:bg-muted/60'}`}
+						class={`border-border border-l p-1.5 transition-colors ${viewMode === 'list' ? 'bg-accent text-accent-foreground' : 'bg-card text-muted-foreground hover:bg-muted/60'}`}
 						title="List view"
 						aria-label="List view"
 					>
@@ -326,10 +326,10 @@
 
 			{#if filtered.length === 0}
 				<div
-					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border py-20 text-center"
+					class="border-border flex flex-col items-center justify-center rounded-lg border-2 border-dashed py-20 text-center"
 				>
 					<p class="text-sm font-medium">No definitions found</p>
-					<p class="mt-1 text-xs text-muted-foreground">
+					<p class="text-muted-foreground mt-1 text-xs">
 						{searchQuery ? 'Try adjusting your search' : 'Add your first definition to get started'}
 					</p>
 				</div>

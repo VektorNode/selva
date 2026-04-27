@@ -1,5 +1,11 @@
 import type { PageServerLoad } from './$types';
-import type { AuthUser, Invite, OrgPermission, OrgRole, PlatformPermission } from '@selvajs/platform';
+import type {
+	AuthUser,
+	Invite,
+	OrgPermission,
+	OrgRole,
+	PlatformPermission
+} from '@selvajs/platform';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
 import {

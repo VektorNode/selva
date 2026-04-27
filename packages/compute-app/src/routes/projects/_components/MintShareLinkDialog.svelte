@@ -66,9 +66,7 @@
 				allowSolve,
 				...(label.trim() ? { name: label.trim() } : {}),
 				maxSolves: capEnabled ? cap : null,
-				...(expiresEnabled && expiresAt
-					? { expiresAt: new Date(expiresAt).toISOString() }
-					: {})
+				...(expiresEnabled && expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {})
 			};
 			const res = await fetch(`/api/definitions/${definitionGuid}/share-links`, {
 				method: 'POST',
@@ -120,13 +118,13 @@
 					<select
 						id="sl-channel"
 						bind:value={channel}
-						class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+						class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
 					>
 						<option value="live">Live — recipients see the published version</option>
 						<option value="draft">Draft — recipients see the unpublished version</option>
 					</select>
 					{#if channel === 'draft'}
-						<p class="flex items-start gap-1.5 text-xs text-warning">
+						<p class="text-warning flex items-start gap-1.5 text-xs">
 							<TriangleAlert class="mt-0.5 h-3 w-3 shrink-0" />
 							Draft links expose the unpublished version. Use only for reviewers.
 						</p>
@@ -138,52 +136,43 @@
 					<Input id="sl-label" bind:value={label} placeholder="e.g. Demo for Acme" />
 				</div>
 
-				<div class="rounded-md border border-border p-3">
-					<label class="flex items-start gap-3 cursor-pointer">
-						<input
-							type="checkbox"
-							bind:checked={allowSolve}
-							class="mt-0.5 shrink-0"
-						/>
+				<div class="border-border rounded-md border p-3">
+					<label class="flex cursor-pointer items-start gap-3">
+						<input type="checkbox" bind:checked={allowSolve} class="mt-0.5 shrink-0" />
 						<div class="min-w-0">
 							<p class="text-sm font-medium">Allow solve</p>
-							<p class="mt-0.5 text-xs text-muted-foreground">
-								When off, recipients can view the schema and parameters but can't run solves.
-								When on, every solve counts against the cap.
+							<p class="text-muted-foreground mt-0.5 text-xs">
+								When off, recipients can view the schema and parameters but can't run solves. When
+								on, every solve counts against the cap.
 							</p>
 						</div>
 					</label>
 				</div>
 
-				<div class="rounded-md border border-border p-3">
-					<label class="flex items-start gap-3 cursor-pointer">
+				<div class="border-border rounded-md border p-3">
+					<label class="flex cursor-pointer items-start gap-3">
 						<input type="checkbox" bind:checked={capEnabled} class="mt-0.5 shrink-0" />
 						<div class="min-w-0 flex-1">
 							<p class="text-sm font-medium">Cap total solves</p>
-							<p class="mt-0.5 text-xs text-muted-foreground">
-								Default {DEFAULT_SHARE_LINK_MAX_SOLVES.toLocaleString()}. Recommended.
-								Uncapped links are a denial-of-wallet risk if leaked.
+							<p class="text-muted-foreground mt-0.5 text-xs">
+								Default {DEFAULT_SHARE_LINK_MAX_SOLVES.toLocaleString()}. Recommended. Uncapped
+								links are a denial-of-wallet risk if leaked.
 							</p>
 						</div>
 					</label>
 					{#if capEnabled}
 						<div class="mt-2 ml-6">
-							<Input
-								type="number"
-								min={1}
-								bind:value={cap}
-								class="h-8 w-32 text-sm"
-							/>
+							<Input type="number" min={1} bind:value={cap} class="h-8 w-32 text-sm" />
 						</div>
 					{/if}
 				</div>
 
-				<div class="rounded-md border border-border p-3">
-					<label class="flex items-start gap-3 cursor-pointer">
+				<div class="border-border rounded-md border p-3">
+					<label class="flex cursor-pointer items-start gap-3">
 						<input type="checkbox" bind:checked={expiresEnabled} class="mt-0.5 shrink-0" />
 						<div class="min-w-0 flex-1">
 							<p class="text-sm font-medium">Set expiry</p>
-							<p class="mt-0.5 text-xs text-muted-foreground">
+							<p class="text-muted-foreground mt-0.5 text-xs">
 								The link stops working after this date. Off = never expires.
 							</p>
 						</div>
@@ -193,7 +182,7 @@
 							<input
 								type="datetime-local"
 								bind:value={expiresAt}
-								class="h-8 rounded-md border border-input bg-background px-2 text-sm"
+								class="border-input bg-background h-8 rounded-md border px-2 text-sm"
 							/>
 						</div>
 					{/if}
@@ -213,14 +202,14 @@
 			<Dialog.Header>
 				<Dialog.Title>Share link ready</Dialog.Title>
 				<Dialog.Description>
-					Copy the link now — this is the only time you'll see it. The server stores only a hash;
-					we cannot show it again.
+					Copy the link now — this is the only time you'll see it. The server stores only a hash; we
+					cannot show it again.
 				</Dialog.Description>
 			</Dialog.Header>
 
 			<div class="mt-4 space-y-3">
-				<div class="rounded-md border border-warning/40 bg-warning/5 p-3">
-					<p class="flex items-start gap-2 text-xs text-warning">
+				<div class="border-warning/40 bg-warning/5 rounded-md border p-3">
+					<p class="text-warning flex items-start gap-2 text-xs">
 						<TriangleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
 						<span>
 							This URL grants the configured access to anyone who receives it. Treat it like a
@@ -229,13 +218,12 @@
 					</p>
 				</div>
 
-				<div class="rounded-md border border-border bg-muted/40 p-3">
-					<p class="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+				<div class="border-border bg-muted/40 rounded-md border p-3">
+					<p class="text-muted-foreground mb-2 text-xs font-medium tracking-wider uppercase">
 						Share URL
 					</p>
 					<div class="flex items-start gap-2">
-						<code
-							class="min-w-0 flex-1 break-all rounded bg-background p-2 font-mono text-xs"
+						<code class="bg-background min-w-0 flex-1 rounded p-2 font-mono text-xs break-all"
 							>{mintedShareUrl}</code
 						>
 						<Button

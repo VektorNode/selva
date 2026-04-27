@@ -8,10 +8,10 @@ This guide covers both backends — the wiring is provider-agnostic; only the "w
 
 Set in [selva.config.ts](../selva.config.ts) (`tenancy: 'single' | 'multi'`):
 
-| `tenancy`          | Setup creates…                        | Use when                                  |
-| ------------------ | ------------------------------------- | ----------------------------------------- |
-| `'single'` (default) | One org + the first user as its owner | Single-tenant deploy                    |
-| `'multi'`          | Only the platform admin user; no org  | Testing multi-org, or multi-tenant deploy |
+| `tenancy`            | Setup creates…                        | Use when                                  |
+| -------------------- | ------------------------------------- | ----------------------------------------- |
+| `'single'` (default) | One org + the first user as its owner | Single-tenant deploy                      |
+| `'multi'`            | Only the platform admin user; no org  | Testing multi-org, or multi-tenant deploy |
 
 `/setup` branches on this — see [setup/+page.server.ts:86](../packages/compute-app/src/routes/setup/+page.server.ts#L86). In `multi` mode the user lands in the admin without an `actingOrgId` until they're a member of an org.
 
@@ -20,6 +20,7 @@ Set in [selva.config.ts](../selva.config.ts) (`tenancy: 'single' | 'multi'`):
 ### Option A: Local provider (filesystem JSON)
 
 `selva.config.ts`:
+
 ```ts
 tenancy: 'multi',
 flags: { ALLOW_ORG_CREATION: true }, // optional; lets non-admins create orgs
@@ -27,6 +28,7 @@ flags: { ALLOW_ORG_CREATION: true }, // optional; lets non-admins create orgs
 ```
 
 `.env`:
+
 ```bash
 DATA_PATH=./.selva-data
 SESSION_SECRET=$(openssl rand -base64 32)
@@ -37,6 +39,7 @@ SESSION_SECRET=$(openssl rand -base64 32)
 Follow the [supabase-provider quick start](../packages/supabase-provider/README.md#quick-start) up to `npx supabase start`, then:
 
 `selva.config.ts`:
+
 ```ts
 tenancy: 'multi',
 flags: { ALLOW_ORG_CREATION: true },
@@ -44,6 +47,7 @@ flags: { ALLOW_ORG_CREATION: true },
 ```
 
 `.env`:
+
 ```bash
 SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_ANON_KEY=<from supabase status>

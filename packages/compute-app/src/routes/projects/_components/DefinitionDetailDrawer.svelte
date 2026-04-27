@@ -17,17 +17,17 @@
 </script>
 
 <Drawer {onClose}>
-	<div class="flex items-start justify-between gap-4 border-b border-border p-6">
+	<div class="border-border flex items-start justify-between gap-4 border-b p-6">
 		<div class="min-w-0">
 			<div class="flex items-center gap-2">
 				<StatusBadge status={record.status} />
-				<span class="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+				<span class="text-muted-foreground font-mono text-[11px] tracking-wide uppercase">
 					{projectName}
 				</span>
 			</div>
 			<h2 class="mt-2.5 text-xl font-semibold tracking-tight">{record.displayName}</h2>
 			{#if record.description}
-				<p class="mt-1 text-sm text-muted-foreground">{record.description}</p>
+				<p class="text-muted-foreground mt-1 text-sm">{record.description}</p>
 			{/if}
 		</div>
 		<Button variant="ghost" size="icon" onclick={onClose} class="mt-0.5 h-8 w-8 shrink-0">
@@ -40,13 +40,13 @@
 			<img
 				src={record.coverImage}
 				alt={record.displayName}
-				class="aspect-4/3 w-full rounded-lg border border-border object-cover"
+				class="border-border aspect-4/3 w-full rounded-lg border object-cover"
 			/>
 		{:else}
 			<div
-				class="flex aspect-4/3 w-full items-center justify-center rounded-lg border border-border bg-muted"
+				class="border-border bg-muted flex aspect-4/3 w-full items-center justify-center rounded-lg border"
 			>
-				<span class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+				<span class="text-muted-foreground font-mono text-[11px] tracking-widest uppercase">
 					No preview
 				</span>
 			</div>
@@ -63,28 +63,24 @@
 
 		<div class="grid grid-cols-2 gap-4">
 			<div>
-				<p class="font-mono text-[10.5px] uppercase tracking-widest text-muted-foreground">
+				<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">
 					Updated
 				</p>
 				<p class="mt-1 text-sm">{formatUpdated(record.updatedAt)} ago</p>
 			</div>
 			<div>
-				<p class="font-mono text-[10.5px] uppercase tracking-widest text-muted-foreground">
-					Runs
-				</p>
+				<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">Runs</p>
 				<p class="mt-1 text-sm">{record.solveCount.toLocaleString()}</p>
 			</div>
 			<div>
-				<p class="font-mono text-[10.5px] uppercase tracking-widest text-muted-foreground">
-					Live
-				</p>
-				<p class="mt-1 font-mono text-xs text-muted-foreground">
+				<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">Live</p>
+				<p class="text-muted-foreground mt-1 font-mono text-xs">
 					{record.liveVersionId ? record.liveVersionId.slice(0, 8) : 'pending'}
 				</p>
 			</div>
 			{#if record.category}
 				<div>
-					<p class="font-mono text-[10.5px] uppercase tracking-widest text-muted-foreground">
+					<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">
 						Category
 					</p>
 					<p class="mt-1 text-sm">{record.category}</p>
@@ -95,14 +91,12 @@
 		{#if record.tags?.length}
 			<div>
 				<Separator class="mb-4" />
-				<p class="mb-2.5 font-mono text-[10.5px] uppercase tracking-widest text-muted-foreground">
+				<p class="text-muted-foreground mb-2.5 font-mono text-[10.5px] tracking-widest uppercase">
 					Tags
 				</p>
 				<div class="flex flex-wrap gap-1.5">
 					{#each record.tags as tag (tag)}
-						<span
-							class="rounded bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground"
-						>
+						<span class="bg-muted text-muted-foreground rounded px-2 py-0.5 font-mono text-[11px]">
 							#{tag}
 						</span>
 					{/each}

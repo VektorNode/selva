@@ -12,15 +12,15 @@
 	const Icon = $derived(icon ?? Construction);
 </script>
 
-<div class="mx-auto max-w-xl py-16 flex flex-col items-center text-center">
+<div class="mx-auto flex max-w-xl flex-col items-center py-16 text-center">
 	<div
-		class="h-12 w-12 mb-5 rounded-full bg-accent text-accent-foreground flex items-center justify-center"
+		class="bg-accent text-accent-foreground mb-5 flex h-12 w-12 items-center justify-center rounded-full"
 	>
 		<Icon class="h-5 w-5" />
 	</div>
 	<h2 class="text-xl font-semibold tracking-tight">{title}</h2>
 	{#if description}
-		<p class="mt-2 max-w-sm text-sm text-muted-foreground">{description}</p>
+		<p class="text-muted-foreground mt-2 max-w-sm text-sm">{description}</p>
 	{/if}
-	<p class="mt-6 text-xs uppercase tracking-wider text-muted-foreground">Coming soon</p>
+	<p class="text-muted-foreground mt-6 text-xs tracking-wider uppercase">Coming soon</p>
 </div>

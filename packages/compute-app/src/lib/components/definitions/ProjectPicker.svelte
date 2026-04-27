@@ -89,41 +89,41 @@
 		type="button"
 		{id}
 		onclick={() => (open = !open)}
-		class={`flex h-10 w-full items-center gap-2 rounded-md border bg-background px-3 text-left text-sm transition-colors ${
-			open ? 'border-ring ring-2 ring-ring/30' : 'border-input hover:bg-muted/40'
+		class={`bg-background flex h-10 w-full items-center gap-2 rounded-md border px-3 text-left text-sm transition-colors ${
+			open ? 'border-ring ring-ring/30 ring-2' : 'border-input hover:bg-muted/40'
 		}`}
 	>
-		<FolderOpen class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+		<FolderOpen class="text-muted-foreground h-3.5 w-3.5 shrink-0" />
 		<span class={`min-w-0 flex-1 truncate ${selected ? '' : 'text-muted-foreground'}`}>
 			{selected ? selected.name : placeholder}
 		</span>
 		<ChevronDown
-			class={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+			class={`text-muted-foreground h-3.5 w-3.5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
 		/>
 	</button>
 
 	{#if open}
 		<div
-			class="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-md border border-border bg-popover shadow-md"
+			class="border-border bg-popover absolute top-full right-0 left-0 z-50 mt-1 overflow-hidden rounded-md border shadow-md"
 		>
 			{#if projects.length > 4}
-				<div class="relative border-b border-border">
+				<div class="border-border relative border-b">
 					<Search
-						class="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+						class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2"
 					/>
 					<input
 						bind:this={inputRef}
 						bind:value={query}
 						onkeydown={handleKey}
 						placeholder="Filter projects"
-						class="h-9 w-full bg-transparent pl-9 pr-3 text-sm outline-none placeholder:text-muted-foreground"
+						class="placeholder:text-muted-foreground h-9 w-full bg-transparent pr-3 pl-9 text-sm outline-none"
 					/>
 				</div>
 			{/if}
 
 			<div class="max-h-60 overflow-y-auto py-1">
 				{#if matches.length === 0}
-					<p class="px-3 py-3 text-center text-xs text-muted-foreground">
+					<p class="text-muted-foreground px-3 py-3 text-center text-xs">
 						No matches for "{query}"
 					</p>
 				{:else}
@@ -133,14 +133,12 @@
 							onclick={() => pick(project)}
 							onmouseenter={() => (highlighted = i)}
 							class={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
-								highlighted === i
-									? 'bg-accent text-accent-foreground'
-									: 'hover:bg-muted/60'
+								highlighted === i ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/60'
 							}`}
 						>
 							<span class="flex-1 truncate">{project.name}</span>
 							{#if project.id === value}
-								<Check class="h-3.5 w-3.5 shrink-0 text-primary" />
+								<Check class="text-primary h-3.5 w-3.5 shrink-0" />
 							{/if}
 						</button>
 					{/each}

@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import type { UISchema, DiscoveredParameters, SupportedTypes } from '@selvajs/ui';
+	import type { UISchema, DiscoveredParameters, SupportedTypes } from '@selvajs/schemas';
 	import {
 		PageContainer,
 		PageHeader,

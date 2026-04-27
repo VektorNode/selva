@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Card, Button } from '@selvajs/ui';
 	import { SchemaInfoPanel, AvailableItemList } from '$lib/components/builder';
-	import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/ui';
+	import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/schemas';
 
 	interface Props {
 		schema: UISchema;

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { UISchema } from '@selvajs/ui';
+	import type { UISchema } from '@selvajs/schemas';
 	import { Dialog, AlertDialog as Alert, Button, Badge } from '@selvajs/ui';
 	import { AlertCircle, AlertTriangle, CheckCircle2, Info } from '@lucide/svelte';
 	import {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { UISchema, ViewerOptions } from '@selvajs/ui';
+	import type { UISchema, ViewerOptions } from '@selvajs/schemas';
 	import { Card, Input, Textarea, Label, Checkbox, Button, toast } from '@selvajs/ui';
 	import { Download, Upload } from '@lucide/svelte';
 	import { exportSchemaAsFile, importSchemaFromFile } from '$lib/utils/schema-exporter';

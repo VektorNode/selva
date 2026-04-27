@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 
 async function generateSchema(schemaFileName, outputFileName, rootTypeName, options = {}) {
   const schemaPath = path.join(__dirname, schemaFileName);
-  const outputPath = path.join(__dirname, `../ui/src/lib/types/generated/${outputFileName}`);
+  const outputPath = path.join(__dirname, `./src/generated/${outputFileName}`);
 
   if (!fs.existsSync(schemaPath)) {
     console.warn(`Schema file not found: ${schemaPath}`);

@@ -363,5 +363,4 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			});
 		}
 	}
-
 }

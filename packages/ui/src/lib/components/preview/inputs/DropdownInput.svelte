@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { DropdownWidgetConfig, SupportedTypes } from '$lib/types/generated';
+	import type { DropdownWidgetConfig, SupportedTypes } from '@selvajs/schemas';
 	import * as Select from '$lib/components/ui/select';
 
 	interface Props {

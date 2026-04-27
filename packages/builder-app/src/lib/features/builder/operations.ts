@@ -8,7 +8,7 @@ import type {
 	LayoutItem,
 	InputLayoutItem,
 	OutputLayoutItem
-} from '@selvajs/ui';
+} from '@selvajs/schemas';
 import { mapParamTypeToWidgetType, createDefaultWidgetConfig } from './widget-config';
 import { toast } from '@selvajs/ui';
 

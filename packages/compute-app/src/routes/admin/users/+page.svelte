@@ -459,8 +459,7 @@
 							soleInstanceAdmin={isSoleInstanceAdmin(user)}
 							updating={updatingId === user.id}
 							deleting={deletingId === user.id}
-							onToggleExpand={() =>
-								(expandedUserId = expandedUserId === user.id ? null : user.id)}
+							onToggleExpand={() => (expandedUserId = expandedUserId === user.id ? null : user.id)}
 							onTogglePermission={async (perm, checked) => {
 								const next = checked
 									? [...user.permissions, perm]

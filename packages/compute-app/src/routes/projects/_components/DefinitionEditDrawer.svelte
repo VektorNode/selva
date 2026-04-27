@@ -166,7 +166,7 @@
 		<button
 			type="button"
 			onclick={onBack}
-			class="mx-6 mt-4 inline-flex items-center gap-1.5 self-start text-xs text-muted-foreground transition-colors hover:text-foreground"
+			class="text-muted-foreground hover:text-foreground mx-6 mt-4 inline-flex items-center gap-1.5 self-start text-xs transition-colors"
 		>
 			<ArrowLeft class="h-3 w-3" />
 			Back to definition
@@ -200,7 +200,7 @@
 				<select
 					id="edit-status"
 					bind:value={status}
-					class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+					class="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
 				>
 					<option value="draft">Draft — work in progress</option>
 					<option value="published">Published — live and visible to runners</option>
@@ -215,7 +215,7 @@
 				<div class="space-y-1.5">
 					<div class="flex items-center justify-between">
 						<Label for="edit-tags">Tags</Label>
-						<span class="text-xs text-muted-foreground">{tags.length}/5</span>
+						<span class="text-muted-foreground text-xs">{tags.length}/5</span>
 					</div>
 					{#if tags.length > 0}
 						<div class="mb-1 flex flex-wrap gap-1">
@@ -256,7 +256,7 @@
 
 			<div class="space-y-2">
 				<div class="flex items-center gap-2">
-					<Image class="h-4 w-4 text-muted-foreground" />
+					<Image class="text-muted-foreground h-4 w-4" />
 					<Label>Cover image</Label>
 				</div>
 				<ImageUploadField
@@ -294,7 +294,7 @@
 								onchange={(e) => {
 									computeServerId = (e.currentTarget as HTMLSelectElement).value || null;
 								}}
-								class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+								class="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
 							>
 								<option value="">Default</option>
 								{#each computeServers as s (s.id)}<option value={s.id}>{s.label}</option>{/each}
@@ -310,12 +310,12 @@
 		</Tabs.Content>
 	</Tabs.Root>
 
-	<div class="flex shrink-0 items-center justify-between border-t border-border px-6 py-4">
+	<div class="border-border flex shrink-0 items-center justify-between border-t px-6 py-4">
 		<Button
 			variant="ghost"
 			size="sm"
 			onclick={() => (showDeleteConfirm = true)}
-			class="gap-1.5 px-2 text-destructive hover:text-destructive"
+			class="text-destructive hover:text-destructive gap-1.5 px-2"
 		>
 			<Trash2 class="h-3.5 w-3.5" /> Delete
 		</Button>
@@ -367,4 +367,3 @@
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>
-

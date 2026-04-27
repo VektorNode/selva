@@ -57,12 +57,14 @@ describe('isPublicRoute', () => {
 });
 
 describe('isStaticAsset', () => {
-	it.each([['/_app/immutable/chunks/x.js'], ['/favicon/16.png'], ['/favicon.svg'], ['/robots.txt']])(
-		'classifies %j as a static asset',
-		(path) => {
-			expect(isStaticAsset(path)).toBe(true);
-		}
-	);
+	it.each([
+		['/_app/immutable/chunks/x.js'],
+		['/favicon/16.png'],
+		['/favicon.svg'],
+		['/robots.txt']
+	])('classifies %j as a static asset', (path) => {
+		expect(isStaticAsset(path)).toBe(true);
+	});
 
 	it.each([['/'], ['/login'], ['/api/projects'], ['/_admin/something'], ['/favicon-other.png']])(
 		'classifies %j as NOT a static asset',

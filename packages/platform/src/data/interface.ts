@@ -190,11 +190,7 @@ export interface IDefinitionStore {
 	 * `definition.published` is reserved for explicit publish ops via
 	 * `setLiveVersion`.
 	 */
-	attachInitialVersion(
-		ctx: RequestContext,
-		definitionId: string,
-		versionId: string
-	): Promise<void>;
+	attachInitialVersion(ctx: RequestContext, definitionId: string, versionId: string): Promise<void>;
 }
 
 /**

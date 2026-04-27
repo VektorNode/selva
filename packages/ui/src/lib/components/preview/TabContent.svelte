@@ -6,7 +6,7 @@
 		SupportedTypes,
 		InputLayoutItem,
 		OutputLayoutItem
-	} from '$lib/types/generated';
+	} from '@selvajs/schemas';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import StateDisplay from '../ui/StateDisplay.svelte';

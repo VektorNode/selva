@@ -182,6 +182,9 @@ importers:
       '@selvajs/compute':
         specifier: 'catalog:'
         version: 1.5.1(three@0.184.0)
+      '@selvajs/schemas':
+        specifier: workspace:*
+        version: link:../schemas
       '@selvajs/ui':
         specifier: workspace:*
         version: link:../ui
@@ -228,6 +231,9 @@ importers:
       '@selvajs/platform':
         specifier: workspace:*
         version: link:../platform
+      '@selvajs/schemas':
+        specifier: workspace:*
+        version: link:../schemas
       '@selvajs/ui':
         specifier: workspace:*
         version: link:../ui
@@ -330,6 +336,9 @@ importers:
       json-schema-to-typescript:
         specifier: ^15.0.4
         version: 15.0.4
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
 
   packages/supabase-provider:
     dependencies:
@@ -370,6 +379,9 @@ importers:
       '@selvajs/compute':
         specifier: 'catalog:'
         version: 1.5.1(three@0.184.0)
+      '@selvajs/schemas':
+        specifier: workspace:*
+        version: link:../schemas
       clsx:
         specifier: 'catalog:'
         version: 2.1.1

@@ -1,4 +1,4 @@
- 
+/* eslint-disable */
 /**
  * This file was automatically generated from schemas/preset-schema.json.
  * DO NOT MODIFY IT BY HAND. Instead, modify the source JSON Schema file,

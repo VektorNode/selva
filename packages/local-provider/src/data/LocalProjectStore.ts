@@ -254,5 +254,4 @@ export class LocalProjectStore implements IProjectStore {
 			actorId: actorFrom(ctx)
 		});
 	}
-
 }

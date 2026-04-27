@@ -4,7 +4,7 @@
 		DiscoveredOutput,
 		GrasshopperParamType,
 		TabConfig
-	} from '@selvajs/ui';
+	} from '@selvajs/schemas';
 	import { StateDisplay, Input, Select } from '@selvajs/ui';
 	import DraggableItem from './DraggableItem.svelte';
 	import { Search, X } from '@lucide/svelte';

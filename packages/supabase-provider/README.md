@@ -90,7 +90,11 @@ import * as supa from '@selvajs/supabase-provider';
 
 export default defineConfig((env) => ({
 	tenancy: 'single',
-	flags: { ALLOW_CROSS_ORG_PUBLIC: false, ALLOW_ORG_COMPUTE_OVERRIDE: false, ALLOW_ORG_CREATION: false },
+	flags: {
+		ALLOW_CROSS_ORG_PUBLIC: false,
+		ALLOW_ORG_COMPUTE_OVERRIDE: false,
+		ALLOW_ORG_CREATION: false
+	},
 	auth: supa.SupabaseAuthProvider.fromEnv(env),
 	data: supa.SupabaseDataProvider.fromEnv(env),
 	storage: supa.SupabaseStorageProvider.fromEnv(env)

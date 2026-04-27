@@ -139,10 +139,7 @@ export function requireMaxBodySize(request: Request, maxBytes: number): void {
  * Always returns a safe path: the validated target on success, the fallback
  * otherwise. Routes call this with `redirectTo` from form data or query string.
  */
-export function safeRedirectTarget(
-	raw: string | null | undefined,
-	fallback: string
-): string {
+export function safeRedirectTarget(raw: string | null | undefined, fallback: string): string {
 	if (typeof raw !== 'string' || raw.length < 2) return fallback;
 	if (raw[0] !== '/') return fallback;
 	// Reject protocol-relative (`//host`) and back-slash bypass (`/\host`).

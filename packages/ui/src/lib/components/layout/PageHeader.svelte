@@ -49,7 +49,7 @@
 		{/if}
 
 		<!-- Right cluster: identity + utilities, anchored flush-right -->
-		<div class="ml-auto gap-2 flex items-center">
+		<div class="gap-2 ml-auto flex items-center">
 			{#if rightContent}
 				{@render rightContent()}
 			{/if}
