@@ -240,6 +240,7 @@ public class BridgeCommunicationService : IDisposable
 
             _component.Attributes?.DocObject?.RecordUndoEvent("Update Schema");
             _setSchema(validatedSchema);
+            _schemaManager.ApplyParameterAccessFromSchema(validatedSchema, document);
             _schemaManager.ClearMetadataCache();
             document.Modified();
 

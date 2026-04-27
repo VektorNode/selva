@@ -7,6 +7,6 @@
 	let { class: className = '', children }: PageContentProps = $props();
 </script>
 
-<main class={`px-6 py-7 ${className}`}>
+<main class={`px-(--page-px) py-(--page-py) ${className}`}>
 	{@render children?.()}
 </main>

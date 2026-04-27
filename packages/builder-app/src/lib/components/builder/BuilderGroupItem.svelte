@@ -5,7 +5,8 @@
 		DiscoveredInput,
 		NumberWidgetConfig,
 		FileInputWidgetConfig,
-		TextWidgetConfig
+		TextWidgetConfig,
+		DropdownWidgetConfig
 	} from '@selvajs/schemas';
 	type LayoutItem = InputLayoutItem | OutputLayoutItem;
 	import { Badge, Button, Card, Switch } from '@selvajs/ui';
@@ -48,17 +49,25 @@
 	let isNumberInput = $derived(item.type === 'input' && item.widgetType === 'number');
 	let isFileInput = $derived(item.type === 'input' && item.widgetType === 'file');
 	let isTextInput = $derived(item.type === 'input' && item.widgetType === 'text');
+	let isDropdownInput = $derived(item.type === 'input' && item.widgetType === 'dropdown');
 	let fileInputConfig = $derived(isFileInput ? (item.config as FileInputWidgetConfig) : null);
+	let dropdownConfig = $derived(isDropdownInput ? (item.config as DropdownWidgetConfig) : null);
 	let showAdvanced = $state(false);
 	let showVisibilityRules = $state(false);
 	let hasVisibilityRules = $derived((item.visibilityCondition?.rules?.length ?? 0) > 0);
 	// Advanced section only for widget-specific options
-	let hasAdvancedOptions = $derived(isNumberInput || isFileInput || isTextInput);
+	let hasAdvancedOptions = $derived(isNumberInput || isFileInput || isTextInput || isDropdownInput);
 
 	function toggleSliderMode() {
 		if (!isNumberInput) return;
 		const config = item.config as NumberWidgetConfig;
 		config.renderAsSlider = !config.renderAsSlider;
+	}
+
+	function toggleChecklistMode() {
+		if (!isDropdownInput) return;
+		const config = item.config as DropdownWidgetConfig;
+		config.displayAs = config.displayAs === 'checklist' ? 'dropdown' : 'checklist';
 	}
 
 	function setFileInputMode(mode: 'upload' | 'url') {
@@ -224,6 +233,24 @@
 										onCheckedChange={toggleSliderMode}
 										class="scale-75"
 									/>
+								</div>
+							{/if}
+
+							{#if isDropdownInput && dropdownConfig}
+								<div class="flex flex-col gap-2">
+									<div class="flex items-center justify-between text-[11px]">
+										<div class="flex flex-col">
+											<span class="text-muted-foreground">Multi-select (checklist)</span>
+											<span class="text-muted-foreground/70 text-[9px]">
+												Renders as checkboxes; emits a list to Grasshopper.
+											</span>
+										</div>
+										<Switch
+											checked={dropdownConfig.displayAs === 'checklist'}
+											onCheckedChange={toggleChecklistMode}
+											class="scale-75"
+										/>
+									</div>
 								</div>
 							{/if}
 

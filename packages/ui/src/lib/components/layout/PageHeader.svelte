@@ -29,7 +29,7 @@
 <header
 	class={`top-0 backdrop-blur-sm sticky z-40 border-b border-border bg-background/90 ${className}`}
 >
-	<div class="h-14 gap-5 px-6 flex items-center">
+	<div class="h-(--header-h) gap-5 px-(--page-px) flex items-center">
 		<!-- Logo -->
 		<a href={homeUrl} class="gap-2 flex shrink-0 items-center">
 			<img src={logo} alt="" aria-hidden="true" class="h-5 w-5" />
@@ -60,7 +60,7 @@
 	</div>
 
 	{#if subnav}
-		<div class="h-10 px-6 flex items-center border-t border-border/60">
+		<div class="h-10 px-(--page-px) flex items-center border-t border-border/60">
 			{@render subnav()}
 		</div>
 	{/if}

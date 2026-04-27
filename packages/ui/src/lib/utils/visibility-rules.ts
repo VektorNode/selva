@@ -13,6 +13,12 @@ export interface VisibilityResult {
 
 type RuleOperatorFn = (a: unknown, b: unknown, values?: unknown[]) => boolean;
 
+const toStringArray = (value: unknown): string[] => {
+	if (Array.isArray(value)) return value.map(String);
+	if (value === undefined || value === null || value === '') return [];
+	return [String(value)];
+};
+
 const RULE_OPERATORS: Record<string, RuleOperatorFn> = {
 	equals: (a, b) => a === b,
 	notEquals: (a, b) => a !== b,
@@ -30,7 +36,14 @@ const RULE_OPERATORS: Record<string, RuleOperatorFn> = {
 		} catch {
 			return false;
 		}
-	}
+	},
+	contains: (a, b) => toStringArray(a).includes(String(b)),
+	containsAny: (a, _, vals) => {
+		const arr = toStringArray(a);
+		return vals?.some((v) => arr.includes(String(v))) ?? false;
+	},
+	isEmpty: (a) => toStringArray(a).length === 0,
+	isNotEmpty: (a) => toStringArray(a).length > 0
 };
 
 export function evaluateRule(rule: VisibilityRule, values: Record<string, unknown>): boolean {

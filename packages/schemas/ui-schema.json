@@ -35,9 +35,13 @@
 						"in",
 						"notIn",
 						"between",
-						"matches"
+						"matches",
+						"contains",
+						"containsAny",
+						"isEmpty",
+						"isNotEmpty"
 					],
-					"description": "Comparison operator"
+					"description": "Comparison operator. 'contains', 'containsAny', 'isEmpty', 'isNotEmpty' apply to array-valued params (e.g., checklist value lists)."
 				},
 				"value": {
 					"description": "Value to compare against (used for equals, notEquals, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual)"
@@ -146,7 +150,13 @@
 					"additionalProperties": { "type": "string" },
 					"description": "Key-value pairs for dropdown options"
 				},
-				"required": { "type": "boolean" }
+				"required": { "type": "boolean" },
+				"displayAs": {
+					"type": "string",
+					"enum": ["dropdown", "checklist"],
+					"default": "dropdown",
+					"description": "How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected Grasshopper parameter."
+				}
 			},
 			"required": ["options"],
 			"additionalProperties": false
@@ -652,7 +662,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.5.0",
+					"default": "2.6.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

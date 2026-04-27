@@ -195,6 +195,12 @@ namespace Selva.Core.Models
 
         [JsonProperty("required")]
         public bool? Required { get; set; }
+
+/// <summary>
+/// How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected Grasshopper parameter.
+/// </summary>
+        [JsonProperty("displayAs", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string DisplayAs { get; set; } = "dropdown";
     }
 
     public class CheckboxWidgetConfig
@@ -337,7 +343,7 @@ namespace Selva.Core.Models
         public string ParamId { get; set; }
 
 /// <summary>
-/// Comparison operator
+/// Comparison operator. 'contains', 'containsAny', 'isEmpty', 'isNotEmpty' apply to array-valued params (e.g., checklist value lists).
 /// </summary>
         [JsonProperty("operator")]
         public string Operator { get; set; }

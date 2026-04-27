@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import { AlertDialog, Button, Search, toast } from '@selvajs/ui';
-	import { Grid2x2, List, Plus, Settings } from '@lucide/svelte';
+	import {
+		AlertDialog,
+		Button,
+		EmptyState,
+		Search,
+		SectionHeader,
+		ViewToggle,
+		toast
+	} from '@selvajs/ui';
+	import { Plus, Settings } from '@lucide/svelte';
 	import AddDefinitionDialog from '$lib/components/definitions/AddDefinitionDialog.svelte';
 	import ProjectSidebar from './_components/ProjectSidebar.svelte';
 	import ProjectSettingsDialog from './_components/ProjectSettingsDialog.svelte';
@@ -245,7 +253,7 @@
 	<title>Projects</title>
 </svelte:head>
 
-<div class="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+<div class="flex h-full overflow-hidden">
 	<ProjectSidebar
 		projects={data.projects}
 		records={data.records}
@@ -256,24 +264,15 @@
 	/>
 
 	<div class="flex flex-1 flex-col overflow-hidden">
-		<div class="border-border bg-background shrink-0 border-b px-6 py-5">
-			<div class="flex items-start justify-between gap-4">
-				<div class="min-w-0">
-					<p class="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase">
-						{activeProject ? activeProject.name : 'All projects'}
-					</p>
-					<h1 class="text-foreground text-xl font-semibold tracking-tight">Definitions</h1>
-					{#if activeProject?.description}
-						<p class="text-muted-foreground mt-1 max-w-xl text-sm">
-							{activeProject.description}
-						</p>
-					{:else if !activeProject}
-						<p class="text-muted-foreground mt-1 max-w-xl text-sm">
-							Definitions across every project in this organization.
-						</p>
-					{/if}
-				</div>
-				<div class="flex shrink-0 items-center gap-2">
+		<div class="border-border bg-background shrink-0 border-b px-(--page-px) py-5">
+			<SectionHeader
+				class="mb-0"
+				eyebrow={activeProject ? activeProject.name : 'All projects'}
+				title="Definitions"
+				description={activeProject?.description ??
+					(!activeProject ? 'Definitions across every project in this organization.' : undefined)}
+			>
+				{#snippet actions()}
 					{#if data.canManageProjects && activeProject}
 						<Button
 							variant="outline"
@@ -288,11 +287,11 @@
 						<Plus class="mr-1.5 h-3.5 w-3.5" />
 						Add definition
 					</Button>
-				</div>
-			</div>
+				{/snippet}
+			</SectionHeader>
 		</div>
 
-		<div class="flex-1 overflow-y-auto px-6 py-5">
+		<div class="flex-1 overflow-y-auto px-(--page-px) py-5">
 			<div class="mb-5 flex items-center gap-3">
 				<div class="max-w-lg flex-1">
 					<Search
@@ -304,35 +303,19 @@
 				<span class="text-muted-foreground font-mono text-xs tabular-nums">
 					{filtered.length} definition{filtered.length === 1 ? '' : 's'}
 				</span>
-				<div class="border-border ml-auto flex overflow-hidden rounded-md border">
-					<button
-						onclick={() => (viewMode = 'grid')}
-						class={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-accent text-accent-foreground' : 'bg-card text-muted-foreground hover:bg-muted/60'}`}
-						title="Grid view"
-						aria-label="Grid view"
-					>
-						<Grid2x2 class="h-3.5 w-3.5" />
-					</button>
-					<button
-						onclick={() => (viewMode = 'list')}
-						class={`border-border border-l p-1.5 transition-colors ${viewMode === 'list' ? 'bg-accent text-accent-foreground' : 'bg-card text-muted-foreground hover:bg-muted/60'}`}
-						title="List view"
-						aria-label="List view"
-					>
-						<List class="h-3.5 w-3.5" />
-					</button>
+				<div class="ml-auto">
+					<ViewToggle mode={viewMode} size="sm" onChange={(m) => (viewMode = m)} />
 				</div>
 			</div>
 
 			{#if filtered.length === 0}
-				<div
-					class="border-border flex flex-col items-center justify-center rounded-lg border-2 border-dashed py-20 text-center"
-				>
-					<p class="text-sm font-medium">No definitions found</p>
-					<p class="text-muted-foreground mt-1 text-xs">
-						{searchQuery ? 'Try adjusting your search' : 'Add your first definition to get started'}
-					</p>
-				</div>
+				<EmptyState
+					size="lg"
+					title="No definitions found"
+					description={searchQuery
+						? 'Try adjusting your search'
+						: 'Add your first definition to get started'}
+				/>
 			{:else if viewMode === 'grid'}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 					{#each filtered as record (record.guid)}

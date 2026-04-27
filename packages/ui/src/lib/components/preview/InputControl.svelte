@@ -13,6 +13,7 @@
 	import { HelpCircle } from '@lucide/svelte';
 	import {
 		CheckboxInput,
+		ChecklistInput,
 		ColorInput,
 		DropdownInput,
 		FileInput,
@@ -91,12 +92,26 @@
 		/>
 	{:else if isDropdownWidget(item)}
 		{@const config = item.config}
-		<DropdownInput
-			value={typeof value === 'string' ? value : ''}
-			{config}
-			onChange={commit}
-			{disabled}
-		/>
+		{#if config.displayAs === 'checklist'}
+			<ChecklistInput
+				{inputId}
+				value={Array.isArray(value)
+					? (value as string[])
+					: typeof value === 'string' && value
+						? [value]
+						: []}
+				{config}
+				onChange={commit}
+				{disabled}
+			/>
+		{:else}
+			<DropdownInput
+				value={typeof value === 'string' ? value : ''}
+				{config}
+				onChange={commit}
+				{disabled}
+			/>
+		{/if}
 	{:else if isFileWidget(item)}
 		{@const config = item.config as FileInputWidgetConfig}
 		<FileInput

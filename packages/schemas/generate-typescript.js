@@ -159,7 +159,7 @@ export function isColorWidget(item: LayoutItem): item is InputColorLayoutItem {
 // Helper type aliases
 export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem | InputColorLayoutItem;
 export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem;
-export type SupportedTypes = string | number | boolean;
+export type SupportedTypes = string | number | boolean | string[];
 `,
   });
 

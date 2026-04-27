@@ -377,6 +377,26 @@ public class ValueApplicator
     {
         try
         {
+            // Multi-select (checklist) values arrive as arrays — dispatch to SelectItemsByName.
+            var multiValues = ExtractMultiValues(value);
+            if (multiValues != null)
+            {
+                var multiMethod = contextParam.GetType().GetMethod("SelectItemsByName");
+                if (multiMethod != null)
+                {
+                    var multiResult = multiMethod.Invoke(contextParam, new object[] { multiValues });
+                    if (multiResult is bool multiSuccess && multiSuccess)
+                    {
+                        TrackConnectedValueListExpire(contextParam, pendingExpirations);
+                        return true;
+                    }
+
+                    addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+                        "No checklist items matched the requested values");
+                    return false;
+                }
+            }
+
             var selectedKey = value?.ToString();
             if (string.IsNullOrEmpty(selectedKey))
             {
@@ -391,15 +411,7 @@ public class ValueApplicator
                 var result = selectMethod.Invoke(contextParam, new object[] { selectedKey });
                 if (result is bool success && success)
                 {
-                    // Also add the connected GH_ValueList to pending expirations
-                    // This ensures the actual ValueList component gets expired too
-                    var connectedVLProperty = contextParam.GetType().GetProperty("ConnectedValueList",
-                        BindingFlags.NonPublic | BindingFlags.Instance);
-                    if (connectedVLProperty?.GetValue(contextParam) is IGH_ActiveObject connectedVL)
-                    {
-                        pendingExpirations.Add(connectedVL);
-                    }
-
+                    TrackConnectedValueListExpire(contextParam, pendingExpirations);
                     return true;
                 }
 
@@ -417,6 +429,59 @@ public class ValueApplicator
             addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
                 $"Error applying ValueList value: {ex.Message}");
             return false;
+        }
+    }
+
+    /// <summary>
+    ///     If the value is a multi-select payload (JArray, IEnumerable of strings, etc.) return it as
+    ///     a List&lt;string&gt;; otherwise return null so the single-value path handles it.
+    /// </summary>
+    private static List<string> ExtractMultiValues(object value)
+    {
+        if (value == null || value is string)
+        {
+            return null;
+        }
+
+        if (value is JArray jarray)
+        {
+            var list = new List<string>();
+            foreach (var token in jarray)
+            {
+                if (token != null && token.Type != JTokenType.Null)
+                {
+                    list.Add(token.ToString());
+                }
+            }
+
+            return list.Count > 0 ? list : null;
+        }
+
+        if (value is IEnumerable enumerable)
+        {
+            var list = new List<string>();
+            foreach (var item in enumerable)
+            {
+                if (item != null)
+                {
+                    list.Add(item.ToString());
+                }
+            }
+
+            return list.Count > 0 ? list : null;
+        }
+
+        return null;
+    }
+
+    private static void TrackConnectedValueListExpire(
+        IGH_ContextualParameter contextParam, HashSet<IGH_ActiveObject> pendingExpirations)
+    {
+        var connectedVLProperty = contextParam.GetType().GetProperty("ConnectedValueList",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        if (connectedVLProperty?.GetValue(contextParam) is IGH_ActiveObject connectedVL)
+        {
+            pendingExpirations.Add(connectedVL);
         }
     }
 

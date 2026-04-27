@@ -332,6 +332,36 @@ public class SchemaManager
         }
     }
 
+    /// <summary>
+    ///     Apply layout-item config flags that affect GH parameter behavior back onto the document.
+    ///     Currently: when a dropdown layout item declares `displayAs = "checklist"`, the matching
+    ///     GetValueListParameter is switched to list access so multi-selection flows downstream.
+    /// </summary>
+    public void ApplyParameterAccessFromSchema(UISchema schema, GH_Document document)
+    {
+        if (schema?.Layout == null || document == null)
+        {
+            return;
+        }
+
+        foreach (var item in GetAllLayoutItems(schema.Layout))
+        {
+            if (item is not InputDropdownLayoutItem dropdown || dropdown.Config == null)
+            {
+                continue;
+            }
+
+            var docObj = document.FindObject(dropdown.ParamId, false);
+            if (docObj is not GetValueListParameter valueList)
+            {
+                continue;
+            }
+
+            var listAccess = string.Equals(dropdown.Config.DisplayAs, "checklist", StringComparison.OrdinalIgnoreCase);
+            valueList.SetListAccess(listAccess);
+        }
+    }
+
     #endregion
 
     #region Schema Validation

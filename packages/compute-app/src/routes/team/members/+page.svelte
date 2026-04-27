@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Card, Input, toast, SectionHeader } from '@selvajs/ui';
+	import { Button, Card, Input, toast, SectionHeader, EmptyState } from '@selvajs/ui';
 	import { Mail, Trash2, Copy, X, UserPlus } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { Invite, OrgPermission, OrgRole } from '@selvajs/platform';
@@ -223,13 +223,11 @@
 			</Card.Header>
 			<Card.Content>
 				{#if data.members.length === 0}
-					<div
-						class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
-					>
-						<UserPlus class="text-muted-foreground mb-3 h-8 w-8" />
-						<p class="text-sm font-medium">No members yet</p>
-						<p class="text-muted-foreground mt-1 text-sm">Invite teammates to get started.</p>
-					</div>
+					<EmptyState
+						icon={UserPlus}
+						title="No members yet"
+						description="Invite teammates to get started."
+					/>
 				{:else}
 					<div class="divide-y rounded-lg border">
 						{#each data.members as member (member.userId)}

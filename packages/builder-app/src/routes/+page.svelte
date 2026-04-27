@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { PageContainer, PageContent, PageHeader, StateDisplay, Card } from '@selvajs/ui';
+	import { AppShell, PageContent, StateDisplay, Card } from '@selvajs/ui';
 	import { Wrench, Play } from '@lucide/svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
@@ -22,8 +22,7 @@
 	const homeUrl = $derived(`/?${buildParams()}`);
 </script>
 
-<PageContainer background="white">
-	<PageHeader {homeUrl} showModeToggle={true} />
+<AppShell {homeUrl} mode="fixed" showFooter>
 	{#if !sessionId}
 		<div class="flex flex-1 items-center justify-center">
 			<StateDisplay
@@ -76,4 +75,4 @@
 			</div>
 		</PageContent>
 	{/if}
-</PageContainer>
+</AppShell>

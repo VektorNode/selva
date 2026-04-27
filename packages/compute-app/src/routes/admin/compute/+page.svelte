@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Card, Input, toast, SectionHeader } from '@selvajs/ui';
+	import { Button, Card, EmptyState, Input, toast, SectionHeader } from '@selvajs/ui';
 	import { Circle, Server, Plus, Trash2, Star, ChevronDown, ChevronUp } from '@lucide/svelte';
 	import type { ComputeServerConfig } from '@selvajs/platform/computeServer';
 	import { useServerHealth } from '$lib/composables/useServerHealth.svelte';
@@ -356,16 +356,14 @@
 	<Card.Root>
 		<Card.Content class="space-y-3 pt-6">
 			{#if servers.length === 0}
-				<div
-					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
-				>
-					<Server class="text-muted-foreground mb-3 h-8 w-8" />
-					<p class="text-sm font-medium">No servers configured</p>
-					<Button variant="outline" size="sm" class="mt-3" onclick={addServer}>
-						<Plus class="mr-1.5 h-3.5 w-3.5" />
-						Add Server
-					</Button>
-				</div>
+				<EmptyState icon={Server} title="No servers configured">
+					{#snippet actions()}
+						<Button variant="outline" size="sm" onclick={addServer}>
+							<Plus class="mr-1.5 h-3.5 w-3.5" />
+							Add Server
+						</Button>
+					{/snippet}
+				</EmptyState>
 			{:else}
 				{#each servers as server, i (server.id)}
 					{@render serverCard(server, i)}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, toast, AlertDialog } from '@selvajs/ui';
+	import { Button, EmptyState, toast, AlertDialog } from '@selvajs/ui';
 	import { Plus, Trash2, Link2, TriangleAlert } from '@lucide/svelte';
 	import type { ShareLink } from '@selvajs/platform';
 	import MintShareLinkDialog from './MintShareLinkDialog.svelte';
@@ -94,19 +94,19 @@
 			<p class="text-muted-foreground text-xs">Loading…</p>
 		</div>
 	{:else if activeLinks.length === 0}
-		<div
-			class="border-border flex flex-col items-center justify-center rounded-md border-2 border-dashed p-8 text-center"
+		<EmptyState
+			size="sm"
+			icon={Link2}
+			title="No share links yet"
+			description="Mint a link to share this definition without requiring the recipient to have an account."
 		>
-			<Link2 class="text-muted-foreground mb-2 h-7 w-7" />
-			<p class="text-sm font-medium">No share links yet</p>
-			<p class="text-muted-foreground mt-1 mb-4 max-w-xs text-xs">
-				Mint a link to share this definition without requiring the recipient to have an account.
-			</p>
-			<Button size="sm" onclick={() => (showMintDialog = true)}>
-				<Plus class="mr-1.5 h-3.5 w-3.5" />
-				New link
-			</Button>
-		</div>
+			{#snippet actions()}
+				<Button size="sm" onclick={() => (showMintDialog = true)}>
+					<Plus class="mr-1.5 h-3.5 w-3.5" />
+					New link
+				</Button>
+			{/snippet}
+		</EmptyState>
 	{:else}
 		<div class="border-border bg-card overflow-hidden rounded-md border">
 			<div
