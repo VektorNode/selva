@@ -1,23 +1,29 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { PageContainer, PageHeader, StateDisplay, Card } from '@selvajs/ui';
+	import { PageContainer, PageContent, PageHeader, StateDisplay, Card } from '@selvajs/ui';
 	import { Wrench, Play } from '@lucide/svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
 	var sessionId = page.url.searchParams.get('session');
 	var wsPort = page.url.searchParams.get('wsPort');
 
-	function navigateTo(path: string) {
+	function buildParams() {
 		const params = new SvelteURLSearchParams();
 		if (sessionId) params.set('session', sessionId);
 		if (wsPort) params.set('wsPort', wsPort);
-		goto(`/${path}?${params.toString()}`, { noScroll: true }).catch(() => {});
+		return params.toString();
 	}
+
+	function navigateTo(path: string) {
+		goto(`/${path}?${buildParams()}`, { noScroll: true }).catch(() => {});
+	}
+
+	const homeUrl = $derived(`/?${buildParams()}`);
 </script>
 
 <PageContainer background="white">
-	<PageHeader title="Selva" showModeToggle={true} />
+	<PageHeader {homeUrl} showModeToggle={true} />
 	{#if !sessionId}
 		<div class="flex flex-1 items-center justify-center">
 			<StateDisplay
@@ -28,7 +34,7 @@
 			/>
 		</div>
 	{:else}
-		<div class="mx-auto w-full max-w-4xl flex-1 p-12">
+		<PageContent class="mx-auto w-full max-w-4xl flex-1">
 			<h2 class="text-foreground mb-4 text-4xl font-bold">Welcome to Selva</h2>
 			<p class="text-muted-foreground mb-8 text-lg">Choose a mode to get started:</p>
 
@@ -68,6 +74,6 @@
 					</Card.Root>
 				</button>
 			</div>
-		</div>
+		</PageContent>
 	{/if}
 </PageContainer>

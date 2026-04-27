@@ -36,9 +36,9 @@
 			<span class="font-semibold text-sm tracking-tight">Selva</span>
 		</a>
 
-		{#if title}
+		{#if title !== undefined}
 			<span class="text-sm text-border">/</span>
-			<span class="text-sm font-medium text-muted-foreground">{title}</span>
+			<span class="text-sm font-medium text-muted-foreground">{title ?? ''}</span>
 		{/if}
 
 		<!-- Primary nav next to logo -->

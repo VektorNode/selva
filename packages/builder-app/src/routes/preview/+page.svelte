@@ -141,15 +141,20 @@
 		}
 	}
 
-	function navigateTo(route: '/' | '/builder') {
+	function buildParams() {
 		const params = new SvelteURLSearchParams();
 		if (sessionId) params.set('session', sessionId);
-		const wsPort = page.url.searchParams.get('wsPort');
-		if (wsPort) params.set('wsPort', wsPort);
+		const wsPortParam = page.url.searchParams.get('wsPort');
+		if (wsPortParam) params.set('wsPort', wsPortParam);
+		return params.toString();
+	}
 
-		const url = `${route}?${params.toString()}`;
+	function navigateTo(route: '/' | '/builder') {
+		const url = `${route}?${buildParams()}`;
 		goto(url).catch(() => {});
 	}
+
+	const homeUrl = $derived(`/?${buildParams()}`);
 
 	function syncParameters() {
 		syncNeeded = false;
@@ -406,8 +411,14 @@
 </script>
 
 <PageContainer background="white">
-	<PageHeader title={schema?.name || 'Interactive Preview'} showModeToggle={true}>
+	<PageHeader {homeUrl} title={schema?.name ?? null} showModeToggle={true}>
 		{#snippet navItems()}
+			<Button variant="ghost" size="sm" onclick={() => navigateTo('/builder')}>
+				Schema Builder
+			</Button>
+			<Button variant="default" size="sm">Interactive Preview</Button>
+		{/snippet}
+		{#snippet rightContent()}
 			{#if syncNeeded}
 				<Button
 					variant="default"
@@ -418,15 +429,12 @@
 					⚡ Sync Parameters
 				</Button>
 			{/if}
-			<Button variant="outline" size="sm" onclick={() => navigateTo('/')}>Home</Button>
-			<Button variant="outline" size="sm" onclick={() => navigateTo('/builder')}>
-				Schema Builder
-			</Button>
-			<Button variant="default" size="sm">Interactive Preview</Button>
 		{/snippet}
 	</PageHeader>
 
-	<div class="relative flex flex-1 flex-col overflow-hidden">
+	<div
+		class="relative flex flex-1 flex-col overflow-hidden {isViewerFullscreen ? '' : 'pt-6'}"
+	>
 		{#if loading}
 			<div class="flex min-h-100 items-center justify-center">
 				<StateDisplay type="loading" size="large" message="Loading preview..." />

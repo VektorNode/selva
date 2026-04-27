@@ -36,14 +36,19 @@
 			}
 		}
 
+		const url = `${route}?${buildParams()}`;
+		goto(url, { noScroll: true }).catch(() => {});
+	}
+
+	function buildParams() {
 		const params = new SvelteURLSearchParams();
 		if (sessionId) params.set('session', sessionId);
 		const wsPort = page.url.searchParams.get('wsPort');
 		if (wsPort) params.set('wsPort', wsPort);
-
-		const url = `${route}?${params.toString()}`;
-		goto(url, { noScroll: true }).catch(() => {});
+		return params.toString();
 	}
+
+	const homeUrl = $derived(`/?${buildParams()}`);
 
 	const placedInLayoutIds = $derived.by(() => {
 		const ids = new SvelteSet<string>();
@@ -225,7 +230,13 @@
 
 <DragDropContext>
 	<PageContainer background="white">
-		<PageHeader title="Schema Builder" showModeToggle={true}>
+		<PageHeader {homeUrl} title="Schema Builder" showModeToggle={true}>
+			{#snippet navItems()}
+				<Button variant="default" size="sm">Schema Builder</Button>
+				<Button variant="ghost" size="sm" onclick={() => navigateTo('/preview')}>
+					Interactive Preview
+				</Button>
+			{/snippet}
 			{#snippet rightContent()}
 				{#if builderState?.state.syncNeeded}
 					<Button
@@ -237,12 +248,6 @@
 						⚡ Sync Parameters
 					</Button>
 				{/if}
-				<Button variant="outline" size="sm" onclick={() => navigateTo('/')}>Home</Button>
-				<Button variant="default" size="sm">Schema Builder</Button>
-				<Button variant="outline" size="sm" onclick={() => navigateTo('/preview')}>
-					Interactive Preview
-				</Button>
-				<div class="h-6 w-px bg-gray-300"></div>
 				<Button
 					variant="outline"
 					size="sm"
