@@ -31,8 +31,8 @@
 	"scripts": {
 		"dev": "vite dev",
 		"build": "rm -rf dist && vite build && pnpm prepack",
-		"build:fast": "svelte-kit sync && svelte-package --types=false",
-		"build:watch": "svelte-kit sync && svelte-package --types=false --watch",
+		"build:fast": "svelte-kit sync && svelte-package",
+		"build:watch": "svelte-kit sync && svelte-package --watch",
 		"preview": "vite preview",
 		"prepack": "svelte-kit sync && svelte-package && publint",
 		"prepare": "svelte-kit sync || echo ''",
