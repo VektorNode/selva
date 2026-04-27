@@ -82,55 +82,22 @@ export default defineConfig((env) => ({
 }));
 ```
 
-**Production or Supabase dev:**
+**Supabase (`selva.config.ts`):**
 
 ```ts
-import { defineConfig } from '@selvajs/platform/config';
-import {
-	SupabaseAuthProvider,
-	SupabaseDataProvider,
-	SupabaseStorageProvider,
-	SupabaseUserProfileProvider
-} from '@selvajs/supabase-provider';
-
-export default defineConfig((env) => {
-	const data = SupabaseDataProvider.fromEnv(env);
-	// Share one ClientBundle across every provider — cheaper + consistent.
-	const bundle = data.getClientBundle();
-	return {
-		auth: SupabaseAuthProvider.fromEnv(env),
-		data,
-		storage: SupabaseStorageProvider.fromEnv(env),
-		userProfile: new SupabaseUserProfileProvider(bundle)
-	};
-});
-```
-
-**Environment-switched (pick at runtime):**
-
-```ts
-import { defineConfig } from '@selvajs/platform/config';
-import * as local from '@selvajs/local-provider';
+import { defineConfig } from '@selvajs/platform';
 import * as supa from '@selvajs/supabase-provider';
 
-export default defineConfig((env) => {
-	if (env.SELVA_PROVIDER === 'supabase') {
-		const data = supa.SupabaseDataProvider.fromEnv(env);
-		return {
-			auth: supa.SupabaseAuthProvider.fromEnv(env),
-			data,
-			storage: supa.SupabaseStorageProvider.fromEnv(env),
-			userProfile: new supa.SupabaseUserProfileProvider(data.getClientBundle())
-		};
-	}
-	return {
-		auth: local.LocalAuthProvider.fromEnv(env),
-		data: local.LocalDataProvider.fromEnv(env),
-		storage: local.LocalStorageProvider.fromEnv(env),
-		userProfile: local.LocalUserProfileProvider.fromEnv(env)
-	};
-});
+export default defineConfig((env) => ({
+	tenancy: 'single',
+	flags: { ALLOW_CROSS_ORG_PUBLIC: false, ALLOW_ORG_COMPUTE_OVERRIDE: false, ALLOW_ORG_CREATION: false },
+	auth: supa.SupabaseAuthProvider.fromEnv(env),
+	data: supa.SupabaseDataProvider.fromEnv(env),
+	storage: supa.SupabaseStorageProvider.fromEnv(env)
+}));
 ```
+
+To switch to the local provider, swap the imports and the three provider lines. See the commented example in `selva.config.ts`.
 
 ---
 

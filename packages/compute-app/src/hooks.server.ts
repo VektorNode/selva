@@ -62,7 +62,7 @@ async function buildContext(
 	// Identity from the auth provider, authorization from the data layer.
 	// Both reads run as SYSTEM_CONTEXT during request bootstrap (the user's
 	// own ctx isn't built yet).
-	const platformPermissions = await providers.permissions.getFor(SYSTEM_CONTEXT, user.id);
+	const platformPermissions = await providers.data.permissions.getFor(SYSTEM_CONTEXT, user.id);
 
 	// Single round-trip via `findUserMembership` (one indexed lookup against
 	// `org_members`). Replaces the prior `listOrgs(50) + getOrgMember-per-org`
@@ -238,7 +238,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		// and the user is loading their own profile during request bootstrap.
 		event.locals.user = user;
 		event.locals.profile =
-			(await providers.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ?? emptyProfile(user.id);
+			(await providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ?? emptyProfile(user.id);
 		event.locals.ctx = await buildContext(user, token);
 	}
 

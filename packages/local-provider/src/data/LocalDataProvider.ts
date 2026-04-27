@@ -6,6 +6,8 @@ import type {
 	IComputeServerStore,
 	IInviteStore,
 	IShareLinkStore,
+	IUserProfileStore,
+	IPlatformPermissionStore,
 	IEventSink
 } from '@selvajs/platform';
 import { NoopEventSink } from '@selvajs/platform';
@@ -16,6 +18,8 @@ import { LocalDefinitionStore } from './LocalDefinitionStore.js';
 import { LocalComputeServerStore } from './LocalComputeServerStore.js';
 import { LocalInviteStore } from './LocalInviteStore.js';
 import { LocalShareLinkStore } from './LocalShareLinkStore.js';
+import { LocalUserProfileProvider } from '../userProfile/LocalUserProfileProvider.js';
+import { LocalPlatformPermissionStore } from '../permissions/LocalPlatformPermissionStore.js';
 
 /**
  * Composition of every local-provider data store. One `LocalOrgStoreLoader`
@@ -29,6 +33,8 @@ export class LocalDataProvider implements IDataProvider {
 	readonly computeServer: IComputeServerStore;
 	readonly invites: IInviteStore;
 	readonly shareLinks: IShareLinkStore;
+	readonly userProfile: IUserProfileStore;
+	readonly permissions: IPlatformPermissionStore;
 
 	static fromEnv(
 		env: Record<string, string | undefined>,
@@ -51,7 +57,19 @@ export class LocalDataProvider implements IDataProvider {
 		//   soft-delete cascade (Supabase does the equivalent via JOIN)
 		definitions.setProjectProvider(projects);
 		shareLinks.setDefinitionProvider(definitions);
-		return new LocalDataProvider(orgs, projects, definitions, computeServer, invites, shareLinks);
+		const usersFilePath = path.join(env.DATA_PATH, 'users.json');
+		const userProfile = new LocalUserProfileProvider(usersFilePath);
+		const permissions = new LocalPlatformPermissionStore(usersFilePath);
+		return new LocalDataProvider(
+			orgs,
+			projects,
+			definitions,
+			computeServer,
+			invites,
+			shareLinks,
+			userProfile,
+			permissions
+		);
 	}
 
 	constructor(
@@ -60,7 +78,9 @@ export class LocalDataProvider implements IDataProvider {
 		definitions: IDefinitionStore,
 		computeServer: IComputeServerStore,
 		invites: IInviteStore,
-		shareLinks: IShareLinkStore
+		shareLinks: IShareLinkStore,
+		userProfile: IUserProfileStore,
+		permissions: IPlatformPermissionStore
 	) {
 		this.orgs = orgs;
 		this.projects = projects;
@@ -68,5 +88,7 @@ export class LocalDataProvider implements IDataProvider {
 		this.computeServer = computeServer;
 		this.invites = invites;
 		this.shareLinks = shareLinks;
+		this.userProfile = userProfile;
+		this.permissions = permissions;
 	}
 }

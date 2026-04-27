@@ -25,9 +25,9 @@ Selva ships two backend providers; both run locally. Pick one:
 | **State lives in** | JSON files on disk                       | Postgres + Supabase Auth + Storage |
 | **External deps**  | none                                     | Docker                             |
 | **Best for**       | quick eval, single-instance self-host    | multi-instance, RLS, managed auth  |
-| **Switch later**   | yes — change `SELVA_PROVIDER` and re-run | yes                                |
+| **Switch later**   | yes — edit `selva.config.ts` and re-run | yes                                |
 
-The default is local. You can switch any time by changing one env var.
+The default is local. You can switch any time by editing `selva.config.ts`.
 
 ## 3. Configure environment
 
@@ -38,8 +38,8 @@ cp packages/compute-app/.env.example packages/compute-app/.env
 [`.env.example`](../packages/compute-app/.env.example) is the **single authoritative reference** for every env var Selva reads — provider choice, tenancy, platform flags, secrets. Open it and:
 
 - Set `SESSION_SECRET` (instructions inline). For local provider this is enough.
-- For Supabase, follow the inline pointers and set `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — see [@selvajs/supabase-provider](../packages/supabase-provider/README.md#development--local-supabase-stack) for the `npx supabase start` flow that produces those keys.
-- For multi-org testing, set `SELVA_TENANCY=multi` and follow [MultiOrg-LocalDev.md](MultiOrg-LocalDev.md).
+- For Supabase, set `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — see [@selvajs/supabase-provider](../packages/supabase-provider/README.md#development--local-supabase-stack) for the `npx supabase start` flow that produces those keys. Then switch the provider in `selva.config.ts`.
+- For multi-org testing, set `tenancy: 'multi'` in `selva.config.ts` and follow [MultiOrg-LocalDev.md](MultiOrg-LocalDev.md).
 
 You shouldn't need to read any other env-var documentation.
 

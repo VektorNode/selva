@@ -598,7 +598,7 @@ describe('§11 — instance-admin invariants', () => {
 		await grantPlatformPermissions(tp, alice.id, ['instance_admin']);
 		const aliceCtx = (await actAs(tp, alice.id)).ctx;
 
-		const result = await tp.config.permissions.set(aliceCtx, alice.id, []);
+		const result = await tp.config.data.permissions.set(aliceCtx, alice.id, []);
 		expect(result).toBe('last_admin');
 	});
 
@@ -609,7 +609,7 @@ describe('§11 — instance-admin invariants', () => {
 		await grantPlatformPermissions(tp, bob.id, ['instance_admin']);
 		const aliceCtx = (await actAs(tp, alice.id)).ctx;
 
-		const result = await tp.config.permissions.set(aliceCtx, bob.id, []);
+		const result = await tp.config.data.permissions.set(aliceCtx, bob.id, []);
 		expect(result).toBe('ok');
 	});
 
@@ -620,15 +620,15 @@ describe('§11 — instance-admin invariants', () => {
 		await grantPlatformPermissions(tp, bob.id, ['instance_admin']);
 
 		// Both admins. Excluding either drops count to 1.
-		expect(await tp.config.permissions.countInstanceAdminsExcluding(SYSTEM_CONTEXT, alice.id)).toBe(
+		expect(await tp.config.data.permissions.countInstanceAdminsExcluding(SYSTEM_CONTEXT, alice.id)).toBe(
 			1
 		);
-		expect(await tp.config.permissions.countInstanceAdminsExcluding(SYSTEM_CONTEXT, bob.id)).toBe(
+		expect(await tp.config.data.permissions.countInstanceAdminsExcluding(SYSTEM_CONTEXT, bob.id)).toBe(
 			1
 		);
 		// Excluding a non-admin doesn't change the count.
 		expect(
-			await tp.config.permissions.countInstanceAdminsExcluding(SYSTEM_CONTEXT, 'nonexistent')
+			await tp.config.data.permissions.countInstanceAdminsExcluding(SYSTEM_CONTEXT, 'nonexistent')
 		).toBe(2);
 	});
 

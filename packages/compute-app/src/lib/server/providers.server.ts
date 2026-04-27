@@ -42,7 +42,7 @@ export function getComputeServerConfigStore() {
 }
 
 export function getUserProfileStore() {
-	return providers.userProfile;
+	return providers.data.userProfile;
 }
 
 export function getInviteStore() {
@@ -50,5 +50,5 @@ export function getInviteStore() {
 }
 
 export function getPermissionStore() {
-	return providers.permissions;
+	return providers.data.permissions;
 }
