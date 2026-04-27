@@ -2,11 +2,10 @@
 	import { SideNav, type SideNavItem } from '@selvajs/ui';
 	import { Gauge, Users, FolderKanban, Activity, Link2, SlidersHorizontal } from '@lucide/svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
-	import type { Organization, OrgPermission, PlatformPermission } from '@selvajs/platform';
+	import type { Organization, OrgPermission } from '@selvajs/platform';
 
 	interface LayoutProps {
 		data: {
-			user?: { platformPermissions?: PlatformPermission[] } | null;
 			ctx: { orgPermissions: OrgPermission[] } | null;
 			org: Organization | null;
 		};
