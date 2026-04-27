@@ -432,23 +432,14 @@
 
 			<!-- User list -->
 			{#if data.users === null}
-				<div
-					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
-				>
-					<ShieldCheck class="text-muted-foreground mb-3 h-8 w-8" />
-					<p class="text-sm font-medium">User store unavailable</p>
-					<p class="text-muted-foreground mt-1 text-sm">
+				<EmptyState icon={ShieldCheck} title="User store unavailable">
+					{#snippet body()}
 						Set <code class="text-xs">DATA_PATH</code> (local provider) or check your provider
 						wiring in <code class="text-xs">selva.config.ts</code>.
-					</p>
-				</div>
+					{/snippet}
+				</EmptyState>
 			{:else if data.users.length === 0}
-				<div
-					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
-				>
-					<p class="text-sm font-medium">No users yet</p>
-					<p class="text-muted-foreground mt-1 text-sm">Add your first user above.</p>
-				</div>
+				<EmptyState title="No users yet" description="Add your first user above." />
 			{:else}
 				<div class="divide-y rounded-lg border">
 					{#each data.users as user (user.id)}

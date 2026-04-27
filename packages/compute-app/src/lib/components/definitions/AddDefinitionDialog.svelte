@@ -1,7 +1,15 @@
 <script lang="ts">
-	import { Button, Dialog, Input, Label, Textarea, toast, Badge } from '@selvajs/ui';
+	import {
+		Badge,
+		Button,
+		Dialog,
+		ImageUploadField,
+		Input,
+		Label,
+		Textarea,
+		toast
+	} from '@selvajs/ui';
 	import { X } from '@lucide/svelte';
-	import ImageUploadField from './ImageUploadField.svelte';
 	import ProjectPicker from './ProjectPicker.svelte';
 
 	interface Project {

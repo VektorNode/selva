@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Card, SectionHeader } from '@selvajs/ui';
+	import { Card, EmptyState, SectionHeader } from '@selvajs/ui';
 	import { Building2 } from '@lucide/svelte';
 	import type { OrgRow } from './+page.server';
 
@@ -23,16 +23,11 @@
 	<Card.Root>
 		<Card.Content class="pt-6">
 			{#if data.orgs.length === 0}
-				<div
-					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
-				>
-					<Building2 class="text-muted-foreground mb-3 h-8 w-8" />
-					<p class="text-sm font-medium">No organizations</p>
-					<p class="text-muted-foreground mt-1 text-sm">
-						This instance has no organizations yet, or the data provider does not expose org
-						listing.
-					</p>
-				</div>
+				<EmptyState
+					icon={Building2}
+					title="No organizations"
+					description="This instance has no organizations yet, or the data provider does not expose org listing."
+				/>
 			{:else}
 				<div class="divide-y rounded-lg border">
 					<div

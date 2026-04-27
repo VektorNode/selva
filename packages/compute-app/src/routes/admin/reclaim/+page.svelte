@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Card, SectionHeader, AlertDialog, toast } from '@selvajs/ui';
+	import { Button, Card, EmptyState, SectionHeader, AlertDialog, toast } from '@selvajs/ui';
 	import { RotateCcw, FolderOpen } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { ReclaimRow } from './+page.server';
@@ -52,16 +52,11 @@
 	<Card.Root>
 		<Card.Content class="pt-6">
 			{#if data.projects.length === 0}
-				<div
-					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
-				>
-					<FolderOpen class="text-muted-foreground mb-3 h-8 w-8" />
-					<p class="text-sm font-medium">No projects</p>
-					<p class="text-muted-foreground mt-1 text-sm">
-						No projects exist on this instance, or the data provider does not expose project
-						listing.
-					</p>
-				</div>
+				<EmptyState
+					icon={FolderOpen}
+					title="No projects"
+					description="No projects exist on this instance, or the data provider does not expose project listing."
+				/>
 			{:else}
 				<div class="divide-y rounded-lg border">
 					<div
