@@ -35,3 +35,4 @@ export { default as CalculateButton } from './CalculateButton.svelte';
 export { ModeToggle } from './mode-toggle';
 export { default as ViewToggle } from './ViewToggle.svelte';
 export { default as ImageUploadField } from './ImageUploadField.svelte';
+export { default as DataTable, type DataTableColumn } from './DataTable.svelte';
