@@ -39,7 +39,7 @@ body:
         - label: Frontend (Web UI - @selvajs/builder-app)
         - label: Plugin (C# Grasshopper component)
         - label: Schema (JSON Schema / Type definitions)
-        - label: Core (selva-compute)
+        - label: Core (@selva/compute)
         - label: Shared Components (@selvajs/shared)
         - label: Communication (WebSocket/HTTP)
         - label: Build System

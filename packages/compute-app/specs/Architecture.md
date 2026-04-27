@@ -354,6 +354,6 @@ Things the architecture supports today but no code path exercises yet. These are
 For grounding — these exist but live outside this document:
 
 - **`@selvajs/builder-app`** — designer's local schema editor, embedded as a website inside the Grasshopper plugin. Hosted and maintained by Selva internally; not a deployable product.
-- **`selva-compute`** (external npm package) — author's helper library for working with Rhino.Compute and Three.js. A dependency Selva uses, not a Selva component.
+- **`@selvajs/compute`** (external npm package) — author's helper library for working with Rhino.Compute and Three.js. A dependency Selva uses, not a Selva component.
 - **Plugin internals** (`Plugin/Selva.GH`) — components, schema-link WebSocket protocol, embedded HTTP server. Lives in the .NET workspace; would deserve its own `Plugin/ARCHITECTURE.md`.
 - **Frontend component architecture** — Svelte stores, theming, the `@selvajs/shared` library. Tracked in `packages/compute-app/UI_INVENTORY.md`.

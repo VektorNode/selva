@@ -13,11 +13,11 @@ const rootDir = path.resolve(__dirname, '..');
 const DRY_RUN = process.argv.includes('--dry-run');
 
 // Order matters: longer/more specific names first so we never partially match.
-// IMPORTANT: `selva-compute` (external published pkg) is NOT renamed.
+// IMPORTANT: `@selvajs/compute` (external published pkg) is NOT renamed.
 // IMPORTANT: `selva-compute-app` MUST be replaced before any pattern that could
-// touch `selva-compute`. We don't replace `selva-compute` at all, so just be
+// touch `@selvajs/compute`. We don't replace `@selvajs/compute` at all, so just be
 // sure the `selva-compute-app` regex doesn't include a trailing-anchor that
-// would match `selva-compute` alone.
+// would match `@selvajs/compute` alone.
 const replacements = [
   // Scoped @selva/* -> @selvajs/*
   ['@selva/supabase-provider', '@selvajs/supabase-provider'],

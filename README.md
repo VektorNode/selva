@@ -28,7 +28,7 @@ Turn Grasshopper definitions into full web applications — with a live schema d
 | [`compute-app`](./packages/compute-app/README.md)              | Standalone solver app for cloud deployment via Rhino.Compute       |
 | [`shared`](./packages/shared/README.md)                        | Shared Svelte components, theme, and utilities                     |
 | [`schemas`](./packages/schemas/README.md)                      | Schema definitions and TypeScript/C# code generators               |
-| [`selva-compute`](https://www.npmjs.com/package/selva-compute) | Type-safe Rhino Compute client and Three.js helpers (npm)          |
+| [`@selvajs/compute`](https://www.npmjs.com/package/@selvajs/compute) | Type-safe Rhino Compute client and Three.js helpers (npm)          |
 
 ## Requirements
 

@@ -45,12 +45,12 @@
 	},
 	"dependencies": {
 		"@selvajs/platform": "workspace:*",
-		"@supabase/supabase-js": "^2.47.0",
+		"@supabase/supabase-js": "^2.104.1",
 		"sharp": "^0.34.5"
 	},
 	"devDependencies": {
 		"@types/node": "catalog:",
-		"supabase": "^2.0.0",
+		"supabase": "^2.95.3",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	}

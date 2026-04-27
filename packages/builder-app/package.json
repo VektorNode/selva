@@ -23,10 +23,10 @@
 	},
 	"dependencies": {
 		"@iconify/svelte": "catalog:",
-		"bits-ui": "^2.15.4",
+		"@selvajs/compute": "catalog:",
 		"@selvajs/shared": "workspace:*",
+		"bits-ui": "^2.18.0",
 		"mode-watcher": "catalog:",
-		"selva-compute": "catalog:",
 		"svelte-dnd-action": "^0.9.69",
 		"tailwind-variants": "^3.2.2",
 		"three": "catalog:"

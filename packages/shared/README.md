@@ -8,7 +8,7 @@ Shared Svelte components, utilities, and theme system for Selva applications.
 pnpm add @selvajs/shared
 ```
 
-Peer dependencies required: `svelte ^5`, `@sveltejs/kit ^2`, `bits-ui ^2`, `tailwind-variants ^3`, `selva-compute ^1`
+Peer dependencies required: `svelte ^5`, `@sveltejs/kit ^2`, `bits-ui ^2`, `tailwind-variants ^3`, `@selvajs/compute ^1`
 
 ## Usage
 
