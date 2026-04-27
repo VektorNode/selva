@@ -5,6 +5,7 @@
 		Badge,
 		Button,
 		Drawer,
+		ImageUploadField,
 		Input,
 		Label,
 		Separator,
@@ -13,7 +14,6 @@
 		toast
 	} from '@selvajs/ui';
 	import { ArrowLeft, Image, Trash2, X } from '@lucide/svelte';
-	import ImageUploadField from '$lib/components/definitions/ImageUploadField.svelte';
 	import ProjectPicker from '$lib/components/definitions/ProjectPicker.svelte';
 	import type { DefinitionRecord, ProjectWithMembers, ComputeServerConfig } from '../+page.server';
 	import type { DefinitionStatus } from '@selvajs/platform';

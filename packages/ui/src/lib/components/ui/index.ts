@@ -34,3 +34,4 @@ export { default as StateDisplay } from './StateDisplay.svelte';
 export { default as CalculateButton } from './CalculateButton.svelte';
 export { ModeToggle } from './mode-toggle';
 export { default as ViewToggle } from './ViewToggle.svelte';
+export { default as ImageUploadField } from './ImageUploadField.svelte';
