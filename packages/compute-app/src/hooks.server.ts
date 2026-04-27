@@ -240,6 +240,24 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		event.locals.profile =
 			(await providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ?? emptyProfile(user.id);
 		event.locals.ctx = await buildContext(user, token);
+	} else {
+		// Public page route (e.g. `/`): best-effort session attach. If a valid
+		// session cookie is present we populate locals so the UI can reflect
+		// the authed state (nav, user chip, etc.). Failure is silent — public
+		// pages must keep rendering for guests. Skipped for public APIs and
+		// the OAuth flow under `/auth/` since neither benefits from the lookup.
+		const isPublicPage = PUBLIC_PAGE_ROUTES.has(pathname);
+		const token = isPublicPage ? (event.cookies.get('admin_session') ?? '') : '';
+		if (token) {
+			const user = await providers.auth.verifyToken(token);
+			if (user) {
+				event.locals.user = user;
+				event.locals.profile =
+					(await providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ??
+					emptyProfile(user.id);
+				event.locals.ctx = await buildContext(user, token);
+			}
+		}
 	}
 
 	return applySecurityHeaders(await resolve(event), pathname);

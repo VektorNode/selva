@@ -1,14 +1,16 @@
 <script lang="ts">
-	import { PageHeader, PageContent, SubNav, type SubNavItem } from '@selvajs/shared';
+	import { PageHeader, SideNav, type SideNavItem } from '@selvajs/shared';
 	import { Gauge, Users, FolderKanban, Activity, Link2, SlidersHorizontal } from '@lucide/svelte';
 	import UserChip from '$lib/components/UserChip.svelte';
 	import MainNav from '$lib/components/MainNav.svelte';
-	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
+	import SettingsMenu from '$lib/components/SettingsMenu.svelte';
+	import type { Organization, OrgPermission, PlatformPermission } from '@selvajs/platform';
 
 	interface LayoutProps {
 		data: {
 			user?: { platformPermissions?: PlatformPermission[] } | null;
 			ctx: { orgPermissions: OrgPermission[] } | null;
+			org: Organization | null;
 		};
 		children?: import('svelte').Snippet;
 	}
@@ -17,12 +19,12 @@
 	const orgPerms = $derived<OrgPermission[]>(data.ctx?.orgPermissions ?? []);
 	const can = (p: OrgPermission) => orgPerms.includes(p);
 
-	const tabs = $derived(
+	const items = $derived(
 		[
 			{ href: '/team', label: 'General', icon: Gauge, show: true },
 			{
 				href: '/team/members',
-				label: 'Members',
+				label: 'Members & roles',
 				icon: Users,
 				match: 'prefix' as const,
 				show: can('manage_org_members')
@@ -55,25 +57,54 @@
 				match: 'prefix' as const,
 				show: can('manage_org_members')
 			}
-		].filter((i) => i.show) satisfies (SubNavItem & { show: boolean })[]
+		].filter((i) => i.show) satisfies (SideNavItem & { show: boolean })[]
 	);
+
+	function orgInitials(name: string): string {
+		return name
+			.split(/\s+/)
+			.filter(Boolean)
+			.slice(0, 2)
+			.map((w) => w[0]!.toUpperCase())
+			.join('');
+	}
 </script>
 
-<PageHeader homeUrl="/app">
+<PageHeader homeUrl="/library">
 	{#snippet navItems()}
-		<MainNav
+		<MainNav />
+	{/snippet}
+	{#snippet rightContent()}
+		<UserChip />
+		<SettingsMenu
 			platformPermissions={data.user?.platformPermissions ?? []}
 			orgPermissions={orgPerms}
 		/>
 	{/snippet}
-	{#snippet rightContent()}
-		<UserChip />
-	{/snippet}
-	{#snippet subnav()}
-		<SubNav items={tabs} />
-	{/snippet}
 </PageHeader>
 
-<PageContent>
-	{@render children?.()}
-</PageContent>
+<div class="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+	<SideNav {items} eyebrow="Organization">
+		{#snippet header()}
+			{#if data.org}
+				<div
+					class="flex items-center gap-2 rounded-md border border-border bg-accent/40 px-2.5 py-2"
+				>
+					<span
+						class="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-primary/15 font-mono text-[11px] font-semibold text-primary"
+					>
+						{orgInitials(data.org.name)}
+					</span>
+					<div class="min-w-0 flex-1">
+						<p class="truncate text-sm font-medium leading-tight">{data.org.name}</p>
+						<p class="truncate font-mono text-[10px] text-muted-foreground">{data.org.slug}</p>
+					</div>
+				</div>
+			{/if}
+		{/snippet}
+	</SideNav>
+
+	<main class="flex-1 overflow-y-auto px-6 py-7">
+		{@render children?.()}
+	</main>
+</div>

@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { PageHeader, PageContent, SubNav, type SubNavItem } from '@selvajs/shared';
+	import { PageHeader, SideNav, type SideNavItem } from '@selvajs/shared';
 	import { Gauge, Building2, Users, RotateCcw, Server, Settings, ScrollText } from '@lucide/svelte';
 	import UserChip from '$lib/components/UserChip.svelte';
 	import MainNav from '$lib/components/MainNav.svelte';
+	import SettingsMenu from '$lib/components/SettingsMenu.svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 
 	interface LayoutData {
@@ -22,7 +23,7 @@
 		return data.orgPermissions.includes(p as OrgPermission);
 	};
 
-	const adminTabs = $derived(
+	const items = $derived(
 		[
 			{ href: '/admin', label: 'General', icon: Gauge, show: true },
 			{
@@ -67,25 +68,27 @@
 				match: 'prefix' as const,
 				show: can('instance_admin')
 			}
-		].filter((i) => i.show) satisfies (SubNavItem & { show: boolean })[]
+		].filter((i) => i.show) satisfies (SideNavItem & { show: boolean })[]
 	);
 </script>
 
-<PageHeader homeUrl="/app">
+<PageHeader homeUrl="/library">
 	{#snippet navItems()}
-		<MainNav
+		<MainNav />
+	{/snippet}
+	{#snippet rightContent()}
+		<UserChip />
+		<SettingsMenu
 			platformPermissions={data.platformPermissions}
 			orgPermissions={data.orgPermissions}
 		/>
 	{/snippet}
-	{#snippet rightContent()}
-		<UserChip />
-	{/snippet}
-	{#snippet subnav()}
-		<SubNav items={adminTabs} />
-	{/snippet}
 </PageHeader>
 
-<PageContent>
-	{@render children?.()}
-</PageContent>
+<div class="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+	<SideNav {items} eyebrow="Platform" />
+
+	<main class="flex-1 overflow-y-auto px-6 py-7">
+		{@render children?.()}
+	</main>
+</div>

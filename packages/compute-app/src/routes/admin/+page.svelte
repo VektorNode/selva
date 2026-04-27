@@ -54,7 +54,7 @@
 			label: 'Take ownership of any project'
 		},
 		{
-			href: '/definitions',
+			href: '/projects',
 			icon: LayoutDashboard,
 			value: 'Content',
 			label: 'Definitions & projects'

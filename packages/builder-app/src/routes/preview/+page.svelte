@@ -407,7 +407,7 @@
 
 <PageContainer background="white">
 	<PageHeader title={schema?.name || 'Interactive Preview'} showModeToggle={true}>
-		<nav class="flex items-center gap-2">
+		{#snippet navItems()}
 			{#if syncNeeded}
 				<Button
 					variant="default"
@@ -423,7 +423,7 @@
 				Schema Builder
 			</Button>
 			<Button variant="default" size="sm">Interactive Preview</Button>
-		</nav>
+		{/snippet}
 	</PageHeader>
 
 	<div class="relative flex flex-1 flex-col overflow-hidden">
