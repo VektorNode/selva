@@ -6,7 +6,7 @@ import {
 	type InputParam,
 	TreeBuilder,
 	GrasshopperClient
-} from 'selva-compute';
+} from '@selvajs/compute';
 import type { SchemaInput } from '@selvajs/shared';
 import { error, json, isHttpError } from '@sveltejs/kit';
 import type { ComputeServerConfig, RequestContext } from '@selvajs/platform';

@@ -5,7 +5,7 @@
 		initThree,
 		updateScene,
 		type ThreeInitializerOptions
-	} from 'selva-compute/visualization';
+	} from '@selvajs/compute/visualization';
 	import { Maximize, Minimize, Camera, Layers } from '@lucide/svelte';
 	import type * as THREE from 'three';
 	import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
 	import { ComputeApp, type SolveFn } from '@selvajs/shared';
-	import { GrasshopperResponseProcessor } from 'selva-compute';
+	import { GrasshopperResponseProcessor } from '@selva/compute';
 	import ServerFooter from '$lib/components/ServerFooter.svelte';
 	import UserChip from '$lib/components/UserChip.svelte';
 

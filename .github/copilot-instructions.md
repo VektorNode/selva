@@ -70,7 +70,7 @@ pnpm run build:plugin  # Builds plugin with embedded web assets
 
 ```bash
 pm2 start ecosystem.config.cjs              # Start with PM2
-pm2 reload selva-compute --update-env       # Graceful reload (zero-downtime)
+pm2 reload selva-compute --update-env       # Graceful reload (zero-downtime) — PM2 process name
 ```
 
 ## 4. Code Style and Conventions

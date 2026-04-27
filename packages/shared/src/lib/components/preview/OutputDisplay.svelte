@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { OutputLayoutItem } from '$lib/types/generated';
-	import type { FileData } from 'selva-compute';
+	import type { FileData } from '@selvajs/compute';
 	import ChartOutput from './ChartOutput.svelte';
 	import { downloadFiles, formatFileSize, getBase64FileSize } from '$lib/utils/file-download';
 	import { Button } from '../ui';

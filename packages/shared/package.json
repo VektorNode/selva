@@ -40,9 +40,9 @@
 		"lint": "prettier --check . && eslint ."
 	},
 	"peerDependencies": {
+		"@selvajs/compute": "catalog:",
 		"@sveltejs/kit": "^2",
 		"bits-ui": "^2.15.4",
-		"selva-compute": "catalog:",
 		"svelte": "^5",
 		"tailwind-variants": "^3.2.2",
 		"three": "catalog:"
@@ -64,11 +64,11 @@
 		"tw-animate-css": "catalog:"
 	},
 	"devDependencies": {
-		"@internationalized/date": "^3.10.1",
+		"@internationalized/date": "^3.12.1",
 		"@selvajs/config": "workspace:*",
 		"@sveltejs/kit": "catalog:",
 		"@types/three": "catalog:",
-		"bits-ui": "^2.15.4",
+		"bits-ui": "^2.18.0",
 		"svelte": "catalog:",
 		"tailwind-variants": "^3.2.2"
 	}

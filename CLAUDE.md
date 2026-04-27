@@ -16,7 +16,7 @@ This is a monorepo with two distinct stacks:
 
 ### TypeScript/JavaScript Workspace (`packages/`)
 
-- [selva-compute](https://www.npmjs.com/package/selva-compute) - (External npm package) Type-safe Rhino Compute client, Three.js helpers, file utilities
+- [@selvajs/compute](https://www.npmjs.com/package/@selvajs/compute) - (External npm package) Type-safe Rhino Compute client, Three.js helpers, file utilities
 - **`@selvajs/config`** - Shared ESLint, Vite, and Prettier configuration
 - **`@selvajs/builder-app`** - Schema designer connected to Grasshopper via WebSocket (local dev mode)
 - **`@selvajs/compute-app`** - Standalone app for solving Grasshopper definitions via Rhino.Compute (cloud mode)
@@ -70,9 +70,9 @@ cd packages/schemas && pnpm run generate:cs     # Generate C# only
 # Clean and reinstall
 pnpm clean:reinstall        # Remove all node_modules and reinstall
 
-# Testing (selva-compute external package)
-# Run tests for the selva-compute npm package (development only)
-# pnpm test                  # (When selva-compute is developed locally)
+# Testing (@selvajs/compute external package)
+# Run tests for the @selvajs/compute npm package (development only)
+# pnpm test                  # (When @selvajs/compute is developed locally)
 ```
 
 ### .NET (Plugin)
@@ -161,7 +161,7 @@ Located in `Plugin/Selva.GH/Features/`:
 - **FileIO** - `DataToFile`, `BlockToFile` for geometry export
 - **ComputeIO** - `ValueListData`, `GetValueList` for interactive selections
 
-### Core Package Architecture (`selva-compute`)
+### Core Package Architecture (`@selvajs/compute`)
 
 Modular exports for tree-shaking:
 

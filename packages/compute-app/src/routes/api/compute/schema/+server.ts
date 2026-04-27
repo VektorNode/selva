@@ -2,7 +2,7 @@ import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
 import { requireCanCreateDefinition } from '$lib/server/access.server';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { camelcaseKeys } from 'selva-compute/core';
+import { camelcaseKeys } from '@selvajs/compute/core';
 import type { UISchema } from '@selvajs/shared';
 
 export const POST: RequestHandler = async ({ request, locals, url }) => {

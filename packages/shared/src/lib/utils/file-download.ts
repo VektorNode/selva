@@ -3,7 +3,7 @@
  * Uses the core package implementation for file handling
  */
 
-import { downloadFileData, type FileData } from 'selva-compute';
+import { downloadFileData, type FileData } from '@selvajs/compute';
 import { APP_DEFAULTS } from '../constants';
 
 /**

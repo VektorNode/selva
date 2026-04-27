@@ -18,11 +18,11 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",
+		"@selvajs/compute": "catalog:",
 		"@selvajs/platform": "workspace:*",
-		"bits-ui": "^2.15.4",
 		"@selvajs/shared": "workspace:*",
+		"bits-ui": "^2.18.0",
 		"mode-watcher": "catalog:",
-		"selva-compute": "catalog:",
 		"sharp": "^0.34.5",
 		"tailwind-variants": "^3.2.2",
 		"three": "catalog:",
@@ -30,10 +30,10 @@
 	},
 	"devDependencies": {
 		"@selvajs/config": "workspace:*",
-		"@sveltejs/adapter-auto": "catalog:",
-		"@sveltejs/adapter-node": "^5.5.1",
-		"@types/three": "catalog:",
 		"@selvajs/local-provider": "workspace:*",
+		"@sveltejs/adapter-auto": "catalog:",
+		"@sveltejs/adapter-node": "^5.5.4",
+		"@types/three": "catalog:",
 		"tw-animate-css": "catalog:",
 		"vitest": "catalog:"
 	}
