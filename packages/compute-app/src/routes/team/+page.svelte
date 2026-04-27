@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Card, SectionHeader } from '@selvajs/shared';
+	import { Card, SectionHeader } from '@selvajs/ui';
 	import { Users, FolderKanban, Building2, ArrowRight } from '@lucide/svelte';
 	import type { Organization } from '@selvajs/platform';
 

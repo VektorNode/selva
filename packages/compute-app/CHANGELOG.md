@@ -5,7 +5,7 @@
 ### Patch Changes
 
 - Updated dependencies
-  - @selvajs/shared@0.9.0
+  - @selvajs/ui@0.9.0
 
 ## 0.8.4
 
@@ -20,14 +20,14 @@
   - Slim `compute-app/+page.svelte` from ~280 lines to ~58 lines
 
 - Updated dependencies
-  - @selvajs/shared@0.8.4
+  - @selvajs/ui@0.8.4
 
 ## 0.8.3
 
 ### Patch Changes
 
 - Updated dependencies
-  - @selvajs/shared@0.8.3
+  - @selvajs/ui@0.8.3
 
 ## 0.4.1
 

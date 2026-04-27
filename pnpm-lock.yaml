@@ -182,9 +182,9 @@ importers:
       '@selvajs/compute':
         specifier: 'catalog:'
         version: 1.5.1(three@0.184.0)
-      '@selvajs/shared':
+      '@selvajs/ui':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../ui
       bits-ui:
         specifier: ^2.18.0
         version: 2.18.0(@internationalized/date@3.12.1)(@sveltejs/kit@2.58.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.5(@typescript-eslint/types@8.59.0))(vite@7.3.2(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)))(svelte@5.55.5(@typescript-eslint/types@8.59.0))(typescript@5.9.3)(vite@7.3.2(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)))(svelte@5.55.5(@typescript-eslint/types@8.59.0))
@@ -228,9 +228,9 @@ importers:
       '@selvajs/platform':
         specifier: workspace:*
         version: link:../platform
-      '@selvajs/shared':
+      '@selvajs/ui':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../ui
       bits-ui:
         specifier: ^2.18.0
         version: 2.18.0(@internationalized/date@3.12.1)(@sveltejs/kit@2.58.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.5(@typescript-eslint/types@8.59.0))(vite@7.3.2(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)))(svelte@5.55.5(@typescript-eslint/types@8.59.0))(typescript@5.9.3)(vite@7.3.2(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)))(svelte@5.55.5(@typescript-eslint/types@8.59.0))
@@ -331,7 +331,32 @@ importers:
         specifier: ^15.0.4
         version: 15.0.4
 
-  packages/shared:
+  packages/supabase-provider:
+    dependencies:
+      '@selvajs/platform':
+        specifier: workspace:*
+        version: link:../platform
+      '@supabase/supabase-js':
+        specifier: ^2.104.1
+        version: 2.104.1
+      sharp:
+        specifier: ^0.34.5
+        version: 0.34.5
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.17
+      supabase:
+        specifier: ^2.95.3
+        version: 2.95.3
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)
+
+  packages/ui:
     dependencies:
       '@floating-ui/dom':
         specifier: 'catalog:'
@@ -388,31 +413,6 @@ importers:
       tailwind-variants:
         specifier: ^3.2.2
         version: 3.2.2(tailwind-merge@3.5.0)(tailwindcss@4.2.4)
-
-  packages/supabase-provider:
-    dependencies:
-      '@selvajs/platform':
-        specifier: workspace:*
-        version: link:../platform
-      '@supabase/supabase-js':
-        specifier: ^2.104.1
-        version: 2.104.1
-      sharp:
-        specifier: ^0.34.5
-        version: 0.34.5
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 22.19.17
-      supabase:
-        specifier: ^2.95.3
-        version: 2.95.3
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-      vitest:
-        specifier: 'catalog:'
-        version: 3.2.4(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)
 
 packages:
 

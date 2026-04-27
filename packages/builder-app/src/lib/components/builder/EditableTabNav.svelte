@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import type { TabConfig } from '@selvajs/shared';
+	import type { TabConfig } from '@selvajs/ui';
 	import { GripVertical, Pencil, PanelLeft, PanelRight, ImageIcon } from '@lucide/svelte';
 	import Icon from '@iconify/svelte';
 

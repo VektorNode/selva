@@ -1,6 +1,6 @@
 <script>
 	import { page } from '$app/state';
-	import { ErrorScreen } from '@selvajs/shared';
+	import { ErrorScreen } from '@selvajs/ui';
 </script>
 
 <div class="px-6 py-6">

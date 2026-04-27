@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Input } from '@selvajs/shared';
+	import { Button, Input } from '@selvajs/ui';
 	import { Plus, X, Search, FolderOpen } from '@lucide/svelte';
 	import type { ProjectWithMembers, DefinitionRecord } from '../+page.server';
 	import type { ProjectVisibility } from '@selvajs/platform/projects';

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, toast, AlertDialog } from '@selvajs/shared';
+	import { Button, toast, AlertDialog } from '@selvajs/ui';
 	import { Plus, Trash2, Link2, TriangleAlert } from '@lucide/svelte';
 	import type { ShareLink } from '@selvajs/platform';
 	import MintShareLinkDialog from './MintShareLinkDialog.svelte';

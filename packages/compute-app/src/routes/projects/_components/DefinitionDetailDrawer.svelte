@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Drawer, Separator } from '@selvajs/shared';
+	import { Button, Drawer, Separator } from '@selvajs/ui';
 	import { Play, X } from '@lucide/svelte';
 	import type { DefinitionRecord } from '../+page.server';
 	import StatusBadge from './StatusBadge.svelte';

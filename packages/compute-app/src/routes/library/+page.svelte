@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import { Search, toast, PageHeader, PageContent, SectionHeader } from '@selvajs/shared';
+	import { Search, toast, PageHeader, PageContent, SectionHeader } from '@selvajs/ui';
 	import { ArrowRight, Filter as FilterIcon, X } from '@lucide/svelte';
 	import type { DefinitionRecord } from '@selvajs/platform';
 	import type { PageData } from './$types';

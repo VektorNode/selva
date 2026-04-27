@@ -9,7 +9,7 @@
 		Dialog,
 		toast,
 		useFooterItem
-	} from '@selvajs/shared';
+	} from '@selvajs/ui';
 	import { Save } from '@lucide/svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';

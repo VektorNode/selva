@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Card, Input, SectionHeader, AlertDialog, toast } from '@selvajs/shared';
+	import { Button, Card, Input, SectionHeader, AlertDialog, toast } from '@selvajs/ui';
 	import { Plus, Trash2, FolderKanban, ExternalLink } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { ProjectVisibility } from '@selvajs/platform';

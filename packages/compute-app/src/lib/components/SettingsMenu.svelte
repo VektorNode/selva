@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Button } from '@selvajs/shared';
+	import { Button } from '@selvajs/ui';
 	import { Settings, Users, Shield } from '@lucide/svelte';
 	import type { Component } from 'svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';

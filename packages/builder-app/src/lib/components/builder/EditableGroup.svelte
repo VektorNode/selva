@@ -6,8 +6,8 @@
 		InputLayoutItem,
 		OutputLayoutItem,
 		LineBreakLayoutItem
-	} from '@selvajs/shared';
-	import { Button, Card } from '@selvajs/shared';
+	} from '@selvajs/ui';
+	import { Button, Card } from '@selvajs/ui';
 	import DropZone from './DropZone.svelte';
 	import BuilderGroupItem from './BuilderGroupItem.svelte';
 	import LineBreakItem from './LineBreakItem.svelte';

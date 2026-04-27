@@ -288,7 +288,7 @@ A single source generates types for both stacks:
 ```
 packages/schemas/ui-schema.json
         │
-        ├─→ pnpm generate:ts → packages/shared/src/lib/types/generated/schema.ts
+        ├─→ pnpm generate:ts → packages/ui/src/lib/types/generated/schema.ts
         │
         └─→ pnpm generate:cs → Plugin/Selva.Core/Models/UISchema.Generated.cs
 ```
@@ -327,7 +327,7 @@ This means Selva itself has zero exposure to GDPR-class data — the auth provid
 
 - **Access control rules** — see [Permissions.md](./Permissions.md). It is the authority on `canView`/`canEdit`/`canSolve`/etc.
 - **The Grasshopper plugin internals** (component anatomy, schema-link protocol, embedded HTTP server). Out of scope here; would belong in a `Plugin/ARCHITECTURE.md`.
-- **Frontend component architecture** (Svelte stores, theming, shared UI library). Out of scope; tracked in `packages/compute-app/UI_INVENTORY.md` and `@selvajs/shared`.
+- **Frontend component architecture** (Svelte stores, theming, shared UI library). Out of scope; tracked in `packages/compute-app/UI_INVENTORY.md` and `@selvajs/ui`.
 - **Rhino.Compute server topology** (single instance vs pool vs ours-vs-theirs). See `docs/RHINO_COMPUTE.md`.
 
 ---
@@ -356,4 +356,4 @@ For grounding — these exist but live outside this document:
 - **`@selvajs/builder-app`** — designer's local schema editor, embedded as a website inside the Grasshopper plugin. Hosted and maintained by Selva internally; not a deployable product.
 - **`@selvajs/compute`** (external npm package) — author's helper library for working with Rhino.Compute and Three.js. A dependency Selva uses, not a Selva component.
 - **Plugin internals** (`Plugin/Selva.GH`) — components, schema-link WebSocket protocol, embedded HTTP server. Lives in the .NET workspace; would deserve its own `Plugin/ARCHITECTURE.md`.
-- **Frontend component architecture** — Svelte stores, theming, the `@selvajs/shared` library. Tracked in `packages/compute-app/UI_INVENTORY.md`.
+- **Frontend component architecture** — Svelte stores, theming, the `@selvajs/ui` library. Tracked in `packages/compute-app/UI_INVENTORY.md`.

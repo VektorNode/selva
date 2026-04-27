@@ -6,9 +6,9 @@
 		NumberWidgetConfig,
 		FileInputWidgetConfig,
 		TextWidgetConfig
-	} from '@selvajs/shared';
+	} from '@selvajs/ui';
 	type LayoutItem = InputLayoutItem | OutputLayoutItem;
-	import { Badge, Button, Card, Switch } from '@selvajs/shared';
+	import { Badge, Button, Card, Switch } from '@selvajs/ui';
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '$lib/features/builder/widget-config';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';

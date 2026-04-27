@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, PageHeader } from '@selvajs/shared';
+	import { Button, PageHeader } from '@selvajs/ui';
 	import UserChip from '$lib/components/UserChip.svelte';
 	import MainNav from '$lib/components/MainNav.svelte';
 	import SettingsMenu from '$lib/components/SettingsMenu.svelte';

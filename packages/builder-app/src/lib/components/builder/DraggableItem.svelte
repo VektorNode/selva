@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { dragStore } from '$lib/stores/dragStore.svelte';
-	import type { DiscoveredInput, DiscoveredOutput, TabConfig } from '@selvajs/shared';
-	import { ContextMenu, Input } from '@selvajs/shared';
+	import type { DiscoveredInput, DiscoveredOutput, TabConfig } from '@selvajs/ui';
+	import { ContextMenu, Input } from '@selvajs/ui';
 	import { FolderPlus } from '@lucide/svelte';
 
 	interface Props {

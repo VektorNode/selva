@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Card, Button, StateDisplay } from '@selvajs/shared';
+	import { Card, Button, StateDisplay } from '@selvajs/ui';
 	import { EditableTabNav, EditableGroup } from '$lib/components/builder';
-	import type { TabConfig, DiscoveredInput, LayoutItem } from '@selvajs/shared';
+	import type { TabConfig, DiscoveredInput, LayoutItem } from '@selvajs/ui';
 	import { dragStore } from '$lib/stores/dragStore.svelte';
 
 	interface Props {

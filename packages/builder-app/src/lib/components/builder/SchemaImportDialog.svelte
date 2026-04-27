@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { UISchema } from '@selvajs/shared';
-	import { Dialog, AlertDialog as Alert, Button, Badge } from '@selvajs/shared';
+	import type { UISchema } from '@selvajs/ui';
+	import { Dialog, AlertDialog as Alert, Button, Badge } from '@selvajs/ui';
 	import { AlertCircle, AlertTriangle, CheckCircle2, Info } from '@lucide/svelte';
 	import {
 		validateImportedSchema,

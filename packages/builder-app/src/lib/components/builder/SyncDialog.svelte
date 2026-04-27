@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Dialog, Button, Badge, Checkbox, Label } from '@selvajs/shared';
+	import { Dialog, Button, Badge, Checkbox, Label } from '@selvajs/ui';
 	import type { SyncChange, SyncDiff } from '$lib/websocket/websocket.svelte';
 	import { ChevronDown, ChevronUp, ArrowRight } from '@lucide/svelte';
 

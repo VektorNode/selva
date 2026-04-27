@@ -11,7 +11,7 @@ Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for b
   - Frontend: TypeScript/SvelteKit apps in `packages/` for two deployment modes
 - **Local Mode** (`@selvajs/builder-app`): Schema designer with WebSocket connection to Grasshopper
 - **Cloud Mode** (`@selvajs/compute-app`): Standalone app using Rhino.Compute for cloud solving
-- **Shared** (`@selvajs/shared`): Components, utilities, and theme system
+- **Shared** (`@selvajs/ui`): Components, utilities, and theme system
 
 Copilot should use this context when generating code, explanations, review comments, or test scaffolding.
 
@@ -56,7 +56,7 @@ pnpm run build:all          # Build all packages
 
 ```bash
 cd packages/schemas && pnpm run generate:all
-# Updates: packages/shared/src/lib/types/generated/schema.ts
+# Updates: packages/ui/src/lib/types/generated/schema.ts
 #          Plugin/Selva.Core/Models/UISchema.Generated.cs
 ```
 
@@ -102,7 +102,7 @@ When asked to help generate commit messages:
 - **Single source of truth:** `packages/schemas/ui-schema.json` generates both C# and TypeScript
 - When adding new types or properties, always update the schema and run `generate:all`
 - Never manually edit generated files:
-  - `packages/shared/src/lib/types/generated/schema.ts`
+  - `packages/ui/src/lib/types/generated/schema.ts`
   - `Plugin/Selva.Core/Models/UISchema.Generated.cs`
 - Type mappings: string → string, number → double?, integer → int?, boolean → bool?, array → List<T>
 

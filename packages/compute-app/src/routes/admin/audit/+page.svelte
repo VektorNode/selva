@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Card, SectionHeader } from '@selvajs/shared';
+	import { Card, SectionHeader } from '@selvajs/ui';
 	import { ScrollText, ShieldCheck } from '@lucide/svelte';
 </script>
 

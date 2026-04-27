@@ -40,7 +40,7 @@ body:
         - label: Plugin (C# Grasshopper component)
         - label: Schema (JSON Schema / Type definitions)
         - label: Core (@selvajs/compute)
-        - label: Shared Components (@selvajs/shared)
+        - label: Shared Components (@selvajs/ui)
         - label: Communication (WebSocket/HTTP)
         - label: Build System
         - label: Documentation

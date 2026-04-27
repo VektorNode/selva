@@ -5,8 +5,8 @@ import type {
 	InputLayoutItem,
 	InputNumberLayoutItem,
 	NumberWidgetConfig
-} from '@selvajs/shared';
-import { getDefaultValue } from '@selvajs/shared';
+} from '@selvajs/ui';
+import { getDefaultValue } from '@selvajs/ui';
 
 function isInputLayoutItem(item: LayoutItem): item is InputLayoutItem {
 	return item.type === 'input';

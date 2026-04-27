@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { PageHeader, SideNav, type SideNavItem } from '@selvajs/shared';
+	import { PageHeader, SideNav, type SideNavItem } from '@selvajs/ui';
 	import { Gauge, Users, FolderKanban, Activity, Link2, SlidersHorizontal } from '@lucide/svelte';
 	import UserChip from '$lib/components/UserChip.svelte';
 	import MainNav from '$lib/components/MainNav.svelte';
