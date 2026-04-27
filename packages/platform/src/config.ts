@@ -1,9 +1,7 @@
 import type { IAuthProvider } from './auth/interface.js';
 import type { IDataProvider } from './data/interface.js';
 import type { IStorageProvider } from './storage/interface.js';
-import type { IUserProfileStore } from './userProfile/interface.js';
 import type { IEventSink } from './events/interface.js';
-import type { IPlatformPermissionStore } from './permissions/interface.js';
 
 /**
  * - `single`: one org per deployment. Setup creates it; `ctx.actingOrgId`
@@ -27,17 +25,13 @@ export interface SelvaConfig {
 	tenancy?: TenancyMode;
 	flags?: SelvaFlags;
 	auth: IAuthProvider;
-	/** Orgs, projects, members, definition metadata, compute config. */
+	/**
+	 * Orgs, projects, members, definitions, compute config, user profiles,
+	 * and platform permissions. All database-layer concerns live here.
+	 */
 	data: IDataProvider;
 	/** Blob storage — .gh/.ghx files, archived versions, images. */
 	storage: IStorageProvider;
-	/** Identity from the IdP, profile state from your DB. */
-	userProfile: IUserProfileStore;
-	/**
-	 * Per-user platform permissions. Required — the sole-`instance_admin`
-	 * invariant lives here.
-	 */
-	permissions: IPlatformPermissionStore;
 	/** Optional. Defaults to `NoopEventSink`. */
 	events?: IEventSink;
 }

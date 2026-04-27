@@ -1,13 +1,15 @@
 import type { IDataProvider, IEventSink } from '@selvajs/platform';
-import { NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle, BuildClientOptions } from './client.js';
 import { buildClientBundle } from './client.js';
+import { SupabaseEventSink } from './SupabaseEventSink.js';
 import { SupabaseOrgStore } from './SupabaseOrgStore.js';
 import { SupabaseProjectStore } from './SupabaseProjectStore.js';
 import { SupabaseDefinitionStore } from './SupabaseDefinitionStore.js';
 import { SupabaseInviteStore } from './SupabaseInviteStore.js';
 import { SupabaseComputeServerStore } from './SupabaseComputeServerStore.js';
 import { SupabaseShareLinkStore } from './SupabaseShareLinkStore.js';
+import { SupabaseUserProfileProvider } from '../userProfile/SupabaseUserProfileProvider.js';
+import { SupabasePlatformPermissionStore } from '../permissions/SupabasePlatformPermissionStore.js';
 
 /**
  * Composition of every data store for the Supabase backend. Instantiates one
@@ -21,6 +23,8 @@ export class SupabaseDataProvider implements IDataProvider {
 	readonly invites: SupabaseInviteStore;
 	readonly computeServer: SupabaseComputeServerStore;
 	readonly shareLinks: SupabaseShareLinkStore;
+	readonly userProfile: SupabaseUserProfileProvider;
+	readonly permissions: SupabasePlatformPermissionStore;
 
 	private constructor(
 		private readonly clients: ClientBundle,
@@ -32,11 +36,13 @@ export class SupabaseDataProvider implements IDataProvider {
 		this.invites = new SupabaseInviteStore(clients, events);
 		this.computeServer = new SupabaseComputeServerStore(clients);
 		this.shareLinks = new SupabaseShareLinkStore(clients, events);
+		this.userProfile = new SupabaseUserProfileProvider(clients);
+		this.permissions = new SupabasePlatformPermissionStore(clients);
 	}
 
 	static fromEnv(
 		env: Record<string, string | undefined>,
-		events: IEventSink = new NoopEventSink()
+		events?: IEventSink
 	): SupabaseDataProvider {
 		const supabaseUrl = env.SUPABASE_URL;
 		const anonKey = env.SUPABASE_ANON_KEY;
@@ -44,26 +50,27 @@ export class SupabaseDataProvider implements IDataProvider {
 		if (!supabaseUrl) throw new Error('Missing required env var: SUPABASE_URL');
 		if (!anonKey) throw new Error('Missing required env var: SUPABASE_ANON_KEY');
 		if (!serviceRoleKey) throw new Error('Missing required env var: SUPABASE_SERVICE_ROLE_KEY');
-		return SupabaseDataProvider.create({ supabaseUrl, anonKey, serviceRoleKey }, events);
+		const bundle = buildClientBundle({ supabaseUrl, anonKey, serviceRoleKey });
+		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle));
 	}
 
 	static create(
 		opts: BuildClientOptions,
-		events: IEventSink = new NoopEventSink()
+		events?: IEventSink
 	): SupabaseDataProvider {
-		return new SupabaseDataProvider(buildClientBundle(opts), events);
+		const bundle = buildClientBundle(opts);
+		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle));
 	}
 
 	/**
-	 * Build from a pre-existing `ClientBundle`. Used when the caller wants to
-	 * share one bundle across the data provider AND a sink that writes through
-	 * the same service-role client (e.g., `SupabaseEventSink`).
+	 * Build from a pre-existing `ClientBundle`. Useful for tests or advanced
+	 * cases that need to inject a custom event sink or share a bundle externally.
 	 */
 	static fromBundle(
 		bundle: ClientBundle,
-		events: IEventSink = new NoopEventSink()
+		events?: IEventSink
 	): SupabaseDataProvider {
-		return new SupabaseDataProvider(bundle, events);
+		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle));
 	}
 
 	/**

@@ -84,7 +84,7 @@ describe('OAuth callback bootstrap admin grant', () => {
 
 		const newUser = await tp.usersFile.findByEmail('first@example.test');
 		expect(newUser).not.toBeNull();
-		const perms = await tp.config.permissions.getFor(
+		const perms = await tp.config.data.permissions.getFor(
 			{ userId: newUser!.id, platformPermissions: ['instance_admin'], orgPermissions: [] },
 			newUser!.id
 		);
@@ -100,7 +100,7 @@ describe('OAuth callback bootstrap admin grant', () => {
 		expect(res.status).toBe(303);
 
 		const operator = await tp.usersFile.findByEmail('operator@example.test');
-		const perms = await tp.config.permissions.getFor(
+		const perms = await tp.config.data.permissions.getFor(
 			{ userId: operator!.id, platformPermissions: ['instance_admin'], orgPermissions: [] },
 			operator!.id
 		);
@@ -116,7 +116,7 @@ describe('OAuth callback bootstrap admin grant', () => {
 		expect(res.status).toBe(303);
 
 		const random = await tp.usersFile.findByEmail('random@example.test');
-		const perms = await tp.config.permissions.getFor(
+		const perms = await tp.config.data.permissions.getFor(
 			{ userId: random!.id, platformPermissions: ['instance_admin'], orgPermissions: [] },
 			random!.id
 		);
@@ -136,7 +136,7 @@ describe('OAuth callback bootstrap admin grant', () => {
 		expect(res.status).toBe(303);
 
 		const operator = await tp.usersFile.findByEmail('operator@example.test');
-		const perms = await tp.config.permissions.getFor(
+		const perms = await tp.config.data.permissions.getFor(
 			{ userId: operator!.id, platformPermissions: ['instance_admin'], orgPermissions: [] },
 			operator!.id
 		);

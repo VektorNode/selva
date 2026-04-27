@@ -12,6 +12,8 @@ import type { RequestContext } from '../context.js';
 import type { ListOptions, DefinitionListOptions, Page } from '../pagination.js';
 import type { IInviteStore } from '../invites/interface.js';
 import type { ShareLink } from '../shareLinks/types.js';
+import type { IUserProfileStore } from '../userProfile/interface.js';
+import type { IPlatformPermissionStore } from '../permissions/interface.js';
 
 /**
  * Auth boundary contract for every store below.
@@ -250,4 +252,6 @@ export interface IDataProvider {
 	computeServer: IComputeServerStore;
 	invites: IInviteStore;
 	shareLinks: IShareLinkStore;
+	userProfile: IUserProfileStore;
+	permissions: IPlatformPermissionStore;
 }

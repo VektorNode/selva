@@ -105,7 +105,7 @@ describe('§2 sole-admin invariant — PATCH /admin/api/users/[id] permissions',
 		expect(res.status).toBe(409);
 		expect((res.json as { message: string }).message).toMatch(/last instance admin/i);
 
-		const after = await tp.config.permissions.getFor(aliceLocals.ctx, alice.id);
+		const after = await tp.config.data.permissions.getFor(aliceLocals.ctx, alice.id);
 		expect(after).toContain('instance_admin');
 	});
 });

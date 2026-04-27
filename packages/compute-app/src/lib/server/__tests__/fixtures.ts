@@ -19,8 +19,6 @@ import {
 	LocalAuthProvider,
 	LocalDataProvider,
 	LocalStorageProvider,
-	LocalUserProfileProvider,
-	LocalPlatformPermissionStore,
 	createLocalUserMetaProvider
 } from '@selvajs/local-provider';
 import {
@@ -83,16 +81,12 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 	const auth = LocalAuthProvider.fromEnv(env);
 	const data = LocalDataProvider.fromEnv(env, events);
 	const storage = LocalStorageProvider.fromEnv(env);
-	const userProfile = LocalUserProfileProvider.fromEnv(env);
-	const permissions = LocalPlatformPermissionStore.fromEnv(env);
 	const usersFile = createLocalUserMetaProvider(path.join(root, 'users.json'));
 
 	const config: SelvaConfig = {
 		auth,
 		data,
 		storage,
-		userProfile,
-		permissions,
 		events,
 		tenancy: opts.tenancy ?? 'single',
 		flags: opts.flags ?? {}
@@ -530,7 +524,7 @@ export async function actAs(
 		disabled: stored.disabled
 	};
 
-	const platformPermissions = await tp.config.permissions.getFor(SYSTEM_CONTEXT, user.id);
+	const platformPermissions = await tp.config.data.permissions.getFor(SYSTEM_CONTEXT, user.id);
 	// Mirror the production bootstrap path (hooks.server.ts) — single
 	// `findUserMembership` lookup, with the instance-admin fallback to the
 	// first listed org for admins not in any org. Keeping this aligned with
@@ -552,7 +546,7 @@ export async function actAs(
 	};
 
 	const profile =
-		(await tp.config.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ?? emptyProfile(user.id);
+		(await tp.config.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ?? emptyProfile(user.id);
 
 	return { user, ctx, profile, providers: tp.config };
 }
