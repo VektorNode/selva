@@ -11,7 +11,7 @@
 		Tabs,
 		Textarea,
 		toast
-	} from '@selvajs/shared';
+	} from '@selvajs/ui';
 	import { ArrowLeft, Image, Trash2, X } from '@lucide/svelte';
 	import ImageUploadField from '$lib/components/definitions/ImageUploadField.svelte';
 	import ProjectPicker from '$lib/components/definitions/ProjectPicker.svelte';

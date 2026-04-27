@@ -4,8 +4,8 @@
 		VisibilityRule,
 		DiscoveredInput,
 		GroupVisibilityCondition
-	} from '@selvajs/shared';
-	import { Button, Select } from '@selvajs/shared';
+	} from '@selvajs/ui';
+	import { Button, Select } from '@selvajs/ui';
 	import RuleRow from './RuleRow.svelte';
 	import DefaultValueInput from './DefaultValueInput.svelte';
 	import { validateRuleValue, validateDefaultValue } from '$lib/utils/validation';

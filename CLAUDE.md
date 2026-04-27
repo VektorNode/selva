@@ -20,7 +20,7 @@ This is a monorepo with two distinct stacks:
 - **`@selvajs/config`** - Shared ESLint, Vite, and Prettier configuration
 - **`@selvajs/builder-app`** - Schema designer connected to Grasshopper via WebSocket (local dev mode)
 - **`@selvajs/compute-app`** - Standalone app for solving Grasshopper definitions via Rhino.Compute (cloud mode)
-- **`@selvajs/shared`** - Shared Svelte components, utilities, and theme styles (CSS + theme utilities)
+- **`@selvajs/ui`** - Shared Svelte components, utilities, and theme styles (CSS + theme utilities)
 - **`@selvajs/schemas`** - Schema definitions and code generators (TypeScript + C#)
 - **`@selvajs/platform`** - Pure TypeScript interfaces for platform providers (auth, definitions, compute, storage, organizations, projects) with conformance test suites
 - **`@selvajs/local-provider`** - Filesystem/JSON/HMAC implementations of `@selvajs/platform` interfaces for local development
@@ -100,7 +100,7 @@ A single schema (`packages/schemas/ui-schema.json`) generates both TypeScript ty
 
 **Generated files:**
 
-- TypeScript: `packages/shared/src/lib/types/generated/schema.ts`
+- TypeScript: `packages/ui/src/lib/types/generated/schema.ts`
 - C#: `Plugin/Selva.Core/Models/UISchema.Generated.cs`
 
 After modifying `ui-schema.json`, always run:

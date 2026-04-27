@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ModeWatcher } from 'mode-watcher';
 	import '../app.css';
-	import { initializeFooterContext, Toaster } from '@selvajs/shared';
+	import { initializeFooterContext, Toaster } from '@selvajs/ui';
 
 	let { children } = $props();
 

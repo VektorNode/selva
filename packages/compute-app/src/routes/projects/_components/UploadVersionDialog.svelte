@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Dialog, Label, Textarea, toast } from '@selvajs/shared';
+	import { Button, Dialog, Label, Textarea, toast } from '@selvajs/ui';
 	import { Upload, FileUp } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 

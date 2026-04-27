@@ -18,8 +18,8 @@ import type {
 	OutputNumberLayoutItem,
 	OutputFileLayoutItem,
 	OutputChartLayoutItem
-} from '@selvajs/shared';
-import { ACCEPTED_FILE_FORMATS } from '@selvajs/shared';
+} from '@selvajs/ui';
+import { ACCEPTED_FILE_FORMATS } from '@selvajs/ui';
 
 // File input configuration constants
 export const FILE_INPUT_MODES = ['upload', 'url'] as const;

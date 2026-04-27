@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { PageContainer, PageHeader, StateDisplay, Card } from '@selvajs/shared';
+	import { PageContainer, PageHeader, StateDisplay, Card } from '@selvajs/ui';
 	import { Wrench, Play } from '@lucide/svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 

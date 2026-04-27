@@ -2,7 +2,7 @@ import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
 import { GrasshopperClient } from '@selvajs/compute/grasshopper';
 import { camelcaseKeys } from '@selvajs/compute/core';
-import type { UISchema } from '@selvajs/shared';
+import type { UISchema } from '@selvajs/ui';
 import type { ComputeServerConfig, RequestContext } from '@selvajs/platform';
 import {
 	getStorageProvider,

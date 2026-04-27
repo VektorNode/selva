@@ -8,9 +8,9 @@ import type {
 	LayoutItem,
 	InputLayoutItem,
 	OutputLayoutItem
-} from '@selvajs/shared';
+} from '@selvajs/ui';
 import { mapParamTypeToWidgetType, createDefaultWidgetConfig } from './widget-config';
-import { toast } from '@selvajs/shared';
+import { toast } from '@selvajs/ui';
 
 export function isItemUsedInLayout(schema: UISchema | null, paramId: string): boolean {
 	if (!schema?.layout) return false;

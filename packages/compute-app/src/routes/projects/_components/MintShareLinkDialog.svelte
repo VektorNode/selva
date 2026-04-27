@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Dialog, Input, Label, toast } from '@selvajs/shared';
+	import { Button, Dialog, Input, Label, toast } from '@selvajs/ui';
 	import { Copy, TriangleAlert, Check } from '@lucide/svelte';
 	import { DEFAULT_SHARE_LINK_MAX_SOLVES } from '@selvajs/platform';
 

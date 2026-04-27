@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Card, SectionHeader } from '@selvajs/shared';
+	import { Card, SectionHeader } from '@selvajs/ui';
 	import { Building2 } from '@lucide/svelte';
 	import type { OrgRow } from './+page.server';
 

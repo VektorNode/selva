@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button } from '@selvajs/shared';
+	import { Button } from '@selvajs/ui';
 	import { Search, X } from '@lucide/svelte';
 	import type { ProjectRole } from '@selvajs/platform/projects';
 	import type { UserListItem } from '../+page.server';

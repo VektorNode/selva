@@ -44,21 +44,21 @@
 ### Patch Changes
 
 - Updated dependencies
-  - @selvajs/shared@0.9.0
+  - @selvajs/ui@0.9.0
 
 ## 0.8.4
 
 ### Patch Changes
 
 - Updated dependencies
-  - @selvajs/shared@0.8.4
+  - @selvajs/ui@0.8.4
 
 ## 0.8.3
 
 ### Patch Changes
 
 - Updated dependencies
-  - @selvajs/shared@0.8.3
+  - @selvajs/ui@0.8.3
 
 ## 0.4.1
 

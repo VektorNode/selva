@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Card, SectionHeader, AlertDialog, toast } from '@selvajs/shared';
+	import { Button, Card, SectionHeader, AlertDialog, toast } from '@selvajs/ui';
 	import { RotateCcw, FolderOpen } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { ReclaimRow } from './+page.server';

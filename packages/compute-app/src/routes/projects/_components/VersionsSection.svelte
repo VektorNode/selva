@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, AlertDialog, toast } from '@selvajs/shared';
+	import { Button, AlertDialog, toast } from '@selvajs/ui';
 	import { Upload, Play, CloudUpload, Trash2 } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { DefinitionVersion } from '@selvajs/platform';

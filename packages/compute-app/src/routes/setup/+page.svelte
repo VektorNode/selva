@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Input, Label, Alert } from '@selvajs/shared';
+	import { Button, Input, Label, Alert } from '@selvajs/ui';
 	import { CircleAlert } from '@lucide/svelte';
 
 	interface ActionData {

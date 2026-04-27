@@ -1,5 +1,5 @@
-import { toast } from '@selvajs/shared';
-import type { DiscoveredInput, DiscoveredOutput, GroupConfig, LayoutItem } from '@selvajs/shared';
+import { toast } from '@selvajs/ui';
+import type { DiscoveredInput, DiscoveredOutput, GroupConfig, LayoutItem } from '@selvajs/ui';
 import {
 	handleItemDrop,
 	addTab,

@@ -23,7 +23,7 @@ When used with `Selva.gha` plugin in Grasshopper:
 
 ### Release
 
-`cd packages/shared && pnpm publish --no-git-checks`
+`cd packages/ui && pnpm publish --no-git-checks`
 
 ### Cloud Deployment Mode
 
@@ -57,6 +57,6 @@ pnpm run dev           # http://localhost:5173 (dev server)
 ## Related
 
 - [`@selvajs/compute`](../compute) — Rhino Compute client (used in cloud mode)
-- [`@selvajs/shared`](../shared) — Shared Svelte components and theme used by this app
+- [`@selvajs/ui`](../shared) — Shared Svelte components and theme used by this app
 - [`@selvajs/schemas`](../schemas) — Schema generators (produces types for this app)
 - [Selva.gha Plugin](../../Plugin) — Grasshopper bridge (used in local mode)

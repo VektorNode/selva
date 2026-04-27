@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
-	import { ComputeApp, type SolveFn } from '@selvajs/shared';
+	import { ComputeApp, type SolveFn } from '@selvajs/ui';
 	import { GrasshopperResponseProcessor } from '@selvajs/compute';
 	import ServerFooter from '$lib/components/ServerFooter.svelte';
 	import UserChip from '$lib/components/UserChip.svelte';

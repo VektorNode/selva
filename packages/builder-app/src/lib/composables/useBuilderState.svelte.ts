@@ -1,5 +1,5 @@
-import { toast } from '@selvajs/shared';
-import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/shared';
+import { toast } from '@selvajs/ui';
+import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/ui';
 import { processInitialDataSchema, getWebSocketPortFromUrl } from '$lib/utils/session';
 import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 import type { SyncDiff, SyncChange } from '$lib/websocket/websocket.svelte';

@@ -1,4 +1,4 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @source '../../shared/dist';
-@import '@selvajs/shared/styles/base.css';
+@import '@selvajs/ui/styles/base.css';

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Card, Input, toast, SectionHeader } from '@selvajs/shared';
+	import { Button, Card, Input, toast, SectionHeader } from '@selvajs/ui';
 	import { Mail, Trash2, Copy, X, UserPlus } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { Invite, OrgPermission, OrgRole } from '@selvajs/platform';

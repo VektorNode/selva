@@ -8,7 +8,7 @@ import {
 	GrasshopperClient,
 	type SolveScheduler
 } from '@selvajs/compute';
-import type { SchemaInput } from '@selvajs/shared';
+import type { SchemaInput } from '@selvajs/ui';
 import { error, json, isHttpError } from '@sveltejs/kit';
 import type { ComputeServerConfig, RequestContext } from '@selvajs/platform';
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';

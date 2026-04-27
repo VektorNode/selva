@@ -1,6 +1,6 @@
 import { page } from '$app/state';
 import { getWebSocketState, type WebSocketState } from '$lib/websocket/websocket.svelte';
-import type { UISchema, DiscoveredParameters } from '@selvajs/shared';
+import type { UISchema, DiscoveredParameters } from '@selvajs/ui';
 import { DEFAULT_WEBSOCKET_PORT, WEBSOCKET_PORT_QUERY_PARAM } from '$lib/app.config';
 
 /**

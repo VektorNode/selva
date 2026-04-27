@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Dialog, Input, Label, Tabs, Textarea } from '@selvajs/shared';
+	import { Button, Dialog, Input, Label, Tabs, Textarea } from '@selvajs/ui';
 	import { Trash2, UserPlus, Users, X } from '@lucide/svelte';
 	import type { ProjectWithMembers, UserListItem } from '../+page.server';
 	import type { ProjectRole, ProjectVisibility } from '@selvajs/platform/projects';

@@ -20,7 +20,7 @@
 		"@lucide/svelte": "catalog:",
 		"@selvajs/compute": "catalog:",
 		"@selvajs/platform": "workspace:*",
-		"@selvajs/shared": "workspace:*",
+		"@selvajs/ui": "workspace:*",
 		"bits-ui": "^2.18.0",
 		"mode-watcher": "catalog:",
 		"sharp": "^0.34.5",

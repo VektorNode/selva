@@ -1,4 +1,4 @@
-import type { UISchema, ValidationIssueMessage } from '@selvajs/shared';
+import type { UISchema, ValidationIssueMessage } from '@selvajs/ui';
 
 export interface SchemaExportMetadata {
 	exportedAt: string;

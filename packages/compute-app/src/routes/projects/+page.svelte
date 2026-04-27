@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import { AlertDialog, Button, Search, toast } from '@selvajs/shared';
+	import { AlertDialog, Button, Search, toast } from '@selvajs/ui';
 	import { Grid2x2, List, Plus, Settings } from '@lucide/svelte';
 	import AddDefinitionDialog from '$lib/components/definitions/AddDefinitionDialog.svelte';
 	import ProjectSidebar from './_components/ProjectSidebar.svelte';
