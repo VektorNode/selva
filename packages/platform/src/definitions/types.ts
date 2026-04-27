@@ -57,7 +57,7 @@ export interface DefinitionRecord {
 	/** Provider-dependent public URL — must be safe to send to clients. */
 	coverImage?: string;
 	status: DefinitionStatus;
-	runCount: number;
+	solveCount: number;
 	/**
 	 * Both null only during the brief `pending` window between metadata create
 	 * and v1 upload; otherwise both reference live `DefinitionVersion` rows.
@@ -77,7 +77,7 @@ export interface DefinitionRecord {
  * - `null` — clear (only on nullable fields)
  * - value — set
  *
- * Use `incrementRunCount` for atomic +1 bumps instead of patching `runCount`.
+ * Use `incrementSolveCount` for atomic +1 bumps instead of patching `solveCount`.
  */
 export interface DefinitionRecordPatch {
 	displayName?: string;

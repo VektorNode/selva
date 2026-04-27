@@ -99,7 +99,7 @@ function record(
 		updatedBy: overrides.updatedBy ?? scope.ownerId,
 		displayName: overrides.displayName ?? 'Test',
 		status: overrides.status ?? 'published',
-		runCount: overrides.runCount ?? 0,
+		solveCount: overrides.solveCount ?? 0,
 		liveVersionId: overrides.liveVersionId ?? null,
 		draftVersionId: overrides.draftVersionId ?? null,
 		createdAt: overrides.createdAt ?? now,
@@ -255,22 +255,22 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(afterFlip.items.map((r) => r.guid)).toContain(guid);
 		});
 
-		it('incrementRunCount increases runCount by 1', async () => {
+		it('incrementSolveCount increases solveCount by 1', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const guid = makeUuid();
-			await store.create(ctx(scope.ownerId), record(scope, { guid, runCount: 5 }));
-			await store.incrementRunCount(ctx(scope.ownerId), guid);
+			await store.create(ctx(scope.ownerId), record(scope, { guid, solveCount: 5 }));
+			await store.incrementSolveCount(ctx(scope.ownerId), guid);
 			const got = await store.get(ctx(scope.ownerId), guid);
-			expect(got?.runCount).toBe(6);
+			expect(got?.solveCount).toBe(6);
 		});
 
-		it('incrementRunCount is a no-op for missing guid', async () => {
+		it('incrementSolveCount is a no-op for missing guid', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			let threw = false;
 			try {
-				await store.incrementRunCount(ctx(scope.ownerId), makeUuid());
+				await store.incrementSolveCount(ctx(scope.ownerId), makeUuid());
 			} catch {
 				threw = true;
 			}

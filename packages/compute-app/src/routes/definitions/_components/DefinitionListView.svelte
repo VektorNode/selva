@@ -45,7 +45,7 @@
 			<span class="font-mono text-[12px] text-muted-foreground"
 				>{formatUpdated(record.updatedAt)}</span
 			>
-			<span class="text-right font-mono text-[12px]">{record.runCount.toLocaleString()}</span>
+			<span class="text-right font-mono text-[12px]">{record.solveCount.toLocaleString()}</span>
 			<span class="flex justify-end">
 				<button
 					type="button"

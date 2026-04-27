@@ -17,7 +17,7 @@ export interface ListOptions {
 
 /** Definition-specific filtering on top of `ListOptions`. */
 export interface DefinitionListOptions extends Omit<ListOptions, 'orderBy'> {
-	orderBy?: 'createdAt' | 'updatedAt' | 'name' | 'runCount';
+	orderBy?: 'createdAt' | 'updatedAt' | 'name' | 'solveCount';
 	/**
 	 * Include records with `status='pending'`. Default false — consumers don't
 	 * see half-written state unless they explicitly opt in.

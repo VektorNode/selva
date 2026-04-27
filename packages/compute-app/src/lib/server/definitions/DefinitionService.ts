@@ -92,7 +92,7 @@ export class DefinitionService {
 			coverImage: input.coverImage,
 			computeServerId: input.computeServerId,
 			status: 'pending',
-			runCount: 0,
+			solveCount: 0,
 			liveVersionId: null,
 			draftVersionId: null,
 			createdAt: now,

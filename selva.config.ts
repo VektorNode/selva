@@ -1,42 +1,36 @@
 /**
- * Selva provider wiring — the single DI point that picks which provider
- * backs auth / data / storage / userProfile, plus tenancy and platform flags.
+ * Selva provider wiring — the single DI point for auth / data / storage /
+ * userProfile, tenancy, and platform flags.
  *
- * Configuration is env-driven. Every var read here is documented in
- * packages/compute-app/.env.example — that file is the authoritative
- * reference. Don't duplicate env documentation in this header; keep it there.
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │  What belongs here vs in .env                                           │
+ * │                                                                         │
+ * │  selva.config.ts  — intentional product decisions: flags, tenancy,      │
+ * │                     provider choice. Committed, reviewed in PRs,        │
+ * │                     auditable in git history.                           │
+ * │                                                                         │
+ * │  .env             — deployment secrets and per-environment overrides:   │
+ * │                     keys, URLs, credentials. Never committed.           │
+ * └─────────────────────────────────────────────────────────────────────────┘
  *
- * Setup guide:    docs/QuickStart.md
- * Provider depth: packages/local-provider/README.md
- *                 packages/supabase-provider/README.md
+ * Provider env vars: packages/compute-app/.env.example (authoritative ref)
+ * Setup guide:       docs/QuickStart.md
  */
 
-import { defineConfig, type SelvaFlags, type TenancyMode } from '@selvajs/platform';
+import { defineConfig } from '@selvajs/platform';
 import * as local from '@selvajs/local-provider';
 import * as supa from '@selvajs/supabase-provider';
 
-function resolveTenancy(env: Record<string, string | undefined>): TenancyMode {
-	return env.SELVA_TENANCY === 'multi' ? 'multi' : 'single';
-}
-
-/**
- * Parse platform feature flags from env. Each flag is opt-in via `=true`;
- * anything else (including absence) resolves to false. Keep this strict —
- * cross-org public and anonymous-allowing flags are security-relevant.
- */
-function resolveFlags(env: Record<string, string | undefined>): SelvaFlags {
-	const on = (v: string | undefined) => v === 'true';
-	return {
-		ALLOW_CROSS_ORG_PUBLIC: on(env.ALLOW_CROSS_ORG_PUBLIC),
-		ALLOW_ORG_COMPUTE_OVERRIDE: on(env.ALLOW_ORG_COMPUTE_OVERRIDE),
-		ALLOW_ORG_CREATION: on(env.ALLOW_ORG_CREATION)
-	};
-}
-
 export default defineConfig((env) => {
-	const tenancy = resolveTenancy(env);
-	const flags = resolveFlags(env);
+	// ── Product decisions (commit these, review them in PRs) ──────────────
+	const tenancy = 'single';
+	const flags = {
+		ALLOW_CROSS_ORG_PUBLIC: false,
+		ALLOW_ORG_COMPUTE_OVERRIDE: false,
+		ALLOW_ORG_CREATION: false
+	};
 
+	// ── Provider selection (env-driven: secrets stay out of source) ───────
 	if (env.SELVA_PROVIDER === 'supabase') {
 		const supabaseUrl = env.SUPABASE_URL;
 		const anonKey = env.SUPABASE_ANON_KEY;
@@ -44,10 +38,9 @@ export default defineConfig((env) => {
 		if (!supabaseUrl) throw new Error('Missing required env var: SUPABASE_URL');
 		if (!anonKey) throw new Error('Missing required env var: SUPABASE_ANON_KEY');
 		if (!serviceRoleKey) throw new Error('Missing required env var: SUPABASE_SERVICE_ROLE_KEY');
-		// Share one ClientBundle across every Supabase provider so they reuse
-		// a single service-role client and per-request WeakMap cache. The audit
-		// sink writes via the same bundle, persisting every domain event to
-		// `audit_events` (Permissions.md §9).
+		// Share one ClientBundle so all providers reuse a single service-role
+		// client and per-request WeakMap cache. The audit sink persists every
+		// domain event to `audit_events` (Permissions.md §9).
 		const bundle = supa.buildClientBundle({ supabaseUrl, anonKey, serviceRoleKey });
 		const events = new supa.SupabaseEventSink(bundle);
 		return {

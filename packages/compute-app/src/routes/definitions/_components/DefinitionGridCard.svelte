@@ -57,7 +57,7 @@
 		<Separator class="my-3" />
 		<div class="text-muted-foreground flex items-center justify-between font-mono text-[11.5px]">
 			<span>{formatUpdated(record.updatedAt)} ago</span>
-			<span>{record.runCount.toLocaleString()} runs</span>
+			<span>{record.solveCount.toLocaleString()} runs</span>
 		</div>
 	</div>
 </button>
