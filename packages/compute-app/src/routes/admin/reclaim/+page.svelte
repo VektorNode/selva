@@ -1,5 +1,13 @@
 <script lang="ts">
-	import { Button, Card, EmptyState, SectionHeader, AlertDialog, toast } from '@selvajs/ui';
+	import {
+		AlertDialog,
+		Button,
+		Card,
+		DataTable,
+		EmptyState,
+		SectionHeader,
+		toast
+	} from '@selvajs/ui';
 	import { RotateCcw, FolderOpen } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { ReclaimRow } from './+page.server';
@@ -58,46 +66,45 @@
 					description="No projects exist on this instance, or the data provider does not expose project listing."
 				/>
 			{:else}
-				<div class="divide-y rounded-lg border">
-					<div
-						class="bg-muted/40 text-muted-foreground grid grid-cols-[1fr_180px_120px_100px_100px] gap-4 px-4 py-2 text-xs font-medium tracking-wide uppercase"
-					>
-						<span>Project</span>
-						<span>Organization</span>
-						<span>Visibility</span>
-						<span class="text-right">Members</span>
-						<span></span>
-					</div>
-					{#each data.projects as project (project.id)}
-						<div class="grid grid-cols-[1fr_180px_120px_100px_100px] items-center gap-4 px-4 py-3">
-							<div class="min-w-0">
-								<p class="truncate text-sm font-medium">{project.name}</p>
-								<p class="text-muted-foreground truncate font-mono text-xs">{project.id}</p>
-							</div>
-							<div class="min-w-0">
-								<p class="truncate text-sm">{project.orgName}</p>
-								<code class="text-muted-foreground font-mono text-xs">{project.orgSlug}</code>
-							</div>
-							<span
-								class={`w-fit rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${VISIBILITY_TONE[project.visibility] ?? VISIBILITY_TONE.private}`}
-							>
-								{project.visibility}
-							</span>
-							<span class="text-right font-mono text-sm tabular-nums">{project.memberCount}</span>
-							<div class="flex justify-end">
-								<Button
-									size="sm"
-									variant="outline"
-									disabled={reclaimingId === project.id}
-									onclick={() => (confirming = project)}
-								>
-									<RotateCcw class="mr-1.5 h-3.5 w-3.5" />
-									Reclaim
-								</Button>
-							</div>
+				<DataTable
+					rows={data.projects}
+					getKey={(p) => p.id}
+					columns={[
+						{ label: 'Project' },
+						{ label: 'Organization', width: '180px' },
+						{ label: 'Visibility', width: '120px' },
+						{ label: 'Members', width: '100px', align: 'right' },
+						{ label: '', width: '100px' }
+					]}
+				>
+					{#snippet row(project)}
+						<div class="min-w-0">
+							<p class="truncate text-sm font-medium">{project.name}</p>
+							<p class="text-muted-foreground truncate font-mono text-xs">{project.id}</p>
 						</div>
-					{/each}
-				</div>
+						<div class="min-w-0">
+							<p class="truncate text-sm">{project.orgName}</p>
+							<code class="text-muted-foreground font-mono text-xs">{project.orgSlug}</code>
+						</div>
+						<span
+							class={`w-fit rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${VISIBILITY_TONE[project.visibility] ?? VISIBILITY_TONE.private}`}
+						>
+							{project.visibility}
+						</span>
+						<span class="text-right font-mono text-sm tabular-nums">{project.memberCount}</span>
+						<div class="flex justify-end">
+							<Button
+								size="sm"
+								variant="outline"
+								disabled={reclaimingId === project.id}
+								onclick={() => (confirming = project)}
+							>
+								<RotateCcw class="mr-1.5 h-3.5 w-3.5" />
+								Reclaim
+							</Button>
+						</div>
+					{/snippet}
+				</DataTable>
 			{/if}
 		</Card.Content>
 	</Card.Root>

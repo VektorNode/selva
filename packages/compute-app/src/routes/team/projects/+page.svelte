@@ -1,11 +1,12 @@
 <script lang="ts">
 	import {
+		AlertDialog,
 		Button,
 		Card,
+		DataTable,
+		EmptyState,
 		Input,
 		SectionHeader,
-		AlertDialog,
-		EmptyState,
 		toast
 	} from '@selvajs/ui';
 	import { Plus, Trash2, FolderKanban, ExternalLink } from '@lucide/svelte';
@@ -148,59 +149,58 @@
 					description="Create your first project to start uploading definitions."
 				/>
 			{:else}
-				<div class="divide-y rounded-lg border">
-					<div
-						class="bg-muted/40 text-muted-foreground grid grid-cols-[1fr_120px_100px_120px_80px] gap-4 px-4 py-2 text-xs font-medium tracking-wide uppercase"
-					>
-						<span>Project</span>
-						<span>Visibility</span>
-						<span class="text-right">Members</span>
-						<span class="text-right">Updated</span>
-						<span></span>
-					</div>
-					{#each data.projects as project (project.id)}
-						<div class="grid grid-cols-[1fr_120px_100px_120px_80px] items-center gap-4 px-4 py-3">
-							<div class="min-w-0">
-								<div class="flex items-center gap-2">
-									<a
-										href={`/projects?project=${project.slug}`}
-										class="truncate text-sm font-medium hover:underline"
-									>
-										{project.name}
-									</a>
-									<a
-										href={`/projects?project=${project.slug}`}
-										class="text-muted-foreground hover:text-foreground"
-										aria-label="Open project"
-									>
-										<ExternalLink class="h-3.5 w-3.5" />
-									</a>
-								</div>
-								<p class="text-muted-foreground truncate font-mono text-xs">{project.slug}</p>
-							</div>
-							<span
-								class={`w-fit rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${VISIBILITY_TONE[project.visibility] ?? VISIBILITY_TONE.private}`}
-							>
-								{project.visibility}
-							</span>
-							<span class="text-right font-mono text-sm tabular-nums">{project.memberCount}</span>
-							<span class="text-muted-foreground text-right text-xs">
-								{new Date(project.updatedAt).toLocaleDateString()}
-							</span>
-							<div class="flex justify-end">
-								<Button
-									size="sm"
-									variant="ghost"
-									disabled={deletingId === project.id}
-									onclick={() => (confirmingDelete = project)}
-									class="text-destructive hover:text-destructive h-8 w-8 p-0"
+				<DataTable
+					rows={data.projects}
+					getKey={(p) => p.id}
+					columns={[
+						{ label: 'Project' },
+						{ label: 'Visibility', width: '120px' },
+						{ label: 'Members', width: '100px', align: 'right' },
+						{ label: 'Updated', width: '120px', align: 'right' },
+						{ label: '', width: '80px' }
+					]}
+				>
+					{#snippet row(project)}
+						<div class="min-w-0">
+							<div class="flex items-center gap-2">
+								<a
+									href={`/projects?project=${project.slug}`}
+									class="truncate text-sm font-medium hover:underline"
 								>
-									<Trash2 class="h-4 w-4" />
-								</Button>
+									{project.name}
+								</a>
+								<a
+									href={`/projects?project=${project.slug}`}
+									class="text-muted-foreground hover:text-foreground"
+									aria-label="Open project"
+								>
+									<ExternalLink class="h-3.5 w-3.5" />
+								</a>
 							</div>
+							<p class="text-muted-foreground truncate font-mono text-xs">{project.slug}</p>
 						</div>
-					{/each}
-				</div>
+						<span
+							class={`w-fit rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${VISIBILITY_TONE[project.visibility] ?? VISIBILITY_TONE.private}`}
+						>
+							{project.visibility}
+						</span>
+						<span class="text-right font-mono text-sm tabular-nums">{project.memberCount}</span>
+						<span class="text-muted-foreground text-right text-xs">
+							{new Date(project.updatedAt).toLocaleDateString()}
+						</span>
+						<div class="flex justify-end">
+							<Button
+								size="sm"
+								variant="ghost"
+								disabled={deletingId === project.id}
+								onclick={() => (confirmingDelete = project)}
+								class="text-destructive hover:text-destructive h-8 w-8 p-0"
+							>
+								<Trash2 class="h-4 w-4" />
+							</Button>
+						</div>
+					{/snippet}
+				</DataTable>
 			{/if}
 		</Card.Content>
 	</Card.Root>
