@@ -332,7 +332,7 @@ function makeDefinition(overrides: {
 		updatedBy: overrides.ownerId,
 		displayName: `Def ${overrides.guid.slice(0, 6)}`,
 		status: 'published',
-		runCount: 0,
+		solveCount: 0,
 		liveVersionId: null,
 		draftVersionId: null,
 		createdAt: now,

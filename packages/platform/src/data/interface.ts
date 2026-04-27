@@ -152,8 +152,8 @@ export interface IDefinitionStore {
 	update(ctx: RequestContext, guid: string, patch: DefinitionRecordPatch): Promise<void>;
 	delete(ctx: RequestContext, guid: string): Promise<void>;
 
-	/** Atomic +1 on the run counter. No-op if the record doesn't exist. */
-	incrementRunCount(ctx: RequestContext, guid: string): Promise<void>;
+	/** Atomic +1 on the solve counter. No-op if the record doesn't exist. */
+	incrementSolveCount(ctx: RequestContext, guid: string): Promise<void>;
 
 	// Versions (immutable rows)
 	createVersion(ctx: RequestContext, version: DefinitionVersion): Promise<void>;

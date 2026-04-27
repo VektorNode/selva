@@ -24,7 +24,7 @@ import { nextCursorFromRange, toRange } from './pagination.js';
  * and `draft_version_id` are ON DELETE RESTRICT. Trying to delete a
  * referenced version raises 23503 which `mapError` turns into a 409.
  *
- * `incrementRunCount` uses a SQL function for atomic UPDATE — no
+ * `incrementSolveCount` uses a SQL function for atomic UPDATE — no
  * read-modify-write race like the local provider has.
  */
 export class SupabaseDefinitionStore implements IDefinitionStore {
@@ -171,7 +171,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		});
 	}
 
-	async incrementRunCount(ctx: RequestContext, guid: string): Promise<void> {
+	async incrementSolveCount(ctx: RequestContext, guid: string): Promise<void> {
 		const { error } = await this.clients.forRequest(ctx).rpc('increment_run_count', { g: guid });
 		if (error) throw mapError(error);
 	}
@@ -391,7 +391,7 @@ function rowToRecord(row: DefinitionRow): DefinitionRecord {
 		tags: row.tags ?? undefined,
 		coverImage: row.cover_image ?? undefined,
 		status: row.status,
-		runCount: typeof row.run_count === 'string' ? Number(row.run_count) : row.run_count,
+		solveCount: typeof row.run_count === 'string' ? Number(row.run_count) : row.run_count,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		deletedAt: row.deleted_at ?? null
@@ -413,7 +413,7 @@ function recordToRow(r: DefinitionRecord): Record<string, unknown> {
 		category: r.category ?? null,
 		cover_image: r.coverImage ?? null,
 		status: r.status,
-		run_count: r.runCount,
+		run_count: r.solveCount,
 		created_at: r.createdAt,
 		updated_at: r.updatedAt,
 		deleted_at: r.deletedAt ?? null
@@ -469,7 +469,7 @@ function definitionOrderColumn(orderBy: DefinitionListOptions['orderBy'] | undef
 	switch (orderBy) {
 		case 'name':
 			return 'display_name';
-		case 'runCount':
+		case 'solveCount':
 			return 'run_count';
 		case 'updatedAt':
 			return 'updated_at';

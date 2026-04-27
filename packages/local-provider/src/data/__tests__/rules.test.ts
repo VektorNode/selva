@@ -79,7 +79,7 @@ function def(overrides: Partial<DefinitionRecord> = {}): DefinitionRecord {
 		updatedBy: 'u-alice',
 		displayName: 'D',
 		status: 'published',
-		runCount: 0,
+		solveCount: 0,
 		liveVersionId: null,
 		draftVersionId: null,
 		createdAt: now,

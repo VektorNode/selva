@@ -72,7 +72,7 @@
 				<p class="font-mono text-[10.5px] uppercase tracking-widest text-muted-foreground">
 					Runs
 				</p>
-				<p class="mt-1 text-sm">{record.runCount.toLocaleString()}</p>
+				<p class="mt-1 text-sm">{record.solveCount.toLocaleString()}</p>
 			</div>
 			<div>
 				<p class="font-mono text-[10.5px] uppercase tracking-widest text-muted-foreground">

@@ -62,7 +62,7 @@
 			</div>
 
 			<span class="text-muted-foreground font-mono text-[12px]">
-				{record.runCount > 0 ? `${record.runCount.toLocaleString()} runs` : '—'}
+				{record.solveCount > 0 ? `${record.solveCount.toLocaleString()} runs` : '—'}
 			</span>
 
 			<div class="flex items-center justify-end gap-1">

@@ -89,7 +89,7 @@
 			<hr class="border-border my-3" />
 			<div class="text-muted-foreground flex items-center justify-between text-[11.5px]">
 				<span class="font-mono">
-					{record.runCount > 0 ? `${record.runCount.toLocaleString()} runs` : 'No runs yet'}
+					{record.solveCount > 0 ? `${record.solveCount.toLocaleString()} runs` : 'No runs yet'}
 				</span>
 				<span
 					class="text-foreground flex items-center gap-1 font-medium opacity-0 transition-opacity group-hover:opacity-100"

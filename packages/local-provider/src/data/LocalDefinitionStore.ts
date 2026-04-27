@@ -78,7 +78,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		};
 		return applyOrder([...records], defaulted, (r, field) => {
 			if (field === 'name') return r.displayName.toLowerCase();
-			if (field === 'runCount') return r.runCount ?? 0;
+			if (field === 'solveCount') return r.solveCount ?? 0;
 			return (r as unknown as Record<string, unknown>)[field];
 		});
 	}
@@ -220,11 +220,11 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		});
 	}
 
-	async incrementRunCount(_ctx: RequestContext, guid: string): Promise<void> {
+	async incrementSolveCount(_ctx: RequestContext, guid: string): Promise<void> {
 		const config = await this.readConfig();
 		const existing = config.definitions[guid];
 		if (!this.live(existing)) return;
-		existing.runCount = (existing.runCount ?? 0) + 1;
+		existing.solveCount = (existing.solveCount ?? 0) + 1;
 		existing.updatedAt = new Date().toISOString();
 		await this.writeConfig(config);
 	}

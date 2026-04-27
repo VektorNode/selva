@@ -255,7 +255,7 @@ describe('Cross-store cascade', () => {
 			updatedBy: ownerId,
 			displayName: 'Def',
 			status: 'published',
-			runCount: 0,
+			solveCount: 0,
 			liveVersionId: null,
 			draftVersionId: null,
 			createdAt: now,
