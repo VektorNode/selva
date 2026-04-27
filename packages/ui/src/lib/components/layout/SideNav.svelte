@@ -1,6 +1,5 @@
-<script lang="ts">
-	import type { Component, Snippet } from 'svelte';
-	import { page } from '$app/state';
+<script lang="ts" module>
+	import type { Component } from 'svelte';
 
 	export interface SideNavItem {
 		href: string;
@@ -9,6 +8,11 @@
 		match?: 'exact' | 'prefix';
 		badge?: string | number;
 	}
+</script>
+
+<script lang="ts">
+	import type { Snippet } from 'svelte';
+	import { page } from '$app/state';
 
 	interface SideNavProps {
 		items: SideNavItem[];
