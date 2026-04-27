@@ -1,5 +1,13 @@
 <script lang="ts">
-	import { Button, Card, Input, SectionHeader, AlertDialog, toast } from '@selvajs/ui';
+	import {
+		Button,
+		Card,
+		Input,
+		SectionHeader,
+		AlertDialog,
+		EmptyState,
+		toast
+	} from '@selvajs/ui';
 	import { Plus, Trash2, FolderKanban, ExternalLink } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { ProjectVisibility } from '@selvajs/platform';
@@ -134,15 +142,11 @@
 	<Card.Root>
 		<Card.Content class="pt-6">
 			{#if data.projects.length === 0}
-				<div
-					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
-				>
-					<FolderKanban class="text-muted-foreground mb-3 h-8 w-8" />
-					<p class="text-sm font-medium">No projects yet</p>
-					<p class="text-muted-foreground mt-1 text-sm">
-						Create your first project to start uploading definitions.
-					</p>
-				</div>
+				<EmptyState
+					icon={FolderKanban}
+					title="No projects yet"
+					description="Create your first project to start uploading definitions."
+				/>
 			{:else}
 				<div class="divide-y rounded-lg border">
 					<div

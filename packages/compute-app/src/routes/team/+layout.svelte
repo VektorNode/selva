@@ -1,9 +1,7 @@
 <script lang="ts">
-	import { PageHeader, SideNav, type SideNavItem } from '@selvajs/ui';
+	import { SideNav, type SideNavItem } from '@selvajs/ui';
 	import { Gauge, Users, FolderKanban, Activity, Link2, SlidersHorizontal } from '@lucide/svelte';
-	import UserChip from '$lib/components/UserChip.svelte';
-	import MainNav from '$lib/components/MainNav.svelte';
-	import SettingsMenu from '$lib/components/SettingsMenu.svelte';
+	import AppHeader from '$lib/components/AppHeader.svelte';
 	import type { Organization, OrgPermission, PlatformPermission } from '@selvajs/platform';
 
 	interface LayoutProps {
@@ -70,41 +68,30 @@
 	}
 </script>
 
-<PageHeader homeUrl="/library">
-	{#snippet navItems()}
-		<MainNav />
-	{/snippet}
-	{#snippet rightContent()}
-		<UserChip />
-		<SettingsMenu
-			platformPermissions={data.user?.platformPermissions ?? []}
-			orgPermissions={orgPerms}
-		/>
-	{/snippet}
-</PageHeader>
-
-<div class="flex h-[calc(100vh-3.5rem)] overflow-hidden">
-	<SideNav {items} eyebrow="Organization">
-		{#snippet header()}
-			{#if data.org}
-				<div
-					class="border-border bg-accent/40 flex items-center gap-2 rounded-md border px-2.5 py-2"
-				>
-					<span
-						class="bg-primary/15 text-primary flex h-6 w-6 shrink-0 items-center justify-center rounded font-mono text-[11px] font-semibold"
+<AppHeader>
+	{#snippet sidenav()}
+		<SideNav {items} eyebrow="Organization">
+			{#snippet header()}
+				{#if data.org}
+					<div
+						class="border-border bg-accent/40 flex items-center gap-2 rounded-md border px-2.5 py-2"
 					>
-						{orgInitials(data.org.name)}
-					</span>
-					<div class="min-w-0 flex-1">
-						<p class="truncate text-sm leading-tight font-medium">{data.org.name}</p>
-						<p class="text-muted-foreground truncate font-mono text-[10px]">{data.org.slug}</p>
+						<span
+							class="bg-primary/15 text-primary flex h-6 w-6 shrink-0 items-center justify-center rounded font-mono text-[11px] font-semibold"
+						>
+							{orgInitials(data.org.name)}
+						</span>
+						<div class="min-w-0 flex-1">
+							<p class="truncate text-sm leading-tight font-medium">{data.org.name}</p>
+							<p class="text-muted-foreground truncate font-mono text-[10px]">{data.org.slug}</p>
+						</div>
 					</div>
-				</div>
-			{/if}
-		{/snippet}
-	</SideNav>
+				{/if}
+			{/snippet}
+		</SideNav>
+	{/snippet}
 
-	<main class="flex-1 overflow-y-auto px-6 py-7">
+	<div class="px-(--page-px) py-(--page-py)">
 		{@render children?.()}
-	</main>
-</div>
+	</div>
+</AppHeader>

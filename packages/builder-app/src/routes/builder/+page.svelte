@@ -1,15 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import {
-		PageContainer,
-		PageHeader,
-		StateDisplay,
-		Button,
-		Dialog,
-		toast,
-		useFooterItem
-	} from '@selvajs/ui';
+	import { AppShell, StateDisplay, Button, Dialog, toast, useFooterItem } from '@selvajs/ui';
 	import { Save } from '@lucide/svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
@@ -229,8 +221,7 @@
 </script>
 
 <DragDropContext>
-	<PageContainer background="white">
-		<PageHeader {homeUrl} title="Schema Builder" showModeToggle={true}>
+	<AppShell {homeUrl} title="Schema Builder" mode="fixed" showFooter>
 			{#snippet navItems()}
 				<Button variant="default" size="sm">Schema Builder</Button>
 				<Button variant="ghost" size="sm" onclick={() => navigateTo('/preview')}>
@@ -264,7 +255,6 @@
 					Batch Processors
 				</Button>
 			{/snippet}
-		</PageHeader>
 
 		<div class="flex-1 overflow-auto">
 			{#if builderState?.state.loading}
@@ -379,5 +369,5 @@
 				onApplyChanges={(changes) => builderState?.applySyncChanges(changes)}
 			/>
 		{/if}
-	</PageContainer>
+	</AppShell>
 </DragDropContext>

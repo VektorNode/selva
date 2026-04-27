@@ -26,7 +26,8 @@ public static class SchemaMigrator
             { new Version(2, 0, 0), MigrateTo_2_0_0 },
             { new Version(2, 3, 0), MigrateTo_2_3_0 },
             { new Version(2, 4, 0), MigrateTo_2_4_0 },
-            { SchemaVersion.CURRENT, MigrateTo_2_5_0 }
+            { new Version(2, 5, 0), MigrateTo_2_5_0 },
+            { SchemaVersion.CURRENT, MigrateTo_2_6_0 }
         };
 
     /// <summary>
@@ -134,10 +135,22 @@ public static class SchemaMigrator
 
     private static UISchema MigrateTo_2_5_0(UISchema schema)
     {
-        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+        schema.SchemaVersion = "2.5.0";
 
         // LineBreakLayoutItem added in 2.5.0 - fully backward-compatible addition.
         // No data transformation needed; existing schemas load unchanged.
+
+        return schema;
+    }
+
+    private static UISchema MigrateTo_2_6_0(UISchema schema)
+    {
+        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+        // 2.6.0 additions (all backward-compatible):
+        // - DropdownWidgetConfig.displayAs ('dropdown' | 'checklist'); existing dropdowns
+        //   default to 'dropdown' on deserialization.
+        // - VisibilityRule.operator gains 'contains', 'containsAny', 'isEmpty', 'isNotEmpty'.
 
         return schema;
     }

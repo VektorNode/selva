@@ -129,6 +129,24 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     public int AtMost { get; set; } = 1;
     public bool Immediate { get; set; } = true;
 
+    /// <summary>
+    ///     Enable list/multi-select mode. When true the parameter exposes selected items as a list
+    ///     and AtMost is raised so the underlying ValueList accepts multiple selections.
+    ///     Driven by the schema's `displayAs: 'checklist'` flag and persisted in the GH file.
+    /// </summary>
+    public void SetListAccess(bool listAccess)
+    {
+        Access = listAccess ? GH_ParamAccess.list : GH_ParamAccess.item;
+        if (listAccess && AtMost <= 1)
+        {
+            AtMost = int.MaxValue;
+        }
+        else if (!listAccess && AtMost == int.MaxValue)
+        {
+            AtMost = 1;
+        }
+    }
+
     public IEnumerable<object> ContextualData
     {
         get
@@ -212,6 +230,63 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         }
 
         return string.Empty;
+    }
+
+    /// <summary>
+    ///     Selects multiple items on the connected ValueList by name (or expression).
+    ///     Used for checklist (multi-select) mode. Switches the ValueList into CheckList mode
+    ///     so all matched items can be co-selected, then triggers expire.
+    ///     Returns true if at least one item matched.
+    /// </summary>
+    public bool SelectItemsByName(IEnumerable<string> values)
+    {
+        var vl = ConnectedValueList;
+        if (vl == null || values == null)
+        {
+            return false;
+        }
+
+        var requested = new HashSet<string>(values.Where(v => v != null), StringComparer.OrdinalIgnoreCase);
+        if (requested.Count == 0)
+        {
+            return false;
+        }
+
+        Action apply = () =>
+        {
+            // CheckList mode lets the value list hold multiple selections concurrently.
+            vl.ListMode = GH_ValueListMode.CheckList;
+
+            var matched = false;
+            for (var i = 0; i < vl.ListItems.Count; i++)
+            {
+                var item = vl.ListItems[i];
+                var shouldSelect = requested.Contains(item.Name) || requested.Contains(item.Expression);
+                item.Selected = shouldSelect;
+                if (shouldSelect)
+                {
+                    matched = true;
+                }
+            }
+
+            if (matched)
+            {
+                vl.ExpireSolution(false);
+            }
+        };
+
+        try
+        {
+            RhinoApp.InvokeOnUiThread(new Action(apply));
+        }
+        catch
+        {
+            apply();
+        }
+
+        // Best-effort: report success if any requested value matched at least one option.
+        return vl.ListItems.Any(li =>
+            requested.Contains(li.Name) || requested.Contains(li.Expression));
     }
 
     /// <summary>
@@ -483,6 +558,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         writer.SetInt32("AtLeast", AtLeast);
         writer.SetInt32("AtMost", AtMost);
         writer.SetBoolean("TreeAccess", TreeAccess);
+        writer.SetBoolean("ListAccess", Access == GH_ParamAccess.list);
         writer.SetBoolean("Immediate", Immediate);
         writer.SetString("ConnectedValueListGuid", _connectedValueListGuid.ToString());
 
@@ -523,6 +599,12 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         if (reader.TryGetBoolean("TreeAccess", ref treeAccess))
         {
             TreeAccess = treeAccess;
+        }
+
+        var listAccess = false;
+        if (reader.TryGetBoolean("ListAccess", ref listAccess))
+        {
+            SetListAccess(listAccess);
         }
 
         var immediate = true;

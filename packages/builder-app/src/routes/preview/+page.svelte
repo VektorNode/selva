@@ -5,8 +5,7 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { UISchema, DiscoveredParameters, SupportedTypes } from '@selvajs/schemas';
 	import {
-		PageContainer,
-		PageHeader,
+		AppShell,
 		StateDisplay,
 		Button,
 		AppLayout,
@@ -410,27 +409,25 @@
 	});
 </script>
 
-<PageContainer background="white">
-	<PageHeader {homeUrl} title={schema?.name ?? null} showModeToggle={true}>
-		{#snippet navItems()}
-			<Button variant="ghost" size="sm" onclick={() => navigateTo('/builder')}>
-				Schema Builder
+<AppShell {homeUrl} title={schema?.name ?? null} mode="fixed" showFooter>
+	{#snippet navItems()}
+		<Button variant="ghost" size="sm" onclick={() => navigateTo('/builder')}>
+			Schema Builder
+		</Button>
+		<Button variant="default" size="sm">Interactive Preview</Button>
+	{/snippet}
+	{#snippet rightContent()}
+		{#if syncNeeded}
+			<Button
+				variant="default"
+				size="sm"
+				onclick={syncParameters}
+				class="animate-pulse bg-amber-500 hover:bg-amber-600"
+			>
+				⚡ Sync Parameters
 			</Button>
-			<Button variant="default" size="sm">Interactive Preview</Button>
-		{/snippet}
-		{#snippet rightContent()}
-			{#if syncNeeded}
-				<Button
-					variant="default"
-					size="sm"
-					onclick={syncParameters}
-					class="animate-pulse bg-amber-500 hover:bg-amber-600"
-				>
-					⚡ Sync Parameters
-				</Button>
-			{/if}
-		{/snippet}
-	</PageHeader>
+		{/if}
+	{/snippet}
 
 	<div
 		class="relative flex flex-1 flex-col overflow-hidden {isViewerFullscreen ? '' : 'pt-6'}"
@@ -482,7 +479,7 @@
 			<span class="font-medium">{schemaUpdateNotification}</span>
 		</div>
 	{/if}
-</PageContainer>
+</AppShell>
 
 <style>
 	@keyframes slideInRight {

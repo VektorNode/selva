@@ -1,16 +1,20 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import { Search, toast, PageHeader, PageContent, SectionHeader } from '@selvajs/ui';
+	import {
+		Search,
+		toast,
+		PageContent,
+		SectionHeader,
+		ViewToggle,
+		EmptyState
+	} from '@selvajs/ui';
 	import { ArrowRight, Filter as FilterIcon, X } from '@lucide/svelte';
 	import type { DefinitionRecord } from '@selvajs/platform';
 	import type { PageData } from './$types';
 	import DefinitionCard from '$lib/components/definitions/DefinitionCard.svelte';
 	import ToolListView from './_components/ToolListView.svelte';
-	import ViewToggle from './_components/ViewToggle.svelte';
 	import { formatRelative } from './_components/toolStyles';
-	import UserChip from '$lib/components/UserChip.svelte';
-	import MainNav from '$lib/components/MainNav.svelte';
-	import SettingsMenu from '$lib/components/SettingsMenu.svelte';
+	import AppHeader from '$lib/components/AppHeader.svelte';
 
 	type ViewMode = 'grid' | 'list';
 
@@ -111,19 +115,7 @@
 	}
 </script>
 
-<PageHeader homeUrl="/library">
-	{#snippet navItems()}
-		<MainNav />
-	{/snippet}
-	{#snippet rightContent()}
-		<UserChip />
-		<SettingsMenu
-			platformPermissions={data.user?.platformPermissions ?? []}
-			orgPermissions={data.ctx?.orgPermissions ?? []}
-		/>
-	{/snippet}
-</PageHeader>
-
+<AppHeader homeUrl="/library">
 <PageContent>
 	<div class="space-y-6">
 		<SectionHeader
@@ -305,26 +297,24 @@
 					onToggleStar={toggleStar}
 				/>
 			{/if}
-		{:else}
-			<!-- Empty state -->
-			<div
-				class="border-border flex flex-col items-center justify-center rounded-md border-2 border-dashed py-20 text-center"
-			>
-				{#if hasAnyFilter}
-					<p class="text-sm font-medium">No tools match your filters</p>
+		{:else if hasAnyFilter}
+			<EmptyState size="lg" title="No tools match your filters">
+				{#snippet actions()}
 					<button
-						class="text-muted-foreground hover:text-foreground mt-2 text-xs underline underline-offset-2"
+						class="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
 						onclick={clearFilters}
 					>
 						Clear all filters
 					</button>
-				{:else}
-					<p class="text-sm font-medium">No tools available yet</p>
-					<p class="text-muted-foreground mt-1 text-xs">
-						Ask an admin to publish a Grasshopper definition.
-					</p>
-				{/if}
-			</div>
+				{/snippet}
+			</EmptyState>
+		{:else}
+			<EmptyState
+				size="lg"
+				title="No tools available yet"
+				description="Ask an admin to publish a Grasshopper definition."
+			/>
 		{/if}
 	</div>
 </PageContent>
+</AppHeader>

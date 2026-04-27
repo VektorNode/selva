@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Dialog, Input, Label, Tabs, Textarea } from '@selvajs/ui';
+	import { Button, Dialog, EmptyState, Input, Label, Tabs, Textarea } from '@selvajs/ui';
 	import { Trash2, UserPlus, Users, X } from '@lucide/svelte';
 	import type { ProjectWithMembers, UserListItem } from '../+page.server';
 	import type { ProjectRole, ProjectVisibility } from '@selvajs/platform/projects';
@@ -149,15 +149,12 @@
 
 			<Tabs.Content value="members" class="mt-4 space-y-3">
 				{#if project.members.length === 0 && !showAddForm}
-					<div
-						class="border-border flex flex-col items-center justify-center rounded-md border-2 border-dashed py-10 text-center"
-					>
-						<Users class="text-muted-foreground mb-2 h-7 w-7" />
-						<p class="text-sm font-medium">No members yet</p>
-						<p class="text-muted-foreground mt-1 text-xs">
-							Add members to control who can edit this project.
-						</p>
-					</div>
+					<EmptyState
+						size="sm"
+						icon={Users}
+						title="No members yet"
+						description="Add members to control who can edit this project."
+					/>
 				{:else if project.members.length > 0}
 					<div class="border-border bg-card overflow-hidden rounded-md border">
 						{#each project.members as member (`${member.projectId}:${member.userId}`)}

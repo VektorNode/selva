@@ -1,9 +1,7 @@
 <script lang="ts">
-	import { PageHeader, SideNav, type SideNavItem } from '@selvajs/ui';
+	import { SideNav, type SideNavItem } from '@selvajs/ui';
 	import { Gauge, Building2, Users, RotateCcw, Server, Settings, ScrollText } from '@lucide/svelte';
-	import UserChip from '$lib/components/UserChip.svelte';
-	import MainNav from '$lib/components/MainNav.svelte';
-	import SettingsMenu from '$lib/components/SettingsMenu.svelte';
+	import AppHeader from '$lib/components/AppHeader.svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 
 	interface LayoutData {
@@ -72,23 +70,12 @@
 	);
 </script>
 
-<PageHeader homeUrl="/library">
-	{#snippet navItems()}
-		<MainNav />
+<AppHeader>
+	{#snippet sidenav()}
+		<SideNav {items} eyebrow="Platform" />
 	{/snippet}
-	{#snippet rightContent()}
-		<UserChip />
-		<SettingsMenu
-			platformPermissions={data.platformPermissions}
-			orgPermissions={data.orgPermissions}
-		/>
-	{/snippet}
-</PageHeader>
 
-<div class="flex h-[calc(100vh-3.5rem)] overflow-hidden">
-	<SideNav {items} eyebrow="Platform" />
-
-	<main class="flex-1 overflow-y-auto px-6 py-7">
+	<div class="px-(--page-px) py-(--page-py)">
 		{@render children?.()}
-	</main>
-</div>
+	</div>
+</AppHeader>

@@ -12,10 +12,10 @@ public static class SchemaVersion
 	///   Current version of the schema format (MAJOR.MINOR.PATCH).
 	///   Update this when making breaking or non-breaking changes to the schema.
 	/// </summary>
-	public static readonly Version CURRENT = new(2, 5, 0);
+	public static readonly Version CURRENT = new(2, 6, 0);
 
 	/// <summary>
-	///   Current version as a string (e.g., "2.5.0").
+	///   Current version as a string (e.g., "2.6.0").
 	///   Used for serialization and comparison.
 	/// </summary>
 	public static readonly string CURRENT_STRING = CURRENT.ToString();
