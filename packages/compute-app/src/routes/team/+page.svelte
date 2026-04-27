@@ -44,20 +44,20 @@
 			{#each tiles as tile (tile.href)}
 				{@const Icon = tile.icon}
 				<a href={tile.href} class="block">
-					<Card.Root class="h-full transition-colors hover:bg-accent/40">
+					<Card.Root class="hover:bg-accent/40 h-full transition-colors">
 						<Card.Content class="flex items-center justify-between gap-4 pt-6">
 							<div class="flex items-center gap-4">
-								<div class="rounded-md bg-accent p-2.5 text-accent-foreground">
+								<div class="bg-accent text-accent-foreground rounded-md p-2.5">
 									<Icon class="h-4 w-4" />
 								</div>
 								<div>
-									<p class="font-mono text-2xl font-semibold leading-none tabular-nums">
+									<p class="font-mono text-2xl leading-none font-semibold tabular-nums">
 										{tile.value}
 									</p>
-									<p class="mt-1 text-xs text-muted-foreground">{tile.label}</p>
+									<p class="text-muted-foreground mt-1 text-xs">{tile.label}</p>
 								</div>
 							</div>
-							<ArrowRight class="h-4 w-4 shrink-0 text-muted-foreground" />
+							<ArrowRight class="text-muted-foreground h-4 w-4 shrink-0" />
 						</Card.Content>
 					</Card.Root>
 				</a>
@@ -67,12 +67,12 @@
 		<Card.Root>
 			<Card.Header>
 				<Card.Title class="flex items-center gap-2 text-sm font-medium">
-					<Building2 class="h-4 w-4 text-muted-foreground" />
+					<Building2 class="text-muted-foreground h-4 w-4" />
 					Organization details
 				</Card.Title>
 			</Card.Header>
 			<Card.Content>
-				<dl class="grid gap-y-2 gap-x-4 text-sm sm:grid-cols-[120px_1fr]">
+				<dl class="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-[120px_1fr]">
 					<dt class="text-muted-foreground">Name</dt>
 					<dd>{data.org.name}</dd>
 
@@ -80,7 +80,7 @@
 					<dd><code class="font-mono text-xs">{data.org.slug}</code></dd>
 
 					<dt class="text-muted-foreground">Org ID</dt>
-					<dd><code class="font-mono text-xs text-muted-foreground">{data.org.id}</code></dd>
+					<dd><code class="text-muted-foreground font-mono text-xs">{data.org.id}</code></dd>
 
 					<dt class="text-muted-foreground">Created</dt>
 					<dd class="text-muted-foreground">

@@ -105,7 +105,7 @@
 			<Card.Content class="space-y-3 pt-6">
 				<div>
 					<p class="text-sm font-medium">New project</p>
-					<p class="text-xs text-muted-foreground">
+					<p class="text-muted-foreground text-xs">
 						Visibility can be changed later. Public requires the platform flag.
 					</p>
 				</div>
@@ -113,7 +113,7 @@
 					<Input placeholder="Project name" bind:value={newName} />
 					<select
 						bind:value={newVisibility}
-						class="h-9 rounded-md border border-input bg-background px-3 text-sm"
+						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
 					>
 						{#each VISIBILITY_OPTIONS as v (v)}
 							<option value={v}>{v}</option>
@@ -137,16 +137,16 @@
 				<div
 					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
 				>
-					<FolderKanban class="mb-3 h-8 w-8 text-muted-foreground" />
+					<FolderKanban class="text-muted-foreground mb-3 h-8 w-8" />
 					<p class="text-sm font-medium">No projects yet</p>
-					<p class="mt-1 text-sm text-muted-foreground">
+					<p class="text-muted-foreground mt-1 text-sm">
 						Create your first project to start uploading definitions.
 					</p>
 				</div>
 			{:else}
 				<div class="divide-y rounded-lg border">
 					<div
-						class="grid grid-cols-[1fr_120px_100px_120px_80px] gap-4 bg-muted/40 px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+						class="bg-muted/40 text-muted-foreground grid grid-cols-[1fr_120px_100px_120px_80px] gap-4 px-4 py-2 text-xs font-medium tracking-wide uppercase"
 					>
 						<span>Project</span>
 						<span>Visibility</span>
@@ -155,9 +155,7 @@
 						<span></span>
 					</div>
 					{#each data.projects as project (project.id)}
-						<div
-							class="grid grid-cols-[1fr_120px_100px_120px_80px] items-center gap-4 px-4 py-3"
-						>
+						<div class="grid grid-cols-[1fr_120px_100px_120px_80px] items-center gap-4 px-4 py-3">
 							<div class="min-w-0">
 								<div class="flex items-center gap-2">
 									<a
@@ -174,15 +172,15 @@
 										<ExternalLink class="h-3.5 w-3.5" />
 									</a>
 								</div>
-								<p class="truncate font-mono text-xs text-muted-foreground">{project.slug}</p>
+								<p class="text-muted-foreground truncate font-mono text-xs">{project.slug}</p>
 							</div>
 							<span
-								class={`w-fit rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${VISIBILITY_TONE[project.visibility] ?? VISIBILITY_TONE.private}`}
+								class={`w-fit rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${VISIBILITY_TONE[project.visibility] ?? VISIBILITY_TONE.private}`}
 							>
 								{project.visibility}
 							</span>
 							<span class="text-right font-mono text-sm tabular-nums">{project.memberCount}</span>
-							<span class="text-right text-xs text-muted-foreground">
+							<span class="text-muted-foreground text-right text-xs">
 								{new Date(project.updatedAt).toLocaleDateString()}
 							</span>
 							<div class="flex justify-end">
@@ -191,7 +189,7 @@
 									variant="ghost"
 									disabled={deletingId === project.id}
 									onclick={() => (confirmingDelete = project)}
-									class="h-8 w-8 p-0 text-destructive hover:text-destructive"
+									class="text-destructive hover:text-destructive h-8 w-8 p-0"
 								>
 									<Trash2 class="h-4 w-4" />
 								</Button>
@@ -204,17 +202,14 @@
 	</Card.Root>
 </div>
 
-<AlertDialog.Root
-	open={!!confirmingDelete}
-	onOpenChange={(o) => !o && (confirmingDelete = null)}
->
+<AlertDialog.Root open={!!confirmingDelete} onOpenChange={(o) => !o && (confirmingDelete = null)}>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>Delete this project?</AlertDialog.Title>
 			<AlertDialog.Description>
 				{#if confirmingDelete}
-					<strong>{confirmingDelete.name}</strong> will be removed from view immediately. Permanent
-					deletion happens after the retention window.
+					<strong>{confirmingDelete.name}</strong> will be removed from view immediately. Permanent deletion
+					happens after the retention window.
 				{/if}
 			</AlertDialog.Description>
 		</AlertDialog.Header>

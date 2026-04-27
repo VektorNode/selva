@@ -274,7 +274,6 @@ export class SupabaseProjectStore implements IProjectStore {
 			actorId: actorFrom(ctx)
 		});
 	}
-
 }
 
 // ============================================================================

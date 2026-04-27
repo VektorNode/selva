@@ -6,7 +6,7 @@
 		NumberWidgetConfig,
 		FileInputWidgetConfig,
 		TextWidgetConfig
-	} from '@selvajs/ui';
+	} from '@selvajs/schemas';
 	type LayoutItem = InputLayoutItem | OutputLayoutItem;
 	import { Badge, Button, Card, Switch } from '@selvajs/ui';
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';

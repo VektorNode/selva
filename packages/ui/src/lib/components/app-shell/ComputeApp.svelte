@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
-	import type { UISchema } from '../../types/generated';
+	import type { UISchema } from '@selvajs/schemas';
 	import type { ActionButton } from '../../types/actionButton';
 	import type { SolveFn } from '../../types/solveFn';
 	import { getDefaultValue } from '../../utils/utils-shared';

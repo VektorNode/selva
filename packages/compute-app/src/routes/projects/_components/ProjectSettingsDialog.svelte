@@ -150,25 +150,23 @@
 			<Tabs.Content value="members" class="mt-4 space-y-3">
 				{#if project.members.length === 0 && !showAddForm}
 					<div
-						class="flex flex-col items-center justify-center rounded-md border-2 border-dashed border-border py-10 text-center"
+						class="border-border flex flex-col items-center justify-center rounded-md border-2 border-dashed py-10 text-center"
 					>
-						<Users class="mb-2 h-7 w-7 text-muted-foreground" />
+						<Users class="text-muted-foreground mb-2 h-7 w-7" />
 						<p class="text-sm font-medium">No members yet</p>
-						<p class="mt-1 text-xs text-muted-foreground">
+						<p class="text-muted-foreground mt-1 text-xs">
 							Add members to control who can edit this project.
 						</p>
 					</div>
 				{:else if project.members.length > 0}
-					<div class="overflow-hidden rounded-md border border-border bg-card">
+					<div class="border-border bg-card overflow-hidden rounded-md border">
 						{#each project.members as member (`${member.projectId}:${member.userId}`)}
-							<div
-								class="flex items-center gap-3 border-b border-border px-3 py-2.5 last:border-0"
-							>
+							<div class="border-border flex items-center gap-3 border-b px-3 py-2.5 last:border-0">
 								<UserAvatar name={userLabel(member.userId)} size="sm" />
 								<div class="min-w-0 flex-1">
 									<p class="truncate text-sm font-medium">{userLabel(member.userId)}</p>
 									{#if userEmail(member.userId) && userEmail(member.userId) !== userLabel(member.userId)}
-										<p class="truncate font-mono text-xs text-muted-foreground">
+										<p class="text-muted-foreground truncate font-mono text-xs">
 											{userEmail(member.userId)}
 										</p>
 									{/if}
@@ -181,7 +179,7 @@
 											member.userId,
 											(e.target as HTMLSelectElement).value as ProjectRole
 										)}
-									class="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none"
+									class="border-input bg-background h-8 rounded-md border px-2 text-xs outline-none"
 								>
 									<option value="owner">Owner</option>
 									<option value="editor">Editor</option>
@@ -192,7 +190,7 @@
 									disabled={removing === member.userId}
 									variant="ghost"
 									size="icon"
-									class="h-7 w-7 text-muted-foreground hover:text-destructive"
+									class="text-muted-foreground hover:text-destructive h-7 w-7"
 								>
 									<X class="h-3.5 w-3.5" />
 								</Button>
@@ -209,12 +207,7 @@
 						onCancel={() => (showAddForm = false)}
 					/>
 				{:else}
-					<Button
-						onclick={() => (showAddForm = true)}
-						variant="outline"
-						size="sm"
-						class="gap-1.5"
-					>
+					<Button onclick={() => (showAddForm = true)} variant="outline" size="sm" class="gap-1.5">
 						<UserPlus class="h-3.5 w-3.5" /> Add member
 					</Button>
 				{/if}

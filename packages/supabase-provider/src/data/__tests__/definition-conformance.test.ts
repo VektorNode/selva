@@ -23,8 +23,10 @@ if (!envCtx) {
 				// Seed: 1 owner + 1 secondary user + 1 org + 2 projects. Definitions
 				// created in the suite FK to one of those two projects.
 				const { userId: ownerId, sessionToken: ownerSessionToken } = await seedUser(envCtx, '');
-				const { userId: secondaryUserId, sessionToken: secondaryUserSessionToken } =
-					await seedUser(envCtx, '');
+				const { userId: secondaryUserId, sessionToken: secondaryUserSessionToken } = await seedUser(
+					envCtx,
+					''
+				);
 				const orgId = crypto.randomUUID();
 				const projectId = crypto.randomUUID();
 				const secondaryProjectId = crypto.randomUUID();

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { UISchema, SupportedTypes } from '$lib/types/generated';
+	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
 	import * as Card from '$lib/components/ui/card';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import TabBar from './TabBar.svelte';

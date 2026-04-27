@@ -3,7 +3,7 @@ import type {
 	VisibilityRule,
 	VisibilityCondition,
 	GroupVisibilityCondition
-} from '$lib/types/generated';
+} from '@selvajs/schemas';
 
 export interface VisibilityResult {
 	visible: boolean;

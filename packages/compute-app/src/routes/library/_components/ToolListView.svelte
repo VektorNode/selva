@@ -29,9 +29,7 @@
 			style={gridTemplate}
 		>
 			{#if record.coverImage}
-				<div
-					class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md"
-				>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md">
 					<img src={record.coverImage} alt="" class="h-full w-full object-cover" />
 				</div>
 			{:else}

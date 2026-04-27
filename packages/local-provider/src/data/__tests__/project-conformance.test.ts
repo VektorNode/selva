@@ -26,9 +26,7 @@ describe('LocalProjectStore', () => {
 		createStore: async () => {
 			const loader = new LocalOrgStoreLoader(tempDir);
 			const invites = new LocalInviteStore(tempDir);
-			const computeServer = new LocalComputeServerStore(
-				path.join(tempDir, 'compute.config.json')
-			);
+			const computeServer = new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'));
 			const orgs = new LocalOrgStore(loader, invites, computeServer);
 			const store = new LocalProjectStore(loader);
 			// Explicitly create the host org for the project tests.

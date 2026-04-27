@@ -264,11 +264,7 @@ describe('§11 — project edit gates', () => {
 		});
 		const bobCtx = (await actAs(tp, bob.id)).ctx;
 
-		const member = await tp.config.data.projects.getProjectMember(
-			bobCtx,
-			alicesPrivate.id,
-			bob.id
-		);
+		const member = await tp.config.data.projects.getProjectMember(bobCtx, alicesPrivate.id, bob.id);
 		const allowed = canEditProjectSettings({
 			orgPermissions: bobCtx.orgPermissions,
 			project: alicesPrivate,
@@ -620,12 +616,12 @@ describe('§11 — instance-admin invariants', () => {
 		await grantPlatformPermissions(tp, bob.id, ['instance_admin']);
 
 		// Both admins. Excluding either drops count to 1.
-		expect(await tp.config.data.permissions.countInstanceAdminsExcluding(SYSTEM_CONTEXT, alice.id)).toBe(
-			1
-		);
-		expect(await tp.config.data.permissions.countInstanceAdminsExcluding(SYSTEM_CONTEXT, bob.id)).toBe(
-			1
-		);
+		expect(
+			await tp.config.data.permissions.countInstanceAdminsExcluding(SYSTEM_CONTEXT, alice.id)
+		).toBe(1);
+		expect(
+			await tp.config.data.permissions.countInstanceAdminsExcluding(SYSTEM_CONTEXT, bob.id)
+		).toBe(1);
 		// Excluding a non-admin doesn't change the count.
 		expect(
 			await tp.config.data.permissions.countInstanceAdminsExcluding(SYSTEM_CONTEXT, 'nonexistent')

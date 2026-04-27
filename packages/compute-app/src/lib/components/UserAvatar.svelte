@@ -11,7 +11,7 @@
 </script>
 
 <span
-	class={`shrink-0 rounded-full bg-accent text-accent-foreground font-medium flex items-center justify-center ${dim}`}
+	class={`bg-accent text-accent-foreground flex shrink-0 items-center justify-center rounded-full font-medium ${dim}`}
 	aria-hidden="true"
 >
 	{initial}

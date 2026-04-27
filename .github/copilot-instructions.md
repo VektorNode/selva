@@ -56,7 +56,7 @@ pnpm run build:all          # Build all packages
 
 ```bash
 cd packages/schemas && pnpm run generate:all
-# Updates: packages/ui/src/lib/types/generated/schema.ts
+# Updates: packages/schemas/src/generated/schema.ts
 #          Plugin/Selva.Core/Models/UISchema.Generated.cs
 ```
 
@@ -102,7 +102,7 @@ When asked to help generate commit messages:
 - **Single source of truth:** `packages/schemas/ui-schema.json` generates both C# and TypeScript
 - When adding new types or properties, always update the schema and run `generate:all`
 - Never manually edit generated files:
-  - `packages/ui/src/lib/types/generated/schema.ts`
+  - `packages/schemas/src/generated/schema.ts`
   - `Plugin/Selva.Core/Models/UISchema.Generated.cs`
 - Type mappings: string → string, number → double?, integer → int?, boolean → bool?, array → List<T>
 

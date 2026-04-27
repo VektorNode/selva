@@ -83,23 +83,23 @@
 <div class="space-y-4">
 	<div>
 		<h3 class="text-base font-semibold tracking-tight">Share links</h3>
-		<p class="mt-1 text-xs text-muted-foreground">
-			Per-definition tokens that grant access without an account. Use for client demos, embeds,
-			and review links.
+		<p class="text-muted-foreground mt-1 text-xs">
+			Per-definition tokens that grant access without an account. Use for client demos, embeds, and
+			review links.
 		</p>
 	</div>
 
 	{#if loading}
-		<div class="rounded-md border border-border p-6 text-center">
-			<p class="text-xs text-muted-foreground">Loading…</p>
+		<div class="border-border rounded-md border p-6 text-center">
+			<p class="text-muted-foreground text-xs">Loading…</p>
 		</div>
 	{:else if activeLinks.length === 0}
 		<div
-			class="flex flex-col items-center justify-center rounded-md border-2 border-dashed border-border p-8 text-center"
+			class="border-border flex flex-col items-center justify-center rounded-md border-2 border-dashed p-8 text-center"
 		>
-			<Link2 class="mb-2 h-7 w-7 text-muted-foreground" />
+			<Link2 class="text-muted-foreground mb-2 h-7 w-7" />
 			<p class="text-sm font-medium">No share links yet</p>
-			<p class="mt-1 mb-4 max-w-xs text-xs text-muted-foreground">
+			<p class="text-muted-foreground mt-1 mb-4 max-w-xs text-xs">
 				Mint a link to share this definition without requiring the recipient to have an account.
 			</p>
 			<Button size="sm" onclick={() => (showMintDialog = true)}>
@@ -108,11 +108,11 @@
 			</Button>
 		</div>
 	{:else}
-		<div class="overflow-hidden rounded-md border border-border bg-card">
+		<div class="border-border bg-card overflow-hidden rounded-md border">
 			<div
-				class="flex items-center justify-between gap-3 border-b border-border bg-muted/40 px-4 py-2"
+				class="border-border bg-muted/40 flex items-center justify-between gap-3 border-b px-4 py-2"
 			>
-				<span class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+				<span class="text-muted-foreground text-xs font-medium tracking-wider uppercase">
 					{activeLinks.length} active link{activeLinks.length === 1 ? '' : 's'}
 				</span>
 				<Button size="sm" variant="outline" onclick={() => (showMintDialog = true)}>
@@ -127,7 +127,7 @@
 				{@const hasCap = capValue !== null && capValue !== undefined}
 				{@const capReached = hasCap && link.solveCount >= (capValue as number)}
 				<div
-					class={`flex items-start gap-3 px-4 py-3 ${i < activeLinks.length - 1 ? 'border-b border-border' : ''}`}
+					class={`flex items-start gap-3 px-4 py-3 ${i < activeLinks.length - 1 ? 'border-border border-b' : ''}`}
 				>
 					<div class="min-w-0 flex-1">
 						<div class="flex flex-wrap items-center gap-1.5">
@@ -135,7 +135,7 @@
 								{link.name ?? 'Untitled link'}
 							</p>
 							<span
-								class={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
+								class={`rounded-full px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${
 									link.channel === 'live'
 										? 'bg-success/10 text-success'
 										: 'bg-warning/10 text-warning'
@@ -145,14 +145,14 @@
 							</span>
 							{#if !link.allowSolve}
 								<span
-									class="rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground"
+									class="bg-muted text-muted-foreground rounded-full px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase"
 								>
 									view-only
 								</span>
 							{/if}
 							{#if expired}
 								<span
-									class="flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-destructive"
+									class="bg-destructive/10 text-destructive flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase"
 								>
 									<TriangleAlert class="h-2.5 w-2.5" />
 									expired
@@ -160,13 +160,15 @@
 							{/if}
 							{#if capReached}
 								<span
-									class="rounded-full bg-destructive/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-destructive"
+									class="bg-destructive/10 text-destructive rounded-full px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase"
 								>
 									cap reached
 								</span>
 							{/if}
 						</div>
-						<div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+						<div
+							class="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs"
+						>
 							<span class="font-mono tabular-nums">
 								{link.solveCount.toLocaleString()}{hasCap
 									? ` / ${(capValue as number).toLocaleString()}`
@@ -185,7 +187,7 @@
 						size="icon"
 						onclick={() => (confirmingRevoke = link)}
 						disabled={revokingId === link.id}
-						class="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+						class="text-muted-foreground hover:text-destructive h-7 w-7 shrink-0"
 						aria-label="Revoke link"
 					>
 						<Trash2 class="h-3.5 w-3.5" />
@@ -203,17 +205,14 @@
 	onMinted={loadLinks}
 />
 
-<AlertDialog.Root
-	open={!!confirmingRevoke}
-	onOpenChange={(o) => !o && (confirmingRevoke = null)}
->
+<AlertDialog.Root open={!!confirmingRevoke} onOpenChange={(o) => !o && (confirmingRevoke = null)}>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>Revoke this link?</AlertDialog.Title>
 			<AlertDialog.Description>
 				{#if confirmingRevoke}
-					<strong>{confirmingRevoke.name ?? 'This link'}</strong> will stop working immediately.
-					Anyone using it will see a "no longer active" page. This cannot be undone.
+					<strong>{confirmingRevoke.name ?? 'This link'}</strong> will stop working immediately. Anyone
+					using it will see a "no longer active" page. This cannot be undone.
 				{/if}
 			</AlertDialog.Description>
 		</AlertDialog.Header>

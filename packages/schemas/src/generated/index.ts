@@ -1,6 +1,6 @@
 /**
- * Re-export all generated schema types
- * Import from here: import { UISchema, LayoutItem } from '$lib/types/generated';
+ * Re-export all generated schema types.
+ * Import from here: import { UISchema, LayoutItem } from '@selvajs/schemas';
  */
-export * from './schema';
-export * from './preset';
+export * from './schema.js';
+export * from './preset.js';

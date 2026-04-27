@@ -55,9 +55,9 @@
 				<div
 					class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center"
 				>
-					<FolderOpen class="mb-3 h-8 w-8 text-muted-foreground" />
+					<FolderOpen class="text-muted-foreground mb-3 h-8 w-8" />
 					<p class="text-sm font-medium">No projects</p>
-					<p class="mt-1 text-sm text-muted-foreground">
+					<p class="text-muted-foreground mt-1 text-sm">
 						No projects exist on this instance, or the data provider does not expose project
 						listing.
 					</p>
@@ -65,7 +65,7 @@
 			{:else}
 				<div class="divide-y rounded-lg border">
 					<div
-						class="grid grid-cols-[1fr_180px_120px_100px_100px] gap-4 bg-muted/40 px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+						class="bg-muted/40 text-muted-foreground grid grid-cols-[1fr_180px_120px_100px_100px] gap-4 px-4 py-2 text-xs font-medium tracking-wide uppercase"
 					>
 						<span>Project</span>
 						<span>Organization</span>
@@ -74,19 +74,17 @@
 						<span></span>
 					</div>
 					{#each data.projects as project (project.id)}
-						<div
-							class="grid grid-cols-[1fr_180px_120px_100px_100px] items-center gap-4 px-4 py-3"
-						>
+						<div class="grid grid-cols-[1fr_180px_120px_100px_100px] items-center gap-4 px-4 py-3">
 							<div class="min-w-0">
 								<p class="truncate text-sm font-medium">{project.name}</p>
-								<p class="truncate font-mono text-xs text-muted-foreground">{project.id}</p>
+								<p class="text-muted-foreground truncate font-mono text-xs">{project.id}</p>
 							</div>
 							<div class="min-w-0">
 								<p class="truncate text-sm">{project.orgName}</p>
-								<code class="font-mono text-xs text-muted-foreground">{project.orgSlug}</code>
+								<code class="text-muted-foreground font-mono text-xs">{project.orgSlug}</code>
 							</div>
 							<span
-								class={`w-fit rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${VISIBILITY_TONE[project.visibility] ?? VISIBILITY_TONE.private}`}
+								class={`w-fit rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${VISIBILITY_TONE[project.visibility] ?? VISIBILITY_TONE.private}`}
 							>
 								{project.visibility}
 							</span>

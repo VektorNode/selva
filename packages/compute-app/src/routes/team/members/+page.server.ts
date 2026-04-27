@@ -28,9 +28,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const page = await orgs.listOrgMembers(ctx, orgId, { limit: 200 });
 		const userIds = page.items.map((m) => m.userId);
 		const users = await Promise.all(
-			userIds.map((id) =>
-				auth.getUser(id).catch(() => null as AuthUser | null)
-			)
+			userIds.map((id) => auth.getUser(id).catch(() => null as AuthUser | null))
 		);
 		const userById = new Map(users.filter((u): u is AuthUser => !!u).map((u) => [u.id, u]));
 		members = page.items.map((m) => ({

@@ -130,13 +130,13 @@
 				{#each Object.entries(data.flags) as [name, value] (name)}
 					<div class="flex items-start justify-between gap-4 px-4 py-3">
 						<div class="min-w-0 flex-1">
-							<code class="font-mono text-xs text-foreground">{name}</code>
-							<p class="mt-1 text-xs text-muted-foreground">
+							<code class="text-foreground font-mono text-xs">{name}</code>
+							<p class="text-muted-foreground mt-1 text-xs">
 								{flagDescriptions[name as keyof PageData['flags']]}
 							</p>
 						</div>
 						<span
-							class={`rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
+							class={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${
 								value
 									? 'border-success/40 bg-success/10 text-success'
 									: 'border-border text-muted-foreground'

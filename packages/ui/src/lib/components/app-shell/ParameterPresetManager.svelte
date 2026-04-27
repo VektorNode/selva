@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Download, Upload, AlertTriangle, CheckCircle } from '@lucide/svelte';
-	import type { UISchema, ParameterPreset } from '../../types/generated';
+	import type { UISchema, ParameterPreset } from '@selvajs/schemas';
 	import {
 		createSavedState,
 		validateSavedState,

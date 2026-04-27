@@ -28,14 +28,14 @@
 				<Card.Description>The org's display name and URL slug.</Card.Description>
 			</Card.Header>
 			<Card.Content>
-				<dl class="grid gap-y-2 gap-x-4 text-sm sm:grid-cols-[140px_1fr_120px]">
+				<dl class="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-[140px_1fr_120px]">
 					<dt class="text-muted-foreground">Name</dt>
 					<dd class="font-medium">{data.org.name}</dd>
 					<dd class="text-right">
 						<button
 							type="button"
 							disabled
-							class="inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground opacity-60"
+							class="text-muted-foreground inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs opacity-60"
 						>
 							<Pencil class="h-3 w-3" />
 							Edit
@@ -48,7 +48,7 @@
 						<button
 							type="button"
 							disabled
-							class="inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground opacity-60"
+							class="text-muted-foreground inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs opacity-60"
 						>
 							<Pencil class="h-3 w-3" />
 							Edit
@@ -57,11 +57,11 @@
 
 					<dt class="text-muted-foreground">Org ID</dt>
 					<dd>
-						<code class="font-mono text-xs text-muted-foreground">{data.org.id}</code>
+						<code class="text-muted-foreground font-mono text-xs">{data.org.id}</code>
 					</dd>
 					<dd></dd>
 				</dl>
-				<p class="mt-3 text-xs text-muted-foreground">
+				<p class="text-muted-foreground mt-3 text-xs">
 					Editing identity ships when the corresponding API endpoint lands.
 				</p>
 			</Card.Content>
@@ -80,12 +80,12 @@
 				<button
 					type="button"
 					disabled
-					class="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm text-muted-foreground opacity-60"
+					class="text-muted-foreground inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm opacity-60"
 				>
 					<ArrowRightLeft class="h-3.5 w-3.5" />
 					Transfer ownership
 				</button>
-				<p class="mt-3 text-xs text-muted-foreground">
+				<p class="text-muted-foreground mt-3 text-xs">
 					Transfer flow ships with the matching API endpoint.
 				</p>
 			</Card.Content>
@@ -94,7 +94,7 @@
 		{#if data.isOwner}
 			<Card.Root class="border-destructive/40">
 				<Card.Header>
-					<Card.Title class="text-sm font-medium text-destructive">Danger zone</Card.Title>
+					<Card.Title class="text-destructive text-sm font-medium">Danger zone</Card.Title>
 					<Card.Description>
 						Deleting an organization removes all members, projects, and definitions. Cannot be
 						undone.
@@ -104,12 +104,12 @@
 					<button
 						type="button"
 						disabled
-						class="inline-flex h-9 items-center gap-2 rounded-md border border-destructive/40 px-3 text-sm text-destructive opacity-60"
+						class="border-destructive/40 text-destructive inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm opacity-60"
 					>
 						<Trash2 class="h-3.5 w-3.5" />
 						Delete organization
 					</button>
-					<p class="mt-3 text-xs text-muted-foreground">
+					<p class="text-muted-foreground mt-3 text-xs">
 						Org deletion ships with the matching API endpoint.
 					</p>
 				</Card.Content>
@@ -117,7 +117,7 @@
 		{/if}
 	{:else}
 		<Card.Root>
-			<Card.Content class="pt-6 text-sm text-muted-foreground">
+			<Card.Content class="text-muted-foreground pt-6 text-sm">
 				No active organization. Switch orgs from the user menu.
 			</Card.Content>
 		</Card.Root>

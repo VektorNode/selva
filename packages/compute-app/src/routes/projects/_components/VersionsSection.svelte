@@ -99,14 +99,15 @@
 	async function deleteVersion(version: DefinitionVersion) {
 		deletingId = version.id;
 		try {
-			const res = await fetch(
-				`/api/definitions/${definitionGuid}/versions/${version.id}`,
-				{ method: 'DELETE' }
-			);
+			const res = await fetch(`/api/definitions/${definitionGuid}/versions/${version.id}`, {
+				method: 'DELETE'
+			});
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({}));
 				toast.error(
-					err.message || err.error || 'Failed to delete version. Live or draft versions cannot be deleted.'
+					err.message ||
+						err.error ||
+						'Failed to delete version. Live or draft versions cannot be deleted.'
 				);
 				return;
 			}
@@ -125,19 +126,21 @@
 <div class="space-y-4">
 	<!-- Status banner -->
 	{#if loading}
-		<div class="rounded-md border border-border bg-muted/30 px-4 py-3">
-			<p class="text-xs text-muted-foreground">Loading versions…</p>
+		<div class="border-border bg-muted/30 rounded-md border px-4 py-3">
+			<p class="text-muted-foreground text-xs">Loading versions…</p>
 		</div>
 	{:else if versions.length === 0}
-		<div class="rounded-md border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+		<div
+			class="border-border bg-muted/30 text-muted-foreground rounded-md border px-4 py-3 text-sm"
+		>
 			No versions yet. Upload one to get started.
 		</div>
 	{:else}
 		<div
-			class="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/30 px-4 py-3"
+			class="border-border bg-muted/30 flex items-center justify-between gap-3 rounded-md border px-4 py-3"
 		>
 			<div class="flex min-w-0 items-center gap-2 text-sm">
-				<span class="h-2 w-2 shrink-0 rounded-full bg-success"></span>
+				<span class="bg-success h-2 w-2 shrink-0 rounded-full"></span>
 				{#if liveVersion}
 					<span><strong>Live now</strong> — v{liveVersion.versionNumber}</span>
 					{#if draftIsAhead && draftVersion}
@@ -150,12 +153,7 @@
 				{/if}
 			</div>
 			{#if draftIsAhead && draftVersion}
-				<Button
-					size="sm"
-					onclick={() => publish(null)}
-					disabled={publishing}
-					class="shrink-0"
-				>
+				<Button size="sm" onclick={() => publish(null)} disabled={publishing} class="shrink-0">
 					<CloudUpload class="mr-1.5 h-3.5 w-3.5" />
 					Publish v{draftVersion.versionNumber}
 				</Button>
@@ -167,7 +165,7 @@
 	<div class="flex items-center justify-between gap-3">
 		<div>
 			<h3 class="text-base font-semibold tracking-tight">Versions</h3>
-			<p class="mt-1 text-xs text-muted-foreground">
+			<p class="text-muted-foreground mt-1 text-xs">
 				Each upload becomes a version. The live version is what runs when someone uses this
 				definition.
 			</p>
@@ -186,9 +184,7 @@
 				{@const isDraft = version.id === draftVersionId && !isLive}
 				<div
 					class={`rounded-md border p-3 transition-colors ${
-						isLive
-							? 'border-primary/40 bg-accent/40'
-							: 'border-border bg-card hover:bg-muted/30'
+						isLive ? 'border-primary/40 bg-accent/40' : 'border-border bg-card hover:bg-muted/30'
 					}`}
 				>
 					<div class="flex items-start justify-between gap-3">
@@ -197,14 +193,14 @@
 								<span class="font-mono text-sm font-semibold">v{version.versionNumber}</span>
 								{#if isLive}
 									<span
-										class="rounded-full bg-success/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-success"
+										class="bg-success/10 text-success rounded-full px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase"
 									>
 										live
 									</span>
 								{/if}
 								{#if isDraft}
 									<span
-										class="rounded-full bg-warning/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-warning"
+										class="bg-warning/10 text-warning rounded-full px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase"
 									>
 										draft
 									</span>
@@ -213,21 +209,17 @@
 							{#if version.changeNote}
 								<p class="mt-1 truncate text-sm">{version.changeNote}</p>
 							{:else if version.originalFilename}
-								<p class="mt-1 truncate font-mono text-xs text-muted-foreground">
+								<p class="text-muted-foreground mt-1 truncate font-mono text-xs">
 									{version.originalFilename}
 								</p>
 							{/if}
-							<p class="mt-1 text-xs text-muted-foreground">
+							<p class="text-muted-foreground mt-1 text-xs">
 								Uploaded {formatRelative(version.uploadedAt)}
 							</p>
 						</div>
 						<div class="flex shrink-0 items-center gap-1">
 							{#if isLive}
-								<Button
-									size="sm"
-									variant="outline"
-									onclick={() => onOpenRunner(definitionGuid)}
-								>
+								<Button size="sm" variant="outline" onclick={() => onOpenRunner(definitionGuid)}>
 									<Play class="mr-1.5 h-3.5 w-3.5" />
 									Run
 								</Button>
@@ -250,7 +242,7 @@
 									variant="ghost"
 									onclick={() => (confirmingDelete = version)}
 									disabled={deletingId === version.id}
-									class="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+									class="text-muted-foreground hover:text-destructive h-8 w-8 p-0"
 									aria-label="Delete version"
 								>
 									<Trash2 class="h-3.5 w-3.5" />
@@ -292,14 +284,14 @@
 			</AlertDialog.Title>
 			<AlertDialog.Description>
 				{#if publishingTarget && liveVersion && publishingTarget.versionNumber < liveVersion.versionNumber}
-					Rolling back to an older version. Anyone running this definition will immediately get
-					v{publishingTarget.versionNumber} instead of v{liveVersion.versionNumber}.
+					Rolling back to an older version. Anyone running this definition will immediately get v{publishingTarget.versionNumber}
+					instead of v{liveVersion.versionNumber}.
 				{:else if publishingTarget}
 					Anyone running this definition will immediately get v{publishingTarget.versionNumber}
 					instead of v{liveVersion?.versionNumber ?? '—'}.
 				{:else}
-					Promotes the current draft to live. Everyone running this definition gets the new
-					version immediately.
+					Promotes the current draft to live. Everyone running this definition gets the new version
+					immediately.
 				{/if}
 			</AlertDialog.Description>
 		</AlertDialog.Header>
@@ -312,18 +304,15 @@
 	</AlertDialog.Content>
 </AlertDialog.Root>
 
-<AlertDialog.Root
-	open={!!confirmingDelete}
-	onOpenChange={(o) => !o && (confirmingDelete = null)}
->
+<AlertDialog.Root open={!!confirmingDelete} onOpenChange={(o) => !o && (confirmingDelete = null)}>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>
 				Delete v{confirmingDelete?.versionNumber}?
 			</AlertDialog.Title>
 			<AlertDialog.Description>
-				This permanently removes the version's file. The live and draft versions cannot be
-				deleted — repoint first.
+				This permanently removes the version's file. The live and draft versions cannot be deleted —
+				repoint first.
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>

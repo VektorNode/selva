@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { TextWidgetConfig, SupportedTypes } from '$lib/types/generated';
+	import type { TextWidgetConfig, SupportedTypes } from '@selvajs/schemas';
 	import { debounce } from '$lib/utils/debounce';
 	import { Input } from '$lib/components/ui/input';
 	import * as Field from '$lib/components/ui/field';

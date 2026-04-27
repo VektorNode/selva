@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { OutputLayoutItem } from '$lib/types/generated';
+	import type { OutputLayoutItem } from '@selvajs/schemas';
 	import type { FileData } from '@selvajs/compute';
 	import ChartOutput from './ChartOutput.svelte';
 	import { downloadFiles, formatFileSize, getBase64FileSize } from '$lib/utils/file-download';

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { TabConfig } from '../../types/generated';
+	import type { TabConfig } from '@selvajs/schemas';
 	import { ChevronRight, ChevronLeft, ChevronDown } from '@lucide/svelte';
 	import Icon from '@iconify/svelte';
 

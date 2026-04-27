@@ -29,7 +29,7 @@
 		<a
 			href={item.href}
 			class={[
-				'h-7 px-3 gap-1.5 rounded-md flex items-center text-sm font-medium transition-colors',
+				'h-7 px-3 gap-1.5 text-sm font-medium flex items-center rounded-md transition-colors',
 				active
 					? 'bg-accent text-accent-foreground'
 					: 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'

@@ -57,7 +57,7 @@
 	aria-disabled={loading}
 	onclick={activate}
 	onkeydown={handleKey}
-	class="group border-border bg-card flex flex-col overflow-hidden rounded-xl border text-left shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-shadow hover:shadow-[0_10px_30px_-16px_rgba(0,0,0,0.18)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
+	class="group border-border bg-card focus-visible:ring-ring flex flex-col overflow-hidden rounded-xl border text-left shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-shadow hover:shadow-[0_10px_30px_-16px_rgba(0,0,0,0.18)] focus:outline-none focus-visible:ring-2 aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
 >
 	<div class="border-border relative aspect-4/3 overflow-hidden border-b">
 		{#if record.coverImage}
@@ -94,7 +94,7 @@
 		{#if projectName}
 			<div class="absolute left-2.5 {projectChipTopOffset}">
 				<span
-					class="rounded-full bg-background/85 px-2 py-0.5 font-mono text-[10px] text-foreground backdrop-blur-sm"
+					class="bg-background/85 text-foreground rounded-full px-2 py-0.5 font-mono text-[10px] backdrop-blur-sm"
 				>
 					{projectName}
 				</span>

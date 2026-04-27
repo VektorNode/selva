@@ -26,7 +26,7 @@
 	<a
 		href={item.href}
 		class={[
-			'h-8 px-2.5 gap-1.5 rounded-md flex items-center text-sm font-medium transition-colors',
+			'flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors',
 			active
 				? 'bg-accent text-accent-foreground'
 				: 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'

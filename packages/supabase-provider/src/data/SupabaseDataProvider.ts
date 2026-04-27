@@ -54,10 +54,7 @@ export class SupabaseDataProvider implements IDataProvider {
 		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle));
 	}
 
-	static create(
-		opts: BuildClientOptions,
-		events?: IEventSink
-	): SupabaseDataProvider {
+	static create(opts: BuildClientOptions, events?: IEventSink): SupabaseDataProvider {
 		const bundle = buildClientBundle(opts);
 		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle));
 	}
@@ -66,10 +63,7 @@ export class SupabaseDataProvider implements IDataProvider {
 	 * Build from a pre-existing `ClientBundle`. Useful for tests or advanced
 	 * cases that need to inject a custom event sink or share a bundle externally.
 	 */
-	static fromBundle(
-		bundle: ClientBundle,
-		events?: IEventSink
-	): SupabaseDataProvider {
+	static fromBundle(bundle: ClientBundle, events?: IEventSink): SupabaseDataProvider {
 		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle));
 	}
 

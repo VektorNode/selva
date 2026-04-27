@@ -20,11 +20,11 @@ pnpm run build:all
 
 Selva ships two backend providers; both run locally. Pick one:
 
-|                    | Local provider                           | Supabase (local stack)             |
-| ------------------ | ---------------------------------------- | ---------------------------------- |
-| **State lives in** | JSON files on disk                       | Postgres + Supabase Auth + Storage |
-| **External deps**  | none                                     | Docker                             |
-| **Best for**       | quick eval, single-instance self-host    | multi-instance, RLS, managed auth  |
+|                    | Local provider                          | Supabase (local stack)             |
+| ------------------ | --------------------------------------- | ---------------------------------- |
+| **State lives in** | JSON files on disk                      | Postgres + Supabase Auth + Storage |
+| **External deps**  | none                                    | Docker                             |
+| **Best for**       | quick eval, single-instance self-host   | multi-instance, RLS, managed auth  |
 | **Switch later**   | yes — edit `selva.config.ts` and re-run | yes                                |
 
 The default is local. You can switch any time by editing `selva.config.ts`.

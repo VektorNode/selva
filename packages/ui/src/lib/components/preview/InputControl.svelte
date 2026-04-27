@@ -1,9 +1,5 @@
 <script lang="ts">
-	import type {
-		InputLayoutItem,
-		FileInputWidgetConfig,
-		SupportedTypes
-	} from '$lib/types/generated';
+	import type { InputLayoutItem, FileInputWidgetConfig, SupportedTypes } from '@selvajs/schemas';
 	import {
 		isNumberWidget,
 		isTextWidget,
@@ -11,7 +7,7 @@
 		isCheckboxWidget,
 		isFileWidget,
 		isColorWidget
-	} from '$lib/types/generated';
+	} from '@selvajs/schemas';
 	import * as Field from '$lib/components/ui/field';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { HelpCircle } from '@lucide/svelte';

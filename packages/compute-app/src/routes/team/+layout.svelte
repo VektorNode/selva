@@ -88,16 +88,16 @@
 		{#snippet header()}
 			{#if data.org}
 				<div
-					class="flex items-center gap-2 rounded-md border border-border bg-accent/40 px-2.5 py-2"
+					class="border-border bg-accent/40 flex items-center gap-2 rounded-md border px-2.5 py-2"
 				>
 					<span
-						class="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-primary/15 font-mono text-[11px] font-semibold text-primary"
+						class="bg-primary/15 text-primary flex h-6 w-6 shrink-0 items-center justify-center rounded font-mono text-[11px] font-semibold"
 					>
 						{orgInitials(data.org.name)}
 					</span>
 					<div class="min-w-0 flex-1">
-						<p class="truncate text-sm font-medium leading-tight">{data.org.name}</p>
-						<p class="truncate font-mono text-[10px] text-muted-foreground">{data.org.slug}</p>
+						<p class="truncate text-sm leading-tight font-medium">{data.org.name}</p>
+						<p class="text-muted-foreground truncate font-mono text-[10px]">{data.org.slug}</p>
 					</div>
 				</div>
 			{/if}

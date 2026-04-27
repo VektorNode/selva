@@ -107,10 +107,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			.delete()
 			.eq('org_id', orgId);
 		if (defErr) throw mapError(defErr);
-		const { error: srvErr } = await client
-			.from('compute_servers')
-			.delete()
-			.eq('org_id', orgId);
+		const { error: srvErr } = await client.from('compute_servers').delete().eq('org_id', orgId);
 		if (srvErr) throw mapError(srvErr);
 	}
 }

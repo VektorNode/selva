@@ -336,7 +336,6 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			throw new ProviderError(`Definition '${definitionId}' not found`, 404);
 		}
 	}
-
 }
 
 // ============================================================================

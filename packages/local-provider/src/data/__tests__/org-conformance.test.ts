@@ -19,8 +19,7 @@ describe('LocalOrgStore', () => {
 	});
 
 	const makeInvites = () => new LocalInviteStore(tempDir);
-	const makeCompute = () =>
-		new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'));
+	const makeCompute = () => new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'));
 
 	runOrgStoreConformance({
 		name: 'LocalOrgStore',

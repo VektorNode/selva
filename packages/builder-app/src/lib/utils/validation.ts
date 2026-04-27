@@ -1,4 +1,4 @@
-import type { VisibilityRule, DiscoveredInput, GrasshopperParamType } from '@selvajs/ui';
+import type { VisibilityRule, DiscoveredInput, GrasshopperParamType } from '@selvajs/schemas';
 
 /**
  * Validates a visibility rule value against parameter constraints

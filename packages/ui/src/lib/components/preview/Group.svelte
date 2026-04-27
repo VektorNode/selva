@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { LayoutItem, InputLayoutItem, OutputLayoutItem } from '$lib/types/generated';
+	import type { LayoutItem, InputLayoutItem, OutputLayoutItem } from '@selvajs/schemas';
 	import type { Snippet } from 'svelte';
 	import * as Card from '$lib/components/ui/card';
 	import { ChevronDown } from '@lucide/svelte';

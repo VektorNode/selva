@@ -53,15 +53,15 @@
 	}
 </script>
 
-<aside class="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-border bg-background">
+<aside class="border-border bg-background flex w-60 shrink-0 flex-col overflow-y-auto border-r">
 	<div class="flex items-center justify-between px-4 pt-5 pb-3">
-		<span class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+		<span class="text-muted-foreground text-xs font-medium tracking-wider uppercase">
 			Projects
 		</span>
 		{#if canManageProjects}
 			<button
 				onclick={() => (showForm = !showForm)}
-				class="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+				class="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors"
 				title="New project"
 				aria-label="New project"
 			>
@@ -71,11 +71,11 @@
 	</div>
 
 	{#if showForm && canManageProjects}
-		<div class="mx-3 mb-3 space-y-2 rounded-md border border-border bg-muted/40 p-3">
+		<div class="border-border bg-muted/40 mx-3 mb-3 space-y-2 rounded-md border p-3">
 			<Input bind:value={newName} placeholder="Project name" class="h-8 text-xs" />
 			<select
 				bind:value={newVisibility}
-				class="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none"
+				class="border-input bg-background w-full rounded-md border px-2.5 py-1.5 text-xs outline-none"
 			>
 				<option value="public">Public</option>
 				<option value="org">Org</option>
@@ -105,12 +105,12 @@
 	{#if projects.length > 4}
 		<div class="relative mx-3 mb-2">
 			<Search
-				class="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+				class="text-muted-foreground pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2"
 			/>
 			<input
 				bind:value={filterQuery}
 				placeholder="Filter projects"
-				class="h-7 w-full rounded-md border border-input bg-background pl-7 pr-2 text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+				class="border-input bg-background placeholder:text-muted-foreground focus:border-ring h-7 w-full rounded-md border pr-2 pl-7 text-xs transition-colors outline-none"
 			/>
 		</div>
 	{/if}
@@ -121,15 +121,12 @@
 			onclick={() => onSelect(null)}
 			class={`group relative flex w-full items-center gap-2 py-1.5 pr-2.5 text-left transition-colors ${
 				activeProjectId === null
-					? 'rounded-r-md bg-accent pl-4 text-accent-foreground'
-					: 'mx-2 rounded-md pl-2.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+					? 'bg-accent text-accent-foreground rounded-r-md pl-4'
+					: 'text-muted-foreground hover:bg-muted/60 hover:text-foreground mx-2 rounded-md pl-2.5'
 			}`}
 		>
 			{#if activeProjectId === null}
-				<span
-					class="absolute left-0 top-0 bottom-0 w-0.75 bg-primary"
-					aria-hidden="true"
-				></span>
+				<span class="bg-primary absolute top-0 bottom-0 left-0 w-0.75" aria-hidden="true"></span>
 			{/if}
 			<FolderOpen class="h-3.5 w-3.5 shrink-0 opacity-70" />
 			<span class="flex-1 truncate text-sm font-medium">All projects</span>
@@ -137,7 +134,7 @@
 		</button>
 
 		{#if filteredProjects.length > 0}
-			<div class="my-2 border-t border-border/60"></div>
+			<div class="border-border/60 my-2 border-t"></div>
 		{/if}
 
 		{#each filteredProjects as project (project.id)}
@@ -147,15 +144,12 @@
 				onclick={() => onSelect(project.id)}
 				class={`group relative flex w-full items-center gap-2 py-1.5 pr-2.5 text-left transition-colors ${
 					isActive
-						? 'rounded-r-md bg-accent pl-4 text-accent-foreground'
-						: 'mx-2 rounded-md pl-2.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+						? 'bg-accent text-accent-foreground rounded-r-md pl-4'
+						: 'text-muted-foreground hover:bg-muted/60 hover:text-foreground mx-2 rounded-md pl-2.5'
 				}`}
 			>
 				{#if isActive}
-					<span
-						class="absolute left-0 top-0 bottom-0 w-0.75 bg-primary"
-						aria-hidden="true"
-					></span>
+					<span class="bg-primary absolute top-0 bottom-0 left-0 w-0.75" aria-hidden="true"></span>
 				{/if}
 				<span class="flex-1 truncate text-sm font-medium">{project.name}</span>
 				<span class="shrink-0 font-mono text-[11px] tabular-nums opacity-60">{defCount}</span>
@@ -163,9 +157,9 @@
 		{/each}
 
 		{#if projects.length === 0}
-			<p class="px-2 py-4 text-center text-xs text-muted-foreground">No projects yet</p>
+			<p class="text-muted-foreground px-2 py-4 text-center text-xs">No projects yet</p>
 		{:else if filteredProjects.length === 0 && filterQuery}
-			<p class="px-2 py-4 text-center text-xs text-muted-foreground">
+			<p class="text-muted-foreground px-2 py-4 text-center text-xs">
 				No matches for "{filterQuery}"
 			</p>
 		{/if}

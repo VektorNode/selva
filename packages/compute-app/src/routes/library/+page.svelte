@@ -165,7 +165,7 @@
 					Filters
 					{#if activeFilterCount > 0}
 						<span
-							class="rounded-full bg-primary px-1.5 py-px font-mono text-[10px] text-primary-foreground"
+							class="bg-primary text-primary-foreground rounded-full px-1.5 py-px font-mono text-[10px]"
 						>
 							{activeFilterCount}
 						</span>
@@ -177,7 +177,7 @@
 				<button
 					type="button"
 					onclick={clearFilters}
-					class="inline-flex h-9 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+					class="text-muted-foreground hover:text-foreground inline-flex h-9 items-center gap-1 rounded-md px-2 text-xs transition-colors"
 				>
 					<X class="h-3 w-3" />
 					Clear
@@ -186,17 +186,17 @@
 		</div>
 
 		{#if showFilters}
-			<div class="rounded-md border border-border bg-card p-4">
+			<div class="border-border bg-card rounded-md border p-4">
 				<div class="grid gap-4 sm:grid-cols-3">
 					{#if projectList.length > 1}
 						<div class="space-y-1.5">
-							<label class="text-xs font-medium text-muted-foreground" for="filter-project">
+							<label class="text-muted-foreground text-xs font-medium" for="filter-project">
 								Project
 							</label>
 							<select
 								id="filter-project"
 								bind:value={activeProjectId}
-								class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+								class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
 							>
 								<option value={null}>All projects</option>
 								{#each projectList as p (p.id)}
@@ -208,13 +208,13 @@
 
 					{#if availableCategories.length > 0}
 						<div class="space-y-1.5">
-							<label class="text-xs font-medium text-muted-foreground" for="filter-category">
+							<label class="text-muted-foreground text-xs font-medium" for="filter-category">
 								Category
 							</label>
 							<select
 								id="filter-category"
 								bind:value={activeCategory}
-								class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+								class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
 							>
 								<option value={null}>All categories</option>
 								{#each availableCategories as cat (cat)}
@@ -226,13 +226,13 @@
 
 					{#if availableTags.length > 0}
 						<div class="space-y-1.5">
-							<label class="text-xs font-medium text-muted-foreground" for="filter-tag">
+							<label class="text-muted-foreground text-xs font-medium" for="filter-tag">
 								Tag
 							</label>
 							<select
 								id="filter-tag"
 								bind:value={activeTag}
-								class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+								class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
 							>
 								<option value={null}>All tags</option>
 								{#each availableTags as tag (tag)}
@@ -249,23 +249,23 @@
 		{#if data.recentRuns.length > 0 && !hasAnyFilter}
 			<section>
 				<div class="mb-3 flex items-baseline justify-between">
-					<span class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+					<span class="text-muted-foreground text-xs font-medium tracking-wider uppercase">
 						Recent runs
 					</span>
-					<span class="text-xs text-muted-foreground">Resume where you left off</span>
+					<span class="text-muted-foreground text-xs">Resume where you left off</span>
 				</div>
-				<div class="overflow-hidden rounded-md border border-border bg-card">
+				<div class="border-border bg-card overflow-hidden rounded-md border">
 					{#each data.recentRuns.slice(0, 5) as run, i (run.runId)}
 						<button
 							onclick={() => open(run.definitionId)}
 							disabled={loadingGuid === run.definitionId}
-							class={`group grid w-full items-center gap-4 px-4 py-3 text-left text-sm transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60 ${
-								i < Math.min(data.recentRuns.length, 5) - 1 ? 'border-b border-border' : ''
+							class={`group hover:bg-muted/40 grid w-full items-center gap-4 px-4 py-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+								i < Math.min(data.recentRuns.length, 5) - 1 ? 'border-border border-b' : ''
 							}`}
 							style="grid-template-columns: 1fr 120px auto"
 						>
 							<span class="truncate font-medium">{run.definitionName}</span>
-							<span class="font-mono text-xs text-muted-foreground">
+							<span class="text-muted-foreground font-mono text-xs">
 								{formatRelative(run.timestamp)}
 							</span>
 							<span
@@ -308,19 +308,19 @@
 		{:else}
 			<!-- Empty state -->
 			<div
-				class="flex flex-col items-center justify-center rounded-md border-2 border-dashed border-border py-20 text-center"
+				class="border-border flex flex-col items-center justify-center rounded-md border-2 border-dashed py-20 text-center"
 			>
 				{#if hasAnyFilter}
 					<p class="text-sm font-medium">No tools match your filters</p>
 					<button
-						class="mt-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+						class="text-muted-foreground hover:text-foreground mt-2 text-xs underline underline-offset-2"
 						onclick={clearFilters}
 					>
 						Clear all filters
 					</button>
 				{:else}
 					<p class="text-sm font-medium">No tools available yet</p>
-					<p class="mt-1 text-xs text-muted-foreground">
+					<p class="text-muted-foreground mt-1 text-xs">
 						Ask an admin to publish a Grasshopper definition.
 					</p>
 				{/if}

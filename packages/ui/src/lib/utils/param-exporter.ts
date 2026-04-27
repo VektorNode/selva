@@ -4,7 +4,7 @@ import type {
 	ParameterPreset,
 	ParameterState,
 	ValidationIssueMessage
-} from '../types/generated';
+} from '@selvajs/schemas';
 
 function getGroups(schema: UISchema) {
 	if (!schema.layout) return [];

@@ -80,11 +80,11 @@
 	}
 </script>
 
-<div class="rounded-md border border-border bg-card">
+<div class="border-border bg-card rounded-md border">
 	{#if !selected}
-		<div class="relative border-b border-border">
+		<div class="border-border relative border-b">
 			<Search
-				class="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+				class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2"
 			/>
 			<!-- svelte-ignore a11y_autofocus -->
 			<input
@@ -92,12 +92,12 @@
 				autofocus
 				onkeydown={handleKey}
 				placeholder="Search by name or email"
-				class="h-9 w-full rounded-t-md bg-transparent pl-9 pr-9 text-sm outline-none placeholder:text-muted-foreground"
+				class="placeholder:text-muted-foreground h-9 w-full rounded-t-md bg-transparent pr-9 pl-9 text-sm outline-none"
 			/>
 			<button
 				type="button"
 				onclick={onCancel}
-				class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+				class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 rounded p-1"
 				aria-label="Cancel"
 			>
 				<X class="h-3.5 w-3.5" />
@@ -106,7 +106,7 @@
 
 		<div bind:this={listRef} class="max-h-60 overflow-y-auto py-1">
 			{#if matches.length === 0}
-				<p class="px-3 py-6 text-center text-xs text-muted-foreground">
+				<p class="text-muted-foreground px-3 py-6 text-center text-xs">
 					{availableUsers.length === 0
 						? 'Everyone in this org is already on the project.'
 						: `No matches for "${query}"`}
@@ -126,7 +126,7 @@
 						<div class="min-w-0 flex-1">
 							<p class="truncate text-sm font-medium">{userLabel(user)}</p>
 							{#if user.displayName && user.email}
-								<p class="truncate font-mono text-xs text-muted-foreground">{user.email}</p>
+								<p class="text-muted-foreground truncate font-mono text-xs">{user.email}</p>
 							{/if}
 						</div>
 					</button>
@@ -139,12 +139,12 @@
 			<div class="min-w-0 flex-1">
 				<p class="truncate text-sm font-medium">{userLabel(selected)}</p>
 				{#if selected.email && selected.displayName}
-					<p class="truncate font-mono text-xs text-muted-foreground">{selected.email}</p>
+					<p class="text-muted-foreground truncate font-mono text-xs">{selected.email}</p>
 				{/if}
 			</div>
 			<select
 				bind:value={role}
-				class="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none"
+				class="border-input bg-background h-8 rounded-md border px-2 text-xs outline-none"
 			>
 				<option value="owner">Owner</option>
 				<option value="editor">Editor</option>
@@ -157,7 +157,7 @@
 				onclick={() => (selected = null)}
 				variant="ghost"
 				size="icon"
-				class="h-8 w-8 text-muted-foreground"
+				class="text-muted-foreground h-8 w-8"
 				aria-label="Pick a different user"
 			>
 				<X class="h-3.5 w-3.5" />

@@ -23,10 +23,6 @@ export * from './composables/useFooterItem.svelte';
 // Utils (cn function)
 export * from './utils';
 
-// Re-export types from generated schema
-export type * from './types/generated';
+// UI-specific runtime types (not from schema)
 export type { ActionButton } from './types/actionButton';
 export type { SolveFn } from './types/solveFn';
-
-// Re-export constants from generated schema
-export { ACCEPTED_FILE_FORMATS } from './types/generated/schema';

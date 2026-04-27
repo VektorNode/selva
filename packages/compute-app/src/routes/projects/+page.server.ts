@@ -114,7 +114,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 			});
 			const memberIds = memberPage.items.map((m) => m.userId);
 			const [authUsers, profiles] = await Promise.all([
-				Promise.all(memberIds.map((id) => getAuthProvider().getUser(id).catch(() => null))),
+				Promise.all(
+					memberIds.map((id) =>
+						getAuthProvider()
+							.getUser(id)
+							.catch(() => null)
+					)
+				),
 				getUserProfileStore().getProfiles(ctx, memberIds)
 			]);
 			const displayById = new Map(profiles.map((p) => [p.userId, p.displayName]));

@@ -221,7 +221,7 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
 
 `@selvajs/platform` defines _only_ TypeScript interfaces, Zod schemas, pure rule functions, and shared utilities. No I/O. Two providers implement the contract today:
 
-|                     | `@selvajs/local-provider`                                 | `@selvajs/supabase-provider`                      |
+|                     | `@selvajs/local-provider`                              | `@selvajs/supabase-provider`                    |
 | ------------------- | ------------------------------------------------------ | ----------------------------------------------- |
 | Identity            | `LocalAuthProvider` (HMAC sessions, optional password) | `SupabaseAuthProvider` (JWT, MFA-capable)       |
 | Data                | JSON files under `DATA_PATH/`                          | Postgres + RLS                                  |
@@ -232,8 +232,8 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
 
 **Interfaces:**
 
-| Interface                                                                                                   | Location                                                                     |
-| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Interface                                                                                                   | Location                                                                       |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `IAuthProvider`                                                                                             | [`@selvajs/platform/auth`](../../platform/src/auth/interface.ts)               |
 | `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IComputeServerStore`, `IShareLinkStore` | [`@selvajs/platform/data`](../../platform/src/data/interface.ts)               |
 | `IInviteStore`                                                                                              | [`@selvajs/platform/invites`](../../platform/src/invites/interface.ts)         |
@@ -288,7 +288,7 @@ A single source generates types for both stacks:
 ```
 packages/schemas/ui-schema.json
         │
-        ├─→ pnpm generate:ts → packages/ui/src/lib/types/generated/schema.ts
+        ├─→ pnpm generate:ts → packages/schemas/src/generated/schema.ts
         │
         └─→ pnpm generate:cs → Plugin/Selva.Core/Models/UISchema.Generated.cs
 ```
