@@ -31,12 +31,12 @@ const MB = 1024 * 1024;
 // ============================================================================
 // Maximum solve duration (single source of truth for /api/compute timeout)
 // ============================================================================
-// The longest the app will wait for one solve. Server enforces it via a
-// soft Promise.race deadline (selva-compute doesn't accept an AbortSignal
-// today, so the orphan solve keeps running on Rhino.Compute until it
-// finishes — but the HTTP response returns 504 to the client at this
-// deadline). The same value is forwarded to the client via page data and
-// drives the in-browser AbortController in `createComputeThrottle`.
+// The longest the app will wait for one solve. Enforced by the
+// SolveScheduler (`@selvajs/compute`), which propagates AbortSignal into
+// the upstream Compute call — so a timeout actually cancels the work
+// instead of orphaning it. The same value is forwarded to the client via
+// page data and drives the in-browser AbortController in
+// `createComputeThrottle`.
 //
 // Caveat: this knob bounds only the parts of the stack we own. A reverse
 // proxy (`read_timeout`) or serverless platform cap may shoot the request

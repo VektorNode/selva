@@ -5,7 +5,8 @@ import {
 	type BooleanInputType,
 	type InputParam,
 	TreeBuilder,
-	GrasshopperClient
+	GrasshopperClient,
+	type SolveScheduler
 } from '@selvajs/compute';
 import type { SchemaInput } from '@selvajs/shared';
 import { error, json, isHttpError } from '@sveltejs/kit';
@@ -40,16 +41,16 @@ interface ComputeRequest {
 /** Cache for remote definitions (URL -> bytes). TTL/caps come from computeLimits. */
 const definitionCache = new Map<string, { data: Uint8Array; fetchedAt: number }>();
 
-/** Singleton GrasshopperClient instance */
+/** Singleton GrasshopperClient + scheduler. The scheduler dedupes identical
+ * (definition, dataTree) solves via an LRU cache and propagates AbortSignal
+ * to the upstream Compute call so client disconnects kill orphan solves. */
 let cachedClient: GrasshopperClient | null = null;
+let cachedScheduler: SolveScheduler | null = null;
 let cachedClientConfig: { serverUrl: string; apiKey?: string } | null = null;
 
-/**
- * Get or create a GrasshopperClient for the resolved server. The cache is
- * keyed by serverUrl + apiKey identity so distinct orgs sharing a server
- * reuse one warm client; switching servers invalidates and rebuilds.
- */
-async function getClient(serverConfig: ComputeServerConfig): Promise<GrasshopperClient> {
+async function getClient(
+	serverConfig: ComputeServerConfig
+): Promise<{ client: GrasshopperClient; scheduler: SolveScheduler }> {
 	const currentConfig = {
 		serverUrl: serverConfig.serverUrl,
 		apiKey: serverConfig.apiKey
@@ -57,19 +58,32 @@ async function getClient(serverConfig: ComputeServerConfig): Promise<Grasshopper
 
 	if (
 		cachedClient &&
+		cachedScheduler &&
 		cachedClientConfig &&
 		cachedClientConfig.serverUrl === currentConfig.serverUrl &&
 		cachedClientConfig.apiKey === currentConfig.apiKey
 	) {
-		return cachedClient;
+		return { client: cachedClient, scheduler: cachedScheduler };
 	}
+
+	// Server identity changed — drop the old scheduler so its cache + in-flight
+	// state don't leak across servers.
+	cachedScheduler?.dispose();
 
 	cachedClient = await GrasshopperClient.create({
 		serverUrl: currentConfig.serverUrl,
 		apiKey: currentConfig.apiKey
 	});
+	// `mode: 'queue'` because each HTTP request is its own caller — we never
+	// want one user's solve to be superseded by another's. The dedup we want
+	// is response caching, which is independent of mode.
+	cachedScheduler = cachedClient.createScheduler({
+		mode: 'queue',
+		timeoutMs: MAX_SOLVE_DURATION_MS,
+		cache: { maxEntries: 20, ttlMs: 5 * 60_000 }
+	});
 	cachedClientConfig = currentConfig;
-	return cachedClient;
+	return { client: cachedClient, scheduler: cachedScheduler };
 }
 
 /**
@@ -324,35 +338,32 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		}
 
 		const serverConfig = await resolveServerForOrg(solveCtx, solveOrgId);
-		const client = await getClient(serverConfig);
+		const { scheduler } = await getClient(serverConfig);
 
-		// Soft deadline: selva-compute's solve() doesn't accept an AbortSignal
-		// (yet), so we race against a timer. On overrun we return 504 — the
-		// orphan solve keeps running on the Rhino.Compute server until it
-		// finishes, but our HTTP handler stops holding the connection open.
-		// MAX_SOLVE_DURATION_MS is the single source of truth for "longest
-		// solve we'll wait for" and is also forwarded to the client.
-		const SOLVE_TIMEOUT = Symbol('solve-timeout');
-		let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-		const timeoutPromise = new Promise<typeof SOLVE_TIMEOUT>((resolve) => {
-			timeoutHandle = setTimeout(() => resolve(SOLVE_TIMEOUT), MAX_SOLVE_DURATION_MS);
-		});
-
+		// The scheduler propagates `request.signal` to the Compute call, so a
+		// client disconnect aborts the upstream solve instead of orphaning it.
+		// Timeout is enforced by the scheduler (MAX_SOLVE_DURATION_MS); on
+		// overrun the scheduler rejects with an abort error which we map to 504.
 		let solvedDefinition;
 		try {
-			const result = await Promise.race([
-				client.solve(definitionSource, inputTree),
-				timeoutPromise
-			]);
-			if (result === SOLVE_TIMEOUT) {
+			solvedDefinition = await scheduler.solve(definitionSource, inputTree, {
+				signal: request.signal
+			});
+		} catch (err) {
+			// Distinguish timeout from caller-disconnect. The scheduler raises
+			// AbortError for both; the timer firing first means we hit the
+			// deadline, the request signal firing first means the client left.
+			if (err instanceof Error && err.name === 'AbortError') {
+				if (request.signal.aborted) {
+					// Client gave up; don't bother responding with a useful body.
+					throw error(499, 'Client closed request');
+				}
 				throw error(
 					504,
 					`Solve exceeded the ${Math.round(MAX_SOLVE_DURATION_MS / 1000)}s deadline.`
 				);
 			}
-			solvedDefinition = result;
-		} finally {
-			if (timeoutHandle) clearTimeout(timeoutHandle);
+			throw err;
 		}
 
 		return json(solvedDefinition);

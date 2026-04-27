@@ -30,9 +30,9 @@ When used with `Selva.gha` plugin in Grasshopper:
 Standalone web app deployed independently (Vercel, Netlify, etc):
 
 - **Routes:**
-  - `/app` — Grasshopper solver interface using `@selva/compute`
+  - `/app` — Grasshopper solver interface using `@selvajs/compute`
   - Uses generated schemas from `@selvajs/schemas`
-  - Calls Rhino Compute servers via `@selva/compute` client
+  - Calls Rhino Compute servers via `@selvajs/compute` client
 
 - **How it works:**
   1. Generated schema embedded in build
@@ -56,7 +56,7 @@ pnpm run dev           # http://localhost:5173 (dev server)
 
 ## Related
 
-- [`@selva/compute`](../compute) — Rhino Compute client (used in cloud mode)
+- [`@selvajs/compute`](../compute) — Rhino Compute client (used in cloud mode)
 - [`@selvajs/shared`](../shared) — Shared Svelte components and theme used by this app
 - [`@selvajs/schemas`](../schemas) — Schema generators (produces types for this app)
 - [Selva.gha Plugin](../../Plugin) — Grasshopper bridge (used in local mode)
