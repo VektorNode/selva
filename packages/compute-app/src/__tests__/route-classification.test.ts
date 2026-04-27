@@ -27,9 +27,9 @@ describe('isPublicRoute', () => {
 
 	it.each([
 		// Authenticated app surfaces.
-		['/app'],
-		['/app/abc-guid'],
-		['/definitions'],
+		['/library'],
+		['/library/abc-guid'],
+		['/projects'],
 		['/admin'],
 		['/admin/users'],
 		// Authenticated APIs (every /api/* except /api/health).

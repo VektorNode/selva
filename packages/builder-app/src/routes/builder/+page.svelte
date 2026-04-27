@@ -226,7 +226,7 @@
 <DragDropContext>
 	<PageContainer background="white">
 		<PageHeader title="Schema Builder" showModeToggle={true}>
-			<nav class="flex items-center gap-2">
+			{#snippet rightContent()}
 				{#if builderState?.state.syncNeeded}
 					<Button
 						variant="default"
@@ -258,7 +258,7 @@
 				>
 					Batch Processors
 				</Button>
-			</nav>
+			{/snippet}
 		</PageHeader>
 
 		<div class="flex-1 overflow-auto">

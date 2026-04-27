@@ -13,7 +13,7 @@ export interface MemberRow extends OrgMember {
 export const load: PageServerLoad = async ({ locals }) => {
 	const ctx = locals.ctx;
 	if (!ctx) redirect(303, '/login');
-	if (!hasPermission(ctx, 'manage_org_members')) redirect(303, '/app');
+	if (!hasPermission(ctx, 'manage_org_members')) redirect(303, '/library');
 
 	const orgId = ctx.actingOrgId;
 	if (!orgId) {

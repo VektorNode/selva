@@ -10,7 +10,7 @@ function isAllowedProvider(value: string | null): value is AllowedProvider {
 }
 
 /**
- * GET /auth/supabase/start?provider=google&redirectTo=/app
+ * GET /auth/supabase/start?provider=google&redirectTo=/library
  *
  * Initiates an OAuth sign-in via Supabase Auth. The Supabase project must
  * have the named provider enabled in its dashboard. Bounces the browser to
@@ -31,7 +31,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		throw error(501, 'OAuth is not supported by the configured auth provider.');
 	}
 
-	const redirectTo = url.searchParams.get('redirectTo') ?? '/app';
+	const redirectTo = url.searchParams.get('redirectTo') ?? '/library';
 	// Forward `redirectTo` through the OAuth callback so the post-login redirect
 	// survives the IdP round trip.
 	const callbackUrl = new URL('/auth/supabase/callback', url.origin);

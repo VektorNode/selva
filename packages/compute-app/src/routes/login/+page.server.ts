@@ -69,7 +69,7 @@ export const actions = {
 				const fromForm = typeof redirectTo === 'string' ? redirectTo : null;
 				const fromQuery = url.searchParams.get('redirectTo');
 				const destination =
-					safeRedirectTarget(fromForm, '') || safeRedirectTarget(fromQuery, '/app');
+					safeRedirectTarget(fromForm, '') || safeRedirectTarget(fromQuery, '/library');
 
 				redirect(303, destination);
 			}

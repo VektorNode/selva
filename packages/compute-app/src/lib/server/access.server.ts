@@ -100,11 +100,11 @@ export function requireAnyPlatformPermission(locals: Locals): AuthUser {
 	return user;
 }
 
-/** Redirects to /app — use in page load functions on platform-scoped routes. */
+/** Redirects to /library — use in page load functions on platform-scoped routes. */
 export function assertAnyPlatformPermission(locals: Locals): AuthUser {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = ALL_PLATFORM_PERMISSIONS.some((p) => hasPermission(ctx, p));
-	if (!allowed) redirect(303, '/app');
+	if (!allowed) redirect(303, '/library');
 	return user;
 }
 

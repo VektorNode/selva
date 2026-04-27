@@ -80,7 +80,7 @@ describe('OAuth callback bootstrap admin grant', () => {
 
 		const res = await callback({ code: 'fake-code' });
 		expect(res.status).toBe(303);
-		expect(res.location).toBe('/app');
+		expect(res.location).toBe('/library');
 
 		const newUser = await tp.usersFile.findByEmail('first@example.test');
 		expect(newUser).not.toBeNull();

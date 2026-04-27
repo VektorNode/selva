@@ -161,13 +161,13 @@
 							<div class="min-w-0">
 								<div class="flex items-center gap-2">
 									<a
-										href={`/definitions?project=${project.slug}`}
+										href={`/projects?project=${project.slug}`}
 										class="truncate text-sm font-medium hover:underline"
 									>
 										{project.name}
 									</a>
 									<a
-										href={`/definitions?project=${project.slug}`}
+										href={`/projects?project=${project.slug}`}
 										class="text-muted-foreground hover:text-foreground"
 										aria-label="Open project"
 									>

@@ -11,7 +11,7 @@ import {
 } from '$lib/server/admin-auth.server';
 
 /**
- * GET /auth/supabase/callback?code=...&redirectTo=/app
+ * GET /auth/supabase/callback?code=...&redirectTo=/library
  *
  * Completes a Supabase OAuth round-trip. Exchanges the authorization code
  * for a session, sets the session cookie, and redirects to `redirectTo`.
@@ -46,7 +46,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	setRefreshCookie(cookies, result.refreshToken);
 
 	// Same-origin only — `//evil.com` and `/\evil.com` would otherwise pass.
-	const dest = safeRedirectTarget(url.searchParams.get('redirectTo'), '/app');
+	const dest = safeRedirectTarget(url.searchParams.get('redirectTo'), '/library');
 	redirect(303, dest);
 };
 

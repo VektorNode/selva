@@ -41,15 +41,15 @@
 			<span class="text-sm font-medium text-muted-foreground">{title}</span>
 		{/if}
 
-		<!-- Nav items -->
+		<!-- Primary nav next to logo -->
 		{#if navItems}
 			<nav class="ml-5 gap-1 flex">
 				{@render navItems()}
 			</nav>
 		{/if}
 
-		<!-- Right content -->
-		<div class="gap-2 ml-auto flex items-center">
+		<!-- Right cluster: identity + utilities, anchored flush-right -->
+		<div class="ml-auto gap-2 flex items-center">
 			{#if rightContent}
 				{@render rightContent()}
 			{/if}
