@@ -115,7 +115,7 @@ export const actions = {
 			}
 		}
 
-		// §1a: sign in to mint a session token — matches Supabase's shape.
+		// Sign in to mint a session token — matches Supabase's shape.
 		const loginResult = await auth.passwordAuth.verifyLogin(invite.email, password);
 		if (loginResult.kind !== 'success') {
 			return fail(500, {

@@ -17,7 +17,7 @@ export const COVER_IMAGE_CONTENT_TYPES: Record<string, string> = {
  * - `draft` — work in progress, not visible to runners.
  * - `published` — live, visible to all with solve access.
  *
- * List endpoints filter `pending` by default; a janitor sweeps stale ones.
+ * List endpoints filter `pending` by default (opt in via `ListOptions.includePending`).
  */
 export type DefinitionStatus = 'pending' | 'draft' | 'published';
 

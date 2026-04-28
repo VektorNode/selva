@@ -223,7 +223,7 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
 
 |                     | `@selvajs/local-provider`                              | `@selvajs/supabase-provider`                    |
 | ------------------- | ------------------------------------------------------ | ----------------------------------------------- |
-| Identity            | `LocalAuthProvider` (HMAC sessions, optional password) | `SupabaseAuthProvider` (JWT, MFA-capable)       |
+| Identity            | `LocalAuthProvider` (HMAC sessions, password auth)     | `SupabaseAuthProvider` (JWT, MFA-capable)       |
 | Data                | JSON files under `DATA_PATH/`                          | Postgres + RLS                                  |
 | Blobs               | Filesystem under `DATA_PATH/`                          | Supabase Storage bucket                         |
 | User profile        | JSON file                                              | `user_profiles` table                           |
