@@ -3,7 +3,7 @@
 	import type { Snippet } from 'svelte';
 	import * as Card from '$lib/components/primitives/card';
 	import { ChevronDown } from '@lucide/svelte';
-	import { evaluateVisibility } from '$lib/utils/visibility-rules';
+	import { evaluateVisibility } from '$lib/schema/visibility-rules';
 
 	interface Props {
 		label: string;

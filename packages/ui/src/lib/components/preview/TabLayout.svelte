@@ -4,7 +4,7 @@
 	import * as Tabs from '$lib/components/primitives/tabs';
 	import TabBar from './TabBar.svelte';
 	import TabContent from './TabContent.svelte';
-	import { evaluateVisibility } from '$lib/utils/visibility-rules';
+	import { evaluateVisibility } from '$lib/schema/visibility-rules';
 
 	interface Props {
 		schema: UISchema;

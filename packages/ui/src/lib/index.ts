@@ -16,8 +16,8 @@ export { default as StateDisplay } from './components/primitives/StateDisplay.sv
 export { default as Viewer } from './components/viewer/Viewer.svelte';
 
 // Utilities
-export * from './utils/utils-shared';
-export * from './utils/solving.svelte';
+export * from './schema/defaults';
+export * from './compute/solving.svelte';
 
 // Contexts & Composables
 export * from './contexts/footerContext.svelte';
