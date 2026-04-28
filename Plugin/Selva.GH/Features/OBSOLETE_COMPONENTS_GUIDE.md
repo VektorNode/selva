@@ -106,8 +106,9 @@ When deprecating a component:
 
 ### Display Components
 
-- ✅ `OBSOLETE_WebDisplay_UntilV0_2_0.cs` + `GH_WebDisplayUpgrader.cs`
+- ✅ `OBSOLETE_WebDisplay_UntilV0_2_0.cs`
 - ✅ `OBSOLETE_WebDisplay_UntilV0_5_0.cs`
+- ✅ `OBSOLETE_WebDisplay_UntilV0_8_3.cs` + `GH_WebDisplayUpgrader_To_0_9.cs`
 
 ## Notes
 

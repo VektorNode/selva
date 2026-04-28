@@ -20,9 +20,10 @@ Selva's auth, data, and storage are pluggable. Pick one when configuring the com
   - [Server Setup](./deployment/compute-app/SERVER_SETUP.md) — Install tools, clone, build
   - [Node.js Deployment](./deployment/compute-app/NODE_DEPLOYMENT.md) — Deploy with PM2
   - [Reverse Proxy (Caddy)](./deployment/compute-app/REVERSE_PROXY_LOAD_BALANCER.md) — HTTPS and reverse proxy
-  - [Definitions Configuration](./deployment/compute-app/DEFINITIONS_SETUP.md) — Configure Grasshopper definitions (local provider)
 - **[Rhino Compute Setup](./RHINO_COMPUTE.md)** — Set up the Rhino.Compute server
+
+After the app is up, definitions are uploaded through the admin UI — there is no on-disk setup step.
 
 ## Release Management
 
-- **[CHANGELOG.md](./CHANGELOG.md)** — Managing changelogs and versioning with Changesets
+- **[Releasing.md](./Releasing.md)** — Managing changelogs and versioning with Changesets

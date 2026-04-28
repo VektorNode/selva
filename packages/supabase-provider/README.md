@@ -63,33 +63,12 @@ Rhino.Compute URL + API key are configured in `/admin/compute` and persisted in 
 
 The repo's [`selva.config.ts`](../../selva.config.ts) is the single DI point — it picks which provider backs every interface. Switch between providers by changing imports:
 
-**Development (local-provider, default):**
-
-```ts
-import { defineConfig } from '@selvajs/platform/config';
-import {
-	LocalAuthProvider,
-	LocalDataProvider,
-	LocalStorageProvider,
-	LocalUserProfileProvider
-} from '@selvajs/local-provider';
-
-export default defineConfig((env) => ({
-	auth: LocalAuthProvider.fromEnv(env),
-	data: LocalDataProvider.fromEnv(env),
-	storage: LocalStorageProvider.fromEnv(env),
-	userProfile: LocalUserProfileProvider.fromEnv(env)
-}));
-```
-
-**Supabase (`selva.config.ts`):**
-
 ```ts
 import { defineConfig } from '@selvajs/platform';
 import * as supa from '@selvajs/supabase-provider';
 
 export default defineConfig((env) => ({
-	tenancy: 'single',
+	tenancy: 'single' as const,
 	flags: {
 		ALLOW_CROSS_ORG_PUBLIC: false,
 		ALLOW_ORG_COMPUTE_OVERRIDE: false,
@@ -101,7 +80,7 @@ export default defineConfig((env) => ({
 }));
 ```
 
-To switch to the local provider, swap the imports and the three provider lines. See the commented example in `selva.config.ts`.
+To switch back to the local provider, swap the import and the three provider lines. See the commented example in [`selva.config.ts`](../../selva.config.ts).
 
 ---
 
@@ -282,16 +261,13 @@ Every abstraction-pressure point hit during implementation is logged in [FINDING
 
 ## Status
 
-Every interface from `@selvajs/platform` is implemented with passing conformance tests:
+Every interface from `@selvajs/platform` is implemented and exercised by the shared conformance suites against a live local Supabase stack:
 
-- [x] `SupabaseStorageProvider` — 15 tests
-- [x] `SupabaseAuthProvider` — 15 tests (incl. MFA-ready `LoginResult`)
-- [x] `SupabaseOrgStore` — 12 tests (incl. ctxIsolation)
-- [x] `SupabaseProjectStore` — 12 tests (incl. ctxIsolation)
-- [x] `SupabaseDefinitionStore` — 18 tests (incl. atomic `incrementRunCount`)
-- [x] `SupabaseInviteStore` — 7 tests
-- [x] `SupabaseComputeServerStore` — 3 tests
-- [x] `SupabaseUserProfileProvider` — 10 tests
-- [x] `SupabaseDataProvider` — composition of all five data stores
+- `SupabaseAuthProvider` (incl. MFA-ready `LoginResult`)
+- `SupabaseStorageProvider`
+- `SupabaseOrgStore`, `SupabaseProjectStore`, `SupabaseDefinitionStore` (atomic `incrementRunCount`), `SupabaseInviteStore`, `SupabaseShareLinkStore`, `SupabaseComputeServerStore`
+- `SupabaseUserProfileProvider`
+- `SupabasePlatformPermissionStore`
+- `SupabaseDataProvider` — composition of the data stores
 
-**92/92 tests green** against a live local Supabase stack.
+Run them with `pnpm test` (see [Running the conformance tests](#running-the-conformance-tests)).

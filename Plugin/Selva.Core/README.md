@@ -46,7 +46,7 @@ cd packages/schemas && pnpm run generate:cs
 
 This library is referenced by:
 
-- `Selva.Grasshopper` - Main plugin implementation
+- `Selva.GH` - Main plugin implementation
 - `Selva.Tests` - Unit tests
 
 It provides the shared foundation for schema handling across the Grasshopper plugin.

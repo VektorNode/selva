@@ -4,7 +4,7 @@ This is the canonical onramp. Follow it top to bottom.
 
 ## Prerequisites
 
-- **Node.js + pnpm** (versions in [.node-version](../.node-version))
+- **Node.js >= 18** and **pnpm >= 9** (see `engines` in [package.json](../package.json))
 - **.NET SDK 7.0+** and an IDE (Visual Studio / Rider / VS Code) — only if you'll touch the C# plugin
 - **Rhino 8** — only if you'll run the plugin
 - **Docker Desktop** — only if you'll use the Supabase provider locally
@@ -71,7 +71,8 @@ The builder app needs no env vars.
 
 ## Going further
 
-- **[Architecture.md](Architecture.md)** — how the providers, tenancy, and access rules fit together
+- **[Architecture](../packages/compute-app/specs/Architecture.md)** — how the providers, tenancy, and access rules fit together
+- **[Access control](../packages/compute-app/specs/Permissions.md)** — who can do what
 - **[MultiOrg-LocalDev.md](MultiOrg-LocalDev.md)** — testing multi-org / multi-tenant locally
 - **[@selvajs/local-provider](../packages/local-provider/README.md)** — on-disk layout, backups, caveats
 - **[@selvajs/supabase-provider](../packages/supabase-provider/README.md)** — schema, RLS, hosted setup

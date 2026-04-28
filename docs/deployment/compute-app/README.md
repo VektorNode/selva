@@ -15,9 +15,10 @@ Follow these steps in order:
 3. **[Server Setup](./SERVER_SETUP.md)** — Install tools, clone repo, build (automated via `setup.sh`)
 4. **[Node.js with PM2](./NODE_DEPLOYMENT.md)** — PM2 ecosystem config and lifecycle
 5. **[Caddy Reverse Proxy](./REVERSE_PROXY_LOAD_BALANCER.md)** — HTTPS and port 80 forwarding (recommended for production)
-6. **[Configure Definitions](./DEFINITIONS_SETUP.md)** — Set up your `.gh` files (local provider)
 
 **Verify:** `curl http://YOUR-IP/api/health`
+
+Definitions are uploaded through the admin UI after the app is running — no on-disk setup step.
 
 ---
 
