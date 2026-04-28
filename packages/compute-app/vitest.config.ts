@@ -7,9 +7,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
 	resolve: {
 		// Prefer the `"source"` export condition on workspace packages so tests
-		// read TypeScript source directly — no `pnpm build:platform` needed
-		// between editing a rule and re-running tests. Production picks the
-		// `"import"` condition (dist/) because it doesn't set this flag.
+		// read TypeScript source directly — no upstream rebuild needed between
+		// editing a rule and re-running tests. Production picks the `"import"`
+		// condition (dist/) because it doesn't set this flag.
 		conditions: ['source'],
 		alias: {
 			// SvelteKit virtual modules — replicate just what server-side tests need.

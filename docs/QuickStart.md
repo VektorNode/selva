@@ -13,7 +13,7 @@ This is the canonical onramp. Follow it top to bottom.
 
 ```bash
 pnpm install
-pnpm run build:all
+pnpm build
 ```
 
 ## 2. Pick a path

@@ -30,7 +30,7 @@ flags: { ALLOW_ORG_CREATION: true }, // optional; lets non-admins create orgs
 `.env`:
 
 ```bash
-DATA_PATH=./.selva-data
+DATA_PATH=../../.selva-data
 SESSION_SECRET=$(openssl rand -base64 32)
 ```
 

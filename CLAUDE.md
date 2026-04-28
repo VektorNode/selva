@@ -43,32 +43,34 @@ pnpm install
 pnpm dev                    # Start builder-app dev server (http://localhost:5173)
 pnpm dev:compute            # Start compute-app dev server
 
-# Build commands
-pnpm run build:all          # Build all packages in order
-pnpm run build:shared    # Build shared UI components
-pnpm run build:builder      # Build builder-app
-pnpm run build:compute      # Build compute-app
+# Build commands (orchestrated by Turborepo — see docs/Turborepo.md)
+pnpm build                  # Build every package in dep order, with caching
+pnpm build --filter=@selvajs/compute-app    # Build one package + its deps
+pnpm run build:builder      # Build builder-app + its deps
+pnpm run build:compute      # Build compute-app + its deps
 pnpm run build:plugin       # Build production plugin with embedded web assets
 
 # Type checking and linting
-pnpm check                  # Run svelte-check on all packages
-pnpm type-check             # TypeScript type check across workspace
-pnpm lint                   # Lint all files
+pnpm check                  # svelte-check across the workspace (turbo)
+pnpm type-check             # tsc --noEmit across the workspace (turbo)
+pnpm lint                   # ESLint at the repo root (not via turbo)
 pnpm lint:fix               # Fix linting issues
 pnpm format                 # Format code with Prettier
 pnpm format:check           # Check formatting
 
-# Testing (core package)
-cd packages/compute && pnpm test          # Run vitest
-cd packages/compute && pnpm test:watch    # Run vitest in watch mode
+# Testing
+pnpm test                   # vitest run across packages that have tests (turbo)
+cd packages/local-provider && pnpm test:watch    # Watch mode in one package
 
 # Schema generation (run after modifying ui-schema.json)
-cd packages/schemas && pnpm run generate:all    # Generate both TS and C# types
+pnpm generate                                      # turbo run generate
+cd packages/schemas && pnpm run generate:all       # Or directly
 cd packages/schemas && pnpm run generate:ts     # Generate TypeScript only
 cd packages/schemas && pnpm run generate:cs     # Generate C# only
 
 # Clean and reinstall
-pnpm clean:reinstall        # Remove all node_modules and reinstall
+pnpm clean                  # Remove node_modules, .svelte-kit, and pnpm-lock.yaml
+pnpm rebuild                # clean + install + build
 
 # Testing (@selvajs/compute external package)
 # Run tests for the @selvajs/compute npm package (development only)
@@ -222,7 +224,7 @@ This architecture means Selva has **zero exposure to EU data regulations, creden
 
 ## Requirements
 
-- [pnpm](https://pnpm.io) >= 9.0.0 (Node.js package manager)
+- [pnpm](https://pnpm.io) >= 10.0.0 (Node.js package manager — version pinned in `packageManager`, activated via Corepack)
 - Node.js >= 18.0.0
 - .NET SDK 7.0+ (for plugin development)
 - Rhino 8 (for using the plugin)
