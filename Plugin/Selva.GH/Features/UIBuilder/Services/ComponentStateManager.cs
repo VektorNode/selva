@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 using Rhino;
 
-namespace Selva.GH.Features.UIBuilder.Services.State;
+namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
 ///     Manages component lifecycle state with robust solving state tracking

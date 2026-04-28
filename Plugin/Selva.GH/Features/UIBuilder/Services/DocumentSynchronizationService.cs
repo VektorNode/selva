@@ -4,7 +4,6 @@ using System.Linq;
 using Grasshopper.Kernel;
 using Selva.Schema.Models;
 using Selva.GH.Features.UIBuilder.Services.Communication;
-using Selva.GH.Features.UIBuilder.Services.Events;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.GH.Utilities.Helpers;
 

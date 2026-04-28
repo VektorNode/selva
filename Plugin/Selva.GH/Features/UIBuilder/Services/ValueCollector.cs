@@ -12,7 +12,7 @@ using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
 
-namespace Selva.GH.Features.UIBuilder.Services.Values;
+namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
 ///     Handles collection and extraction of values from Grasshopper parameters and components

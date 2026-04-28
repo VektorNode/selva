@@ -9,10 +9,9 @@ using Selva.Schema.Models;
 using Selva.GH.Features.UIBuilder.Helpers;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Features.UIBuilder.Services.Schema;
-using Selva.GH.Features.UIBuilder.Services.Values;
 using Selva.GH.Utilities.Helpers;
 
-namespace Selva.GH.Features.UIBuilder.Services.Events;
+namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
 ///     Manages Grasshopper document event subscriptions and handling

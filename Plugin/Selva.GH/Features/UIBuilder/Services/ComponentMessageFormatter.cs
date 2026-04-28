@@ -1,6 +1,6 @@
 using Selva.Schema.Models;
 
-namespace Selva.GH.Features.UIBuilder.Services.UI;
+namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
 ///     Formats status messages for UI Builder component

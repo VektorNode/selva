@@ -65,20 +65,13 @@ Moved:
 
 Consumer `using` directives updated across ~17 files (Components, OBSOLETE upgraders, ValueCollector, ValueApplicator, BridgeCommunicationService, etc.). `dotnet build` clean, `dotnet test` 65/65.
 
-## Phase 4 — Flatten `UIBuilder/Services/`
+## Phase 4 — Flatten `UIBuilder/Services/` ✅
 
-Currently 6 files at the top + 7 subfolders, 5 of them with **one file each**. The mix invites duplication: `BridgeCommunicationService` (top) coexists with `Communication/CommunicationHandler`; `SchemaPersistenceService` (top) coexists with `Schema/SchemaManager`.
+5 single-file subfolders (`Events/`, `Persistence/`, `State/`, `UI/`, `Values/`) dissolved into `Services/`. `Communication/` (3 files) and `Schema/` (4 files) kept — they earn their keep. 13 stale `using` directives removed across 6 consumer files.
 
-**Action**: collapse all single-file subfolders into the top level. Keep `Communication/` and `Schema/` (they earn their keep with 3+ and 4 files respectively).
+`Services/` now: 11 files at top level + 2 multi-file subfolders. `dotnet build` clean, `dotnet test` 65/65.
 
-Single-file folders to dissolve:
-- `Events/DocumentEventManager.cs` → `Services/DocumentEventManager.cs`
-- `Persistence/ValueApplicator.cs` → `Services/ValueApplicator.cs`
-- `State/ComponentStateManager.cs` → `Services/ComponentStateManager.cs`
-- `UI/ComponentMessageFormatter.cs` → `Services/ComponentMessageFormatter.cs`
-- `Values/ValueCollector.cs` → `Services/ValueCollector.cs`
-
-Follow-up code task (separate from this refactor): read `BridgeCommunicationService` ↔ `CommunicationHandler` and `SchemaManager` ↔ `SchemaPersistenceService`. They likely overlap. Out of scope for this phase — file moves only here.
+Follow-up code task (separate refactor, not part of this plan): inspect for likely overlap between `BridgeCommunicationService` ↔ `CommunicationHandler` and `SchemaManager` ↔ `SchemaPersistenceService`. Possibly merge.
 
 ## Phase 5 — Move `OBSOLETE_COMPONENTS_GUIDE.md`
 
