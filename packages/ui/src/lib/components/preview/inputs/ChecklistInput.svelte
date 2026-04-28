@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { DropdownWidgetConfig, SupportedTypes } from '@selvajs/schemas';
-	import { Checkbox } from '$lib/components/ui/checkbox';
+	import { Checkbox } from '$lib/components/primitives/checkbox';
 
 	interface Props {
 		inputId: string;

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { TextWidgetConfig, SupportedTypes } from '@selvajs/schemas';
 	import { debounce } from '$lib/utils/debounce';
-	import { Input } from '$lib/components/ui/input';
-	import * as Field from '$lib/components/ui/field';
+	import { Input } from '$lib/components/primitives/input';
+	import * as Field from '$lib/components/primitives/field';
 
 	interface Props {
 		inputId: string;

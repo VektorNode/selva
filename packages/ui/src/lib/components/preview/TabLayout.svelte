@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
-	import * as Card from '$lib/components/ui/card';
-	import * as Tabs from '$lib/components/ui/tabs';
+	import * as Card from '$lib/components/primitives/card';
+	import * as Tabs from '$lib/components/primitives/tabs';
 	import TabBar from './TabBar.svelte';
 	import TabContent from './TabContent.svelte';
 	import { evaluateVisibility } from '$lib/utils/visibility-rules';

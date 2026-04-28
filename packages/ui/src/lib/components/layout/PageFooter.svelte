@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import * as Collapsible from '$lib/components/ui/collapsible';
+	import * as Dialog from '$lib/components/primitives/dialog';
+	import * as Collapsible from '$lib/components/primitives/collapsible';
 	import { CircleAlert, TriangleAlert, ChevronDown, ChevronRight } from '@lucide/svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { useFooter } from '$lib/contexts/footerContext.svelte';

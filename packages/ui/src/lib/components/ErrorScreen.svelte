@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { AlertCircle } from '@lucide/svelte';
-	import * as Card from './ui/card/index.js';
-	import { Button } from './ui/button/index.js';
+	import * as Card from './primitives/card/index.js';
+	import { Button } from './primitives/button/index.js';
 
 	interface Props {
 		status?: number;

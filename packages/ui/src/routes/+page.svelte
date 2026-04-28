@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
-	import AppLayout from '$lib/components/app-shell/AppLayout.svelte';
+	import AppLayout from '$lib/components/compute/AppLayout.svelte';
 	import exampleSchema from '../demo/example-schema.json';
 	import exampleSchemaLeftOnly from '../demo/example-schema-left-only.json';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';

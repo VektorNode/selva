@@ -8,8 +8,8 @@
 		isFileWidget,
 		isColorWidget
 	} from '@selvajs/schemas';
-	import * as Field from '$lib/components/ui/field';
-	import * as Dialog from '$lib/components/ui/dialog';
+	import * as Field from '$lib/components/primitives/field';
+	import * as Dialog from '$lib/components/primitives/dialog';
 	import { HelpCircle } from '@lucide/svelte';
 	import {
 		CheckboxInput,

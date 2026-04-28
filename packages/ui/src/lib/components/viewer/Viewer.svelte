@@ -11,7 +11,7 @@
 	import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 	import SceneManager from './SceneManager.svelte';
 	import MeshMetadataDialog from './MeshMetadataDialog.svelte';
-	import * as Resizable from '$lib/components/ui/resizable/index.js';
+	import * as Resizable from '$lib/components/primitives/resizable/index.js';
 
 	export interface ViewerConfig {
 		showScreenshotButton?: boolean;

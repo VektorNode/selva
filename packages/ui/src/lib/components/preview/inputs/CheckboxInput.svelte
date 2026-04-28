@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { SupportedTypes } from '@selvajs/schemas';
-	import { Checkbox } from '$lib/components/ui/checkbox';
-	import * as Field from '$lib/components/ui/field';
+	import { Checkbox } from '$lib/components/primitives/checkbox';
+	import * as Field from '$lib/components/primitives/field';
 
 	interface Props {
 		inputId: string;

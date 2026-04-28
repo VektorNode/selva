@@ -7,9 +7,9 @@
 		InputLayoutItem,
 		OutputLayoutItem
 	} from '@selvajs/schemas';
-	import * as Tabs from '$lib/components/ui/tabs';
-	import { ScrollArea } from '$lib/components/ui/scroll-area';
-	import StateDisplay from '../ui/StateDisplay.svelte';
+	import * as Tabs from '$lib/components/primitives/tabs';
+	import { ScrollArea } from '$lib/components/primitives/scroll-area';
+	import StateDisplay from '../primitives/StateDisplay.svelte';
 	import Group from './Group.svelte';
 	import InputControl from './InputControl.svelte';
 	import OutputDisplay from './OutputDisplay.svelte';

@@ -3,11 +3,11 @@
 	import type { ActionButton } from '../../types/actionButton';
 	import { ChevronUp } from '@lucide/svelte';
 	import Viewer, { type ViewerConfig } from '../viewer/Viewer.svelte';
-	import CalculateButton from '../ui/CalculateButton.svelte';
-	import SolvingIndicator from '../ui/SolvingIndicator.svelte';
+	import CalculateButton from '../primitives/CalculateButton.svelte';
+	import SolvingIndicator from '../primitives/SolvingIndicator.svelte';
 	import TabLayout from '../preview/TabLayout.svelte';
 	import CollapsedPanelStrip from './CollapsedPanelStrip.svelte';
-	import * as Resizable from '$lib/components/ui/resizable';
+	import * as Resizable from '$lib/components/primitives/resizable';
 	import { Button } from '$lib';
 	import ParameterPresetManager from './ParameterPresetManager.svelte';
 

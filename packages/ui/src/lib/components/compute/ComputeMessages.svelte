@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { CircleAlert, TriangleAlert, ChevronDown, ChevronRight } from '@lucide/svelte';
 	import { SvelteMap } from 'svelte/reactivity';
-	import * as Collapsible from '$lib/components/ui/collapsible';
-	import * as Dialog from '$lib/components/ui/dialog';
+	import * as Collapsible from '$lib/components/primitives/collapsible';
+	import * as Dialog from '$lib/components/primitives/dialog';
 
 	interface Props {
 		errors?: string[];
