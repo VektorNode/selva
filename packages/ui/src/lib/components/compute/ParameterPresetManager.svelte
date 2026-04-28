@@ -7,7 +7,7 @@
 		extractLoadableValues,
 		exportStateAsJson,
 		importStateFromJson
-	} from '../../utils/param-exporter';
+	} from '../../schema/param-exporter';
 	import { Button, Input, Label, Textarea, Dialog, Card } from '../primitives';
 
 	import type { ActionButton } from '../../types/actionButton';

@@ -13,7 +13,7 @@
 	import Group from './Group.svelte';
 	import InputControl from './InputControl.svelte';
 	import OutputDisplay from './OutputDisplay.svelte';
-	import { evaluateGroupVisibility } from '$lib/utils/visibility-rules';
+	import { evaluateGroupVisibility } from '$lib/schema/visibility-rules';
 
 	interface Props {
 		tab: TabConfig;

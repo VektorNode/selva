@@ -4,9 +4,9 @@
 	import type { UISchema } from '@selvajs/schemas';
 	import type { ActionButton } from '../../types/actionButton';
 	import type { SolveFn } from '../../types/solveFn';
-	import { getDefaultValue } from '../../utils/utils-shared';
-	import { createComputeThrottle } from '../../utils/computeThrottle.svelte';
-	import { createSolvingIndicator } from '../../utils/solving.svelte';
+	import { getDefaultValue } from '../../schema/defaults';
+	import { createComputeThrottle } from '../../compute/computeThrottle.svelte';
+	import { createSolvingIndicator } from '../../compute/solving.svelte';
 	import { useFooterItem } from '../../composables/useFooterItem.svelte';
 	import { hexToOklch } from '../../utils/color';
 	import PageContainer from '../layout/PageContainer.svelte';

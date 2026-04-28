@@ -81,26 +81,37 @@ Moved to `docs/development/obsolete-components.md` (kebab-case, no SCREAMING_SNA
 
 Folder renamed via `git mv`. All versioned `.yak`/`.gh` artifacts tracked as renames. Confirmed via grep that no scripts or docs reference the old `Plugin/Dist/` path — nothing else needed updating.
 
-## Phase 7 — Root cleanup ✅ (mostly)
+## Phase 7 — Root cleanup ✅
 
 - [x] Deleted `tsconfig.lib.json` — confirmed unreferenced anywhere; root `tsconfig.json` extends `tsconfig.base.json`. `pnpm type-check` clean across all 11 packages.
 - [x] Renamed `example.ecosystem.config.cjs` → `ecosystem.config.example.cjs`. Updated 2 doc references (`docs/deployment/compute-app/NODE_DEPLOYMENT.md`, `packages/compute-app/specs/Architecture.md`).
 - [x] Moved `Caddyfile.example` → `docs/deployment/Caddyfile.example`. No script referenced the example file (only the deployed `/etc/caddy/Caddyfile`).
-- [ ] **TBD: `examples/`** — contains one orphan file `embed-code-generator.html` (16KB, last touched January 2026, referenced nowhere). Awaiting decision: delete, document, or leave.
+- [x] `examples/embed-code-generator.html` — kept (user decision).
 
-## Phase 8 — Reorganize `@selvajs/ui` `lib/utils/`
+## Phase 8 — Reorganize `@selvajs/ui` `lib/utils/` ✅
 
-`utils/` is currently a junk drawer (compute helpers, schema helpers, generic helpers, plus a `utils-shared.ts` for one tiny function next to a `utils.ts` for shadcn's `cn()`).
+Split the junk drawer into three categorical folders. Generic helpers stay in `utils/`. Domain-specific helpers go to `compute/` or `schema/`.
 
-| File | New home |
+| Old | New |
 |---|---|
-| `color.ts`, `debounce.ts`, `loadScript.ts`, `file-download.ts` | stay in `utils/` (truly generic) |
-| `utils.ts` (shadcn `cn`) | leave alone (shadcn convention) |
-| `computeThrottle.svelte.ts`, `solving.svelte.ts` | move to new `lib/compute/` |
-| `param-exporter.ts`, `visibility-rules.ts` | move to new `lib/schema/` |
-| `utils-shared.ts` (single `getDefaultValue`) | inline at call sites or move to `lib/schema/defaults.ts` |
+| `utils/computeThrottle.svelte.ts` | `compute/computeThrottle.svelte.ts` |
+| `utils/solving.svelte.ts` | `compute/solving.svelte.ts` |
+| `utils/param-exporter.ts` | `schema/param-exporter.ts` |
+| `utils/visibility-rules.ts` | `schema/visibility-rules.ts` |
+| `utils/utils-shared.ts` | `schema/defaults.ts` (renamed for clarity — its one function is `getDefaultValue`) |
+| `utils/color.ts`, `utils/debounce.ts`, `utils/loadScript.ts`, `utils/file-download.ts` | unchanged (truly generic) |
+| `utils.ts` (shadcn `cn`) | unchanged (shadcn convention) |
 
-Update `packages/ui/package.json` exports if any of these are publicly exported. Update import paths in `builder-app` and `compute-app`.
+Updated:
+- `lib/index.ts` re-exports (public API surface for `@selvajs/ui`).
+- 7 internal `ui` consumers (`ComputeApp`, `ParameterPresetManager`, `TabLayout`, `TabContent`, `Group`, `OutputDisplay`, `ChartOutput`, plus `NumberInput`/`TextInput` for `debounce`).
+- One stale path comment in `compute-app/src/lib/server/computeLimits.ts:16`.
+
+External consumer `builder-app/handlers.ts` imports `getDefaultValue` from `@selvajs/ui` (top-level export), so it kept working without changes.
+
+`pnpm type-check` clean (11/11 packages). `pnpm check` clean (8/8, 0 errors, 0 warnings).
+
+**Out-of-scope finding**: `builder-app/src/lib/utils/session.ts:111` has its own local `getDefaultValue` definition — duplicates the one in `@selvajs/ui`. Worth de-duplicating in a follow-up.
 
 ## Phase 9 — Document `builder-app` lib structure
 

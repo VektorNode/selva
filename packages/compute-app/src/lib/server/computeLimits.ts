@@ -13,7 +13,7 @@
  * Client-side counterparts (the in-flight compute throttle and the slider
  * debounce on inputs) live in `@selvajs/ui` and are bundled into the client,
  * so they cannot read process.env. The throttle is in
- * `utils/computeThrottle.svelte.ts`; per-input debounce values live with the
+ * `compute/computeThrottle.svelte.ts`; per-input debounce values live with the
  * input components themselves.
  */
 
