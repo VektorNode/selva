@@ -113,18 +113,21 @@ External consumer `builder-app/handlers.ts` imports `getDefaultValue` from `@sel
 
 **Out-of-scope finding**: `builder-app/src/lib/utils/session.ts:111` has its own local `getDefaultValue` definition — duplicates the one in `@selvajs/ui`. Worth de-duplicating in a follow-up.
 
-## Phase 9 — Document `builder-app` lib structure
+## Phase 9 — Document `builder-app` lib structure ✅
 
-The split between `lib/features/builder/` (TS logic) and `lib/components/builder/` (Svelte UI) is intentional but undocumented. Add a short `packages/builder-app/src/lib/README.md` (3 sentences) explaining the rule. No code changes.
+Wrote `packages/builder-app/src/lib/README.md` — short table of what lives in each folder, and a brief explanation of why `features/` and `components/` are split (logic vs UI; UI imports logic, never the reverse).
 
-## Phase 10 — Normalize `_components/` convention
+## Phase 10 — Normalize `_components/` convention ✅
 
-Currently 3 routes use `_components/` (`admin/users/`, `library/`, `projects/`); other routes don't. Audit each route in `compute-app/src/routes/`:
+Audited every route in `compute-app/src/routes/`. Result of applying the rule "use `_components/` when ≥2 page-private components, otherwise inline":
 
-- If a route has 2+ page-private components, colocate them in `_components/`.
-- Otherwise, leave inline or pull from `lib/components/`.
+- `library/` (2 files) — kept `_components/` ✅
+- `projects/` (11 files) — kept `_components/` ✅
+- `admin/users/` (1 file) — inlined `UserListItem.svelte` next to `+page.svelte`, removed empty `_components/` folder, updated 2 import paths (the page importing it + the component's own `+page.server` type import).
+- `admin/system/` (1 file inline) — left as-is. Already conforms.
+- All other routes (no page-private components) — nothing to do.
 
-Small janitorial pass. Lowest priority.
+`pnpm check` clean across all 8 packages, 0 errors, 0 warnings.
 
 ---
 

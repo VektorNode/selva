@@ -7,7 +7,7 @@
 		ALL_PLATFORM_PERMISSIONS,
 		OWNER_ADMIN_ONLY_PERMISSIONS
 	} from '@selvajs/platform';
-	import type { UserRow } from '../+page.server';
+	import type { UserRow } from './+page.server';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 
 	type FlatPermission = PlatformPermission | OrgPermission;
