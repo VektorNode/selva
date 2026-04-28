@@ -1,0 +1,53 @@
+{
+	"$schema": "https://turborepo.com/schema.json",
+	"ui": "stream",
+	"globalDependencies": [
+		"pnpm-workspace.yaml",
+		"pnpm-lock.yaml",
+		"tsconfig.base.json",
+		"selva.config.ts"
+	],
+	"tasks": {
+		"generate": {
+			"outputs": [
+				"src/generated/**",
+				"../../Plugin/Selva.Core/Models/UISchema.Generated.cs",
+				"../../Plugin/Selva.Core/Constants/SchemaVersion.cs"
+			],
+			"inputs": ["ui-schema.json", "preset-schema.json", "scripts/generate-*.js"]
+		},
+		"build": {
+			"dependsOn": ["^build"],
+			"outputs": ["dist/**", "build/**", ".svelte-kit/output/**"],
+			"inputs": [
+				"src/**",
+				"static/**",
+				"package.json",
+				"tsconfig.json",
+				"svelte.config.js",
+				"vite.config.ts",
+				"vite.config.js"
+			]
+		},
+		"check": {
+			"dependsOn": ["^build"],
+			"outputs": [],
+			"inputs": ["src/**", "tsconfig.json", "svelte.config.js"]
+		},
+		"type-check": {
+			"dependsOn": ["^build"],
+			"outputs": [],
+			"inputs": ["src/**", "tsconfig.json"]
+		},
+		"test": {
+			"dependsOn": ["^build"],
+			"outputs": [],
+			"inputs": ["src/**", "vitest.config.ts", ".env.test"]
+		},
+		"dev": {
+			"cache": false,
+			"persistent": true,
+			"dependsOn": ["^build"]
+		}
+	}
+}

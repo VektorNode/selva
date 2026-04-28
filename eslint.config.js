@@ -21,7 +21,7 @@ export default [
 			'bin',
 			'obj',
 			'**/Generated/**',
-			'packages/schemas/generate-*.js',
+			'packages/schemas/scripts/generate-*.js',
 			'**/*.d.ts',
 			'Plugin/Selva.GH/EmbeddedAssets/web',
 			// Config files at package root — not in any tsconfig include, and

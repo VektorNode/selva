@@ -8,10 +8,11 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const packageRoot = path.join(__dirname, '..');
 
 async function generateSchema(schemaFileName, outputFileName, rootTypeName, options = {}) {
-  const schemaPath = path.join(__dirname, schemaFileName);
-  const outputPath = path.join(__dirname, `./src/generated/${outputFileName}`);
+  const schemaPath = path.join(packageRoot, schemaFileName);
+  const outputPath = path.join(packageRoot, `./src/generated/${outputFileName}`);
 
   if (!fs.existsSync(schemaPath)) {
     console.warn(`Schema file not found: ${schemaPath}`);
@@ -91,7 +92,7 @@ async function generateSchema(schemaFileName, outputFileName, rootTypeName, opti
 
 async function main() {
   // Read schema to extract constants
-  const schemaPath = path.join(__dirname, 'ui-schema.json');
+  const schemaPath = path.join(packageRoot, 'ui-schema.json');
   const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 
   // Generate constants code
@@ -171,7 +172,7 @@ checkSchemaVersionBumped();
 main();
 
 function checkSchemaVersionBumped() {
-  const schemaPath = path.join(__dirname, 'ui-schema.json');
+  const schemaPath = path.join(packageRoot, 'ui-schema.json');
   const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 
   function canonicalise(schemaObj) {
@@ -189,7 +190,7 @@ function checkSchemaVersionBumped() {
   let committedSchemaStr;
   try {
     committedSchemaStr = execSync('git show HEAD:packages/schemas/ui-schema.json', {
-      cwd: path.join(__dirname, '../..'),
+      cwd: path.join(packageRoot, '..', '..'),
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });

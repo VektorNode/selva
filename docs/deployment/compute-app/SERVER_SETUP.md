@@ -51,7 +51,7 @@ Vars `setup.sh` itself reads:
 | Variable         | Default                               | Description                                                                                       |
 | ---------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `REPO_URL`       | `git@github.com:VektorNode/selva.git` | Repository SSH URL                                                                                |
-| `DATA_PATH`      | `./definitions`                       | Local provider data directory (the script also accepts `GH_DEFINITIONS_PATH` as an alias for now) |
+| `DATA_PATH`      | `../../.selva-data`                   | Local provider data directory, relative to `packages/compute-app/` (resolves to `.selva-data/` at the repo root). The script also accepts `GH_DEFINITIONS_PATH` and the legacy `./definitions` path for backwards compat. |
 | `SESSION_SECRET` | auto-generated                        | HMAC secret for session cookies (local provider only)                                             |
 | `PORT`           | `3000`                                | Internal app port                                                                                 |
 | `ORIGIN`         | `http://your-server-ip`               | Public-facing URL — no port suffix, no trailing slash                                             |

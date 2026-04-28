@@ -194,11 +194,13 @@ if [ -f ".git/rebase-merge/applying" ] || [ -f ".git/rebase-apply/applying" ]; t
   exit 1
 fi
 
-# Ensure definitions folder is never touched by git
+# Ensure runtime data folders are never touched by git
 # .gitignore already covers untracked files; handle the edge case where
-# it was accidentally committed/tracked.
-print_step "Protecting definitions folder from git..."
+# it was accidentally committed/tracked. We list both the new default
+# (.selva-data/) and the legacy path so existing deployments stay safe.
+print_step "Protecting runtime data folders from git..."
 DEFINITIONS_PATHS=(
+  ".selva-data"
   "packages/compute-app/definitions"
 )
 

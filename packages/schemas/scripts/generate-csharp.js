@@ -5,9 +5,11 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const packageRoot = path.join(__dirname, '..');
+const repoRoot = path.join(packageRoot, '..', '..');
 
-const schemaPath = path.join(__dirname, 'ui-schema.json');
-const outputPath = path.join(__dirname, '../../Plugin/Selva.Core/Models/UISchema.Generated.cs');
+const schemaPath = path.join(packageRoot, 'ui-schema.json');
+const outputPath = path.join(repoRoot, 'Plugin/Selva.Core/Models/UISchema.Generated.cs');
 
 const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 const definitions = schema.definitions;
@@ -41,7 +43,7 @@ function checkSchemaVersionBumped() {
   let committedSchemaStr;
   try {
     committedSchemaStr = execSync('git show HEAD:packages/schemas/ui-schema.json', {
-      cwd: path.join(__dirname, '../..'),
+      cwd: repoRoot,
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -771,7 +773,7 @@ console.log(`Generated C# types at: ${outputPath}`);
 const schemaVersionDefault = schema.definitions?.UISchema?.properties?.schemaVersion?.default;
 if (schemaVersionDefault) {
   const [major, minor, patch] = schemaVersionDefault.split('.').map(Number);
-  const schemaVersionPath = path.join(__dirname, '../../Plugin/Selva.Core/Constants/SchemaVersion.cs');
+  const schemaVersionPath = path.join(repoRoot, 'Plugin/Selva.Core/Constants/SchemaVersion.cs');
   const schemaVersionContent = `using System;
 
 namespace Selva.Core.Constants;
