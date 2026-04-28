@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Grasshopper.Kernel;
 using Rhino;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Features.UIBuilder.Services.Persistence;
 using Selva.GH.Utilities.Helpers;

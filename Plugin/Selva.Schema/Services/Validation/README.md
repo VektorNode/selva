@@ -28,7 +28,7 @@ Located in `Services/Validation/Rules/`:
 ### Basic Validation
 
 ```csharp
-using Selva.Core.Services.Validation;
+using Selva.Schema.Services.Validation;
 
 var validator = new SchemaValidator();
 var result = validator.Validate(schema);
@@ -105,10 +105,10 @@ The new validator is backwards compatible. Simply update your using statements:
 
 ```csharp
 // Old
-using Selva.Core.Models;
+using Selva.Schema.Models;
 
 // New
-using Selva.Core.Services.Validation;
+using Selva.Schema.Services.Validation;
 ```
 
 The API remains the same, so no code changes are needed.

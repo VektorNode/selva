@@ -57,7 +57,7 @@ pnpm build                  # Build all packages (Turborepo, with caching)
 ```bash
 cd packages/schemas && pnpm run generate:all
 # Updates: packages/schemas/src/generated/schema.ts
-#          Plugin/Selva.Core/Models/UISchema.Generated.cs
+#          Plugin/Selva.Schema/Models/UISchema.Generated.cs
 ```
 
 **Production build:**
@@ -103,7 +103,7 @@ When asked to help generate commit messages:
 - When adding new types or properties, always update the schema and run `generate:all`
 - Never manually edit generated files:
   - `packages/schemas/src/generated/schema.ts`
-  - `Plugin/Selva.Core/Models/UISchema.Generated.cs`
+  - `Plugin/Selva.Schema/Models/UISchema.Generated.cs`
 - Type mappings (C# nullable when the property is not in `required`): string → string, number → double / double?, integer → int / int?, boolean → bool / bool?, array → List<T>
 
 ## 8. Do Not

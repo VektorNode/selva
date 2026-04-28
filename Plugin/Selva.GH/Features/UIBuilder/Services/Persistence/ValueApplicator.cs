@@ -10,7 +10,7 @@ using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 using Selva.GH.Config;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Utilities.Helpers;

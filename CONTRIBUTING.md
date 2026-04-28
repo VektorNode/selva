@@ -12,6 +12,10 @@ cd Plugin && dotnet build  # Terminal 2: plugin dev
 
 See [CLAUDE.md](./CLAUDE.md) for full setup details.
 
+## Project Structure
+
+[STRUCTURE.md](./STRUCTURE.md) is the source of truth for where code lives and how it's named — folder layout, C# naming rules, TypeScript package conventions. Read it before adding new files or moving things around.
+
 ## Code Style
 
 ### General Principles
@@ -48,7 +52,7 @@ See [CLAUDE.md](./CLAUDE.md) for full setup details.
 
 - Modify `packages/schemas/ui-schema.json`
 - Run `cd packages/schemas && pnpm run generate:all`
-- Generated files: `packages/schemas/src/generated/schema.ts` and `Plugin/Selva.Core/Models/UISchema.Generated.cs`
+- Generated files: `packages/schemas/src/generated/schema.ts` and `Plugin/Selva.Schema/Models/UISchema.Generated.cs`
 
 ## Before You Submit
 

@@ -12,7 +12,7 @@ using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Rhino.Geometry;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 using Selva.GH.Config;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;

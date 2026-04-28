@@ -290,7 +290,7 @@ packages/schemas/ui-schema.json
         │
         ├─→ pnpm generate:ts → packages/schemas/src/generated/schema.ts
         │
-        └─→ pnpm generate:cs → Plugin/Selva.Core/Models/UISchema.Generated.cs
+        └─→ pnpm generate:cs → Plugin/Selva.Schema/Models/UISchema.Generated.cs
 ```
 
 Workflow: edit `ui-schema.json` → run `pnpm generate:all` → both sides see the new shape on next build. UI shape and parameter shape cannot drift by design.

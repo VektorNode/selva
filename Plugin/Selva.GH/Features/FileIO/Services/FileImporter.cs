@@ -6,7 +6,7 @@ using Rhino;
 using Rhino.DocObjects;
 using Rhino.FileIO;
 using Rhino.Geometry;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 using Selva.GH.Config;
 
 namespace Selva.GH.Features.FileIO.Services;

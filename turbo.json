@@ -11,8 +11,8 @@
 		"generate": {
 			"outputs": [
 				"src/generated/**",
-				"../../Plugin/Selva.Core/Models/UISchema.Generated.cs",
-				"../../Plugin/Selva.Core/Constants/SchemaVersion.cs"
+				"../../Plugin/Selva.Schema/Models/UISchema.Generated.cs",
+				"../../Plugin/Selva.Schema/Constants/SchemaVersion.cs"
 			],
 			"inputs": ["ui-schema.json", "preset-schema.json", "scripts/generate-*.js"]
 		},

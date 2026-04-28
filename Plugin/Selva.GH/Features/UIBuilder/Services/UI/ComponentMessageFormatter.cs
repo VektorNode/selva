@@ -1,4 +1,4 @@
-using Selva.Core.Models;
+using Selva.Schema.Models;
 
 namespace Selva.GH.Features.UIBuilder.Services.UI;
 

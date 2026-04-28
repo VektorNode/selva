@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 using Selva.GH.Features.FileIO;
 
 namespace Selva.GH.Features.UIBuilder.Helpers;

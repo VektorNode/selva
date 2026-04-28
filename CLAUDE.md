@@ -12,6 +12,8 @@ Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for b
 
 ## Repository Structure
 
+For folder layout, naming rules, and per-package conventions, see [STRUCTURE.md](./STRUCTURE.md). The summary below is a quick orientation only — STRUCTURE.md is authoritative.
+
 This is a monorepo with two distinct stacks:
 
 ### TypeScript/JavaScript Workspace (`packages/`)
@@ -27,7 +29,7 @@ This is a monorepo with two distinct stacks:
 
 ### .NET Workspace (`Plugin/`)
 
-- **`Selva.Core`** - Shared models and services (netstandard2.0)
+- **`Selva.Schema`** - Shared schema models, validation, and migration (netstandard2.0)
 - **`Selva.GH`** - Main plugin with components (net48/net7.0, outputs `.gha`)
 - **`Selva.Tests`** - xUnit tests (net7.0)
 
@@ -103,7 +105,7 @@ A single schema (`packages/schemas/ui-schema.json`) generates both TypeScript ty
 **Generated files:**
 
 - TypeScript: `packages/schemas/src/generated/schema.ts`
-- C#: `Plugin/Selva.Core/Models/UISchema.Generated.cs`
+- C#: `Plugin/Selva.Schema/Models/UISchema.Generated.cs`
 
 After modifying `ui-schema.json`, always run:
 

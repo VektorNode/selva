@@ -3,9 +3,9 @@ using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 
-namespace Selva.Core.Services;
+namespace Selva.Schema.Services;
 
 /// <summary>
 ///     Handles automatic backups of schemas before migration, and a save-triggered history log.

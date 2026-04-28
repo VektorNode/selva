@@ -11,7 +11,7 @@ Single source of truth for type-safe C# and TypeScript types across the entire c
    ```
 3. Types auto-update in:
    - TypeScript: `packages/schemas/src/generated/schema.ts`
-   - C#: `Plugin/Selva.Core/Models/UISchema.Generated.cs`
+   - C#: `Plugin/Selva.Schema/Models/UISchema.Generated.cs`
 
 ## Adding a Type
 

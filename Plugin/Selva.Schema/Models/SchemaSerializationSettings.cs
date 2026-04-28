@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace Selva.Core.Models;
+namespace Selva.Schema.Models;
 
 public static class SchemaSerializationSettings
 {

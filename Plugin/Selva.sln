@@ -5,7 +5,7 @@ VisualStudioVersion = 17.13.35931.197
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Selva.GH", "Selva.GH\Selva.GH.csproj", "{0A846067-1A4F-4DCA-9BBB-1A5B0D767851}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Selva.Core", "Selva.Core\Selva.Core.csproj", "{91FE95E0-A9C8-4431-B21A-21A0355ED60E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Selva.Schema", "Selva.Schema\Selva.Schema.csproj", "{91FE95E0-A9C8-4431-B21A-21A0355ED60E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Selva.Tests", "Selva.Tests\Selva.Tests.csproj", "{E9DEB2E5-E662-40F4-A217-6CD8E4879AC7}"
 EndProject

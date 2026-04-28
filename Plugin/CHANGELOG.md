@@ -130,7 +130,7 @@ Changed data input of [GH_DataToFileGeneric](Selva.GH/Features/FileIO/Components
 
 **Core Library Documentation**
 
-- Comprehensive README.md for Selva.Core library with architecture overview
+- Comprehensive README.md for Selva.Schema library with architecture overview
 - Detailed documentation for schema validation and migration system
 
 **Testing & Quality**

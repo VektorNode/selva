@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
-using Selva.Core.Models;
-using Selva.Core.Services.Validation.Rules;
+using Selva.Schema.Models;
+using Selva.Schema.Services.Validation.Rules;
 
-namespace Selva.Core.Services.Validation;
+namespace Selva.Schema.Services.Validation;
 
 /// <summary>
 ///     Centralized schema validation using composable rules.

@@ -5,7 +5,7 @@ using System.Linq;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 using Selva.GH.Features.ComputeIO.Components;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.FileIO.Services;

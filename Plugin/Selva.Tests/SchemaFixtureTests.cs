@@ -1,7 +1,7 @@
 using Newtonsoft.Json.Linq;
-using Selva.Core.Constants;
-using Selva.Core.Models;
-using Selva.Core.Services;
+using Selva.Schema.Constants;
+using Selva.Schema.Models;
+using Selva.Schema.Services;
 
 namespace Selva.Tests;
 
