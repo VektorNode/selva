@@ -13,7 +13,7 @@ namespace Selva.GH.Features.UIBuilder.Services;
 /// <summary>
 ///     Handles schema and values serialization/deserialization for persistence in .gh files.
 /// </summary>
-public class SchemaPersistenceService
+public class SchemaArchiveSerializer
 {
     private static readonly JsonSerializerSettings SchemaSerializationSettings = new JsonSerializerSettings
     {
@@ -24,10 +24,10 @@ public class SchemaPersistenceService
     private readonly Version _pluginVersion;
 
     /// <summary>
-    ///     Creates a new instance of SchemaPersistenceService.
+    ///     Creates a new instance of SchemaArchiveSerializer.
     /// </summary>
     /// <param name="pluginVersion">The current plugin version for schema migration.</param>
-    public SchemaPersistenceService(Version pluginVersion)
+    public SchemaArchiveSerializer(Version pluginVersion)
     {
         _pluginVersion = pluginVersion ?? throw new ArgumentNullException(nameof(pluginVersion));
     }

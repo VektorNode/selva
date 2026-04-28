@@ -19,8 +19,8 @@ namespace Selva.GH.Features.UIBuilder.Services;
 public class DocumentEventManager : IDisposable
 {
     private const int DOCUMENT_MODIFIED_DEBOUNCE_MS = 600;
-    private readonly CommunicationHandler _communicationHandler;
-    private readonly SchemaManager _schemaManager;
+    private readonly WebSocketTransport _webSocketTransport;
+    private readonly SchemaSynchronizer _schemaSynchronizer;
     private readonly ValueCollector _valueCollector;
 
     // Watched set — GUIDs of relevant objects (contextual params + output components).
@@ -35,12 +35,12 @@ public class DocumentEventManager : IDisposable
     private Timer _documentModifiedTimer;
     private bool _eventsRegistered;
 
-    public DocumentEventManager(SchemaManager schemaManager, ValueCollector valueCollector,
-        CommunicationHandler communicationHandler)
+    public DocumentEventManager(SchemaSynchronizer schemaSynchronizer, ValueCollector valueCollector,
+        WebSocketTransport webSocketTransport)
     {
-        _schemaManager = schemaManager ?? throw new ArgumentNullException(nameof(schemaManager));
+        _schemaSynchronizer = schemaSynchronizer ?? throw new ArgumentNullException(nameof(schemaSynchronizer));
         _valueCollector = valueCollector ?? throw new ArgumentNullException(nameof(valueCollector));
-        _communicationHandler = communicationHandler ?? throw new ArgumentNullException(nameof(communicationHandler));
+        _webSocketTransport = webSocketTransport ?? throw new ArgumentNullException(nameof(webSocketTransport));
         _documentModifiedTimer = new Timer(
             _ => DocumentModified?.Invoke(this, EventArgs.Empty),
             null,
@@ -211,11 +211,11 @@ public class DocumentEventManager : IDisposable
     {
         SolutionStarted?.Invoke(this, EventArgs.Empty);
 
-        if (_communicationHandler.IsRunning)
+        if (_webSocketTransport.IsRunning)
             // Fire and forget is ok for start message - it's informational
             // Note: SetSolving now returns false if debounced, so we always broadcast to be safe
         {
-            _ = _communicationHandler.BroadcastSolvingState(true);
+            _ = _webSocketTransport.BroadcastSolvingState(true);
         }
     }
 
@@ -223,7 +223,7 @@ public class DocumentEventManager : IDisposable
     {
         SolutionEnded?.Invoke(this, EventArgs.Empty);
 
-        if (_communicationHandler.IsRunning)
+        if (_webSocketTransport.IsRunning)
             // Critical: Ensure solving=false is sent. If this fails, clients may get stuck.
             // We use Task.Run to avoid blocking Grasshopper's event thread
         {
@@ -231,7 +231,7 @@ public class DocumentEventManager : IDisposable
             {
                 try
                 {
-                    await _communicationHandler.BroadcastSolvingState(false);
+                    await _webSocketTransport.BroadcastSolvingState(false);
                 }
                 catch (Exception ex)
                 {
@@ -249,7 +249,7 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     private void OnUndoStateChanged(object sender, GH_DocUndoEventArgs e)
     {
-        if (_currentDocument == null || !_communicationHandler.IsRunning)
+        if (_currentDocument == null || !_webSocketTransport.IsRunning)
         {
             return;
         }
@@ -270,7 +270,7 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     private void OnObjectsAdded(object sender, GH_DocObjectEventArgs e)
     {
-        if (_currentDocument == null || !_communicationHandler.IsRunning)
+        if (_currentDocument == null || !_webSocketTransport.IsRunning)
         {
             return;
         }
@@ -297,7 +297,7 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     private void OnObjectsDeleted(object sender, GH_DocObjectEventArgs e)
     {
-        if (_currentDocument == null || !_communicationHandler.IsRunning)
+        if (_currentDocument == null || !_webSocketTransport.IsRunning)
         {
             return;
         }
@@ -329,14 +329,14 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     public void DetectAndBroadcastMetadataChanges(UISchema schema)
     {
-        if (_currentDocument == null || !_communicationHandler.IsRunning || schema == null)
+        if (_currentDocument == null || !_webSocketTransport.IsRunning || schema == null)
         {
             return;
         }
 
         try
         {
-            var metadataChanges = _schemaManager.DetectMetadataChanges(_currentDocument, schema);
+            var metadataChanges = _schemaSynchronizer.DetectMetadataChanges(_currentDocument, schema);
 #if DEBUG
             Logger.Log(
                 $"[UIBuilder] MetadataDetect — changed inputs={metadataChanges.Inputs.Count}, outputs={metadataChanges.Outputs.Count}");
@@ -348,7 +348,7 @@ public class DocumentEventManager : IDisposable
                     .Concat(metadataChanges.Outputs.Select(o => o.Nickname));
                 Logger.Log($"[UIBuilder] MetadataChanged — params=[{string.Join(", ", names)}]");
 #endif
-                var _ = _communicationHandler.BroadcastMetadataChanges(metadataChanges);
+                var _ = _webSocketTransport.BroadcastMetadataChanges(metadataChanges);
                 MetadataChanged?.Invoke(this, new MetadataChangedEventArgs { Changes = metadataChanges });
             }
         }
@@ -365,7 +365,7 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     public void CollectAndBroadcastOutputs(UISchema schema)
     {
-        if (_currentDocument == null || !_communicationHandler.IsRunning || schema == null)
+        if (_currentDocument == null || !_webSocketTransport.IsRunning || schema == null)
         {
             return;
         }
@@ -380,7 +380,7 @@ public class DocumentEventManager : IDisposable
 
         if (outputValues.Count > 0 || fileOutputs.Count > 0 || displayData.Count > 0)
         {
-            var _ = _communicationHandler.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData,
+            var _ = _webSocketTransport.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData,
                 includeDisplayData);
         }
     }

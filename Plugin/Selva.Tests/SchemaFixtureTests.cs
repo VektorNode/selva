@@ -202,7 +202,7 @@ public class SchemaFixtureTests
     }
 
     /// <summary>
-    ///     Runs the full two-phase migration pipeline the same way SchemaPersistenceService does.
+    ///     Runs the full two-phase migration pipeline the same way SchemaArchiveSerializer does.
     /// </summary>
     private static UISchema FullMigration(string rawJson)
     {

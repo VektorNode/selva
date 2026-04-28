@@ -16,9 +16,9 @@ namespace Selva.GH.Features.UIBuilder.Services;
 public class DocumentSynchronizationService : IDisposable
 {
     private readonly SchemaCleanupService _cleanupService;
-    private readonly CommunicationHandler _communicationHandler;
+    private readonly WebSocketTransport _webSocketTransport;
     private readonly DocumentEventManager _eventManager;
-    private readonly SchemaManager _schemaManager;
+    private readonly SchemaSynchronizer _schemaSynchronizer;
 
     private GH_Component _component;
     private GH_Document _currentDocument;
@@ -31,13 +31,13 @@ public class DocumentSynchronizationService : IDisposable
 
     public DocumentSynchronizationService(
         DocumentEventManager eventManager,
-        SchemaManager schemaManager,
-        CommunicationHandler communicationHandler,
+        SchemaSynchronizer schemaSynchronizer,
+        WebSocketTransport webSocketTransport,
         SchemaCleanupService cleanupService)
     {
         _eventManager = eventManager ?? throw new ArgumentNullException(nameof(eventManager));
-        _schemaManager = schemaManager ?? throw new ArgumentNullException(nameof(schemaManager));
-        _communicationHandler = communicationHandler ?? throw new ArgumentNullException(nameof(communicationHandler));
+        _schemaSynchronizer = schemaSynchronizer ?? throw new ArgumentNullException(nameof(schemaSynchronizer));
+        _webSocketTransport = webSocketTransport ?? throw new ArgumentNullException(nameof(webSocketTransport));
         _cleanupService = cleanupService ?? throw new ArgumentNullException(nameof(cleanupService));
     }
 
@@ -97,7 +97,7 @@ public class DocumentSynchronizationService : IDisposable
                 var available = GetCurrentAvailableParameters(e.Document);
                 if (available.Inputs.Count > 0 || available.Outputs.Count > 0)
                 {
-                    _ = _communicationHandler
+                    _ = _webSocketTransport
                         .BroadcastMessage("parametersAdded", new { availableParams = available })
                         .ContinueWith(t =>
                         {
@@ -119,7 +119,7 @@ public class DocumentSynchronizationService : IDisposable
 
             // ValidateSchemaAndTrackChanges: purges deleted params AND merges new ones into schema.Inputs
             List<Guid> removedIds;
-            (schema, removedIds) = _schemaManager.ValidateSchemaAndTrackChanges(schema, e.Document);
+            (schema, removedIds) = _schemaSynchronizer.ValidateSchemaAndTrackChanges(schema, e.Document);
             _setSchema(schema);
 
             if (removedIds.Count > 0)
@@ -143,7 +143,7 @@ public class DocumentSynchronizationService : IDisposable
             OnNewIdsDiscovered?.Invoke(addedInputs.Select(i => i.Id).Concat(addedOutputs.Select(o => o.Id)));
 
             // Broadcast the full updated schema — web UI updates without reload
-            _ = _communicationHandler
+            _ = _webSocketTransport
                 .BroadcastSchemaUpdate(schema)
                 .ContinueWith(t =>
                 {
@@ -204,6 +204,6 @@ public class DocumentSynchronizationService : IDisposable
             return new DiscoveredParameters { SessionId = "", Inputs = [], Outputs = [] };
         }
 
-        return _schemaManager.ScanParameters(document, _component);
+        return _schemaSynchronizer.ScanParameters(document, _component);
     }
 }

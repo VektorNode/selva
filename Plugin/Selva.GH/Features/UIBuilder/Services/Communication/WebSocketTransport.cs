@@ -16,7 +16,7 @@ namespace Selva.GH.Features.UIBuilder.Services.Communication;
 /// <summary>
 ///     Handles WebSocket communication with the web UI.
 /// </summary>
-public class CommunicationHandler : IDisposable
+public class WebSocketTransport : IDisposable
 {
     /// <summary>
     ///     Secure JSON serializer — prevents type confusion attacks, created once and reused.
@@ -45,7 +45,7 @@ public class CommunicationHandler : IDisposable
 
     private WebSocketServer _webSocketServer;
 
-    public CommunicationHandler(string sessionId, int port = 8765)
+    public WebSocketTransport(string sessionId, int port = 8765)
     {
         _sessionId = sessionId;
         _port = port;
@@ -172,7 +172,7 @@ public class CommunicationHandler : IDisposable
             _suppressSolvingCyclesRemaining = Math.Max(0, cycles);
         }
 
-        Logger.Log($"[CommunicationHandler] Suppressing next {cycles} solving cycle(s).");
+        Logger.Log($"[WebSocketTransport] Suppressing next {cycles} solving cycle(s).");
     }
 
     // -------------------------------------------------------------------------
@@ -261,11 +261,11 @@ public class CommunicationHandler : IDisposable
                 {
                     _suppressSolvingCyclesRemaining--;
                     Logger.Log(
-                        $"[CommunicationHandler] Cycle suppressed ({_suppressSolvingCyclesRemaining} remaining).");
+                        $"[WebSocketTransport] Cycle suppressed ({_suppressSolvingCyclesRemaining} remaining).");
                 }
                 else
                 {
-                    Logger.Log($"[CommunicationHandler] Skipping solving state (suppressed): {isSolving}.");
+                    Logger.Log($"[WebSocketTransport] Skipping solving state (suppressed): {isSolving}.");
                 }
 
                 return Task.CompletedTask;
@@ -273,7 +273,7 @@ public class CommunicationHandler : IDisposable
 
             if (_lastBroadcastedSolvingState == isSolving)
             {
-                Logger.Log($"[CommunicationHandler] Skipping duplicate solving state: {isSolving}.");
+                Logger.Log($"[WebSocketTransport] Skipping duplicate solving state: {isSolving}.");
                 return Task.CompletedTask;
             }
 
@@ -377,7 +377,7 @@ public class CommunicationHandler : IDisposable
     private void HandleClientConnected(object sender, WebSocket _)
     {
 #if DEBUG
-        Logger.Log("[CommunicationHandler] WebSocket client connected (waiting for requestInitialData).");
+        Logger.Log("[WebSocketTransport] WebSocket client connected (waiting for requestInitialData).");
 #endif
     }
 
@@ -395,7 +395,7 @@ public class CommunicationHandler : IDisposable
                 // requestInitialData establishes the session — exempt from session check.
                 if (msgType != "requestInitialData" && sid != _sessionId)
                 {
-                    Logger.Warn($"[CommunicationHandler] Session ID mismatch for '{msgType}'.");
+                    Logger.Warn($"[WebSocketTransport] Session ID mismatch for '{msgType}'.");
                     return;
                 }
 
@@ -410,7 +410,7 @@ public class CommunicationHandler : IDisposable
                         }
                         else
                         {
-                            Logger.Warn("[CommunicationHandler] valueUpdate missing 'values'.");
+                            Logger.Warn("[WebSocketTransport] valueUpdate missing 'values'.");
                         }
 
                         break;
@@ -474,13 +474,13 @@ public class CommunicationHandler : IDisposable
                     }
 
                     default:
-                        Logger.Warn($"[CommunicationHandler] Unknown message type: '{msgType}'.");
+                        Logger.Warn($"[WebSocketTransport] Unknown message type: '{msgType}'.");
                         break;
                 }
             }
             catch (Exception ex)
             {
-                Logger.Warn($"[CommunicationHandler] Message error: {ex.Message}");
+                Logger.Warn($"[WebSocketTransport] Message error: {ex.Message}");
             }
         });
     }
@@ -498,7 +498,7 @@ public class CommunicationHandler : IDisposable
         catch (Exception ex)
         {
             // Last-resort fallback: run inline if marshalling failed.
-            Logger.Warn($"[CommunicationHandler] InvokeOnUiThread failed, running inline: {ex.Message}");
+            Logger.Warn($"[WebSocketTransport] InvokeOnUiThread failed, running inline: {ex.Message}");
             callback?.Invoke();
         }
     }
