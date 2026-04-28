@@ -11,7 +11,7 @@ namespace Selva.GH.Features.FileIO.Components;
 ///     Standalone canvas parameter that holds FileDataGoo values.
 ///     Implements ISelvaFileOutput so the schema scanner detects it as a file output
 ///     without needing a ContextBakeComponent in between.
-///     Usage: wire from GH_DataToFile / GH_Block_To_File (or any ISelvaFileOutput component),
+///     Usage: wire from GH_DataToFile / GH_BlockToFile (or any ISelvaFileOutput component),
 ///     or from external sources. The Selva UI picks this up as a downloadable file output.
 /// </summary>
 public class Param_FileData : GH_PersistentParam<FileDataGoo>, ISelvaFileOutput

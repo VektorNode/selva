@@ -6,9 +6,9 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.ComputeIO.Components;
 
-public class GH_Environement : GH_Component
+public class GH_Environment : GH_Component
 {
-    public GH_Environement()
+    public GH_Environment()
         : base("Environment", "Env",
             "Get information about the current running environment (Compute or Desktop)",
             "Selva", "Utilities")
