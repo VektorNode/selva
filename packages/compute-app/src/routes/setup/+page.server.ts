@@ -148,7 +148,7 @@ export const actions = {
 			}
 		}
 
-		// §1a: `createUserWithPassword` doesn't return a session — matches
+		// `createUserWithPassword` doesn't return a session — matches
 		// Supabase's admin.createUser contract. Sign in to mint one.
 		const loginResult = await passwordAuth.verifyLogin(email, password);
 		if (loginResult.kind !== 'success') {

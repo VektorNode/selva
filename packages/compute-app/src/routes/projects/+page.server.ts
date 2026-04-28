@@ -30,7 +30,7 @@ export interface ProjectWithMembers extends Project {
 	members: ProjectMember[];
 }
 
-/** User row with display name joined from the profile store (§1e). */
+/** User row with display name joined from the profile store. */
 export interface UserListItem extends AuthUser {
 	displayName?: string;
 }

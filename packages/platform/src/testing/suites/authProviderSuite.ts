@@ -166,7 +166,7 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 					`new-${makeUuid()}@example.com`,
 					'pass12345678'
 				);
-				// §1e: profile state (starred, recentRuns, displayName) lives on
+				// Profile state (starred, recentRuns, displayName) lives on
 				// IUserProfileStore. Platform permissions live on
 				// IPlatformPermissionStore. AuthUser is identity-only.
 				expect(

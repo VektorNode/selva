@@ -141,7 +141,7 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 		});
 
 		// ============================================================================
-		// Image transcoding (§1b)
+		// Image transcoding
 		// ============================================================================
 		//
 		// Every adapter MUST run uploads through the shared `transcodeImageIfNeeded`

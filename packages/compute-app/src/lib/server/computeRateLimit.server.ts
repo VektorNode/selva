@@ -7,7 +7,7 @@
  * Design:
  *  - Process-local Map. Multi-instance deployments will see N× the per-key
  *    rate — acceptable as a first line; a proper distributed limiter is a
- *    follow-up tracked alongside the H12 cross-instance cache work.
+ *    follow-up.
  *  - Fixed window (vs sliding) — simpler, no per-request bookkeeping, and
  *    the "burst at window edges" failure mode is fine for this surface
  *    (the share-link `maxSolves` cap and per-user authentication already

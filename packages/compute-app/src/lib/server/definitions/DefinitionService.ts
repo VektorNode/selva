@@ -33,11 +33,6 @@ export interface CreateDefinitionRecord {
 }
 
 /**
- * Default age threshold after which a 'pending' record is considered stale.
- * Conservative — covers slow uploads over weak connections.
- */
-
-/**
  * Orchestrates writes that span IDataProvider + IStorageProvider for the
  * spec §6 versioning model. Lives in compute-app (not @selvajs/platform)
  * because it is application orchestration, not platform contract.
@@ -53,7 +48,7 @@ export interface CreateDefinitionRecord {
  *   Step 4 is one round-trip so a mid-flight failure can't leave a partial
  *   state (status='draft' with null pointers, or status='pending' with
  *   pointers set). If step 2 fails the record stays 'pending' with no
- *   blob; the janitor sweeps stale pendings.
+ *   blob and is filtered out of list endpoints by default.
  *
  *   uploadVersion — append-only:
  *     1. Resolve next versionNumber from the version list
@@ -103,7 +98,8 @@ export class DefinitionService {
 		// 1. Metadata first — if this fails there's nothing to clean up.
 		await this.data.definitions.create(ctx, record);
 
-		// 2. v1 blob — if this fails the record stays 'pending' for the janitor.
+		// 2. v1 blob — if this fails the record stays 'pending' and is hidden
+		//    from default list queries.
 		const versionId = randomUUID();
 		const fileKey = definitionPaths.version(input.guid, 1, input.fileExt);
 		await this.storage.put(fileKey, file, 'application/octet-stream');

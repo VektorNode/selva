@@ -10,9 +10,11 @@
  * tradeoffs (raise the rate cap → also consider the body cap, etc.) at one
  * glance.
  *
- * Client-side counterparts (debounce, throttle timeout) live in
- * `@selvajs/ui/lib/constants.ts` — they are bundled into the client and
- * cannot read process.env. Cross-reference comments are placed at both ends.
+ * Client-side counterparts (the in-flight compute throttle and the slider
+ * debounce on inputs) live in `@selvajs/ui` and are bundled into the client,
+ * so they cannot read process.env. The throttle is in
+ * `utils/computeThrottle.svelte.ts`; per-input debounce values live with the
+ * input components themselves.
  */
 
 function readPositiveInt(name: string, fallback: number): number {

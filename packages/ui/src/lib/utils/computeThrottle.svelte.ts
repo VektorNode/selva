@@ -19,9 +19,10 @@ interface ComputeThrottleOptions {
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 /**
- * Creates a throttled compute handler that ensures only one request is in-flight at a time.
- * When a new request arrives while one is running, the new values are queued and processed
- * immediately after the current request finishes (or aborts).
+ * Creates a throttled compute handler that keeps only one request in-flight.
+ * If a new value arrives while one is running, it overwrites the single pending
+ * slot — older pending values are dropped. The pending value runs once the
+ * current request finishes (or aborts).
  */
 export function createComputeThrottle<T>(
 	computeFn: (values: T, signal: AbortSignal) => Promise<void>,

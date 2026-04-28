@@ -56,9 +56,9 @@ export function clearRateLimit(ip: string): void {
 // Session management (cookie I/O — SvelteKit transport layer)
 // ============================================================================
 /**
- * Set the session cookie using a token produced by the auth provider. §1a:
- * the token is always minted by the provider (local = HMAC, Supabase = JWT)
- * as part of `verifyLogin` — this helper does cookie transport only.
+ * Set the session cookie using a token produced by the auth provider. The
+ * token is always minted by the provider (local = HMAC, Supabase = JWT) as
+ * part of `verifyLogin` — this helper does cookie transport only.
  */
 export function setSessionCookie(cookies: Cookies, sessionToken: string): void {
 	const isSecure =
