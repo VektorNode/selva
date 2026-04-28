@@ -1,7 +1,7 @@
 using System.Collections.Generic;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 
-namespace Selva.Core.Services.Validation;
+namespace Selva.Schema.Services.Validation;
 
 /// <summary>
 ///     Interface for modular validation rules.

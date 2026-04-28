@@ -10,7 +10,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Selva.Core.Models
+namespace Selva.Schema.Models
 {
 // ============================================================================
     // CONSTANTS (from schema)

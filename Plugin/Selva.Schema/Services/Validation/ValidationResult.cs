@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Selva.Core.Services.Validation;
+namespace Selva.Schema.Services.Validation;
 
 /// <summary>
 ///     Result of schema validation

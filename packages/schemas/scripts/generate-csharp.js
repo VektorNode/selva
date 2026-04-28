@@ -9,7 +9,7 @@ const packageRoot = path.join(__dirname, '..');
 const repoRoot = path.join(packageRoot, '..', '..');
 
 const schemaPath = path.join(packageRoot, 'ui-schema.json');
-const outputPath = path.join(repoRoot, 'Plugin/Selva.Core/Models/UISchema.Generated.cs');
+const outputPath = path.join(repoRoot, 'Plugin/Selva.Schema/Models/UISchema.Generated.cs');
 
 const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 const definitions = schema.definitions;
@@ -333,7 +333,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Selva.Core.Models
+namespace Selva.Schema.Models
 {
 `;
 
@@ -773,10 +773,10 @@ console.log(`Generated C# types at: ${outputPath}`);
 const schemaVersionDefault = schema.definitions?.UISchema?.properties?.schemaVersion?.default;
 if (schemaVersionDefault) {
   const [major, minor, patch] = schemaVersionDefault.split('.').map(Number);
-  const schemaVersionPath = path.join(repoRoot, 'Plugin/Selva.Core/Constants/SchemaVersion.cs');
+  const schemaVersionPath = path.join(repoRoot, 'Plugin/Selva.Schema/Constants/SchemaVersion.cs');
   const schemaVersionContent = `using System;
 
-namespace Selva.Core.Constants;
+namespace Selva.Schema.Constants;
 
 /// <summary>
 ///   Central definition of schema version constants.

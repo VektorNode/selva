@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using GH_IO.Serialization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Selva.Core.Constants;
-using Selva.Core.Models;
-using Selva.Core.Services;
+using Selva.Schema.Constants;
+using Selva.Schema.Models;
+using Selva.Schema.Services;
 using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services;

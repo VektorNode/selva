@@ -22,7 +22,7 @@ Turbo reads each package's `package.json` `scripts` and the rules in [turbo.json
 
 - **`build` `dependsOn: ["^build"]`** — the `^` means "build all upstream workspace deps first." So when you build [@selvajs/compute-app](../packages/compute-app/), turbo first builds [@selvajs/platform](../packages/platform/), [@selvajs/schemas](../packages/schemas/), [@selvajs/ui](../packages/ui/), etc. — in topo order, in parallel where possible.
 - **`schemas#build` `dependsOn: ["^build", "generate"]`** — overridden in [packages/schemas/turbo.json](../packages/schemas/turbo.json). Forces `generate` (the JSON-schema → TS/C# codegen) to run before `tsc` compiles the package, since `tsc` reads `src/generated/`.
-- **`generate` outputs include the .NET file** (`Plugin/Selva.Core/Models/UISchema.Generated.cs`) — turbo will track that file even though it lives outside the schemas package. Cache invalidates when [ui-schema.json](../packages/schemas/ui-schema.json) or [preset-schema.json](../packages/schemas/preset-schema.json) changes.
+- **`generate` outputs include the .NET file** (`Plugin/Selva.Schema/Models/UISchema.Generated.cs`) — turbo will track that file even though it lives outside the schemas package. Cache invalidates when [ui-schema.json](../packages/schemas/ui-schema.json) or [preset-schema.json](../packages/schemas/preset-schema.json) changes.
 
 ## Caching
 

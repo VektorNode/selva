@@ -1,4 +1,4 @@
-# Selva.Core
+# Selva.Schema
 
 Shared models and services for the Selva Grasshopper plugin. This library provides the core functionality for schema
 management, validation, and versioning.

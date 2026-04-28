@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 
-namespace Selva.Core.Services.Validation.Rules;
+namespace Selva.Schema.Services.Validation.Rules;
 
 /// <summary>
 ///     Validates data constraints and business rules

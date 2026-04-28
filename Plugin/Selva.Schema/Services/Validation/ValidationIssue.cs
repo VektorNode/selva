@@ -1,4 +1,4 @@
-namespace Selva.Core.Services.Validation;
+namespace Selva.Schema.Services.Validation;
 
 /// <summary>
 ///     Severity levels for validation issues

@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
-using Selva.Core.Constants;
-using Selva.Core.Models;
+using Selva.Schema.Constants;
+using Selva.Schema.Models;
 
-namespace Selva.Core.Services;
+namespace Selva.Schema.Services;
 
 /// <summary>
 ///     Handles schema migration across versions

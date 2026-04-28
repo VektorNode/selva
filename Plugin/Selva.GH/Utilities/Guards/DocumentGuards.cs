@@ -1,5 +1,5 @@
 using Grasshopper.Kernel;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 
 namespace Selva.GH.Utilities.Guards;
 

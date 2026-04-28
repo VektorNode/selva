@@ -2,7 +2,7 @@ using System;
 using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Models;

@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Grasshopper.Kernel;
 using Rhino;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 using Selva.GH.Config;
 using Selva.GH.Features.UIBuilder.Helpers;
 using Selva.GH.Features.UIBuilder.Models;

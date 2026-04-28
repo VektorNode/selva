@@ -1,6 +1,6 @@
 using System;
 
-namespace Selva.Core.Constants;
+namespace Selva.Schema.Constants;
 
 /// <summary>
 ///   Central definition of schema version constants.

@@ -5,7 +5,7 @@ using System.Text;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 using Selva.GH.Features.UIBuilder.Models;
 using Selva.GH.Properties;
 
