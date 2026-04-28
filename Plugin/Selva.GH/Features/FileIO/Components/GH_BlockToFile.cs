@@ -20,14 +20,14 @@ namespace Selva.GH.Features.FileIO.Components;
 ///     Exports Rhino block instances to base64-encoded .3dm files.
 ///     Supports recursive block hierarchies by automatically including nested block definitions.
 /// </summary>
-public class GH_Block_To_File : GH_Component, ISelvaFileOutput
+public class GH_BlockToFile : GH_Component, ISelvaFileOutput
 {
     private static RhinoDocumentConverter _converter;
     private static readonly object _converterLock = new object();
 
     private readonly Dictionary<string, int> _copiedBlockIndices;
 
-    public GH_Block_To_File()
+    public GH_BlockToFile()
         : base(
             "Block to File",
             "Block2File",
