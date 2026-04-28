@@ -9,6 +9,7 @@ using Rhino;
 using Rhino.DocObjects;
 using Rhino.Geometry;
 using Selva.GH.Config;
+using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;

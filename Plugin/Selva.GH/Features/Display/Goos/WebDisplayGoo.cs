@@ -1,8 +1,9 @@
 using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
+using Selva.GH.Features.Display.Services;
 
-namespace Selva.GH.Features.Display.Services;
+namespace Selva.GH.Features.Display.Goos;
 
 /// <summary>
 ///     Grasshopper Goo wrapper for WebDisplay data to prevent double JSON encoding.

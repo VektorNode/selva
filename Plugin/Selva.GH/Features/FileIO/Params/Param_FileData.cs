@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
-using Selva.GH.Features.FileIO.Services;
+using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Properties;
 
-namespace Selva.GH.Features.FileIO.Components;
+namespace Selva.GH.Features.FileIO.Params;
 
 /// <summary>
 ///     Standalone canvas parameter that holds FileDataGoo values.

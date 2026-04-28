@@ -12,7 +12,7 @@ using Selva.Schema.Models;
 using Selva.Schema.Services;
 using Selva.GH.Config;
 using Selva.GH.Features.UIBuilder.Helpers;
-using Selva.GH.Features.UIBuilder.Models;
+using Selva.GH.Features.UIBuilder.Goos;
 using Selva.GH.Features.UIBuilder.Services;
 using Selva.GH.Features.UIBuilder.Services.State;
 using Selva.GH.Features.UIBuilder.Services.UI;

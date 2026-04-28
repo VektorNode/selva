@@ -12,6 +12,7 @@ using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Rhino;
+using Selva.GH.Features.ComputeIO.Goos;
 using Selva.GH.Properties;
 
 namespace Selva.GH.Features.ComputeIO.Components;

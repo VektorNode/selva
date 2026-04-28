@@ -5,7 +5,7 @@ using Newtonsoft.Json;
 using Selva.Schema.Models;
 using Selva.GH.Utilities.Helpers;
 
-namespace Selva.GH.Features.UIBuilder.Models;
+namespace Selva.GH.Features.UIBuilder.Goos;
 
 public class UISchemaGoo : IGH_Goo
 {

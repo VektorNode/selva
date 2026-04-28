@@ -14,6 +14,7 @@ using Newtonsoft.Json.Linq;
 using Rhino.Geometry;
 using Selva.Schema.Models;
 using Selva.GH.Config;
+using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Point = Rhino.Geometry.Point;
