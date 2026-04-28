@@ -41,3 +41,8 @@ pnpm build:plugin
 
 - Rhino 7 or 8 (Windows/macOS)
 - Grasshopper
+
+## Development
+
+- [Project structure & conventions](../STRUCTURE.md)
+- [Obsolete components naming guide](../docs/development/obsolete-components.md)
