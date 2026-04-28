@@ -9,7 +9,7 @@
 		OWNER_ADMIN_ONLY_PERMISSIONS
 	} from '@selvajs/platform';
 	import type { UserRow } from './+page.server';
-	import UserListItem from './_components/UserListItem.svelte';
+	import UserListItem from './UserListItem.svelte';
 
 	// One flat list today; scoped Platform-admin + Org-member views come later.
 	type FlatPermission = PlatformPermission | OrgPermission;
