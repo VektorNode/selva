@@ -5,6 +5,7 @@
 
 	interface AppShellProps {
 		// Header
+		showHeader?: boolean;
 		homeUrl?: string;
 		title?: string | null;
 		logo?: string;
@@ -35,6 +36,7 @@
 	}
 
 	let {
+		showHeader = true,
 		homeUrl = '/',
 		title = undefined,
 		logo = '/favicon/favicon.svg',
@@ -43,7 +45,7 @@
 		rightContent,
 		subnav,
 		headerClass = '',
-		mode = 'scroll',
+		mode: _mode = 'scroll',
 		sidenav,
 		showFooter = false,
 		errors = [],
@@ -54,32 +56,38 @@
 		children
 	}: AppShellProps = $props();
 
+	// fixed: viewport-locked, no page scroll — body owns its own scroll internally.
+	// scroll: normal page flow, footer sticks to bottom via sticky positioning.
 	const rootClass = $derived(
-		mode === 'fixed'
+		_mode === 'fixed'
 			? `flex flex-col h-screen overflow-hidden bg-background ${className}`
-			: `flex flex-col bg-background ${className}`
+			: `flex flex-col min-h-screen bg-background ${className}`
 	);
 
 	const bodyShellClass = $derived(
-		mode === 'fixed'
-			? `flex flex-1 min-h-0 ${sidenav ? 'flex-row' : 'flex-col'} ${bodyClass}`
-			: `flex h-[calc(100vh-var(--header-h))] overflow-hidden ${sidenav ? 'flex-row' : 'flex-col'} ${bodyClass}`.trim()
+		_mode === 'fixed'
+			? `flex flex-1 min-h-0 ${sidenav ? 'flex-row' : 'flex-col'} ${bodyClass}`.trim()
+			: `flex-1 ${sidenav ? 'flex flex-row' : ''} ${bodyClass}`.trim()
 	);
+
+	const bodyShellStyle = '';
 </script>
 
 <div class={rootClass}>
-	<PageHeader
-		{homeUrl}
-		{title}
-		{logo}
-		{showModeToggle}
-		{navItems}
-		{rightContent}
-		{subnav}
-		class={headerClass}
-	/>
+	{#if showHeader}
+		<PageHeader
+			{homeUrl}
+			{title}
+			{logo}
+			{showModeToggle}
+			{navItems}
+			{rightContent}
+			{subnav}
+			class={headerClass}
+		/>
+	{/if}
 
-	<div class={bodyShellClass}>
+	<div class={bodyShellClass} style={bodyShellStyle}>
 		{#if sidenav}
 			{@render sidenav()}
 			<main class="flex-1 overflow-y-auto">
@@ -91,7 +99,7 @@
 	</div>
 
 	{#if showFooter}
-		<div class="shrink-0">
+		<div class="sticky bottom-0 z-10 shrink-0">
 			<PageFooter {errors} {warnings}>
 				{#if footerChildren}
 					{@render footerChildren()}

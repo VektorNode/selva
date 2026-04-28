@@ -109,11 +109,30 @@ export function assertAnyPlatformPermission(locals: Locals): AuthUser {
 }
 
 /**
- * Every project/definition gate funnels through this so the `instance_admin`
- * bypass lives in one place — the future audit-log hook point.
+ * Management-scope bypass — used for org governance and project management
+ * actions (Reclaim, create project, delete project, manage members, edit
+ * settings). `instance_admin` bypasses these so platform staff can administer
+ * the instance without being a member of every org.
+ *
+ * NOT used for content access (view, solve, edit definitions). See §2 of
+ * Permissions.md: `instance_admin` follows the same `canView`/`canEdit` rules
+ * as any other user for content — keeping blast radius small and ensuring
+ * any content escalation goes through Reclaim, leaving an audit trail.
  */
-async function bypassOrRun(ctx: RequestContext, check: () => Promise<boolean>): Promise<boolean> {
+async function managementBypassOrRun(
+	ctx: RequestContext,
+	check: () => Promise<boolean>
+): Promise<boolean> {
 	if (hasPermission(ctx, 'instance_admin')) return true;
+	return await check();
+}
+
+/**
+ * Content-scope check — NO `instance_admin` bypass. `canView`, `canSolve`,
+ * `canEdit`, and `canEditDefinition` run as-is regardless of platform role.
+ * If platform staff need to access content, they use Reclaim first.
+ */
+async function contentCheck(check: () => Promise<boolean>): Promise<boolean> {
 	return await check();
 }
 
@@ -149,7 +168,7 @@ async function projectAccessInput(
 
 export async function requireCanEdit(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	const allowed = await bypassOrRun(ctx, async () => {
+	const allowed = await contentCheck(async () => {
 		const project = await loadProjectOr404(ctx, projectId);
 		return canEdit(await projectAccessInput(ctx, project));
 	});
@@ -169,7 +188,7 @@ export async function requireCanCreateDefinition(
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId);
-	const allowed = await bypassOrRun(ctx, async () => {
+	const allowed = await contentCheck(async () => {
 		if (project.autoJoinOnUpload) return true;
 		return canEdit(await projectAccessInput(ctx, project));
 	});
@@ -206,7 +225,7 @@ export async function requireCanReclaim(
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId);
-	const allowed = await bypassOrRun(ctx, async () => {
+	const allowed = await managementBypassOrRun(ctx, async () => {
 		const orgMember = await getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId);
 		return canReclaim({
 			project,
@@ -229,7 +248,7 @@ export async function requireCanCreateProject(
 	targetOrgId: string
 ): Promise<{ user: AuthUser; ctx: RequestContext }> {
 	const { user, ctx } = requireAuthed(locals);
-	const allowed = await bypassOrRun(ctx, async () => {
+	const allowed = await managementBypassOrRun(ctx, async () => {
 		const orgMember = await getOrganizationProvider().getOrgMember(ctx, targetOrgId, ctx.userId);
 		return canCreateProject({
 			orgPermissions: ctx.orgPermissions,
@@ -244,7 +263,7 @@ export async function requireCanCreateProject(
 
 export async function requireCanManage(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	const allowed = await bypassOrRun(ctx, async () => {
+	const allowed = await managementBypassOrRun(ctx, async () => {
 		const project = await loadProjectOr404(ctx, projectId);
 		return canManage(await projectAccessInput(ctx, project));
 	});
@@ -257,7 +276,7 @@ export async function requireCanManageMembers(
 	projectId: string
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	const allowed = await bypassOrRun(ctx, async () => {
+	const allowed = await managementBypassOrRun(ctx, async () => {
 		const project = await loadProjectOr404(ctx, projectId);
 		return canManage(await projectAccessInput(ctx, project));
 	});
@@ -276,7 +295,7 @@ export async function requireCanEditProjectSettings(
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId);
-	const allowed = await bypassOrRun(ctx, async () =>
+	const allowed = await managementBypassOrRun(ctx, async () =>
 		canEditProjectSettings(await projectAccessInput(ctx, project))
 	);
 	if (!allowed) throw error(403, 'Only project owners can edit project settings.');
@@ -326,7 +345,7 @@ async function loadAndCheckView(ctx: RequestContext, project: Project): Promise<
 
 export async function requireCanViewProject(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	const allowed = await bypassOrRun(ctx, async () => {
+	const allowed = await contentCheck(async () => {
 		const project = await loadProjectOr404(ctx, projectId);
 		return loadAndCheckView(ctx, project);
 	});
@@ -346,7 +365,7 @@ export async function requireCanSolve(
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId);
 
-	const allowed = await bypassOrRun(ctx, async () => {
+	const allowed = await contentCheck(async () => {
 		const allowCrossOrgPublic = flag('ALLOW_CROSS_ORG_PUBLIC');
 		if (project.visibility === 'public' && allowCrossOrgPublic) {
 			return canSolve({
@@ -382,7 +401,7 @@ export async function requireEditableDefinition(locals: Locals, guid: string) {
 	const { ctx } = requireAuthed(locals);
 	const record = await getDefinitionMeta().get(ctx, guid);
 	if (!record) throw error(404, 'Definition not found');
-	const allowed = await bypassOrRun(ctx, async () => {
+	const allowed = await contentCheck(async () => {
 		const [project, member] = await Promise.all([
 			getProjectProvider().getProject(ctx, record.projectId),
 			getProjectProvider().getProjectMember(ctx, record.projectId, ctx.userId)
@@ -404,7 +423,7 @@ export async function requireCanEditDefinition(
 	definitionGuid: string
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	const allowed = await bypassOrRun(ctx, async () => {
+	const allowed = await contentCheck(async () => {
 		const [project, definition, member] = await Promise.all([
 			getProjectProvider().getProject(ctx, projectId),
 			getDefinitionMeta().get(ctx, definitionGuid),

@@ -66,7 +66,7 @@
 </script>
 
 <footer
-	class="px-4 gap-4 text-xs h-7 mt-2 flex shrink-0 items-center justify-between border-t border-border bg-background text-muted-foreground select-none"
+	class="px-4 gap-4 text-xs h-7 flex shrink-0 items-center justify-between border-t border-border bg-background text-muted-foreground select-none"
 >
 	<!-- Left section: Status items + custom context items -->
 	<div class="gap-4 flex items-center">

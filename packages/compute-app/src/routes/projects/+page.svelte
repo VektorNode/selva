@@ -88,6 +88,10 @@
 		return data.projects.find((p) => p.id === id)?.name ?? '';
 	}
 
+	function projectVisibility(id: string) {
+		return data.projects.find((p) => p.id === id)?.visibility;
+	}
+
 	async function errorMessage(res: Response, fallback: string) {
 		if (res.headers.get('content-type')?.includes('application/json')) {
 			const e = await res.json().catch(() => null);
@@ -324,6 +328,7 @@
 							showStatus
 							onOpen={(r) => (drawerRecord = r)}
 							projectName={activeProjectId === null ? projectName(record.projectId) : undefined}
+							projectVisibility={activeProjectId === null ? projectVisibility(record.projectId) : undefined}
 						/>
 					{/each}
 				</div>

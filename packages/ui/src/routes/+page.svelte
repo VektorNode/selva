@@ -3,8 +3,7 @@
 	import AppLayout from '$lib/components/compute/AppLayout.svelte';
 	import exampleSchema from '../demo/example-schema.json';
 	import exampleSchemaLeftOnly from '../demo/example-schema-left-only.json';
-	import PageHeader from '$lib/components/layout/PageHeader.svelte';
-	import PageContainer from '$lib/components/layout/PageContainer.svelte';
+	import AppShell from '$lib/components/layout/AppShell.svelte';
 	import { cubeMesh, getParsedMeshes, dummyOutputValues } from '../demo/dummy-output-values';
 	import { APP_DEFAULTS } from '$lib/constants';
 
@@ -66,13 +65,15 @@
 	}
 </script>
 
-<PageContainer errors={dummyErrors} warnings={dummyWarnings}>
-	<PageHeader
-		title="Test"
-		showModeToggle={true}
-		logo="https://static.food4rhino.com/cdn/farfuture/-8kBLLz1EsmzigoTR71h78u38ce2X1pkplK7Xhz-nXg/mtime:1766995049/sites/default/files/public/styles/thumbnail/public/users-files/thevessen/app/asset2.png?itok=Om5jrCuE"
-	/>
-
+<AppShell
+	mode="fixed"
+	showFooter
+	title="Test"
+	showModeToggle
+	logo="https://static.food4rhino.com/cdn/farfuture/-8kBLLz1EsmzigoTR71h78u38ce2X1pkplK7Xhz-nXg/mtime:1766995049/sites/default/files/public/styles/thumbnail/public/users-files/thevessen/app/asset2.png?itok=Om5jrCuE"
+	errors={dummyErrors}
+	warnings={dummyWarnings}
+>
 	<div class="flex flex-1 flex-col overflow-hidden bg-background">
 		<AppLayout
 			{schema}
@@ -93,4 +94,4 @@
 			}}
 		/>
 	</div>
-</PageContainer>
+</AppShell>

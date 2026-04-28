@@ -9,8 +9,7 @@
 	import { createSolvingIndicator } from '../../compute/solving.svelte';
 	import { useFooterItem } from '../../composables/useFooterItem.svelte';
 	import { hexToOklch } from '../../utils/color';
-	import PageContainer from '../layout/PageContainer.svelte';
-	import PageHeader from '../layout/PageHeader.svelte';
+	import AppShell from '../layout/AppShell.svelte';
 	import AppLayout from './AppLayout.svelte';
 	import StateDisplay from '../primitives/StateDisplay.svelte';
 
@@ -34,9 +33,7 @@
 		footerItemId?: string;
 		footerItemPriority?: number;
 		onReady?: (api: { loadValues: (values: Record<string, unknown>) => void }) => void;
-		header?: Snippet;
 		headerRight?: Snippet;
-		children?: Snippet<[{ errors: string[]; warnings: string[] }]>;
 	}
 
 	let {
@@ -55,9 +52,7 @@
 		footerComponentProps,
 		footerItemId = 'footer-item',
 		footerItemPriority = 0,
-		header,
 		headerRight,
-		children,
 		onReady
 	}: Props = $props();
 
@@ -200,52 +195,49 @@
 </script>
 
 <div style={customStyle} style:display="contents">
-	{#if children}
-		{@render children({ errors: computeErrors, warnings: computeWarnings })}
-	{:else}
-		<PageContainer errors={computeErrors} warnings={computeWarnings}>
-			{#if header}
-				{@render header()}
-			{:else if !resolvedIsEmbedded}
-				<PageHeader title={pageTitle} {showModeToggle} rightContent={headerRight} />
-			{/if}
-
-			<div class="flex flex-1 flex-col overflow-hidden bg-background">
-				{#if error}
-					<div class="min-h-100 p-8 flex items-center justify-center">
-						<StateDisplay type="error" size="medium" message={error} />
-					</div>
-				{:else if !schema}
-					<div class="min-h-100 flex items-center justify-center">
-						<StateDisplay type="loading" size="large" message="Loading schema..." />
-					</div>
-				{:else}
-					{#key definitionKey}
-						<AppLayout
-							{schema}
-							{meshes}
-							isSolving={solving}
-							showSolvingIndicator={schema.instanceSolve !== false && solvingIndicator.show}
-							{hasPendingChanges}
-							{hasNeverSolved}
-							bind:isViewerFullscreen
-							bind:values
-							{panelActions}
-							{showSaveButton}
-							{showLoadButton}
-							onValueChange={handleValueChange}
-							oncalculate={handleCalculate}
-							onLoadValues={() => {
-								if (schema?.instanceSolve !== false) {
-									performSolve();
-								} else {
-									hasPendingChanges = true;
-								}
-							}}
-						/>
-					{/key}
-				{/if}
+	<AppShell
+		mode="fixed"
+		showHeader={!resolvedIsEmbedded}
+		showFooter
+		title={pageTitle}
+		{showModeToggle}
+		rightContent={headerRight}
+		errors={computeErrors}
+		warnings={computeWarnings}
+	>
+		{#if error}
+			<div class="min-h-100 p-8 flex items-center justify-center">
+				<StateDisplay type="error" size="medium" message={error} />
 			</div>
-		</PageContainer>
-	{/if}
+		{:else if !schema}
+			<div class="min-h-100 flex items-center justify-center">
+				<StateDisplay type="loading" size="large" message="Loading schema..." />
+			</div>
+		{:else}
+			{#key definitionKey}
+				<AppLayout
+					{schema}
+					{meshes}
+					isSolving={solving}
+					showSolvingIndicator={schema.instanceSolve !== false && solvingIndicator.show}
+					{hasPendingChanges}
+					{hasNeverSolved}
+					bind:isViewerFullscreen
+					bind:values
+					{panelActions}
+					{showSaveButton}
+					{showLoadButton}
+					onValueChange={handleValueChange}
+					oncalculate={handleCalculate}
+					onLoadValues={() => {
+						if (schema?.instanceSolve !== false) {
+							performSolve();
+						} else {
+							hasPendingChanges = true;
+						}
+					}}
+				/>
+			{/key}
+		{/if}
+	</AppShell>
 </div>

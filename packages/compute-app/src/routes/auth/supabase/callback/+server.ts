@@ -1,9 +1,14 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { ALL_PLATFORM_PERMISSIONS, SYSTEM_CONTEXT, type AuthUser } from '@selvajs/platform';
+import {
+	ALL_PLATFORM_PERMISSIONS,
+	SYSTEM_CONTEXT,
+	type AuthUser,
+	type TenancyMode
+} from '@selvajs/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
-import { getPermissionStore } from '$lib/server/providers.server';
+import { getPermissionStore, tenancy } from '$lib/server/providers.server';
 import {
 	safeRedirectTarget,
 	setSessionCookie,
@@ -17,12 +22,18 @@ import {
  * for a session, sets the session cookie, and redirects to `redirectTo`.
  *
  * **Instance-admin bootstrap** (Permissions.md §2 invariant): if no user
- * currently holds `instance_admin`, the signing-in user is granted every
- * platform permission. `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` constrains this to a
- * single configured email — without it, *whoever signs in first wins the race*,
- * which is fine for fresh self-hosted installs but risky in production. Setting
- * the env var also doubles as the break-glass recovery path (Permissions.md §12)
- * when admin is lost to manual DB edits or a backup restore.
+ * currently holds `instance_admin`, the signing-in user MAY be granted every
+ * platform permission. The exact rule depends on tenancy mode:
+ *
+ * - `tenancy='single'` (self-hosted): without `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`,
+ *   whoever signs in first wins the race — fine for fresh self-hosted installs.
+ *   With the env var set, only the named user qualifies.
+ * - `tenancy='multi'` (multi-tenant / SaaS): the race is a security hole — the
+ *   first random signup would become Selva staff. The bootstrap path is
+ *   therefore **disabled unless `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is set AND
+ *   matches the signer**. Operators seed admins explicitly. The env var also
+ *   doubles as the break-glass recovery path (Permissions.md §12) when admin
+ *   is lost to manual DB edits, a backup restore, or migration drift.
  */
 export const GET: RequestHandler = async ({ url, cookies }) => {
 	const code = url.searchParams.get('code');
@@ -38,7 +49,10 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
 	const perms = getPermissionStore();
 	const hasAdmin = await perms.hasInstanceAdmin(SYSTEM_CONTEXT);
-	if (!hasAdmin && shouldBootstrapAdmin(result.user, env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL)) {
+	if (
+		!hasAdmin &&
+		shouldBootstrapAdmin(result.user, env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL, tenancy)
+	) {
 		await perms.set(SYSTEM_CONTEXT, result.user.id, [...ALL_PLATFORM_PERMISSIONS]);
 	}
 
@@ -50,9 +64,16 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	redirect(303, dest);
 };
 
-function shouldBootstrapAdmin(user: AuthUser, configuredEmail: string | undefined): boolean {
-	if (!configuredEmail) return true;
-	const expected = configuredEmail.trim().toLowerCase();
+function shouldBootstrapAdmin(
+	user: AuthUser,
+	configuredEmail: string | undefined,
+	mode: TenancyMode
+): boolean {
+	const expected = configuredEmail?.trim().toLowerCase();
+	// Multi-tenant: env var is REQUIRED. Without it, the first random OAuth
+	// signer would become Selva staff — a SaaS-mode security hole.
+	if (mode === 'multi' && !expected) return false;
+	if (!expected) return true;
 	const actual = user.email?.trim().toLowerCase();
 	return !!actual && actual === expected;
 }

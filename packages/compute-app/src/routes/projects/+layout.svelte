@@ -7,6 +7,6 @@
 	let { children }: LayoutProps = $props();
 </script>
 
-<AppHeader>
+<AppHeader mode="fixed">
 	{@render children?.()}
 </AppHeader>

@@ -1,6 +1,14 @@
 <script lang="ts">
 	import { SideNav, type SideNavItem } from '@selvajs/ui';
-	import { Gauge, Users, FolderKanban, Activity, Link2, SlidersHorizontal } from '@lucide/svelte';
+	import {
+		Gauge,
+		Users,
+		FolderKanban,
+		Activity,
+		Link2,
+		SlidersHorizontal,
+		RotateCcw
+	} from '@lucide/svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import type { Organization, OrgPermission } from '@selvajs/platform';
 
@@ -32,6 +40,18 @@
 				icon: FolderKanban,
 				match: 'prefix' as const,
 				show: can('manage_projects')
+			},
+			{
+				href: '/team/reclaim',
+				label: 'Reclaim',
+				icon: RotateCcw,
+				match: 'prefix' as const,
+				// `manage_org_members` is owner/admin-only by spec (§3) — never
+				// granted to regular members. Mirrors the §5 `canReclaim` rule
+				// (org owner/admin in `actingOrgId`). The page server runs the
+				// load-bearing role check; this just keeps the link out of
+				// the wrong sidebar.
+				show: can('manage_org_members')
 			},
 			{
 				href: '/team/activity',

@@ -47,14 +47,14 @@
 </script>
 
 <svelte:head>
-	<title>Admin · Reclaim</title>
+	<title>Team · Reclaim</title>
 </svelte:head>
 
 <div class="space-y-6">
 	<SectionHeader
-		eyebrow="Admin"
-		title="Reclaim & offboard"
-		description="Take co-ownership of any project on the instance. Reclaiming does not demote the existing owner — it adds you alongside them. Recorded in the audit log."
+		eyebrow="Organization"
+		title="Reclaim project"
+		description="Take co-ownership of any project in this organization. Reclaiming does not demote the existing owner — it adds you alongside them. Recorded in the audit log."
 	/>
 
 	<Card.Root>
@@ -63,7 +63,7 @@
 				<EmptyState
 					icon={FolderOpen}
 					title="No projects"
-					description="No projects exist on this instance, or the data provider does not expose project listing."
+					description="No projects exist in this organization yet."
 				/>
 			{:else}
 				<DataTable
@@ -71,7 +71,6 @@
 					getKey={(p) => p.id}
 					columns={[
 						{ label: 'Project' },
-						{ label: 'Organization', width: '180px' },
 						{ label: 'Visibility', width: '120px' },
 						{ label: 'Members', width: '100px', align: 'right' },
 						{ label: '', width: '100px' }
@@ -81,10 +80,6 @@
 						<div class="min-w-0">
 							<p class="truncate text-sm font-medium">{project.name}</p>
 							<p class="text-muted-foreground truncate font-mono text-xs">{project.id}</p>
-						</div>
-						<div class="min-w-0">
-							<p class="truncate text-sm">{project.orgName}</p>
-							<code class="text-muted-foreground font-mono text-xs">{project.orgSlug}</code>
 						</div>
 						<span
 							class={`w-fit rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${VISIBILITY_TONE[project.visibility] ?? VISIBILITY_TONE.private}`}
@@ -116,9 +111,8 @@
 			<AlertDialog.Title>Reclaim this project?</AlertDialog.Title>
 			<AlertDialog.Description>
 				{#if confirming}
-					You'll be added as a co-owner of <strong>{confirming.name}</strong> in
-					<strong>{confirming.orgName}</strong>. The existing owner is not demoted. This action is
-					recorded in the audit log.
+					You'll be added as a co-owner of <strong>{confirming.name}</strong>. The existing owner is
+					not demoted. This action is recorded in the audit log.
 				{/if}
 			</AlertDialog.Description>
 		</AlertDialog.Header>

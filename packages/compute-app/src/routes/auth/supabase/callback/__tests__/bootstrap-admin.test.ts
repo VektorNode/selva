@@ -142,4 +142,38 @@ describe('OAuth callback bootstrap admin grant', () => {
 		);
 		expect(perms).not.toContain('instance_admin');
 	});
+
+	// In multi-tenant mode the first OAuth signer must NOT win the race —
+	// without the env var, a random SaaS signup would become Selva staff.
+	// Operators seed admin explicitly via BOOTSTRAP_INSTANCE_ADMIN_EMAIL.
+	it('Multi-tenant, no env var → bootstrap disabled, first signer is NOT admin', async () => {
+		tp = await freshProviders({ tenancy: 'multi' });
+		installOAuthShim(tp, { email: 'random@example.test' });
+
+		const res = await callback({ code: 'fake-code' });
+		expect(res.status).toBe(303);
+
+		const random = await tp.usersFile.findByEmail('random@example.test');
+		const perms = await tp.config.data.permissions.getFor(
+			{ userId: random!.id, platformPermissions: ['instance_admin'], orgPermissions: [] },
+			random!.id
+		);
+		expect(perms).not.toContain('instance_admin');
+	});
+
+	it('Multi-tenant, env var matches signer → admin granted (staff seed / break-glass)', async () => {
+		tp = await freshProviders({ tenancy: 'multi' });
+		await setEnv('BOOTSTRAP_INSTANCE_ADMIN_EMAIL', 'staff@selva.test');
+		installOAuthShim(tp, { email: 'staff@selva.test' });
+
+		const res = await callback({ code: 'fake-code' });
+		expect(res.status).toBe(303);
+
+		const staff = await tp.usersFile.findByEmail('staff@selva.test');
+		const perms = await tp.config.data.permissions.getFor(
+			{ userId: staff!.id, platformPermissions: ['instance_admin'], orgPermissions: [] },
+			staff!.id
+		);
+		expect(perms).toContain('instance_admin');
+	});
 });

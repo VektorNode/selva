@@ -42,7 +42,7 @@
 	const orgPermissions = $derived<OrgPermission[]>(pageData.ctx?.orgPermissions ?? []);
 </script>
 
-<AppShell {homeUrl} {title} {mode} {sidenav}>
+<AppShell {homeUrl} {title} {mode} {sidenav} showFooter>
 	{#snippet navItems()}
 		{#if isAuthed && showMainNav}
 			<MainNav />
