@@ -19,16 +19,16 @@ namespace Selva.GH.Features.UIBuilder.Services;
 ///     Orchestrates communication between the web UI and Grasshopper component.
 ///     Handles WebSocket event routing, message processing, and response broadcasting.
 /// </summary>
-public class BridgeCommunicationService : IDisposable
+public class BridgeOrchestrator : IDisposable
 {
     // Delay before broadcasting initial outputs after client connects.
     // Gives Grasshopper time to finish its current solution before we read output data.
     private const int InitialOutputBroadcastDelayMs = AppConfig.UIBuilder.InitialOutputBroadcastDelayMs;
 
-    private readonly CommunicationHandler _communicationHandler;
+    private readonly WebSocketTransport _webSocketTransport;
     private readonly DocumentEventManager _eventManager;
     private readonly Version _pluginVersion;
-    private readonly SchemaManager _schemaManager;
+    private readonly SchemaSynchronizer _schemaSynchronizer;
     private readonly string _sessionId;
     private readonly ComponentStateManager _stateManager;
     private readonly ValueApplicator _valueApplicator;
@@ -39,9 +39,9 @@ public class BridgeCommunicationService : IDisposable
     private Func<UISchema> _getSchema;
     private Action<UISchema> _setSchema;
 
-    public BridgeCommunicationService(
-        CommunicationHandler communicationHandler,
-        SchemaManager schemaManager,
+    public BridgeOrchestrator(
+        WebSocketTransport webSocketTransport,
+        SchemaSynchronizer schemaSynchronizer,
         ValueApplicator valueApplicator,
         ValueCollector valueCollector,
         ComponentStateManager stateManager,
@@ -49,8 +49,8 @@ public class BridgeCommunicationService : IDisposable
         Version pluginVersion,
         string sessionId)
     {
-        _communicationHandler = communicationHandler ?? throw new ArgumentNullException(nameof(communicationHandler));
-        _schemaManager = schemaManager ?? throw new ArgumentNullException(nameof(schemaManager));
+        _webSocketTransport = webSocketTransport ?? throw new ArgumentNullException(nameof(webSocketTransport));
+        _schemaSynchronizer = schemaSynchronizer ?? throw new ArgumentNullException(nameof(schemaSynchronizer));
         _valueApplicator = valueApplicator ?? throw new ArgumentNullException(nameof(valueApplicator));
         _valueCollector = valueCollector ?? throw new ArgumentNullException(nameof(valueCollector));
         _stateManager = stateManager ?? throw new ArgumentNullException(nameof(stateManager));
@@ -68,12 +68,12 @@ public class BridgeCommunicationService : IDisposable
 
         _disposed = true;
 
-        _communicationHandler.OnValuesReceived -= HandleWebSocketValueUpdate;
-        _communicationHandler.OnCurrentValuesRequested -= HandleCurrentValuesRequest;
-        _communicationHandler.OnClientConnected -= HandleClientConnected;
-        _communicationHandler.OnSchemaSaveRequested -= HandleSchemaSave;
-        _communicationHandler.OnSyncPreviewRequested -= HandleSyncPreviewRequest;
-        _communicationHandler.OnSyncChangesApply -= HandleApplySyncChanges;
+        _webSocketTransport.OnValuesReceived -= HandleWebSocketValueUpdate;
+        _webSocketTransport.OnCurrentValuesRequested -= HandleCurrentValuesRequest;
+        _webSocketTransport.OnClientConnected -= HandleClientConnected;
+        _webSocketTransport.OnSchemaSaveRequested -= HandleSchemaSave;
+        _webSocketTransport.OnSyncPreviewRequested -= HandleSyncPreviewRequest;
+        _webSocketTransport.OnSyncChangesApply -= HandleApplySyncChanges;
     }
 
     // -------------------------------------------------------------------------
@@ -92,12 +92,12 @@ public class BridgeCommunicationService : IDisposable
         _getSchema = getSchema ?? throw new ArgumentNullException(nameof(getSchema));
         _setSchema = setSchema ?? throw new ArgumentNullException(nameof(setSchema));
 
-        _communicationHandler.OnValuesReceived += HandleWebSocketValueUpdate;
-        _communicationHandler.OnCurrentValuesRequested += HandleCurrentValuesRequest;
-        _communicationHandler.OnClientConnected += HandleClientConnected;
-        _communicationHandler.OnSchemaSaveRequested += HandleSchemaSave;
-        _communicationHandler.OnSyncPreviewRequested += HandleSyncPreviewRequest;
-        _communicationHandler.OnSyncChangesApply += HandleApplySyncChanges;
+        _webSocketTransport.OnValuesReceived += HandleWebSocketValueUpdate;
+        _webSocketTransport.OnCurrentValuesRequested += HandleCurrentValuesRequest;
+        _webSocketTransport.OnClientConnected += HandleClientConnected;
+        _webSocketTransport.OnSchemaSaveRequested += HandleSchemaSave;
+        _webSocketTransport.OnSyncPreviewRequested += HandleSyncPreviewRequest;
+        _webSocketTransport.OnSyncChangesApply += HandleApplySyncChanges;
     }
 
     // -------------------------------------------------------------------------
@@ -110,8 +110,8 @@ public class BridgeCommunicationService : IDisposable
         {
             if (_stateManager.IsSolving)
             {
-                Logger.Log("[BridgeCommunicationService] Skipping value update — currently solving.");
-                _ = _communicationHandler.BroadcastRuntimeMessage("warning",
+                Logger.Log("[BridgeOrchestrator] Skipping value update — currently solving.");
+                _ = _webSocketTransport.BroadcastRuntimeMessage("warning",
                     "Skipping value update — currently solving.");
                 return;
             }
@@ -121,8 +121,8 @@ public class BridgeCommunicationService : IDisposable
 
             if (!DocumentGuards.DocumentAndSchemaValid(document, schema, out _))
             {
-                Logger.Warn("[BridgeCommunicationService] Document or schema invalid, skipping value update.");
-                _ = _communicationHandler.BroadcastRuntimeMessage("error", "Document or schema invalid.");
+                Logger.Warn("[BridgeOrchestrator] Document or schema invalid, skipping value update.");
+                _ = _webSocketTransport.BroadcastRuntimeMessage("error", "Document or schema invalid.");
                 return;
             }
 
@@ -132,15 +132,15 @@ public class BridgeCommunicationService : IDisposable
 
                 if (level == GH_RuntimeMessageLevel.Error || level == GH_RuntimeMessageLevel.Warning)
                 {
-                    _ = _communicationHandler.BroadcastRuntimeMessage(ConvertMessageLevel(level), msg);
+                    _ = _webSocketTransport.BroadcastRuntimeMessage(ConvertMessageLevel(level), msg);
                 }
             });
         }
         catch (Exception ex)
         {
-            Logger.Error($"[BridgeCommunicationService] Error handling value update: {ex.Message}", ex);
+            Logger.Error($"[BridgeOrchestrator] Error handling value update: {ex.Message}", ex);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
-            _ = _communicationHandler.BroadcastRuntimeMessage("error", $"Error handling value update: {ex.Message}");
+            _ = _webSocketTransport.BroadcastRuntimeMessage("error", $"Error handling value update: {ex.Message}");
         }
     }
 
@@ -163,7 +163,7 @@ public class BridgeCommunicationService : IDisposable
                 if (contextBake == null)
                 {
                     // No ContextBake wired at all — refuse and tell the user.
-                    _ = _communicationHandler.BroadcastRuntimeMessage("error",
+                    _ = _webSocketTransport.BroadcastRuntimeMessage("error",
                         "UIBridge Schema output is not connected to a Context Bake component " +
                         "with param name \"Schema\". Wire it up in Grasshopper first.");
                     _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
@@ -176,7 +176,7 @@ public class BridgeCommunicationService : IDisposable
                 schema = CreateDefaultSchema(document);
             }
 
-            var validatedSchema = _schemaManager.ValidateSchema(schema, document);
+            var validatedSchema = _schemaSynchronizer.ValidateSchema(schema, document);
 #if DEBUG
             Logger.Log($"[UIBuilder] ClientConnected — schema={validatedSchema.Name}, " +
                        $"inputs={validatedSchema.Inputs?.Count}, outputs={validatedSchema.Outputs?.Count}");
@@ -186,7 +186,7 @@ public class BridgeCommunicationService : IDisposable
             var currentValues = _valueCollector.CollectInputValues(
                 document, validatedSchema, _component.AddRuntimeMessage);
 
-            _ = _communicationHandler.BroadcastInitialData(validatedSchema, currentParams, currentValues);
+            _ = _webSocketTransport.BroadcastInitialData(validatedSchema, currentParams, currentValues);
 
             if (validatedSchema.Outputs?.Count > 0)
             {
@@ -196,7 +196,7 @@ public class BridgeCommunicationService : IDisposable
         catch (Exception ex)
         {
             // Always log — silent swallowing made failures invisible.
-            Logger.Error($"[BridgeCommunicationService] Error sending initial data: {ex.Message}", ex);
+            Logger.Error($"[BridgeOrchestrator] Error sending initial data: {ex.Message}", ex);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error sending initial data: {ex.Message}");
         }
     }
@@ -208,13 +208,13 @@ public class BridgeCommunicationService : IDisposable
             var document = _component.OnPingDocument();
             if (document == null)
             {
-                _ = _communicationHandler.BroadcastSchemaSaved(false, "No document available.");
+                _ = _webSocketTransport.BroadcastSchemaSaved(false, "No document available.");
                 return;
             }
 
             if (FindWiredContextBake() == null)
             {
-                _ = _communicationHandler.BroadcastSchemaSaved(false,
+                _ = _webSocketTransport.BroadcastSchemaSaved(false,
                     "Cannot save: UIBridge Schema output is not connected to a Context Bake component.");
                 _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
                     "Schema save rejected: Schema output is not wired to a Context Bake component.");
@@ -227,7 +227,7 @@ public class BridgeCommunicationService : IDisposable
 
             SanitizeSchema(schema);
 
-            var validatedSchema = _schemaManager.ValidateSchema(schema, document);
+            var validatedSchema = _schemaSynchronizer.ValidateSchema(schema, document);
 #if DEBUG
             Logger.Log($"[UIBuilder] Save — inputs={validatedSchema.Inputs?.Count}, " +
                        $"outputs={validatedSchema.Outputs?.Count}, " +
@@ -236,15 +236,15 @@ public class BridgeCommunicationService : IDisposable
 
             _component.Attributes?.DocObject?.RecordUndoEvent("Update Schema");
             _setSchema(validatedSchema);
-            _schemaManager.ApplyParameterAccessFromSchema(validatedSchema, document);
-            _schemaManager.ClearMetadataCache();
+            _schemaSynchronizer.ApplyParameterAccessFromSchema(validatedSchema, document);
+            _schemaSynchronizer.ClearMetadataCache();
             document.Modified();
 
             // Suppress the re-solve triggered by the component expire below so the
             // frontend does not see a spurious solving-state flash.
-            _communicationHandler.SuppressSolvingCycles(1);
+            _webSocketTransport.SuppressSolvingCycles(1);
 
-            _ = _communicationHandler.BroadcastSchemaSaved(true);
+            _ = _webSocketTransport.BroadcastSchemaSaved(true);
 
             GHDocumentMutator.ScheduleComponentExpire(document, _component);
 #if DEBUG
@@ -255,8 +255,8 @@ public class BridgeCommunicationService : IDisposable
         catch (Exception ex)
         {
             // Clear suppression so the next solve is not accidentally hidden.
-            _communicationHandler.SuppressSolvingCycles(0);
-            _ = _communicationHandler.BroadcastSchemaSaved(false, ex.Message);
+            _webSocketTransport.SuppressSolvingCycles(0);
+            _ = _webSocketTransport.BroadcastSchemaSaved(false, ex.Message);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error saving schema: {ex.Message}");
         }
     }
@@ -274,11 +274,11 @@ public class BridgeCommunicationService : IDisposable
             var currentValues = _valueCollector.CollectInputValues(
                 document, _getSchema(), _component.AddRuntimeMessage);
 
-            _ = _communicationHandler.BroadcastCurrentValues(currentValues);
+            _ = _webSocketTransport.BroadcastCurrentValues(currentValues);
         }
         catch (Exception ex)
         {
-            Logger.Error($"[BridgeCommunicationService] Error handling current values request: {ex.Message}", ex);
+            Logger.Error($"[BridgeOrchestrator] Error handling current values request: {ex.Message}", ex);
         }
     }
 
@@ -289,17 +289,17 @@ public class BridgeCommunicationService : IDisposable
             var document = _component.OnPingDocument();
             if (document == null)
             {
-                _ = _communicationHandler.BroadcastRuntimeMessage("error", "No document available.");
+                _ = _webSocketTransport.BroadcastRuntimeMessage("error", "No document available.");
                 return;
             }
 
-            _ = _communicationHandler.BroadcastSyncPreview(
-                SchemaManager.ComputeSyncDiff(schema, document));
+            _ = _webSocketTransport.BroadcastSyncPreview(
+                SchemaSynchronizer.ComputeSyncDiff(schema, document));
         }
         catch (Exception ex)
         {
-            Logger.Error($"[BridgeCommunicationService] Error computing sync preview: {ex.Message}", ex);
-            _ = _communicationHandler.BroadcastRuntimeMessage("error", $"Error computing sync preview: {ex.Message}");
+            Logger.Error($"[BridgeOrchestrator] Error computing sync preview: {ex.Message}", ex);
+            _ = _webSocketTransport.BroadcastRuntimeMessage("error", $"Error computing sync preview: {ex.Message}");
         }
     }
 
@@ -310,23 +310,23 @@ public class BridgeCommunicationService : IDisposable
             var document = _component.OnPingDocument();
             if (document == null)
             {
-                _ = _communicationHandler.BroadcastSyncApplied(false, "No document available.");
+                _ = _webSocketTransport.BroadcastSyncApplied(false, "No document available.");
                 return;
             }
 
             var currentSchema = _getSchema();
             if (currentSchema == null)
             {
-                _ = _communicationHandler.BroadcastSyncApplied(false, "No schema available.");
+                _ = _webSocketTransport.BroadcastSyncApplied(false, "No schema available.");
                 return;
             }
 
-            var updatedSchema = SchemaManager.ApplySyncChanges(changes, document, currentSchema);
+            var updatedSchema = SchemaSynchronizer.ApplySyncChanges(changes, document, currentSchema);
             if (updatedSchema != null)
             {
                 _setSchema(updatedSchema);
                 document.Modified();
-                _ = _communicationHandler.BroadcastSchemaUpdate(updatedSchema);
+                _ = _webSocketTransport.BroadcastSchemaUpdate(updatedSchema);
             }
 
             // Refresh nicknames on the canvas for all changed objects.
@@ -339,13 +339,13 @@ public class BridgeCommunicationService : IDisposable
             GHDocumentMutator.RefreshObjectsOnCanvas(document, changedObjects);
             GHDocumentMutator.ScheduleComponentExpire(document, _component, true);
 
-            _ = _communicationHandler.BroadcastSyncApplied(true);
+            _ = _webSocketTransport.BroadcastSyncApplied(true);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Sync changes applied successfully.");
         }
         catch (Exception ex)
         {
-            Logger.Error($"[BridgeCommunicationService] Error applying sync changes: {ex.Message}", ex);
-            _ = _communicationHandler.BroadcastSyncApplied(false, ex.Message);
+            Logger.Error($"[BridgeOrchestrator] Error applying sync changes: {ex.Message}", ex);
+            _ = _webSocketTransport.BroadcastSyncApplied(false, ex.Message);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error applying sync changes: {ex.Message}");
         }
     }
@@ -435,7 +435,7 @@ public class BridgeCommunicationService : IDisposable
             };
         }
 
-        return _schemaManager.ScanParameters(document, _component);
+        return _schemaSynchronizer.ScanParameters(document, _component);
     }
 
     private UISchema CreateDefaultSchema(GH_Document document)

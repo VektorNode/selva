@@ -15,7 +15,7 @@ namespace Selva.GH.Features.UIBuilder.Services.Schema;
 ///     Manages parameter scanning, schema validation, and synchronization between
 ///     Grasshopper documents and UI schemas.
 /// </summary>
-public class SchemaManager
+public class SchemaSynchronizer
 {
     #region Static Configuration
 
@@ -67,7 +67,7 @@ public class SchemaManager
 
     private readonly string _sessionId;
 
-    public SchemaManager(string sessionId)
+    public SchemaSynchronizer(string sessionId)
     {
         _sessionId = sessionId;
     }

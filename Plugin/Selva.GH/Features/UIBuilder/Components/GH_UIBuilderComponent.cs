@@ -51,7 +51,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     /// <summary>
     ///     Helper property to check if WebSocket communication is available
     /// </summary>
-    private bool IsConnected => _service?.CommunicationHandler?.IsRunning == true;
+    private bool IsConnected => _service?.WebSocketTransport?.IsRunning == true;
 
     public override Guid ComponentGuid => new Guid("D4E5F6A7-B8C9-4D5E-0F1A-2B3C4D5E6F7A");
 
@@ -213,7 +213,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                 {
                     var document = OnPingDocument();
                     var (addedIds, removedIds) =
-                        _service.SchemaManager.MergePostSolveBakeOutputs(_embeddedSchema, document);
+                        _service.SchemaSynchronizer.MergePostSolveBakeOutputs(_embeddedSchema, document);
                     if (addedIds.Count > 0 || removedIds.Count > 0)
                     {
                         if (addedIds.Count > 0)
@@ -221,7 +221,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                             _service.EventManager.RegisterWatchedIds(addedIds);
                         }
 
-                        _ = _service.CommunicationHandler
+                        _ = _service.WebSocketTransport
                             .BroadcastSchemaUpdate(_embeddedSchema, removedIds.Count > 0 ? removedIds : null)
                             .ContinueWith(t =>
                             {
@@ -296,9 +296,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         if (_embeddedSchema != null && transition.EnableRising)
         {
             // Remove any parameters deleted while component was off
-            _embeddedSchema = _service.SchemaManager.ValidateSchema(_embeddedSchema, document);
+            _embeddedSchema = _service.SchemaSynchronizer.ValidateSchema(_embeddedSchema, document);
             // Reconcile nicknames renamed while component was off (or Rhino was closed)
-            _service.SchemaManager.SyncNicknamesFromDocument(_embeddedSchema, document);
+            _service.SchemaSynchronizer.SyncNicknamesFromDocument(_embeddedSchema, document);
             // Seed the watched set so UndoStateChanged can short-circuit correctly
             _service.EventManager.RegisterWatchedObjects(_embeddedSchema);
         }
@@ -341,7 +341,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             _embeddedSchema,
             _service.ValueApplicator,
             _embeddedValues,
-            _service.CommunicationHandler,
+            _service.WebSocketTransport,
             document,
             AddRuntimeMessage
         );
@@ -351,8 +351,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         try
         {
-            // Get WebSocket port from CommunicationHandler
-            var wsPort = _service?.CommunicationHandler?.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
+            // Get WebSocket port from WebSocketTransport
+            var wsPort = _service?.WebSocketTransport?.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
 
             // Use embedded web server if available, otherwise fall back to dev server
             var url = _service?.WebServer?.IsRunning == true
@@ -474,7 +474,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
 
         _service?.ValueApplicator?.Clear();
-        _service?.SchemaManager?.ClearMetadataCache();
+        _service?.SchemaSynchronizer?.ClearMetadataCache();
         _service?.StateManager?.Reset();
         _currentDocument = null;
     }
@@ -543,7 +543,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         {
             try
             {
-                var persistenceService = new SchemaPersistenceService(PluginVersion);
+                var persistenceService = new SchemaArchiveSerializer(PluginVersion);
                 var result = persistenceService.DeserializeFromArchive(reader);
 
                 if (result.HasValue)

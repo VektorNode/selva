@@ -106,23 +106,6 @@ export function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | 
 }
 
 /**
- * Get default value for a parameter type
- */
-export function getDefaultValue(paramType: string): unknown {
-	switch (paramType) {
-		case 'number':
-		case 'integer':
-			return 0;
-		case 'boolean':
-			return false;
-		case 'text':
-			return '';
-		default:
-			return null;
-	}
-}
-
-/**
  * Process initial data message and extract schema with defaults
  * Note: Default schema creation is now handled by the C# UIBuilderComponent,
  * which includes document metadata (projectFileName, documentId)
