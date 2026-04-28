@@ -1,8 +1,9 @@
 ﻿using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
+using Selva.GH.Features.FileIO.Services;
 
-namespace Selva.GH.Features.FileIO.Services;
+namespace Selva.GH.Features.FileIO.Goos;
 
 public class FileDataGoo : IGH_Goo
 {

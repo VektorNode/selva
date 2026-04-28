@@ -24,17 +24,11 @@ The project was always just schema. Rename makes the boundary self-documenting.
 - [x] `dotnet build` clean (0 errors).
 - [x] `dotnet test` — 65 / 65 pass.
 
-## Phase 2 — Normalize C# component naming 🚧
+## Phase 2 — Normalize C# component naming ✅
 
-**Rules** (from `STRUCTURE.md`):
-- `GH_Component` subclass → `GH_PascalCase`, filename matches class name.
-- `IGH_Param` subclass → `Param_PascalCase`.
-- `IGH_Goo` type → `XGoo`.
-- No `snake_case` in C# class or filenames.
+Rules applied (from `STRUCTURE.md`): filename matches class name, no `snake_case`, no Pascal-case typos. All `ComponentGuid` values were preserved — existing user `.gh` files keep working.
 
-**Critical**: when renaming a `GH_Component` class, the `ComponentGuid` property MUST stay unchanged. Grasshopper persists the GUID in user `.gh` files; changing it orphans existing components.
-
-Renames:
+Done:
 
 | From | To | Notes |
 |---|---|---|
@@ -45,16 +39,18 @@ Renames:
 | `Drawing/Components/ExportSvgFile.cs` | `GH_ExportSvgFile.cs` | filename only |
 | `Drawing/Components/LinearDimension.cs` | `GH_LinearDimension.cs` | filename only |
 | `Drawing/Components/PathStyle.cs` | `GH_PathStyle.cs` | filename only |
-| `FileIO/Components/GH_Block_To_File.cs` | `GH_BlockToFile.cs` | **file + class** |
-| `ComputeIO/Components/GH_Contextual_Value_List.cs` | `GH_ContextualValueList.cs` | **file + class** |
-| `ComputeIO/Components/GH_Environement.cs` | `GH_Environment.cs` | **file + class + typo fix** |
-| `Selva.GH/Config/Rhinoconverteroptions.cs` | `RhinoConverterOptions.cs` | filename only |
+| `FileIO/Components/GH_Block_To_File.cs` | `GH_BlockToFile.cs` | file + class (also doc-comment in `Param_FileData.cs`) |
+| `ComputeIO/Components/GH_Contextual_Value_List.cs` | `GetValueListParameter.cs` | filename now matches the actual class (`GetValueListParameter`, an `IGH_Param`) |
+| `ComputeIO/Components/GH_Environement.cs` | `GH_Environment.cs` | file + class + typo fix |
+| `Selva.GH/Config/Rhinoconverteroptions.cs` | `RhinoConverterOptions.cs` | filename only (case-rename via `git mv -f`) |
 
-Verify after each rename: class compiles, `ComponentGuid` is unchanged, `dotnet build && dotnet test` still green.
+`dotnet build` clean (0 errors), `dotnet test` 65/65 pass.
 
-## Phase 3 — Goos and Params into dedicated folders
+## Phase 3 — Goos and Params into dedicated folders ✅
 
-Goos and Params currently live in `Components/`, `Services/`, or `Models/` depending on the feature. Move them all into per-feature `Goos/` and `Params/` folders.
+8 files moved (`git mv` rename-tracked) into per-feature `Goos/` and `Params/` folders. Namespaces aligned to folders. The empty `UIBuilder/Models/` folder was removed.
+
+Moved:
 
 | File | New location |
 |---|---|
@@ -67,7 +63,7 @@ Goos and Params currently live in `Components/`, `Services/`, or `Models/` depen
 | `Display/Components/Param_ThreeMaterial.cs` | `Display/Params/Param_ThreeMaterial.cs` |
 | `FileIO/Components/Param_FileData.cs` | `FileIO/Params/Param_FileData.cs` |
 
-Pure file moves. Namespaces don't have to change (they follow folder conventions but aren't required to). Build + test after.
+Consumer `using` directives updated across ~17 files (Components, OBSOLETE upgraders, ValueCollector, ValueApplicator, BridgeCommunicationService, etc.). `dotnet build` clean, `dotnet test` 65/65.
 
 ## Phase 4 — Flatten `UIBuilder/Services/`
 

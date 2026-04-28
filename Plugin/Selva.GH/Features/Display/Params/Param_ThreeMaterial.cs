@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Drawing;
 using Grasshopper.Kernel;
-using Selva.GH.Features.Display.Services;
+using Selva.GH.Features.Display.Goos;
 using Selva.GH.Properties;
 
-namespace Selva.GH.Features.Display.Components;
+namespace Selva.GH.Features.Display.Params;
 
 /// <summary>
 ///     Dedicated Grasshopper parameter for <see cref="ThreeMaterialGoo" />.

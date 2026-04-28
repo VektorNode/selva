@@ -7,7 +7,7 @@ using Rhino;
 using Selva.Schema.Models;
 using Selva.GH.Config;
 using Selva.GH.Features.UIBuilder.Helpers;
-using Selva.GH.Features.UIBuilder.Models;
+using Selva.GH.Features.UIBuilder.Goos;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Features.UIBuilder.Services.Events;
 using Selva.GH.Features.UIBuilder.Services.Persistence;

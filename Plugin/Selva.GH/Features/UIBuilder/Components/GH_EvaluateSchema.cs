@@ -6,7 +6,7 @@ using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Selva.Schema.Models;
-using Selva.GH.Features.UIBuilder.Models;
+using Selva.GH.Features.UIBuilder.Goos;
 using Selva.GH.Properties;
 
 namespace Selva.GH.Features.UIBuilder.Components;

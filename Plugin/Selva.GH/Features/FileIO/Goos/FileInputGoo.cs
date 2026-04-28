@@ -2,8 +2,9 @@ using System.Runtime.InteropServices;
 using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
+using Selva.GH.Features.FileIO.Services;
 
-namespace Selva.GH.Features.FileIO.Services;
+namespace Selva.GH.Features.FileIO.Goos;
 
 /// <summary>
 ///     Custom IGH_Goo type for file input data.
