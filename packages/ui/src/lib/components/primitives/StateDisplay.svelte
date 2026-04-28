@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Loader, AlertCircle, AlertTriangle, Inbox } from '@lucide/svelte';
-	import * as Card from '$lib/components/ui/card';
+	import * as Card from '$lib/components/primitives/card';
 
 	interface StateDisplayProps {
 		type: 'loading' | 'error' | 'warning' | 'empty';

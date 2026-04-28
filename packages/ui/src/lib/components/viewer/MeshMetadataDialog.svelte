@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as Dialog from '../ui/dialog/index.js';
+	import * as Dialog from '../primitives/dialog/index.js';
 
 	interface Props {
 		open: boolean;

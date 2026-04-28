@@ -12,7 +12,7 @@
 	import PageContainer from '../layout/PageContainer.svelte';
 	import PageHeader from '../layout/PageHeader.svelte';
 	import AppLayout from './AppLayout.svelte';
-	import StateDisplay from '../ui/StateDisplay.svelte';
+	import StateDisplay from '../primitives/StateDisplay.svelte';
 
 	import type { Snippet } from 'svelte';
 

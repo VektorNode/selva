@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { ModeToggle } from '$lib/components/ui/mode-toggle';
+	import { ModeToggle } from '$lib/components/primitives/mode-toggle';
 
 	interface PageHeaderProps {
 		homeUrl?: string;

@@ -2,7 +2,7 @@
 	import type { OutputChartLayoutItem } from '@selvajs/schemas';
 	import { onMount } from 'svelte';
 	import { Loader, Maximize, Minimize } from '@lucide/svelte';
-	import { Label } from '$lib/components/ui/label';
+	import { Label } from '$lib/components/primitives/label';
 	import { loadScript } from '$lib/utils/loadScript';
 
 	interface Props {

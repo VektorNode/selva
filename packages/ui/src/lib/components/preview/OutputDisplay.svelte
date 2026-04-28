@@ -3,11 +3,11 @@
 	import type { FileData } from '@selvajs/compute';
 	import ChartOutput from './ChartOutput.svelte';
 	import { downloadFiles, formatFileSize, getBase64FileSize } from '$lib/utils/file-download';
-	import { Button } from '../ui';
-	import * as Dialog from '$lib/components/ui/dialog';
+	import { Button } from '../primitives';
+	import * as Dialog from '$lib/components/primitives/dialog';
 	import { Info, Folder, FolderOpen, FileIcon, ChevronRight } from '@lucide/svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-	import { Label } from '$lib/components/ui/label';
+	import { Label } from '$lib/components/primitives/label';
 
 	interface Props {
 		item: OutputLayoutItem;

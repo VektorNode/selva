@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { DropdownWidgetConfig, SupportedTypes } from '@selvajs/schemas';
-	import * as Select from '$lib/components/ui/select';
+	import * as Select from '$lib/components/primitives/select';
 
 	interface Props {
 		value?: string;

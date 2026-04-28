@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Input } from '$lib/components/ui/input';
-	import { Button } from '$lib/components/ui/button';
-	import { Label } from '$lib/components/ui/label';
+	import { Input } from '$lib/components/primitives/input';
+	import { Button } from '$lib/components/primitives/button';
+	import { Label } from '$lib/components/primitives/label';
 	import { FileUp, Link, CircleAlert, CircleCheck } from '@lucide/svelte';
 	import { APP_DEFAULTS } from '$lib/constants';
 

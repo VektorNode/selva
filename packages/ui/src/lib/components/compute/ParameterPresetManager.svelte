@@ -8,7 +8,7 @@
 		exportStateAsJson,
 		importStateFromJson
 	} from '../../utils/param-exporter';
-	import { Button, Input, Label, Textarea, Dialog, Card } from '../ui';
+	import { Button, Input, Label, Textarea, Dialog, Card } from '../primitives';
 
 	import type { ActionButton } from '../../types/actionButton';
 

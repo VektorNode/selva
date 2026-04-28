@@ -1,15 +1,18 @@
-// Layout components
+// Layout components (page chrome: shell, header, footer, nav)
 export * from './components/layout';
-// App shell (compose schema + viewer + layout into a runnable app)
-export { default as AppLayout } from './components/app-shell/AppLayout.svelte';
-export { default as ComputeApp } from './components/app-shell/ComputeApp.svelte';
 
-// Error components
+// Compute app (schema + viewer + solve controls composed into a runnable app)
+export { default as AppLayout } from './components/compute/AppLayout.svelte';
+export { default as ComputeApp } from './components/compute/ComputeApp.svelte';
+
+// Error screen
 export { default as ErrorScreen } from './components/ErrorScreen.svelte';
 
-// UI components
-export * from './components/ui';
-export { default as StateDisplay } from './components/ui/StateDisplay.svelte';
+// Design-system primitives (shadcn-svelte + custom)
+export * from './components/primitives';
+export { default as StateDisplay } from './components/primitives/StateDisplay.svelte';
+
+// 3D viewer
 export { default as Viewer } from './components/viewer/Viewer.svelte';
 
 // Utilities
