@@ -309,7 +309,7 @@ Workflow: edit `ui-schema.json` → run `pnpm generate:all` → both sides see t
 - Standalone SvelteKit deployment.
 - Provider (local vs supabase), tenancy, and feature flags are set in [`selva.config.ts`](../../../selva.config.ts) — committed to git, reviewed in PRs. Secrets and per-environment values (URLs, keys, `SESSION_SECRET`) live in `.env`. The authoritative reference for env vars is [.env.example](../.env.example). `PORT` defaults to 3000.
 - Compute server URL/key configured in the admin UI (`/admin/compute`), persisted via `IComputeServerStore`. **Never** an env var.
-- Example PM2 config: [`example.ecosystem.config.cjs`](../../../example.ecosystem.config.cjs).
+- Example PM2 config: [`ecosystem.config.example.cjs`](../../../ecosystem.config.example.cjs).
 
 ---
 

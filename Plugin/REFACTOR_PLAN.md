@@ -73,20 +73,20 @@ Consumer `using` directives updated across ~17 files (Components, OBSOLETE upgra
 
 Follow-up code task (separate refactor, not part of this plan): inspect for likely overlap between `BridgeCommunicationService` ↔ `CommunicationHandler` and `SchemaManager` ↔ `SchemaPersistenceService`. Possibly merge.
 
-## Phase 5 — Move `OBSOLETE_COMPONENTS_GUIDE.md`
+## Phase 5 — Move `OBSOLETE_COMPONENTS_GUIDE.md` ✅
 
-`Plugin/Selva.GH/Features/OBSOLETE_COMPONENTS_GUIDE.md` → `docs/development/obsolete-components.md`. Lowercase kebab-case, lives in `docs/`. Add a link from `Plugin/README.md`.
+Moved to `docs/development/obsolete-components.md` (kebab-case, no SCREAMING_SNAKE). Linked from `Plugin/README.md` under a new "Development" section that also points to `STRUCTURE.md`.
 
-## Phase 6 — Rename `Plugin/Dist/` → `Plugin/Releases/`
+## Phase 6 — Rename `Plugin/Dist/` → `Plugin/Releases/` ✅
 
-`Dist/` is checked-in versioned `.yak` releases (not build output). Rename for clarity. Update `scripts/build-production.js`, `scripts/setup.sh`, `scripts/update.sh`, and any docs that reference the path.
+Folder renamed via `git mv`. All versioned `.yak`/`.gh` artifacts tracked as renames. Confirmed via grep that no scripts or docs reference the old `Plugin/Dist/` path — nothing else needed updating.
 
-## Phase 7 — Root cleanup
+## Phase 7 — Root cleanup ✅ (mostly)
 
-- [ ] Delete `tsconfig.lib.json` (referenced nowhere — verified via grep).
-- [ ] Rename `example.ecosystem.config.cjs` → `ecosystem.config.example.cjs` (convention: `.example` as suffix, not prefix).
-- [ ] Move `Caddyfile.example` → `infra/Caddyfile.example` or `docs/deployment/`.
-- [ ] Decide on `examples/` (currently one HTML file): populate or fold into `docs/`.
+- [x] Deleted `tsconfig.lib.json` — confirmed unreferenced anywhere; root `tsconfig.json` extends `tsconfig.base.json`. `pnpm type-check` clean across all 11 packages.
+- [x] Renamed `example.ecosystem.config.cjs` → `ecosystem.config.example.cjs`. Updated 2 doc references (`docs/deployment/compute-app/NODE_DEPLOYMENT.md`, `packages/compute-app/specs/Architecture.md`).
+- [x] Moved `Caddyfile.example` → `docs/deployment/Caddyfile.example`. No script referenced the example file (only the deployed `/etc/caddy/Caddyfile`).
+- [ ] **TBD: `examples/`** — contains one orphan file `embed-code-generator.html` (16KB, last touched January 2026, referenced nowhere). Awaiting decision: delete, document, or leave.
 
 ## Phase 8 — Reorganize `@selvajs/ui` `lib/utils/`
 

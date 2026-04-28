@@ -47,7 +47,7 @@ env: {
 // Rhino.Compute URL + API key are configured in /admin/compute after first boot.
 ```
 
-See [`example.ecosystem.config.cjs`](../../../example.ecosystem.config.cjs) at the repo root for the canonical template.
+See [`ecosystem.config.example.cjs`](../../../ecosystem.config.example.cjs) at the repo root for the canonical template.
 
 ---
 
