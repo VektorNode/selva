@@ -24,11 +24,6 @@ ecosystem.config.cjs
 # Grasshopper definitions (keep private, not tracked)
 *.gh
 *.ghx
-# Legacy: pre-DATA_PATH-move installs put runtime data here. New default is
-# .selva-data/ at the repo root. Kept for backwards compat with existing
-# deployments that still set DATA_PATH="./definitions".
-/definitions/
-/example-definitions/
 
 # Deployment-specific thumbnails
 static/images/*_Thumbnail.png

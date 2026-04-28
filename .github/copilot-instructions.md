@@ -49,7 +49,7 @@ pnpm dev                    # Dev server (http://localhost:5173)
 pnpm type-check             # TypeScript check
 pnpm lint                   # Lint all files
 pnpm format                 # Format with Prettier
-pnpm run build:all          # Build all packages
+pnpm build                  # Build all packages (Turborepo, with caching)
 ```
 
 **Schema workflow (when modifying ui-schema.json):**

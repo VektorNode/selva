@@ -27,7 +27,8 @@
 				"svelte.config.js",
 				"vite.config.ts",
 				"vite.config.js"
-			]
+			],
+			"env": ["ADAPTER", "NODE_ENV"]
 		},
 		"check": {
 			"dependsOn": ["^build"],

@@ -32,7 +32,7 @@ Cache is local to your machine in `.turbo/` (gitignored). What invalidates it:
 
 - **Source changes** — anything matching `inputs` in the relevant task definition.
 - **Workspace files** — [pnpm-workspace.yaml](../pnpm-workspace.yaml), [pnpm-lock.yaml](../pnpm-lock.yaml), [tsconfig.base.json](../tsconfig.base.json), and [selva.config.ts](../selva.config.ts) are in `globalDependencies`, so any change to them busts every cache.
-- **Env vars** — currently no env vars are tracked. If you add Vite env vars that affect output, list them under `env` in the task definition or they'll silently break caching.
+- **Env vars** — `build` tracks `ADAPTER` and `NODE_ENV` (the compute-app's [svelte.config.js](../packages/compute-app/svelte.config.js) reads `ADAPTER` to choose between `adapter-auto` and `adapter-node`). If you add Vite env vars that affect output, list them under `env` in the task definition or they'll silently break caching.
 
 `turbo run build --force` bypasses the cache and rebuilds everything.
 

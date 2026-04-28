@@ -8,7 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
 	resolve: {
 		// Read @selvajs/platform source directly via the `"source"` export
-		// condition — no `pnpm build:platform` between editing a rule and
+		// condition — no upstream rebuild needed between editing a rule and
 		// running these tests.
 		conditions: ['source']
 	},

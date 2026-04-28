@@ -194,14 +194,12 @@ if [ -f ".git/rebase-merge/applying" ] || [ -f ".git/rebase-apply/applying" ]; t
   exit 1
 fi
 
-# Ensure runtime data folders are never touched by git
+# Ensure the runtime data folder is never touched by git.
 # .gitignore already covers untracked files; handle the edge case where
-# it was accidentally committed/tracked. We list both the new default
-# (.selva-data/) and the legacy path so existing deployments stay safe.
-print_step "Protecting runtime data folders from git..."
+# it was accidentally committed/tracked.
+print_step "Protecting .selva-data/ from git..."
 DEFINITIONS_PATHS=(
   ".selva-data"
-  "packages/compute-app/definitions"
 )
 
 for DEF_PATH in "${DEFINITIONS_PATHS[@]}"; do
@@ -361,29 +359,14 @@ print_success "Dependencies updated"
 ################################################################################
 print_header "Step 3: Building Application"
 
-# Check if shared package has changed since the last build
-SHARED_CHANGED=false
-if [ "$NO_PULL" = true ]; then
-  # No pull means we can't compare commits — assume shared may have changed
-  SHARED_CHANGED=true
-elif git diff --name-only "$LOCAL_COMMIT" HEAD -- packages/shared | grep -q .; then
-  SHARED_CHANGED=true
-fi
-
-cd "$INSTALL_DIR"
-
-if [ "$SHARED_CHANGED" = true ]; then
-  print_step "Changes detected in shared package — building shared..."
-  run_build pnpm run build:shared
-  print_success "Shared package built"
-else
-  print_warning "No changes in packages/shared — skipping shared build"
-fi
-
+# Build compute-app and all its workspace dependencies. Turbo derives the
+# build order from the workspace dep graph and skips any package whose
+# inputs haven't changed since the last build (its cache replaces the
+# pre-turbo "did packages/shared change?" check we used to do here).
 print_step "Building compute-app for production..."
-cd "$INSTALL_DIR/packages/compute-app"
+cd "$INSTALL_DIR"
 export ADAPTER=node
-run_build pnpm build
+run_build pnpm build --filter=@selvajs/compute-app
 print_success "Compute-app built"
 
 fi # end of restart-only skip block

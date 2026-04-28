@@ -42,8 +42,8 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
 # DATA_PATH is the local provider's data directory: users.json, orgs/projects/
 # definitions JSON, compute.config.json, and uploaded .gh files. Resolved
 # relative to packages/compute-app/ — the default lands at .selva-data/ at
-# the repo root. GH_DEFINITIONS_PATH is honored as a legacy alias.
-DATA_PATH="${DATA_PATH:-${GH_DEFINITIONS_PATH:-../../.selva-data}}"
+# the repo root.
+DATA_PATH="${DATA_PATH:-../../.selva-data}"
 SESSION_SECRET="${SESSION_SECRET:-}"
 ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES:-}"  # auto-detected: true for http, false for https
 PORT="${PORT:-3000}"
@@ -128,20 +128,17 @@ else
   print_success "Node.js installed: $(node -v)"
 fi
 
-# Check/install pnpm
-if command_exists pnpm; then
-  PNPM_VERSION=$(pnpm -v)
-  print_success "pnpm found: $PNPM_VERSION"
-  PNPM_MAJOR=$(echo $PNPM_VERSION | cut -d'.' -f1)
-  if [ "$PNPM_MAJOR" -lt 9 ]; then
-    print_warning "pnpm 9.0.0+ recommended (found $PNPM_VERSION), upgrading..."
-    sudo npm install -g pnpm@latest
-  fi
-else
-  print_step "Installing pnpm..."
-  sudo npm install -g pnpm
-  print_success "pnpm installed: $(pnpm -v)"
+# Enable Corepack — it ships with Node 16.10+ and manages package-manager
+# versions per project. The exact pnpm version is pinned in package.json's
+# `packageManager` field, which Corepack reads when we run pnpm from inside
+# the repo. Single source of truth across dev / CI / prod.
+if ! command_exists corepack; then
+  print_error "corepack not found. Update Node.js to 16.10+ (current: $(node -v))."
+  exit 1
 fi
+print_step "Enabling Corepack..."
+sudo corepack enable
+print_success "Corepack enabled (pnpm version will be activated after clone)"
 
 # Check git
 if ! command_exists git; then
@@ -178,6 +175,12 @@ fi
 # 3. DEPENDENCY INSTALLATION
 ################################################################################
 print_header "Step 3: Installing Dependencies"
+
+# Activate the pnpm version pinned in package.json's `packageManager` field.
+# Corepack reads it and downloads/uses that exact version — no drift.
+print_step "Activating pnpm via Corepack..."
+corepack prepare --activate
+print_success "pnpm $(pnpm -v) activated"
 
 print_step "Running pnpm install..."
 pnpm install
@@ -312,15 +315,10 @@ fi
 ################################################################################
 print_header "Step 5: Building Application"
 
-print_step "Building shared package..."
+print_step "Building compute-app and all workspace dependencies..."
 cd "$INSTALL_DIR"
-pnpm run build:shared
-print_success "Shared package built"
-
-print_step "Building compute-app for production..."
-cd "$INSTALL_DIR/packages/compute-app"
 export ADAPTER=node
-pnpm build
+pnpm build --filter=@selvajs/compute-app
 print_success "Compute-app built for production"
 
 ################################################################################

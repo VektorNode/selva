@@ -71,8 +71,7 @@ pm2 delete selva-compute
 bash ~/selva/scripts/update.sh
 
 # Manual
-cd ~/selva && git pull && pnpm install && pnpm run build:all
-cd packages/compute-app && export ADAPTER=node && pnpm build
+cd ~/selva && git pull && pnpm install && ADAPTER=node pnpm build --filter=@selvajs/compute-app
 pm2 restart selva-compute --update-env
 ```
 
