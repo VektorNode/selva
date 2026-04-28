@@ -5,7 +5,6 @@ using Grasshopper.Kernel;
 using Rhino;
 using Selva.Schema.Models;
 using Selva.GH.Features.UIBuilder.Services.Communication;
-using Selva.GH.Features.UIBuilder.Services.Persistence;
 using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services.Schema;

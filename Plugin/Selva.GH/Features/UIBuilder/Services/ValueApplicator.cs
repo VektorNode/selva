@@ -16,7 +16,7 @@ using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Utilities.Helpers;
 
-namespace Selva.GH.Features.UIBuilder.Services.Persistence;
+namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
 ///     Handles applying values from web UI to Grasshopper parameters
