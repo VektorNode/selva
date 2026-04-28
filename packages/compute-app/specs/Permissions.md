@@ -39,12 +39,16 @@ One role, four permissions. All instance-wide.
 
 **Invariant: at least one user holds `instance_admin`.** Any operation that would leave the instance with zero `instance_admin`s — revoking the permission, deleting the user, disabling the user — is rejected by the data layer (`IPlatformPermissionStore`). Revocation is blocked inside `set()`; delete/disable is blocked by the route handler consulting `countInstanceAdminsExcluding(targetId)` before calling the auth provider. Mirrored in the admin UI by disabling the relevant control on the sole admin. See §10 for the offboarding pattern.
 
-**Break-glass recovery.** If the invariant is ever bypassed by non-runtime means (manual DB edits, restoring from a backup pre-dating the invariant, migration drift), set `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` and have the named user sign in via OAuth. The callback grants every platform permission iff no admin exists _and_ the signing-in email matches. The env var also functions as a production hardening — without it, any user can win the bootstrap race on a fresh install; with it, only the configured operator can. Local provider has no equivalent path because admin can be edited directly in `users.json`.
+**`instance_admin` does not bypass content access.** The `instance_admin` bypass (§5) applies to management actions only — user administration, org management, compute config, project governance (create, delete, manage members, Reclaim). It does **not** apply to content routes: `canView`, `canSolve`, `canEdit`, and `canEditDefinition` run as-is regardless of platform role. Platform staff who need to read a specific private project must Reclaim it first, creating an explicit audit trail (§5 `canReclaim`).
 
-**Deployment modes:**
+This is a deliberate compliance decision (least privilege / GDPR / SOC 2): blanket content access for admins enlarges the blast radius of a compromised account, is hard to justify in a data audit, and violates user expectations that private work is private. The API layer enforces this boundary; note that raw database/filesystem access is a separate physical security concern outside the application layer.
 
-- **Self-hosted / single-tenant.** One org exists, provisioned at install time. The `instance_admin` is typically also the org owner. UI merges the two views.
-- **Multi-tenant (future).** Many orgs coexist. `instance_admin` is Selva-staff-only. Config flag `ALLOW_ORG_CREATION=true` lets authenticated users create their own orgs.
+**Break-glass recovery.** If the invariant is ever bypassed by non-runtime means (manual DB edits, restoring from a backup pre-dating the invariant, migration drift), set `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` and have the named user sign in via OAuth. The callback grants every platform permission iff no admin exists _and_ the signing-in email matches. Local provider has no equivalent path because admin can be edited directly in `users.json`.
+
+**Deployment modes** are selected by `tenancy` in [`selva.config.ts`](../../../selva.config.ts) (`'single' | 'multi'`):
+
+- **Self-hosted / single-tenant** (`tenancy: 'single'`). One org exists, provisioned at install time via `/setup`. The `instance_admin` is typically also the org owner; the UI merges the two views. **Bootstrap path is open by default:** without `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`, the first OAuth signer on a fresh install wins the bootstrap race. Setting the env var hardens the path to a named operator only.
+- **Multi-tenant / SaaS** (`tenancy: 'multi'`). Many orgs coexist. `instance_admin` is Selva-staff-only; customers — even org owners of the largest tenant — never hold it. **Bootstrap path is closed by default:** the OAuth callback refuses to grant `instance_admin` unless `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is set AND matches the signer. Without this gate, the first random signup would become Selva staff. Operators seed admin explicitly. The env var is safe to leave permanently set — the path is inert once an admin exists. Self-service org creation, plan/billing, and quota gating are deferred — see §12.
 
 ---
 
@@ -58,11 +62,15 @@ One role, four permissions. All instance-wide.
 | `admin`  | All four org permissions.                                                |
 | `member` | None by default. Grantable: `manage_definitions`, `manage_projects`.     |
 
+> **Owner vs admin in practice.** The two roles share every permission. The structural difference is that **only `owner` can change roles** — promote a `member` to `admin`, demote an `admin`, or transfer ownership (§10). An `admin` can be demoted by an `owner` (or another `admin`'s revocation request, surfaced to owner — see `manage_org_members` below). Treat **owner as the role that cannot lock itself out**: there is always at least one, they survive any admin coup, and they hold the org-transfer authority. Treat **admin as the role you grant freely**: full operational power day-to-day, but revocable. In small orgs the founder is owner and that's it; in larger orgs the owner is whoever holds the contract, with multiple admins doing the operational work.
+>
+> **Admins do not see all projects in the org.** Org role does not grant project visibility. An admin sees only projects they are a member of, plus `org`/`public`-visibility projects per §4. Private projects they are not a project member of are invisible to them (and to the listing in `GET /api/projects`). The escape hatch is `canReclaim` (§5), which is auditable and adds the admin as a co-owner — this preserves the audit trail rather than letting org role silently bypass project ACLs. (The "no permission inheritance" principle — §13 rule 2.)
+
 ### Permissions
 
 | Permission           | What it grants                                                                                                                                                                                                              |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `manage_org_members` | Invite, remove, change roles of users in **this** org. Owner/admin only — never grantable to `member`.                                                                                                                      |
+| `manage_org_members` | Invite, remove members; grant/revoke the grantable permissions (`manage_definitions`, `manage_projects`). Owner/admin only — never grantable to `member`. **Does NOT include role changes** — promoting a `member` to `admin`, demoting an `admin`, or transferring ownership is owner-only (see role table above and §10).                                                                                                                      |
 | `manage_definitions` | Upload/edit definitions in this org (further gated by project role).                                                                                                                                                        |
 | `manage_projects`    | Create projects in this org. (Editing/deleting gated by project role.)                                                                                                                                                      |
 | `manage_org_compute` | Configure this org's compute server override (BYO compute). Owner/admin only. **Gated by platform flag `ALLOW_ORG_COMPUTE_OVERRIDE`**; when off, this permission is effectively inert and all solves use the instance pool. |
@@ -119,6 +127,22 @@ The override is never instance-wide. An org misconfiguring their compute (wrong 
 
 **Anonymous access is not a project flag** — it's delivered via per-definition **share links** (§7). The project owner mints a link for one definition + channel; the link carries its own cap, expiry, and revocation. There is no "this project is anonymously solvable" mode; explicit per-link grants only.
 
+#### What `private` actually means
+
+`private` means private from everyone who isn't an explicit project member — including org leadership. A member's personal R&D, a project an employee doesn't want their manager to see yet, a side project that happens to live in an org: all of these are valid reasons a user might want a private project, and org admin/owner role does not automatically grant access.
+
+This is a deliberate design decision: **`private` means private, full stop.** The escape hatch for leadership is **Reclaim** (§5 `canReclaim`) — an explicit, auditable action that adds them as co-owner. That audit trail is the load-bearing protection: the cost of "I need to access this" is one intentional step, not a silent default.
+
+**The three privacy scopes, separated by scope not by flag:**
+
+| Need | How |
+|------|-----|
+| Private from org peers | `private` project inside an org |
+| Visible to org leadership + members | `org`-visibility project |
+| Private from everyone including leadership | Personal scope (§12 deferred) — exists outside any org |
+
+Org `owner`/`admin` see `org` and `public` projects by virtue of being org members. They do **not** automatically see `private` projects they aren't a member of — they see the same org-and-public content any member sees, plus they have the Reclaim capability to escalate when genuinely needed.
+
 ### Project members must be org members
 
 To become a project member, a user must first be a member of the project's parent org. This is enforced in the **rule layer**, not as a hard DB constraint — leaving room for cross-org identities (guests, service accounts) later without a schema migration.
@@ -160,11 +184,15 @@ The pure access-control functions live in [rules.ts](../../platform/src/access/r
 
 > **Single source of truth.** Every gate — adapter `can*` methods, route-layer `requireCan*` helpers — funnels through `rules.ts`. No predicate is duplicated; the route layer pre-loads the membership rows the rule needs and calls it directly. Cross-org-public visibility short-circuits the fetch so the hot path stays cheap.
 
-### The `instance_admin` bypass lives in one place
+### The `instance_admin` bypass is split: management yes, content no
 
-Rather than every rule starting with `if (instance_admin) return true`, the bypass is centralized in a single wrapper applied at the rule-call site (in [access.server.ts](../src/lib/server/access.server.ts) or the adapter layer). The pure rules below reason about **normal users only.**
+The bypass is centralized in [access.server.ts](../src/lib/server/access.server.ts) as two separate wrappers, not one:
 
-This matters for two reasons: (1) a bug in a rule doesn't become a bug in god-mode, and (2) the wrapper is the future hook point for audit logging instance-admin access to foreign org data. Today the hook is a no-op; when audit ships, every cross-tenant admin access records automatically without touching rule bodies.
+**`managementBypassOrRun`** — used for governance actions: Reclaim, create/delete project, manage project members, edit project settings, create org. `instance_admin` bypasses these so platform staff can administer the instance without being a member of every org.
+
+**`contentCheck`** — used for content access: `canView`, `canSolve`, `canEdit`, `canEditDefinition`. **No bypass.** `instance_admin` runs the same rules as any other user. If platform staff need to access content in a private project, they Reclaim first — the audit trail attaches to that explicit escalation, not to a silent default.
+
+The pure rules below reason about **normal users only** in both cases. This matters because: (1) a bug in a rule doesn't become a bug in god-mode, (2) the wrapper is the future hook point for audit logging, and (3) keeping content and management bypass separate makes the security boundary explicit and reviewable in one place.
 
 ### Share-link grants are a parallel path
 
@@ -380,7 +408,7 @@ Authoritative mapping of HTTP routes to rule checks. `instance_admin` passes eve
 
 | Route                                          | Method        | Rule                                                                                                                                                                                                                                                                                                        |
 | ---------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/projects`                                | `GET`         | Authenticated. Filtered by visibility + membership.                                                                                                                                                                                                                                                         |
+| `/api/projects`                                | `GET`         | Authenticated. Returns only projects the caller passes `canView` for — no broader. Org `owner`/`admin` is **not** a substitute for project membership; private projects they aren't a member of do not appear. Reclaim (§5) is the escape hatch.                                                                                                                                                                                                         |
 | `/api/projects`                                | `POST`        | `canCreateProject(targetOrg, user, ctx)`                                                                                                                                                                                                                                                                    |
 | `/api/projects/[id]`                           | `GET`         | `canView(project, user, ctx)`                                                                                                                                                                                                                                                                               |
 | `/api/projects/[id]`                           | `PATCH`       | `canEditProjectSettings`. Visibility → `public` additionally requires `canChangeVisibilityToPublic`.                                                                                                                                                                                                        |
@@ -402,6 +430,7 @@ Authoritative mapping of HTTP routes to rule checks. `instance_admin` passes eve
 | `/api/compute/solve`                           | `POST`        | `canSolve(project, user, ctx)`. Channel: `live` (default) or `draft`; `draft` requires `canEditDefinition`. **A valid `?token=…` (§7) bypasses user auth and grants the token's pinned scope only.**                                                                                                        |
 | `/api/compute/schema?projectId=…`              | `POST`        | `requireCanCreateDefinition(projectId)` — same gate as creating a definition. Container projects need owner/editor; commons projects accept any authenticated user. The target project's `orgId` selects BYO compute. Used by the upload dialog to preview a user-supplied .gh file's schema before saving. |
 | `/api/org/compute`                             | `GET/PUT`     | `manage_org_compute`. Gated by `ALLOW_ORG_COMPUTE_OVERRIDE` platform flag. Tenancy implicit via `ctx.actingOrgId`.                                                                                                                                                                                          |
+| `/api/orgs/[orgId]/members/[userId]`           | `PATCH`       | Body `{ role?, permissions? }`. URL `orgId` must equal `ctx.actingOrgId`. Role change branch is **owner-only** (§3); permission change branch is `manage_org_members`. Cannot demote the sole owner (409). For `member`-role targets, `permissions` is restricted to `MEMBER_ASSIGNABLE_PERMISSIONS`.       |
 | `/api/invites`                                 | `GET/POST`    | `manage_org_members` for the active org.                                                                                                                                                                                                                                                                    |
 | `/api/invites/[id]`                            | `DELETE`      | `manage_org_members`.                                                                                                                                                                                                                                                                                       |
 | `/api/me/starred/[guid]`                       | `POST/DELETE` | Authenticated. Acts on `locals.user.id`'s own profile only — `IUserProfileStore` enforces self-or-admin scoping.                                                                                                                                                                                            |
@@ -422,6 +451,15 @@ Instance-level only. Denial returns **403** (not redirect).
 | `/admin/api/orgs`               | `*`            | `instance_admin`                                                                                                                                                                                                               |
 | `/admin/api/orgs/[id]`          | `*`            | `instance_admin`                                                                                                                                                                                                               |
 
+### The two-shell rule
+
+Selva has two distinct admin areas, and they never mix:
+
+- **`/admin/*`** — the **platform** shell. About the whole Selva instance: every user, every org, the instance compute pool, system updates. Gated on platform perms.
+- **`/team/*`** — the **organization** shell. About one org the user is acting in: its members, projects, compute override, settings. Gated on org perms.
+
+**No route appears in both.** Reclaim is an org concern → `/team/reclaim`. Managing instance users is a platform concern → `/admin/users`. A user who happens to hold both kinds of authority (e.g., Selva staff who is also an org owner) navigates between `/admin` and `/team` via the header — the views are not merged.
+
 ### Admin pages (`/admin/*`)
 
 Instance-level only. The shell admits **platform** perms exclusively — org-scope perms (`manage_org_members`, `manage_org_compute`, `manage_definitions`, `manage_projects`) never grant entry, even though they share the `manage_*` prefix. Sub-page denial redirects to `/admin`; layout-level denial (no platform perm at all) redirects to `/app`.
@@ -433,6 +471,20 @@ Instance-level only. The shell admits **platform** perms exclusively — org-sco
 | `/admin/compute`     | `manage_compute`        |
 | `/admin/orgs`        | `instance_admin`        |
 | `/admin/update`      | `manage_updates`        |
+
+### Team pages (`/team/*`)
+
+Org-level only. The shell admits **org** perms exclusively — platform perms (`instance_admin`, `manage_compute`, etc.) never grant entry on their own, though `instance_admin`'s centralized bypass (§5) means staff can still load these pages while acting in any org. Tenancy is implicit via `ctx.actingOrgId`; routes never accept a target org via URL or query. Sub-page denial redirects to `/team`; layout-level denial (no `actingOrgId`, or no org membership) redirects to `/app`.
+
+| Page              | Permission                                                                  |
+| ----------------- | --------------------------------------------------------------------------- |
+| `/team` (general) | Any org membership                                                          |
+| `/team/members`   | `manage_org_members`. Role changes (member↔admin, transfer) owner-only (§3) |
+| `/team/projects`  | `manage_projects`                                                           |
+| `/team/reclaim`   | `manage_org_members` (proxy for org owner/admin per §3); load-bearing check is `canReclaim` (§5) on the API endpoint |
+| `/team/activity`  | Any org membership                                                          |
+| `/team/shares`    | `manage_definitions`                                                        |
+| `/team/settings`  | `manage_org_members`                                                        |
 
 ### Auth flow (`/auth/*`)
 
@@ -524,7 +576,13 @@ Walk through these to confirm the model behaves as expected.
 | Project owner leaves Acme. Org owner opens the project.                                                                                                        | Uses **Reclaim** → becomes co-owner. Original owner not demoted. Audit entry (future).                                                                                             |
 | Reclaim done; co-owner tries to remove the original owner.                                                                                                     | Handler surfaces owner-on-owner confirm step (`?confirm=true`) before proceeding.                                                                                                  |
 | Alice flips a `private` project to `public`.                                                                                                                   | Requires org `owner`/`admin` (Alice qualifies as `admin`). If cross-org public is off at platform level, flip is rejected.                                                         |
-| `instance_admin` views Acme data.                                                                                                                              | **OK.** Centralized bypass wrapper records the access (future audit hook).                                                                                                         |
+| Alice (Acme `admin`) tries to promote Bob (`member`) to `admin`.                                                                                               | **403.** Role changes are owner-only (§3). Alice can grant Bob `manage_definitions` / `manage_projects` permissions, but not change his role.                                       |
+| Alice (Acme `admin`) tries to demote another `admin` to `member`.                                                                                              | **403.** Role changes are owner-only. Admins cannot expand or contract their peer group; only owner can.                                                                            |
+| Alice (Acme `admin`) grants Bob (`member`) the `manage_projects` permission.                                                                                   | **OK.** `manage_org_members` covers grantable permissions. Bob can now create projects but his role stays `member`.                                                                 |
+| Marcus (Acme `admin`, no project memberships) opens `/projects`.                                                                                               | He sees `org` and `public` Acme projects (any org member's entitlement) but **not** private ones he isn't a member of (e.g., R&D Sandbox). `private` means private from everyone without a membership — including org leadership. Reclaim is the explicit escalation path if he needs access. |
+| Bob (Acme `member`, no project memberships) opens `/projects`.                                                                                                 | Same as Marcus — he sees `org`/`public` projects only. Private projects he's not a member of do not appear.                                                                                           |
+| `instance_admin` tries to view a private Acme project they are not a member of.                                                                                | **403.** Content access follows `canView` regardless of platform role — no bypass (§2, §5). Reclaim is the explicit path, which then creates an audit row.                         |
+| `instance_admin` manages Acme's org settings (members, compute config).                                                                                        | **OK.** Management actions use `managementBypassOrRun` — platform staff can administer the instance without being a member of every org.                                           |
 | Alice mints a `live`-channel share link for her definition with a 1000-solve cap. Bob (no account) solves 999 times via the link; the 1000th request hits 429. | **OK.** Cap enforced by atomic increment. Alice raises the cap, removes it, or revokes.                                                                                            |
 | Alice mints a `draft`-channel share link for QA review. The reviewer (no account) opens it and solves the unpublished version.                                 | **OK.** Token grants the pinned channel only. The reviewer cannot switch to `live` from the same token.                                                                            |
 | Alice's share link gets posted publicly and starts seeing a flood of solves. Alice clicks **Revoke**.                                                          | The link 401s on next use. Existing in-flight solves complete; subsequent ones fail at token resolution.                                                                           |
@@ -542,13 +600,20 @@ Walk through these to confirm the model behaves as expected.
 Designed-for but not implemented. Each can ship later without breaking the model.
 
 - Cross-org guest on a private project
-- Personal scope outside any org
+- **Personal scope outside any org** — a scope that belongs to the user, not any org. No org leadership has visibility because no org leadership exists. This is the right home for work a user wants completely to themselves (side projects, drafts not ready for the org, personal tools). Until it ships, private org projects are the closest alternative — they're private from peers and from leadership, but the org owner does have the Reclaim escape hatch. UI would get a scope switcher in the header (`Acting in: Acme / Personal`); the existing `actingOrgId` discipline carries through with a sentinel or parallel `personalScopeId`.
 - Project transfer between orgs (UI — data model allows it)
 - Audit-log viewer UI. Storage **is** wired in v1: `SupabaseEventSink` persists every domain event to `public.audit_events`. What's deferred is the operator-facing UI for browsing it. The `instance_admin` bypass wrapper is also a hook point for recording cross-tenant admin reads — currently a no-op, lit up when the viewer ships.
 - API tokens / service accounts / PATs (distinct from share links — share links are for unauthenticated end-users; PATs are for authenticated programmatic access)
 - Webhooks (events emit; dispatcher is later — it slots in as another `IEventSink` alongside the audit sink)
 - Per-org data residency / storage backends
 - Project templates / bulk member operations (pressure valve for flat ACLs at scale)
+- **Multi-tenant SaaS mode** — self-service signup, public org creation, plan/billing, quota enforcement, past-due/read-only state. The data model and the `tenancy: 'multi'` switch already accommodate it; what's deferred is the user-facing flow and the gates around it. When this ships:
+    - **Plans are a fourth axis, orthogonal to platform/org/project.** Model them as feature flags + quotas on `Org`, NOT as permissions or roles. Route handlers do `canX(...) && plan.allows('x', currentCount)` — two checks, both must pass. Keeps `rules.ts` free of billing concerns and lets new tiers ship without touching access logic. (§13's "permissions are extensible; roles are not" extends naturally: plan features are extensible; tiers should be too.)
+    - **`ALLOW_ORG_COMPUTE_OVERRIDE` becomes per-plan, not platform-wide.** The flag-vs-plan distinction is otherwise the same shape — a feature gate on the org.
+    - **The "user has zero orgs" state needs handling.** Today §9 says `actingOrgId` is required at every tenant-touching handler (400 if missing). Fresh SaaS signups legitimately have no orgs yet — those routes need an allowlist (`POST /api/orgs`, profile, logout) and the rest should redirect to a "create or join an org" landing page rather than 400. Mechanical sweep, not architectural.
+    - **`/setup` and `/signup` stay separate routes.** `/setup` is staff-seeding: run-once, only reachable while no `instance_admin` exists, grants every platform permission, and in `single` mode also creates the first org. `/signup` is public SaaS account creation: runs forever, creates regular users with no platform permissions, no org side effect — the new user lands on a "create or join an org" page. Keeping them as separate files (not one with branching logic) makes it possible to disable `/signup` per-deployment without touching `/setup`, and keeps the staff-seed path's narrower attack surface obvious.
+    - **The OAuth bootstrap path is already gated** on `tenancy === 'single'` (§2) so the first random SaaS signup cannot become Selva staff.
+    - **Past-due / read-only state.** Failed payment puts an org in a degraded state — reads still work so customers aren't locked out of their data; writes and solves are blocked. New flag on `Org`, gate at write paths only.
 
 ---
 

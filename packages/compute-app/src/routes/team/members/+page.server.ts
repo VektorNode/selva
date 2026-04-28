@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import type { AuthUser, Invite, OrgMember } from '@selvajs/platform';
+import type { AuthUser, Invite, OrgMember, OrgRole } from '@selvajs/platform';
 import { hasPermission } from '@selvajs/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { getInviteStore, getOrganizationProvider } from '$lib/server/providers.server';
@@ -17,13 +17,20 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const orgId = ctx.actingOrgId;
 	if (!orgId) {
-		return { members: [] as MemberRow[], invites: [] as Invite[], orgId: null };
+		return {
+			members: [] as MemberRow[],
+			invites: [] as Invite[],
+			orgId: null,
+			actorRole: null as OrgRole | null,
+			actorUserId: ctx.userId
+		};
 	}
 
 	const orgs = getOrganizationProvider();
 	const auth = getAuthProvider();
 
 	let members: MemberRow[] = [];
+	let actorRole: OrgRole | null = null;
 	try {
 		const page = await orgs.listOrgMembers(ctx, orgId, { limit: 200 });
 		const userIds = page.items.map((m) => m.userId);
@@ -35,6 +42,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			...m,
 			email: userById.get(m.userId)?.email
 		}));
+		actorRole = page.items.find((m) => m.userId === ctx.userId)?.role ?? null;
 	} catch {
 		// Provider may not support listing — surface empty roster
 	}
@@ -47,5 +55,5 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// Non-fatal
 	}
 
-	return { members, invites, orgId };
+	return { members, invites, orgId, actorRole, actorUserId: ctx.userId };
 };

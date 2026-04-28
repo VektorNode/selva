@@ -6,10 +6,11 @@ import {
 	getAuthProvider,
 	getUserProfileStore
 } from '$lib/server/providers.server';
-import { hasPermission, canEdit } from '@selvajs/platform';
+import { hasPermission, canView, canEdit } from '@selvajs/platform';
 import type {
 	DefinitionRecord,
 	DefinitionVersion,
+	OrgMember,
 	Project,
 	ProjectMember,
 	ComputeServerConfig,
@@ -28,6 +29,13 @@ export type {
 
 export interface ProjectWithMembers extends Project {
 	members: ProjectMember[];
+	/**
+	 * Whether the caller can edit this project (add/edit definitions, change
+	 * settings). Computed per-row so the UI can disable affordances on rows the
+	 * user can only view (leadership visibility per Permissions.md §4).
+	 * `instance_admin` always edits via the centralized bypass.
+	 */
+	canEdit: boolean;
 }
 
 /** User row with display name joined from the profile store. */
@@ -42,13 +50,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 			records: [],
 			computeServers: [],
 			users: [],
-			canManageProjects: false,
-			isPlatformAdmin: false
+			canManageProjects: false
 		};
 
 	const ctx = locals.ctx!;
 	const canManageProjects = hasPermission(ctx, 'manage_projects');
-	const isPlatformAdmin = hasPermission(ctx, 'instance_admin');
 
 	try {
 		const [orgsPage, recordsPage, computeConfig] = await Promise.all([
@@ -58,32 +64,41 @@ export const load: PageServerLoad = async ({ locals }) => {
 		]);
 
 		const projectStore = getProjectProvider();
+		const orgs = getOrganizationProvider();
 		const projectPages = await Promise.all(
 			orgsPage.items.map((org) => projectStore.listProjects(ctx, org.id, { limit: 200 }))
 		);
 		const allProjects: Project[] = projectPages.flatMap((p) => p.items);
 
-		// Filter to projects the current user can actually edit. Pure-rule path
-		// (Permissions.md §5): fetch each project's membership row once and let
-		// `canEdit` decide. We were previously calling `projectStore.canEdit`
-		// per project which re-fetched the project AND the member row — N+1.
-		let accessibleProjects: Project[];
-		if (isPlatformAdmin) {
-			accessibleProjects = allProjects;
-		} else {
-			const memberships = await Promise.all(
-				allProjects.map((p) => projectStore.getProjectMember(ctx, p.id, ctx.userId))
-			);
-			accessibleProjects = allProjects.filter((project, i) =>
-				canEdit({
+		// Resolve membership context per project: the caller's project-level row
+		// (drives `canEdit`) and the caller's org-level row in that project's org
+		// (drives `canView` for org/public visibility). Org rows fetched once per
+		// org and reused across that org's projects to avoid N+1.
+		// `instance_admin` gets NO content bypass — follows canView like everyone
+		// else (Permissions.md §2). Reclaim is the explicit escalation path.
+		const orgMemberByOrgId = new Map<string, OrgMember | null>();
+		await Promise.all(
+			orgsPage.items.map(async (org) => {
+				const m = await orgs.getOrgMember(ctx, org.id, ctx.userId).catch(() => null);
+				orgMemberByOrgId.set(org.id, m);
+			})
+		);
+		const projectMembers = await Promise.all(
+			allProjects.map((p) => projectStore.getProjectMember(ctx, p.id, ctx.userId))
+		);
+
+		const visibleIndexes = allProjects
+			.map((project, i) => ({ project, i }))
+			.filter(({ project, i }) =>
+				canView({
 					orgPermissions: ctx.orgPermissions,
 					project,
-					member: memberships[i],
-					orgMember: null,
+					member: projectMembers[i],
+					orgMember: orgMemberByOrgId.get(project.orgId) ?? null,
 					allowCrossOrgPublic: false
 				})
 			);
-		}
+		const accessibleProjects = visibleIndexes.map(({ project }) => project);
 
 		// Only show definitions belonging to accessible projects
 		const projectIds = new Set(accessibleProjects.map((p) => p.id));
@@ -91,24 +106,37 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 		// Load members for projects if user can manage projects
 		let projects: ProjectWithMembers[];
-		if (canManageProjects || isPlatformAdmin) {
+		if (canManageProjects) {
 			projects = await Promise.all(
-				accessibleProjects.map(async (p) => ({
-					...p,
-					members: (await projectStore.listProjectMembers(ctx, p.id, { limit: 200 })).items
+				visibleIndexes.map(async ({ project, i }) => ({
+					...project,
+					members: (await projectStore.listProjectMembers(ctx, project.id, { limit: 200 })).items,
+					canEdit: canEdit({
+						orgPermissions: ctx.orgPermissions,
+						project,
+						member: projectMembers[i],
+						orgMember: orgMemberByOrgId.get(project.orgId) ?? null,
+						allowCrossOrgPublic: false
+					})
 				}))
 			);
 		} else {
-			projects = accessibleProjects.map((p) => ({ ...p, members: [] }));
+			projects = visibleIndexes.map(({ project, i }) => ({
+				...project,
+				members: [],
+				canEdit: canEdit({
+					orgPermissions: ctx.orgPermissions,
+					project,
+					member: projectMembers[i],
+					orgMember: orgMemberByOrgId.get(project.orgId) ?? null,
+					allowCrossOrgPublic: false
+				})
+			}));
 		}
 
 		// Load users for member management — scoped to members of the active org.
-		// Cross-org users are not addable to projects (cross-org guests are a
-		// deferred feature with its own flow), so the picker only sees this org's
-		// roster. This holds for instance admins too, who'd otherwise see the
-		// entire instance roster from `auth.listUsers()`.
 		let users: UserListItem[] = [];
-		if ((canManageProjects || isPlatformAdmin) && ctx.actingOrgId) {
+		if (canManageProjects && ctx.actingOrgId) {
 			const memberPage = await getOrganizationProvider().listOrgMembers(ctx, ctx.actingOrgId, {
 				limit: 500
 			});
@@ -134,8 +162,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			records,
 			computeServers: computeConfig.servers,
 			users,
-			canManageProjects: canManageProjects || isPlatformAdmin,
-			isPlatformAdmin
+			canManageProjects
 		};
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
@@ -145,8 +172,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			records: [] as DefinitionRecord[],
 			computeServers: [] as ComputeServerConfig[],
 			users: [] as UserListItem[],
-			canManageProjects: false,
-			isPlatformAdmin: false
+			canManageProjects: false
 		};
 	}
 };

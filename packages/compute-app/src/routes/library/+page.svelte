@@ -58,6 +58,10 @@
 		return data.projects[id]?.name ?? '';
 	}
 
+	function projectVisibility(id: string) {
+		return data.projectMap[id]?.visibility;
+	}
+
 	function matches(r: DefinitionRecord): boolean {
 		if (activeProjectId && r.projectId !== activeProjectId) return false;
 		if (activeCategory && r.category !== activeCategory) return false;
@@ -282,6 +286,7 @@
 							loading={loadingGuid === record.guid}
 							starBusy={starBusyGuid === record.guid}
 							projectName={projectList.length > 1 ? projectName(record.projectId) : undefined}
+							projectVisibility={projectList.length > 1 ? projectVisibility(record.projectId) : undefined}
 							onOpen={(r) => open(r.guid)}
 							onToggleStar={toggleStar}
 						/>

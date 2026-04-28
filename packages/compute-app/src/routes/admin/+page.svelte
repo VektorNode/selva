@@ -1,14 +1,6 @@
 <script lang="ts">
 	import { Card, SectionHeader } from '@selvajs/ui';
-	import {
-		Users,
-		Server,
-		LayoutDashboard,
-		ArrowRight,
-		GitCommit,
-		Building2,
-		RotateCcw
-	} from '@lucide/svelte';
+	import { Users, Server, LayoutDashboard, ArrowRight, GitCommit, Building2 } from '@lucide/svelte';
 
 	interface PageData {
 		stats: { users: number | null };
@@ -46,12 +38,6 @@
 			icon: Server,
 			value: 'Compute',
 			label: 'Servers, status & config'
-		},
-		{
-			href: '/admin/reclaim',
-			icon: RotateCcw,
-			value: 'Reclaim',
-			label: 'Take ownership of any project'
 		},
 		{
 			href: '/projects',

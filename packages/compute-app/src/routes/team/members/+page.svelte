@@ -3,15 +3,68 @@
 	import { Mail, Trash2, Copy, X, UserPlus } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { Invite, OrgPermission, OrgRole } from '@selvajs/platform';
-	import { ALL_ORG_PERMISSIONS, OWNER_ADMIN_ONLY_PERMISSIONS } from '@selvajs/platform';
+	import {
+		ALL_ORG_PERMISSIONS,
+		MEMBER_ASSIGNABLE_PERMISSIONS,
+		OWNER_ADMIN_ONLY_PERMISSIONS
+	} from '@selvajs/platform';
 	import type { MemberRow } from './+page.server';
 
 	interface PageData {
 		members: MemberRow[];
 		invites: Invite[];
 		orgId: string | null;
+		actorRole: OrgRole | null;
+		actorUserId: string;
 	}
 	let { data }: { data: PageData } = $props();
+
+	// Per spec §3: only `owner` can change roles; `owner`/`admin` can grant
+	// `manage_definitions`/`manage_projects` to a `member`. Server-side
+	// `/api/orgs/[orgId]/members/[userId]` PATCH is the load-bearing check.
+	const isOwner = $derived(data.actorRole === 'owner');
+	const isOwnerOrAdmin = $derived(data.actorRole === 'owner' || data.actorRole === 'admin');
+	const ownerCount = $derived(data.members.filter((m) => m.role === 'owner').length);
+
+	let savingId = $state<string | null>(null);
+
+	async function patchMember(
+		userId: string,
+		patch: { role?: OrgRole; permissions?: OrgPermission[] }
+	) {
+		if (!data.orgId) return;
+		savingId = userId;
+		try {
+			const res = await fetch(`/api/orgs/${data.orgId}/members/${userId}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(patch)
+			});
+			if (res.ok) {
+				toast.success('Updated');
+				await invalidateAll();
+			} else {
+				const err = await res.json().catch(() => ({}));
+				toast.error(err.message || err.error || 'Update failed');
+			}
+		} catch {
+			toast.error('Update failed');
+		} finally {
+			savingId = null;
+		}
+	}
+
+	function changeRole(member: MemberRow, role: OrgRole) {
+		if (member.role === role) return;
+		patchMember(member.userId, { role });
+	}
+
+	function toggleMemberPermission(member: MemberRow, p: OrgPermission, checked: boolean) {
+		const next = checked
+			? Array.from(new Set([...member.permissions, p]))
+			: member.permissions.filter((x) => x !== p);
+		patchMember(member.userId, { permissions: next });
+	}
 
 	const ORG_ROLES: OrgRole[] = ['owner', 'admin', 'member'];
 
@@ -218,7 +271,11 @@
 			<Card.Header>
 				<Card.Title class="text-sm font-medium">Roster</Card.Title>
 				<Card.Description>
-					Roles and per-member permissions. Editing roles lands in a follow-up.
+					Roles and per-member permissions.{isOwner
+						? ' You can change roles and permissions.'
+						: isOwnerOrAdmin
+							? ' You can grant member permissions; only the owner can change roles.'
+							: ''}
 				</Card.Description>
 			</Card.Header>
 			<Card.Content>
@@ -231,6 +288,10 @@
 				{:else}
 					<div class="divide-y rounded-lg border">
 						{#each data.members as member (member.userId)}
+							{@const isSelf = member.userId === data.actorUserId}
+							{@const isSoleOwner = member.role === 'owner' && ownerCount === 1}
+							{@const canEditRole = isOwner && !isSelf && !isSoleOwner}
+							{@const canEditPermissions = isOwnerOrAdmin && member.role === 'member'}
 							<div class="px-4 py-3">
 								<div class="flex items-start justify-between gap-4">
 									<div class="min-w-0 flex-1">
@@ -238,27 +299,69 @@
 											<p class="truncate text-sm font-medium">
 												{member.email ?? member.displayName ?? member.userId}
 											</p>
-											<span
-												class={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${ROLE_TONE[member.role]}`}
-											>
-												{member.role}
-											</span>
+											{#if canEditRole}
+												<select
+													value={member.role}
+													disabled={savingId === member.userId}
+													onchange={(e) =>
+														changeRole(member, (e.target as HTMLSelectElement).value as OrgRole)}
+													class={`border-input bg-background h-6 rounded-md border px-1.5 font-mono text-[10px] tracking-wide uppercase ${ROLE_TONE[member.role]}`}
+												>
+													{#each ORG_ROLES as role (role)}
+														<option value={role}>{role}</option>
+													{/each}
+												</select>
+											{:else}
+												<span
+													class={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${ROLE_TONE[member.role]}`}
+													title={isSoleOwner
+														? 'Sole owner — promote another member to owner before changing this role.'
+														: isSelf
+															? 'You cannot change your own role.'
+															: undefined}
+												>
+													{member.role}
+												</span>
+											{/if}
 										</div>
 										<p class="text-muted-foreground text-xs">
 											Joined {new Date(member.joinedAt).toLocaleDateString()}
 										</p>
 									</div>
 								</div>
-								{#if member.role === 'member' && member.permissions.length > 0}
-									<div class="mt-2 flex flex-wrap gap-1.5">
-										{#each member.permissions as p (p)}
-											<span
-												class="bg-muted text-muted-foreground rounded-full px-2 py-0.5 font-mono text-[10px]"
-											>
-												{PERMISSION_LABELS[p] ?? p}
-											</span>
+								{#if member.role === 'member'}
+									<div class="mt-2 flex flex-wrap gap-3">
+										{#each MEMBER_ASSIGNABLE_PERMISSIONS as p (p)}
+											{@const has = member.permissions.includes(p)}
+											{#if canEditPermissions}
+												<label class="flex cursor-pointer items-center gap-1.5 text-xs">
+													<input
+														type="checkbox"
+														checked={has}
+														disabled={savingId === member.userId}
+														onchange={(e) =>
+															toggleMemberPermission(
+																member,
+																p,
+																(e.target as HTMLInputElement).checked
+															)}
+													/>
+													{PERMISSION_LABELS[p] ?? p}
+												</label>
+											{:else if has}
+												<span
+													class="bg-muted text-muted-foreground rounded-full px-2 py-0.5 font-mono text-[10px]"
+												>
+													{PERMISSION_LABELS[p] ?? p}
+												</span>
+											{/if}
 										{/each}
 									</div>
+								{:else if OWNER_ADMIN_ONLY_PERMISSIONS.length > 0}
+									<p class="text-muted-foreground mt-2 text-xs">
+										{member.role === 'owner' ? 'Owners' : 'Admins'} hold all organization permissions
+										by default.
+									</p>
 								{/if}
 							</div>
 						{/each}

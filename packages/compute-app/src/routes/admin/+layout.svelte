@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { SideNav, type SideNavItem } from '@selvajs/ui';
-	import { Gauge, Building2, Users, RotateCcw, Server, Settings, ScrollText } from '@lucide/svelte';
+	import { Gauge, Building2, Users, Server, Settings, ScrollText } from '@lucide/svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 
@@ -37,13 +37,6 @@
 				icon: Users,
 				match: 'prefix' as const,
 				show: can('manage_instance_users')
-			},
-			{
-				href: '/admin/reclaim',
-				label: 'Reclaim',
-				icon: RotateCcw,
-				match: 'prefix' as const,
-				show: can('instance_admin')
 			},
 			{
 				href: '/admin/compute',

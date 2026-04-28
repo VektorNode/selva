@@ -10,6 +10,8 @@
 		onOpen: (record: DefinitionRecord) => void;
 		/** Optional project chip; pass when the surrounding view shows multiple projects. */
 		projectName?: string;
+		/** Visibility of the parent project. Shown as muted text alongside projectName. */
+		projectVisibility?: 'public' | 'org' | 'private';
 
 		// ---- Author surface (projects) ----
 		/** When true, renders the status badge top-left and "updated X ago" in the footer. */
@@ -28,6 +30,7 @@
 		record,
 		onOpen,
 		projectName,
+		projectVisibility,
 		showStatus = false,
 		loading = false,
 		starred = false,
@@ -36,8 +39,6 @@
 	}: Props = $props();
 
 	const hues = $derived(huesFor(record.guid));
-	// When status owns the top-left, project chip slips down a row to avoid overlap.
-	const projectChipTopOffset = $derived(showStatus ? 'top-9' : 'top-2.5');
 
 	function activate() {
 		if (loading) return;
@@ -91,15 +92,6 @@
 			</div>
 		{/if}
 
-		{#if projectName}
-			<div class="absolute left-2.5 {projectChipTopOffset}">
-				<span
-					class="bg-background/85 text-foreground rounded-full px-2 py-0.5 font-mono text-[10px] backdrop-blur-sm"
-				>
-					{projectName}
-				</span>
-			</div>
-		{/if}
 
 		{#if onToggleStar}
 			<button
@@ -133,6 +125,11 @@
 	</div>
 
 	<div class="flex flex-1 flex-col p-3.5">
+		{#if projectName}
+			<p class="text-muted-foreground mb-1 truncate font-mono text-[10.5px]">
+				{projectName}{#if projectVisibility}&nbsp;·&nbsp;{projectVisibility}{/if}
+			</p>
+		{/if}
 		<p class="truncate text-[14px] font-semibold">{record.displayName}</p>
 		{#if record.description}
 			<p class="text-muted-foreground mt-1 line-clamp-2 text-[12.5px] leading-relaxed">

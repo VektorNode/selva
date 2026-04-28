@@ -628,14 +628,18 @@ describe('§11 — instance-admin invariants', () => {
 		).toBe(2);
 	});
 
-	it('instance_admin views Acme private project without being a member — OK via bypass', async () => {
+	it('instance_admin views Acme private project without being a member — 403 (no content bypass)', async () => {
 		tp = await freshProviders();
 		const { alicesPrivate, bob } = await seedAcme(tp);
 		// Bob is an Acme member but NOT a member of Alice's private project.
-		// Granting instance_admin should bypass the project-membership check.
+		// `instance_admin` no longer bypasses content access (Permissions.md §2) —
+		// private projects are private from everyone without a membership, including
+		// platform staff. Reclaim is the explicit escalation path.
 		await grantPlatformPermissions(tp, bob.id, ['instance_admin']);
 		const bobLocals = await actAs(tp, bob.id);
 
-		await expect(requireCanViewProject(bobLocals, alicesPrivate.id)).resolves.toBeDefined();
+		await expect(requireCanViewProject(bobLocals, alicesPrivate.id)).rejects.toMatchObject({
+			status: 403
+		});
 	});
 });

@@ -184,6 +184,44 @@ describe('canView', () => {
 			})
 		).toBe(false);
 	});
+
+	// `private` means private from everyone without project membership —
+	// including org leadership. Reclaim is the explicit escalation path.
+	it('private + org owner (no project membership): still denied', () => {
+		expect(
+			canView({
+				orgPermissions: [],
+				project: project({ visibility: 'private' }),
+				member: null,
+				orgMember: orgMember('owner'),
+				allowCrossOrgPublic: false
+			})
+		).toBe(false);
+	});
+
+	it('private + org admin (no project membership): still denied', () => {
+		expect(
+			canView({
+				orgPermissions: [],
+				project: project({ visibility: 'private' }),
+				member: null,
+				orgMember: orgMember('admin'),
+				allowCrossOrgPublic: false
+			})
+		).toBe(false);
+	});
+
+	it('private + org member (no project membership): denied', () => {
+		expect(
+			canView({
+				orgPermissions: [],
+				project: project({ visibility: 'private' }),
+				member: null,
+				orgMember: orgMember('member'),
+				allowCrossOrgPublic: false
+			})
+		).toBe(false);
+	});
 });
 
 // ============================================================================
