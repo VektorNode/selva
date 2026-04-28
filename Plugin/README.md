@@ -39,5 +39,5 @@ pnpm build:plugin
 
 ## Requirements
 
-- Rhino 8 (Windows/macOS)
+- Rhino 7 or 8 (Windows/macOS)
 - Grasshopper

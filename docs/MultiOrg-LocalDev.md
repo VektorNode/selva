@@ -1,6 +1,6 @@
 # Testing Multi-Org Locally
 
-Selva treats organizations as the hard tenancy boundary. Most of that boundary is enforced by store methods comparing `RequestContext.actingOrgId` to the resource's `orgId` ([Permissions.md](../packages/compute-app/src/routes/admin/Permissions.md)). To exercise that boundary on your machine you need at least two orgs and at least one user per org.
+Selva treats organizations as the hard tenancy boundary. Most of that boundary is enforced by store methods comparing `RequestContext.actingOrgId` to the resource's `orgId` ([Permissions.md](../packages/compute-app/specs/Permissions.md)). To exercise that boundary on your machine you need at least two orgs and at least one user per org.
 
 This guide covers both backends — the wiring is provider-agnostic; only the "where the rows land" step differs.
 
@@ -13,7 +13,7 @@ Set in [selva.config.ts](../selva.config.ts) (`tenancy: 'single' | 'multi'`):
 | `'single'` (default) | One org + the first user as its owner | Single-tenant deploy                      |
 | `'multi'`            | Only the platform admin user; no org  | Testing multi-org, or multi-tenant deploy |
 
-`/setup` branches on this — see [setup/+page.server.ts:86](../packages/compute-app/src/routes/setup/+page.server.ts#L86). In `multi` mode the user lands in the admin without an `actingOrgId` until they're a member of an org.
+`/setup` branches on this — see [setup/+page.server.ts](../packages/compute-app/src/routes/setup/+page.server.ts). In `multi` mode the user lands in the admin without an `actingOrgId` until they're a member of an org.
 
 ## Step 1 — Pick a backend
 
@@ -63,11 +63,11 @@ Both backends share the same compute-app, hooks, admin API, and access rules. Fr
 pnpm dev:compute
 ```
 
-Hit `http://localhost:3000/setup`, create the first user. They get every platform permission ([setup/+page.server.ts:79-81](../packages/compute-app/src/routes/setup/+page.server.ts#L79-L81)) including `instance_admin`. In `multi` mode no org is created — they're a platform admin floating above tenancy.
+Hit `http://localhost:3000/setup`, create the first user. They get every platform permission (see [setup/+page.server.ts](../packages/compute-app/src/routes/setup/+page.server.ts)) including `instance_admin`. In `multi` mode no org is created — they're a platform admin floating above tenancy.
 
 ## Step 3 — Create orgs
 
-The admin API exists; there's no admin-UI button for it yet. Endpoint: [admin/api/orgs/+server.ts:34](../packages/compute-app/src/routes/admin/api/orgs/+server.ts#L34) (instance-admin only).
+The admin API exists; there's no admin-UI button for it yet. Endpoint: [admin/api/orgs/+server.ts](../packages/compute-app/src/routes/admin/api/orgs/+server.ts) (instance-admin only).
 
 Grab `admin_session` from the browser cookie jar after logging in, then:
 
@@ -97,7 +97,7 @@ Either use `/setup` for one and `/admin/users` for the rest (admin-create flow),
 
 This is where the two backends diverge.
 
-**Local provider** — edit `$DATA_PATH/local-org.json`. Schema lives in [LocalOrgStore.ts](../packages/local-provider/src/data/LocalOrgStore.ts); `OrgMember` shape is in [types.ts:19-33](../packages/platform/src/organizations/types.ts#L19-L33). Append to `orgMembers`:
+**Local provider** — edit `$DATA_PATH/local-org.json`. Schema lives in [LocalOrgStore.ts](../packages/local-provider/src/data/LocalOrgStore.ts); `OrgMember` shape is in [types.ts](../packages/platform/src/organizations/types.ts). Append to `orgMembers`:
 
 ```json
 {
@@ -114,7 +114,7 @@ This is where the two backends diverge.
 
 Empty `permissions` → the role's defaults apply via `DEFAULT_ORG_PERMISSIONS[role]`. Restart the dev server so the JSON re-reads.
 
-**Supabase** — `psql` into the local stack (`supabase status` for the connection string) and `INSERT` into `public.org_members`. Schema in [0001_initial.sql:115](../packages/supabase-provider/supabase/migrations/0001_initial.sql#L115):
+**Supabase** — `psql` into the local stack (`supabase status` for the connection string) and `INSERT` into `public.org_members`. Schema in [0001_initial.sql](../packages/supabase-provider/supabase/migrations/0001_initial.sql):
 
 ```sql
 insert into public.org_members (org_id, user_id, role, permissions, updated_by)
@@ -135,11 +135,11 @@ Open separate browser profiles (or incognito windows):
 - `alice@acme` → only Acme; should not see Globex's projects/definitions
 - `bob@globex` → only Globex
 
-The rule layer documented in [Permissions.md](../packages/compute-app/src/routes/admin/Permissions.md) is what you're testing. The conformance suites in [packages/local-provider/src/data/**tests**/rules.test.ts](../packages/local-provider/src/data/__tests__/rules.test.ts) cover the same surface programmatically.
+The rule layer documented in [Permissions.md](../packages/compute-app/specs/Permissions.md) is what you're testing. The conformance suites in [packages/local-provider/src/data/**tests**/rules.test.ts](../packages/local-provider/src/data/__tests__/rules.test.ts) cover the same surface programmatically.
 
 ## Caveat: there's no org switcher yet
 
-[hooks.server.ts:35-44](../packages/compute-app/src/hooks.server.ts#L35-L44) sets `actingOrgId` to **the first org the user is a member of** and stops. The inline comment flags this:
+[hooks.server.ts](../packages/compute-app/src/hooks.server.ts) sets `actingOrgId` to **the first org the user is a member of** and stops. The inline comment flags this:
 
 > URL-prefix resolution (`/o/{slug}/...`) will replace this once routes are tenant-namespaced.
 

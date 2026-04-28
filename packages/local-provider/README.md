@@ -52,15 +52,16 @@ Rhino.Compute server URL + API key are configured in `/admin/compute` and persis
 
 ```
 $DATA_PATH/
-├── users.json                    # all users + hashed passwords + platform permissions
-├── compute.config.json           # registered Rhino.Compute servers
-├── orgs.json                     # organizations + members
-├── projects.json                 # projects + members
-├── definitions.json              # definition metadata (filenames, owners, run counts)
+├── users.json                    # users + hashed passwords + platform permissions
+├── local-org.json                # organizations, projects, and their memberships
+├── definitions-config.json       # definition metadata + version history
+├── share-links.json              # per-definition share tokens (HMAC-hashed)
 ├── invites.json                  # pending invite tokens
-└── files/                        # uploaded .gh / .ghx + cover images
-    └── <project-id>/
-        └── <definition-id>.gh
+├── compute.config.json           # registered Rhino.Compute servers
+└── definitions/                  # uploaded .gh / .ghx + cover images
+    └── <definition-guid>/
+        ├── versions/v{n}.{ext}
+        └── cover.webp
 ```
 
 All JSON files are written atomically (temp file + rename) so a crash mid-write leaves either the old or new file — never a partial. Image uploads are transcoded to WebP (1200px max, quality 85) via `sharp`.
@@ -79,21 +80,23 @@ All JSON files are written atomically (temp file + rename) so a crash mid-write 
 This is the default config in [`selva.config.ts`](../../selva.config.ts) at the repo root:
 
 ```ts
-import { defineConfig } from '@selvajs/platform/config';
-import {
-	LocalAuthProvider,
-	LocalDataProvider,
-	LocalStorageProvider,
-	LocalUserProfileProvider
-} from '@selvajs/local-provider';
+import { defineConfig } from '@selvajs/platform';
+import * as local from '@selvajs/local-provider';
 
 export default defineConfig((env) => ({
-	auth: LocalAuthProvider.fromEnv(env),
-	data: LocalDataProvider.fromEnv(env),
-	storage: LocalStorageProvider.fromEnv(env),
-	userProfile: LocalUserProfileProvider.fromEnv(env)
+	tenancy: 'single' as const,
+	flags: {
+		ALLOW_CROSS_ORG_PUBLIC: false,
+		ALLOW_ORG_COMPUTE_OVERRIDE: false,
+		ALLOW_ORG_CREATION: false
+	},
+	auth: local.LocalAuthProvider.fromEnv(env),
+	data: local.LocalDataProvider.fromEnv(env),
+	storage: local.LocalStorageProvider.fromEnv(env)
 }));
 ```
+
+`LocalDataProvider` internally wires every store — orgs, projects, definitions, share-links, invites, compute server, user profile, platform permissions.
 
 To switch to Supabase, see [`@selvajs/supabase-provider`](../supabase-provider/README.md#wiring-into-selvaconfigts).
 
@@ -105,7 +108,7 @@ To switch to Supabase, see [`@selvajs/supabase-provider`](../supabase-provider/R
 
 `LocalAuthProvider` issues HMAC-signed session tokens (no JWT library; see [`auth/`](src/auth/)). Tokens carry `{ userId, expiresAt }` and are verified on every request.
 
-Users live in `users.json` with `argon2id` password hashes and platform permissions. The first admin is bootstrapped through the in-app setup page on a fresh install.
+Users live in `users.json` with `PBKDF2-SHA256` password hashes and platform permissions. The first admin is bootstrapped through the in-app setup page on a fresh install.
 
 ### Data
 

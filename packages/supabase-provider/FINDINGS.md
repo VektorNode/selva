@@ -1,5 +1,7 @@
 # Supabase provider — findings
 
+> Internal log. Not part of the public README surface.
+
 Living log of friction points hit while implementing the Supabase provider
 against the `@selvajs/platform` contracts. Each entry is either:
 

@@ -6,7 +6,7 @@ Guide for setting up a Rhino.Compute server to enable cloud-based solving of Gra
 
 - Windows Server or VM (Azure, AWS, or on-premises)
 - Administrator access
-- [Core Hour Billing](https://developer.rhino3d.com/guides/compute/core-hour-billing/) account
+- A Rhino license — most production deployments use [Core Hour Billing](https://developer.rhino3d.com/guides/compute/core-hour-billing/), but a standalone or Cloud Zoo license also works in local mode.
 
 ## Steps
 

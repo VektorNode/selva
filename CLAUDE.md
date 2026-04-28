@@ -227,8 +227,8 @@ This architecture means Selva has **zero exposure to EU data regulations, creden
 - [pnpm](https://pnpm.io) >= 10.0.0 (Node.js package manager — version pinned in `packageManager`, activated via Corepack)
 - Node.js >= 18.0.0
 - .NET SDK 7.0+ (for plugin development)
-- Rhino 8 (for using the plugin)
-- Custom Rhino Compute fork: https://github.com/VektorNode/compute.rhino3d
+- Rhino 7 or 8 (for using the plugin)
+- Rhino.Compute server — the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) is required for block instance support
 
 ## Environment Variables
 
@@ -242,22 +242,29 @@ Rhino.Compute server URL + API key are configured in `/admin/compute` and persis
 
 Core provider interfaces for Selva's pluggable architecture. All modules support Zod schema validation and are granular exports for tree-shaking.
 
-| Module                            | Exports                                                                                                                     | Purpose                                                                                                                                  |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `@selvajs/platform/auth`          | `IAuthProvider`, `IPasswordAuth`                                                                                            | Identity verification, optional password capability, user management                                                                     |
-| `@selvajs/platform/data`          | `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IShareLinkStore`, `IInviteStore`, `IComputeServerStore` | Structured data storage (all methods take `RequestContext`)                                                                              |
-| `@selvajs/platform/storage`       | `IStorageProvider`                                                                                                          | Blob storage (get, put, delete, getPublicUrl)                                                                                            |
-| `@selvajs/platform/definitions`   | Types, schemas, `definitionPaths`                                                                                           | Definition record types + path helpers. (Service orchestration lives in compute-app; see `lib/server/definitions/DefinitionService.ts`.) |
-| `@selvajs/platform/organizations` | —                                                                                                                           | `Organization`, `OrgMember`, `OrgRole` types + Zod schemas                                                                               |
-| `@selvajs/platform/projects`      | —                                                                                                                           | `Project`, `ProjectMember`, `ProjectRole`, `ProjectVisibility` types + schemas                                                           |
-| `@selvajs/platform/computeServer` | —                                                                                                                           | `ComputeServerConfig`, `resolveComputeServer()` helpers                                                                                  |
-| `@selvajs/platform/testing`       | `runXxxConformance` functions (one per store)                                                                               | Vitest-based conformance suites for all stores                                                                                           |
+All modules are granular exports for tree-shaking; see [packages/platform/src/](packages/platform/src/) for the full list.
+
+| Module                            | Key exports                                                                                                          |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `@selvajs/platform/auth`          | `IAuthProvider`, `IPasswordAuth`                                                                                     |
+| `@selvajs/platform/data`          | `IDataProvider` (composes all stores below), `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IComputeServerStore` |
+| `@selvajs/platform/invites`       | `IInviteStore`                                                                                                       |
+| `@selvajs/platform/shareLinks`    | `IShareLinkStore`                                                                                                    |
+| `@selvajs/platform/permissions`   | `IPlatformPermissionStore`                                                                                           |
+| `@selvajs/platform/userProfile`   | `IUserProfileStore`                                                                                                  |
+| `@selvajs/platform/storage`       | `IStorageProvider`                                                                                                   |
+| `@selvajs/platform/definitions`   | Definition record types + `definitionPaths` helpers. Service orchestration lives in compute-app (`lib/server/definitions/DefinitionService.ts`). |
+| `@selvajs/platform/organizations` | `Organization`, `OrgMember`, `OrgRole` types + Zod schemas                                                           |
+| `@selvajs/platform/projects`      | `Project`, `ProjectMember`, `ProjectRole`, `ProjectVisibility` types + schemas                                       |
+| `@selvajs/platform/computeServer` | `ComputeServerConfig`, `resolveComputeServer()` helpers                                                              |
+| `@selvajs/platform/access`        | Pure rule functions (`canView`, `canEdit`, `canSolve`, …) over `RequestContext`                                      |
+| `@selvajs/platform/testing`       | Vitest conformance suites — one per store                                                                            |
 
 **Local provider** (`@selvajs/local-provider`) implements all interfaces using the filesystem:
 
-- `LocalAuthProvider` — HMAC tokens + optional `users.json`
-- `LocalDataProvider` — Wires all stores; reads/writes JSON config files
-- `LocalStorageProvider` — Filesystem blobs, auto-transcodes images to WebP via sharp
+- `LocalAuthProvider` — HMAC session tokens; reads users from `users.json` (PBKDF2-SHA256 password hashes)
+- `LocalDataProvider` — wires all stores; each backed by an atomic-write JSON file
+- `LocalStorageProvider` — filesystem blobs under `$DATA_PATH/`, auto-transcodes images to WebP via sharp
 - `LocalComputeServerStore` — `compute.config.json`
 
 ## Issues

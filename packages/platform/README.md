@@ -21,7 +21,7 @@ This README is the contract. Read it before writing an adapter.
 | `IComputeServerStore`      | Global + per-org compute-server config.                                           | No — not tenant-scoped.                                              |
 | `IStorageProvider`         | Path-based blob storage. Authorization is the caller's responsibility.            | No — callers pass already-authorized paths.                          |
 
-`IDataProvider` composes the data stores: `{ orgs, projects, definitions, shareLinks, invites, computeServer }`. An adapter typically implements one class per store and aggregates them.
+`IDataProvider` composes every store: `{ orgs, projects, definitions, computeServer, invites, shareLinks, userProfile, permissions }`. An adapter typically implements one class per store and aggregates them.
 
 ---
 
@@ -46,7 +46,7 @@ Providers are two-phase: a metadata store (`IDataProvider`) and a blob store (`I
 2. Upload the blob.
 3. Flip `status` to `'ready'`.
 
-List queries filter `'pending'` by default (`ListOptions.includePending` opts in). If step 2 fails, the record is invisible to consumers. `DefinitionService.gcStalePending` sweeps records older than 30 min.
+List queries filter `'pending'` by default (`ListOptions.includePending` opts in). If step 2 fails, the record stays `'pending'` and is invisible to consumers.
 
 **Delete — blob-first:**
 
@@ -81,7 +81,7 @@ export class MyDefinitionStore implements IDefinitionStore {
 }
 ```
 
-Wire it into a `SelvaConfig` via `defineConfig({ auth, data, storage, userProfile, permissions })`.
+Wire it into a `SelvaConfig` via `defineConfig({ auth, data, storage })`. `data` is an `IDataProvider` that composes every store (orgs, projects, definitions, invites, share-links, compute server, user profile, platform permissions).
 
 ---
 
@@ -99,7 +99,7 @@ runDefinitionStoreConformance({
 });
 ```
 
-The suites cover `ctx` scoping, `pending` filtering, `includePending` opt-in, `listStalePending` cutoff behavior, history pruning, and `ProviderError` shapes. They do not cover performance or concurrency.
+The suites cover `ctx` scoping, `pending` filtering, `includePending` opt-in, history pruning, and `ProviderError` shapes. They do not cover performance or concurrency.
 
 ---
 

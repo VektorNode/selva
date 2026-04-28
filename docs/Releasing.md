@@ -1,6 +1,6 @@
-# Changelog & Versioning
+# Releasing
 
-Selva uses [Changesets](https://github.com/changesets/changesets) to automatically manage changelogs and semantic versioning across packages.
+Selva uses [Changesets](https://github.com/changesets/changesets) to manage changelogs and semantic versioning across packages.
 
 ## Quick Start
 
@@ -45,8 +45,8 @@ Changesets are automatically created in `.changeset/[id].md`:
 
 ```markdown
 ---
-'@selva/compute': minor
-'@selva/shared': patch
+'@selvajs/compute-app': minor
+'@selvajs/ui': patch
 ---
 
 Brief description of what changed

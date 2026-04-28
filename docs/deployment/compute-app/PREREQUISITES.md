@@ -13,7 +13,7 @@
 | Dependency              | Setup                                         |
 | ----------------------- | --------------------------------------------- |
 | Rhino.Compute server    | [Rhino Compute Setup](../../RHINO_COMPUTE.md) |
-| Grasshopper definitions | [Definitions Setup](./DEFINITIONS_SETUP.md)   |
+| Grasshopper definitions | Uploaded through the admin UI after install   |
 
 The server URL + API key are registered post-install via `/admin/compute` — not env vars.
 
@@ -52,5 +52,5 @@ These apply regardless of provider:
 | `HOST`                   | `0.0.0.0`     | Bind address                                           |
 | `NODE_ENV`               | `development` | Set `production` to hide stack traces                  |
 | `ORIGIN`                 | —             | Public URL — **required behind a reverse proxy**       |
-| `BODY_SIZE_LIMIT`        | `512kb`       | Increase for large geometry uploads (`Infinity` works) |
+| `BODY_SIZE_LIMIT`        | `60mb`        | Cap for largest legitimate request (.gh + image)       |
 | `ALLOW_INSECURE_COOKIES` | —             | Set `true` for HTTP-only deployments (dev/testing)     |

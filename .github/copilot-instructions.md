@@ -70,7 +70,7 @@ pnpm run build:plugin  # Builds plugin with embedded web assets
 
 ```bash
 pm2 start ecosystem.config.cjs              # Start with PM2
-pm2 reload selva-compute --update-env       # Graceful reload (zero-downtime) — PM2 process name
+pm2 restart selva-compute --update-env      # Restart after config or env change
 ```
 
 ## 4. Code Style and Conventions
@@ -104,7 +104,7 @@ When asked to help generate commit messages:
 - Never manually edit generated files:
   - `packages/schemas/src/generated/schema.ts`
   - `Plugin/Selva.Core/Models/UISchema.Generated.cs`
-- Type mappings: string → string, number → double?, integer → int?, boolean → bool?, array → List<T>
+- Type mappings (C# nullable when the property is not in `required`): string → string, number → double / double?, integer → int / int?, boolean → bool / bool?, array → List<T>
 
 ## 8. Do Not
 

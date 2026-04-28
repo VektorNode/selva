@@ -4,7 +4,7 @@
 >
 > **Audience.** Selva contributors. Not aimed at integrators or evaluators.
 >
-> **Last reconciled with code:** 2026-04-25.
+> **Last reconciled with code:** 2026-04-28.
 
 ---
 
@@ -166,7 +166,7 @@ A Grasshopper definition (`.gh` or `.ghx`) plus its metadata.
 - Identified by `guid` (immutable, public-facing).
 - `projectId` FK to parent project.
 - `ownerId` set at creation, never changes. In container mode it's display metadata; in commons mode it's an access input.
-- `status`: `pending | draft | published`. `pending` is internal — covers the window between metadata-write and blob-upload-complete; janitor sweeps stale rows; filtered out of list endpoints by default. `draft` and `published` are the editorial states. Add more states later if a real workflow needs them.
+- `status`: `pending | draft | published`. `pending` is internal — covers the window between metadata-write and blob-upload-complete; filtered out of list endpoints by default (opt in via `ListOptions.includePending`). `draft` and `published` are the editorial states. Add more states later if a real workflow needs them.
 - `runCount` increments atomically per solve. `liveVersionId` and `draftVersionId` point at version rows (see §4.5).
 - `coverImage` is a public URL; uploads are unconditionally transcoded to WebP, max 1200px, q=85 (see [storage/image.ts](../../platform/src/storage/image.ts)).
 - `computeServerId` optional override — falls back to org default, then instance default.
@@ -327,7 +327,7 @@ This means Selva itself has zero exposure to GDPR-class data — the auth provid
 
 - **Access control rules** — see [Permissions.md](./Permissions.md). It is the authority on `canView`/`canEdit`/`canSolve`/etc.
 - **The Grasshopper plugin internals** (component anatomy, schema-link protocol, embedded HTTP server). Out of scope here; would belong in a `Plugin/ARCHITECTURE.md`.
-- **Frontend component architecture** (Svelte stores, theming, shared UI library). Out of scope; tracked in `packages/compute-app/UI_INVENTORY.md` and `@selvajs/ui`.
+- **Frontend component architecture** (Svelte stores, theming, shared UI library). Out of scope; lives in `@selvajs/ui`.
 - **Rhino.Compute server topology** (single instance vs pool vs ours-vs-theirs). See `docs/RHINO_COMPUTE.md`.
 
 ---
@@ -356,4 +356,4 @@ For grounding — these exist but live outside this document:
 - **`@selvajs/builder-app`** — designer's local schema editor, embedded as a website inside the Grasshopper plugin. Hosted and maintained by Selva internally; not a deployable product.
 - **`@selvajs/compute`** (external npm package) — author's helper library for working with Rhino.Compute and Three.js. A dependency Selva uses, not a Selva component.
 - **Plugin internals** (`Plugin/Selva.GH`) — components, schema-link WebSocket protocol, embedded HTTP server. Lives in the .NET workspace; would deserve its own `Plugin/ARCHITECTURE.md`.
-- **Frontend component architecture** — Svelte stores, theming, the `@selvajs/ui` library. Tracked in `packages/compute-app/UI_INVENTORY.md`.
+- **Frontend component architecture** — Svelte stores, theming, the `@selvajs/ui` library.

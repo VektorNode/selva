@@ -43,5 +43,3 @@ Types are generated from `packages/schemas/ui-schema.json`. After modifying the 
 ```bash
 cd packages/schemas && pnpm run generate:all
 ```
-
-cd packages/ui && pnpm publish --no-git-checks
