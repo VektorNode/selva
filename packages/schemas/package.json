@@ -26,9 +26,10 @@
 		"build": "tsc",
 		"dev": "tsc --watch",
 		"type-check": "tsc --noEmit",
-		"generate:ts": "node generate-typescript.js",
-		"generate:cs": "node generate-csharp.js",
-		"generate:all": "pnpm run generate:ts && pnpm run generate:cs"
+		"generate": "pnpm run generate:ts && pnpm run generate:cs",
+		"generate:ts": "node scripts/generate-typescript.js",
+		"generate:cs": "node scripts/generate-csharp.js",
+		"generate:all": "pnpm run generate"
 	},
 	"devDependencies": {
 		"json-schema-to-typescript": "^15.0.4",

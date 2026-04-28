@@ -40,9 +40,10 @@ NC='\033[0m' # No Color
 REPO_URL="${REPO_URL:-git@github.com:VektorNode/selva.git}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
 # DATA_PATH is the local provider's data directory: users.json, orgs/projects/
-# definitions JSON, compute.config.json, and uploaded .gh files.
-# GH_DEFINITIONS_PATH is accepted as a legacy alias for backward compatibility.
-DATA_PATH="${DATA_PATH:-${GH_DEFINITIONS_PATH:-./definitions}}"
+# definitions JSON, compute.config.json, and uploaded .gh files. Resolved
+# relative to packages/compute-app/ — the default lands at .selva-data/ at
+# the repo root. GH_DEFINITIONS_PATH is honored as a legacy alias.
+DATA_PATH="${DATA_PATH:-${GH_DEFINITIONS_PATH:-../../.selva-data}}"
 SESSION_SECRET="${SESSION_SECRET:-}"
 ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES:-}"  # auto-detected: true for http, false for https
 PORT="${PORT:-3000}"
@@ -351,8 +352,8 @@ if [ "$SKIP_PM2" = false ]; then
   ORIGIN=${ORIGIN:-http://localhost}
   ALLOW_INSECURE_COOKIES=${ALLOW_INSECURE_COOKIES:-true}
 
-  # Resolve DATA_PATH to absolute path (default to ./definitions if not set)
-  DATA_PATH="${DATA_PATH:-./definitions}"
+  # Resolve DATA_PATH to absolute path (default to ../../.selva-data if not set)
+  DATA_PATH="${DATA_PATH:-../../.selva-data}"
   if [[ "$DATA_PATH" != /* ]]; then
     ABS_DATA_PATH="$INSTALL_DIR/packages/compute-app/$DATA_PATH"
   else
@@ -449,7 +450,7 @@ if [ "$SKIP_PM2" = false ]; then
 fi
 
 echo "📝 Next steps:"
-echo "   1. Add your .gh files to: ${DATA_DIR:-$INSTALL_DIR/packages/compute-app/definitions}"
+echo "   1. Add your .gh files to: ${DATA_DIR:-$INSTALL_DIR/.selva-data}"
 echo "   2. Open /admin/compute to register your Rhino.Compute server URL (+ optional API key)"
 echo "   3. (Optional) Set up Caddy reverse proxy: bash setup-caddy.sh [--domain app.example.com]"
 echo ""

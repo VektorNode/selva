@@ -1,7 +1,6 @@
 packages:
   - packages/*
   - examples/*
-  - Plugin
 
 catalogs:
   default:
