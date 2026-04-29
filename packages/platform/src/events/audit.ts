@@ -7,7 +7,7 @@ import type { DomainEvent, DomainEventType } from './interface.js';
  *
  * Kept on its own interface so:
  *   - dev-mode `NoopEventSink` doesn't need a fake `query` returning empty;
- *     `auditQuery` simply stays undefined on `SelvaConfig`.
+ *     `auditQuery` simply stays undefined on the data provider.
  *   - future webhook-dispatcher sinks aren't forced to implement a query path.
  *   - the contract here can throw on backend failure without violating the
  *     sink's "MUST NOT throw" rule.

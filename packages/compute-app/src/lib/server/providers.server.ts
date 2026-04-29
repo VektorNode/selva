@@ -63,5 +63,5 @@ export function getPlatformProjectGrantStore() {
  * surface). Routes that consume this MUST handle null and degrade their UI.
  */
 export function getAuditQuery() {
-	return providers.auditQuery ?? null;
+	return providers.data.auditQuery ?? null;
 }

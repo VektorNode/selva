@@ -21,6 +21,8 @@ import type { IPlatformProjectGrantStore } from '../platformProjects/interface.j
 import type { IInviteStore } from '../invites/interface.js';
 import type { IUserProfileStore } from '../userProfile/interface.js';
 import type { IPlatformPermissionStore } from '../permissions/interface.js';
+import type { IAuditQuery } from '../events/audit.js';
+import type { RequestContext } from '../context.js';
 
 export interface IDataProvider {
 	orgs: IOrgStore;
@@ -32,4 +34,24 @@ export interface IDataProvider {
 	userProfile: IUserProfileStore;
 	permissions: IPlatformPermissionStore;
 	platformProjectGrants: IPlatformProjectGrantStore;
+	/**
+	 * Read-side for the persisted event log. Optional — providers whose event
+	 * sink is a noop (local-provider) leave this undefined and the
+	 * `/admin/audit` UI degrades to its "no backend wired" state.
+	 */
+	auditQuery?: IAuditQuery;
+
+	/**
+	 * Idempotently register a user in the data layer. Called by `hooks.server.ts`
+	 * after `verifyToken` succeeds, so the data layer always has a row for the
+	 * authenticated user regardless of which auth provider issued the ID.
+	 *
+	 * Adapters with a DB-side trigger that auto-seeds on auth signup (Supabase)
+	 * make this a no-op. Adapters that own a separate user-data table without a
+	 * trigger (local-provider) upsert here.
+	 *
+	 * MUST be safe to call concurrently and on every request. MUST NOT throw on
+	 * a duplicate userId.
+	 */
+	ensureUser(ctx: RequestContext, userId: string): Promise<void>;
 }
