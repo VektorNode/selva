@@ -1,5 +1,5 @@
 import { getAuthProvider } from '$lib/server/auth.server';
-import { hasPermission } from '@selvajs/platform';
+import { hasPermission, type PlatformPermission } from '@selvajs/platform';
 import type { PageServerLoad } from './$types';
 
 /**
@@ -11,18 +11,21 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const ctx = locals.ctx;
 	const canSeeUserStats = ctx ? hasPermission(ctx, 'manage_instance_users') : false;
 
+	const platformPermissions: PlatformPermission[] = ctx?.platformPermissions ?? [];
+
 	if (!canSeeUserStats) {
-		return { stats: { users: null } };
+		return { stats: { users: null }, platformPermissions };
 	}
 
 	try {
 		const usersPage = await getAuthProvider().listUsers({ limit: 200 });
 		return {
-			stats: { users: usersPage?.items.length ?? null }
+			stats: { users: usersPage?.items.length ?? null },
+			platformPermissions
 		};
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
 		console.error('Failed to load admin dashboard:', err);
-		return { stats: { users: null } };
+		return { stats: { users: null }, platformPermissions };
 	}
 };

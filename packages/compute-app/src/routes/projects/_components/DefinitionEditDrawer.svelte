@@ -36,10 +36,11 @@
 		projects: ProjectWithMembers[];
 		computeServers: ComputeServerConfig[];
 		isSaving: boolean;
+		initialTab?: 'versions' | 'details' | 'shares';
 		onClose: () => void;
 		onSave: (guid: string, patch: EditPatch) => Promise<void>;
 		onDelete: (guid: string) => Promise<void>;
-		onOpenRunner: (guid: string) => void;
+		onOpenRunner: (guid: string, channel?: 'live' | 'draft') => void;
 		/** Optional — when set, surfaces a Back link to return to the detail view. */
 		onBack?: () => void;
 	}
@@ -49,6 +50,7 @@
 		projects,
 		computeServers,
 		isSaving,
+		initialTab = 'versions',
 		onClose,
 		onSave,
 		onDelete,
@@ -56,7 +58,8 @@
 		onBack
 	}: Props = $props();
 
-	let activeTab = $state<'versions' | 'details' | 'shares'>('versions');
+	/* svelte-ignore state_referenced_locally */
+	let activeTab = $state<'versions' | 'details' | 'shares'>(initialTab);
 
 	// Form state — initialized once from record at mount. The parent unmounts
 	// this drawer via {#if editingRecord}, so a new record always gets a fresh
@@ -175,8 +178,8 @@
 
 	<Tabs.Root bind:value={activeTab} class="flex flex-1 flex-col overflow-hidden">
 		<Tabs.List class={`mx-6 grid w-auto grid-cols-3 ${onBack ? 'mt-2' : 'mt-4'}`}>
-			<Tabs.Trigger value="versions">Versions</Tabs.Trigger>
 			<Tabs.Trigger value="details">Details</Tabs.Trigger>
+			<Tabs.Trigger value="versions">Versions</Tabs.Trigger>
 			<Tabs.Trigger value="shares">Share links</Tabs.Trigger>
 		</Tabs.List>
 

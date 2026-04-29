@@ -51,6 +51,7 @@
 	let showAddModal = $state(false);
 	// True when edit was opened from the detail drawer — surfaces a Back link.
 	let editCameFromDetail = $state(false);
+	let editInitialTab = $state<'versions' | 'details' | 'shares'>('versions');
 
 	// In-flight flags
 	let addingDefinition = $state(false);
@@ -90,6 +91,10 @@
 
 	function projectVisibility(id: string) {
 		return data.projects.find((p) => p.id === id)?.visibility;
+	}
+
+	function recordCanEdit(record: DefinitionRecord) {
+		return data.projects.find((p) => p.id === record.projectId)?.canEdit ?? false;
 	}
 
 	async function errorMessage(res: Response, fallback: string) {
@@ -347,37 +352,49 @@
 	<DefinitionDetailDrawer
 		record={drawerRecord}
 		projectName={projectName(drawerRecord.projectId)}
+		canEdit={recordCanEdit(drawerRecord)}
 		onClose={() => (drawerRecord = null)}
 		onEdit={(r) => {
+			editInitialTab = 'details';
 			editingDefinitionId = r.guid;
 			editCameFromDetail = true;
 			drawerRecord = null;
 		}}
-		onOpenRunner={(guid) => goto(`/library/${guid}`)}
+		onShare={(r) => {
+			editInitialTab = 'shares';
+			editingDefinitionId = r.guid;
+			editCameFromDetail = true;
+			drawerRecord = null;
+		}}
+		onOpenRunner={(guid, channel) => goto(`/library/${guid}${channel === 'draft' ? '?channel=draft' : ''}`)}
 	/>
 {/if}
 
 {#if editingRecord}
-	<DefinitionEditDrawer
-		record={editingRecord}
-		projects={data.projects}
-		computeServers={data.computeServers}
-		isSaving={savingDefinitionId === editingRecord.guid}
-		onClose={() => {
-			editingDefinitionId = null;
-			editCameFromDetail = false;
-		}}
-		onBack={editCameFromDetail
-			? () => {
-					drawerRecord = editingRecord;
-					editingDefinitionId = null;
-					editCameFromDetail = false;
-				}
-			: undefined}
-		onSave={saveDefinition}
-		onDelete={deleteDefinition}
-		onOpenRunner={(guid) => goto(`/library/${guid}`)}
-	/>
+	{#key editInitialTab}
+		<DefinitionEditDrawer
+			record={editingRecord}
+			projects={data.projects}
+			computeServers={data.computeServers}
+			isSaving={savingDefinitionId === editingRecord.guid}
+			initialTab={editInitialTab}
+			onClose={() => {
+				editingDefinitionId = null;
+				editCameFromDetail = false;
+				editInitialTab = 'versions';
+			}}
+			onBack={editCameFromDetail
+				? () => {
+						drawerRecord = editingRecord;
+						editingDefinitionId = null;
+						editCameFromDetail = false;
+					}
+				: undefined}
+			onSave={saveDefinition}
+			onDelete={deleteDefinition}
+			onOpenRunner={(guid, channel) => goto(`/library/${guid}${channel === 'draft' ? '?channel=draft' : ''}`)}
+		/>
+	{/key}
 {/if}
 
 {#if editingProject && data.canManageProjects}

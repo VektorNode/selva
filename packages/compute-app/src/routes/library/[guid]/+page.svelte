@@ -25,7 +25,8 @@
 			body: JSON.stringify({
 				inputs: data.schema.inputs,
 				values,
-				definitionUrl: data.ghDefinition
+				definitionUrl: data.ghDefinition,
+				...(data.channel === 'draft' && { channel: 'draft' })
 			}),
 			signal
 		});
@@ -81,6 +82,11 @@
 	footerComponentProps={() => ({ label: data.serverLabel })}
 >
 	{#snippet headerRight()}
+		{#if data.channel === 'draft'}
+			<span class="bg-warning/15 text-warning rounded-full px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide uppercase">
+				Draft preview
+			</span>
+		{/if}
 		<UserChip />
 	{/snippet}
 </ComputeApp>

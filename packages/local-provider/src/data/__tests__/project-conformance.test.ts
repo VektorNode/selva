@@ -27,7 +27,10 @@ describe('LocalProjectStore', () => {
 		createStore: async () => {
 			const loader = new LocalOrgStoreLoader(tempDir);
 			const invites = new LocalInviteStore(tempDir);
-			const computeServer = new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'));
+			const computeServer = new LocalComputeServerStore(
+				path.join(tempDir, 'compute.config.json'),
+				Buffer.alloc(32, 0x42)
+			);
 			const grants = new LocalPlatformProjectGrantStore(
 				path.join(tempDir, 'platform-project-grants.json')
 			);

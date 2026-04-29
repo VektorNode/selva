@@ -64,6 +64,7 @@ export const load = (async ({ params, locals, request, url }) => {
 	const projects = getProjectProvider();
 
 	const guid = params.guid;
+	const channel = url.searchParams.get('channel') === 'draft' ? 'draft' : 'live';
 
 	let definitionSource: Uint8Array;
 	let server: ComputeServerConfig;
@@ -73,12 +74,10 @@ export const load = (async ({ params, locals, request, url }) => {
 	let shareToken: string | null = null;
 
 	try {
-		// Spec §7 — try a share-link token first. App loader always serves the
-		// `live` channel (preview-of-published embed). Schema fetch is view-only,
-		// so we don't require `allowSolve` here; the solve route enforces that.
-		const sharedAccess = await tryResolveShareToken(request, url, guid, 'live', {
-			requireSolve: false
-		});
+		// Draft channel is editor-only — share tokens are always live channel.
+		const sharedAccess = channel === 'live'
+			? await tryResolveShareToken(request, url, guid, 'live', { requireSolve: false })
+			: null;
 		if (sharedAccess) {
 			shareToken = url.searchParams.get('token');
 		} else if (!locals.ctx || !locals.user) {
@@ -93,9 +92,15 @@ export const load = (async ({ params, locals, request, url }) => {
 		// User-auth path needs the canSolve gate; token-auth was already gated.
 		if (!sharedAccess) await requireCanSolve(locals, record.projectId);
 
-		// §6 — the schema page always reflects the live channel.
-		if (!record.liveVersionId) throw new Error(`Definition '${guid}' has no live version`);
-		const version = await meta.getVersion(ctx, record.liveVersionId);
+		// Draft channel requires edit permission on top of solve.
+		if (channel === 'draft') {
+			const { requireEditableDefinition } = await import('$lib/server/access.server');
+			await requireEditableDefinition(locals, guid);
+		}
+
+		const versionId = channel === 'draft' ? record.draftVersionId : record.liveVersionId;
+		if (!versionId) throw new Error(`Definition '${guid}' has no ${channel} version`);
+		const version = await meta.getVersion(ctx, versionId);
 		if (!version) throw new Error(`Live version missing for '${guid}'`);
 		const bytes = await storage.get(version.fileKey);
 		if (!bytes) throw new Error(`Definition file for '${guid}' not found on disk`);
@@ -176,6 +181,7 @@ export const load = (async ({ params, locals, request, url }) => {
 			ghDefinition: clientDefUrl,
 			currentDefinition: guid,
 			serverLabel: server.label,
+			channel,
 			// Forward to the client so /api/compute/solve calls can include it.
 			// Null when the request was user-authenticated (session cookie carries auth).
 			shareToken,

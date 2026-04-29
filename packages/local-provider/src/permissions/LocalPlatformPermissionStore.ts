@@ -40,7 +40,7 @@ export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 		ctx: RequestContext,
 		userIds: readonly string[]
 	): Promise<Map<string, PlatformPermission[]>> {
-		assertAdmin(ctx);
+		assertCanReadBatch(ctx);
 		const all = await this.users.listUsers();
 		const wanted = new Set(userIds);
 		const out = new Map<string, PlatformPermission[]>();
@@ -108,4 +108,11 @@ function assertAdmin(ctx: RequestContext): void {
 	if (ctx.system) return;
 	if (hasPermission(ctx, 'instance_admin')) return;
 	throw new ProviderError('Forbidden: instance admin required', 403);
+}
+
+function assertCanReadBatch(ctx: RequestContext): void {
+	if (ctx.system) return;
+	if (hasPermission(ctx, 'instance_admin')) return;
+	if (hasPermission(ctx, 'manage_instance_users')) return;
+	throw new ProviderError('Forbidden: instance admin or manage_instance_users required', 403);
 }

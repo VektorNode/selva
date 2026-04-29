@@ -12,7 +12,13 @@ runEventSinkConformance({
 	createProvider: async (sink: RecordingEventSink) => {
 		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'selva-events-'));
 		tempDirs.push(tempDir);
-		return LocalDataProvider.fromEnv({ DATA_PATH: tempDir }, sink);
+		return LocalDataProvider.fromEnv(
+			{
+				DATA_PATH: tempDir,
+				SELVA_SECRET_KEY: '0'.repeat(64)
+			},
+			sink
+		);
 	},
 	createActorId: async () => ({ userId: randomUUID() }),
 	cleanup: async () => {

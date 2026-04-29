@@ -11,7 +11,7 @@
 		/** Optional project chip; pass when the surrounding view shows multiple projects. */
 		projectName?: string;
 		/** Visibility of the parent project. Shown as muted text alongside projectName. */
-		projectVisibility?: 'public' | 'org' | 'private';
+		projectVisibility?: 'public' | 'org' | 'private' | 'platform';
 
 		// ---- Author surface (projects) ----
 		/** When true, renders the status badge top-left and "updated X ago" in the footer. */

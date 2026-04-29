@@ -107,22 +107,25 @@ export function canSolve(input: ProjectAccessInput): boolean {
 	return canView(input);
 }
 
-/** Platform projects have no members — always false for them. */
+/**
+ * Platform projects: `instance_admin` only (they have no member rows).
+ * All other visibilities: project owner/editor.
+ */
 export function canEdit(input: ProjectAccessInput): boolean {
-	const { member, project } = input;
-	if (project?.visibility === 'platform') return false;
+	const { member, project, platformPermissions } = input;
+	if (project?.visibility === 'platform') return isInstanceAdmin(platformPermissions);
 	return member?.role === 'owner' || member?.role === 'editor';
 }
 
-/** Platform projects are managed by `instance_admin` exclusively (no member rows). */
+/** Platform projects: `instance_admin` only. All other visibilities: project owner. */
 export function canManage(input: ProjectAccessInput): boolean {
-	if (input.project?.visibility === 'platform') return false;
+	if (input.project?.visibility === 'platform') return isInstanceAdmin(input.platformPermissions);
 	return input.member?.role === 'owner';
 }
 
-/** Platform projects are managed by `instance_admin` exclusively (no member rows). */
+/** Platform projects: `instance_admin` only. All other visibilities: project owner. */
 export function canEditProjectSettings(input: ProjectAccessInput): boolean {
-	if (input.project?.visibility === 'platform') return false;
+	if (input.project?.visibility === 'platform') return isInstanceAdmin(input.platformPermissions);
 	return input.member?.role === 'owner';
 }
 

@@ -3,15 +3,14 @@
 	import { LayoutGrid, GitBranch } from '@lucide/svelte';
 	import type { Component } from 'svelte';
 
-	const items: {
-		href: string;
-		label: string;
-		icon: Component;
-		match: 'exact' | 'prefix';
-	}[] = [
-		{ href: '/library', label: 'Library', icon: LayoutGrid as Component, match: 'prefix' },
-		{ href: '/projects', label: 'Projects', icon: GitBranch as Component, match: 'prefix' }
-	];
+	const hasOrg = $derived(!!(page.data as { ctx?: { orgId?: string } }).ctx?.orgId);
+
+	const items = $derived(
+		[
+			{ href: '/library', label: 'Library', icon: LayoutGrid as Component, match: 'prefix', show: true },
+			{ href: '/projects', label: 'Projects', icon: GitBranch as Component, match: 'prefix', show: hasOrg }
+		].filter((i) => i.show)
+	);
 
 	function isActive(item: (typeof items)[number]): boolean {
 		const path = page.url.pathname;
