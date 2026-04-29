@@ -2,7 +2,6 @@ import type { IAuthProvider } from './auth/interface.js';
 import type { IDataProvider } from './data/interface.js';
 import type { IStorageProvider } from './storage/interface.js';
 import type { IEventSink } from './events/interface.js';
-import type { IAuditQuery } from './events/audit.js';
 
 /**
  * - `single`: one org per deployment. Setup creates it; `ctx.actingOrgId`
@@ -35,12 +34,6 @@ export interface SelvaConfig {
 	storage: IStorageProvider;
 	/** Optional. Defaults to `NoopEventSink`. */
 	events?: IEventSink;
-	/**
-	 * Optional read-side for the persisted event log. Required only by the
-	 * `/admin/audit` UI; absence renders the page in its "no backend wired"
-	 * state (matches local-provider deployments where events are noop'd).
-	 */
-	auditQuery?: IAuditQuery;
 }
 
 export type SelvaConfigFactory = (env: Record<string, string | undefined>) => SelvaConfig;

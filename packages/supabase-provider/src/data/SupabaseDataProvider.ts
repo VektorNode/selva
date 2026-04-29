@@ -3,6 +3,7 @@ import { ProviderError } from '@selvajs/platform';
 import type { ClientBundle, BuildClientOptions } from './client.js';
 import { buildClientBundle } from './client.js';
 import { SupabaseEventSink } from './SupabaseEventSink.js';
+import { SupabaseAuditQuery } from './SupabaseAuditQuery.js';
 import { SupabaseOrgStore } from './SupabaseOrgStore.js';
 import { SupabaseProjectStore } from './SupabaseProjectStore.js';
 import { SupabaseDefinitionStore } from './SupabaseDefinitionStore.js';
@@ -51,6 +52,7 @@ export class SupabaseDataProvider implements IDataProvider {
 	readonly userProfile: SupabaseUserProfileProvider;
 	readonly permissions: SupabasePlatformPermissionStore;
 	readonly platformProjectGrants: IPlatformProjectGrantStore;
+	readonly auditQuery: SupabaseAuditQuery;
 
 	private constructor(
 		private readonly clients: ClientBundle,
@@ -65,6 +67,7 @@ export class SupabaseDataProvider implements IDataProvider {
 		this.userProfile = new SupabaseUserProfileProvider(clients);
 		this.permissions = new SupabasePlatformPermissionStore(clients);
 		this.platformProjectGrants = notImplementedGrantStore;
+		this.auditQuery = new SupabaseAuditQuery(clients);
 	}
 
 	static fromEnv(

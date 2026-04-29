@@ -22,10 +22,6 @@ import * as local from '@selvajs/local-provider';
 import * as supa from '@selvajs/supabase-provider';
 
 export default defineConfig((env) => {
-	// Supabase data provider owns the ClientBundle; the audit query reuses it
-	// so reads share the same service-role client as the event sink writes.
-	const data = supa.SupabaseDataProvider.fromEnv(env);
-
 	return {
 		// ── Product decisions ─────────────────────────────────────────────────
 		tenancy: 'single' as const,
@@ -43,8 +39,7 @@ export default defineConfig((env) => {
 
 		// Supabase:
 		auth: supa.SupabaseAuthProvider.fromEnv(env),
-		data,
-		storage: supa.SupabaseStorageProvider.fromEnv(env),
-		auditQuery: new supa.SupabaseAuditQuery(data.getClientBundle())
+		data: local.LocalDataProvider.fromEnv(env),
+		storage: local.LocalStorageProvider.fromEnv(env)
 	};
 });
