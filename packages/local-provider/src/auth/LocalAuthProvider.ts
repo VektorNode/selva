@@ -10,14 +10,14 @@ import type {
 } from '@selvajs/platform';
 import { ProviderError } from '@selvajs/platform';
 import { signHmacToken, verifyHmacToken } from './hmac.js';
-import { verifyPasswordHash, createLocalUserMetaProvider } from './users.js';
-import type { LocalUserMetaProvider, StoredUser } from './users.js';
+import { verifyPasswordHash, createLocalAuthUserStore } from './users.js';
+import type { LocalAuthUserStore, StoredAuthUser } from './users.js';
 import { paginate } from '../data/pagination.js';
 
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 function toAuthUser(
-	u: Pick<StoredUser, 'id' | 'email' | 'createdAt' | 'lastLoginAt' | 'disabled'>
+	u: Pick<StoredAuthUser, 'id' | 'email' | 'createdAt' | 'lastLoginAt' | 'disabled'>
 ): AuthUser {
 	return {
 		id: u.id,
@@ -32,16 +32,17 @@ export interface LocalAuthProviderConfig {
 	/** HMAC signing secret. Pass from env (SESSION_SECRET). */
 	hmacSecret: string;
 	/**
-	 * Absolute path to users.json.
-	 * Login authenticates against users in this file. Bootstrap the first user
-	 * via the in-app setup page.
+	 * Absolute path to auth-users.json — identity-only storage. Per-user app
+	 * state (permissions, profile, starred defs, recent runs) lives in
+	 * `user-data.json`, owned by `LocalDataProvider`. The two files key on
+	 * the same user ID and are written independently.
 	 */
 	usersFilePath?: string;
 }
 
 class LocalPasswordAuth implements IPasswordAuth {
 	constructor(
-		private readonly users: LocalUserMetaProvider | undefined,
+		private readonly users: LocalAuthUserStore | undefined,
 		private readonly mintToken: (user: AuthUser) => string
 	) {}
 
@@ -65,20 +66,20 @@ class LocalPasswordAuth implements IPasswordAuth {
 				500
 			);
 		}
-		// Pure identity creation — platform permissions are granted separately
-		// via IPlatformPermissionStore.set.
-		return toAuthUser(await this.users.createUser(email, password, []));
+		// Identity-only — platform permissions and the user-data row are seeded
+		// separately via `IDataProvider.ensureUser` + `IPlatformPermissionStore.set`.
+		return toAuthUser(await this.users.createUser(email, password));
 	}
 
 	async registerUser(email: string, password: string): Promise<AuthUser | null> {
 		if (!this.users) return null;
-		return toAuthUser(await this.users.createUser(email, password, []));
+		return toAuthUser(await this.users.createUser(email, password));
 	}
 }
 
 export class LocalAuthProvider implements IAuthProvider {
 	private readonly hmacSecret: string;
-	private readonly users?: LocalUserMetaProvider;
+	private readonly users?: LocalAuthUserStore;
 
 	readonly name = 'Local';
 	readonly passwordAuth: IPasswordAuth;
@@ -86,7 +87,7 @@ export class LocalAuthProvider implements IAuthProvider {
 	constructor(config: LocalAuthProviderConfig) {
 		this.hmacSecret = config.hmacSecret;
 		if (config.usersFilePath) {
-			this.users = createLocalUserMetaProvider(config.usersFilePath);
+			this.users = createLocalAuthUserStore(config.usersFilePath);
 		}
 		this.passwordAuth = new LocalPasswordAuth(this.users, (user) =>
 			signHmacToken(this.hmacSecret, user.id, SESSION_MAX_AGE_MS)
@@ -98,7 +99,7 @@ export class LocalAuthProvider implements IAuthProvider {
 		if (!hmacSecret) throw new Error('Missing required env var: SESSION_SECRET');
 		return new LocalAuthProvider({
 			hmacSecret,
-			usersFilePath: env.DATA_PATH ? path.join(env.DATA_PATH, 'users.json') : undefined
+			usersFilePath: env.DATA_PATH ? path.join(env.DATA_PATH, 'auth-users.json') : undefined
 		});
 	}
 
@@ -133,7 +134,8 @@ export class LocalAuthProvider implements IAuthProvider {
 	async deleteUser(id: string): Promise<UserManagementResult> {
 		// Identity-only delete. The §2 sole-`instance_admin` invariant is
 		// enforced by the caller via `IPlatformPermissionStore.countInstanceAdminsExcluding`
-		// before this method is called.
+		// before this method is called. The caller is also responsible for
+		// removing the user-data row via `LocalDataProvider`'s cascade hook.
 		if (!this.users) return 'not_supported';
 		const target = await this.users.findById(id);
 		if (!target) return 'not_found';

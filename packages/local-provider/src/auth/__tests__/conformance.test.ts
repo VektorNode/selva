@@ -9,7 +9,7 @@ const TEST_SECRET = 'test-hmac-secret-for-conformance';
 const ADMIN_EMAIL = 'conformance-admin@example.com';
 const ADMIN_PASSWORD = 'test-admin-password';
 
-describe('LocalAuthProvider — users.json mode', () => {
+describe('LocalAuthProvider — auth-users.json mode', () => {
 	let tempDir: string;
 
 	beforeEach(async () => {
@@ -21,11 +21,11 @@ describe('LocalAuthProvider — users.json mode', () => {
 	});
 
 	runAuthProviderConformance({
-		name: 'LocalAuthProvider/users-json',
+		name: 'LocalAuthProvider/auth-users-json',
 		createProvider: async () => {
 			const provider = new LocalAuthProvider({
 				hmacSecret: TEST_SECRET,
-				usersFilePath: path.join(tempDir, 'users.json')
+				usersFilePath: path.join(tempDir, 'auth-users.json')
 			});
 			// Idempotent seed — the conformance suite calls createProvider per test,
 			// but a single test may invoke it more than once.

@@ -1,6 +1,9 @@
 export { runAuthProviderConformance } from './suites/authProviderSuite.js';
 export type { AuthProviderConformanceOptions } from './suites/authProviderSuite.js';
 
+export { runEmailLinkAuthConformance } from './suites/emailLinkAuthSuite.js';
+export type { EmailLinkAuthConformanceOptions } from './suites/emailLinkAuthSuite.js';
+
 export { runDefinitionStoreConformance } from './suites/definitionStoreSuite.js';
 export type { DefinitionStoreConformanceOptions } from './suites/definitionStoreSuite.js';
 

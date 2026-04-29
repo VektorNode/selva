@@ -7,14 +7,11 @@ import type {
 	UserProfile
 } from '@selvajs/platform';
 import { ProviderError, hasPermission } from '@selvajs/platform';
-import { createLocalUserMetaProvider } from '../auth/users.js';
-import type { LocalUserMetaProvider, StoredUser } from '../auth/users.js';
+import { createLocalUserDataStore, type LocalUserDataStore, type StoredUserData } from '../data/userData.js';
 
-function toProfile(
-	u: Pick<StoredUser, 'id' | 'displayName' | 'starredDefinitions' | 'recentRuns'>
-): UserProfile {
+function toProfile(u: StoredUserData): UserProfile {
 	return {
-		userId: u.id,
+		userId: u.userId,
 		displayName: u.displayName,
 		starredDefinitions: u.starredDefinitions ?? [],
 		recentRuns: u.recentRuns ?? []
@@ -22,25 +19,30 @@ function toProfile(
 }
 
 /**
- * Filesystem-backed user-profile store. Reads and writes the same users.json
- * the LocalAuthProvider uses, but exposes only the profile surface — identity
- * + platform permissions stay on LocalAuthProvider.
+ * Filesystem-backed user-profile store. Reads and writes `user-data.json`,
+ * shared with `LocalPlatformPermissionStore`. Identity (email, password
+ * hash) lives separately on the auth provider — this store keys exclusively
+ * by user ID.
+ *
+ * `IDataProvider.ensureUser` (called from `hooks.server.ts`) seeds an empty
+ * row for every authed user, mirroring Supabase's `handle_new_auth_user`
+ * trigger.
  */
 export class LocalUserProfileProvider implements IUserProfileStore {
-	private readonly users: LocalUserMetaProvider;
+	private readonly data: LocalUserDataStore;
 
-	constructor(usersFilePath: string) {
-		this.users = createLocalUserMetaProvider(usersFilePath);
+	constructor(userDataFilePath: string) {
+		this.data = createLocalUserDataStore(userDataFilePath);
 	}
 
 	static fromEnv(env: Record<string, string | undefined>): LocalUserProfileProvider {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
-		return new LocalUserProfileProvider(path.join(env.DATA_PATH, 'users.json'));
+		return new LocalUserProfileProvider(path.join(env.DATA_PATH, 'user-data.json'));
 	}
 
 	async getProfile(ctx: RequestContext, userId: string): Promise<UserProfile | null> {
 		assertCanAccess(ctx, userId);
-		const u = await this.users.findById(userId);
+		const u = await this.data.findById(userId);
 		return u ? toProfile(u) : null;
 	}
 
@@ -48,9 +50,9 @@ export class LocalUserProfileProvider implements IUserProfileStore {
 		// Batch read is read-only and used for display name lookups across the UI;
 		// scoping to a single user defeats the purpose. Adapters with stricter
 		// requirements should override.
-		const all = await this.users.listUsers();
+		const all = await this.data.listAll();
 		const wanted = new Set(userIds);
-		return all.filter((u) => wanted.has(u.id)).map(toProfile);
+		return all.filter((u) => wanted.has(u.userId)).map(toProfile);
 	}
 
 	async updateProfile(
@@ -60,7 +62,9 @@ export class LocalUserProfileProvider implements IUserProfileStore {
 	): Promise<UserManagementResult> {
 		assertCanAccess(ctx, userId);
 		try {
-			await this.users.updateProfile(userId, patch);
+			if (patch.displayName !== undefined) {
+				await this.data.updateDisplayName(userId, patch.displayName);
+			}
 			return 'ok';
 		} catch (err) {
 			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';
@@ -75,7 +79,7 @@ export class LocalUserProfileProvider implements IUserProfileStore {
 	): Promise<UserManagementResult> {
 		assertCanAccess(ctx, userId);
 		try {
-			await this.users.starDefinition(userId, definitionId);
+			await this.data.starDefinition(userId, definitionId);
 			return 'ok';
 		} catch (err) {
 			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';
@@ -90,7 +94,7 @@ export class LocalUserProfileProvider implements IUserProfileStore {
 	): Promise<UserManagementResult> {
 		assertCanAccess(ctx, userId);
 		try {
-			await this.users.unstarDefinition(userId, definitionId);
+			await this.data.unstarDefinition(userId, definitionId);
 			return 'ok';
 		} catch (err) {
 			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';
@@ -105,7 +109,7 @@ export class LocalUserProfileProvider implements IUserProfileStore {
 	): Promise<UserManagementResult> {
 		assertCanAccess(ctx, userId);
 		try {
-			await this.users.recordRun(userId, run);
+			await this.data.recordRun(userId, run);
 			return 'ok';
 		} catch (err) {
 			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';

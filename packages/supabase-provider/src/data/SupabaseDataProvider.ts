@@ -104,4 +104,22 @@ export class SupabaseDataProvider implements IDataProvider {
 	getClientBundle(): ClientBundle {
 		return this.clients;
 	}
+
+	/**
+	 * No-op: `public.user_profiles` is auto-seeded by the `handle_new_auth_user`
+	 * trigger on every `auth.users` insert (see `0001_initial.sql`). The data
+	 * layer always has a row for any authenticated user without per-request work.
+	 */
+	async ensureUser(): Promise<void> {
+		// Trigger handles it.
+	}
+
+	/**
+	 * No-op: `public.user_profiles.user_id` references `auth.users(id)` with
+	 * `on delete cascade`. Deleting the auth user removes the profile row
+	 * automatically.
+	 */
+	async onUserDeleted(): Promise<void> {
+		// FK cascade handles it.
+	}
 }

@@ -10,23 +10,17 @@ import {
 import { getAuthProvider } from '$lib/server/auth.server';
 
 /**
- * Surface the auth capabilities the page should render: password form when
- * `passwordAuth` is wired, OAuth buttons when the provider exposes the
- * Supabase-style `getOAuthAuthorizationUrl`. Driven by env config — the
- * SUPABASE_OAUTH_PROVIDERS env var is a comma-separated list of providers
- * enabled in the Supabase dashboard. Nothing renders if neither is set up.
+ * Surface the auth capabilities the page should render. We ask the auth port
+ * what's available — never the env or a specific provider's name. An adapter
+ * that doesn't broker OAuth omits `oauth`; an adapter that does decides for
+ * itself which providers to expose via `listProviders()`.
  */
 export const load: PageServerLoad = async () => {
 	const auth = getAuthProvider();
-	const oauthProviders = auth.oauth
-		? (process.env.SUPABASE_OAUTH_PROVIDERS ?? '')
-				.split(',')
-				.map((p) => p.trim())
-				.filter((p) => p.length > 0)
-		: [];
 	return {
 		hasPasswordAuth: Boolean(auth.passwordAuth),
-		oauthProviders
+		hasEmailLink: Boolean(auth.emailLink),
+		oauthProviders: auth.oauth?.listProviders() ?? []
 	};
 };
 

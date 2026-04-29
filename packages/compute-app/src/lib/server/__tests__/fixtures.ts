@@ -19,7 +19,7 @@ import {
 	LocalAuthProvider,
 	LocalDataProvider,
 	LocalStorageProvider,
-	createLocalUserMetaProvider
+	createLocalAuthUserStore
 } from '@selvajs/local-provider';
 import {
 	NoopEventSink,
@@ -53,6 +53,10 @@ import { hashToken, mintRawToken } from '../shareLinks/token.server.js';
 import { setTestProviders, clearTestProviders } from './test-providers.js';
 
 const TEST_SESSION_SECRET = 'test-session-secret-32-chars-min-len';
+// Deterministic 32-byte hex — `LocalComputeServerStore.fromEnv` needs a key
+// to encrypt the per-server compute config. Tests don't read the encrypted
+// blob, but the constructor still requires one.
+const TEST_SELVA_SECRET_KEY = '0'.repeat(64);
 
 // ============================================================================
 // Provider stack
@@ -64,7 +68,8 @@ export interface TestProviders {
 	tenancy: TenancyMode;
 	flags: SelvaFlags;
 	definitionService: DefinitionService;
-	usersFile: ReturnType<typeof createLocalUserMetaProvider>;
+	/** Identity-only file (auth-users.json). Shaped like the auth provider's view. */
+	authUsers: ReturnType<typeof createLocalAuthUserStore>;
 	cleanup: () => Promise<void>;
 }
 
@@ -75,13 +80,17 @@ export interface FreshProvidersOpts {
 
 export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<TestProviders> {
 	const root = await fs.mkdtemp(path.join(os.tmpdir(), 'selva-test-'));
-	const env = { DATA_PATH: root, SESSION_SECRET: TEST_SESSION_SECRET };
+	const env = {
+		DATA_PATH: root,
+		SESSION_SECRET: TEST_SESSION_SECRET,
+		SELVA_SECRET_KEY: TEST_SELVA_SECRET_KEY
+	};
 
 	const events = new NoopEventSink();
 	const auth = LocalAuthProvider.fromEnv(env);
 	const data = LocalDataProvider.fromEnv(env, events);
 	const storage = LocalStorageProvider.fromEnv(env);
-	const usersFile = createLocalUserMetaProvider(path.join(root, 'users.json'));
+	const authUsers = createLocalAuthUserStore(path.join(root, 'auth-users.json'));
 
 	const config: SelvaConfig = {
 		auth,
@@ -99,7 +108,7 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 		tenancy: config.tenancy ?? 'single',
 		flags: config.flags ?? {},
 		definitionService,
-		usersFile,
+		authUsers,
 		cleanup: async () => {
 			clearTestProviders();
 			await fs.rm(root, { recursive: true, force: true });
@@ -129,7 +138,15 @@ export async function seedUser(
 	email: string,
 	platformPermissions: PlatformPermission[] = []
 ): Promise<SeededUser> {
-	const u = await tp.usersFile.createUser(email, null, platformPermissions);
+	// Identity row (auth-users.json) + data-layer row (user-data.json), in that
+	// order — same sequence production runs through `hooks.server.ts` /
+	// `setup`. `null` password marks an OAuth-allowlisted entry; tests don't
+	// authenticate, they just need the IDs to align across stores.
+	const u = await tp.authUsers.createUser(email, null);
+	await tp.config.data.ensureUser(SYSTEM_CONTEXT, u.id);
+	if (platformPermissions.length > 0) {
+		await tp.config.data.permissions.set(SYSTEM_CONTEXT, u.id, platformPermissions);
+	}
 	return { id: u.id, email: u.email };
 }
 
@@ -312,7 +329,7 @@ export async function grantPlatformPermissions(
 	userId: string,
 	perms: PlatformPermission[]
 ): Promise<void> {
-	await tp.usersFile.updatePlatformPermissions(userId, perms);
+	await tp.config.data.permissions.set(SYSTEM_CONTEXT, userId, perms);
 }
 
 /**
@@ -320,9 +337,9 @@ export async function grantPlatformPermissions(
  * a synthetic session for the given email. The Supabase auth provider
  * exposes `IOAuthAuth` in production; the local one doesn't, so
  * OAuth-callback tests inject this typed shim. `exchangeOAuthCode`
- * creates the user in usersFile if missing (matching real Supabase
- * behavior on first sign-in); the other two methods throw because no
- * existing test path exercises them.
+ * creates the auth-users row if missing (matching real Supabase behavior
+ * on first sign-in). The data-layer row is auto-seeded by the OAuth
+ * callback handler itself via `ensureUser`, exactly as in production.
  */
 export function installOAuthShim(
 	tp: TestProviders,
@@ -331,12 +348,11 @@ export function installOAuthShim(
 	const state = { calls: 0 };
 	void opts.userId; // reserved for future tests that need a deterministic id
 	const shim: IOAuthAuth = {
+		listProviders: () => [],
 		async exchangeOAuthCode(_code: string) {
 			state.calls++;
-			// Ensure the user exists so downstream calls (hasInstanceAdmin,
-			// getProfile) see a real row.
-			const existing = await tp.usersFile.findByEmail(opts.email);
-			const user = existing ?? (await tp.usersFile.createUser(opts.email, null, []));
+			const existing = await tp.authUsers.findByEmail(opts.email);
+			const user = existing ?? (await tp.authUsers.createUser(opts.email, null));
 			const finalId = existing ? existing.id : user.id;
 			return {
 				user: {
@@ -514,7 +530,7 @@ export async function actAs(
 	profile: ReturnType<typeof emptyProfile>;
 	providers: SelvaConfig;
 }> {
-	const stored = await tp.usersFile.findById(userId);
+	const stored = await tp.authUsers.findById(userId);
 	if (!stored) throw new Error(`actAs: user not found: ${userId}`);
 	const user: AuthUser = {
 		id: stored.id,

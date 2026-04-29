@@ -9,7 +9,8 @@ import type {
 	IUserProfileStore,
 	IPlatformPermissionStore,
 	IPlatformProjectGrantStore,
-	IEventSink
+	IEventSink,
+	RequestContext
 } from '@selvajs/platform';
 import { NoopEventSink } from '@selvajs/platform';
 import * as path from 'node:path';
@@ -22,11 +23,17 @@ import { LocalShareLinkStore } from './LocalShareLinkStore.js';
 import { LocalPlatformProjectGrantStore } from './LocalPlatformProjectGrantStore.js';
 import { LocalUserProfileProvider } from '../userProfile/LocalUserProfileProvider.js';
 import { LocalPlatformPermissionStore } from '../permissions/LocalPlatformPermissionStore.js';
+import { createLocalUserDataStore, type LocalUserDataStore } from './userData.js';
 
 /**
  * Composition of every local-provider data store. One `LocalOrgStoreLoader`
  * is shared across org + project stores so they see the same cache and
  * atomic write path.
+ *
+ * The `LocalUserDataStore` is similarly shared across the permissions and
+ * profile stores: both write to `user-data.json`, and `ensureUser` seeds
+ * exactly the same row both stores read from. This is the local equivalent
+ * of Supabase's `handle_new_auth_user` trigger.
  *
  * Stores are passed as a record so adding a new store doesn't ripple through
  * test fixtures and call sites.
@@ -42,7 +49,12 @@ export class LocalDataProvider implements IDataProvider {
 	readonly permissions: IPlatformPermissionStore;
 	readonly platformProjectGrants: IPlatformProjectGrantStore;
 
-	constructor(stores: IDataProvider) {
+	private readonly userData: LocalUserDataStore;
+
+	private constructor(
+		stores: Omit<IDataProvider, 'ensureUser' | 'onUserDeleted'>,
+		userData: LocalUserDataStore
+	) {
 		this.orgs = stores.orgs;
 		this.projects = stores.projects;
 		this.definitions = stores.definitions;
@@ -52,6 +64,35 @@ export class LocalDataProvider implements IDataProvider {
 		this.userProfile = stores.userProfile;
 		this.permissions = stores.permissions;
 		this.platformProjectGrants = stores.platformProjectGrants;
+		this.userData = userData;
+	}
+
+	/**
+	 * Idempotently register a user in the data layer. Called from
+	 * `hooks.server.ts` on every authed request — the local equivalent of
+	 * Supabase's `handle_new_auth_user` trigger. After this completes the
+	 * user has an empty row in `user-data.json` that the permissions and
+	 * profile stores can read and update.
+	 *
+	 * `ctx` is unused — registration runs as a system operation regardless of
+	 * the calling user. Argument is kept for interface symmetry with adapters
+	 * that need it.
+	 */
+	async ensureUser(_ctx: RequestContext, userId: string): Promise<void> {
+		await this.userData.ensure(userId);
+	}
+
+	/**
+	 * Cascade hook called after the auth provider deletes a user. Removes the
+	 * matching `user-data.json` row so the data layer doesn't accumulate
+	 * orphans. Tolerates missing rows.
+	 */
+	async onUserDeleted(_ctx: RequestContext, userId: string): Promise<void> {
+		try {
+			await this.userData.deleteUser(userId);
+		} catch {
+			// Already absent — nothing to clean up.
+		}
 	}
 
 	static fromEnv(
@@ -60,7 +101,7 @@ export class LocalDataProvider implements IDataProvider {
 	): LocalDataProvider {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
 		const dataPath = env.DATA_PATH;
-		const usersFilePath = path.join(dataPath, 'users.json');
+		const userDataFilePath = path.join(dataPath, 'user-data.json');
 
 		const loader = new LocalOrgStoreLoader(dataPath);
 		const platformProjectGrants = LocalPlatformProjectGrantStore.fromEnv(env);
@@ -87,16 +128,21 @@ export class LocalDataProvider implements IDataProvider {
 		definitions.setProjectProvider(projects);
 		shareLinks.setDefinitionProvider(definitions);
 
-		return new LocalDataProvider({
-			orgs,
-			projects,
-			definitions,
-			computeServer,
-			invites,
-			shareLinks,
-			userProfile: new LocalUserProfileProvider(usersFilePath),
-			permissions: new LocalPlatformPermissionStore(usersFilePath),
-			platformProjectGrants
-		});
+		const userData = createLocalUserDataStore(userDataFilePath);
+
+		return new LocalDataProvider(
+			{
+				orgs,
+				projects,
+				definitions,
+				computeServer,
+				invites,
+				shareLinks,
+				userProfile: new LocalUserProfileProvider(userDataFilePath),
+				permissions: new LocalPlatformPermissionStore(userDataFilePath),
+				platformProjectGrants
+			},
+			userData
+		);
 	}
 }

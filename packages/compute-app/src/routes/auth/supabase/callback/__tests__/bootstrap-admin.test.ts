@@ -14,6 +14,7 @@ import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import {
 	freshProviders,
 	installOAuthShim,
+	seedUser,
 	setEnv,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
@@ -82,7 +83,7 @@ describe('OAuth callback bootstrap admin grant', () => {
 		expect(res.status).toBe(303);
 		expect(res.location).toBe('/library');
 
-		const newUser = await tp.usersFile.findByEmail('first@example.test');
+		const newUser = await tp.authUsers.findByEmail('first@example.test');
 		expect(newUser).not.toBeNull();
 		const perms = await tp.config.data.permissions.getFor(
 			{ userId: newUser!.id, platformPermissions: ['instance_admin'], orgPermissions: [] },
@@ -99,7 +100,7 @@ describe('OAuth callback bootstrap admin grant', () => {
 		const res = await callback({ code: 'fake-code' });
 		expect(res.status).toBe(303);
 
-		const operator = await tp.usersFile.findByEmail('operator@example.test');
+		const operator = await tp.authUsers.findByEmail('operator@example.test');
 		const perms = await tp.config.data.permissions.getFor(
 			{ userId: operator!.id, platformPermissions: ['instance_admin'], orgPermissions: [] },
 			operator!.id
@@ -115,7 +116,7 @@ describe('OAuth callback bootstrap admin grant', () => {
 		const res = await callback({ code: 'fake-code' });
 		expect(res.status).toBe(303);
 
-		const random = await tp.usersFile.findByEmail('random@example.test');
+		const random = await tp.authUsers.findByEmail('random@example.test');
 		const perms = await tp.config.data.permissions.getFor(
 			{ userId: random!.id, platformPermissions: ['instance_admin'], orgPermissions: [] },
 			random!.id
@@ -126,8 +127,13 @@ describe('OAuth callback bootstrap admin grant', () => {
 	it('Existing admin present → bootstrap path skipped even with matching email', async () => {
 		tp = await freshProviders();
 		// Pre-existing admin Alice.
-		const alice = await tp.usersFile.createUser('alice@acme.test', null, ['instance_admin']);
-		expect(alice.platformPermissions).toContain('instance_admin');
+		const alice = await seedUser(tp, 'alice@acme.test', ['instance_admin']);
+		expect(
+			await tp.config.data.permissions.getFor(
+				{ userId: alice.id, platformPermissions: ['instance_admin'], orgPermissions: [] },
+				alice.id
+			)
+		).toContain('instance_admin');
 
 		await setEnv('BOOTSTRAP_INSTANCE_ADMIN_EMAIL', 'operator@example.test');
 		installOAuthShim(tp, { email: 'operator@example.test' });
@@ -135,7 +141,7 @@ describe('OAuth callback bootstrap admin grant', () => {
 		const res = await callback({ code: 'fake-code' });
 		expect(res.status).toBe(303);
 
-		const operator = await tp.usersFile.findByEmail('operator@example.test');
+		const operator = await tp.authUsers.findByEmail('operator@example.test');
 		const perms = await tp.config.data.permissions.getFor(
 			{ userId: operator!.id, platformPermissions: ['instance_admin'], orgPermissions: [] },
 			operator!.id
@@ -153,7 +159,7 @@ describe('OAuth callback bootstrap admin grant', () => {
 		const res = await callback({ code: 'fake-code' });
 		expect(res.status).toBe(303);
 
-		const random = await tp.usersFile.findByEmail('random@example.test');
+		const random = await tp.authUsers.findByEmail('random@example.test');
 		const perms = await tp.config.data.permissions.getFor(
 			{ userId: random!.id, platformPermissions: ['instance_admin'], orgPermissions: [] },
 			random!.id
@@ -169,7 +175,7 @@ describe('OAuth callback bootstrap admin grant', () => {
 		const res = await callback({ code: 'fake-code' });
 		expect(res.status).toBe(303);
 
-		const staff = await tp.usersFile.findByEmail('staff@selva.test');
+		const staff = await tp.authUsers.findByEmail('staff@selva.test');
 		const perms = await tp.config.data.permissions.getFor(
 			{ userId: staff!.id, platformPermissions: ['instance_admin'], orgPermissions: [] },
 			staff!.id

@@ -44,6 +44,18 @@ export interface IPasswordAuth {
  */
 export interface IOAuthAuth {
 	/**
+	 * The OAuth providers this adapter is configured to broker. Returned as
+	 * lowercased identifiers ("google", "github", …) — the adapter reads its
+	 * own configuration source (env var, dashboard, hard-coded list) and
+	 * decides what's available. Empty array when none are wired.
+	 *
+	 * Driving adapters (HTTP routes, UI) call this instead of reading
+	 * provider-specific env vars directly — keeps the provider name out of
+	 * `compute-app`.
+	 */
+	listProviders(): readonly string[];
+
+	/**
 	 * Build the IdP authorization URL the browser should be redirected to.
 	 * `redirectTo` is the full callback URL — must be the route that handles
 	 * the `?code=...` exchange. Provider-name validation is the caller's job;
@@ -79,6 +91,62 @@ export interface IOAuthAuth {
 }
 
 /**
+ * Optional passwordless email surface — "type your email, click the link in
+ * your inbox, you're in." Implemented by providers that broker email delivery
+ * + token verification (Supabase Auth, future Eterna ID, …). Adapters that
+ * can't send mail or don't model this flow leave `IAuthProvider.emailLink`
+ * undefined.
+ *
+ * Lifecycle is two phases mirroring OAuth's start/callback split:
+ *
+ *   1. User submits an email → server calls `sendMagicLink(email,
+ *      callbackUrl)`. The adapter delivers a link to that callback URL with
+ *      whatever verification token shape it uses (Supabase: `?token_hash=…
+ *      &type=magiclink`).
+ *   2. User clicks the link, browser hits the callback route → server calls
+ *      `verifyMagicLink(rawTokenFromUrl)` to mint a session.
+ *
+ * The driving adapter never inspects the token itself — it forwards the raw
+ * URL string. Adapter-specific token shapes stay inside the adapter.
+ */
+export interface IEmailLinkAuth {
+	/**
+	 * Send a magic-link email. `callbackUrl` is the absolute URL the
+	 * adapter should embed in the link — must point at the route that
+	 * handles `verifyMagicLink`.
+	 *
+	 * Returns `{ ok: true }` on success. On adapter-classified failures
+	 * (rate limit, signup disabled, invalid email) returns
+	 * `{ ok: false, reason }` so the route can render a user-friendly
+	 * message without exposing provider internals. Network/unknown errors
+	 * still throw.
+	 */
+	sendMagicLink(
+		email: string,
+		callbackUrl: string
+	): Promise<
+		| { ok: true }
+		| { ok: false; reason: 'rate_limited' | 'signup_disabled' | 'invalid_email' }
+	>;
+
+	/**
+	 * Verify the token the IdP sent the user. `rawCallbackUrl` is the full
+	 * URL the user landed on (or an opaque adapter-specific token string —
+	 * adapters document which); the adapter pulls whatever fields it needs.
+	 *
+	 * Returns `null` for invalid/expired/already-redeemed tokens — callers
+	 * MUST treat null as "send the user back to /login". `refreshToken` is
+	 * present only for adapters that issue refresh tokens for email-link
+	 * sessions (Supabase does); omit otherwise.
+	 */
+	verifyMagicLink(rawCallbackUrl: string): Promise<{
+		user: AuthUser;
+		sessionToken: string;
+		refreshToken?: string;
+	} | null>;
+}
+
+/**
  * Authentication provider — identity verification only. Profile state lives
  * in `IUserProfileStore`, platform permissions in `IPlatformPermissionStore`,
  * password ops in optional `passwordAuth`, OAuth in optional `oauth`.
@@ -95,6 +163,12 @@ export interface IAuthProvider {
 
 	/** Present for providers that broker OAuth flows; undefined otherwise. */
 	readonly oauth?: IOAuthAuth;
+
+	/**
+	 * Present for providers that send sign-in links over email (Supabase Auth,
+	 * future Eterna ID). Undefined otherwise.
+	 */
+	readonly emailLink?: IEmailLinkAuth;
 
 	/**
 	 * Verify a token (session cookie, JWT, ID token, etc.). Returns the user

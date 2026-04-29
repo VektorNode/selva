@@ -8,6 +8,7 @@
 
 	interface PageData {
 		hasPasswordAuth: boolean;
+		hasEmailLink: boolean;
 		oauthProviders: string[];
 	}
 
@@ -71,7 +72,35 @@
 			</div>
 		{/if}
 
-		{#if data.hasPasswordAuth && data.oauthProviders.length > 0}
+		{#if data.hasEmailLink && data.oauthProviders.length > 0}
+			<div class="text-muted-foreground flex items-center gap-2 text-xs uppercase">
+				<div class="bg-border h-px flex-1"></div>
+				<span>or</span>
+				<div class="bg-border h-px flex-1"></div>
+			</div>
+		{/if}
+
+		{#if data.hasEmailLink}
+			<form method="POST" action="/auth/email/start?redirectTo=%2Fadmin" class="space-y-4">
+				<p class="text-muted-foreground text-center text-xs">
+					Sign in via email link. Set <code>BOOTSTRAP_INSTANCE_ADMIN_EMAIL</code> in your env to
+					control which address becomes admin.
+				</p>
+				<div class="space-y-2">
+					<Label for="bootstrap-email">Email</Label>
+					<Input
+						id="bootstrap-email"
+						name="email"
+						type="email"
+						required
+						placeholder="admin@example.com"
+					/>
+				</div>
+				<Button type="submit" variant="outline" class="w-full">Email me a sign-in link</Button>
+			</form>
+		{/if}
+
+		{#if data.hasPasswordAuth && (data.hasEmailLink || data.oauthProviders.length > 0)}
 			<div class="text-muted-foreground flex items-center gap-2 text-xs uppercase">
 				<div class="bg-border h-px flex-1"></div>
 				<span>or</span>
@@ -122,12 +151,12 @@
 			</form>
 		{/if}
 
-		{#if !data.hasPasswordAuth && data.oauthProviders.length === 0}
+		{#if !data.hasPasswordAuth && !data.hasEmailLink && data.oauthProviders.length === 0}
 			<Alert.Root variant="destructive">
 				<CircleAlert />
 				<Alert.Description>
-					No setup methods are configured. Configure password auth or OAuth providers before
-					bootstrapping the first admin.
+					No setup methods are configured. Configure password auth, email-link sign-in, or OAuth
+					providers before bootstrapping the first admin.
 				</Alert.Description>
 			</Alert.Root>
 		{/if}

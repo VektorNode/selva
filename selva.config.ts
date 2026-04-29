@@ -23,7 +23,6 @@ import * as supa from '@selvajs/supabase-provider';
 
 export default defineConfig((env) => {
 	return {
-		// ── Product decisions ─────────────────────────────────────────────────
 		tenancy: 'single' as const,
 		flags: {
 			ALLOW_CROSS_ORG_PUBLIC: false,
@@ -31,14 +30,7 @@ export default defineConfig((env) => {
 			ALLOW_ORG_CREATION: false
 		},
 
-		// ── Provider (switch this whole block to change backend) ──────────────
-		// Local (no audit log — local-provider stays on NoopEventSink):
-		// auth: local.LocalAuthProvider.fromEnv(env),
-		// data: local.LocalDataProvider.fromEnv(env),
-		// storage: local.LocalStorageProvider.fromEnv(env)
-
-		// Supabase:
-		auth: supa.SupabaseAuthProvider.fromEnv(env),
+		auth: local.LocalAuthProvider.fromEnv(env),
 		data: local.LocalDataProvider.fromEnv(env),
 		storage: local.LocalStorageProvider.fromEnv(env)
 	};
