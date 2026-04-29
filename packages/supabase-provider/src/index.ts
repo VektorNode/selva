@@ -7,6 +7,7 @@ export {
 	SupabaseDefinitionStore,
 	SupabaseInviteStore,
 	SupabaseComputeServerStore,
+	SupabaseShareLinkStore,
 	SupabaseDataProvider,
 	SupabaseEventSink,
 	buildClientBundle

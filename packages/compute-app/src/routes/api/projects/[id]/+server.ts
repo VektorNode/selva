@@ -68,7 +68,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		name?: string;
 		slug?: string;
 		description?: string;
-		visibility?: 'public' | 'org' | 'private';
+		visibility?: 'public' | 'org' | 'private' | 'platform';
 		autoJoinOnUpload?: boolean;
 	} = {};
 	if (parsed.data.name !== undefined) {

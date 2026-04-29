@@ -6,6 +6,7 @@ export type {
 	DefinitionVersion,
 	DefinitionChannel
 } from './types.js';
+export type { IDefinitionStore } from './interface.js';
 export {
 	GH_EXTENSIONS,
 	COVER_IMAGE_EXTENSIONS,

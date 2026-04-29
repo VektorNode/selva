@@ -52,3 +52,7 @@ export function getInviteStore() {
 export function getPermissionStore() {
 	return providers.data.permissions;
 }
+
+export function getPlatformProjectGrantStore() {
+	return providers.data.platformProjectGrants;
+}

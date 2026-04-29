@@ -267,10 +267,14 @@ describe('§11 — project edit gates', () => {
 		const member = await tp.config.data.projects.getProjectMember(bobCtx, alicesPrivate.id, bob.id);
 		const allowed = canEditProjectSettings({
 			orgPermissions: bobCtx.orgPermissions,
+			platformPermissions: bobCtx.platformPermissions,
 			project: alicesPrivate,
 			member,
 			orgMember: null,
-			allowCrossOrgPublic: false
+			allowCrossOrgPublic: false,
+			platformGrants: [],
+			actingOrgId: bobCtx.actingOrgId ?? null,
+			userId: bobCtx.userId
 		});
 		expect(allowed).toBe(false);
 	});
@@ -456,10 +460,14 @@ describe('§11 — visibility flips', () => {
 		expect(
 			canView({
 				orgPermissions: [],
+				platformPermissions: [],
 				project,
 				member: null,
 				orgMember: null,
-				allowCrossOrgPublic: true
+				allowCrossOrgPublic: true,
+				platformGrants: [],
+				actingOrgId: null,
+				userId: 'u-anon'
 			})
 		).toBe(true);
 	});
@@ -493,20 +501,28 @@ describe('§11 — visibility flips', () => {
 		expect(
 			canView({
 				orgPermissions: [],
+				platformPermissions: [],
 				project,
 				member: null,
 				orgMember: null,
-				allowCrossOrgPublic: false
+				allowCrossOrgPublic: false,
+				platformGrants: [],
+				actingOrgId: null,
+				userId: 'u-anon'
 			})
 		).toBe(false);
 		// Org member: orgMember set, flag=false → allowed (within-org public)
 		expect(
 			canView({
 				orgPermissions: [],
+				platformPermissions: [],
 				project,
 				member: null,
 				orgMember,
-				allowCrossOrgPublic: false
+				allowCrossOrgPublic: false,
+				platformGrants: [],
+				actingOrgId: 'acme',
+				userId: 'u1'
 			})
 		).toBe(true);
 	});

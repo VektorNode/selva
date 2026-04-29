@@ -1,0 +1,48 @@
+import type { RequestContext } from '../context.js';
+import type { ListOptions, Page } from '../pagination.js';
+import type { Project, ProjectMember } from './types.js';
+import type { ProjectRole } from './schemas.js';
+
+/**
+ * Projects + project members. Soft-delete cascades to members and definitions;
+ * see also the cross-store cascade hook on `IPlatformProjectGrantStore`.
+ */
+export interface IProjectStore {
+	// Projects
+	listProjects(ctx: RequestContext, orgId: string, opts?: ListOptions): Promise<Page<Project>>;
+	getProject(ctx: RequestContext, id: string): Promise<Project | null>;
+	getProjectBySlug(ctx: RequestContext, orgId: string, slug: string): Promise<Project | null>;
+	createProject(ctx: RequestContext, project: Project): Promise<void>;
+	updateProject(
+		ctx: RequestContext,
+		id: string,
+		patch: Partial<
+			Pick<Project, 'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload'>
+		>
+	): Promise<void>;
+	/**
+	 * Soft-delete the project. Cascades to project members and definitions.
+	 * Definition versions and share links cascade through the definition delete.
+	 */
+	deleteProject(ctx: RequestContext, id: string): Promise<void>;
+
+	// Project members
+	listProjectMembers(
+		ctx: RequestContext,
+		projectId: string,
+		opts?: ListOptions
+	): Promise<Page<ProjectMember>>;
+	getProjectMember(
+		ctx: RequestContext,
+		projectId: string,
+		userId: string
+	): Promise<ProjectMember | null>;
+	addProjectMember(ctx: RequestContext, member: ProjectMember): Promise<void>;
+	updateProjectMemberRole(
+		ctx: RequestContext,
+		projectId: string,
+		userId: string,
+		role: ProjectRole
+	): Promise<void>;
+	removeProjectMember(ctx: RequestContext, projectId: string, userId: string): Promise<void>;
+}

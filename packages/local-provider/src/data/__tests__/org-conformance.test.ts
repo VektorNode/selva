@@ -6,6 +6,7 @@ import { runOrgStoreConformance } from '@selvajs/platform/testing';
 import { LocalOrgStore, LocalOrgStoreLoader } from '../LocalOrgStore.js';
 import { LocalInviteStore } from '../LocalInviteStore.js';
 import { LocalComputeServerStore } from '../LocalComputeServerStore.js';
+import { LocalPlatformProjectGrantStore } from '../LocalPlatformProjectGrantStore.js';
 
 describe('LocalOrgStore', () => {
 	let tempDir: string;
@@ -20,11 +21,18 @@ describe('LocalOrgStore', () => {
 
 	const makeInvites = () => new LocalInviteStore(tempDir);
 	const makeCompute = () => new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'));
+	const makeGrants = () =>
+		new LocalPlatformProjectGrantStore(path.join(tempDir, 'platform-project-grants.json'));
 
 	runOrgStoreConformance({
 		name: 'LocalOrgStore',
 		createStore: () =>
-			new LocalOrgStore(new LocalOrgStoreLoader(tempDir), makeInvites(), makeCompute()),
+			new LocalOrgStore({
+				loader: new LocalOrgStoreLoader(tempDir),
+				invites: makeInvites(),
+				computeServer: makeCompute(),
+				grants: makeGrants()
+			}),
 		createCompanionStores: () => ({
 			invites: makeInvites(),
 			computeServer: makeCompute()

@@ -3,6 +3,7 @@ export { SupabaseProjectStore } from './SupabaseProjectStore.js';
 export { SupabaseDefinitionStore } from './SupabaseDefinitionStore.js';
 export { SupabaseInviteStore } from './SupabaseInviteStore.js';
 export { SupabaseComputeServerStore } from './SupabaseComputeServerStore.js';
+export { SupabaseShareLinkStore } from './SupabaseShareLinkStore.js';
 export { SupabaseDataProvider } from './SupabaseDataProvider.js';
 export { SupabaseEventSink } from './SupabaseEventSink.js';
 export { buildClientBundle } from './client.js';

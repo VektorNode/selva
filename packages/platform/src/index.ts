@@ -4,6 +4,7 @@ export * from './userProfile/index.js';
 export * from './organizations/index.js';
 export * from './invites/index.js';
 export * from './projects/index.js';
+export * from './platformProjects/index.js';
 export * from './definitions/index.js';
 export * from './shareLinks/index.js';
 export * from './storage/index.js';

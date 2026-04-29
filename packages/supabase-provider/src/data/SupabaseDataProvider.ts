@@ -1,4 +1,5 @@
-import type { IDataProvider, IEventSink } from '@selvajs/platform';
+import type { IDataProvider, IEventSink, IPlatformProjectGrantStore } from '@selvajs/platform';
+import { ProviderError } from '@selvajs/platform';
 import type { ClientBundle, BuildClientOptions } from './client.js';
 import { buildClientBundle } from './client.js';
 import { SupabaseEventSink } from './SupabaseEventSink.js';
@@ -10,6 +11,30 @@ import { SupabaseComputeServerStore } from './SupabaseComputeServerStore.js';
 import { SupabaseShareLinkStore } from './SupabaseShareLinkStore.js';
 import { SupabaseUserProfileProvider } from '../userProfile/SupabaseUserProfileProvider.js';
 import { SupabasePlatformPermissionStore } from '../permissions/SupabasePlatformPermissionStore.js';
+
+/**
+ * Stub until the Supabase implementation lands. Reads and mutations surface a
+ * clear 501; cascade hooks are silent no-ops so deleting an org or project on
+ * a Supabase deployment without the feature wired does not blow up.
+ */
+const NOT_IMPLEMENTED_MSG = 'Platform projects are not supported on this deployment yet.';
+const notImplementedGrantStore: IPlatformProjectGrantStore = {
+	listByProject: async () => {
+		throw new ProviderError(NOT_IMPLEMENTED_MSG, 501);
+	},
+	create: async () => {
+		throw new ProviderError(NOT_IMPLEMENTED_MSG, 501);
+	},
+	delete: async () => {
+		throw new ProviderError(NOT_IMPLEMENTED_MSG, 501);
+	},
+	deleteByProject: async () => {
+		// No-op: nothing to clean up on a deployment that never accepted grants.
+	},
+	deleteByGranteeOrg: async () => {
+		// No-op: same reasoning.
+	}
+};
 
 /**
  * Composition of every data store for the Supabase backend. Instantiates one
@@ -25,6 +50,7 @@ export class SupabaseDataProvider implements IDataProvider {
 	readonly shareLinks: SupabaseShareLinkStore;
 	readonly userProfile: SupabaseUserProfileProvider;
 	readonly permissions: SupabasePlatformPermissionStore;
+	readonly platformProjectGrants: IPlatformProjectGrantStore;
 
 	private constructor(
 		private readonly clients: ClientBundle,
@@ -38,6 +64,7 @@ export class SupabaseDataProvider implements IDataProvider {
 		this.shareLinks = new SupabaseShareLinkStore(clients, events);
 		this.userProfile = new SupabaseUserProfileProvider(clients);
 		this.permissions = new SupabasePlatformPermissionStore(clients);
+		this.platformProjectGrants = notImplementedGrantStore;
 	}
 
 	static fromEnv(

@@ -1,4 +1,5 @@
 export type { Organization, OrgMember } from './types.js';
+export type { IOrgStore } from './interface.js';
 export type { OrgRole, OrgPermission, CreateOrgInput, UpdateOrgInput } from './schemas.js';
 export {
 	OrgRoleSchema,

@@ -5,7 +5,6 @@ import type {
 	PlatformPermission,
 	Project,
 	ProjectAccessInput,
-	ProjectMember,
 	RequestContext
 } from '@selvajs/platform';
 import {
@@ -24,6 +23,7 @@ import {
 	getProjectProvider,
 	getDefinitionMeta,
 	getOrganizationProvider,
+	getPlatformProjectGrantStore,
 	flag
 } from './providers.server.js';
 import { handleApiError } from './api-errors.js';
@@ -143,26 +143,74 @@ async function loadProjectOr404(ctx: RequestContext, projectId: string): Promise
 }
 
 /**
- * Build the rule input for project-role gates (`canEdit`, `canManage`,
- * `canEditProjectSettings`). Loads the caller's project membership row;
- * `orgMember` and `allowCrossOrgPublic` are unused by these rules so we
- * pass placeholders.
+ * Build the rule input for any project-scope rule. Fetches exactly the rows
+ * the rule will consult based on `project.visibility`:
+ *
+ * - `platform` → grants
+ * - `private`  → caller's project member row
+ * - `org` / `public` → caller's org member row
+ *
+ * Other fields default to safe values; pass `overrides` for the rare callers
+ * that already loaded a row (e.g. tests, batched listing pages).
  */
-async function projectAccessInput(
+async function buildProjectAccessInput(
 	ctx: RequestContext,
-	project: Project
+	project: Project,
+	overrides: Partial<ProjectAccessInput> = {}
 ): Promise<ProjectAccessInput> {
-	const member: ProjectMember | null = await getProjectProvider().getProjectMember(
-		ctx,
-		project.id,
-		ctx.userId
-	);
+	const allowCrossOrgPublic = flag('ALLOW_CROSS_ORG_PUBLIC');
+
+	let member: ProjectAccessInput['member'] = null;
+	let orgMember: ProjectAccessInput['orgMember'] = null;
+	let platformGrants: ProjectAccessInput['platformGrants'] = [];
+
+	if (project.visibility === 'platform') {
+		platformGrants = await getPlatformProjectGrantStore().listByProject(ctx, project.id);
+	} else if (project.visibility === 'private') {
+		member = await getProjectProvider().getProjectMember(ctx, project.id, ctx.userId);
+	} else if (!(project.visibility === 'public' && allowCrossOrgPublic)) {
+		orgMember = await getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId);
+	}
+
 	return {
 		orgPermissions: ctx.orgPermissions,
+		platformPermissions: ctx.platformPermissions,
 		project,
 		member,
-		orgMember: null,
-		allowCrossOrgPublic: false
+		orgMember,
+		allowCrossOrgPublic,
+		platformGrants,
+		actingOrgId: ctx.actingOrgId ?? null,
+		userId: ctx.userId,
+		...overrides
+	};
+}
+
+/**
+ * Build a `ProjectAccessInput` from caller-provided rows without any I/O.
+ * Used by listing pages that have already batch-loaded membership for many
+ * projects; the route layer's per-row predicate calls this instead of
+ * `buildProjectAccessInput` to avoid an N+1 fetch.
+ */
+export function projectAccessInputFromRows(
+	ctx: RequestContext,
+	project: Project,
+	rows: {
+		member?: ProjectAccessInput['member'];
+		orgMember?: ProjectAccessInput['orgMember'];
+		platformGrants?: ProjectAccessInput['platformGrants'];
+	}
+): ProjectAccessInput {
+	return {
+		orgPermissions: ctx.orgPermissions,
+		platformPermissions: ctx.platformPermissions,
+		project,
+		member: rows.member ?? null,
+		orgMember: rows.orgMember ?? null,
+		allowCrossOrgPublic: flag('ALLOW_CROSS_ORG_PUBLIC'),
+		platformGrants: rows.platformGrants ?? [],
+		actingOrgId: ctx.actingOrgId ?? null,
+		userId: ctx.userId
 	};
 }
 
@@ -170,7 +218,7 @@ export async function requireCanEdit(locals: Locals, projectId: string): Promise
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await contentCheck(async () => {
 		const project = await loadProjectOr404(ctx, projectId);
-		return canEdit(await projectAccessInput(ctx, project));
+		return canEdit(await buildProjectAccessInput(ctx, project));
 	});
 	if (!allowed) throw error(403, 'You do not have permission to edit this project.');
 	return user;
@@ -190,7 +238,7 @@ export async function requireCanCreateDefinition(
 	const project = await loadProjectOr404(ctx, projectId);
 	const allowed = await contentCheck(async () => {
 		if (project.autoJoinOnUpload) return true;
-		return canEdit(await projectAccessInput(ctx, project));
+		return canEdit(await buildProjectAccessInput(ctx, project));
 	});
 	if (!allowed) {
 		throw error(403, 'You do not have permission to upload definitions to this project.');
@@ -265,7 +313,7 @@ export async function requireCanManage(locals: Locals, projectId: string): Promi
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await managementBypassOrRun(ctx, async () => {
 		const project = await loadProjectOr404(ctx, projectId);
-		return canManage(await projectAccessInput(ctx, project));
+		return canManage(await buildProjectAccessInput(ctx, project));
 	});
 	if (!allowed) throw error(403, 'Only project owners can manage this project.');
 	return user;
@@ -278,7 +326,7 @@ export async function requireCanManageMembers(
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await managementBypassOrRun(ctx, async () => {
 		const project = await loadProjectOr404(ctx, projectId);
-		return canManage(await projectAccessInput(ctx, project));
+		return canManage(await buildProjectAccessInput(ctx, project));
 	});
 	if (!allowed) throw error(403, 'Only project owners can manage members.');
 	return user;
@@ -296,67 +344,27 @@ export async function requireCanEditProjectSettings(
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId);
 	const allowed = await managementBypassOrRun(ctx, async () =>
-		canEditProjectSettings(await projectAccessInput(ctx, project))
+		canEditProjectSettings(await buildProjectAccessInput(ctx, project))
 	);
 	if (!allowed) throw error(403, 'Only project owners can edit project settings.');
 	return { user, ctx, project };
-}
-
-/**
- * Load the inputs the canonical `canView`/`canSolve` rules need, then call
- * the rule. The cross-org-public shortcut (allow-cross-org-public flag is on
- * AND visibility is public) returns early without any membership fetch.
- *
- * Permissions.md §5 — this is the single source of truth for view/solve
- * gating. Adapter `can*` methods on the project store also delegate to
- * `rules.ts`; the route layer used to inline its own predicate but now
- * funnels through the same rule.
- */
-async function loadAndCheckView(ctx: RequestContext, project: Project): Promise<boolean> {
-	const allowCrossOrgPublic = flag('ALLOW_CROSS_ORG_PUBLIC');
-	// Cross-org public bypass: no membership fetch needed.
-	if (project.visibility === 'public' && allowCrossOrgPublic) {
-		return canView({
-			orgPermissions: ctx.orgPermissions,
-			project,
-			member: null,
-			orgMember: null,
-			allowCrossOrgPublic
-		});
-	}
-	// Private needs member, org/within-org-public needs orgMember. Fetch only
-	// what the rule will consult.
-	const [member, orgMember] = await Promise.all([
-		project.visibility === 'private'
-			? getProjectProvider().getProjectMember(ctx, project.id, ctx.userId)
-			: Promise.resolve(null),
-		project.visibility !== 'private'
-			? getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId)
-			: Promise.resolve(null)
-	]);
-	return canView({
-		orgPermissions: ctx.orgPermissions,
-		project,
-		member,
-		orgMember,
-		allowCrossOrgPublic
-	});
 }
 
 export async function requireCanViewProject(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await contentCheck(async () => {
 		const project = await loadProjectOr404(ctx, projectId);
-		return loadAndCheckView(ctx, project);
+		return canView(await buildProjectAccessInput(ctx, project));
 	});
 	if (!allowed) throw error(403, 'You do not have access to this project.');
 	return user;
 }
 
 /**
- * Solve gating. Today `canSolve === canView`, but the rule lives in its own
- * function so future cost-gating (quotas, rate limits) lands without touching
- * view semantics. `viewer` project role passes.
+ * Solve gating. Today `canSolve === canView` for non-platform projects, but
+ * the rule lives in its own function so future cost-gating (quotas, rate
+ * limits) lands without touching view semantics. `viewer` project role
+ * passes. Platform projects narrow to grants with `canSolve=true`.
  */
 export async function requireCanSolve(
 	locals: Locals,
@@ -364,34 +372,9 @@ export async function requireCanSolve(
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId);
-
-	const allowed = await contentCheck(async () => {
-		const allowCrossOrgPublic = flag('ALLOW_CROSS_ORG_PUBLIC');
-		if (project.visibility === 'public' && allowCrossOrgPublic) {
-			return canSolve({
-				orgPermissions: ctx.orgPermissions,
-				project,
-				member: null,
-				orgMember: null,
-				allowCrossOrgPublic
-			});
-		}
-		const [member, orgMember] = await Promise.all([
-			project.visibility === 'private'
-				? getProjectProvider().getProjectMember(ctx, project.id, ctx.userId)
-				: Promise.resolve(null),
-			project.visibility !== 'private'
-				? getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId)
-				: Promise.resolve(null)
-		]);
-		return canSolve({
-			orgPermissions: ctx.orgPermissions,
-			project,
-			member,
-			orgMember,
-			allowCrossOrgPublic
-		});
-	});
+	const allowed = await contentCheck(async () =>
+		canSolve(await buildProjectAccessInput(ctx, project))
+	);
 	if (!allowed) throw error(403, 'You do not have access to this project.');
 	return { user, ctx, project };
 }
@@ -410,7 +393,8 @@ export async function requireEditableDefinition(locals: Locals, guid: string) {
 			project,
 			definition: record,
 			member,
-			userId: ctx.userId
+			userId: ctx.userId,
+			platformPermissions: ctx.platformPermissions
 		});
 	});
 	if (!allowed) throw error(403, 'You do not have permission to edit this definition.');
@@ -433,7 +417,8 @@ export async function requireCanEditDefinition(
 			project,
 			definition,
 			member,
-			userId: ctx.userId
+			userId: ctx.userId,
+			platformPermissions: ctx.platformPermissions
 		});
 	});
 	if (!allowed) throw error(403, 'You do not have permission to edit this definition.');

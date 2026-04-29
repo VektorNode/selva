@@ -115,6 +115,8 @@ The override is never instance-wide. An org misconfiguring their compute (wrong 
 
 `viewer` exists specifically for clients / stakeholders / auditors: they see schemas, submit solves, download results — but cannot modify the definition.
 
+**Platform-admin projects have no project members.** `instance_admin` is the implicit owner via platform role; grants (see §4a) deliver the view/solve entitlement to external parties without creating membership rows.
+
 ### Visibility
 
 | Visibility | Who can view/solve                                        |
@@ -122,6 +124,7 @@ The override is never instance-wide. An org misconfiguring their compute (wrong 
 | `private`  | Project members only (explicit owner/editor/viewer role). |
 | `org`      | Any member of the parent org.                             |
 | `public`   | Any authenticated user on the instance. Cross-org.        |
+| `platform` | `instance_admin` only, plus explicit grant holders (see §4a). |
 
 **Default for new projects: `private`.** Users opt into broader visibility explicitly.
 
@@ -178,6 +181,92 @@ The distinction protects the Alice/Peter case: on a commons project, Peter canno
 
 ---
 
+## 4a. Platform-admin projects
+
+A **platform-admin project** is a project with `visibility = 'platform'`. It is owned and operated exclusively by `instance_admin` users. External parties (other orgs or individual users) can be granted **view/solve** access via explicit grants — but they can never edit definitions or manage the project.
+
+### Why a new visibility level, not a new role
+
+The `platform` visibility type keeps the separation clean:
+- No project membership rows needed — `instance_admin` governs through platform role.
+- Grants are a narrow, auditable entitlement (view/solve only) with no org-membership side effects.
+- Adding a new role would be a schema migration and UX churn (§13 rule 1: permissions are extensible, roles are not).
+
+### Creation and management
+
+- Only `instance_admin` can create a `platform` project.
+- `instance_admin` can update the project, upload/edit definitions, manage grants, and delete the project.
+- `platform` projects live inside a real org (an org whose owner is `instance_admin`). The org provides the tenancy boundary for storage routing and compute resolution; org membership in that org does **not** grant any access to `platform` projects — the visibility type governs everything.
+- `autoJoinOnUpload` is not valid on `platform` projects. Cross-field validation (`validateProjectFlags`) rejects the combination.
+
+### Grants
+
+```
+PlatformProjectGrant {
+  id:          string           PK
+  projectId:   string           FK projects(id), ON DELETE CASCADE
+  granteeType: 'org' | 'user'
+  granteeId:   string           orgId or userId depending on granteeType
+  canSolve:    boolean          false = view-only; true = view + solve
+  createdBy:   string
+  createdAt:   ISO
+}
+```
+
+- `instance_admin` mints and revokes grants via `/admin/api/projects/[id]/grants`.
+- A `granteeType: 'org'` grant applies to **all current and future members** of that org — no per-user expansion needed for org-wide access.
+- A `granteeType: 'user'` grant applies to that specific user regardless of org membership.
+- Grants are deleted (hard) when revoked. No soft-delete — revocation is immediate and the grant has no downstream references.
+
+### `canView` / `canSolve` for platform projects
+
+```
+canView(platform project, user, ctx):
+  → user holds instance_admin                         → yes
+  → a user grant exists for user.id  AND canSolve OR view-only → yes (view-only grant still allows view)
+  → an org grant  exists for ctx.actingOrgId AND canSolve OR view-only → yes
+  → otherwise                                         → no
+
+canSolve(platform project, user, ctx):
+  → user holds instance_admin                         → yes
+  → a user grant exists for user.id  AND grant.canSolve → yes
+  → an org grant  exists for ctx.actingOrgId AND grant.canSolve → yes
+  → otherwise                                         → no
+```
+
+`canSolve` is strictly narrower than `canView` for platform projects: a view-only grant holder can fetch the schema but cannot submit solves.
+
+### `canEditDefinition` / `canManage` for platform projects
+
+Both require `instance_admin`. No project membership, no org-role escape hatch, no Reclaim. Platform staff who need content access already hold `instance_admin`.
+
+> **No Reclaim on platform projects.** The Reclaim flow (`canReclaim`, §5) is an org-leadership escape hatch for org-owned projects whose owner left. Platform projects have no org ownership to reclaim — they are governed by `instance_admin` exclusively. `canReclaim` returns `false` when `project.visibility === 'platform'`.
+
+### API routes
+
+| Route | Method | Rule |
+|---|---|---|
+| `/admin/api/projects` | `POST` | `instance_admin`. Creates a `platform` project. |
+| `/admin/api/projects/[id]` | `GET/PATCH/DELETE` | `instance_admin`. |
+| `/admin/api/projects/[id]/grants` | `GET/POST` | `instance_admin`. POST body: `{ granteeType, granteeId, canSolve }`. |
+| `/admin/api/projects/[id]/grants/[grantId]` | `DELETE` | `instance_admin`. Hard-delete (immediate revocation). |
+
+Definitions on platform projects use the existing `/api/definitions/*` routes — the auth layer reads `project.visibility` and applies the platform-project rules above.
+
+### Scenarios
+
+| Scenario | Outcome |
+|---|---|
+| `instance_admin` uploads a definition to a `platform` project. | **OK.** `canEditDefinition` passes — admin always qualifies. |
+| Acme org member navigates to a `platform` project URL. | **403.** No grant exists for them. |
+| `instance_admin` grants Acme org `canSolve = true`. | All Acme org members can now view and solve. |
+| `instance_admin` grants Acme org `canSolve = false` (view-only). | Acme members can fetch the schema / view the project but cannot submit solves. |
+| `instance_admin` grants a specific user `canSolve = true`. | That user can view and solve, regardless of their org. |
+| Acme org admin tries to Reclaim a `platform` project. | **403.** `canReclaim` returns false for `platform` visibility. |
+| `instance_admin` tries to set `autoJoinOnUpload = true` on a `platform` project. | **400.** `validateProjectFlags` rejects the combination. |
+
+---
+
 ## 5. Rules
 
 The pure access-control functions live in [rules.ts](../../platform/src/access/rules.ts). They take already-resolved entities as input and return booleans. Adapters do the lookup; rules do the logic.
@@ -203,10 +292,11 @@ A request authenticated by a valid share-link token (§7) is granted access to *
 - `private` → yes iff user is a project member (any role)
 - `org` → yes iff `ctx.actingOrgId === project.orgId` **and** user is a member of that org
 - `public` → yes iff user is authenticated on the instance, **and** either `ALLOW_CROSS_ORG_PUBLIC=true` OR the user is a member of the project's parent org. With the flag off, `public` narrows to "everyone in the publishing org" — the visibility flip is still allowed (see `canChangeVisibilityToPublic`), but the reach is the org rather than the instance.
+- `platform` → yes iff user holds `instance_admin`, OR a user grant exists for `user.id`, OR an org grant exists for `ctx.actingOrgId`. Both grant types (view-only and canSolve) satisfy `canView`.
 
 ### `canSolve(project, user, ctx) → bool`
 
-A distinct function from `canView`. **Today its body is `canView(...)`** — if you can see it, you can solve it.
+A distinct function from `canView`. For non-platform projects **today its body is `canView(...)`** — if you can see it, you can solve it. For `platform` projects the bodies diverge: `canView` accepts any grant holder; `canSolve` requires `grant.canSolve = true`.
 
 It exists as a separate function so future solve-gating (cost quotas, rate limits, compute-budget checks) has an obvious home without touching every call site or retrofitting `canView` semantics. Authorization and cost are two different concerns; keeping the functions distinct keeps them from tangling.
 
@@ -272,6 +362,7 @@ The route handler at `/api/projects/[id]/members/[userId]` `DELETE` consults thi
 
 Org leadership can reclaim any project in their org to regain access (e.g., original owner left the company):
 
+- `project.visibility === 'platform'` → **no** (platform projects have no org ownership to reclaim; `instance_admin` always has management access)
 - `ctx.actingOrgId === project.orgId` **and** user is org `owner` or `admin` → yes
 - Otherwise → no
 
@@ -450,6 +541,10 @@ Instance-level only. Denial returns **403** (not redirect).
 | `/admin/api/system/update`      | `POST`         | `manage_updates`                                                                                                                                                                                                               |
 | `/admin/api/orgs`               | `*`            | `instance_admin`                                                                                                                                                                                                               |
 | `/admin/api/orgs/[id]`          | `*`            | `instance_admin`                                                                                                                                                                                                               |
+| `/admin/api/projects`           | `POST`         | `instance_admin`. Creates a `platform` project.                                                                                                                                                                                |
+| `/admin/api/projects/[id]`      | `GET/PATCH/DELETE` | `instance_admin`.                                                                                                                                                                                                          |
+| `/admin/api/projects/[id]/grants` | `GET/POST`   | `instance_admin`. POST body: `{ granteeType, granteeId, canSolve }`.                                                                                                                                                          |
+| `/admin/api/projects/[id]/grants/[grantId]` | `DELETE` | `instance_admin`. Hard-delete (immediate revocation).                                                                                                                                                                 |
 
 ### The two-shell rule
 
@@ -592,6 +687,9 @@ Walk through these to confirm the model behaves as expected.
 | Sole `instance_admin` unchecks their own `Instance Admin (all)` checkbox.                                                                                      | **409.** `IPlatformPermissionStore.set` returns `last_admin`; UI mirror disables the checkbox preemptively. Promote another user first, then demote.                               |
 | `instance_admin` deletes the only other user, who also holds `instance_admin`.                                                                                 | Allowed — the actor still holds it. The DELETE handler consults `countInstanceAdminsExcluding(targetId)` first; with the actor still admin, the count is ≥1 and the call proceeds. |
 | Sole `instance_admin` tries to delete or disable themselves.                                                                                                   | **409.** The route handler's `countInstanceAdminsExcluding(self)` returns 0 and surfaces `last_admin` before reaching the auth provider.                                           |
+| `instance_admin` creates a `platform` project and grants Acme org `canSolve = true`.                                                                          | **OK.** All Acme members can view and solve. `canEditDefinition` remains `instance_admin`-only.                                                                                    |
+| Acme `member` (org grant `canSolve = false`) tries to solve a `platform` project definition.                                                                  | **403.** View-only grant; `canSolve` requires `grant.canSolve = true`.                                                                                                             |
+| Acme org `admin` tries to Reclaim a `platform` project.                                                                                                       | **403.** `canReclaim` returns false for `platform` visibility.                                                                                                                     |
 
 ---
 

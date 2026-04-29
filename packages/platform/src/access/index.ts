@@ -7,6 +7,7 @@ export type {
 	OwnerRemovalInput,
 	OwnerRemovalCheck
 } from './rules.js';
+
 export {
 	canView,
 	canSolve,
