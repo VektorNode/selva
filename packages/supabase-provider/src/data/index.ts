@@ -6,5 +6,6 @@ export { SupabaseComputeServerStore } from './SupabaseComputeServerStore.js';
 export { SupabaseShareLinkStore } from './SupabaseShareLinkStore.js';
 export { SupabaseDataProvider } from './SupabaseDataProvider.js';
 export { SupabaseEventSink } from './SupabaseEventSink.js';
+export { SupabaseAuditQuery } from './SupabaseAuditQuery.js';
 export { buildClientBundle } from './client.js';
 export type { ClientBundle, BuildClientOptions } from './client.js';
