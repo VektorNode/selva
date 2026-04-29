@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { IComputeServerStore } from '../../data/interface.js';
+import type { IComputeServerStore } from '../../computeServer/interface.js';
 import type { ComputeServerConfig } from '../../computeServer/types.js';
 import { SYSTEM_CONTEXT, type RequestContext } from '../../context.js';
 import { ALL_PLATFORM_PERMISSIONS } from '../../permissions/types.js';

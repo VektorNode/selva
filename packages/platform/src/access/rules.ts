@@ -3,6 +3,7 @@ import type { OrgPermission } from '../organizations/schemas.js';
 import type { Project, ProjectMember } from '../projects/types.js';
 import type { OrgMember } from '../organizations/types.js';
 import type { DefinitionRecord } from '../definitions/types.js';
+import type { PlatformProjectGrant } from '../platformProjects/types.js';
 
 /**
  * Pure access-control rules — single source of truth for UI gating across
@@ -27,6 +28,7 @@ export function withAdminBypass(
 
 export interface ProjectAccessInput {
 	orgPermissions: readonly OrgPermission[];
+	platformPermissions: readonly PlatformPermission[];
 	project: Project | null;
 	member: ProjectMember | null;
 	orgMember: OrgMember | null;
@@ -35,15 +37,45 @@ export interface ProjectAccessInput {
 	 * "everyone in the parent org" rather than "everyone on the instance".
 	 */
 	allowCrossOrgPublic: boolean;
+	/**
+	 * Grants for `platform`-visibility projects. Pass an empty array for
+	 * non-platform projects — the rule only consults this for `platform`.
+	 */
+	platformGrants: readonly PlatformProjectGrant[];
+	/** `ctx.actingOrgId` — used to match org grants on platform projects. */
+	actingOrgId: string | null;
+	/** `ctx.userId` — used to match user grants on platform projects. */
+	userId: string;
 }
 
 /**
  * Authenticated-user view rule. Anonymous access is delivered via share-link
  * tokens — the route resolves a valid token before this rule runs.
+ *
+ * For `platform` projects: `instance_admin` always passes; otherwise any
+ * grant (view-only or canSolve) satisfies view access.
  */
 export function canView(input: ProjectAccessInput): boolean {
-	const { project, member, orgMember, allowCrossOrgPublic } = input;
+	const {
+		project,
+		member,
+		orgMember,
+		allowCrossOrgPublic,
+		platformPermissions,
+		platformGrants,
+		actingOrgId,
+		userId
+	} = input;
 	if (!project) return false;
+
+	if (project.visibility === 'platform') {
+		if (isInstanceAdmin(platformPermissions)) return true;
+		return platformGrants.some(
+			(g) =>
+				(g.granteeType === 'user' && g.granteeId === userId) ||
+				(g.granteeType === 'org' && g.granteeId === actingOrgId)
+		);
+	}
 
 	if (project.visibility === 'private') return member !== null;
 	if (project.visibility === 'org') return orgMember !== null;
@@ -51,21 +83,46 @@ export function canView(input: ProjectAccessInput): boolean {
 	return false;
 }
 
-/** Same as `canView` today — kept distinct for future cost gating. */
+/**
+ * For non-platform projects: same as `canView` today — kept distinct for
+ * future cost gating.
+ *
+ * For `platform` projects: `instance_admin` always passes; a view-only grant
+ * satisfies `canView` but NOT `canSolve` — the grant must have `canSolve=true`.
+ */
 export function canSolve(input: ProjectAccessInput): boolean {
+	const { project, platformPermissions, platformGrants, actingOrgId, userId } = input;
+	if (!project) return false;
+
+	if (project.visibility === 'platform') {
+		if (isInstanceAdmin(platformPermissions)) return true;
+		return platformGrants.some(
+			(g) =>
+				g.canSolve &&
+				((g.granteeType === 'user' && g.granteeId === userId) ||
+					(g.granteeType === 'org' && g.granteeId === actingOrgId))
+		);
+	}
+
 	return canView(input);
 }
 
+/** Platform projects have no members — always false for them. */
 export function canEdit(input: ProjectAccessInput): boolean {
-	const { member } = input;
+	const { member, project } = input;
+	if (project?.visibility === 'platform') return false;
 	return member?.role === 'owner' || member?.role === 'editor';
 }
 
+/** Platform projects are managed by `instance_admin` exclusively (no member rows). */
 export function canManage(input: ProjectAccessInput): boolean {
+	if (input.project?.visibility === 'platform') return false;
 	return input.member?.role === 'owner';
 }
 
+/** Platform projects are managed by `instance_admin` exclusively (no member rows). */
 export function canEditProjectSettings(input: ProjectAccessInput): boolean {
+	if (input.project?.visibility === 'platform') return false;
 	return input.member?.role === 'owner';
 }
 
@@ -88,15 +145,21 @@ export interface DefinitionAccessInput {
 	definition: DefinitionRecord | null;
 	member: ProjectMember | null;
 	userId: string;
+	platformPermissions: readonly PlatformPermission[];
 }
 
 /**
- * Project editor/owner can always edit (moderation). On commons projects
- * (`autoJoinOnUpload=true`) the definition owner can edit their own.
+ * For platform projects: `instance_admin` only.
+ * For all other projects: project editor/owner can always edit (moderation).
+ * On commons projects (`autoJoinOnUpload=true`) the definition owner can edit their own.
  */
 export function canEditDefinition(input: DefinitionAccessInput): boolean {
-	const { project, definition, member, userId } = input;
+	const { project, definition, member, userId, platformPermissions } = input;
 	if (!project || !definition) return false;
+
+	if (project.visibility === 'platform') {
+		return isInstanceAdmin(platformPermissions);
+	}
 
 	if (member?.role === 'owner' || member?.role === 'editor') return true;
 	if (project.autoJoinOnUpload && userId === definition.ownerId) return true;
@@ -114,10 +177,14 @@ export interface ReclaimAccessInput {
 /**
  * Org leadership escape hatch. Reclaim adds the actor as co-owner; it does
  * NOT demote the existing owner. Tenancy must match.
+ *
+ * Platform projects cannot be reclaimed — `instance_admin` always has
+ * management access to them without needing the Reclaim mechanism.
  */
 export function canReclaim(input: ReclaimAccessInput): boolean {
 	const { project, orgMember, actingOrgId } = input;
 	if (!project || !actingOrgId) return false;
+	if (project.visibility === 'platform') return false;
 	if (actingOrgId !== project.orgId) return false;
 	const role = orgMember?.role;
 	return role === 'owner' || role === 'admin';
@@ -133,6 +200,9 @@ export interface CreateProjectAccessInput {
 /**
  * Owner/admin can always create. A `member` needs `manage_projects` org
  * permission. Tenancy is enforced.
+ *
+ * Platform projects (`visibility='platform'`) are created via the admin API
+ * and gated on `instance_admin` — this rule is not consulted for them.
  */
 export function canCreateProject(input: CreateProjectAccessInput): boolean {
 	const { orgMember, orgPermissions, actingOrgId, targetOrgId } = input;

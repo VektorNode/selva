@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { IDefinitionStore } from '../../data/interface.js';
+import type { IDefinitionStore } from '../../definitions/interface.js';
 import type { DefinitionRecord, DefinitionVersion } from '../../definitions/types.js';
 import { makeCtx, makeUuid } from './helpers.js';
 import type { RequestContext } from '../../context.js';

@@ -6,6 +6,7 @@ import {
 	getAuthProvider,
 	getUserProfileStore
 } from '$lib/server/providers.server';
+import { projectAccessInputFromRows } from '$lib/server/access.server';
 import { hasPermission, canView, canEdit } from '@selvajs/platform';
 import type {
 	DefinitionRecord,
@@ -90,13 +91,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const visibleIndexes = allProjects
 			.map((project, i) => ({ project, i }))
 			.filter(({ project, i }) =>
-				canView({
-					orgPermissions: ctx.orgPermissions,
-					project,
-					member: projectMembers[i],
-					orgMember: orgMemberByOrgId.get(project.orgId) ?? null,
-					allowCrossOrgPublic: false
-				})
+				canView(
+					projectAccessInputFromRows(ctx, project, {
+						member: projectMembers[i],
+						orgMember: orgMemberByOrgId.get(project.orgId) ?? null
+					})
+				)
 			);
 		const accessibleProjects = visibleIndexes.map(({ project }) => project);
 
@@ -106,31 +106,25 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 		// Load members for projects if user can manage projects
 		let projects: ProjectWithMembers[];
+		const editInput = (project: Project, i: number) =>
+			projectAccessInputFromRows(ctx, project, {
+				member: projectMembers[i],
+				orgMember: orgMemberByOrgId.get(project.orgId) ?? null
+			});
+
 		if (canManageProjects) {
 			projects = await Promise.all(
 				visibleIndexes.map(async ({ project, i }) => ({
 					...project,
 					members: (await projectStore.listProjectMembers(ctx, project.id, { limit: 200 })).items,
-					canEdit: canEdit({
-						orgPermissions: ctx.orgPermissions,
-						project,
-						member: projectMembers[i],
-						orgMember: orgMemberByOrgId.get(project.orgId) ?? null,
-						allowCrossOrgPublic: false
-					})
+					canEdit: canEdit(editInput(project, i))
 				}))
 			);
 		} else {
 			projects = visibleIndexes.map(({ project, i }) => ({
 				...project,
 				members: [],
-				canEdit: canEdit({
-					orgPermissions: ctx.orgPermissions,
-					project,
-					member: projectMembers[i],
-					orgMember: orgMemberByOrgId.get(project.orgId) ?? null,
-					allowCrossOrgPublic: false
-				})
+				canEdit: canEdit(editInput(project, i))
 			}));
 		}
 

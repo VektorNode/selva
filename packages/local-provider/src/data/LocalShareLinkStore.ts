@@ -18,6 +18,12 @@ interface OnDiskShape {
 
 const empty = (): OnDiskShape => ({ links: {} });
 
+export interface LocalShareLinkStoreOptions {
+	/** Absolute path to the JSON file backing this store. */
+	filePath: string;
+	events?: IEventSink;
+}
+
 /**
  * Spec §7 — share-link store backed by share-links.json.
  *
@@ -29,17 +35,18 @@ const empty = (): OnDiskShape => ({ links: {} });
 export class LocalShareLinkStore implements IShareLinkStore {
 	private definitionProvider?: IDefinitionStore;
 	private readonly events: IEventSink;
+	private readonly configFilePath: string;
 
 	static fromEnv(env: Record<string, string | undefined>): LocalShareLinkStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
-		return new LocalShareLinkStore(path.join(env.DATA_PATH, 'share-links.json'));
+		return new LocalShareLinkStore({
+			filePath: path.join(env.DATA_PATH, 'share-links.json')
+		});
 	}
 
-	constructor(
-		private readonly configFilePath: string,
-		events: IEventSink = new NoopEventSink()
-	) {
-		this.events = events;
+	constructor(opts: LocalShareLinkStoreOptions) {
+		this.configFilePath = opts.filePath;
+		this.events = opts.events ?? new NoopEventSink();
 	}
 
 	/**

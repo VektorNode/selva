@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { IShareLinkStore } from '../../data/interface.js';
+import type { IShareLinkStore } from '../../shareLinks/interface.js';
 import type { ShareLink } from '../../shareLinks/types.js';
 import { makeCtx, makeUuid } from './helpers.js';
 import type { RequestContext } from '../../context.js';

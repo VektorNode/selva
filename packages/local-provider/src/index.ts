@@ -14,9 +14,15 @@ export {
 	LocalDefinitionStore,
 	LocalInviteStore,
 	LocalComputeServerStore,
-	LocalShareLinkStore
+	LocalShareLinkStore,
+	LocalPlatformProjectGrantStore
 } from './data/index.js';
-export type { LocalOrgStoreData } from './data/index.js';
+export type {
+	LocalOrgStoreData,
+	LocalOrgStoreOptions,
+	LocalProjectStoreOptions,
+	LocalShareLinkStoreOptions
+} from './data/index.js';
 
 // Storage
 export { LocalStorageProvider } from './storage/LocalStorageProvider.js';

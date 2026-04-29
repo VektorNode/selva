@@ -9,6 +9,7 @@ import { LocalOrgStoreLoader, LocalOrgStore } from '../LocalOrgStore.js';
 import { LocalProjectStore } from '../LocalProjectStore.js';
 import { LocalInviteStore } from '../LocalInviteStore.js';
 import { LocalComputeServerStore } from '../LocalComputeServerStore.js';
+import { LocalPlatformProjectGrantStore } from '../LocalPlatformProjectGrantStore.js';
 
 describe('LocalProjectStore', () => {
 	let tempDir: string;
@@ -27,8 +28,11 @@ describe('LocalProjectStore', () => {
 			const loader = new LocalOrgStoreLoader(tempDir);
 			const invites = new LocalInviteStore(tempDir);
 			const computeServer = new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'));
-			const orgs = new LocalOrgStore(loader, invites, computeServer);
-			const store = new LocalProjectStore(loader);
+			const grants = new LocalPlatformProjectGrantStore(
+				path.join(tempDir, 'platform-project-grants.json')
+			);
+			const orgs = new LocalOrgStore({ loader, invites, computeServer, grants });
+			const store = new LocalProjectStore({ loader, grants });
 			// Explicitly create the host org for the project tests.
 			const ownerId = randomUUID();
 			const orgId = randomUUID();

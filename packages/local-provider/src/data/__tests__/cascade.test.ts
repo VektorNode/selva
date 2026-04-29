@@ -17,6 +17,7 @@ import { LocalDefinitionStore } from '../LocalDefinitionStore.js';
 import { LocalShareLinkStore } from '../LocalShareLinkStore.js';
 import { LocalInviteStore } from '../LocalInviteStore.js';
 import { LocalComputeServerStore } from '../LocalComputeServerStore.js';
+import { LocalPlatformProjectGrantStore } from '../LocalPlatformProjectGrantStore.js';
 
 /**
  * Cross-store cascade behavior. Lives outside the per-store conformance suites
@@ -32,8 +33,11 @@ describe('Cross-store cascade', () => {
 		const loader = new LocalOrgStoreLoader(tempDir);
 		const invites = new LocalInviteStore(tempDir);
 		const computeServer = new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'));
-		orgs = new LocalOrgStore(loader, invites, computeServer);
-		projects = new LocalProjectStore(loader);
+		const grants = new LocalPlatformProjectGrantStore(
+			path.join(tempDir, 'platform-project-grants.json')
+		);
+		orgs = new LocalOrgStore({ loader, invites, computeServer, grants });
+		projects = new LocalProjectStore({ loader, grants });
 	});
 
 	afterEach(async () => {
@@ -244,7 +248,9 @@ describe('Cross-store cascade', () => {
 		});
 
 		const definitions = new LocalDefinitionStore(tempDir);
-		const shareLinks = new LocalShareLinkStore(path.join(tempDir, 'share-links.json'));
+		const shareLinks = new LocalShareLinkStore({
+			filePath: path.join(tempDir, 'share-links.json')
+		});
 		shareLinks.setDefinitionProvider(definitions);
 
 		const definition: DefinitionRecord = {

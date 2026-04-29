@@ -6,7 +6,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { IOrgStore, IComputeServerStore } from '../../data/interface.js';
+import type { IOrgStore } from '../../organizations/interface.js';
+import type { IComputeServerStore } from '../../computeServer/interface.js';
 import type { IInviteStore } from '../../invites/interface.js';
 import type { Organization, OrgMember, OrgRole, Invite, ComputeServerConfig } from '../../index.js';
 import { DEFAULT_ORG_PERMISSIONS } from '../../organizations/schemas.js';

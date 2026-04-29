@@ -3,6 +3,7 @@ import type {
 	IOrgStore,
 	IInviteStore,
 	IComputeServerStore,
+	IPlatformProjectGrantStore,
 	IEventSink,
 	Organization,
 	OrgRole,
@@ -26,6 +27,7 @@ import { paginate, applyOrder } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 import { LocalInviteStore } from './LocalInviteStore.js';
 import { LocalComputeServerStore } from './LocalComputeServerStore.js';
+import { LocalPlatformProjectGrantStore } from './LocalPlatformProjectGrantStore.js';
 
 /** Shape of the on-disk local-org.json file. */
 export interface LocalOrgStoreData {
@@ -80,39 +82,45 @@ export class LocalOrgStoreLoader {
 	}
 }
 
+export interface LocalOrgStoreOptions {
+	loader: LocalOrgStoreLoader;
+	/**
+	 * Sibling stores wired in for the `deleteOrg` cascade. The local provider
+	 * splits invites, compute config, and platform-project grants into
+	 * separate JSON files that the loader can't reach — so they're injected
+	 * here. Required, not optional: an unwired cascade silently leaks
+	 * operational data, exactly the footgun the cascade fix was meant to
+	 * remove.
+	 */
+	invites: IInviteStore;
+	computeServer: IComputeServerStore;
+	grants: IPlatformProjectGrantStore;
+	events?: IEventSink;
+}
+
 export class LocalOrgStore implements IOrgStore {
 	private readonly loader: LocalOrgStoreLoader;
 	private readonly events: IEventSink;
-	/**
-	 * Sibling stores wired in for the `deleteOrg` cascade. The local provider
-	 * splits invites and compute config into separate JSON files that the
-	 * loader can't reach — so they're injected here. Required, not optional:
-	 * an unwired cascade silently leaks invites and stale compute config,
-	 * exactly the footgun the cascade fix was meant to remove.
-	 */
 	private readonly invites: IInviteStore;
 	private readonly computeServer: IComputeServerStore;
+	private readonly grants: IPlatformProjectGrantStore;
 
 	static fromEnv(env: Record<string, string | undefined>): LocalOrgStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
-		const loader = new LocalOrgStoreLoader(env.DATA_PATH);
-		return new LocalOrgStore(
-			loader,
-			LocalInviteStore.fromEnv(env),
-			LocalComputeServerStore.fromEnv(env)
-		);
+		return new LocalOrgStore({
+			loader: new LocalOrgStoreLoader(env.DATA_PATH),
+			invites: LocalInviteStore.fromEnv(env),
+			computeServer: LocalComputeServerStore.fromEnv(env),
+			grants: LocalPlatformProjectGrantStore.fromEnv(env)
+		});
 	}
 
-	constructor(
-		loader: LocalOrgStoreLoader,
-		invites: IInviteStore,
-		computeServer: IComputeServerStore,
-		events: IEventSink = new NoopEventSink()
-	) {
-		this.loader = loader;
-		this.invites = invites;
-		this.computeServer = computeServer;
-		this.events = events;
+	constructor(opts: LocalOrgStoreOptions) {
+		this.loader = opts.loader;
+		this.invites = opts.invites;
+		this.computeServer = opts.computeServer;
+		this.grants = opts.grants;
+		this.events = opts.events ?? new NoopEventSink();
 	}
 
 	async listOrgs(_ctx: RequestContext, opts?: ListOptions): Promise<Page<Organization>> {
@@ -201,6 +209,13 @@ export class LocalOrgStore implements IOrgStore {
 		// to preserve, and leaving them behind only creates orphans.
 		await this.invites.deleteByOrg(ctx, id);
 		await this.computeServer.deleteByOrg(ctx, id);
+		// Drop grants for projects we just soft-deleted, plus any grant where
+		// this org is the grantee. User grants survive — they're identity-
+		// scoped, not org-scoped.
+		for (const projectId of orgProjectIds) {
+			await this.grants.deleteByProject(ctx, projectId);
+		}
+		await this.grants.deleteByGranteeOrg(ctx, id);
 		await this.events.emit({ type: 'org.deleted', orgId: id, actorId: actorFrom(ctx) });
 	}
 

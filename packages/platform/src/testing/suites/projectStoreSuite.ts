@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { IProjectStore } from '../../data/interface.js';
+import type { IProjectStore } from '../../projects/interface.js';
 import type { Project, ProjectMember } from '../../index.js';
 import { makeSeedHelpers, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
 

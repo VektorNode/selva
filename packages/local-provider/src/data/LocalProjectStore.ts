@@ -1,5 +1,6 @@
 import type {
 	IProjectStore,
+	IPlatformProjectGrantStore,
 	IEventSink,
 	Project,
 	ProjectRole,
@@ -23,13 +24,26 @@ function isLive<T extends { deletedAt?: string | null }>(row: T): boolean {
 	return row.deletedAt == null;
 }
 
+export interface LocalProjectStoreOptions {
+	loader: LocalOrgStoreLoader;
+	/**
+	 * Sibling store wired in for the `deleteProject` cascade. Grants live in
+	 * a separate JSON file the loader can't reach. Required, not optional —
+	 * an unwired cascade leaks grants on platform projects after deletion.
+	 */
+	grants: IPlatformProjectGrantStore;
+	events?: IEventSink;
+}
+
 export class LocalProjectStore implements IProjectStore {
 	private readonly loader: LocalOrgStoreLoader;
 	private readonly events: IEventSink;
+	private readonly grants: IPlatformProjectGrantStore;
 
-	constructor(loader: LocalOrgStoreLoader, events: IEventSink = new NoopEventSink()) {
-		this.loader = loader;
-		this.events = events;
+	constructor(opts: LocalProjectStoreOptions) {
+		this.loader = opts.loader;
+		this.grants = opts.grants;
+		this.events = opts.events ?? new NoopEventSink();
 	}
 
 	async listProjects(
@@ -162,6 +176,9 @@ export class LocalProjectStore implements IProjectStore {
 			m.projectId === id && isLive(m) ? { ...m, ...stamp } : m
 		);
 		await this.loader.write(store);
+		// Hard-delete grants — they have no soft-delete column and a deleted
+		// project should never resolve grants again.
+		await this.grants.deleteByProject(ctx, id);
 		await this.events.emit({ type: 'project.deleted', projectId: id, actorId: actorFrom(ctx) });
 	}
 

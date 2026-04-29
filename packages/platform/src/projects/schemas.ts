@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ProjectVisibilitySchema = z.enum(['public', 'org', 'private']);
+export const ProjectVisibilitySchema = z.enum(['public', 'org', 'private', 'platform']);
 export type ProjectVisibility = z.infer<typeof ProjectVisibilitySchema>;
 
 export const ProjectRoleSchema = z.enum(['owner', 'editor', 'viewer']);
@@ -16,6 +16,12 @@ export function validateProjectFlags(merged: {
 		issues.push({
 			path: 'autoJoinOnUpload',
 			message: 'autoJoinOnUpload requires visibility=public'
+		});
+	}
+	if (merged.visibility === 'platform' && merged.autoJoinOnUpload) {
+		issues.push({
+			path: 'autoJoinOnUpload',
+			message: 'autoJoinOnUpload is not allowed on platform projects'
 		});
 	}
 	return issues;
