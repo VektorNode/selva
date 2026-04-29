@@ -170,38 +170,36 @@
 
 	{#if expanded}
 		<div class="mt-4 ml-10 space-y-4">
-			{#if isPlatformAdmin}
-				<section>
-					<h4 class="text-muted-foreground mb-2 text-xs font-medium tracking-wider uppercase">
-						Platform
-					</h4>
+			<section>
+				<h4 class="text-muted-foreground mb-2 text-xs font-medium tracking-wider uppercase">
+					Platform
+				</h4>
 					<div class="grid gap-2 sm:grid-cols-2">
-						{#each ALL_PLATFORM_PERMISSIONS as p (p)}
-							{@const state = checkboxState(p)}
-							<label
-								class={`flex items-start gap-2 rounded-md border p-2.5 ${
-									state.locked
-										? 'border-border cursor-not-allowed opacity-60'
-										: 'border-border hover:bg-accent/40 cursor-pointer'
-								}`}
-								title={state.soleAdminLock ? 'Cannot remove the only instance admin.' : undefined}
-							>
-								<input
-									type="checkbox"
-									class="mt-0.5 shrink-0"
-									checked={state.checked}
-									disabled={updating || state.locked}
-									onchange={(e) => onTogglePermission(p, (e.target as HTMLInputElement).checked)}
-								/>
-								<div class="min-w-0">
-									<p class="text-sm leading-tight font-medium">{PERM_LABEL[p]}</p>
-									<p class="text-muted-foreground mt-0.5 text-xs">{PERM_DESC[p]}</p>
-								</div>
-							</label>
-						{/each}
-					</div>
-				</section>
-			{/if}
+					{#each ALL_PLATFORM_PERMISSIONS as p (p)}
+						{@const state = checkboxState(p)}
+						<label
+							class={`flex items-start gap-2 rounded-md border p-2.5 ${
+								state.locked
+									? 'border-border cursor-not-allowed opacity-60'
+									: 'border-border hover:bg-accent/40 cursor-pointer'
+							}`}
+							title={state.soleAdminLock ? 'Cannot remove the only instance admin.' : undefined}
+						>
+							<input
+								type="checkbox"
+								class="mt-0.5 shrink-0"
+								checked={state.checked}
+								disabled={updating || state.locked}
+								onchange={(e) => onTogglePermission(p, (e.target as HTMLInputElement).checked)}
+							/>
+							<div class="min-w-0">
+								<p class="text-sm leading-tight font-medium">{PERM_LABEL[p]}</p>
+								<p class="text-muted-foreground mt-0.5 text-xs">{PERM_DESC[p]}</p>
+							</div>
+						</label>
+					{/each}
+				</div>
+			</section>
 
 			<section>
 				<h4 class="text-muted-foreground mb-2 text-xs font-medium tracking-wider uppercase">

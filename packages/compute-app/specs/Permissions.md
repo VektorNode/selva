@@ -236,9 +236,11 @@ canSolve(platform project, user, ctx):
 
 `canSolve` is strictly narrower than `canView` for platform projects: a view-only grant holder can fetch the schema but cannot submit solves.
 
-### `canEditDefinition` / `canManage` for platform projects
+### `canEdit` / `canEditDefinition` / `canManage` / `canEditProjectSettings` for platform projects
 
-Both require `instance_admin`. No project membership, no org-role escape hatch, no Reclaim. Platform staff who need content access already hold `instance_admin`.
+All require `instance_admin`. No project membership, no org-role escape hatch, no Reclaim. Platform staff who need content access already hold `instance_admin`.
+
+This is **not** the §5 `instance_admin` bypass — for platform projects, admin status IS the rule. The bypass distinction (`managementBypassOrRun` vs `contentCheck`) only matters for non-platform projects where admins are forbidden from content access without explicit Reclaim.
 
 > **No Reclaim on platform projects.** The Reclaim flow (`canReclaim`, §5) is an org-leadership escape hatch for org-owned projects whose owner left. Platform projects have no org ownership to reclaim — they are governed by `instance_admin` exclusively. `canReclaim` returns `false` when `project.visibility === 'platform'`.
 

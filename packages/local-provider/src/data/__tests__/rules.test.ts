@@ -309,12 +309,24 @@ describe('canEdit', () => {
 		).toBe(false);
 	});
 
-	it('platform project always returns false (no member concept)', () => {
+	it('platform project: instance_admin passes; project member role is ignored', () => {
+		const platformProject = project({ visibility: 'platform' });
 		expect(
-			canEdit(accessInput({
-				project: project({ visibility: 'platform' }),
-				member: member('owner')
-			}))
+			canEdit(
+				accessInput({
+					project: platformProject,
+					platformPermissions: ['instance_admin']
+				})
+			)
+		).toBe(true);
+		// A project member role on a platform project is meaningless — only admin grants edit.
+		expect(
+			canEdit(
+				accessInput({
+					project: platformProject,
+					member: member('owner')
+				})
+			)
 		).toBe(false);
 	});
 });
@@ -326,12 +338,23 @@ describe('canEditProjectSettings', () => {
 		expect(canEditProjectSettings({ ...base, orgPermissions: ['manage_definitions', 'manage_projects'], member: member('editor') })).toBe(false);
 	});
 
-	it('platform project always returns false', () => {
+	it('platform project: instance_admin passes; non-admin denied', () => {
+		const platformProject = project({ visibility: 'platform' });
 		expect(
-			canEditProjectSettings(accessInput({
-				project: project({ visibility: 'platform' }),
-				member: member('owner')
-			}))
+			canEditProjectSettings(
+				accessInput({
+					project: platformProject,
+					platformPermissions: ['instance_admin']
+				})
+			)
+		).toBe(true);
+		expect(
+			canEditProjectSettings(
+				accessInput({
+					project: platformProject,
+					member: member('owner')
+				})
+			)
 		).toBe(false);
 	});
 });
@@ -344,12 +367,23 @@ describe('canManage', () => {
 		expect(canManage({ ...base, member: null })).toBe(false);
 	});
 
-	it('platform project always returns false', () => {
+	it('platform project: instance_admin passes; non-admin denied', () => {
+		const platformProject = project({ visibility: 'platform' });
 		expect(
-			canManage(accessInput({
-				project: project({ visibility: 'platform' }),
-				member: member('owner')
-			}))
+			canManage(
+				accessInput({
+					project: platformProject,
+					platformPermissions: ['instance_admin']
+				})
+			)
+		).toBe(true);
+		expect(
+			canManage(
+				accessInput({
+					project: platformProject,
+					member: member('owner')
+				})
+			)
 		).toBe(false);
 	});
 });

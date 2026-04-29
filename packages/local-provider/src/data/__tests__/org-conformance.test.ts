@@ -19,8 +19,10 @@ describe('LocalOrgStore', () => {
 		await fs.rm(tempDir, { recursive: true, force: true });
 	});
 
+	const TEST_SECRET_KEY = Buffer.alloc(32, 0x42);
 	const makeInvites = () => new LocalInviteStore(tempDir);
-	const makeCompute = () => new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'));
+	const makeCompute = () =>
+		new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'), TEST_SECRET_KEY);
 	const makeGrants = () =>
 		new LocalPlatformProjectGrantStore(path.join(tempDir, 'platform-project-grants.json'));
 

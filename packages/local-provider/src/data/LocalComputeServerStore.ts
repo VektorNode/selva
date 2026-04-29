@@ -6,6 +6,7 @@ import type {
 	RequestContext
 } from '@selvajs/platform';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
+import { decodeSecretKey, decryptSecret, encryptSecret, isEncryptedSecret } from './secretCrypto.js';
 
 /**
  * On-disk file shape. One file holds both the instance pool (rows with
@@ -14,6 +15,9 @@ import { readJsonFile, writeJsonFile } from './fsJson.js';
  * `defaultServerId` is the instance-pool default. `orgDefaults[orgId]` is
  * each org's override default. Reads scope by `ctx.actingOrgId` and return
  * only the matching slice.
+ *
+ * `apiKey` on disk is always an `enc:v1:<…>` envelope (AES-256-GCM); the
+ * store decrypts on read so callers see plaintext.
  */
 interface OnDiskShape {
 	servers: ComputeServerConfig[];
@@ -37,15 +41,47 @@ const EMPTY: OnDiskShape = { servers: [] };
 export class LocalComputeServerStore implements IComputeServerStore {
 	static fromEnv(env: Record<string, string | undefined>): LocalComputeServerStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
-		return new LocalComputeServerStore(path.join(env.DATA_PATH, 'compute.config.json'));
+		if (!env.SELVA_SECRET_KEY) {
+			throw new Error(
+				'Missing required env var: SELVA_SECRET_KEY (32-byte hex or base64). ' +
+					'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+			);
+		}
+		return new LocalComputeServerStore(
+			path.join(env.DATA_PATH, 'compute.config.json'),
+			decodeSecretKey(env.SELVA_SECRET_KEY)
+		);
 	}
 
-	constructor(private readonly configFilePath: string) {}
+	constructor(
+		private readonly configFilePath: string,
+		private readonly secretKey: Buffer
+	) {}
 
 	private async readAll(): Promise<OnDiskShape> {
 		const raw = await readJsonFile<OnDiskShape>(this.configFilePath, EMPTY);
-		// Defensive: older files may lack orgDefaults.
 		return { ...raw, orgDefaults: raw.orgDefaults ?? {} };
+	}
+
+	private decryptApiKeys(servers: ComputeServerConfig[]): ComputeServerConfig[] {
+		return servers.map((s) => {
+			if (!s.apiKey) return s;
+			if (!isEncryptedSecret(s.apiKey)) {
+				throw new Error(
+					`compute.config.json contains an unencrypted apiKey for server "${s.label}" (${s.id}). ` +
+						'Re-enter the key via /admin/compute so it is stored encrypted.'
+				);
+			}
+			return { ...s, apiKey: decryptSecret(s.apiKey, this.secretKey) };
+		});
+	}
+
+	private encryptApiKeys(servers: ComputeServerConfig[]): ComputeServerConfig[] {
+		return servers.map((s) => {
+			if (!s.apiKey) return s;
+			if (isEncryptedSecret(s.apiKey)) return s;
+			return { ...s, apiKey: encryptSecret(s.apiKey, this.secretKey) };
+		});
 	}
 
 	async getConfig(ctx: RequestContext): Promise<ComputeConfig> {
@@ -53,12 +89,12 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		const orgId = ctx.actingOrgId;
 
 		if (orgId) {
-			const servers = all.servers.filter((s) => s.orgId === orgId);
+			const servers = this.decryptApiKeys(all.servers.filter((s) => s.orgId === orgId));
 			const defaultServerId = all.orgDefaults?.[orgId];
 			return { servers, defaultServerId };
 		}
 
-		const servers = all.servers.filter((s) => s.orgId == null);
+		const servers = this.decryptApiKeys(all.servers.filter((s) => s.orgId == null));
 		return { servers, defaultServerId: all.defaultServerId };
 	}
 
@@ -69,7 +105,9 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		// Preserve other scopes' rows; replace only the scope we're saving.
 		if (orgId) {
 			const otherScopes = all.servers.filter((s) => s.orgId !== orgId);
-			const orgServers = config.servers.map((s) => ({ ...s, orgId }));
+			const orgServers = this.encryptApiKeys(
+				config.servers.map((s) => ({ ...s, orgId }))
+			);
 			const orgDefaults = { ...(all.orgDefaults ?? {}) };
 			if (config.defaultServerId) orgDefaults[orgId] = config.defaultServerId;
 			else delete orgDefaults[orgId];
@@ -83,7 +121,9 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		}
 
 		const otherScopes = all.servers.filter((s) => s.orgId != null);
-		const instanceServers = config.servers.map((s) => ({ ...s, orgId: null }));
+		const instanceServers = this.encryptApiKeys(
+			config.servers.map((s) => ({ ...s, orgId: null }))
+		);
 		await writeJsonFile<OnDiskShape>(this.configFilePath, {
 			...all,
 			servers: [...instanceServers, ...otherScopes],

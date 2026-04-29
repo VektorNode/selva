@@ -7,7 +7,7 @@
 
 	interface Props {
 		definitionGuid: string;
-		onOpenRunner: (guid: string) => void;
+		onOpenRunner: (guid: string, channel?: 'live' | 'draft') => void;
 	}
 
 	let { definitionGuid, onOpenRunner }: Props = $props();
@@ -219,11 +219,17 @@
 						</div>
 						<div class="flex shrink-0 items-center gap-1">
 							{#if isLive}
-								<Button size="sm" variant="outline" onclick={() => onOpenRunner(definitionGuid)}>
+								<Button size="sm" variant="outline" onclick={() => onOpenRunner(definitionGuid, 'live')}>
 									<Play class="mr-1.5 h-3.5 w-3.5" />
 									Run
 								</Button>
 							{:else}
+								{#if isDraft}
+									<Button size="sm" variant="ghost" onclick={() => onOpenRunner(definitionGuid, 'draft')}>
+										<Play class="mr-1.5 h-3.5 w-3.5" />
+										Run
+									</Button>
+								{/if}
 								<Button
 									size="sm"
 									variant="outline"

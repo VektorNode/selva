@@ -3,7 +3,8 @@ import { redirect } from '@sveltejs/kit';
 import {
 	getDefinitionMeta,
 	getOrganizationProvider,
-	getProjectProvider
+	getProjectProvider,
+	getPlatformProjectGrantStore
 } from '$lib/server/providers.server';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
 import type { DefinitionRecord, Project } from '@selvajs/platform';
@@ -33,6 +34,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		);
 		const allProjects: Project[] = projectPages.flatMap((p) => p.items);
 
+		const grantStore = getPlatformProjectGrantStore();
+
 		// Filter to projects accessible by this user
 		const accessibleProjects = await Promise.all(
 			allProjects.map(async (p) => {
@@ -40,6 +43,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 				if (p.visibility === 'org') {
 					const member = await orgs.getOrgMember(SYSTEM_CONTEXT, p.orgId, user.id);
 					return member ? p : null;
+				}
+				if (p.visibility === 'platform') {
+					const grants = await grantStore.listByProject(SYSTEM_CONTEXT, p.id);
+					const ctx = locals.ctx;
+					const hasGrant = grants.some(
+						(g) =>
+							(g.granteeType === 'user' && g.granteeId === user.id) ||
+							(g.granteeType === 'org' && ctx?.actingOrgId && g.granteeId === ctx.actingOrgId)
+					);
+					return hasGrant ? p : null;
 				}
 				// private
 				const member = await projectStore.getProjectMember(SYSTEM_CONTEXT, p.id, user.id);

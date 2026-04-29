@@ -1,6 +1,14 @@
 <script lang="ts">
 	import { SideNav, type SideNavItem } from '@selvajs/ui';
-	import { Gauge, Building2, Users, Server, Settings, ScrollText } from '@lucide/svelte';
+	import {
+		Gauge,
+		Building2,
+		Folders,
+		Users,
+		Server,
+		Settings,
+		ScrollText
+	} from '@lucide/svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 
@@ -14,10 +22,10 @@
 	}
 	let { data, children }: LayoutProps = $props();
 
-	// Client-side gate — `instance_admin` implies every org perm.
+	// Client-side gate — `instance_admin` implies every perm.
 	const can = (p: PlatformPermission | OrgPermission) => {
 		if (data.platformPermissions.includes('instance_admin')) return true;
-		if (p === 'instance_admin') return false;
+		if (data.platformPermissions.includes(p as PlatformPermission)) return true;
 		return data.orgPermissions.includes(p as OrgPermission);
 	};
 
@@ -28,6 +36,13 @@
 				href: '/admin/organizations',
 				label: 'Organizations',
 				icon: Building2,
+				match: 'prefix' as const,
+				show: can('instance_admin')
+			},
+			{
+				href: '/admin/projects',
+				label: 'Projects',
+				icon: Folders,
 				match: 'prefix' as const,
 				show: can('instance_admin')
 			},
@@ -50,7 +65,7 @@
 				label: 'System',
 				icon: Settings,
 				match: 'prefix' as const,
-				show: can('instance_admin')
+				show: can('manage_updates')
 			},
 			{
 				href: '/admin/audit',

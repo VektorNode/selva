@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button, Drawer, Separator } from '@selvajs/ui';
-	import { Play, X } from '@lucide/svelte';
+	import { Play, Share2, X } from '@lucide/svelte';
 	import type { DefinitionRecord } from '../+page.server';
 	import StatusBadge from './StatusBadge.svelte';
 	import { formatUpdated } from './statusStyles';
@@ -8,12 +8,16 @@
 	interface Props {
 		record: DefinitionRecord;
 		projectName: string;
+		canEdit: boolean;
 		onClose: () => void;
 		onEdit: (record: DefinitionRecord) => void;
-		onOpenRunner: (guid: string) => void;
+		onOpenRunner: (guid: string, channel?: 'live' | 'draft') => void;
+		onShare: (record: DefinitionRecord) => void;
 	}
 
-	let { record, projectName, onClose, onEdit, onOpenRunner }: Props = $props();
+	let { record, projectName, canEdit, onClose, onEdit, onOpenRunner, onShare }: Props = $props();
+
+
 </script>
 
 <Drawer {onClose}>
@@ -52,37 +56,33 @@
 			</div>
 		{/if}
 
+		<!-- Primary action row -->
 		<div class="flex gap-2">
-			<Button class="flex-1" onclick={() => onOpenRunner(record.guid)}>
-				<Play class="mr-1.5 h-3.5 w-3.5" /> Open runner
+			<Button class="flex-1" onclick={() => onOpenRunner(record.guid, 'live')}>
+				<Play class="mr-1.5 h-3.5 w-3.5" /> Run
 			</Button>
-			<Button variant="outline" onclick={() => onEdit(record)}>Edit</Button>
+			{#if canEdit}
+				<Button variant="outline" size="icon" onclick={() => onShare(record)} title="Share links">
+					<Share2 class="h-4 w-4" />
+				</Button>
+				<Button variant="outline" onclick={() => onEdit(record)}>Edit</Button>
+			{/if}
 		</div>
 
 		<Separator />
 
-		<div class="grid grid-cols-2 gap-4">
+		<div class="grid grid-cols-2 gap-x-4 gap-y-3">
 			<div>
-				<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">
-					Updated
-				</p>
+				<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">Updated</p>
 				<p class="mt-1 text-sm">{formatUpdated(record.updatedAt)} ago</p>
 			</div>
 			<div>
 				<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">Runs</p>
 				<p class="mt-1 text-sm">{record.solveCount.toLocaleString()}</p>
 			</div>
-			<div>
-				<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">Live</p>
-				<p class="text-muted-foreground mt-1 font-mono text-xs">
-					{record.liveVersionId ? record.liveVersionId.slice(0, 8) : 'pending'}
-				</p>
-			</div>
 			{#if record.category}
 				<div>
-					<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">
-						Category
-					</p>
+					<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">Category</p>
 					<p class="mt-1 text-sm">{record.category}</p>
 				</div>
 			{/if}
@@ -91,9 +91,6 @@
 		{#if record.tags?.length}
 			<div>
 				<Separator class="mb-4" />
-				<p class="text-muted-foreground mb-2.5 font-mono text-[10.5px] tracking-widest uppercase">
-					Tags
-				</p>
 				<div class="flex flex-wrap gap-1.5">
 					{#each record.tags as tag (tag)}
 						<span class="bg-muted text-muted-foreground rounded px-2 py-0.5 font-mono text-[11px]">

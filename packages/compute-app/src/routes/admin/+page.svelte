@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { Card, SectionHeader } from '@selvajs/ui';
 	import { Users, Server, LayoutDashboard, ArrowRight, GitCommit, Building2 } from '@lucide/svelte';
+	import type { PlatformPermission } from '@selvajs/platform';
 
 	interface PageData {
 		stats: { users: number | null };
+		platformPermissions: PlatformPermission[];
 	}
 	interface Props {
 		data: PageData;
@@ -17,35 +19,44 @@
 		date: __GIT_DATE__
 	};
 
-	const tiles = $derived([
-		{
-			href: '/admin/users',
-			icon: Users,
-			value: data.stats.users ?? '—',
-			label:
-				data.stats.users === null
-					? 'User store unavailable'
-					: `User${data.stats.users === 1 ? '' : 's'}`
-		},
-		{
-			href: '/admin/organizations',
-			icon: Building2,
-			value: 'Organizations',
-			label: 'All orgs on this instance'
-		},
-		{
-			href: '/admin/compute',
-			icon: Server,
-			value: 'Compute',
-			label: 'Servers, status & config'
-		},
-		{
-			href: '/projects',
-			icon: LayoutDashboard,
-			value: 'Content',
-			label: 'Definitions & projects'
-		}
-	]);
+	const can = (p: PlatformPermission) =>
+		data.platformPermissions.includes('instance_admin') || data.platformPermissions.includes(p);
+
+	const tiles = $derived(
+		[
+			{
+				href: '/admin/users',
+				icon: Users,
+				value: data.stats.users ?? '—',
+				label:
+					data.stats.users === null
+						? 'User store unavailable'
+						: `User${data.stats.users === 1 ? '' : 's'}`,
+				show: can('manage_instance_users')
+			},
+			{
+				href: '/admin/organizations',
+				icon: Building2,
+				value: 'Organizations',
+				label: 'All orgs on this instance',
+				show: can('instance_admin')
+			},
+			{
+				href: '/admin/compute',
+				icon: Server,
+				value: 'Compute',
+				label: 'Servers, status & config',
+				show: can('manage_compute')
+			},
+			{
+				href: '/projects',
+				icon: LayoutDashboard,
+				value: 'Content',
+				label: 'Definitions & projects',
+				show: can('instance_admin')
+			}
+		].filter((t) => t.show)
+	);
 </script>
 
 <svelte:head>
