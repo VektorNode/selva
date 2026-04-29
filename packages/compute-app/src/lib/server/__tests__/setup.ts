@@ -31,12 +31,15 @@ vi.mock('$lib/server/providers.server', async () => {
 			Boolean((currentTestProviders().flags as Record<string, unknown>)[name]),
 		getAuthProvider: () => currentTestProviders().config.auth,
 		getStorageProvider: () => currentTestProviders().config.storage,
+		getDataProvider: () => currentTestProviders().config.data,
 		getOrganizationProvider: () => currentTestProviders().config.data.orgs,
 		getProjectProvider: () => currentTestProviders().config.data.projects,
 		getDefinitionMeta: () => currentTestProviders().config.data.definitions,
 		getComputeServerConfigStore: () => currentTestProviders().config.data.computeServer,
 		getUserProfileStore: () => currentTestProviders().config.data.userProfile,
 		getInviteStore: () => currentTestProviders().config.data.invites,
-		getPermissionStore: () => currentTestProviders().config.data.permissions
+		getPermissionStore: () => currentTestProviders().config.data.permissions,
+		getPlatformProjectGrantStore: () => currentTestProviders().config.data.platformProjectGrants,
+		getAuditQuery: () => currentTestProviders().config.data.auditQuery ?? null
 	};
 });

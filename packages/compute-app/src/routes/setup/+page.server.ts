@@ -9,6 +9,7 @@ import {
 } from '@selvajs/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
 import {
+	getDataProvider,
 	getOrganizationProvider,
 	getPermissionStore,
 	getProjectProvider,
@@ -29,16 +30,11 @@ export const load: PageServerLoad = async () => {
 	}
 
 	const auth = getAuthProvider();
-	const oauthProviders = auth.oauth
-		? (process.env.SUPABASE_OAUTH_PROVIDERS ?? '')
-				.split(',')
-				.map((p) => p.trim())
-				.filter((p) => p.length > 0)
-		: [];
 
 	return {
 		hasPasswordAuth: Boolean(auth.passwordAuth),
-		oauthProviders
+		hasEmailLink: Boolean(auth.emailLink),
+		oauthProviders: auth.oauth?.listProviders() ?? []
 	};
 };
 
@@ -80,9 +76,16 @@ export const actions = {
 		// Identity + admin grant must succeed together — without admin perms the
 		// new user can't recover, and `hasInstanceAdmin` returning false would
 		// allow setup to be re-run with a duplicate email.
+		//
+		// `ensureUser` is the local equivalent of Supabase's
+		// `handle_new_auth_user` trigger: every authed user must have a
+		// data-layer row before permissions can be granted. `hooks.server.ts`
+		// calls this on every authed request, but the setup action mints the
+		// user mid-request (before any cookie is set), so we call it inline.
 		let user;
 		try {
 			user = await passwordAuth.createUserWithPassword(email, password);
+			await getDataProvider().ensureUser(SYSTEM_CONTEXT, user.id);
 			await setUserPlatformPermissions(SYSTEM_CONTEXT, user.id, [...ALL_PLATFORM_PERMISSIONS]);
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);

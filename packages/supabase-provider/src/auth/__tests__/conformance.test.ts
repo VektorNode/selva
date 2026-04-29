@@ -1,5 +1,5 @@
 import { describe, beforeEach, it } from 'vitest';
-import { runAuthProviderConformance } from '@selvajs/platform/testing';
+import { runAuthProviderConformance, runEmailLinkAuthConformance } from '@selvajs/platform/testing';
 import { SupabaseAuthProvider } from '../SupabaseAuthProvider.js';
 import { readEnv, resetAllData } from '../../data/__tests__/test-helpers.js';
 
@@ -58,6 +58,21 @@ if (!envCtx) {
 				return { provider, adminPassword, adminEmail: ADMIN_EMAIL };
 			},
 			userManagement: true
+		});
+
+		runEmailLinkAuthConformance({
+			name: 'SupabaseEmailLinkAuth',
+			createAdapter: async () => {
+				const { provider } = await makeProvider();
+				return {
+					adapter: provider.emailLink,
+					// `validEmail` isn't used by the suite for live mail delivery;
+					// it just needs to look like a real address. The malformed
+					// case is what we actually assert on.
+					validEmail: 'real-looking@conformance.test',
+					invalidEmail: 'not-an-email-address'
+				};
+			}
 		});
 	});
 }

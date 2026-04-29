@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import type {
 	IAuthProvider,
+	IEmailLinkAuth,
 	IOAuthAuth,
 	IPasswordAuth,
 	AuthUser,
@@ -33,12 +34,28 @@ export interface SupabaseAuthProviderConfig {
 	 * Default false — production deployments start with invite-only.
 	 */
 	enableSelfSignup?: boolean;
+	/**
+	 * OAuth providers enabled in the Supabase dashboard (lowercased:
+	 * "google", "github", …). Surfaced via `oauth.listProviders()` so the
+	 * driving layer doesn't read provider-specific env vars itself. Defaults
+	 * to an empty list.
+	 */
+	oauthProviders?: readonly string[];
+	/**
+	 * Allow `emailLink.sendMagicLink` to create new users on first request.
+	 * Default true — matches Supabase's `signInWithOtp` default and gives
+	 * fresh installs a working signup path. Set false for invite-only
+	 * deployments; `sendMagicLink` for an unknown email returns
+	 * `{ ok: false, reason: 'signup_disabled' }`.
+	 */
+	allowEmailLinkSignup?: boolean;
 }
 
 export class SupabaseAuthProvider implements IAuthProvider {
 	readonly name = 'Supabase Auth';
 	readonly passwordAuth: IPasswordAuth;
 	readonly oauth: IOAuthAuth;
+	readonly emailLink: IEmailLinkAuth;
 
 	private readonly admin: SupabaseClient;
 	private readonly anon: SupabaseClient;
@@ -61,7 +78,16 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			config.enableSelfSignup ?? false,
 			(user) => this.hydrate(user)
 		);
-		this.oauth = new SupabaseOAuthAuth(this.anon, (user) => this.hydrate(user));
+		this.oauth = new SupabaseOAuthAuth(
+			this.anon,
+			(user) => this.hydrate(user),
+			config.oauthProviders ?? []
+		);
+		this.emailLink = new SupabaseEmailLinkAuth(
+			this.anon,
+			(user) => this.hydrate(user),
+			config.allowEmailLinkSignup ?? true
+		);
 	}
 
 	static fromEnv(env: Record<string, string | undefined>): SupabaseAuthProvider {
@@ -71,11 +97,19 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		if (!supabaseUrl) throw new Error('Missing required env var: SUPABASE_URL');
 		if (!anonKey) throw new Error('Missing required env var: SUPABASE_ANON_KEY');
 		if (!serviceRoleKey) throw new Error('Missing required env var: SUPABASE_SERVICE_ROLE_KEY');
+		const oauthProviders = (env.SUPABASE_OAUTH_PROVIDERS ?? '')
+			.split(',')
+			.map((p) => p.trim().toLowerCase())
+			.filter((p) => p.length > 0);
 		return new SupabaseAuthProvider({
 			supabaseUrl,
 			anonKey,
 			serviceRoleKey,
-			enableSelfSignup: env.SUPABASE_ENABLE_SELF_SIGNUP === 'true'
+			enableSelfSignup: env.SUPABASE_ENABLE_SELF_SIGNUP === 'true',
+			oauthProviders,
+			// Default true; set SUPABASE_ALLOW_EMAIL_LINK_SIGNUP=false to lock down
+			// to invite-only and reject magic-link signups for new addresses.
+			allowEmailLinkSignup: env.SUPABASE_ALLOW_EMAIL_LINK_SIGNUP !== 'false'
 		});
 	}
 
@@ -274,8 +308,13 @@ class SupabasePasswordAuth implements IPasswordAuth {
 class SupabaseOAuthAuth implements IOAuthAuth {
 	constructor(
 		private readonly anon: SupabaseClient,
-		private readonly hydrate: (user: User) => AuthUser
+		private readonly hydrate: (user: User) => AuthUser,
+		private readonly providers: readonly string[]
 	) {}
+
+	listProviders(): readonly string[] {
+		return this.providers;
+	}
 
 	async getOAuthAuthorizationUrl(
 		provider: 'google' | 'github' | 'azure' | 'gitlab',
@@ -315,4 +354,107 @@ class SupabaseOAuthAuth implements IOAuthAuth {
 			refreshToken: data.session.refresh_token
 		};
 	}
+}
+
+/**
+ * Supabase-backed `IEmailLinkAuth`. Wraps GoTrue's `signInWithOtp` (send the
+ * link) and `verifyOtp` with `type: 'magiclink' | 'email' | 'signup'`
+ * (verify on click).
+ *
+ * Token shape: Supabase emails the user `{callbackUrl}?token_hash=…&type=…`.
+ * `verifyMagicLink` accepts either the full URL or just the raw `token_hash`
+ * — adapters MAY support either to give the route layer flexibility. The
+ * `type` query param decides which OTP variant `verifyOtp` runs (signup vs
+ * magic-link returning user vs invite acceptance), so we pass it through.
+ */
+class SupabaseEmailLinkAuth implements IEmailLinkAuth {
+	constructor(
+		private readonly anon: SupabaseClient,
+		private readonly hydrate: (user: User) => AuthUser,
+		private readonly allowSignup: boolean
+	) {}
+
+	async sendMagicLink(
+		email: string,
+		callbackUrl: string
+	): Promise<
+		| { ok: true }
+		| { ok: false; reason: 'rate_limited' | 'signup_disabled' | 'invalid_email' }
+	> {
+		const { error } = await this.anon.auth.signInWithOtp({
+			email,
+			options: {
+				emailRedirectTo: callbackUrl,
+				shouldCreateUser: this.allowSignup
+			}
+		});
+		if (!error) return { ok: true };
+
+		// Map GoTrue's classified errors to our coarse reasons. Anything we
+		// don't recognize we throw — the route returns 500 and we get a stack
+		// trace, instead of swallowing a real bug as "rate limited".
+		const status = (error as { status?: number }).status;
+		const code = (error as { code?: string }).code;
+		const message = error.message ?? '';
+		if (status === 429 || /rate.?limit/i.test(message)) return { ok: false, reason: 'rate_limited' };
+		if (code === 'otp_disabled' || code === 'signup_disabled' || /signup.*disabled/i.test(message)) {
+			return { ok: false, reason: 'signup_disabled' };
+		}
+		if (code === 'validation_failed' || /invalid.*email|email.*invalid/i.test(message)) {
+			return { ok: false, reason: 'invalid_email' };
+		}
+		throw error;
+	}
+
+	async verifyMagicLink(rawCallbackUrl: string): Promise<{
+		user: AuthUser;
+		sessionToken: string;
+		refreshToken?: string;
+	} | null> {
+		const params = parseCallbackParams(rawCallbackUrl);
+		if (!params) return null;
+		const { tokenHash, type } = params;
+
+		const { data, error } = await this.anon.auth.verifyOtp({
+			token_hash: tokenHash,
+			type
+		});
+		if (error || !data.user || !data.session) return null;
+		if (data.user.user_metadata?.disabled === true) return null;
+		return {
+			user: this.hydrate(data.user),
+			sessionToken: data.session.access_token,
+			refreshToken: data.session.refresh_token
+		};
+	}
+}
+
+/**
+ * Pull `token_hash` + `type` from either a full callback URL or a bare
+ * `token_hash=…&type=…` query string. Tolerant of both shapes so the route
+ * layer can pass whichever form is convenient.
+ *
+ * Returns null when the inputs aren't recognizable — the caller treats null
+ * as "send the user back to /login".
+ */
+function parseCallbackParams(
+	raw: string
+): { tokenHash: string; type: 'magiclink' | 'email' | 'signup' | 'invite' | 'recovery' } | null {
+	let search: URLSearchParams;
+	try {
+		// Full URL path
+		search = new URL(raw).searchParams;
+	} catch {
+		// Query-string-only path — treat as bare params.
+		search = new URLSearchParams(raw.startsWith('?') ? raw.slice(1) : raw);
+	}
+	const tokenHash = search.get('token_hash');
+	const type = search.get('type');
+	if (!tokenHash) return null;
+	const allowed = new Set(['magiclink', 'email', 'signup', 'invite', 'recovery']);
+	if (!type || !allowed.has(type)) return null;
+	return {
+		tokenHash,
+		type: type as 'magiclink' | 'email' | 'signup' | 'invite' | 'recovery'
+	};
 }

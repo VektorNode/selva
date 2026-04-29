@@ -54,4 +54,17 @@ export interface IDataProvider {
 	 * a duplicate userId.
 	 */
 	ensureUser(ctx: RequestContext, userId: string): Promise<void>;
+
+	/**
+	 * Cascade hook called after the auth provider deletes a user. Removes any
+	 * data-layer rows tied to that user (the user-data row, anything else
+	 * keyed by `userId` that should die with the identity).
+	 *
+	 * Adapters whose data-layer FKs cascade on delete (Supabase via
+	 * `on delete cascade` against `auth.users`) no-op. Adapters that own
+	 * separate tables (local-provider) clean up here.
+	 *
+	 * MUST tolerate a missing user (idempotent — caller may retry).
+	 */
+	onUserDeleted(ctx: RequestContext, userId: string): Promise<void>;
 }

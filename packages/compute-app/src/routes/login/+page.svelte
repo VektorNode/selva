@@ -9,6 +9,7 @@
 
 	interface PageData {
 		hasPasswordAuth: boolean;
+		hasEmailLink: boolean;
 		oauthProviders: string[];
 	}
 
@@ -40,6 +41,10 @@
 		};
 		return labels[p] ?? p;
 	}
+
+	const noAuthMethods = $derived(
+		!data.hasPasswordAuth && !data.hasEmailLink && data.oauthProviders.length === 0
+	);
 </script>
 
 <svelte:head>
@@ -72,7 +77,34 @@
 			</div>
 		{/if}
 
-		{#if data.hasPasswordAuth && data.oauthProviders.length > 0}
+		{#if data.hasEmailLink && data.oauthProviders.length > 0}
+			<div class="text-muted-foreground flex items-center gap-2 text-xs uppercase">
+				<div class="bg-border h-px flex-1"></div>
+				<span>or</span>
+				<div class="bg-border h-px flex-1"></div>
+			</div>
+		{/if}
+
+		{#if data.hasEmailLink}
+			<form method="POST" action="/auth/email/start" class="space-y-4">
+				{#if redirectTo}
+					<input type="hidden" name="redirectTo" value={redirectTo} />
+				{/if}
+				<div class="space-y-2">
+					<Label for="email-link-email">Email</Label>
+					<Input
+						id="email-link-email"
+						name="email"
+						type="email"
+						required
+						placeholder="you@example.com"
+					/>
+				</div>
+				<Button type="submit" variant="outline" class="w-full">Email me a sign-in link</Button>
+			</form>
+		{/if}
+
+		{#if data.hasPasswordAuth && (data.hasEmailLink || data.oauthProviders.length > 0)}
 			<div class="text-muted-foreground flex items-center gap-2 text-xs uppercase">
 				<div class="bg-border h-px flex-1"></div>
 				<span>or</span>
@@ -96,11 +128,11 @@
 					<Input id="password" name="password" type="password" required placeholder="Password" />
 				</div>
 
-				<Button type="submit" class="w-full">Sign in</Button>
+				<Button type="submit" class="w-full">Sign in with password</Button>
 			</form>
 		{/if}
 
-		{#if !data.hasPasswordAuth && data.oauthProviders.length === 0}
+		{#if noAuthMethods}
 			<Alert.Root variant="destructive">
 				<CircleAlert />
 				<Alert.Description>

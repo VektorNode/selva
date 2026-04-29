@@ -25,6 +25,10 @@ export function getStorageProvider() {
 	return providers.storage;
 }
 
+export function getDataProvider() {
+	return providers.data;
+}
+
 export function getOrganizationProvider() {
 	return providers.data.orgs;
 }

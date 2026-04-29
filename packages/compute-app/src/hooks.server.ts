@@ -236,6 +236,12 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		// already cached by the auth flow, Supabase will hit the user_profiles table.
 		// Use SYSTEM_CONTEXT for the profile load — ctx itself isn't built yet,
 		// and the user is loading their own profile during request bootstrap.
+		// Local equivalent of Supabase's `handle_new_auth_user` trigger:
+		// guarantees a `user-data.json` row exists for this user before any
+		// data-layer read or write. Idempotent and cheap; Supabase makes it a
+		// no-op (its DB trigger has already run).
+		await providers.data.ensureUser(SYSTEM_CONTEXT, user.id);
+
 		event.locals.user = user;
 		event.locals.profile =
 			(await providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ??
@@ -252,6 +258,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		if (token) {
 			const user = await providers.auth.verifyToken(token);
 			if (user) {
+				await providers.data.ensureUser(SYSTEM_CONTEXT, user.id);
 				event.locals.user = user;
 				event.locals.profile =
 					(await providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ??

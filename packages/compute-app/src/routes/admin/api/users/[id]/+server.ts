@@ -2,7 +2,11 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
-import { getOrganizationProvider, getPermissionStore } from '$lib/server/providers.server';
+import {
+	getDataProvider,
+	getOrganizationProvider,
+	getPermissionStore
+} from '$lib/server/providers.server';
 import { requireManageInstanceUsers } from '$lib/server/access.server';
 import { throwZodError } from '$lib/server/api-errors';
 import {
@@ -116,6 +120,11 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 	if (result === 'not_found') throw error(404, 'User not found');
 	if (result === 'not_supported')
 		throw error(501, 'User deletion not supported by this auth provider');
+
+	// Cascade: drop the user-data row. Supabase no-ops (FK cascade); local
+	// removes the row from `user-data.json`. Symmetric to the `ensureUser`
+	// hook in `hooks.server.ts`.
+	await getDataProvider().onUserDeleted(SYSTEM_CONTEXT, id);
 
 	return json({ success: true });
 };

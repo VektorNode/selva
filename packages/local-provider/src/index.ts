@@ -1,9 +1,9 @@
-// Auth
+// Auth — identity-only (auth-users.json)
 export { LocalAuthProvider } from './auth/LocalAuthProvider.js';
 export type { LocalAuthProviderConfig } from './auth/LocalAuthProvider.js';
 export { signHmacToken, verifyHmacToken } from './auth/hmac.js';
-export { hashPassword, verifyPasswordHash, createLocalUserMetaProvider } from './auth/users.js';
-export type { StoredUser, UsersFile, LocalUserMetaProvider } from './auth/users.js';
+export { hashPassword, verifyPasswordHash, createLocalAuthUserStore } from './auth/users.js';
+export type { StoredAuthUser, AuthUsersFile, LocalAuthUserStore } from './auth/users.js';
 
 // Data — class names use the `*Store` suffix to match the Supabase provider.
 export {
@@ -23,6 +23,11 @@ export type {
 	LocalProjectStoreOptions,
 	LocalShareLinkStoreOptions
 } from './data/index.js';
+
+// Per-user data layer (user-data.json) — keyed by user ID, paired with any
+// auth provider. The permission and profile stores both read/write here.
+export { createLocalUserDataStore } from './data/userData.js';
+export type { LocalUserDataStore, StoredUserData, UserDataFile } from './data/userData.js';
 
 // Storage
 export { LocalStorageProvider } from './storage/LocalStorageProvider.js';

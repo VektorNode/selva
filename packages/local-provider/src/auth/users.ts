@@ -1,29 +1,23 @@
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import { ProviderError } from '@selvajs/platform';
-import type { PlatformPermission } from '@selvajs/platform';
 import { readJsonFile, writeJsonFile } from '../data/fsJson.js';
 
-export type { PlatformPermission };
-
-export interface StoredUser {
+/**
+ * Identity-only on-disk shape. Per-user app state (permissions, profile,
+ * starred definitions, recent runs) lives in `user-data.json`, owned by
+ * `LocalDataProvider`. This split lets `LocalAuthProvider` be paired with any
+ * data provider, and any auth provider be paired with `LocalDataProvider`,
+ * without one stepping on the other.
+ */
+export interface StoredAuthUser {
 	id: string;
 	email: string;
-	displayName?: string;
-	/**
-	 * Platform-scope permissions. Typically empty.
-	 * Per-org permissions live on `OrgMember.permissions`, not here.
-	 */
-	platformPermissions: PlatformPermission[];
 	/**
 	 * "pbkdf2:sha256:<iterations>:<salt>:<hash>" — all binary values base64url encoded.
 	 * Null for OAuth-only users (allowlisted email, no password stored).
 	 */
 	passwordHash: string | null;
-	/** Definition GUIDs pinned by this user. */
-	starredDefinitions: string[];
-	/** Last N solve runs, newest first. Capped at MAX_RECENT_RUNS. */
-	recentRuns: import('@selvajs/platform').RecentRun[];
 	createdAt: string; // ISO 8601
 	/** ISO 8601 — most recent successful credential login or token verification. */
 	lastLoginAt?: string;
@@ -34,10 +28,8 @@ export interface StoredUser {
 /** Debounce window for lastLoginAt writes — skip if prior stamp is newer than this. */
 const LAST_LOGIN_DEBOUNCE_MS = 60_000;
 
-const MAX_RECENT_RUNS = 20;
-
-export interface UsersFile {
-	users: StoredUser[];
+export interface AuthUsersFile {
+	users: StoredAuthUser[];
 }
 
 // ============================================================================
@@ -81,59 +73,45 @@ export async function verifyPasswordHash(password: string, storedHash: string): 
 // Fresh object per call — `readJsonFile` returns its fallback by reference
 // when the file is missing, so a shared singleton would let one test (or
 // one process write) mutate state visible to the next read.
-const empty = (): UsersFile => ({ users: [] });
+const empty = (): AuthUsersFile => ({ users: [] });
 
-export interface LocalUserMetaProvider {
-	findByEmail(email: string): Promise<StoredUser | null>;
-	findById(id: string): Promise<StoredUser | null>;
-	listUsers(): Promise<Omit<StoredUser, 'passwordHash'>[]>;
+export interface LocalAuthUserStore {
+	findByEmail(email: string): Promise<StoredAuthUser | null>;
+	findById(id: string): Promise<StoredAuthUser | null>;
+	listUsers(): Promise<Omit<StoredAuthUser, 'passwordHash'>[]>;
 	/** password null = OAuth allowlist entry (no password stored) */
-	createUser(
-		email: string,
-		password: string | null,
-		platformPermissions: PlatformPermission[],
-		displayName?: string
-	): Promise<StoredUser>;
-	updatePlatformPermissions(id: string, platformPermissions: PlatformPermission[]): Promise<void>;
-	updateProfile(id: string, patch: { displayName?: string }): Promise<void>;
+	createUser(email: string, password: string | null): Promise<StoredAuthUser>;
 	setDisabled(id: string, disabled: boolean): Promise<void>;
 	touchLastLogin(id: string): Promise<void>;
-	starDefinition(id: string, definitionId: string): Promise<void>;
-	unstarDefinition(id: string, definitionId: string): Promise<void>;
-	recordRun(id: string, run: import('@selvajs/platform').RecentRun): Promise<void>;
 	deleteUser(id: string): Promise<void>;
 }
 
-export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMetaProvider {
+export function createLocalAuthUserStore(usersFilePath: string): LocalAuthUserStore {
 	return {
 		async findByEmail(email) {
-			const { users } = await readJsonFile<UsersFile>(usersFilePath, empty());
+			const { users } = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
 			return users.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? null;
 		},
 
 		async findById(id) {
-			const { users } = await readJsonFile<UsersFile>(usersFilePath, empty());
+			const { users } = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
 			return users.find((u) => u.id === id) ?? null;
 		},
 
 		async listUsers() {
-			const { users } = await readJsonFile<UsersFile>(usersFilePath, empty());
+			const { users } = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
 			return users.map(({ passwordHash: _ph, ...rest }) => rest);
 		},
 
-		async createUser(email, password, platformPermissions, displayName?) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
+		async createUser(email, password) {
+			const file = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
 			if (file.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
 				throw new ProviderError(`User with email "${email}" already exists`, 409);
 			}
-			const user: StoredUser = {
+			const user: StoredAuthUser = {
 				id: randomUUID(),
 				email,
-				...(displayName && { displayName }),
-				platformPermissions,
 				passwordHash: password !== null ? await hashPassword(password) : null,
-				starredDefinitions: [],
-				recentRuns: [],
 				createdAt: new Date().toISOString()
 			};
 			file.users.push(user);
@@ -141,24 +119,8 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 			return user;
 		},
 
-		async updatePlatformPermissions(id, platformPermissions) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
-			const user = file.users.find((u) => u.id === id);
-			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
-			user.platformPermissions = platformPermissions;
-			await writeJsonFile(usersFilePath, file);
-		},
-
-		async updateProfile(id, patch) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
-			const user = file.users.find((u) => u.id === id);
-			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
-			if (patch.displayName !== undefined) user.displayName = patch.displayName;
-			await writeJsonFile(usersFilePath, file);
-		},
-
 		async setDisabled(id, disabled) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
+			const file = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
 			user.disabled = disabled;
@@ -166,7 +128,7 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 		},
 
 		async touchLastLogin(id) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
+			const file = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
 			const user = file.users.find((u) => u.id === id);
 			if (!user) return;
 			const now = Date.now();
@@ -178,38 +140,8 @@ export function createLocalUserMetaProvider(usersFilePath: string): LocalUserMet
 			await writeJsonFile(usersFilePath, file);
 		},
 
-		async starDefinition(id, definitionId) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
-			const user = file.users.find((u) => u.id === id);
-			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
-			if (!user.starredDefinitions.includes(definitionId)) {
-				user.starredDefinitions.push(definitionId);
-				await writeJsonFile(usersFilePath, file);
-			}
-		},
-
-		async unstarDefinition(id, definitionId) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
-			const user = file.users.find((u) => u.id === id);
-			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
-			user.starredDefinitions = user.starredDefinitions.filter((d) => d !== definitionId);
-			await writeJsonFile(usersFilePath, file);
-		},
-
-		async recordRun(id, run) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
-			const user = file.users.find((u) => u.id === id);
-			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
-			// Remove older entry for same definition, then prepend newest
-			user.recentRuns = [
-				run,
-				...user.recentRuns.filter((r) => r.definitionId !== run.definitionId)
-			].slice(0, MAX_RECENT_RUNS);
-			await writeJsonFile(usersFilePath, file);
-		},
-
 		async deleteUser(id) {
-			const file = await readJsonFile<UsersFile>(usersFilePath, empty());
+			const file = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
 			const before = file.users.length;
 			file.users = file.users.filter((u) => u.id !== id);
 			if (file.users.length === before) throw new ProviderError(`User "${id}" not found`, 404);

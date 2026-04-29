@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import { runUserProfileStoreConformance } from '@selvajs/platform/testing';
 import { LocalAuthProvider } from '../../auth/LocalAuthProvider.js';
 import { LocalUserProfileProvider } from '../LocalUserProfileProvider.js';
+import { createLocalUserDataStore } from '../../data/userData.js';
 
 describe('LocalUserProfileProvider', () => {
 	let tempDir: string;
@@ -20,16 +21,20 @@ describe('LocalUserProfileProvider', () => {
 	runUserProfileStoreConformance({
 		name: 'LocalUserProfileProvider',
 		createStore: async () => {
-			const usersFilePath = path.join(tempDir, 'users.json');
 			const auth = new LocalAuthProvider({
 				hmacSecret: 'test-secret',
-				usersFilePath
+				usersFilePath: path.join(tempDir, 'auth-users.json')
 			});
-			const store = new LocalUserProfileProvider(usersFilePath);
+			const userDataPath = path.join(tempDir, 'user-data.json');
+			const userData = createLocalUserDataStore(userDataPath);
+			const store = new LocalUserProfileProvider(userDataPath);
 			return {
 				store,
 				seedUser: async (email: string) => {
+					// Real user creation: auth-users row + user-data row, mirroring
+					// what `hooks.server.ts` does in production via `ensureUser`.
 					const user = await auth.passwordAuth.createUserWithPassword(email, 'pw');
+					await userData.ensure(user.id);
 					return user;
 				}
 			};

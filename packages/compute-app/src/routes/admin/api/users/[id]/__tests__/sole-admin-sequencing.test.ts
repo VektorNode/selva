@@ -41,7 +41,7 @@ describe('§2 sole-admin invariant — DELETE /admin/api/users/[id]', () => {
 		expect((res.json as { message: string }).message).toMatch(/last instance admin/i);
 
 		// Auth provider was NOT called — Alice still exists.
-		const stillThere = await tp.usersFile.findById(alice.id);
+		const stillThere = await tp.authUsers.findById(alice.id);
 		expect(stillThere).not.toBeNull();
 	});
 
@@ -55,7 +55,7 @@ describe('§2 sole-admin invariant — DELETE /admin/api/users/[id]', () => {
 		const res = await call(DELETE, { locals: aliceLocals, params: { id: bob.id } });
 		expect(res.status).toBe(200);
 
-		const bobAfter = await tp.usersFile.findById(bob.id);
+		const bobAfter = await tp.authUsers.findById(bob.id);
 		expect(bobAfter).toBeNull();
 	});
 });
@@ -71,7 +71,7 @@ describe('§2 sole-admin invariant — POST /admin/api/users/[id]/disable', () =
 		expect(res.status).toBe(409);
 		expect((res.json as { message: string }).message).toMatch(/last instance admin/i);
 
-		const stillEnabled = await tp.usersFile.findById(alice.id);
+		const stillEnabled = await tp.authUsers.findById(alice.id);
 		expect(stillEnabled?.disabled).not.toBe(true);
 	});
 
@@ -85,7 +85,7 @@ describe('§2 sole-admin invariant — POST /admin/api/users/[id]/disable', () =
 		const res = await call(DISABLE, { locals: aliceLocals, params: { id: bob.id } });
 		expect(res.status).toBe(200);
 
-		const bobAfter = await tp.usersFile.findById(bob.id);
+		const bobAfter = await tp.authUsers.findById(bob.id);
 		expect(bobAfter?.disabled).toBe(true);
 	});
 });
