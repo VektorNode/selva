@@ -333,7 +333,7 @@
 						<Button
 							size="sm"
 							variant="outline"
-							onclick={() => goto(`/projects?focus=${data.project.id}`)}
+							onclick={() => goto(`/projects?project=${data.project.slug}`)}
 						>
 							Open in projects
 						</Button>

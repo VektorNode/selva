@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Card, SectionHeader } from '@selvajs/ui';
-	import { Users, Server, LayoutDashboard, ArrowRight, GitCommit, Building2 } from '@lucide/svelte';
+	import { Users, Server, LayoutDashboard, GitCommit, Building2 } from '@lucide/svelte';
+	import StatCard from '$lib/components/StatCard.svelte';
 	import type { PlatformPermission } from '@selvajs/platform';
 
 	interface PageData {
@@ -72,23 +73,7 @@
 
 	<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 		{#each tiles as tile (tile.href)}
-			{@const Icon = tile.icon}
-			<a href={tile.href} class="block">
-				<Card.Root class="hover:bg-accent/40 h-full transition-colors">
-					<Card.Content class="flex items-center justify-between gap-4 pt-6">
-						<div class="flex items-center gap-4">
-							<div class="bg-accent text-accent-foreground rounded-md p-2.5">
-								<Icon class="h-4 w-4" />
-							</div>
-							<div>
-								<p class="text-lg leading-tight font-semibold">{tile.value}</p>
-								<p class="text-muted-foreground text-xs">{tile.label}</p>
-							</div>
-						</div>
-						<ArrowRight class="text-muted-foreground h-4 w-4 shrink-0" />
-					</Card.Content>
-				</Card.Root>
-			</a>
+			<StatCard {...tile} />
 		{/each}
 	</div>
 
