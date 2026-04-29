@@ -29,7 +29,7 @@ One role, four permissions. All instance-wide.
 | Permission              | What it grants                                                                                          |
 | ----------------------- | ------------------------------------------------------------------------------------------------------- |
 | `instance_admin`        | Superuser. Implies every other permission, everywhere.                                                  |
-| `manage_compute`        | Configure the instance-wide Rhino.Compute pool (default + named servers). See §3 for per-org overrides. |
+| `manage_compute`        | Manage platform compute servers: create/edit/delete platform servers, set each server's per-org sharing (`sharedWith`), and set the global `defaultServerId`. See §3. |
 | `manage_instance_users` | Disable/enable any user on the instance.                                                                |
 | `manage_updates`        | Run system updates.                                                                                     |
 
@@ -73,9 +73,9 @@ This is a deliberate compliance decision (least privilege / GDPR / SOC 2): blank
 | `manage_org_members` | Invite, remove members; grant/revoke the grantable permissions (`manage_definitions`, `manage_projects`). Owner/admin only — never grantable to `member`. **Does NOT include role changes** — promoting a `member` to `admin`, demoting an `admin`, or transferring ownership is owner-only (see role table above and §10).                                                                                                                      |
 | `manage_definitions` | Upload/edit definitions in this org (further gated by project role).                                                                                                                                                        |
 | `manage_projects`    | Create projects in this org. (Editing/deleting gated by project role.)                                                                                                                                                      |
-| `manage_org_compute` | Configure this org's compute server override (BYO compute). Owner/admin only. **Gated by platform flag `ALLOW_ORG_COMPUTE_OVERRIDE`**; when off, this permission is effectively inert and all solves use the instance pool. |
+| `manage_org_compute` | Create/edit/delete this org's own compute servers (`scope: 'org'`) and set this org's `orgDefaults[orgId]`. Owner/admin only. **Gated by platform flag `ALLOW_ORG_COMPUTE_OVERRIDE`**; when off, this permission is effectively inert — orgs use platform servers shared with them, with the global `defaultServerId` as the baseline. See §3. |
 
-> **`manage_compute` stays at platform scope.** Instance-wide compute is the platform admin's concern. `manage_org_compute` is a separate, org-scoped permission that only grants authority over the org's _override_, never the instance pool.
+> **`manage_compute` stays at platform scope.** Platform-server administration — creating servers, choosing which orgs see each one, and setting the global default — is the platform admin's concern. `manage_org_compute` is a separate, org-scoped permission that only grants authority over the org's own servers and the org's default selection, never platform servers.
 
 ### Invites
 
@@ -83,23 +83,55 @@ This is a deliberate compliance decision (least privilege / GDPR / SOC 2): blank
 - Once in an org, project membership is managed within-org (see §5).
 - Cross-org project guests are **out of scope for now.** Deferred (see §12).
 
-### Compute (BYO override)
+### Compute (servers, sharing, defaults)
 
-Each instance has a default compute pool configured by `instance_admin` (§2). Orgs can optionally override with their own Rhino.Compute server:
+Compute servers are owned by one of two scopes — never both. The shape is a discriminated union, not a flag:
 
-- **Default:** no override → the org's solves use the instance pool.
-- **Override:** org `owner`/`admin` with `manage_org_compute` configures a custom Rhino.Compute URL + key → the org's solves route there instead.
-- **Platform gate:** overrides only work when `ALLOW_ORG_COMPUTE_OVERRIDE=true` at the platform level. Self-hosted single-tenant and early SaaS can leave this off — everyone shares the one pool.
+- **Platform server** (`scope: 'platform'`) — created by `manage_compute`. Carries a `sharedWith: 'all' | string[]` field controlling which orgs can see/use it. `'all'` is the default in `tenancy: 'single'`; in `tenancy: 'multi'` admins assign explicitly.
+- **Org-private server** (`scope: 'org'`, `ownerOrgId: string`) — created by an org `owner`/`admin` with `manage_org_compute`. Visible only to that org. Gated by the platform flag `ALLOW_ORG_COMPUTE_OVERRIDE`; when off, this scope cannot be created and any existing rows are inert.
+
+**Defaults are layered:**
+
+- **`defaultServerId`** (global) — set by `manage_compute`. Must reference a platform server. **Always usable by every org regardless of `sharedWith`** — this is the baseline server "any generic user uses." Acts as the floor of the system: every org sees at least this one.
+- **`orgDefaults[orgId]`** (per-org override) — set by org `owner`/`admin` with `manage_org_compute`. Must reference a server visible to that org (see visibility rule below). Only meaningful when the org has more than the global default to choose from — i.e., either the admin shared additional platform servers with them, or the org has its own org-private servers (`ALLOW_ORG_COMPUTE_OVERRIDE` on).
+
+A platform server with `sharedWith: []` that is also not the global default is **dormant** — admin-only, unusable for solves until assigned or promoted.
+
+**Visibility rule** (pure function, used by every picker and the resolver):
+
+```
+serversVisibleTo(orgId) =
+  platformServers.filter(s =>
+    s.id === defaultServerId ||
+    s.sharedWith === 'all' ||
+    s.sharedWith.includes(orgId)
+  )
+  ∪ orgServers.filter(s => s.ownerOrgId === orgId)   // only when ALLOW_ORG_COMPUTE_OVERRIDE
+```
 
 **Resolution order** (pure function, no I/O), narrowest wins:
 
-1. If the definition has `computeServerId` set → use that server. Lets a single heavy definition route to beefier hardware while light ones stay on cheap servers.
-2. Else, if the project's org has a compute override **and** the platform flag is on → use the override.
-3. Otherwise → use the instance default pool.
+1. If the definition has `computeServerId` set **and** that server is in `serversVisibleTo(project.orgId)` → use that server. Lets a single heavy definition route to beefier hardware. A pin to a no-longer-visible server falls through (defensive — admin may have un-shared the server since the pin was set).
+2. Else, if `orgDefaults[project.orgId]` is set → use that.
+3. Otherwise → use the global `defaultServerId`.
 
-The override is never instance-wide. An org misconfiguring their compute (wrong URL, bad key) only affects that org's solves. The instance pool is the `instance_admin`'s domain and cannot be touched by org admins under any circumstance.
+An org misconfiguring its own server or default only affects that org's solves. Platform-server administration (creating servers, sharing, setting the global default) is exclusively the `manage_compute` holder's domain and cannot be touched by org admins under any circumstance.
 
-`ComputeServerConfig` carries an optional `orgId` field: null rows are instance-pool servers, non-null rows are that org's override. `Definition.computeServerId` is an optional per-definition pin to one of those rows. Stores filter by scope on read; the `resolveComputeServerForOrg(instance, org, opts)` helper applies the precedence rule with the platform flag.
+**Type shape:**
+
+```ts
+type ComputeServerConfig =
+  | { scope: 'platform'; id; label; serverUrl; sharedWith: 'all' | string[]; /* + auth + timeouts */ }
+  | { scope: 'org';      id; label; serverUrl; ownerOrgId: string;           /* + auth + timeouts */ };
+
+interface ComputeConfig {
+  servers: ComputeServerConfig[];
+  defaultServerId: string;                  // must reference a platform server
+  orgDefaults: Record<string, string>;      // orgId → serverId; serverId must be visible to that org
+}
+```
+
+`Definition.computeServerId` is an optional per-definition pin to any server visible to the definition's project's org.
 
 ---
 
@@ -684,8 +716,12 @@ Walk through these to confirm the model behaves as expected.
 | Alice mints a `draft`-channel share link for QA review. The reviewer (no account) opens it and solves the unpublished version.                                 | **OK.** Token grants the pinned channel only. The reviewer cannot switch to `live` from the same token.                                                                            |
 | Alice's share link gets posted publicly and starts seeing a flood of solves. Alice clicks **Revoke**.                                                          | The link 401s on next use. Existing in-flight solves complete; subsequent ones fail at token resolution.                                                                           |
 | Alice deletes the definition that a share link points at.                                                                                                      | Token resolution fails closed (`def.deletedAt IS NULL` check). Hard delete cascades the link out.                                                                                  |
-| Acme org configures a BYO compute server; instance has `ALLOW_ORG_COMPUTE_OVERRIDE=true`.                                                                      | Solves on Acme projects route to Acme's compute. Solves on other orgs' projects continue to use the instance pool.                                                                 |
-| `instance_admin` edits compute config in their personal org context.                                                                                           | Edits the **instance pool** regardless of `actingOrgId` — the `/admin/api/compute` route explicitly scopes to instance.                                                            |
+| Acme org configures an org-private compute server and sets it as `orgDefaults[acme]`; platform has `ALLOW_ORG_COMPUTE_OVERRIDE=true`.                          | Solves on Acme projects route to Acme's server. Solves on other orgs' projects continue to use the global default (or that org's own override). |
+| `instance_admin` shares an existing platform server with Acme org by adding Acme to `sharedWith`.                                                              | Acme members see the server in their picker and can pin definitions to it; Acme owner can promote it to `orgDefaults[acme]`. The server remains a platform-owned row — Acme cannot edit or delete it. |
+| `instance_admin` edits platform compute config (creates a server, changes sharing, changes global default) while their `actingOrgId` is set.                   | Edits the **platform-server set** regardless of `actingOrgId` — `/admin/api/compute` is platform-scope. The `actingOrgId` is irrelevant on this route. |
+| Acme org owner tries to set `orgDefaults[acme]` to a platform server that has `sharedWith: []` and is not the global default.                                  | **403/400.** That server is not in `serversVisibleTo(acme)`; the route rejects. Admin must share it first. |
+| `instance_admin` revokes Acme's access to a platform server that is currently `orgDefaults[acme]`.                                                             | The override silently falls through. Acme's solves use the global `defaultServerId` until Acme picks a different visible server. (No cascade rewrite — defensive resolver behavior.) |
+| Definition is pinned to a server that the admin later un-shares from the project's org.                                                                        | Pin is ignored at solve time; falls through to `orgDefaults[orgId]` then global default. UI surfaces the stale pin so an editor can clear or re-pick it. |
 | Sole `instance_admin` unchecks their own `Instance Admin (all)` checkbox.                                                                                      | **409.** `IPlatformPermissionStore.set` returns `last_admin`; UI mirror disables the checkbox preemptively. Promote another user first, then demote.                               |
 | `instance_admin` deletes the only other user, who also holds `instance_admin`.                                                                                 | Allowed — the actor still holds it. The DELETE handler consults `countInstanceAdminsExcluding(targetId)` first; with the actor still admin, the count is ≥1 and the call proceeds. |
 | Sole `instance_admin` tries to delete or disable themselves.                                                                                                   | **409.** The route handler's `countInstanceAdminsExcluding(self)` returns 0 and surfaces `last_admin` before reaching the auth provider.                                           |
