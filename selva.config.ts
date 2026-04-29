@@ -19,7 +19,7 @@
 
 import { defineConfig } from '@selvajs/platform';
 import * as local from '@selvajs/local-provider';
-// import * as supa from '@selvajs/supabase-provider';
+import * as supa from '@selvajs/supabase-provider';
 
 export default defineConfig((env) => ({
 	// ── Product decisions ─────────────────────────────────────────────────
@@ -31,12 +31,12 @@ export default defineConfig((env) => ({
 	},
 
 	// ── Provider (switch the import + these three lines to change backend) ─
-	auth: local.LocalAuthProvider.fromEnv(env),
-	data: local.LocalDataProvider.fromEnv(env),
-	storage: local.LocalStorageProvider.fromEnv(env)
+	// auth: local.LocalAuthProvider.fromEnv(env),
+	// data: local.LocalDataProvider.fromEnv(env),
+	// storage: local.LocalStorageProvider.fromEnv(env)
 
 	// Supabase:
-	// auth: supa.SupabaseAuthProvider.fromEnv(env),
-	// data: supa.SupabaseDataProvider.fromEnv(env),
-	// storage: supa.SupabaseStorageProvider.fromEnv(env)
+	auth: supa.SupabaseAuthProvider.fromEnv(env),
+	data: supa.SupabaseDataProvider.fromEnv(env),
+	storage: supa.SupabaseStorageProvider.fromEnv(env)
 }));

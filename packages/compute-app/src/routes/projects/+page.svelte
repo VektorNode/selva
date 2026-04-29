@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
+	import { page } from '$app/stores';
 	import {
 		AlertDialog,
 		Button,
@@ -42,6 +43,16 @@
 	let searchQuery = $state('');
 	let activeProjectId = $state<string | null>(null);
 	let viewMode = $state<'grid' | 'list'>('grid');
+
+	$effect(() => {
+		const projectSlug = $page.url.searchParams.get('project');
+		if (projectSlug) {
+			const project = data.projects.find((p) => p.slug === projectSlug);
+			if (project) {
+				activeProjectId = project.id;
+			}
+		}
+	});
 
 	// Panels / dialogs
 	let drawerRecord = $state<DefinitionRecord | null>(null);
@@ -268,7 +279,15 @@
 		records={data.records}
 		{activeProjectId}
 		canManageProjects={data.canManageProjects}
-		onSelect={(id) => (activeProjectId = id)}
+		onSelect={(id) => {
+			activeProjectId = id;
+			const project = data.projects.find((p) => p.id === id);
+			if (project) {
+				const params = new URLSearchParams($page.url.search);
+				params.set('project', project.slug);
+				window.history.replaceState(null, '', `?${params}`);
+			}
+		}}
 		onCreate={createProject}
 	/>
 
