@@ -56,3 +56,12 @@ export function getPermissionStore() {
 export function getPlatformProjectGrantStore() {
 	return providers.data.platformProjectGrants;
 }
+
+/**
+ * Optional. Null on deployments where the audit log isn't queryable
+ * (local-provider stays on `NoopEventSink`; the read-side has nothing to
+ * surface). Routes that consume this MUST handle null and degrade their UI.
+ */
+export function getAuditQuery() {
+	return providers.auditQuery ?? null;
+}
