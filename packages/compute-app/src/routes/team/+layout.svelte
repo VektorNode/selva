@@ -7,7 +7,8 @@
 		Activity,
 		Link2,
 		SlidersHorizontal,
-		RotateCcw
+		RotateCcw,
+		Server
 	} from '@lucide/svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import type { Organization, OrgPermission } from '@selvajs/platform';
@@ -66,6 +67,13 @@
 				icon: Link2,
 				match: 'prefix' as const,
 				show: can('manage_definitions')
+			},
+			{
+				href: '/team/compute',
+				label: 'Compute',
+				icon: Server,
+				match: 'prefix' as const,
+				show: can('manage_org_compute')
 			},
 			{
 				href: '/team/settings',

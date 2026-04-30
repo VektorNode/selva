@@ -7,7 +7,7 @@ import {
 	getUserProfileStore
 } from '$lib/server/providers.server';
 import { projectAccessInputFromRows } from '$lib/server/access.server';
-import { hasPermission, canView, canEdit } from '@selvajs/platform';
+import { hasPermission, canView, canEdit, serversVisibleTo } from '@selvajs/platform';
 import type {
 	DefinitionRecord,
 	DefinitionVersion,
@@ -151,10 +151,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 				.map((u) => ({ ...u, displayName: displayById.get(u.id) }));
 		}
 
+		// Picker shows only servers visible to the user's acting org —
+		// platform servers shared with this org (or with `'all'`, or the
+		// global default) plus this org's org-private servers.
+		const computeServers = serversVisibleTo(computeConfig, ctx.actingOrgId);
+
 		return {
 			projects,
 			records,
-			computeServers: computeConfig.servers,
+			computeServers,
 			users,
 			canManageProjects
 		};

@@ -613,6 +613,7 @@ Org-level only. The shell admits **org** perms exclusively — platform perms (`
 | `/team/reclaim`   | `manage_org_members` (proxy for org owner/admin per §3); load-bearing check is `canReclaim` (§5) on the API endpoint |
 | `/team/activity`  | Any org membership                                                          |
 | `/team/shares`    | `manage_definitions`                                                        |
+| `/team/compute`   | `manage_org_compute`. Server-add controls hidden when `ALLOW_ORG_COMPUTE_OVERRIDE` is off; default-selection still works against shared platform servers. |
 | `/team/settings`  | `manage_org_members`                                                        |
 
 ### Auth flow (`/auth/*`)

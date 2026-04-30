@@ -113,7 +113,9 @@ Instance (one Selva deployment)
  │                    ├── allowSolve, maxSolves, expiresAt, revokedAt
  │                    └── tokenHash (HMAC; raw shown once at mint)
  │
- └── ComputeServerConfig[]  (instance pool, orgId = null)
+ └── ComputeServerConfig[]  (platform servers + org-private servers)
+       ├── PlatformComputeServer  (scope: 'platform', sharedWith: 'all' | string[])
+       └── OrgComputeServer       (scope: 'org', ownerOrgId: string)
 ```
 
 ### Key invariants
@@ -201,13 +203,16 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
 
 ### 4.8 ComputeServerConfig
 
-- Configuration of a Rhino.Compute endpoint: `(id, orgId?, label, serverUrl, apiKey?, timeoutMs?, retryCount?)`.
+- Discriminated by `scope`:
+  - `PlatformComputeServer` — `(id, scope: 'platform', sharedWith: 'all' | string[], label, serverUrl, apiKey?, timeoutMs?, retryCount?)`. Created by `manage_compute`.
+  - `OrgComputeServer` — `(id, scope: 'org', ownerOrgId, label, serverUrl, apiKey?, …)`. Created by an org owner/admin with `manage_org_compute`. Gated by `ALLOW_ORG_COMPUTE_OVERRIDE`.
+- **Defaults are layered:** global `defaultServerId` (must reference a platform server) plus per-org `orgDefaults[orgId]`. The global default is *always usable* by every org regardless of `sharedWith` — the "baseline" floor of the system.
 - **Three-tier resolution**, narrowest wins:
-  1. **Per-definition** (`Definition.computeServerId`) — for routing individual heavy definitions to beefier (more expensive) hardware while light ones stay on cheap servers.
-  2. **Per-org** override (`ComputeServerConfig.orgId = <org>`) — for the future SaaS deployment where companies bring their own servers alongside Selva's defaults. Configured by org owner/admin with `manage_org_compute`.
-  3. **Instance pool** (`ComputeServerConfig.orgId = null`) — configured by `instance_admin`. Always the fallback.
-- The override can never affect the instance pool. An org misconfiguring their compute only breaks their own solves.
-- **`ALLOW_ORG_COMPUTE_OVERRIDE` flag** is enforced in two places: [`resolve.server.ts`](../src/lib/server/compute/resolve.server.ts) skips the per-org override during resolution when the flag is off, and [`/api/org/compute`](../src/routes/api/org/compute/+server.ts) returns 403 when callers try to configure one. With single-tenant self-hosted as the current target the flag is typically off, collapsing to the instance pool; flipping it on is what unlocks BYO compute.
+  1. **Per-definition** (`Definition.computeServerId`) — pin to a specific server. Falls through silently if the pinned server is no longer visible to the project's org.
+  2. **Per-org default** (`orgDefaults[orgId]`) — set by the org owner from servers visible to that org.
+  3. **Global default** (`defaultServerId`) — set by `manage_compute`.
+- An org can only see/use platform servers shared with it (`'all'`, or its id in `sharedWith`, or the global default) plus servers it owns. Helper: `serversVisibleTo(config, orgId)` in [`@selvajs/platform`](../../platform/src/computeServer/utils.ts).
+- **`ALLOW_ORG_COMPUTE_OVERRIDE` flag** gates org-private server creation and per-org default selection (`/api/org/compute` returns 403 when off). Platform servers and the global default work identically regardless of the flag — single-tenant self-hosted typically leaves it off, with the admin sharing platform servers to the one org.
 
 ### 4.9 UserProfile
 

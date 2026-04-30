@@ -1,120 +1,204 @@
-import type {
-	IComputeServerStore,
-	ComputeConfig,
-	ComputeServerConfig,
-	RequestContext
+import {
+	isOrgServer,
+	isPlatformServer,
+	type IComputeServerStore,
+	type ComputeConfig,
+	type ComputeServerConfig,
+	type RequestContext
 } from '@selvajs/platform';
 import { ProviderError } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 
 /**
  * Compute-server config backed by three tables:
- *   - `compute_servers`: one row per configured Rhino.Compute instance.
- *     `org_id NULL` = platform-wide (cross-org) entry.
- *   - `compute_server_defaults`: per-org default selection.
- *   - `compute_server_platform_default`: single-row sentinel for the
- *     platform-wide default (Postgres can't use NULL in a PK, so we
- *     use a boolean singleton).
+ *   - `compute_servers`: one row per server. `scope = 'platform' | 'org'`.
+ *     Platform rows carry a `shared_with_all` flag + `compute_server_shares`
+ *     allowlist; org rows carry `owner_org_id`.
+ *   - `compute_server_shares`: many-to-many for platform servers shared
+ *     with specific orgs (when `shared_with_all = false`).
+ *   - `compute_server_org_defaults`: per-org `orgDefaults[orgId]` choice.
+ *   - `compute_server_platform_default`: single-row sentinel for the global
+ *     `defaultServerId`.
  *
- * `getConfig` / `saveConfig` take a `RequestContext`. If `ctx.actingOrgId` is
- * set, we scope to that org; otherwise we return the platform-wide view.
- * Matches what the local provider does today.
- *
- * `saveConfig` replaces the entire server list for the active scope.
- * Simplest correct behavior — compute-server config is admin-edited and
- * rare, atomic-ness is not worth a transaction RPC.
+ * `getConfig` returns the full doc; the visibility predicate is applied by
+ * callers (resolver, page loaders) using helpers in `@selvajs/platform`.
  */
 export class SupabaseComputeServerStore implements IComputeServerStore {
 	constructor(private readonly clients: ClientBundle) {}
 
 	async getConfig(ctx: RequestContext): Promise<ComputeConfig> {
 		const client = this.clients.forRequest(ctx);
-		const orgId = ctx.actingOrgId ?? null;
 
-		const serversQuery = orgId
-			? client.from('compute_servers').select('*').eq('org_id', orgId)
-			: client.from('compute_servers').select('*').is('org_id', null);
-
-		const { data: servers, error: serversError } = await serversQuery;
-		if (serversError) throw mapError(serversError);
-
-		let defaultServerId: string | undefined;
-		if (orgId) {
-			const { data: d, error: dError } = await client
-				.from('compute_server_defaults')
-				.select('default_server_id')
-				.eq('org_id', orgId)
-				.maybeSingle();
-			if (dError) throw mapError(dError);
-			defaultServerId = d?.default_server_id ?? undefined;
-		} else {
-			const { data: d, error: dError } = await client
+		const [serversRes, sharesRes, orgDefRes, platDefRes] = await Promise.all([
+			client.from('compute_servers').select('*'),
+			client.from('compute_server_shares').select('*'),
+			client.from('compute_server_org_defaults').select('*'),
+			client
 				.from('compute_server_platform_default')
 				.select('default_server_id')
 				.eq('singleton', true)
-				.maybeSingle();
-			if (dError) throw mapError(dError);
-			defaultServerId = d?.default_server_id ?? undefined;
+				.maybeSingle()
+		]);
+
+		if (serversRes.error) throw mapError(serversRes.error);
+		if (sharesRes.error) throw mapError(sharesRes.error);
+		if (orgDefRes.error) throw mapError(orgDefRes.error);
+		if (platDefRes.error) throw mapError(platDefRes.error);
+
+		// Build per-server `sharedWith` allowlists from the join table.
+		const sharedByServer = new Map<string, string[]>();
+		for (const row of sharesRes.data ?? []) {
+			const list = sharedByServer.get(row.server_id) ?? [];
+			list.push(row.org_id);
+			sharedByServer.set(row.server_id, list);
+		}
+
+		const servers = (serversRes.data ?? []).map((row) => rowToServer(row, sharedByServer));
+
+		const orgDefaults: Record<string, string> = {};
+		for (const row of orgDefRes.data ?? []) {
+			if (row.default_server_id) orgDefaults[row.org_id] = row.default_server_id;
 		}
 
 		return {
-			servers: (servers ?? []).map(rowToServer),
-			defaultServerId
+			servers,
+			defaultServerId: platDefRes.data?.default_server_id ?? undefined,
+			orgDefaults
 		};
 	}
 
-	async saveConfig(ctx: RequestContext, config: ComputeConfig): Promise<void> {
+	async savePlatformServers(
+		ctx: RequestContext,
+		servers: ComputeServerConfig[],
+		defaultServerId: string | undefined
+	): Promise<void> {
 		const client = this.clients.forRequest(ctx);
-		const orgId = ctx.actingOrgId ?? null;
+		const platformOnly = servers.filter(isPlatformServer);
 
-		// Replace-all: delete current rows in scope, insert the new set.
-		// Not atomic across PostgREST calls — acceptable here because
-		// compute-server config is admin-edited and rare.
-		const delQuery = orgId
-			? client.from('compute_servers').delete().eq('org_id', orgId)
-			: client.from('compute_servers').delete().is('org_id', null);
-		const { error: delError } = await delQuery;
-		if (delError) throw mapError(delError);
+		// Replace-all of platform rows.
+		const { error: delErr } = await client
+			.from('compute_servers')
+			.delete()
+			.eq('scope', 'platform');
+		if (delErr) throw mapError(delErr);
 
-		if (config.servers.length > 0) {
-			const { error: insError } = await client
+		if (platformOnly.length > 0) {
+			const { error: insErr } = await client
 				.from('compute_servers')
-				.insert(config.servers.map((s) => serverToRow(s, orgId)));
-			if (insError) throw mapError(insError);
+				.insert(platformOnly.map(serverToRow));
+			if (insErr) throw mapError(insErr);
+
+			// Rebuild the share rows for any non-`all` platform servers.
+			const shareRows = platformOnly.flatMap((s) =>
+				s.sharedWith === 'all'
+					? []
+					: s.sharedWith.map((orgId) => ({ server_id: s.id, org_id: orgId }))
+			);
+			if (shareRows.length > 0) {
+				const { error: shErr } = await client.from('compute_server_shares').insert(shareRows);
+				if (shErr) throw mapError(shErr);
+			}
 		}
 
-		const defaultId = config.defaultServerId ?? null;
-		if (orgId) {
+		const { error: defErr } = await client
+			.from('compute_server_platform_default')
+			.update({ default_server_id: defaultServerId ?? null })
+			.eq('singleton', true);
+		if (defErr) throw mapError(defErr);
+	}
+
+	async saveOrgServers(
+		ctx: RequestContext,
+		orgId: string,
+		servers: ComputeServerConfig[],
+		defaultServerId?: string | null
+	): Promise<void> {
+		const client = this.clients.forRequest(ctx);
+		const orgOnly = servers
+			.filter(isOrgServer)
+			.map((s) => ({ ...s, ownerOrgId: orgId }));
+
+		const { error: delErr } = await client
+			.from('compute_servers')
+			.delete()
+			.eq('scope', 'org')
+			.eq('owner_org_id', orgId);
+		if (delErr) throw mapError(delErr);
+
+		if (orgOnly.length > 0) {
+			const { error: insErr } = await client
+				.from('compute_servers')
+				.insert(orgOnly.map(serverToRow));
+			if (insErr) throw mapError(insErr);
+		}
+
+		if (defaultServerId === null) {
 			const { error } = await client
-				.from('compute_server_defaults')
-				.upsert({ org_id: orgId, default_server_id: defaultId });
+				.from('compute_server_org_defaults')
+				.delete()
+				.eq('org_id', orgId);
 			if (error) throw mapError(error);
-		} else {
+		} else if (typeof defaultServerId === 'string') {
 			const { error } = await client
-				.from('compute_server_platform_default')
-				.update({ default_server_id: defaultId })
-				.eq('singleton', true);
+				.from('compute_server_org_defaults')
+				.upsert({ org_id: orgId, default_server_id: defaultServerId });
 			if (error) throw mapError(error);
 		}
+	}
+
+	async setOrgDefault(
+		ctx: RequestContext,
+		orgId: string,
+		serverId: string | null
+	): Promise<void> {
+		const client = this.clients.forRequest(ctx);
+		if (serverId === null) {
+			const { error } = await client
+				.from('compute_server_org_defaults')
+				.delete()
+				.eq('org_id', orgId);
+			if (error) throw mapError(error);
+			return;
+		}
+		const { error } = await client
+			.from('compute_server_org_defaults')
+			.upsert({ org_id: orgId, default_server_id: serverId });
+		if (error) throw mapError(error);
 	}
 
 	async deleteByOrg(ctx: RequestContext, orgId: string): Promise<void> {
 		const client = this.clients.forRequest(ctx);
-		// Defaults first — its FK references compute_servers with ON DELETE SET
-		// NULL, but we delete the row outright so the column becomes irrelevant.
+
+		// orgDefaults entry — FK on org_id cascades from orgs(id), but org
+		// soft-delete doesn't trigger the cascade, so do it explicitly.
 		const { error: defErr } = await client
-			.from('compute_server_defaults')
+			.from('compute_server_org_defaults')
 			.delete()
 			.eq('org_id', orgId);
 		if (defErr) throw mapError(defErr);
-		const { error: srvErr } = await client.from('compute_servers').delete().eq('org_id', orgId);
+
+		// Org-private servers owned by this org.
+		const { error: srvErr } = await client
+			.from('compute_servers')
+			.delete()
+			.eq('scope', 'org')
+			.eq('owner_org_id', orgId);
 		if (srvErr) throw mapError(srvErr);
+
+		// Strip this org from any platform server share allowlist.
+		const { error: shErr } = await client
+			.from('compute_server_shares')
+			.delete()
+			.eq('org_id', orgId);
+		if (shErr) throw mapError(shErr);
 	}
 }
 
 interface ServerRow {
 	id: string;
-	org_id: string | null;
+	scope: 'platform' | 'org';
+	owner_org_id: string | null;
+	shared_with_all: boolean;
 	label: string;
 	server_url: string;
 	api_key: string | null;
@@ -122,27 +206,53 @@ interface ServerRow {
 	retry_count: number | null;
 }
 
-function rowToServer(row: ServerRow): ComputeServerConfig {
-	return {
+function rowToServer(
+	row: ServerRow,
+	sharedByServer: Map<string, string[]>
+): ComputeServerConfig {
+	const common = {
 		id: row.id,
-		orgId: row.org_id,
 		label: row.label,
 		serverUrl: row.server_url,
 		apiKey: row.api_key ?? undefined,
 		timeoutMs: row.timeout_ms ?? undefined,
 		retryCount: row.retry_count ?? undefined
 	};
+	if (row.scope === 'platform') {
+		return {
+			...common,
+			scope: 'platform',
+			sharedWith: row.shared_with_all ? 'all' : (sharedByServer.get(row.id) ?? [])
+		};
+	}
+	if (!row.owner_org_id) {
+		throw new Error(`compute_servers row ${row.id} has scope='org' but null owner_org_id`);
+	}
+	return { ...common, scope: 'org', ownerOrgId: row.owner_org_id };
 }
 
-function serverToRow(s: ComputeServerConfig, orgId: string | null): ServerRow {
-	return {
+function serverToRow(s: ComputeServerConfig): ServerRow {
+	const base = {
 		id: s.id,
-		org_id: orgId,
 		label: s.label,
 		server_url: s.serverUrl,
 		api_key: s.apiKey ?? null,
 		timeout_ms: s.timeoutMs ?? null,
 		retry_count: s.retryCount ?? null
+	};
+	if (isPlatformServer(s)) {
+		return {
+			...base,
+			scope: 'platform',
+			owner_org_id: null,
+			shared_with_all: s.sharedWith === 'all'
+		};
+	}
+	return {
+		...base,
+		scope: 'org',
+		owner_org_id: s.ownerOrgId,
+		shared_with_all: false
 	};
 }
 

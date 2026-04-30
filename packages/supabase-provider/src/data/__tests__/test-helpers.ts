@@ -49,8 +49,9 @@ export async function resetAllData(ctx: TestContext): Promise<void> {
 	await truncate(ctx, 'definition_versions');
 	await truncate(ctx, 'definitions');
 	await truncate(ctx, 'project_members');
-	// compute_server_defaults has a platform_default sibling — reset both.
-	await truncate(ctx, 'compute_server_defaults');
+	// compute defaults have a platform_default sibling — reset all three.
+	await truncate(ctx, 'compute_server_org_defaults');
+	await truncate(ctx, 'compute_server_shares');
 	await resetComputePlatformDefault(ctx);
 	await truncate(ctx, 'compute_servers');
 	await truncate(ctx, 'org_members');
@@ -82,7 +83,8 @@ function columnForDeleteAll(table: string): string {
 	if (table === 'user_profiles') return 'user_id';
 	if (table === 'definitions') return 'guid';
 	if (table === 'definition_versions') return 'id';
-	if (table === 'compute_server_defaults') return 'org_id';
+	if (table === 'compute_server_org_defaults') return 'org_id';
+	if (table === 'compute_server_shares') return 'server_id';
 	return 'id';
 }
 

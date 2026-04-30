@@ -195,10 +195,23 @@ export class SupabaseOrgStore implements IOrgStore {
 		const { error: invErr } = await client.from('invites').delete().eq('org_id', id);
 		if (invErr) throw mapError(invErr);
 
-		const { error: cdErr } = await client.from('compute_server_defaults').delete().eq('org_id', id);
+		const { error: cdErr } = await client
+			.from('compute_server_org_defaults')
+			.delete()
+			.eq('org_id', id);
 		if (cdErr) throw mapError(cdErr);
 
-		const { error: csErr } = await client.from('compute_servers').delete().eq('org_id', id);
+		const { error: shErr } = await client
+			.from('compute_server_shares')
+			.delete()
+			.eq('org_id', id);
+		if (shErr) throw mapError(shErr);
+
+		const { error: csErr } = await client
+			.from('compute_servers')
+			.delete()
+			.eq('scope', 'org')
+			.eq('owner_org_id', id);
 		if (csErr) throw mapError(csErr);
 
 		await this.events.emit({ type: 'org.deleted', orgId: id, actorId: actorFrom(ctx) });

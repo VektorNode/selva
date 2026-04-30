@@ -107,11 +107,12 @@ export const load = (async ({ params, locals, request, url }) => {
 
 		definitionSource = bytes;
 
-		// §3 — route the schema fetch through the owning org's compute when BYO
-		// compute is configured; otherwise fall through to the instance pool.
+		// §3 — resolution order: definition pin → org default override → global default.
 		const project = await projects.getProject(ctx, record.projectId);
 		try {
-			server = await resolveServerForOrg(ctx, project?.orgId ?? null);
+			server = await resolveServerForOrg(ctx, project?.orgId ?? null, {
+				definitionPin: record.computeServerId ?? null
+			});
 		} catch {
 			throw error(503, 'No compute server configured. Ask an admin to add one in /admin/compute.');
 		}

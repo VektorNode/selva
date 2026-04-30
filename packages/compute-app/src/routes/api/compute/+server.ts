@@ -218,8 +218,11 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		let definitionSource: Uint8Array;
 		// Track which org owns the definition so BYO compute can route the solve
 		// to that org's override server (spec §3). Null when the definition is
-		// externally hosted — no tenant context, fall through to instance pool.
+		// externally hosted — no tenant context, fall through to global default.
 		let solveOrgId: string | null = null;
+		// Per-definition compute pin (spec §3 step 1). Falls through silently if
+		// the pinned server is no longer visible to the project's org.
+		let definitionPin: string | null = null;
 
 		// Spec §7 — share-link tokens authenticate anonymous solves to one
 		// (definitionId, channel). Only meaningful for `local:` URLs; remote
@@ -276,6 +279,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 
 			const project = await providers.data.projects.getProject(solveCtx, record.projectId);
 			solveOrgId = project?.orgId ?? null;
+			definitionPin = record.computeServerId ?? null;
 
 			// Token-resolved requests skip the user-auth gate (the token IS the
 			// authorization). Otherwise enforce the channel-appropriate user rule.
@@ -335,7 +339,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			}
 		}
 
-		const serverConfig = await resolveServerForOrg(solveCtx, solveOrgId);
+		const serverConfig = await resolveServerForOrg(solveCtx, solveOrgId, { definitionPin });
 		const { scheduler } = await getClient(serverConfig);
 
 		// The scheduler propagates `request.signal` to the Compute call, so a

@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { getComputeServerConfigStore } from '$lib/server/providers.server';
-import { resolveServerById } from '@selvajs/platform';
+import { findServerById } from '@selvajs/platform';
 import { requireManageCompute } from '$lib/server/access.server';
 
 const TIMEOUT_MS = 8000;
@@ -22,11 +22,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	const serverId = url.searchParams.get('serverId');
 	if (!serverId) throw error(400, 'serverId required');
 
-	// Admin compute route manages the instance pool — strip actingOrgId so
-	// status lookups match what /admin/api/compute writes. See Permissions.md §3.
-	const ctx = { ...locals.ctx!, actingOrgId: undefined, orgPermissions: [] };
-	const config = await getComputeServerConfigStore().getConfig(ctx);
-	const server = resolveServerById(config, serverId);
+	// Admin route — read the full config; admin can probe any server.
+	const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
+	const server = findServerById(config, serverId);
 	if (!server) throw error(404, 'Server not found');
 
 	try {
