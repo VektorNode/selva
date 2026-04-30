@@ -6,7 +6,8 @@
 		NumberWidgetConfig,
 		FileInputWidgetConfig,
 		TextWidgetConfig,
-		DropdownWidgetConfig
+		DropdownWidgetConfig,
+		ImageWidgetConfig
 	} from '@selvajs/schemas';
 	type LayoutItem = InputLayoutItem | OutputLayoutItem;
 	import { Badge, Button, Card, Switch } from '@selvajs/ui';
@@ -50,13 +51,45 @@
 	let isFileInput = $derived(item.type === 'input' && item.widgetType === 'file');
 	let isTextInput = $derived(item.type === 'input' && item.widgetType === 'text');
 	let isDropdownInput = $derived(item.type === 'input' && item.widgetType === 'dropdown');
+	let isFileOutput = $derived(item.type === 'output' && item.widgetType === 'file');
+	let isImageOutput = $derived(item.type === 'output' && item.widgetType === 'image');
+	let isFileOrImageOutput = $derived(isFileOutput || isImageOutput);
 	let fileInputConfig = $derived(isFileInput ? (item.config as FileInputWidgetConfig) : null);
 	let dropdownConfig = $derived(isDropdownInput ? (item.config as DropdownWidgetConfig) : null);
+	let imageConfig = $derived(isImageOutput ? (item.config as ImageWidgetConfig) : null);
 	let showAdvanced = $state(false);
 	let showVisibilityRules = $state(false);
 	let hasVisibilityRules = $derived((item.visibilityCondition?.rules?.length ?? 0) > 0);
 	// Advanced section only for widget-specific options
-	let hasAdvancedOptions = $derived(isNumberInput || isFileInput || isTextInput || isDropdownInput);
+	let hasAdvancedOptions = $derived(
+		isNumberInput || isFileInput || isTextInput || isDropdownInput || isFileOrImageOutput
+	);
+
+	function setFileOutputMode(mode: 'file' | 'image') {
+		if (item.type !== 'output') return;
+		if (item.widgetType === mode) return;
+		if (mode === 'image') {
+			(item as OutputLayoutItem).widgetType = 'image';
+			(item as OutputLayoutItem).config = {
+				allowDownload: true,
+				allowFullscreen: true,
+				fitMode: 'contain'
+			} as ImageWidgetConfig;
+		} else {
+			(item as OutputLayoutItem).widgetType = 'file';
+			(item as OutputLayoutItem).config = {} as never;
+		}
+	}
+
+	function toggleImageOption(key: 'allowDownload' | 'allowFullscreen') {
+		if (!imageConfig) return;
+		imageConfig[key] = !(imageConfig[key] ?? true);
+	}
+
+	function setImageFitMode(mode: 'contain' | 'cover') {
+		if (!imageConfig) return;
+		imageConfig.fitMode = mode;
+	}
 
 	function toggleSliderMode() {
 		if (!isNumberInput) return;
@@ -223,6 +256,86 @@
 						</button>
 
 						{#if showAdvanced}
+							<!-- Output: File ↔ Image display mode switcher -->
+							{#if isFileOrImageOutput}
+								<div class="flex flex-col gap-2 pb-2">
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium">Display As</span>
+										<div class="grid grid-cols-2 gap-1">
+											<button
+												onclick={() => setFileOutputMode('file')}
+												class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+													isFileOutput
+														? 'bg-primary text-primary-foreground border-primary'
+														: 'border-border/70 hover:border-border hover:bg-accent'
+												}`}
+											>
+												File (download)
+											</button>
+											<button
+												onclick={() => setFileOutputMode('image')}
+												class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+													isImageOutput
+														? 'bg-primary text-primary-foreground border-primary'
+														: 'border-border/70 hover:border-border hover:bg-accent'
+												}`}
+											>
+												Image viewer
+											</button>
+										</div>
+										<span class="text-muted-foreground/70 text-[9px]">
+											{isImageOutput
+												? 'Renders PNG/JPG/WEBP/GIF/SVG inline. Other formats fall back to download.'
+												: 'Standard download button for any file type.'}
+										</span>
+									</div>
+
+									{#if isImageOutput && imageConfig}
+										<div class="flex items-center justify-between text-[11px]">
+											<span class="text-muted-foreground">Allow download</span>
+											<Switch
+												checked={imageConfig.allowDownload ?? true}
+												onCheckedChange={() => toggleImageOption('allowDownload')}
+												class="scale-75"
+											/>
+										</div>
+										<div class="flex items-center justify-between text-[11px]">
+											<span class="text-muted-foreground">Allow fullscreen</span>
+											<Switch
+												checked={imageConfig.allowFullscreen ?? true}
+												onCheckedChange={() => toggleImageOption('allowFullscreen')}
+												class="scale-75"
+											/>
+										</div>
+										<div class="flex flex-col gap-1">
+											<span class="text-muted-foreground text-[10px] font-medium">Fit Mode</span>
+											<div class="grid grid-cols-2 gap-1">
+												<button
+													onclick={() => setImageFitMode('contain')}
+													class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+														(imageConfig.fitMode ?? 'contain') === 'contain'
+															? 'bg-primary text-primary-foreground border-primary'
+															: 'border-border/70 hover:border-border hover:bg-accent'
+													}`}
+												>
+													Contain
+												</button>
+												<button
+													onclick={() => setImageFitMode('cover')}
+													class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+														imageConfig.fitMode === 'cover'
+															? 'bg-primary text-primary-foreground border-primary'
+															: 'border-border/70 hover:border-border hover:bg-accent'
+													}`}
+												>
+													Cover
+												</button>
+											</div>
+										</div>
+									{/if}
+								</div>
+							{/if}
+
 							<!-- Widget-Specific Options -->
 							{#if isNumberInput}
 								{@const config = item.config as NumberWidgetConfig}

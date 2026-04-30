@@ -27,7 +27,7 @@ public class GH_CurveInfo : GH_Component
     {
         pManager.AddTextParameter("Type", "T", "Curve type", GH_ParamAccess.item);
         pManager.AddBooleanParameter("Is Closed", "IC", "Whether curve is closed", GH_ParamAccess.item);
-        pManager.AddBooleanParameter("Can Fill", "CF", "Whether curve can be filled", GH_ParamAccess.item);
+        pManager.AddBooleanParameter("Can Fill", "CF", "Whether curve can be used as a fill boundary", GH_ParamAccess.item);
         pManager.AddNumberParameter("Length", "L", "Curve length", GH_ParamAccess.item);
         pManager.AddRectangleParameter("Bounding Box", "BB", "Curve bounding box", GH_ParamAccess.item);
     }
@@ -42,7 +42,7 @@ public class GH_CurveInfo : GH_Component
 
         DA.SetData(0, curve.GetType().Name);
         DA.SetData(1, curve.IsClosed);
-        DA.SetData(2, curve.IsClosed);
+        DA.SetData(2, curve.IsClosed || curve.IsPeriodic);
         DA.SetData(3, curve.GetLength());
         DA.SetData(4, rectangle);
     }

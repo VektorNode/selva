@@ -1,9 +1,10 @@
 using System.Drawing;
 
-namespace Selva.GH.Features.Drawing.Lib;
+namespace Selva.Drawing;
 
 public enum SvgStrokeCap { Butt, Round, Square }
 public enum SvgStrokeJoin { Miter, Round, Bevel }
+public enum SvgFillRule { EvenOdd, NonZero }
 
 public class PathStyleData
 {
@@ -18,4 +19,5 @@ public class PathStyleData
     public SvgStrokeJoin StrokeJoin { get; set; } = SvgStrokeJoin.Miter;
     public float[] DashArray { get; set; } = null;
     public bool NonScalingStroke { get; set; } = false;
+    public SvgFillRule FillRule { get; set; } = SvgFillRule.EvenOdd;
 }

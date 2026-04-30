@@ -6,6 +6,45 @@
 import { downloadFileData, type FileData } from '@selvajs/compute';
 import { APP_DEFAULTS } from '../constants';
 
+const MIME_BY_EXT: Record<string, string> = {
+	'.png': 'image/png',
+	'.jpg': 'image/jpeg',
+	'.jpeg': 'image/jpeg',
+	'.webp': 'image/webp',
+	'.gif': 'image/gif',
+	'.svg': 'image/svg+xml',
+	'.json': 'application/json',
+	'.txt': 'text/plain',
+	'.csv': 'text/csv',
+	'.xml': 'application/xml',
+	'.pdf': 'application/pdf',
+	'.3dm': 'model/vnd.3dm',
+	'.obj': 'model/obj',
+	'.stl': 'model/stl'
+};
+
+function saveSingleFile(file: FileData): void {
+	const ext = (file.fileType ?? '').toLowerCase();
+	const mime = MIME_BY_EXT[ext] ?? 'application/octet-stream';
+
+	let blob: Blob;
+	if (file.isBase64Encoded) {
+		const binary = atob(file.data);
+		const bytes = new Uint8Array(binary.length);
+		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+		blob = new Blob([bytes], { type: mime });
+	} else {
+		blob = new Blob([file.data], { type: mime });
+	}
+
+	const fullName = `${file.fileName}${file.fileType ?? ''}`;
+	const a = document.createElement('a');
+	a.href = URL.createObjectURL(blob);
+	a.download = fullName;
+	a.click();
+	URL.revokeObjectURL(a.href);
+}
+
 /**
  * Download file(s) from Grasshopper outputs
  * Single files are downloaded directly, multiple files are packaged as ZIP
@@ -19,6 +58,11 @@ export async function downloadFiles(
 
 		if (filesArray.length === 0) {
 			console.warn('[FileDownload] No files to download');
+			return;
+		}
+
+		if (filesArray.length === 1) {
+			saveSingleFile(filesArray[0]);
 			return;
 		}
 

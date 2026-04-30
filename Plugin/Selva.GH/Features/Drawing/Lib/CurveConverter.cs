@@ -5,6 +5,8 @@ using Rhino.Geometry;
 
 namespace Selva.GH.Features.Drawing.Lib;
 
+// Rhino-dependent: takes Rhino.Geometry curves and returns SVG path data strings.
+
 public static class CurveConverter
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;

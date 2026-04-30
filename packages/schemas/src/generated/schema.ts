@@ -72,6 +72,12 @@ export type OutputChartLayoutItem = LayoutItemBase & {
   config?: ChartWidgetConfig;
   [k: string]: unknown | undefined;
 };
+export type OutputImageLayoutItem = LayoutItemBase & {
+  type: 'output';
+  widgetType: 'image';
+  config?: ImageWidgetConfig;
+  [k: string]: unknown | undefined;
+};
 export type LayoutItem =
   | InputNumberLayoutItem
   | InputTextLayoutItem
@@ -83,6 +89,7 @@ export type LayoutItem =
   | OutputNumberLayoutItem
   | OutputFileLayoutItem
   | OutputChartLayoutItem
+  | OutputImageLayoutItem
   | LineBreakLayoutItem;
 export type LayoutConfig = TabbedLayoutConfig | FlatLayoutConfig;
 export type GrasshopperInputStructure = 'item' | 'list' | 'tree';
@@ -245,6 +252,24 @@ export interface LayoutItemBase {
   [k: string]: unknown | undefined;
 }
 export interface ChartWidgetConfig {}
+export interface ImageWidgetConfig {
+  /**
+   * Show a download button on the image viewer
+   */
+  allowDownload?: boolean;
+  /**
+   * Show a fullscreen toggle button on the image viewer
+   */
+  allowFullscreen?: boolean;
+  /**
+   * How the image should fit its container: 'contain' preserves aspect ratio with letterboxing, 'cover' fills container and may crop
+   */
+  fitMode?: 'contain' | 'cover';
+  /**
+   * Optional background color shown behind the image (hex string, e.g. '#ffffff')
+   */
+  backgroundColor?: string;
+}
 export interface LineBreakLayoutItem {
   /**
    * Unique identifier for this layout item in the UI tree
@@ -497,7 +522,7 @@ export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutIt
   return item.type === 'input';
 }
 
-export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem {
+export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem | OutputImageLayoutItem {
   return item.type === 'output';
 }
 
@@ -529,7 +554,11 @@ export function isColorWidget(item: LayoutItem): item is InputColorLayoutItem {
   return item.type === 'input' && item.widgetType === 'color';
 }
 
+export function isImageWidget(item: LayoutItem): item is OutputImageLayoutItem {
+  return item.type === 'output' && item.widgetType === 'image';
+}
+
 // Helper type aliases
 export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem | InputColorLayoutItem;
-export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem;
+export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem | OutputImageLayoutItem;
 export type SupportedTypes = string | number | boolean | string[];

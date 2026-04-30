@@ -125,7 +125,7 @@ export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutIt
   return item.type === 'input';
 }
 
-export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem {
+export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem | OutputImageLayoutItem {
   return item.type === 'output';
 }
 
@@ -157,9 +157,13 @@ export function isColorWidget(item: LayoutItem): item is InputColorLayoutItem {
   return item.type === 'input' && item.widgetType === 'color';
 }
 
+export function isImageWidget(item: LayoutItem): item is OutputImageLayoutItem {
+  return item.type === 'output' && item.widgetType === 'image';
+}
+
 // Helper type aliases
 export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem | InputColorLayoutItem;
-export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem;
+export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem | OutputImageLayoutItem;
 export type SupportedTypes = string | number | boolean | string[];
 `,
   });

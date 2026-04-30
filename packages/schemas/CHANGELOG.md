@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MINOR** version (e.g., 1.0.x → 1.1.0): Backward-compatible additions
 - **PATCH** version (e.g., 1.0.0 → 1.0.1): Bug fixes and documentation
 
+## [2.7.0] - 2026-04-30
+
+### Added
+
+- `ImageWidgetConfig` - New config object with `allowDownload` (default `true`), `allowFullscreen` (default `true`), `fitMode` (`"contain" | "cover"`, default `"contain"`), and optional `backgroundColor` (hex string)
+- `OutputImageLayoutItem` - New output layout item with `widgetType: "image"` for rendering image files (PNG/JPG/WEBP/GIF/SVG) inline. Reuses the existing file output pipeline; the builder picks `image` instead of `file` when an inline viewer is preferred over a download button
+- `LayoutItem` union - Added `OutputImageLayoutItem`
+
+### Migration Notes
+
+- Fully backward-compatible addition. Existing schemas load unchanged.
+- Migration function `MigrateTo_2_7_0` registered in `SchemaMigrator`; no data transformation needed.
+
+---
+
 ## [2.4.0] - 2026-04-01
 
 ### Added

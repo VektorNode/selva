@@ -28,6 +28,7 @@
 		<PackageReference Include="System.Resources.Extensions" Version="7.0.0"/>
 		<PackageReference Include="System.Windows.Forms" Version="4.0.0"/>
 		<ProjectReference Include="..\Selva.Schema\Selva.Schema.csproj"/>
+		<ProjectReference Include="..\Selva.Drawing\Selva.Drawing.csproj"/>
 	</ItemGroup>
 
 	<!-- Embed web assets from the build output -->

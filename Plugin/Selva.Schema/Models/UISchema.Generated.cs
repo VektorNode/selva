@@ -250,6 +250,34 @@ namespace Selva.Schema.Models
     {
     }
 
+    public class ImageWidgetConfig
+    {
+
+/// <summary>
+/// Show a download button on the image viewer
+/// </summary>
+        [JsonProperty("allowDownload", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool? AllowDownload { get; set; } = true;
+
+/// <summary>
+/// Show a fullscreen toggle button on the image viewer
+/// </summary>
+        [JsonProperty("allowFullscreen", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool? AllowFullscreen { get; set; } = true;
+
+/// <summary>
+/// How the image should fit its container: 'contain' preserves aspect ratio with letterboxing, 'cover' fills container and may crop
+/// </summary>
+        [JsonProperty("fitMode", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string FitMode { get; set; } = "contain";
+
+/// <summary>
+/// Optional background color shown behind the image (hex string, e.g. '#ffffff')
+/// </summary>
+        [JsonProperty("backgroundColor")]
+        public string BackgroundColor { get; set; }
+    }
+
 // ============================================================================
     // LAYOUT CONFIGURATION
     // ============================================================================
@@ -738,6 +766,15 @@ public override string WidgetType => "chart";
         public ChartWidgetConfig Config { get; set; }
     }
 
+public class OutputImageLayoutItem : LayoutItemBase
+    {
+public override string Type => "output";
+public override string WidgetType => "image";
+
+        [JsonProperty("config", NullValueHandling = NullValueHandling.Ignore)]
+        public ImageWidgetConfig Config { get; set; }
+    }
+
 public class LineBreakLayoutItem : LayoutItemBase
     {
 public override string Type => "linebreak";
@@ -822,6 +859,8 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
                 item = new OutputFileLayoutItem();
             else if (type == "output" && widgetType == "chart")
                 item = new OutputChartLayoutItem();
+            else if (type == "output" && widgetType == "image")
+                item = new OutputImageLayoutItem();
             else if (type == "linebreak")
                 item = new LineBreakLayoutItem();
             else

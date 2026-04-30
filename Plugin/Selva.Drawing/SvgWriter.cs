@@ -2,9 +2,9 @@ using System.Drawing;
 using System.Globalization;
 using System.Text;
 
-namespace Selva.GH.Features.Drawing.Lib;
+namespace Selva.Drawing;
 
-internal static class SvgWriter
+public static class SvgWriter
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
@@ -53,7 +53,12 @@ internal static class SvgWriter
         }
     }
 
-    public static string Rgb(Color c) => $"rgb({c.R},{c.G},{c.B})";
+    public static string Rgb(Color c) => ColorValue(c);
+
+    public static string ColorValue(Color c) =>
+        c.A < 255
+            ? $"rgba({c.R},{c.G},{c.B},{c.A / 255f:0.####})"
+            : $"rgb({c.R},{c.G},{c.B})";
 
     public static string F(double v) => v.ToString("0.######", Inv);
 
