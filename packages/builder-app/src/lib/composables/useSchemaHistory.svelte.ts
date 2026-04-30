@@ -39,7 +39,13 @@ export function useSchemaHistory(sessionId: string) {
 	if (typeof localStorage !== 'undefined') purgeStaleSessions(sessionId);
 
 	function push(schema: UISchema) {
-		past.push(schema);
+		// Defensive deep-clone so a caller passing a live $state proxy can't
+		// retroactively corrupt the history through later mutations.
+		const frozen =
+			typeof structuredClone === 'function'
+				? (structuredClone(schema) as UISchema)
+				: (JSON.parse(JSON.stringify(schema)) as UISchema);
+		past.push(frozen);
 		if (past.length > MAX_HISTORY) past.shift();
 		future.length = 0;
 		persistToStorage();

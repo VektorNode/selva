@@ -12,8 +12,7 @@ import type {
 	WsMetadataUpdatedMessage,
 	WsParametersAddedMessage,
 	WsSyncPreviewMessage,
-	WsSyncAppliedMessage,
-	WsSchemaSavedMessage
+	WsSyncAppliedMessage
 } from '$lib/websocket/websocket.svelte';
 import { useSchemaHistory } from './useSchemaHistory.svelte';
 
@@ -128,10 +127,6 @@ export function useBuilderState(sessionId: string) {
 		}
 
 		state.loading = false;
-	}
-
-	function handleSchemaSaved(message: WsSchemaSavedMessage) {
-		if (message.sessionId !== sessionId) return;
 	}
 
 	function handleMetadataUpdated(message: WsMetadataUpdatedMessage) {
@@ -351,7 +346,6 @@ export function useBuilderState(sessionId: string) {
 
 		wsState.on('outputs', handleOutputs);
 		wsState.on('initialData', handleInitialData);
-		wsState.on('schemaSaved', handleSchemaSaved);
 		wsState.on('metadataUpdated', handleMetadataUpdated);
 		wsState.on('schemaUpdated', handleSchemaUpdated);
 		wsState.on('parametersAdded', handleParametersAdded);
@@ -367,7 +361,6 @@ export function useBuilderState(sessionId: string) {
 
 		wsState.off('outputs', handleOutputs);
 		wsState.off('initialData', handleInitialData);
-		wsState.off('schemaSaved', handleSchemaSaved);
 		wsState.off('metadataUpdated', handleMetadataUpdated);
 		wsState.off('schemaUpdated', handleSchemaUpdated);
 		wsState.off('parametersAdded', handleParametersAdded);
