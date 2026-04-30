@@ -31,6 +31,7 @@ public class GH_CreateSurface : GH_Component
         pManager[1].Optional = true;
     }
 
+
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
         pManager.AddGenericParameter("Element", "E", "Drawing element", GH_ParamAccess.item);
