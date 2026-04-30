@@ -1,17 +1,16 @@
 using System;
-using System.Globalization;
-using System.Text;
 using Rhino.Geometry;
+using Selva.Drawing.Model.Geometry;
+using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.GH.Features.Drawing.Lib;
 
-// Rhino-dependent: takes Rhino.Geometry curves and returns SVG path data strings.
-
+// Rhino-dependent: converts Rhino curves to typed model Paths. Phase 3 replaced the
+// SVG-string output with model Path emission so the same curve drives both SVG and PDF
+// renderers via the unified Document Model.
 public static class CurveConverter
 {
-    private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
-
-    public static string ToSvgPathData(Curve curve, double chordTol = 0.01, double kinkTol = 0.01)
+    public static Path ToPath(Curve curve, double chordTol = 0.01, double kinkTol = 0.01)
     {
         if (curve == null) throw new ArgumentNullException(nameof(curve));
 
@@ -28,70 +27,69 @@ public static class CurveConverter
         }
     }
 
-    private static string LineToPath(LineCurve line)
+    private static Path LineToPath(LineCurve line)
     {
         var a = line.PointAtStart;
         var b = line.PointAtEnd;
-        var sb = new StringBuilder();
-        sb.Append("M ").Append(F(a.X)).Append(' ').Append(F(a.Y));
-        sb.Append(" L ").Append(F(b.X)).Append(' ').Append(F(b.Y));
-        return sb.ToString();
+        return new Path.Builder()
+            .MoveTo(a.X, a.Y)
+            .LineTo(b.X, b.Y)
+            .Build();
     }
 
-    private static string PolylineToPath(PolylineCurve poly)
+    private static Path PolylineToPath(PolylineCurve poly)
     {
-        if (poly.PointCount == 0) return string.Empty;
-        var sb = new StringBuilder();
+        if (poly.PointCount == 0) return Path.Empty;
+
+        var builder = new Path.Builder();
         var p0 = poly.Point(0);
-        sb.Append("M ").Append(F(p0.X)).Append(' ').Append(F(p0.Y));
+        builder.MoveTo(p0.X, p0.Y);
         for (var i = 1; i < poly.PointCount; i++)
         {
             var p = poly.Point(i);
-            sb.Append(" L ").Append(F(p.X)).Append(' ').Append(F(p.Y));
+            builder.LineTo(p.X, p.Y);
         }
-        if (poly.IsClosed) sb.Append(" Z");
-        return sb.ToString();
+        if (poly.IsClosed) builder.Close();
+        return builder.Build();
     }
 
-    private static string ArcToPath(ArcCurve arcCurve)
+    private static Path ArcToPath(ArcCurve arcCurve)
     {
         var arc = arcCurve.Arc;
 
-        // Full circle: emit two half-arcs (SVG A flag can't draw a full circle in one segment).
+        // Full circle: emit two half-arcs (a single SVG-style A-segment can't cover 360°).
         if (Math.Abs(arc.AngleDomain.Length - 2 * Math.PI) < 1e-10)
         {
             var c = arc.Center;
             var r = arc.Radius;
-            var sb = new StringBuilder();
-            sb.Append("M ").Append(F(c.X + r)).Append(' ').Append(F(c.Y));
-            sb.Append(" A ").Append(F(r)).Append(' ').Append(F(r)).Append(" 0 1 0 ")
-              .Append(F(c.X - r)).Append(' ').Append(F(c.Y));
-            sb.Append(" A ").Append(F(r)).Append(' ').Append(F(r)).Append(" 0 1 0 ")
-              .Append(F(c.X + r)).Append(' ').Append(F(c.Y));
-            sb.Append(" Z");
-            return sb.ToString();
+            return new Path.Builder()
+                .MoveTo(c.X + r, c.Y)
+                .ArcTo(new Point2D(c.X - r, c.Y), r, r, 0, largeArc: true, sweepClockwise: false)
+                .ArcTo(new Point2D(c.X + r, c.Y), r, r, 0, largeArc: true, sweepClockwise: false)
+                .Close()
+                .Build();
         }
 
         var start = arc.PointAt(arc.AngleDomain.T0);
         var end = arc.PointAt(arc.AngleDomain.T1);
         var sweep = arc.AngleDomain.Length;
-        var largeArc = Math.Abs(sweep) > Math.PI ? 1 : 0;
-        // SVG sweep flag: 1 = counter-clockwise in user-space (with Y-flip applied at root, this maps to Rhino CCW).
-        var sweepFlag = sweep > 0 ? 1 : 0;
-        var sb2 = new StringBuilder();
-        sb2.Append("M ").Append(F(start.X)).Append(' ').Append(F(start.Y));
-        sb2.Append(" A ").Append(F(arc.Radius)).Append(' ').Append(F(arc.Radius))
-           .Append(" 0 ").Append(largeArc).Append(' ').Append(sweepFlag).Append(' ')
-           .Append(F(end.X)).Append(' ').Append(F(end.Y));
-        return sb2.ToString();
+        var largeArc = Math.Abs(sweep) > Math.PI;
+        // Rhino CCW (positive sweep) maps to SVG sweep=1 once the root Y-flip is applied —
+        // PathSegment.ArcTo.SweepClockwise mirrors SVG's sweep flag, so true == sweep > 0.
+        var sweepClockwise = sweep > 0;
+
+        return new Path.Builder()
+            .MoveTo(start.X, start.Y)
+            .ArcTo(new Point2D(end.X, end.Y), arc.Radius, arc.Radius, 0, largeArc, sweepClockwise)
+            .Build();
     }
 
-    private static string BezierApproxToPath(Curve curve, double chordTol, double kinkTol)
+    private static Path BezierApproxToPath(Curve curve, double chordTol, double kinkTol)
     {
         var beziers = BezierCurve.CreateCubicBeziers(curve, chordTol, kinkTol);
-        if (beziers == null || beziers.Length == 0) return string.Empty;
+        if (beziers == null || beziers.Length == 0) return Path.Empty;
 
-        var sb = new StringBuilder();
+        var builder = new Path.Builder();
         var moved = false;
         Point3d last = default;
 
@@ -105,26 +103,21 @@ public static class CurveConverter
 
             if (!moved)
             {
-                sb.Append("M ").Append(F(p0.X)).Append(' ').Append(F(p0.Y));
+                builder.MoveTo(p0.X, p0.Y);
                 moved = true;
             }
             else
             {
                 var dx = last.X - p0.X;
                 var dy = last.Y - p0.Y;
-                if (dx * dx + dy * dy > 1e-12) sb.Append(" L ").Append(F(p0.X)).Append(' ').Append(F(p0.Y));
+                if (dx * dx + dy * dy > 1e-12) builder.LineTo(p0.X, p0.Y);
             }
 
-            sb.Append(" C ")
-              .Append(F(p1.X)).Append(' ').Append(F(p1.Y)).Append(' ')
-              .Append(F(p2.X)).Append(' ').Append(F(p2.Y)).Append(' ')
-              .Append(F(p3.X)).Append(' ').Append(F(p3.Y));
+            builder.CubicTo(new Point2D(p1.X, p1.Y), new Point2D(p2.X, p2.Y), new Point2D(p3.X, p3.Y));
             last = p3;
         }
 
-        if (curve.IsClosed) sb.Append(" Z");
-        return sb.ToString();
+        if (curve.IsClosed) builder.Close();
+        return builder.Build();
     }
-
-    private static string F(double v) => v.ToString("0.######", Inv);
 }
