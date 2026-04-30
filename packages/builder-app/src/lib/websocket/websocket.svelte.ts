@@ -112,6 +112,7 @@ export class WebSocketState {
 	private maxReconnectAttempts = WEBSOCKET_MAX_RECONNECT_ATTEMPTS;
 	private reconnectDelay = WEBSOCKET_RECONNECT_INTERVAL;
 	private isConnecting = false;
+	private connectPromise: Promise<boolean> | null = null;
 	private _pendingValueUpdate: { sessionId: string; values: Record<string, unknown> } | null = null;
 	private _serverDisconnected = false;
 	private _shouldReloadOnReconnect = false;
@@ -183,13 +184,27 @@ export class WebSocketState {
 	 * Connect to the WebSocket server
 	 */
 	connect(): Promise<boolean> {
-		if (this.socket?.readyState === WebSocket.OPEN || this.isConnecting) {
+		if (this.socket?.readyState === WebSocket.OPEN) {
 			return Promise.resolve(true);
+		}
+		// If a connect is already in flight, return its promise so concurrent
+		// callers all see the same outcome instead of getting an early `true`.
+		if (this.isConnecting && this.connectPromise) {
+			return this.connectPromise;
 		}
 
 		this.isConnecting = true;
 
-		return new Promise((resolve) => {
+		this.connectPromise = new Promise((resolve) => {
+			let settled = false;
+			const settle = (value: boolean) => {
+				if (settled) return;
+				settled = true;
+				this.isConnecting = false;
+				this.connectPromise = null;
+				resolve(value);
+			};
+
 			try {
 				this.socket = new WebSocket(this.url);
 
@@ -202,9 +217,8 @@ export class WebSocketState {
 
 					this.reconnectAttempts = 0;
 					this._serverDisconnected = false;
-					this.isConnecting = false;
 					this.connected = true;
-					resolve(true);
+					settle(true);
 				};
 
 				this.socket.onmessage = (event) => {
@@ -222,22 +236,23 @@ export class WebSocketState {
 
 				this.socket.onerror = (error) => {
 					console.error('[WebSocket] Error:', error);
-					this.isConnecting = false;
-					resolve(false);
+					settle(false);
 				};
 
 				this.socket.onclose = () => {
-					this.isConnecting = false;
 					this.socket = null;
 					this.connected = false;
+					// If we closed before opening, settle false; otherwise this is a no-op.
+					settle(false);
 					this.attemptReconnect();
 				};
 			} catch (error) {
 				console.error('[WebSocket] Connection failed:', error);
-				this.isConnecting = false;
-				resolve(false);
+				settle(false);
 			}
 		});
+
+		return this.connectPromise;
 	}
 
 	/**
@@ -266,8 +281,14 @@ export class WebSocketState {
 
 		this.reconnectAttempts = 0;
 		this.connected = false;
+		this.isConnecting = false;
+		this.connectPromise = null;
 		this.batchedValues = {};
 		this._pendingValueUpdate = null;
+		// Clear server-disconnect flags so a future connect() doesn't think
+		// we're still in the "server went away, force reload on reconnect" path.
+		this._serverDisconnected = false;
+		this._shouldReloadOnReconnect = false;
 	}
 
 	/**
