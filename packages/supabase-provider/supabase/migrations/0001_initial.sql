@@ -724,42 +724,76 @@ grant execute on function public.get_invite_by_token_hash(text) to anon, authent
 
 
 -- ============================================================================
--- 9. compute_servers (spec §3 BYO compute)
+-- 9. compute_servers (spec §3 — platform vs. org-private)
 --
--- Row shape:
---   * org_id IS NULL     → instance-pool server (managed by instance_admin
---                          via `manage_compute` platform permission).
---   * org_id IS NOT NULL → per-org override; managed by an org member
---                          holding `manage_org_compute`.
+-- Servers are discriminated by `scope`:
+--   * scope = 'platform' → managed by `manage_compute`. `sharedWith = 'all'`
+--     (db: shared_with_all = true) exposes to every org; otherwise the
+--     per-org allowlist lives in `compute_server_shares`. The global
+--     default is always visible regardless (the "baseline" floor).
+--   * scope = 'org'      → org-private. `owner_org_id` is required.
+--     Visible only to members of that org. Gated by the platform flag
+--     ALLOW_ORG_COMPUTE_OVERRIDE at the TS layer; DB policies still accept
+--     writes so flipping the flag on doesn't require a policy change.
 --
--- The platform flag ALLOW_ORG_COMPUTE_OVERRIDE gates org-row writes at the
--- TS layer. The DB policy still accepts them so flipping the flag on
--- doesn't require a policy change.
+-- Defaults are layered:
+--   * compute_server_platform_default (singleton) — global default. Must
+--     reference a platform row.
+--   * compute_server_org_defaults — per-org override. Must reference a
+--     server visible to that org (validated at the TS layer).
 --
--- Cascade note: the `org_id` FK below is `on delete cascade`, but `deleteOrg`
--- is a soft-delete and never triggers it. SupabaseOrgStore.deleteOrg
--- explicitly DELETEs from `compute_server_defaults` and `compute_servers`
--- for the org. The FK cascade only matters for the eventual hard-delete
--- janitor.
+-- Cascade note: the `owner_org_id` FK is `on delete cascade`, but
+-- `deleteOrg` is a soft-delete and never triggers it. SupabaseOrgStore
+-- explicitly DELETEs from compute_server_org_defaults, compute_server_shares,
+-- and compute_servers (where owner_org_id matches) for the org. The FK
+-- cascade only matters for the eventual hard-delete janitor.
 -- ============================================================================
 
+-- compute_servers — discriminated by `scope`.
+--   * scope = 'platform': managed by `manage_compute`. `owner_org_id` must
+--     be null. `shared_with_all = true` exposes the server to every org;
+--     otherwise the per-org allowlist lives in `compute_server_shares`. The
+--     global default in `compute_server_platform_default` is *always*
+--     visible regardless of share state (spec §3 — baseline floor).
+--   * scope = 'org':      managed by an org member with `manage_org_compute`.
+--     `owner_org_id` is required and visibility is implicit (only members
+--     of `owner_org_id` can see it). Gated by the platform flag
+--     ALLOW_ORG_COMPUTE_OVERRIDE at the TS layer.
 create table if not exists public.compute_servers (
 	id uuid primary key,
-	org_id uuid references public.orgs(id) on delete cascade,
+	scope text not null check (scope in ('platform', 'org')),
+	owner_org_id uuid references public.orgs(id) on delete cascade,
+	shared_with_all boolean not null default false,
 	label text not null,
 	server_url text not null,
 	api_key text,
 	timeout_ms integer,
 	retry_count integer,
-	created_at timestamptz not null default now()
+	created_at timestamptz not null default now(),
+	-- Scope-specific invariants.
+	check (
+		(scope = 'platform' and owner_org_id is null)
+		or (scope = 'org' and owner_org_id is not null and shared_with_all = false)
+	)
 );
-create index if not exists idx_compute_servers_org on public.compute_servers(org_id);
+create index if not exists idx_compute_servers_owner_org on public.compute_servers(owner_org_id);
 
-create table if not exists public.compute_server_defaults (
+-- Per-org share allowlist for platform servers. Empty rows = dormant
+-- platform server (admin-only) unless it's the global default.
+create table if not exists public.compute_server_shares (
+	server_id uuid not null references public.compute_servers(id) on delete cascade,
+	org_id uuid not null references public.orgs(id) on delete cascade,
+	primary key (server_id, org_id)
+);
+create index if not exists idx_compute_server_shares_org on public.compute_server_shares(org_id);
+
+-- Per-org default override (orgDefaults[orgId]).
+create table if not exists public.compute_server_org_defaults (
 	org_id uuid primary key references public.orgs(id) on delete cascade,
 	default_server_id uuid references public.compute_servers(id) on delete set null
 );
 
+-- Single-row sentinel for the global default.
 create table if not exists public.compute_server_platform_default (
 	singleton boolean primary key default true,
 	default_server_id uuid references public.compute_servers(id) on delete set null,
@@ -770,40 +804,67 @@ insert into public.compute_server_platform_default (singleton, default_server_id
 on conflict (singleton) do nothing;
 
 alter table public.compute_servers enable row level security;
-alter table public.compute_server_defaults enable row level security;
+alter table public.compute_server_shares enable row level security;
+alter table public.compute_server_org_defaults enable row level security;
 alter table public.compute_server_platform_default enable row level security;
 
-create policy "compute_servers: members can read"
+-- Read: instance_admin sees everything. Otherwise visibility follows §3:
+--   * platform server with shared_with_all = true → all authenticated users
+--   * platform server with a row in compute_server_shares for an org the
+--     user belongs to → that user
+--   * platform server that is the current global default → all (floor)
+--   * org server → only members of owner_org_id
+create policy "compute_servers: visibility-scoped read"
 on public.compute_servers for select
 to authenticated
 using (
 	public.is_instance_admin()
-	or org_id is null
-	or public.is_org_member(org_id)
+	or (scope = 'platform' and shared_with_all)
+	or (scope = 'platform' and id = (
+		select default_server_id from public.compute_server_platform_default where singleton
+	))
+	or (scope = 'platform' and exists (
+		select 1 from public.compute_server_shares s
+		where s.server_id = compute_servers.id and public.is_org_member(s.org_id)
+	))
+	or (scope = 'org' and public.is_org_member(owner_org_id))
 );
 
 -- Writes:
---   * Instance pool (org_id is null) → only instance_admin may write.
---   * Org override (org_id is not null) → manage_org_compute grant required.
+--   * scope = 'platform' → instance_admin only.
+--   * scope = 'org'      → manage_org_compute on owner_org_id.
 create policy "compute_servers: scoped write"
 on public.compute_servers for all
 to authenticated
 using (
 	public.is_instance_admin()
-	or (org_id is not null and public.has_org_permission(org_id, 'manage_org_compute'))
+	or (scope = 'org' and owner_org_id is not null
+		and public.has_org_permission(owner_org_id, 'manage_org_compute'))
 )
 with check (
 	public.is_instance_admin()
-	or (org_id is not null and public.has_org_permission(org_id, 'manage_org_compute'))
+	or (scope = 'org' and owner_org_id is not null
+		and public.has_org_permission(owner_org_id, 'manage_org_compute'))
 );
 
-create policy "compute_server_defaults: members can read"
-on public.compute_server_defaults for select
+create policy "compute_server_shares: read"
+on public.compute_server_shares for select
 to authenticated
 using (public.is_instance_admin() or public.is_org_member(org_id));
 
-create policy "compute_server_defaults: manage_org_compute can write"
-on public.compute_server_defaults for all
+create policy "compute_server_shares: admin write"
+on public.compute_server_shares for all
+to authenticated
+using (public.is_instance_admin())
+with check (public.is_instance_admin());
+
+create policy "compute_server_org_defaults: members can read"
+on public.compute_server_org_defaults for select
+to authenticated
+using (public.is_instance_admin() or public.is_org_member(org_id));
+
+create policy "compute_server_org_defaults: manage_org_compute can write"
+on public.compute_server_org_defaults for all
 to authenticated
 using (public.is_instance_admin() or public.has_org_permission(org_id, 'manage_org_compute'))
 with check (public.is_instance_admin() or public.has_org_permission(org_id, 'manage_org_compute'));

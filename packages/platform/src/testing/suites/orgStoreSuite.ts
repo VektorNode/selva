@@ -347,22 +347,23 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 					const orgCtx = { ...ctx(u1), actingOrgId: orgId };
 					const server: ComputeServerConfig = {
 						id: makeUuid(),
-						orgId,
+						scope: 'org',
+						ownerOrgId: orgId,
 						label: 'BYO',
 						serverUrl: 'https://compute.example.com',
 						apiKey: 'secret'
 					};
-					await computeServer.saveConfig(orgCtx, {
-						servers: [server],
-						defaultServerId: server.id
-					});
+					await computeServer.saveOrgServers(orgCtx, orgId, [server], server.id);
 
 					await store.deleteOrg(ctx(u1), orgId);
 
 					expect(await invites.getByTokenHash(ctx(u1), invite.tokenHash)).toBeNull();
 					const remainingConfig = await computeServer.getConfig(orgCtx);
-					expect(remainingConfig.servers).toEqual([]);
-					expect(remainingConfig.defaultServerId).toBeUndefined();
+					const orgRows = remainingConfig.servers.filter(
+						(s) => s.scope === 'org' && s.ownerOrgId === orgId
+					);
+					expect(orgRows).toEqual([]);
+					expect(remainingConfig.orgDefaults?.[orgId]).toBeUndefined();
 				});
 			}
 		}

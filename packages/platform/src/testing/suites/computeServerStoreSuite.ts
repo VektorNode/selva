@@ -1,17 +1,21 @@
 /**
  * Adapter conformance suite for IComputeServerStore.
  *
- * Compute config is a single `ComputeConfig` per tenant scope — the
- * adapter's "store" surface is just `getConfig` / `saveConfig`. Tests
- * cover the round-trip and the default-server-id handling.
+ * Spec §3 — servers are scoped (platform vs. org-private), with a global
+ * `defaultServerId` and per-org `orgDefaults`. The store surface exposes
+ * scope-targeted mutations; visibility filtering is done by callers via
+ * the pure helpers in `@selvajs/platform`.
  */
 
 import { describe, it, expect } from 'vitest';
 import type { IComputeServerStore } from '../../computeServer/interface.js';
-import type { ComputeServerConfig } from '../../computeServer/types.js';
-import { SYSTEM_CONTEXT, type RequestContext } from '../../context.js';
-import { ALL_PLATFORM_PERMISSIONS } from '../../permissions/types.js';
-import { ALL_ORG_PERMISSIONS } from '../../organizations/schemas.js';
+import type {
+	ComputeServerConfig,
+	OrgComputeServer,
+	PlatformComputeServer
+} from '../../computeServer/types.js';
+import { isOrgServer, isPlatformServer } from '../../computeServer/types.js';
+import { SYSTEM_CONTEXT } from '../../context.js';
 import { makeUuid } from './helpers.js';
 
 export interface ComputeServerStoreConformanceOptions {
@@ -25,10 +29,13 @@ export interface ComputeServerStoreConformanceOptions {
 	seedOrg?: (orgId: string) => Promise<void>;
 }
 
-function server(overrides: Partial<ComputeServerConfig> = {}): ComputeServerConfig {
+function platformServer(
+	overrides: Partial<Omit<PlatformComputeServer, 'scope'>> = {}
+): PlatformComputeServer {
 	return {
 		id: overrides.id ?? makeUuid(),
-		orgId: overrides.orgId,
+		scope: 'platform',
+		sharedWith: overrides.sharedWith ?? 'all',
 		label: overrides.label ?? 'Test Server',
 		serverUrl: overrides.serverUrl ?? 'http://localhost:5000',
 		apiKey: overrides.apiKey,
@@ -37,13 +44,19 @@ function server(overrides: Partial<ComputeServerConfig> = {}): ComputeServerConf
 	};
 }
 
-function orgCtx(orgId: string): RequestContext {
+function orgServer(
+	ownerOrgId: string,
+	overrides: Partial<Omit<OrgComputeServer, 'scope' | 'ownerOrgId'>> = {}
+): OrgComputeServer {
 	return {
-		userId: '',
-		actingOrgId: orgId,
-		platformPermissions: [...ALL_PLATFORM_PERMISSIONS],
-		orgPermissions: [...ALL_ORG_PERMISSIONS],
-		system: true
+		id: overrides.id ?? makeUuid(),
+		scope: 'org',
+		ownerOrgId,
+		label: overrides.label ?? 'Org Server',
+		serverUrl: overrides.serverUrl ?? 'http://localhost:5001',
+		apiKey: overrides.apiKey,
+		timeoutMs: overrides.timeoutMs,
+		retryCount: overrides.retryCount
 	};
 }
 
@@ -56,28 +69,32 @@ export function runComputeServerStoreConformance(opts: ComputeServerStoreConform
 	};
 
 	describe(`IComputeServerStore conformance: ${name}`, () => {
-		it('saveConfig + getConfig round-trips servers and defaultServerId', async () => {
+		it('savePlatformServers + getConfig round-trips servers and defaultServerId', async () => {
 			const store = await createStore();
-			const s1 = server({ label: 'Primary' });
-			const s2 = server({ label: 'Secondary', apiKey: 'secret' });
-			await store.saveConfig(SYSTEM_CONTEXT, { servers: [s1, s2], defaultServerId: s1.id });
+			const s1 = platformServer({ label: 'Primary' });
+			const s2 = platformServer({ label: 'Secondary', apiKey: 'secret' });
+			await store.savePlatformServers(SYSTEM_CONTEXT, [s1, s2], s1.id);
 
 			const got = await store.getConfig(SYSTEM_CONTEXT);
-			expect(got.servers.length).toBe(2);
-			expect(got.servers.map((s) => s.id).sort()).toEqual([s1.id, s2.id].sort());
+			const platformIds = got.servers.filter(isPlatformServer).map((s) => s.id);
+			expect(platformIds.sort()).toEqual([s1.id, s2.id].sort());
 			expect(got.defaultServerId).toBe(s1.id);
 		});
 
-		it('saveConfig replaces the previous list', async () => {
+		it('savePlatformServers replaces the previous platform set', async () => {
 			const store = await createStore();
-			const oldS = server({ label: 'Old' });
-			await store.saveConfig(SYSTEM_CONTEXT, { servers: [oldS] });
+			await store.savePlatformServers(
+				SYSTEM_CONTEXT,
+				[platformServer({ label: 'Old' })],
+				undefined
+			);
 
-			const newS = server({ label: 'New' });
-			await store.saveConfig(SYSTEM_CONTEXT, { servers: [newS] });
+			const newS = platformServer({ label: 'New' });
+			await store.savePlatformServers(SYSTEM_CONTEXT, [newS], newS.id);
 
 			const got = await store.getConfig(SYSTEM_CONTEXT);
-			expect(got.servers.map((s) => s.id)).toEqual([newS.id]);
+			const platformIds = got.servers.filter(isPlatformServer).map((s) => s.id);
+			expect(platformIds).toEqual([newS.id]);
 		});
 
 		it('getConfig on empty returns an empty servers list', async () => {
@@ -87,63 +104,92 @@ export function runComputeServerStoreConformance(opts: ComputeServerStoreConform
 		});
 
 		// ============================================================================
-		// Org-scoped reads / writes (spec §3 BYO compute)
+		// Org-private servers + orgDefaults (spec §3)
 		// ============================================================================
 
-		it('saveConfig in org scope is invisible to instance reads', async () => {
+		it('saveOrgServers stores rows owned by the org', async () => {
 			const store = await createStore();
 			const orgId = await seed();
-			const orgServer = server({ label: "Org's BYO" });
-			await store.saveConfig(orgCtx(orgId), {
-				servers: [orgServer],
-				defaultServerId: orgServer.id
-			});
+			const s = orgServer(orgId, { label: "Org's BYO" });
+			await store.saveOrgServers(SYSTEM_CONTEXT, orgId, [s], s.id);
 
-			const instance = await store.getConfig(SYSTEM_CONTEXT);
-			expect(instance.servers.map((s) => s.id)).not.toContain(orgServer.id);
+			const got = await store.getConfig(SYSTEM_CONTEXT);
+			const ownRows = got.servers.filter((row): row is OrgComputeServer =>
+				isOrgServer(row) && row.ownerOrgId === orgId
+			);
+			expect(ownRows.map((r) => r.id)).toEqual([s.id]);
+			expect(got.orgDefaults?.[orgId]).toBe(s.id);
 		});
 
-		it('saveConfig in org scope returns its own servers + default on read', async () => {
+		it('saveOrgServers does not clobber platform rows (and vice versa)', async () => {
 			const store = await createStore();
 			const orgId = await seed();
-			const orgServer = server({ label: "Org's BYO" });
-			await store.saveConfig(orgCtx(orgId), {
-				servers: [orgServer],
-				defaultServerId: orgServer.id
-			});
+			const platS = platformServer({ label: 'Platform' });
+			const orgS = orgServer(orgId, { label: 'Org' });
 
-			const got = await store.getConfig(orgCtx(orgId));
-			expect(got.servers.map((s) => s.id)).toEqual([orgServer.id]);
-			expect(got.defaultServerId).toBe(orgServer.id);
+			await store.savePlatformServers(SYSTEM_CONTEXT, [platS], platS.id);
+			await store.saveOrgServers(SYSTEM_CONTEXT, orgId, [orgS], orgS.id);
+
+			// Replacing the platform set should leave org rows untouched.
+			const replacement = platformServer({ label: 'Replacement' });
+			await store.savePlatformServers(SYSTEM_CONTEXT, [replacement], replacement.id);
+
+			const got = await store.getConfig(SYSTEM_CONTEXT);
+			const platformIds = got.servers.filter(isPlatformServer).map((s) => s.id);
+			expect(platformIds).toEqual([replacement.id]);
+			const orgIds = got.servers
+				.filter((s): s is OrgComputeServer => isOrgServer(s) && s.ownerOrgId === orgId)
+				.map((s) => s.id);
+			expect(orgIds).toEqual([orgS.id]);
+			expect(got.defaultServerId).toBe(replacement.id);
+			expect(got.orgDefaults?.[orgId]).toBe(orgS.id);
 		});
 
-		it('saving the instance scope does not clobber org-scoped servers (and vice versa)', async () => {
+		it('setOrgDefault updates and clears the per-org default', async () => {
 			const store = await createStore();
 			const orgId = await seed();
-			const instanceServer = server({ label: 'Instance Pool' });
-			const orgServer = server({ label: "Org's BYO" });
+			const s = orgServer(orgId);
+			await store.saveOrgServers(SYSTEM_CONTEXT, orgId, [s]);
 
-			await store.saveConfig(SYSTEM_CONTEXT, {
-				servers: [instanceServer],
-				defaultServerId: instanceServer.id
-			});
-			await store.saveConfig(orgCtx(orgId), {
-				servers: [orgServer],
-				defaultServerId: orgServer.id
-			});
+			await store.setOrgDefault(SYSTEM_CONTEXT, orgId, s.id);
+			let got = await store.getConfig(SYSTEM_CONTEXT);
+			expect(got.orgDefaults?.[orgId]).toBe(s.id);
 
-			// Re-saving the instance scope should leave org rows untouched.
-			const replacement = server({ label: 'Replacement' });
-			await store.saveConfig(SYSTEM_CONTEXT, {
-				servers: [replacement],
-				defaultServerId: replacement.id
-			});
+			await store.setOrgDefault(SYSTEM_CONTEXT, orgId, null);
+			got = await store.getConfig(SYSTEM_CONTEXT);
+			expect(got.orgDefaults?.[orgId]).toBeUndefined();
+		});
 
-			const instance = await store.getConfig(SYSTEM_CONTEXT);
-			expect(instance.servers.map((s) => s.id)).toEqual([replacement.id]);
-			const org = await store.getConfig(orgCtx(orgId));
-			expect(org.servers.map((s) => s.id)).toEqual([orgServer.id]);
-			expect(org.defaultServerId).toBe(orgServer.id);
+		it('deleteByOrg removes org-private rows and the orgDefaults entry', async () => {
+			const store = await createStore();
+			const orgId = await seed();
+			const orgS = orgServer(orgId);
+			await store.saveOrgServers(SYSTEM_CONTEXT, orgId, [orgS], orgS.id);
+
+			await store.deleteByOrg(SYSTEM_CONTEXT, orgId);
+
+			const got = await store.getConfig(SYSTEM_CONTEXT);
+			const remaining = got.servers.filter(
+				(s): s is ComputeServerConfig => isOrgServer(s) && s.ownerOrgId === orgId
+			);
+			expect(remaining).toEqual([]);
+			expect(got.orgDefaults?.[orgId]).toBeUndefined();
+		});
+
+		it('deleteByOrg strips this org from platform sharedWith allowlists', async () => {
+			const store = await createStore();
+			const orgId = await seed();
+			const otherOrgId = await seed();
+			const platS = platformServer({ sharedWith: [orgId, otherOrgId] });
+			await store.savePlatformServers(SYSTEM_CONTEXT, [platS], platS.id);
+
+			await store.deleteByOrg(SYSTEM_CONTEXT, orgId);
+
+			const got = await store.getConfig(SYSTEM_CONTEXT);
+			const found = got.servers.find(
+				(s): s is PlatformComputeServer => isPlatformServer(s) && s.id === platS.id
+			);
+			expect(found?.sharedWith).toEqual([otherOrgId]);
 		});
 	});
 }

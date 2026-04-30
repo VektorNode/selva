@@ -19,8 +19,8 @@ if (!envCtx) {
 			name: 'SupabaseComputeServerStore',
 			createStore: () => new SupabaseComputeServerStore(envCtx.bundle),
 			seedOrg: async (orgId) => {
-				// `compute_servers.org_id` and `compute_server_defaults.org_id` FK
-				// to `orgs(id)`; the suite invents an `orgId` per org-scoped test,
+				// `compute_servers.owner_org_id` and `compute_server_org_defaults.org_id`
+				// FK to `orgs(id)`; the suite invents an `orgId` per org-scoped test,
 				// so we materialize the parent org here. Owner is a throwaway user
 				// (the org-scoped tests use SYSTEM_CONTEXT for writes anyway).
 				const { userId } = await seedUser(envCtx, '');

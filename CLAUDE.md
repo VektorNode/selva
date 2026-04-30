@@ -258,7 +258,7 @@ All modules are granular exports for tree-shaking; see [packages/platform/src/](
 | `@selvajs/platform/definitions`   | Definition record types + `definitionPaths` helpers. Service orchestration lives in compute-app (`lib/server/definitions/DefinitionService.ts`). |
 | `@selvajs/platform/organizations` | `Organization`, `OrgMember`, `OrgRole` types + Zod schemas                                                           |
 | `@selvajs/platform/projects`      | `Project`, `ProjectMember`, `ProjectRole`, `ProjectVisibility` types + schemas                                       |
-| `@selvajs/platform/computeServer` | `ComputeServerConfig`, `resolveComputeServer()` helpers                                                              |
+| `@selvajs/platform/computeServer` | `ComputeServerConfig` (platform vs. org discriminated union), `serversVisibleTo()`, `resolveServerForOrg()` helpers |
 | `@selvajs/platform/access`        | Pure rule functions (`canView`, `canEdit`, `canSolve`, …) over `RequestContext`                                      |
 | `@selvajs/platform/testing`       | Vitest conformance suites — one per store                                                                            |
 

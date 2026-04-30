@@ -275,7 +275,7 @@
 				/>
 			</div>
 
-			{#if projects.length > 1 || computeServers.length > 1}
+			{#if projects.length > 1 || computeServers.length > 0}
 				<div class="grid grid-cols-2 gap-3">
 					{#if projects.length > 1}
 						<div class="space-y-1.5">
@@ -288,7 +288,7 @@
 							/>
 						</div>
 					{/if}
-					{#if computeServers.length > 1}
+					{#if computeServers.length > 0}
 						<div class="space-y-1.5">
 							<Label for="edit-srv">Compute server</Label>
 							<select

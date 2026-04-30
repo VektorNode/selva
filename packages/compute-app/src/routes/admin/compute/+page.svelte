@@ -1,37 +1,39 @@
 <script lang="ts">
 	import { Button, Card, EmptyState, Input, toast, SectionHeader } from '@selvajs/ui';
 	import { Circle, Server, Plus, Trash2, Star, ChevronDown, ChevronUp } from '@lucide/svelte';
-	import type { ComputeServerConfig } from '@selvajs/platform/computeServer';
+	import type { PlatformComputeServer } from '@selvajs/platform/computeServer';
 	import { useServerHealth } from '$lib/composables/useServerHealth.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { onMount } from 'svelte';
 
 	const API_KEY_CLEAR = '__clear__';
 
-	interface ServerEntry extends Omit<ComputeServerConfig, 'apiKey'> {
+	interface ServerEntry extends Omit<PlatformComputeServer, 'apiKey' | 'scope'> {
 		apiKey: string;
 		hasApiKey: boolean;
-		storedKeyIndex: number;
+	}
+
+	interface OrgRow {
+		id: string;
+		name: string;
+		slug: string;
 	}
 
 	interface PageData {
-		servers: (Omit<ComputeServerConfig, 'apiKey'> & { hasApiKey: boolean })[];
+		servers: (Omit<PlatformComputeServer, 'apiKey'> & { hasApiKey: boolean })[];
 		defaultServerId: string;
+		orgs: OrgRow[];
 	}
 	interface Props {
 		data: PageData;
 	}
 	let { data }: Props = $props();
 
-	$effect(() => {
-		console.log('Loaded compute config:', data);
-	});
-
 	const statusConfig = {
 		ok: { label: 'Online', color: 'text-green-600 dark:text-green-400' },
 		warning: { label: 'Warning', color: 'text-yellow-600 dark:text-yellow-400' },
 		error: { label: 'Offline', color: 'text-red-600 dark:text-red-400' },
-		checking: { label: 'Checking\u2026', color: 'text-blue-600 dark:text-blue-400' }
+		checking: { label: 'Checking…', color: 'text-blue-600 dark:text-blue-400' }
 	};
 
 	let servers = $state<ServerEntry[]>([]);
@@ -39,21 +41,22 @@
 	let saving = $state(false);
 	let dirty = $state(false);
 	let expandedPlugins = $state<Record<string, boolean>>({});
+	let expandedSharing = $state<Record<string, boolean>>({});
 
 	// Per-server health — keyed by server id
 	let healthMap = $state<Record<string, ReturnType<typeof useServerHealth>>>({});
 
 	$effect(() => {
 		if (!dirty) {
-			servers = data.servers.map((s, i) => ({
+			servers = data.servers.map((s) => ({
 				id: s.id,
 				label: s.label,
 				serverUrl: s.serverUrl,
+				sharedWith: s.sharedWith === 'all' ? 'all' : [...s.sharedWith],
 				timeoutMs: s.timeoutMs ?? 30000,
 				retryCount: s.retryCount ?? 0,
 				apiKey: '',
-				hasApiKey: s.hasApiKey,
-				storedKeyIndex: i
+				hasApiKey: s.hasApiKey
 			}));
 			defaultServerId = data.defaultServerId;
 		}
@@ -80,9 +83,9 @@
 				id,
 				label: 'new-server',
 				serverUrl: 'http://localhost:5000',
+				sharedWith: 'all',
 				apiKey: '',
 				hasApiKey: false,
-				storedKeyIndex: -1,
 				timeoutMs: 30000,
 				retryCount: 0
 			}
@@ -102,22 +105,33 @@
 		dirty = true;
 	}
 
+	function setSharedWithAll(server: ServerEntry, all: boolean) {
+		server.sharedWith = all ? 'all' : [];
+		dirty = true;
+	}
+
+	function toggleOrg(server: ServerEntry, orgId: string) {
+		if (server.sharedWith === 'all') return; // ignored when in 'all' mode
+		const set = new Set(server.sharedWith);
+		if (set.has(orgId)) set.delete(orgId);
+		else set.add(orgId);
+		server.sharedWith = [...set];
+		dirty = true;
+	}
+
 	async function save() {
 		saving = true;
 		try {
 			const payload = {
 				defaultServerId,
-				servers: servers.map(
-					({ apiKey, hasApiKey: _, retryCount, timeoutMs, storedKeyIndex, ...s }) => ({
-						...s,
-						storedKeyIndex,
-						timeoutMs: Math.min(300000, Math.max(1000, Number(timeoutMs) || 30000)),
-						...(apiKey === API_KEY_CLEAR ? { apiKey: null } : apiKey ? { apiKey } : {}),
-						...(Number(retryCount)
-							? { retryCount: Math.min(5, Math.max(0, Number(retryCount))) }
-							: {})
-					})
-				)
+				servers: servers.map(({ apiKey, hasApiKey: _, retryCount, timeoutMs, ...s }) => ({
+					...s,
+					timeoutMs: Math.min(300000, Math.max(1000, Number(timeoutMs) || 30000)),
+					...(apiKey === API_KEY_CLEAR ? { apiKey: null } : apiKey ? { apiKey } : {}),
+					...(Number(retryCount)
+						? { retryCount: Math.min(5, Math.max(0, Number(retryCount))) }
+						: {})
+				}))
 			};
 			const res = await fetch('/admin/api/compute', {
 				method: 'PUT',
@@ -152,6 +166,78 @@
 <svelte:head>
 	<title>Admin · Compute</title>
 </svelte:head>
+
+{#snippet sharingControl(server: ServerEntry)}
+	{@const isAll = server.sharedWith === 'all'}
+	{@const orgIds = isAll ? new Set<string>() : new Set(server.sharedWith)}
+	{@const isDefault = server.id === defaultServerId}
+	<div class="space-y-2">
+		<div class="flex items-center gap-3">
+			<p class="text-muted-foreground text-xs">Available to</p>
+			<div class="bg-muted inline-flex rounded-md p-0.5">
+				<button
+					class="rounded px-2 py-0.5 text-xs {isAll
+						? 'bg-background shadow-sm'
+						: 'text-muted-foreground hover:text-foreground'}"
+					onclick={() => setSharedWithAll(server, true)}
+				>
+					All orgs
+				</button>
+				<button
+					class="rounded px-2 py-0.5 text-xs {!isAll
+						? 'bg-background shadow-sm'
+						: 'text-muted-foreground hover:text-foreground'}"
+					onclick={() => setSharedWithAll(server, false)}
+				>
+					Specific orgs
+				</button>
+			</div>
+			{#if !isAll && data.orgs.length > 0}
+				<button
+					class="text-muted-foreground hover:text-foreground ml-auto flex items-center gap-1 text-xs"
+					onclick={() => (expandedSharing[server.id] = !expandedSharing[server.id])}
+				>
+					{orgIds.size}/{data.orgs.length} selected
+					{#if expandedSharing[server.id]}
+						<ChevronUp class="h-3 w-3" />
+					{:else}
+						<ChevronDown class="h-3 w-3" />
+					{/if}
+				</button>
+			{/if}
+		</div>
+		{#if !isAll && expandedSharing[server.id]}
+			{#if data.orgs.length === 0}
+				<p class="text-muted-foreground text-xs">No organizations exist yet.</p>
+			{:else}
+				<div class="grid gap-1 sm:grid-cols-2">
+					{#each data.orgs as org (org.id)}
+						<label class="hover:bg-muted/40 flex items-center gap-2 rounded px-2 py-1 text-xs">
+							<input
+								type="checkbox"
+								checked={orgIds.has(org.id)}
+								onchange={() => toggleOrg(server, org.id)}
+								class="h-3.5 w-3.5"
+							/>
+							<span class="truncate">{org.name}</span>
+							<span class="text-muted-foreground ml-auto font-mono text-[10px]">{org.slug}</span>
+						</label>
+					{/each}
+				</div>
+			{/if}
+		{/if}
+		{#if !isAll && isDefault}
+			<p class="text-muted-foreground text-xs">
+				This server is the global default — it stays visible to every org regardless of the
+				allowlist.
+			</p>
+		{:else if !isAll && orgIds.size === 0}
+			<p class="text-muted-foreground text-xs">
+				No orgs selected — this server is dormant (admin-only).
+			</p>
+		{/if}
+	</div>
+{/snippet}
 
 {#snippet serverCard(server: ServerEntry, i: number)}
 	{@const health = healthMap[server.id]?.state}
@@ -308,6 +394,8 @@
 			</div>
 		</div>
 
+		{@render sharingControl(server)}
+
 		{#if health?.reachable && pluginEntries.length > 0}
 			<div>
 				<button
@@ -340,7 +428,7 @@
 	<SectionHeader
 		eyebrow="Admin"
 		title="Compute"
-		description="The instance compute pool \u2014 used by every org unless they configure a BYO override. Changes take effect immediately, no restart required."
+		description="Platform compute servers. The global default is always visible to every org; share additional servers with specific orgs (or all orgs) to expose them in pickers and let orgs pin definitions to them. Org owners can configure their own servers via /team/compute when ALLOW_ORG_COMPUTE_OVERRIDE is on."
 	>
 		{#snippet actions()}
 			<Button variant="outline" size="sm" onclick={addServer}>
@@ -348,7 +436,7 @@
 				Add server
 			</Button>
 			<Button size="sm" onclick={save} disabled={saving || !dirty}>
-				{saving ? 'Saving\u2026' : 'Save'}
+				{saving ? 'Saving…' : 'Save'}
 			</Button>
 		{/snippet}
 	</SectionHeader>

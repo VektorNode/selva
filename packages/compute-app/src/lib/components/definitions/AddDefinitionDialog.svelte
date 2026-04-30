@@ -195,9 +195,9 @@
 
 		<div class="space-y-4">
 			<!-- Project & compute server -->
-			{#if showProjectDropdown || computeServers.length > 1}
+			{#if showProjectDropdown || computeServers.length > 0}
 				<div
-					class="grid gap-3 {showProjectDropdown && computeServers.length > 1
+					class="grid gap-3 {showProjectDropdown && computeServers.length > 0
 						? 'sm:grid-cols-2'
 						: ''}"
 				>
@@ -220,7 +220,7 @@
 							</div>
 						</div>
 					{/if}
-					{#if computeServers.length > 1}
+					{#if computeServers.length > 0}
 						<div class="space-y-1">
 							<Label for="new-server">Compute Server</Label>
 							<select

@@ -1,20 +1,20 @@
 import * as path from 'node:path';
-import type {
-	IComputeServerStore,
-	ComputeConfig,
-	ComputeServerConfig,
-	RequestContext
+import {
+	isOrgServer,
+	isPlatformServer,
+	type IComputeServerStore,
+	type ComputeConfig,
+	type ComputeServerConfig,
+	type PlatformComputeServer,
+	type RequestContext
 } from '@selvajs/platform';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 import { decodeSecretKey, decryptSecret, encryptSecret, isEncryptedSecret } from './secretCrypto.js';
 
 /**
- * On-disk file shape. One file holds both the instance pool (rows with
- * `orgId === null`) and per-org overrides (rows with `orgId === '<uuid>'`).
- *
- * `defaultServerId` is the instance-pool default. `orgDefaults[orgId]` is
- * each org's override default. Reads scope by `ctx.actingOrgId` and return
- * only the matching slice.
+ * On-disk file shape. Single document holding *all* servers (platform +
+ * org-private), the global `defaultServerId`, and the per-org
+ * `orgDefaults` map. Spec §3.
  *
  * `apiKey` on disk is always an `enc:v1:<…>` envelope (AES-256-GCM); the
  * store decrypts on read so callers see plaintext.
@@ -25,18 +25,15 @@ interface OnDiskShape {
 	orgDefaults?: Record<string, string>;
 }
 
-const EMPTY: OnDiskShape = { servers: [] };
+const EMPTY: OnDiskShape = { servers: [], orgDefaults: {} };
 
 /**
- * Reads/writes compute.config.json. The file is re-read on every `getConfig`
- * call so changes take effect without a restart.
+ * Reads/writes compute.config.json. The file is re-read on every read call
+ * so changes take effect without a restart.
  *
- * Spec §3 BYO compute: `ctx.actingOrgId` selects the scope.
- *   - `actingOrgId` set → returns servers/default for that org only.
- *   - `actingOrgId` unset → returns the instance pool only.
- *
- * Saving in a given scope replaces *only that scope's* rows; cross-scope
- * data is preserved untouched.
+ * Mutation methods are scope-targeted (`savePlatformServers`,
+ * `saveOrgServers`, `setOrgDefault`) — each preserves rows in the other
+ * scopes untouched.
  */
 export class LocalComputeServerStore implements IComputeServerStore {
 	static fromEnv(env: Record<string, string | undefined>): LocalComputeServerStore {
@@ -60,7 +57,11 @@ export class LocalComputeServerStore implements IComputeServerStore {
 
 	private async readAll(): Promise<OnDiskShape> {
 		const raw = await readJsonFile<OnDiskShape>(this.configFilePath, EMPTY);
-		return { ...raw, orgDefaults: raw.orgDefaults ?? {} };
+		return {
+			servers: raw.servers ?? [],
+			defaultServerId: raw.defaultServerId,
+			orgDefaults: raw.orgDefaults ?? {}
+		};
 	}
 
 	private decryptApiKeys(servers: ComputeServerConfig[]): ComputeServerConfig[] {
@@ -84,63 +85,109 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		});
 	}
 
-	async getConfig(ctx: RequestContext): Promise<ComputeConfig> {
+	async getConfig(_ctx: RequestContext): Promise<ComputeConfig> {
 		const all = await this.readAll();
-		const orgId = ctx.actingOrgId;
-
-		if (orgId) {
-			const servers = this.decryptApiKeys(all.servers.filter((s) => s.orgId === orgId));
-			const defaultServerId = all.orgDefaults?.[orgId];
-			return { servers, defaultServerId };
-		}
-
-		const servers = this.decryptApiKeys(all.servers.filter((s) => s.orgId == null));
-		return { servers, defaultServerId: all.defaultServerId };
+		return {
+			servers: this.decryptApiKeys(all.servers),
+			defaultServerId: all.defaultServerId,
+			orgDefaults: all.orgDefaults
+		};
 	}
 
-	async saveConfig(ctx: RequestContext, config: ComputeConfig): Promise<void> {
+	async savePlatformServers(
+		_ctx: RequestContext,
+		servers: ComputeServerConfig[],
+		defaultServerId: string | undefined
+	): Promise<void> {
 		const all = await this.readAll();
-		const orgId = ctx.actingOrgId;
+		const orgRows = all.servers.filter(isOrgServer);
+		const platformRows = this.encryptApiKeys(servers.filter(isPlatformServer));
 
-		// Preserve other scopes' rows; replace only the scope we're saving.
-		if (orgId) {
-			const otherScopes = all.servers.filter((s) => s.orgId !== orgId);
-			const orgServers = this.encryptApiKeys(
-				config.servers.map((s) => ({ ...s, orgId }))
-			);
-			const orgDefaults = { ...(all.orgDefaults ?? {}) };
-			if (config.defaultServerId) orgDefaults[orgId] = config.defaultServerId;
-			else delete orgDefaults[orgId];
+		await writeJsonFile<OnDiskShape>(this.configFilePath, {
+			servers: [...platformRows, ...orgRows],
+			defaultServerId,
+			orgDefaults: all.orgDefaults
+		});
+	}
 
-			await writeJsonFile<OnDiskShape>(this.configFilePath, {
-				...all,
-				servers: [...otherScopes, ...orgServers],
-				orgDefaults
-			});
-			return;
+	async saveOrgServers(
+		_ctx: RequestContext,
+		orgId: string,
+		servers: ComputeServerConfig[],
+		defaultServerId?: string | null
+	): Promise<void> {
+		const all = await this.readAll();
+		const platformRows = all.servers.filter(isPlatformServer);
+		const otherOrgRows = all.servers.filter((s) => isOrgServer(s) && s.ownerOrgId !== orgId);
+		const thisOrgRows = this.encryptApiKeys(
+			servers.filter((s): s is ComputeServerConfig => true).map((s) =>
+				isOrgServer(s)
+					? { ...s, ownerOrgId: orgId }
+					: // Coerce — caller passed something with the wrong/missing scope.
+					  ({ ...s, scope: 'org', ownerOrgId: orgId } as ComputeServerConfig)
+			)
+		);
+
+		const orgDefaults = { ...(all.orgDefaults ?? {}) };
+		if (defaultServerId === null) {
+			delete orgDefaults[orgId];
+		} else if (typeof defaultServerId === 'string') {
+			orgDefaults[orgId] = defaultServerId;
 		}
 
-		const otherScopes = all.servers.filter((s) => s.orgId != null);
-		const instanceServers = this.encryptApiKeys(
-			config.servers.map((s) => ({ ...s, orgId: null }))
-		);
 		await writeJsonFile<OnDiskShape>(this.configFilePath, {
-			...all,
-			servers: [...instanceServers, ...otherScopes],
-			defaultServerId: config.defaultServerId
+			servers: [...platformRows, ...otherOrgRows, ...thisOrgRows],
+			defaultServerId: all.defaultServerId,
+			orgDefaults
 		});
+	}
+
+	async setOrgDefault(
+		_ctx: RequestContext,
+		orgId: string,
+		serverId: string | null
+	): Promise<void> {
+		const all = await this.readAll();
+		const orgDefaults = { ...(all.orgDefaults ?? {}) };
+		if (serverId === null) {
+			delete orgDefaults[orgId];
+		} else {
+			orgDefaults[orgId] = serverId;
+		}
+		await writeJsonFile<OnDiskShape>(this.configFilePath, { ...all, orgDefaults });
 	}
 
 	async deleteByOrg(_ctx: RequestContext, orgId: string): Promise<void> {
 		const all = await this.readAll();
-		const servers = all.servers.filter((s) => s.orgId !== orgId);
+
+		// Drop org-private rows owned by this org.
+		const remaining = all.servers.filter((s) => !(isOrgServer(s) && s.ownerOrgId === orgId));
+
+		// Strip this org from any platform server's `sharedWith` allowlist.
+		const cleaned: ComputeServerConfig[] = remaining.map((s) => {
+			if (!isPlatformServer(s)) return s;
+			if (s.sharedWith === 'all') return s;
+			if (!s.sharedWith.includes(orgId)) return s;
+			const next: PlatformComputeServer = {
+				...s,
+				sharedWith: s.sharedWith.filter((id) => id !== orgId)
+			};
+			return next;
+		});
+
 		const orgDefaults = { ...(all.orgDefaults ?? {}) };
 		const hadDefault = orgId in orgDefaults;
 		delete orgDefaults[orgId];
-		if (servers.length === all.servers.length && !hadDefault) return;
+
+		const changed =
+			cleaned.length !== all.servers.length ||
+			hadDefault ||
+			cleaned.some((c, i) => c !== all.servers[i]);
+		if (!changed) return;
+
 		await writeJsonFile<OnDiskShape>(this.configFilePath, {
-			...all,
-			servers,
+			servers: cleaned,
+			defaultServerId: all.defaultServerId,
 			orgDefaults
 		});
 	}
