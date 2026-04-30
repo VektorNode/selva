@@ -52,7 +52,7 @@ public class GH_Page : GH_Component
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        pManager.AddGenericParameter("Element", "E", "Drawing element", GH_ParamAccess.item);
+        pManager.AddGenericParameter("Page", "P", "Drawing page", GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)
