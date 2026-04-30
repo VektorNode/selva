@@ -23,7 +23,7 @@
 		"watch:ui": "pnpm --filter @selvajs/ui build:watch",
 		"generate": "turbo run generate",
 		"build": "turbo run build",
-		"build:ui:fast": "pnpm --filter @selvajs/ui build:fast",
+		"build:ui": "pnpm --filter @selvajs/ui build",
 		"build:builder": "turbo run build --filter=@selvajs/builder-app",
 		"build:compute": "turbo run build --filter=@selvajs/compute-app",
 		"build:plugin": "turbo run build --filter=@selvajs/builder-app && node scripts/build-production.js",

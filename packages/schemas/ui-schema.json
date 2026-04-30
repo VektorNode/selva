@@ -385,6 +385,48 @@
 				}
 			]
 		},
+		"ImageWidgetConfig": {
+			"type": "object",
+			"description": "Configuration for the image viewer output widget. Renders PNG/JPG/WEBP/GIF/SVG files inline.",
+			"properties": {
+				"allowDownload": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show a download button on the image viewer"
+				},
+				"allowFullscreen": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show a fullscreen toggle button on the image viewer"
+				},
+				"fitMode": {
+					"type": "string",
+					"enum": ["contain", "cover"],
+					"default": "contain",
+					"description": "How the image should fit its container: 'contain' preserves aspect ratio with letterboxing, 'cover' fills container and may crop"
+				},
+				"backgroundColor": {
+					"type": "string",
+					"pattern": "^#[0-9A-Fa-f]{6}$",
+					"description": "Optional background color shown behind the image (hex string, e.g. '#ffffff')"
+				}
+			},
+			"additionalProperties": false
+		},
+		"OutputImageLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "output" },
+						"widgetType": { "const": "image" },
+						"config": { "$ref": "#/definitions/ImageWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
 		"LineBreakLayoutItem": {
 			"type": "object",
 			"description": "A full-width line break that forces subsequent items onto a new grid row",
@@ -410,6 +452,7 @@
 				{ "$ref": "#/definitions/OutputNumberLayoutItem" },
 				{ "$ref": "#/definitions/OutputFileLayoutItem" },
 				{ "$ref": "#/definitions/OutputChartLayoutItem" },
+				{ "$ref": "#/definitions/OutputImageLayoutItem" },
 				{ "$ref": "#/definitions/LineBreakLayoutItem" }
 			]
 		},
@@ -662,7 +705,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.6.0",
+					"default": "2.7.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

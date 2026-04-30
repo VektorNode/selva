@@ -8,6 +8,7 @@ import type {
 	FileInputWidgetConfig,
 	ColorWidgetConfig,
 	ChartWidgetConfig,
+	ImageWidgetConfig,
 	InputNumberLayoutItem,
 	InputTextLayoutItem,
 	InputDropdownLayoutItem,
@@ -17,7 +18,8 @@ import type {
 	OutputTextLayoutItem,
 	OutputNumberLayoutItem,
 	OutputFileLayoutItem,
-	OutputChartLayoutItem
+	OutputChartLayoutItem,
+	OutputImageLayoutItem
 } from '@selvajs/schemas';
 import { ACCEPTED_FILE_FORMATS } from '@selvajs/schemas';
 
@@ -40,7 +42,8 @@ export type OutputWidgetType =
 	| OutputTextLayoutItem['widgetType']
 	| OutputNumberLayoutItem['widgetType']
 	| OutputFileLayoutItem['widgetType']
-	| OutputChartLayoutItem['widgetType'];
+	| OutputChartLayoutItem['widgetType']
+	| OutputImageLayoutItem['widgetType'];
 
 export type WidgetType = InputWidgetType | OutputWidgetType;
 
@@ -52,7 +55,7 @@ export type InputWidgetConfig =
 	| FileInputWidgetConfig
 	| ColorWidgetConfig;
 
-export type OutputWidgetConfig = ChartWidgetConfig | Record<string, never>;
+export type OutputWidgetConfig = ChartWidgetConfig | ImageWidgetConfig | Record<string, never>;
 
 export type WidgetConfig = InputWidgetConfig | OutputWidgetConfig;
 
@@ -157,6 +160,15 @@ export function createDefaultWidgetConfig(
 
 			case 'chart': {
 				const config: ChartWidgetConfig = {};
+				return config;
+			}
+
+			case 'image': {
+				const config: ImageWidgetConfig = {
+					allowDownload: true,
+					allowFullscreen: true,
+					fitMode: 'contain'
+				};
 				return config;
 			}
 

@@ -2,6 +2,7 @@
 	import type { OutputLayoutItem } from '@selvajs/schemas';
 	import type { FileData } from '@selvajs/compute';
 	import ChartOutput from './ChartOutput.svelte';
+	import ImageOutput from './ImageOutput.svelte';
 	import { downloadFiles, formatFileSize, getBase64FileSize } from '$lib/utils/file-download';
 	import { Button } from '../primitives';
 	import * as Dialog from '$lib/components/primitives/dialog';
@@ -249,7 +250,7 @@
 {/snippet}
 
 <div class="gap-2 flex flex-col">
-	{#if item.widgetType !== 'chart'}
+	{#if item.widgetType !== 'chart' && item.widgetType !== 'image'}
 		{@render fieldHeader()}
 	{/if}
 
@@ -258,6 +259,8 @@
 			{item}
 			value={typeof value === 'string' ? value : value != null ? JSON.stringify(value) : ''}
 		/>
+	{:else if item.widgetType === 'image'}
+		<ImageOutput {item} {value} />
 	{:else if item.widgetType === 'file'}
 		{@render fileDisplay()}
 	{:else if item.widgetType === 'number'}
