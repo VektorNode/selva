@@ -4,6 +4,7 @@ using Grasshopper.Kernel;
 using Grasshopper.Kernel.Parameters;
 using Rhino.Geometry;
 using Selva.Drawing;
+using Selva.Drawing.Model.Elements;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -12,7 +13,7 @@ public class GH_LinearDimension : GH_Component
     public GH_LinearDimension()
         : base("Linear Dimension", "LDim",
             "Aligned linear dimension between two points, offset perpendicular to the segment",
-            "Selva", "SVG")
+            "Selva", "Elements")
     {
     }
 
@@ -50,7 +51,7 @@ public class GH_LinearDimension : GH_Component
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        pManager.AddGenericParameter("SVG Dimension", "SD", "SVG dimension data", GH_ParamAccess.item);
+        pManager.AddGenericParameter("Element", "E", "Drawing element", GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)
@@ -79,18 +80,18 @@ public class GH_LinearDimension : GH_Component
         {
             TextSize = textSize,
             StrokeWidth = stroke,
-            Color = color,
-            TickStyle = (DimensionTickStyle)Math.Max(0, Math.Min(2, tickStyle)),
-            TextPlacement = (DimensionTextPlacement)Math.Max(0, Math.Min(1, textPlacement))
+            Color = Selva.Drawing.Model.Style.Color.Rgb(color.R, color.G, color.B, color.A),
+            TickKind = (DimensionTickKind)Math.Max(0, Math.Min(2, tickStyle)),
+            TextPlacement = (DimensionTextPlacement)Math.Max(0, Math.Min(1, textPlacement)),
         };
 
-        var data = LinearDimensionBuilder.Build(a.X, a.Y, b.X, b.Y, offset, label, style);
-        if (data == null)
+        var element = LinearDimensionBuilder.Build(a.X, a.Y, b.X, b.Y, offset, label, style);
+        if (element == null)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Points coincide");
             return;
         }
 
-        DA.SetData(0, data);
+        DA.SetData(0, element);
     }
 }

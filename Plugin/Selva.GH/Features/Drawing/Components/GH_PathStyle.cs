@@ -3,16 +3,18 @@ using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Parameters;
-using Selva.Drawing;
+using Selva.Drawing.Model.Style;
+using Color = System.Drawing.Color;
+using ModelColor = Selva.Drawing.Model.Style.Color;
 
 namespace Selva.GH.Features.Drawing.Components;
 
 public class GH_PathStyle : GH_Component
 {
     public GH_PathStyle()
-        : base("Path Style", "PStyle",
-            "Creates a stroke/fill style for SVG curves and surfaces",
-            "Selva", "SVG")
+        : base("Path Style", "Style",
+            "Creates a stroke/fill style for curves and surfaces",
+            "Selva", "Elements")
     {
     }
 
@@ -90,32 +92,40 @@ public class GH_PathStyle : GH_Component
         DA.GetData(9, ref nonScaling);
         DA.GetData(10, ref fillRuleInt);
 
-        float[] dashArray = null;
+        double[] dashArray = null;
         if (dashValues.Count > 0)
         {
-            dashArray = new float[dashValues.Count];
+            dashArray = new double[dashValues.Count];
             for (var i = 0; i < dashValues.Count; i++)
-                dashArray[i] = (float)Math.Max(0, dashValues[i]);
+                dashArray[i] = Math.Max(0, dashValues[i]);
         }
 
-        var style = new PathStyleData
+        var stroke = new Stroke
         {
-            StrokeColor = strokeColor,
-            StrokeWidth = (float)strokeWidth,
-            StrokeOpacity = (float)Clamp01(strokeOpacity),
-            HasStroke = true,
-            FillColor = fillColor,
-            HasFill = fill,
-            FillOpacity = (float)Clamp01(fillOpacity),
-            StrokeCap = (SvgStrokeCap)Math.Max(0, Math.Min(2, lineCap)),
-            StrokeJoin = (SvgStrokeJoin)Math.Max(0, Math.Min(2, lineJoin)),
+            Color = ToModelColor(strokeColor),
+            Width = strokeWidth,
+            Opacity = Clamp01(strokeOpacity),
+            Cap = (StrokeCap)Math.Max(0, Math.Min(2, lineCap)),
+            Join = (StrokeJoin)Math.Max(0, Math.Min(2, lineJoin)),
             DashArray = dashArray,
-            NonScalingStroke = nonScaling,
-            FillRule = fillRuleInt == 1 ? SvgFillRule.NonZero : SvgFillRule.EvenOdd
+            NonScaling = nonScaling,
         };
 
-        DA.SetData(0, style);
+        Fill fillStyle = null;
+        if (fill)
+        {
+            fillStyle = new Fill
+            {
+                Color = ToModelColor(fillColor),
+                Opacity = Clamp01(fillOpacity),
+                Rule = fillRuleInt == 1 ? FillRule.NonZero : FillRule.EvenOdd,
+            };
+        }
+
+        DA.SetData(0, new PathStyle { Stroke = stroke, Fill = fillStyle });
     }
+
+    private static ModelColor ToModelColor(Color c) => ModelColor.Rgb(c.R, c.G, c.B, c.A);
 
     private static double Clamp01(double v) => v < 0 ? 0 : v > 1 ? 1 : v;
 }

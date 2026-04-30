@@ -12,26 +12,7 @@ Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for b
 
 ## Repository Structure
 
-For folder layout, naming rules, and per-package conventions, see [STRUCTURE.md](./STRUCTURE.md). The summary below is a quick orientation only — STRUCTURE.md is authoritative.
-
-This is a monorepo with two distinct stacks:
-
-### TypeScript/JavaScript Workspace (`packages/`)
-
-- [@selvajs/compute](https://www.npmjs.com/package/@selvajs/compute) - (External npm package) Type-safe Rhino Compute client, Three.js helpers, file utilities
-- **`@selvajs/config`** - Shared ESLint, Vite, and Prettier configuration
-- **`@selvajs/builder-app`** - Schema designer connected to Grasshopper via WebSocket (local dev mode)
-- **`@selvajs/compute-app`** - Standalone app for solving Grasshopper definitions via Rhino.Compute (cloud mode)
-- **`@selvajs/ui`** - Shared Svelte components, utilities, and theme styles (CSS + theme utilities)
-- **`@selvajs/schemas`** - Schema definitions and code generators (TypeScript + C#)
-- **`@selvajs/platform`** - Pure TypeScript interfaces for platform providers (auth, definitions, compute, storage, organizations, projects) with conformance test suites
-- **`@selvajs/local-provider`** - Filesystem/JSON/HMAC implementations of `@selvajs/platform` interfaces for local development
-
-### .NET Workspace (`Plugin/`)
-
-- **`Selva.Schema`** - Shared schema models, validation, and migration (netstandard2.0)
-- **`Selva.GH`** - Main plugin with components (net48/net7.0, outputs `.gha`)
-- **`Selva.Tests`** - xUnit tests (net7.0)
+Monorepo with two stacks: `packages/` (TypeScript/Svelte workspace) and `Plugin/` (.NET / Grasshopper). [STRUCTURE.md](./STRUCTURE.md) is authoritative for folder layout, naming, and per-package conventions — read it before adding files.
 
 ## Common Development Commands
 
@@ -189,13 +170,6 @@ Key features:
 - Only add error handling at system boundaries (user input, external APIs)
 - Section headers use the format: `// ============================================================================` with title between two lines of equals signs
 
-## Performance Notes
-
-- Three.js is lazy-loaded only when 3D viewer is enabled
-- `rhino-compute-core` (now `compute-rhino3d`) is dynamically imported when needed
-- Use `@lucide/svelte` for all icons (tree-shakeable, no duplicates)
-- Prefer consolidating utilities over creating new abstractions
-
 ## Installation to Grasshopper
 
 After building the plugin, copy to your Grasshopper Libraries folder:
@@ -242,32 +216,7 @@ Rhino.Compute server URL + API key are configured in `/admin/compute` and persis
 
 ### Platform Package (`@selvajs/platform`)
 
-Core provider interfaces for Selva's pluggable architecture. All modules support Zod schema validation and are granular exports for tree-shaking.
-
-All modules are granular exports for tree-shaking; see [packages/platform/src/](packages/platform/src/) for the full list.
-
-| Module                            | Key exports                                                                                                          |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `@selvajs/platform/auth`          | `IAuthProvider`, `IPasswordAuth`                                                                                     |
-| `@selvajs/platform/data`          | `IDataProvider` (composes all stores below), `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IComputeServerStore` |
-| `@selvajs/platform/invites`       | `IInviteStore`                                                                                                       |
-| `@selvajs/platform/shareLinks`    | `IShareLinkStore`                                                                                                    |
-| `@selvajs/platform/permissions`   | `IPlatformPermissionStore`                                                                                           |
-| `@selvajs/platform/userProfile`   | `IUserProfileStore`                                                                                                  |
-| `@selvajs/platform/storage`       | `IStorageProvider`                                                                                                   |
-| `@selvajs/platform/definitions`   | Definition record types + `definitionPaths` helpers. Service orchestration lives in compute-app (`lib/server/definitions/DefinitionService.ts`). |
-| `@selvajs/platform/organizations` | `Organization`, `OrgMember`, `OrgRole` types + Zod schemas                                                           |
-| `@selvajs/platform/projects`      | `Project`, `ProjectMember`, `ProjectRole`, `ProjectVisibility` types + schemas                                       |
-| `@selvajs/platform/computeServer` | `ComputeServerConfig` (platform vs. org discriminated union), `serversVisibleTo()`, `resolveServerForOrg()` helpers |
-| `@selvajs/platform/access`        | Pure rule functions (`canView`, `canEdit`, `canSolve`, …) over `RequestContext`                                      |
-| `@selvajs/platform/testing`       | Vitest conformance suites — one per store                                                                            |
-
-**Local provider** (`@selvajs/local-provider`) implements all interfaces using the filesystem:
-
-- `LocalAuthProvider` — HMAC session tokens; reads users from `users.json` (PBKDF2-SHA256 password hashes)
-- `LocalDataProvider` — wires all stores; each backed by an atomic-write JSON file
-- `LocalStorageProvider` — filesystem blobs under `$DATA_PATH/`, auto-transcodes images to WebP via sharp
-- `LocalComputeServerStore` — `compute.config.json`
+Pluggable provider interfaces (auth, data stores, storage, permissions, access rules) with Zod schemas. Granular exports for tree-shaking — see [packages/platform/src/](packages/platform/src/) for the module list. `@selvajs/local-provider` is the filesystem-backed implementation (HMAC sessions, atomic-write JSON, WebP image transcoding).
 
 ## Issues
 

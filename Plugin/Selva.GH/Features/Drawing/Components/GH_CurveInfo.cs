@@ -8,9 +8,9 @@ namespace Selva.GH.Features.Drawing.Components;
 public class GH_CurveInfo : GH_Component
 {
     public GH_CurveInfo()
-        : base("Curve Info", "CI",
-            "Inspects curve properties relevant to SVG conversion",
-            "Selva", "SVG")
+        : base("Curve Info", "CrvI",
+            "Inspects curve properties relevant to drawing conversion",
+            "Selva", "Elements")
     {
     }
 

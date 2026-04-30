@@ -4,6 +4,7 @@ using Grasshopper.Kernel;
 using Grasshopper.Kernel.Parameters;
 using Rhino.Geometry;
 using Selva.Drawing;
+using Selva.Drawing.Model.Elements;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -12,7 +13,7 @@ public class GH_AngularDimension : GH_Component
     public GH_AngularDimension()
         : base("Angular Dimension", "ADim",
             "Angular dimension at a vertex measuring the angle between vertex→A and vertex→B",
-            "Selva", "SVG")
+            "Selva", "Elements")
     {
     }
 
@@ -45,7 +46,7 @@ public class GH_AngularDimension : GH_Component
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        pManager.AddGenericParameter("SVG Dimension", "SD", "SVG dimension data", GH_ParamAccess.item);
+        pManager.AddGenericParameter("Element", "E", "Drawing element", GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)
@@ -74,17 +75,17 @@ public class GH_AngularDimension : GH_Component
         {
             TextSize = textSize,
             StrokeWidth = stroke,
-            Color = color,
-            TickStyle = (DimensionTickStyle)Math.Max(0, Math.Min(2, tickStyle))
+            Color = Selva.Drawing.Model.Style.Color.Rgb(color.R, color.G, color.B, color.A),
+            TickKind = (DimensionTickKind)Math.Max(0, Math.Min(2, tickStyle)),
         };
 
-        var data = AngularDimensionBuilder.Build(v.X, v.Y, a.X, a.Y, b.X, b.Y, label, style, reflex);
-        if (data == null)
+        var element = AngularDimensionBuilder.Build(v.X, v.Y, a.X, a.Y, b.X, b.Y, label, style, reflex);
+        if (element == null)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Invalid angular dimension (collinear arms)");
             return;
         }
 
-        DA.SetData(0, data);
+        DA.SetData(0, element);
     }
 }

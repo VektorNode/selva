@@ -8,9 +8,9 @@ namespace Selva.GH.Features.Drawing.Components;
 public class GH_ExportSvgFile : GH_Component
 {
     public GH_ExportSvgFile()
-        : base("Export SVG File", "ESF",
+        : base("Export SVG", "ExSVG",
             "Writes an SVG document to a file",
-            "Selva", "SVG")
+            "Selva", "Document")
     {
     }
 
