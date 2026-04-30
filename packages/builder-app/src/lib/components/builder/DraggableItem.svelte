@@ -19,18 +19,17 @@
 
 	let newGroupPath = $state('');
 
-	// Infer variant from item type
-	const variant = $derived('name' in item ? 'input' : 'output');
+	const dragPayload = $derived(
+		'name' in item
+			? ({ dropType: 'input', data: item as DiscoveredInput } as const)
+			: ({ dropType: 'output', data: item as DiscoveredOutput } as const)
+	);
 
 	let isDragging = $state(false);
 
 	function handleDragStart(e: DragEvent) {
 		isDragging = true;
-
-		dragStore.set({
-			dropType: variant,
-			data: item
-		});
+		dragStore.set(dragPayload);
 
 		if (e.dataTransfer) {
 			e.dataTransfer.effectAllowed = 'copy';
@@ -60,7 +59,7 @@
 			badgeText: 'text-primary'
 		}
 	});
-	const style = $derived(styles[variant]);
+	const style = $derived(styles[dragPayload.dropType]);
 
 	function handleAddToGroup(tabId: string, groupId: string) {
 		onAddToGroup?.(tabId, groupId, item);

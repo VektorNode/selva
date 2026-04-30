@@ -11,7 +11,73 @@ import {
 import type { UISchema } from '@selvajs/schemas';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
-export type MessageHandler = (data: unknown) => void;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type MessageHandler = (data: any) => void;
+
+// ============================================================================
+// Incoming message types (matching the C# WebSocket protocol)
+// ============================================================================
+
+export interface WsSessionMessage {
+	sessionId: string;
+	type: string;
+}
+
+export interface WsInitialDataMessage extends WsSessionMessage {
+	schema?: import('@selvajs/schemas').UISchema;
+	availableParams?: import('@selvajs/schemas').DiscoveredParameters;
+	currentValues?: Record<string, unknown>;
+	outputs?: Record<string, unknown>;
+	displayData?: unknown;
+	isSolving?: boolean;
+}
+
+export interface WsOutputsMessage extends WsSessionMessage {
+	outputs?: Record<string, unknown>;
+	fileOutputs?: Record<string, unknown>;
+	displayData?: unknown;
+	modelUnits?: string;
+}
+
+export interface WsSchemaUpdatedMessage extends WsSessionMessage {
+	schema: import('@selvajs/schemas').UISchema;
+	removedIds?: string[];
+}
+
+export interface WsMetadataUpdatedMessage extends WsSessionMessage {
+	changedParams?: Array<{
+		id: string;
+		nickname?: string;
+		description?: string;
+		minimum?: number;
+		maximum?: number;
+		stepSize?: number;
+		options?: { [k: string]: string | undefined };
+	}>;
+}
+
+export interface WsParametersAddedMessage extends WsSessionMessage {
+	availableParams?: import('@selvajs/schemas').DiscoveredParameters;
+}
+
+export interface WsSyncPreviewMessage extends WsSessionMessage {
+	fromGH: SyncChange[];
+	toGH: SyncChange[];
+}
+
+export interface WsSyncAppliedMessage extends WsSessionMessage {
+	success: boolean;
+	message?: string;
+}
+
+export interface WsSchemaSavedMessage extends WsSessionMessage {
+	success: boolean;
+	message?: string;
+}
+
+export interface WsCurrentValuesMessage extends WsSessionMessage {
+	values: Record<string, unknown>;
+}
 
 /**
  * Represents a single metadata difference between Grasshopper and schema

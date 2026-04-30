@@ -3,23 +3,15 @@
 	import { goto } from '$app/navigation';
 	import { AppShell, PageContent, StateDisplay, Card } from '@selvajs/ui';
 	import { Wrench, Play } from '@lucide/svelte';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import { buildSessionParams } from '$lib/utils/session';
 
-	var sessionId = page.url.searchParams.get('session');
-	var wsPort = page.url.searchParams.get('wsPort');
-
-	function buildParams() {
-		const params = new SvelteURLSearchParams();
-		if (sessionId) params.set('session', sessionId);
-		if (wsPort) params.set('wsPort', wsPort);
-		return params.toString();
-	}
+	const sessionId = page.url.searchParams.get('session');
 
 	function navigateTo(path: string) {
-		goto(`/${path}?${buildParams()}`, { noScroll: true }).catch(() => {});
+		goto(`/${path}?${buildSessionParams()}`, { noScroll: true }).catch(() => {});
 	}
 
-	const homeUrl = $derived(`/?${buildParams()}`);
+	const homeUrl = $derived(`/?${buildSessionParams()}`);
 </script>
 
 <AppShell {homeUrl} mode="fixed" showFooter>

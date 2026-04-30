@@ -4,9 +4,9 @@
 	import { AppShell, StateDisplay, Button, Dialog, toast, useFooterItem } from '@selvajs/ui';
 	import { Save } from '@lucide/svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
-	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
-	import { DragDropContext, BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
-	import { initializeWebSocketSession } from '$lib/utils/session';
+	import { SvelteSet } from 'svelte/reactivity';
+	import { BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
+	import { initializeWebSocketSession, buildSessionParams } from '$lib/utils/session';
 	import { onMount } from 'svelte';
 	import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
 	import { useBuilderActions } from '$lib/composables/useBuilderActions.svelte';
@@ -14,6 +14,7 @@
 	let sessionId = $state('');
 	let builderState = $state<ReturnType<typeof useBuilderState> | null>(null);
 	let showBatchProcessor = $state(false);
+	let saveInFlight: Promise<boolean> | null = null;
 
 	const actions = useBuilderActions(() => builderState);
 
@@ -28,19 +29,11 @@
 			}
 		}
 
-		const url = `${route}?${buildParams()}`;
+		const url = `${route}?${buildSessionParams()}`;
 		goto(url, { noScroll: true }).catch(() => {});
 	}
 
-	function buildParams() {
-		const params = new SvelteURLSearchParams();
-		if (sessionId) params.set('session', sessionId);
-		const wsPort = page.url.searchParams.get('wsPort');
-		if (wsPort) params.set('wsPort', wsPort);
-		return params.toString();
-	}
-
-	const homeUrl = $derived(`/?${buildParams()}`);
+	const homeUrl = $derived(`/?${buildSessionParams()}`);
 
 	const placedInLayoutIds = $derived.by(() => {
 		const ids = new SvelteSet<string>();
@@ -84,7 +77,10 @@
 	});
 
 	function saveSchema(): Promise<boolean> {
-		return new Promise((resolve) => {
+		// Coalesce concurrent calls — a single in-flight save resolves them all
+		if (saveInFlight) return saveInFlight;
+
+		const promise = new Promise<boolean>((resolve) => {
 			// Validation checks
 			if (!builderState?.state.schema) {
 				toast.error('Schema not initialized');
@@ -105,8 +101,8 @@
 			}
 
 			let handled = false;
+			let timeoutId: ReturnType<typeof setTimeout>;
 
-			// Set up one-time listener for save response
 			const handleSaveResponse = (data: unknown) => {
 				if (handled) return;
 
@@ -127,8 +123,10 @@
 				}
 			};
 
-			// Timeout after 10 seconds if no response
-			const timeoutId = setTimeout(() => {
+			// Register listener BEFORE sending so a fast response can't arrive first
+			builderState.wsState.on('schemaSaved', handleSaveResponse);
+
+			timeoutId = setTimeout(() => {
 				if (handled) return;
 				handled = true;
 				builderState?.wsState.off('schemaSaved', handleSaveResponse);
@@ -136,12 +134,14 @@
 				resolve(false);
 			}, 10000);
 
-			// Listen for save response (runs before composable handlers due to registration order)
-			builderState.wsState.on('schemaSaved', handleSaveResponse);
-
-			// Send save request
 			builderState.wsState.saveSchema(sessionId, $state.snapshot(builderState.state.schema));
 		});
+
+		saveInFlight = promise;
+		promise.finally(() => {
+			if (saveInFlight === promise) saveInFlight = null;
+		});
+		return promise;
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -220,8 +220,7 @@
 	);
 </script>
 
-<DragDropContext>
-	<AppShell {homeUrl} title="Schema Builder" mode="fixed" showFooter>
+<AppShell {homeUrl} title="Schema Builder" mode="fixed" showFooter>
 			{#snippet navItems()}
 				<Button variant="default" size="sm">Schema Builder</Button>
 				<Button variant="ghost" size="sm" onclick={() => navigateTo('/preview')}>
@@ -370,4 +369,3 @@
 			/>
 		{/if}
 	</AppShell>
-</DragDropContext>

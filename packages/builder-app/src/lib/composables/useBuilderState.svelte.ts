@@ -2,28 +2,21 @@ import { toast } from '@selvajs/ui';
 import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/schemas';
 import { processInitialDataSchema, getWebSocketPortFromUrl } from '$lib/utils/session';
 import { getWebSocketState } from '$lib/websocket/websocket.svelte';
-import type { SyncDiff, SyncChange } from '$lib/websocket/websocket.svelte';
+import { getAllLayoutItems } from '$lib/features/builder/operations';
+import type {
+	SyncDiff,
+	SyncChange,
+	WsInitialDataMessage,
+	WsOutputsMessage,
+	WsSchemaUpdatedMessage,
+	WsMetadataUpdatedMessage,
+	WsParametersAddedMessage,
+	WsSyncPreviewMessage,
+	WsSyncAppliedMessage,
+	WsSchemaSavedMessage
+} from '$lib/websocket/websocket.svelte';
 import { useSchemaHistory } from './useSchemaHistory.svelte';
 
-type AnyItem = {
-	type: string;
-	widgetType?: string;
-	paramId?: string;
-	config?: Record<string, unknown>;
-};
-
-function getAllLayoutItems(schema: UISchema): AnyItem[] {
-	const items: AnyItem[] = [];
-	if (!schema?.layout) return items;
-	if (schema.layout.type === 'tabbed') {
-		schema.layout.tabs.forEach((tab) =>
-			tab.groups?.forEach((g) => items.push(...(g.items as AnyItem[])))
-		);
-	} else if (schema.layout.type === 'flat') {
-		schema.layout.groups?.forEach((g) => items.push(...(g.items as AnyItem[])));
-	}
-	return items;
-}
 
 /**
  * Backfill empty dropdown options in schema layout items from the available inputs list.
@@ -53,7 +46,7 @@ function backfillDropdownOptions(
 function patchDropdownOptions(
 	schema: UISchema | null,
 	paramId: string,
-	options: Record<string, unknown>
+	options: { [k: string]: string | undefined }
 ): void {
 	if (!schema) return;
 	for (const item of getAllLayoutItems(schema)) {
@@ -97,12 +90,12 @@ export function useBuilderState(sessionId: string) {
 		outputValues: {}
 	});
 
-	function handleOutputs(message: any) {
+	function handleOutputs(message: WsOutputsMessage) {
 		if (message.sessionId !== sessionId) return;
 		if (message.outputs) Object.assign(state.outputValues, message.outputs);
 	}
 
-	function handleInitialData(message: any) {
+	function handleInitialData(message: WsInitialDataMessage) {
 		if (message.sessionId !== sessionId) return;
 
 		if (message.outputs) Object.assign(state.outputValues, message.outputs);
@@ -137,22 +130,19 @@ export function useBuilderState(sessionId: string) {
 		state.loading = false;
 	}
 
-	function handleSchemaSaved(message: any) {
+	function handleSchemaSaved(message: WsSchemaSavedMessage) {
 		if (message.sessionId !== sessionId) return;
 	}
 
-	function handleMetadataUpdated(message: any) {
+	function handleMetadataUpdated(message: WsMetadataUpdatedMessage) {
 		if (message.sessionId !== sessionId) return;
 
-		const changedParams = [
-			...(message.changedParams?.inputs || []),
-			...(message.changedParams?.outputs || [])
-		];
+		const changedParams = message.changedParams ?? [];
 		if (changedParams.length === 0) return;
 
 		const updatedNames: string[] = [];
 
-		changedParams.forEach((updated: any) => {
+		changedParams.forEach((updated) => {
 			// Update schema inputs if present
 			let inputInSchema = false;
 			if (state.schema) {
@@ -222,7 +212,7 @@ export function useBuilderState(sessionId: string) {
 		}
 	}
 
-	function handleSchemaUpdated(message: any) {
+	function handleSchemaUpdated(message: WsSchemaUpdatedMessage) {
 		if (message.sessionId !== sessionId) return;
 
 		const removedIds = message.removedIds || [];
@@ -268,18 +258,18 @@ export function useBuilderState(sessionId: string) {
 						);
 					}
 				}
-
-				toast.info(
-					`${removedCount} item${removedCount > 1 ? 's' : ''} removed from Grasshopper and cleaned from layout`
-				);
 			}
+
+			toast.info(
+				`${removedCount} item${removedCount > 1 ? 's' : ''} removed from Grasshopper and cleaned from layout`
+			);
 		} else {
 			wsState.requestInitialData(sessionId);
 			toast.info('Schema structure updated - checking for new items...');
 		}
 	}
 
-	function handleParametersAdded(message: any) {
+	function handleParametersAdded(message: WsParametersAddedMessage) {
 		if (message.sessionId !== sessionId) return;
 
 		const availableParams = message.availableParams;
@@ -311,7 +301,7 @@ export function useBuilderState(sessionId: string) {
 		toast.info('Syncing parameters...');
 	}
 
-	function handleSyncPreview(message: any) {
+	function handleSyncPreview(message: WsSyncPreviewMessage) {
 		if (message.sessionId !== sessionId) return;
 
 		// C# sends fromGH/toGH as camelCase (anonymous object properties)
@@ -323,7 +313,7 @@ export function useBuilderState(sessionId: string) {
 		state.syncLoading = false;
 	}
 
-	function handleSyncApplied(message: any) {
+	function handleSyncApplied(message: WsSyncAppliedMessage) {
 		if (message.sessionId !== sessionId) return;
 
 		state.syncLoading = false;
@@ -353,7 +343,12 @@ export function useBuilderState(sessionId: string) {
 		wsState.applySyncChanges(sessionId, selectedChanges);
 	}
 
+	let initialized = false;
+
 	function initialize() {
+		if (initialized) return;
+		initialized = true;
+
 		wsState.on('outputs', handleOutputs);
 		wsState.on('initialData', handleInitialData);
 		wsState.on('schemaSaved', handleSchemaSaved);
@@ -367,6 +362,9 @@ export function useBuilderState(sessionId: string) {
 	}
 
 	function cleanup() {
+		if (!initialized) return;
+		initialized = false;
+
 		wsState.off('outputs', handleOutputs);
 		wsState.off('initialData', handleInitialData);
 		wsState.off('schemaSaved', handleSchemaSaved);

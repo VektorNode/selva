@@ -3,6 +3,12 @@ import type { UISchema } from '@selvajs/schemas';
 const LS_HISTORY_PREFIX = 'selva-schema-history:';
 const LS_CURRENT_PREFIX = 'selva-schema-current:';
 
+function isValidSchema(value: unknown): value is UISchema {
+	if (!value || typeof value !== 'object') return false;
+	const v = value as Record<string, unknown>;
+	return Array.isArray(v.inputs) && Array.isArray(v.outputs) && typeof v.layout === 'object' && v.layout !== null;
+}
+
 function purgeStaleSessions(keepSessionId: string) {
 	try {
 		const stale: string[] = [];
@@ -33,18 +39,15 @@ export function useSchemaHistory(sessionId: string) {
 	if (typeof localStorage !== 'undefined') purgeStaleSessions(sessionId);
 
 	function push(schema: UISchema) {
-		// Deep clone using JSON round-trip for compatibility
-		past.push(JSON.parse(JSON.stringify(schema)));
+		past.push(schema);
 		if (past.length > MAX_HISTORY) past.shift();
-		future.length = 0; // Clear redo stack on new action
+		future.length = 0;
 		persistToStorage();
 	}
 
 	function undo(current: UISchema): UISchema | null {
 		if (past.length === 0) return null;
-
-		// Save current state to redo stack
-		future.unshift(JSON.parse(JSON.stringify(current)));
+		future.unshift(current);
 		const prev = past.pop()!;
 		persistToStorage();
 		return prev;
@@ -52,9 +55,7 @@ export function useSchemaHistory(sessionId: string) {
 
 	function redo(current: UISchema): UISchema | null {
 		if (future.length === 0) return null;
-
-		// Save current state to undo stack
-		past.push(JSON.parse(JSON.stringify(current)));
+		past.push(current);
 		const next = future.shift()!;
 		persistToStorage();
 		return next;
@@ -79,7 +80,12 @@ export function useSchemaHistory(sessionId: string) {
 	function loadFromStorage(): { past: UISchema[]; future: UISchema[] } | null {
 		try {
 			const raw = localStorage.getItem(LS_KEY);
-			return raw ? JSON.parse(raw) : null;
+			if (!raw) return null;
+			const parsed = JSON.parse(raw);
+			if (!parsed || typeof parsed !== 'object') return null;
+			const past = Array.isArray(parsed.past) ? parsed.past.filter(isValidSchema) : [];
+			const future = Array.isArray(parsed.future) ? parsed.future.filter(isValidSchema) : [];
+			return { past, future };
 		} catch {
 			return null;
 		}
@@ -88,7 +94,14 @@ export function useSchemaHistory(sessionId: string) {
 	function loadCurrentSchema(): UISchema | null {
 		try {
 			const raw = localStorage.getItem(LS_CURRENT_KEY);
-			return raw ? JSON.parse(raw) : null;
+			if (!raw) return null;
+			const parsed = JSON.parse(raw);
+			if (!isValidSchema(parsed)) {
+				// Stale/corrupt entry — drop it so we fall back to the server-provided schema
+				localStorage.removeItem(LS_CURRENT_KEY);
+				return null;
+			}
+			return parsed;
 		} catch {
 			return null;
 		}
