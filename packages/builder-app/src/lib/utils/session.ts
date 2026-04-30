@@ -1,4 +1,5 @@
 import { page } from '$app/state';
+import { SvelteURLSearchParams } from 'svelte/reactivity';
 import { getWebSocketState, type WebSocketState } from '$lib/websocket/websocket.svelte';
 import type { UISchema, DiscoveredParameters } from '@selvajs/schemas';
 import { DEFAULT_WEBSOCKET_PORT, WEBSOCKET_PORT_QUERY_PARAM } from '$lib/app.config';
@@ -28,6 +29,18 @@ export interface SessionState {
  */
 export function getSessionIdFromUrl(): string {
 	return page.url.searchParams.get('session') || '';
+}
+
+/**
+ * Build URL query params string preserving session and wsPort from the current page URL.
+ */
+export function buildSessionParams(): string {
+	const params = new SvelteURLSearchParams();
+	const session = page.url.searchParams.get('session');
+	const wsPort = page.url.searchParams.get(WEBSOCKET_PORT_QUERY_PARAM);
+	if (session) params.set('session', session);
+	if (wsPort) params.set(WEBSOCKET_PORT_QUERY_PARAM, wsPort);
+	return params.toString();
 }
 
 /**

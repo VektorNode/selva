@@ -2,6 +2,7 @@ import { toast } from '@selvajs/ui';
 import type { DiscoveredInput, DiscoveredOutput, GroupConfig, LayoutItem } from '@selvajs/schemas';
 import {
 	handleItemDrop,
+	type ItemDropOptions,
 	addTab,
 	removeTab,
 	addGroup,
@@ -9,7 +10,8 @@ import {
 	removeItem,
 	reorderTabs,
 	reorderGroups,
-	batchSetNumberWidgetType
+	batchSetNumberWidgetType,
+	isInputItem
 } from '$lib/features/builder/operations';
 import type { useBuilderState } from './useBuilderState.svelte';
 
@@ -44,40 +46,21 @@ export function useBuilderActions(
 
 		if (!group) return;
 
-		// Handle dropping inputs or outputs
+		const base: Pick<ItemDropOptions, 'schema' | 'group' | 'availableInputs' | 'availableOutputs' | 'targetItem' | 'dropPosition'> = {
+			schema,
+			group,
+			availableInputs: builderState.state.availableInputs,
+			availableOutputs: builderState.state.availableOutputs,
+			targetItem,
+			dropPosition
+		};
+
 		if (dropType === 'input') {
 			const param = data as DiscoveredInput;
-			handleItemDrop(
-				schema,
-				group,
-				param.id,
-				param.nickname || 'unnamed',
-				'input',
-				builderState.state.availableInputs,
-				builderState.state.availableOutputs,
-				param.type,
-				undefined,
-				targetItem,
-				dropPosition
-			);
+			handleItemDrop({ ...base, paramId: param.id, displayName: param.nickname || 'unnamed', itemType: 'input', paramType: param.type });
 		} else if (dropType === 'output') {
 			const output = data as DiscoveredOutput;
-			const widgetType =
-				output.type === 'file' ? 'file' : output.type === 'chart' ? 'chart' : 'text';
-			handleItemDrop(
-				schema,
-				group,
-				output.id,
-				output.nickname,
-				'output',
-				builderState.state.availableInputs,
-				builderState.state.availableOutputs,
-				undefined,
-				widgetType,
-				targetItem,
-				dropPosition,
-				output.type
-			);
+			handleItemDrop({ ...base, paramId: output.id, displayName: output.nickname, itemType: 'output', widgetType: output.type === 'file' ? 'file' : output.type === 'chart' ? 'chart' : 'text', outputType: output.type });
 		}
 	}
 
@@ -121,25 +104,19 @@ export function useBuilderActions(
 
 		if (!group) return;
 
-		const itemType = 'name' in item ? 'input' : 'output';
-		const paramType = 'name' in item ? item.type : undefined;
-		const widgetType = 'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
-		const outputType = 'name' in item ? undefined : item.type;
-
-		handleItemDrop(
+		const asInput = isInputItem(item);
+		handleItemDrop({
 			schema,
 			group,
-			item.id,
-			item.nickname || ('name' in item ? item.name : 'Unknown'),
-			itemType,
-			builderState.state.availableInputs,
-			builderState.state.availableOutputs,
-			paramType,
-			widgetType,
-			undefined,
-			undefined,
-			outputType
-		);
+			paramId: item.id,
+			displayName: item.nickname || (asInput ? item.name : 'Unknown'),
+			itemType: asInput ? 'input' : 'output',
+			availableInputs: builderState.state.availableInputs,
+			availableOutputs: builderState.state.availableOutputs,
+			paramType: asInput ? item.type : undefined,
+			widgetType: asInput ? undefined : item.type === 'file' ? 'file' : 'text',
+			outputType: asInput ? undefined : item.type
+		});
 
 		toast.success(`Added to ${tabLabel} / ${group.label}`);
 	}
@@ -201,26 +178,19 @@ export function useBuilderActions(
 				toast.success(`Created new group: ${groupLabel}`);
 			}
 
-			// Add item to group
-			const itemType = 'name' in item ? 'input' : 'output';
-			const paramType = 'name' in item ? item.type : undefined;
-			const widgetType = 'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
-			const outputType = 'name' in item ? undefined : item.type;
-
-			handleItemDrop(
+			const asInput = isInputItem(item);
+			handleItemDrop({
 				schema,
 				group,
-				item.id,
-				item.nickname || ('name' in item ? item.name : 'Unknown'),
-				itemType,
-				builderState.state.availableInputs,
-				builderState.state.availableOutputs,
-				paramType,
-				widgetType,
-				undefined,
-				undefined,
-				outputType
-			);
+				paramId: item.id,
+				displayName: item.nickname || (asInput ? item.name : 'Unknown'),
+				itemType: asInput ? 'input' : 'output',
+				availableInputs: builderState.state.availableInputs,
+				availableOutputs: builderState.state.availableOutputs,
+				paramType: asInput ? item.type : undefined,
+				widgetType: asInput ? undefined : item.type === 'file' ? 'file' : 'text',
+				outputType: asInput ? undefined : item.type
+			});
 
 			toast.success(`Added ${item.nickname || 'item'} to ${tab.label} / ${group.label}`);
 		} else if (schema.layout.type === 'flat') {
@@ -236,26 +206,19 @@ export function useBuilderActions(
 				toast.success(`Created new group: ${groupLabel}`);
 			}
 
-			// Add item to group
-			const itemType = 'name' in item ? 'input' : 'output';
-			const paramType = 'name' in item ? item.type : undefined;
-			const widgetType = 'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
-			const outputType = 'name' in item ? undefined : item.type;
-
-			handleItemDrop(
+			const asInput = isInputItem(item);
+			handleItemDrop({
 				schema,
 				group,
-				item.id,
-				item.nickname || ('name' in item ? item.name : 'Unknown'),
-				itemType,
-				builderState.state.availableInputs,
-				builderState.state.availableOutputs,
-				paramType,
-				widgetType,
-				undefined,
-				undefined,
-				outputType
-			);
+				paramId: item.id,
+				displayName: item.nickname || (asInput ? item.name : 'Unknown'),
+				itemType: asInput ? 'input' : 'output',
+				availableInputs: builderState.state.availableInputs,
+				availableOutputs: builderState.state.availableOutputs,
+				paramType: asInput ? item.type : undefined,
+				widgetType: asInput ? undefined : item.type === 'file' ? 'file' : 'text',
+				outputType: asInput ? undefined : item.type
+			});
 
 			toast.success(`Added ${item.nickname || 'item'} to ${group.label}`);
 		}

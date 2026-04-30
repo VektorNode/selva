@@ -12,6 +12,20 @@ import type {
 import { mapParamTypeToWidgetType, createDefaultWidgetConfig } from './widget-config';
 import { toast } from '@selvajs/ui';
 
+export function isInputItem(item: DiscoveredInput | DiscoveredOutput): item is DiscoveredInput {
+	return 'name' in item;
+}
+
+export function getAllLayoutItems(schema: UISchema): LayoutItem[] {
+	if (!schema?.layout) return [];
+	if (schema.layout.type === 'tabbed') {
+		return schema.layout.tabs.flatMap((tab) => tab.groups?.flatMap((g) => g.items) ?? []);
+	} else if (schema.layout.type === 'flat') {
+		return schema.layout.groups?.flatMap((g) => g.items) ?? [];
+	}
+	return [];
+}
+
 export function isItemUsedInLayout(schema: UISchema | null, paramId: string): boolean {
 	if (!schema?.layout) return false;
 
@@ -138,20 +152,35 @@ export function insertLayoutItem(
 	group.items = newItems;
 }
 
-export function handleItemDrop(
-	schema: UISchema,
-	group: GroupConfig,
-	paramId: string,
-	displayName: string,
-	itemType: 'input' | 'output',
-	availableInputs: DiscoveredInput[],
-	availableOutputs: DiscoveredOutput[],
-	paramType?: string,
-	widgetType?: string,
-	targetItem?: LayoutItem,
-	dropPosition?: 'before' | 'after',
-	outputType?: 'text' | 'number' | 'file' | 'chart'
-) {
+export interface ItemDropOptions {
+	schema: UISchema;
+	group: GroupConfig;
+	paramId: string;
+	displayName: string;
+	itemType: 'input' | 'output';
+	availableInputs: DiscoveredInput[];
+	availableOutputs: DiscoveredOutput[];
+	paramType?: string;
+	widgetType?: string;
+	targetItem?: LayoutItem;
+	dropPosition?: 'before' | 'after';
+	outputType?: 'text' | 'number' | 'file' | 'chart';
+}
+
+export function handleItemDrop({
+	schema,
+	group,
+	paramId,
+	displayName,
+	itemType,
+	availableInputs,
+	availableOutputs,
+	paramType,
+	widgetType,
+	targetItem,
+	dropPosition,
+	outputType
+}: ItemDropOptions) {
 	if (group.items.some((i) => i.type !== 'linebreak' && i.paramId === paramId)) {
 		const itemTypeLabel =
 			widgetType === 'file' ? 'file component' : itemType === 'input' ? 'parameter' : 'output';

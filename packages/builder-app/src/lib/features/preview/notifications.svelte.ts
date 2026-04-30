@@ -6,7 +6,6 @@ export interface NotificationManager {
 export function createNotificationManager(): {
 	manager: NotificationManager;
 	getMessage: () => string;
-	setMessage: (msg: string) => void;
 } {
 	let message = $state('');
 	let timer: ReturnType<typeof setTimeout> | null = null;
@@ -33,10 +32,7 @@ export function createNotificationManager(): {
 
 	return {
 		manager,
-		getMessage: () => message,
-		setMessage: (msg: string) => {
-			message = msg;
-		}
+		getMessage: () => message
 	};
 }
 
