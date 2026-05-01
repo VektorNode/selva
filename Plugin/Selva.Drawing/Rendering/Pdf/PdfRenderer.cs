@@ -455,7 +455,6 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 	public void Visit(PathElement element)
 	{
 		if (element == null) return;
-		var xpath = PdfPathBuilder.Build(element.Path);
 
 		// Mirror legacy emission semantics: when both stroke and fill are null, draw a
 		// black hairline. When fill is null but stroke is not, stroke only. When fill is
@@ -470,9 +469,23 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			pen = CreatePen(new Stroke { Color = Color.Black, Width = 0.25 });
 		}
 
-		if (brush != null && pen != null) _gfx.DrawPath(pen, brush, xpath);
-		else if (brush != null) _gfx.DrawPath(brush, xpath);
-		else _gfx.DrawPath(pen, xpath);
+		if (brush != null)
+		{
+			// Fills (with or without stroke) need a single XGraphicsPath so multi-subpath
+			// shapes with holes resolve correctly under the path's fill rule.
+			var xpath = PdfPathBuilder.Build(element.Path);
+			if (pen != null) _gfx.DrawPath(pen, brush, xpath);
+			else _gfx.DrawPath(brush, xpath);
+		}
+		else
+		{
+			// Stroke-only: draw each subpath as its own XGraphicsPath. PdfSharpCore's
+			// StartFigure() boundary inside a single path doesn't reliably prevent disjoint
+			// figures from being stroked as one connected polyline, which manifests as
+			// spurious diagonals (e.g. across cells of a Table border path).
+			foreach (var sub in PdfPathBuilder.BuildSubpaths(element.Path))
+				_gfx.DrawPath(pen, sub);
+		}
 	}
 
 	public void Visit(TextElement element)

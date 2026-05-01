@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using PdfSharpCore.Drawing;
 using Selva.Drawing.Model.Geometry;
 
@@ -67,6 +68,69 @@ public static class PdfPathBuilder
 		}
 
 		return xpath;
+	}
+
+	// Splits a Path into one XGraphicsPath per subpath (i.e. per MoveTo). Stroking via a
+	// single XGraphicsPath with multiple StartFigure() boundaries lets PdfSharpCore /
+	// underlying GDI silently merge disjoint figures into one connected polyline, which
+	// shows up as diagonal lines crossing through cells when rendering tables with grid
+	// dividers. Drawing each subpath as its own XGraphicsPath sidesteps that entirely.
+	// Used by stroke-only paths; fills still need a single path for correct hole semantics.
+	public static IReadOnlyList<XGraphicsPath> BuildSubpaths(Path path)
+	{
+		var result = new List<XGraphicsPath>();
+		if (path == null || path.IsEmpty) return result;
+
+		XGraphicsPath xpath = null;
+		Point2D current = Point2D.Zero;
+		Point2D subpathStart = Point2D.Zero;
+		var hasCurrent = false;
+
+		foreach (var seg in path)
+		{
+			switch (seg)
+			{
+				case PathSegment.MoveTo m:
+					xpath = new XGraphicsPath();
+					result.Add(xpath);
+					current = m.To;
+					subpathStart = m.To;
+					hasCurrent = true;
+					break;
+
+				case PathSegment.LineTo l:
+					if (xpath == null) { xpath = new XGraphicsPath(); result.Add(xpath); }
+					if (!hasCurrent) { current = Point2D.Zero; hasCurrent = true; }
+					xpath.AddLine(current.X, current.Y, l.To.X, l.To.Y);
+					current = l.To;
+					break;
+
+				case PathSegment.CubicTo c:
+					if (xpath == null) { xpath = new XGraphicsPath(); result.Add(xpath); }
+					if (!hasCurrent) { current = Point2D.Zero; hasCurrent = true; }
+					xpath.AddBezier(
+						current.X, current.Y,
+						c.Control1.X, c.Control1.Y,
+						c.Control2.X, c.Control2.Y,
+						c.To.X, c.To.Y);
+					current = c.To;
+					break;
+
+				case PathSegment.ArcTo a:
+					if (xpath == null) { xpath = new XGraphicsPath(); result.Add(xpath); }
+					if (!hasCurrent) { current = Point2D.Zero; hasCurrent = true; }
+					EmitSvgArcAsCubics(xpath, current, a);
+					current = a.To;
+					break;
+
+				case PathSegment.Close _:
+					if (xpath != null) xpath.CloseFigure();
+					if (hasCurrent) current = subpathStart;
+					break;
+			}
+		}
+
+		return result;
 	}
 
 	// W3C SVG 1.1 implementation notes, F.6.5: convert an SVG-style elliptical arc to
