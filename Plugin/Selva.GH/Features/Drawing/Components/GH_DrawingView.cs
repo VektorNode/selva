@@ -6,6 +6,7 @@ using Selva.Drawing.Model.Drawings;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Style;
+using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -19,7 +20,7 @@ public class GH_DrawingView : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.DrawingView;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
     public override Guid ComponentGuid => new Guid("F1234567-89AB-4CDE-F123-456789ABCDEF");
 

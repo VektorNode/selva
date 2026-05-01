@@ -381,6 +381,42 @@ export function reorderTabs(schema: UISchema, fromIndex: number, toIndex: number
 	schema.layout.tabs = tabs;
 }
 
+export function moveGroupToTab(
+	schema: UISchema,
+	sourceTabId: string,
+	groupId: string,
+	targetTabId: string,
+	targetIndex?: number
+): boolean {
+	if (!schema.layout || schema.layout.type !== 'tabbed') return false;
+	if (sourceTabId === targetTabId) return false;
+
+	const sourceTab = schema.layout.tabs.find((t) => t.id === sourceTabId);
+	const targetTab = schema.layout.tabs.find((t) => t.id === targetTabId);
+	if (!sourceTab || !targetTab) return false;
+
+	const idx = sourceTab.groups.findIndex((g) => g.id === groupId);
+	if (idx === -1) return false;
+
+	const sourceGroups = [...sourceTab.groups];
+	const [movedGroup] = sourceGroups.splice(idx, 1);
+
+	const targetGroups = [...targetTab.groups];
+	if (targetIndex === undefined || targetIndex < 0 || targetIndex > targetGroups.length) {
+		targetGroups.push(movedGroup);
+	} else {
+		targetGroups.splice(targetIndex, 0, movedGroup);
+	}
+
+	sourceGroups.forEach((g, i) => (g.order = i));
+	targetGroups.forEach((g, i) => (g.order = i));
+
+	sourceTab.groups = sourceGroups;
+	targetTab.groups = targetGroups;
+	schema.layout.tabs = [...schema.layout.tabs];
+	return true;
+}
+
 export function reorderGroups(schema: UISchema, tabId: string, fromIndex: number, toIndex: number) {
 	if (!schema.layout) return;
 

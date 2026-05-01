@@ -6,6 +6,7 @@ using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Style;
 using Selva.GH.Features.Drawing.Lib;
+using Selva.GH.Properties;
 using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.GH.Features.Drawing.Components;
@@ -19,7 +20,7 @@ public class GH_CreateSurface : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.DrawSurface;
     public override GH_Exposure Exposure => GH_Exposure.primary;
     public override Guid ComponentGuid => new Guid("5D7E9A2B-3C4F-4B8E-A1D2-6F8B9C0E1F23");
 

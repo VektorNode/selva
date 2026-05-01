@@ -4,6 +4,7 @@ using System.Drawing;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Parameters;
 using Selva.Drawing.Model.Style;
+using Selva.GH.Properties;
 using Color = System.Drawing.Color;
 using ModelColor = Selva.Drawing.Model.Style.Color;
 
@@ -18,7 +19,7 @@ public class GH_PathStyle : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.PathStlye;
     public override GH_Exposure Exposure => GH_Exposure.tertiary;
     public override Guid ComponentGuid => new Guid("2049ED21-0C88-4F99-AD1B-2E6717C37B3F");
 

@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.IO;
 using Grasshopper.Kernel;
+using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -14,7 +15,7 @@ public class GH_ExportSvgFile : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.ExportSVG;
     public override GH_Exposure Exposure => GH_Exposure.primary;
     public override Guid ComponentGuid => new Guid("E8609DFF-085E-4232-B0CB-57B96A12326B");
 

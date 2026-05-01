@@ -27,4 +27,18 @@ public abstract class LayoutElement : DrawElement
 	// override when they can compute natural bounds without resolving.
 	public override BoundingBox ComputeBounds()
 		=> Resolve(new LayoutContext(BoundingBox.Empty)).ComputeBounds();
+
+	// Pagination hook: try to fit this layout element into a vertical budget. Default is
+	// atomic — resolve once, take it whole or leave it whole. Subclasses that can break
+	// between children (Stack between items, Table between rows, TextFlow between lines)
+	// override this to produce partial Fits + Overflow.
+	public virtual SplitResult TrySplit(double availableHeight, LayoutContext context)
+	{
+		var resolved = Resolve(context);
+		var bounds = resolved?.ComputeBounds() ?? BoundingBox.Empty;
+		var height = bounds.IsEmpty ? 0 : bounds.Height;
+		if (height <= availableHeight + 1e-6)
+			return SplitResult.AllFits(resolved, height);
+		return SplitResult.NothingFits(resolved);
+	}
 }

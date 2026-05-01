@@ -8,6 +8,7 @@ using Selva.Drawing.Model;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Layout;
 using Selva.Drawing.Model.Style;
+using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -24,7 +25,7 @@ public class GH_Table : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.Table;
     public override GH_Exposure Exposure => GH_Exposure.tertiary;
     public override Guid ComponentGuid => new Guid("E0123456-789A-4BCD-EF12-3456789ABCDE");
 

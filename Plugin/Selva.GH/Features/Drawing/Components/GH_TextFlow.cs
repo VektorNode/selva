@@ -4,6 +4,7 @@ using Grasshopper.Kernel;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Layout;
 using Selva.Drawing.Model.Style;
+using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -18,7 +19,7 @@ public class GH_TextFlow : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.TextFlow;
     public override GH_Exposure Exposure => GH_Exposure.tertiary;
     public override Guid ComponentGuid => new Guid("C7E89F01-2B3C-4D5E-AF60-718293A4B5C6");
 

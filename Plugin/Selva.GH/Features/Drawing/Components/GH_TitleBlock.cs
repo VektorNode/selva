@@ -4,6 +4,7 @@ using System.Drawing;
 using Grasshopper.Kernel;
 using Selva.Drawing.Model.Drawings;
 using Selva.Drawing.Model.Geometry;
+using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -21,7 +22,7 @@ public class GH_TitleBlock : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.TitleBlock;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
     public override Guid ComponentGuid => new Guid("12345678-9ABC-4DEF-0123-456789ABCDEF");
 

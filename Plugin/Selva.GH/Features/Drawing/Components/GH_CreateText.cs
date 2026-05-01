@@ -4,6 +4,7 @@ using Grasshopper.Kernel;
 using Rhino.Geometry;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
+using Selva.GH.Properties;
 using ModelStyle = Selva.Drawing.Model.Style;
 
 namespace Selva.GH.Features.Drawing.Components;
@@ -17,7 +18,7 @@ public class GH_CreateText : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.DrawText;
     public override GH_Exposure Exposure => GH_Exposure.primary;
     public override Guid ComponentGuid => new Guid("8B4F2D1E-9A6C-4F3B-B7E1-2C5D8E0A1B34");
 

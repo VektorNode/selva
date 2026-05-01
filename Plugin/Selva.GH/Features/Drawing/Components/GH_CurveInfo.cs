@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using Grasshopper.Kernel;
 using Rhino.Geometry;
+using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -14,7 +15,7 @@ public class GH_CurveInfo : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.CurveInfo;
     public override GH_Exposure Exposure => GH_Exposure.secondary;
     public override Guid ComponentGuid => new Guid("C69E7C31-4BC3-44AC-8D3D-2C0E698774B2");
 

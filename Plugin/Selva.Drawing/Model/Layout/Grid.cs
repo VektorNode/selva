@@ -246,7 +246,7 @@ public sealed class Grid : LayoutElement
 	internal BoundingBox ComputeCellRect(TrackLayout layout, GridCell cell, double totalHeight)
 	{
 		var x0 = 0.0;
-		for (var c = 0; c < cell.Column; c++) x0 += layout.ColWidths[c] + ColumnSpacing;
+		for (var c = 0; c < cell.Column && c < layout.ColWidths.Length; c++) x0 += layout.ColWidths[c] + ColumnSpacing;
 		var width = 0.0;
 		for (var c = cell.Column; c < cell.Column + cell.ColumnSpan && c < layout.ColWidths.Length; c++)
 		{
@@ -257,7 +257,7 @@ public sealed class Grid : LayoutElement
 		// Row 0 sits at the TOP. Row r's top-edge offset from grid bottom = totalHeight -
 		// sum of heights of rows [0..r] - spacings.
 		var topFromBottom = totalHeight;
-		for (var r = 0; r < cell.Row; r++) topFromBottom -= layout.RowHeights[r] + RowSpacing;
+		for (var r = 0; r < cell.Row && r < layout.RowHeights.Length; r++) topFromBottom -= layout.RowHeights[r] + RowSpacing;
 
 		var height = 0.0;
 		for (var r = cell.Row; r < cell.Row + cell.RowSpan && r < layout.RowHeights.Length; r++)

@@ -6,6 +6,7 @@ using Selva.Drawing.Rendering.Pdf;
 using Selva.GH.Features.FileIO;
 using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
+using Selva.GH.Properties;
 using Selva.GH.Utilities;
 
 namespace Selva.GH.Features.Drawing.Components;
@@ -23,7 +24,7 @@ public class GH_RenderPdf : GH_Component, ISelvaFileOutput
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.RenderPdf;
     public override GH_Exposure Exposure => GH_Exposure.secondary;
     public override Guid ComponentGuid => new Guid("F4A2D915-7B86-4A3C-AC8D-3FE7B0C1D2E3");
 

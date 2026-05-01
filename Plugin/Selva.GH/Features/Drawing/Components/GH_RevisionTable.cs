@@ -5,6 +5,7 @@ using Grasshopper.Kernel;
 using Selva.Drawing.Model.Drawings;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Style;
+using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -19,7 +20,7 @@ public class GH_RevisionTable : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.RevisionTable;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
     public override Guid ComponentGuid => new Guid("23456789-ABCD-4EF0-1234-56789ABCDEF0");
 
