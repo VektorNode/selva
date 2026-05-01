@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
+using System.Linq;
 using Grasshopper.Kernel;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
@@ -28,8 +29,8 @@ public class GH_Grid : GH_Component
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        pManager.AddTextParameter("Columns", "C", "Column-track DSL: space-separated <mm>|auto|<weight>* (e.g. \"40 auto 1*\")", GH_ParamAccess.item, "auto");
-        pManager.AddTextParameter("Rows", "R", "Row-track DSL", GH_ParamAccess.item, "auto");
+        pManager.AddTextParameter("Columns", "C", "Column-track DSL: space-separated <mm>|auto|<weight>* (e.g. \"40 auto 1*\"). Leave empty to auto-derive auto tracks from the cell column indices.", GH_ParamAccess.item, "");
+        pManager.AddTextParameter("Rows", "R", "Row-track DSL — same syntax as Columns. Leave empty to auto-derive auto tracks from the cell row indices.", GH_ParamAccess.item, "");
         pManager.AddGenericParameter("Cell Children", "Ch", "Cell content (one element per cell)", GH_ParamAccess.list);
         pManager.AddIntegerParameter("Cell Rows", "Cr", "Row index per cell, 0-based (parallel to Children)", GH_ParamAccess.list);
         pManager.AddIntegerParameter("Cell Columns", "Cc", "Column index per cell, 0-based (parallel to Children)", GH_ParamAccess.list);
@@ -51,8 +52,8 @@ public class GH_Grid : GH_Component
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-        var columnsDsl = "auto";
-        var rowsDsl = "auto";
+        var columnsDsl = "";
+        var rowsDsl = "";
         var children = new List<DrawElement>();
         var rows = new List<int>();
         var cols = new List<int>();
@@ -80,9 +81,28 @@ public class GH_Grid : GH_Component
                 "Cell Children, Cell Rows, and Cell Columns must have matching counts");
             return;
         }
+        for (var i = 0; i < children.Count; i++)
+        {
+            if (rows[i] < 0)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Cell {i}: row index {rows[i]} cannot be negative");
+                return;
+            }
+            if (cols[i] < 0)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Cell {i}: column index {cols[i]} cannot be negative");
+                return;
+            }
+        }
 
-        var columnTracks = ParseTracks(columnsDsl);
-        var rowTracks = ParseTracks(rowsDsl);
+        // Empty DSL → auto-derive `auto` tracks from cell indices. Lets users skip the DSL
+        // entirely for the common case of "N children at these (row, col) positions".
+        var columnTracks = string.IsNullOrWhiteSpace(columnsDsl)
+            ? AutoTracks(cols.Max() + 1)
+            : ParseTracks(columnsDsl);
+        var rowTracks = string.IsNullOrWhiteSpace(rowsDsl)
+            ? AutoTracks(rows.Max() + 1)
+            : ParseTracks(rowsDsl);
 
         if (rowTracks.Count == 0 || columnTracks.Count == 0)
         {
@@ -94,13 +114,13 @@ public class GH_Grid : GH_Component
         var cells = new List<GridCell>(children.Count);
         for (var i = 0; i < children.Count; i++)
         {
-            if (rows[i] < 0 || rows[i] >= rowTracks.Count)
+            if (rows[i] >= rowTracks.Count)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
                     $"Cell {i}: row index {rows[i]} is outside [0, {rowTracks.Count - 1}]");
                 return;
             }
-            if (cols[i] < 0 || cols[i] >= columnTracks.Count)
+            if (cols[i] >= columnTracks.Count)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
                     $"Cell {i}: column index {cols[i]} is outside [0, {columnTracks.Count - 1}]");
@@ -119,7 +139,28 @@ public class GH_Grid : GH_Component
             Origin = new Point2D(origin.X, origin.Y),
         };
 
+        // Surface absolute-track overflows as warnings. Star/auto overflows depend on the
+        // parent layout context (page width, etc.) so they can only be reported here when
+        // an absolute cell is too small for its content.
+        foreach (var ov in grid.ComputeOverflows(new LayoutContext(BoundingBox.Empty)))
+        {
+            var axis = ov.OverflowsWidth && ov.OverflowsHeight
+                ? $"{ov.ContentWidth:0.##}×{ov.ContentHeight:0.##}mm content vs {ov.CellWidth:0.##}×{ov.CellHeight:0.##}mm cell"
+                : ov.OverflowsWidth
+                    ? $"{ov.ContentWidth:0.##}mm content vs {ov.CellWidth:0.##}mm cell width"
+                    : $"{ov.ContentHeight:0.##}mm content vs {ov.CellHeight:0.##}mm cell height";
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                $"Cell {ov.CellIndex} [row {ov.Row}, col {ov.Column}] overflows: {axis}");
+        }
+
         DA.SetData(0, grid);
+    }
+
+    private static IReadOnlyList<GridLength> AutoTracks(int count)
+    {
+        var list = new List<GridLength>(count);
+        for (var i = 0; i < count; i++) list.Add(GridLength.Auto);
+        return list;
     }
 
     private static IReadOnlyList<GridLength> ParseTracks(string dsl)

@@ -37,6 +37,22 @@ public sealed class GridCell
 	public DrawElement Content { get; init; }
 }
 
+// Reported by Grid.ComputeOverflows when a cell's natural content exceeds its allocated
+// track space. Components surface these as runtime warnings — actionable feedback at
+// graph-eval time rather than waiting for the final render to look wrong.
+public sealed class GridOverflow
+{
+	public int CellIndex { get; init; }
+	public int Row { get; init; }
+	public int Column { get; init; }
+	public double ContentWidth { get; init; }
+	public double ContentHeight { get; init; }
+	public double CellWidth { get; init; }
+	public double CellHeight { get; init; }
+	public bool OverflowsWidth => ContentWidth > CellWidth + 1e-6;
+	public bool OverflowsHeight => ContentHeight > CellHeight + 1e-6;
+}
+
 // Phase 7: a flex grid that resolves rows × columns and places each cell at the
 // intersection. The grid's natural size honours absolute/auto tracks; star tracks expand
 // to fill `LayoutContext.AvailableWidth`/`AvailableHeight` when the context is finite,
@@ -90,6 +106,39 @@ public sealed class Grid : LayoutElement
 	{
 		var (_, total) = ComputeLayout(new LayoutContext(BoundingBox.Empty));
 		return new BoundingBox(Origin.X, Origin.Y, Origin.X + total.Width, Origin.Y + total.Height);
+	}
+
+	// Returns one entry per cell whose resolved content is larger than its allocated cell rect.
+	// Caller passes the LayoutContext the grid will be laid out in; in standalone evaluation
+	// (no parent context) pass `new LayoutContext(BoundingBox.Empty)` and only Absolute-track
+	// overflows will be detected — Auto tracks always grow to fit, and Star tracks fall back
+	// to natural sizes when available is infinite.
+	public IReadOnlyList<GridOverflow> ComputeOverflows(LayoutContext context)
+	{
+		var (layout, _) = ComputeLayout(context);
+		var totalHeight = SumWithSpacing(layout.RowHeights, RowSpacing);
+		var result = new List<GridOverflow>();
+		for (var i = 0; i < Cells.Count; i++)
+		{
+			var cell = Cells[i];
+			if (cell.Row < 0 || cell.Row >= layout.RowHeights.Length) continue;
+			if (cell.Column < 0 || cell.Column >= layout.ColWidths.Length) continue;
+			var b = layout.CellBounds[i];
+			if (b.IsEmpty) continue;
+			var rect = ComputeCellRect(layout, cell, totalHeight);
+			var ov = new GridOverflow
+			{
+				CellIndex = i,
+				Row = cell.Row,
+				Column = cell.Column,
+				ContentWidth = b.Width,
+				ContentHeight = b.Height,
+				CellWidth = rect.Width,
+				CellHeight = rect.Height,
+			};
+			if (ov.OverflowsWidth || ov.OverflowsHeight) result.Add(ov);
+		}
+		return result;
 	}
 
 	internal (TrackLayout Layout, BoundingBox Total) ComputeLayout(LayoutContext context)

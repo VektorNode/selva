@@ -128,6 +128,124 @@ public sealed class Table : LayoutElement
 		return resolved.ComputeBounds();
 	}
 
+	// Pagination: tables split between data rows. The header row repeats on every page so a
+	// BOM-style table still reads as a table after a break. Tables without a header just
+	// split between rows.
+	//
+	// Edge cases:
+	//   - Header alone is taller than availableHeight → NothingFits, caller defers/force-places.
+	//   - Header fits but no data row fits → NothingFits, same handling. Avoids emitting a page
+	//     of pure chrome (header + zero rows) which would not make forward progress.
+	//   - No data rows at all → fall back to atomic resolve (a header-only table either fits or
+	//     doesn't).
+	public override SplitResult TrySplit(double availableHeight, LayoutContext context)
+	{
+		if (Rows == null || Rows.Count == 0)
+			return base.TrySplit(availableHeight, context);
+
+		var (headerHeight, dataRowHeights) = MeasureRowHeights();
+		const double tol = 1e-6;
+
+		var hasHeader = Header != null && Header.Count > 0;
+		if (hasHeader && headerHeight > availableHeight + tol)
+			return SplitResult.NothingFits(this);
+
+		var availableForData = availableHeight - headerHeight;
+		var fitsRowCount = 0;
+		var consumed = 0.0;
+		for (var i = 0; i < dataRowHeights.Length; i++)
+		{
+			if (consumed + dataRowHeights[i] <= availableForData + tol)
+			{
+				consumed += dataRowHeights[i];
+				fitsRowCount++;
+			}
+			else break;
+		}
+
+		if (fitsRowCount == dataRowHeights.Length)
+			return base.TrySplit(availableHeight, context);
+
+		if (fitsRowCount == 0)
+			return SplitResult.NothingFits(this);
+
+		var fitsRows = new List<IReadOnlyList<TableCell>>(fitsRowCount);
+		for (var i = 0; i < fitsRowCount; i++) fitsRows.Add(Rows[i]);
+		var overflowRows = new List<IReadOnlyList<TableCell>>(Rows.Count - fitsRowCount);
+		for (var i = fitsRowCount; i < Rows.Count; i++) overflowRows.Add(Rows[i]);
+
+		var fitsTable = CloneWithRows(fitsRows, Origin);
+		var overflowTable = CloneWithRows(overflowRows, Point2D.Zero);
+
+		var fitsResolved = fitsTable.Resolve(context);
+		var fitsBounds = fitsResolved?.ComputeBounds() ?? BoundingBox.Empty;
+		var fitsHeight = fitsBounds.IsEmpty ? (headerHeight + consumed) : fitsBounds.Height;
+		return SplitResult.Partial(fitsResolved, overflowTable, fitsHeight);
+	}
+
+	private Table CloneWithRows(IReadOnlyList<IReadOnlyList<TableCell>> rows, Point2D origin)
+	{
+		return new Table
+		{
+			Id = Id,
+			CssClass = CssClass,
+			Metadata = Metadata,
+			Header = Header,
+			Rows = rows,
+			ColumnWidths = ColumnWidths,
+			RowHeight = RowHeight,
+			CellPadding = CellPadding,
+			Border = Border,
+			HeaderBackground = HeaderBackground,
+			DefaultCellStyle = DefaultCellStyle,
+			Origin = origin,
+		};
+	}
+
+	// Per-row natural heights used by TrySplit. Mirrors how Grid resolves Auto rows: each row
+	// height = max over its cells of resolved-cell bounds (which already include cell padding
+	// via the Frame wrapper). When RowHeight is set, every row uses that absolute height.
+	private (double headerHeight, double[] dataRowHeights) MeasureRowHeights()
+	{
+		var columnCount = InferColumnCount();
+		if (columnCount == 0) return (0, Array.Empty<double>());
+		var columnWidths = ResolveColumnWidths(columnCount);
+
+		var hasHeader = Header != null && Header.Count > 0;
+		var headerH = hasHeader ? MeasureRowHeight(Header, isHeader: true, columnWidths) : 0;
+
+		var rowHs = new double[Rows.Count];
+		for (var i = 0; i < Rows.Count; i++)
+			rowHs[i] = MeasureRowHeight(Rows[i], isHeader: false, columnWidths);
+
+		if (RowHeight.HasValue)
+		{
+			if (hasHeader) headerH = RowHeight.Value;
+			for (var i = 0; i < rowHs.Length; i++) rowHs[i] = RowHeight.Value;
+		}
+
+		return (headerH, rowHs);
+	}
+
+	private double MeasureRowHeight(IReadOnlyList<TableCell> row, bool isHeader, IReadOnlyList<GridLength> columnWidths)
+	{
+		if (row == null) return 0;
+		var max = 0.0;
+		var col = 0;
+		foreach (var cell in row)
+		{
+			if (cell == null) { col++; continue; }
+			var span = Math.Max(1, cell.ColumnSpan);
+			if (col + span > columnWidths.Count) span = columnWidths.Count - col;
+			var content = ResolveCellContent(cell, isHeader, col, span, columnWidths);
+			var b = content?.ComputeBounds() ?? BoundingBox.Empty;
+			var h = b.IsEmpty ? 0 : b.Height;
+			if (h > max) max = h;
+			col += span;
+		}
+		return max;
+	}
+
 	private int InferColumnCount()
 	{
 		var count = 0;
