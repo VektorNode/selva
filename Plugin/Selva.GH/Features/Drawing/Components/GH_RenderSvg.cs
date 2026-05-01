@@ -7,6 +7,7 @@ using Selva.Drawing.Rendering.Svg;
 using Selva.GH.Features.FileIO;
 using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
+using Selva.GH.Properties;
 using Selva.GH.Utilities;
 
 namespace Selva.GH.Features.Drawing.Components;
@@ -24,7 +25,7 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.RenderSvg;
     public override GH_Exposure Exposure => GH_Exposure.secondary;
     public override Guid ComponentGuid => new Guid("E1B6B3F7-9D24-4F23-B47D-5C1C8F2D3E40");
 

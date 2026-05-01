@@ -5,6 +5,7 @@ using Grasshopper.Kernel;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Rendering.Svg;
+using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -18,7 +19,7 @@ public class GH_Combine : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.Combine;
     public override GH_Exposure Exposure => GH_Exposure.primary;
     public override Guid ComponentGuid => new Guid("3F8B5C1E-2D7A-4E9F-A4B6-1C3D5E7F8A9B");
 

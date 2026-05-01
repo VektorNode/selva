@@ -6,6 +6,7 @@ using Selva.Drawing.Model.Drawings;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Style;
+using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -21,7 +22,7 @@ public class GH_LegendBlock : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.LegendBlock;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
     public override Guid ComponentGuid => new Guid("3456789A-BCDE-4F01-2345-6789ABCDEF01");
 

@@ -10,10 +10,17 @@
 		onTabChange: (tabId: string) => void;
 		onRemoveTab: (tabId: string) => void;
 		onReorderTabs?: (fromIndex: number, toIndex: number) => void;
+		onGroupDropOnTab?: (targetTabId: string, groupId: string) => void;
 	}
 
-	let { tabs, activeTabId, onTabChange, onRemoveTab, onReorderTabs }: EditableTabNavProps =
-		$props();
+	let {
+		tabs,
+		activeTabId,
+		onTabChange,
+		onRemoveTab,
+		onReorderTabs,
+		onGroupDropOnTab
+	}: EditableTabNavProps = $props();
 
 	// track which tab is currently being edited and the temporary edit text
 	let editingTabId: string | null = $state(null);
@@ -28,7 +35,12 @@
 	// drag state
 	let draggedTabId: string | null = $state(null);
 	let dragOverTabId: string | null = $state(null);
+	let dragOverIsGroup = $state(false);
 	let dragHandleRefs = $state<Record<string, HTMLDivElement | null>>({});
+
+	function isGroupDrag(e: DragEvent): boolean {
+		return e.dataTransfer?.types.includes('application/x-group') ?? false;
+	}
 
 	function dragHandleAction(node: HTMLDivElement, tabId: string) {
 		dragHandleRefs[tabId] = node;
@@ -101,9 +113,21 @@
 	}
 
 	function handleDragOver(e: DragEvent, tabId: string) {
+		if (isGroupDrag(e)) {
+			if (!onGroupDropOnTab || tabId === activeTabId) return;
+			e.preventDefault();
+			dragOverTabId = tabId;
+			dragOverIsGroup = true;
+			if (e.dataTransfer) {
+				e.dataTransfer.dropEffect = 'move';
+			}
+			return;
+		}
+
 		e.preventDefault();
 		if (draggedTabId && draggedTabId !== tabId) {
 			dragOverTabId = tabId;
+			dragOverIsGroup = false;
 			if (e.dataTransfer) {
 				e.dataTransfer.dropEffect = 'move';
 			}
@@ -112,9 +136,22 @@
 
 	function handleDragLeave() {
 		dragOverTabId = null;
+		dragOverIsGroup = false;
 	}
 
 	function handleDrop(e: DragEvent, targetTabId: string) {
+		if (isGroupDrag(e)) {
+			e.preventDefault();
+			e.stopPropagation();
+			if (onGroupDropOnTab && targetTabId !== activeTabId) {
+				const groupId = e.dataTransfer?.getData('application/x-group');
+				if (groupId) onGroupDropOnTab(targetTabId, groupId);
+			}
+			dragOverTabId = null;
+			dragOverIsGroup = false;
+			return;
+		}
+
 		e.preventDefault();
 
 		if (!draggedTabId || !onReorderTabs) return;
@@ -128,11 +165,13 @@
 
 		draggedTabId = null;
 		dragOverTabId = null;
+		dragOverIsGroup = false;
 	}
 
 	function handleDragEnd() {
 		draggedTabId = null;
 		dragOverTabId = null;
+		dragOverIsGroup = false;
 	}
 </script>
 
@@ -142,7 +181,11 @@
 			class="group relative flex items-center rounded-t-lg transition-all
 				{activeTabId === tab.id ? 'bg-primary/20 shadow-md' : 'bg-muted/70 hover:bg-muted/50'}
 				{draggedTabId === tab.id ? 'opacity-50' : ''}
-				{dragOverTabId === tab.id ? 'ring-primary ring-2' : ''}"
+				{dragOverTabId === tab.id
+					? dragOverIsGroup
+						? 'ring-2 ring-amber-500 ring-offset-1'
+						: 'ring-primary ring-2'
+					: ''}"
 			ondragover={(e) => handleDragOver(e, tab.id)}
 			ondragleave={handleDragLeave}
 			ondrop={(e) => handleDrop(e, tab.id)}

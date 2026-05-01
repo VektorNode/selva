@@ -10,6 +10,7 @@ import {
 	removeItem,
 	reorderTabs,
 	reorderGroups,
+	moveGroupToTab,
 	batchSetNumberWidgetType,
 	isInputItem
 } from '$lib/features/builder/operations';
@@ -275,6 +276,27 @@ export function useBuilderActions(
 		reorderGroups(context.schema, tabId, fromIndex, toIndex);
 	}
 
+	function onMoveGroupToTab(sourceTabId: string, groupId: string, targetTabId: string) {
+		const context = ensureSchema();
+		if (!context) return;
+		const { builderState, schema } = context;
+
+		if (sourceTabId === targetTabId) return;
+
+		builderState.history.push($state.snapshot(schema));
+
+		const moved = moveGroupToTab(schema, sourceTabId, groupId, targetTabId);
+		if (!moved) return;
+
+		if (schema.layout.type === 'tabbed') {
+			const targetTab = schema.layout.tabs.find((t) => t.id === targetTabId);
+			if (targetTab) {
+				builderState.state.activeTabId = targetTabId;
+				toast.success(`Moved group to ${targetTab.label}`);
+			}
+		}
+	}
+
 	function onAddGroup(tabId: string) {
 		const context = ensureSchema();
 		if (!context) return;
@@ -366,6 +388,7 @@ export function useBuilderActions(
 		onRemoveTab,
 		onReorderTabs,
 		onReorderGroups,
+		onMoveGroupToTab,
 		onAddGroup,
 		onRemoveGroup,
 		onRemoveItem,

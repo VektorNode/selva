@@ -113,6 +113,102 @@ public sealed class Stack : LayoutElement
 		};
 	}
 
+	// Pagination: vertical stacks can break between children. Walk children top-down
+	// accumulating until the next one would overflow; if that child is itself a layout
+	// element we recurse into its TrySplit so a tall nested Stack/Table can also split.
+	// Horizontal stacks fall back to the atomic default (whole-stack-or-nothing).
+	public override SplitResult TrySplit(double availableHeight, LayoutContext context)
+	{
+		if (Orientation != StackOrientation.Vertical)
+			return base.TrySplit(availableHeight, context);
+
+		if (Children.Count == 0)
+			return SplitResult.AllFits(Resolve(context), 0);
+
+		var fitsChildren = new List<DrawElement>();
+		var overflowChildren = new List<DrawElement>();
+		var consumed = 0.0;
+		var splitDone = false;
+
+		for (var i = 0; i < Children.Count; i++)
+		{
+			var child = Children[i];
+			if (splitDone)
+			{
+				overflowChildren.Add(child);
+				continue;
+			}
+
+			var resolvedForMeasure = child is LayoutElement nested
+				? nested.Resolve(new LayoutContext(BoundingBox.Empty))
+				: child;
+			var b = resolvedForMeasure?.ComputeBounds() ?? BoundingBox.Empty;
+			var h = b.IsEmpty ? 0 : b.Height;
+			var spacingBefore = fitsChildren.Count > 0 ? Spacing : 0;
+
+			if (consumed + spacingBefore + h <= availableHeight + 1e-6)
+			{
+				fitsChildren.Add(child);
+				consumed += spacingBefore + h;
+				continue;
+			}
+
+			// This child doesn't fit whole. Ask it to split if it's a layout element with
+			// remaining budget left after accounting for inter-child spacing.
+			var remaining = availableHeight - consumed - spacingBefore;
+			if (remaining > 0 && child is LayoutElement layoutChild)
+			{
+				var childSplit = layoutChild.TrySplit(remaining, context);
+				if (childSplit.Fits != null)
+				{
+					fitsChildren.Add(childSplit.Fits);
+					consumed += spacingBefore + childSplit.FitsHeight;
+					if (childSplit.Overflow != null) overflowChildren.Add(childSplit.Overflow);
+					splitDone = true;
+					continue;
+				}
+			}
+
+			overflowChildren.Add(child);
+			splitDone = true;
+		}
+
+		if (overflowChildren.Count == 0)
+		{
+			var resolved = Resolve(context);
+			var rb = resolved?.ComputeBounds() ?? BoundingBox.Empty;
+			return SplitResult.AllFits(resolved, rb.IsEmpty ? 0 : rb.Height);
+		}
+
+		if (fitsChildren.Count == 0)
+			return SplitResult.NothingFits(this);
+
+		var fitsStack = new Stack
+		{
+			Id = Id,
+			CssClass = CssClass,
+			Metadata = Metadata,
+			Orientation = Orientation,
+			Spacing = Spacing,
+			CrossAlign = CrossAlign,
+			Origin = Origin,
+			Children = fitsChildren,
+		};
+		var overflowStack = new Stack
+		{
+			Orientation = Orientation,
+			Spacing = Spacing,
+			CrossAlign = CrossAlign,
+			Origin = Point2D.Zero,
+			Children = overflowChildren,
+		};
+
+		var fitsResolved = fitsStack.Resolve(context);
+		var fitsBounds = fitsResolved?.ComputeBounds() ?? BoundingBox.Empty;
+		var fitsHeight = fitsBounds.IsEmpty ? consumed : fitsBounds.Height;
+		return SplitResult.Partial(fitsResolved, overflowStack, fitsHeight);
+	}
+
 	private double ResolveCrossOffset(double naturalCross, double maxCross)
 	{
 		switch (CrossAlign)

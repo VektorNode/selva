@@ -305,6 +305,7 @@
 								onAddGroup={actions.onAddGroup}
 								onRemoveGroup={actions.onRemoveGroup}
 								onReorderGroups={actions.onReorderGroups}
+								onMoveGroupToTab={actions.onMoveGroupToTab}
 								onParameterDrop={actions.onParameterDrop}
 								onReorder={actions.onReorder}
 								onRemoveItem={actions.onRemoveItem}

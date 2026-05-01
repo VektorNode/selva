@@ -3,8 +3,12 @@ using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Parameters;
+using Rhino.Geometry;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
+using Selva.Drawing.Model.Layout;
+using Selva.GH.Features.Drawing.Preview;
+using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -12,6 +16,10 @@ namespace Selva.GH.Features.Drawing.Components;
 // and margins. Pages then flow into GH_Document → GH_RenderPdf / GH_RenderSvg.
 public class GH_Page : GH_Component
 {
+    private Page _previewPage;
+    private DrawElement _previewContent;
+    private BoundingBox _clippingBox = BoundingBox.Empty;
+
     public GH_Page()
         : base("Page", "Page",
             "Wraps drawing elements into a single drawing page with a paper size and margins",
@@ -19,9 +27,20 @@ public class GH_Page : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.Page;
     public override GH_Exposure Exposure => GH_Exposure.primary;
     public override Guid ComponentGuid => new Guid("B27D9F11-3CC4-4F1B-9E25-7E9B0C5F2E18");
+
+    public override bool IsPreviewCapable => true;
+    public override BoundingBox ClippingBox => _clippingBox;
+
+    public override void ClearData()
+    {
+        base.ClearData();
+        _previewPage = null;
+        _previewContent = null;
+        _clippingBox = BoundingBox.Empty;
+    }
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
@@ -83,7 +102,74 @@ public class GH_Page : GH_Component
             Content = new GroupElement { Children = children },
         };
 
+        _previewPage = page;
+        // Layout primitives (Stack, Table, Frame, Grid, TextFlow) only become visitable
+        // primitives after a layout pass — renderers do this automatically; the viewport
+        // preview has to do it itself or those elements won't appear (and would throw).
+        var resolved = LayoutPass.ResolvePage(page);
+        _previewContent = resolved?.Content;
+        _clippingBox = ComputeClippingBox(page);
+
         DA.SetData(0, page);
+    }
+
+    public override void DrawViewportWires(IGH_PreviewArgs args)
+    {
+        if (Locked || Hidden || _previewPage == null) return;
+
+        var page = _previewPage;
+        var w = page.Size.WidthMm;
+        var h = page.Size.HeightMm;
+
+        var paperColor = Attributes.Selected ? args.WireColour_Selected : Color.Black;
+        var marginColor = Color.FromArgb(160, 160, 160);
+
+        // Paper outline.
+        var p0 = new Point3d(0, 0, 0);
+        var p1 = new Point3d(w, 0, 0);
+        var p2 = new Point3d(w, h, 0);
+        var p3 = new Point3d(0, h, 0);
+        args.Display.DrawPolyline(new Polyline(new[] { p0, p1, p2, p3, p0 }), paperColor, 2);
+
+        // Margin rectangle (dotted).
+        var m = page.Margins;
+        var minX = m.Left;
+        var minY = m.Bottom;
+        var maxX = w - m.Right;
+        var maxY = h - m.Top;
+        if (maxX > minX && maxY > minY)
+        {
+            var q0 = new Point3d(minX, minY, 0);
+            var q1 = new Point3d(maxX, minY, 0);
+            var q2 = new Point3d(maxX, maxY, 0);
+            var q3 = new Point3d(minX, maxY, 0);
+            args.Display.DrawDottedLine(q0, q1, marginColor);
+            args.Display.DrawDottedLine(q1, q2, marginColor);
+            args.Display.DrawDottedLine(q2, q3, marginColor);
+            args.Display.DrawDottedLine(q3, q0, marginColor);
+        }
+
+        // Paper-size label below the bottom-left corner — helps tell A4 from A3 at a glance.
+        var label = page.Size.Name ?? $"{w:0}×{h:0}mm";
+        var labelHeight = Math.Max(2.5, Math.Min(w, h) * 0.012);
+        var labelPlane = new Plane(new Point3d(0, -labelHeight * 1.6, 0), Vector3d.XAxis, Vector3d.YAxis);
+        args.Display.Draw3dText(label, marginColor, labelPlane, labelHeight, "Arial");
+
+        if (_previewContent != null)
+        {
+            var visitor = new RhinoViewportVisitor(args.Display);
+            visitor.Render(_previewContent);
+        }
+    }
+
+    private static BoundingBox ComputeClippingBox(Page page)
+    {
+        if (page == null) return BoundingBox.Empty;
+        // Paper rect plus a small margin for the size label.
+        var padY = Math.Max(2.5, Math.Min(page.Size.WidthMm, page.Size.HeightMm) * 0.02);
+        return new BoundingBox(
+            new Point3d(0, -padY * 2, 0),
+            new Point3d(page.Size.WidthMm, page.Size.HeightMm, 0));
     }
 
     private static PaperSize ResolvePaper(int i) => i switch

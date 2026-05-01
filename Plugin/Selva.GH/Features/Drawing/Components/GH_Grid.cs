@@ -6,6 +6,7 @@ using Grasshopper.Kernel;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Layout;
+using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -21,7 +22,7 @@ public class GH_Grid : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.Grid;
     public override GH_Exposure Exposure => GH_Exposure.tertiary;
     public override Guid ComponentGuid => new Guid("D9F0A123-3C4D-4E5F-B071-829304B5C6D7");
 
@@ -30,8 +31,8 @@ public class GH_Grid : GH_Component
         pManager.AddTextParameter("Columns", "C", "Column-track DSL: space-separated <mm>|auto|<weight>* (e.g. \"40 auto 1*\")", GH_ParamAccess.item, "auto");
         pManager.AddTextParameter("Rows", "R", "Row-track DSL", GH_ParamAccess.item, "auto");
         pManager.AddGenericParameter("Cell Children", "Ch", "Cell content (one element per cell)", GH_ParamAccess.list);
-        pManager.AddIntegerParameter("Cell Rows", "Cr", "Row index per cell (parallel to Children)", GH_ParamAccess.list);
-        pManager.AddIntegerParameter("Cell Columns", "Cc", "Column index per cell (parallel to Children)", GH_ParamAccess.list);
+        pManager.AddIntegerParameter("Cell Rows", "Cr", "Row index per cell, 0-based (parallel to Children)", GH_ParamAccess.list);
+        pManager.AddIntegerParameter("Cell Columns", "Cc", "Column index per cell, 0-based (parallel to Children)", GH_ParamAccess.list);
         pManager.AddNumberParameter("Column Spacing", "CS", "Spacing between columns in mm", GH_ParamAccess.item, 0.0);
         pManager.AddNumberParameter("Row Spacing", "RS", "Spacing between rows in mm", GH_ParamAccess.item, 0.0);
         pManager.AddPointParameter("Origin", "O", "Bottom-left of the grid in world coordinates", GH_ParamAccess.item, new Rhino.Geometry.Point3d(0, 0, 0));
@@ -83,9 +84,28 @@ public class GH_Grid : GH_Component
         var columnTracks = ParseTracks(columnsDsl);
         var rowTracks = ParseTracks(rowsDsl);
 
+        if (rowTracks.Count == 0 || columnTracks.Count == 0)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                "Columns and Rows DSL must each declare at least one track");
+            return;
+        }
+
         var cells = new List<GridCell>(children.Count);
         for (var i = 0; i < children.Count; i++)
         {
+            if (rows[i] < 0 || rows[i] >= rowTracks.Count)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                    $"Cell {i}: row index {rows[i]} is outside [0, {rowTracks.Count - 1}]");
+                return;
+            }
+            if (cols[i] < 0 || cols[i] >= columnTracks.Count)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                    $"Cell {i}: column index {cols[i]} is outside [0, {columnTracks.Count - 1}]");
+                return;
+            }
             cells.Add(new GridCell { Row = rows[i], Column = cols[i], Content = children[i] });
         }
 

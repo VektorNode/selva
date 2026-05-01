@@ -14,6 +14,7 @@
 		onAddGroup: (tabId: string) => void;
 		onRemoveGroup: (tabId: string, groupId: string) => void;
 		onReorderGroups: (tabId: string, fromIndex: number, toIndex: number) => void;
+		onMoveGroupToTab: (sourceTabId: string, groupId: string, targetTabId: string) => void;
 		onParameterDrop: (tabId: string, groupId: string, event: CustomEvent) => void;
 		onReorder: (items: LayoutItem[], tabId: string, groupId: string) => void;
 		onRemoveItem: (tabId: string, groupId: string, itemId: string) => void;
@@ -33,6 +34,7 @@
 		onAddGroup,
 		onRemoveGroup,
 		onReorderGroups,
+		onMoveGroupToTab,
 		onParameterDrop,
 		onReorder,
 		onRemoveItem,
@@ -139,7 +141,16 @@
 				/>
 			{:else}
 				<!-- Tab Navigation -->
-				<EditableTabNav {tabs} {activeTabId} {onTabChange} {onRemoveTab} {onReorderTabs} />
+				<EditableTabNav
+					{tabs}
+					{activeTabId}
+					{onTabChange}
+					{onRemoveTab}
+					{onReorderTabs}
+					onGroupDropOnTab={(targetTabId, groupId) => {
+						if (activeTabId) onMoveGroupToTab(activeTabId, groupId, targetTabId);
+					}}
+				/>
 
 				<!-- Active Tab Content -->
 				{#if activeTab}

@@ -5,6 +5,7 @@ using Grasshopper.Kernel.Parameters;
 using Rhino.Geometry;
 using Selva.Drawing;
 using Selva.Drawing.Model.Elements;
+using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -17,7 +18,7 @@ public class GH_AngularDimension : GH_Component
     {
     }
 
-    protected override Bitmap Icon => null;
+    protected override Bitmap Icon => Resources.AngularDimension;
     public override GH_Exposure Exposure => GH_Exposure.secondary;
     public override Guid ComponentGuid => new Guid("7C3D5F2A-6B8E-4A1D-9F4C-3E0B7D2A8C19");
 
