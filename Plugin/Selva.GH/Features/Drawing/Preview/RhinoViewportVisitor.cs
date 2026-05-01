@@ -26,6 +26,7 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
     private static readonly Color DimColor = Color.FromArgb(170, 70, 70);
     private static readonly Color HatchColor = Color.FromArgb(120, 120, 200);
     private static readonly Color BoxColor = Color.FromArgb(190, 190, 190);
+    private static readonly Color LayoutBoundsColor = Color.FromArgb(120, 170, 220);
 
     private readonly DisplayPipeline _display;
     private DrawTransform _current = DrawTransform.Identity;
@@ -46,6 +47,12 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
         if (element == null) return;
         var saved = _current;
         if (!element.Transform.IsIdentity) _current = _current.Multiply(element.Transform);
+        // BoundsOverride is set by layout primitives (Grid, Frame, Table, TitleBlock, etc.)
+        // when the resolved group's outer extent is wider than the union of its children.
+        // Drawing those rects in the viewport gives a "show your layout" overlay for free —
+        // SVG/PDF renderers don't run this visitor, so the final output is unaffected.
+        if (element.BoundsOverride.HasValue)
+            DrawDottedBox(element.BoundsOverride.Value, LayoutBoundsColor);
         foreach (var child in element.Children) child?.Accept(this);
         _current = saved;
     }
@@ -182,6 +189,19 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
         var p3 = Map(new DrawPoint(b.MaxX, b.MaxY));
         var p4 = Map(new DrawPoint(b.MinX, b.MaxY));
         _display.DrawPolyline(new Polyline(new[] { p1, p2, p3, p4, p1 }), color, 1);
+    }
+
+    private void DrawDottedBox(DrawBox b, Color color)
+    {
+        if (b.IsEmpty) return;
+        var p1 = Map(new DrawPoint(b.MinX, b.MinY));
+        var p2 = Map(new DrawPoint(b.MaxX, b.MinY));
+        var p3 = Map(new DrawPoint(b.MaxX, b.MaxY));
+        var p4 = Map(new DrawPoint(b.MinX, b.MaxY));
+        _display.DrawDottedLine(p1, p2, color);
+        _display.DrawDottedLine(p2, p3, color);
+        _display.DrawDottedLine(p3, p4, color);
+        _display.DrawDottedLine(p4, p1, color);
     }
 
     private void DrawLinearDim(DimensionElement d)

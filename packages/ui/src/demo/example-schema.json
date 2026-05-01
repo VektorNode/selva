@@ -303,6 +303,12 @@
 			"nickname": "Contour Plot",
 			"description": "Plotly contour chart output",
 			"type": "chart"
+		},
+		{
+			"id": "output-009",
+			"nickname": "Preview Image",
+			"description": "Rendered preview (PNG/JPG/SVG)",
+			"type": "file"
 		}
 	],
 	"layout": {
@@ -754,6 +760,28 @@
 										"preset-4": "Preset 4: Custom"
 									}
 								}
+							},
+							{
+								"type": "input",
+								"widgetType": "dropdown",
+								"id": "item-dd-checklist",
+								"paramId": "input-009",
+								"displayName": "Export Formats",
+								"description": "Checklist — select multiple export formats",
+								"order": 3,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"displayAs": "checklist",
+									"options": {
+										"3dm": "Rhino (.3dm)",
+										"step": "STEP (.stp)",
+										"iges": "IGES (.iges)",
+										"obj": "Wavefront (.obj)",
+										"fbx": "FBX (.fbx)",
+										"stl": "STL (.stl)"
+									}
+								}
 							}
 						]
 					},
@@ -1130,6 +1158,22 @@
 								"config": {
 									"buttonLabel": "Export",
 									"fileFormat": "step"
+								}
+							},
+							{
+								"type": "output",
+								"widgetType": "image",
+								"id": "item-out-009",
+								"paramId": "output-009",
+								"displayName": "Preview Image",
+								"order": 8,
+								"span": 1,
+								"visible": true,
+								"config": {
+									"allowDownload": true,
+									"allowFullscreen": true,
+									"fitMode": "contain",
+									"backgroundColor": "#f5f5f5"
 								}
 							}
 						]
