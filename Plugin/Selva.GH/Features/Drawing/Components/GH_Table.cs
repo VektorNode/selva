@@ -38,6 +38,8 @@ public class GH_Table : GH_Component
         pManager.AddGenericParameter("Border", "B", "Stroke style for borders (leave empty for none)", GH_ParamAccess.item);
         pManager.AddGenericParameter("Default Style", "S", "Default text style for cells (leave empty for default)", GH_ParamAccess.item);
         pManager.AddPointParameter("Origin", "O", "Bottom-left of the table in world coordinates", GH_ParamAccess.item, new Rhino.Geometry.Point3d(0, 0, 0));
+        pManager.AddGenericParameter("Header Style", "HS", "Text style for header cells (leave empty to inherit default style with bold weight)", GH_ParamAccess.item);
+        pManager.AddGenericParameter("Header Fill", "HF", "Background fill for the header row (leave empty for none)", GH_ParamAccess.item);
 
         pManager[0].Optional = true;
         pManager[2].Optional = true;
@@ -45,6 +47,8 @@ public class GH_Table : GH_Component
         pManager[4].Optional = true;
         pManager[5].Optional = true;
         pManager[6].Optional = true;
+        pManager[7].Optional = true;
+        pManager[8].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -59,6 +63,8 @@ public class GH_Table : GH_Component
         var rowHeight = 0.0;
         Stroke border = null;
         TextStyle style = null;
+        TextStyle headerStyle = null;
+        Fill headerFill = null;
         var origin = new Rhino.Geometry.Point3d(0, 0, 0);
 
         DA.GetDataList(0, headers);
@@ -72,6 +78,8 @@ public class GH_Table : GH_Component
         DA.GetData(4, ref border);
         DA.GetData(5, ref style);
         DA.GetData(6, ref origin);
+        DA.GetData(7, ref headerStyle);
+        DA.GetData(8, ref headerFill);
 
         var bodyRows = new List<IReadOnlyList<TableCell>>(rowTree.PathCount);
         foreach (var path in rowTree.Paths)
@@ -102,6 +110,8 @@ public class GH_Table : GH_Component
             RowHeight = rowHeight > 0 ? (double?)rowHeight : null,
             Border = border ?? new Stroke { Width = 0.25 },
             DefaultCellStyle = style ?? new TextStyle(),
+            HeaderStyle = headerStyle,
+            HeaderBackground = headerFill,
             Origin = new Point2D(origin.X, origin.Y),
         };
 

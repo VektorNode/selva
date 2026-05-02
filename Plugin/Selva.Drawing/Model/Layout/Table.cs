@@ -35,6 +35,9 @@ public sealed class Table : LayoutElement
 	public Stroke Border { get; init; } = new Stroke { Width = 0.25 };
 	public Fill HeaderBackground { get; init; }
 	public TextStyle DefaultCellStyle { get; init; } = new TextStyle();
+	// Explicit header text style. When null, header cells inherit DefaultCellStyle with
+	// Weight bumped to Bold (see ResolveCellContent).
+	public TextStyle HeaderStyle { get; init; }
 
 	public Point2D Origin { get; init; } = Point2D.Zero;
 
@@ -198,6 +201,7 @@ public sealed class Table : LayoutElement
 			Border = Border,
 			HeaderBackground = HeaderBackground,
 			DefaultCellStyle = DefaultCellStyle,
+			HeaderStyle = HeaderStyle,
 			Origin = origin,
 		};
 	}
@@ -307,21 +311,28 @@ public sealed class Table : LayoutElement
 		if (cell.Element != null) return PadCellElement(cell.Element);
 
 		var style = cell.Style ?? DefaultCellStyle ?? new TextStyle();
-		if (isHeader && cell.Style == null && DefaultCellStyle != null)
+		if (isHeader && cell.Style == null)
 		{
-			style = new TextStyle
+			if (HeaderStyle != null)
 			{
-				FontFamily = style.FontFamily,
-				FontSize = style.FontSize,
-				Weight = FontWeight.Bold,
-				Style = style.Style,
-				Decoration = style.Decoration,
-				Color = style.Color,
-				HorizontalAnchor = style.HorizontalAnchor,
-				VerticalAnchor = style.VerticalAnchor,
-				LineHeight = style.LineHeight,
-				LetterSpacing = style.LetterSpacing,
-			};
+				style = HeaderStyle;
+			}
+			else if (DefaultCellStyle != null)
+			{
+				style = new TextStyle
+				{
+					FontFamily = style.FontFamily,
+					FontSize = style.FontSize,
+					Weight = FontWeight.Bold,
+					Style = style.Style,
+					Decoration = style.Decoration,
+					Color = style.Color,
+					HorizontalAnchor = style.HorizontalAnchor,
+					VerticalAnchor = style.VerticalAnchor,
+					LineHeight = style.LineHeight,
+					LetterSpacing = style.LetterSpacing,
+				};
+			}
 		}
 
 		// Width is left null: the TextFlow inherits its wrap width from the surrounding
