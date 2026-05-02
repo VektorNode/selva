@@ -22,18 +22,21 @@ public sealed class TokenResolver
 	private readonly int _totalPages;
 	private readonly DateTime _now;
 	private readonly string _title;
+	private readonly string _section;
 	private readonly IReadOnlyDictionary<string, string> _userTokens;
 
 	public TokenResolver(
 		int page,
 		int totalPages,
 		string title,
+		string section = null,
 		IReadOnlyDictionary<string, string> userTokens = null,
 		DateTime? now = null)
 	{
 		_page = page;
 		_totalPages = totalPages;
 		_title = title ?? string.Empty;
+		_section = section ?? string.Empty;
 		_userTokens = userTokens;
 		_now = now ?? DateTime.Now;
 	}
@@ -140,6 +143,8 @@ public sealed class TokenResolver
 					: _now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 			case "title":
 				return _title;
+			case "section":
+				return _section;
 			default:
 				if (_userTokens != null && _userTokens.TryGetValue(name, out var v)) return v ?? string.Empty;
 				return m.Value;

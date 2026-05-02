@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { AppShell, StateDisplay, Button, Dialog, toast, useFooterItem } from '@selvajs/ui';
+	import { AppShell, StateDisplay, Button, Dialog, Resizable, toast, useFooterItem } from '@selvajs/ui';
 	import { Save } from '@lucide/svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -59,13 +59,9 @@
 		return ids;
 	});
 
-	const availableInputs = $derived(
-		builderState?.state.availableInputs.filter((p) => !placedInLayoutIds.has(p.id)) || []
-	);
+	const availableInputs = $derived(builderState?.state.availableInputs || []);
 
-	const availableOutputsUnplaced = $derived(
-		builderState?.state.availableOutputs.filter((o) => !placedInLayoutIds.has(o.id)) || []
-	);
+	const availableOutputsUnplaced = $derived(builderState?.state.availableOutputs || []);
 
 	const allAvailableInputs = $derived(builderState?.state.availableInputs || []);
 
@@ -255,74 +251,86 @@
 				</Button>
 			{/snippet}
 
-		<div class="flex-1 overflow-auto">
+		<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
 			{#if builderState?.state.loading}
 				<div class="flex min-h-100 items-center justify-center">
 					<StateDisplay type="loading" size="large" message="Loading schema..." />
 				</div>
 			{:else if builderState?.state.schema}
-				<div class="mx-auto grid h-full max-w-500 grid-cols-1 gap-6 p-6 lg:grid-cols-[360px_1fr]">
-					{#if builderState.state.error}
-						<div class="col-span-2">
-							<StateDisplay type="warning" size="medium" message={builderState.state.error} />
-						</div>
-					{/if}
+				{#if builderState.state.error}
+					<div class="px-6 pt-4">
+						<StateDisplay type="warning" size="medium" message={builderState.state.error} />
+					</div>
+				{/if}
 
-					<BuilderSidebar
-						schema={builderState.state.schema}
-						{availableInputs}
-						availableOutputs={availableOutputsUnplaced}
-						placedIds={placedInLayoutIds}
-						syncNeeded={builderState.state.syncNeeded}
-						onSchemaChange={(updatedSchema) => {
-							if (builderState && builderState.state.schema) {
-								// Save snapshot before import
-								builderState.history.push($state.snapshot(builderState.state.schema));
-								builderState.state.schema = updatedSchema;
-								// Auto-select first tab when schema is imported/changed
-								if (
-									updatedSchema.layout?.type === 'tabbed' &&
-									updatedSchema.layout.tabs.length > 0
-								) {
-									builderState.state.activeTabId = updatedSchema.layout.tabs[0].id;
-								}
-							}
-						}}
-						onSync={() => builderState?.syncParameters()}
-						onAddToGroup={actions.onAddToGroup}
-						onAddToNewGroup={actions.onAddToNewGroup}
-					/>
-
-					<main class="flex flex-col gap-6">
-						{#if builderState.state.schema.layout?.type === 'tabbed'}
-							<TabEditor
-								bind:tabs={builderState.state.schema.layout.tabs}
-								activeTabId={builderState.state.activeTabId}
-								onTabChange={handleTabChange}
-								onAddTab={actions.onAddTab}
-								onRemoveTab={actions.onRemoveTab}
-								onReorderTabs={actions.onReorderTabs}
-								onAddGroup={actions.onAddGroup}
-								onRemoveGroup={actions.onRemoveGroup}
-								onReorderGroups={actions.onReorderGroups}
-								onMoveGroupToTab={actions.onMoveGroupToTab}
-								onParameterDrop={actions.onParameterDrop}
-								onReorder={actions.onReorder}
-								onRemoveItem={actions.onRemoveItem}
-								onAddLineBreak={actions.onAddLineBreak}
-								availableInputs={allAvailableInputs}
-								{getParameterInfo}
-								outputValues={builderState.state.outputValues}
+				<Resizable.PaneGroup
+					direction="horizontal"
+					autoSaveId="builder-sidebar-layout"
+					class="min-h-0 flex-1"
+				>
+					<Resizable.Pane defaultSize={25} minSize={18} maxSize={42}>
+						<div class="h-full px-(--page-px) py-(--page-py)">
+							<BuilderSidebar
+								schema={builderState.state.schema}
+								{availableInputs}
+								availableOutputs={availableOutputsUnplaced}
+								placedIds={placedInLayoutIds}
+								syncNeeded={builderState.state.syncNeeded}
+								onSchemaChange={(updatedSchema) => {
+									if (builderState && builderState.state.schema) {
+										// Save snapshot before import
+										builderState.history.push($state.snapshot(builderState.state.schema));
+										builderState.state.schema = updatedSchema;
+										// Auto-select first tab when schema is imported/changed
+										if (
+											updatedSchema.layout?.type === 'tabbed' &&
+											updatedSchema.layout.tabs.length > 0
+										) {
+											builderState.state.activeTabId = updatedSchema.layout.tabs[0].id;
+										}
+									}
+								}}
+								onSync={() => builderState?.syncParameters()}
+								onAddToGroup={actions.onAddToGroup}
+								onAddToNewGroup={actions.onAddToNewGroup}
 							/>
-						{/if}
-
-						<div class="mb-20 flex justify-end gap-4">
-							<Button onclick={() => saveSchema().catch(() => {})}
-								><Save class="mr-2 h-4 w-4" />Save Schema</Button
-							>
 						</div>
-					</main>
-				</div>
+					</Resizable.Pane>
+
+					<Resizable.Handle withHandle />
+
+					<Resizable.Pane defaultSize={75} minSize={40}>
+						<main class="flex h-full flex-col gap-6 overflow-y-auto px-(--page-px) py-(--page-py)">
+							{#if builderState.state.schema.layout?.type === 'tabbed'}
+								<TabEditor
+									bind:tabs={builderState.state.schema.layout.tabs}
+									activeTabId={builderState.state.activeTabId}
+									onTabChange={handleTabChange}
+									onAddTab={actions.onAddTab}
+									onRemoveTab={actions.onRemoveTab}
+									onReorderTabs={actions.onReorderTabs}
+									onAddGroup={actions.onAddGroup}
+									onRemoveGroup={actions.onRemoveGroup}
+									onReorderGroups={actions.onReorderGroups}
+									onMoveGroupToTab={actions.onMoveGroupToTab}
+									onParameterDrop={actions.onParameterDrop}
+									onReorder={actions.onReorder}
+									onRemoveItem={actions.onRemoveItem}
+									onAddLineBreak={actions.onAddLineBreak}
+									availableInputs={allAvailableInputs}
+									{getParameterInfo}
+									outputValues={builderState.state.outputValues}
+								/>
+							{/if}
+
+							<div class="mb-20 flex justify-end gap-4">
+								<Button onclick={() => saveSchema().catch(() => {})}
+									><Save class="mr-2 h-4 w-4" />Save Schema</Button
+								>
+							</div>
+						</main>
+					</Resizable.Pane>
+				</Resizable.PaneGroup>
 			{/if}
 		</div>
 

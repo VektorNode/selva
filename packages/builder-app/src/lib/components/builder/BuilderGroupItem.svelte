@@ -10,7 +10,7 @@
 		ImageWidgetConfig
 	} from '@selvajs/schemas';
 	type LayoutItem = InputLayoutItem | OutputLayoutItem;
-	import { Badge, Button, Card, Switch } from '@selvajs/ui';
+	import { Button, Card, Collapsible, Switch } from '@selvajs/ui';
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '$lib/features/builder/widget-config';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
@@ -19,6 +19,7 @@
 		item: LayoutItem;
 		paramInfo?: DiscoveredInput;
 		columns?: number;
+		expanded?: boolean;
 		onRemove: () => void;
 		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
@@ -29,6 +30,7 @@
 		item = $bindable(),
 		paramInfo,
 		columns = 1,
+		expanded = $bindable(false),
 		onRemove,
 		availableInputs,
 		getParameterInfo,
@@ -64,6 +66,42 @@
 	let hasAdvancedOptions = $derived(
 		isNumberInput || isFileInput || isTextInput || isDropdownInput || isFileOrImageOutput
 	);
+	let hasDescription = $derived(!!(item.description && item.description.trim().length > 0));
+	let hasCustomConfig = $derived.by(() => {
+		if (isNumberInput) {
+			const c = item.config as NumberWidgetConfig;
+			return c.renderAsSlider === false;
+		}
+		if (isDropdownInput && dropdownConfig) {
+			return dropdownConfig.displayAs === 'checklist';
+		}
+		if (isFileInput && fileInputConfig) {
+			if (fileInputConfig.defaultInputMode) return true;
+			if (
+				fileInputConfig.allowedInputModes &&
+				fileInputConfig.allowedInputModes.length < 2
+			)
+				return true;
+			if (
+				fileInputConfig.acceptedFormats &&
+				fileInputConfig.acceptedFormats.length < ACCEPTED_FILE_FORMATS.length
+			)
+				return true;
+			return false;
+		}
+		if (isTextInput) {
+			const c = item.config as TextWidgetConfig;
+			return !!(c.maxLength || c.pattern || c.customErrorMessage);
+		}
+		if (isImageOutput && imageConfig) {
+			if (imageConfig.allowDownload === false) return true;
+			if (imageConfig.allowFullscreen === false) return true;
+			if (imageConfig.fitMode === 'cover') return true;
+			return true; // image vs file is itself a divergence
+		}
+		return false;
+	});
+	let hasNonDefaultConfig = $derived(hasDescription || hasCustomConfig || hasVisibilityRules);
 
 	function setFileOutputMode(mode: 'file' | 'image') {
 		if (item.type !== 'output') return;
@@ -157,40 +195,80 @@
 </script>
 
 <div class="relative">
-	<Card.Root
-		class="hover:border-primary py-1 transition-all hover:shadow-sm
-			{item.type === 'input' ? 'bg-inputparam' : 'bg-outputparam'}"
-	>
-		<div class="grid grid-cols-[auto_20px_1fr] gap-2 p-2">
-			<!-- Drag Handle (visual affordance only — dndzone handles drag initiation) -->
-			<div
-				class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex cursor-grab self-start rounded p-0.5 active:cursor-grabbing"
-				role="button"
-				tabindex="0"
-				aria-label="Drag to reorder"
-			>
-				<GripVertical size={14} />
-			</div>
-			<div class="flex items-start pt-0.5">
+	<Collapsible.Root bind:open={expanded}>
+		<Card.Root
+			class="group hover:border-primary overflow-hidden border-l-4 py-1.5 transition-all hover:shadow-sm
+			{item.type === 'input'
+				? 'bg-inputparam border-l-primary'
+				: 'bg-outputparam border-l-chart-3'}"
+		>
+			<!-- Compact header row (always visible) -->
+			<div class="flex items-center gap-2 px-3 py-1.5">
+				<div
+					class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex cursor-grab rounded p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+					role="button"
+					tabindex="0"
+					aria-label="Drag to reorder"
+				>
+					<GripVertical size={16} />
+				</div>
 				{#if item.type === 'input'}
-					<ArrowUpFromLine size={14} class="text-muted-foreground" />
+					<ArrowUpFromLine size={15} class="text-muted-foreground shrink-0" />
 				{:else}
-					<ArrowDownToLine size={14} class="text-muted-foreground" />
+					<ArrowDownToLine size={15} class="text-muted-foreground shrink-0" />
 				{/if}
+				<input
+					type="text"
+					bind:value={item.displayName}
+					title={paramInfo ? `GH: ${paramInfo.nickname}` : undefined}
+					class="hover:border-border focus:border-primary min-w-0 rounded-sm border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium focus:outline-none"
+					style="field-sizing: content; min-width: 7rem; max-width: 18rem;"
+					placeholder="Display Name"
+				/>
+				{#if paramInfo}
+					<span
+						class="text-muted-foreground/80 bg-accent/40 rounded-sm px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide"
+					>
+						{paramInfo.type}
+					</span>
+				{:else if item.type === 'output'}
+					<span
+						class="text-muted-foreground/80 bg-accent/40 rounded-sm px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide"
+					>
+						{item.widgetType}
+					</span>
+					{#if detectedChartType}
+						<span
+							class="text-muted-foreground/70 border-border/60 rounded-sm border px-1.5 py-0.5 text-[10px] capitalize"
+						>
+							{detectedChartType}
+						</span>
+					{/if}
+				{/if}
+				<Collapsible.Trigger
+					class="hover:bg-accent/50 relative ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded {hasNonDefaultConfig
+						? 'text-primary'
+						: 'text-muted-foreground hover:text-foreground'}"
+					aria-label={expanded ? 'Collapse details' : 'Expand details'}
+					title={hasNonDefaultConfig ? 'Has custom configuration' : undefined}
+				>
+					<ChevronDown
+						size={16}
+						class={`transition-transform ${expanded ? 'rotate-180' : ''}`}
+					/>
+				</Collapsible.Trigger>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					class="hover:bg-destructive hover:text-destructive-foreground h-6 w-6 text-base"
+					onclick={onRemove}>×</Button
+				>
 			</div>
 
-			<div class="flex flex-col gap-2">
-				<!-- Display Name + Span + Remove -->
-				<div class="flex items-center gap-2">
-					<input
-						type="text"
-						bind:value={item.displayName}
-						class="hover:border-border focus:border-primary flex-1 rounded-sm border border-transparent bg-transparent px-1 py-0.5
-							   text-xs font-medium focus:outline-none"
-						placeholder="Display Name"
-					/>
+			<Collapsible.Content>
+				<div class="flex flex-col gap-2 px-2 pt-1 pb-2">
 					{#if columns > 1}
-						<label class="text-muted-foreground flex shrink-0 items-center gap-1 text-[10px]">
+						<label class="text-muted-foreground flex items-center gap-1 text-[10px]">
 							Span:
 							<input
 								type="number"
@@ -201,47 +279,17 @@
 							/>
 						</label>
 					{/if}
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						class="hover:bg-destructive hover:text-destructive-foreground h-4 w-4"
-						onclick={onRemove}>×</Button
-					>
-				</div>
 
-				<!-- Description -->
-				<input
-					type="text"
-					bind:value={item.description}
-					class="text-muted-foreground hover:border-border focus:border-primary rounded-sm border border-transparent bg-transparent px-1
-						   py-0.5 text-[11px] focus:outline-none"
-					placeholder="Description"
-				/>
+					<!-- Description -->
+					<input
+						type="text"
+						bind:value={item.description}
+						class="text-muted-foreground hover:border-border focus:border-primary rounded-sm border border-transparent bg-transparent px-1
+							   py-0.5 text-[11px] focus:outline-none"
+						placeholder="Description"
+					/>
 
-				<!-- Parameter Info / Type Badge -->
-				{#if paramInfo}
-					<div class="flex items-center gap-2">
-						<Badge variant="default" class="rounded-xs px-1 py-0 text-[9px]">
-							{paramInfo.type}
-						</Badge>
-						<span class="text-muted-foreground font-mono text-[9px]">
-							GH: {paramInfo.nickname}
-						</span>
-					</div>
-				{:else if item.type === 'output'}
-					<div class="flex items-center gap-2">
-						<Badge variant="default" class="rounded-xs px-1 py-0 text-[9px]">
-							{item.widgetType}
-						</Badge>
-						{#if detectedChartType}
-							<Badge variant="outline" class="rounded-xs px-1 py-0 text-[9px] capitalize">
-								{detectedChartType}
-							</Badge>
-						{/if}
-					</div>
-				{/if}
-
-				<!-- Advanced -->
+					<!-- Advanced -->
 				{#if hasAdvancedOptions}
 					<div class="border-border/70 mt-1 border-t pt-1">
 						<button
@@ -524,6 +572,7 @@
 					{/if}
 				</div>
 			</div>
-		</div>
+			</Collapsible.Content>
 	</Card.Root>
+	</Collapsible.Root>
 </div>

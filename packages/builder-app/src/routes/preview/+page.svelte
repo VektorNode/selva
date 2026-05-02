@@ -54,7 +54,7 @@
 		{/if}
 	{/snippet}
 
-	<div class="relative flex flex-1 flex-col overflow-hidden {isViewerFullscreen ? '' : 'pt-6'}">
+	<div class="relative flex flex-1 flex-col overflow-hidden">
 		{#if preview.state.loading}
 			<div class="flex min-h-100 items-center justify-center">
 				<StateDisplay type="loading" size="large" message="Loading preview..." />

@@ -1022,54 +1022,28 @@ with check (
 -- ============================================================================
 -- 11. Storage bucket policies
 --
--- selva-public:  anyone reads, authenticated writes/deletes.
--- selva-private: authenticated only for everything; app-layer checks layer
---                visibility on top via /api/files.
--- Service-role bypasses RLS entirely — admin paths and the conformance
--- suite rely on that.
+-- All mutations on both buckets go through the app server, which holds the
+-- service-role key (SupabaseStorageProvider) — service-role bypasses RLS.
+-- User-scoped JWTs (the `authenticated` role) get NO direct access to
+-- storage REST: a logged-in user could otherwise extract their cookie JWT,
+-- pair it with the public anon key, and call /storage/v1/object/... directly
+-- to read/overwrite/delete any tenant's objects, since storage.objects has
+-- no project/ownership column to filter on. Application-layer access is
+-- enforced server-side: private reads flow through /api/files (which uses
+-- the service-role client and runs project-membership checks), and public
+-- reads use the CDN endpoint via the anon role below.
 -- ============================================================================
 
+-- selva-public is served directly from the CDN (cover images, brand assets);
+-- anonymous reads are required. Writes are service-role only.
 create policy "selva-public: anyone can read"
 on storage.objects for select
 to anon, authenticated
 using (bucket_id = 'selva-public');
 
-create policy "selva-public: authenticated can write"
-on storage.objects for insert
-to authenticated
-with check (bucket_id = 'selva-public');
-
-create policy "selva-public: authenticated can update"
-on storage.objects for update
-to authenticated
-using (bucket_id = 'selva-public')
-with check (bucket_id = 'selva-public');
-
-create policy "selva-public: authenticated can delete"
-on storage.objects for delete
-to authenticated
-using (bucket_id = 'selva-public');
-
-create policy "selva-private: authenticated can read"
-on storage.objects for select
-to authenticated
-using (bucket_id = 'selva-private');
-
-create policy "selva-private: authenticated can write"
-on storage.objects for insert
-to authenticated
-with check (bucket_id = 'selva-private');
-
-create policy "selva-private: authenticated can update"
-on storage.objects for update
-to authenticated
-using (bucket_id = 'selva-private')
-with check (bucket_id = 'selva-private');
-
-create policy "selva-private: authenticated can delete"
-on storage.objects for delete
-to authenticated
-using (bucket_id = 'selva-private');
+-- selva-private is never accessed directly by users. No policies for the
+-- authenticated role are defined; service-role bypasses RLS for app writes
+-- and proxied reads through /api/files.
 
 
 -- ============================================================================
