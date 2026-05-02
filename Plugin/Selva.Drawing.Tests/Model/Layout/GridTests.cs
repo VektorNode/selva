@@ -1,6 +1,7 @@
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Layout;
+using Selva.Drawing.Model.Style;
 using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Model.Layout;
@@ -111,6 +112,42 @@ public class GridTests
 			return pe.Path.ComputeBounds().MinY + grp.Transform.F;
 		}
 		return ((PathElement)child).Path.ComputeBounds().MinY;
+	}
+
+	[Fact]
+	public void Auto_row_grows_to_fit_wrapped_TextFlow_in_star_column()
+	{
+		// Star column + Auto row + wrapping TextFlow. Pass 1 sized the row from the cell's
+		// single-line natural height. Pass 2 wrapped the text to the column's resolved width
+		// (much narrower than the natural width), making the cell taller than the row. Pass 3
+		// re-grows the Auto row so the grid's reported height matches what's actually rendered.
+		const string longText =
+			"the quick brown fox jumps over the lazy dog and then jumps back again over the lazy dog";
+		var grid = new Grid
+		{
+			Columns = new[] { GridLength.Star() },
+			Rows = new[] { GridLength.Auto },
+			Cells = new[]
+			{
+				new GridCell
+				{
+					Row = 0, Column = 0,
+					Content = new TextFlow { Text = longText, Style = new TextStyle { FontSize = 3.0 } },
+				},
+			},
+		};
+
+		// Narrow context → text wraps to multiple lines.
+		var ctx = new LayoutContext(new BoundingBox(0, 0, 30, 200));
+		var resolved = grid.Resolve(ctx);
+		var gridBounds = resolved.ComputeBounds();
+
+		// Cell content's actual rendered height (after wrap).
+		var cellGroup = (GroupElement)resolved;
+		var cellBounds = cellGroup.Children[0].ComputeBounds();
+
+		Assert.True(gridBounds.Height >= cellBounds.Height - 1e-6,
+			$"grid reported {gridBounds.Height}mm but contains {cellBounds.Height}mm of content — Auto row didn't grow");
 	}
 
 	private static PathElement Marker(double x, double y) =>

@@ -17,7 +17,7 @@ public class GH_ExportSvgFile : GH_Component
 
     protected override Bitmap Icon => Resources.ExportSVG;
     public override GH_Exposure Exposure => GH_Exposure.primary;
-    public override Guid ComponentGuid => new Guid("E8609DFF-085E-4232-B0CB-57B96A12326B");
+    public override Guid ComponentGuid => new Guid("537DD157-370A-434E-A2C5-E4E1061B019E");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {

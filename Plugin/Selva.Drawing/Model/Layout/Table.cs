@@ -143,7 +143,7 @@ public sealed class Table : LayoutElement
 		if (Rows == null || Rows.Count == 0)
 			return base.TrySplit(availableHeight, context);
 
-		var (headerHeight, dataRowHeights) = MeasureRowHeights();
+		var (headerHeight, dataRowHeights) = MeasureRowHeights(context);
 		const double tol = 1e-6;
 
 		var hasHeader = Header != null && Header.Count > 0;
@@ -202,48 +202,57 @@ public sealed class Table : LayoutElement
 		};
 	}
 
-	// Per-row natural heights used by TrySplit. Mirrors how Grid resolves Auto rows: each row
-	// height = max over its cells of resolved-cell bounds (which already include cell padding
-	// via the Frame wrapper). When RowHeight is set, every row uses that absolute height.
-	private (double headerHeight, double[] dataRowHeights) MeasureRowHeights()
+	// Per-row heights used by TrySplit. We build the same Grid Resolve uses, run its full
+	// two-pass layout against the parent context (so Star columns get their real widths and
+	// cells re-measure with that width), and read row heights straight off the resulting
+	// TrackLayout. This keeps TrySplit's "rows that fit" arithmetic consistent with how the
+	// fits half is actually rendered — a TextFlow that wraps to N lines in render also
+	// reports N-line height here, so the trailing rows don't get pushed past the page edge.
+	private (double headerHeight, double[] dataRowHeights) MeasureRowHeights(LayoutContext context)
 	{
 		var columnCount = InferColumnCount();
 		if (columnCount == 0) return (0, Array.Empty<double>());
-		var columnWidths = ResolveColumnWidths(columnCount);
-
-		var hasHeader = Header != null && Header.Count > 0;
-		var headerH = hasHeader ? MeasureRowHeight(Header, isHeader: true, columnWidths) : 0;
-
-		var rowHs = new double[Rows.Count];
-		for (var i = 0; i < Rows.Count; i++)
-			rowHs[i] = MeasureRowHeight(Rows[i], isHeader: false, columnWidths);
 
 		if (RowHeight.HasValue)
 		{
-			if (hasHeader) headerH = RowHeight.Value;
-			for (var i = 0; i < rowHs.Length; i++) rowHs[i] = RowHeight.Value;
+			var hasHdr = Header != null && Header.Count > 0;
+			var rowHsFixed = new double[Rows.Count];
+			for (var i = 0; i < rowHsFixed.Length; i++) rowHsFixed[i] = RowHeight.Value;
+			return (hasHdr ? RowHeight.Value : 0, rowHsFixed);
 		}
 
-		return (headerH, rowHs);
-	}
-
-	private double MeasureRowHeight(IReadOnlyList<TableCell> row, bool isHeader, IReadOnlyList<GridLength> columnWidths)
-	{
-		if (row == null) return 0;
-		var max = 0.0;
-		var col = 0;
-		foreach (var cell in row)
+		var columnWidths = ResolveColumnWidths(columnCount);
+		var gridCells = new List<GridCell>();
+		var rowIndex = 0;
+		var hasHeader = Header != null && Header.Count > 0;
+		if (hasHeader)
 		{
-			if (cell == null) { col++; continue; }
-			var span = Math.Max(1, cell.ColumnSpan);
-			if (col + span > columnWidths.Count) span = columnWidths.Count - col;
-			var content = ResolveCellContent(cell, isHeader, col, span, columnWidths);
-			var b = content?.ComputeBounds() ?? BoundingBox.Empty;
-			var h = b.IsEmpty ? 0 : b.Height;
-			if (h > max) max = h;
-			col += span;
+			AddRow(gridCells, Header, rowIndex, isHeader: true, columnCount: columnCount, columnWidths: columnWidths);
+			rowIndex++;
 		}
-		return max;
+		foreach (var row in Rows)
+		{
+			AddRow(gridCells, row, rowIndex, isHeader: false, columnCount: columnCount, columnWidths: columnWidths);
+			rowIndex++;
+		}
+		var rowCount = rowIndex;
+		var rowTracks = new GridLength[rowCount];
+		for (var i = 0; i < rowCount; i++) rowTracks[i] = GridLength.Auto;
+
+		var grid = new Grid
+		{
+			Columns = columnWidths,
+			Rows = rowTracks,
+			Cells = gridCells,
+			Origin = Origin,
+		};
+		var (layout, _) = grid.ComputeLayout(context);
+
+		var headerH = hasHeader ? layout.RowHeights[0] : 0;
+		var dataStart = hasHeader ? 1 : 0;
+		var rowHs = new double[Rows.Count];
+		for (var i = 0; i < Rows.Count; i++) rowHs[i] = layout.RowHeights[dataStart + i];
+		return (headerH, rowHs);
 	}
 
 	private int InferColumnCount()
@@ -281,7 +290,7 @@ public sealed class Table : LayoutElement
 			var span = Math.Max(1, cell.ColumnSpan);
 			if (col + span > columnCount) span = columnCount - col;
 
-			var content = ResolveCellContent(cell, isHeader, col, span, columnWidths);
+			var content = ResolveCellContent(cell, isHeader);
 			grid.Add(new GridCell
 			{
 				Row = rowIndex,
@@ -293,8 +302,7 @@ public sealed class Table : LayoutElement
 		}
 	}
 
-	private DrawElement ResolveCellContent(TableCell cell, bool isHeader, int colStart, int span,
-		IReadOnlyList<GridLength> columnWidths)
+	private DrawElement ResolveCellContent(TableCell cell, bool isHeader)
 	{
 		if (cell.Element != null) return PadCellElement(cell.Element);
 
@@ -316,30 +324,16 @@ public sealed class Table : LayoutElement
 			};
 		}
 
-		// Compute the available text width = sum of spanned column widths minus padding.
-		// Only Absolute columns yield a known width here; for Auto/Star we leave Width=0 so
-		// TextFlow doesn't wrap (the cell will size to the longest line).
-		var width = ComputeAbsoluteTextWidth(columnWidths, colStart, span);
-
+		// Width is left null: the TextFlow inherits its wrap width from the surrounding
+		// Frame (cell padding) which itself inherits from the Grid cell rect. This works
+		// for Absolute, Auto, and Star columns alike — no per-column-type special-casing.
 		var flow = new TextFlow
 		{
 			Text = cell.Text ?? string.Empty,
-			Width = width,
 			Style = style,
 		};
 
 		return PadCellElement(flow);
-	}
-
-	private double ComputeAbsoluteTextWidth(IReadOnlyList<GridLength> columnWidths, int colStart, int span)
-	{
-		var width = 0.0;
-		for (var i = colStart; i < colStart + span; i++)
-		{
-			if (columnWidths[i].Type != GridLength.Kind.Absolute) return 0;
-			width += columnWidths[i].Value;
-		}
-		return Math.Max(0, width - CellPadding.Left - CellPadding.Right);
 	}
 
 	private DrawElement PadCellElement(DrawElement child)

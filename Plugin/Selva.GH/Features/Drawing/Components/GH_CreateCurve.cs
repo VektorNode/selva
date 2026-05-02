@@ -20,7 +20,7 @@ public class GH_CreateCurve : GH_Component
 
     protected override Bitmap Icon => Resources.DrawCurve;
     public override GH_Exposure Exposure => GH_Exposure.primary;
-    public override Guid ComponentGuid => new Guid("4C2E8F3A-1B5D-4A9C-9E2F-7D8A1B4C5E6F");
+    public override Guid ComponentGuid => new Guid("33D854CA-A7E6-48C7-819C-0FA9E63B6B4F");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {

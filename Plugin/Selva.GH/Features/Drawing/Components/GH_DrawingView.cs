@@ -22,7 +22,7 @@ public class GH_DrawingView : GH_Component
 
     protected override Bitmap Icon => Resources.DrawingView;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
-    public override Guid ComponentGuid => new Guid("F1234567-89AB-4CDE-F123-456789ABCDEF");
+    public override Guid ComponentGuid => new Guid("3336B561-6152-4CA0-83D6-C0F5EED76540");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {

@@ -38,7 +38,7 @@ public class GH_Document : GH_Component
 
     protected override Bitmap Icon => Resources.Document;
     public override GH_Exposure Exposure => GH_Exposure.primary;
-    public override Guid ComponentGuid => new Guid("D6F37B49-9CFF-4D5E-94B6-2C0B8E7FD0A7");
+    public override Guid ComponentGuid => new Guid("5D1CF967-D40D-412E-AA63-4D081419BDF3");
 
     public override bool IsPreviewCapable => true;
     public override BoundingBox ClippingBox => _clippingBox;

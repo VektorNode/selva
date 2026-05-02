@@ -20,7 +20,7 @@ public class GH_LinearDimension : GH_Component
 
     protected override Bitmap Icon => Resources.LinearDimension;
     public override GH_Exposure Exposure => GH_Exposure.secondary;
-    public override Guid ComponentGuid => new Guid("9E1A2B3C-4D5F-4A6B-8C7D-0E1F2A3B4C5D");
+    public override Guid ComponentGuid => new Guid("90160C4E-C8C8-4777-BD42-53347E115120");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {

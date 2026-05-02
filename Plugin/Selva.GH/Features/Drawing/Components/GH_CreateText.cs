@@ -20,7 +20,7 @@ public class GH_CreateText : GH_Component
 
     protected override Bitmap Icon => Resources.DrawText;
     public override GH_Exposure Exposure => GH_Exposure.primary;
-    public override Guid ComponentGuid => new Guid("8B4F2D1E-9A6C-4F3B-B7E1-2C5D8E0A1B34");
+    public override Guid ComponentGuid => new Guid("6B9D20CC-5566-47CF-9364-F65F9283396F");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {

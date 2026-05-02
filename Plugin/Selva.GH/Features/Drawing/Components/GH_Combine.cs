@@ -21,7 +21,7 @@ public class GH_Combine : GH_Component
 
     protected override Bitmap Icon => Resources.Combine;
     public override GH_Exposure Exposure => GH_Exposure.primary;
-    public override Guid ComponentGuid => new Guid("3F8B5C1E-2D7A-4E9F-A4B6-1C3D5E7F8A9B");
+    public override Guid ComponentGuid => new Guid("5CF6402E-FE8E-4ED3-9124-4034C9950790");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {

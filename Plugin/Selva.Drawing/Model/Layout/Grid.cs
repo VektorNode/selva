@@ -148,6 +148,7 @@ public sealed class Grid : LayoutElement
 		var resolvedCells = new DrawElement[Cells.Count];
 		var cellBounds = new BoundingBox[Cells.Count];
 
+		// Pass 1: measure each cell unconstrained so Auto tracks know their natural sizes.
 		for (var i = 0; i < Cells.Count; i++)
 		{
 			var c = Cells[i];
@@ -161,6 +162,33 @@ public sealed class Grid : LayoutElement
 		var colWidths = ResolveTrackSizes(Columns, Cells, cellBounds, context.AvailableWidth, ColumnSpacing, isColumn: true);
 		var rowHeights = ResolveTrackSizes(Rows, Cells, cellBounds, context.AvailableHeight, RowSpacing, isColumn: false);
 
+		// Pass 2: cells whose content is a LayoutElement get re-resolved with their real
+		// cell rect as context. This is what lets a TextFlow inside a Star column wrap to
+		// the column's resolved width instead of needing the user to pre-compute it.
+		// Primitives don't depend on context, so we leave them alone.
+		for (var i = 0; i < Cells.Count; i++)
+		{
+			var c = Cells[i];
+			if (c.Content is not LayoutElement nested) continue;
+			var cellWidth = SpanSize(colWidths, c.Column, c.ColumnSpan, ColumnSpacing);
+			var cellHeight = SpanSize(rowHeights, c.Row, c.RowSpan, RowSpacing);
+			if (cellWidth <= 0 || cellHeight <= 0) continue;
+			var cellContext = new LayoutContext(new BoundingBox(0, 0, cellWidth, cellHeight));
+			resolvedCells[i] = nested.Resolve(cellContext);
+			cellBounds[i] = resolvedCells[i]?.ComputeBounds() ?? BoundingBox.Empty;
+		}
+
+		// Pass 3: re-grow Auto rows whose content got taller after Pass 2 wrapped to the real
+		// column width. Columns stay locked — width was the input to Pass 2, height is the
+		// downstream effect. Only Auto rows participate; Absolute/Star rows keep the explicit
+		// size the user asked for (clipping is the user's choice in those cases).
+		for (var r = 0; r < Rows.Count; r++)
+		{
+			if (Rows[r].Type != GridLength.Kind.Auto) continue;
+			var grown = LargestNaturalSizeOnTrack(Cells, cellBounds, r, isColumn: false);
+			if (grown > rowHeights[r]) rowHeights[r] = grown;
+		}
+
 		var totalWidth = SumWithSpacing(colWidths, ColumnSpacing);
 		var totalHeight = SumWithSpacing(rowHeights, RowSpacing);
 
@@ -171,6 +199,19 @@ public sealed class Grid : LayoutElement
 			ResolvedCells = resolvedCells,
 			CellBounds = cellBounds,
 		}, new BoundingBox(0, 0, totalWidth, totalHeight));
+	}
+
+	private static double SpanSize(double[] sizes, int start, int span, double spacing)
+	{
+		var total = 0.0;
+		var count = 0;
+		for (var i = start; i < start + span && i < sizes.Length; i++)
+		{
+			total += sizes[i];
+			count++;
+		}
+		if (count > 1) total += spacing * (count - 1);
+		return total;
 	}
 
 	private double[] ResolveTrackSizes(IReadOnlyList<GridLength> tracks, IReadOnlyList<GridCell> cells,

@@ -22,7 +22,7 @@ public class GH_RevisionTable : GH_Component
 
     protected override Bitmap Icon => Resources.RevisionTable;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
-    public override Guid ComponentGuid => new Guid("23456789-ABCD-4EF0-1234-56789ABCDEF0");
+    public override Guid ComponentGuid => new Guid("A4CD58ED-35CA-47AC-8505-F1DCAB1FBCD2");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {

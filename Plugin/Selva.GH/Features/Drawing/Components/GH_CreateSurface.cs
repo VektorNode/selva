@@ -22,7 +22,7 @@ public class GH_CreateSurface : GH_Component
 
     protected override Bitmap Icon => Resources.DrawSurface;
     public override GH_Exposure Exposure => GH_Exposure.primary;
-    public override Guid ComponentGuid => new Guid("5D7E9A2B-3C4F-4B8E-A1D2-6F8B9C0E1F23");
+    public override Guid ComponentGuid => new Guid("29735748-B215-42FB-85D0-85549F26F28E");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {

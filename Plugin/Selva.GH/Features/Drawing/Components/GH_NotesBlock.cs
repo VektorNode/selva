@@ -21,7 +21,7 @@ public class GH_NotesBlock : GH_Component
 
     protected override Bitmap Icon => Resources.NotesBlock;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
-    public override Guid ComponentGuid => new Guid("456789AB-CDEF-4012-3456-789ABCDEF012");
+    public override Guid ComponentGuid => new Guid("63FCFB53-2BC4-40C7-AAA9-EF3B9A808EE1");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
