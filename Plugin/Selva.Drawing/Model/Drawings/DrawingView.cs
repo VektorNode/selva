@@ -17,6 +17,9 @@ namespace Selva.Drawing.Model.Drawings;
 //   - When Size is set, the view occupies that rectangle. The geometry is scaled by Scale
 //     (default 1.0), then centred in the inner rect. Geometry that overflows the inner
 //     rect is NOT clipped — that's the caller's responsibility (use a smaller Scale).
+//     When Scale <= 0, the view auto-fits geometry into the inner rect uniformly
+//     (uniform scale = min(innerW / geomW, innerH / geomH)) so callers can ask for a
+//     fixed-size viewport without computing the scale themselves.
 //   - When Size is null, the view sizes itself to fit the scaled geometry plus padding.
 //
 // The caption (if set) is a single-line label drawn below the frame's bottom edge, e.g.
@@ -65,8 +68,20 @@ public sealed class DrawingView : LayoutElement
 		}
 		else
 		{
-			innerWidth = geomBounds.Width * Scale;
-			innerHeight = geomBounds.Height * Scale;
+			var unsizedScale = Scale > 0 ? Scale : 1.0;
+			innerWidth = geomBounds.Width * unsizedScale;
+			innerHeight = geomBounds.Height * unsizedScale;
+		}
+
+		// Resolve the actual scale used for placing geometry. Auto-fit kicks in only when a
+		// fixed Size is supplied AND Scale <= 0 — otherwise we honour the caller's Scale even
+		// if the geometry overflows the inner rect (matches the documented contract).
+		var effectiveScale = Scale > 0 ? Scale : 1.0;
+		if (Size.HasValue && Scale <= 0 && !geomBounds.IsEmpty && innerWidth > 0 && innerHeight > 0)
+		{
+			var fitX = innerWidth / geomBounds.Width;
+			var fitY = innerHeight / geomBounds.Height;
+			effectiveScale = Math.Min(fitX, fitY);
 		}
 
 		var outerWidth = innerWidth + Padding.Left + Padding.Right;
@@ -106,17 +121,17 @@ public sealed class DrawingView : LayoutElement
 		{
 			// Centre the scaled geometry in the inner rect. Compose:
 			//   1) translate so geometry's min corner ends up at (0,0)
-			//   2) scale uniformly by Scale
+			//   2) scale uniformly by effectiveScale
 			//   3) translate to inner-rect bottom-left + centring offset
-			var scaledW = geomBounds.Width * Scale;
-			var scaledH = geomBounds.Height * Scale;
+			var scaledW = geomBounds.Width * effectiveScale;
+			var scaledH = geomBounds.Height * effectiveScale;
 			var innerLeft = Origin.X + Padding.Left;
 			var innerBottom = Origin.Y + Padding.Bottom;
 			var dx = innerLeft + (innerWidth - scaledW) / 2.0;
 			var dy = innerBottom + (innerHeight - scaledH) / 2.0;
 
 			var t = Transform.Translate(-geomBounds.MinX, -geomBounds.MinY)
-				.Then(Transform.Scale(Scale))
+				.Then(Transform.Scale(effectiveScale))
 				.Then(Transform.Translate(dx, dy));
 
 			children.Add(new GroupElement

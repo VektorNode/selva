@@ -20,6 +20,10 @@ public sealed class DimensionStyle
 
 	public double ExtensionGapFactor { get; init; } = 0.4;
 	public double ExtensionOvershootFactor { get; init; } = 0.3;
+	// Caps witness-line length at TextSize × this factor when |Offset| is larger, so a
+	// dim line placed far from the measured points doesn't drag huge extension lines
+	// from each point. Matches AutoCAD/Revit behavior. <= 0 disables the cap.
+	public double ExtensionLengthFactor { get; init; } = 8.0;
 	public double TextLiftFactor { get; init; } = 0.6;
 	public double TextSidePaddingFactor { get; init; } = 0.5;
 

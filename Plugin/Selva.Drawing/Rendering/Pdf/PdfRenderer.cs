@@ -663,8 +663,15 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		var arrowSize = ts * style.ArrowSizeFactor;
 
 		var sign = offset >= 0 ? 1 : -1;
-		var extStartA = (X: ax + nx * extGap * sign, Y: ay + ny * extGap * sign);
-		var extStartB = (X: bx + nx * extGap * sign, Y: by + ny * extGap * sign);
+		var absOffset = Math.Abs(offset);
+		var fullExtLen = Math.Max(0.0, absOffset - extGap);
+		var maxExtLen = style.ExtensionLengthFactor > 0
+			? ts * style.ExtensionLengthFactor
+			: fullExtLen;
+		var extLen = Math.Min(fullExtLen, maxExtLen);
+		var extStartOffset = absOffset - extLen;
+		var extStartA = (X: ax + nx * extStartOffset * sign, Y: ay + ny * extStartOffset * sign);
+		var extStartB = (X: bx + nx * extStartOffset * sign, Y: by + ny * extStartOffset * sign);
 		var extEndA = (X: ax + nx * (offset + extOver * sign), Y: ay + ny * (offset + extOver * sign));
 		var extEndB = (X: bx + nx * (offset + extOver * sign), Y: by + ny * (offset + extOver * sign));
 
