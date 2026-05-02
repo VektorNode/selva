@@ -4,6 +4,8 @@ using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Data;
+using Grasshopper.Kernel.Types;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Layout;
@@ -31,9 +33,9 @@ public class GH_Grid : GH_Component
     {
         pManager.AddTextParameter("Columns", "C", "Column-track DSL: space-separated <mm>|auto|<weight>* (e.g. \"40 auto 1*\"). Leave empty to auto-derive auto tracks from the cell column indices.", GH_ParamAccess.item, "");
         pManager.AddTextParameter("Rows", "R", "Row-track DSL — same syntax as Columns. Leave empty to auto-derive auto tracks from the cell row indices.", GH_ParamAccess.item, "");
-        pManager.AddGenericParameter("Cell Children", "Ch", "Cell content (one element per cell)", GH_ParamAccess.list);
-        pManager.AddIntegerParameter("Cell Rows", "Cr", "Row index per cell, 0-based (parallel to Children)", GH_ParamAccess.list);
-        pManager.AddIntegerParameter("Cell Columns", "Cc", "Column index per cell, 0-based (parallel to Children)", GH_ParamAccess.list);
+        pManager.AddGenericParameter("Cell Children", "Ch", "Cell content (one element per cell). All branches are flattened into a single grid.", GH_ParamAccess.tree);
+        pManager.AddIntegerParameter("Cell Rows", "Cr", "Row index per cell, 0-based (parallel to Children). Flattened in the same order as Children.", GH_ParamAccess.tree);
+        pManager.AddIntegerParameter("Cell Columns", "Cc", "Column index per cell, 0-based (parallel to Children). Flattened in the same order as Children.", GH_ParamAccess.tree);
         pManager.AddNumberParameter("Column Spacing", "CS", "Spacing between columns in mm", GH_ParamAccess.item, 0.0);
         pManager.AddNumberParameter("Row Spacing", "RS", "Spacing between rows in mm", GH_ParamAccess.item, 0.0);
         pManager.AddPointParameter("Origin", "O", "Bottom-left of the grid in world coordinates", GH_ParamAccess.item, new Rhino.Geometry.Point3d(0, 0, 0));
@@ -54,21 +56,34 @@ public class GH_Grid : GH_Component
     {
         var columnsDsl = "";
         var rowsDsl = "";
-        var children = new List<DrawElement>();
-        var rows = new List<int>();
-        var cols = new List<int>();
         var colSpacing = 0.0;
         var rowSpacing = 0.0;
         var origin = new Rhino.Geometry.Point3d(0, 0, 0);
 
         DA.GetData(0, ref columnsDsl);
         DA.GetData(1, ref rowsDsl);
-        DA.GetDataList(2, children);
-        DA.GetDataList(3, rows);
-        DA.GetDataList(4, cols);
+        if (!DA.GetDataTree<IGH_Goo>(2, out GH_Structure<IGH_Goo> childTree)) childTree = new GH_Structure<IGH_Goo>();
+        if (!DA.GetDataTree<GH_Integer>(3, out GH_Structure<GH_Integer> rowTree)) rowTree = new GH_Structure<GH_Integer>();
+        if (!DA.GetDataTree<GH_Integer>(4, out GH_Structure<GH_Integer> colTree)) colTree = new GH_Structure<GH_Integer>();
         DA.GetData(5, ref colSpacing);
         DA.GetData(6, ref rowSpacing);
         DA.GetData(7, ref origin);
+
+        var children = new List<DrawElement>();
+        var skipped = 0;
+        foreach (var goo in childTree.AllData(true))
+        {
+            if (goo is GH_ObjectWrapper wrap && wrap.Value is DrawElement el) children.Add(el);
+            else if (goo is DrawElement direct) children.Add(direct);
+            else skipped++;
+        }
+        if (skipped > 0)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                $"Skipped {skipped} input(s) that are not drawing elements");
+        }
+        var rows = rowTree.AllData(true).OfType<GH_Integer>().Select(g => g.Value).ToList();
+        var cols = colTree.AllData(true).OfType<GH_Integer>().Select(g => g.Value).ToList();
 
         if (children.Count == 0)
         {
@@ -97,12 +112,22 @@ public class GH_Grid : GH_Component
 
         // Empty DSL → auto-derive `auto` tracks from cell indices. Lets users skip the DSL
         // entirely for the common case of "N children at these (row, col) positions".
-        var columnTracks = string.IsNullOrWhiteSpace(columnsDsl)
-            ? AutoTracks(cols.Max() + 1)
-            : ParseTracks(columnsDsl);
-        var rowTracks = string.IsNullOrWhiteSpace(rowsDsl)
-            ? AutoTracks(rows.Max() + 1)
-            : ParseTracks(rowsDsl);
+        IReadOnlyList<GridLength> columnTracks;
+        IReadOnlyList<GridLength> rowTracks;
+        try
+        {
+            columnTracks = string.IsNullOrWhiteSpace(columnsDsl)
+                ? AutoTracks(cols.Max() + 1)
+                : ParseTracks(columnsDsl, "Columns");
+            rowTracks = string.IsNullOrWhiteSpace(rowsDsl)
+                ? AutoTracks(rows.Max() + 1)
+                : ParseTracks(rowsDsl, "Rows");
+        }
+        catch (FormatException ex)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Error, ex.Message);
+            return;
+        }
 
         if (rowTracks.Count == 0 || columnTracks.Count == 0)
         {
@@ -163,7 +188,7 @@ public class GH_Grid : GH_Component
         return list;
     }
 
-    private static IReadOnlyList<GridLength> ParseTracks(string dsl)
+    private static IReadOnlyList<GridLength> ParseTracks(string dsl, string axis)
     {
         var list = new List<GridLength>();
         if (string.IsNullOrWhiteSpace(dsl)) return list;
@@ -177,14 +202,28 @@ public class GH_Grid : GH_Component
             else if (t.EndsWith("*"))
             {
                 var w = t.Substring(0, t.Length - 1);
-                var weight = w.Length == 0 ? 1.0
-                    : double.Parse(w, NumberStyles.Float, CultureInfo.InvariantCulture);
-                list.Add(GridLength.Star(weight));
+                if (w.Length == 0)
+                {
+                    list.Add(GridLength.Star(1.0));
+                }
+                else if (double.TryParse(w, NumberStyles.Float, CultureInfo.InvariantCulture, out var weight))
+                {
+                    list.Add(GridLength.Star(weight));
+                }
+                else
+                {
+                    throw new FormatException(
+                        $"{axis} DSL: \"{t}\" is not a valid star track. Expected <number>* or *.");
+                }
+            }
+            else if (double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var mm))
+            {
+                list.Add(GridLength.Absolute(mm));
             }
             else
             {
-                var mm = double.Parse(t, NumberStyles.Float, CultureInfo.InvariantCulture);
-                list.Add(GridLength.Absolute(mm));
+                throw new FormatException(
+                    $"{axis} DSL: \"{t}\" is not a valid track. Expected <mm>, auto, or <weight>*.");
             }
         }
         return list;

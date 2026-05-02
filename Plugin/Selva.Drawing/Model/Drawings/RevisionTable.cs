@@ -65,6 +65,7 @@ public sealed class RevisionTable : LayoutElement
 			Rows = BuildRows(),
 			Border = Border,
 			DefaultCellStyle = CellStyle,
+			HeaderStyle = HeaderStyle,
 			HeaderBackground = HeaderBackground,
 			CellPadding = CellPadding,
 		};

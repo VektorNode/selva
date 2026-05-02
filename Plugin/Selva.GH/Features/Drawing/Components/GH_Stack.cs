@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Parameters;
+using Grasshopper.Kernel.Types;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Layout;
@@ -28,7 +30,7 @@ public class GH_Stack : GH_Component
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        pManager.AddGenericParameter("Children", "C", "Drawing elements to arrange", GH_ParamAccess.list);
+        pManager.AddGenericParameter("Children", "C", "Drawing elements to arrange. All branches of the input tree are flattened into a single stack.", GH_ParamAccess.tree);
         pManager.AddIntegerParameter("Orientation", "O", "0 = vertical, 1 = horizontal", GH_ParamAccess.item, 0);
         pManager.AddNumberParameter("Spacing", "S", "Gap between children in millimetres", GH_ParamAccess.item, 0.0);
         pManager.AddIntegerParameter("Cross Align", "A", "Cross-axis alignment", GH_ParamAccess.item, 0);
@@ -60,19 +62,41 @@ public class GH_Stack : GH_Component
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-        var children = new List<DrawElement>();
         var orientation = 0;
         var spacing = 0.0;
         var align = 0;
         var origin = new Rhino.Geometry.Point3d(0, 0, 0);
 
-        DA.GetDataList(0, children);
+        if (!DA.GetDataTree<IGH_Goo>(0, out GH_Structure<IGH_Goo> tree)) tree = new GH_Structure<IGH_Goo>();
         DA.GetData(1, ref orientation);
         DA.GetData(2, ref spacing);
         DA.GetData(3, ref align);
         DA.GetData(4, ref origin);
 
-        var filtered = children.FindAll(c => c != null);
+        var filtered = new List<DrawElement>();
+        var skipped = 0;
+        foreach (var goo in tree.AllData(true))
+        {
+            if (goo is GH_ObjectWrapper wrap && wrap.Value is DrawElement el) filtered.Add(el);
+            else if (goo is DrawElement direct) filtered.Add(direct);
+            else skipped++;
+        }
+        if (skipped > 0)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                $"Skipped {skipped} input(s) that are not drawing elements");
+        }
+
+        if (orientation < 0 || orientation > 1)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                $"Orientation {orientation} is outside [0, 1]; falling back to Vertical");
+        }
+        if (align < 0 || align > 3)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                $"Cross Align {align} is outside [0, 3]; clamping into range");
+        }
 
         var stack = new Stack
         {
