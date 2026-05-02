@@ -41,7 +41,7 @@ public class GH_Page : GH_Component
 
     protected override Bitmap Icon => Resources.Page;
     public override GH_Exposure Exposure => GH_Exposure.primary;
-    public override Guid ComponentGuid => new Guid("B27D9F11-3CC4-4F1B-9E25-7E9B0C5F2E18");
+    public override Guid ComponentGuid => new Guid("AA5EAA20-2AD8-4ECE-8DA5-BB275BF36456");
 
     public override bool IsPreviewCapable => true;
     public override BoundingBox ClippingBox => _clippingBox;

@@ -28,6 +28,12 @@ public abstract class LayoutElement : DrawElement
 	public override BoundingBox ComputeBounds()
 		=> Resolve(new LayoutContext(BoundingBox.Empty)).ComputeBounds();
 
+	// Context-aware bounds. Layout primitives whose size depends on the parent (e.g. a
+	// TextFlow that auto-wraps to the available width) override this to honour the
+	// context. Default delegates to the unconstrained ComputeBounds for elements whose
+	// size is independent of the parent.
+	public virtual BoundingBox ComputeBounds(LayoutContext context) => ComputeBounds();
+
 	// Pagination hook: try to fit this layout element into a vertical budget. Default is
 	// atomic — resolve once, take it whole or leave it whole. Subclasses that can break
 	// between children (Stack between items, Table between rows, TextFlow between lines)

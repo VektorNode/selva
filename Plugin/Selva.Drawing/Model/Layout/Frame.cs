@@ -26,13 +26,41 @@ public sealed class Frame : LayoutElement
 	// Origin of the frame's bottom-left corner in world coords. Defaults to (0,0).
 	public Point2D Origin { get; init; } = Point2D.Zero;
 
+	private LayoutContext BuildChildContext(LayoutContext parent)
+	{
+		double innerWidth, innerHeight;
+		if (Size.HasValue)
+		{
+			innerWidth = Math.Max(0, Size.Value.Width - Padding.Left - Padding.Right);
+			innerHeight = Math.Max(0, Size.Value.Height - Padding.Top - Padding.Bottom);
+		}
+		else
+		{
+			var pw = parent.AvailableWidth;
+			var ph = parent.AvailableHeight;
+			innerWidth = double.IsInfinity(pw) ? 0 : Math.Max(0, pw - Padding.Left - Padding.Right);
+			innerHeight = double.IsInfinity(ph) ? 0 : Math.Max(0, ph - Padding.Top - Padding.Bottom);
+		}
+		if (innerWidth <= 0 || innerHeight <= 0) return new LayoutContext(BoundingBox.Empty);
+		return new LayoutContext(new BoundingBox(0, 0, innerWidth, innerHeight));
+	}
+
 	public override DrawElement Resolve(LayoutContext context)
 	{
+		// Build the child's available rect so flexible children (auto-width TextFlow,
+		// star-sized Grids) can fill the frame's interior. When Size is set we know the
+		// inner rect exactly; otherwise we forward whatever the parent gave us, minus
+		// padding — the child still gets a useful constraint when the frame itself is
+		// flexible.
+		var childContext = BuildChildContext(context);
+
 		var resolvedChild = Child is LayoutElement nested
-			? nested.Resolve(new LayoutContext(BoundingBox.Empty))
+			? nested.Resolve(childContext)
 			: Child;
 
-		var childBounds = resolvedChild?.ComputeBounds() ?? BoundingBox.Empty;
+		var childBounds = Child is LayoutElement nestedForBounds
+			? nestedForBounds.ComputeBounds(childContext)
+			: resolvedChild?.ComputeBounds() ?? BoundingBox.Empty;
 
 		double width, height;
 		if (Size.HasValue)

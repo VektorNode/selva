@@ -4,6 +4,7 @@ using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Layout;
+using Selva.Drawing.Model.Style;
 using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Model.Layout;
@@ -85,6 +86,58 @@ public class TableSplitTests
 		var paper = new PaperSize(20, 10, "T20x10");
 		var pages = PaginationPass.Paginate(table, paper, Margins.Zero);
 		Assert.Single(pages);
+	}
+
+	[Fact]
+	public void Row_with_wrapping_TextFlow_measures_at_resolved_column_width_so_split_matches_render()
+	{
+		// Star column with an auto-width TextFlow that wraps to multiple lines. Before the
+		// fix, MeasureRowHeights resolved the cell unconstrained → single-line height. The
+		// fits half then rendered with the real (narrow) column width and grew much taller,
+		// pushing trailing rows past the page edge.
+		const string longText =
+			"the quick brown fox jumps over the lazy dog and then jumps back again over the lazy dog";
+		var rows = new IReadOnlyList<TableCell>[]
+		{
+			new[] { new TableCell { Text = "row 0 " + longText } },
+			new[] { new TableCell { Text = "row 1 " + longText } },
+			new[] { new TableCell { Text = "row 2 " + longText } },
+		};
+		var table = new Table
+		{
+			ColumnWidths = new[] { GridLength.Star() },
+			Rows = rows,
+			CellPadding = Margins.Zero,
+			Border = null,
+			DefaultCellStyle = new TextStyle { FontSize = 3.0 },
+		};
+
+		// Narrow column → text wraps to multiple lines per row.
+		var ctx = new LayoutContext(new BoundingBox(0, 0, 30, 200));
+
+		// Measure one row's natural wrapped height first, then pick a budget that fits ~2 rows
+		// but not all 3 — that way both Fits and Overflow are non-null and we can assert
+		// rendered height against budget.
+		var oneRowTable = new Table
+		{
+			ColumnWidths = new[] { GridLength.Star() },
+			Rows = new IReadOnlyList<TableCell>[] { new[] { new TableCell { Text = "row 0 " + longText } } },
+			CellPadding = Margins.Zero,
+			Border = null,
+			DefaultCellStyle = new TextStyle { FontSize = 3.0 },
+		};
+		var oneRowHeight = oneRowTable.Resolve(ctx).ComputeBounds().Height;
+		var budget = oneRowHeight * 2.5; // room for two rows but not three
+
+		var split = table.TrySplit(budget, ctx);
+		Assert.NotNull(split.Fits);
+		Assert.NotNull(split.Overflow);
+
+		// The fits half's actual rendered height must not exceed the budget — the bug let
+		// it overshoot because MeasureRowHeights underestimated row heights.
+		var fitsBounds = split.Fits.ComputeBounds();
+		Assert.True(fitsBounds.Height <= budget + 1e-6,
+			$"fits height {fitsBounds.Height} exceeded budget {budget} — TrySplit measured rows too small");
 	}
 
 	private static Table MakeTable(double? header, double[] rowHeights)

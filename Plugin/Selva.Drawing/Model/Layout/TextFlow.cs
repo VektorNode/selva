@@ -7,9 +7,16 @@ using Selva.Drawing.Model.Style;
 
 namespace Selva.Drawing.Model.Layout;
 
-// Phase 7: paragraph layout. Wraps `Text` to fit `Width` (mm) using FontMetrics for line
+// Phase 7: paragraph layout. Wraps `Text` to fit a width (mm) using FontMetrics for line
 // breaking, then resolves to a stack of TextElements — one per line. Hard newlines in the
 // input force a paragraph break.
+//
+// Width semantics:
+//   null  → auto-fill: use the parent's available width (from LayoutContext). Falls back to
+//           "no wrap" only when the parent provides no width (unconstrained context).
+//   >0    → fixed wrap width.
+// This lets a TextFlow inside a Page/Frame/Stack/Grid wrap to its container without the
+// user having to pre-compute it.
 //
 // Anchor: the resulting block's TOP-LEFT corner sits at (Origin.X, Origin.Y + height) in
 // world Y-up coords, so the FIRST line's baseline ends up at Origin.Y + height - ascent.
@@ -17,7 +24,7 @@ namespace Selva.Drawing.Model.Layout;
 public sealed class TextFlow : LayoutElement
 {
 	public string Text { get; init; } = string.Empty;
-	public double Width { get; init; } = 0.0;
+	public double? Width { get; init; }
 	public TextStyle Style { get; init; } = new TextStyle();
 	public Point2D Origin { get; init; } = Point2D.Zero;
 
@@ -25,10 +32,13 @@ public sealed class TextFlow : LayoutElement
 	// natural multi-line height. Useful for cells with fixed row heights.
 	public double? FixedHeight { get; init; }
 
-	public override BoundingBox ComputeBounds()
+	public override BoundingBox ComputeBounds() => ComputeBounds(new LayoutContext(BoundingBox.Empty));
+
+	public override BoundingBox ComputeBounds(LayoutContext context)
 	{
-		var (lines, lineHeight, _) = LayoutLines(Style, Text, Width);
-		var w = Width > 0 ? Width : MaxLineWidth(lines, Style);
+		var effectiveWidth = ResolveEffectiveWidth(context);
+		var (lines, lineHeight, _) = LayoutLines(Style, Text, effectiveWidth);
+		var w = effectiveWidth > 0 ? effectiveWidth : MaxLineWidth(lines, Style);
 		var h = FixedHeight ?? Math.Max(lineHeight, lines.Count * lineHeight);
 		return new BoundingBox(Origin.X, Origin.Y, Origin.X + w, Origin.Y + h);
 	}
@@ -39,7 +49,8 @@ public sealed class TextFlow : LayoutElement
 	// height described the original whole flow.
 	public override SplitResult TrySplit(double availableHeight, LayoutContext context)
 	{
-		var (lines, lineHeight, _) = LayoutLines(Style, Text, Width);
+		var effectiveWidth = ResolveEffectiveWidth(context);
+		var (lines, lineHeight, _) = LayoutLines(Style, Text, effectiveWidth);
 		if (lines.Count == 0 || lineHeight <= 0)
 			return base.TrySplit(availableHeight, context);
 
@@ -82,7 +93,8 @@ public sealed class TextFlow : LayoutElement
 
 	public override DrawElement Resolve(LayoutContext context)
 	{
-		var (lines, lineHeight, ascent) = LayoutLines(Style, Text, Width);
+		var effectiveWidth = ResolveEffectiveWidth(context);
+		var (lines, lineHeight, ascent) = LayoutLines(Style, Text, effectiveWidth);
 		var children = new List<DrawElement>(lines.Count);
 		var totalH = FixedHeight ?? Math.Max(lineHeight, lines.Count * lineHeight);
 
@@ -157,6 +169,17 @@ public sealed class TextFlow : LayoutElement
 
 		if (lines.Count == 0) lines.Add(string.Empty);
 		return (lines, lineHeight, ascent);
+	}
+
+	// Width resolution: explicit Width wins; otherwise inherit from the parent's
+	// available rect; otherwise 0 (= no wrapping). 0 means "single-line per paragraph"
+	// because the wrap loop in LayoutLines short-circuits when width <= 0.
+	private double ResolveEffectiveWidth(LayoutContext context)
+	{
+		if (Width.HasValue) return Math.Max(0, Width.Value);
+		var available = context.AvailableWidth;
+		if (double.IsInfinity(available) || available <= 0) return 0;
+		return available;
 	}
 
 	private static double MaxLineWidth(IReadOnlyList<string> lines, TextStyle style)

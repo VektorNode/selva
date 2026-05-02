@@ -8,8 +8,9 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Phase 7 layout component: paragraph layout. Wraps text to fit a fixed width using real
-// font metrics for line breaking. Hard newlines force paragraph breaks.
+// Phase 7 layout component: paragraph layout. Wraps text using real font metrics for line
+// breaking. Width unset (or 0) means "fill the available width from the parent layout"
+// (Page, Frame, Stack, Grid cell). Hard newlines force paragraph breaks.
 public class GH_TextFlow : GH_Component
 {
     public GH_TextFlow()
@@ -21,12 +22,12 @@ public class GH_TextFlow : GH_Component
 
     protected override Bitmap Icon => Resources.TextFlow;
     public override GH_Exposure Exposure => GH_Exposure.tertiary;
-    public override Guid ComponentGuid => new Guid("C7E89F01-2B3C-4D5E-AF60-718293A4B5C6");
+    public override Guid ComponentGuid => new Guid("62C55B55-FE35-4D21-8B4E-821F117F406B");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
         pManager.AddTextParameter("Text", "T", "Text to wrap (use \\n for paragraph breaks)", GH_ParamAccess.item, "");
-        pManager.AddNumberParameter("Width", "W", "Maximum line width in millimetres (0 = no wrapping)", GH_ParamAccess.item, 0.0);
+        pManager.AddNumberParameter("Width", "W", "Maximum line width in millimetres (0 or unset = fill available width from the parent layout)", GH_ParamAccess.item, 0.0);
         pManager.AddGenericParameter("Style", "S", "Text style (leave empty for default)", GH_ParamAccess.item);
         pManager.AddPointParameter("Origin", "P", "Bottom-left of the text block in world coordinates", GH_ParamAccess.item, new Rhino.Geometry.Point3d(0, 0, 0));
 
@@ -53,10 +54,11 @@ public class GH_TextFlow : GH_Component
         DA.GetData(2, ref style);
         DA.GetData(3, ref origin);
 
+        double? wrapWidth = width > 0 ? width : null;
         var flow = new TextFlow
         {
             Text = text ?? string.Empty,
-            Width = Math.Max(0, width),
+            Width = wrapWidth,
             Style = style ?? new TextStyle(),
             Origin = new Point2D(origin.X, origin.Y),
         };

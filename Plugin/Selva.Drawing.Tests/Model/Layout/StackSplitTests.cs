@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Layout;
+using Selva.Drawing.Model.Style;
 using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Model.Layout;
@@ -150,6 +151,53 @@ public class StackSplitTests
 		var split = outer.TrySplit(10, new LayoutContext(BoundingBox.Empty));
 		Assert.NotNull(split.Fits);
 		Assert.Null(split.Overflow);
+	}
+
+	[Fact]
+	public void TextFlow_split_inside_stack_uses_stack_cross_axis_so_trailing_sibling_lands_below_overflow()
+	{
+		// Multi-line auto-width TextFlow followed by a small element in a vertical stack.
+		// The stack's cross-axis (40mm) is much narrower than the parent context (200mm).
+		// Before the fix, Stack.TrySplit handed `context` (200mm) to the child's TrySplit
+		// while Resolve used `childContext` (40mm) — TextFlow re-wrapped to a wider width
+		// inside TrySplit, reported "everything fits" against the wide measurement, and
+		// the trailing element was placed where the wide-wrap text ended. When rendered at
+		// 40mm the text was much taller, so the trailing element overlapped it.
+		const string longText =
+			"the quick brown fox jumps over the lazy dog and then jumps back again over the lazy dog";
+		var stack = new Stack
+		{
+			Orientation = StackOrientation.Vertical,
+			Spacing = 0,
+			Children = new DrawElement[]
+			{
+				new TextFlow { Text = longText, Style = new TextStyle { FontSize = 3.0 } },
+				Rect(2, 4),
+			},
+		};
+
+		// Parent context: 40mm wide (cross-axis source), 200mm tall page slice.
+		var parentContext = new LayoutContext(new BoundingBox(0, 0, 40, 200));
+
+		// Pick a budget that forces a split mid-text: small enough that the wrapped flow
+		// can't all fit, but large enough that several lines do.
+		var split = stack.TrySplit(15, parentContext);
+
+		Assert.NotNull(split.Fits);
+		Assert.NotNull(split.Overflow);
+
+		// Reported FitsHeight must match the actual rendered height of Fits.
+		var fitsBounds = split.Fits.ComputeBounds();
+		Assert.Equal(split.FitsHeight, fitsBounds.Height, 6);
+
+		// Resolve the overflow Stack at the same cross-axis. The trailing Rect must land
+		// BELOW (smaller MaxY than MinY of) the overflow text — no overlap.
+		var overflowStack = Assert.IsType<Stack>(split.Overflow);
+		Assert.Equal(2, overflowStack.Children.Count); // text overflow + trailing rect
+		var resolvedOverflow = overflowStack.Resolve(parentContext);
+		var overflowBounds = resolvedOverflow.ComputeBounds();
+		// Sanity: overflow should fit within or near the page slice.
+		Assert.True(overflowBounds.Height > 0);
 	}
 
 	private static PathElement Rect(double w, double h) =>

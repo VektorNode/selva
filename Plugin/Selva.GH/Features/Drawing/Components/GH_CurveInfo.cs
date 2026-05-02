@@ -17,7 +17,7 @@ public class GH_CurveInfo : GH_Component
 
     protected override Bitmap Icon => Resources.CurveInfo;
     public override GH_Exposure Exposure => GH_Exposure.secondary;
-    public override Guid ComponentGuid => new Guid("C69E7C31-4BC3-44AC-8D3D-2C0E698774B2");
+    public override Guid ComponentGuid => new Guid("B9E5CA52-A7C8-4E25-83BD-3990B091AAF3");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {

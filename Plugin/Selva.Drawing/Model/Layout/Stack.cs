@@ -36,8 +36,13 @@ public sealed class Stack : LayoutElement
 		if (Children.Count == 0)
 			return new GroupElement { Id = Id, CssClass = CssClass, Metadata = Metadata };
 
+		// Forward the cross-axis size so flexible children (auto-width TextFlow, star
+		// Grids) can fill the stack's cross extent. Main axis is left unconstrained —
+		// the stack sums children along it.
+		var childContext = BuildChildContext(context);
+
 		// First pass: ask each child for its natural bounds (recursing into LayoutElements
-		// with the unconstrained context — they'll hand back a minimum-size primitive).
+		// with the cross-axis context — they'll hand back a sized primitive).
 		var resolvedChildren = new DrawElement[Children.Count];
 		var bounds = new BoundingBox[Children.Count];
 		var maxCross = 0.0;
@@ -45,7 +50,7 @@ public sealed class Stack : LayoutElement
 		for (var i = 0; i < Children.Count; i++)
 		{
 			var child = Children[i] is LayoutElement nested
-				? nested.Resolve(new LayoutContext(BoundingBox.Empty))
+				? nested.Resolve(childContext)
 				: Children[i];
 			resolvedChildren[i] = child;
 			var b = child?.ComputeBounds() ?? BoundingBox.Empty;
@@ -62,6 +67,20 @@ public sealed class Stack : LayoutElement
 			}
 		}
 		totalMain += Spacing * Math.Max(0, Children.Count - 1);
+
+		// Stretch alignment: if the parent provides a finite cross-axis and we'd otherwise
+		// pick a smaller maxCross, expand to fill. Layout-element children already filled
+		// to the same width via childContext; primitive children stay their natural size
+		// but row width matches the parent. (Primitives can't be resized — they keep their
+		// authored geometry; alignment falls back to Start for them.)
+		if (CrossAlign == CrossAlign.Stretch)
+		{
+			var parentCross = Orientation == StackOrientation.Vertical
+				? context.AvailableWidth
+				: context.AvailableHeight;
+			if (!double.IsInfinity(parentCross) && parentCross > maxCross)
+				maxCross = parentCross;
+		}
 
 		// Lay out: vertical stack pins child i so its TOP edge is `cursor` mm below the
 		// stack's top. Stack's top sits at (Origin.Y + totalMain) in world Y. Cross axis
@@ -125,6 +144,8 @@ public sealed class Stack : LayoutElement
 		if (Children.Count == 0)
 			return SplitResult.AllFits(Resolve(context), 0);
 
+		var childContext = BuildChildContext(context);
+
 		var fitsChildren = new List<DrawElement>();
 		var overflowChildren = new List<DrawElement>();
 		var consumed = 0.0;
@@ -140,7 +161,7 @@ public sealed class Stack : LayoutElement
 			}
 
 			var resolvedForMeasure = child is LayoutElement nested
-				? nested.Resolve(new LayoutContext(BoundingBox.Empty))
+				? nested.Resolve(childContext)
 				: child;
 			var b = resolvedForMeasure?.ComputeBounds() ?? BoundingBox.Empty;
 			var h = b.IsEmpty ? 0 : b.Height;
@@ -162,7 +183,11 @@ public sealed class Stack : LayoutElement
 			var remaining = availableHeight - consumed - spacingBefore;
 			if (remaining > 0 && child is LayoutElement layoutChild && !IsKeepTogether(child))
 			{
-				var childSplit = layoutChild.TrySplit(remaining, context);
+				// Pass the cross-axis-constrained childContext, not the parent context. Otherwise
+				// a child like TextFlow re-wraps to the parent's full width inside TrySplit while
+				// Resolve uses the stack's narrower cross-axis — line counts diverge and the
+				// next sibling lands at the wrong Y, often overlapping the text on the next page.
+				var childSplit = layoutChild.TrySplit(remaining, childContext);
 				if (childSplit.Fits != null)
 				{
 					fitsChildren.Add(childSplit.Fits);
@@ -211,6 +236,26 @@ public sealed class Stack : LayoutElement
 		var fitsBounds = fitsResolved?.ComputeBounds() ?? BoundingBox.Empty;
 		var fitsHeight = fitsBounds.IsEmpty ? consumed : fitsBounds.Height;
 		return SplitResult.Partial(fitsResolved, overflowStack, fitsHeight);
+	}
+
+	// Build the per-child context: cross-axis = parent's available cross-axis size,
+	// main axis = unconstrained (0 width box on main). Children that care about cross
+	// (auto-width TextFlow in a vertical stack) read AvailableWidth/Height from this.
+	private LayoutContext BuildChildContext(LayoutContext parent)
+	{
+		if (Orientation == StackOrientation.Vertical)
+		{
+			var w = parent.AvailableWidth;
+			if (double.IsInfinity(w) || w <= 0) return new LayoutContext(BoundingBox.Empty);
+			// Use a tall box on the main axis — children won't read AvailableHeight here
+			// (TrySplit handles per-child height budgets explicitly). Setting it to
+			// a finite value avoids the "infinite" branch in star-track resolution while
+			// remaining permissive.
+			return new LayoutContext(new BoundingBox(0, 0, w, w));
+		}
+		var h = parent.AvailableHeight;
+		if (double.IsInfinity(h) || h <= 0) return new LayoutContext(BoundingBox.Empty);
+		return new LayoutContext(new BoundingBox(0, 0, h, h));
 	}
 
 	// Keep-together flag lives in DrawElement.Metadata under "keep-together". Truthy

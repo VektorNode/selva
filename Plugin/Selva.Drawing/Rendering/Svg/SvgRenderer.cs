@@ -91,7 +91,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		}
 
 		_sb = new StringBuilder();
-		_sb.AppendLine("<?xml version='1.0' encoding='UTF-8'?>");
+		_sb.Append("<?xml version='1.0' encoding='UTF-8'?>\n");
 		_sb.Append("<svg xmlns='http://www.w3.org/2000/svg' version='1.1'");
 		_sb.Append(" width='").Append(F(width)).Append('\'');
 		_sb.Append(" height='").Append(F(height)).Append('\'');
@@ -100,17 +100,17 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			.Append(F(minY)).Append(' ')
 			.Append(F(width)).Append(' ')
 			.Append(F(height)).Append('\'');
-		_sb.AppendLine(">");
+		_sb.Append(">\n");
 
 		var title = ResolveTitle(document, page);
 		if (!string.IsNullOrEmpty(title))
-			_sb.Append("<title>").Append(Escape(title)).AppendLine("</title>");
+			_sb.Append("<title>").Append(Escape(title)).Append("</title>\n");
 
 		AppendDefs();
 
 		if (!string.IsNullOrEmpty(_options.BackgroundColor))
 			_sb.Append("<rect width='100%' height='100%' fill='")
-				.Append(Escape(_options.BackgroundColor)).AppendLine("' />");
+				.Append(Escape(_options.BackgroundColor)).Append("' />\n");
 
 		// Single root Y-flip — everything else uses Rhino-world coordinates.
 		// font-family is set here so all <text> descendants inherit it. The stack may
@@ -118,12 +118,12 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		// valid.
 		_sb.Append("<g transform='matrix(1 0 0 -1 0 0)' font-family='")
 			.Append(Escape(_options.FontFamily ?? SvgRenderOptions.DefaultFontFamily).Replace("\"", "&quot;"))
-			.AppendLine("'>");
+			.Append("'>\n");
 
 		if (page.Content != null) page.Content.Accept(this);
 
-		_sb.AppendLine("</g>");
-		_sb.AppendLine("</svg>");
+		_sb.Append("</g>\n");
+		_sb.Append("</svg>\n");
 
 		var result = _sb.ToString();
 		_sb = null;
@@ -324,35 +324,35 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		var emitDefs = _hasDimensions || fonts.Count > 0 || hasSymbols;
 		if (!emitDefs) return;
 
-		_sb.AppendLine("<defs>");
+		_sb.Append("<defs>\n");
 
 		if (_hasDimensions)
 		{
-			_sb.AppendLine("  <marker id='selva-dim-arrow' viewBox='0 0 10 10' refX='10' refY='5' markerWidth='4' markerHeight='4' orient='auto-start-reverse'>");
-			_sb.AppendLine("    <path d='M 0 0 L 10 5 L 0 10 Z' fill='context-stroke' />");
-			_sb.AppendLine("  </marker>");
-			_sb.AppendLine("  <marker id='selva-dim-tick' viewBox='-5 -5 10 10' refX='0' refY='0' markerWidth='10' markerHeight='10' orient='auto'>");
-			_sb.AppendLine("    <path d='M -3 3 L 3 -3' stroke='context-stroke' stroke-width='1' />");
-			_sb.AppendLine("  </marker>");
+			_sb.Append("  <marker id='selva-dim-arrow' viewBox='0 0 10 10' refX='10' refY='5' markerWidth='4' markerHeight='4' orient='auto-start-reverse'>\n");
+			_sb.Append("    <path d='M 0 0 L 10 5 L 0 10 Z' fill='context-stroke' />\n");
+			_sb.Append("  </marker>\n");
+			_sb.Append("  <marker id='selva-dim-tick' viewBox='-5 -5 10 10' refX='0' refY='0' markerWidth='10' markerHeight='10' orient='auto'>\n");
+			_sb.Append("    <path d='M -3 3 L 3 -3' stroke='context-stroke' stroke-width='1' />\n");
+			_sb.Append("  </marker>\n");
 		}
 
 		if (fonts.Count > 0)
 		{
-			_sb.AppendLine("  <style>");
+			_sb.Append("  <style>\n");
 			foreach (var f in fonts)
 			{
 				_sb.Append("    @font-face { font-family: '").Append(f.Family)
 					.Append("'; font-weight: ").Append(f.Weight)
 					.Append("; font-style: ").Append(f.Style)
 					.Append("; src: url('").Append(f.DataUri)
-					.AppendLine("') format('truetype'); }");
+					.Append("') format('truetype'); }\n");
 			}
-			_sb.AppendLine("  </style>");
+			_sb.Append("  </style>\n");
 		}
 
 		if (hasSymbols) AppendSymbolDefs();
 
-		_sb.AppendLine("</defs>");
+		_sb.Append("</defs>\n");
 	}
 
 	private void AppendSymbolDefs()
@@ -372,14 +372,14 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 					.Append(F(vb.Width)).Append(' ').Append(F(vb.Height)).Append('\'');
 				_sb.Append(" overflow='visible'");
 			}
-			_sb.AppendLine(">");
+			_sb.Append(">\n");
 
 			// SVG <symbol> children are emitted top-down (no Y-flip wrapper inside the def)
 			// so callers measure them in the same Y-up world space as the rest of the model.
 			// The outer Y-flip on <g> still applies to the surrounding <use>.
 			foreach (var child in def.Children) child?.Accept(this);
 
-			_sb.AppendLine("  </symbol>");
+			_sb.Append("  </symbol>\n");
 		}
 	}
 
@@ -436,12 +436,12 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 				.Append(F(element.Transform.E)).Append(' ').Append(F(element.Transform.F)).Append(")'");
 			AppendIdClass(element.Id, element.CssClass);
 			AppendData(element.Metadata);
-			_sb.AppendLine(">");
+			_sb.Append(">\n");
 		}
 
 		foreach (var child in element.Children) child?.Accept(this);
 
-		if (hasTransform) _sb.AppendLine("  </g>");
+		if (hasTransform) _sb.Append("  </g>\n");
 	}
 
 	public void Visit(PathElement element)
@@ -464,7 +464,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 
 		AppendStyle(element.Stroke, element.Fill, defaultFillNone: true);
 		AppendData(element.Metadata);
-		_sb.AppendLine(" />");
+		_sb.Append(" />\n");
 	}
 
 	public void Visit(TextElement element)
@@ -478,7 +478,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		// into a /Link annotation.
 		if (hasLink)
 		{
-			_sb.Append("  <a href='").Append(Escape(element.Hyperlink)).AppendLine("'>");
+			_sb.Append("  <a href='").Append(Escape(element.Hyperlink)).Append("'>\n");
 		}
 
 		// Text is positioned in Rhino-world space; the root Y-flip would invert it,
@@ -492,9 +492,9 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		_sb.Append(" transform='translate(").Append(F(element.Position.X)).Append(' ').Append(F(element.Position.Y))
 			.Append(") scale(1 -1) rotate(").Append(F(-element.RotationDegrees)).Append(")'");
 		AppendData(element.Metadata);
-		_sb.Append('>').Append(Escape(element.Text ?? string.Empty)).AppendLine("</text>");
+		_sb.Append('>').Append(Escape(element.Text ?? string.Empty)).Append("</text>\n");
 
-		if (hasLink) _sb.AppendLine("  </a>");
+		if (hasLink) _sb.Append("  </a>\n");
 	}
 
 	public void Visit(TextBlockElement element)
@@ -529,7 +529,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		if (!string.IsNullOrEmpty(element.CssClass)) _sb.Append(' ').Append(element.CssClass);
 		_sb.Append('\'');
 		if (!string.IsNullOrEmpty(element.Id)) _sb.Append(" id='").Append(Escape(element.Id)).Append('\'');
-		_sb.AppendLine(">");
+		_sb.Append(">\n");
 
 		switch (element.Kind)
 		{
@@ -537,7 +537,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			case DimensionKind.Angular: AppendAngularDimensionBody(element); break;
 		}
 
-		_sb.AppendLine("  </g>");
+		_sb.Append("  </g>\n");
 	}
 
 	public void Visit(LeaderElement element)
@@ -555,7 +555,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		if (element.Head == LeaderHead.Arrow)
 			_sb.Append(" marker-end='url(#selva-dim-arrow)'");
 		AppendData(element.Metadata);
-		_sb.AppendLine(" />");
+		_sb.Append(" />\n");
 
 		if (!string.IsNullOrEmpty(element.Text))
 		{
@@ -600,7 +600,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 					.Append(F(element.Transform.C)).Append(' ').Append(F(element.Transform.D)).Append(' ')
 					.Append(F(element.Transform.E)).Append(' ').Append(F(element.Transform.F)).Append(")'");
 			}
-			_sb.AppendLine(" />");
+			_sb.Append(" />\n");
 			return;
 		}
 
@@ -623,12 +623,12 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 					.Append(F(element.Transform.C)).Append(' ').Append(F(element.Transform.D)).Append(' ')
 					.Append(F(element.Transform.E)).Append(' ').Append(F(element.Transform.F)).Append(')');
 			}
-			_sb.AppendLine("'>");
+			_sb.Append("'>\n");
 		}
 
 		foreach (var child in element.Definition.Children) child?.Accept(this);
 
-		if (hasOffset || hasTransform) _sb.AppendLine("  </g>");
+		if (hasOffset || hasTransform) _sb.Append("  </g>\n");
 	}
 
 	// ============================================================================
@@ -719,12 +719,12 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 				.Append(" marker-end='url(#selva-dim-arrow)'")
 				.Append(" x1='").Append(F(outAx)).Append("' y1='").Append(F(outAy))
 				.Append("' x2='").Append(F(dimA.X)).Append("' y2='").Append(F(dimA.Y))
-				.AppendLine("' />");
+				.Append("' />\n");
 			_sb.Append("    <line ").Append(strokeAttr)
 				.Append(" marker-end='url(#selva-dim-arrow)'")
 				.Append(" x1='").Append(F(outBx)).Append("' y1='").Append(F(outBy))
 				.Append("' x2='").Append(F(dimB.X)).Append("' y2='").Append(F(dimB.Y))
-				.AppendLine("' />");
+				.Append("' />\n");
 		}
 
 		_sb.Append("    <text x='0' y='0'")
@@ -733,7 +733,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			.Append(" text-anchor='middle' dominant-baseline='middle'")
 			.Append(" transform='translate(").Append(F(midX)).Append(' ').Append(F(midY))
 			.Append(") scale(1 -1) rotate(").Append(F(-angleDeg)).Append(")'")
-			.Append('>').Append(Escape(text)).AppendLine("</text>");
+			.Append('>').Append(Escape(text)).Append("</text>\n");
 	}
 
 	private void AppendAngularDimensionBody(DimensionElement element)
@@ -811,7 +811,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			.Append(" A ").Append(F(radius)).Append(' ').Append(F(radius))
 			.Append(" 0 ").Append(largeArcFlag).Append(' ').Append(sweepFlag).Append(' ')
 			.Append(F(arcEndX)).Append(' ').Append(F(arcEndY))
-			.AppendLine("' />");
+			.Append("' />\n");
 
 		if (flipArrows && style.TickKind == DimensionTickKind.Arrow)
 		{
@@ -833,12 +833,12 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 				.Append(" marker-end='url(#selva-dim-arrow)'")
 				.Append(" x1='").Append(F(outStartX)).Append("' y1='").Append(F(outStartY))
 				.Append("' x2='").Append(F(arcStartX)).Append("' y2='").Append(F(arcStartY))
-				.AppendLine("' />");
+				.Append("' />\n");
 			_sb.Append("    <line ").Append(strokeAttr)
 				.Append(" marker-end='url(#selva-dim-arrow)'")
 				.Append(" x1='").Append(F(outEndX)).Append("' y1='").Append(F(outEndY))
 				.Append("' x2='").Append(F(arcEndX)).Append("' y2='").Append(F(arcEndY))
-				.AppendLine("' />");
+				.Append("' />\n");
 		}
 
 		var degrees = absTheta * 180.0 / Math.PI;
@@ -861,7 +861,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			.Append(" text-anchor='middle' dominant-baseline='middle'")
 			.Append(" transform='translate(").Append(F(midX)).Append(' ').Append(F(midY))
 			.Append(") scale(1 -1) rotate(").Append(F(-tangentAngleDeg)).Append(")'")
-			.Append('>').Append(Escape(text)).AppendLine("</text>");
+			.Append('>').Append(Escape(text)).Append("</text>\n");
 	}
 
 	private void AppendDimLine(string strokeAttr, double x1, double y1, double x2, double y2)
@@ -869,7 +869,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		_sb.Append("    <line ").Append(strokeAttr)
 			.Append(" x1='").Append(F(x1)).Append("' y1='").Append(F(y1))
 			.Append("' x2='").Append(F(x2)).Append("' y2='").Append(F(y2))
-			.AppendLine("' />");
+			.Append("' />\n");
 	}
 
 	private void AppendDimSegment(
@@ -893,7 +893,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 
 		_sb.Append(" x1='").Append(F(x1)).Append("' y1='").Append(F(y1))
 			.Append("' x2='").Append(F(x2)).Append("' y2='").Append(F(y2))
-			.AppendLine("' />");
+			.Append("' />\n");
 	}
 
 	// ============================================================================

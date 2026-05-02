@@ -27,7 +27,7 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
 
     protected override Bitmap Icon => Resources.RenderSvg;
     public override GH_Exposure Exposure => GH_Exposure.secondary;
-    public override Guid ComponentGuid => new Guid("E1B6B3F7-9D24-4F23-B47D-5C1C8F2D3E40");
+    public override Guid ComponentGuid => new Guid("69A739F3-44CB-42D7-BBF4-8A10B109AEB8");
 
     public override void CreateAttributes()
     {

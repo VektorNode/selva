@@ -24,7 +24,7 @@ public class GH_Frame : GH_Component
 
     protected override Bitmap Icon => Resources.Frame;
     public override GH_Exposure Exposure => GH_Exposure.tertiary;
-    public override Guid ComponentGuid => new Guid("B5D67E89-1A2B-4C3D-9E4F-5A6B7C8D9E0F");
+    public override Guid ComponentGuid => new Guid("B85A48FD-46DC-4A94-AD44-64B048237DBE");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
