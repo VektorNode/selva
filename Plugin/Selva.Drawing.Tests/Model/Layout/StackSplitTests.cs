@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Layout;
@@ -97,6 +98,58 @@ public class StackSplitTests
 		Assert.Single(outerOverflow.Children);
 		var innerOverflow = Assert.IsType<Stack>(outerOverflow.Children[0]);
 		Assert.Equal(2, innerOverflow.Children.Count);
+	}
+
+	[Fact]
+	public void Keep_together_child_is_treated_as_atomic_and_pushed_whole_to_overflow()
+	{
+		// Outer stack: 2mm rect + an inner stack (3 × 3mm = 9mm) marked keep-together.
+		// Budget = 7mm. Without the flag, Stack.TrySplit would recurse into the inner stack
+		// and split it (1 of 3 fits). With the flag, the inner stack is atomic — only the
+		// 2mm rect fits, and the whole inner stack spills.
+		var inner = new Stack
+		{
+			Orientation = StackOrientation.Vertical,
+			Spacing = 0,
+			Children = new DrawElement[] { Rect(2, 3), Rect(2, 3), Rect(2, 3) },
+			Metadata = new Dictionary<string, string> { ["keep-together"] = "true" },
+		};
+		var outer = new Stack
+		{
+			Orientation = StackOrientation.Vertical,
+			Spacing = 0,
+			Children = new DrawElement[] { Rect(2, 2), inner },
+		};
+
+		var split = outer.TrySplit(7, new LayoutContext(BoundingBox.Empty));
+		Assert.NotNull(split.Fits);
+		var outerOverflow = Assert.IsType<Stack>(split.Overflow);
+		Assert.Single(outerOverflow.Children);
+		// The overflow is the original inner stack (still 3 children, not a 2-of-3 remnant).
+		var innerOverflow = Assert.IsType<Stack>(outerOverflow.Children[0]);
+		Assert.Equal(3, innerOverflow.Children.Count);
+	}
+
+	[Fact]
+	public void Keep_together_does_not_force_atomic_when_child_fits_whole()
+	{
+		// 2mm + 3mm = 5mm fits in 10mm. Keep-together flag is irrelevant when nothing splits.
+		var inner = new Stack
+		{
+			Orientation = StackOrientation.Vertical,
+			Spacing = 0,
+			Children = new DrawElement[] { Rect(2, 3) },
+			Metadata = new Dictionary<string, string> { ["keep-together"] = "true" },
+		};
+		var outer = new Stack
+		{
+			Orientation = StackOrientation.Vertical,
+			Spacing = 0,
+			Children = new DrawElement[] { Rect(2, 2), inner },
+		};
+		var split = outer.TrySplit(10, new LayoutContext(BoundingBox.Empty));
+		Assert.NotNull(split.Fits);
+		Assert.Null(split.Overflow);
 	}
 
 	private static PathElement Rect(double w, double h) =>

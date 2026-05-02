@@ -155,8 +155,12 @@ public sealed class Stack : LayoutElement
 
 			// This child doesn't fit whole. Ask it to split if it's a layout element with
 			// remaining budget left after accounting for inter-child spacing.
+			// Honour the "keep-together" metadata hint: a child marked keep-together is
+			// treated atomically — push it whole to overflow rather than recursing into
+			// its TrySplit. Useful for "title + first paragraph" groups that must stay on
+			// the same page as a unit.
 			var remaining = availableHeight - consumed - spacingBefore;
-			if (remaining > 0 && child is LayoutElement layoutChild)
+			if (remaining > 0 && child is LayoutElement layoutChild && !IsKeepTogether(child))
 			{
 				var childSplit = layoutChild.TrySplit(remaining, context);
 				if (childSplit.Fits != null)
@@ -207,6 +211,18 @@ public sealed class Stack : LayoutElement
 		var fitsBounds = fitsResolved?.ComputeBounds() ?? BoundingBox.Empty;
 		var fitsHeight = fitsBounds.IsEmpty ? consumed : fitsBounds.Height;
 		return SplitResult.Partial(fitsResolved, overflowStack, fitsHeight);
+	}
+
+	// Keep-together flag lives in DrawElement.Metadata under "keep-together". Truthy
+	// values: "true", "1", "yes" (case-insensitive). Anything else is false.
+	internal static bool IsKeepTogether(DrawElement element)
+	{
+		var md = element?.Metadata;
+		if (md == null) return false;
+		if (!md.TryGetValue("keep-together", out var v) || v == null) return false;
+		return v.Equals("true", StringComparison.OrdinalIgnoreCase)
+			|| v.Equals("1", StringComparison.Ordinal)
+			|| v.Equals("yes", StringComparison.OrdinalIgnoreCase);
 	}
 
 	private double ResolveCrossOffset(double naturalCross, double maxCross)

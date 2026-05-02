@@ -14,6 +14,8 @@ import {
 	batchSetNumberWidgetType,
 	isInputItem
 } from '$lib/features/builder/operations';
+import { recentParamsStore } from '$lib/stores/recentParams.svelte';
+import { getSessionIdFromUrl } from '$lib/utils/session';
 import type { useBuilderState } from './useBuilderState.svelte';
 
 export function useBuilderActions(
@@ -119,6 +121,7 @@ export function useBuilderActions(
 			outputType: asInput ? undefined : item.type
 		});
 
+		recentParamsStore.track(getSessionIdFromUrl(), item.id);
 		toast.success(`Added to ${tabLabel} / ${group.label}`);
 	}
 
@@ -193,6 +196,7 @@ export function useBuilderActions(
 				outputType: asInput ? undefined : item.type
 			});
 
+			recentParamsStore.track(getSessionIdFromUrl(), item.id);
 			toast.success(`Added ${item.nickname || 'item'} to ${tab.label} / ${group.label}`);
 		} else if (schema.layout.type === 'flat') {
 			groupLabel = parts[parts.length - 1];
@@ -221,6 +225,7 @@ export function useBuilderActions(
 				outputType: asInput ? undefined : item.type
 			});
 
+			recentParamsStore.track(getSessionIdFromUrl(), item.id);
 			toast.success(`Added ${item.nickname || 'item'} to ${group.label}`);
 		}
 	}

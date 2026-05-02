@@ -156,7 +156,7 @@
 
 <div
 	data-layout-root
-	class="min-h-0 sm:flex-row flex flex-1 flex-col overflow-hidden"
+	class="min-h-0 sm:flex-row sm:px-(--page-px) sm:py-(--page-py) flex flex-1 flex-col overflow-hidden"
 	class:fullscreen-layout={isViewerFullscreen}
 	class:relative={isMobile}
 >

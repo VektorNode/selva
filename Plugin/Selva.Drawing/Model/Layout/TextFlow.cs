@@ -33,6 +33,53 @@ public sealed class TextFlow : LayoutElement
 		return new BoundingBox(Origin.X, Origin.Y, Origin.X + w, Origin.Y + h);
 	}
 
+	// Pagination: split at line boundaries. Wrap once, then bin-pack lines into the budget.
+	// The fits half keeps Origin; the overflow half resets to (0,0) so PaginationPass can
+	// re-anchor it on the next page. FixedHeight is dropped on overflow because the fixed
+	// height described the original whole flow.
+	public override SplitResult TrySplit(double availableHeight, LayoutContext context)
+	{
+		var (lines, lineHeight, _) = LayoutLines(Style, Text, Width);
+		if (lines.Count == 0 || lineHeight <= 0)
+			return base.TrySplit(availableHeight, context);
+
+		var fitsLineCount = (int)Math.Floor((availableHeight + 1e-6) / lineHeight);
+		if (fitsLineCount <= 0)
+			return SplitResult.NothingFits(this);
+
+		if (fitsLineCount >= lines.Count)
+			return base.TrySplit(availableHeight, context);
+
+		var fitsLines = new List<string>(fitsLineCount);
+		for (var i = 0; i < fitsLineCount; i++) fitsLines.Add(lines[i]);
+		var overflowLines = new List<string>(lines.Count - fitsLineCount);
+		for (var i = fitsLineCount; i < lines.Count; i++) overflowLines.Add(lines[i]);
+
+		var fitsFlow = new TextFlow
+		{
+			Id = Id,
+			CssClass = CssClass,
+			Metadata = Metadata,
+			Text = string.Join("\n", fitsLines),
+			Width = Width,
+			Style = Style,
+			Origin = Origin,
+			FixedHeight = null,
+		};
+		var overflowFlow = new TextFlow
+		{
+			Text = string.Join("\n", overflowLines),
+			Width = Width,
+			Style = Style,
+			Origin = Point2D.Zero,
+		};
+
+		var fitsResolved = fitsFlow.Resolve(context);
+		var fitsBounds = fitsResolved?.ComputeBounds() ?? BoundingBox.Empty;
+		var fitsHeight = fitsBounds.IsEmpty ? fitsLineCount * lineHeight : fitsBounds.Height;
+		return SplitResult.Partial(fitsResolved, overflowFlow, fitsHeight);
+	}
+
 	public override DrawElement Resolve(LayoutContext context)
 	{
 		var (lines, lineHeight, ascent) = LayoutLines(Style, Text, Width);

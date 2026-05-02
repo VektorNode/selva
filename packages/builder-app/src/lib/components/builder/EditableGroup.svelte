@@ -16,6 +16,7 @@
 	import { dndzone } from 'svelte-dnd-action';
 	import type { DndEvent } from 'svelte-dnd-action';
 	import { dragStore } from '$lib/stores/dragStore.svelte';
+	import { SvelteMap } from 'svelte/reactivity';
 
 	type DndLayoutItem = LayoutItem & { isDndShadowItem?: true };
 
@@ -52,6 +53,13 @@
 	let isDragOver = $state(false);
 	let showVisibilityRules = $state(false);
 	let hasVisibilityRules = $derived((group.visibilityCondition?.rules?.length ?? 0) > 0);
+	const expandedItems = new SvelteMap<string, boolean>();
+	function isExpanded(id: string) {
+		return expandedItems.get(id) ?? false;
+	}
+	function setExpanded(id: string, value: boolean) {
+		expandedItems.set(id, value);
+	}
 
 	// Local items for dnd preview — synced from group.items when not dragging
 	let localItems = $state<DndLayoutItem[]>([]);
@@ -104,16 +112,16 @@
 </script>
 
 <Card.Root
-	class="bg-muted gap-0 overflow-hidden border-2 py-0 {isDragOver ? 'border-primary' : ''}"
+	class="group bg-muted gap-0 overflow-hidden border-2 py-0 {isDragOver ? 'border-primary' : ''}"
 >
 	<Card.Header
-		class="border-border bg-card flex flex-row items-center justify-between gap-2 space-y-0 border-b px-3 py-2 {isDragging
+		class="border-border bg-card flex flex-row items-center justify-between gap-2 space-y-0 border-b px-3 py-3 {isDragging
 			? 'opacity-50'
 			: ''}  transition-colors"
 	>
 		<!-- Drag Handle (group-level, native HTML5) -->
 		<div
-			class="text-muted-foreground hover:text-foreground hover:bg-accent flex cursor-grab rounded p-1 active:cursor-grabbing"
+			class="text-muted-foreground hover:text-foreground hover:bg-accent flex cursor-grab rounded p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
 			role="button"
 			tabindex="0"
 			aria-label="Drag to reorder"
@@ -124,22 +132,22 @@
 			<GripVertical size={16} />
 		</div>
 		<div class="flex flex-1 items-center gap-1.5">
-			<div class="flex flex-1 flex-col">
-				<div class="">
+			<div class="flex flex-1 flex-col gap-0.5">
+				<div class="flex items-center gap-1">
 					<button
 						type="button"
-						class="text-muted-foreground hover:text-foreground items-center text-xs transition-transform duration-200 {group.collapsed
+						class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex h-6 w-6 shrink-0 items-center justify-center rounded transition-transform duration-200 {group.collapsed
 							? ''
 							: 'rotate-180'}"
 						onclick={toggleCollapsed}
 						aria-label={group.collapsed ? 'Expand group' : 'Collapse group'}
 					>
-						<ChevronDown size={14} />
+						<ChevronDown size={16} />
 					</button>
 					<input
 						type="text"
 						bind:value={group.label}
-						class="text-foreground hover:border-border focus:border-primary flex-1 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-sm font-medium focus:outline-none"
+						class="text-foreground hover:border-border focus:border-primary flex-1 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-base font-semibold focus:outline-none"
 						placeholder="Group name"
 					/>
 				</div>
@@ -147,7 +155,7 @@
 				<input
 					type="text"
 					bind:value={group.description}
-					class="text-muted-foreground hover:border-border focus:border-primary flex-1 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-xs focus:outline-none"
+					class="text-muted-foreground hover:border-border focus:border-primary ml-7 flex-1 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-xs focus:outline-none"
 					placeholder="Description"
 				/>
 			</div>
@@ -265,6 +273,7 @@
 									bind:item={localItems[idx] as InputLayoutItem | OutputLayoutItem}
 									paramInfo={getParameterInfo(item.paramId)}
 									columns={group.columns}
+									bind:expanded={() => isExpanded(item.id), (v) => setExpanded(item.id, v)}
 									{availableInputs}
 									{getParameterInfo}
 									currentValue={outputValues[item.paramId]}

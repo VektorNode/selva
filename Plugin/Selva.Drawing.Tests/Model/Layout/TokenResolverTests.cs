@@ -28,7 +28,7 @@ public class TokenResolverTests
 	public void Date_token_default_is_ISO()
 	{
 		var fixedNow = new DateTime(2026, 5, 1);
-		var r = new TokenResolver(1, 1, null, null, fixedNow);
+		var r = new TokenResolver(1, 1, null, now: fixedNow);
 		Assert.Equal("2026-05-01", r.Resolve("{date}"));
 	}
 
@@ -36,7 +36,7 @@ public class TokenResolverTests
 	public void Date_token_with_format_argument_uses_DotNet_format_string()
 	{
 		var fixedNow = new DateTime(2026, 5, 1);
-		var r = new TokenResolver(1, 1, null, null, fixedNow);
+		var r = new TokenResolver(1, 1, null, now: fixedNow);
 		Assert.Equal("01 May 2026", r.Resolve("{date:dd MMM yyyy}"));
 	}
 
@@ -55,10 +55,24 @@ public class TokenResolverTests
 	}
 
 	[Fact]
+	public void Section_token_substitutes_current_section_title()
+	{
+		var r = new TokenResolver(1, 5, "Doc", section: "BOM");
+		Assert.Equal("Doc / BOM", r.Resolve("{title} / {section}"));
+	}
+
+	[Fact]
+	public void Section_token_with_null_section_substitutes_empty_string()
+	{
+		var r = new TokenResolver(1, 1, "Doc");
+		Assert.Equal("[]", r.Resolve("[{section}]"));
+	}
+
+	[Fact]
 	public void User_tokens_substitute_by_name()
 	{
 		var tokens = new Dictionary<string, string> { ["author"] = "Felix", ["rev"] = "B" };
-		var r = new TokenResolver(1, 1, null, tokens);
+		var r = new TokenResolver(1, 1, null, userTokens: tokens);
 		Assert.Equal("by Felix rev B", r.Resolve("by {author} rev {rev}"));
 	}
 
@@ -73,7 +87,7 @@ public class TokenResolverTests
 	public void Builtin_token_wins_over_user_token_with_same_name()
 	{
 		var tokens = new Dictionary<string, string> { ["page"] = "OVERRIDE" };
-		var r = new TokenResolver(5, 9, null, tokens);
+		var r = new TokenResolver(5, 9, null, userTokens: tokens);
 		Assert.Equal("5", r.Resolve("{page}"));
 	}
 

@@ -23,6 +23,9 @@ export { Drawer } from './drawer';
 export * as Alert from './alert';
 export * as AlertDialog from './alert-dialog';
 export * as ContextMenu from './context-menu';
+export * as Collapsible from './collapsible';
+export { ScrollArea } from './scroll-area';
+export * as Resizable from './resizable';
 
 export { Separator } from './separator';
 export { Switch } from './switch';

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { dragStore } from '$lib/stores/dragStore.svelte';
+	import { recentParamsStore } from '$lib/stores/recentParams.svelte';
+	import { getSessionIdFromUrl } from '$lib/utils/session';
 	import type { DiscoveredInput, DiscoveredOutput, TabConfig } from '@selvajs/schemas';
 	import { ContextMenu, Input } from '@selvajs/ui';
 	import { FolderPlus } from '@lucide/svelte';
@@ -30,6 +32,7 @@
 	function handleDragStart(e: DragEvent) {
 		isDragging = true;
 		dragStore.set(dragPayload);
+		recentParamsStore.track(getSessionIdFromUrl(), item.id);
 
 		if (e.dataTransfer) {
 			e.dataTransfer.effectAllowed = 'copy';
