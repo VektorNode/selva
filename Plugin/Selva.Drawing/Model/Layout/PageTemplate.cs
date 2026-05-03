@@ -20,6 +20,18 @@ public sealed class PageTemplate
 	public double? HeaderHeight { get; init; }
 	public double? FooterHeight { get; init; }
 
+	// Horizontal alignment of header/footer within their band. Defaults to Left for backwards
+	// compatibility with the original anchor-top-left behaviour.
+	public HorizontalAlign HeaderAlign { get; init; } = HorizontalAlign.Left;
+	public HorizontalAlign FooterAlign { get; init; } = HorizontalAlign.Left;
+
 	// User-defined tokens. Built-in tokens win on a name collision.
 	public IReadOnlyDictionary<string, string> Tokens { get; init; }
+}
+
+public enum HorizontalAlign
+{
+	Left = 0,
+	Center = 1,
+	Right = 2,
 }

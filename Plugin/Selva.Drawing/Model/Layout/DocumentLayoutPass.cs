@@ -48,6 +48,8 @@ public static class DocumentLayoutPass
 				SectionTitle = string.Empty,
 				ResolvedHeader = defaultHeader,
 				ResolvedFooter = defaultFooter,
+				HeaderAlign = layout.HeaderAlign,
+				FooterAlign = layout.FooterAlign,
 				Layout = body,
 				ContentIndex = 0,
 			});
@@ -73,6 +75,9 @@ public static class DocumentLayoutPass
 				var footerH = PaginationPass.ResolveBandHeight(
 					section.FooterHeight ?? layout.FooterHeight, sectionFooter);
 
+				var headerAlign = section.HeaderAlign ?? layout.HeaderAlign;
+				var footerAlign = section.FooterAlign ?? layout.FooterAlign;
+
 				// KeepTogether forces the whole section onto one page even if it overflows the
 				// content rect. Pagination runs with infinite vertical budget: TrySplit always
 				// reports AllFits and we get a single raw page with all the content.
@@ -90,6 +95,8 @@ public static class DocumentLayoutPass
 						SectionTitle = section.Title ?? string.Empty,
 						ResolvedHeader = sectionHeader,
 						ResolvedFooter = sectionFooter,
+						HeaderAlign = headerAlign,
+						FooterAlign = footerAlign,
 						Layout = body,
 						ContentIndex = i,
 					});
@@ -111,6 +118,8 @@ public static class DocumentLayoutPass
 				SectionTitle = string.Empty,
 				ResolvedHeader = defaultHeader,
 				ResolvedFooter = defaultFooter,
+				HeaderAlign = layout.HeaderAlign,
+				FooterAlign = layout.FooterAlign,
 				Layout = PaginationPass.PaginateBody(null, paper, margins, 0, 0),
 				ContentIndex = 0,
 			});
@@ -130,8 +139,8 @@ public static class DocumentLayoutPass
 
 			var rawContent = rp.Layout.RawContents[rp.ContentIndex];
 			var anchoredContent = PaginationPass.AnchorTopLeft(rawContent, rp.Layout.ContentRect);
-			var anchoredHeader = PaginationPass.AnchorTopLeft(pageHeader, rp.Layout.HeaderRect);
-			var anchoredFooter = PaginationPass.AnchorTopLeft(pageFooter, rp.Layout.FooterRect);
+			var anchoredHeader = PaginationPass.AnchorChrome(pageHeader, rp.Layout.HeaderRect, rp.HeaderAlign);
+			var anchoredFooter = PaginationPass.AnchorChrome(pageFooter, rp.Layout.FooterRect, rp.FooterAlign);
 
 			pages.Add(new Page
 			{
@@ -153,6 +162,8 @@ public static class DocumentLayoutPass
 		public string SectionTitle;
 		public DrawElement ResolvedHeader;
 		public DrawElement ResolvedFooter;
+		public HorizontalAlign HeaderAlign;
+		public HorizontalAlign FooterAlign;
 		public SectionLayout Layout;
 		public int ContentIndex;
 	}
@@ -173,6 +184,9 @@ public sealed class DocumentLayout
 	public DrawElement Footer { get; init; }
 	public double? HeaderHeight { get; init; }
 	public double? FooterHeight { get; init; }
+
+	public HorizontalAlign HeaderAlign { get; init; } = HorizontalAlign.Left;
+	public HorizontalAlign FooterAlign { get; init; } = HorizontalAlign.Left;
 
 	// Document-level user tokens. Built-ins (page, pages, section, title, date) win on collision.
 	public IReadOnlyDictionary<string, string> Tokens { get; init; }

@@ -47,8 +47,8 @@ public static class PaginationPass
 			var pageFooter = resolvedFooter != null ? resolver.ResolveTree(resolvedFooter) : null;
 
 			var anchoredContent = AnchorTopLeft(body.RawContents[i], body.ContentRect);
-			var anchoredHeader = AnchorTopLeft(pageHeader, body.HeaderRect);
-			var anchoredFooter = AnchorTopLeft(pageFooter, body.FooterRect);
+			var anchoredHeader = AnchorChrome(pageHeader, body.HeaderRect, template.HeaderAlign);
+			var anchoredFooter = AnchorChrome(pageFooter, body.FooterRect, template.FooterAlign);
 
 			pages.Add(new Page
 			{
@@ -165,15 +165,14 @@ public static class PaginationPass
 		return new BoundingBox(rect.MinX, minY, rect.MaxX, maxY);
 	}
 
-	internal static DrawElement ResolveLayout(DrawElement element)
-	{
-		if (element == null) return null;
-		if (element is LayoutElement layout)
-			return layout.Resolve(new LayoutContext(BoundingBox.Empty));
-		return element;
-	}
+	// Fully resolve any LayoutElement subtree to primitives so ComputeBounds returns a real
+	// height for band measurement. Walks GroupElements too — a GroupElement wrapping a Stack
+	// would otherwise be returned untouched and its measured bounds would miss the Stack's
+	// post-layout extent, which silently zeroes out the chrome band reservation.
+	public static DrawElement ResolveLayout(DrawElement element)
+		=> LayoutPass.Resolve(element, new LayoutContext(BoundingBox.Empty));
 
-	internal static double ResolveBandHeight(double? explicitHeight, DrawElement resolved)
+	public static double ResolveBandHeight(double? explicitHeight, DrawElement resolved)
 	{
 		if (explicitHeight.HasValue) return Math.Max(0, explicitHeight.Value);
 		if (resolved == null) return 0;
@@ -182,12 +181,27 @@ public static class PaginationPass
 	}
 
 	internal static DrawElement AnchorTopLeft(DrawElement element, BoundingBox available)
+		=> AnchorChrome(element, available, HorizontalAlign.Left);
+
+	internal static DrawElement AnchorChrome(DrawElement element, BoundingBox available, HorizontalAlign align)
 	{
 		if (element == null) return null;
 		var b = element.ComputeBounds();
 		if (b.IsEmpty || available.IsEmpty) return element;
 
-		var tx = available.MinX - b.MinX;
+		double tx;
+		switch (align)
+		{
+			case HorizontalAlign.Center:
+				tx = available.MinX + (available.Width - b.Width) / 2.0 - b.MinX;
+				break;
+			case HorizontalAlign.Right:
+				tx = available.MaxX - b.MaxX;
+				break;
+			default:
+				tx = available.MinX - b.MinX;
+				break;
+		}
 		var ty = available.MaxY - b.MaxY;
 		if (Math.Abs(tx) < 1e-9 && Math.Abs(ty) < 1e-9) return element;
 

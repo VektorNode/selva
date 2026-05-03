@@ -83,6 +83,165 @@ public class DrawingViewTests
 	}
 
 	[Fact]
+	public void Length_pins_longest_geometry_side()
+	{
+		// Geometry is 200×50 (landscape). Length=80 should make the long side 80mm and the
+		// short side 80*(50/200)=20mm. Plus uniform 5mm padding on each side.
+		var geometry = new PathElement
+		{
+			Path = new Path.Builder().MoveTo(0, 0).LineTo(200, 50).Build(),
+		};
+		var view = new DrawingView
+		{
+			Geometry = geometry,
+			Length = 80,
+			Padding = Margins.Uniform(5),
+		};
+		var b = view.ComputeBounds();
+		Assert.Equal(90, b.Width, 1);   // 80 + 10 padding
+		Assert.Equal(30, b.Height, 1);  // 20 + 10 padding
+	}
+
+	[Fact]
+	public void Auto_fits_to_layout_context_when_no_size_or_length()
+	{
+		// 1000×500 geometry resolved into a 100×100 context (post-padding inner = 90×90)
+		// should fit longest side to 90 → effective scale 0.09 → 90×45 inner + 10 padding.
+		var geometry = new PathElement
+		{
+			Path = new Path.Builder().MoveTo(0, 0).LineTo(1000, 500).Build(),
+		};
+		var view = new DrawingView
+		{
+			Geometry = geometry,
+			Padding = Margins.Uniform(5),
+		};
+		var resolved = (GroupElement)view.Resolve(new LayoutContext(new BoundingBox(0, 0, 100, 100)));
+		var b = resolved.BoundsOverride!.Value;
+		Assert.Equal(100, b.Width, 1);
+		Assert.Equal(55, b.Height, 1);  // 45 inner + 10 padding
+	}
+
+	[Fact]
+	public void Paper_space_text_keeps_font_size_when_view_is_scaled_down()
+	{
+		// 1000mm geometry pinned to 100mm: effective scale = 0.1. A 3mm paper-space label
+		// should be rewritten to FontSize=30 so the group's 0.1× transform renders it at 3mm.
+		var label = new TextElement
+		{
+			Text = "Hi",
+			Position = new Point2D(500, 250),
+			Style = new TextStyle { FontSize = 3.0 },
+		};
+		var curve = new PathElement { Path = new Path.Builder().MoveTo(0, 0).LineTo(1000, 500).Build() };
+		var view = new DrawingView
+		{
+			Geometry = new GroupElement { Children = new DrawElement[] { curve, label } },
+			Length = 100,
+		};
+		var resolved = (GroupElement)view.Resolve(new LayoutContext(BoundingBox.Empty));
+		var scaledGroup = FindFirstScaledGroup(resolved);
+		var rewrittenLabel = FindFirstText(scaledGroup);
+		Assert.Equal(30.0, rewrittenLabel.Style.FontSize, 6);
+	}
+
+	[Fact]
+	public void Paper_space_text_counter_scales_padding_radius_and_letter_spacing()
+	{
+		// Same 0.1× setup as the FontSize test: padding (1mm), corner radius (0.5mm), and
+		// letter spacing (0.2mm) are all paper-space measurements that should multiply by
+		// 1/scale = 10 so the group transform renders them at the requested mm on the page.
+		var label = new TextElement
+		{
+			Text = "Hi",
+			Position = new Point2D(500, 250),
+			Style = new TextStyle { FontSize = 3.0, LetterSpacing = 0.2 },
+			Background = Color.White,
+			BackgroundPadding = 1.0,
+			BackgroundCornerRadius = 0.5,
+		};
+		var curve = new PathElement { Path = new Path.Builder().MoveTo(0, 0).LineTo(1000, 500).Build() };
+		var view = new DrawingView
+		{
+			Geometry = new GroupElement { Children = new DrawElement[] { curve, label } },
+			Length = 100,
+		};
+		var resolved = (GroupElement)view.Resolve(new LayoutContext(BoundingBox.Empty));
+		var scaledGroup = FindFirstScaledGroup(resolved);
+		var rewrittenLabel = FindFirstText(scaledGroup);
+		Assert.Equal(10.0, rewrittenLabel.BackgroundPadding, 6);
+		Assert.Equal(5.0, rewrittenLabel.BackgroundCornerRadius, 6);
+		Assert.Equal(2.0, rewrittenLabel.Style.LetterSpacing, 6);
+	}
+
+	[Fact]
+	public void Stroke_width_and_dash_pattern_are_paper_space()
+	{
+		// View at Scale=0.1 (1:10). A 0.25 mm stroke and a [4, 2] mm dash pattern should be
+		// rewritten to 2.5 and [40, 20] respectively, so the group's 0.1× transform renders
+		// them at the authored mm on the page.
+		var curve = new PathElement
+		{
+			Path = new Path.Builder().MoveTo(0, 0).LineTo(1000, 500).Build(),
+			Stroke = new Stroke { Width = 0.25, DashArray = new[] { 4.0, 2.0 }, DashOffset = 1.0 },
+		};
+		var view = new DrawingView
+		{
+			Geometry = curve,
+			Scale = 0.1,
+		};
+		var resolved = (GroupElement)view.Resolve(new LayoutContext(BoundingBox.Empty));
+		var scaledGroup = FindFirstScaledGroup(resolved);
+		var rewritten = FindFirstPath(scaledGroup);
+		Assert.Equal(2.5, rewritten.Stroke.Width, 6);
+		Assert.Equal(40.0, rewritten.Stroke.DashArray[0], 6);
+		Assert.Equal(20.0, rewritten.Stroke.DashArray[1], 6);
+		Assert.Equal(10.0, rewritten.Stroke.DashOffset, 6);
+	}
+
+	private static GroupElement FindFirstScaledGroup(DrawElement element)
+	{
+		if (element is GroupElement g)
+		{
+			if (!g.Transform.IsIdentity) return g;
+			foreach (var child in g.Children)
+			{
+				var hit = FindFirstScaledGroup(child);
+				if (hit != null) return hit;
+			}
+		}
+		return null;
+	}
+
+	private static TextElement FindFirstText(DrawElement element)
+	{
+		if (element is TextElement t) return t;
+		if (element is GroupElement g)
+		{
+			foreach (var child in g.Children)
+			{
+				var hit = FindFirstText(child);
+				if (hit != null) return hit;
+			}
+		}
+		return null;
+	}
+
+	private static PathElement FindFirstPath(DrawElement element)
+	{
+		if (element is PathElement p) return p;
+		if (element is GroupElement g)
+		{
+			foreach (var child in g.Children)
+			{
+				var hit = FindFirstPath(child);
+				if (hit != null) return hit;
+			}
+		}
+		return null;
+	}
+
+	[Fact]
 	public void Format_scale_label_handles_common_ratios()
 	{
 		Assert.Equal("SCALE 1:1", DrawingView.FormatScaleLabel(1.0));

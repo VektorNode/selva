@@ -25,6 +25,13 @@ public sealed class TextElement : DrawElement
 	// PdfPage.AddWebLink. Empty/null = no link.
 	public string Hyperlink { get; init; }
 
+	// Optional background fill drawn behind the glyphs. Null = no background. The rect is
+	// the text's measured bounds expanded by BackgroundPadding on all sides, with corners
+	// rounded by BackgroundCornerRadius. Padding/Radius are ignored when Background is null.
+	public Color? Background { get; init; }
+	public double BackgroundPadding { get; init; }
+	public double BackgroundCornerRadius { get; init; }
+
 	public override void Accept(IElementVisitor visitor)
 	{
 		if (visitor == null) throw new ArgumentNullException(nameof(visitor));
@@ -67,6 +74,12 @@ public sealed class TextElement : DrawElement
 			case VerticalAnchor.Middle: minY = Position.Y - (ascent + descent) / 2; maxY = Position.Y + (ascent + descent) / 2; break;
 			case VerticalAnchor.Bottom: minY = Position.Y; maxY = Position.Y + (ascent + descent); break;
 			default: minY = Position.Y - descent; maxY = Position.Y + ascent; break;
+		}
+
+		if (Background.HasValue && BackgroundPadding > 0)
+		{
+			var p = BackgroundPadding;
+			minX -= p; maxX += p; minY -= p; maxY += p;
 		}
 
 		return new BoundingBox(minX, minY, maxX, maxY);

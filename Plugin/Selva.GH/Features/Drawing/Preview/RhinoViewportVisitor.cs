@@ -14,10 +14,12 @@ using PathSeg = Selva.Drawing.Model.Geometry.PathSegment;
 
 namespace Selva.GH.Features.Drawing.Preview;
 
-// Walks a Selva.Drawing element tree and renders a quick layout preview into a Rhino
-// viewport pipeline. Lives in Selva.GH (not Selva.Drawing) so the model layer stays
-// free of RhinoCommon. This is a layout preview only — text shows real glyphs at the
-// authored size, hatches show their outline, images show a placeholder rectangle.
+// Walks a Selva.Drawing element tree and renders the document into a Rhino viewport.
+// Lives in Selva.GH (not Selva.Drawing) so the model layer stays free of RhinoCommon.
+// Aims to mirror SvgRenderer's visual output: closed paths fill, strokes honor color and
+// dashes, elliptical arcs are tessellated via SVG's center-parameterization, and hatches
+// emit Lines/CrossHatch/Dots patterns. Images still show a placeholder rectangle and text
+// metrics will not match a browser exactly (Rhino's display fonts differ from SVG glyphs).
 internal sealed class RhinoViewportVisitor : IElementVisitor
 {
     private static readonly Color StrokeFallback = Color.FromArgb(40, 40, 40);
@@ -61,40 +63,185 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
     {
         if (element == null || element.Path.IsEmpty) return;
 
-        var color = element.Stroke != null
-            ? ToSystemColor(element.Stroke.Color, StrokeFallback)
-            : (element.Fill != null ? ToSystemColor(element.Fill.Color, FillOutlineFallback) : StrokeFallback);
-        var thickness = StrokeThickness(element.Stroke?.Width);
+        var subpaths = TessellateSubpaths(element.Path);
 
-        foreach (var poly in TessellatePath(element.Path))
+        // Fill closed subpaths first so strokes draw on top (matches SVG paint order).
+        if (element.Fill != null)
         {
-            if (poly.Count >= 2) _display.DrawPolyline(poly, color, thickness);
+            var fillColor = ApplyOpacity(ToSystemColor(element.Fill.Color, FillOutlineFallback), element.Fill.Opacity);
+            foreach (var sp in subpaths)
+                if (sp.Closed && sp.Points.Count >= 3)
+                    _display.DrawPolygon(sp.Points, fillColor, filled: true);
+        }
+
+        if (element.Stroke != null)
+        {
+            var strokeColor = ApplyOpacity(ToSystemColor(element.Stroke.Color, StrokeFallback), element.Stroke.Opacity);
+            var thickness = StrokeThickness(element.Stroke.Width);
+            var dashed = element.Stroke.DashArray != null && element.Stroke.DashArray.Count > 0;
+
+            foreach (var sp in subpaths)
+            {
+                if (sp.Points.Count < 2) continue;
+                if (dashed) DrawDashedPolyline(sp.Points, strokeColor);
+                else _display.DrawPolyline(sp.Points, strokeColor, thickness);
+            }
+        }
+        else if (element.Fill == null)
+        {
+            // Unstyled path: draw outline so the geometry is at least visible in preview.
+            foreach (var sp in subpaths)
+                if (sp.Points.Count >= 2)
+                    _display.DrawPolyline(sp.Points, StrokeFallback, 1);
         }
     }
 
     public void Visit(TextElement element)
     {
         if (element == null) return;
-        DrawBoxOutline(element.ComputeBounds(), BoxColor);
 
         var text = element.Text;
         if (string.IsNullOrEmpty(text)) return;
 
-        var size = element.Style?.FontSize ?? 2.5;
+        var style = element.Style;
+        var size = style?.FontSize ?? 2.5;
         if (size <= 0) return;
+
+        // Background mirrors the SVG/PDF output: derived from FontMetrics so the preview
+        // matches what gets exported. The heuristic for unbundled families (e.g. "Arial")
+        // won't perfectly match Rhino's display glyphs, but it's faithful to the output.
+        if (element.Background.HasValue)
+            DrawTextBackground(element);
 
         var pos = Map(element.Position);
         var plane = new Plane(pos, Vector3d.XAxis, Vector3d.YAxis);
         if (element.RotationDegrees != 0)
             plane.Rotate(element.RotationDegrees * Math.PI / 180.0, Vector3d.ZAxis, pos);
-        _display.Draw3dText(text, TextColor, plane, size, "Arial");
+
+        // Draw3dText(string, color, plane, size, font) centers the run on the plane origin,
+        // ignoring our anchors. Build a Text3d so HorizontalAlignment / VerticalAlignment
+        // are respected and the glyph run sits on the actual Position.
+        var fontFace = ResolveFontFace(style?.FontFamily);
+        // Two corrections turn the model FontSize into a Rhino-world Text3d height:
+        //   1. capRatio (~0.7): Rhino sizes by cap-height while SVG/PDF size by em.
+        //   2. transformScale: DrawingView pre-multiplies FontSize by 1/effectiveScale so
+        //      that the SVG/PDF group transform cancels it back to paper-space mm. Rhino's
+        //      Text3d ignores the parent transform — apply the scale here so preview text
+        //      ends up at the same visible size as the exported output.
+        var capRatio = CapHeightToEmRatio(style);
+        var transformScale = UniformScale(_current);
+        var t3d = new Rhino.Display.Text3d(text, plane, size * capRatio * transformScale) { FontFace = fontFace };
+        t3d.HorizontalAlignment = ToRhinoHAlign(style?.HorizontalAnchor ?? Selva.Drawing.Model.Style.TextAnchor.Left);
+        t3d.VerticalAlignment = ToRhinoVAlign(style?.VerticalAnchor ?? Selva.Drawing.Model.Style.VerticalAnchor.Baseline);
+        _display.Draw3dText(t3d, TextColor);
+        t3d.Dispose();
+    }
+
+    // Ratio of cap-height to em for the resolved font. Rhino's Text3d sizes by cap-height
+    // while SVG/PDF size by em — without this correction, preview glyphs come out ~1.4×
+    // bigger than the exported output. Uses bundled font metrics when available, falls
+    // back to the heuristic 0.7 for unbundled families.
+    private static double CapHeightToEmRatio(Selva.Drawing.Model.Style.TextStyle style)
+    {
+        const double fallback = 0.7;
+        if (style == null || style.FontSize <= 0) return fallback;
+        var measured = Selva.Drawing.Fonts.FontMetrics.Measure("H", style);
+        if (measured.CapHeight <= 0) return fallback;
+        return measured.CapHeight / style.FontSize;
+    }
+
+    // The first family in a CSS-style stack ("Inter, Helvetica, sans-serif" → "Inter").
+    // Matches FontMetrics.ExtractFirstFamily, which is what the SVG/PDF renderers measure
+    // against — so the preview's glyph metrics line up with the background rect we draw.
+    private static string ResolveFontFace(string fontFamily)
+    {
+        if (string.IsNullOrEmpty(fontFamily)) return "Inter";
+        var comma = fontFamily.IndexOf(',');
+        var first = comma < 0 ? fontFamily : fontFamily.Substring(0, comma);
+        return first.Trim().Trim('"', '\'');
+    }
+
+    private static Rhino.DocObjects.TextHorizontalAlignment ToRhinoHAlign(Selva.Drawing.Model.Style.TextAnchor a)
+    {
+        switch (a)
+        {
+            case Selva.Drawing.Model.Style.TextAnchor.Center: return Rhino.DocObjects.TextHorizontalAlignment.Center;
+            case Selva.Drawing.Model.Style.TextAnchor.Right: return Rhino.DocObjects.TextHorizontalAlignment.Right;
+            default: return Rhino.DocObjects.TextHorizontalAlignment.Left;
+        }
+    }
+
+    private static Rhino.DocObjects.TextVerticalAlignment ToRhinoVAlign(Selva.Drawing.Model.Style.VerticalAnchor a)
+    {
+        switch (a)
+        {
+            case Selva.Drawing.Model.Style.VerticalAnchor.Top: return Rhino.DocObjects.TextVerticalAlignment.Top;
+            case Selva.Drawing.Model.Style.VerticalAnchor.Middle: return Rhino.DocObjects.TextVerticalAlignment.Middle;
+            case Selva.Drawing.Model.Style.VerticalAnchor.Bottom: return Rhino.DocObjects.TextVerticalAlignment.BottomOfBoundingBox;
+            // Baseline maps closest to Rhino's "Bottom" (baseline of bottom line of text).
+            default: return Rhino.DocObjects.TextVerticalAlignment.Bottom;
+        }
+    }
+
+    // Filled background behind a TextElement. Mirrors SvgRenderer.AppendTextBackgroundRect
+    // so the preview shows what the SVG/PDF will export. Rhino's DisplayPipeline has no
+    // rounded-rect helper, so corner radius is ignored in preview — final output honors it.
+    private void DrawTextBackground(TextElement element)
+    {
+        var style = element.Style ?? new Selva.Drawing.Model.Style.TextStyle();
+        var measured = Selva.Drawing.Fonts.FontMetrics.Measure(element.Text ?? string.Empty, style);
+        var width = measured.Width;
+        var ascent = measured.Ascent;
+        var descent = Math.Abs(measured.Descent);
+        var lineHeightMultiplier = Math.Max(1.0, style.LineHeight);
+        var extra = (ascent + descent) * (lineHeightMultiplier - 1.0) * 0.5;
+        ascent += extra;
+        descent += extra;
+
+        double localX;
+        switch (style.HorizontalAnchor)
+        {
+            case Selva.Drawing.Model.Style.TextAnchor.Center: localX = -width / 2.0; break;
+            case Selva.Drawing.Model.Style.TextAnchor.Right: localX = -width; break;
+            default: localX = 0; break;
+        }
+        // Match SvgRenderer's dominant-baseline=middle convention: visual middle at y=0.
+        var height = ascent + descent;
+        var localY = -height / 2.0;
+
+        var p = element.BackgroundPadding;
+        if (p > 0)
+        {
+            localX -= p; localY -= p;
+            width += 2 * p; height += 2 * p;
+        }
+
+        var cos = 1.0; var sin = 0.0;
+        if (element.RotationDegrees != 0)
+        {
+            var rad = element.RotationDegrees * Math.PI / 180.0;
+            cos = Math.Cos(rad); sin = Math.Sin(rad);
+        }
+
+        DrawPoint Local(double lx, double ly)
+        {
+            var rx = lx * cos - ly * sin;
+            var ry = lx * sin + ly * cos;
+            return new DrawPoint(element.Position.X + rx, element.Position.Y + ry);
+        }
+
+        var p1 = Map(Local(localX, localY));
+        var p2 = Map(Local(localX + width, localY));
+        var p3 = Map(Local(localX + width, localY + height));
+        var p4 = Map(Local(localX, localY + height));
+
+        var bgColor = ToSystemColor(element.Background.Value, Color.Transparent);
+        _display.DrawPolygon(new[] { p1, p2, p3, p4 }, bgColor, filled: true);
     }
 
     public void Visit(TextBlockElement element)
     {
         if (element == null) return;
-        DrawBoxOutline(element.Box, BoxColor);
-
         if (string.IsNullOrEmpty(element.Text)) return;
         var size = element.Style?.FontSize ?? 2.5;
         if (size <= 0) return;
@@ -150,9 +297,50 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
     public void Visit(HatchElement element)
     {
         if (element == null || element.Boundary.IsEmpty) return;
-        foreach (var poly in TessellatePath(element.Boundary))
+
+        var subpaths = TessellateSubpaths(element.Boundary);
+        var lineColor = element.LineStyle != null
+            ? ApplyOpacity(ToSystemColor(element.LineStyle.Color, HatchColor), element.LineStyle.Opacity)
+            : HatchColor;
+
+        // Optional background fill behind the pattern.
+        if (element.BackgroundColor.A > 0)
         {
-            if (poly.Count >= 2) _display.DrawPolyline(poly, HatchColor, 1);
+            var bg = ToSystemColor(element.BackgroundColor, Color.Transparent);
+            foreach (var sp in subpaths)
+                if (sp.Closed && sp.Points.Count >= 3)
+                    _display.DrawPolygon(sp.Points, bg, filled: true);
+        }
+
+        // Always trace the boundary so the region is legible even when the pattern is sparse.
+        foreach (var sp in subpaths)
+            if (sp.Points.Count >= 2)
+                _display.DrawPolyline(sp.Points, lineColor, 1);
+
+        if (element.Pattern == HatchPatternKind.Solid)
+        {
+            foreach (var sp in subpaths)
+                if (sp.Closed && sp.Points.Count >= 3)
+                    _display.DrawPolygon(sp.Points, lineColor, filled: true);
+            return;
+        }
+
+        var spacing = element.Spacing > 0 ? element.Spacing : 2.0;
+        var bounds = element.Boundary.ComputeBounds();
+        if (bounds.IsEmpty) return;
+
+        switch (element.Pattern)
+        {
+            case HatchPatternKind.Lines:
+                DrawHatchLines(subpaths, bounds, element.AngleDegrees, spacing, lineColor);
+                break;
+            case HatchPatternKind.CrossHatch:
+                DrawHatchLines(subpaths, bounds, element.AngleDegrees, spacing, lineColor);
+                DrawHatchLines(subpaths, bounds, element.AngleDegrees + 90, spacing, lineColor);
+                break;
+            case HatchPatternKind.Dots:
+                DrawHatchDots(subpaths, bounds, spacing, lineColor);
+                break;
         }
     }
 
@@ -179,6 +367,16 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
     {
         var t = _current.Apply(p);
         return new Point3d(t.X, t.Y, 0);
+    }
+
+    // Uniform-scale factor of an affine transform: sqrt(|det|). Used to scale paper-space
+    // lengths (font size, etc.) that the model has pre-multiplied by 1/scale to survive a
+    // group transform — SVG/PDF apply the transform to glyphs, Rhino Text3d does not.
+    private static double UniformScale(DrawTransform t)
+    {
+        var det = t.A * t.D - t.B * t.C;
+        var s = Math.Sqrt(Math.Abs(det));
+        return s > 1e-12 ? s : 1.0;
     }
 
     private void DrawBoxOutline(DrawBox b, Color color)
@@ -316,27 +514,41 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
         return i;
     }
 
-    // Tessellate a Path into a sequence of polylines (one per subpath). MoveTo opens a new
-    // subpath; Close re-emits the first vertex so the polyline visually closes. Cubic
-    // segments are sampled at a fixed 16 steps — fine for layout preview; the renderer
-    // does the precise math.
-    private IEnumerable<List<Point3d>> TessellatePath(DrawPath path)
+    // A tessellated subpath: the points (in viewport space) plus whether the originating
+    // path's MoveTo..[next MoveTo|end] range terminated in a Close segment. Closed subpaths
+    // are eligible for fill / hatch operations.
+    private readonly struct Subpath
+    {
+        public readonly List<Point3d> Points;
+        public readonly bool Closed;
+        public Subpath(List<Point3d> points, bool closed) { Points = points; Closed = closed; }
+    }
+
+    private List<Subpath> TessellateSubpaths(DrawPath path)
     {
         const int cubicSteps = 16;
-        const int arcSteps = 24;
 
+        var result = new List<Subpath>();
         var current = new List<Point3d>();
+        var closed = false;
         var cursor = default(DrawPoint);
         var subpathStart = default(DrawPoint);
         var cursorValid = false;
+
+        void Flush()
+        {
+            if (current.Count > 0) result.Add(new Subpath(current, closed));
+            current = new List<Point3d>();
+            closed = false;
+        }
 
         foreach (var seg in path)
         {
             switch (seg)
             {
                 case PathSeg.MoveTo m:
-                    if (current.Count > 0) yield return current;
-                    current = new List<Point3d> { Map(m.To) };
+                    Flush();
+                    current.Add(Map(m.To));
                     cursor = m.To;
                     subpathStart = m.To;
                     cursorValid = true;
@@ -358,25 +570,20 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
                     break;
 
                 case PathSeg.ArcTo a when cursorValid:
-                    // Layout-preview approximation: sample the arc's endpoint chord.
-                    // Geometrically correct arc tessellation is the renderer's job.
-                    for (var i = 1; i <= arcSteps; i++)
-                    {
-                        var t = i / (double)arcSteps;
-                        current.Add(Map(new DrawPoint(
-                            cursor.X + (a.To.X - cursor.X) * t,
-                            cursor.Y + (a.To.Y - cursor.Y) * t)));
-                    }
+                    foreach (var p in SampleEllipticalArc(cursor, a))
+                        current.Add(Map(p));
                     cursor = a.To;
                     break;
 
                 case PathSeg.Close _ when cursorValid:
                     current.Add(Map(subpathStart));
                     cursor = subpathStart;
+                    closed = true;
                     break;
             }
         }
-        if (current.Count > 0) yield return current;
+        Flush();
+        return result;
     }
 
     private static DrawPoint CubicAt(DrawPoint p0, DrawPoint p1, DrawPoint p2, DrawPoint p3, double t)
@@ -389,5 +596,237 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
         return new DrawPoint(
             b0 * p0.X + b1 * p1.X + b2 * p2.X + b3 * p3.X,
             b0 * p0.Y + b1 * p1.Y + b2 * p2.Y + b3 * p3.Y);
+    }
+
+    // SVG endpoint-parameterization → center-parameterization (W3C SVG 1.1 Appendix F.6.5).
+    // Yields points along the arc, excluding the start (cursor) and including the endpoint,
+    // sampled at ~3° per step.
+    private static IEnumerable<DrawPoint> SampleEllipticalArc(DrawPoint from, PathSeg.ArcTo a)
+    {
+        var rx = Math.Abs(a.RadiusX);
+        var ry = Math.Abs(a.RadiusY);
+        if (rx < 1e-9 || ry < 1e-9)
+        {
+            yield return a.To;
+            yield break;
+        }
+
+        var phi = a.XAxisRotationDegrees * Math.PI / 180.0;
+        var cosPhi = Math.Cos(phi);
+        var sinPhi = Math.Sin(phi);
+
+        // Step 1: compute (x1', y1') in the rotated frame.
+        var dx = (from.X - a.To.X) * 0.5;
+        var dy = (from.Y - a.To.Y) * 0.5;
+        var x1p = cosPhi * dx + sinPhi * dy;
+        var y1p = -sinPhi * dx + cosPhi * dy;
+
+        // Step 2: scale radii up if endpoints are too far apart for the given radii.
+        var lambda = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry);
+        if (lambda > 1.0)
+        {
+            var s = Math.Sqrt(lambda);
+            rx *= s;
+            ry *= s;
+        }
+
+        // Step 3: compute (cx', cy').
+        var rx2 = rx * rx;
+        var ry2 = ry * ry;
+        var x1p2 = x1p * x1p;
+        var y1p2 = y1p * y1p;
+        var num = rx2 * ry2 - rx2 * y1p2 - ry2 * x1p2;
+        var den = rx2 * y1p2 + ry2 * x1p2;
+        var factor = den < 1e-12 ? 0.0 : Math.Sqrt(Math.Max(0.0, num / den));
+        // Note: SVG's sweep-flag "1" is anti-clockwise in the canonical y-up frame used here
+        // (Selva.Drawing operates in y-up, before any renderer-side flip). SweepClockwise
+        // therefore inverts the sign relative to the W3C formula's large-arc/sweep rules.
+        if (a.LargeArc == a.SweepClockwise) factor = -factor;
+        var cxp = factor * (rx * y1p / ry);
+        var cyp = factor * (-ry * x1p / rx);
+
+        // Step 4: rotate back to the original frame.
+        var cx = cosPhi * cxp - sinPhi * cyp + (from.X + a.To.X) * 0.5;
+        var cy = sinPhi * cxp + cosPhi * cyp + (from.Y + a.To.Y) * 0.5;
+
+        // Step 5: angles.
+        var ux = (x1p - cxp) / rx;
+        var uy = (y1p - cyp) / ry;
+        var vx = (-x1p - cxp) / rx;
+        var vy = (-y1p - cyp) / ry;
+        var theta1 = AngleBetween(1, 0, ux, uy);
+        var deltaTheta = AngleBetween(ux, uy, vx, vy);
+        if (!a.SweepClockwise && deltaTheta > 0) deltaTheta -= 2 * Math.PI;
+        else if (a.SweepClockwise && deltaTheta < 0) deltaTheta += 2 * Math.PI;
+
+        var arcLen = Math.Max(rx, ry) * Math.Abs(deltaTheta);
+        var steps = Math.Max(8, (int)Math.Ceiling(arcLen / 0.5));
+        if (steps > 256) steps = 256;
+
+        for (var i = 1; i <= steps; i++)
+        {
+            var t = i / (double)steps;
+            var ang = theta1 + deltaTheta * t;
+            var ex = Math.Cos(ang) * rx;
+            var ey = Math.Sin(ang) * ry;
+            var px = cosPhi * ex - sinPhi * ey + cx;
+            var py = sinPhi * ex + cosPhi * ey + cy;
+            yield return new DrawPoint(px, py);
+        }
+    }
+
+    private static double AngleBetween(double ux, double uy, double vx, double vy)
+    {
+        var dot = ux * vx + uy * vy;
+        var len = Math.Sqrt((ux * ux + uy * uy) * (vx * vx + vy * vy));
+        if (len < 1e-12) return 0;
+        var c = dot / len;
+        if (c < -1) c = -1;
+        else if (c > 1) c = 1;
+        var sign = (ux * vy - uy * vx) < 0 ? -1.0 : 1.0;
+        return sign * Math.Acos(c);
+    }
+
+    // ============================================================================
+    // Stroke / fill helpers
+    // ============================================================================
+
+    private void DrawDashedPolyline(IList<Point3d> pts, Color color)
+    {
+        // The DisplayPipeline only exposes DrawDottedLine for dashed-style drawing. Walking
+        // the polyline segment by segment gives a consistent dash pattern without needing
+        // the actual on/off lengths from the model — close enough for preview.
+        for (var i = 0; i < pts.Count - 1; i++)
+            _display.DrawDottedLine(pts[i], pts[i + 1], color);
+    }
+
+    private static Color ApplyOpacity(Color c, double opacity)
+    {
+        if (opacity >= 1.0) return c;
+        if (opacity <= 0.0) return Color.FromArgb(0, c);
+        var a = (int)Math.Round(c.A * opacity);
+        if (a < 0) a = 0;
+        else if (a > 255) a = 255;
+        return Color.FromArgb(a, c.R, c.G, c.B);
+    }
+
+    // ============================================================================
+    // Hatch pattern rendering
+    // ============================================================================
+
+    // Sweep parallel lines across the bounding box at the given angle/spacing, clip each
+    // line to the boundary subpaths via even-odd ray crossings, and emit the inside spans.
+    private void DrawHatchLines(List<Subpath> subpaths, DrawBox bounds, double angleDegrees, double spacing, Color color)
+    {
+        if (spacing <= 0) return;
+
+        var theta = angleDegrees * Math.PI / 180.0;
+        var dx = Math.Cos(theta);
+        var dy = Math.Sin(theta);
+        // Perpendicular axis along which we step from line to line.
+        var nx = -dy;
+        var ny = dx;
+
+        var cx = (bounds.MinX + bounds.MaxX) * 0.5;
+        var cy = (bounds.MinY + bounds.MaxY) * 0.5;
+        // Half-diagonal of the bounding box along both axes.
+        var halfSpan = Math.Sqrt(bounds.Width * bounds.Width + bounds.Height * bounds.Height) * 0.5 + spacing;
+
+        var stepCount = (int)Math.Ceiling((halfSpan * 2) / spacing);
+        if (stepCount > 2000) return; // guard against pathological inputs
+
+        for (var i = -stepCount; i <= stepCount; i++)
+        {
+            var offset = i * spacing;
+            // A point on this hatch line, with the line direction (dx, dy).
+            var ox = cx + nx * offset;
+            var oy = cy + ny * offset;
+
+            // Parametric line: (ox + dx*t, oy + dy*t). Find boundary intersections in t.
+            var crossings = new List<double>();
+            CollectLineCrossings(subpaths, ox, oy, dx, dy, crossings);
+            if (crossings.Count < 2) continue;
+            crossings.Sort();
+
+            // Even-odd: pair consecutive crossings; the segments between odd→even are inside.
+            for (var k = 0; k + 1 < crossings.Count; k += 2)
+            {
+                var t0 = crossings[k];
+                var t1 = crossings[k + 1];
+                var p0 = new Point3d(ox + dx * t0, oy + dy * t0, 0);
+                var p1 = new Point3d(ox + dx * t1, oy + dy * t1, 0);
+                _display.DrawLine(new Line(p0, p1), color);
+            }
+        }
+    }
+
+    private static void CollectLineCrossings(List<Subpath> subpaths, double ox, double oy, double dx, double dy, List<double> output)
+    {
+        // For each polyline edge (p->q), find t along the hatch line where it crosses the
+        // edge. The hatch line's "across" axis is perpendicular: (-dy, dx). The edge
+        // crosses when its endpoints lie on opposite sides of the hatch line.
+        foreach (var sp in subpaths)
+        {
+            if (!sp.Closed || sp.Points.Count < 2) continue;
+            for (var i = 0; i < sp.Points.Count - 1; i++)
+            {
+                var p = sp.Points[i];
+                var q = sp.Points[i + 1];
+                var sp1 = (p.X - ox) * (-dy) + (p.Y - oy) * dx;
+                var sp2 = (q.X - ox) * (-dy) + (q.Y - oy) * dx;
+                if ((sp1 > 0 && sp2 > 0) || (sp1 < 0 && sp2 < 0)) continue;
+                if (sp1 == sp2) continue; // colinear edge — skip to avoid div0
+                var u = sp1 / (sp1 - sp2);
+                var ix = p.X + (q.X - p.X) * u;
+                var iy = p.Y + (q.Y - p.Y) * u;
+                // Project intersection back onto hatch direction.
+                var t = (ix - ox) * dx + (iy - oy) * dy;
+                output.Add(t);
+            }
+        }
+    }
+
+    private void DrawHatchDots(List<Subpath> subpaths, DrawBox bounds, double spacing, Color color)
+    {
+        if (spacing <= 0) return;
+
+        var minX = bounds.MinX;
+        var minY = bounds.MinY;
+        var cols = (int)Math.Ceiling(bounds.Width / spacing) + 1;
+        var rows = (int)Math.Ceiling(bounds.Height / spacing) + 1;
+        if ((long)cols * rows > 50_000) return; // guard
+
+        for (var r = 0; r < rows; r++)
+        {
+            var y = minY + r * spacing;
+            for (var c = 0; c < cols; c++)
+            {
+                var x = minX + c * spacing;
+                if (!PointInSubpaths(subpaths, x, y)) continue;
+                var pt = Map(new DrawPoint(x, y));
+                _display.DrawPoint(pt, PointStyle.RoundSimple, 2, color);
+            }
+        }
+    }
+
+    private static bool PointInSubpaths(List<Subpath> subpaths, double x, double y)
+    {
+        // Even-odd ray cast (horizontal, +x) across all closed subpaths.
+        var inside = false;
+        foreach (var sp in subpaths)
+        {
+            if (!sp.Closed || sp.Points.Count < 2) continue;
+            for (var i = 0; i < sp.Points.Count - 1; i++)
+            {
+                var p = sp.Points[i];
+                var q = sp.Points[i + 1];
+                if ((p.Y > y) == (q.Y > y)) continue;
+                var dy = q.Y - p.Y;
+                if (Math.Abs(dy) < 1e-12) continue;
+                var xCross = p.X + (y - p.Y) * (q.X - p.X) / dy;
+                if (xCross > x) inside = !inside;
+            }
+        }
+        return inside;
     }
 }

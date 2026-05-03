@@ -13,14 +13,17 @@ namespace Selva.Drawing.Model.Drawings;
 // Transform = Translate(Origin) ∘ Translate(viewport-fit) ∘ Scale(Scale), so the model
 // geometry's bounds at the input scale land inside the requested viewport.
 //
-// Two sizing modes:
-//   - When Size is set, the view occupies that rectangle. The geometry is scaled by Scale
-//     (default 1.0), then centred in the inner rect. Geometry that overflows the inner
-//     rect is NOT clipped — that's the caller's responsibility (use a smaller Scale).
-//     When Scale <= 0, the view auto-fits geometry into the inner rect uniformly
-//     (uniform scale = min(innerW / geomW, innerH / geomH)) so callers can ask for a
-//     fixed-size viewport without computing the scale themselves.
-//   - When Size is null, the view sizes itself to fit the scaled geometry plus padding.
+// Sizing modes (resolved in order):
+//   - Length set: pin the view's longest geometry side to Length mm; the other side follows
+//     the geometry's aspect ratio. This is the common "I want this view to be ~80mm across"
+//     ask without thinking about scale ratios.
+//   - Size set: the view occupies that rectangle. Geometry is scaled by Scale (default 1.0)
+//     then centred in the inner rect; Scale <= 0 means uniform-fit into the inner rect.
+//   - Neither set + LayoutContext has finite bounds: auto-fit geometry into the available
+//     bounds (the "drop it on a Page and it just works" path).
+//   - Neither set + no parent bounds: fall back to natural size at Scale (default 1.0).
+//
+// In every case, geometry that overflows the inner rect is NOT clipped.
 //
 // The caption (if set) is a single-line label drawn below the frame's bottom edge, e.g.
 // "SCALE 1:5" or a view name. Caption text uses CaptionStyle.
@@ -29,11 +32,18 @@ public sealed class DrawingView : LayoutElement
 	public DrawElement Geometry { get; init; }
 
 	// Drawing scale. 1.0 = full size in mm; 0.2 = 1:5; 2.0 = 2:1. Numeric only — formatting
-	// for the caption is up to the caller via ScaleLabel.
-	public double Scale { get; init; } = 1.0;
+	// for the caption is up to the caller via ScaleLabel. Default 0 means "auto-fit" — the
+	// view scales to its layout context (or falls back to 1.0 when no context is available).
+	public double Scale { get; init; } = 0.0;
 
 	// Optional fixed viewport size. When null, the view fits the scaled geometry + padding.
 	public BoundingBox? Size { get; init; }
+
+	// Convenience sizing: pin the geometry's longest side (post-padding inner rect) to this
+	// length in mm. The shorter side follows from the geometry's aspect ratio. Wins over
+	// Scale when set; ignored when Size is also set. Use this when you want "draw the view
+	// at ~N millimetres" without computing the scale ratio yourself.
+	public double? Length { get; init; }
 
 	public Stroke Border { get; init; }
 	public Fill Background { get; init; }
@@ -54,34 +64,53 @@ public sealed class DrawingView : LayoutElement
 			: Geometry;
 		var geomBounds = resolvedGeometry?.ComputeBounds() ?? BoundingBox.Empty;
 
-		// Inner viewport size = geometry-fit (scaled) when no fixed Size; otherwise use Size.
-		double innerWidth, innerHeight;
-		if (Size.HasValue)
+		// Resolve sizing. Order: Length → Size → context auto-fit → natural size at Scale.
+		double innerWidth, innerHeight, effectiveScale;
+		if (Length.HasValue && Length.Value > 0 && !geomBounds.IsEmpty)
+		{
+			var longest = Math.Max(geomBounds.Width, geomBounds.Height);
+			effectiveScale = longest > 0 ? Length.Value / longest : 1.0;
+			innerWidth = geomBounds.Width * effectiveScale;
+			innerHeight = geomBounds.Height * effectiveScale;
+		}
+		else if (Size.HasValue)
 		{
 			innerWidth = Math.Max(0, Size.Value.Width - Padding.Left - Padding.Right);
 			innerHeight = Math.Max(0, Size.Value.Height - Padding.Top - Padding.Bottom);
+			effectiveScale = Scale > 0 ? Scale : 1.0;
+			if (Scale <= 0 && !geomBounds.IsEmpty && innerWidth > 0 && innerHeight > 0)
+			{
+				effectiveScale = Math.Min(innerWidth / geomBounds.Width, innerHeight / geomBounds.Height);
+			}
+		}
+		else if (Scale <= 0 && !geomBounds.IsEmpty && context.HasFiniteAvailableWidth && context.HasFiniteAvailableHeight)
+		{
+			// Auto-fit to whatever container we're being resolved into. This is the
+			// "drop me on a Page and figure it out" path.
+			var availW = Math.Max(0, context.AvailableWidth - Padding.Left - Padding.Right);
+			var availH = Math.Max(0, context.AvailableHeight - Padding.Top - Padding.Bottom);
+			if (availW > 0 && availH > 0)
+			{
+				effectiveScale = Math.Min(availW / geomBounds.Width, availH / geomBounds.Height);
+			}
+			else
+			{
+				effectiveScale = 1.0;
+			}
+			innerWidth = geomBounds.Width * effectiveScale;
+			innerHeight = geomBounds.Height * effectiveScale;
 		}
 		else if (geomBounds.IsEmpty)
 		{
 			innerWidth = 0;
 			innerHeight = 0;
+			effectiveScale = Scale > 0 ? Scale : 1.0;
 		}
 		else
 		{
-			var unsizedScale = Scale > 0 ? Scale : 1.0;
-			innerWidth = geomBounds.Width * unsizedScale;
-			innerHeight = geomBounds.Height * unsizedScale;
-		}
-
-		// Resolve the actual scale used for placing geometry. Auto-fit kicks in only when a
-		// fixed Size is supplied AND Scale <= 0 — otherwise we honour the caller's Scale even
-		// if the geometry overflows the inner rect (matches the documented contract).
-		var effectiveScale = Scale > 0 ? Scale : 1.0;
-		if (Size.HasValue && Scale <= 0 && !geomBounds.IsEmpty && innerWidth > 0 && innerHeight > 0)
-		{
-			var fitX = innerWidth / geomBounds.Width;
-			var fitY = innerHeight / geomBounds.Height;
-			effectiveScale = Math.Min(fitX, fitY);
+			effectiveScale = Scale > 0 ? Scale : 1.0;
+			innerWidth = geomBounds.Width * effectiveScale;
+			innerHeight = geomBounds.Height * effectiveScale;
 		}
 
 		var outerWidth = innerWidth + Padding.Left + Padding.Right;
@@ -119,6 +148,15 @@ public sealed class DrawingView : LayoutElement
 
 		if (resolvedGeometry != null && !geomBounds.IsEmpty && innerWidth > 0 && innerHeight > 0)
 		{
+			// One rule: geometry coordinates scale, styles do not. Stroke widths, dash
+			// patterns, font sizes, and text background padding are all paper-space mm —
+			// what the user authors is what shows up on paper. The group transform below
+			// uniformly scales every coordinate, so we pre-multiply every paper-space style
+			// length by 1/effectiveScale to cancel it out.
+			var geometryToWrap = effectiveScale > 0 && Math.Abs(effectiveScale - 1.0) > 1e-12
+				? CounterScalePaperSpaceStyles(resolvedGeometry, 1.0 / effectiveScale)
+				: resolvedGeometry;
+
 			// Centre the scaled geometry in the inner rect. Compose:
 			//   1) translate so geometry's min corner ends up at (0,0)
 			//   2) scale uniformly by effectiveScale
@@ -137,7 +175,7 @@ public sealed class DrawingView : LayoutElement
 			children.Add(new GroupElement
 			{
 				Transform = t,
-				Children = new[] { resolvedGeometry },
+				Children = new[] { geometryToWrap },
 			});
 		}
 
@@ -172,6 +210,95 @@ public sealed class DrawingView : LayoutElement
 			Metadata = Metadata,
 			Children = children,
 			BoundsOverride = new BoundingBox(minX, minY, maxX, maxY),
+		};
+	}
+
+	private static DrawElement CounterScalePaperSpaceStyles(DrawElement element, double styleScale)
+	{
+		switch (element)
+		{
+			case TextElement text when text.Style != null:
+				var s = text.Style;
+				var rescaledStyle = new TextStyle
+				{
+					FontFamily = s.FontFamily,
+					FontSize = s.FontSize * styleScale,
+					Weight = s.Weight,
+					Style = s.Style,
+					Decoration = s.Decoration,
+					Color = s.Color,
+					HorizontalAnchor = s.HorizontalAnchor,
+					VerticalAnchor = s.VerticalAnchor,
+					LineHeight = s.LineHeight,
+					LetterSpacing = s.LetterSpacing * styleScale,
+				};
+				return new TextElement
+				{
+					Id = text.Id,
+					CssClass = text.CssClass,
+					Metadata = text.Metadata,
+					Text = text.Text,
+					Position = text.Position,
+					Style = rescaledStyle,
+					RotationDegrees = text.RotationDegrees,
+					Hyperlink = text.Hyperlink,
+					Background = text.Background,
+					BackgroundPadding = text.BackgroundPadding * styleScale,
+					BackgroundCornerRadius = text.BackgroundCornerRadius * styleScale,
+					MeasuredBounds = null,
+				};
+			case PathElement path when path.Stroke != null:
+				return new PathElement
+				{
+					Id = path.Id,
+					CssClass = path.CssClass,
+					Metadata = path.Metadata,
+					Path = path.Path,
+					Stroke = ScaleStroke(path.Stroke, styleScale),
+					Fill = path.Fill,
+				};
+			case GroupElement group:
+				var rewritten = new List<DrawElement>(group.Children.Count);
+				var changed = false;
+				foreach (var child in group.Children)
+				{
+					var next = CounterScalePaperSpaceStyles(child, styleScale);
+					if (!ReferenceEquals(next, child)) changed = true;
+					rewritten.Add(next);
+				}
+				if (!changed) return group;
+				return new GroupElement
+				{
+					Id = group.Id,
+					CssClass = group.CssClass,
+					Metadata = group.Metadata,
+					Transform = group.Transform,
+					BoundsOverride = group.BoundsOverride,
+					Children = rewritten,
+				};
+			default:
+				return element;
+		}
+	}
+
+	private static Stroke ScaleStroke(Stroke stroke, double styleScale)
+	{
+		double[] dashes = null;
+		if (stroke.DashArray != null && stroke.DashArray.Count > 0)
+		{
+			dashes = new double[stroke.DashArray.Count];
+			for (var i = 0; i < stroke.DashArray.Count; i++) dashes[i] = stroke.DashArray[i] * styleScale;
+		}
+		return new Stroke
+		{
+			Color = stroke.Color,
+			Width = stroke.Width * styleScale,
+			Opacity = stroke.Opacity,
+			Cap = stroke.Cap,
+			Join = stroke.Join,
+			MiterLimit = stroke.MiterLimit,
+			DashArray = dashes,
+			DashOffset = stroke.DashOffset * styleScale,
 		};
 	}
 
