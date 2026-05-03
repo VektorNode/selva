@@ -491,12 +491,17 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 	public void Visit(TextElement element)
 	{
 		if (element == null || string.IsNullOrEmpty(element.Text)) return;
+
+		var style = element.Style ?? new TextStyle();
+		if (element.Background.HasValue)
+			DrawTextBackground(element, style);
+
 		DrawText(
 			element.Text,
 			element.Position,
-			element.Style ?? new TextStyle(),
+			style,
 			element.RotationDegrees,
-			horizontalAnchor: (element.Style ?? new TextStyle()).HorizontalAnchor,
+			horizontalAnchor: style.HorizontalAnchor,
 			verticalAnchor: VerticalAnchor.Middle); // SvgRenderer uses dominant-baseline=middle
 
 		// Phase 9: capture clickable hyperlink rect. We use ComputeBounds() over MeasuredBounds
@@ -932,6 +937,62 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 	// ============================================================================
 	// Text drawing
 	// ============================================================================
+
+	// Draws the background rectangle for a TextElement. We match DrawText's transform
+	// stack (translate → scale(1,-1) → rotate) so the rect rotates with the glyphs, then
+	// derive the local-frame bounds the same way DrawText would for verticalAnchor=Middle:
+	// baseline at yOffset, line spans yOffset-ascent .. yOffset+descent. SvgRenderer uses
+	// dominant-baseline=middle which centers slightly differently, but the discrepancy is
+	// well within typical padding values and matches how the PDF renderer already draws
+	// the glyphs.
+	private void DrawTextBackground(TextElement element, TextStyle style)
+	{
+		if (!element.Background.HasValue) return;
+		var text = element.Text ?? string.Empty;
+		if (text.Length == 0 || style.FontSize <= 0) return;
+
+		var measured = FontMetrics.Measure(text, style.FontFamily, style.FontSize, style.Weight, style.Style);
+		var width = measured.Width;
+		var ascent = measured.Ascent;
+		var descent = Math.Abs(measured.Descent);
+		var lineHeightMultiplier = Math.Max(1.0, style.LineHeight);
+		var extra = (ascent + descent) * (lineHeightMultiplier - 1.0) * 0.5;
+		ascent += extra;
+		descent += extra;
+
+		double xOffset = 0;
+		switch (style.HorizontalAnchor)
+		{
+			case TextAnchor.Center: xOffset = -width / 2.0; break;
+			case TextAnchor.Right: xOffset = -width; break;
+		}
+
+		// Mirror DrawText's verticalAnchor=Middle baseline placement.
+		var yBaseline = (ascent + descent) / 2.0;
+		var yTop = yBaseline - ascent;
+		var height = ascent + descent;
+
+		var p = element.BackgroundPadding;
+		if (p > 0)
+		{
+			xOffset -= p; yTop -= p;
+			width += 2 * p; height += 2 * p;
+		}
+		var radius = Math.Max(0, element.BackgroundCornerRadius);
+
+		var state = _gfx.Save();
+		_gfx.TranslateTransform(element.Position.X, element.Position.Y);
+		_gfx.ScaleTransform(1, -1);
+		if (element.RotationDegrees != 0) _gfx.RotateTransform(-element.RotationDegrees);
+
+		var brush = new XSolidBrush(ToXColor(element.Background.Value, 1f));
+		if (radius > 0)
+			_gfx.DrawRoundedRectangle(brush, xOffset, yTop, width, height, radius * 2, radius * 2);
+		else
+			_gfx.DrawRectangle(brush, xOffset, yTop, width, height);
+
+		_gfx.Restore(state);
+	}
 
 	private void DrawText(
 		string text, Point2D position, TextStyle style, double rotationDegrees,

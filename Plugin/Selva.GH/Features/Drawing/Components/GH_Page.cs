@@ -7,6 +7,7 @@ using Rhino.Geometry;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Layout;
+using ModelBoundingBox = Selva.Drawing.Model.Geometry.BoundingBox;
 using Selva.GH.Features.Drawing.Preview;
 using Selva.GH.Properties;
 
@@ -63,9 +64,13 @@ public class GH_Page : GH_Component
         pManager.AddNumberParameter("Margin", "M", "Uniform page margin in millimetres. -1 inherits the document's margin.", GH_ParamAccess.item, -1.0);
         pManager.AddGenericParameter("Header", "H", "Optional override of the document header for this section's pages.", GH_ParamAccess.item);
         pManager.AddGenericParameter("Footer", "F", "Optional override of the document footer for this section's pages.", GH_ParamAccess.item);
+        pManager.AddNumberParameter("Header Height", "HH", "Reserved header height in mm. -1 = Auto. 0 = no reservation.", GH_ParamAccess.item, -1.0);
+        pManager.AddNumberParameter("Footer Height", "FH", "Reserved footer height in mm. -1 = Auto. 0 = no reservation.", GH_ParamAccess.item, -1.0);
+        pManager.AddIntegerParameter("Header Align", "HA", "Horizontal alignment of the header within its band. -1 inherits the document's value.", GH_ParamAccess.item, -1);
+        pManager.AddIntegerParameter("Footer Align", "FA", "Horizontal alignment of the footer within its band. -1 inherits the document's value.", GH_ParamAccess.item, -1);
         pManager.AddBooleanParameter("Keep Together", "KT", "When true, the entire section is forced onto a single page even if its content overflows.", GH_ParamAccess.item, false);
 
-        for (var i = 1; i <= 7; i++) pManager[i].Optional = true;
+        for (var i = 1; i <= 11; i++) pManager[i].Optional = true;
 
         if (pManager[2] is Param_Integer paperParam)
         {
@@ -79,6 +84,20 @@ public class GH_Page : GH_Component
             paperParam.AddNamedValue("Letter", 6);
             paperParam.AddNamedValue("Legal", 7);
             paperParam.AddNamedValue("Tabloid", 8);
+        }
+        if (pManager[9] is Param_Integer headerAlign)
+        {
+            headerAlign.AddNamedValue("Inherit", -1);
+            headerAlign.AddNamedValue("Left", 0);
+            headerAlign.AddNamedValue("Center", 1);
+            headerAlign.AddNamedValue("Right", 2);
+        }
+        if (pManager[10] is Param_Integer footerAlign)
+        {
+            footerAlign.AddNamedValue("Inherit", -1);
+            footerAlign.AddNamedValue("Left", 0);
+            footerAlign.AddNamedValue("Center", 1);
+            footerAlign.AddNamedValue("Right", 2);
         }
     }
 
@@ -96,6 +115,10 @@ public class GH_Page : GH_Component
         var margin = -1.0;
         DrawElement header = null;
         DrawElement footer = null;
+        var headerHeight = -1.0;
+        var footerHeight = -1.0;
+        var headerAlignIndex = -1;
+        var footerAlignIndex = -1;
         var keepTogether = false;
 
         DA.GetDataList(0, elements);
@@ -105,7 +128,14 @@ public class GH_Page : GH_Component
         DA.GetData(4, ref margin);
         DA.GetData(5, ref header);
         DA.GetData(6, ref footer);
-        DA.GetData(7, ref keepTogether);
+        DA.GetData(7, ref headerHeight);
+        DA.GetData(8, ref footerHeight);
+        DA.GetData(9, ref headerAlignIndex);
+        DA.GetData(10, ref footerAlignIndex);
+        DA.GetData(11, ref keepTogether);
+
+        WarnIfChromeHasOrigin(header, "Header");
+        WarnIfChromeHasOrigin(footer, "Footer");
 
         var children = new List<DrawElement>(elements.Count);
         foreach (var e in elements) if (e != null) children.Add(e);
@@ -133,6 +163,11 @@ public class GH_Page : GH_Component
 
         Margins? marginOverride = margin >= 0 ? Margins.Uniform(margin) : (Margins?)null;
 
+        if (children.Count > 1)
+        {
+            WarnOnDirectMultiElementLayout(children, paperOverride ?? PaperSize.A4, marginOverride ?? Margins.Uniform(10));
+        }
+
         var section = new Section
         {
             Content = content,
@@ -141,13 +176,123 @@ public class GH_Page : GH_Component
             Margins = marginOverride,
             Header = header,
             Footer = footer,
+            HeaderHeight = ResolveBandHeight(headerHeight),
+            FooterHeight = ResolveBandHeight(footerHeight),
+            HeaderAlign = ResolveAlign(headerAlignIndex),
+            FooterAlign = ResolveAlign(footerAlignIndex),
             KeepTogether = keepTogether,
         };
+
+        EmitChromeReservationRemark(header, footer, headerHeight, footerHeight);
 
         BuildPreview(section);
 
         DA.SetData(0, section);
     }
+
+    // Connecting multiple elements directly to Page wraps them in a Group, which preserves
+    // their world coordinates and is treated as one atomic block by pagination. That silently
+    // hides content when children overlap or fall outside the margin box. Surface those
+    // cases as warnings so the user knows to put a Stack/Grid in front.
+    private static double? ResolveBandHeight(double input)
+    {
+        if (input < 0) return null;
+        if (input == 0) return 0.0;
+        return input;
+    }
+
+    private static HorizontalAlign? ResolveAlign(int i) => i switch
+    {
+        0 => HorizontalAlign.Left,
+        1 => HorizontalAlign.Center,
+        2 => HorizontalAlign.Right,
+        _ => null,
+    };
+
+    private void EmitChromeReservationRemark(DrawElement header, DrawElement footer, double headerInput, double footerInput)
+    {
+        if (header == null && footer == null) return;
+        var parts = new List<string>(2);
+        if (header != null) parts.Add($"Header {DescribeReservation(header, headerInput)}");
+        if (footer != null) parts.Add($"Footer {DescribeReservation(footer, footerInput)}");
+        AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, string.Join(" · ", parts));
+    }
+
+    private static string DescribeReservation(DrawElement chrome, double input)
+    {
+        if (input > 0) return $"{input:0.##} mm (explicit)";
+        if (input == 0) return "0 mm (no reservation)";
+        var resolved = PaginationPass.ResolveLayout(chrome);
+        var measured = PaginationPass.ResolveBandHeight(null, resolved);
+        return $"{measured:0.##} mm (auto)";
+    }
+
+    private void WarnIfChromeHasOrigin(DrawElement element, string slot)
+    {
+        if (element == null) return;
+        var prop = element.GetType().GetProperty("Origin");
+        if (prop == null) return;
+        var value = prop.GetValue(element);
+        if (value == null) return;
+        var x = (double)value.GetType().GetProperty("X").GetValue(value);
+        var y = (double)value.GetType().GetProperty("Y").GetValue(value);
+        if (Math.Abs(x) < 1e-9 && Math.Abs(y) < 1e-9) return;
+        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+            $"{slot} element's Origin ({x:0.##}, {y:0.##}) is ignored — chrome is anchored to the page band. Use {slot} Align to control horizontal placement.");
+    }
+
+    private void WarnOnDirectMultiElementLayout(List<DrawElement> children, PaperSize paper, Margins margins)
+    {
+        var marginBox = new ModelBoundingBox(
+            margins.Left,
+            margins.Bottom,
+            Math.Max(margins.Left, paper.WidthMm - margins.Right),
+            Math.Max(margins.Bottom, paper.HeightMm - margins.Top));
+
+        var bounds = new ModelBoundingBox[children.Count];
+        for (var i = 0; i < children.Count; i++) bounds[i] = SafeBounds(children[i]);
+
+        var overlaps = 0;
+        for (var i = 0; i < bounds.Length; i++)
+        {
+            if (bounds[i].IsEmpty) continue;
+            for (var j = i + 1; j < bounds.Length; j++)
+            {
+                if (bounds[j].IsEmpty) continue;
+                if (BoxesOverlap(bounds[i], bounds[j])) overlaps++;
+            }
+        }
+        if (overlaps > 0)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                $"{children.Count} elements connected directly — {overlaps} overlapping pair(s) detected. Children keep world positions; use a Stack or Grid to flow them.");
+        }
+
+        var outside = 0;
+        foreach (var b in bounds)
+        {
+            if (b.IsEmpty) continue;
+            if (!BoxContains(marginBox, b)) outside++;
+        }
+        if (outside > 0)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                $"{outside} element(s) extend outside the page's margin box and will be clipped. Use a Stack to flow content across pages.");
+        }
+    }
+
+    private static ModelBoundingBox SafeBounds(DrawElement element)
+    {
+        try { return element.ComputeBounds(); }
+        catch { return ModelBoundingBox.Empty; }
+    }
+
+    private static bool BoxesOverlap(ModelBoundingBox a, ModelBoundingBox b) =>
+        a.MinX < b.MaxX && a.MaxX > b.MinX && a.MinY < b.MaxY && a.MaxY > b.MinY;
+
+    private static bool BoxContains(ModelBoundingBox outer, ModelBoundingBox inner) =>
+        inner.MinX >= outer.MinX && inner.MaxX <= outer.MaxX &&
+        inner.MinY >= outer.MinY && inner.MaxY <= outer.MaxY;
 
     // Section-local preview: paginate this section alone with no document chrome to give the
     // user a fast visual confirmation of how the content splits. Doc-level header/footer and

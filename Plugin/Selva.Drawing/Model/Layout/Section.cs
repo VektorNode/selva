@@ -24,6 +24,10 @@ public sealed class Section
 	public double? HeaderHeight { get; init; }
 	public double? FooterHeight { get; init; }
 
+	// Per-section overrides for chrome alignment. Null inherits the document-level value.
+	public HorizontalAlign? HeaderAlign { get; init; }
+	public HorizontalAlign? FooterAlign { get; init; }
+
 	// When true, the entire section is placed on a single page even if its content overflows
 	// the content rect. Useful for cover pages, summaries, or tables you don't want split.
 	public bool KeepTogether { get; init; }

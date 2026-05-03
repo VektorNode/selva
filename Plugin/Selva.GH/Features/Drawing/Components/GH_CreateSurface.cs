@@ -6,6 +6,7 @@ using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Style;
 using Selva.GH.Features.Drawing.Lib;
+using Selva.GH.Features.Drawing.Preview;
 using Selva.GH.Properties;
 using Path = Selva.Drawing.Model.Geometry.Path;
 
@@ -13,6 +14,8 @@ namespace Selva.GH.Features.Drawing.Components;
 
 public class GH_CreateSurface : GH_Component
 {
+    private readonly ElementPreviewBuffer _preview = new ElementPreviewBuffer();
+
     public GH_CreateSurface()
         : base("Draw Surface", "DSrf",
             "Converts a Brep to a filled drawing surface (with hole support)",
@@ -23,6 +26,21 @@ public class GH_CreateSurface : GH_Component
     protected override Bitmap Icon => Resources.DrawSurface;
     public override GH_Exposure Exposure => GH_Exposure.primary;
     public override Guid ComponentGuid => new Guid("29735748-B215-42FB-85D0-85549F26F28E");
+
+    public override bool IsPreviewCapable => true;
+    public override Rhino.Geometry.BoundingBox ClippingBox => _preview.ClippingBox;
+
+    public override void ClearData()
+    {
+        base.ClearData();
+        _preview.Clear();
+    }
+
+    public override void DrawViewportWires(IGH_PreviewArgs args)
+    {
+        if (Locked || Hidden) return;
+        _preview.Render(args);
+    }
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
@@ -92,6 +110,7 @@ public class GH_CreateSurface : GH_Component
                 Fill = fill,
             };
 
+            _preview.Add(element);
             DA.SetData(0, element);
         }
         catch (Exception e)

@@ -472,6 +472,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		if (element == null) return;
 		var style = element.Style ?? new TextStyle();
 		var hasLink = !string.IsNullOrEmpty(element.Hyperlink);
+		var hasBackground = element.Background.HasValue;
 
 		// Phase 9: clickable hyperlink wraps the text in an <a> element. SVG renderers in
 		// browsers treat <a> as a generic clickable container; PDF/SVG export tools turn it
@@ -482,19 +483,83 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		}
 
 		// Text is positioned in Rhino-world space; the root Y-flip would invert it,
-		// so we counter-flip with scale(1,-1) and then apply the user rotation.
-		_sb.Append("  <text x='0' y='0'");
-		AppendIdClass(element.Id, element.CssClass);
-		_sb.Append(" font-size='").Append(F(style.FontSize)).Append('\'');
-		_sb.Append(" fill='").Append(ColorValue(style.Color)).Append('\'');
-		_sb.Append(" text-anchor='").Append(AnchorToSvg(style.HorizontalAnchor)).Append('\'');
-		_sb.Append(" dominant-baseline='middle'");
-		_sb.Append(" transform='translate(").Append(F(element.Position.X)).Append(' ').Append(F(element.Position.Y))
-			.Append(") scale(1 -1) rotate(").Append(F(-element.RotationDegrees)).Append(")'");
-		AppendData(element.Metadata);
-		_sb.Append('>').Append(Escape(element.Text ?? string.Empty)).Append("</text>\n");
+		// so we counter-flip with scale(1,-1) and then apply the user rotation. When a
+		// background is present we share that transform with the rect via a <g> wrapper
+		// so the rect rotates with the glyphs.
+		var transform = "translate(" + F(element.Position.X) + ' ' + F(element.Position.Y)
+			+ ") scale(1 -1) rotate(" + F(-element.RotationDegrees) + ")";
+
+		if (hasBackground)
+		{
+			AppendTextBackgroundRect(element, style, transform);
+			_sb.Append("  <text x='0' y='0'");
+			AppendIdClass(element.Id, element.CssClass);
+			_sb.Append(" font-size='").Append(F(style.FontSize)).Append('\'');
+			_sb.Append(" fill='").Append(ColorValue(style.Color)).Append('\'');
+			_sb.Append(" text-anchor='").Append(AnchorToSvg(style.HorizontalAnchor)).Append('\'');
+			_sb.Append(" dominant-baseline='middle'");
+			_sb.Append(" transform='").Append(transform).Append('\'');
+			AppendData(element.Metadata);
+			_sb.Append('>').Append(Escape(element.Text ?? string.Empty)).Append("</text>\n");
+		}
+		else
+		{
+			_sb.Append("  <text x='0' y='0'");
+			AppendIdClass(element.Id, element.CssClass);
+			_sb.Append(" font-size='").Append(F(style.FontSize)).Append('\'');
+			_sb.Append(" fill='").Append(ColorValue(style.Color)).Append('\'');
+			_sb.Append(" text-anchor='").Append(AnchorToSvg(style.HorizontalAnchor)).Append('\'');
+			_sb.Append(" dominant-baseline='middle'");
+			_sb.Append(" transform='").Append(transform).Append('\'');
+			AppendData(element.Metadata);
+			_sb.Append('>').Append(Escape(element.Text ?? string.Empty)).Append("</text>\n");
+		}
 
 		if (hasLink) _sb.Append("  </a>\n");
+	}
+
+	// Draws the background rectangle behind a TextElement under the same transform the
+	// text uses, so rotation is shared. Coordinates are in the text's local (post-flip)
+	// frame: the horizontal anchor selects which side of x=0 the run extends to, and the
+	// dominant-baseline=middle convention puts the visual middle of the line at y=0.
+	private void AppendTextBackgroundRect(TextElement element, TextStyle style, string transform)
+	{
+		var measured = FontMetrics.Measure(element.Text ?? string.Empty, style);
+		var width = measured.Width;
+		var ascent = measured.Ascent;
+		var descent = Math.Abs(measured.Descent);
+		var lineHeightMultiplier = Math.Max(1.0, style.LineHeight);
+		var extra = (ascent + descent) * (lineHeightMultiplier - 1.0) * 0.5;
+		ascent += extra;
+		descent += extra;
+
+		double x;
+		switch (style.HorizontalAnchor)
+		{
+			case TextAnchor.Center: x = -width / 2.0; break;
+			case TextAnchor.Right: x = -width; break;
+			default: x = 0; break;
+		}
+		var height = ascent + descent;
+		// dominant-baseline=middle puts y=0 at the line's visual middle in local
+		// (post-counter-flip) coords; the rect's top sits half the line height above it.
+		var y = -height / 2.0;
+
+		var p = element.BackgroundPadding;
+		if (p > 0)
+		{
+			x -= p; y -= p;
+			width += 2 * p; height += 2 * p;
+		}
+
+		var radius = Math.Max(0, element.BackgroundCornerRadius);
+
+		_sb.Append("  <rect x='").Append(F(x)).Append("' y='").Append(F(y))
+			.Append("' width='").Append(F(width)).Append("' height='").Append(F(height)).Append('\'');
+		if (radius > 0)
+			_sb.Append(" rx='").Append(F(radius)).Append("' ry='").Append(F(radius)).Append('\'');
+		_sb.Append(" fill='").Append(ColorValue(element.Background.Value)).Append('\'');
+		_sb.Append(" transform='").Append(transform).Append("' />\n");
 	}
 
 	public void Visit(TextBlockElement element)
@@ -959,7 +1024,6 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 				}
 				_sb.Append('\'');
 			}
-			if (stroke.NonScaling) _sb.Append(" vector-effect='non-scaling-stroke'");
 		}
 		else if (stroke == null && defaultFillNone && fill == null)
 		{

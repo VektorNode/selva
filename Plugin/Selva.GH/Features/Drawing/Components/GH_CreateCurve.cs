@@ -5,12 +5,15 @@ using Rhino.Geometry;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Style;
 using Selva.GH.Features.Drawing.Lib;
+using Selva.GH.Features.Drawing.Preview;
 using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
 public class GH_CreateCurve : GH_Component
 {
+    private readonly ElementPreviewBuffer _preview = new ElementPreviewBuffer();
+
     public GH_CreateCurve()
         : base("Draw Curve", "DCrv",
             "Converts a Rhino curve to a drawing element",
@@ -21,6 +24,21 @@ public class GH_CreateCurve : GH_Component
     protected override Bitmap Icon => Resources.DrawCurve;
     public override GH_Exposure Exposure => GH_Exposure.primary;
     public override Guid ComponentGuid => new Guid("33D854CA-A7E6-48C7-819C-0FA9E63B6B4F");
+
+    public override bool IsPreviewCapable => true;
+    public override BoundingBox ClippingBox => _preview.ClippingBox;
+
+    public override void ClearData()
+    {
+        base.ClearData();
+        _preview.Clear();
+    }
+
+    public override void DrawViewportWires(IGH_PreviewArgs args)
+    {
+        if (Locked || Hidden) return;
+        _preview.Render(args);
+    }
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
@@ -62,6 +80,7 @@ public class GH_CreateCurve : GH_Component
                 Fill = style?.Fill,
             };
 
+            _preview.Add(element);
             DA.SetData(0, element);
         }
         catch (Exception e)

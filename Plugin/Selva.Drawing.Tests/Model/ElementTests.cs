@@ -22,18 +22,6 @@ public class ElementTests
 	}
 
 	[Fact]
-	public void PathElement_non_scaling_stroke_does_not_inflate()
-	{
-		var path = new Path.Builder().MoveTo(0, 0).LineTo(10, 0).Build();
-		var e = new PathElement { Path = path, Stroke = new Stroke { Width = 2.0, NonScaling = true } };
-		var b = e.ComputeBounds();
-		Assert.Equal(0, b.MinX);
-		Assert.Equal(0, b.MinY);
-		Assert.Equal(10, b.MaxX);
-		Assert.Equal(0, b.MaxY);
-	}
-
-	[Fact]
 	public void TextElement_uses_measured_bounds_when_set()
 	{
 		var measured = new BoundingBox(1, 2, 3, 4);

@@ -22,9 +22,7 @@ public sealed class PathElement : DrawElement
 	public override BoundingBox ComputeBounds()
 	{
 		var b = Path.ComputeBounds();
-		// Stroke widens the visible footprint by half-width on each side. Width is fine to
-		// inflate by uniformly even for non-uniform transforms — bounds are conservative.
-		if (Stroke != null && Stroke.Width > 0 && !Stroke.NonScaling)
+		if (Stroke != null && Stroke.Width > 0)
 		{
 			var half = Stroke.Width / 2.0;
 			b = b.Inflate(half, half);
