@@ -69,8 +69,12 @@ public class GH_Page : GH_Component
         pManager.AddIntegerParameter("Header Align", "HA", "Horizontal alignment of the header within its band. -1 inherits the document's value.", GH_ParamAccess.item, -1);
         pManager.AddIntegerParameter("Footer Align", "FA", "Horizontal alignment of the footer within its band. -1 inherits the document's value.", GH_ParamAccess.item, -1);
         pManager.AddBooleanParameter("Keep Together", "KT", "When true, the entire section is forced onto a single page even if its content overflows.", GH_ParamAccess.item, false);
+        pManager.AddIntegerParameter("Header Placement", "HP", "Where the header band lives. -1 inherits the document's value. Margin = in the top margin, body fills full content rect. Content = reserves space inside the content rect. Edge = anchored a fixed distance from the paper edge.", GH_ParamAccess.item, -1);
+        pManager.AddIntegerParameter("Footer Placement", "FP", "Where the footer band lives. -1 inherits the document's value. Margin = in the bottom margin, body fills full content rect. Content = reserves space inside the content rect. Edge = anchored a fixed distance from the paper edge.", GH_ParamAccess.item, -1);
+        pManager.AddNumberParameter("Header Edge Offset", "HEO", "Distance in mm from the top of the paper to the top of the header band when Header Placement is Edge. -1 inherits the document's value.", GH_ParamAccess.item, -1.0);
+        pManager.AddNumberParameter("Footer Edge Offset", "FEO", "Distance in mm from the bottom of the paper to the bottom of the footer band when Footer Placement is Edge. -1 inherits the document's value.", GH_ParamAccess.item, -1.0);
 
-        for (var i = 1; i <= 11; i++) pManager[i].Optional = true;
+        for (var i = 1; i <= 15; i++) pManager[i].Optional = true;
 
         if (pManager[2] is Param_Integer paperParam)
         {
@@ -99,6 +103,20 @@ public class GH_Page : GH_Component
             footerAlign.AddNamedValue("Center", 1);
             footerAlign.AddNamedValue("Right", 2);
         }
+        if (pManager[12] is Param_Integer headerPlacement)
+        {
+            headerPlacement.AddNamedValue("Inherit", -1);
+            headerPlacement.AddNamedValue("Margin", 0);
+            headerPlacement.AddNamedValue("Content", 1);
+            headerPlacement.AddNamedValue("Edge", 2);
+        }
+        if (pManager[13] is Param_Integer footerPlacement)
+        {
+            footerPlacement.AddNamedValue("Inherit", -1);
+            footerPlacement.AddNamedValue("Margin", 0);
+            footerPlacement.AddNamedValue("Content", 1);
+            footerPlacement.AddNamedValue("Edge", 2);
+        }
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -120,6 +138,10 @@ public class GH_Page : GH_Component
         var headerAlignIndex = -1;
         var footerAlignIndex = -1;
         var keepTogether = false;
+        var headerPlacementIndex = -1;
+        var footerPlacementIndex = -1;
+        var headerEdgeOffset = -1.0;
+        var footerEdgeOffset = -1.0;
 
         DA.GetDataList(0, elements);
         DA.GetData(1, ref title);
@@ -133,6 +155,10 @@ public class GH_Page : GH_Component
         DA.GetData(9, ref headerAlignIndex);
         DA.GetData(10, ref footerAlignIndex);
         DA.GetData(11, ref keepTogether);
+        DA.GetData(12, ref headerPlacementIndex);
+        DA.GetData(13, ref footerPlacementIndex);
+        DA.GetData(14, ref headerEdgeOffset);
+        DA.GetData(15, ref footerEdgeOffset);
 
         WarnIfChromeHasOrigin(header, "Header");
         WarnIfChromeHasOrigin(footer, "Footer");
@@ -180,6 +206,10 @@ public class GH_Page : GH_Component
             FooterHeight = ResolveBandHeight(footerHeight),
             HeaderAlign = ResolveAlign(headerAlignIndex),
             FooterAlign = ResolveAlign(footerAlignIndex),
+            HeaderPlacement = ResolvePlacement(headerPlacementIndex),
+            FooterPlacement = ResolvePlacement(footerPlacementIndex),
+            HeaderEdgeOffset = headerEdgeOffset >= 0 ? headerEdgeOffset : (double?)null,
+            FooterEdgeOffset = footerEdgeOffset >= 0 ? footerEdgeOffset : (double?)null,
             KeepTogether = keepTogether,
         };
 
@@ -206,6 +236,14 @@ public class GH_Page : GH_Component
         0 => HorizontalAlign.Left,
         1 => HorizontalAlign.Center,
         2 => HorizontalAlign.Right,
+        _ => null,
+    };
+
+    private static ChromePlacement? ResolvePlacement(int i) => i switch
+    {
+        0 => ChromePlacement.Margin,
+        1 => ChromePlacement.Content,
+        2 => ChromePlacement.Edge,
         _ => null,
     };
 
@@ -383,6 +421,8 @@ public class GH_Page : GH_Component
             xCursor += w + TileGapMm;
         }
     }
+
+    public override void DrawViewportMeshes(IGH_PreviewArgs args) => DrawViewportWires(args);
 
     private static BoundingBox ComputeClippingBox(IReadOnlyList<Page> pages)
     {

@@ -25,6 +25,17 @@ public sealed class PageTemplate
 	public HorizontalAlign HeaderAlign { get; init; } = HorizontalAlign.Left;
 	public HorizontalAlign FooterAlign { get; init; } = HorizontalAlign.Left;
 
+	// Where the chrome bands live relative to the page margin. Defaults to Margin: the body
+	// fills the full content rect and the chrome floats in the margin space outside it (this
+	// matches Word / InDesign / CSS @page).
+	public ChromePlacement HeaderPlacement { get; init; } = ChromePlacement.Margin;
+	public ChromePlacement FooterPlacement { get; init; } = ChromePlacement.Margin;
+
+	// Distance from the paper edge to the chrome band when placement is Edge. Ignored for
+	// Margin / Content placements.
+	public double HeaderEdgeOffset { get; init; }
+	public double FooterEdgeOffset { get; init; }
+
 	// User-defined tokens. Built-in tokens win on a name collision.
 	public IReadOnlyDictionary<string, string> Tokens { get; init; }
 }
@@ -34,4 +45,21 @@ public enum HorizontalAlign
 	Left = 0,
 	Center = 1,
 	Right = 2,
+}
+
+// Where a header / footer band lives on the page.
+//
+// - Margin: the band sits in the page margin (between the content rect and the paper edge).
+//   The body fills the full content rect, unaffected by the band's height. Default.
+// - Content: the band reserves space inside the content rect, shrinking the body accordingly.
+//   Use when the body needs to flow above/below the chrome rather than overlap with margin
+//   space.
+// - Edge: the band is anchored a fixed distance from the paper edge, ignoring margins. Pair
+//   with HeaderEdgeOffset / FooterEdgeOffset (mm from paper edge to the outer side of the
+//   band).
+public enum ChromePlacement
+{
+	Margin = 0,
+	Content = 1,
+	Edge = 2,
 }

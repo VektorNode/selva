@@ -25,9 +25,14 @@ public class PaginationTemplateTests
 		var withoutTemplate = PaginationPass.Paginate(stack, TenByTen, NoMargin);
 		Assert.Single(withoutTemplate);
 
-		// Same content with a 5mm header — content rect is now 5mm tall, so only one rect fits
-		// per page → three pages.
-		var template = new PageTemplate { HeaderHeight = 5 };
+		// Same content with a 5mm header in Content placement — content rect is now 5mm tall,
+		// so only one rect fits per page → three pages. (Margin placement leaves the body
+		// alone and is verified separately.)
+		var template = new PageTemplate
+		{
+			HeaderHeight = 5,
+			HeaderPlacement = ChromePlacement.Content,
+		};
 		var pages = PaginationPass.Paginate(stack, TenByTen, NoMargin, template);
 		Assert.Equal(3, pages.Count);
 	}
@@ -48,7 +53,14 @@ public class PaginationTemplateTests
 			BoundsOverride = new BoundingBox(0, 0, 10, 2),
 		};
 
-		var template = new PageTemplate { Header = header, HeaderHeight = 2 };
+		// Content placement so the header reserves space and forces the rects onto separate
+		// pages. (Default Margin placement would let all three fit on one page.)
+		var template = new PageTemplate
+		{
+			Header = header,
+			HeaderHeight = 2,
+			HeaderPlacement = ChromePlacement.Content,
+		};
 		// 8mm content rect (10mm page - 2mm header). Three 5mm rects → only one per page.
 		var stack = new Stack
 		{
@@ -92,10 +104,11 @@ public class PaginationTemplateTests
 	}
 
 	[Fact]
-	public void Footer_anchored_to_bottom_of_page_content_rect()
+	public void Footer_in_margin_placement_is_anchored_below_the_page_rect()
 	{
-		// 20×20 paper, 5mm margin → page rect (5,5)-(15,15). Footer 3mm tall sits at the bottom.
-		// With no header, content rect = (5,8)-(15,15).
+		// 20×20 paper, 5mm margin → page rect (5,5)-(15,15). Default Margin placement puts a
+		// 3mm footer flush with the bottom paper edge, hanging into the bottom margin: y=0..3.
+		// The body keeps the full content rect.
 		var paper = new PaperSize(20, 20, "T20");
 		var margins = Margins.Uniform(5);
 		var footer = new GroupElement
@@ -108,11 +121,79 @@ public class PaginationTemplateTests
 		var pages = PaginationPass.Paginate(Rect(4, 4), paper, margins, template);
 		Assert.Single(pages);
 
-		// Footer's bounds within the composed page should sit at y in [5, 8].
+		var pageBounds = pages[0].Content.ComputeBounds();
+		// Footer bottom is at y=0 (paper edge); body's top is at y=15 (page rect top).
+		Assert.Equal(0, pageBounds.MinY, 6);
+		Assert.Equal(15, pageBounds.MaxY, 6);
+	}
+
+	[Fact]
+	public void Footer_in_content_placement_sits_at_bottom_of_page_rect()
+	{
+		// Same setup as above but with explicit Content placement: the footer reserves space
+		// inside the page rect, sitting at y=5..8 (just inside the bottom margin).
+		var paper = new PaperSize(20, 20, "T20");
+		var margins = Margins.Uniform(5);
+		var footer = new GroupElement
+		{
+			Children = new DrawElement[] { Rect(2, 3) },
+			BoundsOverride = new BoundingBox(0, 0, 2, 3),
+		};
+		var template = new PageTemplate
+		{
+			Footer = footer,
+			FooterHeight = 3,
+			FooterPlacement = ChromePlacement.Content,
+		};
+
+		var pages = PaginationPass.Paginate(Rect(4, 4), paper, margins, template);
+		Assert.Single(pages);
+
 		var pageBounds = pages[0].Content.ComputeBounds();
 		Assert.Equal(5, pageBounds.MinY, 6);
-		// Top of full content (header missing → content at top, footer at bottom). Top edge is 15.
 		Assert.Equal(15, pageBounds.MaxY, 6);
+	}
+
+	[Fact]
+	public void Footer_in_edge_placement_shrinks_body_when_band_intrudes_into_content_rect()
+	{
+		// 20×20 paper, 3mm margin → page rect (3,3)-(17,17). Footer: EdgeOffset=2, height=4 →
+		// band occupies y=2..6, which extends 3mm into the content rect (2+4-3=3). The body
+		// content rect is shrunk by 3mm from the bottom → content rect bottom rises to y=6.
+		// Separately: a band that fits fully within the margin (offset+height ≤ margin) should
+		// leave the body rect untouched.
+		var paper = new PaperSize(20, 20, "T20");
+		var margins = Margins.Uniform(3);
+		var footer = new GroupElement
+		{
+			Children = new DrawElement[] { Rect(2, 4) },
+			BoundsOverride = new BoundingBox(0, 0, 2, 4),
+		};
+		var template = new PageTemplate
+		{
+			Footer = footer,
+			FooterHeight = 4,
+			FooterPlacement = ChromePlacement.Edge,
+			FooterEdgeOffset = 2,
+		};
+
+		// reserve = max(0, 2+4-3) = 3 → content rect bottom at 3+3 = 6
+		var body = PaginationPass.PaginateBody(Rect(4, 4), paper, margins, new BandConfig
+		{
+			FooterHeight = 4,
+			FooterPlacement = ChromePlacement.Edge,
+			FooterEdgeOffset = 2,
+		});
+		Assert.Equal(6, body.ContentRect.MinY, 6);
+
+		// Band within margin (offset=1, height=2, margin=3 → reserve=0) → body unaffected.
+		var bodyNoShrink = PaginationPass.PaginateBody(Rect(4, 4), paper, margins, new BandConfig
+		{
+			FooterHeight = 2,
+			FooterPlacement = ChromePlacement.Edge,
+			FooterEdgeOffset = 1,
+		});
+		Assert.Equal(3, bodyNoShrink.ContentRect.MinY, 6);
 	}
 
 	[Fact]
@@ -125,7 +206,12 @@ public class PaginationTemplateTests
 			Children = new DrawElement[] { Rect(2, 4) },
 			BoundsOverride = new BoundingBox(0, 0, 2, 4),
 		};
-		var template = new PageTemplate { Header = header };
+		// Content placement so the auto-measured header height shrinks the content rect.
+		var template = new PageTemplate
+		{
+			Header = header,
+			HeaderPlacement = ChromePlacement.Content,
+		};
 
 		var stack = new Stack
 		{

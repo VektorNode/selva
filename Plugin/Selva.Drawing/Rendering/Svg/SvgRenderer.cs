@@ -22,10 +22,14 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 	private readonly SvgRenderOptions _options;
 	private StringBuilder _sb;
 	private bool _hasDimensions;
+	// Unique arrow sizes collected per page: key = rounded mm value, value = marker id.
+	private Dictionary<double, string> _dimArrowMarkers;
 	// Phase 10a: collected once per page so <symbol> defs and <use> refs both see the
 	// same set. Key is SymbolDefinition.Id; null/empty Ids fall through to inline
 	// expansion (same as pre-Phase-10 behaviour).
 	private Dictionary<string, SymbolDefinition> _symbolDefs;
+	// Hatch patterns collected per page: key = stable pattern id string, value = Fill snapshot.
+	private Dictionary<string, Fill> _hatchPatternDefs;
 
 	public SvgRenderer() : this(new SvgRenderOptions()) { }
 	public SvgRenderer(SvgRenderOptions options)
@@ -63,8 +67,10 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		// PathElement / TextElement / ... after this — keeps the visitor surface narrow.
 		page = LayoutPass.ResolvePage(page);
 
-		_hasDimensions = ContainsDimensions(page.Content);
+		_dimArrowMarkers = CollectDimArrowMarkers(page.Content);
+		_hasDimensions = _dimArrowMarkers.Count > 0 || ContainsDimensions(page.Content);
 		_symbolDefs = CollectSymbolDefinitions(page.Content);
+		_hatchPatternDefs = CollectHatchPatterns(page.Content);
 
 		var bounds = MeasureForViewBox(page.Content);
 		if (bounds.IsEmpty || !_options.AutoFitToContent && !HasPaperSize(page))
@@ -317,20 +323,77 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		return false;
 	}
 
+	private static Dictionary<double, string> CollectDimArrowMarkers(DrawElement element)
+	{
+		var sizes = new Dictionary<double, string>();
+		CollectDimArrowSizes(element, sizes);
+		return sizes;
+	}
+
+	private static void CollectDimArrowSizes(DrawElement element, Dictionary<double, string> sizes)
+	{
+		if (element == null) return;
+		if (element is DimensionElement dim)
+		{
+			var style = dim.Style ?? new DimensionStyle();
+			if (style.TickKind == DimensionTickKind.Arrow)
+				RegisterArrowSize(style.TextSize * style.ArrowSizeFactor, sizes);
+		}
+		else if (element is LeaderElement leader && leader.Head == LeaderHead.Arrow)
+		{
+			RegisterArrowSize(leader.HeadSize, sizes);
+		}
+		else if (element is GroupElement g)
+		{
+			foreach (var c in g.Children) CollectDimArrowSizes(c, sizes);
+		}
+	}
+
+	private static void RegisterArrowSize(double arrowSize, Dictionary<double, string> sizes)
+	{
+		// Round to 4 decimal places to avoid float noise creating duplicate markers.
+		var key = Math.Round(arrowSize, 4);
+		if (!sizes.ContainsKey(key))
+			sizes[key] = "selva-dim-arrow-" + key.ToString("0.####", Inv).Replace(".", "_");
+	}
+
+	private string DimArrowMarkerId(DimensionStyle style)
+	{
+		var key = Math.Round(style.TextSize * style.ArrowSizeFactor, 4);
+		return _dimArrowMarkers.TryGetValue(key, out var id) ? id : "selva-dim-arrow-fallback";
+	}
+
+	private string LeaderArrowMarkerId(LeaderElement leader)
+	{
+		var key = Math.Round(leader.HeadSize, 4);
+		return _dimArrowMarkers.TryGetValue(key, out var id) ? id : "selva-dim-arrow-fallback";
+	}
+
 	private void AppendDefs()
 	{
 		var fonts = _options.EmbedFonts ? SvgFontResolver.LoadAll() : Array.Empty<SvgFontResolver.EmbeddedFont>();
 		var hasSymbols = _symbolDefs != null && _symbolDefs.Count > 0;
-		var emitDefs = _hasDimensions || fonts.Count > 0 || hasSymbols;
+		var hasHatches = _hatchPatternDefs != null && _hatchPatternDefs.Count > 0;
+		var emitDefs = _hasDimensions || fonts.Count > 0 || hasSymbols || hasHatches;
 		if (!emitDefs) return;
 
 		_sb.Append("<defs>\n");
 
 		if (_hasDimensions)
 		{
-			_sb.Append("  <marker id='selva-dim-arrow' viewBox='0 0 10 10' refX='10' refY='5' markerWidth='4' markerHeight='4' orient='auto-start-reverse'>\n");
-			_sb.Append("    <path d='M 0 0 L 10 5 L 0 10 Z' fill='context-stroke' />\n");
-			_sb.Append("  </marker>\n");
+			// One arrow marker per unique arrowSize (markerUnits=userSpaceOnUse so size
+			// is in mm, independent of stroke-width). markerWidth/Height = arrowSize so
+			// the triangle matches TextSize x ArrowSizeFactor exactly.
+			foreach (var kvp in _dimArrowMarkers)
+			{
+				var sz = F(kvp.Key);
+				_sb.Append("  <marker id='").Append(kvp.Value).Append("' viewBox='0 0 10 10' refX='10' refY='5'")
+					.Append(" markerUnits='userSpaceOnUse'")
+					.Append(" markerWidth='").Append(sz).Append("' markerHeight='").Append(sz).Append("'")
+					.Append(" orient='auto-start-reverse'>\n");
+				_sb.Append("    <path d='M 0 0 L 10 5 L 0 10 Z' fill='context-stroke' />\n");
+				_sb.Append("  </marker>\n");
+			}
 			_sb.Append("  <marker id='selva-dim-tick' viewBox='-5 -5 10 10' refX='0' refY='0' markerWidth='10' markerHeight='10' orient='auto'>\n");
 			_sb.Append("    <path d='M -3 3 L 3 -3' stroke='context-stroke' stroke-width='1' />\n");
 			_sb.Append("  </marker>\n");
@@ -351,6 +414,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		}
 
 		if (hasSymbols) AppendSymbolDefs();
+		if (hasHatches) AppendHatchPatternDefs();
 
 		_sb.Append("</defs>\n");
 	}
@@ -381,6 +445,106 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 
 			_sb.Append("  </symbol>\n");
 		}
+	}
+
+	private void AppendHatchPatternDefs()
+	{
+		foreach (var kvp in _hatchPatternDefs)
+		{
+			var id = kvp.Key;
+			var fill = kvp.Value;
+			var scale = fill.PatternScale > 0 ? fill.PatternScale : 1.0;
+			var angle = fill.PatternAngle;
+			var color = ColorValue(fill.Color);
+
+			// Base tile sizes in mm — scale multiplied in.
+			var tileSize = 4.0 * scale;
+			var transform = angle != 0.0
+				? $" patternTransform='rotate({F(angle)})'"
+				: "";
+
+			switch (fill.Pattern)
+			{
+				case HatchPattern.Lines:
+					// Parallel diagonal lines at 45°.
+					_sb.Append($"  <pattern id='{id}' x='0' y='0' width='{F(tileSize)}' height='{F(tileSize)}' patternUnits='userSpaceOnUse'{transform}>\n");
+					_sb.Append($"    <line x1='0' y1='0' x2='{F(tileSize)}' y2='{F(tileSize)}' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
+					_sb.Append($"    <line x1='{F(-tileSize)}' y1='0' x2='0' y2='{F(tileSize)}' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
+					_sb.Append($"    <line x1='{F(tileSize)}' y1='0' x2='{F(tileSize * 2)}' y2='{F(tileSize)}' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
+					_sb.Append("  </pattern>\n");
+					break;
+
+				case HatchPattern.CrossHatch:
+					// Two sets of crossing diagonal lines.
+					_sb.Append($"  <pattern id='{id}' x='0' y='0' width='{F(tileSize)}' height='{F(tileSize)}' patternUnits='userSpaceOnUse'{transform}>\n");
+					_sb.Append($"    <line x1='0' y1='0' x2='{F(tileSize)}' y2='{F(tileSize)}' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
+					_sb.Append($"    <line x1='{F(-tileSize)}' y1='0' x2='0' y2='{F(tileSize)}' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
+					_sb.Append($"    <line x1='{F(tileSize)}' y1='0' x2='{F(tileSize * 2)}' y2='{F(tileSize)}' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
+					_sb.Append($"    <line x1='0' y1='{F(tileSize)}' x2='{F(tileSize)}' y2='0' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
+					_sb.Append($"    <line x1='{F(-tileSize)}' y1='{F(tileSize)}' x2='0' y2='0' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
+					_sb.Append($"    <line x1='{F(tileSize)}' y1='{F(tileSize)}' x2='{F(tileSize * 2)}' y2='0' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
+					_sb.Append("  </pattern>\n");
+					break;
+
+				case HatchPattern.Dots:
+					// Small dots on a regular grid.
+					var dotR = 0.4 * scale;
+					var half = tileSize / 2;
+					_sb.Append($"  <pattern id='{id}' x='0' y='0' width='{F(tileSize)}' height='{F(tileSize)}' patternUnits='userSpaceOnUse'{transform}>\n");
+					_sb.Append($"    <circle cx='{F(half)}' cy='{F(half)}' r='{F(dotR)}' fill='{color}' />\n");
+					_sb.Append("  </pattern>\n");
+					break;
+
+				case HatchPattern.Brick:
+					// Staggered horizontal lines mimicking a brick coursing pattern.
+					var brickH = tileSize;
+					var brickW = tileSize * 2;
+					var sw = 0.3 * scale;
+					_sb.Append($"  <pattern id='{id}' x='0' y='0' width='{F(brickW)}' height='{F(brickH)}' patternUnits='userSpaceOnUse'{transform}>\n");
+					// Full-width horizontal course lines
+					_sb.Append($"    <line x1='0' y1='0' x2='{F(brickW)}' y2='0' stroke='{color}' stroke-width='{F(sw)}' />\n");
+					_sb.Append($"    <line x1='0' y1='{F(brickH / 2)}' x2='{F(brickW)}' y2='{F(brickH / 2)}' stroke='{color}' stroke-width='{F(sw)}' />\n");
+					// Vertical head joints — offset by half a brick width on alternating rows
+					_sb.Append($"    <line x1='0' y1='0' x2='0' y2='{F(brickH / 2)}' stroke='{color}' stroke-width='{F(sw)}' />\n");
+					_sb.Append($"    <line x1='{F(brickW)}' y1='0' x2='{F(brickW)}' y2='{F(brickH / 2)}' stroke='{color}' stroke-width='{F(sw)}' />\n");
+					_sb.Append($"    <line x1='{F(brickW / 2)}' y1='{F(brickH / 2)}' x2='{F(brickW / 2)}' y2='{F(brickH)}' stroke='{color}' stroke-width='{F(sw)}' />\n");
+					_sb.Append("  </pattern>\n");
+					break;
+			}
+		}
+	}
+
+	// Walks the page element tree and collects every unique hatch Fill into a keyed dict.
+	// Key encodes pattern + color + scale + angle so two fills that differ only in color
+	// get distinct <pattern> elements.
+	private static Dictionary<string, Fill> CollectHatchPatterns(DrawElement element)
+	{
+		var result = new Dictionary<string, Fill>(StringComparer.Ordinal);
+		WalkHatches(element, result);
+		return result;
+	}
+
+	private static void WalkHatches(DrawElement element, Dictionary<string, Fill> result)
+	{
+		if (element == null) return;
+		if (element is PathElement path && path.Fill != null && path.Fill.Pattern != HatchPattern.None)
+		{
+			var key = HatchPatternId(path.Fill);
+			if (!result.ContainsKey(key)) result[key] = path.Fill;
+		}
+		if (element is GroupElement group)
+			foreach (var child in group.Children) WalkHatches(child, result);
+	}
+
+	internal static string HatchPatternId(Fill fill)
+	{
+		// Stable, attribute-safe id — no spaces, no special chars.
+		var colorHex = fill.Color.Space == ColorSpace.Rgb
+			? $"{(int)(fill.Color.R * 255):x2}{(int)(fill.Color.G * 255):x2}{(int)(fill.Color.B * 255):x2}"
+			: fill.Color.GetHashCode().ToString("x8");
+		var scaleStr = ((int)(fill.PatternScale * 100)).ToString();
+		var angleStr = ((int)(fill.PatternAngle * 10)).ToString().Replace("-", "n");
+		return $"selva-hatch-{fill.Pattern.ToString().ToLowerInvariant()}-{colorHex}-s{scaleStr}-a{angleStr}";
 	}
 
 	// Walks the page once and returns every reachable SymbolDefinition keyed by Id.
@@ -618,7 +782,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 
 		AppendStyle(element.Stroke, fill: null, defaultFillNone: true);
 		if (element.Head == LeaderHead.Arrow)
-			_sb.Append(" marker-end='url(#selva-dim-arrow)'");
+			_sb.Append(" marker-end='url(#").Append(LeaderArrowMarkerId(element)).Append(")'");
 		AppendData(element.Metadata);
 		_sb.Append(" />\n");
 
@@ -759,6 +923,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		if (angleDeg > 90 || angleDeg < -90) angleDeg += 180;
 
 		var strokeAttr = $"stroke='{ColorValue(style.Color)}' stroke-width='{F(style.StrokeWidth)}' fill='none' vector-effect='non-scaling-stroke'";
+		var arrowMarkerId = DimArrowMarkerId(style);
 
 		AppendDimLine(strokeAttr, extStartA.X, extStartA.Y, extEndA.X, extEndA.Y);
 		AppendDimLine(strokeAttr, extStartB.X, extStartB.Y, extEndB.X, extEndB.Y);
@@ -776,12 +941,12 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			var gapBx = midWorldX + ux * textHalfWidth;
 			var gapBy = midWorldY + uy * textHalfWidth;
 
-			AppendDimSegment(strokeAttr, dimA.X, dimA.Y, gapAx, gapAy, style.TickKind, flipArrows, startTick: true, endTick: false);
-			AppendDimSegment(strokeAttr, gapBx, gapBy, dimB.X, dimB.Y, style.TickKind, flipArrows, startTick: false, endTick: true);
+			AppendDimSegment(strokeAttr, dimA.X, dimA.Y, gapAx, gapAy, style.TickKind, flipArrows, startTick: true, endTick: false, arrowMarkerId);
+			AppendDimSegment(strokeAttr, gapBx, gapBy, dimB.X, dimB.Y, style.TickKind, flipArrows, startTick: false, endTick: true, arrowMarkerId);
 		}
 		else
 		{
-			AppendDimSegment(strokeAttr, dimA.X, dimA.Y, dimB.X, dimB.Y, style.TickKind, flipArrows, startTick: true, endTick: true);
+			AppendDimSegment(strokeAttr, dimA.X, dimA.Y, dimB.X, dimB.Y, style.TickKind, flipArrows, startTick: true, endTick: true, arrowMarkerId);
 		}
 
 		if (flipArrows && style.TickKind == DimensionTickKind.Arrow)
@@ -792,12 +957,12 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			var outBx = dimB.X + ux * stub;
 			var outBy = dimB.Y + uy * stub;
 			_sb.Append("    <line ").Append(strokeAttr)
-				.Append(" marker-end='url(#selva-dim-arrow)'")
+				.Append(" marker-end='url(#").Append(arrowMarkerId).Append(")'")
 				.Append(" x1='").Append(F(outAx)).Append("' y1='").Append(F(outAy))
 				.Append("' x2='").Append(F(dimA.X)).Append("' y2='").Append(F(dimA.Y))
 				.Append("' />\n");
 			_sb.Append("    <line ").Append(strokeAttr)
-				.Append(" marker-end='url(#selva-dim-arrow)'")
+				.Append(" marker-end='url(#").Append(arrowMarkerId).Append(")'")
 				.Append(" x1='").Append(F(outBx)).Append("' y1='").Append(F(outBy))
 				.Append("' x2='").Append(F(dimB.X)).Append("' y2='").Append(F(dimB.Y))
 				.Append("' />\n");
@@ -863,6 +1028,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		bisX /= bisLen; bisY /= bisLen;
 
 		var strokeAttr = $"stroke='{ColorValue(style.Color)}' stroke-width='{F(style.StrokeWidth)}' fill='none' vector-effect='non-scaling-stroke'";
+		var arrowMarkerId = DimArrowMarkerId(style);
 
 		var arcLen = absTheta * radius;
 		var flipArrows = style.AutoFlipArrows
@@ -875,8 +1041,8 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		_sb.Append("    <path ").Append(strokeAttr);
 		if (style.TickKind == DimensionTickKind.Arrow && !flipArrows)
 		{
-			_sb.Append(" marker-start='url(#selva-dim-arrow)'");
-			_sb.Append(" marker-end='url(#selva-dim-arrow)'");
+			_sb.Append(" marker-start='url(#").Append(arrowMarkerId).Append(")'");
+			_sb.Append(" marker-end='url(#").Append(arrowMarkerId).Append(")'");
 		}
 		else if (style.TickKind == DimensionTickKind.Tick)
 		{
@@ -906,12 +1072,12 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			var outEndY = arcEndY + tEndY * stub;
 
 			_sb.Append("    <line ").Append(strokeAttr)
-				.Append(" marker-end='url(#selva-dim-arrow)'")
+				.Append(" marker-end='url(#").Append(arrowMarkerId).Append(")'")
 				.Append(" x1='").Append(F(outStartX)).Append("' y1='").Append(F(outStartY))
 				.Append("' x2='").Append(F(arcStartX)).Append("' y2='").Append(F(arcStartY))
 				.Append("' />\n");
 			_sb.Append("    <line ").Append(strokeAttr)
-				.Append(" marker-end='url(#selva-dim-arrow)'")
+				.Append(" marker-end='url(#").Append(arrowMarkerId).Append(")'")
 				.Append(" x1='").Append(F(outEndX)).Append("' y1='").Append(F(outEndY))
 				.Append("' x2='").Append(F(arcEndX)).Append("' y2='").Append(F(arcEndY))
 				.Append("' />\n");
@@ -952,14 +1118,14 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		string strokeAttr,
 		double x1, double y1, double x2, double y2,
 		DimensionTickKind tickKind, bool flipArrows,
-		bool startTick, bool endTick)
+		bool startTick, bool endTick, string arrowMarkerId = "selva-dim-arrow-fallback")
 	{
 		_sb.Append("    <line ").Append(strokeAttr);
 
 		if (tickKind == DimensionTickKind.Arrow && !flipArrows)
 		{
-			if (startTick) _sb.Append(" marker-start='url(#selva-dim-arrow)'");
-			if (endTick) _sb.Append(" marker-end='url(#selva-dim-arrow)'");
+			if (startTick) _sb.Append(" marker-start='url(#").Append(arrowMarkerId).Append(")'");
+			if (endTick) _sb.Append(" marker-end='url(#").Append(arrowMarkerId).Append(")'");
 		}
 		else if (tickKind == DimensionTickKind.Tick)
 		{
@@ -997,7 +1163,10 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		// Mirrors SvgWriter.AppendStyle's emission order: fill first, then stroke.
 		if (fill != null)
 		{
-			_sb.Append(" fill='").Append(ColorValue(fill.Color)).Append('\'');
+			if (fill.Pattern != HatchPattern.None)
+				_sb.Append(" fill='url(#").Append(HatchPatternId(fill)).Append(")'");
+			else
+				_sb.Append(" fill='").Append(ColorValue(fill.Color)).Append('\'');
 			if (fill.Opacity < 1.0) _sb.Append(" fill-opacity='").Append(F(fill.Opacity)).Append('\'');
 		}
 		else

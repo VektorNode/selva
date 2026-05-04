@@ -38,13 +38,11 @@ public class GH_Grid : GH_Component
         pManager.AddIntegerParameter("Cell Columns", "Cc", "Column index per cell, 0-based (parallel to Children). Flattened in the same order as Children.", GH_ParamAccess.tree);
         pManager.AddNumberParameter("Column Spacing", "CS", "Spacing between columns in mm", GH_ParamAccess.item, 0.0);
         pManager.AddNumberParameter("Row Spacing", "RS", "Spacing between rows in mm", GH_ParamAccess.item, 0.0);
-        pManager.AddPointParameter("Origin", "O", "Bottom-left of the grid in world coordinates", GH_ParamAccess.item, new Rhino.Geometry.Point3d(0, 0, 0));
 
         pManager[3].Optional = true;
         pManager[4].Optional = true;
         pManager[5].Optional = true;
         pManager[6].Optional = true;
-        pManager[7].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -58,7 +56,6 @@ public class GH_Grid : GH_Component
         var rowsDsl = "";
         var colSpacing = 0.0;
         var rowSpacing = 0.0;
-        var origin = new Rhino.Geometry.Point3d(0, 0, 0);
 
         DA.GetData(0, ref columnsDsl);
         DA.GetData(1, ref rowsDsl);
@@ -67,7 +64,6 @@ public class GH_Grid : GH_Component
         if (!DA.GetDataTree<GH_Integer>(4, out GH_Structure<GH_Integer> colTree)) colTree = new GH_Structure<GH_Integer>();
         DA.GetData(5, ref colSpacing);
         DA.GetData(6, ref rowSpacing);
-        DA.GetData(7, ref origin);
 
         var children = new List<DrawElement>();
         var skipped = 0;
@@ -161,7 +157,6 @@ public class GH_Grid : GH_Component
             Cells = cells,
             ColumnSpacing = Math.Max(0, colSpacing),
             RowSpacing = Math.Max(0, rowSpacing),
-            Origin = new Point2D(origin.X, origin.Y),
         };
 
         // Surface absolute-track overflows as warnings. Star/auto overflows depend on the

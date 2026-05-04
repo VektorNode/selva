@@ -28,6 +28,14 @@ public sealed class Section
 	public HorizontalAlign? HeaderAlign { get; init; }
 	public HorizontalAlign? FooterAlign { get; init; }
 
+	// Per-section overrides for chrome placement. Null inherits the document-level value.
+	public ChromePlacement? HeaderPlacement { get; init; }
+	public ChromePlacement? FooterPlacement { get; init; }
+
+	// Per-section overrides for the Edge-mode offset (mm from paper edge). Null inherits.
+	public double? HeaderEdgeOffset { get; init; }
+	public double? FooterEdgeOffset { get; init; }
+
 	// When true, the entire section is placed on a single page even if its content overflows
 	// the content rect. Useful for cover pages, summaries, or tables you don't want split.
 	public bool KeepTogether { get; init; }

@@ -35,9 +35,15 @@ public class GH_PathStyle : GH_Component
         pManager.AddIntegerParameter("Line Join", "LJ", "Stroke line join shape", GH_ParamAccess.item, 0);
         pManager.AddNumberParameter("Dash Pattern", "DP", "Stroke dash pattern (e.g. 5 2 1 2 maps to stroke-dasharray)", GH_ParamAccess.list);
         pManager.AddIntegerParameter("Fill Rule", "FR", "Fill rule for self-intersecting paths", GH_ParamAccess.item, 0);
+        pManager.AddIntegerParameter("Hatch Pattern", "HP", "Fill hatch pattern (overrides solid fill)", GH_ParamAccess.item, 0);
+        pManager.AddNumberParameter("Pattern Scale", "PS", "Hatch pattern scale multiplier (1 = default)", GH_ParamAccess.item, 1.0);
+        pManager.AddNumberParameter("Pattern Angle", "PA", "Hatch pattern rotation in degrees", GH_ParamAccess.item, 0.0);
 
         pManager[8].Optional = true;
         pManager[9].Optional = true;
+        pManager[10].Optional = true;
+        pManager[11].Optional = true;
+        pManager[12].Optional = true;
 
         if (pManager[6] is Param_Integer lineCapParam)
         {
@@ -58,6 +64,15 @@ public class GH_PathStyle : GH_Component
             fillRuleParam.AddNamedValue("Even-Odd", 0);
             fillRuleParam.AddNamedValue("Non-Zero", 1);
         }
+
+        if (pManager[10] is Param_Integer hatchParam)
+        {
+            hatchParam.AddNamedValue("None (Solid)", 0);
+            hatchParam.AddNamedValue("Lines", 1);
+            hatchParam.AddNamedValue("Cross Hatch", 2);
+            hatchParam.AddNamedValue("Dots", 3);
+            hatchParam.AddNamedValue("Brick", 4);
+        }
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -77,6 +92,9 @@ public class GH_PathStyle : GH_Component
         var lineJoin = 0;
         var dashValues = new List<double>();
         var fillRuleInt = 0;
+        var hatchPatternInt = 0;
+        var patternScale = 1.0;
+        var patternAngle = 0.0;
 
         DA.GetData(0, ref strokeColor);
         DA.GetData(1, ref strokeWidth);
@@ -88,6 +106,9 @@ public class GH_PathStyle : GH_Component
         DA.GetData(7, ref lineJoin);
         DA.GetDataList(8, dashValues);
         DA.GetData(9, ref fillRuleInt);
+        DA.GetData(10, ref hatchPatternInt);
+        DA.GetData(11, ref patternScale);
+        DA.GetData(12, ref patternAngle);
 
         double[] dashArray = null;
         if (dashValues.Count > 0)
@@ -110,11 +131,15 @@ public class GH_PathStyle : GH_Component
         Fill fillStyle = null;
         if (fill)
         {
+            var hatch = (HatchPattern)Math.Max(0, Math.Min(4, hatchPatternInt));
             fillStyle = new Fill
             {
                 Color = ToModelColor(fillColor),
                 Opacity = Clamp01(fillOpacity),
                 Rule = fillRuleInt == 1 ? FillRule.NonZero : FillRule.EvenOdd,
+                Pattern = hatch,
+                PatternScale = Math.Max(0.01, patternScale),
+                PatternAngle = patternAngle,
             };
         }
 

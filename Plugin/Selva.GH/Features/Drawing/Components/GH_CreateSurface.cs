@@ -42,6 +42,12 @@ public class GH_CreateSurface : GH_Component
         _preview.Render(args);
     }
 
+    public override void DrawViewportMeshes(IGH_PreviewArgs args)
+    {
+        if (Locked || Hidden) return;
+        _preview.Render(args);
+    }
+
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
         pManager.AddBrepParameter("Brep", "B", "Input Brep", GH_ParamAccess.item);
