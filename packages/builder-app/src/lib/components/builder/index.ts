@@ -10,3 +10,4 @@ export { default as BuilderSidebar } from './BuilderSidebar.svelte';
 export { default as TabEditor } from './TabEditor.svelte';
 export { default as LineBreakItem } from './LineBreakItem.svelte';
 export { default as SyncDialog } from './SyncDialog.svelte';
+export { default as GhGroupImportDialog } from './GhGroupImportDialog.svelte';

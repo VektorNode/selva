@@ -1,6 +1,6 @@
 import type { DiscoveredInput, DiscoveredOutput } from '@selvajs/schemas';
 
-export type GroupBy = 'none' | 'prefix' | 'type';
+export type GroupBy = 'none' | 'prefix' | 'type' | 'ghGroup';
 
 export type GroupedItem = DiscoveredInput | DiscoveredOutput;
 
@@ -11,6 +11,7 @@ export interface ParamCluster {
 }
 
 const PREFIX_FALLBACK = 'Other';
+const GH_GROUP_FALLBACK = 'Ungrouped';
 
 /**
  * Derive a cluster key from a parameter's nickname. Splits on the first
@@ -53,8 +54,27 @@ export function clusterByType(items: GroupedItem[]): ParamCluster[] {
 		.map(([key, bucketItems]) => ({ key, label: key, items: bucketItems }));
 }
 
+export function clusterByGhGroup(items: GroupedItem[]): ParamCluster[] {
+	const map = new Map<string, GroupedItem[]>();
+	for (const item of items) {
+		const key = item.groupName?.trim() || GH_GROUP_FALLBACK;
+		const bucket = map.get(key);
+		if (bucket) bucket.push(item);
+		else map.set(key, [item]);
+	}
+	return Array.from(map.entries())
+		.sort(([a], [b]) => {
+			// Push the fallback bucket to the bottom
+			if (a === GH_GROUP_FALLBACK) return 1;
+			if (b === GH_GROUP_FALLBACK) return -1;
+			return a.localeCompare(b);
+		})
+		.map(([key, bucketItems]) => ({ key, label: key, items: bucketItems }));
+}
+
 export function clusterItems(items: GroupedItem[], groupBy: GroupBy): ParamCluster[] {
 	if (groupBy === 'prefix') return clusterByPrefix(items);
 	if (groupBy === 'type') return clusterByType(items);
+	if (groupBy === 'ghGroup') return clusterByGhGroup(items);
 	return [{ key: '__all__', label: 'All', items }];
 }

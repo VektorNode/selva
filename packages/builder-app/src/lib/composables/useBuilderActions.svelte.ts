@@ -350,6 +350,116 @@ export function useBuilderActions(
 		group.items.push({ id: crypto.randomUUID().substring(0, 8), type: 'linebreak' });
 	}
 
+	/**
+	 * Bulk-import the given GH group names: for each, create (or reuse) a builder
+	 * group with the same label in the active tab (or flat layout) and add every
+	 * unplaced input/output whose `groupName` matches.
+	 *
+	 * Returns the number of items added so the caller can surface a toast.
+	 */
+	function onImportGhGroups(
+		groupNames: string[],
+		availableInputs: DiscoveredInput[],
+		availableOutputs: DiscoveredOutput[],
+		placedIds: Set<string>
+	) {
+		const context = ensureSchema();
+		if (!context) return;
+		const { builderState, schema } = context;
+
+		if (groupNames.length === 0) return;
+
+		builderState.history.push($state.snapshot(schema));
+
+		let tabId = '';
+		if (schema.layout.type === 'tabbed') {
+			if (builderState.state.activeTabId) {
+				tabId = builderState.state.activeTabId;
+			} else if (schema.layout.tabs.length > 0) {
+				tabId = schema.layout.tabs[0].id;
+			} else {
+				const newTabId = addTab(schema);
+				tabId = newTabId;
+				builderState.state.activeTabId = newTabId;
+			}
+		}
+
+		let totalAdded = 0;
+		const sessionId = getSessionIdFromUrl();
+
+		for (const groupName of groupNames) {
+			let group: GroupConfig | undefined;
+
+			if (schema.layout.type === 'tabbed') {
+				const tab = schema.layout.tabs.find((t) => t.id === tabId);
+				if (!tab) continue;
+
+				group = tab.groups.find((g) => g.label.toLowerCase() === groupName.toLowerCase());
+				if (!group) {
+					addGroup(schema, tabId);
+					group = tab.groups[tab.groups.length - 1];
+					group.label = groupName;
+				}
+			} else if (schema.layout.type === 'flat') {
+				group = schema.layout.groups.find(
+					(g) => g.label.toLowerCase() === groupName.toLowerCase()
+				);
+				if (!group) {
+					addGroup(schema, '');
+					group = schema.layout.groups[schema.layout.groups.length - 1];
+					group.label = groupName;
+				}
+			}
+
+			if (!group) continue;
+
+			const inputsForGroup = availableInputs.filter(
+				(i) => i.groupName?.trim() === groupName && !placedIds.has(i.id)
+			);
+			const outputsForGroup = availableOutputs.filter(
+				(o) => o.groupName?.trim() === groupName && !placedIds.has(o.id)
+			);
+
+			for (const param of inputsForGroup) {
+				handleItemDrop({
+					schema,
+					group,
+					paramId: param.id,
+					displayName: param.nickname || param.name || 'unnamed',
+					itemType: 'input',
+					availableInputs,
+					availableOutputs,
+					paramType: param.type
+				});
+				recentParamsStore.track(sessionId, param.id);
+				totalAdded++;
+			}
+
+			for (const output of outputsForGroup) {
+				handleItemDrop({
+					schema,
+					group,
+					paramId: output.id,
+					displayName: output.nickname,
+					itemType: 'output',
+					availableInputs,
+					availableOutputs,
+					widgetType:
+						output.type === 'file' ? 'file' : output.type === 'chart' ? 'chart' : 'text',
+					outputType: output.type
+				});
+				recentParamsStore.track(sessionId, output.id);
+				totalAdded++;
+			}
+		}
+
+		if (totalAdded > 0) {
+			toast.success(`Imported ${totalAdded} item(s) from ${groupNames.length} GH group(s)`);
+		} else {
+			toast.info('No new items to import — all already placed.');
+		}
+	}
+
 	function onBatchConvertToSliders(onSuccess: () => void) {
 		const context = ensureSchema();
 		if (!context) return;
@@ -399,6 +509,7 @@ export function useBuilderActions(
 		onRemoveItem,
 		onAddLineBreak,
 		onBatchConvertToSliders,
-		onBatchConvertToNumberInputs
+		onBatchConvertToNumberInputs,
+		onImportGhGroups
 	};
 }

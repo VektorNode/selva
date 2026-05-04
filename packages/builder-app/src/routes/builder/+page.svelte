@@ -293,6 +293,7 @@
 								onSync={() => builderState?.syncParameters()}
 								onAddToGroup={actions.onAddToGroup}
 								onAddToNewGroup={actions.onAddToNewGroup}
+								onImportGhGroups={actions.onImportGhGroups}
 							/>
 						</div>
 					</Resizable.Pane>

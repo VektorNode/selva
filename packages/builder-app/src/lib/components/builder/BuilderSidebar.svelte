@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Card, Button, ScrollArea } from '@selvajs/ui';
-	import { SchemaInfoPanel, AvailableItemList } from '$lib/components/builder';
+	import { Layers } from '@lucide/svelte';
+	import { SchemaInfoPanel, AvailableItemList, GhGroupImportDialog } from '$lib/components/builder';
 	import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/schemas';
 	import { getSessionIdFromUrl } from '$lib/utils/session';
 
@@ -18,6 +19,12 @@
 			item: DiscoveredInput | DiscoveredOutput
 		) => void;
 		onAddToNewGroup: (path: string, item: DiscoveredInput | DiscoveredOutput) => void;
+		onImportGhGroups: (
+			groupNames: string[],
+			availableInputs: DiscoveredInput[],
+			availableOutputs: DiscoveredOutput[],
+			placedIds: Set<string>
+		) => void;
 	}
 
 	let {
@@ -29,8 +36,16 @@
 		onSchemaChange,
 		onSync,
 		onAddToGroup,
-		onAddToNewGroup
+		onAddToNewGroup,
+		onImportGhGroups
 	}: Props = $props();
+
+	let importDialogOpen = $state(false);
+
+	const hasGhGroups = $derived(
+		availableInputs.some((i) => !!i.groupName?.trim()) ||
+			availableOutputs.some((o) => !!o.groupName?.trim())
+	);
 
 	const schemaInfoStorageKey = $derived(`builder.schemaInfo.open:${getSessionIdFromUrl()}`);
 
@@ -71,6 +86,18 @@
 						them to specific tabs/groups.
 					</p>
 
+					{#if hasGhGroups}
+						<Button
+							variant="outline"
+							size="sm"
+							class="mb-4 w-full"
+							onclick={() => (importDialogOpen = true)}
+						>
+							<Layers class="mr-2 h-4 w-4" />
+							Add by Grasshopper group
+						</Button>
+					{/if}
+
 					<AvailableItemList
 						items={availableInputs}
 						title="Inputs"
@@ -95,3 +122,13 @@
 		</div>
 	</ScrollArea>
 </aside>
+
+<GhGroupImportDialog
+	open={importDialogOpen}
+	{availableInputs}
+	{availableOutputs}
+	{placedIds}
+	onOpenChange={(open) => (importDialogOpen = open)}
+	onConfirm={(groupNames) =>
+		onImportGhGroups(groupNames, availableInputs, availableOutputs, placedIds)}
+/>

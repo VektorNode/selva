@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Grasshopper;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Special;
 using Selva.Schema.Models;
 using Selva.GH.Features.ComputeIO.Components;
 using Selva.GH.Features.UIBuilder.Helpers;
@@ -93,13 +94,55 @@ public class SchemaSynchronizer
 
         var scopeFilter = BuildScopeFilter(document, ownerComponent);
         var (contextParams, printComponents, bakeComponents) = ClassifyDocumentObjects(document, scopeFilter);
+        var groupLookup = BuildGroupLookup(document);
 
-        CollectPrintOutputs(printComponents, result.Outputs);
-        CollectFileOutputs(bakeComponents, result.Outputs);
-        CollectChartOutputs(bakeComponents, result.Outputs);
-        CollectInputs(contextParams, result.Inputs);
+        CollectPrintOutputs(printComponents, result.Outputs, groupLookup);
+        CollectFileOutputs(bakeComponents, result.Outputs, groupLookup);
+        CollectChartOutputs(bakeComponents, result.Outputs, groupLookup);
+        CollectInputs(contextParams, result.Inputs, groupLookup);
 
         return result;
+    }
+
+    /// <summary>
+    ///     Build a Guid → group nickname lookup for the directly-enclosing GH group of each object.
+    ///     If an object sits in multiple overlapping groups, the innermost (smallest member count) wins.
+    ///     Returns an empty dictionary if the document has no groups.
+    /// </summary>
+    private static Dictionary<Guid, string> BuildGroupLookup(GH_Document document)
+    {
+        var lookup = new Dictionary<Guid, string>();
+        if (document == null)
+        {
+            return lookup;
+        }
+
+        // Collect all groups and sort by member count descending so smaller (innermost)
+        // groups overwrite larger ones in the lookup.
+        var groups = document.Objects.OfType<GH_Group>()
+            .Where(g => g.ObjectIDs != null && g.ObjectIDs.Count > 0)
+            .OrderByDescending(g => g.ObjectIDs.Count);
+
+        foreach (var group in groups)
+        {
+            var name = group.NickName;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            foreach (var memberId in group.ObjectIDs)
+            {
+                lookup[memberId] = name;
+            }
+        }
+
+        return lookup;
+    }
+
+    private static string ResolveGroupName(Dictionary<Guid, string> lookup, Guid id)
+    {
+        return lookup != null && lookup.TryGetValue(id, out var name) ? name : null;
     }
 
     /// <summary>
@@ -184,7 +227,8 @@ public class SchemaSynchronizer
         return (inputs, prints, bakes);
     }
 
-    private static void CollectPrintOutputs(List<GH_Component> printComponents, List<DiscoveredOutput> outputs)
+    private static void CollectPrintOutputs(
+        List<GH_Component> printComponents, List<DiscoveredOutput> outputs, Dictionary<Guid, string> groupLookup)
     {
         foreach (var c in printComponents)
         {
@@ -194,12 +238,14 @@ public class SchemaSynchronizer
                 Id = c.InstanceGuid,
                 Nickname = param?.NickName ?? "Output",
                 Description = "",
-                Type = "text"
+                Type = "text",
+                GroupName = ResolveGroupName(groupLookup, c.InstanceGuid)
             });
         }
     }
 
-    private static void CollectFileOutputs(List<GH_Component> bakeComponents, List<DiscoveredOutput> outputs)
+    private static void CollectFileOutputs(
+        List<GH_Component> bakeComponents, List<DiscoveredOutput> outputs, Dictionary<Guid, string> groupLookup)
     {
         foreach (var c in bakeComponents)
         {
@@ -213,12 +259,14 @@ public class SchemaSynchronizer
                 Id = c.InstanceGuid,
                 Nickname = c.Params.Input[0].NickName,
                 Description = "",
-                Type = "file"
+                Type = "file",
+                GroupName = ResolveGroupName(groupLookup, c.InstanceGuid)
             });
         }
     }
 
-    private static void CollectChartOutputs(List<GH_Component> bakeComponents, List<DiscoveredOutput> outputs)
+    private static void CollectChartOutputs(
+        List<GH_Component> bakeComponents, List<DiscoveredOutput> outputs, Dictionary<Guid, string> groupLookup)
     {
         foreach (var c in bakeComponents)
         {
@@ -232,12 +280,14 @@ public class SchemaSynchronizer
                 Id = c.InstanceGuid,
                 Nickname = c.Params.Input[0].NickName,
                 Description = "",
-                Type = "chart"
+                Type = "chart",
+                GroupName = ResolveGroupName(groupLookup, c.InstanceGuid)
             });
         }
     }
 
-    private static void CollectInputs(List<IGH_ContextualParameter> contextParams, List<DiscoveredInput> inputs)
+    private static void CollectInputs(
+        List<IGH_ContextualParameter> contextParams, List<DiscoveredInput> inputs, Dictionary<Guid, string> groupLookup)
     {
         foreach (var param in contextParams)
         {
@@ -256,7 +306,8 @@ public class SchemaSynchronizer
                 Type = ResolveParameterTypeName(param),
                 Default = null,
                 AtLeast = param.AtLeast,
-                AtMost = param.AtMost
+                AtMost = param.AtMost,
+                GroupName = ResolveGroupName(groupLookup, docObj.InstanceGuid)
             };
 
             PopulateInputDefault(param, ghParam, input);
