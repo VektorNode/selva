@@ -39,7 +39,16 @@ public static class DocumentLayoutPass
 			var margins = layout.Margins;
 			var headerH = PaginationPass.ResolveBandHeight(layout.HeaderHeight, defaultHeader);
 			var footerH = PaginationPass.ResolveBandHeight(layout.FooterHeight, defaultFooter);
-			var body = PaginationPass.PaginateBody(null, paper, margins, headerH, footerH);
+			var bands = new BandConfig
+			{
+				HeaderHeight = headerH,
+				FooterHeight = footerH,
+				HeaderPlacement = layout.HeaderPlacement,
+				FooterPlacement = layout.FooterPlacement,
+				HeaderEdgeOffset = layout.HeaderEdgeOffset,
+				FooterEdgeOffset = layout.FooterEdgeOffset,
+			};
+			var body = PaginationPass.PaginateBody(null, paper, margins, bands);
 			raw.Add(new RawPage
 			{
 				Paper = paper,
@@ -78,12 +87,22 @@ public static class DocumentLayoutPass
 				var headerAlign = section.HeaderAlign ?? layout.HeaderAlign;
 				var footerAlign = section.FooterAlign ?? layout.FooterAlign;
 
+				var bands = new BandConfig
+				{
+					HeaderHeight = headerH,
+					FooterHeight = footerH,
+					HeaderPlacement = section.HeaderPlacement ?? layout.HeaderPlacement,
+					FooterPlacement = section.FooterPlacement ?? layout.FooterPlacement,
+					HeaderEdgeOffset = section.HeaderEdgeOffset ?? layout.HeaderEdgeOffset,
+					FooterEdgeOffset = section.FooterEdgeOffset ?? layout.FooterEdgeOffset,
+				};
+
 				// KeepTogether forces the whole section onto one page even if it overflows the
 				// content rect. Pagination runs with infinite vertical budget: TrySplit always
 				// reports AllFits and we get a single raw page with all the content.
 				var body = section.KeepTogether
-					? PaginationPass.PaginateBody(section.Content, paper, margins, headerH, footerH, double.PositiveInfinity)
-					: PaginationPass.PaginateBody(section.Content, paper, margins, headerH, footerH);
+					? PaginationPass.PaginateBody(section.Content, paper, margins, bands, double.PositiveInfinity)
+					: PaginationPass.PaginateBody(section.Content, paper, margins, bands);
 
 				for (var i = 0; i < body.RawContents.Count; i++)
 				{
@@ -187,6 +206,12 @@ public sealed class DocumentLayout
 
 	public HorizontalAlign HeaderAlign { get; init; } = HorizontalAlign.Left;
 	public HorizontalAlign FooterAlign { get; init; } = HorizontalAlign.Left;
+
+	public ChromePlacement HeaderPlacement { get; init; } = ChromePlacement.Margin;
+	public ChromePlacement FooterPlacement { get; init; } = ChromePlacement.Margin;
+
+	public double HeaderEdgeOffset { get; init; }
+	public double FooterEdgeOffset { get; init; }
 
 	// Document-level user tokens. Built-ins (page, pages, section, title, date) win on collision.
 	public IReadOnlyDictionary<string, string> Tokens { get; init; }

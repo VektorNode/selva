@@ -1,7 +1,6 @@
 using System;
 using System.Drawing;
 using Grasshopper.Kernel;
-using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Layout;
 using Selva.Drawing.Model.Style;
 using Selva.GH.Properties;
@@ -29,12 +28,10 @@ public class GH_TextFlow : GH_Component
         pManager.AddTextParameter("Text", "T", "Text to wrap (use \\n for paragraph breaks)", GH_ParamAccess.item, "");
         pManager.AddNumberParameter("Width", "W", "Maximum line width in millimetres (0 or unset = fill available width from the parent layout)", GH_ParamAccess.item, 0.0);
         pManager.AddGenericParameter("Style", "S", "Text style (leave empty for default)", GH_ParamAccess.item);
-        pManager.AddPointParameter("Origin", "P", "Bottom-left of the text block in world coordinates", GH_ParamAccess.item, new Rhino.Geometry.Point3d(0, 0, 0));
 
         pManager[0].Optional = true;
         pManager[1].Optional = true;
         pManager[2].Optional = true;
-        pManager[3].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -47,12 +44,10 @@ public class GH_TextFlow : GH_Component
         var text = "";
         var width = 0.0;
         TextStyle style = null;
-        var origin = new Rhino.Geometry.Point3d(0, 0, 0);
 
         DA.GetData(0, ref text);
         DA.GetData(1, ref width);
         DA.GetData(2, ref style);
-        DA.GetData(3, ref origin);
 
         double? wrapWidth = width > 0 ? width : null;
         var flow = new TextFlow
@@ -60,7 +55,6 @@ public class GH_TextFlow : GH_Component
             Text = text ?? string.Empty,
             Width = wrapWidth,
             Style = style ?? new TextStyle(),
-            Origin = new Point2D(origin.X, origin.Y),
         };
 
         DA.SetData(0, flow);

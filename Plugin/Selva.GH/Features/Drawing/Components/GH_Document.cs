@@ -67,10 +67,12 @@ public class GH_Document : GH_Component
         pManager.AddNumberParameter("Footer Height", "FH", "Reserved footer height in mm. -1 = Auto (measure from footer bounds). 0 = no reservation.", GH_ParamAccess.item, -1.0);
         pManager.AddIntegerParameter("Header Align", "HA", "Horizontal alignment of the header within its band", GH_ParamAccess.item, 0);
         pManager.AddIntegerParameter("Footer Align", "FA", "Horizontal alignment of the footer within its band", GH_ParamAccess.item, 0);
-        pManager.AddTextParameter("Token Keys", "TK", "User-defined token names. Parallel to Token Values. Built-ins (page, pages, section, title, date) win on collision.", GH_ParamAccess.list);
-        pManager.AddTextParameter("Token Values", "TV", "User-defined token values, parallel to Token Keys.", GH_ParamAccess.list);
+        pManager.AddIntegerParameter("Header Placement", "HP", "Where the header band lives: Margin (in the top margin, body fills full content rect — default), Content (reserves space inside the content rect), Edge (anchored a fixed distance from the paper edge — uses Header Edge Offset).", GH_ParamAccess.item, 0);
+        pManager.AddIntegerParameter("Footer Placement", "FP", "Where the footer band lives: Margin (in the bottom margin, body fills full content rect — default), Content (reserves space inside the content rect), Edge (anchored a fixed distance from the paper edge — uses Footer Edge Offset).", GH_ParamAccess.item, 0);
+        pManager.AddNumberParameter("Header Edge Offset", "HEO", "Distance in mm from the top of the paper to the top of the header band. Only used when Header Placement is Edge.", GH_ParamAccess.item, 0.0);
+        pManager.AddNumberParameter("Footer Edge Offset", "FEO", "Distance in mm from the bottom of the paper to the bottom of the footer band. Only used when Footer Placement is Edge.", GH_ParamAccess.item, 0.0);
 
-        for (var i = 1; i <= 15; i++) pManager[i].Optional = true;
+        for (var i = 1; i <= 17; i++) pManager[i].Optional = true;
 
         if (pManager[12] is Param_Integer headerAlign)
         {
@@ -83,6 +85,18 @@ public class GH_Document : GH_Component
             footerAlign.AddNamedValue("Left", 0);
             footerAlign.AddNamedValue("Center", 1);
             footerAlign.AddNamedValue("Right", 2);
+        }
+        if (pManager[14] is Param_Integer headerPlacement)
+        {
+            headerPlacement.AddNamedValue("Margin", 0);
+            headerPlacement.AddNamedValue("Content", 1);
+            headerPlacement.AddNamedValue("Edge", 2);
+        }
+        if (pManager[15] is Param_Integer footerPlacement)
+        {
+            footerPlacement.AddNamedValue("Margin", 0);
+            footerPlacement.AddNamedValue("Content", 1);
+            footerPlacement.AddNamedValue("Edge", 2);
         }
 
         if (pManager[5] is Param_Integer paperParam)
@@ -120,8 +134,10 @@ public class GH_Document : GH_Component
         var footerHeight = -1.0;
         var headerAlignIndex = 0;
         var footerAlignIndex = 0;
-        var tokenKeys = new List<string>();
-        var tokenValues = new List<string>();
+        var headerPlacementIndex = 0;
+        var footerPlacementIndex = 0;
+        var headerEdgeOffset = 0.0;
+        var footerEdgeOffset = 0.0;
 
         DA.GetDataList(0, sections);
         DA.GetData(1, ref title);
@@ -137,8 +153,10 @@ public class GH_Document : GH_Component
         DA.GetData(11, ref footerHeight);
         DA.GetData(12, ref headerAlignIndex);
         DA.GetData(13, ref footerAlignIndex);
-        DA.GetDataList(14, tokenKeys);
-        DA.GetDataList(15, tokenValues);
+        DA.GetData(14, ref headerPlacementIndex);
+        DA.GetData(15, ref footerPlacementIndex);
+        DA.GetData(16, ref headerEdgeOffset);
+        DA.GetData(17, ref footerEdgeOffset);
 
         WarnIfChromeHasOrigin(header, "Header");
         WarnIfChromeHasOrigin(footer, "Footer");
@@ -156,8 +174,6 @@ public class GH_Document : GH_Component
         if (landscape) paper = paper.Landscape();
         var margins = Margins.Uniform(Math.Max(0, margin));
 
-        var userTokens = BuildTokenMap(tokenKeys, tokenValues);
-
         var layout = new DocumentLayout
         {
             Sections = validSections,
@@ -170,7 +186,10 @@ public class GH_Document : GH_Component
             FooterHeight = ResolveBandHeight(footerHeight),
             HeaderAlign = ResolveAlign(headerAlignIndex),
             FooterAlign = ResolveAlign(footerAlignIndex),
-            Tokens = userTokens,
+            HeaderPlacement = ResolvePlacement(headerPlacementIndex),
+            FooterPlacement = ResolvePlacement(footerPlacementIndex),
+            HeaderEdgeOffset = Math.Max(0, headerEdgeOffset),
+            FooterEdgeOffset = Math.Max(0, footerEdgeOffset),
         };
 
         EmitChromeReservationRemark(header, footer, headerHeight, footerHeight);
@@ -224,6 +243,13 @@ public class GH_Document : GH_Component
         _ => HorizontalAlign.Left,
     };
 
+    private static ChromePlacement ResolvePlacement(int i) => i switch
+    {
+        1 => ChromePlacement.Content,
+        2 => ChromePlacement.Edge,
+        _ => ChromePlacement.Margin,
+    };
+
     // Surface what the pagination pass actually reserved so the user has a visible signal
     // instead of guessing whether 0 / -1 / a positive number did what they expected.
     private void EmitChromeReservationRemark(DrawElement header, DrawElement footer, double headerInput, double footerInput)
@@ -260,26 +286,6 @@ public class GH_Document : GH_Component
             $"{slot} element's Origin ({x:0.##}, {y:0.##}) is ignored — chrome is anchored to the page band. Use {slot} Align to control horizontal placement.");
     }
 
-    private IReadOnlyDictionary<string, string> BuildTokenMap(IList<string> keys, IList<string> values)
-    {
-        if (keys == null || values == null || keys.Count == 0) return null;
-
-        if (keys.Count != values.Count)
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                $"Token Keys and Token Values have different lengths ({keys.Count} vs {values.Count}); using the shorter list");
-
-        var n = Math.Min(keys.Count, values.Count);
-        if (n == 0) return null;
-
-        var map = new Dictionary<string, string>(n, StringComparer.OrdinalIgnoreCase);
-        for (var i = 0; i < n; i++)
-        {
-            var k = keys[i];
-            if (string.IsNullOrWhiteSpace(k)) continue;
-            map[k] = values[i] ?? string.Empty;
-        }
-        return map.Count == 0 ? null : map;
-    }
 
     public override void DrawViewportWires(IGH_PreviewArgs args)
     {
@@ -340,6 +346,8 @@ public class GH_Document : GH_Component
             xCursor += w + TileGapMm;
         }
     }
+
+    public override void DrawViewportMeshes(IGH_PreviewArgs args) => DrawViewportWires(args);
 
     private static BoundingBox ComputeClippingBox(IReadOnlyList<Page> pages)
     {

@@ -6,7 +6,6 @@ using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
 using Selva.Drawing.Model.Elements;
-using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Layout;
 using Selva.GH.Properties;
 
@@ -34,12 +33,10 @@ public class GH_Stack : GH_Component
         pManager.AddIntegerParameter("Orientation", "O", "0 = vertical, 1 = horizontal", GH_ParamAccess.item, 0);
         pManager.AddNumberParameter("Spacing", "S", "Gap between children in millimetres", GH_ParamAccess.item, 0.0);
         pManager.AddIntegerParameter("Cross Align", "A", "Cross-axis alignment", GH_ParamAccess.item, 0);
-        pManager.AddPointParameter("Origin", "P", "Bottom-left of the stack in world coordinates", GH_ParamAccess.item, new Rhino.Geometry.Point3d(0, 0, 0));
 
         pManager[1].Optional = true;
         pManager[2].Optional = true;
         pManager[3].Optional = true;
-        pManager[4].Optional = true;
 
         if (pManager[1] is Param_Integer orient)
         {
@@ -65,13 +62,11 @@ public class GH_Stack : GH_Component
         var orientation = 0;
         var spacing = 0.0;
         var align = 0;
-        var origin = new Rhino.Geometry.Point3d(0, 0, 0);
 
         if (!DA.GetDataTree<IGH_Goo>(0, out GH_Structure<IGH_Goo> tree)) tree = new GH_Structure<IGH_Goo>();
         DA.GetData(1, ref orientation);
         DA.GetData(2, ref spacing);
         DA.GetData(3, ref align);
-        DA.GetData(4, ref origin);
 
         var filtered = new List<DrawElement>();
         var skipped = 0;
@@ -103,7 +98,6 @@ public class GH_Stack : GH_Component
             Orientation = orientation == 1 ? StackOrientation.Horizontal : StackOrientation.Vertical,
             Spacing = Math.Max(0, spacing),
             CrossAlign = (CrossAlign)Math.Max(0, Math.Min(3, align)),
-            Origin = new Point2D(origin.X, origin.Y),
             Children = filtered,
         };
 

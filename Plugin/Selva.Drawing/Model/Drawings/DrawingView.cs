@@ -218,20 +218,6 @@ public sealed class DrawingView : LayoutElement
 		switch (element)
 		{
 			case TextElement text when text.Style != null:
-				var s = text.Style;
-				var rescaledStyle = new TextStyle
-				{
-					FontFamily = s.FontFamily,
-					FontSize = s.FontSize * styleScale,
-					Weight = s.Weight,
-					Style = s.Style,
-					Decoration = s.Decoration,
-					Color = s.Color,
-					HorizontalAnchor = s.HorizontalAnchor,
-					VerticalAnchor = s.VerticalAnchor,
-					LineHeight = s.LineHeight,
-					LetterSpacing = s.LetterSpacing * styleScale,
-				};
 				return new TextElement
 				{
 					Id = text.Id,
@@ -239,7 +225,7 @@ public sealed class DrawingView : LayoutElement
 					Metadata = text.Metadata,
 					Text = text.Text,
 					Position = text.Position,
-					Style = rescaledStyle,
+					Style = ScaleTextStyle(text.Style, styleScale),
 					RotationDegrees = text.RotationDegrees,
 					Hyperlink = text.Hyperlink,
 					Background = text.Background,
@@ -256,6 +242,38 @@ public sealed class DrawingView : LayoutElement
 					Path = path.Path,
 					Stroke = ScaleStroke(path.Stroke, styleScale),
 					Fill = path.Fill,
+				};
+			case DimensionElement dim:
+				// TextSize, StrokeWidth, and the *Factor fields all live in paper-space mm
+				// (or as multiples of TextSize). Counter-scale TextSize and StrokeWidth so
+				// labels, extension lines, and arrows (= TextSize × ArrowSizeFactor) stay
+				// constant on paper regardless of the view's scale. Geometric inputs (A, B,
+				// Vertex, Offset) are world coords and ride the group transform.
+				return new DimensionElement
+				{
+					Id = dim.Id,
+					CssClass = dim.CssClass,
+					Metadata = dim.Metadata,
+					Kind = dim.Kind,
+					A = dim.A,
+					B = dim.B,
+					Vertex = dim.Vertex,
+					Offset = dim.Offset,
+					Label = dim.Label,
+					Style = ScaleDimensionStyle(dim.Style, styleScale),
+				};
+			case LeaderElement leader:
+				return new LeaderElement
+				{
+					Id = leader.Id,
+					CssClass = leader.CssClass,
+					Metadata = leader.Metadata,
+					Points = leader.Points,
+					Text = leader.Text,
+					TextStyle = leader.TextStyle != null ? ScaleTextStyle(leader.TextStyle, styleScale) : leader.TextStyle,
+					Stroke = leader.Stroke != null ? ScaleStroke(leader.Stroke, styleScale) : leader.Stroke,
+					Head = leader.Head,
+					HeadSize = leader.HeadSize * styleScale,
 				};
 			case GroupElement group:
 				var rewritten = new List<DrawElement>(group.Children.Count);
@@ -299,6 +317,44 @@ public sealed class DrawingView : LayoutElement
 			MiterLimit = stroke.MiterLimit,
 			DashArray = dashes,
 			DashOffset = stroke.DashOffset * styleScale,
+		};
+	}
+
+	private static TextStyle ScaleTextStyle(TextStyle style, double styleScale)
+	{
+		return new TextStyle
+		{
+			FontFamily = style.FontFamily,
+			FontSize = style.FontSize * styleScale,
+			Weight = style.Weight,
+			Style = style.Style,
+			Decoration = style.Decoration,
+			Color = style.Color,
+			HorizontalAnchor = style.HorizontalAnchor,
+			VerticalAnchor = style.VerticalAnchor,
+			LineHeight = style.LineHeight,
+			LetterSpacing = style.LetterSpacing * styleScale,
+		};
+	}
+
+	private static DimensionStyle ScaleDimensionStyle(DimensionStyle style, double styleScale)
+	{
+		if (style == null) return null;
+		return new DimensionStyle
+		{
+			TextSize = style.TextSize * styleScale,
+			StrokeWidth = style.StrokeWidth * styleScale,
+			Color = style.Color,
+			FontFamily = style.FontFamily,
+			ExtensionGapFactor = style.ExtensionGapFactor,
+			ExtensionOvershootFactor = style.ExtensionOvershootFactor,
+			ExtensionLengthFactor = style.ExtensionLengthFactor,
+			TextLiftFactor = style.TextLiftFactor,
+			TextSidePaddingFactor = style.TextSidePaddingFactor,
+			TickKind = style.TickKind,
+			TextPlacement = style.TextPlacement,
+			AutoFlipArrows = style.AutoFlipArrows,
+			ArrowSizeFactor = style.ArrowSizeFactor,
 		};
 	}
 
