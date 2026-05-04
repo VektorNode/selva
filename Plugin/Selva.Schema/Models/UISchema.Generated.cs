@@ -464,6 +464,12 @@ namespace Selva.Schema.Models
 /// </summary>
         [JsonProperty("options")]
         public Dictionary<string, object> Options { get; set; }
+
+/// <summary>
+/// Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import.
+/// </summary>
+        [JsonProperty("groupName")]
+        public string GroupName { get; set; }
     }
 
     public class DiscoveredOutput
@@ -486,6 +492,12 @@ namespace Selva.Schema.Models
 /// </summary>
         [JsonProperty("type")]
         public string Type { get; set; }
+
+/// <summary>
+/// Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import.
+/// </summary>
+        [JsonProperty("groupName")]
+        public string GroupName { get; set; }
     }
 
     public class SchemaInput

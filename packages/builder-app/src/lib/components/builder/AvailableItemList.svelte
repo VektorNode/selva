@@ -72,7 +72,12 @@
 				groupBy?: GroupBy;
 				selectedTypes?: string[];
 			};
-			if (parsed.groupBy === 'none' || parsed.groupBy === 'prefix' || parsed.groupBy === 'type') {
+			if (
+				parsed.groupBy === 'none' ||
+				parsed.groupBy === 'prefix' ||
+				parsed.groupBy === 'type' ||
+				parsed.groupBy === 'ghGroup'
+			) {
 				groupBy = parsed.groupBy;
 			}
 			if (Array.isArray(parsed.selectedTypes)) {
@@ -100,6 +105,13 @@
 	const baseItems = $derived(items.filter((i) => !placedSet.has(i.id)));
 
 	const availableTypes = $derived(Array.from(new Set(items.map((item) => item.type))).sort());
+
+	const hasGhGroups = $derived(items.some((item) => !!item.groupName?.trim()));
+
+	$effect(() => {
+		// If the persisted choice is ghGroup but no items have a group, fall back to none
+		if (groupBy === 'ghGroup' && !hasGhGroups) groupBy = 'none';
+	});
 
 	const filteredItems = $derived.by(() => {
 		let filtered = baseItems;
@@ -228,7 +240,14 @@
 					type="single"
 					value={groupBy}
 					onValueChange={(value) => {
-						if (value === 'none' || value === 'prefix' || value === 'type') groupBy = value;
+						if (
+							value === 'none' ||
+							value === 'prefix' ||
+							value === 'type' ||
+							value === 'ghGroup'
+						) {
+							groupBy = value;
+						}
 					}}
 				>
 					<Select.Trigger class="h-8 w-full text-xs">
@@ -236,12 +255,17 @@
 							? 'No grouping'
 							: groupBy === 'prefix'
 								? 'Group by prefix'
-								: 'Group by type'}
+								: groupBy === 'type'
+									? 'Group by type'
+									: 'Group by GH group'}
 					</Select.Trigger>
 					<Select.Content>
 						<Select.Item value="none" label="No grouping" />
 						<Select.Item value="prefix" label="Group by prefix" />
 						<Select.Item value="type" label="Group by type" />
+						{#if hasGhGroups}
+							<Select.Item value="ghGroup" label="Group by GH group" />
+						{/if}
 					</Select.Content>
 				</Select.Root>
 

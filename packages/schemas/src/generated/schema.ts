@@ -330,6 +330,10 @@ export interface DiscoveredInput {
   options?: {
     [k: string]: string | undefined;
   };
+  /**
+   * Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import.
+   */
+  groupName?: string;
   [k: string]: unknown | undefined;
 }
 export interface DiscoveredOutput {
@@ -343,6 +347,10 @@ export interface DiscoveredOutput {
    * Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files, 'html' for rendered HTML (e.g. Plotly charts)
    */
   type: 'text' | 'number' | 'file' | 'chart';
+  /**
+   * Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import.
+   */
+  groupName?: string;
 }
 export interface DiscoveredParameters {
   sessionId: string;
