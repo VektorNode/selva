@@ -58,11 +58,11 @@ All multi-byte integers and floats are little-endian.
 
 Flags layout:
 
-| Bit | Meaning | v1 status |
-|-----|---------|-----------|
-| 0   | 0 = int16 quantized, 1 = float32 raw | active |
-| 1   | 0 = uncompressed payload, 1 = zstd-compressed vertices+indices | reserved (Phase 5) |
-| 2-31 | reserved | must be 0 |
+| Bit  | Meaning                                                        | v1 status          |
+| ---- | -------------------------------------------------------------- | ------------------ |
+| 0    | 0 = int16 quantized, 1 = float32 raw                           | active             |
+| 1    | 0 = uncompressed payload, 1 = zstd-compressed vertices+indices | reserved (Phase 5) |
+| 2-31 | reserved                                                       | must be 0          |
 
 Reserved bits must be zero in v1; the parser must reject unknown bits with a clear error.
 
@@ -140,7 +140,7 @@ writer auto-selects float32.
   - `VertexOffset` → `VertexStart` (in **vertex-count** units; multiply by 3 for the typed-array
     component offset)
   - `FaceOffset` → `IndexStart` (in index-count units)
-  These names are stable for the JS parser; the old "in floats / in ints" semantics are gone.
+    These names are stable for the JS parser; the old "in floats / in ints" semantics are gone.
 
 ### Metadata JSON inside the blob
 
@@ -159,15 +159,17 @@ Phase 2 shipped there; the builder-app and compute-app should bump the catalog r
 ### Binary parser — [`binary-parser.ts`](../../selva-compute/src/features/visualization/webdisplay/binary-parser.ts)
 
 ```ts
-export function parseBinaryMeshBatch(input: ArrayBuffer | Uint8Array | string): ParsedBinaryMeshBatch;
+export function parseBinaryMeshBatch(
+	input: ArrayBuffer | Uint8Array | string
+): ParsedBinaryMeshBatch;
 
 export interface ParsedBinaryMeshBatch {
-  metadata: BinaryMeshMetadata;
-  flags: number;                       // bit 0: 0 = int16, 1 = float32
-  vertices: Int16Array | Float32Array; // typed view into buffer, no copy
-  indices: Uint32Array;
-  origin: [number, number, number];
-  scale: [number, number, number];
+	metadata: BinaryMeshMetadata;
+	flags: number; // bit 0: 0 = int16, 1 = float32
+	vertices: Int16Array | Float32Array; // typed view into buffer, no copy
+	indices: Uint32Array;
+	origin: [number, number, number];
+	scale: [number, number, number];
 }
 ```
 
@@ -188,7 +190,7 @@ Three.js helpers continue to work normally.
 ```ts
 // Dequantize int16 to float32, folding in optional Z-up→Y-up rotation.
 // world = origin + (q + 32767) * scale
-function dequantizeInt16(q, origin, scale, applyCoordinateTransform): Float32Array
+function dequantizeInt16(q, origin, scale, applyCoordinateTransform): Float32Array;
 ```
 
 `computeVertexNormals()` is kept on the client. Materials and groups are read from the blob's
@@ -201,12 +203,12 @@ are gone; `fflate` is no longer called from the mesh pipeline.
 
 `MeshMetadata` field renames match the C# renames (vertex-count units throughout):
 
-| Old | New | Unit |
-|---|---|---|
-| `vertexCount` | `vertexCount` | **vertex count** (was float-component count) |
-| `faceCount` | `indexCount` | index count |
+| Old            | New           | Unit                                             |
+| -------------- | ------------- | ------------------------------------------------ |
+| `vertexCount`  | `vertexCount` | **vertex count** (was float-component count)     |
+| `faceCount`    | `indexCount`  | index count                                      |
 | `vertexOffset` | `vertexStart` | vertex index (multiply × 3 for component offset) |
-| `faceOffset` | `indexStart` | index array offset |
+| `faceOffset`   | `indexStart`  | index array offset                               |
 
 `DecompressedMeshData` updated to carry `flags`, `origin`, `scale` alongside the typed arrays.
 
@@ -249,16 +251,25 @@ Both transports `postMessage(buf, [buf])` the `ArrayBuffer` into a Web Worker fo
 - `CompressionHelper` deleted; gzip removed from the pipeline.
 - `WebDisplayGoo` unchanged — base64-in-JSON persistence still works since the blob is opaque to the goo.
 - Test project keeps `Selva.GH` out of its compile graph (dragging in Grasshopper.dll / WindowsForms breaks the net8 test host); the writer is linked in via `<Compile Include Link>` since it has no Rhino/GH deps.
-- **No transport change yet** — the blob still rides as base64 inside the values JSON. End-to-end client still sees the old format until Phase 2 ships in `@selvajs/compute`. **The current pipeline is broken end-to-end during the Phase 1a → Phase 2 gap**; coordinate the plugin release with the package release.
+- **No transport change yet** — the blob still rides as base64 inside the values JSON. End-to-end client sees the new format now that Phase 2 has shipped in `@selvajs/compute`. Pipeline is unblocked end-to-end.
 
-### Phase 1b — WebSocket binary frame
+### Phase 1b — WebSocket binary frame ✅ DONE
 
-- Add a `WebSocketMessageType.Binary` send path to `WebSocketServer.SendToClientAsync` (today
-  hardcoded to `Text`).
-- Strip WebDisplay batches out of the unified values JSON in `ValueCollector`; ship them as
-  separate binary frames keyed by `sourceComponentId`.
-- Negotiate transport capability at connect, or accept that older builder-app clients break for
-  WebDisplay until they update.
+- `WebSocketServer.BroadcastBinaryAsync` ships frames with `WebSocketMessageType.Binary` (the
+  text-only path is still used for the JSON envelopes).
+- `WebSocketTransport.BroadcastOutputsWithFilesAndDisplay` strips `MeshBatch.CompressedData` out
+  of the unified values JSON, sends each blob as its own binary frame, and announces the count
+  via `binaryBatchCount` on the `outputs` envelope. WebSocket per-message ordering (TCP) keeps the
+  binary frames after the JSON envelope they belong to.
+- Client side: builder-app's WebSocket layer sets `binaryType = 'arraybuffer'` and dispatches
+  `binaryFrame` events. `usePreviewState` subscribes, correlates the count, and parses each blob
+  via `parseMeshBatchBlob` (added in `@selvajs/compute@1.5.2-beta.7`). The dead `displayData`
+  field is removed from the message types.
+- Compute-app (cloud) is intentionally unchanged on this phase — Rhino.Compute responses are
+  JSON, so the SLVA blob still travels as base64 inside `item.data` and goes through the
+  unchanged `parseMeshBatch` string entry. Phase 4 is what turns that into a binary stream.
+- No backward-compat shim: builder-app and `@selvajs/compute` ship together. An older client
+  paired with a Phase 1b plugin gets an empty viewport (no errors) until updated.
 
 ### Phase 2 — Web binary parser + dequantize path ✅ DONE
 
@@ -311,24 +322,24 @@ shows much smaller wire savings — **gzip on float32 is more effective than exp
 
 ### Raw size and encode time (measured)
 
-| Scene | Old (gzip+f32+i32) raw | New (int16+u32) raw | Δ size | Old encode | New encode |
-|---|---|---|---|---|---|
-| Small (10k v / 30k i) | 176 KB | 180 KB | **+2%** | 21ms | 2ms |
-| Medium (250k v / 750k i) | 4.84 MB | 4.50 MB | **−7%** | 208ms | 22ms |
-| Heavy (1.5M v / 4.5M i) | 30.4 MB | 27.0 MB | **−11%** | 1262ms | 113ms |
+| Scene                    | Old (gzip+f32+i32) raw | New (int16+u32) raw | Δ size   | Old encode | New encode |
+| ------------------------ | ---------------------- | ------------------- | -------- | ---------- | ---------- |
+| Small (10k v / 30k i)    | 176 KB                 | 180 KB              | **+2%**  | 21ms       | 2ms        |
+| Medium (250k v / 750k i) | 4.84 MB                | 4.50 MB             | **−7%**  | 208ms      | 22ms       |
+| Heavy (1.5M v / 4.5M i)  | 30.4 MB                | 27.0 MB             | **−11%** | 1262ms     | 113ms      |
 
 Encode is **~11× faster** on the heavy case. That's the largest single win.
 
 ### End-to-end stages (heavy case, after Phase 1b + Phase 2 ship)
 
-| Stage | Today | After plan (v1) | After Phase 5 (zstd) |
-|---|---|---|---|
-| C# encode | ~1260ms | ~110ms | ~150–200ms |
-| Wire payload (post-base64) | ~40 MB | ~36 MB raw bytes (Phase 1b removes base64) → ~27 MB | ~16–18 MB |
-| `JSON.parse` of geometry | hundreds of ms | <5ms (Phase 1b) | <5ms |
-| Decompress on client | ~200ms | 0ms | ~30–50ms (zstd) |
-| Dequantize + Z-up rotate (CPU) | ~50ms | 0ms (GPU) | 0ms |
-| `computeVertexNormals` | ~30–80ms | unchanged | unchanged |
+| Stage                          | Today          | After plan (v1)                                     | After Phase 5 (zstd) |
+| ------------------------------ | -------------- | --------------------------------------------------- | -------------------- |
+| C# encode                      | ~1260ms        | ~110ms                                              | ~150–200ms           |
+| Wire payload (post-base64)     | ~40 MB         | ~36 MB raw bytes (Phase 1b removes base64) → ~27 MB | ~16–18 MB            |
+| `JSON.parse` of geometry       | hundreds of ms | <5ms (Phase 1b)                                     | <5ms                 |
+| Decompress on client           | ~200ms         | 0ms                                                 | ~30–50ms (zstd)      |
+| Dequantize + Z-up rotate (CPU) | ~50ms          | 0ms (GPU)                                           | 0ms                  |
+| `computeVertexNormals`         | ~30–80ms       | unchanged                                           | unchanged            |
 
 ### Where the win actually comes from
 
@@ -354,9 +365,7 @@ Encode is **~11× faster** on the heavy case. That's the largest single win.
   are not interchangeable on the JS side, but this is invisible to GH itself.
 - **net48 compatibility** — confirmed clean. The writer uses only `BinaryWriter`,
   `Buffer.BlockCopy`, and `ArrayPool<byte>`. No Span APIs, no `System.Memory` package needed.
-- **Format versioning** — version = 1. Bump on any wire-layout change. Client rejects unknown
-  versions with a clear error.
-- **Phase 1a → Phase 2 coordination** — RESOLVED. Both sides are implemented. Ship both together:
+- **Format versioning** — version = 1. Bump on any wire-layout change. Clien and live. The new `@selvajs/compute` version is published and the monorepo catalog reference is bumped. End-to-end is unblockedth sides are implemented. Ship both together:
   publish the new `@selvajs/compute` version, bump the monorepo catalog reference, then release the
   plugin. End-to-end is unblocked once both are live.
 
@@ -371,11 +380,37 @@ Encode is **~11× faster** on the heavy case. That's the largest single win.
 - **Phase 1a** — DONE (2026-05-05). C# writer, processor, tests, benchmarks. Plugin emits SLVA
   blob inside existing JSON envelope.
 - **Phase 2** — DONE (2026-05-05). `@selvajs/compute` binary parser, dequantize path, updated
-  types + test helper. 135 tests passing, build clean. **Publish the package and bump the monorepo
-  catalog reference to restore end-to-end.**
-- **Phase 1b** — pending. Binary WebSocket frame. Depends on nothing (can land any time); most
-  useful after Phase 2 is live so the client can actually handle binary frames.
+  types + test helper. 135 tests passing, build clean. Package published and monorepo catalog bumped; end-to-end is restored.
+- **Phase 1b** — DONE (2026-05-05). Binary WebSocket frame on the local (builder-app) transport.
+  C# `WebSocketTransport.BroadcastOutputsWithFilesAndDisplay` strips `MeshBatch.CompressedData` out
+  of the `outputs` JSON, ships each blob as a `WebSocketMessageType.Binary` frame, and announces
+  the count via `binaryBatchCount`. Client side: `parseMeshBatchBlob(ArrayBuffer)` was added to
+  `@selvajs/compute@1.5.2-beta.7`; `usePreviewState` subscribes to the `binaryFrame` event,
+  correlates the count with the matching `outputs` envelope (using the existing
+  `outputsToken` supersession pattern), and parses each blob without the JSON-string detour.
+  `displayData` is gone from `WsOutputsMessage` / `WsInitialDataMessage`. Compute-app (cloud) is
+  unchanged — it still receives the SLVA blob as base64 inside the Rhino.Compute JSON response,
+  parsed by the existing `parseMeshBatch` string entry.
 - **Phase 3** — pending. Worker offload for parse + BufferGeometry construction.
 - **Phase 4** — pending. Compute-app proxy endpoint (server-side repackage of Rhino.Compute JSON).
 - **Phase 5** — pending. zstd compression if network-bound connections still show >1.5s on the
   27MB raw payload.
+
+### What Phase 1b actually buys (no new benchmark, just deterministic deltas)
+
+The Phase 1a benchmark numbers in [Measured impact](#measured-impact-revised-after-phase-1a-benchmarks)
+already projected the Phase 1b column. With the binary frame transport now live, those projections
+become realized for the local (builder-app) path:
+
+- **−25% on the wire** vs. Phase 1a's base64-in-JSON shape. Pure removal of base64 inflation
+  (1 raw byte → 1.33 ASCII bytes). On the heavy synthetic case from the Phase 1a benchmark:
+  ~36 MB base64 → **~27 MB raw bytes** on the wire.
+- **`JSON.parse` on geometry: gone.** The `outputs` envelope now contains only metadata
+  (kilobytes); the multi-MB geometry never enters the JSON parser. Phase 1a's "hundreds of ms"
+  client-side JSON.parse cost on heavy scenes drops to **<5ms** (parsing the small envelope).
+- **No base64 decode pass on the client.** `parseMeshBatchBlob` consumes the `ArrayBuffer`
+  directly; the buffer→string→buffer round-trip from the JSON path is eliminated.
+
+These are architectural deltas, not measured ones — no new benchmark runs. If you want hard
+numbers from an end-to-end real run (heavy scene, real LAN, dev tools timeline), that's the next
+thing worth measuring before deciding on Phase 5 (zstd).

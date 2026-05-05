@@ -8,6 +8,7 @@ using Newtonsoft.Json.Linq;
 using Rhino;
 using Selva.Schema.Models;
 using Selva.GH.Config;
+using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.GH.Utilities.Helpers;
 
@@ -184,7 +185,7 @@ public class WebSocketTransport : IDisposable
         return BroadcastAsync(new { type = messageType, sessionId = _sessionId, data });
     }
 
-    public Task BroadcastOutputsWithFilesAndDisplay(
+    public async Task BroadcastOutputsWithFilesAndDisplay(
         Dictionary<string, object> outputs,
         Dictionary<string, object> fileOutputs,
         List<object> displayData,
@@ -193,15 +194,42 @@ public class WebSocketTransport : IDisposable
         var doc = RhinoDoc.ActiveDoc;
         var modelUnits = doc?.ModelUnitSystem.ToString() ?? "Meters";
 
-        return BroadcastAsync(new
+        // Extract binary blobs from MeshBatch objects so they travel as binary WebSocket frames
+        // instead of base64-in-JSON. The SLVA blob contains embedded metadata (materials, groups,
+        // sourceComponentId), so no separate envelope is needed.
+        var binaryBlobs = new List<byte[]>();
+        if (includeDisplayData && displayData != null)
+        {
+            foreach (var item in displayData)
+            {
+                if (item is MeshBatch batch && batch.CompressedData != null)
+                {
+                    binaryBlobs.Add(batch.CompressedData);
+                }
+            }
+        }
+
+        // JSON envelope: omit displayData; include count so the client knows how many binary
+        // frames to collect before processing the scene update.
+        await BroadcastAsync(new
         {
             type = "outputs",
             sessionId = _sessionId,
             outputs,
             fileOutputs,
-            displayData = includeDisplayData ? displayData : new List<object>(),
+            binaryBatchCount = binaryBlobs.Count,
             modelUnits
         });
+
+        // Send each binary blob as a separate binary WebSocket frame. WebSocket preserves message
+        // order (TCP), so these frames always arrive after the JSON envelope above.
+        if (_webSocketServer != null && _webSocketServer.IsRunning)
+        {
+            foreach (var blob in binaryBlobs)
+            {
+                await _webSocketServer.BroadcastBinaryAsync(blob);
+            }
+        }
     }
 
     public Task BroadcastCurrentValues(Dictionary<string, object> values)
@@ -402,19 +430,19 @@ public class WebSocketTransport : IDisposable
                 switch (msgType)
                 {
                     case "valueUpdate":
-                    {
-                        var values = jObj["values"]?.ToObject<Dictionary<string, object>>(SecureSerializer);
-                        if (values != null)
                         {
-                            MarshalToMainThread(() => OnValuesReceived?.Invoke(this, values));
-                        }
-                        else
-                        {
-                            Logger.Warn("[WebSocketTransport] valueUpdate missing 'values'.");
-                        }
+                            var values = jObj["values"]?.ToObject<Dictionary<string, object>>(SecureSerializer);
+                            if (values != null)
+                            {
+                                MarshalToMainThread(() => OnValuesReceived?.Invoke(this, values));
+                            }
+                            else
+                            {
+                                Logger.Warn("[WebSocketTransport] valueUpdate missing 'values'.");
+                            }
 
-                        break;
-                    }
+                            break;
+                        }
 
                     case "requestCurrentValues":
                         MarshalToMainThread(() => OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty));
@@ -441,37 +469,37 @@ public class WebSocketTransport : IDisposable
                         break;
 
                     case "saveSchema":
-                    {
-                        var schema = jObj["schema"]?.ToObject<UISchema>(SecureSerializer);
-                        if (schema != null)
                         {
-                            MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, schema));
-                        }
+                            var schema = jObj["schema"]?.ToObject<UISchema>(SecureSerializer);
+                            if (schema != null)
+                            {
+                                MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, schema));
+                            }
 
-                        break;
-                    }
+                            break;
+                        }
 
                     case "requestSyncPreview":
-                    {
-                        var schema = jObj["schema"]?.ToObject<UISchema>(SecureSerializer);
-                        if (schema != null)
                         {
-                            MarshalToMainThread(() => OnSyncPreviewRequested?.Invoke(this, schema));
-                        }
+                            var schema = jObj["schema"]?.ToObject<UISchema>(SecureSerializer);
+                            if (schema != null)
+                            {
+                                MarshalToMainThread(() => OnSyncPreviewRequested?.Invoke(this, schema));
+                            }
 
-                        break;
-                    }
+                            break;
+                        }
 
                     case "applySyncChanges":
-                    {
-                        var changes = jObj["changes"]?.ToObject<List<SyncChange>>(SecureSerializer);
-                        if (changes != null)
                         {
-                            MarshalToMainThread(() => OnSyncChangesApply?.Invoke(this, changes));
-                        }
+                            var changes = jObj["changes"]?.ToObject<List<SyncChange>>(SecureSerializer);
+                            if (changes != null)
+                            {
+                                MarshalToMainThread(() => OnSyncChangesApply?.Invoke(this, changes));
+                            }
 
-                        break;
-                    }
+                            break;
+                        }
 
                     default:
                         Logger.Warn($"[WebSocketTransport] Unknown message type: '{msgType}'.");

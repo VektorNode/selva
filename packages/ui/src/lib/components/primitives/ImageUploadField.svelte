@@ -32,12 +32,12 @@
 
 <div class="space-y-2">
 	<!-- Mode toggle -->
-	<div class="flex gap-1 rounded-md border p-0.5">
+	<div class="gap-1 p-0.5 flex rounded-md border">
 		<Button
 			size="sm"
 			variant={mode !== 'upload' ? 'default' : 'ghost'}
 			onclick={() => onModeChange?.('url')}
-			class="h-7 flex-1 text-xs"
+			class="h-7 text-xs flex-1"
 		>
 			URL
 		</Button>
@@ -45,7 +45,7 @@
 			size="sm"
 			variant={mode === 'upload' ? 'default' : 'ghost'}
 			onclick={() => onModeChange?.('upload')}
-			class="h-7 flex-1 text-xs"
+			class="h-7 text-xs flex-1"
 		>
 			Upload File
 		</Button>
@@ -53,14 +53,14 @@
 
 	<!-- Content -->
 	{#if mode === 'upload'}
-		<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+		<div class="gap-2 sm:flex-row sm:items-center flex flex-col">
 			<input
 				type="file"
 				bind:this={inputRef}
 				accept="image/*"
 				{disabled}
 				onchange={onFileSelected}
-				class="border-input bg-background focus-visible:ring-ring flex h-10 flex-1 rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
+				class="h-10 px-3 py-2 text-sm file:text-sm file:font-medium flex flex-1 rounded-md border border-input bg-background file:border-0 file:bg-transparent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
 			/>
 			<Button
 				size="sm"
@@ -69,7 +69,7 @@
 				class="shrink-0"
 			>
 				<Upload class="mr-2 h-4 w-4" />
-				<span class="hidden sm:inline">{isUploading ? 'Uploading…' : 'Upload'}</span>
+				<span class="sm:inline hidden">{isUploading ? 'Uploading…' : 'Upload'}</span>
 			</Button>
 		</div>
 	{:else}

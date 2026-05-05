@@ -99,7 +99,7 @@
 	</div>
 
 	{#if showFooter}
-		<div class="sticky bottom-0 z-10 shrink-0">
+		<div class="bottom-0 sticky z-10 shrink-0">
 			<PageFooter {errors} {warnings}>
 				{#if footerChildren}
 					{@render footerChildren()}

@@ -24,7 +24,7 @@
 
 <div class={`divide-y rounded-lg border ${className}`}>
 	<div
-		class="bg-muted/40 text-muted-foreground grid gap-4 px-4 py-2 text-xs font-medium tracking-wide uppercase"
+		class="gap-4 px-4 py-2 text-xs font-medium tracking-wide grid bg-muted/40 text-muted-foreground uppercase"
 		style:grid-template-columns={gridTemplate}
 	>
 		{#each columns as col (col.label)}
@@ -32,10 +32,7 @@
 		{/each}
 	</div>
 	{#each rows as item (getKey(item))}
-		<div
-			class="grid items-center gap-4 px-4 py-3"
-			style:grid-template-columns={gridTemplate}
-		>
+		<div class="gap-4 px-4 py-3 grid items-center" style:grid-template-columns={gridTemplate}>
 			{@render row(item)}
 		</div>
 	{/each}
