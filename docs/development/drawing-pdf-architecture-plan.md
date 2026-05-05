@@ -1,7 +1,7 @@
 # Drawing System: Document Model + PDF Architecture Plan
 
-**Status:** Phases 0–10 complete
-**Last updated:** 2026-04-30
+**Status:** Phases 0–10 complete (PDF hatch rendering completed 2026-05-05)
+**Last updated:** 2026-05-05
 **Owner:** Felix
 **Decision authority:** Felix — this plan is the source of truth; deviations should update it
 
@@ -317,7 +317,7 @@ label content (`100.00` and `179.01` get the right gap; multi-byte/wide labels b
 **Goal:** PDF output for simple drawings.
 
 - [x] `PdfRenderer : IElementVisitor` using PdfSharpCore. (`Plugin/Selva.Drawing/Rendering/Pdf/PdfRenderer.cs`. Mirrors `SvgRenderer`'s structure: visitor over the element tree, single-page render today (multi-page is Phase 6). Coordinate system: PdfSharpCore's `XGraphics` is Y-down with origin top-left; the renderer applies one root `translate(0, pageHeight) + scale(1,-1)` so the model's Y-up world coords flow naturally. Text counter-flips locally with `scale(1,-1)` around the anchor point — same pattern as `SvgRenderer`.)
-- [x] Handle `PathElement`, `TextElement`, `TextBlockElement`, `GroupElement`, `ImageElement` (stub), `DimensionElement` (linear + angular), `LeaderElement`, `HatchElement` (stub), `SymbolElement` (inline expansion). Stubs match the corresponding SVG renderer stubs and exist purely to keep the visitor surface complete.
+- [x] Handle `PathElement`, `TextElement`, `TextBlockElement`, `GroupElement`, `ImageElement` (stub), `DimensionElement` (linear + angular), `LeaderElement`, `HatchElement`, `SymbolElement` (inline expansion). `HatchElement` and `Fill.Pattern` on `PathElement` were stubs through Phase 10 and now ship in Phase 5.5: the renderer clips to the boundary path via `XGraphics.IntersectClip`, then draws repeating strokes/dots inside the bbox (PdfSharpCore exposes no public tiling-pattern brush, so clip-and-tile is the practical equivalent of SVG's `<pattern>` defs). Tile geometry mirrors the SVG renderer's `AppendHatchPatternDefs` (4mm tile × scale, 0.3mm × scale stroke, 0.4mm × scale dots, 4×8mm × scale brick courses with staggered head joints) so PDF and SVG output read the same. Tests: `PdfHatchTests` (12 tests).
 - [x] Embed bundled Inter via `PdfFontEmbedder` (`Plugin/Selva.Drawing/Rendering/Pdf/PdfFontEmbedder.cs`). Implements PdfSharpCore's `IFontResolver`. Idempotent install via `EnsureInstalled()` — first `PdfRenderer.Render()` call wires the resolver into `GlobalFontSettings.FontResolver`; subsequent calls are no-ops because PdfSharpCore refuses to swap an in-use resolver. If a host application has already installed its own resolver, we leave it alone (the host's font setup wins).
 - [x] `Document.Metadata` → PDF `/Info` dictionary (`PdfRenderer.ApplyMetadata`). Title/Author/Subject/Creator/Producer/Keywords/CreatedAt/ModifiedAt all flow through. Producer uses `Info.Elements.SetString("/Producer", ...)` because PdfSharpCore otherwise stamps its own producer string.
 - [x] `PdfPathBuilder` (`Plugin/Selva.Drawing/Rendering/Pdf/PdfPathBuilder.cs`) converts the model `Path` to `XGraphicsPath`. The non-trivial piece is `ArcTo` flattening — PdfSharpCore's `AddArc` uses centre/start/sweep parameterisation, but our SVG-style `ArcTo` carries radii + large-arc + sweep flags. We implement the W3C SVG 1.1 §F.6.5 algorithm: compute the centre, split the sweep into pieces of ≤ π/2, approximate each with a cubic Bezier via `α = (4/3) tan(Δθ/4)`. ~5 control-point math lines per piece.

@@ -11,6 +11,7 @@ using DrawPath = Selva.Drawing.Model.Geometry.Path;
 using DrawPoint = Selva.Drawing.Model.Geometry.Point2D;
 using DrawBox = Selva.Drawing.Model.Geometry.BoundingBox;
 using PathSeg = Selva.Drawing.Model.Geometry.PathSegment;
+using FillRule = Selva.Drawing.Model.Style.FillRule;
 
 namespace Selva.GH.Features.Drawing.Preview;
 
@@ -69,9 +70,7 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
         if (element.Fill != null)
         {
             var fillColor = ApplyOpacity(ToSystemColor(element.Fill.Color, FillOutlineFallback), element.Fill.Opacity);
-            foreach (var sp in subpaths)
-                if (sp.Closed && sp.Points.Count >= 3)
-                    _display.DrawPolygon(sp.Points, fillColor, filled: true);
+            FillSubpaths(subpaths, fillColor, element.Fill.Rule);
         }
 
         if (element.Stroke != null)
@@ -307,9 +306,7 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
         if (element.BackgroundColor.A > 0)
         {
             var bg = ToSystemColor(element.BackgroundColor, Color.Transparent);
-            foreach (var sp in subpaths)
-                if (sp.Closed && sp.Points.Count >= 3)
-                    _display.DrawPolygon(sp.Points, bg, filled: true);
+            FillSubpaths(subpaths, bg, FillRule.EvenOdd);
         }
 
         // Always trace the boundary so the region is legible even when the pattern is sparse.
@@ -319,9 +316,7 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
 
         if (element.Pattern == HatchPatternKind.Solid)
         {
-            foreach (var sp in subpaths)
-                if (sp.Closed && sp.Points.Count >= 3)
-                    _display.DrawPolygon(sp.Points, lineColor, filled: true);
+            FillSubpaths(subpaths, lineColor, FillRule.EvenOdd);
             return;
         }
 
@@ -708,6 +703,309 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
         if (a < 0) a = 0;
         else if (a > 255) a = 255;
         return Color.FromArgb(a, c.R, c.G, c.B);
+    }
+
+    // ============================================================================
+    // Polygon fill (concave + holes)
+    // ============================================================================
+
+    // DisplayPipeline.DrawPolygon does fan-triangulation from vertex 0, which produces
+    // visible artifacts on concave outlines and ignores holes entirely. Fix: triangulate
+    // the closed subpaths (respecting the fill rule for hole detection) and shade the
+    // resulting mesh. This matches what the SVG/PDF renderers actually output.
+    private void FillSubpaths(List<Subpath> subpaths, Color color, FillRule rule)
+    {
+        var rings = new List<List<Point3d>>();
+        foreach (var sp in subpaths)
+            if (sp.Closed && sp.Points.Count >= 4) // last point repeats start, so >=4 = >=3 unique
+                rings.Add(sp.Points);
+        if (rings.Count == 0) return;
+
+        var mesh = TriangulateRings(rings, rule);
+        if (mesh == null || mesh.Faces.Count == 0) return;
+
+        var material = new DisplayMaterial(color);
+        if (color.A < 255) material.Transparency = 1.0 - color.A / 255.0;
+        _display.DrawMeshShaded(mesh, material);
+    }
+
+    // Build a triangle mesh from a set of closed rings. Outer rings get filled, hole
+    // rings are subtracted via "bridges": a seam from the hole to the outer ring that
+    // turns "polygon-with-holes" into a single weakly-simple polygon ear-clipping handles.
+    //
+    // Hole detection follows the requested fill rule. EvenOdd: a ring is a hole when it
+    // sits inside an odd number of other rings. NonZero: classify by signed area; for
+    // our purposes (paths from CurveConverter) the practical effect is the same since
+    // we don't get authoritative winding info from the source curves.
+    private static Mesh TriangulateRings(List<List<Point3d>> rings, FillRule rule)
+    {
+        _ = rule; // Both rules currently use the same depth-parity hole classification;
+                  // the parameter stays so callers can pass intent and a future refinement
+                  // can branch here without changing call sites.
+        var n = rings.Count;
+        if (n == 1) return TriangulatePolygon(rings[0], null);
+
+        // Drop the trailing duplicate point used for stroke rendering — ear-clipping
+        // wants the bare ring with no closing repeat.
+        var bare = new List<List<Point3d>>(n);
+        foreach (var r in rings) bare.Add(StripClosingDuplicate(r));
+
+        // Classify each ring as outer or hole by counting how many other rings contain
+        // its representative point. Even count → outer, odd → hole. This matches SVG's
+        // even-odd rule and is a reasonable approximation for non-zero given our inputs.
+        var depth = new int[n];
+        for (var i = 0; i < n; i++)
+        {
+            var rep = bare[i][0];
+            for (var j = 0; j < n; j++)
+            {
+                if (i == j) continue;
+                if (RingContains(bare[j], rep.X, rep.Y)) depth[i]++;
+            }
+        }
+
+        // Group holes with their immediate parent (smallest-area enclosing outer).
+        var children = new List<List<int>>(n);
+        for (var i = 0; i < n; i++) children.Add(new List<int>());
+        for (var i = 0; i < n; i++)
+        {
+            if (depth[i] % 2 == 0) continue; // outer
+            var parent = -1;
+            var bestArea = double.MaxValue;
+            for (var j = 0; j < n; j++)
+            {
+                if (i == j || depth[j] % 2 != 0) continue;
+                if (depth[j] != depth[i] - 1) continue;
+                if (!RingContains(bare[j], bare[i][0].X, bare[i][0].Y)) continue;
+                var a = Math.Abs(SignedArea(bare[j]));
+                if (a < bestArea) { bestArea = a; parent = j; }
+            }
+            if (parent >= 0) children[parent].Add(i);
+        }
+
+        var combined = new Mesh();
+        for (var i = 0; i < n; i++)
+        {
+            if (depth[i] % 2 != 0) continue;
+            var holes = children[i].Count > 0 ? children[i].ConvertAll(h => bare[h]) : null;
+            var sub = TriangulatePolygon(bare[i], holes);
+            if (sub != null && sub.Faces.Count > 0) combined.Append(sub);
+        }
+        return combined;
+    }
+
+    private static List<Point3d> StripClosingDuplicate(List<Point3d> ring)
+    {
+        if (ring.Count < 2) return ring;
+        var first = ring[0];
+        var last = ring[ring.Count - 1];
+        if (first.DistanceToSquared(last) < 1e-18)
+        {
+            var trimmed = new List<Point3d>(ring.Count - 1);
+            for (var i = 0; i < ring.Count - 1; i++) trimmed.Add(ring[i]);
+            return trimmed;
+        }
+        return ring;
+    }
+
+    private static double SignedArea(List<Point3d> ring)
+    {
+        var a = 0.0;
+        for (var i = 0; i < ring.Count; i++)
+        {
+            var p = ring[i];
+            var q = ring[(i + 1) % ring.Count];
+            a += p.X * q.Y - q.X * p.Y;
+        }
+        return a * 0.5;
+    }
+
+    private static bool RingContains(List<Point3d> ring, double x, double y)
+    {
+        var inside = false;
+        var n = ring.Count;
+        for (int i = 0, j = n - 1; i < n; j = i++)
+        {
+            var pi = ring[i];
+            var pj = ring[j];
+            if ((pi.Y > y) == (pj.Y > y)) continue;
+            var dy = pj.Y - pi.Y;
+            if (Math.Abs(dy) < 1e-12) continue;
+            var xCross = pi.X + (y - pi.Y) * (pj.X - pi.X) / dy;
+            if (xCross > x) inside = !inside;
+        }
+        return inside;
+    }
+
+    // Ear-clipping triangulation. If `holes` is given, each hole is bridged to the outer
+    // ring by inserting a back-and-forth seam, producing a single weakly-simple polygon.
+    // Returns a Mesh with the resulting triangles, or null if the input is degenerate.
+    private static Mesh TriangulatePolygon(List<Point3d> outer, List<List<Point3d>> holes)
+    {
+        var ring = StripClosingDuplicate(outer);
+        if (ring.Count < 3) return null;
+
+        // Ensure outer is CCW so the ear-clip "left-turn" test classifies reflex vertices
+        // correctly. Holes get the opposite (CW) orientation.
+        var working = new List<Point3d>(ring);
+        if (SignedArea(working) < 0) working.Reverse();
+
+        if (holes != null && holes.Count > 0)
+            working = BridgeHoles(working, holes);
+
+        if (working.Count < 3) return null;
+
+        var mesh = new Mesh();
+        foreach (var p in working) mesh.Vertices.Add(p.X, p.Y, 0);
+
+        // Ear-clipping with a small reflex cache for O(n²) total work.
+        var indices = new List<int>(working.Count);
+        for (var i = 0; i < working.Count; i++) indices.Add(i);
+
+        var guard = working.Count * working.Count + 16;
+        while (indices.Count > 3 && guard-- > 0)
+        {
+            var clipped = false;
+            for (var i = 0; i < indices.Count; i++)
+            {
+                var i0 = indices[(i - 1 + indices.Count) % indices.Count];
+                var i1 = indices[i];
+                var i2 = indices[(i + 1) % indices.Count];
+                if (!IsEar(working, indices, i0, i1, i2)) continue;
+                mesh.Faces.AddFace(i0, i1, i2);
+                indices.RemoveAt(i);
+                clipped = true;
+                break;
+            }
+            if (!clipped) break; // no ear found — input is malformed; bail to avoid infinite loop
+        }
+        if (indices.Count == 3)
+            mesh.Faces.AddFace(indices[0], indices[1], indices[2]);
+
+        return mesh;
+    }
+
+    private static bool IsEar(List<Point3d> verts, List<int> indices, int i0, int i1, int i2)
+    {
+        var a = verts[i0]; var b = verts[i1]; var c = verts[i2];
+        var cross = (b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X);
+        if (cross <= 1e-12) return false; // reflex or colinear in CCW polygon
+
+        // No other polygon vertex inside this triangle.
+        foreach (var idx in indices)
+        {
+            if (idx == i0 || idx == i1 || idx == i2) continue;
+            if (PointInTriangle(verts[idx], a, b, c)) return false;
+        }
+        return true;
+    }
+
+    private static bool PointInTriangle(Point3d p, Point3d a, Point3d b, Point3d c)
+    {
+        var d1 = Sign(p, a, b);
+        var d2 = Sign(p, b, c);
+        var d3 = Sign(p, c, a);
+        var hasNeg = d1 < 0 || d2 < 0 || d3 < 0;
+        var hasPos = d1 > 0 || d2 > 0 || d3 > 0;
+        return !(hasNeg && hasPos);
+    }
+
+    private static double Sign(Point3d p, Point3d a, Point3d b) =>
+        (p.X - b.X) * (a.Y - b.Y) - (a.X - b.X) * (p.Y - b.Y);
+
+    // Combine outer + holes into a single ring by inserting bridges. For each hole,
+    // pick the hole vertex with maximum X, find a visible vertex on the outer ring,
+    // and splice the hole vertices into the outer ring with a back-and-forth seam.
+    // Holes must be wound CW relative to outer's CCW; the splice flips them as needed.
+    private static List<Point3d> BridgeHoles(List<Point3d> outerCcw, List<List<Point3d>> holes)
+    {
+        var combined = new List<Point3d>(outerCcw);
+
+        // Process holes in descending order of rightmost X — bridging the right-most
+        // hole first reduces the chance that a later bridge crosses an earlier one.
+        var ordered = new List<List<Point3d>>(holes);
+        ordered.Sort((h1, h2) => MaxX(h2).CompareTo(MaxX(h1)));
+
+        foreach (var hole in ordered)
+        {
+            var bare = StripClosingDuplicate(hole);
+            if (bare.Count < 3) continue;
+
+            // Force CW so the splice produces a consistent CCW combined ring.
+            var holeRing = new List<Point3d>(bare);
+            if (SignedArea(holeRing) > 0) holeRing.Reverse();
+
+            // Find hole's rightmost vertex.
+            var holeIdx = 0;
+            for (var i = 1; i < holeRing.Count; i++)
+                if (holeRing[i].X > holeRing[holeIdx].X) holeIdx = i;
+
+            // Find a "visible" outer vertex: pick the outer vertex with smallest distance
+            // to the hole vertex such that the connecting segment doesn't cross any other
+            // outer edge. (This is the simplified Eberly bridge: not optimal in pathological
+            // cases, but robust enough for the well-behaved paths Rhino produces.)
+            var outerIdx = FindVisibleOuterVertex(combined, holeRing[holeIdx]);
+            if (outerIdx < 0) continue;
+
+            // Splice: outer[0..outerIdx], outer[outerIdx], hole[holeIdx..end..holeIdx],
+            // outer[outerIdx], outer[outerIdx+1..end].
+            var spliced = new List<Point3d>(combined.Count + holeRing.Count + 2);
+            for (var i = 0; i <= outerIdx; i++) spliced.Add(combined[i]);
+            for (var k = 0; k < holeRing.Count; k++)
+                spliced.Add(holeRing[(holeIdx + k) % holeRing.Count]);
+            spliced.Add(holeRing[holeIdx]);
+            spliced.Add(combined[outerIdx]);
+            for (var i = outerIdx + 1; i < combined.Count; i++) spliced.Add(combined[i]);
+            combined = spliced;
+        }
+        return combined;
+    }
+
+    private static double MaxX(List<Point3d> pts)
+    {
+        var m = double.NegativeInfinity;
+        foreach (var p in pts) if (p.X > m) m = p.X;
+        return m;
+    }
+
+    private static int FindVisibleOuterVertex(List<Point3d> outer, Point3d holePt)
+    {
+        var best = -1;
+        var bestDist = double.MaxValue;
+        for (var i = 0; i < outer.Count; i++)
+        {
+            var v = outer[i];
+            var dx = v.X - holePt.X; var dy = v.Y - holePt.Y;
+            var d = dx * dx + dy * dy;
+            if (d >= bestDist) continue;
+            if (SegmentClearOfRing(holePt, v, outer, i)) { best = i; bestDist = d; }
+        }
+        return best;
+    }
+
+    private static bool SegmentClearOfRing(Point3d p, Point3d q, List<Point3d> ring, int skipIdx)
+    {
+        var n = ring.Count;
+        for (var i = 0; i < n; i++)
+        {
+            // Skip edges incident to the candidate vertex — they share an endpoint with q.
+            if (i == skipIdx || (i + 1) % n == skipIdx) continue;
+            var a = ring[i];
+            var b = ring[(i + 1) % n];
+            if (SegmentsIntersect(p, q, a, b)) return false;
+        }
+        return true;
+    }
+
+    private static bool SegmentsIntersect(Point3d p1, Point3d p2, Point3d p3, Point3d p4)
+    {
+        var d1 = Sign(p1, p3, p4);
+        var d2 = Sign(p2, p3, p4);
+        var d3 = Sign(p3, p1, p2);
+        var d4 = Sign(p4, p1, p2);
+        if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+            ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
+        return false;
     }
 
     // ============================================================================

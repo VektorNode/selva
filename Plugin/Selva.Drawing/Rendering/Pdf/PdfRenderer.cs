@@ -13,6 +13,7 @@ using Selva.Drawing.Model.Style;
 using PdfFontStyle = PdfSharpCore.Drawing.XFontStyle;
 using ModelFontStyle = Selva.Drawing.Model.Style.FontStyle;
 using PdfSharpColorMode = PdfSharpCore.Pdf.PdfColorMode;
+using ModelPath = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Rendering.Pdf;
 
@@ -460,16 +461,32 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		// black hairline. When fill is null but stroke is not, stroke only. When fill is
 		// set, fill (and optionally stroke).
 		var pen = element.Stroke != null ? CreatePen(element.Stroke) : null;
-		var brush = element.Fill != null ? new XSolidBrush(ToXColor(element.Fill.Color, (float)element.Fill.Opacity)) : null;
+		var hasHatch = element.Fill != null && element.Fill.Pattern != HatchPattern.None;
+		var brush = (element.Fill != null && !hasHatch)
+			? new XSolidBrush(ToXColor(element.Fill.Color, (float)element.Fill.Opacity))
+			: null;
 
-		if (pen == null && brush == null)
+		if (pen == null && brush == null && !hasHatch)
 		{
 			// Legacy "unstyled curve" => fill='none' stroke='black' stroke-width unspecified.
 			// PdfSharpCore needs an explicit width — mirror SvgRenderer's default Stroke width.
 			pen = CreatePen(new Stroke { Color = Color.Black, Width = 0.25 });
 		}
 
-		if (brush != null)
+		if (hasHatch)
+		{
+			// Pattern fill: clip to the path, draw repeating pattern strokes inside, then
+			// stroke the boundary if requested. SVG's <pattern> approach maps naturally to
+			// "clip + tile" in PDF since PdfSharpCore doesn't expose tiling-pattern brushes.
+			var xpath = PdfPathBuilder.Build(element.Path);
+			DrawHatchedFill(xpath, element.Path, element.Fill);
+			if (pen != null)
+			{
+				foreach (var sub in PdfPathBuilder.BuildSubpaths(element.Path))
+					_gfx.DrawPath(pen, sub);
+			}
+		}
+		else if (brush != null)
 		{
 			// Fills (with or without stroke) need a single XGraphicsPath so multi-subpath
 			// shapes with holes resolve correctly under the path's fill rule.
@@ -583,8 +600,47 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 	public void Visit(HatchElement element)
 	{
-		// Phase 5 stub. Pattern fills ship with the layout layer (Phase 7+).
-		_ = element;
+		if (element == null || element.Boundary.IsEmpty) return;
+
+		var bounds = element.Boundary.ComputeBounds();
+		if (bounds.IsEmpty) return;
+
+		var xpath = PdfPathBuilder.Build(element.Boundary);
+
+		// Optional opaque background behind the pattern lines.
+		if (element.BackgroundColor.A > 0)
+		{
+			var bgBrush = new XSolidBrush(ToXColor(element.BackgroundColor, 1f));
+			_gfx.DrawPath(bgBrush, xpath);
+		}
+
+		// Pattern stroking — clipped to the boundary so lines don't leak outside.
+		var line = element.LineStyle ?? new Stroke { Width = 0.18 };
+		var pen = CreatePen(line);
+
+		switch (element.Pattern)
+		{
+			case HatchPatternKind.Solid:
+			{
+				var solid = new XSolidBrush(ToXColor(line.Color, (float)line.Opacity));
+				_gfx.DrawPath(solid, xpath);
+				break;
+			}
+			case HatchPatternKind.Lines:
+				DrawHatchLinesClipped(xpath, bounds, element.AngleDegrees, element.Spacing, pen);
+				break;
+			case HatchPatternKind.CrossHatch:
+				DrawHatchLinesClipped(xpath, bounds, element.AngleDegrees, element.Spacing, pen);
+				DrawHatchLinesClipped(xpath, bounds, element.AngleDegrees + 90.0, element.Spacing, pen);
+				break;
+			case HatchPatternKind.Dots:
+				DrawHatchDotsClipped(xpath, bounds, element.Spacing, line);
+				break;
+		}
+
+		// Always trace the boundary so the region is legible even when the pattern is sparse.
+		foreach (var sub in PdfPathBuilder.BuildSubpaths(element.Boundary))
+			_gfx.DrawPath(pen, sub);
 	}
 
 	public void Visit(SymbolElement element)
@@ -1061,6 +1117,192 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		var comma = fontFamily.IndexOf(',');
 		var first = comma < 0 ? fontFamily : fontFamily.Substring(0, comma);
 		return first.Trim().Trim('"', '\'');
+	}
+
+	// ============================================================================
+	// Hatch pattern emission (Fill.Pattern on PathElement + HatchElement)
+	// ============================================================================
+
+	// Pattern fill for a PathElement: clip to xpath, then draw repeating strokes inside
+	// the path's axis-aligned bounding box. Matches SvgRenderer's <pattern> definitions
+	// (4mm tile × scale, line width 0.3mm × scale, dot radius 0.4mm × scale, brick 4×8mm
+	// × scale). Pattern angle rotates the line direction; the clipping path is unchanged.
+	private void DrawHatchedFill(XGraphicsPath xpath, ModelPath modelPath, Fill fill)
+	{
+		var bounds = modelPath.ComputeBounds();
+		if (bounds.IsEmpty) return;
+
+		var scale = fill.PatternScale > 0 ? fill.PatternScale : 1.0;
+		var lineWidth = 0.3 * scale;
+		var color = ToXColor(fill.Color, (float)fill.Opacity);
+		var pen = new XPen(color, lineWidth);
+		var brush = new XSolidBrush(color);
+
+		var state = _gfx.Save();
+		_gfx.IntersectClip(xpath);
+
+		switch (fill.Pattern)
+		{
+			case HatchPattern.Lines:
+				// SVG pattern emits lines at 45° relative to the tile; PatternAngle adds on top.
+				DrawHatchLines(bounds, 45.0 + fill.PatternAngle, 4.0 * scale, pen);
+				break;
+			case HatchPattern.CrossHatch:
+				DrawHatchLines(bounds, 45.0 + fill.PatternAngle, 4.0 * scale, pen);
+				DrawHatchLines(bounds, -45.0 + fill.PatternAngle, 4.0 * scale, pen);
+				break;
+			case HatchPattern.Dots:
+				DrawHatchDots(bounds, 4.0 * scale, 0.4 * scale, brush);
+				break;
+			case HatchPattern.Brick:
+				DrawHatchBrick(bounds, 4.0 * scale, fill.PatternAngle, pen);
+				break;
+		}
+
+		_gfx.Restore(state);
+	}
+
+	// Parallel lines at the given angle, spaced uniformly across the axis-aligned bbox.
+	// We rotate the bbox into line-perpendicular space, scan that range at `spacing`
+	// intervals, then emit each line as a segment long enough to cross the original bbox
+	// when un-rotated. Clipping (set up by the caller) trims overflow.
+	private void DrawHatchLines(BoundingBox bounds, double angleDegrees, double spacing, XPen pen)
+	{
+		if (spacing <= 0) return;
+		var theta = angleDegrees * Math.PI / 180.0;
+		var ux = Math.Cos(theta);
+		var uy = Math.Sin(theta);
+		// Perpendicular axis along which we sweep.
+		var px = -uy;
+		var py = ux;
+
+		// Project all four bbox corners onto the sweep axis to get the parameter range.
+		var corners = new[]
+		{
+			(bounds.MinX, bounds.MinY),
+			(bounds.MaxX, bounds.MinY),
+			(bounds.MaxX, bounds.MaxY),
+			(bounds.MinX, bounds.MaxY),
+		};
+		double tMin = double.PositiveInfinity, tMax = double.NegativeInfinity;
+		double sMin = double.PositiveInfinity, sMax = double.NegativeInfinity;
+		foreach (var (x, y) in corners)
+		{
+			var t = x * px + y * py; // sweep axis
+			var s = x * ux + y * uy; // along-line axis
+			if (t < tMin) tMin = t;
+			if (t > tMax) tMax = t;
+			if (s < sMin) sMin = s;
+			if (s > sMax) sMax = s;
+		}
+
+		// Snap the start so neighbouring shapes with the same pattern align.
+		var first = Math.Floor(tMin / spacing) * spacing;
+		// Extend along-line endpoints slightly so clipped diagonals don't leave gaps at corners.
+		var s0 = sMin - spacing;
+		var s1 = sMax + spacing;
+
+		for (var t = first; t <= tMax + 1e-9; t += spacing)
+		{
+			var x0 = ux * s0 + px * t;
+			var y0 = uy * s0 + py * t;
+			var x1 = ux * s1 + px * t;
+			var y1 = uy * s1 + py * t;
+			_gfx.DrawLine(pen, x0, y0, x1, y1);
+		}
+	}
+
+	private void DrawHatchDots(BoundingBox bounds, double spacing, double radius, XBrush brush)
+	{
+		if (spacing <= 0 || radius <= 0) return;
+		var x0 = Math.Floor(bounds.MinX / spacing) * spacing + spacing / 2.0;
+		var y0 = Math.Floor(bounds.MinY / spacing) * spacing + spacing / 2.0;
+		for (var y = y0; y <= bounds.MaxY + 1e-9; y += spacing)
+		{
+			for (var x = x0; x <= bounds.MaxX + 1e-9; x += spacing)
+			{
+				_gfx.DrawEllipse(brush, x - radius, y - radius, radius * 2.0, radius * 2.0);
+			}
+		}
+	}
+
+	// Brick coursing: full-width horizontal lines at every half-tile, plus half-height
+	// vertical head-joints staggered by half a brick on alternating courses.
+	private void DrawHatchBrick(BoundingBox bounds, double tile, double angleDegrees, XPen pen)
+	{
+		if (tile <= 0) return;
+		var brickH = tile;
+		var brickW = tile * 2.0;
+
+		// SVG renders brick in tile-local coords then applies patternTransform=rotate(angle).
+		// Mirror that: build the courses in axis-aligned space using a generously inflated
+		// bbox (so a rotated rendering still covers the clip), then rotate around (0,0).
+		var diag = Math.Sqrt(
+			(bounds.MaxX - bounds.MinX) * (bounds.MaxX - bounds.MinX) +
+			(bounds.MaxY - bounds.MinY) * (bounds.MaxY - bounds.MinY));
+		var cx = (bounds.MinX + bounds.MaxX) / 2.0;
+		var cy = (bounds.MinY + bounds.MaxY) / 2.0;
+		var rxMin = cx - diag;
+		var rxMax = cx + diag;
+		var ryMin = cy - diag;
+		var ryMax = cy + diag;
+
+		XGraphicsState state = default;
+		var hasAngle = Math.Abs(angleDegrees) > 1e-9;
+		if (hasAngle)
+		{
+			state = _gfx.Save();
+			_gfx.RotateAtTransform(angleDegrees, new XPoint(cx, cy));
+		}
+
+		// Horizontal courses every brickH/2 (every half-tile) — SVG's pattern emits both
+		// y=0 and y=brickH/2 within a brickH-tall tile, so the period on screen is brickH/2.
+		var hStart = Math.Floor(ryMin / (brickH / 2.0)) * (brickH / 2.0);
+		for (var y = hStart; y <= ryMax + 1e-9; y += brickH / 2.0)
+		{
+			_gfx.DrawLine(pen, rxMin, y, rxMax, y);
+		}
+
+		// Head joints: vertical segments of length brickH/2.
+		// Even rows: joints at x = k*brickW (full-tile boundary).
+		// Odd rows:  joints at x = k*brickW + brickW/2 (staggered by half a brick).
+		var rowIndex = 0;
+		for (var y = hStart; y <= ryMax + 1e-9; y += brickH / 2.0)
+		{
+			var offset = (rowIndex % 2 == 0) ? 0.0 : brickW / 2.0;
+			var xStart = Math.Floor((rxMin - offset) / brickW) * brickW + offset;
+			for (var x = xStart; x <= rxMax + 1e-9; x += brickW)
+			{
+				_gfx.DrawLine(pen, x, y, x, y + brickH / 2.0);
+			}
+			rowIndex++;
+		}
+
+		if (hasAngle) _gfx.Restore(state);
+	}
+
+	// HatchElement variants: spacing/angle come from the element rather than a Fill, and
+	// dots use the line-style stroke width as their radius source. Clipping is applied
+	// per-call so callers don't have to manage state when only one pattern fires.
+	private void DrawHatchLinesClipped(XGraphicsPath xpath, BoundingBox bounds, double angleDegrees, double spacing, XPen pen)
+	{
+		var state = _gfx.Save();
+		_gfx.IntersectClip(xpath);
+		DrawHatchLines(bounds, angleDegrees, spacing > 0 ? spacing : 2.0, pen);
+		_gfx.Restore(state);
+	}
+
+	private void DrawHatchDotsClipped(XGraphicsPath xpath, BoundingBox bounds, double spacing, Stroke line)
+	{
+		var brush = new XSolidBrush(ToXColor(line.Color, (float)line.Opacity));
+		// HatchElement dots size is implicit; pick something proportional to spacing so
+		// dense spacings don't render as overlapping disks. Half the line width is a sensible
+		// default — matches the visual weight of HatchPatternKind.Lines at the same stroke.
+		var radius = Math.Max(line.Width * 0.5, 0.15);
+		var state = _gfx.Save();
+		_gfx.IntersectClip(xpath);
+		DrawHatchDots(bounds, spacing > 0 ? spacing : 2.0, radius, brush);
+		_gfx.Restore(state);
 	}
 
 	// ============================================================================

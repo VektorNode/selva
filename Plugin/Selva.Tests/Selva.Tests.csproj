@@ -24,6 +24,17 @@
 		<ProjectReference Include="..\Selva.Schema\Selva.Schema.csproj"/>
 	</ItemGroup>
 
+	<!--
+	  Link the BinaryGeometryWriter source directly instead of taking a project reference on
+	  Selva.GH. The plugin project pulls in Grasshopper / Windows.Forms / RhinoCommon, which
+	  break the net8 test host (Failed to create CoreCLR). The writer has no Rhino/GH
+	  dependencies so compiling it into the test assembly is the simplest isolation.
+	-->
+	<ItemGroup>
+		<Compile Include="..\Selva.GH\Features\Display\Services\BinaryGeometryWriter.cs"
+		         Link="Linked\BinaryGeometryWriter.cs"/>
+	</ItemGroup>
+
 	<ItemGroup>
 		<Content Include="TestFiles\**">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
