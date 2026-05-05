@@ -37,6 +37,11 @@ public class GH_Table : GH_Component
         pManager.AddGenericParameter("Default Style", "S", "Default text style for cells (leave empty for default)", GH_ParamAccess.item);
         pManager.AddGenericParameter("Header Style", "HS", "Text style for header cells (leave empty to inherit default style with bold weight)", GH_ParamAccess.item);
         pManager.AddGenericParameter("Header Fill", "HF", "Background fill for the header row (leave empty for none)", GH_ParamAccess.item);
+        // New polish inputs — appended to keep saved-file input order stable.
+        pManager.AddTextParameter("Column Align", "CA", "Per-column text alignment: one item per column. Accepts \"left\"/\"l\", \"center\"/\"c\", \"right\"/\"r\". Empty = left.", GH_ParamAccess.list);
+        pManager.AddTextParameter("Border Style", "BS", "all | horizontal | header | outer | none. Default: all.", GH_ParamAccess.item, "all");
+        pManager.AddGenericParameter("Stripe Fill", "ZF", "Alternating row fill (leave empty for none)", GH_ParamAccess.item);
+        pManager.AddIntegerParameter("Stripe Every", "ZN", "Stripe every Nth body row (default 2)", GH_ParamAccess.item, 2);
 
         pManager[0].Optional = true;
         pManager[2].Optional = true;
@@ -45,6 +50,10 @@ public class GH_Table : GH_Component
         pManager[5].Optional = true;
         pManager[6].Optional = true;
         pManager[7].Optional = true;
+        pManager[8].Optional = true;
+        pManager[9].Optional = true;
+        pManager[10].Optional = true;
+        pManager[11].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -61,6 +70,10 @@ public class GH_Table : GH_Component
         TextStyle style = null;
         TextStyle headerStyle = null;
         Fill headerFill = null;
+        var alignTokens = new List<string>();
+        var borderStyleToken = "all";
+        Fill stripeFill = null;
+        var stripeEvery = 2;
 
         DA.GetDataList(0, headers);
         if (!DA.GetDataTree(1, out GH_Structure<GH_String> rowTree))
@@ -74,6 +87,10 @@ public class GH_Table : GH_Component
         DA.GetData(5, ref style);
         DA.GetData(6, ref headerStyle);
         DA.GetData(7, ref headerFill);
+        DA.GetDataList(8, alignTokens);
+        DA.GetData(9, ref borderStyleToken);
+        DA.GetData(10, ref stripeFill);
+        DA.GetData(11, ref stripeEvery);
 
         var bodyRows = new List<IReadOnlyList<TableCell>>(rowTree.PathCount);
         foreach (var path in rowTree.Paths)
@@ -96,19 +113,88 @@ public class GH_Table : GH_Component
             headerRow = hCells;
         }
 
+        IReadOnlyList<TextAnchor> columnAlignments = null;
+        if (alignTokens.Count > 0)
+        {
+            var anchors = new TextAnchor[alignTokens.Count];
+            for (var i = 0; i < alignTokens.Count; i++) anchors[i] = ParseAnchor(alignTokens[i]);
+            columnAlignments = anchors;
+        }
+
+        if (!TryParseBorderStyle(borderStyleToken, out var resolvedBorderStyle))
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                $"Unknown Border Style '{borderStyleToken}', falling back to 'all'");
+            resolvedBorderStyle = TableBorderStyle.All;
+        }
+
         var table = new Table
         {
             Header = headerRow,
             Rows = bodyRows,
             ColumnWidths = string.IsNullOrWhiteSpace(columnsDsl) ? null : ParseTracks(columnsDsl),
+            ColumnAlignments = columnAlignments,
             RowHeight = rowHeight > 0 ? (double?)rowHeight : null,
             Border = border ?? new Stroke { Width = 0.25 },
+            BorderStyle = resolvedBorderStyle,
             DefaultCellStyle = style ?? new TextStyle(),
             HeaderStyle = headerStyle,
             HeaderBackground = headerFill,
+            RowStripeFill = stripeFill,
+            RowStripeEvery = Math.Max(1, stripeEvery),
         };
 
         DA.SetData(0, table);
+    }
+
+    private static TextAnchor ParseAnchor(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return TextAnchor.Left;
+        switch (token.Trim().ToLowerInvariant())
+        {
+            case "c":
+            case "center":
+            case "centre":
+            case "middle":
+            case "m":
+                return TextAnchor.Center;
+            case "r":
+            case "right":
+            case "end":
+                return TextAnchor.Right;
+            default:
+                return TextAnchor.Left;
+        }
+    }
+
+    private static bool TryParseBorderStyle(string token, out TableBorderStyle style)
+    {
+        switch ((token ?? "").Trim().ToLowerInvariant())
+        {
+            case "":
+            case "all":
+            case "grid":
+                style = TableBorderStyle.All; return true;
+            case "horizontal":
+            case "horizontals":
+            case "h":
+            case "rows":
+                style = TableBorderStyle.HorizontalOnly; return true;
+            case "header":
+            case "headerandouter":
+            case "header+outer":
+            case "bom":
+                style = TableBorderStyle.HeaderAndOuter; return true;
+            case "outer":
+            case "frame":
+            case "box":
+                style = TableBorderStyle.Outer; return true;
+            case "none":
+            case "off":
+                style = TableBorderStyle.None; return true;
+            default:
+                style = TableBorderStyle.All; return false;
+        }
     }
 
     private static IReadOnlyList<GridLength> ParseTracks(string dsl)

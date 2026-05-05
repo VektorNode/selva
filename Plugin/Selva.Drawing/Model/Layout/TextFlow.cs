@@ -98,6 +98,23 @@ public sealed class TextFlow : LayoutElement
 		var children = new List<DrawElement>(lines.Count);
 		var totalH = FixedHeight ?? Math.Max(lineHeight, lines.Count * lineHeight);
 
+		// Horizontal anchor x — the renderer interprets style.HorizontalAnchor by shifting
+		// the glyph run left by 0/half-width/full-width. To make the run visually align
+		// inside the wrap rectangle (Origin.X .. Origin.X + width), pin Position.X to the
+		// matching anchor point. Falls back to Origin.X when no width is known (single-line
+		// no-wrap case), which preserves prior behaviour for unconstrained TextFlows.
+		var style = Style ?? new TextStyle();
+		double anchorX = Origin.X;
+		if (effectiveWidth > 0)
+		{
+			anchorX = style.HorizontalAnchor switch
+			{
+				TextAnchor.Center => Origin.X + effectiveWidth / 2.0,
+				TextAnchor.Right => Origin.X + effectiveWidth,
+				_ => Origin.X,
+			};
+		}
+
 		// Place line i so its baseline sits at: top - ascent - i*lineHeight.
 		// Top in world Y-up = Origin.Y + totalH.
 		var top = Origin.Y + totalH;
@@ -107,8 +124,8 @@ public sealed class TextFlow : LayoutElement
 			children.Add(new TextElement
 			{
 				Text = lines[i],
-				Position = new Point2D(Origin.X, baseline),
-				Style = Style,
+				Position = new Point2D(anchorX, baseline),
+				Style = style,
 			});
 		}
 

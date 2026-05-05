@@ -23,17 +23,30 @@ public sealed class TableCell
 	public int ColumnSpan { get; init; } = 1;
 }
 
+// Which border lines to draw. Outer = the four edges only; HorizontalOnly = no verticals;
+// HeaderAndOuter = outer rect + the rule under the header (clean BOM look); All = full grid.
+public enum TableBorderStyle { All, HorizontalOnly, HeaderAndOuter, Outer, None }
+
 public sealed class Table : LayoutElement
 {
 	public IReadOnlyList<TableCell> Header { get; init; }
 	public IReadOnlyList<IReadOnlyList<TableCell>> Rows { get; init; } = Array.Empty<IReadOnlyList<TableCell>>();
 
 	public IReadOnlyList<GridLength> ColumnWidths { get; init; }
+	// Per-column horizontal text anchor. Applied to text cells whose own Style doesn't
+	// override HorizontalAnchor. Null or short list → cells fall back to the resolved style's
+	// own anchor (typically left). Longer than column count → extra entries are ignored.
+	public IReadOnlyList<TextAnchor> ColumnAlignments { get; init; }
 	public double? RowHeight { get; init; }
 	public Margins CellPadding { get; init; } = new Margins(1.5, 2.5, 1.5, 2.5);
 
 	public Stroke Border { get; init; } = new Stroke { Width = 0.25 };
+	public TableBorderStyle BorderStyle { get; init; } = TableBorderStyle.All;
 	public Fill HeaderBackground { get; init; }
+	// Alternating row fill, applied to body rows only. Stripe = the 2nd, 4th, … row when
+	// Every = 2 (the default). Set RowStripeFill = null to disable.
+	public Fill RowStripeFill { get; init; }
+	public int RowStripeEvery { get; init; } = 2;
 	public TextStyle DefaultCellStyle { get; init; } = new TextStyle();
 	// Explicit header text style. When null, header cells inherit DefaultCellStyle with
 	// Weight bumped to Bold (see ResolveCellContent).
@@ -83,7 +96,8 @@ public sealed class Table : LayoutElement
 
 		// Header background (under content). Drawn before the grid lays out its cells so the
 		// fill sits behind the text.
-		if (Header != null && Header.Count > 0 && HeaderBackground != null)
+		var hasHeader = Header != null && Header.Count > 0;
+		if (hasHeader && HeaderBackground != null)
 		{
 			var headerCell = grid.ComputeCellRect(gridLayout, new GridCell { Row = 0, Column = 0, ColumnSpan = columnCount }, totalRect.Height);
 			var rect = new Path.Builder()
@@ -96,13 +110,37 @@ public sealed class Table : LayoutElement
 			children.Add(new PathElement { Path = rect, Fill = HeaderBackground });
 		}
 
+		// Row stripes. Body row index k = grid row (hasHeader ? k+1 : k). Stripe pattern:
+		// every Nth body row (1-indexed) gets the fill, e.g. RowStripeEvery=2 stripes the
+		// 2nd, 4th, … body rows. Drawn under cell content for the same reason as the header
+		// background.
+		if (RowStripeFill != null && Rows != null && Rows.Count > 0 && RowStripeEvery > 0)
+		{
+			var dataStart = hasHeader ? 1 : 0;
+			for (var k = 0; k < Rows.Count; k++)
+			{
+				if (((k + 1) % RowStripeEvery) != 0) continue;
+				var stripeCell = grid.ComputeCellRect(gridLayout,
+					new GridCell { Row = dataStart + k, Column = 0, ColumnSpan = columnCount },
+					totalRect.Height);
+				var rect = new Path.Builder()
+					.MoveTo(Origin.X + stripeCell.MinX, Origin.Y + stripeCell.MinY)
+					.LineTo(Origin.X + stripeCell.MaxX, Origin.Y + stripeCell.MinY)
+					.LineTo(Origin.X + stripeCell.MaxX, Origin.Y + stripeCell.MaxY)
+					.LineTo(Origin.X + stripeCell.MinX, Origin.Y + stripeCell.MaxY)
+					.Close()
+					.Build();
+				children.Add(new PathElement { Path = rect, Fill = RowStripeFill });
+			}
+		}
+
 		// Cell content via the grid.
 		var resolvedGrid = grid.Resolve(context);
 		children.Add(resolvedGrid);
 
-		// Border lines: outer rect + every internal grid line. We emit them as a single
+		// Border lines: outer rect + internal rules per BorderStyle. We emit them as a single
 		// PathElement so the renderer treats the whole frame as one stroked path.
-		if (Border != null)
+		if (Border != null && BorderStyle != TableBorderStyle.None)
 		{
 			var borderPath = BuildBorderPath(gridLayout, totalRect);
 			children.Add(new PathElement { Path = borderPath, Stroke = Border });
@@ -196,10 +234,14 @@ public sealed class Table : LayoutElement
 			Header = Header,
 			Rows = rows,
 			ColumnWidths = ColumnWidths,
+			ColumnAlignments = ColumnAlignments,
 			RowHeight = RowHeight,
 			CellPadding = CellPadding,
 			Border = Border,
+			BorderStyle = BorderStyle,
 			HeaderBackground = HeaderBackground,
+			RowStripeFill = RowStripeFill,
+			RowStripeEvery = RowStripeEvery,
 			DefaultCellStyle = DefaultCellStyle,
 			HeaderStyle = HeaderStyle,
 			Origin = origin,
@@ -294,7 +336,7 @@ public sealed class Table : LayoutElement
 			var span = Math.Max(1, cell.ColumnSpan);
 			if (col + span > columnCount) span = columnCount - col;
 
-			var content = ResolveCellContent(cell, isHeader);
+			var content = ResolveCellContent(cell, isHeader, col);
 			grid.Add(new GridCell
 			{
 				Row = rowIndex,
@@ -306,7 +348,7 @@ public sealed class Table : LayoutElement
 		}
 	}
 
-	private DrawElement ResolveCellContent(TableCell cell, bool isHeader)
+	private DrawElement ResolveCellContent(TableCell cell, bool isHeader, int columnIndex)
 	{
 		if (cell.Element != null) return PadCellElement(cell.Element);
 
@@ -319,20 +361,19 @@ public sealed class Table : LayoutElement
 			}
 			else if (DefaultCellStyle != null)
 			{
-				style = new TextStyle
-				{
-					FontFamily = style.FontFamily,
-					FontSize = style.FontSize,
-					Weight = FontWeight.Bold,
-					Style = style.Style,
-					Decoration = style.Decoration,
-					Color = style.Color,
-					HorizontalAnchor = style.HorizontalAnchor,
-					VerticalAnchor = style.VerticalAnchor,
-					LineHeight = style.LineHeight,
-					LetterSpacing = style.LetterSpacing,
-				};
+				style = CloneWithWeight(style, FontWeight.Bold);
 			}
+		}
+
+		// Per-column alignment overrides the resolved style's HorizontalAnchor — but only
+		// when the cell didn't bring its own Style. A caller that sets cell.Style is making
+		// an explicit choice and shouldn't be silently overridden by the column default.
+		if (cell.Style == null
+			&& ColumnAlignments != null
+			&& columnIndex >= 0 && columnIndex < ColumnAlignments.Count
+			&& style.HorizontalAnchor != ColumnAlignments[columnIndex])
+		{
+			style = CloneWithAnchor(style, ColumnAlignments[columnIndex]);
 		}
 
 		// Width is left null: the TextFlow inherits its wrap width from the surrounding
@@ -347,6 +388,34 @@ public sealed class Table : LayoutElement
 		return PadCellElement(flow);
 	}
 
+	private static TextStyle CloneWithWeight(TextStyle s, FontWeight w) => new TextStyle
+	{
+		FontFamily = s.FontFamily,
+		FontSize = s.FontSize,
+		Weight = w,
+		Style = s.Style,
+		Decoration = s.Decoration,
+		Color = s.Color,
+		HorizontalAnchor = s.HorizontalAnchor,
+		VerticalAnchor = s.VerticalAnchor,
+		LineHeight = s.LineHeight,
+		LetterSpacing = s.LetterSpacing,
+	};
+
+	private static TextStyle CloneWithAnchor(TextStyle s, TextAnchor a) => new TextStyle
+	{
+		FontFamily = s.FontFamily,
+		FontSize = s.FontSize,
+		Weight = s.Weight,
+		Style = s.Style,
+		Decoration = s.Decoration,
+		Color = s.Color,
+		HorizontalAnchor = a,
+		VerticalAnchor = s.VerticalAnchor,
+		LineHeight = s.LineHeight,
+		LetterSpacing = s.LetterSpacing,
+	};
+
 	private DrawElement PadCellElement(DrawElement child)
 	{
 		if (CellPadding.Equals(Margins.Zero)) return child;
@@ -357,9 +426,8 @@ public sealed class Table : LayoutElement
 		};
 	}
 
-	// Border path: outer rect + horizontal lines between rows + vertical lines between
-	// columns. Each line is a separate MoveTo/LineTo so the stroker doesn't draw a single
-	// open polygon.
+	// Border path: outer rect + optional internal rules per BorderStyle. Each line is a
+	// separate MoveTo/LineTo so the stroker doesn't draw a single open polygon.
 	private Path BuildBorderPath(Grid.TrackLayout layout, BoundingBox totalRect)
 	{
 		var b = new Path.Builder();
@@ -368,24 +436,41 @@ public sealed class Table : LayoutElement
 		var x1 = Origin.X + totalRect.Width;
 		var y1 = Origin.Y + totalRect.Height;
 
-		// Outer rectangle.
-		b.MoveTo(x0, y0).LineTo(x1, y0).LineTo(x1, y1).LineTo(x0, y1).Close();
+		var style = BorderStyle;
+		var drawOuter = style != TableBorderStyle.None;
+		var drawHorizontals = style == TableBorderStyle.All || style == TableBorderStyle.HorizontalOnly;
+		var drawVerticals = style == TableBorderStyle.All;
+		var drawHeaderRule = style == TableBorderStyle.HeaderAndOuter && Header != null && Header.Count > 0;
+
+		if (drawOuter)
+			b.MoveTo(x0, y0).LineTo(x1, y0).LineTo(x1, y1).LineTo(x0, y1).Close();
 
 		// Horizontal lines between rows. Top of grid = y1; row 0 top = y1; we want a line
 		// below row 0, below row 1, ..., above the last row.
-		var cursorY = y1;
-		for (var r = 0; r < layout.RowHeights.Length - 1; r++)
+		if (drawHorizontals)
 		{
-			cursorY -= layout.RowHeights[r];
-			b.MoveTo(x0, cursorY).LineTo(x1, cursorY);
+			var cursorY = y1;
+			for (var r = 0; r < layout.RowHeights.Length - 1; r++)
+			{
+				cursorY -= layout.RowHeights[r];
+				b.MoveTo(x0, cursorY).LineTo(x1, cursorY);
+			}
+		}
+		else if (drawHeaderRule)
+		{
+			// Just the rule under the header row (row 0 in track order = top track).
+			var ruleY = y1 - layout.RowHeights[0];
+			b.MoveTo(x0, ruleY).LineTo(x1, ruleY);
 		}
 
-		// Vertical lines between columns.
-		var cursorX = x0;
-		for (var c = 0; c < layout.ColWidths.Length - 1; c++)
+		if (drawVerticals)
 		{
-			cursorX += layout.ColWidths[c];
-			b.MoveTo(cursorX, y0).LineTo(cursorX, y1);
+			var cursorX = x0;
+			for (var c = 0; c < layout.ColWidths.Length - 1; c++)
+			{
+				cursorX += layout.ColWidths[c];
+				b.MoveTo(cursorX, y0).LineTo(cursorX, y1);
+			}
 		}
 
 		return b.Build();
