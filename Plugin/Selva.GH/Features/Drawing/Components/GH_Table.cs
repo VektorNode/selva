@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
+using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
 using Selva.Drawing.Model.Layout;
 using Selva.Drawing.Model.Style;
+using Selva.GH.Features.Drawing.Params;
 using Selva.GH.Properties;
+using DrawColor = Selva.Drawing.Model.Style.Color;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -33,15 +36,13 @@ public class GH_Table : GH_Component
         pManager.AddTextParameter("Rows", "R", "Body rows — supply as a data tree, one branch per row", GH_ParamAccess.tree);
         pManager.AddTextParameter("Column Widths", "CW", "Track DSL: \"40 auto 1*\". Empty → all columns are 1*.", GH_ParamAccess.item, "");
         pManager.AddNumberParameter("Row Height", "RH", "Fixed row height in mm (0 = auto-size)", GH_ParamAccess.item, 0.0);
-        pManager.AddGenericParameter("Border", "B", "Stroke style for borders (leave empty for none)", GH_ParamAccess.item);
-        pManager.AddGenericParameter("Default Style", "S", "Default text style for cells (leave empty for default)", GH_ParamAccess.item);
-        pManager.AddGenericParameter("Header Style", "HS", "Text style for header cells (leave empty to inherit default style with bold weight)", GH_ParamAccess.item);
-        pManager.AddGenericParameter("Header Fill", "HF", "Background fill for the header row (leave empty for none)", GH_ParamAccess.item);
-        // New polish inputs — appended to keep saved-file input order stable.
-        pManager.AddTextParameter("Column Align", "CA", "Per-column text alignment: one item per column. Accepts \"left\"/\"l\", \"center\"/\"c\", \"right\"/\"r\". Empty = left.", GH_ParamAccess.list);
-        pManager.AddTextParameter("Border Style", "BS", "all | horizontal | header | outer | none. Default: all.", GH_ParamAccess.item, "all");
-        pManager.AddGenericParameter("Stripe Fill", "ZF", "Alternating row fill (leave empty for none)", GH_ParamAccess.item);
-        pManager.AddIntegerParameter("Stripe Every", "ZN", "Stripe every Nth body row (default 2)", GH_ParamAccess.item, 2);
+        pManager.AddParameter(new Param_Stroke("Border", "B", "Border stroke (use Path Style component; leave empty for none)", "Selva", "Layout", GH_ParamAccess.item));
+        pManager.AddParameter(new Param_TextStyle("Default Style", "S", "Default cell text style (use Text Style component; leave empty for default)", "Selva", "Layout", GH_ParamAccess.item));
+        pManager.AddParameter(new Param_TextStyle("Header Style", "HS", "Header cell text style (leave empty to inherit default style with bold weight)", "Selva", "Layout", GH_ParamAccess.item));
+        pManager.AddColourParameter("Header Color", "HC", "Header row background color (RGBA supported; leave empty for none)", GH_ParamAccess.item);
+        pManager.AddTextParameter("Column Align", "CA", "Per-column text alignment, one item per column. Accepts \"left\"/\"l\", \"center\"/\"c\", \"right\"/\"r\". Empty = left for all.", GH_ParamAccess.list);
+        pManager.AddIntegerParameter("Border Style", "BS", "Which borders to draw", GH_ParamAccess.item, 0);
+        pManager.AddColourParameter("Row Colors", "RC", "Body row background colors (RGBA supported). Cycles per row: 1 color = solid, 2 = alternating, N = N-row cycle. Empty = no row fills.", GH_ParamAccess.list);
 
         pManager[0].Optional = true;
         pManager[2].Optional = true;
@@ -53,7 +54,15 @@ public class GH_Table : GH_Component
         pManager[8].Optional = true;
         pManager[9].Optional = true;
         pManager[10].Optional = true;
-        pManager[11].Optional = true;
+
+        if (pManager[9] is Param_Integer borderStyleParam)
+        {
+            borderStyleParam.AddNamedValue("All", 0);
+            borderStyleParam.AddNamedValue("Horizontal", 1);
+            borderStyleParam.AddNamedValue("Header", 2);
+            borderStyleParam.AddNamedValue("Outer", 3);
+            borderStyleParam.AddNamedValue("None", 4);
+        }
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -69,11 +78,10 @@ public class GH_Table : GH_Component
         Stroke border = null;
         TextStyle style = null;
         TextStyle headerStyle = null;
-        Fill headerFill = null;
+        System.Drawing.Color? headerColor = null;
         var alignTokens = new List<string>();
-        var borderStyleToken = "all";
-        Fill stripeFill = null;
-        var stripeEvery = 2;
+        var borderStyleIndex = 0;
+        var rowColors = new List<System.Drawing.Color>();
 
         DA.GetDataList(0, headers);
         if (!DA.GetDataTree(1, out GH_Structure<GH_String> rowTree))
@@ -86,11 +94,20 @@ public class GH_Table : GH_Component
         DA.GetData(4, ref border);
         DA.GetData(5, ref style);
         DA.GetData(6, ref headerStyle);
-        DA.GetData(7, ref headerFill);
+        var headerColorValue = System.Drawing.Color.Empty;
+        if (DA.GetData(7, ref headerColorValue)) headerColor = headerColorValue;
         DA.GetDataList(8, alignTokens);
-        DA.GetData(9, ref borderStyleToken);
-        DA.GetData(10, ref stripeFill);
-        DA.GetData(11, ref stripeEvery);
+        DA.GetData(9, ref borderStyleIndex);
+        DA.GetDataList(10, rowColors);
+
+        Fill headerFill = headerColor.HasValue ? ToFill(headerColor.Value) : null;
+        IReadOnlyList<Fill> rowStripeFills = null;
+        if (rowColors.Count > 0)
+        {
+            var fills = new Fill[rowColors.Count];
+            for (var i = 0; i < rowColors.Count; i++) fills[i] = ToFill(rowColors[i]);
+            rowStripeFills = fills;
+        }
 
         var bodyRows = new List<IReadOnlyList<TableCell>>(rowTree.PathCount);
         foreach (var path in rowTree.Paths)
@@ -121,12 +138,7 @@ public class GH_Table : GH_Component
             columnAlignments = anchors;
         }
 
-        if (!TryParseBorderStyle(borderStyleToken, out var resolvedBorderStyle))
-        {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                $"Unknown Border Style '{borderStyleToken}', falling back to 'all'");
-            resolvedBorderStyle = TableBorderStyle.All;
-        }
+        var resolvedBorderStyle = (TableBorderStyle)Math.Max(0, Math.Min(4, borderStyleIndex));
 
         var table = new Table
         {
@@ -140,12 +152,16 @@ public class GH_Table : GH_Component
             DefaultCellStyle = style ?? new TextStyle(),
             HeaderStyle = headerStyle,
             HeaderBackground = headerFill,
-            RowStripeFill = stripeFill,
-            RowStripeEvery = Math.Max(1, stripeEvery),
+            RowStripeFills = rowStripeFills,
         };
 
         DA.SetData(0, table);
     }
+
+    private static Fill ToFill(System.Drawing.Color c) => new Fill
+    {
+        Color = DrawColor.Rgb(c.R, c.G, c.B, c.A),
+    };
 
     private static TextAnchor ParseAnchor(string token)
     {
@@ -164,36 +180,6 @@ public class GH_Table : GH_Component
                 return TextAnchor.Right;
             default:
                 return TextAnchor.Left;
-        }
-    }
-
-    private static bool TryParseBorderStyle(string token, out TableBorderStyle style)
-    {
-        switch ((token ?? "").Trim().ToLowerInvariant())
-        {
-            case "":
-            case "all":
-            case "grid":
-                style = TableBorderStyle.All; return true;
-            case "horizontal":
-            case "horizontals":
-            case "h":
-            case "rows":
-                style = TableBorderStyle.HorizontalOnly; return true;
-            case "header":
-            case "headerandouter":
-            case "header+outer":
-            case "bom":
-                style = TableBorderStyle.HeaderAndOuter; return true;
-            case "outer":
-            case "frame":
-            case "box":
-                style = TableBorderStyle.Outer; return true;
-            case "none":
-            case "off":
-                style = TableBorderStyle.None; return true;
-            default:
-                style = TableBorderStyle.All; return false;
         }
     }
 

@@ -32,7 +32,9 @@ public class GH_LinearDimension : GH_Component
         pManager.AddColourParameter("Color", "C", "Dimension color", GH_ParamAccess.item, Color.Black);
         pManager.AddNumberParameter("Stroke Width", "SW", "Line stroke width", GH_ParamAccess.item, 0.5);
         pManager.AddIntegerParameter("Tick Style", "TK", "Tick mark style at line endpoints", GH_ParamAccess.item, 0);
+        pManager.AddNumberParameter("Tick Size", "TZ", "Tick/arrow size in drawing units (mm), independent of Text Size", GH_ParamAccess.item, 4.0);
         pManager.AddIntegerParameter("Text Placement", "TP", "Where the label sits relative to the dimension line", GH_ParamAccess.item, 0);
+
 
         pManager[3].Optional = true;
 
@@ -43,7 +45,7 @@ public class GH_LinearDimension : GH_Component
             tickParam.AddNamedValue("None", 2);
         }
 
-        if (pManager[8] is Param_Integer placementParam)
+        if (pManager[9] is Param_Integer placementParam)
         {
             placementParam.AddNamedValue("Above line", 0);
             placementParam.AddNamedValue("Break line", 1);
@@ -65,6 +67,7 @@ public class GH_LinearDimension : GH_Component
         var color = Color.Black;
         var stroke = 0.5;
         var tickStyle = 0;
+        var tickSize = 4.0;
         var textPlacement = 0;
 
         if (!DA.GetData(0, ref a)) return;
@@ -75,7 +78,8 @@ public class GH_LinearDimension : GH_Component
         DA.GetData(5, ref color);
         DA.GetData(6, ref stroke);
         DA.GetData(7, ref tickStyle);
-        DA.GetData(8, ref textPlacement);
+        DA.GetData(8, ref tickSize);
+        DA.GetData(9, ref textPlacement);
 
         var style = new DimensionStyle
         {
@@ -83,6 +87,7 @@ public class GH_LinearDimension : GH_Component
             StrokeWidth = stroke,
             Color = Selva.Drawing.Model.Style.Color.Rgb(color.R, color.G, color.B, color.A),
             TickKind = (DimensionTickKind)Math.Max(0, Math.Min(2, tickStyle)),
+            ArrowSize = Math.Max(0, tickSize),
             TextPlacement = (DimensionTextPlacement)Math.Max(0, Math.Min(1, textPlacement)),
         };
 

@@ -1,11 +1,13 @@
 using System;
 using System.Drawing;
 using Grasshopper.Kernel;
-using Grasshopper.Kernel.Parameters;
 using Rhino.Geometry;
 using Selva.Drawing.Model.Elements;
+using Selva.Drawing.Model.Style;
+using Selva.GH.Features.Drawing.Params;
 using Selva.GH.Features.Drawing.Preview;
 using Selva.GH.Properties;
+using Color = System.Drawing.Color;
 using ModelStyle = Selva.Drawing.Model.Style;
 using DrawPoint = Selva.Drawing.Model.Geometry.Point2D;
 
@@ -45,9 +47,7 @@ public class GH_CreateText : GH_Component
     {
         pManager.AddTextParameter("Text", "T", "Text string", GH_ParamAccess.item);
         pManager.AddPointParameter("Position", "P", "Anchor point in world XY space", GH_ParamAccess.item);
-        pManager.AddNumberParameter("Size", "S", "Font size in drawing units", GH_ParamAccess.item, 3.0);
-        pManager.AddColourParameter("Color", "C", "Text color", GH_ParamAccess.item, Color.Black);
-        pManager.AddIntegerParameter("Align", "A", "Horizontal alignment: 0=Left, 1=Center, 2=Right", GH_ParamAccess.item, 0);
+        pManager.AddParameter(new Param_TextStyle("Style", "S", "Text style (use Text Style component; leave empty for default)", "Selva", "Elements", GH_ParamAccess.item));
         pManager.AddNumberParameter("Rotation", "R", "Rotation angle in degrees (counter-clockwise)", GH_ParamAccess.item, 0.0);
         pManager.AddColourParameter("Background", "B", "Optional background color drawn behind the text. Leave unset for no background.", GH_ParamAccess.item);
         pManager.AddNumberParameter("Padding", "Pd", "Background padding around the text (only used when Background is set)", GH_ParamAccess.item, 1.0);
@@ -58,16 +58,6 @@ public class GH_CreateText : GH_Component
         pManager[4].Optional = true;
         pManager[5].Optional = true;
         pManager[6].Optional = true;
-        pManager[7].Optional = true;
-        pManager[8].Optional = true;
-
-
-        if (pManager[4] is Param_Integer alignParam)
-        {
-            alignParam.AddNamedValue("Left", 0);
-            alignParam.AddNamedValue("Center", 1);
-            alignParam.AddNamedValue("Right", 2);
-        }
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -79,9 +69,7 @@ public class GH_CreateText : GH_Component
     {
         var text = "";
         var position = Point3d.Unset;
-        var size = 3.0;
-        var color = Color.Black;
-        var alignInt = 0;
+        TextStyle style = null;
         var rotation = 0.0;
         Color background = Color.Empty;
         var padding = 1.0;
@@ -89,26 +77,17 @@ public class GH_CreateText : GH_Component
 
         if (!DA.GetData(0, ref text)) return;
         if (!DA.GetData(1, ref position) || position == Point3d.Unset) return;
-        DA.GetData(2, ref size);
-        DA.GetData(3, ref color);
-        DA.GetData(4, ref alignInt);
-        DA.GetData(5, ref rotation);
-        var hasBackground = DA.GetData(6, ref background);
-        DA.GetData(7, ref padding);
-        DA.GetData(8, ref radius);
+        DA.GetData(2, ref style);
+        DA.GetData(3, ref rotation);
+        var hasBackground = DA.GetData(4, ref background);
+        DA.GetData(5, ref padding);
+        DA.GetData(6, ref radius);
 
-        var fontSize = Math.Max(0.01, size);
         var element = new TextElement
         {
             Text = text,
             Position = new DrawPoint(position.X, position.Y),
-            Style = new ModelStyle.TextStyle
-            {
-                FontSize = fontSize,
-                Color = ModelStyle.Color.Rgb(color.R, color.G, color.B, color.A),
-                HorizontalAnchor = (ModelStyle.TextAnchor)Math.Max(0, Math.Min(2, alignInt)),
-                VerticalAnchor = ModelStyle.VerticalAnchor.Middle,
-            },
+            Style = style ?? new TextStyle(),
             RotationDegrees = rotation,
             Background = hasBackground
                 ? new ModelStyle.Color?(ModelStyle.Color.Rgb(background.R, background.G, background.B, background.A))

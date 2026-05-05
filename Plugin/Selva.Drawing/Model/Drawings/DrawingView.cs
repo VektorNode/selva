@@ -244,11 +244,11 @@ public sealed class DrawingView : LayoutElement
 					Fill = path.Fill,
 				};
 			case DimensionElement dim:
-				// TextSize, StrokeWidth, and the *Factor fields all live in paper-space mm
-				// (or as multiples of TextSize). Counter-scale TextSize and StrokeWidth so
-				// labels, extension lines, and arrows (= TextSize × ArrowSizeFactor) stay
-				// constant on paper regardless of the view's scale. Geometric inputs (A, B,
-				// Vertex, Offset) are world coords and ride the group transform.
+				// TextSize, StrokeWidth, ArrowSize, and the *Factor fields all live in
+				// paper-space mm (or as multiples of TextSize). Counter-scale the absolute
+				// fields so labels, extension lines, and arrows stay constant on paper
+				// regardless of the view's scale. Geometric inputs (A, B, Vertex, Offset)
+				// are world coords and ride the group transform.
 				return new DimensionElement
 				{
 					Id = dim.Id,
@@ -354,6 +354,7 @@ public sealed class DrawingView : LayoutElement
 			TickKind = style.TickKind,
 			TextPlacement = style.TextPlacement,
 			AutoFlipArrows = style.AutoFlipArrows,
+			ArrowSize = style.ArrowSize * styleScale,
 			ArrowSizeFactor = style.ArrowSizeFactor,
 		};
 	}

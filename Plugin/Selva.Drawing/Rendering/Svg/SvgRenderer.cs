@@ -337,7 +337,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		{
 			var style = dim.Style ?? new DimensionStyle();
 			if (style.TickKind == DimensionTickKind.Arrow)
-				RegisterArrowSize(style.TextSize * style.ArrowSizeFactor, sizes);
+				RegisterArrowSize(style.ResolvedArrowSize(), sizes);
 		}
 		else if (element is LeaderElement leader && leader.Head == LeaderHead.Arrow)
 		{
@@ -359,7 +359,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 
 	private string DimArrowMarkerId(DimensionStyle style)
 	{
-		var key = Math.Round(style.TextSize * style.ArrowSizeFactor, 4);
+		var key = Math.Round(style.ResolvedArrowSize(), 4);
 		return _dimArrowMarkers.TryGetValue(key, out var id) ? id : "selva-dim-arrow-fallback";
 	}
 
@@ -884,7 +884,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		var ts = style.TextSize;
 		var extGap = ts * style.ExtensionGapFactor;
 		var extOver = ts * style.ExtensionOvershootFactor;
-		var arrowSize = ts * style.ArrowSizeFactor;
+		var arrowSize = style.ResolvedArrowSize();
 
 		var sign = offset >= 0 ? 1 : -1;
 		var absOffset = Math.Abs(offset);
@@ -1009,7 +1009,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		var sweepCcw = theta > 0;
 
 		var ts = style.TextSize;
-		var arrowSize = ts * style.ArrowSizeFactor;
+		var arrowSize = style.ResolvedArrowSize();
 
 		var arcStartX = vx + uax * radius;
 		var arcStartY = vy + uay * radius;

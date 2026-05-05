@@ -24,6 +24,7 @@ public class GH_AngularDimension : GH_Component
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
+
         pManager.AddPointParameter("Vertex", "V", "Vertex where the two arms meet", GH_ParamAccess.item);
         pManager.AddPointParameter("Point A", "A", "Point on first arm", GH_ParamAccess.item);
         pManager.AddPointParameter("Point B", "B", "Point on second arm", GH_ParamAccess.item);
@@ -32,10 +33,12 @@ public class GH_AngularDimension : GH_Component
         pManager.AddColourParameter("Color", "C", "Dimension color", GH_ParamAccess.item, Color.Black);
         pManager.AddNumberParameter("Stroke Width", "SW", "Line stroke width", GH_ParamAccess.item, 0.5);
         pManager.AddIntegerParameter("Tick Style", "TK", "Tick mark style at arc endpoints", GH_ParamAccess.item, 0);
+        pManager.AddNumberParameter("Tick Size", "TZ", "Tick/arrow size in drawing units (mm), independent of Text Size", GH_ParamAccess.item, 4.0);
         pManager.AddBooleanParameter("Reflex", "X", "Measure the outer (reflex) angle instead of the inner angle", GH_ParamAccess.item, false);
 
+
         pManager[3].Optional = true;
-        pManager[8].Optional = true;
+        pManager[9].Optional = true;
 
         if (pManager[7] is Param_Integer tickParam)
         {
@@ -60,6 +63,7 @@ public class GH_AngularDimension : GH_Component
         var color = Color.Black;
         var stroke = 0.5;
         var tickStyle = 0;
+        var tickSize = 4.0;
         var reflex = false;
 
         if (!DA.GetData(0, ref v)) return;
@@ -70,7 +74,8 @@ public class GH_AngularDimension : GH_Component
         DA.GetData(5, ref color);
         DA.GetData(6, ref stroke);
         DA.GetData(7, ref tickStyle);
-        DA.GetData(8, ref reflex);
+        DA.GetData(8, ref tickSize);
+        DA.GetData(9, ref reflex);
 
         var style = new DimensionStyle
         {
@@ -78,6 +83,7 @@ public class GH_AngularDimension : GH_Component
             StrokeWidth = stroke,
             Color = Selva.Drawing.Model.Style.Color.Rgb(color.R, color.G, color.B, color.A),
             TickKind = (DimensionTickKind)Math.Max(0, Math.Min(2, tickStyle)),
+            ArrowSize = Math.Max(0, tickSize),
         };
 
         var element = AngularDimensionBuilder.Build(v.X, v.Y, a.X, a.Y, b.X, b.Y, label, style, reflex);

@@ -5,6 +5,7 @@ using Rhino.Geometry;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Style;
 using Selva.GH.Features.Drawing.Lib;
+using Selva.GH.Features.Drawing.Params;
 using Selva.GH.Features.Drawing.Preview;
 using Selva.GH.Properties;
 
@@ -43,7 +44,7 @@ public class GH_CreateCurve : GH_Component
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
         pManager.AddCurveParameter("Curve", "C", "Input curve", GH_ParamAccess.item);
-        pManager.AddGenericParameter("Style", "S", "Path style", GH_ParamAccess.item);
+        pManager.AddParameter(new Param_PathStyle("Style", "S", "Path style (use Path Style component)", "Selva", "Elements", GH_ParamAccess.item));
 
         pManager[1].Optional = true;
     }

@@ -3,6 +3,7 @@ using System.Drawing;
 using Grasshopper.Kernel;
 using Selva.Drawing.Model.Layout;
 using Selva.Drawing.Model.Style;
+using Selva.GH.Features.Drawing.Params;
 using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
@@ -27,7 +28,7 @@ public class GH_TextFlow : GH_Component
     {
         pManager.AddTextParameter("Text", "T", "Text to wrap (use \\n for paragraph breaks)", GH_ParamAccess.item, "");
         pManager.AddNumberParameter("Width", "W", "Maximum line width in millimetres (0 or unset = fill available width from the parent layout)", GH_ParamAccess.item, 0.0);
-        pManager.AddGenericParameter("Style", "S", "Text style (leave empty for default)", GH_ParamAccess.item);
+        pManager.AddParameter(new Param_TextStyle("Style", "S", "Text style (use Text Style component; leave empty for default)", "Selva", "Layout", GH_ParamAccess.item));
 
         pManager[0].Optional = true;
         pManager[1].Optional = true;

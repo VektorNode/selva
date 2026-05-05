@@ -22,3 +22,4 @@ public sealed class TextBlockElement : DrawElement
 
 	public override BoundingBox ComputeBounds() => Box;
 }
+

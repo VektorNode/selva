@@ -6,6 +6,7 @@ using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Style;
 using Selva.GH.Features.Drawing.Lib;
+using Selva.GH.Features.Drawing.Params;
 using Selva.GH.Features.Drawing.Preview;
 using Selva.GH.Properties;
 using Path = Selva.Drawing.Model.Geometry.Path;
@@ -51,7 +52,7 @@ public class GH_CreateSurface : GH_Component
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
         pManager.AddBrepParameter("Brep", "B", "Input Brep", GH_ParamAccess.item);
-        pManager.AddGenericParameter("Style", "S", "Path style (use Path Style component)", GH_ParamAccess.item);
+        pManager.AddParameter(new Param_PathStyle("Style", "S", "Path style (use Path Style component)", "Selva", "Elements", GH_ParamAccess.item));
 
         pManager[1].Optional = true;
     }
