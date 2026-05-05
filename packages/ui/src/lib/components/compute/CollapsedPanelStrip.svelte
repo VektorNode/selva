@@ -15,7 +15,7 @@
 </script>
 
 <div
-	class="gap-2 py-3 lg:py-4 lg:flex-col lg:w-auto px-3 lg:px-0 lg:rounded-md flex w-full shrink-0 cursor-pointer flex-row items-center border-2 bg-muted transition-colors hover:bg-muted/70 border-border"
+	class="gap-2 py-3 lg:py-4 lg:flex-col lg:w-auto px-3 lg:px-0 lg:rounded-md flex w-full shrink-0 cursor-pointer flex-row items-center border-2 border-border bg-muted transition-colors hover:bg-muted/70"
 	style="lg:width: {collapsedWidth}px"
 	role="button"
 	tabindex="0"

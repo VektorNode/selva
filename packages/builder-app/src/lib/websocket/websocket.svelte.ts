@@ -28,14 +28,13 @@ export interface WsInitialDataMessage extends WsSessionMessage {
 	availableParams?: import('@selvajs/schemas').DiscoveredParameters;
 	currentValues?: Record<string, unknown>;
 	outputs?: Record<string, unknown>;
-	displayData?: unknown;
 	isSolving?: boolean;
 }
 
 export interface WsOutputsMessage extends WsSessionMessage {
 	outputs?: Record<string, unknown>;
 	fileOutputs?: Record<string, unknown>;
-	displayData?: unknown;
+	binaryBatchCount?: number;
 	modelUnits?: string;
 }
 
@@ -207,6 +206,8 @@ export class WebSocketState {
 
 			try {
 				this.socket = new WebSocket(this.url);
+				// Receive binary frames as ArrayBuffer (the SLVA mesh blob transport).
+				this.socket.binaryType = 'arraybuffer';
 
 				this.socket.onopen = () => {
 					// If reconnecting after server disconnect, reload the page to get fresh state
@@ -223,6 +224,15 @@ export class WebSocketState {
 
 				this.socket.onmessage = (event) => {
 					try {
+						// Binary frame — SLVA mesh blob from the server.
+						if (event.data instanceof ArrayBuffer) {
+							const handlers = this.messageHandlers.get('binaryFrame');
+							if (handlers) {
+								handlers.forEach((handler) => handler(event.data as ArrayBuffer));
+							}
+							return;
+						}
+
 						if (!event.data || typeof event.data !== 'string' || event.data.trim() === '') {
 							return;
 						}

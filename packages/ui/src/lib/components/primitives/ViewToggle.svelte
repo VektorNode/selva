@@ -19,7 +19,7 @@
 	const iconClass = $derived(size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4');
 </script>
 
-<div class="border-border bg-card inline-flex gap-0.5 rounded-md border p-0.5">
+<div class="gap-0.5 p-0.5 inline-flex rounded-md border border-border bg-card">
 	<button
 		type="button"
 		title="Grid view"

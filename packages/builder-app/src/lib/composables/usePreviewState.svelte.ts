@@ -1,5 +1,9 @@
 import type { UISchema, SupportedTypes } from '@selvajs/schemas';
-import { getWebSocketPortFromUrl, initializeWebSocketSession, ensureSchemaLayoutDefaults } from '$lib/utils/session';
+import {
+	getWebSocketPortFromUrl,
+	initializeWebSocketSession,
+	ensureSchemaLayoutDefaults
+} from '$lib/utils/session';
 import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 import type {
 	WsInitialDataMessage,
@@ -20,8 +24,7 @@ import {
 	formatParameterUpdateMessage,
 	formatMetadataUpdateMessage
 } from '$lib/features/preview/notifications.svelte';
-import { parseMeshBatchObject, SCALE_FACTORS } from '@selvajs/compute/visualization';
-import type { MeshBatch } from '@selvajs/compute/visualization';
+import { parseMeshBatchBlob, SCALE_FACTORS } from '@selvajs/compute/visualization';
 import type * as THREE from 'three';
 
 interface PreviewState {
@@ -61,15 +64,38 @@ export function usePreviewState(getSessionId: () => string) {
 	// Prevents stale initialData mesh parsing from clobbering live outputs.
 	let outputsToken = 0;
 
+	// Binary mesh frames arrive on a separate WebSocket message stream after the JSON `outputs`
+	// envelope (see WebSocketTransport.BroadcastOutputsWithFilesAndDisplay). The envelope tells us
+	// how many blobs to expect via `binaryBatchCount`; we collect that many `ArrayBuffer`s, then
+	// parse them all together. A small ring-buffered queue handles the (rare) case where blobs
+	// arrive before the corresponding outputs message has been dispatched on the bus.
+	const pendingBlobs: ArrayBuffer[] = [];
+	let pendingExpectation: {
+		token: number;
+		expected: number;
+		scaleFactor: number;
+		resolve: (blobs: ArrayBuffer[]) => void;
+	} | null = null;
+
 	// Strip file metadata objects — Grasshopper already has the file
 	function prepareValuesForSend(values: Record<string, unknown>): Record<string, unknown> {
 		const prepared: Record<string, unknown> = {};
 		for (const [key, value] of Object.entries(values)) {
 			let parsed = value;
 			if (typeof value === 'string' && value.trim().startsWith('{')) {
-				try { parsed = JSON.parse(value); } catch { /* keep as string */ }
+				try {
+					parsed = JSON.parse(value);
+				} catch {
+					/* keep as string */
+				}
 			}
-			if (parsed && typeof parsed === 'object' && '_isMetadata' in parsed && (parsed as Record<string, unknown>)._isMetadata === true) continue;
+			if (
+				parsed &&
+				typeof parsed === 'object' &&
+				'_isMetadata' in parsed &&
+				(parsed as Record<string, unknown>)._isMetadata === true
+			)
+				continue;
 			prepared[key] = value;
 		}
 		return prepared;
@@ -116,25 +142,107 @@ export function usePreviewState(getSessionId: () => string) {
 
 		if (message.modelUnits) state.modelUnits = message.modelUnits;
 
-		if (message.displayData) {
-			try {
-				const dataArray = Array.isArray(message.displayData) ? message.displayData : [message.displayData];
-				const scaleFactor = SCALE_FACTORS[state.modelUnits as keyof typeof SCALE_FACTORS] ?? 1;
-				const allMeshes: THREE.Mesh[] = [];
-				for (const batchData of dataArray as MeshBatch[]) {
-					const meshes = await parseMeshBatchObject(batchData, { mergeByMaterial: false, applyTransforms: true, scaleFactor, debug: false });
-					allMeshes.push(...meshes);
+		// `binaryBatchCount` is the new transport (Phase 1b): mesh blobs arrive as separate binary
+		// WebSocket frames, not inside this JSON envelope. `0` is meaningful — it means "no display
+		// output this solve, clear the meshes." `undefined` means the server didn't send a display
+		// payload at all; leave existing meshes alone (matches the previous behavior).
+		if (typeof message.binaryBatchCount === 'number') {
+			const expected = message.binaryBatchCount;
+			const scaleFactor = SCALE_FACTORS[state.modelUnits as keyof typeof SCALE_FACTORS] ?? 1;
+
+			if (expected === 0) {
+				if (myToken === outputsToken) state.displayMeshes = [];
+			} else {
+				try {
+					const blobs = await collectPendingBlobs(myToken, expected, scaleFactor);
+					if (myToken !== outputsToken) {
+						// Newer outputs already started; discard our stale parse.
+					} else {
+						const allMeshes: THREE.Mesh[] = [];
+						for (const blob of blobs) {
+							const meshes = await parseMeshBatchBlob(blob, {
+								mergeByMaterial: false,
+								applyTransforms: true,
+								scaleFactor,
+								debug: false
+							});
+							allMeshes.push(...meshes);
+						}
+						if (myToken === outputsToken) state.displayMeshes = allMeshes;
+					}
+				} catch (err) {
+					console.error('[Preview] Error parsing display data:', err);
 				}
-				// Drop the result if a newer outputs message has started parsing
-				if (myToken === outputsToken) state.displayMeshes = allMeshes;
-			} catch (err) {
-				console.error('[Preview] Error parsing display data:', err);
 			}
 		}
 
-		const allUpdates = processOutputUpdate({ outputs: message.outputs, fileOutputs: message.fileOutputs, schema: state.schema });
+		const allUpdates = processOutputUpdate({
+			outputs: message.outputs,
+			fileOutputs: message.fileOutputs,
+			schema: state.schema
+		});
 		if (Object.keys(allUpdates).length > 0) {
-			try { isRemoteUpdate = true; Object.assign(state.values, allUpdates); } finally { isRemoteUpdate = false; }
+			try {
+				isRemoteUpdate = true;
+				Object.assign(state.values, allUpdates);
+			} finally {
+				isRemoteUpdate = false;
+			}
+		}
+	}
+
+	// Resolves once `expected` binary frames have been collected for this `token`. Frames that
+	// arrived early (before the matching JSON envelope reached this handler) are drained from
+	// `pendingBlobs` first.
+	function collectPendingBlobs(
+		token: number,
+		expected: number,
+		scaleFactor: number
+	): Promise<ArrayBuffer[]> {
+		// If a previous expectation was abandoned (e.g. token was superseded), discard its leftovers
+		// before installing this one. Anything in pendingBlobs is from the most recent stream.
+		const drained = pendingBlobs.splice(0, pendingBlobs.length);
+
+		if (drained.length >= expected) {
+			// Already buffered enough frames; the rest (if any) are stragglers from a previous
+			// envelope and should be dropped.
+			return Promise.resolve(drained.slice(0, expected));
+		}
+
+		return new Promise((resolve) => {
+			pendingExpectation = {
+				token,
+				expected,
+				scaleFactor,
+				resolve: (blobs) => resolve(blobs)
+			};
+			// Re-queue the partial set so handleBinaryFrame can complete the batch.
+			pendingBlobs.push(...drained);
+		});
+	}
+
+	function handleBinaryFrame(buffer: ArrayBuffer) {
+		// No active expectation: a frame arrived ahead of (or after) its envelope. Buffer it; the
+		// next `handleOutputs` will drain on entry. Cap the buffer to avoid unbounded growth if
+		// envelopes are dropped for some reason.
+		if (!pendingExpectation) {
+			if (pendingBlobs.length < 64) pendingBlobs.push(buffer);
+			return;
+		}
+
+		// Stale frame (its expectation was already superseded by a newer outputs message). Drop.
+		if (pendingExpectation.token !== outputsToken) {
+			pendingExpectation = null;
+			pendingBlobs.length = 0;
+			return;
+		}
+
+		pendingBlobs.push(buffer);
+		if (pendingBlobs.length >= pendingExpectation.expected) {
+			const expectation = pendingExpectation;
+			const blobs = pendingBlobs.splice(0, expectation.expected);
+			pendingExpectation = null;
+			expectation.resolve(blobs);
 		}
 	}
 
@@ -155,16 +263,24 @@ export function usePreviewState(getSessionId: () => string) {
 			return;
 		}
 
-		const newValues = initializeValues({ schema: processedSchema, availableParams: message.availableParams, currentValues: message.currentValues });
+		const newValues = initializeValues({
+			schema: processedSchema,
+			availableParams: message.availableParams,
+			currentValues: message.currentValues
+		});
 
-		try { isRemoteUpdate = true; state.values = newValues; } finally { isRemoteUpdate = false; }
+		try {
+			isRemoteUpdate = true;
+			state.values = newValues;
+		} finally {
+			isRemoteUpdate = false;
+		}
 
 		state.schema = processedSchema;
 
 		const hasOutputs = message.outputs && Object.keys(message.outputs).length > 0;
-		const hasDisplayData = message.displayData && (Array.isArray(message.displayData) ? message.displayData.length > 0 : true);
 
-		if (hasOutputs || hasDisplayData) {
+		if (hasOutputs) {
 			// Await so loading flips off only after meshes/outputs are populated
 			await handleOutputs(message as WsOutputsMessage);
 			state.loading = false;
@@ -173,7 +289,10 @@ export function usePreviewState(getSessionId: () => string) {
 			solveTimeout = setTimeout(() => {
 				if (wsState.connected && !initialSolveTriggered) {
 					initialSolveTriggered = true;
-					wsState.send('valueUpdate', { sessionId, values: prepareValuesForSend($state.snapshot(newValues)) });
+					wsState.send('valueUpdate', {
+						sessionId,
+						values: prepareValuesForSend($state.snapshot(newValues))
+					});
 				}
 			}, 500);
 		} else {
@@ -184,21 +303,32 @@ export function usePreviewState(getSessionId: () => string) {
 
 	function handleCurrentValues(message: WsCurrentValuesMessage) {
 		if (message.sessionId !== getSessionId()) return;
-		try { isRemoteUpdate = true; Object.assign(state.values, message.values); } finally { isRemoteUpdate = false; }
+		try {
+			isRemoteUpdate = true;
+			Object.assign(state.values, message.values);
+		} finally {
+			isRemoteUpdate = false;
+		}
 	}
 
 	function handleOutputUpdate(message: WsOutputsMessage) {
 		if (message.sessionId !== getSessionId()) return;
 		const allUpdates = processOutputUpdate({ outputs: message.outputs, schema: state.schema });
 		if (Object.keys(allUpdates).length > 0) {
-			try { isRemoteUpdate = true; Object.assign(state.values, allUpdates); } finally { isRemoteUpdate = false; }
+			try {
+				isRemoteUpdate = true;
+				Object.assign(state.values, allUpdates);
+			} finally {
+				isRemoteUpdate = false;
+			}
 		}
 	}
 
 	function handleSchemaUpdated(message: WsSchemaUpdatedMessage) {
 		if (message.sessionId !== getSessionId()) return;
 		const removedCount = message.removedIds?.length || 0;
-		if (removedCount > 0) state.values = removeParametersFromValues(state.values, message.removedIds!);
+		if (removedCount > 0)
+			state.values = removeParametersFromValues(state.values, message.removedIds!);
 		state.schema = ensureSchemaLayoutDefaults(message.schema);
 		if (removedCount > 0) notification.show(formatParameterUpdateMessage(removedCount));
 	}
@@ -231,6 +361,7 @@ export function usePreviewState(getSessionId: () => string) {
 		wsState.on('schemaUpdated', handleSchemaUpdated);
 		wsState.on('metadataUpdated', handleMetadataUpdated);
 		wsState.on('parametersAdded', handleParametersAdded);
+		wsState.on('binaryFrame', handleBinaryFrame);
 
 		const result = await initializeWebSocketSession(sessionId);
 		if (result.error) {
@@ -246,7 +377,10 @@ export function usePreviewState(getSessionId: () => string) {
 		if (!initialized) return;
 		initialized = false;
 
-		if (solveTimeout) { clearTimeout(solveTimeout); solveTimeout = null; }
+		if (solveTimeout) {
+			clearTimeout(solveTimeout);
+			solveTimeout = null;
+		}
 		notification.clear();
 		wsState.off('initialData', handleInitialData);
 		wsState.off('currentValues', handleCurrentValues);
@@ -255,11 +389,18 @@ export function usePreviewState(getSessionId: () => string) {
 		wsState.off('schemaUpdated', handleSchemaUpdated);
 		wsState.off('metadataUpdated', handleMetadataUpdated);
 		wsState.off('parametersAdded', handleParametersAdded);
+		wsState.off('binaryFrame', handleBinaryFrame);
+		pendingExpectation = null;
+		pendingBlobs.length = 0;
 	}
 
 	return {
-		get state() { return state; },
-		get notification() { return getNotification(); },
+		get state() {
+			return state;
+		},
+		get notification() {
+			return getNotification();
+		},
 		wsState,
 		handleValueChange,
 		handleCalculate,
@@ -268,4 +409,3 @@ export function usePreviewState(getSessionId: () => string) {
 		cleanup
 	};
 }
-

@@ -215,18 +215,34 @@ public class WebSocketServer : IDisposable
     // -------------------------------------------------------------------------
 
     /// <summary>
-    ///     Send a message to all connected clients with backpressure handling.
+    ///     Send a UTF-8 text message to all connected clients with backpressure handling.
     /// </summary>
-    public async Task BroadcastAsync(string message)
+    public Task BroadcastAsync(string message)
     {
         if (!IsRunning)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         var buffer = Encoding.UTF8.GetBytes(message);
-        var segment = new ArraySegment<byte>(buffer);
+        return BroadcastSegmentAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text);
+    }
 
+    /// <summary>
+    ///     Send a raw binary frame to all connected clients with backpressure handling.
+    /// </summary>
+    public Task BroadcastBinaryAsync(byte[] data)
+    {
+        if (!IsRunning)
+        {
+            return Task.CompletedTask;
+        }
+
+        return BroadcastSegmentAsync(new ArraySegment<byte>(data), WebSocketMessageType.Binary);
+    }
+
+    private async Task BroadcastSegmentAsync(ArraySegment<byte> segment, WebSocketMessageType messageType)
+    {
         List<WebSocket> snapshot;
         lock (_clientsLock)
         {
@@ -261,7 +277,7 @@ public class WebSocketServer : IDisposable
                 state.PendingCount++;
             }
 
-            tasks.Add(SendToClientAsync(client, segment, clientsToRemove));
+            tasks.Add(SendToClientAsync(client, segment, messageType, clientsToRemove));
         }
 
         if (tasks.Count > 0)
@@ -278,9 +294,10 @@ public class WebSocketServer : IDisposable
     private async Task SendToClientAsync(
         WebSocket client,
         ArraySegment<byte> segment,
+        WebSocketMessageType messageType,
         List<WebSocket> clientsToRemove)
     {
-        // Acquire per-client send lock so concurrent BroadcastAsync calls never overlap
+        // Acquire per-client send lock so concurrent broadcast calls never overlap
         // on the same WebSocket (SendAsync is not concurrent-safe).
         ClientSendState state;
         lock (_clientsLock)
@@ -303,7 +320,7 @@ public class WebSocketServer : IDisposable
             }
 
             using var cts = new CancellationTokenSource(BROADCAST_TIMEOUT);
-            await client.SendAsync(segment, WebSocketMessageType.Text, true, cts.Token)
+            await client.SendAsync(segment, messageType, true, cts.Token)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -384,7 +401,7 @@ public class WebSocketServer : IDisposable
             lock (_clientsLock)
             {
                 if (_connectedClients.Count >= MAX_CLIENTS)
-                    // Reject outside the lock to avoid holding it during async work.
+                // Reject outside the lock to avoid holding it during async work.
                 {
                     goto reject;
                 }
@@ -394,7 +411,7 @@ public class WebSocketServer : IDisposable
                 goto accepted;
             }
 
-            reject:
+        reject:
             await webSocket.CloseAsync(
                 WebSocketCloseStatus.PolicyViolation,
                 "Maximum client connections reached",
@@ -402,7 +419,7 @@ public class WebSocketServer : IDisposable
             webSocket.Dispose();
             return;
 
-            accepted:
+        accepted:
             OnClientConnected?.Invoke(this, webSocket);
             await ReceiveMessagesAsync(webSocket, cancellationToken).ConfigureAwait(false);
         }

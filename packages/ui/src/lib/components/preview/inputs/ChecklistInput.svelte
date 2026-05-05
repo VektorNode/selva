@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { DropdownWidgetConfig, SupportedTypes } from '@selvajs/schemas';
 	import { Checkbox } from '$lib/components/primitives/checkbox';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	interface Props {
 		inputId: string;
@@ -16,7 +17,7 @@
 	const selected = $derived(new Set(value ?? []));
 
 	function toggle(expr: string, checked: boolean) {
-		const next = new Set(selected);
+		const next = new SvelteSet(selected);
 		if (checked) {
 			next.add(expr);
 		} else {
@@ -26,16 +27,16 @@
 	}
 </script>
 
-<div class="border-input divide-y divide-border/60 overflow-hidden rounded-md border">
+<div class="divide-y divide-border/60 overflow-hidden rounded-md border border-input">
 	{#each Object.entries(options) as [name, expr] (expr ?? name)}
 		{@const optionValue = expr ?? name}
 		{@const optionId = `${inputId}-${optionValue}`}
 		{@const isSelected = selected.has(optionValue)}
 		<label
 			for={optionId}
-			class="flex items-center gap-3 px-3 py-2 text-sm select-none transition-colors hover:bg-accent/50 {isSelected
+			class="gap-3 px-3 py-2 text-sm flex items-center transition-colors select-none hover:bg-accent/50 {isSelected
 				? 'bg-accent/30'
-				: ''} {disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
+				: ''} {disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}"
 		>
 			<Checkbox
 				id={optionId}

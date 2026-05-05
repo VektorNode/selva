@@ -146,15 +146,15 @@
 		</div>
 	{:else}
 		<div
-			class="w-full flex items-center justify-center"
-			style="height: {isFullscreen
-				? 'calc(100vh - 36px)'
-				: '380px'}; {backgroundColor ? `background-color: ${backgroundColor};` : ''}"
+			class="flex w-full items-center justify-center"
+			style="height: {isFullscreen ? 'calc(100vh - 36px)' : '380px'}; {backgroundColor
+				? `background-color: ${backgroundColor};`
+				: ''}"
 		>
 			<img
 				src={dataUrl}
 				alt={item.displayName ?? file.fileName}
-				class="max-w-full max-h-full"
+				class="max-h-full max-w-full"
 				style="object-fit: {fitMode}; width: {fitMode === 'cover'
 					? '100%'
 					: 'auto'}; height: {fitMode === 'cover' ? '100%' : 'auto'};"

@@ -15,28 +15,33 @@
 		actions?: Snippet;
 	}
 
-	let { icon: Icon, title, description, size = 'md', class: className = '', body, actions }: Props =
-		$props();
+	let {
+		icon: Icon,
+		title,
+		description,
+		size = 'md',
+		class: className = '',
+		body,
+		actions
+	}: Props = $props();
 
-	const padClass = $derived(
-		size === 'sm' ? 'py-8' : size === 'lg' ? 'py-20' : 'p-12'
-	);
+	const padClass = $derived(size === 'sm' ? 'py-8' : size === 'lg' ? 'py-20' : 'p-12');
 </script>
 
 <div
-	class={`border-border flex flex-col items-center justify-center rounded-lg border-2 border-dashed text-center ${padClass} ${className}`}
+	class={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border text-center ${padClass} ${className}`}
 >
 	{#if Icon}
-		<Icon class="text-muted-foreground mb-3 h-8 w-8" />
+		<Icon class="mb-3 h-8 w-8 text-muted-foreground" />
 	{/if}
 	<p class="text-sm font-medium">{title}</p>
 	{#if body}
-		<div class="text-muted-foreground mt-1 text-sm">{@render body()}</div>
+		<div class="mt-1 text-sm text-muted-foreground">{@render body()}</div>
 	{:else if description}
-		<p class="text-muted-foreground mt-1 text-sm">{description}</p>
+		<p class="mt-1 text-sm text-muted-foreground">{description}</p>
 	{/if}
 	{#if actions}
-		<div class="mt-3 flex items-center justify-center gap-2">
+		<div class="mt-3 gap-2 flex items-center justify-center">
 			{@render actions()}
 		</div>
 	{/if}

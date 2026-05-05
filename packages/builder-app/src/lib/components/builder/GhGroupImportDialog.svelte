@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { DiscoveredInput, DiscoveredOutput } from '@selvajs/schemas';
 	import { Dialog, Button, Checkbox, Label, Badge } from '@selvajs/ui';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
 	interface Props {
 		open: boolean;
@@ -12,14 +12,8 @@
 		onConfirm: (groupNames: string[]) => void;
 	}
 
-	let {
-		open,
-		availableInputs,
-		availableOutputs,
-		placedIds,
-		onOpenChange,
-		onConfirm
-	}: Props = $props();
+	let { open, availableInputs, availableOutputs, placedIds, onOpenChange, onConfirm }: Props =
+		$props();
 
 	interface GhGroupSummary {
 		name: string;
@@ -28,7 +22,7 @@
 	}
 
 	const summaries = $derived.by<GhGroupSummary[]>(() => {
-		const map = new Map<string, GhGroupSummary>();
+		const map = new SvelteMap<string, GhGroupSummary>();
 
 		for (const item of availableInputs) {
 			const name = item.groupName?.trim();
