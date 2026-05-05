@@ -30,7 +30,14 @@ public sealed class DimensionStyle
 	public DimensionTickKind TickKind { get; init; } = DimensionTickKind.Arrow;
 	public DimensionTextPlacement TextPlacement { get; init; } = DimensionTextPlacement.AboveLine;
 	public bool AutoFlipArrows { get; init; } = true;
+	// Absolute arrow/tick size in paper-space mm. When > 0, takes precedence over the
+	// legacy ArrowSizeFactor (which scales arrows with TextSize). Set this for sizes that
+	// should be independent of text height; leave at 0 for the historical multiplier.
+	public double ArrowSize { get; init; } = 0.0;
 	public double ArrowSizeFactor { get; init; } = 1.6;
+
+	// Resolved paper-space arrow size: absolute when ArrowSize > 0, else TextSize × factor.
+	public double ResolvedArrowSize() => ArrowSize > 0 ? ArrowSize : TextSize * ArrowSizeFactor;
 }
 
 // Semantic dimension element: keeps the geometric intent (vertex/arms/offset/label) so

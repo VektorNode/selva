@@ -43,10 +43,10 @@ public sealed class Table : LayoutElement
 	public Stroke Border { get; init; } = new Stroke { Width = 0.25 };
 	public TableBorderStyle BorderStyle { get; init; } = TableBorderStyle.All;
 	public Fill HeaderBackground { get; init; }
-	// Alternating row fill, applied to body rows only. Stripe = the 2nd, 4th, … row when
-	// Every = 2 (the default). Set RowStripeFill = null to disable.
-	public Fill RowStripeFill { get; init; }
-	public int RowStripeEvery { get; init; } = 2;
+	// Per-row body fills, cycled. Body row k uses RowStripeFills[k % Count]. A null entry in
+	// the list = no fill for that slot (so [null, gray] = unstriped/gray alternation). Null
+	// or empty list = no row fills at all.
+	public IReadOnlyList<Fill> RowStripeFills { get; init; }
 	public TextStyle DefaultCellStyle { get; init; } = new TextStyle();
 	// Explicit header text style. When null, header cells inherit DefaultCellStyle with
 	// Weight bumped to Bold (see ResolveCellContent).
@@ -110,16 +110,16 @@ public sealed class Table : LayoutElement
 			children.Add(new PathElement { Path = rect, Fill = HeaderBackground });
 		}
 
-		// Row stripes. Body row index k = grid row (hasHeader ? k+1 : k). Stripe pattern:
-		// every Nth body row (1-indexed) gets the fill, e.g. RowStripeEvery=2 stripes the
-		// 2nd, 4th, … body rows. Drawn under cell content for the same reason as the header
+		// Row fills. Body row k cycles through RowStripeFills (k % Count). Null entries skip
+		// the fill for that slot. Drawn under cell content for the same reason as the header
 		// background.
-		if (RowStripeFill != null && Rows != null && Rows.Count > 0 && RowStripeEvery > 0)
+		if (RowStripeFills != null && RowStripeFills.Count > 0 && Rows != null && Rows.Count > 0)
 		{
 			var dataStart = hasHeader ? 1 : 0;
 			for (var k = 0; k < Rows.Count; k++)
 			{
-				if (((k + 1) % RowStripeEvery) != 0) continue;
+				var fill = RowStripeFills[k % RowStripeFills.Count];
+				if (fill == null) continue;
 				var stripeCell = grid.ComputeCellRect(gridLayout,
 					new GridCell { Row = dataStart + k, Column = 0, ColumnSpan = columnCount },
 					totalRect.Height);
@@ -130,7 +130,7 @@ public sealed class Table : LayoutElement
 					.LineTo(Origin.X + stripeCell.MinX, Origin.Y + stripeCell.MaxY)
 					.Close()
 					.Build();
-				children.Add(new PathElement { Path = rect, Fill = RowStripeFill });
+				children.Add(new PathElement { Path = rect, Fill = fill });
 			}
 		}
 
@@ -240,8 +240,7 @@ public sealed class Table : LayoutElement
 			Border = Border,
 			BorderStyle = BorderStyle,
 			HeaderBackground = HeaderBackground,
-			RowStripeFill = RowStripeFill,
-			RowStripeEvery = RowStripeEvery,
+			RowStripeFills = RowStripeFills,
 			DefaultCellStyle = DefaultCellStyle,
 			HeaderStyle = HeaderStyle,
 			Origin = origin,

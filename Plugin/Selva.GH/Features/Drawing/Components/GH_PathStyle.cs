@@ -4,6 +4,8 @@ using System.Drawing;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Parameters;
 using Selva.Drawing.Model.Style;
+using Selva.GH.Features.Drawing.Goos;
+using Selva.GH.Features.Drawing.Params;
 using Selva.GH.Properties;
 using Color = System.Drawing.Color;
 using ModelColor = Selva.Drawing.Model.Style.Color;
@@ -77,7 +79,7 @@ public class GH_PathStyle : GH_Component
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        pManager.AddGenericParameter("Style", "S", "Path style", GH_ParamAccess.item);
+        pManager.AddParameter(new Param_PathStyle("Style", "S", "Path style", "Selva", "Elements", GH_ParamAccess.item));
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)
@@ -129,9 +131,9 @@ public class GH_PathStyle : GH_Component
         };
 
         Fill fillStyle = null;
-        if (fill)
+        var hatch = (HatchPattern)Math.Max(0, Math.Min(4, hatchPatternInt));
+        if (fill || hatch != HatchPattern.None)
         {
-            var hatch = (HatchPattern)Math.Max(0, Math.Min(4, hatchPatternInt));
             fillStyle = new Fill
             {
                 Color = ToModelColor(fillColor),
@@ -143,7 +145,7 @@ public class GH_PathStyle : GH_Component
             };
         }
 
-        DA.SetData(0, new PathStyle { Stroke = stroke, Fill = fillStyle });
+        DA.SetData(0, new PathStyleGoo(new PathStyle { Stroke = stroke, Fill = fillStyle }));
     }
 
     private static ModelColor ToModelColor(Color c) => ModelColor.Rgb(c.R, c.G, c.B, c.A);

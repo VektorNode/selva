@@ -6,6 +6,7 @@ using Selva.Drawing.Model.Drawings;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Style;
+using Selva.GH.Features.Drawing.Params;
 using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
@@ -33,7 +34,7 @@ public class GH_LegendBlock : GH_Component
         pManager.AddTextParameter("Descriptions", "D", "Description text for each swatch", GH_ParamAccess.list);
         pManager.AddNumberParameter("Width", "W", "Total width in millimetres", GH_ParamAccess.item, 80.0);
         pManager.AddNumberParameter("Swatch Width", "Sw", "Swatch column width in millimetres", GH_ParamAccess.item, 18.0);
-        pManager.AddGenericParameter("Border", "B", "Stroke style for borders", GH_ParamAccess.item);
+        pManager.AddParameter(new Param_Stroke("Border", "B", "Border stroke (use Path Style component; leave empty for default 0.25mm)", "Selva", "Layout", GH_ParamAccess.item));
         pManager.AddPointParameter("Origin", "O", "Bottom-left in world coordinates", GH_ParamAccess.item, new Rhino.Geometry.Point3d(0, 0, 0));
 
         pManager[0].Optional = true;

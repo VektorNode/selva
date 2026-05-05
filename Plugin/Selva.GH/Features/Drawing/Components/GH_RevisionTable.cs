@@ -5,6 +5,7 @@ using Grasshopper.Kernel;
 using Selva.Drawing.Model.Drawings;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Style;
+using Selva.GH.Features.Drawing.Params;
 using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
@@ -31,7 +32,7 @@ public class GH_RevisionTable : GH_Component
         pManager.AddTextParameter("Descriptions", "Ds", "Revision descriptions", GH_ParamAccess.list);
         pManager.AddTextParameter("By", "B", "Revision authors / initials", GH_ParamAccess.list);
         pManager.AddNumberParameter("Width", "W", "Total width in millimetres", GH_ParamAccess.item, 120.0);
-        pManager.AddGenericParameter("Border", "Br", "Stroke style for borders (leave empty for default 0.25mm)", GH_ParamAccess.item);
+        pManager.AddParameter(new Param_Stroke("Border", "Br", "Border stroke (use Path Style component; leave empty for default 0.25mm)", "Selva", "Layout", GH_ParamAccess.item));
         pManager.AddPointParameter("Origin", "O", "Bottom-left in world coordinates", GH_ParamAccess.item, new Rhino.Geometry.Point3d(0, 0, 0));
 
         pManager[0].Optional = true;

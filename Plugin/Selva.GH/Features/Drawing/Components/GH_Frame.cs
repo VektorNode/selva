@@ -6,6 +6,7 @@ using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Layout;
 using Selva.Drawing.Model.Style;
+using Selva.GH.Features.Drawing.Params;
 using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
@@ -29,7 +30,7 @@ public class GH_Frame : GH_Component
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
         pManager.AddGenericParameter("Child", "C", "Drawing element to wrap", GH_ParamAccess.item);
-        pManager.AddGenericParameter("Border", "B", "Stroke style for the border (leave empty for no border)", GH_ParamAccess.item);
+        pManager.AddParameter(new Param_Stroke("Border", "B", "Border stroke (use Path Style component; leave empty for no border)", "Selva", "Layout", GH_ParamAccess.item));
         pManager.AddNumberParameter("Padding", "P", "Uniform padding in millimetres around the child", GH_ParamAccess.item, 0.0);
         pManager.AddPointParameter("Origin", "O", "Bottom-left of the frame in world coordinates", GH_ParamAccess.item, new Rhino.Geometry.Point3d(0, 0, 0));
 

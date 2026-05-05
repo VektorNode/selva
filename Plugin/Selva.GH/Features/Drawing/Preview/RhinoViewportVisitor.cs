@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Runtime.CompilerServices;
 using Rhino.Display;
 using Rhino.Geometry;
 using Selva.Drawing.Model.Elements;
+using Selva.GH.Features.Drawing.Lib;
 using DrawColor = Selva.Drawing.Model.Style.Color;
 using DrawColorSpace = Selva.Drawing.Model.Style.ColorSpace;
 using DrawTransform = Selva.Drawing.Model.Geometry.Transform;
@@ -12,6 +14,8 @@ using DrawPoint = Selva.Drawing.Model.Geometry.Point2D;
 using DrawBox = Selva.Drawing.Model.Geometry.BoundingBox;
 using PathSeg = Selva.Drawing.Model.Geometry.PathSegment;
 using FillRule = Selva.Drawing.Model.Style.FillRule;
+using HatchPattern = Selva.Drawing.Model.Style.HatchPattern;
+using Fill = Selva.Drawing.Model.Style.Fill;
 
 namespace Selva.GH.Features.Drawing.Preview;
 
@@ -67,10 +71,18 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
         var subpaths = TessellateSubpaths(element.Path);
 
         // Fill closed subpaths first so strokes draw on top (matches SVG paint order).
+        // Closed-path fills go through the cached-Brep route (DrawBrepShaded — Rhino's
+        // GPU-shaded fill, handles concave shapes + holes natively). Falls back to the
+        // tessellate-and-ear-clip mesh path only if Brep construction returns nothing.
+        // Hatch patterns replace the flat fill (matching SVG/PDF), drawn as line/dot
+        // overlays clipped to the subpaths.
         if (element.Fill != null)
         {
             var fillColor = ApplyOpacity(ToSystemColor(element.Fill.Color, FillOutlineFallback), element.Fill.Opacity);
-            FillSubpaths(subpaths, fillColor, element.Fill.Rule);
+            if (element.Fill.Pattern != HatchPattern.None)
+                DrawFillPattern(element.Path, subpaths, element.Fill, fillColor);
+            else if (!FillPathWithBreps(element.Path, fillColor))
+                FillSubpaths(subpaths, fillColor, element.Fill.Rule);
         }
 
         if (element.Stroke != null)
@@ -706,7 +718,66 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
     }
 
     // ============================================================================
-    // Polygon fill (concave + holes)
+    // Brep-based fill (preferred path — concave + holes via Rhino's planar Brep)
+    // ============================================================================
+
+    // Cache: a model Path → the planar Breps it produces. Built once per unique Path
+    // instance, reused across every viewport redraw. ConditionalWeakTable lets the entry
+    // be GC'd when the Path is no longer referenced (component cleared, document closed).
+    // Empty array = "we tried and got nothing" (signals "fall back to mesh path"); null is
+    // never stored.
+    private static readonly ConditionalWeakTable<DrawPath, Brep[]> _brepCache =
+        new ConditionalWeakTable<DrawPath, Brep[]>();
+
+    // Returns true if the fill was rendered via DrawBrepShaded (the fast path). Returns
+    // false if we couldn't build any Breps from this path (no closed subpaths, or
+    // CreatePlanarBreps rejected the input) — caller falls back to the mesh path.
+    private bool FillPathWithBreps(DrawPath path, Color color)
+    {
+        if (!_brepCache.TryGetValue(path, out var breps))
+        {
+            breps = BuildBrepsForPath(path);
+            _brepCache.Add(path, breps);
+        }
+        if (breps.Length == 0) return false;
+
+        // Push the model-space transform onto the display stack so Rhino applies it on the
+        // GPU; the cached Brep stays in path-local coordinates and is reused as-is.
+        var t = ToRhinoTransform(_current);
+        var pushed = !t.IsIdentity;
+        if (pushed) _display.PushModelTransform(t);
+
+        var material = new DisplayMaterial(color);
+        if (color.A < 255) material.Transparency = 1.0 - color.A / 255.0;
+        foreach (var b in breps) _display.DrawBrepShaded(b, material);
+
+        if (pushed) _display.PopModelTransform();
+        return true;
+    }
+
+    private static Brep[] BuildBrepsForPath(DrawPath path)
+    {
+        var curves = PathToCurves.ClosedSubpaths(path);
+        if (curves.Count == 0) return Array.Empty<Brep>();
+        // CreatePlanarBreps groups outer + hole curves by containment, returning one Brep
+        // per outer with its holes trimmed. Tolerance 0.001 mm is generous for paper-space
+        // drawings; tighter tolerances cause valid breps to be rejected when curves come
+        // from float-precision tessellation.
+        var built = Brep.CreatePlanarBreps(curves, 0.001);
+        return built ?? Array.Empty<Brep>();
+    }
+
+    private static Rhino.Geometry.Transform ToRhinoTransform(DrawTransform t)
+    {
+        var m = Rhino.Geometry.Transform.Identity;
+        // SVG matrix(A B C D E F): x' = A*x + C*y + E, y' = B*x + D*y + F. Z stays 0.
+        m.M00 = t.A; m.M01 = t.C; m.M03 = t.E;
+        m.M10 = t.B; m.M11 = t.D; m.M13 = t.F;
+        return m;
+    }
+
+    // ============================================================================
+    // Polygon fill (fallback for hatches and Brep-rejected paths)
     // ============================================================================
 
     // DisplayPipeline.DrawPolygon does fan-triangulation from vertex 0, which produces
@@ -1011,6 +1082,37 @@ internal sealed class RhinoViewportVisitor : IElementVisitor
     // ============================================================================
     // Hatch pattern rendering
     // ============================================================================
+
+    // Renders Fill.Pattern on a PathElement to mirror SVG/PDF output (which use
+    // tile = 4mm * scale, lines at 45° + PatternAngle). Hatch replaces the flat fill.
+    private void DrawFillPattern(DrawPath path, List<Subpath> subpaths, Fill fill, Color color)
+    {
+        var bounds = path.ComputeBounds();
+        if (bounds.IsEmpty) return;
+
+        var scale = fill.PatternScale > 0 ? fill.PatternScale : 1.0;
+        var spacing = 4.0 * scale;
+        var angle = fill.PatternAngle;
+
+        switch (fill.Pattern)
+        {
+            case HatchPattern.Lines:
+                DrawHatchLines(subpaths, bounds, 45.0 + angle, spacing, color);
+                break;
+            case HatchPattern.CrossHatch:
+                DrawHatchLines(subpaths, bounds, 45.0 + angle, spacing, color);
+                DrawHatchLines(subpaths, bounds, -45.0 + angle, spacing, color);
+                break;
+            case HatchPattern.Dots:
+                DrawHatchDots(subpaths, bounds, spacing, color);
+                break;
+            case HatchPattern.Brick:
+                // Approximate brick coursing: horizontal lines + perpendicular ticks.
+                DrawHatchLines(subpaths, bounds, angle, spacing, color);
+                DrawHatchLines(subpaths, bounds, 90.0 + angle, spacing * 2, color);
+                break;
+        }
+    }
 
     // Sweep parallel lines across the bounding box at the given angle/spacing, clip each
     // line to the boundary subpaths via even-odd ray crossings, and emit the inside spans.

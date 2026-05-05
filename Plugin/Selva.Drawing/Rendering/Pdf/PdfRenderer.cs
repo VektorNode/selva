@@ -721,7 +721,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		var ts = style.TextSize;
 		var extGap = ts * style.ExtensionGapFactor;
 		var extOver = ts * style.ExtensionOvershootFactor;
-		var arrowSize = ts * style.ArrowSizeFactor;
+		var arrowSize = style.ResolvedArrowSize();
 
 		var sign = offset >= 0 ? 1 : -1;
 		var absOffset = Math.Abs(offset);
@@ -833,7 +833,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		var sweepCcw = theta > 0;
 
 		var ts = style.TextSize;
-		var arrowSize = ts * style.ArrowSizeFactor;
+		var arrowSize = style.ResolvedArrowSize();
 
 		var arcStartX = vx + uax * radius;
 		var arcStartY = vy + uay * radius;
