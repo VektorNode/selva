@@ -7,6 +7,7 @@
 		acceptTypes?: string[];
 		label?: string;
 		isEmpty?: boolean;
+		isActive?: boolean;
 		ondrop?: (e: CustomEvent) => void;
 		children: Snippet;
 	}
@@ -15,11 +16,13 @@
 		acceptTypes = ['input', 'output', 'group-item'],
 		label = 'Drop here',
 		isEmpty = false,
+		isActive = false,
 		ondrop,
 		children
 	}: Props = $props();
 
 	let isOver = $state(false);
+	const showHighlight = $derived(isOver || isActive);
 
 	function handleDragOver(e: DragEvent) {
 		e.preventDefault();
@@ -75,9 +78,8 @@
 
 <div
 	class={`
-    min-h-[60px] rounded-md border-2 border-dashed p-3 transition-all
-    ${isOver ? 'border-primary bg-primary/10' : 'border-border'}
-    ${isEmpty ? 'flex items-center justify-center' : ''}
+    relative min-h-[60px] rounded-md border-2 border-dashed p-3 transition-all
+    ${showHighlight ? 'border-primary bg-primary/10' : 'border-border'}
   `}
 	role="region"
 	aria-label={label}
@@ -85,12 +87,13 @@
 	ondragleave={handleDragLeave}
 	ondrop={handleDrop}
 >
+	{@render children?.()}
 	{#if isEmpty}
-		<div class="pointer-events-none flex flex-col items-center gap-2">
+		<div
+			class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2"
+		>
 			<MousePointerClick size={48} class="opacity-50" />
 			<span class="text-muted-foreground text-sm">{label}</span>
 		</div>
-	{:else}
-		{@render children?.()}
 	{/if}
 </div>
