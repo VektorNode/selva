@@ -49,12 +49,12 @@
 
 	const schemaInfoStorageKey = $derived(`builder.schemaInfo.open:${getSessionIdFromUrl()}`);
 
-	let schemaInfoOpen = $state(false);
+	let schemaInfoOpen = $state(true);
 
 	$effect(() => {
 		if (typeof localStorage === 'undefined') return;
 		const stored = localStorage.getItem(schemaInfoStorageKey);
-		schemaInfoOpen = stored === '1';
+		if (stored !== null) schemaInfoOpen = stored === '1';
 	});
 
 	$effect(() => {

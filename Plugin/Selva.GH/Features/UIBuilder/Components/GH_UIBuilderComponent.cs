@@ -267,7 +267,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                     var started = await _service.ServerManager.StartServersAsync(_sessionId);
 
                     if (started)
-                        // Show Web UI URL if embedded assets are available
+                    // Show Web UI URL if embedded assets are available
                     {
                         if (_service.ServerManager.HttpPort.HasValue)
                         {
@@ -402,6 +402,105 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         base.RemovedFromDocument(document);
         Cleanup();
+    }
+
+    private static readonly Guid BooleanToggleGuid = new Guid("2e78987b-9dfb-42a2-8b76-3923ac8bd91a");
+    private static readonly Guid HopsContextBakeGuid = new Guid("ae2531b4-bab2-4bb1-b5bf-f2143d10c132");
+
+    public override void AddedToDocument(GH_Document document)
+    {
+        base.AddedToDocument(document);
+
+        if (document == null || !IsFreshPlacement())
+        {
+            return;
+        }
+
+        try
+        {
+            WireDefaultNeighbors(document);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Auto-wire on placement failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    ///     True only when this component was just dropped on a fresh canvas position —
+    ///     not on file load, paste, or when the user has already wired/loaded state.
+    /// </summary>
+    private bool IsFreshPlacement()
+    {
+        if (_embeddedSchema != null)
+        {
+            return false;
+        }
+
+        if (Params.Input.Count > 0 && Params.Input[0].SourceCount > 0)
+        {
+            return false;
+        }
+
+        if (Params.Output.Count > 0 && Params.Output[0].Recipients.Count > 0)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private void WireDefaultNeighbors(GH_Document document)
+    {
+        const float gap = 40f;
+
+        if (Attributes == null)
+        {
+            return;
+        }
+
+        Attributes.PerformLayout();
+        var selfBounds = Attributes.Bounds;
+        var centerY = selfBounds.Y + selfBounds.Height / 2f;
+
+        var toggle = Grasshopper.Instances.ComponentServer.EmitObject(BooleanToggleGuid) as IGH_Param;
+        if (toggle != null && Params.Input.Count > 0)
+        {
+            document.AddObject(toggle, false);
+            if (toggle.Attributes != null)
+            {
+                toggle.Attributes.Pivot = new PointF(selfBounds.Left - gap, centerY);
+                toggle.Attributes.ExpireLayout();
+                toggle.Attributes.PerformLayout();
+
+                var tBounds = toggle.Attributes.Bounds;
+                var dx = (selfBounds.Left - gap) - tBounds.Right;
+                var dy = centerY - (tBounds.Y + tBounds.Height / 2f);
+                toggle.Attributes.Pivot = new PointF(toggle.Attributes.Pivot.X + dx, toggle.Attributes.Pivot.Y + dy);
+                toggle.Attributes.ExpireLayout();
+            }
+            Params.Input[0].AddSource(toggle);
+        }
+
+        var bake = Grasshopper.Instances.ComponentServer.EmitObject(HopsContextBakeGuid);
+        if (bake is IGH_Component bakeComponent && Params.Output.Count > 0 && bakeComponent.Params.Input.Count > 0)
+        {
+            document.AddObject(bakeComponent, false);
+            if (bakeComponent.Attributes != null)
+            {
+                bakeComponent.Attributes.Pivot = new PointF(selfBounds.Right + gap, centerY);
+                bakeComponent.Params.Input[0].NickName = "Schema";
+                bakeComponent.Attributes.ExpireLayout();
+                bakeComponent.Attributes.PerformLayout();
+
+                var bBounds = bakeComponent.Attributes.Bounds;
+                var dx = (selfBounds.Right + gap) - bBounds.Left;
+                var dy = centerY - (bBounds.Y + bBounds.Height / 2f);
+                bakeComponent.Attributes.Pivot = new PointF(bakeComponent.Attributes.Pivot.X + dx, bakeComponent.Attributes.Pivot.Y + dy);
+                bakeComponent.Attributes.ExpireLayout();
+            }
+            bakeComponent.Params.Input[0].AddSource(Params.Output[0]);
+        }
     }
 
     /// <summary>
