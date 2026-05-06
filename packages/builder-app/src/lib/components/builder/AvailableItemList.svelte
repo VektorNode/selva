@@ -7,9 +7,8 @@
 	} from '@selvajs/schemas';
 	import { StateDisplay, Input, Badge, Select, Collapsible } from '@selvajs/ui';
 	import DraggableItem from './DraggableItem.svelte';
-	import { Search, X, ChevronDown, Clock } from '@lucide/svelte';
+	import { Search, X, ChevronDown } from '@lucide/svelte';
 	import { getSessionIdFromUrl } from '$lib/utils/session';
-	import { recentParamsStore } from '$lib/stores/recentParams.svelte';
 	import { clusterItems, type GroupBy, type GroupedItem } from '$lib/utils/paramGrouping';
 	import { SvelteSet } from 'svelte/reactivity';
 
@@ -47,10 +46,6 @@
 
 	let sectionOpen = $state(true);
 	let groupBy = $state<GroupBy>('none');
-
-	$effect(() => {
-		recentParamsStore.init(sessionId);
-	});
 
 	$effect(() => {
 		if (typeof localStorage === 'undefined') return;
@@ -132,24 +127,7 @@
 		return filtered;
 	});
 
-	const recentIds = $derived(recentParamsStore.get(sessionId));
-
-	const recentItems = $derived.by(() => {
-		if (recentIds.length === 0) return [];
-		const byId = new Map(filteredItems.map((i) => [i.id, i]));
-		const out: GroupedItem[] = [];
-		for (const id of recentIds) {
-			const found = byId.get(id);
-			if (found) out.push(found);
-		}
-		return out;
-	});
-
-	const clusters = $derived.by(() => {
-		const recentSet = new Set(recentItems.map((i) => i.id));
-		const remaining = filteredItems.filter((i) => !recentSet.has(i.id));
-		return clusterItems(remaining, groupBy);
-	});
+	const clusters = $derived(clusterItems(filteredItems, groupBy));
 
 	const headerCount = $derived(baseItems.length);
 
@@ -307,20 +285,6 @@
 					: emptyMessage}
 			/>
 		{:else}
-			{#if recentItems.length > 0}
-				<div class="mb-3">
-					<div class="text-muted-foreground mb-1 flex items-center gap-1.5 px-1 text-[11px] font-medium uppercase tracking-wide">
-						<Clock size={11} />
-						Recently used
-					</div>
-					<div class="flex flex-col gap-0">
-						{#each recentItems as item (item.id)}
-							<DraggableItem {item} {tabs} {onAddToGroup} {onAddToNewGroup} />
-						{/each}
-					</div>
-				</div>
-			{/if}
-
 			{#if groupBy === 'none'}
 				<div class="flex flex-col gap-0">
 					{#each clusters[0]?.items ?? [] as item (item.id)}
