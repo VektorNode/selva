@@ -77,6 +77,9 @@
 		dragStore.current?.dropType === 'input' || dragStore.current?.dropType === 'output'
 	);
 
+	// True while a dnd-action drag is hovering this zone (shadow placeholder is present)
+	const isDndTarget = $derived(localItems.some((i) => i.isDndShadowItem));
+
 	function handleConsider(e: CustomEvent<DndEvent<DndLayoutItem>>) {
 		isItemDragging = true;
 		const draggedId = e.detail.info?.id;
@@ -225,6 +228,7 @@
 		<Card.Content class="bg-muted animate-[fadeIn_0.2s] p-4">
 			<DropZone
 				isEmpty={group.items.length === 0}
+				isActive={isDndTarget}
 				label="Drag parameters here"
 				ondrop={handleDropEvent}
 			>
@@ -234,11 +238,11 @@
 						type: 'group-item',
 						flipDurationMs: 200,
 						dragDisabled: isSidebarDragging,
-						dropTargetStyle: { outline: 'var(--primary) solid 2px' }
+						dropTargetStyle: {}
 					}}
 					onconsider={handleConsider}
 					onfinalize={handleFinalize}
-					class="grid items-start gap-3"
+					class="grid min-h-[3.5rem] items-start gap-3"
 					style="grid-template-columns: repeat({group.columns}, 1fr);"
 				>
 					{#each localItems as item (item.id)}
