@@ -399,12 +399,6 @@
 					"default": true,
 					"description": "Show a fullscreen toggle button on the image viewer"
 				},
-				"fitMode": {
-					"type": "string",
-					"enum": ["contain", "cover"],
-					"default": "contain",
-					"description": "How the image should fit its container: 'contain' preserves aspect ratio with letterboxing, 'cover' fills container and may crop"
-				},
 				"backgroundColor": {
 					"type": "string",
 					"pattern": "^#[0-9A-Fa-f]{6}$",

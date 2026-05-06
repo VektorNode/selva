@@ -83,6 +83,7 @@
 								onToggle={() => onToggleGroup(group.id)}
 								inputSnippet={renderInput}
 								outputSnippet={renderOutput}
+								flat={tab.groups.length === 1}
 							/>
 						{/if}
 					{/each}

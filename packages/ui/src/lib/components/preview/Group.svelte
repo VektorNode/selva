@@ -20,6 +20,8 @@
 			]
 		>;
 		outputSnippet: Snippet<[layoutItem: OutputLayoutItem]>;
+		/** When true, renders items flat without the Card wrapper, header, or collapse toggle. */
+		flat?: boolean;
 	}
 
 	let {
@@ -31,7 +33,8 @@
 		values,
 		onToggle,
 		inputSnippet,
-		outputSnippet
+		outputSnippet,
+		flat = false
 	}: Props = $props();
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -42,39 +45,49 @@
 	}
 </script>
 
-<Card.Root class="gap-0 py-0 pt-0 overflow-hidden">
-	<Card.Header
-		class="pt-4 pb-4! cursor-pointer border-b border-border bg-muted transition-colors select-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-		role="button"
-		tabindex={0}
-		aria-expanded={!collapsed}
-		onclick={onToggle}
-		onkeydown={handleKeydown}
-	>
-		<Card.Title>{label}</Card.Title>
-		{#if description}
-			<Card.Description>{description}</Card.Description>
-		{/if}
-		<Card.Action>
-			<ChevronDown
-				class="h-4 w-4 text-muted-foreground transition-transform duration-200 {collapsed
-					? ''
-					: 'rotate-180'}"
-			/>
-		</Card.Action>
-	</Card.Header>
-	<div class="content-wrapper" class:collapsed>
-		<div class="content-inner">
-			<Card.Content class="p-6">
-				<div class="schema-grid gap-6 grid" style="--schema-cols: {columns};">
-					{#each items as layoutItem (layoutItem.type === 'linebreak' ? layoutItem.id : layoutItem.paramId)}
-						{@render gridItem(layoutItem, columns)}
-					{/each}
-				</div>
-			</Card.Content>
+{#if flat}
+	<div class="p-6">
+		<div class="schema-grid gap-6 grid" style="--schema-cols: {columns};">
+			{#each items as layoutItem (layoutItem.type === 'linebreak' ? layoutItem.id : layoutItem.paramId)}
+				{@render gridItem(layoutItem, columns)}
+			{/each}
 		</div>
 	</div>
-</Card.Root>
+{:else}
+	<Card.Root class="gap-0 py-0 pt-0 overflow-hidden">
+		<Card.Header
+			class="pt-4 pb-4! cursor-pointer border-b border-border bg-muted transition-colors select-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+			role="button"
+			tabindex={0}
+			aria-expanded={!collapsed}
+			onclick={onToggle}
+			onkeydown={handleKeydown}
+		>
+			<Card.Title>{label}</Card.Title>
+			{#if description}
+				<Card.Description>{description}</Card.Description>
+			{/if}
+			<Card.Action>
+				<ChevronDown
+					class="h-4 w-4 text-muted-foreground transition-transform duration-200 {collapsed
+						? ''
+						: 'rotate-180'}"
+				/>
+			</Card.Action>
+		</Card.Header>
+		<div class="content-wrapper" class:collapsed>
+			<div class="content-inner">
+				<Card.Content class="p-6">
+					<div class="schema-grid gap-6 grid" style="--schema-cols: {columns};">
+						{#each items as layoutItem (layoutItem.type === 'linebreak' ? layoutItem.id : layoutItem.paramId)}
+							{@render gridItem(layoutItem, columns)}
+						{/each}
+					</div>
+				</Card.Content>
+			</div>
+		</div>
+	</Card.Root>
+{/if}
 
 {#snippet gridItem(layoutItem: LayoutItem, cols: number)}
 	{#if layoutItem.type === 'linebreak'}

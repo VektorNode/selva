@@ -250,9 +250,7 @@
 {/snippet}
 
 <div class="gap-2 flex flex-col">
-	{#if item.widgetType !== 'chart' && item.widgetType !== 'image'}
-		{@render fieldHeader()}
-	{/if}
+	{@render fieldHeader()}
 
 	{#if item.widgetType === 'chart'}
 		<ChartOutput

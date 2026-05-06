@@ -2,7 +2,6 @@
 	import type { OutputChartLayoutItem } from '@selvajs/schemas';
 	import { onMount } from 'svelte';
 	import { Loader, Maximize, Minimize } from '@lucide/svelte';
-	import { Label } from '$lib/components/primitives/label';
 	import { loadScript } from '$lib/utils/loadScript';
 
 	interface Props {
@@ -28,15 +27,6 @@
 		} catch {
 			return null;
 		}
-	});
-
-	const figTitle = $derived.by(() => {
-		if (!figData) return null;
-		const t = figData.layout?.title;
-		if (!t) return null;
-		if (typeof t === 'string') return t;
-		if (typeof t === 'object' && 'text' in t) return (t as Record<string, unknown>).text as string;
-		return null;
 	});
 
 	let containerEl = $state<HTMLDivElement | null>(null);
@@ -187,40 +177,10 @@
 
 <div
 	bind:this={wrapperEl}
-	class="gap-0 flex flex-col overflow-hidden rounded-lg border border-border {isFullscreen
+	class="group relative overflow-hidden rounded border border-border {isFullscreen
 		? 'bg-background'
 		: ''}"
 >
-	<div class="gap-2 px-3 py-1.5 relative z-10 flex items-center border-b border-border bg-muted/40">
-		<Label
-			class="text-xs font-medium truncate text-foreground"
-			title={figTitle ?? item.displayName ?? item.paramId}
-		>
-			{figTitle ?? item.displayName ?? item.paramId}
-		</Label>
-
-		<div class="gap-1 ml-auto flex items-center">
-			{#if loading}
-				<div class="text-muted-foreground">
-					<Loader size={12} class="animate-spin" />
-				</div>
-			{/if}
-
-			<button
-				onclick={toggleFullscreen}
-				disabled={loading}
-				title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-				class="rounded p-1 flex items-center text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-			>
-				{#if isFullscreen}
-					<Minimize size={14} />
-				{:else}
-					<Maximize size={14} />
-				{/if}
-			</button>
-		</div>
-	</div>
-
 	{#if error}
 		<div class="px-4 py-3 text-sm text-destructive">{error}</div>
 	{:else if !figData && value}
@@ -231,7 +191,32 @@
 		<div
 			bind:this={containerEl}
 			class="w-full"
-			style="height: {isFullscreen ? 'calc(100vh - 36px)' : '380px'};"
+			style="height: {isFullscreen ? '100vh' : '380px'};"
 		></div>
+
+		<div
+			class="gap-1 left-2 top-2 absolute z-10 flex items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 {isFullscreen
+				? 'opacity-100'
+				: ''}"
+		>
+			{#if loading}
+				<div class="rounded p-1.5 flex items-center text-muted-foreground border border-border bg-background/80 backdrop-blur-sm">
+					<Loader size={14} class="animate-spin" />
+				</div>
+			{/if}
+
+			<button
+				onclick={toggleFullscreen}
+				disabled={loading}
+				title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+				class="rounded p-1.5 flex items-center text-foreground border border-border bg-background/80 backdrop-blur-sm transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+			>
+				{#if isFullscreen}
+					<Minimize size={14} />
+				{:else}
+					<Maximize size={14} />
+				{/if}
+			</button>
+		</div>
 	{/if}
 </div>
