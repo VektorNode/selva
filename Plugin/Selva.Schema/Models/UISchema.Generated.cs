@@ -266,12 +266,6 @@ namespace Selva.Schema.Models
         public bool? AllowFullscreen { get; set; } = true;
 
 /// <summary>
-/// How the image should fit its container: 'contain' preserves aspect ratio with letterboxing, 'cover' fills container and may crop
-/// </summary>
-        [JsonProperty("fitMode", DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public string FitMode { get; set; } = "contain";
-
-/// <summary>
 /// Optional background color shown behind the image (hex string, e.g. '#ffffff')
 /// </summary>
         [JsonProperty("backgroundColor")]

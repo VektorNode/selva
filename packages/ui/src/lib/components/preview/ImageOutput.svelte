@@ -2,7 +2,6 @@
 	import type { OutputImageLayoutItem } from '@selvajs/schemas';
 	import type { FileData } from '@selvajs/compute';
 	import { Download, Maximize, Minimize } from '@lucide/svelte';
-	import { Label } from '$lib/components/primitives/label';
 	import { downloadFiles } from '$lib/utils/file-download';
 
 	interface Props {
@@ -50,7 +49,6 @@
 	const cfg = $derived(item.config ?? {});
 	const allowDownload = $derived(cfg.allowDownload ?? true);
 	const allowFullscreen = $derived(cfg.allowFullscreen ?? true);
-	const fitMode = $derived(cfg.fitMode ?? 'contain');
 	const backgroundColor = $derived(cfg.backgroundColor);
 
 	let wrapperEl = $state<HTMLDivElement | null>(null);
@@ -95,46 +93,10 @@
 
 <div
 	bind:this={wrapperEl}
-	class="gap-0 flex flex-col overflow-hidden rounded-lg border border-border {isFullscreen
+	class="group relative overflow-hidden rounded border border-border {isFullscreen
 		? 'bg-background'
 		: ''}"
 >
-	<div class="gap-2 px-3 py-1.5 relative z-10 flex items-center border-b border-border bg-muted/40">
-		<Label
-			class="text-xs font-medium truncate text-foreground"
-			title={item.displayName ?? item.paramId}
-		>
-			{item.displayName ?? item.paramId}
-		</Label>
-
-		<div class="gap-1 ml-auto flex items-center">
-			{#if allowDownload && file}
-				<button
-					onclick={handleDownload}
-					disabled={downloading}
-					title="Download image"
-					class="rounded p-1 flex items-center text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-				>
-					<Download size={14} />
-				</button>
-			{/if}
-
-			{#if allowFullscreen}
-				<button
-					onclick={toggleFullscreen}
-					title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-					class="rounded p-1 flex items-center text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
-				>
-					{#if isFullscreen}
-						<Minimize size={14} />
-					{:else}
-						<Maximize size={14} />
-					{/if}
-				</button>
-			{/if}
-		</div>
-	</div>
-
 	{#if error}
 		<div class="px-4 py-3 text-sm text-destructive">{error}</div>
 	{:else if !file}
@@ -147,16 +109,48 @@
 	{:else}
 		<div
 			class="w-full"
-			style="height: {isFullscreen ? 'calc(100vh - 36px)' : '380px'}; {backgroundColor
+			style="height: {isFullscreen ? '100vh' : '380px'}; {backgroundColor
 				? `background-color: ${backgroundColor};`
 				: ''}"
 		>
 			<img
 				src={dataUrl}
 				alt={item.displayName ?? file.fileName}
-				class="h-full w-full"
-				style="object-fit: {fitMode};"
+				class="h-full w-full object-contain"
 			/>
 		</div>
+
+		{#if allowDownload || allowFullscreen}
+			<div
+				class="gap-1 right-2 top-2 absolute z-10 flex items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 {isFullscreen
+					? 'opacity-100'
+					: ''}"
+			>
+				{#if allowDownload && file}
+					<button
+						onclick={handleDownload}
+						disabled={downloading}
+						title="Download image"
+						class="rounded p-1.5 flex items-center text-foreground border border-border bg-background/80 backdrop-blur-sm transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+					>
+						<Download size={14} />
+					</button>
+				{/if}
+
+				{#if allowFullscreen}
+					<button
+						onclick={toggleFullscreen}
+						title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+						class="rounded p-1.5 flex items-center text-foreground border border-border bg-background/80 backdrop-blur-sm transition-colors hover:bg-background"
+					>
+						{#if isFullscreen}
+							<Minimize size={14} />
+						{:else}
+							<Maximize size={14} />
+						{/if}
+					</button>
+				{/if}
+			</div>
+		{/if}
 	{/if}
 </div>

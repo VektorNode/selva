@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Types;
 using Selva.Drawing.Model;
+using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Rendering.Svg;
 using Selva.GH.Features.FileIO;
 using Selva.GH.Features.FileIO.Goos;
@@ -12,15 +14,17 @@ using Selva.GH.Utilities;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Renders a Document to one SVG per page (Decision #3 in the architecture plan: "one file
-// per page"). Emits FileDataGoo so the results flow into the Selva UI download pipeline
-// the same way GeometryToFile / CreateFile / RenderPdf do. Multi-page documents produce
-// "<name>-1.svg", "<name>-2.svg", ...; single-page produces just "<name>.svg".
+// Renders to SVG file(s). Accepts either a Document (one file per page) or loose drawing
+// elements / DrawingViews (wrapped in a single-page document and rendered as one file).
+// Multi-page documents produce "<name>-1.svg", "<name>-2.svg", ...; single-page produces
+// just "<name>.svg".
 public class GH_RenderSvg : GH_Component, ISelvaFileOutput
 {
     public GH_RenderSvg()
         : base("Render SVG", "SVG",
-            "Renders a drawing document to SVG file(s), one per page (downloadable via the Selva UI)",
+            "Renders drawing content to SVG file(s) (downloadable via the Selva UI). " +
+            "Input a Document for paginated multi-page output, or wire DrawingViews / loose " +
+            "elements directly for a single-page SVG.",
             "Selva", "Document")
     {
     }
@@ -36,7 +40,7 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        pManager.AddGenericParameter("Document", "D", "Drawing document", GH_ParamAccess.item);
+        pManager.AddGenericParameter("Drawing", "D", "A Document (paginated) or one or more DrawElements / DrawingViews to wrap into a single-page SVG", GH_ParamAccess.list);
         pManager.AddTextParameter("Name", "N", "Output file name without extension", GH_ParamAccess.item, "drawing");
         pManager.AddNumberParameter("Padding", "P", "Padding around content when auto-fitting (mm)", GH_ParamAccess.item, 10.0);
         pManager.AddBooleanParameter("Auto Fit", "AF", "Auto-fit viewBox to content. When false, page paper size is used.", GH_ParamAccess.item, true);
@@ -61,7 +65,7 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-        Document doc = null;
+        var inputs = new List<IGH_Goo>();
         var name = "drawing";
         var padding = 10.0;
         var autoFit = true;
@@ -70,7 +74,7 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
         var embedFonts = false;
         var subFolder = "";
 
-        if (!DA.GetData(0, ref doc) || doc == null) return;
+        if (!DA.GetDataList(0, inputs) || inputs.Count == 0) return;
         DA.GetData(1, ref name);
         DA.GetData(2, ref padding);
         DA.GetData(3, ref autoFit);
@@ -78,6 +82,12 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
         DA.GetData(5, ref fontFamily);
         DA.GetData(6, ref embedFonts);
         DA.GetData(7, ref subFolder);
+
+        if (!TryBuildDocument(inputs, name, out var doc, out var error))
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, error);
+            return;
+        }
 
         string backgroundColor = null;
         if (bgColor != Color.Empty)
@@ -123,4 +133,71 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
             AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error rendering SVG: {e.Message}");
         }
     }
+
+    private static bool TryBuildDocument(List<IGH_Goo> inputs, string title, out Document doc, out string error)
+    {
+        // A single Document goes through unchanged. Anything else is treated as loose
+        // DrawElements (curves, surfaces, dimensions, text, DrawingViews, ...) and wrapped
+        // in a single-page document.
+        if (inputs.Count == 1 && Unwrap(inputs[0]) is Document existing)
+        {
+            doc = existing;
+            error = null;
+            return true;
+        }
+
+        var elements = new List<DrawElement>(inputs.Count);
+        foreach (var item in inputs)
+        {
+            switch (Unwrap(item))
+            {
+                case null:
+                    continue;
+                case DrawElement element:
+                    elements.Add(element);
+                    break;
+                case Document _:
+                    doc = null;
+                    error = "Mixing a Document with loose drawing elements is not supported. Wire either a single Document or one or more drawing elements.";
+                    return false;
+                default:
+                    doc = null;
+                    error = $"Unsupported input type: {item?.GetType().Name ?? "null"}";
+                    return false;
+            }
+        }
+
+        if (elements.Count == 0)
+        {
+            doc = null;
+            error = "No content provided";
+            return false;
+        }
+
+        DrawElement content = elements.Count == 1
+            ? elements[0]
+            : new GroupElement { Children = elements };
+
+        doc = new Document
+        {
+            Metadata = new DocumentMetadata { Title = title },
+            Pages = new[]
+            {
+                new Page
+                {
+                    Title = title,
+                    Content = content,
+                },
+            },
+        };
+        error = null;
+        return true;
+    }
+
+    private static object Unwrap(IGH_Goo goo) => goo switch
+    {
+        null => null,
+        GH_ObjectWrapper wrap => wrap.Value,
+        _ => goo,
+    };
 }

@@ -166,8 +166,7 @@ export function createDefaultWidgetConfig(
 			case 'image': {
 				const config: ImageWidgetConfig = {
 					allowDownload: true,
-					allowFullscreen: true,
-					fitMode: 'contain'
+					allowFullscreen: true
 				};
 				return config;
 			}

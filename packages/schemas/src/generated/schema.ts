@@ -262,10 +262,6 @@ export interface ImageWidgetConfig {
    */
   allowFullscreen?: boolean;
   /**
-   * How the image should fit its container: 'contain' preserves aspect ratio with letterboxing, 'cover' fills container and may crop
-   */
-  fitMode?: 'contain' | 'cover';
-  /**
    * Optional background color shown behind the image (hex string, e.g. '#ffffff')
    */
   backgroundColor?: string;

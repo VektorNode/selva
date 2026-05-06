@@ -96,7 +96,6 @@
 		if (isImageOutput && imageConfig) {
 			if (imageConfig.allowDownload === false) return true;
 			if (imageConfig.allowFullscreen === false) return true;
-			if (imageConfig.fitMode === 'cover') return true;
 			return true; // image vs file is itself a divergence
 		}
 		return false;
@@ -110,8 +109,7 @@
 			(item as OutputLayoutItem).widgetType = 'image';
 			(item as OutputLayoutItem).config = {
 				allowDownload: true,
-				allowFullscreen: true,
-				fitMode: 'contain'
+				allowFullscreen: true
 			} as ImageWidgetConfig;
 		} else {
 			(item as OutputLayoutItem).widgetType = 'file';
@@ -122,11 +120,6 @@
 	function toggleImageOption(key: 'allowDownload' | 'allowFullscreen') {
 		if (!imageConfig) return;
 		imageConfig[key] = !(imageConfig[key] ?? true);
-	}
-
-	function setImageFitMode(mode: 'contain' | 'cover') {
-		if (!imageConfig) return;
-		imageConfig.fitMode = mode;
 	}
 
 	function toggleSliderMode() {
@@ -354,31 +347,6 @@
 												onCheckedChange={() => toggleImageOption('allowFullscreen')}
 												class="scale-75"
 											/>
-										</div>
-										<div class="flex flex-col gap-1">
-											<span class="text-muted-foreground text-[10px] font-medium">Fit Mode</span>
-											<div class="grid grid-cols-2 gap-1">
-												<button
-													onclick={() => setImageFitMode('contain')}
-													class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-														(imageConfig.fitMode ?? 'contain') === 'contain'
-															? 'bg-primary text-primary-foreground border-primary'
-															: 'border-border/70 hover:border-border hover:bg-accent'
-													}`}
-												>
-													Contain
-												</button>
-												<button
-													onclick={() => setImageFitMode('cover')}
-													class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-														imageConfig.fitMode === 'cover'
-															? 'bg-primary text-primary-foreground border-primary'
-															: 'border-border/70 hover:border-border hover:bg-accent'
-													}`}
-												>
-													Cover
-												</button>
-											</div>
 										</div>
 									{/if}
 								</div>
