@@ -383,8 +383,8 @@ importers:
         specifier: 'catalog:'
         version: 1.5.2-beta.7(three@0.184.0)
       '@selvajs/schemas':
-        specifier: file:../schemas/dist
-        version: dist@file:packages/schemas/dist
+        specifier: workspace:*
+        version: link:../schemas
       clsx:
         specifier: 'catalog:'
         version: 2.1.1
@@ -1691,9 +1691,6 @@ packages:
   dir-glob@3.0.1:
     resolution: {integrity: sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA==}
     engines: {node: '>=8'}
-
-  dist@file:packages/schemas/dist:
-    resolution: {directory: packages/schemas/dist, type: directory}
 
   enhanced-resolve@5.21.0:
     resolution: {integrity: sha512-otxSQPw4lkOZWkHpB3zaEQs6gWYEsmX4xQF68ElXC/TWvGxGMSGOvoNbaLXm6/cS/fSfHtsEdw90y20PCd+sCA==}
@@ -4039,8 +4036,6 @@ snapshots:
   dir-glob@3.0.1:
     dependencies:
       path-type: 4.0.0
-
-  dist@file:packages/schemas/dist: {}
 
   enhanced-resolve@5.21.0:
     dependencies:
