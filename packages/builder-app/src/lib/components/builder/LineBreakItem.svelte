@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { LineBreakLayoutItem } from '@selvajs/schemas';
 	import { GripVertical } from '@lucide/svelte';
+	import { dragHandle } from 'svelte-dnd-action';
 
 	interface Props {
 		item: LineBreakLayoutItem;
@@ -11,12 +12,15 @@
 </script>
 
 <div
-	class="group/lb relative flex cursor-grab items-center gap-2 rounded px-1 py-2 transition-all select-none active:cursor-grabbing"
+	class="group/lb relative flex items-center gap-2 rounded px-1 py-2 transition-all select-none"
 	role="separator"
 	aria-label="Line break — drag to reorder"
 >
 	<!-- Grip handle -->
-	<div class="text-muted-foreground opacity-0 transition-opacity group-hover/lb:opacity-100">
+	<div
+		use:dragHandle
+		class="text-muted-foreground cursor-grab opacity-0 transition-opacity group-hover/lb:opacity-100 active:cursor-grabbing"
+	>
 		<GripVertical size={14} />
 	</div>
 

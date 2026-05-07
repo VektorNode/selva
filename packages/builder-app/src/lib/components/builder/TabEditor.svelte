@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { Card, Button, StateDisplay } from '@selvajs/ui';
 	import { EditableTabNav, EditableGroup } from '$lib/components/builder';
-	import type { TabConfig, DiscoveredInput, LayoutItem } from '@selvajs/schemas';
-	import { dragStore } from '$lib/stores/dragStore.svelte';
+	import type { TabConfig, GroupConfig, DiscoveredInput, LayoutItem } from '@selvajs/schemas';
+	import { dragHandleZone, SHADOW_ITEM_MARKER_PROPERTY_NAME, TRIGGERS } from 'svelte-dnd-action';
+	import type { DndEvent } from 'svelte-dnd-action';
+	import { DND_TYPE_GROUP } from '$lib/dnd/dndzone-helpers';
 
 	interface Props {
 		tabs: TabConfig[];
@@ -46,82 +48,88 @@
 
 	const activeTab = $derived(tabs.find((t) => t.id === activeTabId));
 
-	// Drag state for group reordering (native HTML5 DnD — untouched)
-	let draggedGroupId: string | null = $state(null);
-	let dragOverGroupId: string | null = $state(null);
+	type ZoneGroup = GroupConfig & { isDndShadowItem?: true };
 
-	// Clear group drag state when sidebar items are being dragged
+	let localGroups = $state<ZoneGroup[]>([]);
+	let isGroupDragging = $state(false);
+	let draggedGroupId = $state<string | null>(null);
+
+	// Tab the user is currently hovering during a group drag. Read on
+	// finalize to route the drop as a cross-tab move (append to destination)
+	// instead of a same-tab reorder. Bail-out: hover off any tab → null →
+	// no move; release on a tab → move commits.
+	let pendingTargetTabId = $state<string | null>(null);
+
 	$effect(() => {
-		if (dragStore.current) {
-			draggedGroupId = null;
-			dragOverGroupId = null;
+		if (!isGroupDragging && activeTab) {
+			localGroups = [...(activeTab.groups as ZoneGroup[])];
 		}
 	});
 
-	function handleGroupDragStart(e: DragEvent, groupId: string) {
-		const target = e.target as HTMLElement;
-		let element: HTMLElement | null = target;
-		while (element && element !== e.currentTarget) {
-			if (
-				element.tagName === 'INPUT' ||
-				element.tagName === 'TEXTAREA' ||
-				element.tagName === 'BUTTON'
-			) {
-				e.preventDefault();
-				e.stopPropagation();
-				return;
+	function handleGroupConsider(e: CustomEvent<DndEvent<ZoneGroup>>) {
+		const trigger = e.detail.info?.trigger;
+		const id = e.detail.info?.id;
+
+		if (trigger === TRIGGERS.DRAG_STARTED && id) {
+			draggedGroupId = id;
+		}
+
+		isGroupDragging = true;
+		localGroups = e.detail.items;
+	}
+
+	function handleGroupFinalize(e: CustomEvent<DndEvent<ZoneGroup>>) {
+		const wasDragging = isGroupDragging;
+		isGroupDragging = false;
+		const targetTabIdSnapshot = pendingTargetTabId;
+		const draggedIdSnapshot = draggedGroupId;
+		pendingTargetTabId = null;
+		draggedGroupId = null;
+
+		if (!activeTab) return;
+
+		// Cross-tab move: user released while hovering another tab. Append
+		// to destination + switch. If they hovered off all tabs before
+		// releasing, targetTabIdSnapshot is null and we fall through to
+		// reorder/no-op — that's the bail-out path.
+		if (
+			wasDragging &&
+			draggedIdSnapshot &&
+			targetTabIdSnapshot &&
+			targetTabIdSnapshot !== activeTab.id
+		) {
+			onMoveGroupToTab(activeTab.id, draggedIdSnapshot, targetTabIdSnapshot);
+			localGroups = [...(activeTab.groups as ZoneGroup[])];
+			onTabChange(targetTabIdSnapshot);
+			return;
+		}
+
+		// Drag left this zone entirely.
+		if (e.detail.info?.trigger === TRIGGERS.DROPPED_INTO_ANOTHER) {
+			localGroups = [...(activeTab.groups as ZoneGroup[])];
+			return;
+		}
+
+		// Same-tab reorder.
+		const committed = e.detail.items.filter((g) => !g.isDndShadowItem) as GroupConfig[];
+		const oldIds = activeTab.groups.map((g) => g.id);
+		const newIds = committed.map((g) => g.id);
+
+		let from = -1;
+		let to = -1;
+		for (let i = 0; i < oldIds.length; i++) {
+			if (oldIds[i] !== newIds[i]) {
+				from = oldIds.indexOf(newIds[i]);
+				to = i;
+				break;
 			}
-			element = element.parentElement;
 		}
 
-		draggedGroupId = groupId;
-		if (e.dataTransfer) {
-			e.dataTransfer.effectAllowed = 'move';
-			e.dataTransfer.setData('application/x-group', groupId);
+		localGroups = committed as ZoneGroup[];
+
+		if (from !== -1 && to !== -1 && from !== to) {
+			onReorderGroups(activeTab.id, from, to);
 		}
-	}
-
-	function handleGroupDragOver(e: DragEvent, groupId: string) {
-		if (!draggedGroupId || draggedGroupId === groupId) return;
-		if (dragStore.current) return;
-		if (!e.dataTransfer?.types.includes('application/x-group')) return;
-
-		e.preventDefault();
-		dragOverGroupId = groupId;
-		if (e.dataTransfer) {
-			e.dataTransfer.dropEffect = 'move';
-		}
-	}
-
-	function handleGroupDragLeave(e: DragEvent, groupId: string) {
-		if (dragOverGroupId !== groupId) return;
-		const relatedTarget = e.relatedTarget as Node | null;
-		const currentTarget = e.currentTarget as Node;
-		if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
-			dragOverGroupId = null;
-		}
-	}
-
-	function handleGroupDrop(e: DragEvent, targetGroupId: string) {
-		e.preventDefault();
-		e.stopPropagation();
-
-		if (!draggedGroupId || !activeTab) return;
-
-		const fromIndex = activeTab.groups.findIndex((g) => g.id === draggedGroupId);
-		const toIndex = activeTab.groups.findIndex((g) => g.id === targetGroupId);
-
-		if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
-			onReorderGroups(activeTab.id, fromIndex, toIndex);
-		}
-
-		draggedGroupId = null;
-		dragOverGroupId = null;
-	}
-
-	function handleGroupDragEnd() {
-		draggedGroupId = null;
-		dragOverGroupId = null;
 	}
 </script>
 
@@ -140,16 +148,16 @@
 					message="Click 'Add Tab' to create your first tab"
 				/>
 			{:else}
-				<!-- Tab Navigation -->
+				<!-- Tab Navigation: hover surfaces a pending move target during
+					 a group drag; TabEditor commits the move on finalize. -->
 				<EditableTabNav
 					{tabs}
 					{activeTabId}
 					{onTabChange}
 					{onRemoveTab}
 					{onReorderTabs}
-					onGroupDropOnTab={(targetTabId, groupId) => {
-						if (activeTabId) onMoveGroupToTab(activeTabId, groupId, targetTabId);
-					}}
+					groupDragActive={isGroupDragging}
+					onPendingTargetChange={(id) => (pendingTargetTabId = id)}
 				/>
 
 				<!-- Active Tab Content -->
@@ -161,42 +169,46 @@
 							</Button>
 						</div>
 
-						{#if activeTab.groups.length === 0}
+						<div
+							use:dragHandleZone={{
+								items: localGroups,
+								type: DND_TYPE_GROUP,
+								flipDurationMs: 200,
+								dropAnimationDisabled: true,
+								dropTargetClasses: ['ring-2', 'ring-primary'],
+								dropTargetStyle: {}
+							}}
+							onconsider={handleGroupConsider}
+							onfinalize={handleGroupFinalize}
+							class="flex min-h-20 flex-col gap-6"
+						>
+							{#each localGroups as group, groupIndex (group.id)}
+								{#if (group as ZoneGroup)[SHADOW_ITEM_MARKER_PROPERTY_NAME]}
+									<div
+										class="border-primary/30 bg-primary/5 min-h-20 rounded border-2 border-dashed"
+									></div>
+								{:else}
+									<EditableGroup
+										bind:group={localGroups[groupIndex] as GroupConfig}
+										onFinalize={(items) => onReorder(items, activeTab.id, group.id)}
+										onParameterDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
+										onRemove={() => onRemoveGroup(activeTab.id, group.id)}
+										onAddLineBreak={() => onAddLineBreak(activeTab.id, group.id)}
+										onRemoveItem={(itemId) => onRemoveItem(activeTab.id, group.id, itemId)}
+										{availableInputs}
+										{getParameterInfo}
+										{outputValues}
+									/>
+								{/if}
+							{/each}
+						</div>
+
+						{#if activeTab.groups.length === 0 && !isGroupDragging}
 							<StateDisplay
 								type="empty"
 								size="medium"
 								message="No groups yet. Click 'Add Group' to organize your parameters."
 							/>
-						{:else}
-							<div class="flex flex-col gap-6">
-								{#each activeTab.groups as group, groupIndex (group.id)}
-									<div
-										class="transition-opacity {draggedGroupId === group.id
-											? 'opacity-50'
-											: ''} {dragOverGroupId === group.id ? 'border-t-primary border-t-4' : ''}"
-										ondragover={(e) => handleGroupDragOver(e, group.id)}
-										ondragleave={(e) => handleGroupDragLeave(e, group.id)}
-										ondrop={(e) => handleGroupDrop(e, group.id)}
-										role="group"
-										tabindex="-1"
-									>
-										<EditableGroup
-											bind:group={activeTab.groups[groupIndex]}
-											onFinalize={(items) => onReorder(items, activeTab.id, group.id)}
-											onParameterDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
-											onRemove={() => onRemoveGroup(activeTab.id, group.id)}
-											onAddLineBreak={() => onAddLineBreak(activeTab.id, group.id)}
-											onRemoveItem={(itemId) => onRemoveItem(activeTab.id, group.id, itemId)}
-											onDragStart={(e) => handleGroupDragStart(e, group.id)}
-											onDragEnd={handleGroupDragEnd}
-											isDragging={draggedGroupId === group.id}
-											{availableInputs}
-											{getParameterInfo}
-											{outputValues}
-										/>
-									</div>
-								{/each}
-							</div>
 						{/if}
 					</div>
 				{/if}
