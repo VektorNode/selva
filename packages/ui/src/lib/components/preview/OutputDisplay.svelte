@@ -63,7 +63,8 @@
 
 	function buildTree(files: FileData[]): SvelteMap<string, TreeNode> {
 		const root = new SvelteMap<string, TreeNode>();
-		for (const file of files) {
+		for (let i = 0; i < files.length; i++) {
+			const file = files[i];
 			const parts = (file.subFolder || '').split('/').filter(Boolean);
 			let current = root;
 			for (const part of parts) {
@@ -73,7 +74,9 @@
 				const node = current.get(part)!;
 				if (node.type === 'folder') current = node.children;
 			}
-			current.set(file.fileName + file.fileType, { type: 'file', file });
+			const baseKey = `${file.fileName}${file.fileType ?? ''}`;
+			const key = current.has(baseKey) ? `${baseKey}#${i}` : baseKey;
+			current.set(key, { type: 'file', file });
 		}
 		return root;
 	}
@@ -92,6 +95,24 @@
 
 	const hasSubFolders = $derived(filesArray.some((f) => f.subFolder && f.subFolder.length > 0));
 	const fileTree = $derived(hasSubFolders ? buildTree(filesArray) : null);
+
+	function fullPath(f: FileData): string {
+		const folder = (f.subFolder || '').replace(/^\/+|\/+$/g, '');
+		const name = `${f.fileName}${f.fileType ?? ''}`;
+		return folder ? `${folder}/${name}` : name;
+	}
+
+	const duplicatePaths = $derived.by(() => {
+		const seen = new Map<string, number>();
+		for (const f of filesArray) {
+			const key = fullPath(f);
+			seen.set(key, (seen.get(key) ?? 0) + 1);
+		}
+		return Array.from(seen.entries())
+			.filter(([, n]) => n > 1)
+			.map(([path]) => path);
+	});
+	const hasDuplicates = $derived(duplicatePaths.length > 0);
 
 	// All folders expanded by default
 	let expandedFolders = new SvelteSet<string>();
@@ -220,7 +241,7 @@
 							{@render treeNodes(fileTree, '')}
 						{:else}
 							<div class="gap-1 flex flex-col">
-								{#each filesArray as file (file.fileName)}
+								{#each filesArray as file, i (fullPath(file) + '#' + i)}
 									<div
 										class="gap-2 text-xs flex items-center justify-between text-muted-foreground"
 									>
@@ -233,6 +254,24 @@
 					</div>
 				{/if}
 			</div>
+			{#if hasDuplicates}
+				<div
+					class="rounded px-3 py-2 text-sm border border-destructive bg-destructive/10 text-destructive"
+				>
+					<div class="font-medium">Duplicate file names detected</div>
+					<div class="mt-1 text-xs">
+						The following {duplicatePaths.length === 1 ? 'path appears' : 'paths appear'} more than once:
+					</div>
+					<ul class="mt-1 ml-4 text-xs list-disc">
+						{#each duplicatePaths as path (path)}
+							<li class="truncate"><span class="font-mono">{path}</span></li>
+						{/each}
+					</ul>
+					<div class="mt-1 text-xs">
+						Rename outputs in your Grasshopper definition so each file has a unique name.
+					</div>
+				</div>
+			{/if}
 			{#if downloadError}
 				<div
 					class="rounded px-3 py-2 text-sm border border-destructive bg-destructive/10 text-destructive"
@@ -240,7 +279,11 @@
 					{downloadError}
 				</div>
 			{/if}
-			<Button onclick={handleDownload} disabled={downloading} class="w-full">
+			<Button
+				onclick={handleDownload}
+				disabled={downloading || hasDuplicates}
+				class="w-full"
+			>
 				{downloading
 					? 'Downloading...'
 					: `Download ${fileCount === 1 ? 'File' : `${fileCount} Files`}`}
