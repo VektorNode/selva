@@ -82,7 +82,7 @@
 		"@floating-ui/dom": "catalog:",
 		"@iconify/svelte": "catalog:",
 		"@lucide/svelte": "catalog:",
-		"@selvajs/schemas": "file:../schemas/dist",
+		"@selvajs/schemas": "workspace:*",
 		"clsx": "catalog:",
 		"mode-watcher": "catalog:",
 		"paneforge": "^1.0.2",
