@@ -11,6 +11,8 @@
 	import { getSessionIdFromUrl } from '$lib/utils/session';
 	import { clusterItems, type GroupBy, type GroupedItem } from '$lib/utils/paramGrouping';
 	import { SvelteSet } from 'svelte/reactivity';
+	import { dndzone } from 'svelte-dnd-action';
+	import { DND_TYPE_PARAM } from '$lib/dnd/dndzone-helpers';
 
 	interface AvailableItemListProps {
 		items: GroupedItem[];
@@ -130,6 +132,38 @@
 	const clusters = $derived(clusterItems(filteredItems, groupBy));
 
 	const headerCount = $derived(baseItems.length);
+
+	// Per-cluster local mirror so dndzone can mutate visually without
+	// touching the upstream catalog. Source zones are read-only — once a
+	// drop completes, `placedSet` recomputes and `clusters` re-derives,
+	// overriding any in-flight mutation.
+	let localClusterItems = $state<Record<string, GroupedItem[]>>({});
+	let isDragging = $state(false);
+
+	$effect(() => {
+		if (isDragging) return;
+		const next: Record<string, GroupedItem[]> = {};
+		for (const c of clusters) next[c.key] = [...c.items];
+		localClusterItems = next;
+	});
+
+	function clusterItemsFor(key: string, fallback: GroupedItem[]): GroupedItem[] {
+		return localClusterItems[key] ?? fallback;
+	}
+
+	function handleClusterConsider(key: string, e: CustomEvent<{ items: GroupedItem[] }>) {
+		isDragging = true;
+		localClusterItems = { ...localClusterItems, [key]: e.detail.items };
+	}
+
+	function handleClusterFinalize(key: string, e: CustomEvent<{ items: GroupedItem[] }>) {
+		isDragging = false;
+		// Source is read-only: discard dndzone's mutated items and resync from
+		// the current cluster (the destination's commit will have updated
+		// placedSet, which re-derives the cluster).
+		const current = clusters.find((c) => c.key === key);
+		localClusterItems = { ...localClusterItems, [key]: current ? [...current.items] : e.detail.items };
+	}
 
 	function toggleType(type: string) {
 		if (selectedTypes.has(type)) selectedTypes.delete(type);
@@ -286,15 +320,32 @@
 			/>
 		{:else}
 			{#if groupBy === 'none'}
-				<div class="flex flex-col gap-0">
-					{#each clusters[0]?.items ?? [] as item (item.id)}
-						<DraggableItem {item} {tabs} {onAddToGroup} {onAddToNewGroup} />
-					{/each}
-				</div>
+				{@const noneCluster = clusters[0]}
+				{#if noneCluster}
+					{@const noneItems = clusterItemsFor(noneCluster.key, noneCluster.items)}
+					<div
+						use:dndzone={{
+							items: noneItems,
+							type: DND_TYPE_PARAM,
+							dropFromOthersDisabled: true,
+							autoAriaDisabled: true,
+							flipDurationMs: 200,
+							dropTargetStyle: {}
+						}}
+						onconsider={(e) => handleClusterConsider(noneCluster.key, e)}
+						onfinalize={(e) => handleClusterFinalize(noneCluster.key, e)}
+						class="flex flex-col gap-0"
+					>
+						{#each noneItems as item (item.id)}
+							<DraggableItem {item} {tabs} {onAddToGroup} {onAddToNewGroup} />
+						{/each}
+					</div>
+				{/if}
 			{:else}
 				<div class="flex flex-col gap-2">
 					{#each clusters as cluster (cluster.key)}
 						{#if cluster.items.length > 0}
+							{@const items = clusterItemsFor(cluster.key, cluster.items)}
 							<Collapsible.Root
 								open={isClusterOpen(cluster.key)}
 								onOpenChange={(o) => setClusterOpen(cluster.key, o)}
@@ -315,8 +366,20 @@
 									/>
 								</Collapsible.Trigger>
 								<Collapsible.Content>
-									<div class="flex flex-col gap-0">
-										{#each cluster.items as item (item.id)}
+									<div
+										use:dndzone={{
+											items,
+											type: DND_TYPE_PARAM,
+											dropFromOthersDisabled: true,
+											autoAriaDisabled: true,
+											flipDurationMs: 200,
+											dropTargetStyle: {}
+										}}
+										onconsider={(e) => handleClusterConsider(cluster.key, e)}
+										onfinalize={(e) => handleClusterFinalize(cluster.key, e)}
+										class="flex flex-col gap-0"
+									>
+										{#each items as item (item.id)}
 											<DraggableItem {item} {tabs} {onAddToGroup} {onAddToNewGroup} />
 										{/each}
 									</div>

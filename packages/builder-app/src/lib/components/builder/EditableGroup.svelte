@@ -3,22 +3,28 @@
 		LayoutItem,
 		GroupConfig,
 		DiscoveredInput,
+		DiscoveredOutput,
 		InputLayoutItem,
 		OutputLayoutItem,
 		LineBreakLayoutItem
 	} from '@selvajs/schemas';
 	import { Button, Card } from '@selvajs/ui';
-	import DropZone from './DropZone.svelte';
 	import BuilderGroupItem from './BuilderGroupItem.svelte';
 	import LineBreakItem from './LineBreakItem.svelte';
-	import { ChevronDown, GripVertical, Trash2 } from '@lucide/svelte';
+	import { ChevronDown, GripVertical, MousePointerClick, Trash2 } from '@lucide/svelte';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
-	import { dndzone } from 'svelte-dnd-action';
+	import { dragHandle, dragHandleZone, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
 	import type { DndEvent } from 'svelte-dnd-action';
-	import { dragStore } from '$lib/stores/dragStore.svelte';
 	import { SvelteMap } from 'svelte/reactivity';
+	import {
+		DND_TYPE_PARAM,
+		isDiscoveredInput,
+		isDiscoveredOutput
+	} from '$lib/dnd/dndzone-helpers';
 
-	type DndLayoutItem = LayoutItem & { isDndShadowItem?: true };
+	type ZoneItem = (LayoutItem | DiscoveredInput | DiscoveredOutput) & {
+		isDndShadowItem?: true;
+	};
 
 	interface EditableGroupProps {
 		group: GroupConfig;
@@ -27,9 +33,6 @@
 		onRemove: () => void;
 		onAddLineBreak: () => void;
 		onRemoveItem: (itemId: string) => void;
-		onDragStart?: (event: DragEvent) => void;
-		onDragEnd?: (event: DragEvent) => void;
-		isDragging?: boolean;
 		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
 		outputValues?: Record<string, unknown>;
@@ -42,15 +45,11 @@
 		onRemove,
 		onAddLineBreak,
 		onRemoveItem,
-		onDragStart,
-		onDragEnd,
-		isDragging = false,
 		availableInputs,
 		getParameterInfo,
 		outputValues = {}
 	}: EditableGroupProps = $props();
 
-	let isDragOver = $state(false);
 	let showVisibilityRules = $state(false);
 	let hasVisibilityRules = $derived((group.visibilityCondition?.rules?.length ?? 0) > 0);
 	const expandedItems = new SvelteMap<string, boolean>();
@@ -61,52 +60,102 @@
 		expandedItems.set(id, value);
 	}
 
-	// Local items for dnd preview — synced from group.items when not dragging
-	let localItems = $state<DndLayoutItem[]>([]);
+	// Local items mirror — synced from group.items when not dragging.
+	let localItems = $state<ZoneItem[]>([]);
 	let isItemDragging = $state(false);
 	let draggedSpan = $state(1);
 
 	$effect(() => {
 		if (!isItemDragging) {
-			localItems = [...(group.items as DndLayoutItem[])];
+			localItems = [...(group.items as ZoneItem[])];
 		}
 	});
 
-	// Disable dndzone when dragging from the sidebar (native HTML5 drag)
-	const isSidebarDragging = $derived(
-		dragStore.current?.dropType === 'input' || dragStore.current?.dropType === 'output'
-	);
-
-	// True while a dnd-action drag is hovering this zone (shadow placeholder is present)
+	// True while a placeholder is hovering the zone — used for visual highlight.
 	const isDndTarget = $derived(localItems.some((i) => i.isDndShadowItem));
 
-	function handleConsider(e: CustomEvent<DndEvent<DndLayoutItem>>) {
+	function handleConsider(e: CustomEvent<DndEvent<ZoneItem>>) {
 		isItemDragging = true;
 		const draggedId = e.detail.info?.id;
 		if (draggedId) {
-			// Look up span from current items (before shadow replaces the slot)
-			const all = [...localItems, ...(group.items as DndLayoutItem[])];
+			const all = [...localItems, ...(group.items as ZoneItem[])];
 			const dragged = all.find((i) => i.id === draggedId && !i.isDndShadowItem);
-			if (dragged?.type === 'linebreak') {
+			if (dragged && 'type' in dragged && dragged.type === 'linebreak') {
 				draggedSpan = group.columns ?? 1;
+			} else if (dragged && 'span' in dragged) {
+				draggedSpan = (dragged as InputLayoutItem | OutputLayoutItem).span ?? 1;
 			} else {
-				draggedSpan = (dragged as InputLayoutItem | OutputLayoutItem | undefined)?.span ?? 1;
+				// Foreign item from sidebar — defaults to span 1.
+				draggedSpan = 1;
 			}
 		}
 		localItems = e.detail.items;
 	}
 
-	function handleFinalize(e: CustomEvent<DndEvent<DndLayoutItem>>) {
+	function handleFinalize(e: CustomEvent<DndEvent<ZoneItem>>) {
 		isItemDragging = false;
-		const committed = e.detail.items.filter((i) => !i.isDndShadowItem) as LayoutItem[];
-		localItems = committed as DndLayoutItem[];
-		onFinalize(committed);
-	}
 
-	function handleDropEvent(e: Event | CustomEvent) {
-		if (onParameterDrop && e instanceof CustomEvent) {
-			onParameterDrop(e);
+		const items = e.detail.items.filter((i) => !i.isDndShadowItem);
+
+		// Detect foreign items (sidebar drops) and route through onParameterDrop.
+		// The local commit-then-snapshot does not happen for foreign items —
+		// onParameterDrop pushes its own history snapshot and mutates the schema,
+		// which re-syncs via the $effect.
+		const foreignIndices: number[] = [];
+		for (let i = 0; i < items.length; i++) {
+			const item = items[i];
+			if (isDiscoveredInput(item) || isDiscoveredOutput(item)) {
+				foreignIndices.push(i);
+			}
 		}
+
+		if (foreignIndices.length > 0 && onParameterDrop) {
+			// Process each foreign item as a positioned drop.
+			for (const idx of foreignIndices) {
+				const foreign = items[idx];
+				// Find the nearest neighbour LayoutItem to anchor the drop.
+				let targetItem: LayoutItem | undefined;
+				let dropPosition: 'before' | 'after' | undefined;
+				// Prefer the next neighbour (drop before it). Fall back to previous.
+				for (let j = idx + 1; j < items.length; j++) {
+					const candidate = items[j];
+					if (!isDiscoveredInput(candidate) && !isDiscoveredOutput(candidate)) {
+						targetItem = candidate as LayoutItem;
+						dropPosition = 'before';
+						break;
+					}
+				}
+				if (!targetItem) {
+					for (let j = idx - 1; j >= 0; j--) {
+						const candidate = items[j];
+						if (!isDiscoveredInput(candidate) && !isDiscoveredOutput(candidate)) {
+							targetItem = candidate as LayoutItem;
+							dropPosition = 'after';
+							break;
+						}
+					}
+				}
+
+				const dropType = isDiscoveredInput(foreign) ? 'input' : 'output';
+				const detail = {
+					dropType,
+					data: foreign,
+					targetItem,
+					dropPosition
+				};
+				onParameterDrop(new CustomEvent('parameterdrop', { detail }));
+			}
+			// Resync local from group.items — onParameterDrop will have mutated it.
+			// (The $effect won't fire mid-handler because isItemDragging flipped to false,
+			// but localItems was just set from e.detail; we explicitly resync here.)
+			localItems = [...(group.items as ZoneItem[])];
+			return;
+		}
+
+		// All items are LayoutItems — pure reorder.
+		const committed = items as LayoutItem[];
+		localItems = committed as ZoneItem[];
+		onFinalize(committed);
 	}
 
 	function toggleCollapsed() {
@@ -115,22 +164,18 @@
 </script>
 
 <Card.Root
-	class="group bg-muted gap-0 overflow-hidden border-2 py-0 {isDragOver ? 'border-primary' : ''}"
+	class="group bg-muted gap-0 overflow-hidden border-2 py-0 {isDndTarget ? 'border-primary' : ''}"
 >
 	<Card.Header
-		class="border-border bg-card flex flex-row items-center justify-between gap-2 space-y-0 border-b px-3 py-3 {isDragging
-			? 'opacity-50'
-			: ''}  transition-colors"
+		class="border-border bg-card flex flex-row items-center justify-between gap-2 space-y-0 border-b px-3 py-3 transition-colors"
 	>
-		<!-- Drag Handle (group-level, native HTML5) -->
+		<!-- Drag Handle (group-level) — TabEditor declares the dragHandleZone. -->
 		<div
+			use:dragHandle
 			class="text-muted-foreground hover:text-foreground hover:bg-accent flex cursor-grab rounded p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
 			role="button"
 			tabindex="0"
 			aria-label="Drag to reorder"
-			draggable="true"
-			ondragstart={onDragStart}
-			ondragend={onDragEnd}
 		>
 			<GripVertical size={16} />
 		</div>
@@ -226,27 +271,25 @@
 
 	{#if !group.collapsed}
 		<Card.Content class="bg-muted animate-[fadeIn_0.2s] p-4">
-			<DropZone
-				isEmpty={group.items.length === 0}
-				isActive={isDndTarget}
-				label="Drag parameters here"
-				ondrop={handleDropEvent}
-			>
+			<div class="relative">
 				<div
-					use:dndzone={{
+					use:dragHandleZone={{
 						items: localItems,
-						type: 'group-item',
+						type: DND_TYPE_PARAM,
 						flipDurationMs: 200,
-						dragDisabled: isSidebarDragging,
+						dropTargetClasses: ['ring-2', 'ring-primary'],
 						dropTargetStyle: {}
 					}}
 					onconsider={handleConsider}
 					onfinalize={handleFinalize}
-					class="grid min-h-[3.5rem] items-start gap-3"
+					class="grid min-h-14 items-start gap-3 rounded-md transition-all
+						{group.items.length === 0
+						? 'border-border min-h-15 border-2 border-dashed p-3'
+						: ''}"
 					style="grid-template-columns: repeat({group.columns}, 1fr);"
 				>
 					{#each localItems as item (item.id)}
-						{#if item.isDndShadowItem}
+						{#if (item as ZoneItem)[SHADOW_ITEM_MARKER_PROPERTY_NAME]}
 							<!-- Placeholder: outer div gets visibility:hidden from dndzone; inner overrides with visibility:visible -->
 							<div
 								style="grid-column: {draggedSpan >= (group.columns ?? 1)
@@ -258,36 +301,57 @@
 									class="border-primary/30 bg-primary/5 pointer-events-none rounded border-2 border-dashed"
 								></div>
 							</div>
-						{:else if item.type === 'linebreak'}
+						{:else if 'type' in item && item.type === 'linebreak'}
 							<div style="grid-column: 1 / -1;">
 								<LineBreakItem
 									item={item as LineBreakLayoutItem}
 									onRemove={() => onRemoveItem(item.id)}
 								/>
 							</div>
-						{:else}
+						{:else if 'type' in item && (item.type === 'input' || item.type === 'output')}
 							{@const idx = localItems.indexOf(item)}
+							{@const layoutItem = item as InputLayoutItem | OutputLayoutItem}
 							<div
 								style="grid-column: span {Math.min(
-									Math.max(1, item.span ?? 1),
+									Math.max(1, layoutItem.span ?? 1),
 									group.columns ?? 1
 								)}"
 							>
 								<BuilderGroupItem
 									bind:item={localItems[idx] as InputLayoutItem | OutputLayoutItem}
-									paramInfo={getParameterInfo(item.paramId)}
+									paramInfo={getParameterInfo(layoutItem.paramId)}
 									columns={group.columns}
 									bind:expanded={() => isExpanded(item.id), (v) => setExpanded(item.id, v)}
 									{availableInputs}
 									{getParameterInfo}
-									currentValue={outputValues[item.paramId]}
+									currentValue={outputValues[layoutItem.paramId]}
 									onRemove={() => onRemoveItem(item.id)}
 								/>
+							</div>
+						{:else}
+							<!-- Foreign sidebar item — show a neutral placeholder while hovering. -->
+							<div style="grid-column: span 1">
+								<div
+									class="border-primary/30 bg-primary/5 rounded border-2 border-dashed p-3 text-sm opacity-70"
+								>
+									{('nickname' in item && item.nickname) ||
+										('name' in item && (item as { name?: string }).name) ||
+										'New parameter'}
+								</div>
 							</div>
 						{/if}
 					{/each}
 				</div>
-			</DropZone>
+
+				{#if group.items.length === 0 && !isDndTarget}
+					<div
+						class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2"
+					>
+						<MousePointerClick size={48} class="opacity-50" />
+						<span class="text-muted-foreground text-sm">Drag parameters here</span>
+					</div>
+				{/if}
+			</div>
 		</Card.Content>
 	{/if}
 </Card.Root>

@@ -14,6 +14,7 @@
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '$lib/features/builder/widget-config';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
+	import { dragHandle } from 'svelte-dnd-action';
 
 	interface BuilderGroupItemProps {
 		item: LayoutItem;
@@ -198,6 +199,7 @@
 			<!-- Compact header row (always visible) -->
 			<div class="flex items-center gap-2 px-3 py-1.5">
 				<div
+					use:dragHandle
 					class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex cursor-grab rounded p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
 					role="button"
 					tabindex="0"
