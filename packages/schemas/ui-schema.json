@@ -238,9 +238,26 @@
 				},
 				"visibilityCondition": {
 					"$ref": "#/definitions/VisibilityCondition"
+				},
+				"source": {
+					"$ref": "#/definitions/InputSource"
 				}
 			},
 			"required": ["id", "paramId"]
+		},
+
+		"InputSource": {
+			"type": "object",
+			"description": "Where the input's value comes from. Absent = 'user' (default control behavior). Object form (not boolean) so future kinds (e.g. 'pre-step', 'linked', 'computed') can carry their own fields without a breaking schema change.",
+			"properties": {
+				"kind": {
+					"type": "string",
+					"enum": ["user", "external"],
+					"description": "'user' = rendered as a normal control. 'external' = filled by something outside the form (e.g. a producer route)."
+				}
+			},
+			"required": ["kind"],
+			"additionalProperties": false
 		},
 		"InputNumberLayoutItem": {
 			"allOf": [
@@ -707,7 +724,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.7.0",
+					"default": "2.8.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

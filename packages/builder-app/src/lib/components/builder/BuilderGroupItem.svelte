@@ -7,7 +7,8 @@
 		FileInputWidgetConfig,
 		TextWidgetConfig,
 		DropdownWidgetConfig,
-		ImageWidgetConfig
+		ImageWidgetConfig,
+		InputSource
 	} from '@selvajs/schemas';
 	type LayoutItem = InputLayoutItem | OutputLayoutItem;
 	import { Button, Card, Collapsible, Switch } from '@selvajs/ui';
@@ -50,6 +51,7 @@
 		}
 	});
 
+	let typeLabel = $derived(paramInfo?.type ?? item.widgetType);
 	let isNumberInput = $derived(item.type === 'input' && item.widgetType === 'number');
 	let isFileInput = $derived(item.type === 'input' && item.widgetType === 'file');
 	let isTextInput = $derived(item.type === 'input' && item.widgetType === 'text');
@@ -166,6 +168,24 @@
 		}
 	}
 
+	let isInput = $derived(item.type === 'input');
+	let isExternalSource = $derived(
+		(item as { source?: InputSource }).source?.kind === 'external'
+	);
+
+	function toggleExternalSource() {
+		if (item.type !== 'input') return;
+		const target = item as { source?: InputSource; visible?: boolean };
+		if (target.source?.kind === 'external') {
+			target.source = undefined;
+		} else {
+			target.source = { kind: 'external' };
+			// External-sourced inputs are typically hidden from the end user.
+			// Default to hidden when first toggled on; user can override afterwards.
+			if (target.visible !== false) target.visible = false;
+		}
+	}
+
 	function toggleAcceptedFormat(format: string) {
 		if (!isFileInput) return;
 		const config = item.config as FileInputWidgetConfig;
@@ -191,10 +211,7 @@
 <div class="relative">
 	<Collapsible.Root bind:open={expanded}>
 		<Card.Root
-			class="group hover:border-primary overflow-hidden border-l-4 py-1.5 transition-all hover:shadow-sm
-			{item.type === 'input'
-				? 'bg-inputparam border-l-primary'
-				: 'bg-outputparam border-l-chart-3'}"
+			class="group bg-background hover:border-border overflow-hidden border-border/60 py-1.5 transition-all hover:shadow-sm"
 		>
 			<!-- Compact header row (always visible) -->
 			<div class="flex items-center gap-2 px-3 py-1.5">
@@ -208,9 +225,19 @@
 					<GripVertical size={16} />
 				</div>
 				{#if item.type === 'input'}
-					<ArrowUpFromLine size={15} class="text-muted-foreground shrink-0" />
+					<span
+						class="bg-primary/10 text-primary inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide"
+					>
+						<ArrowUpFromLine size={10} strokeWidth={2.5} />
+						{typeLabel}
+					</span>
 				{:else}
-					<ArrowDownToLine size={15} class="text-muted-foreground shrink-0" />
+					<span
+						class="bg-orange-500/15 text-orange-600 dark:text-orange-400 inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide"
+					>
+						<ArrowDownToLine size={10} strokeWidth={2.5} />
+						{typeLabel}
+					</span>
 				{/if}
 				<input
 					type="text"
@@ -220,25 +247,12 @@
 					style="field-sizing: content; min-width: 7rem; max-width: 18rem;"
 					placeholder="Display Name"
 				/>
-				{#if paramInfo}
+				{#if detectedChartType}
 					<span
-						class="text-muted-foreground/80 bg-accent/40 rounded-sm px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide"
+						class="text-muted-foreground/70 border-border/60 rounded-sm border px-1.5 py-0.5 text-[10px] capitalize"
 					>
-						{paramInfo.type}
+						{detectedChartType}
 					</span>
-				{:else if item.type === 'output'}
-					<span
-						class="text-muted-foreground/80 bg-accent/40 rounded-sm px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide"
-					>
-						{item.widgetType}
-					</span>
-					{#if detectedChartType}
-						<span
-							class="text-muted-foreground/70 border-border/60 rounded-sm border px-1.5 py-0.5 text-[10px] capitalize"
-						>
-							{detectedChartType}
-						</span>
-					{/if}
 				{/if}
 				<Collapsible.Trigger
 					class="hover:bg-accent/50 relative ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded {hasNonDefaultConfig
@@ -510,6 +524,23 @@
 								</div>
 							{/if}
 						{/if}
+					</div>
+				{/if}
+
+				<!-- External Source toggle (input items only) -->
+				{#if isInput}
+					<div class="border-border/70 mt-1 flex items-center justify-between border-t pt-2 text-[11px]">
+						<div class="flex flex-col">
+							<span class="text-muted-foreground">External value</span>
+							<span class="text-muted-foreground/70 text-[9px]">
+								Filled by a producer route (e.g. /preview/producer/json-paste). Hides the control by default.
+							</span>
+						</div>
+						<Switch
+							checked={isExternalSource}
+							onCheckedChange={toggleExternalSource}
+							class="scale-75"
+						/>
 					</div>
 				{/if}
 

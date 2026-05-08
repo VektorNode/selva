@@ -72,6 +72,9 @@ export function evaluateVisibility(
 	values: Record<string, unknown>
 ): VisibilityResult {
 	if (item.type === 'linebreak') return { visible: true, disabled: false };
+	if ('visible' in item && item.visible === false) {
+		return { visible: false, disabled: false };
+	}
 	if (!item.visibilityCondition?.rules) return { visible: true, disabled: false };
 
 	const { action = 'show', defaultValue } = item.visibilityCondition;

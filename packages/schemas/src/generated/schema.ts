@@ -249,7 +249,14 @@ export interface LayoutItemBase {
    */
   visible?: boolean;
   visibilityCondition?: VisibilityCondition;
+  source?: InputSource;
   [k: string]: unknown | undefined;
+}
+export interface InputSource {
+  /**
+   * 'user' = rendered as a normal control. 'external' = filled by something outside the form (e.g. a producer route).
+   */
+  kind: 'user' | 'external';
 }
 export interface ChartWidgetConfig {}
 export interface ImageWidgetConfig {

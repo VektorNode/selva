@@ -12,6 +12,7 @@
 	import AppShell from '../layout/AppShell.svelte';
 	import AppLayout from './AppLayout.svelte';
 	import StateDisplay from '../primitives/StateDisplay.svelte';
+	import { getExternalInputs, readExternalValue } from '../../external/storage';
 
 	import type { Snippet } from 'svelte';
 
@@ -34,6 +35,11 @@
 		footerItemPriority?: number;
 		onReady?: (api: { loadValues: (values: Record<string, unknown>) => void }) => void;
 		headerRight?: Snippet;
+		/**
+		 * Stable identifier used to scope sessionStorage entries for external-input
+		 * values. If absent, falls back to definitionKey, then to schema.id.
+		 */
+		externalScopeKey?: string;
 	}
 
 	let {
@@ -53,12 +59,22 @@
 		footerItemId = 'footer-item',
 		footerItemPriority = 0,
 		headerRight,
-		onReady
+		onReady,
+		externalScopeKey
 	}: Props = $props();
 
-	function createInitialValues(s: UISchema) {
+	const resolvedScopeKey = $derived(externalScopeKey || definitionKey || schema?.id || '');
+
+	function createInitialValues(s: UISchema, scopeKey: string) {
+		const externalSet = new Set(getExternalInputs(s).map((e) => e.paramId));
 		const v: Record<string, unknown> = {};
 		for (const input of s.inputs) {
+			if (externalSet.has(input.id)) {
+				const stored = readExternalValue({ scopeKey, inputId: input.id });
+				if (stored !== undefined) v[input.id] = stored;
+				// else: leave undefined so the missing-inputs panel can detect it
+				continue;
+			}
 			v[input.id] = input.default ?? getDefaultValue(input.paramType);
 		}
 		for (const output of s.outputs) {
@@ -68,7 +84,9 @@
 	}
 
 	// svelte-ignore state_referenced_locally
-	let values = $state<Record<string, unknown>>(createInitialValues(schema));
+	let values = $state<Record<string, unknown>>(
+		createInitialValues(schema, externalScopeKey || definitionKey || schema?.id || '')
+	);
 	let error = $state('');
 	let computeErrors = $state<string[]>([]);
 	let computeWarnings = $state<string[]>([]);
@@ -144,7 +162,7 @@
 				}
 			} else if (previousDefinitionKey !== definitionKey) {
 				meshes = [];
-				values = createInitialValues(schema);
+				values = createInitialValues(schema, resolvedScopeKey);
 				error = '';
 				computeErrors = [];
 				computeWarnings = [];
