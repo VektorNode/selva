@@ -289,9 +289,12 @@ export function usePreviewState(getSessionId: () => string) {
 			solveTimeout = setTimeout(() => {
 				if (wsState.connected && !initialSolveTriggered) {
 					initialSolveTriggered = true;
+					// Snapshot live state.values (not the stale newValues from above) so that
+					// any post-init mutations — e.g. external inputs seeded from sessionStorage
+					// by the route — are included in the initial solve.
 					wsState.send('valueUpdate', {
 						sessionId,
-						values: prepareValuesForSend($state.snapshot(newValues))
+						values: prepareValuesForSend($state.snapshot(state.values))
 					});
 				}
 			}, 500);

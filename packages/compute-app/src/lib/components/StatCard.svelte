@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { Card } from '@selvajs/ui';
-	import { ArrowRight } from '@lucide/svelte';
-	import type { ComponentType } from 'svelte';
+	import { ArrowRight, type LucideIcon } from '@lucide/svelte';
 
 	interface Props {
 		href: string;
-		icon: ComponentType;
+		icon: LucideIcon;
 		value: string | number;
 		label: string;
 	}

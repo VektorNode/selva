@@ -411,6 +411,16 @@ namespace Selva.Schema.Models
         public object DefaultValue { get; set; }
     }
 
+    public class InputSource
+    {
+
+/// <summary>
+/// 'user' = rendered as a normal control. 'external' = filled by something outside the form (e.g. a producer route).
+/// </summary>
+        [JsonProperty("kind")]
+        public string Kind { get; set; }
+    }
+
     public class DiscoveredInput
     {
 
@@ -685,6 +695,9 @@ namespace Selva.Schema.Models
 
         [JsonProperty("visibilityCondition", NullValueHandling = NullValueHandling.Ignore)]
         public VisibilityCondition VisibilityCondition { get; set; }
+
+        [JsonProperty("source", NullValueHandling = NullValueHandling.Ignore)]
+        public InputSource Source { get; set; }
 
     }
 

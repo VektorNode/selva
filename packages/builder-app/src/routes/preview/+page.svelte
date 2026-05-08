@@ -1,7 +1,18 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { AppShell, StateDisplay, Button, AppLayout, createSolvingIndicator, useFooterItem } from '@selvajs/ui';
+	import {
+		AppShell,
+		StateDisplay,
+		Button,
+		AppLayout,
+		createSolvingIndicator,
+		useFooterItem,
+		getExternalInputs,
+		readExternalValue,
+		type ExternalInput
+	} from '@selvajs/ui';
 	import { buildSessionParams } from '$lib/utils/session';
 	import { usePreviewState } from '$lib/composables/usePreviewState.svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
@@ -17,6 +28,37 @@
 			preview.initialize();
 			return () => preview.cleanup();
 		}
+	});
+
+	// External inputs declared by the schema (source.kind === 'external').
+	const externalInputs = $derived<ExternalInput[]>(
+		preview.state.schema ? getExternalInputs(preview.state.schema) : []
+	);
+
+	// External inputs are seeded with the GH default by initializeValues, but we
+	// don't want that default to count as "the user provided a value." Override:
+	// restore from sessionStorage if present; otherwise clear so the missing-check
+	// can detect it.
+	//
+	// untrack(): we *write* to state.values inside the effect; if we also let it
+	// be tracked as a dep, every write re-runs the effect → infinite loop.
+	$effect(() => {
+		if (!sessionId) return;
+		if (externalInputs.length === 0) return;
+		const sid = sessionId;
+		const inputs = externalInputs;
+		untrack(() => {
+			for (const ext of inputs) {
+				const stored = readExternalValue({ scopeKey: sid, inputId: ext.paramId });
+				if (stored !== undefined) {
+					if (preview.state.values[ext.paramId] !== stored) {
+						preview.handleValueChange(ext.paramId, stored as never);
+					}
+				} else if (preview.state.values[ext.paramId] !== undefined) {
+					delete preview.state.values[ext.paramId];
+				}
+			}
+		});
 	});
 
 	function navigateTo(route: '/' | '/builder') {

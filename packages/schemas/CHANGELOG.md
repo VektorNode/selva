@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MINOR** version (e.g., 1.0.x → 1.1.0): Backward-compatible additions
 - **PATCH** version (e.g., 1.0.0 → 1.0.1): Bug fixes and documentation
 
+## [2.8.0] - 2026-05-08
+
+### Added
+
+- `InputSource` - New optional object on `LayoutItemBase` with shape `{ kind: 'user' | 'external' }`. Declares where an input's value comes from. Absent or `kind: 'user'` = normal control behavior (unchanged). `kind: 'external'` = filled by something outside the form (e.g. a producer route writing to sessionStorage). Object form (not boolean) so future kinds (`pre-step`, `linked`, `computed`) can carry their own fields without a breaking schema change.
+
+### Migration Notes
+
+- Fully backward-compatible addition. Existing schemas load unchanged.
+- Migration function `MigrateTo_2_8_0` registered in `SchemaMigrator`; no data transformation needed.
+
+---
+
 ## [2.7.0] - 2026-04-30
 
 ### Added
