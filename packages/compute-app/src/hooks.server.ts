@@ -218,6 +218,15 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 			}
 		}
 
+		// Forward-proxy fallback: providers that derive identity from trusted
+		// upstream-proxy signals (Caddy forward_auth, oauth2-proxy, etc.) get
+		// a chance to identify the request. See IProxyAuth for the trust
+		// contract — the provider's README is responsible for the deployment
+		// rules that make these signals trustworthy.
+		if (!user && providers.auth.proxyAuth) {
+			user = await providers.auth.proxyAuth.identifyFromHeaders(event.request.headers);
+		}
+
 		if (!user) {
 			if (isJsonApiRoute) {
 				return applySecurityHeaders(
@@ -255,16 +264,17 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		// the OAuth flow under `/auth/` since neither benefits from the lookup.
 		const isPublicPage = PUBLIC_PAGE_ROUTES.has(pathname);
 		const token = isPublicPage ? (event.cookies.get('admin_session') ?? '') : '';
-		if (token) {
-			const user = await providers.auth.verifyToken(token);
-			if (user) {
-				await providers.data.ensureUser(SYSTEM_CONTEXT, user.id);
-				event.locals.user = user;
-				event.locals.profile =
-					(await providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ??
-					emptyProfile(user.id);
-				event.locals.ctx = await buildContext(user, token);
-			}
+		let user = token ? await providers.auth.verifyToken(token) : null;
+		if (!user && isPublicPage && providers.auth.proxyAuth) {
+			user = await providers.auth.proxyAuth.identifyFromHeaders(event.request.headers);
+		}
+		if (user) {
+			await providers.data.ensureUser(SYSTEM_CONTEXT, user.id);
+			event.locals.user = user;
+			event.locals.profile =
+				(await providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ??
+				emptyProfile(user.id);
+			event.locals.ctx = await buildContext(user, token);
 		}
 	}
 

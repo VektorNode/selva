@@ -17,6 +17,11 @@ import { hashToken } from '$lib/server/invites/token.server';
  *
  * The raw URL token is HMAC-hashed before lookup — the store sees only the
  * digest. Mirrors the share-link flow.
+ *
+ * Form mode is decided here once and surfaced to the UI:
+ *   - `password` — the provider owns credentials; show password + confirm fields.
+ *   - `proxy`    — identity comes from upstream-proxy headers; the visit itself
+ *                  is the proof of identity and no password is collected.
  */
 export const load: PageServerLoad = async ({ url }) => {
 	const token = url.searchParams.get('token')?.trim();
@@ -30,11 +35,15 @@ export const load: PageServerLoad = async ({ url }) => {
 	}
 
 	const org = await getOrganizationProvider().getOrg(SYSTEM_CONTEXT, invite.orgId);
+	const auth = getAuthProvider();
+	const mode: 'password' | 'proxy' =
+		auth.passwordAuth ? 'password' : auth.proxyAuth && auth.createUser ? 'proxy' : 'password';
 	return {
 		ok: true as const,
 		email: invite.email,
 		orgName: org?.name ?? 'the organization',
-		token
+		token,
+		mode
 	};
 };
 
@@ -49,12 +58,6 @@ export const actions = {
 		if (!token) {
 			return fail(400, { error: 'Missing invite token.' });
 		}
-		if (!password || password.length < 8) {
-			return fail(400, { error: 'Password must be at least 8 characters.' });
-		}
-		if (password !== confirm) {
-			return fail(400, { error: 'Passwords do not match.' });
-		}
 
 		let invite: Invite | null;
 		try {
@@ -67,15 +70,32 @@ export const actions = {
 		}
 
 		const auth = getAuthProvider();
-		if (!auth.passwordAuth) {
-			return fail(501, { error: 'This provider does not support password signup.' });
+		const mode: 'password' | 'proxy' =
+			auth.passwordAuth ? 'password' : auth.proxyAuth && auth.createUser ? 'proxy' : 'password';
+
+		if (mode === 'password') {
+			if (!password || password.length < 8) {
+				return fail(400, { error: 'Password must be at least 8 characters.' });
+			}
+			if (password !== confirm) {
+				return fail(400, { error: 'Passwords do not match.' });
+			}
 		}
 
 		let user;
 		try {
 			// Invites grant org-scope perms only; new users start with no
 			// platform permissions (the empty default in IPlatformPermissionStore).
-			user = await auth.passwordAuth.createUserWithPassword(invite.email, password);
+			if (mode === 'password' && auth.passwordAuth) {
+				user = await auth.passwordAuth.createUserWithPassword(invite.email, password!);
+			} else if (mode === 'proxy' && auth.createUser) {
+				// Forward-auth allowlist entry — the operator is currently behind the
+				// trusted proxy, so the next request will identify them via headers
+				// and mint a session. No password to collect, no token to set here.
+				user = await auth.createUser(invite.email);
+			} else {
+				return fail(501, { error: 'This provider does not support invite-based signup.' });
+			}
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : 'Could not create your account.';
 			return fail(400, { error: msg });
@@ -115,14 +135,19 @@ export const actions = {
 			}
 		}
 
-		// Sign in to mint a session token — matches Supabase's shape.
-		const loginResult = await auth.passwordAuth.verifyLogin(invite.email, password);
-		if (loginResult.kind !== 'success') {
-			return fail(500, {
-				error: 'Your account was created but login failed. Please sign in manually.'
-			});
+		if (mode === 'password' && auth.passwordAuth) {
+			// Sign in to mint a session token — matches Supabase's shape.
+			const loginResult = await auth.passwordAuth.verifyLogin(invite.email, password!);
+			if (loginResult.kind !== 'success') {
+				return fail(500, {
+					error: 'Your account was created but login failed. Please sign in manually.'
+				});
+			}
+			setSessionCookie(cookies, loginResult.sessionToken);
 		}
-		setSessionCookie(cookies, loginResult.sessionToken);
+		// Proxy mode: nothing to mint here. The very next request hits
+		// hooks.server.ts → proxyAuth.identifyFromHeaders → matches the
+		// allowlist row we just created → session attached transparently.
 		redirect(303, '/admin');
 	}
 } satisfies Actions;
