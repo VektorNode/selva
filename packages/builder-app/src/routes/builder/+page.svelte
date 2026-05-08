@@ -1,20 +1,12 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import {
-		PageContainer,
-		PageHeader,
-		StateDisplay,
-		Button,
-		Dialog,
-		toast,
-		useFooterItem
-	} from '@selva/shared';
+	import { AppShell, StateDisplay, Button, Dialog, Resizable, toast, useFooterItem } from '@selvajs/ui';
 	import { Save } from '@lucide/svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
-	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
-	import { DragDropContext, BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
-	import { initializeWebSocketSession } from '$lib/utils/session';
+	import { SvelteSet } from 'svelte/reactivity';
+	import { BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
+	import { initializeWebSocketSession, buildSessionParams } from '$lib/utils/session';
 	import { onMount } from 'svelte';
 	import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
 	import { useBuilderActions } from '$lib/composables/useBuilderActions.svelte';
@@ -22,6 +14,7 @@
 	let sessionId = $state('');
 	let builderState = $state<ReturnType<typeof useBuilderState> | null>(null);
 	let showBatchProcessor = $state(false);
+	let saveInFlight: Promise<boolean> | null = null;
 
 	const actions = useBuilderActions(() => builderState);
 
@@ -36,14 +29,11 @@
 			}
 		}
 
-		const params = new SvelteURLSearchParams();
-		if (sessionId) params.set('session', sessionId);
-		const wsPort = page.url.searchParams.get('wsPort');
-		if (wsPort) params.set('wsPort', wsPort);
-
-		const url = `${route}?${params.toString()}`;
+		const url = `${route}?${buildSessionParams()}`;
 		goto(url, { noScroll: true }).catch(() => {});
 	}
+
+	const homeUrl = $derived(`/?${buildSessionParams()}`);
 
 	const placedInLayoutIds = $derived.by(() => {
 		const ids = new SvelteSet<string>();
@@ -53,27 +43,25 @@
 			layout.tabs.forEach((tab) => {
 				tab.groups.forEach((group) => {
 					group.items.forEach((item) => {
-						ids.add(item.paramId);
+						const paramId = (item as { paramId?: string }).paramId;
+						if (paramId) ids.add(paramId);
 					});
 				});
 			});
 		} else if (layout?.type === 'flat') {
 			layout.groups.forEach((group) => {
 				group.items.forEach((item) => {
-					ids.add(item.paramId);
+					const paramId = (item as { paramId?: string }).paramId;
+					if (paramId) ids.add(paramId);
 				});
 			});
 		}
 		return ids;
 	});
 
-	const availableInputs = $derived(
-		builderState?.state.availableInputs.filter((p) => !placedInLayoutIds.has(p.id)) || []
-	);
+	const availableInputs = $derived(builderState?.state.availableInputs || []);
 
-	const availableOutputsUnplaced = $derived(
-		builderState?.state.availableOutputs.filter((o) => !placedInLayoutIds.has(o.id)) || []
-	);
+	const availableOutputsUnplaced = $derived(builderState?.state.availableOutputs || []);
 
 	const allAvailableInputs = $derived(builderState?.state.availableInputs || []);
 
@@ -85,7 +73,10 @@
 	});
 
 	function saveSchema(): Promise<boolean> {
-		return new Promise((resolve) => {
+		// Coalesce concurrent calls — a single in-flight save resolves them all
+		if (saveInFlight) return saveInFlight;
+
+		const promise = new Promise<boolean>((resolve) => {
 			// Validation checks
 			if (!builderState?.state.schema) {
 				toast.error('Schema not initialized');
@@ -106,8 +97,8 @@
 			}
 
 			let handled = false;
+			let timeoutId: ReturnType<typeof setTimeout>;
 
-			// Set up one-time listener for save response
 			const handleSaveResponse = (data: unknown) => {
 				if (handled) return;
 
@@ -128,8 +119,10 @@
 				}
 			};
 
-			// Timeout after 10 seconds if no response
-			const timeoutId = setTimeout(() => {
+			// Register listener BEFORE sending so a fast response can't arrive first
+			builderState.wsState.on('schemaSaved', handleSaveResponse);
+
+			timeoutId = setTimeout(() => {
 				if (handled) return;
 				handled = true;
 				builderState?.wsState.off('schemaSaved', handleSaveResponse);
@@ -137,12 +130,14 @@
 				resolve(false);
 			}, 10000);
 
-			// Listen for save response (runs before composable handlers due to registration order)
-			builderState.wsState.on('schemaSaved', handleSaveResponse);
-
-			// Send save request
 			builderState.wsState.saveSchema(sessionId, $state.snapshot(builderState.state.schema));
 		});
+
+		saveInFlight = promise;
+		promise.finally(() => {
+			if (saveInFlight === promise) saveInFlight = null;
+		});
+		return promise;
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -221,10 +216,14 @@
 	);
 </script>
 
-<DragDropContext>
-	<PageContainer background="white">
-		<PageHeader title="Schema Builder" showModeToggle={true}>
-			<nav class="flex items-center gap-2">
+<AppShell {homeUrl} title="Schema Builder" mode="fixed" showFooter>
+			{#snippet navItems()}
+				<Button variant="default" size="sm">Schema Builder</Button>
+				<Button variant="ghost" size="sm" onclick={() => navigateTo('/preview')}>
+					Interactive Preview
+				</Button>
+			{/snippet}
+			{#snippet rightContent()}
 				{#if builderState?.state.syncNeeded}
 					<Button
 						variant="default"
@@ -235,12 +234,6 @@
 						⚡ Sync Parameters
 					</Button>
 				{/if}
-				<Button variant="outline" size="sm" onclick={() => navigateTo('/')}>Home</Button>
-				<Button variant="default" size="sm">Schema Builder</Button>
-				<Button variant="outline" size="sm" onclick={() => navigateTo('/preview')}>
-					Interactive Preview
-				</Button>
-				<div class="h-6 w-px bg-gray-300"></div>
 				<Button
 					variant="outline"
 					size="sm"
@@ -256,74 +249,89 @@
 				>
 					Batch Processors
 				</Button>
-			</nav>
-		</PageHeader>
+			{/snippet}
 
-		<div class="flex-1 overflow-auto">
+		<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
 			{#if builderState?.state.loading}
 				<div class="flex min-h-100 items-center justify-center">
 					<StateDisplay type="loading" size="large" message="Loading schema..." />
 				</div>
 			{:else if builderState?.state.schema}
-				<div class="mx-auto grid h-full max-w-500 grid-cols-1 gap-6 p-6 xl:grid-cols-[400px_1fr]">
-					{#if builderState.state.error}
-						<div class="col-span-2">
-							<StateDisplay type="warning" size="medium" message={builderState.state.error} />
-						</div>
-					{/if}
+				{#if builderState.state.error}
+					<div class="px-6 pt-4">
+						<StateDisplay type="warning" size="medium" message={builderState.state.error} />
+					</div>
+				{/if}
 
-					<BuilderSidebar
-						schema={builderState.state.schema}
-						{availableInputs}
-						availableOutputs={availableOutputsUnplaced}
-						placedIds={placedInLayoutIds}
-						syncNeeded={builderState.state.syncNeeded}
-						onSchemaChange={(updatedSchema) => {
-							if (builderState && builderState.state.schema) {
-								// Save snapshot before import
-								builderState.history.push($state.snapshot(builderState.state.schema));
-								builderState.state.schema = updatedSchema;
-								// Auto-select first tab when schema is imported/changed
-								if (
-									updatedSchema.layout?.type === 'tabbed' &&
-									updatedSchema.layout.tabs.length > 0
-								) {
-									builderState.state.activeTabId = updatedSchema.layout.tabs[0].id;
-								}
-							}
-						}}
-						onSync={() => builderState?.syncParameters()}
-						onAddToGroup={actions.onAddToGroup}
-						onAddToNewGroup={actions.onAddToNewGroup}
-					/>
-
-					<main class="flex flex-col gap-6">
-						{#if builderState.state.schema.layout?.type === 'tabbed'}
-							<TabEditor
-								bind:tabs={builderState.state.schema.layout.tabs}
-								activeTabId={builderState.state.activeTabId}
-								onTabChange={handleTabChange}
-								onAddTab={actions.onAddTab}
-								onRemoveTab={actions.onRemoveTab}
-								onReorderTabs={actions.onReorderTabs}
-								onAddGroup={actions.onAddGroup}
-								onRemoveGroup={actions.onRemoveGroup}
-								onReorderGroups={actions.onReorderGroups}
-								onParameterDrop={actions.onParameterDrop}
-								onReorder={actions.onReorder}
-								onRemoveItem={actions.onRemoveItem}
-								availableInputs={allAvailableInputs}
-								{getParameterInfo}
+				<Resizable.PaneGroup
+					direction="horizontal"
+					autoSaveId="builder-sidebar-layout"
+					class="min-h-0 flex-1"
+				>
+					<Resizable.Pane defaultSize={25} minSize={18} maxSize={42}>
+						<div class="h-full px-(--page-px) py-(--page-py)">
+							<BuilderSidebar
+								schema={builderState.state.schema}
+								{availableInputs}
+								availableOutputs={availableOutputsUnplaced}
+								placedIds={placedInLayoutIds}
+								syncNeeded={builderState.state.syncNeeded}
+								onSchemaChange={(updatedSchema) => {
+									if (builderState && builderState.state.schema) {
+										// Save snapshot before import
+										builderState.history.push($state.snapshot(builderState.state.schema));
+										builderState.state.schema = updatedSchema;
+										// Auto-select first tab when schema is imported/changed
+										if (
+											updatedSchema.layout?.type === 'tabbed' &&
+											updatedSchema.layout.tabs.length > 0
+										) {
+											builderState.state.activeTabId = updatedSchema.layout.tabs[0].id;
+										}
+									}
+								}}
+								onSync={() => builderState?.syncParameters()}
+								onAddToGroup={actions.onAddToGroup}
+								onAddToNewGroup={actions.onAddToNewGroup}
+								onImportGhGroups={actions.onImportGhGroups}
 							/>
-						{/if}
-
-						<div class="mb-20 flex justify-end gap-4">
-							<Button onclick={() => saveSchema().catch(() => {})}
-								><Save class="mr-2 h-4 w-4" />Save Schema</Button
-							>
 						</div>
-					</main>
-				</div>
+					</Resizable.Pane>
+
+					<Resizable.Handle withHandle />
+
+					<Resizable.Pane defaultSize={75} minSize={40}>
+						<main class="flex h-full flex-col gap-6 overflow-y-auto px-(--page-px) py-(--page-py)">
+							{#if builderState.state.schema.layout?.type === 'tabbed'}
+								<TabEditor
+									bind:tabs={builderState.state.schema.layout.tabs}
+									activeTabId={builderState.state.activeTabId}
+									onTabChange={handleTabChange}
+									onAddTab={actions.onAddTab}
+									onRemoveTab={actions.onRemoveTab}
+									onReorderTabs={actions.onReorderTabs}
+									onAddGroup={actions.onAddGroup}
+									onRemoveGroup={actions.onRemoveGroup}
+									onReorderGroups={actions.onReorderGroups}
+									onMoveGroupToTab={actions.onMoveGroupToTab}
+									onParameterDrop={actions.onParameterDrop}
+									onReorder={actions.onReorder}
+									onRemoveItem={actions.onRemoveItem}
+									onAddLineBreak={actions.onAddLineBreak}
+									availableInputs={allAvailableInputs}
+									{getParameterInfo}
+									outputValues={builderState.state.outputValues}
+								/>
+							{/if}
+
+							<div class="mb-20 flex justify-end gap-4">
+								<Button onclick={() => saveSchema().catch(() => {})}
+									><Save class="mr-2 h-4 w-4" />Save Schema</Button
+								>
+							</div>
+						</main>
+					</Resizable.Pane>
+				</Resizable.PaneGroup>
 			{/if}
 		</div>
 
@@ -370,5 +378,4 @@
 				onApplyChanges={(changes) => builderState?.applySyncChanges(changes)}
 			/>
 		{/if}
-	</PageContainer>
-</DragDropContext>
+	</AppShell>

@@ -1,81 +1,87 @@
 # Getting Started
 
+This is the canonical onramp. Follow it top to bottom.
+
 ## Prerequisites
 
-- **Node.js** and **pnpm** installed (see `.node-version` for required Node version)
-- **Visual Studio or Rider** (for C# plugin development)
-- **Rhino 8**
+- **Node.js >= 18** and **pnpm >= 9** (see `engines` in [package.json](../package.json))
+- **.NET SDK 7.0+** and an IDE (Visual Studio / Rider / VS Code) — only if you'll touch the C# plugin
+- **Rhino 8** — only if you'll run the plugin
+- **Docker Desktop** — only if you'll use the Supabase provider locally
 
-## Initial Setup
+## 1. Install
 
-1. Install dependencies:
+```bash
+pnpm install
+pnpm build
+```
 
-   ```bash
-   pnpm install
-   ```
+## 2. Pick a path
 
-2. Build all packages:
-   ```bash
-   pnpm run build:all
-   ```
+Selva ships two backend providers; both run locally. Pick one:
 
-## Development
+|                    | Local provider                          | Supabase (local stack)             |
+| ------------------ | --------------------------------------- | ---------------------------------- |
+| **State lives in** | JSON files on disk                      | Postgres + Supabase Auth + Storage |
+| **External deps**  | none                                    | Docker                             |
+| **Best for**       | quick eval, single-instance self-host   | multi-instance, RLS, managed auth  |
+| **Switch later**   | yes — edit `selva.config.ts` and re-run | yes                                |
 
-### Builder App
+The default is local. You can switch any time by editing `selva.config.ts`.
 
-To run the builder app in development mode:
+## 3. Configure environment
 
-1. Start the C# application in Visual Studio or Rider (debug mode)
-2. Run the frontend in another terminal:
-   ```bash
-   cd packages/builder-app
-   pnpm run dev
-   ```
+```bash
+cp packages/compute-app/.env.example packages/compute-app/.env
+```
 
-**Note:** The initial page load may take a while as the frontend compiles.
+[`.env.example`](../packages/compute-app/.env.example) is the **single authoritative reference** for every env var Selva reads — provider choice, tenancy, platform flags, secrets. Open it and:
 
-### Compute App
+- Set `SESSION_SECRET` (instructions inline). For local provider this is enough.
+- For Supabase, set `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — see [@selvajs/supabase-provider](../packages/supabase-provider/README.md#development--local-supabase-stack) for the `npx supabase start` flow that produces those keys. Then switch the provider in `selva.config.ts`.
+- For multi-org testing, set `tenancy: 'multi'` in `selva.config.ts` and follow [MultiOrg-LocalDev.md](MultiOrg-LocalDev.md).
 
-The compute-app provides Grasshopper computation via Rhino.Compute.
+You shouldn't need to read any other env-var documentation.
 
-#### Configuration
+## 4. Run
 
-1. Create a `.env` file in `packages/compute-app/` (use the provided example env file)
-2. Configure the environment variables:
-   - For **local development**: Point to your local Rhino.Compute instance
-   - For **hosted Rhino.Compute**: Provide the API key and endpoint
+```bash
+cd packages/compute-app
+pnpm run dev
+# http://localhost:3000
+```
 
-#### Full Feature Setup
+On first boot, hit `/setup` to create the platform admin.
 
-To use all features:
+After login, go to `/admin/compute` and register your Rhino.Compute server URL (and optional API key) — Selva needs this to actually solve definitions. See [RHINO_COMPUTE.md](RHINO_COMPUTE.md) for setting that up.
 
-1. Install the [Selva plugin](../Plugin/) in Rhino or link in Grasshopper.Developper settings
-2. Set up the custom [Rhino.Compute fork](https://github.com/VektorNode/compute.rhino3d.git):
-   ```bash
-   git clone https://github.com/VektorNode/compute.rhino3d.git
-   ```
-   Follow the setup guide in that repository.
+## Builder app (optional — only for plugin development)
 
-#### Embedding
+If you're working on the C# plugin and want hot-reload UI:
 
-To generate iframe embed code, use the tool at `examples/embed-code-generator.html`:
+```bash
+# Terminal 1 — start the plugin in your IDE (debug mode)
+# Terminal 2:
+cd packages/builder-app
+pnpm run dev
+# http://localhost:5173 — connects to plugin via WebSocket on port 8765
+```
 
-use the Live Server to serve the file
+The builder app needs no env vars.
 
-## Deployment
+## Going further
 
-### Builder App
-
-Choose an adapter based on your hosting platform:
-
-- **Vercel or Firebase**: Use `adapter-auto`
-- **Node.js hosting**: Configure for Node.js adapter (default)
-
-### Compute App
-
-For deploying Rhino.Compute, follow the [official setup guide](https://github.com/VektorNode/compute.rhino3d.git).
+- **[Architecture](../packages/compute-app/specs/Architecture.md)** — how the providers, tenancy, and access rules fit together
+- **[Access control](../packages/compute-app/specs/Permissions.md)** — who can do what
+- **[MultiOrg-LocalDev.md](MultiOrg-LocalDev.md)** — testing multi-org / multi-tenant locally
+- **[@selvajs/local-provider](../packages/local-provider/README.md)** — on-disk layout, backups, caveats
+- **[@selvajs/supabase-provider](../packages/supabase-provider/README.md)** — schema, RLS, hosted setup
+- **[Compute App Deployment](deployment/compute-app/README.md)** — production deploy
+- **[RHINO_COMPUTE.md](RHINO_COMPUTE.md)** — set up the Rhino.Compute server
 
 ## Troubleshooting
 
-- **Frontend loads slowly**: This is normal on first build. Subsequent reloads are faster.
-- **Compute-app features missing**: Ensure Rhino.Compute is running and the `.env` is configured correctly.
+- **Frontend slow on first build** — normal; subsequent reloads are fast.
+- **Compute features missing or 500s on solve** — verify Rhino.Compute is running and registered at `/admin/compute`.
+- **`Cross-site POST form submissions are forbidden`** — set `ORIGIN=https://your-domain.com` in `.env` (you're behind a reverse proxy).
+- **First user can't sign in** — check that `/setup` ran cleanly; it's only available on a fresh install with no users.

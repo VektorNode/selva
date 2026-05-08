@@ -9,6 +9,7 @@ using Rhino;
 using Rhino.DocObjects;
 using Rhino.Geometry;
 using Selva.GH.Config;
+using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
@@ -24,7 +25,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
 
     // Singleton converter instance (reused across all solve instances)
     private static RhinoDocumentConverter _converter;
-    private static readonly object _converterLock = new();
+    private static readonly object _converterLock = new object();
 
     /// <summary>
     ///     Initializes a new instance of the OBSOLETE_DataToFile_UntilV0_6_2 class.
@@ -47,7 +48,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     /// <summary>
     ///     Gets the unique ID for this component. Do not change this ID after release.
     /// </summary>
-    public override Guid ComponentGuid => new("A51C8F6A-D422-4387-8170-F9F34D8E5351");
+    public override Guid ComponentGuid => new Guid("A51C8F6A-D422-4387-8170-F9F34D8E5351");
 
     /// <summary>
     ///     Creates custom component attributes
@@ -63,6 +64,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     private void EnsureConverterInitialized()
     {
         if (_converter == null)
+        {
             lock (_converterLock)
             {
                 if (_converter == null)
@@ -73,6 +75,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
                     _converter = new RhinoDocumentConverter(options);
                 }
             }
+        }
     }
 
     /// <summary>
@@ -150,11 +153,15 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
             // Determine if we're in single file mode (simple list) or multiple file mode (tree structure)
             if (IsSingleFileMode(geometryTree))
                 // Single file mode - all geometry in one file
+            {
                 results = ProcessSingleFile(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree, fileEnding);
+            }
             else
                 // Multiple files mode - one file per branch
+            {
                 results = ProcessMultipleFiles(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree,
                     fileEnding);
+            }
 
             if (results.Count == 0)
             {
@@ -276,7 +283,10 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
             var path = paths[pathIndex];
             var geometryBranch = geometryTree.get_Branch(path);
 
-            if (geometryBranch == null || geometryBranch.Count == 0) continue;
+            if (geometryBranch == null || geometryBranch.Count == 0)
+            {
+                continue;
+            }
 
             try
             {
@@ -367,7 +377,10 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         {
             var goo = gooList[i];
 
-            if (goo == null) continue;
+            if (goo == null)
+            {
+                continue;
+            }
 
             GeometryBase geometry = null;
 
@@ -375,26 +388,50 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
             {
                 var scriptVar = goo.ScriptVariable();
                 if (scriptVar is GeometryBase geomBase)
+                {
                     geometry = geomBase;
+                }
                 else if (goo is GH_Mesh ghMesh && ghMesh.Value != null)
+                {
                     geometry = ghMesh.Value;
+                }
                 else if (goo is GH_Brep ghBrep && ghBrep.Value != null)
+                {
                     geometry = ghBrep.Value;
+                }
                 else if (goo is GH_Surface ghSurface && ghSurface.Value != null)
+                {
                     geometry = ghSurface.Value;
+                }
                 else if (goo is GH_Curve ghCurve && ghCurve.Value != null)
+                {
                     geometry = ghCurve.Value;
+                }
                 else if (goo is GH_Box ghBox && ghBox.Value.IsValid)
+                {
                     geometry = ghBox.Value.ToBrep();
+                }
                 else if (goo is GH_Point ghPoint)
+                {
                     geometry = new Point(ghPoint.Value);
+                }
                 else if (goo is GH_Line ghLine && ghLine.Value.IsValid)
+                {
                     geometry = new LineCurve(ghLine.Value);
+                }
                 else if (goo is GH_Circle ghCircle && ghCircle.Value.IsValid)
+                {
                     geometry = new ArcCurve(ghCircle.Value);
-                else if (goo is GH_Arc ghArc && ghArc.Value.IsValid) geometry = new ArcCurve(ghArc.Value);
+                }
+                else if (goo is GH_Arc ghArc && ghArc.Value.IsValid)
+                {
+                    geometry = new ArcCurve(ghArc.Value);
+                }
 
-                if (geometry != null && geometry.IsValid) validGeometries.Add((geometry, i));
+                if (geometry != null && geometry.IsValid)
+                {
+                    validGeometries.Add((geometry, i));
+                }
             }
             catch (Exception ex)
             {
@@ -418,6 +455,7 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         var layerCache = new Dictionary<string, int>();
 
         foreach (var (geometry, originalIndex) in geometries)
+        {
             try
             {
                 var layerName = GetLayerName(layerNames, originalIndex);
@@ -459,14 +497,17 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
                 var objectId = doc.Objects.Add(geometry, attributes);
 
                 if (objectId == Guid.Empty)
+                {
                     AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
                         $"Failed to add geometry at index {originalIndex} to document");
+                }
             }
             catch (Exception ex)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
                     $"Error processing geometry at index {originalIndex}: {ex.Message}");
             }
+        }
     }
 
     /// <summary>
@@ -474,9 +515,15 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     /// </summary>
     private string GetLayerName(List<string> layerNames, int index)
     {
-        if (layerNames == null || layerNames.Count == 0) return DefaultLayerName;
+        if (layerNames == null || layerNames.Count == 0)
+        {
+            return DefaultLayerName;
+        }
 
-        if (index < layerNames.Count && !string.IsNullOrWhiteSpace(layerNames[index])) return layerNames[index];
+        if (index < layerNames.Count && !string.IsNullOrWhiteSpace(layerNames[index]))
+        {
+            return layerNames[index];
+        }
 
         var lastName = layerNames.LastOrDefault(n => !string.IsNullOrWhiteSpace(n));
         return lastName ?? DefaultLayerName;
@@ -487,9 +534,15 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     /// </summary>
     private Color GetLayerColor(List<Color> layerColors, int index)
     {
-        if (layerColors == null || layerColors.Count == 0) return DefaultLayerColor;
+        if (layerColors == null || layerColors.Count == 0)
+        {
+            return DefaultLayerColor;
+        }
 
-        if (index < layerColors.Count) return layerColors[index];
+        if (index < layerColors.Count)
+        {
+            return layerColors[index];
+        }
 
         return layerColors.Count > 0 ? layerColors[layerColors.Count - 1] : DefaultLayerColor;
     }
@@ -501,7 +554,10 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     {
         try
         {
-            if (fileEnding == ".3dm") return _converter.DocToRhinoFile(doc); // Synchronous!
+            if (fileEnding == ".3dm")
+            {
+                return _converter.DocToRhinoFile(doc); // Synchronous!
+            }
 
             return _converter.DocToBase64(doc, fileEnding); // Synchronous!
         }

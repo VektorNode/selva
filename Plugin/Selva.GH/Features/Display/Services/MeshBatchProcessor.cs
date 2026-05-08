@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using Newtonsoft.Json;
 using Rhino.Geometry;
 
 namespace Selva.GH.Features.Display.Services;
@@ -19,15 +21,29 @@ public static class MeshBatchProcessor
         List<Mesh> meshes,
         List<string> names,
         List<ThreeMaterial> materials,
-        List<Dictionary<string, string>> metadataList = null)
+        List<Dictionary<string, string>> metadataList = null,
+        List<string> layers = null,
+        string sourceComponentId = null)
     {
-        if (meshes.Count == 0) throw new ArgumentException("Mesh list cannot be empty");
+        if (meshes.Count == 0)
+        {
+            throw new ArgumentException("Mesh list cannot be empty");
+        }
 
         if (meshes.Count != names.Count || meshes.Count != materials.Count)
+        {
             throw new ArgumentException("Meshes, names, and materials lists must have the same length");
+        }
 
         if (metadataList != null && meshes.Count != metadataList.Count)
+        {
             throw new ArgumentException("Metadata list must have the same length as meshes if provided");
+        }
+
+        if (layers != null && meshes.Count != layers.Count)
+        {
+            throw new ArgumentException("Layers list must have the same length as meshes if provided");
+        }
 
         var materialCache = new MaterialCache();
 
@@ -36,7 +52,10 @@ public static class MeshBatchProcessor
         for (var i = 0; i < meshes.Count; i++)
         {
             var mesh = meshes[i];
-            if (mesh == null || !mesh.IsValid) continue;
+            if (mesh == null || !mesh.IsValid)
+            {
+                continue;
+            }
 
             var (vertices, faces) = GeoMeshProcessor.ConvertMeshToArrays(mesh);
             var materialId = materialCache.GetMaterialId(materials[i]);
@@ -44,6 +63,8 @@ public static class MeshBatchProcessor
             processedMeshes.Add(new ProcessedMesh
             {
                 Name = names[i],
+                Layer = layers?[i] ?? "",
+                OriginalIndex = i,
                 Vertices = vertices,
                 Faces = faces,
                 MaterialId = materialId,
@@ -63,21 +84,23 @@ public static class MeshBatchProcessor
             Materials = materialCache.GetAllMaterials()
                 .Select(SerializableMaterial.FromThreeMaterial)
                 .ToList(),
-            Groups = new List<MaterialGroup>()
+            Groups = new List<MaterialGroup>(),
+            SourceComponentId = sourceComponentId
         };
 
-        // Calculate total sizes for single allocation
-        var totalVertexCount = processedMeshes.Sum(m => m.Vertices.Length);
-        var totalFaceCount = processedMeshes.Sum(m => m.Faces.Length);
+        // Single allocation for all combined geometry. Lengths are in component/index units:
+        //   allVertices: 3 * total vertex count (x,y,z floats)
+        //   allIndices:  total index count
+        var totalComponentCount = processedMeshes.Sum(m => m.Vertices.Length);
+        var totalIndexCount = processedMeshes.Sum(m => m.Faces.Length);
 
-        // Single allocation for all mesh data
-        var allVertices = new float[totalVertexCount];
-        var allFaces = new int[totalFaceCount];
-        var currentVertexOffset = 0; // Offset in floats
-        var currentFaceOffset = 0; // Offset in indices
-        var currentVertexCount = 0; // Count of vertices (for face index rebasing)
+        var allVertices = new float[totalComponentCount];
+        var allIndices = new int[totalIndexCount];
 
-        // Copy mesh data directly to final arrays
+        var componentCursor = 0;          // write head into allVertices, in float components
+        var indexCursor = 0;              // write head into allIndices, in indices
+        var vertexBaseForIndices = 0;     // number of vertices already in the combined array (rebases per-mesh local indices)
+
         foreach (var group in groupedMeshes)
         {
             var materialGroup = new MaterialGroup
@@ -88,44 +111,68 @@ public static class MeshBatchProcessor
 
             foreach (var mesh in group)
             {
-                var vertexCount = mesh.Vertices.Length;
-                var faceCount = mesh.Faces.Length;
+                var meshComponentCount = mesh.Vertices.Length;
+                var meshVertexCount = meshComponentCount / 3;
+                var meshIndexCount = mesh.Faces.Length;
 
-                // Track metadata with offsets
                 materialGroup.Meshes.Add(new MeshMetadata
                 {
                     Name = mesh.Name,
-                    VertexCount = vertexCount,
-                    FaceCount = faceCount,
-                    VertexOffset = currentVertexOffset,
-                    FaceOffset = currentFaceOffset,
+                    Layer = mesh.Layer,
+                    OriginalIndex = mesh.OriginalIndex,
+                    VertexCount = meshVertexCount,
+                    IndexCount = meshIndexCount,
+                    VertexStart = vertexBaseForIndices,
+                    IndexStart = indexCursor,
                     Metadata = mesh.Metadata
                 });
 
-
-                // Copy vertices using Span for optimal performance
-                var vertexSpan = allVertices.AsSpan(currentVertexOffset, vertexCount);
+                var vertexSpan = allVertices.AsSpan(componentCursor, meshComponentCount);
                 mesh.Vertices.AsSpan().CopyTo(vertexSpan);
 
-                // Adjust face indices and copy
-                // mesh.Faces[i] is a vertex index within this mesh (0-based, relative to mesh start)
-                // We need to offset it by the number of vertices already in the combined array
-                var baseVertexIndex = currentVertexCount; // Number of vertices already in combined array
-                var faceSpan = allFaces.AsSpan(currentFaceOffset, faceCount);
-                for (var i = 0; i < faceCount; i++) faceSpan[i] = mesh.Faces[i] + baseVertexIndex;
+                var indexSpan = allIndices.AsSpan(indexCursor, meshIndexCount);
+                for (var i = 0; i < meshIndexCount; i++)
+                {
+                    indexSpan[i] = mesh.Faces[i] + vertexBaseForIndices;
+                }
 
-                currentVertexOffset += vertexCount;
-                currentFaceOffset += faceCount;
-                currentVertexCount += vertexCount / 3; // vertexCount is in floats, divide by 3 to get vertex count
+                componentCursor += meshComponentCount;
+                indexCursor += meshIndexCount;
+                vertexBaseForIndices += meshVertexCount;
             }
 
             batch.Groups.Add(materialGroup);
         }
 
-        // Compress all vertex and face data
-        batch.CompressedData = CompressionHelper.CompressGeometryData(allVertices, allFaces);
+        // Build the binary blob. The metadata JSON inside the blob is a self-contained copy of the
+        // batch envelope (without the blob itself), so the format is transport-agnostic — the same
+        // bytes can travel inside today's JSON values message or as a future binary WebSocket frame.
+        var metadataJson = SerializeMetadata(batch);
+        using (var ms = new MemoryStream())
+        {
+            BinaryGeometryWriter.Write(ms, metadataJson, allVertices, allIndices);
+            batch.CompressedData = ms.ToArray();
+        }
 
         return batch;
+    }
+
+    /// <summary>
+    ///     Serializes the batch envelope without its own binary blob, for embedding in the blob's
+    ///     metadata header. Keeps a single JSON shape so the client decoder doesn't branch on transport.
+    /// </summary>
+    private static string SerializeMetadata(MeshBatch batch)
+    {
+        var savedBlob = batch.CompressedData;
+        batch.CompressedData = null;
+        try
+        {
+            return JsonConvert.SerializeObject(batch);
+        }
+        finally
+        {
+            batch.CompressedData = savedBlob;
+        }
     }
 
     /// <summary>
@@ -134,6 +181,8 @@ public static class MeshBatchProcessor
     private struct ProcessedMesh
     {
         public string Name { get; set; }
+        public string Layer { get; set; }
+        public int OriginalIndex { get; set; }
         public float[] Vertices { get; set; }
         public int[] Faces { get; set; }
         public int MaterialId { get; set; }

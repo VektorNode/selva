@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
+using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
@@ -19,7 +20,7 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
 
     protected override Bitmap Icon => Resources.CreateFile;
 
-    public override Guid ComponentGuid => new("F9B3F862-611E-4E67-9DE4-67129CC0EF24");
+    public override Guid ComponentGuid => new Guid("F9B3F862-611E-4E67-9DE4-67129CC0EF24");
 
     public override void CreateAttributes()
     {
@@ -45,13 +46,17 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-        List<String> data = new List<string>();
+        var data = new List<string>();
         var name = "file";
         var extension = ".txt";
         var isBase64 = false;
         var subFolder = "";
 
-        if (!DA.GetDataList(0, data)) return;
+        if (!DA.GetDataList(0, data))
+        {
+            return;
+        }
+
         DA.GetData(1, ref name);
         DA.GetData(2, ref extension);
         DA.GetData(3, ref isBase64);
@@ -60,9 +65,13 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
 
         // Ensure extension starts with a dot
         if (!string.IsNullOrEmpty(extension) && !extension.StartsWith("."))
+        {
             extension = "." + extension;
+        }
 
-        var combinedData = string.Join(Environment.NewLine, data);
+        var combinedData = isBase64
+            ? string.Concat(data)
+            : string.Join(Environment.NewLine, data);
 
         var fileData = new FileData
         {

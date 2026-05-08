@@ -1,9 +1,6 @@
-import { createViteConfig } from '@selva/config/vite';
+import { createViteConfig } from '@selvajs/config/vite';
 
 export default createViteConfig({
-	esbuild: {
-		// drop: ['console', 'debugger']
-	},
 	server: {
 		fs: {
 			allow: ['..', '../../node_modules']

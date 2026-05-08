@@ -10,6 +10,7 @@ using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
 using Rhino.Geometry;
+using Selva.GH.Features.Display.Goos;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
@@ -27,7 +28,7 @@ public class OBSOLETE_WebDisplay_UntilV0_5_0 : GH_TaskCapableComponent<WebDispla
     }
 
     protected override Bitmap Icon => Resources.WebDisplay;
-    public override Guid ComponentGuid => new("FCBBE140-D11C-4AA2-97E2-9DA0559CF0DF");
+    public override Guid ComponentGuid => new Guid("FCBBE140-D11C-4AA2-97E2-9DA0559CF0DF");
     public override GH_Exposure Exposure => GH_Exposure.hidden;
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
@@ -90,7 +91,9 @@ public class OBSOLETE_WebDisplay_UntilV0_5_0 : GH_TaskCapableComponent<WebDispla
         }
 
         if (!GetSolveResults(DA, out var batch))
+        {
             batch = Compute(allGeo, allNames, allMetadata, allMaterials, meshSettings);
+        }
 
         if (batch == null)
         {
@@ -162,7 +165,10 @@ public class OBSOLETE_WebDisplay_UntilV0_5_0 : GH_TaskCapableComponent<WebDispla
 
     private List<GeometryBase> ExtractGeometries(List<IGH_Goo> gooList)
     {
-        if (gooList == null || gooList.Count == 0) return new List<GeometryBase>();
+        if (gooList == null || gooList.Count == 0)
+        {
+            return new List<GeometryBase>();
+        }
 
         var geometries = new ConcurrentBag<(int Index, GeometryBase Geometry)>();
 
@@ -172,7 +178,10 @@ public class OBSOLETE_WebDisplay_UntilV0_5_0 : GH_TaskCapableComponent<WebDispla
             {
                 var goo = gooList[i];
                 var geom = TryExtractGeometry(goo);
-                if (geom != null && geom.IsValid) geometries.Add((i, geom));
+                if (geom != null && geom.IsValid)
+                {
+                    geometries.Add((i, geom));
+                }
             }
             catch
             {
@@ -185,9 +194,15 @@ public class OBSOLETE_WebDisplay_UntilV0_5_0 : GH_TaskCapableComponent<WebDispla
 
     private GeometryBase TryExtractGeometry(IGH_Goo goo)
     {
-        if (goo == null) return null;
+        if (goo == null)
+        {
+            return null;
+        }
 
-        if (goo.ScriptVariable() is GeometryBase geomBase) return geomBase;
+        if (goo.ScriptVariable() is GeometryBase geomBase)
+        {
+            return geomBase;
+        }
 
         return goo switch
         {
@@ -207,7 +222,10 @@ public class OBSOLETE_WebDisplay_UntilV0_5_0 : GH_TaskCapableComponent<WebDispla
 
     private List<Mesh> ConvertToMeshesParallel(List<GeometryBase> geometries, MeshingParameters meshSettings)
     {
-        if (geometries == null || geometries.Count == 0) return new List<Mesh>();
+        if (geometries == null || geometries.Count == 0)
+        {
+            return new List<Mesh>();
+        }
 
         var meshDict = new ConcurrentDictionary<int, Mesh>();
 
@@ -216,7 +234,10 @@ public class OBSOLETE_WebDisplay_UntilV0_5_0 : GH_TaskCapableComponent<WebDispla
             try
             {
                 var mesh = ConvertSingleGeometry(geometries[index], meshSettings);
-                if (mesh != null && mesh.IsValid) meshDict.TryAdd(index, mesh);
+                if (mesh != null && mesh.IsValid)
+                {
+                    meshDict.TryAdd(index, mesh);
+                }
             }
             catch
             {
@@ -229,7 +250,10 @@ public class OBSOLETE_WebDisplay_UntilV0_5_0 : GH_TaskCapableComponent<WebDispla
 
     private Mesh ConvertSingleGeometry(GeometryBase geom, MeshingParameters mParams)
     {
-        if (geom == null || !geom.IsValid) return null;
+        if (geom == null || !geom.IsValid)
+        {
+            return null;
+        }
 
         try
         {
@@ -259,17 +283,27 @@ public class OBSOLETE_WebDisplay_UntilV0_5_0 : GH_TaskCapableComponent<WebDispla
 
     private Mesh CreateMeshFromBrep(Brep brep, MeshingParameters mParams)
     {
-        if (brep == null || !brep.IsValid) return null;
+        if (brep == null || !brep.IsValid)
+        {
+            return null;
+        }
 
         try
         {
             var meshArray = Mesh.CreateFromBrep(brep, mParams);
-            if (meshArray == null || meshArray.Length == 0) return null;
+            if (meshArray == null || meshArray.Length == 0)
+            {
+                return null;
+            }
 
             var mesh = new Mesh();
             foreach (var m in meshArray)
+            {
                 if (m != null && m.IsValid)
+                {
                     mesh.Append(m);
+                }
+            }
 
             return mesh.Faces.Count > 0 ? mesh : null;
         }
@@ -305,13 +339,19 @@ public class OBSOLETE_WebDisplay_UntilV0_5_0 : GH_TaskCapableComponent<WebDispla
     private Dictionary<string, string> ParseMetadataString(string metadataString)
     {
         var metadata = new Dictionary<string, string>();
-        if (string.IsNullOrWhiteSpace(metadataString)) return metadata;
+        if (string.IsNullOrWhiteSpace(metadataString))
+        {
+            return metadata;
+        }
 
         var pairs = metadataString.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
         foreach (var pair in pairs)
         {
             var parts = pair.Split(new[] { '=' }, 2);
-            if (parts.Length == 2) metadata[parts[0].Trim()] = parts[1].Trim();
+            if (parts.Length == 2)
+            {
+                metadata[parts[0].Trim()] = parts[1].Trim();
+            }
         }
 
         return metadata;
@@ -324,7 +364,10 @@ public class OBSOLETE_WebDisplay_UntilV0_5_0 : GH_TaskCapableComponent<WebDispla
         foreach (var goo in materialGoos ?? new List<IGH_Goo>())
         {
             var material = ExtractMaterial(goo);
-            if (material != null) materials.Add(material);
+            if (material != null)
+            {
+                materials.Add(material);
+            }
         }
 
         return NormalizeList(materials, count, _ => ThreeMaterial.Default());
@@ -332,23 +375,38 @@ public class OBSOLETE_WebDisplay_UntilV0_5_0 : GH_TaskCapableComponent<WebDispla
 
     private ThreeMaterial ExtractMaterial(IGH_Goo goo)
     {
-        if (goo == null) return null;
+        if (goo == null)
+        {
+            return null;
+        }
 
-        if (goo.ScriptVariable() is ThreeMaterial mat) return mat;
+        if (goo.ScriptVariable() is ThreeMaterial mat)
+        {
+            return mat;
+        }
 
-        if (goo is GH_ObjectWrapper wrapper && wrapper.Value is ThreeMaterial wrapMat) return wrapMat;
+        if (goo is GH_ObjectWrapper wrapper && wrapper.Value is ThreeMaterial wrapMat)
+        {
+            return wrapMat;
+        }
 
         return null;
     }
 
     private List<T> NormalizeList<T>(List<T> input, int targetCount, Func<int, T> defaultFactory)
     {
-        if (input.Count == 0) return Enumerable.Range(0, targetCount).Select(defaultFactory).ToList();
+        if (input.Count == 0)
+        {
+            return Enumerable.Range(0, targetCount).Select(defaultFactory).ToList();
+        }
 
         var result = new List<T>(targetCount);
         var lastItem = input.Last();
 
-        for (var i = 0; i < targetCount; i++) result.Add(i < input.Count ? input[i] : lastItem);
+        for (var i = 0; i < targetCount; i++)
+        {
+            result.Add(i < input.Count ? input[i] : lastItem);
+        }
 
         return result;
     }

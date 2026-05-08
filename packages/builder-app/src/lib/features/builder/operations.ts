@@ -8,9 +8,23 @@ import type {
 	LayoutItem,
 	InputLayoutItem,
 	OutputLayoutItem
-} from '@selva/shared';
+} from '@selvajs/schemas';
 import { mapParamTypeToWidgetType, createDefaultWidgetConfig } from './widget-config';
-import { toast } from '@selva/shared';
+import { toast } from '@selvajs/ui';
+
+export function isInputItem(item: DiscoveredInput | DiscoveredOutput): item is DiscoveredInput {
+	return 'name' in item;
+}
+
+export function getAllLayoutItems(schema: UISchema): LayoutItem[] {
+	if (!schema?.layout) return [];
+	if (schema.layout.type === 'tabbed') {
+		return schema.layout.tabs.flatMap((tab) => tab.groups?.flatMap((g) => g.items) ?? []);
+	} else if (schema.layout.type === 'flat') {
+		return schema.layout.groups?.flatMap((g) => g.items) ?? [];
+	}
+	return [];
+}
 
 export function isItemUsedInLayout(schema: UISchema | null, paramId: string): boolean {
 	if (!schema?.layout) return false;
@@ -18,11 +32,15 @@ export function isItemUsedInLayout(schema: UISchema | null, paramId: string): bo
 	if (schema.layout.type === 'tabbed') {
 		return (
 			schema.layout.tabs.some((t) =>
-				t.groups.some((g) => g.items.some((i) => i.paramId === paramId))
+				t.groups.some((g) => g.items.some((i) => i.type !== 'linebreak' && i.paramId === paramId))
 			) ?? false
 		);
 	} else if (schema.layout.type === 'flat') {
-		return schema.layout.groups.some((g) => g.items.some((i) => i.paramId === paramId)) ?? false;
+		return (
+			schema.layout.groups.some((g) =>
+				g.items.some((i) => i.type !== 'linebreak' && i.paramId === paramId)
+			) ?? false
+		);
 	}
 	return false;
 }
@@ -70,44 +88,42 @@ export function createLayoutItem(
 
 	// Get description from discovered parameters
 	const description =
-		itemType === 'input'
-			? fullParam?.description ?? ''
-			: fullOutput?.description ?? '';
+		itemType === 'input' ? (fullParam?.description ?? '') : (fullOutput?.description ?? '');
 
 	const config =
 		itemType === 'input' && paramType
 			? createDefaultWidgetConfig(
-				resolvedWidgetType as any,
-				fullParam || ({ type: paramType } as any),
-				'input'
-			)
+					resolvedWidgetType as any,
+					fullParam || ({ type: paramType } as any),
+					'input'
+				)
 			: itemType === 'output' && paramType
 				? createDefaultWidgetConfig(resolvedWidgetType as any, { type: paramType } as any, 'output')
 				: {};
 
 	return itemType === 'input'
 		? ({
-			id: crypto.randomUUID().substring(0, 8),
-			paramId,
-			type: 'input',
-			displayName,
-			description,
-			widgetType: resolvedWidgetType as any,
-			order: itemCount,
-			span: 1,
-			config
-		} as InputLayoutItem)
+				id: crypto.randomUUID().substring(0, 8),
+				paramId,
+				type: 'input',
+				displayName,
+				description,
+				widgetType: resolvedWidgetType as any,
+				order: itemCount,
+				span: 1,
+				config
+			} as InputLayoutItem)
 		: ({
-			id: crypto.randomUUID().substring(0, 8),
-			paramId,
-			type: 'output',
-			displayName,
-			description,
-			widgetType: resolvedWidgetType as any,
-			order: itemCount,
-			span: 1,
-			config: itemType === 'output' && resolvedWidgetType === 'file' ? {} : config
-		} as OutputLayoutItem);
+				id: crypto.randomUUID().substring(0, 8),
+				paramId,
+				type: 'output',
+				displayName,
+				description,
+				widgetType: resolvedWidgetType as any,
+				order: itemCount,
+				span: 1,
+				config: itemType === 'output' && resolvedWidgetType === 'file' ? {} : config
+			} as OutputLayoutItem);
 }
 
 export function insertLayoutItem(
@@ -136,21 +152,36 @@ export function insertLayoutItem(
 	group.items = newItems;
 }
 
-export function handleItemDrop(
-	schema: UISchema,
-	group: GroupConfig,
-	paramId: string,
-	displayName: string,
-	itemType: 'input' | 'output',
-	availableInputs: DiscoveredInput[],
-	availableOutputs: DiscoveredOutput[],
-	paramType?: string,
-	widgetType?: string,
-	targetItem?: LayoutItem,
-	dropPosition?: 'before' | 'after',
-	outputType?: 'text' | 'number' | 'file'
-) {
-	if (group.items.some((i) => i.paramId === paramId)) {
+export interface ItemDropOptions {
+	schema: UISchema;
+	group: GroupConfig;
+	paramId: string;
+	displayName: string;
+	itemType: 'input' | 'output';
+	availableInputs: DiscoveredInput[];
+	availableOutputs: DiscoveredOutput[];
+	paramType?: string;
+	widgetType?: string;
+	targetItem?: LayoutItem;
+	dropPosition?: 'before' | 'after';
+	outputType?: 'text' | 'number' | 'file' | 'chart';
+}
+
+export function handleItemDrop({
+	schema,
+	group,
+	paramId,
+	displayName,
+	itemType,
+	availableInputs,
+	availableOutputs,
+	paramType,
+	widgetType,
+	targetItem,
+	dropPosition,
+	outputType
+}: ItemDropOptions) {
+	if (group.items.some((i) => i.type !== 'linebreak' && i.paramId === paramId)) {
 		const itemTypeLabel =
 			widgetType === 'file' ? 'file component' : itemType === 'input' ? 'parameter' : 'output';
 		toast.warning(`This ${itemTypeLabel} is already in this group`);
@@ -259,7 +290,7 @@ export function removeTab(schema: UISchema, tabId: string) {
 
 	tab.groups.forEach((group) => {
 		group.items.forEach((item) => {
-			removeItemIfOrphaned(schema, item.paramId, item.type);
+			if (item.type !== 'linebreak') removeItemIfOrphaned(schema, item.paramId, item.type);
 		});
 	});
 
@@ -331,7 +362,7 @@ export function removeItem(schema: UISchema, tabId: string, groupId: string, ite
 	const item = group.items.find((i) => i.id === itemId);
 	group.items = group.items.filter((i) => i.id !== itemId);
 
-	if (item) {
+	if (item && item.type !== 'linebreak') {
 		removeItemIfOrphaned(schema, item.paramId, item.type);
 	}
 }
@@ -348,6 +379,42 @@ export function reorderTabs(schema: UISchema, fromIndex: number, toIndex: number
 	});
 
 	schema.layout.tabs = tabs;
+}
+
+export function moveGroupToTab(
+	schema: UISchema,
+	sourceTabId: string,
+	groupId: string,
+	targetTabId: string,
+	targetIndex?: number
+): boolean {
+	if (!schema.layout || schema.layout.type !== 'tabbed') return false;
+	if (sourceTabId === targetTabId) return false;
+
+	const sourceTab = schema.layout.tabs.find((t) => t.id === sourceTabId);
+	const targetTab = schema.layout.tabs.find((t) => t.id === targetTabId);
+	if (!sourceTab || !targetTab) return false;
+
+	const idx = sourceTab.groups.findIndex((g) => g.id === groupId);
+	if (idx === -1) return false;
+
+	const sourceGroups = [...sourceTab.groups];
+	const [movedGroup] = sourceGroups.splice(idx, 1);
+
+	const targetGroups = [...targetTab.groups];
+	if (targetIndex === undefined || targetIndex < 0 || targetIndex > targetGroups.length) {
+		targetGroups.push(movedGroup);
+	} else {
+		targetGroups.splice(targetIndex, 0, movedGroup);
+	}
+
+	sourceGroups.forEach((g, i) => (g.order = i));
+	targetGroups.forEach((g, i) => (g.order = i));
+
+	sourceTab.groups = sourceGroups;
+	targetTab.groups = targetGroups;
+	schema.layout.tabs = [...schema.layout.tabs];
+	return true;
 }
 
 export function reorderGroups(schema: UISchema, tabId: string, fromIndex: number, toIndex: number) {

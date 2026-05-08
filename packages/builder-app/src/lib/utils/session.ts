@@ -1,6 +1,7 @@
 import { page } from '$app/state';
+import { SvelteURLSearchParams } from 'svelte/reactivity';
 import { getWebSocketState, type WebSocketState } from '$lib/websocket/websocket.svelte';
-import type { UISchema, DiscoveredParameters } from '@selva/shared';
+import type { UISchema, DiscoveredParameters } from '@selvajs/schemas';
 import { DEFAULT_WEBSOCKET_PORT, WEBSOCKET_PORT_QUERY_PARAM } from '$lib/app.config';
 
 /**
@@ -28,6 +29,18 @@ export interface SessionState {
  */
 export function getSessionIdFromUrl(): string {
 	return page.url.searchParams.get('session') || '';
+}
+
+/**
+ * Build URL query params string preserving session and wsPort from the current page URL.
+ */
+export function buildSessionParams(): string {
+	const params = new SvelteURLSearchParams();
+	const session = page.url.searchParams.get('session');
+	const wsPort = page.url.searchParams.get(WEBSOCKET_PORT_QUERY_PARAM);
+	if (session) params.set('session', session);
+	if (wsPort) params.set(WEBSOCKET_PORT_QUERY_PARAM, wsPort);
+	return params.toString();
 }
 
 /**
@@ -95,43 +108,14 @@ export function ensureSchemaLayoutDefaults(schema: UISchema | null): UISchema | 
 		};
 	}
 
-	// Migration for v1 schemas (missing layout.type)
-	if (schema.layout && !schema.layout.type) {
-		if ('tabs' in schema.layout) {
-			(schema.layout as any).type = 'tabbed';
-		} else if ('groups' in schema.layout) {
-			(schema.layout as any).type = 'flat';
-		} else {
-			(schema.layout as any).type = 'tabbed';
-		}
-	}
-
 	if (schema.layout.type === 'tabbed' && !schema.layout.tabs) {
 		schema.layout.tabs = [];
 	}
-	// Ensure instanceSolve has a default value
 	if (schema.instanceSolve === undefined) {
 		schema.instanceSolve = true;
 	}
 
 	return schema;
-}
-
-/**
- * Get default value for a parameter type
- */
-export function getDefaultValue(paramType: string): unknown {
-	switch (paramType) {
-		case 'number':
-		case 'integer':
-			return 0;
-		case 'boolean':
-			return false;
-		case 'text':
-			return '';
-		default:
-			return null;
-	}
 }
 
 /**

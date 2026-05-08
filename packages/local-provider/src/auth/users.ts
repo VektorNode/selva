@@ -1,0 +1,151 @@
+import * as crypto from 'node:crypto';
+import { randomUUID } from 'node:crypto';
+import { ProviderError } from '@selvajs/platform';
+import { readJsonFile, writeJsonFile } from '../data/fsJson.js';
+
+/**
+ * Identity-only on-disk shape. Per-user app state (permissions, profile,
+ * starred definitions, recent runs) lives in `user-data.json`, owned by
+ * `LocalDataProvider`. This split lets `LocalAuthProvider` be paired with any
+ * data provider, and any auth provider be paired with `LocalDataProvider`,
+ * without one stepping on the other.
+ */
+export interface StoredAuthUser {
+	id: string;
+	email: string;
+	/**
+	 * "pbkdf2:sha256:<iterations>:<salt>:<hash>" — all binary values base64url encoded.
+	 * Null for OAuth-only users (allowlisted email, no password stored).
+	 */
+	passwordHash: string | null;
+	createdAt: string; // ISO 8601
+	/** ISO 8601 — most recent successful credential login or token verification. */
+	lastLoginAt?: string;
+	/** When true, the provider MUST refuse to authenticate this user. */
+	disabled?: boolean;
+}
+
+/** Debounce window for lastLoginAt writes — skip if prior stamp is newer than this. */
+const LAST_LOGIN_DEBOUNCE_MS = 60_000;
+
+export interface AuthUsersFile {
+	users: StoredAuthUser[];
+}
+
+// ============================================================================
+// PBKDF2 password hashing
+// ============================================================================
+const PBKDF2_ITERATIONS = 100_000;
+const PBKDF2_KEYLEN = 32;
+const PBKDF2_DIGEST = 'sha256';
+
+export async function hashPassword(password: string): Promise<string> {
+	const salt = crypto.randomBytes(16).toString('base64url');
+	const hash = await new Promise<Buffer>((resolve, reject) =>
+		crypto.pbkdf2(password, salt, PBKDF2_ITERATIONS, PBKDF2_KEYLEN, PBKDF2_DIGEST, (err, key) =>
+			err ? reject(err) : resolve(key)
+		)
+	);
+	return `pbkdf2:${PBKDF2_DIGEST}:${PBKDF2_ITERATIONS}:${salt}:${hash.toString('base64url')}`;
+}
+
+export async function verifyPasswordHash(password: string, storedHash: string): Promise<boolean> {
+	const parts = storedHash.split(':');
+	if (parts.length !== 5 || parts[0] !== 'pbkdf2') return false;
+	const [, digest, iterStr, salt, expectedHashB64] = parts;
+	const iterations = parseInt(iterStr, 10);
+	if (!Number.isFinite(iterations) || iterations <= 0) return false;
+
+	const expected = Buffer.from(expectedHashB64, 'base64url');
+	const actual = await new Promise<Buffer>((resolve, reject) =>
+		crypto.pbkdf2(password, salt, iterations, PBKDF2_KEYLEN, digest, (err, key) =>
+			err ? reject(err) : resolve(key)
+		)
+	);
+
+	if (actual.length !== expected.length) return false;
+	return crypto.timingSafeEqual(actual, expected);
+}
+
+// ============================================================================
+// CRUD
+// ============================================================================
+// Fresh object per call — `readJsonFile` returns its fallback by reference
+// when the file is missing, so a shared singleton would let one test (or
+// one process write) mutate state visible to the next read.
+const empty = (): AuthUsersFile => ({ users: [] });
+
+export interface LocalAuthUserStore {
+	findByEmail(email: string): Promise<StoredAuthUser | null>;
+	findById(id: string): Promise<StoredAuthUser | null>;
+	listUsers(): Promise<Omit<StoredAuthUser, 'passwordHash'>[]>;
+	/** password null = OAuth allowlist entry (no password stored) */
+	createUser(email: string, password: string | null): Promise<StoredAuthUser>;
+	setDisabled(id: string, disabled: boolean): Promise<void>;
+	touchLastLogin(id: string): Promise<void>;
+	deleteUser(id: string): Promise<void>;
+}
+
+export function createLocalAuthUserStore(usersFilePath: string): LocalAuthUserStore {
+	return {
+		async findByEmail(email) {
+			const { users } = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
+			return users.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? null;
+		},
+
+		async findById(id) {
+			const { users } = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
+			return users.find((u) => u.id === id) ?? null;
+		},
+
+		async listUsers() {
+			const { users } = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
+			return users.map(({ passwordHash: _ph, ...rest }) => rest);
+		},
+
+		async createUser(email, password) {
+			const file = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
+			if (file.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
+				throw new ProviderError(`User with email "${email}" already exists`, 409);
+			}
+			const user: StoredAuthUser = {
+				id: randomUUID(),
+				email,
+				passwordHash: password !== null ? await hashPassword(password) : null,
+				createdAt: new Date().toISOString()
+			};
+			file.users.push(user);
+			await writeJsonFile(usersFilePath, file);
+			return user;
+		},
+
+		async setDisabled(id, disabled) {
+			const file = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
+			const user = file.users.find((u) => u.id === id);
+			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
+			user.disabled = disabled;
+			await writeJsonFile(usersFilePath, file);
+		},
+
+		async touchLastLogin(id) {
+			const file = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
+			const user = file.users.find((u) => u.id === id);
+			if (!user) return;
+			const now = Date.now();
+			if (user.lastLoginAt) {
+				const prev = Date.parse(user.lastLoginAt);
+				if (Number.isFinite(prev) && now - prev < LAST_LOGIN_DEBOUNCE_MS) return;
+			}
+			user.lastLoginAt = new Date(now).toISOString();
+			await writeJsonFile(usersFilePath, file);
+		},
+
+		async deleteUser(id) {
+			const file = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
+			const before = file.users.length;
+			file.users = file.users.filter((u) => u.id !== id);
+			if (file.users.length === before) throw new ProviderError(`User "${id}" not found`, 404);
+			await writeJsonFile(usersFilePath, file);
+		}
+	};
+}

@@ -9,8 +9,8 @@ namespace Selva.GH.Features.Display.Services;
 /// </summary>
 public class MaterialCache
 {
-    private readonly List<ThreeMaterial> _materials = new();
-    private readonly Dictionary<string, int> _materialToId = new();
+    private readonly List<ThreeMaterial> _materials = new List<ThreeMaterial>();
+    private readonly Dictionary<string, int> _materialToId = new Dictionary<string, int>();
     private int _nextId;
 
     /// <summary>
@@ -26,7 +26,10 @@ public class MaterialCache
     {
         var key = GetMaterialKey(material);
 
-        if (_materialToId.TryGetValue(key, out var existingId)) return existingId;
+        if (_materialToId.TryGetValue(key, out var existingId))
+        {
+            return existingId;
+        }
 
         var newId = _nextId++;
         _materialToId[key] = newId;
@@ -72,10 +75,20 @@ public class MeshBatch
     public List<MaterialGroup> Groups { get; set; }
 
     /// <summary>
-    ///     Compressed binary data containing all vertices and faces.
+    ///     Binary geometry blob written by <see cref="BinaryGeometryWriter"/>: magic header,
+    ///     metadata JSON, quantized int16 (or float32) vertices, and uint32 indices.
+    ///     Travels as base64 inside the values JSON for now; will move to an out-of-band binary
+    ///     transport in a later phase. Field name is preserved for `.gh` file backward compatibility.
     /// </summary>
     [JsonProperty("compressedData")]
     public byte[] CompressedData { get; set; }
+
+    /// <summary>
+    ///     InstanceGuid of the WebDisplay GH component that produced this batch.
+    ///     Used for backtracking meshes to their source component.
+    /// </summary>
+    [JsonProperty("sourceComponentId")]
+    public string SourceComponentId { get; set; }
 }
 
 /// <summary>
@@ -104,21 +117,43 @@ public class MeshMetadata
 {
     [JsonProperty("name")] public string Name { get; set; }
 
-    [JsonProperty("vertexCount")] public int VertexCount { get; set; }
-
-    [JsonProperty("faceCount")] public int FaceCount { get; set; }
+    /// <summary>
+    ///     Layer path for grouping in the scene manager (e.g. "Structure/Walls").
+    /// </summary>
+    [JsonProperty("layer")]
+    public string Layer { get; set; }
 
     /// <summary>
-    ///     Offset in the combined vertex array (in number of floats, divide by 3 for vertex index).
+    ///     Original index of this mesh in the GH input tree, before material grouping.
+    ///     Together with sourceComponentId on MeshBatch, uniquely identifies the GH source.
     /// </summary>
-    [JsonProperty("vertexOffset")]
-    public int VertexOffset { get; set; }
+    [JsonProperty("originalIndex")]
+    public int OriginalIndex { get; set; }
 
     /// <summary>
-    ///     Offset in the combined face index array (in number of integers).
+    ///     Number of vertices in this mesh (each vertex is 3 components: x, y, z).
     /// </summary>
-    [JsonProperty("faceOffset")]
-    public int FaceOffset { get; set; }
+    [JsonProperty("vertexCount")]
+    public int VertexCount { get; set; }
+
+    /// <summary>
+    ///     Number of indices in this mesh (3 per triangle).
+    /// </summary>
+    [JsonProperty("indexCount")]
+    public int IndexCount { get; set; }
+
+    /// <summary>
+    ///     Index of this mesh's first vertex in the combined vertex array, in vertex-count units.
+    ///     The corresponding component offset into the int16/float32 typed array is VertexStart * 3.
+    /// </summary>
+    [JsonProperty("vertexStart")]
+    public int VertexStart { get; set; }
+
+    /// <summary>
+    ///     Index of this mesh's first index in the combined index array, in index-count units.
+    /// </summary>
+    [JsonProperty("indexStart")]
+    public int IndexStart { get; set; }
 
     [JsonProperty("metadata")] public Dictionary<string, string> Metadata { get; set; }
 }

@@ -1,0 +1,67 @@
+{
+	"name": "@selvajs/supabase-provider",
+	"version": "0.1.0",
+	"description": "Supabase (Auth + Postgres + Storage) implementations of @selvajs/platform interfaces",
+	"private": true,
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./auth": {
+			"source": "./src/auth/index.ts",
+			"types": "./dist/auth/index.d.ts",
+			"import": "./dist/auth/index.js"
+		},
+		"./data": {
+			"source": "./src/data/index.ts",
+			"types": "./dist/data/index.d.ts",
+			"import": "./dist/data/index.js"
+		},
+		"./storage": {
+			"source": "./src/storage/index.ts",
+			"types": "./dist/storage/index.d.ts",
+			"import": "./dist/storage/index.js"
+		},
+		"./permissions": {
+			"source": "./src/permissions/index.ts",
+			"types": "./dist/permissions/index.d.ts",
+			"import": "./dist/permissions/index.js"
+		},
+		"./userProfile": {
+			"source": "./src/userProfile/index.ts",
+			"types": "./dist/userProfile/index.d.ts",
+			"import": "./dist/userProfile/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"src",
+		"supabase"
+	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"type-check": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"supabase:start": "supabase start",
+		"supabase:stop": "supabase stop",
+		"supabase:reset": "supabase db reset"
+	},
+	"dependencies": {
+		"@selvajs/platform": "workspace:*",
+		"@supabase/supabase-js": "^2.104.1",
+		"sharp": "^0.34.5"
+	},
+	"devDependencies": {
+		"@types/node": "catalog:",
+		"supabase": "^2.95.3",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	}
+}

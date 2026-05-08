@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { ModeWatcher } from 'mode-watcher';
-	import { Toaster, toast, initializeFooterContext } from '@selva/shared';
+	import { Toaster, toast, initializeFooterContext } from '@selvajs/ui';
 	import { onMount } from 'svelte';
 
 	initializeFooterContext();

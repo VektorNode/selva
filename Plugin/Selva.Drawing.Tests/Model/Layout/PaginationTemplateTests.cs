@@ -1,0 +1,265 @@
+using System.Collections.Generic;
+using Selva.Drawing.Model;
+using Selva.Drawing.Model.Elements;
+using Selva.Drawing.Model.Geometry;
+using Selva.Drawing.Model.Layout;
+using Path = Selva.Drawing.Model.Geometry.Path;
+
+namespace Selva.Drawing.Tests.Model.Layout;
+
+public class PaginationTemplateTests
+{
+	private static readonly PaperSize TenByTen = new PaperSize(10, 10, "T10");
+	private static readonly Margins NoMargin = Margins.Zero;
+
+	[Fact]
+	public void Header_height_shrinks_content_rect_so_more_pages_are_emitted()
+	{
+		// Three 3mm rects on a 10mm tall page with no chrome → all three fit (9mm) on one page.
+		var stack = new Stack
+		{
+			Orientation = StackOrientation.Vertical,
+			Spacing = 0,
+			Children = new DrawElement[] { Rect(2, 3), Rect(2, 3), Rect(2, 3) },
+		};
+		var withoutTemplate = PaginationPass.Paginate(stack, TenByTen, NoMargin);
+		Assert.Single(withoutTemplate);
+
+		// Same content with a 5mm header in Content placement — content rect is now 5mm tall,
+		// so only one rect fits per page → three pages. (Margin placement leaves the body
+		// alone and is verified separately.)
+		var template = new PageTemplate
+		{
+			HeaderHeight = 5,
+			HeaderPlacement = ChromePlacement.Content,
+		};
+		var pages = PaginationPass.Paginate(stack, TenByTen, NoMargin, template);
+		Assert.Equal(3, pages.Count);
+	}
+
+	[Fact]
+	public void Header_text_with_page_token_substitutes_per_page()
+	{
+		var headerText = new TextElement
+		{
+			Text = "Page {page} of {pages}",
+			Position = new Point2D(0, 5),
+		};
+		// Wrap the header in a group with explicit bounds so PaginationPass measures it
+		// independently of font metrics that vary by platform.
+		var header = new GroupElement
+		{
+			Children = new DrawElement[] { headerText },
+			BoundsOverride = new BoundingBox(0, 0, 10, 2),
+		};
+
+		// Content placement so the header reserves space and forces the rects onto separate
+		// pages. (Default Margin placement would let all three fit on one page.)
+		var template = new PageTemplate
+		{
+			Header = header,
+			HeaderHeight = 2,
+			HeaderPlacement = ChromePlacement.Content,
+		};
+		// 8mm content rect (10mm page - 2mm header). Three 5mm rects → only one per page.
+		var stack = new Stack
+		{
+			Orientation = StackOrientation.Vertical,
+			Spacing = 0,
+			Children = new DrawElement[] { Rect(2, 5), Rect(2, 5), Rect(2, 5) },
+		};
+
+		var pages = PaginationPass.Paginate(stack, TenByTen, NoMargin, template);
+		Assert.Equal(3, pages.Count);
+
+		var headerTexts = new List<string>();
+		for (var i = 0; i < pages.Count; i++)
+			headerTexts.Add(FindFirstText(pages[i].Content));
+
+		Assert.Equal("Page 1 of 3", headerTexts[0]);
+		Assert.Equal("Page 2 of 3", headerTexts[1]);
+		Assert.Equal("Page 3 of 3", headerTexts[2]);
+	}
+
+	[Fact]
+	public void Title_flows_through_to_Page_Title()
+	{
+		var template = new PageTemplate { Title = "Q2 Report" };
+		var pages = PaginationPass.Paginate(Rect(2, 3), TenByTen, NoMargin, template);
+		Assert.Equal("Q2 Report", pages[0].Title);
+	}
+
+	[Fact]
+	public void Title_token_in_header_substitutes()
+	{
+		var headerText = new TextElement { Text = "{title}", Position = Point2D.Zero };
+		var header = new GroupElement
+		{
+			Children = new DrawElement[] { headerText },
+			BoundsOverride = new BoundingBox(0, 0, 10, 2),
+		};
+		var template = new PageTemplate { Title = "Hello", Header = header, HeaderHeight = 2 };
+		var pages = PaginationPass.Paginate(Rect(2, 3), TenByTen, NoMargin, template);
+		Assert.Equal("Hello", FindFirstText(pages[0].Content));
+	}
+
+	[Fact]
+	public void Footer_in_margin_placement_is_anchored_below_the_page_rect()
+	{
+		// 20×20 paper, 5mm margin → page rect (5,5)-(15,15). Default Margin placement puts a
+		// 3mm footer flush with the bottom paper edge, hanging into the bottom margin: y=0..3.
+		// The body keeps the full content rect.
+		var paper = new PaperSize(20, 20, "T20");
+		var margins = Margins.Uniform(5);
+		var footer = new GroupElement
+		{
+			Children = new DrawElement[] { Rect(2, 3) },
+			BoundsOverride = new BoundingBox(0, 0, 2, 3),
+		};
+		var template = new PageTemplate { Footer = footer, FooterHeight = 3 };
+
+		var pages = PaginationPass.Paginate(Rect(4, 4), paper, margins, template);
+		Assert.Single(pages);
+
+		var pageBounds = pages[0].Content.ComputeBounds();
+		// Footer bottom is at y=0 (paper edge); body's top is at y=15 (page rect top).
+		Assert.Equal(0, pageBounds.MinY, 6);
+		Assert.Equal(15, pageBounds.MaxY, 6);
+	}
+
+	[Fact]
+	public void Footer_in_content_placement_sits_at_bottom_of_page_rect()
+	{
+		// Same setup as above but with explicit Content placement: the footer reserves space
+		// inside the page rect, sitting at y=5..8 (just inside the bottom margin).
+		var paper = new PaperSize(20, 20, "T20");
+		var margins = Margins.Uniform(5);
+		var footer = new GroupElement
+		{
+			Children = new DrawElement[] { Rect(2, 3) },
+			BoundsOverride = new BoundingBox(0, 0, 2, 3),
+		};
+		var template = new PageTemplate
+		{
+			Footer = footer,
+			FooterHeight = 3,
+			FooterPlacement = ChromePlacement.Content,
+		};
+
+		var pages = PaginationPass.Paginate(Rect(4, 4), paper, margins, template);
+		Assert.Single(pages);
+
+		var pageBounds = pages[0].Content.ComputeBounds();
+		Assert.Equal(5, pageBounds.MinY, 6);
+		Assert.Equal(15, pageBounds.MaxY, 6);
+	}
+
+	[Fact]
+	public void Footer_in_edge_placement_shrinks_body_when_band_intrudes_into_content_rect()
+	{
+		// 20×20 paper, 3mm margin → page rect (3,3)-(17,17). Footer: EdgeOffset=2, height=4 →
+		// band occupies y=2..6, which extends 3mm into the content rect (2+4-3=3). The body
+		// content rect is shrunk by 3mm from the bottom → content rect bottom rises to y=6.
+		// Separately: a band that fits fully within the margin (offset+height ≤ margin) should
+		// leave the body rect untouched.
+		var paper = new PaperSize(20, 20, "T20");
+		var margins = Margins.Uniform(3);
+		var footer = new GroupElement
+		{
+			Children = new DrawElement[] { Rect(2, 4) },
+			BoundsOverride = new BoundingBox(0, 0, 2, 4),
+		};
+		var template = new PageTemplate
+		{
+			Footer = footer,
+			FooterHeight = 4,
+			FooterPlacement = ChromePlacement.Edge,
+			FooterEdgeOffset = 2,
+		};
+
+		// reserve = max(0, 2+4-3) = 3 → content rect bottom at 3+3 = 6
+		var body = PaginationPass.PaginateBody(Rect(4, 4), paper, margins, new BandConfig
+		{
+			FooterHeight = 4,
+			FooterPlacement = ChromePlacement.Edge,
+			FooterEdgeOffset = 2,
+		});
+		Assert.Equal(6, body.ContentRect.MinY, 6);
+
+		// Band within margin (offset=1, height=2, margin=3 → reserve=0) → body unaffected.
+		var bodyNoShrink = PaginationPass.PaginateBody(Rect(4, 4), paper, margins, new BandConfig
+		{
+			FooterHeight = 2,
+			FooterPlacement = ChromePlacement.Edge,
+			FooterEdgeOffset = 1,
+		});
+		Assert.Equal(3, bodyNoShrink.ContentRect.MinY, 6);
+	}
+
+	[Fact]
+	public void Header_without_explicit_height_is_measured_from_bounds()
+	{
+		// Header is 4mm tall, no explicit HeaderHeight → measured. Page is 10mm → content rect
+		// is 6mm. Two 3mm rects fit on page 1; rest spill.
+		var header = new GroupElement
+		{
+			Children = new DrawElement[] { Rect(2, 4) },
+			BoundsOverride = new BoundingBox(0, 0, 2, 4),
+		};
+		// Content placement so the auto-measured header height shrinks the content rect.
+		var template = new PageTemplate
+		{
+			Header = header,
+			HeaderPlacement = ChromePlacement.Content,
+		};
+
+		var stack = new Stack
+		{
+			Orientation = StackOrientation.Vertical,
+			Spacing = 0,
+			Children = new DrawElement[] { Rect(2, 3), Rect(2, 3), Rect(2, 3) },
+		};
+		var pages = PaginationPass.Paginate(stack, TenByTen, NoMargin, template);
+		Assert.Equal(2, pages.Count);
+	}
+
+	[Fact]
+	public void Empty_content_with_template_still_emits_one_page_with_chrome()
+	{
+		var headerText = new TextElement { Text = "{page}/{pages}", Position = Point2D.Zero };
+		var header = new GroupElement
+		{
+			Children = new DrawElement[] { headerText },
+			BoundsOverride = new BoundingBox(0, 0, 10, 2),
+		};
+		var template = new PageTemplate { Header = header, HeaderHeight = 2 };
+		var pages = PaginationPass.Paginate(null, TenByTen, NoMargin, template);
+		Assert.Single(pages);
+		Assert.Equal("1/1", FindFirstText(pages[0].Content));
+	}
+
+	private static PathElement Rect(double w, double h) =>
+		new PathElement
+		{
+			Path = new Path.Builder()
+				.MoveTo(0, 0).LineTo(w, 0).LineTo(w, h).LineTo(0, h).Close().Build(),
+		};
+
+	// Walks the resolved page tree and returns the Text of the first TextElement encountered.
+	private static string FindFirstText(DrawElement element)
+	{
+		switch (element)
+		{
+			case null: return null;
+			case TextElement t: return t.Text;
+			case GroupElement g:
+				foreach (var c in g.Children)
+				{
+					var v = FindFirstText(c);
+					if (v != null) return v;
+				}
+				return null;
+			default: return null;
+		}
+	}
+}

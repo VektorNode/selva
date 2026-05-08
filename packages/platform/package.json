@@ -1,0 +1,93 @@
+{
+	"name": "@selvajs/platform",
+	"version": "0.1.0",
+	"description": "Pure TypeScript interfaces for Selva platform providers (auth, definitions, compute)",
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./auth": {
+			"source": "./src/auth/index.ts",
+			"types": "./dist/auth/index.d.ts",
+			"import": "./dist/auth/index.js"
+		},
+		"./data": {
+			"source": "./src/data/index.ts",
+			"types": "./dist/data/index.d.ts",
+			"import": "./dist/data/index.js"
+		},
+		"./storage": {
+			"source": "./src/storage/index.ts",
+			"types": "./dist/storage/index.d.ts",
+			"import": "./dist/storage/index.js"
+		},
+		"./permissions": {
+			"source": "./src/permissions/index.ts",
+			"types": "./dist/permissions/index.d.ts",
+			"import": "./dist/permissions/index.js"
+		},
+		"./userProfile": {
+			"source": "./src/userProfile/index.ts",
+			"types": "./dist/userProfile/index.d.ts",
+			"import": "./dist/userProfile/index.js"
+		},
+		"./projects": {
+			"source": "./src/projects/index.ts",
+			"types": "./dist/projects/index.d.ts",
+			"import": "./dist/projects/index.js"
+		},
+		"./definitions/schemas": {
+			"source": "./src/definitions/schemas.ts",
+			"types": "./dist/definitions/schemas.d.ts",
+			"import": "./dist/definitions/schemas.js"
+		},
+		"./computeServer": {
+			"source": "./src/computeServer/index.ts",
+			"types": "./dist/computeServer/index.d.ts",
+			"import": "./dist/computeServer/index.js"
+		},
+		"./testing": {
+			"source": "./src/testing/index.ts",
+			"types": "./dist/testing/index.d.ts",
+			"import": "./dist/testing/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"src"
+	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"type-check": "tsc --noEmit"
+	},
+	"dependencies": {
+		"zod": "^4.3.6"
+	},
+	"peerDependencies": {
+		"sharp": "^0.34.0",
+		"vitest": "^3.2.4"
+	},
+	"peerDependenciesMeta": {
+		"sharp": {
+			"optional": true
+		},
+		"vitest": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"sharp": "^0.34.5",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	}
+}

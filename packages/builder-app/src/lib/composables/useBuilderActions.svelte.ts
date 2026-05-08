@@ -1,8 +1,8 @@
-import { toast } from '@selva/shared';
-import type { DiscoveredInput, DiscoveredOutput, GroupConfig } from '@selva/shared';
+import { toast } from '@selvajs/ui';
+import type { DiscoveredInput, DiscoveredOutput, GroupConfig, LayoutItem } from '@selvajs/schemas';
 import {
 	handleItemDrop,
-	handleGroupItemDrop,
+	type ItemDropOptions,
 	addTab,
 	removeTab,
 	addGroup,
@@ -10,7 +10,9 @@ import {
 	removeItem,
 	reorderTabs,
 	reorderGroups,
-	batchSetNumberWidgetType
+	moveGroupToTab,
+	batchSetNumberWidgetType,
+	isInputItem
 } from '$lib/features/builder/operations';
 import type { useBuilderState } from './useBuilderState.svelte';
 
@@ -31,8 +33,7 @@ export function useBuilderActions(
 		// Save snapshot before mutation
 		builderState.history.push($state.snapshot(schema));
 
-		const { dropType, data, targetItem, dropPosition, sourceTabId, sourceGroupId, sourceItem } =
-			event.detail;
+		const { dropType, data, targetItem, dropPosition } = event.detail;
 
 		let group: GroupConfig | undefined;
 
@@ -46,123 +47,39 @@ export function useBuilderActions(
 
 		if (!group) return;
 
-		// Handle moving items within layout
-		if (dropType === 'group-item') {
-			handleGroupItemDrop(
-				schema,
-				tabId,
-				groupId,
-				sourceTabId,
-				sourceGroupId,
-				sourceItem,
-				targetItem,
-				dropPosition
-			);
-			return;
-		}
+		const base: Pick<ItemDropOptions, 'schema' | 'group' | 'availableInputs' | 'availableOutputs' | 'targetItem' | 'dropPosition'> = {
+			schema,
+			group,
+			availableInputs: builderState.state.availableInputs,
+			availableOutputs: builderState.state.availableOutputs,
+			targetItem,
+			dropPosition
+		};
 
-		// Handle dropping inputs or outputs
 		if (dropType === 'input') {
 			const param = data as DiscoveredInput;
-			handleItemDrop(
-				schema,
-				group,
-				param.id,
-				param.nickname || 'unnamed',
-				'input',
-				builderState.state.availableInputs,
-				builderState.state.availableOutputs,
-				param.type,
-				undefined,
-				targetItem,
-				dropPosition
-			);
+			handleItemDrop({ ...base, paramId: param.id, displayName: param.nickname || 'unnamed', itemType: 'input', paramType: param.type });
 		} else if (dropType === 'output') {
 			const output = data as DiscoveredOutput;
-			const widgetType = output.type === 'file' ? 'file' : 'text';
-			handleItemDrop(
-				schema,
-				group,
-				output.id,
-				output.nickname,
-				'output',
-				builderState.state.availableInputs,
-				builderState.state.availableOutputs,
-				undefined,
-				widgetType,
-				targetItem,
-				dropPosition,
-				output.type
-			);
+			handleItemDrop({ ...base, paramId: output.id, displayName: output.nickname, itemType: 'output', widgetType: output.type === 'file' ? 'file' : output.type === 'chart' ? 'chart' : 'text', outputType: output.type });
 		}
 	}
 
-	function onReorder(event: CustomEvent) {
+	function onReorder(newItems: LayoutItem[], tabId: string, groupId: string) {
 		const context = ensureSchema();
 		if (!context) return;
 		const { builderState, schema } = context;
 
-		// Save snapshot before mutation
 		builderState.history.push($state.snapshot(schema));
 
-		const {
-			sourceItem,
-			sourceTabId,
-			sourceGroupId,
-			targetItem,
-			targetTabId,
-			targetGroupId,
-			dropPosition
-		} = event.detail;
-
-		if (sourceItem.id === targetItem.id) return;
-
-		let sourceGroup: GroupConfig | undefined;
-		let targetGroup: GroupConfig | undefined;
-
+		let group: GroupConfig | undefined;
 		if (schema.layout.type === 'tabbed') {
-			const sourceTab = schema.layout.tabs.find((t) => t.id === sourceTabId);
-			const targetTab = schema.layout.tabs.find((t) => t.id === targetTabId);
-			if (!sourceTab || !targetTab) return;
-
-			sourceGroup = sourceTab.groups.find((g) => g.id === sourceGroupId);
-			targetGroup = targetTab.groups.find((g) => g.id === targetGroupId);
+			group = schema.layout.tabs.find((t) => t.id === tabId)?.groups.find((g) => g.id === groupId);
 		} else if (schema.layout.type === 'flat') {
-			sourceGroup = schema.layout.groups.find((g) => g.id === sourceGroupId);
-			targetGroup = schema.layout.groups.find((g) => g.id === targetGroupId);
+			group = schema.layout.groups.find((g) => g.id === groupId);
 		}
 
-		if (!sourceGroup || !targetGroup) return;
-
-		const sourceIndex = sourceGroup.items.findIndex((i) => i.id === sourceItem.id);
-		if (sourceIndex < 0) return;
-
-		// Store the target index BEFORE removing the source item
-		let targetIndex = targetGroup.items.findIndex((i) => i.id === targetItem.id);
-
-		const [movedItem] = sourceGroup.items.splice(sourceIndex, 1);
-
-		if (targetIndex < 0) {
-			targetGroup.items.push(movedItem);
-		} else {
-			// When moving within the same group, we need to account for the removed item
-			const isSameGroup = sourceGroup === targetGroup;
-
-			if (dropPosition === 'before') {
-				// Adjust target index if we removed an item before it
-				if (isSameGroup && sourceIndex < targetIndex) {
-					targetIndex--;
-				}
-				targetGroup.items.splice(targetIndex, 0, movedItem);
-			} else {
-				// dropPosition === 'after'
-				// Adjust target index only if we removed an item BEFORE the target
-				if (isSameGroup && sourceIndex < targetIndex) {
-					targetIndex--;
-				}
-				targetGroup.items.splice(targetIndex + 1, 0, movedItem);
-			}
-		}
+		if (group) group.items = newItems;
 	}
 
 	function onAddToGroup(tabId: string, groupId: string, item: DiscoveredInput | DiscoveredOutput) {
@@ -188,25 +105,19 @@ export function useBuilderActions(
 
 		if (!group) return;
 
-		const itemType = 'name' in item ? 'input' : 'output';
-		const paramType = 'name' in item ? item.type : undefined;
-		const widgetType = 'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
-		const outputType = 'name' in item ? undefined : item.type;
-
-		handleItemDrop(
+		const asInput = isInputItem(item);
+		handleItemDrop({
 			schema,
 			group,
-			item.id,
-			item.nickname || ('name' in item ? item.name : 'Unknown'),
-			itemType,
-			builderState.state.availableInputs,
-			builderState.state.availableOutputs,
-			paramType,
-			widgetType,
-			undefined,
-			undefined,
-			outputType
-		);
+			paramId: item.id,
+			displayName: item.nickname || (asInput ? item.name : 'Unknown'),
+			itemType: asInput ? 'input' : 'output',
+			availableInputs: builderState.state.availableInputs,
+			availableOutputs: builderState.state.availableOutputs,
+			paramType: asInput ? item.type : undefined,
+			widgetType: asInput ? undefined : item.type === 'file' ? 'file' : 'text',
+			outputType: asInput ? undefined : item.type
+		});
 
 		toast.success(`Added to ${tabLabel} / ${group.label}`);
 	}
@@ -268,26 +179,19 @@ export function useBuilderActions(
 				toast.success(`Created new group: ${groupLabel}`);
 			}
 
-			// Add item to group
-			const itemType = 'name' in item ? 'input' : 'output';
-			const paramType = 'name' in item ? item.type : undefined;
-			const widgetType = 'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
-			const outputType = 'name' in item ? undefined : item.type;
-
-			handleItemDrop(
+			const asInput = isInputItem(item);
+			handleItemDrop({
 				schema,
 				group,
-				item.id,
-				item.nickname || ('name' in item ? item.name : 'Unknown'),
-				itemType,
-				builderState.state.availableInputs,
-				builderState.state.availableOutputs,
-				paramType,
-				widgetType,
-				undefined,
-				undefined,
-				outputType
-			);
+				paramId: item.id,
+				displayName: item.nickname || (asInput ? item.name : 'Unknown'),
+				itemType: asInput ? 'input' : 'output',
+				availableInputs: builderState.state.availableInputs,
+				availableOutputs: builderState.state.availableOutputs,
+				paramType: asInput ? item.type : undefined,
+				widgetType: asInput ? undefined : item.type === 'file' ? 'file' : 'text',
+				outputType: asInput ? undefined : item.type
+			});
 
 			toast.success(`Added ${item.nickname || 'item'} to ${tab.label} / ${group.label}`);
 		} else if (schema.layout.type === 'flat') {
@@ -303,26 +207,19 @@ export function useBuilderActions(
 				toast.success(`Created new group: ${groupLabel}`);
 			}
 
-			// Add item to group
-			const itemType = 'name' in item ? 'input' : 'output';
-			const paramType = 'name' in item ? item.type : undefined;
-			const widgetType = 'name' in item ? undefined : item.type === 'file' ? 'file' : 'text';
-			const outputType = 'name' in item ? undefined : item.type;
-
-			handleItemDrop(
+			const asInput = isInputItem(item);
+			handleItemDrop({
 				schema,
 				group,
-				item.id,
-				item.nickname || ('name' in item ? item.name : 'Unknown'),
-				itemType,
-				builderState.state.availableInputs,
-				builderState.state.availableOutputs,
-				paramType,
-				widgetType,
-				undefined,
-				undefined,
-				outputType
-			);
+				paramId: item.id,
+				displayName: item.nickname || (asInput ? item.name : 'Unknown'),
+				itemType: asInput ? 'input' : 'output',
+				availableInputs: builderState.state.availableInputs,
+				availableOutputs: builderState.state.availableOutputs,
+				paramType: asInput ? item.type : undefined,
+				widgetType: asInput ? undefined : item.type === 'file' ? 'file' : 'text',
+				outputType: asInput ? undefined : item.type
+			});
 
 			toast.success(`Added ${item.nickname || 'item'} to ${group.label}`);
 		}
@@ -379,6 +276,27 @@ export function useBuilderActions(
 		reorderGroups(context.schema, tabId, fromIndex, toIndex);
 	}
 
+	function onMoveGroupToTab(sourceTabId: string, groupId: string, targetTabId: string) {
+		const context = ensureSchema();
+		if (!context) return;
+		const { builderState, schema } = context;
+
+		if (sourceTabId === targetTabId) return;
+
+		builderState.history.push($state.snapshot(schema));
+
+		const moved = moveGroupToTab(schema, sourceTabId, groupId, targetTabId);
+		if (!moved) return;
+
+		if (schema.layout.type === 'tabbed') {
+			const targetTab = schema.layout.tabs.find((t) => t.id === targetTabId);
+			if (targetTab) {
+				builderState.state.activeTabId = targetTabId;
+				toast.success(`Moved group to ${targetTab.label}`);
+			}
+		}
+	}
+
 	function onAddGroup(tabId: string) {
 		const context = ensureSchema();
 		if (!context) return;
@@ -407,6 +325,131 @@ export function useBuilderActions(
 		context.builderState.history.push($state.snapshot(context.schema));
 
 		removeItem(context.schema, tabId, groupId, itemId);
+	}
+
+	function onAddLineBreak(tabId: string, groupId: string) {
+		const context = ensureSchema();
+		if (!context) return;
+		const { builderState, schema } = context;
+
+		builderState.history.push($state.snapshot(schema));
+
+		let group: GroupConfig | undefined;
+		if (schema.layout.type === 'tabbed') {
+			group = schema.layout.tabs.find((t) => t.id === tabId)?.groups.find((g) => g.id === groupId);
+		} else if (schema.layout.type === 'flat') {
+			group = schema.layout.groups.find((g) => g.id === groupId);
+		}
+		if (!group) return;
+
+		group.items.push({ id: crypto.randomUUID().substring(0, 8), type: 'linebreak' });
+	}
+
+	/**
+	 * Bulk-import the given GH group names: for each, create (or reuse) a builder
+	 * group with the same label in the active tab (or flat layout) and add every
+	 * unplaced input/output whose `groupName` matches.
+	 *
+	 * Returns the number of items added so the caller can surface a toast.
+	 */
+	function onImportGhGroups(
+		groupNames: string[],
+		availableInputs: DiscoveredInput[],
+		availableOutputs: DiscoveredOutput[],
+		placedIds: Set<string>
+	) {
+		const context = ensureSchema();
+		if (!context) return;
+		const { builderState, schema } = context;
+
+		if (groupNames.length === 0) return;
+
+		builderState.history.push($state.snapshot(schema));
+
+		let tabId = '';
+		if (schema.layout.type === 'tabbed') {
+			if (builderState.state.activeTabId) {
+				tabId = builderState.state.activeTabId;
+			} else if (schema.layout.tabs.length > 0) {
+				tabId = schema.layout.tabs[0].id;
+			} else {
+				const newTabId = addTab(schema);
+				tabId = newTabId;
+				builderState.state.activeTabId = newTabId;
+			}
+		}
+
+		let totalAdded = 0;
+
+		for (const groupName of groupNames) {
+			let group: GroupConfig | undefined;
+
+			if (schema.layout.type === 'tabbed') {
+				const tab = schema.layout.tabs.find((t) => t.id === tabId);
+				if (!tab) continue;
+
+				group = tab.groups.find((g) => g.label.toLowerCase() === groupName.toLowerCase());
+				if (!group) {
+					addGroup(schema, tabId);
+					group = tab.groups[tab.groups.length - 1];
+					group.label = groupName;
+				}
+			} else if (schema.layout.type === 'flat') {
+				group = schema.layout.groups.find(
+					(g) => g.label.toLowerCase() === groupName.toLowerCase()
+				);
+				if (!group) {
+					addGroup(schema, '');
+					group = schema.layout.groups[schema.layout.groups.length - 1];
+					group.label = groupName;
+				}
+			}
+
+			if (!group) continue;
+
+			const inputsForGroup = availableInputs.filter(
+				(i) => i.groupName?.trim() === groupName && !placedIds.has(i.id)
+			);
+			const outputsForGroup = availableOutputs.filter(
+				(o) => o.groupName?.trim() === groupName && !placedIds.has(o.id)
+			);
+
+			for (const param of inputsForGroup) {
+				handleItemDrop({
+					schema,
+					group,
+					paramId: param.id,
+					displayName: param.nickname || param.name || 'unnamed',
+					itemType: 'input',
+					availableInputs,
+					availableOutputs,
+					paramType: param.type
+				});
+				totalAdded++;
+			}
+
+			for (const output of outputsForGroup) {
+				handleItemDrop({
+					schema,
+					group,
+					paramId: output.id,
+					displayName: output.nickname,
+					itemType: 'output',
+					availableInputs,
+					availableOutputs,
+					widgetType:
+						output.type === 'file' ? 'file' : output.type === 'chart' ? 'chart' : 'text',
+					outputType: output.type
+				});
+				totalAdded++;
+			}
+		}
+
+		if (totalAdded > 0) {
+			toast.success(`Imported ${totalAdded} item(s) from ${groupNames.length} GH group(s)`);
+		} else {
+			toast.info('No new items to import — all already placed.');
+		}
 	}
 
 	function onBatchConvertToSliders(onSuccess: () => void) {
@@ -452,10 +495,13 @@ export function useBuilderActions(
 		onRemoveTab,
 		onReorderTabs,
 		onReorderGroups,
+		onMoveGroupToTab,
 		onAddGroup,
 		onRemoveGroup,
 		onRemoveItem,
+		onAddLineBreak,
 		onBatchConvertToSliders,
-		onBatchConvertToNumberInputs
+		onBatchConvertToNumberInputs,
+		onImportGhGroups
 	};
 }

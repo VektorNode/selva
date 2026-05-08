@@ -8,10 +8,75 @@ import {
 	WEBSOCKET_RECONNECT_INTERVAL,
 	DEFAULT_WEBSOCKET_PORT
 } from '$lib/app.config';
-import type { UISchema } from '@selva/shared';
+import type { UISchema } from '@selvajs/schemas';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
-export type MessageHandler = (data: unknown) => void;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type MessageHandler = (data: any) => void;
+
+// ============================================================================
+// Incoming message types (matching the C# WebSocket protocol)
+// ============================================================================
+
+export interface WsSessionMessage {
+	sessionId: string;
+	type: string;
+}
+
+export interface WsInitialDataMessage extends WsSessionMessage {
+	schema?: import('@selvajs/schemas').UISchema;
+	availableParams?: import('@selvajs/schemas').DiscoveredParameters;
+	currentValues?: Record<string, unknown>;
+	outputs?: Record<string, unknown>;
+	isSolving?: boolean;
+}
+
+export interface WsOutputsMessage extends WsSessionMessage {
+	outputs?: Record<string, unknown>;
+	fileOutputs?: Record<string, unknown>;
+	binaryBatchCount?: number;
+	modelUnits?: string;
+}
+
+export interface WsSchemaUpdatedMessage extends WsSessionMessage {
+	schema: import('@selvajs/schemas').UISchema;
+	removedIds?: string[];
+}
+
+export interface WsMetadataUpdatedMessage extends WsSessionMessage {
+	changedParams?: Array<{
+		id: string;
+		nickname?: string;
+		description?: string;
+		minimum?: number;
+		maximum?: number;
+		stepSize?: number;
+		options?: { [k: string]: string | undefined };
+	}>;
+}
+
+export interface WsParametersAddedMessage extends WsSessionMessage {
+	availableParams?: import('@selvajs/schemas').DiscoveredParameters;
+}
+
+export interface WsSyncPreviewMessage extends WsSessionMessage {
+	fromGH: SyncChange[];
+	toGH: SyncChange[];
+}
+
+export interface WsSyncAppliedMessage extends WsSessionMessage {
+	success: boolean;
+	message?: string;
+}
+
+export interface WsSchemaSavedMessage extends WsSessionMessage {
+	success: boolean;
+	message?: string;
+}
+
+export interface WsCurrentValuesMessage extends WsSessionMessage {
+	values: Record<string, unknown>;
+}
 
 /**
  * Represents a single metadata difference between Grasshopper and schema
@@ -46,6 +111,7 @@ export class WebSocketState {
 	private maxReconnectAttempts = WEBSOCKET_MAX_RECONNECT_ATTEMPTS;
 	private reconnectDelay = WEBSOCKET_RECONNECT_INTERVAL;
 	private isConnecting = false;
+	private connectPromise: Promise<boolean> | null = null;
 	private _pendingValueUpdate: { sessionId: string; values: Record<string, unknown> } | null = null;
 	private _serverDisconnected = false;
 	private _shouldReloadOnReconnect = false;
@@ -117,15 +183,31 @@ export class WebSocketState {
 	 * Connect to the WebSocket server
 	 */
 	connect(): Promise<boolean> {
-		if (this.socket?.readyState === WebSocket.OPEN || this.isConnecting) {
+		if (this.socket?.readyState === WebSocket.OPEN) {
 			return Promise.resolve(true);
+		}
+		// If a connect is already in flight, return its promise so concurrent
+		// callers all see the same outcome instead of getting an early `true`.
+		if (this.isConnecting && this.connectPromise) {
+			return this.connectPromise;
 		}
 
 		this.isConnecting = true;
 
-		return new Promise((resolve) => {
+		this.connectPromise = new Promise((resolve) => {
+			let settled = false;
+			const settle = (value: boolean) => {
+				if (settled) return;
+				settled = true;
+				this.isConnecting = false;
+				this.connectPromise = null;
+				resolve(value);
+			};
+
 			try {
 				this.socket = new WebSocket(this.url);
+				// Receive binary frames as ArrayBuffer (the SLVA mesh blob transport).
+				this.socket.binaryType = 'arraybuffer';
 
 				this.socket.onopen = () => {
 					// If reconnecting after server disconnect, reload the page to get fresh state
@@ -136,47 +218,51 @@ export class WebSocketState {
 
 					this.reconnectAttempts = 0;
 					this._serverDisconnected = false;
-					this.isConnecting = false;
 					this.connected = true;
-					resolve(true);
+					settle(true);
 				};
 
 				this.socket.onmessage = (event) => {
 					try {
-						// Skip empty messages (note: server no longer sends ping messages)
+						// Binary frame — SLVA mesh blob from the server.
+						if (event.data instanceof ArrayBuffer) {
+							const handlers = this.messageHandlers.get('binaryFrame');
+							if (handlers) {
+								handlers.forEach((handler) => handler(event.data as ArrayBuffer));
+							}
+							return;
+						}
+
 						if (!event.data || typeof event.data !== 'string' || event.data.trim() === '') {
-							return; // Silently ignore empty messages
+							return;
 						}
 
 						const message = JSON.parse(event.data);
 						this.handleMessage(message);
 					} catch (error) {
-						// Log the raw message for debugging, but truncate if too long
-						// const rawData = event.data?.toString() || '';
 						console.error('[WebSocket] Failed to parse message:', error);
-						// console.debug('[WebSocket] Raw message data:', preview);
 					}
 				};
 
 				this.socket.onerror = (error) => {
 					console.error('[WebSocket] Error:', error);
-					this.isConnecting = false;
-					resolve(false);
+					settle(false);
 				};
 
 				this.socket.onclose = () => {
-					// console.log('[WebSocket] Disconnected');
-					this.isConnecting = false;
 					this.socket = null;
 					this.connected = false;
+					// If we closed before opening, settle false; otherwise this is a no-op.
+					settle(false);
 					this.attemptReconnect();
 				};
 			} catch (error) {
 				console.error('[WebSocket] Connection failed:', error);
-				this.isConnecting = false;
-				resolve(false);
+				settle(false);
 			}
 		});
+
+		return this.connectPromise;
 	}
 
 	/**
@@ -205,8 +291,14 @@ export class WebSocketState {
 
 		this.reconnectAttempts = 0;
 		this.connected = false;
+		this.isConnecting = false;
+		this.connectPromise = null;
 		this.batchedValues = {};
 		this._pendingValueUpdate = null;
+		// Clear server-disconnect flags so a future connect() doesn't think
+		// we're still in the "server went away, force reload on reconnect" path.
+		this._serverDisconnected = false;
+		this._shouldReloadOnReconnect = false;
 	}
 
 	/**

@@ -1,6 +1,6 @@
 ## Description
 
-<!-- What changes did you make? -->
+<!-- What changes did you make and why? Reference related issue if any. -->
 
 ## Type of Change
 
@@ -18,3 +18,5 @@
 - [ ] Tested locally
 - [ ] Added/updated tests
 - [ ] All tests pass
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full checklist.

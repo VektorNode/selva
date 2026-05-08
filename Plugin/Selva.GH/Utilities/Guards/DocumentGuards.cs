@@ -1,5 +1,5 @@
 using Grasshopper.Kernel;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 
 namespace Selva.GH.Utilities.Guards;
 
@@ -43,9 +43,15 @@ public static class DocumentGuards
     /// </summary>
     public static bool DocumentAndSchemaValid(GH_Document document, UISchema schema, out string error)
     {
-        if (!IsValid(document, out error)) return false;
+        if (!IsValid(document, out error))
+        {
+            return false;
+        }
 
-        if (!HasSchema(schema, out error)) return false;
+        if (!HasSchema(schema, out error))
+        {
+            return false;
+        }
 
         error = null;
         return true;

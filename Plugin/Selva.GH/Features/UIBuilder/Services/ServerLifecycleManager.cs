@@ -13,34 +13,41 @@ namespace Selva.GH.Features.UIBuilder.Services;
 /// </summary>
 public class ServerLifecycleManager : IDisposable
 {
-    private readonly CommunicationHandler _communicationHandler;
-    private readonly object _lock = new();
+    private readonly WebSocketTransport _webSocketTransport;
+    private readonly object _lock = new object();
     private readonly LocalWebServer _webServer;
     private bool _disposed;
     private bool _isStarting;
 
-    public ServerLifecycleManager(LocalWebServer webServer, CommunicationHandler communicationHandler)
+    public ServerLifecycleManager(LocalWebServer webServer, WebSocketTransport webSocketTransport)
     {
-        _webServer = webServer; // Can be null on non-Windows platforms
-        _communicationHandler = communicationHandler ?? throw new ArgumentNullException(nameof(communicationHandler));
+        _webServer = webServer ?? throw new ArgumentNullException(nameof(webServer));
+        _webSocketTransport = webSocketTransport ?? throw new ArgumentNullException(nameof(webSocketTransport));
     }
 
-    public bool IsRunning => _communicationHandler.IsRunning;
+    public bool IsRunning => _webSocketTransport.IsRunning;
 
-    public int? WebSocketPort => _communicationHandler.IsRunning ? _communicationHandler.WebSocketPort : null;
+    public int? WebSocketPort => _webSocketTransport.IsRunning ? _webSocketTransport.WebSocketPort : null;
 
     public int? HttpPort => _webServer != null && _webServer.IsRunning ? _webServer.Port : null;
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
 
         // Synchronous cleanup only — avoid async/.Wait() which deadlocks on the main thread.
         // Clients will detect the dropped connection on their own.
         try
         {
-            if (_communicationHandler.IsRunning) _communicationHandler.Stop();
+            if (_webSocketTransport.IsRunning)
+            {
+                _webSocketTransport.Stop();
+            }
         }
         catch
         {
@@ -48,7 +55,10 @@ public class ServerLifecycleManager : IDisposable
 
         try
         {
-            if (_webServer != null && _webServer.IsRunning) _webServer.Stop();
+            if (_webServer.IsRunning)
+            {
+                _webServer.Stop();
+            }
         }
         catch
         {
@@ -57,12 +67,19 @@ public class ServerLifecycleManager : IDisposable
 
     public async Task<bool> StartServersAsync(string sessionId)
     {
-        if (string.IsNullOrEmpty(sessionId)) throw new ArgumentNullException(nameof(sessionId));
+        if (string.IsNullOrEmpty(sessionId))
+        {
+            throw new ArgumentNullException(nameof(sessionId));
+        }
 
         // Prevent concurrent starts
         lock (_lock)
         {
-            if (_isStarting || IsRunning) return IsRunning;
+            if (_isStarting || IsRunning)
+            {
+                return IsRunning;
+            }
+
             _isStarting = true;
         }
 
@@ -77,15 +94,15 @@ public class ServerLifecycleManager : IDisposable
             }
 
             // Start WebSocket server for real-time communication
-            await _communicationHandler.StartAsync(msg =>
+            await _webSocketTransport.StartAsync(msg =>
             {
 #if DEBUG
-				Logger.Log($"[ServerLifecycleManager] {msg}");
+                Logger.Log($"[ServerLifecycleManager] {msg}");
 #endif
             });
 
             Logger.Log(
-                $"[ServerLifecycleManager] WebSocket server started on port {_communicationHandler.WebSocketPort}");
+                $"[ServerLifecycleManager] WebSocket server started on port {_webSocketTransport.WebSocketPort}");
             return true;
         }
         catch (Exception ex)
@@ -111,9 +128,9 @@ public class ServerLifecycleManager : IDisposable
         {
             try
             {
-                if (_communicationHandler.IsRunning)
+                if (_webSocketTransport.IsRunning)
                 {
-                    _communicationHandler.Stop();
+                    _webSocketTransport.Stop();
                     Logger.Log("[ServerLifecycleManager] WebSocket server stopped");
                 }
             }
@@ -139,10 +156,11 @@ public class ServerLifecycleManager : IDisposable
 
     public async Task StopServersAndNotifyAsync(string reason = null)
     {
-        if (_communicationHandler.IsRunning)
+        if (_webSocketTransport.IsRunning)
+        {
             try
             {
-                await _communicationHandler.BroadcastMessage("disconnecting",
+                await _webSocketTransport.BroadcastMessage("disconnecting",
                     new { reason = reason ?? "Server shutting down" });
                 await Task.Delay(100); // Give clients time to receive the message
             }
@@ -150,6 +168,7 @@ public class ServerLifecycleManager : IDisposable
             {
                 Logger.Error("[ServerLifecycleManager] Error sending disconnect notification", ex);
             }
+        }
 
         await StopServersAsync();
     }

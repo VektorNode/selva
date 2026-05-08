@@ -7,6 +7,8 @@ import type {
 	CheckboxWidgetConfig,
 	FileInputWidgetConfig,
 	ColorWidgetConfig,
+	ChartWidgetConfig,
+	ImageWidgetConfig,
 	InputNumberLayoutItem,
 	InputTextLayoutItem,
 	InputDropdownLayoutItem,
@@ -15,9 +17,11 @@ import type {
 	InputColorLayoutItem,
 	OutputTextLayoutItem,
 	OutputNumberLayoutItem,
-	OutputFileLayoutItem
-} from '@selva/shared';
-import { ACCEPTED_FILE_FORMATS } from '@selva/shared';
+	OutputFileLayoutItem,
+	OutputChartLayoutItem,
+	OutputImageLayoutItem
+} from '@selvajs/schemas';
+import { ACCEPTED_FILE_FORMATS } from '@selvajs/schemas';
 
 // File input configuration constants
 export const FILE_INPUT_MODES = ['upload', 'url'] as const;
@@ -37,7 +41,9 @@ export type InputWidgetType =
 export type OutputWidgetType =
 	| OutputTextLayoutItem['widgetType']
 	| OutputNumberLayoutItem['widgetType']
-	| OutputFileLayoutItem['widgetType'];
+	| OutputFileLayoutItem['widgetType']
+	| OutputChartLayoutItem['widgetType']
+	| OutputImageLayoutItem['widgetType'];
 
 export type WidgetType = InputWidgetType | OutputWidgetType;
 
@@ -49,12 +55,12 @@ export type InputWidgetConfig =
 	| FileInputWidgetConfig
 	| ColorWidgetConfig;
 
-export type OutputWidgetConfig = Record<string, never>;
+export type OutputWidgetConfig = ChartWidgetConfig | ImageWidgetConfig | Record<string, never>;
 
 export type WidgetConfig = InputWidgetConfig | OutputWidgetConfig;
 
 export function mapParamTypeToWidgetType(
-	paramType: GrasshopperParamType,
+	paramType: GrasshopperParamType | 'chart' | 'file',
 	category: 'input' | 'output'
 ): WidgetType {
 	if (category === 'output') {
@@ -62,6 +68,8 @@ export function mapParamTypeToWidgetType(
 			case 'number':
 			case 'integer':
 				return 'number';
+			case 'chart':
+				return 'chart';
 			default:
 				return 'text';
 		}
@@ -149,6 +157,19 @@ export function createDefaultWidgetConfig(
 			case 'number':
 			case 'file':
 				return {};
+
+			case 'chart': {
+				const config: ChartWidgetConfig = {};
+				return config;
+			}
+
+			case 'image': {
+				const config: ImageWidgetConfig = {
+					allowDownload: true,
+					allowFullscreen: true
+				};
+				return config;
+			}
 
 			case 'dropdown':
 			case 'checkbox':

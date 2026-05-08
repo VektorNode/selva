@@ -1,33 +1,44 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
 
-    <IsPackable>false</IsPackable>
-    <IsTestProject>true</IsTestProject>
-  </PropertyGroup>
+		<IsPackable>false</IsPackable>
+		<IsTestProject>true</IsTestProject>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="coverlet.collector" Version="6.0.0"/>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0"/>
-    <PackageReference Include="xunit" Version="2.5.3"/>
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3"/>
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="coverlet.collector" Version="6.0.0"/>
+		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0"/>
+		<PackageReference Include="xunit" Version="2.5.3"/>
+		<PackageReference Include="xunit.runner.visualstudio" Version="2.5.3"/>
+	</ItemGroup>
 
-  <ItemGroup>
-    <Using Include="Xunit"/>
-  </ItemGroup>
+	<ItemGroup>
+		<Using Include="Xunit"/>
+	</ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Selva.Core\Selva.Core.csproj"/>
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\Selva.Schema\Selva.Schema.csproj"/>
+	</ItemGroup>
 
-  <ItemGroup>
-    <Content Include="TestFiles\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
+	<!--
+	  Link the BinaryGeometryWriter source directly instead of taking a project reference on
+	  Selva.GH. The plugin project pulls in Grasshopper / Windows.Forms / RhinoCommon, which
+	  break the net8 test host (Failed to create CoreCLR). The writer has no Rhino/GH
+	  dependencies so compiling it into the test assembly is the simplest isolation.
+	-->
+	<ItemGroup>
+		<Compile Include="..\Selva.GH\Features\Display\Services\BinaryGeometryWriter.cs"
+		         Link="Linked\BinaryGeometryWriter.cs"/>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Include="TestFiles\**">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
 
 </Project>

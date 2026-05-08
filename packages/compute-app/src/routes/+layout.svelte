@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { ModeWatcher, mode } from 'mode-watcher';
+	import { ModeWatcher } from 'mode-watcher';
 	import '../app.css';
-	import { initializeFooterContext } from '@selva/shared';
+	import { initializeFooterContext, Toaster } from '@selvajs/ui';
 
 	let { children } = $props();
 
@@ -10,9 +10,13 @@
 
 <svelte:head>
 	<title>Selva Compute</title>
-	<meta name="description" content="Build and deploy interactive web applications powered by Grasshopper definitions with Selva Compute." />
+	<meta
+		name="description"
+		content="Build and deploy interactive web applications powered by Grasshopper definitions with Selva Compute."
+	/>
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 </svelte:head>
 
 <ModeWatcher />
+<Toaster />
 {@render children?.()}

@@ -1,43 +1,16 @@
-import { timingSafeEqual, createHmac } from 'crypto';
-import type { Cookies } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
+import { error, type Cookies } from '@sveltejs/kit';
 
 const SESSION_COOKIE_NAME = 'admin_session';
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
+const REFRESH_COOKIE_NAME = 'admin_refresh';
+// Refresh tokens have longer life than the access token so the middleware
+// can mint new access tokens silently. 30 days matches Supabase's default.
+const REFRESH_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-// ── HMAC-signed stateless sessions ───────────────────────────────────────────
-// Sessions are self-verifying: token = base64(expiry) + '.' + hmac(base64(expiry))
-// This survives PM2 restarts and cluster worker recycling because there is no
-// in-memory store that gets wiped. The SESSION_SECRET must be stable across restarts
-// (set it in your ecosystem.config.cjs / .env).
-function getSecret(): string {
-	const secret = env.SESSION_SECRET || env.ADMIN_PASSWORD;
-	if (!secret) throw new Error('SESSION_SECRET or ADMIN_PASSWORD must be set');
-	return secret;
-}
-
-function signToken(expiry: number): string {
-	const payload = Buffer.from(String(expiry)).toString('base64url');
-	const sig = createHmac('sha256', getSecret()).update(payload).digest('base64url');
-	return `${payload}.${sig}`;
-}
-
-function verifyToken(token: string): boolean {
-	const dot = token.lastIndexOf('.');
-	if (dot === -1) return false;
-	const payload = token.slice(0, dot);
-	const sig = token.slice(dot + 1);
-	const expectedSig = createHmac('sha256', getSecret()).update(payload).digest('base64url');
-	// Timing-safe comparison
-	const a = Buffer.from(sig);
-	const b = Buffer.from(expectedSig);
-	if (a.length !== b.length) return false;
-	if (!timingSafeEqual(a, b)) return false;
-	const expiry = parseInt(Buffer.from(payload, 'base64url').toString(), 10);
-	return Date.now() < expiry;
-}
-
-// ── Rate limiter ─────────────────────────────────────────────────────────────
+// ============================================================================
+// Rate limiter
+// ============================================================================
+// Process-local state — not a provider concern.
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -79,26 +52,19 @@ export function clearRateLimit(ip: string): void {
 	rateLimitStore.delete(ip);
 }
 
-// ── Session management ───────────────────────────────────────────────────────
-
-export function verifySession(cookies: Cookies): boolean {
-	const token = cookies.get(SESSION_COOKIE_NAME);
-	if (!token) return false;
-	try {
-		return verifyToken(token);
-	} catch {
-		return false;
-	}
-}
-
-export function createSession(cookies: Cookies): void {
-	const expiry = Date.now() + SESSION_MAX_AGE_MS;
-	const token = signToken(expiry);
-
+// ============================================================================
+// Session management (cookie I/O — SvelteKit transport layer)
+// ============================================================================
+/**
+ * Set the session cookie using a token produced by the auth provider. The
+ * token is always minted by the provider (local = HMAC, Supabase = JWT) as
+ * part of `verifyLogin` — this helper does cookie transport only.
+ */
+export function setSessionCookie(cookies: Cookies, sessionToken: string): void {
 	const isSecure =
 		process.env.NODE_ENV === 'production' && process.env.ALLOW_INSECURE_COOKIES !== 'true';
 
-	cookies.set(SESSION_COOKIE_NAME, token, {
+	cookies.set(SESSION_COOKIE_NAME, sessionToken, {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
@@ -109,20 +75,74 @@ export function createSession(cookies: Cookies): void {
 
 export function destroySession(cookies: Cookies): void {
 	cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
+	cookies.delete(REFRESH_COOKIE_NAME, { path: '/' });
 }
 
-// ── Password verification ────────────────────────────────────────────────────
+/**
+ * Set the refresh-token cookie used by the OAuth/Supabase flow. The
+ * session-refresh middleware in `hooks.server.ts` swaps an expired access
+ * token for a fresh one using this. Local/HMAC sessions don't need it.
+ */
+export function setRefreshCookie(cookies: Cookies, refreshToken: string): void {
+	const isSecure =
+		process.env.NODE_ENV === 'production' && process.env.ALLOW_INSECURE_COOKIES !== 'true';
+	cookies.set(REFRESH_COOKIE_NAME, refreshToken, {
+		path: '/',
+		httpOnly: true,
+		sameSite: 'lax',
+		secure: isSecure,
+		maxAge: REFRESH_MAX_AGE_MS / 1000
+	});
+}
 
-export function verifyPassword(password: string): boolean {
-	const adminPassword = env.ADMIN_PASSWORD;
-	if (!adminPassword) {
-		console.error('ADMIN_PASSWORD not set in environment');
-		return false;
+export function getRefreshToken(cookies: Cookies): string | undefined {
+	return cookies.get(REFRESH_COOKIE_NAME);
+}
+
+export function clearRefreshCookie(cookies: Cookies): void {
+	cookies.delete(REFRESH_COOKIE_NAME, { path: '/' });
+}
+
+// ============================================================================
+// Request body size guard
+// ============================================================================
+/**
+ * Reject a request whose declared `Content-Length` exceeds `maxBytes`. Throws
+ * 413 BEFORE the body is read so a malicious client can't burn memory by
+ * sending a huge JSON payload to a small-body endpoint.
+ *
+ * Background: the global `BODY_SIZE_LIMIT` env var is enforced by adapter-node
+ * for every route — but we want it set high enough to accept the largest
+ * legitimate upload (50MB .gh files), which means the smaller JSON endpoints
+ * inherit that ceiling by default. This helper is the per-route lower bound.
+ *
+ * Caveat: requests without `Content-Length` (chunked transfer encoding) bypass
+ * this check. Most browsers and HTTP clients send Content-Length on POST/PUT.
+ * The global `BODY_SIZE_LIMIT` is the backstop for those.
+ */
+export function requireMaxBodySize(request: Request, maxBytes: number): void {
+	const declared = Number(request.headers.get('content-length'));
+	if (Number.isFinite(declared) && declared > maxBytes) {
+		throw error(413, `Request body exceeds the limit for this endpoint.`);
 	}
+}
 
-	// Timing-safe comparison to prevent timing attacks
-	const a = Buffer.from(password);
-	const b = Buffer.from(adminPassword);
-	if (a.length !== b.length) return false;
-	return timingSafeEqual(a, b);
+// ============================================================================
+// Redirect target validation
+// ============================================================================
+/**
+ * Validate a user-supplied post-login redirect target. Accepts only same-origin
+ * relative paths starting with `/` followed by a non-`/` character, so
+ * `//evil.com/path` (protocol-relative URL — browser treats as cross-origin)
+ * and `/\evil.com` (back-slash variants some browsers normalize) are rejected.
+ *
+ * Always returns a safe path: the validated target on success, the fallback
+ * otherwise. Routes call this with `redirectTo` from form data or query string.
+ */
+export function safeRedirectTarget(raw: string | null | undefined, fallback: string): string {
+	if (typeof raw !== 'string' || raw.length < 2) return fallback;
+	if (raw[0] !== '/') return fallback;
+	// Reject protocol-relative (`//host`) and back-slash bypass (`/\host`).
+	if (raw[1] === '/' || raw[1] === '\\') return fallback;
+	return raw;
 }

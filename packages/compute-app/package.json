@@ -1,31 +1,41 @@
 {
-	"name": "selva-compute-app",
-	"version": "0.4.1",
+	"name": "@selvajs/compute-app",
+	"version": "0.9.0",
 	"description": "Selva Rhino Compute application for iframe embedding",
 	"private": true,
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build",
+		"build": "rm -rf build && vite build",
 		"preview": "vite preview",
 		"start": "node build/index.js",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"type-check": "tsc --noEmit",
-		"lint": "eslint . --ext .js,.ts,.svelte"
+		"lint": "eslint . --ext .js,.ts,.svelte",
+		"test": "vitest run",
+		"test:watch": "vitest"
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",
-		"@selva/shared": "workspace:*",
+		"@selvajs/compute": "catalog:",
+		"@selvajs/platform": "workspace:*",
+		"@selvajs/schemas": "workspace:*",
+		"@selvajs/ui": "workspace:*",
+		"bits-ui": "^2.18.0",
 		"mode-watcher": "catalog:",
-		"selva-compute": "catalog:",
+		"sharp": "^0.34.5",
+		"tailwind-variants": "^3.2.2",
 		"three": "catalog:",
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {
-		"@selva/config": "workspace:*",
+		"@selvajs/config": "workspace:*",
+		"@selvajs/local-provider": "workspace:*",
 		"@sveltejs/adapter-auto": "catalog:",
-		"@sveltejs/adapter-node": "^5.5.1",
-		"tw-animate-css": "catalog:"
+		"@sveltejs/adapter-node": "^5.5.4",
+		"@types/three": "catalog:",
+		"tw-animate-css": "catalog:",
+		"vitest": "catalog:"
 	}
 }

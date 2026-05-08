@@ -1,57 +1,140 @@
 <script lang="ts">
-	import { dragStore } from '$lib/stores/dragStore.svelte';
 	import type {
-		LayoutItem,
+		InputLayoutItem,
+		OutputLayoutItem,
 		DiscoveredInput,
 		NumberWidgetConfig,
 		FileInputWidgetConfig,
-		TextWidgetConfig
-	} from '@selva/shared';
-	import { Badge, Button, Card, Switch } from '@selva/shared';
+		TextWidgetConfig,
+		DropdownWidgetConfig,
+		ImageWidgetConfig,
+		InputSource
+	} from '@selvajs/schemas';
+	type LayoutItem = InputLayoutItem | OutputLayoutItem;
+	import { Button, Card, Collapsible, Switch } from '@selvajs/ui';
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '$lib/features/builder/widget-config';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
+	import { dragHandle } from 'svelte-dnd-action';
 
 	interface BuilderGroupItemProps {
 		item: LayoutItem;
 		paramInfo?: DiscoveredInput;
-		tabId: string;
-		groupId: string;
 		columns?: number;
+		expanded?: boolean;
 		onRemove: () => void;
 		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
+		currentValue?: unknown;
 	}
 
 	let {
 		item = $bindable(),
 		paramInfo,
-		tabId,
-		groupId,
 		columns = 1,
+		expanded = $bindable(false),
 		onRemove,
 		availableInputs,
-		getParameterInfo
+		getParameterInfo,
+		currentValue = undefined
 	}: BuilderGroupItemProps = $props();
 
+	// For chart outputs: parse the live Plotly JSON to show the detected chart type
+	const detectedChartType = $derived.by(() => {
+		if (item.type !== 'output' || item.widgetType !== 'chart') return null;
+		if (!currentValue || typeof currentValue !== 'string') return null;
+		try {
+			const fig = JSON.parse(currentValue);
+			return (fig?.data?.[0]?.type as string) ?? null;
+		} catch {
+			return null;
+		}
+	});
+
+	let typeLabel = $derived(paramInfo?.type ?? item.widgetType);
 	let isNumberInput = $derived(item.type === 'input' && item.widgetType === 'number');
 	let isFileInput = $derived(item.type === 'input' && item.widgetType === 'file');
 	let isTextInput = $derived(item.type === 'input' && item.widgetType === 'text');
+	let isDropdownInput = $derived(item.type === 'input' && item.widgetType === 'dropdown');
+	let isFileOutput = $derived(item.type === 'output' && item.widgetType === 'file');
+	let isImageOutput = $derived(item.type === 'output' && item.widgetType === 'image');
+	let isFileOrImageOutput = $derived(isFileOutput || isImageOutput);
 	let fileInputConfig = $derived(isFileInput ? (item.config as FileInputWidgetConfig) : null);
+	let dropdownConfig = $derived(isDropdownInput ? (item.config as DropdownWidgetConfig) : null);
+	let imageConfig = $derived(isImageOutput ? (item.config as ImageWidgetConfig) : null);
 	let showAdvanced = $state(false);
 	let showVisibilityRules = $state(false);
 	let hasVisibilityRules = $derived((item.visibilityCondition?.rules?.length ?? 0) > 0);
 	// Advanced section only for widget-specific options
-	let hasAdvancedOptions = $derived(isNumberInput || isFileInput || isTextInput);
+	let hasAdvancedOptions = $derived(
+		isNumberInput || isFileInput || isTextInput || isDropdownInput || isFileOrImageOutput
+	);
+	let hasDescription = $derived(!!(item.description && item.description.trim().length > 0));
+	let hasCustomConfig = $derived.by(() => {
+		if (isNumberInput) {
+			const c = item.config as NumberWidgetConfig;
+			return c.renderAsSlider === false;
+		}
+		if (isDropdownInput && dropdownConfig) {
+			return dropdownConfig.displayAs === 'checklist';
+		}
+		if (isFileInput && fileInputConfig) {
+			if (fileInputConfig.defaultInputMode) return true;
+			if (
+				fileInputConfig.allowedInputModes &&
+				fileInputConfig.allowedInputModes.length < 2
+			)
+				return true;
+			if (
+				fileInputConfig.acceptedFormats &&
+				fileInputConfig.acceptedFormats.length < ACCEPTED_FILE_FORMATS.length
+			)
+				return true;
+			return false;
+		}
+		if (isTextInput) {
+			const c = item.config as TextWidgetConfig;
+			return !!(c.maxLength || c.pattern || c.customErrorMessage);
+		}
+		if (isImageOutput && imageConfig) {
+			if (imageConfig.allowDownload === false) return true;
+			if (imageConfig.allowFullscreen === false) return true;
+			return true; // image vs file is itself a divergence
+		}
+		return false;
+	});
+	let hasNonDefaultConfig = $derived(hasDescription || hasCustomConfig || hasVisibilityRules);
 
-	let isDragging = $state(false);
-	let isDragOver = $state(false);
-	let dropPosition: 'before' | 'after' | null = $state(null);
+	function setFileOutputMode(mode: 'file' | 'image') {
+		if (item.type !== 'output') return;
+		if (item.widgetType === mode) return;
+		if (mode === 'image') {
+			(item as OutputLayoutItem).widgetType = 'image';
+			(item as OutputLayoutItem).config = {
+				allowDownload: true,
+				allowFullscreen: true
+			} as ImageWidgetConfig;
+		} else {
+			(item as OutputLayoutItem).widgetType = 'file';
+			(item as OutputLayoutItem).config = {} as never;
+		}
+	}
+
+	function toggleImageOption(key: 'allowDownload' | 'allowFullscreen') {
+		if (!imageConfig) return;
+		imageConfig[key] = !(imageConfig[key] ?? true);
+	}
 
 	function toggleSliderMode() {
 		if (!isNumberInput) return;
 		const config = item.config as NumberWidgetConfig;
 		config.renderAsSlider = !config.renderAsSlider;
+	}
+
+	function toggleChecklistMode() {
+		if (!isDropdownInput) return;
+		const config = item.config as DropdownWidgetConfig;
+		config.displayAs = config.displayAs === 'checklist' ? 'dropdown' : 'checklist';
 	}
 
 	function setFileInputMode(mode: 'upload' | 'url') {
@@ -85,6 +168,24 @@
 		}
 	}
 
+	let isInput = $derived(item.type === 'input');
+	let isExternalSource = $derived(
+		(item as { source?: InputSource }).source?.kind === 'external'
+	);
+
+	function toggleExternalSource() {
+		if (item.type !== 'input') return;
+		const target = item as { source?: InputSource; visible?: boolean };
+		if (target.source?.kind === 'external') {
+			target.source = undefined;
+		} else {
+			target.source = { kind: 'external' };
+			// External-sourced inputs are typically hidden from the end user.
+			// Default to hidden when first toggled on; user can override afterwards.
+			if (target.visible !== false) target.visible = false;
+		}
+	}
+
 	function toggleAcceptedFormat(format: string) {
 		if (!isFileInput) return;
 		const config = item.config as FileInputWidgetConfig;
@@ -105,149 +206,78 @@
 			config.acceptedFormats = [format];
 		}
 	}
-
-	function handleDragStart(e: DragEvent) {
-		isDragging = true;
-
-		dragStore.set({
-			dropType: 'group-item',
-			data: { item, tabId, groupId }
-		});
-
-		e.dataTransfer?.setData('text/plain', item.id);
-		e.dataTransfer!.effectAllowed = 'move';
-	}
-
-	function handleDragEnd() {
-		isDragging = false;
-		dragStore.clear();
-	}
-
-	function handleDragOver(e: DragEvent) {
-		const dragData = dragStore.current;
-
-		// Only show indicators for item/input/output drags (not group drags)
-		// Group drags don't set dragStore, so this naturally filters them out
-		if (!dragData || !['group-item', 'input', 'output'].includes(dragData.dropType)) return;
-
-		e.preventDefault();
-		e.stopPropagation();
-		isDragOver = true;
-
-		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-		const midpoint = rect.top + rect.height / 2;
-		dropPosition = e.clientY < midpoint ? 'before' : 'after';
-
-		e.dataTransfer!.dropEffect = dragData.dropType === 'group-item' ? 'move' : 'copy';
-	}
-
-	function handleDragLeave(e: DragEvent) {
-		// Only clear if leaving the card itself, not child elements
-		const relatedTarget = e.relatedTarget as Node | null;
-		const currentTarget = e.currentTarget as Node;
-		if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
-			isDragOver = false;
-			dropPosition = null;
-		}
-	}
-
-	function handleDrop(e: DragEvent) {
-		e.preventDefault();
-		e.stopPropagation();
-		isDragOver = false;
-
-		const dragData = dragStore.current;
-		if (!dragData) return;
-
-		const detail =
-			dragData.dropType === 'group-item'
-				? {
-						sourceItem: dragData.data.item,
-						sourceTabId: dragData.data.tabId,
-						sourceGroupId: dragData.data.groupId,
-						targetItem: item,
-						targetTabId: tabId,
-						targetGroupId: groupId,
-						dropPosition: dropPosition || 'after'
-					}
-				: {
-						dropType: dragData.dropType,
-						data: dragData.data,
-						targetItem: item,
-						targetTabId: tabId,
-						targetGroupId: groupId,
-						dropPosition: dropPosition || 'after'
-					};
-
-		const event = new CustomEvent(
-			dragData.dropType === 'group-item' ? 'reorder' : 'parameterdrop',
-			{
-				detail,
-				bubbles: true,
-				composed: true
-			}
-		);
-
-		(e.currentTarget as HTMLElement).dispatchEvent(event);
-		dropPosition = null;
-	}
 </script>
 
 <div class="relative">
-	{#if isDragOver && dropPosition === 'before'}
-		<div class="bg-primary absolute -top-0.5 right-0 left-0 h-0.5 rounded"></div>
-	{/if}
-
-	{#if isDragOver && dropPosition === 'after'}
-		<div class="bg-primary absolute right-0 -bottom-0.5 left-0 h-0.5 rounded"></div>
-	{/if}
-
-	<Card.Root
-		class={`
-		hover:border-primary
-			 py-1
-			transition-all hover:shadow-sm
-			${isDragging ? 'opacity-50' : ''}
-			${isDragOver ? 'border-primary' : ''}
-			${item.type === 'input' ? 'bg-inputparam' : 'bg-outputparam'}
-		`}
-		ondragover={handleDragOver}
-		ondragleave={handleDragLeave}
-		ondrop={handleDrop}
-	>
-		<div class="grid grid-cols-[auto_20px_1fr] gap-2 p-2">
-			<!-- Drag Handle -->
-			<div
-				class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex cursor-grab self-start rounded p-0.5 active:cursor-grabbing"
-				role="button"
-				tabindex="0"
-				aria-label="Drag to reorder"
-				draggable="true"
-				ondragstart={handleDragStart}
-				ondragend={handleDragEnd}
-			>
-				<GripVertical size={14} />
-			</div>
-			<div class="flex items-start pt-0.5">
+	<Collapsible.Root bind:open={expanded}>
+		<Card.Root
+			class="group bg-background hover:border-border overflow-hidden border-border/60 py-1.5 transition-all hover:shadow-sm"
+		>
+			<!-- Compact header row (always visible) -->
+			<div class="flex items-center gap-2 px-3 py-1.5">
+				<div
+					use:dragHandle
+					class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex cursor-grab rounded p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+					role="button"
+					tabindex="0"
+					aria-label="Drag to reorder"
+				>
+					<GripVertical size={16} />
+				</div>
 				{#if item.type === 'input'}
-					<ArrowUpFromLine size={14} class="text-muted-foreground" />
+					<span
+						class="bg-primary/10 text-primary inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide"
+					>
+						<ArrowUpFromLine size={10} strokeWidth={2.5} />
+						{typeLabel}
+					</span>
 				{:else}
-					<ArrowDownToLine size={14} class="text-muted-foreground" />
+					<span
+						class="bg-orange-500/15 text-orange-600 dark:text-orange-400 inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide"
+					>
+						<ArrowDownToLine size={10} strokeWidth={2.5} />
+						{typeLabel}
+					</span>
 				{/if}
+				<input
+					type="text"
+					bind:value={item.displayName}
+					title={paramInfo ? `GH: ${paramInfo.nickname}` : undefined}
+					class="hover:border-border focus:border-primary min-w-0 rounded-sm border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium focus:outline-none"
+					style="field-sizing: content; min-width: 7rem; max-width: 18rem;"
+					placeholder="Display Name"
+				/>
+				{#if detectedChartType}
+					<span
+						class="text-muted-foreground/70 border-border/60 rounded-sm border px-1.5 py-0.5 text-[10px] capitalize"
+					>
+						{detectedChartType}
+					</span>
+				{/if}
+				<Collapsible.Trigger
+					class="hover:bg-accent/50 relative ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded {hasNonDefaultConfig
+						? 'text-primary'
+						: 'text-muted-foreground hover:text-foreground'}"
+					aria-label={expanded ? 'Collapse details' : 'Expand details'}
+					title={hasNonDefaultConfig ? 'Has custom configuration' : undefined}
+				>
+					<ChevronDown
+						size={16}
+						class={`transition-transform ${expanded ? 'rotate-180' : ''}`}
+					/>
+				</Collapsible.Trigger>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					class="hover:bg-destructive hover:text-destructive-foreground h-6 w-6 text-base"
+					onclick={onRemove}>×</Button
+				>
 			</div>
 
-			<div class="flex flex-col gap-2">
-				<!-- Display Name + Span + Remove -->
-				<div class="flex items-center gap-2">
-					<input
-						type="text"
-						bind:value={item.displayName}
-						class="hover:border-border focus:border-primary flex-1 rounded-sm border border-transparent bg-transparent px-1 py-0.5
-							   text-xs font-medium focus:outline-none"
-						placeholder="Display Name"
-					/>
+			<Collapsible.Content>
+				<div class="flex flex-col gap-2 px-2 pt-1 pb-2">
 					{#if columns > 1}
-						<label class="text-muted-foreground flex shrink-0 items-center gap-1 text-[10px]">
+						<label class="text-muted-foreground flex items-center gap-1 text-[10px]">
 							Span:
 							<input
 								type="number"
@@ -258,42 +288,17 @@
 							/>
 						</label>
 					{/if}
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						class="hover:bg-destructive hover:text-destructive-foreground h-4 w-4"
-						onclick={onRemove}>×</Button
-					>
-				</div>
 
-				<!-- Description -->
-				<input
-					type="text"
-					bind:value={item.description}
-					class="text-muted-foreground hover:border-border focus:border-primary rounded-sm border border-transparent bg-transparent px-1
-						   py-0.5 text-[11px] focus:outline-none"
-					placeholder="Description"
-				/>
+					<!-- Description -->
+					<input
+						type="text"
+						bind:value={item.description}
+						class="text-muted-foreground hover:border-border focus:border-primary rounded-sm border border-transparent bg-transparent px-1
+							   py-0.5 text-[11px] focus:outline-none"
+						placeholder="Description"
+					/>
 
-				<!-- Parameter Info / Type Badge -->
-				{#if paramInfo}
-					<div class="flex items-center gap-2">
-						<Badge variant="default" class="rounded-xs px-1 py-0 text-[9px]">
-							{paramInfo.type}
-						</Badge>
-						<span class="text-muted-foreground font-mono text-[9px]">
-							GH: {paramInfo.nickname}
-						</span>
-					</div>
-				{:else if item.type === 'output'}
-					<div class="flex items-center gap-2">
-						<Badge variant="default" class="rounded-xs px-1 py-0 text-[9px]">
-							{item.widgetType}
-						</Badge>
-					</div>
-				{/if}
-
-				<!-- Advanced -->
+					<!-- Advanced -->
 				{#if hasAdvancedOptions}
 					<div class="border-border/70 mt-1 border-t pt-1">
 						<button
@@ -308,6 +313,61 @@
 						</button>
 
 						{#if showAdvanced}
+							<!-- Output: File ↔ Image display mode switcher -->
+							{#if isFileOrImageOutput}
+								<div class="flex flex-col gap-2 pb-2">
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium">Display As</span>
+										<div class="grid grid-cols-2 gap-1">
+											<button
+												onclick={() => setFileOutputMode('file')}
+												class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+													isFileOutput
+														? 'bg-primary text-primary-foreground border-primary'
+														: 'border-border/70 hover:border-border hover:bg-accent'
+												}`}
+											>
+												File (download)
+											</button>
+											<button
+												onclick={() => setFileOutputMode('image')}
+												class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+													isImageOutput
+														? 'bg-primary text-primary-foreground border-primary'
+														: 'border-border/70 hover:border-border hover:bg-accent'
+												}`}
+											>
+												Image viewer
+											</button>
+										</div>
+										<span class="text-muted-foreground/70 text-[9px]">
+											{isImageOutput
+												? 'Renders PNG/JPG/WEBP/GIF/SVG inline. Other formats fall back to download.'
+												: 'Standard download button for any file type.'}
+										</span>
+									</div>
+
+									{#if isImageOutput && imageConfig}
+										<div class="flex items-center justify-between text-[11px]">
+											<span class="text-muted-foreground">Allow download</span>
+											<Switch
+												checked={imageConfig.allowDownload ?? true}
+												onCheckedChange={() => toggleImageOption('allowDownload')}
+												class="scale-75"
+											/>
+										</div>
+										<div class="flex items-center justify-between text-[11px]">
+											<span class="text-muted-foreground">Allow fullscreen</span>
+											<Switch
+												checked={imageConfig.allowFullscreen ?? true}
+												onCheckedChange={() => toggleImageOption('allowFullscreen')}
+												class="scale-75"
+											/>
+										</div>
+									{/if}
+								</div>
+							{/if}
+
 							<!-- Widget-Specific Options -->
 							{#if isNumberInput}
 								{@const config = item.config as NumberWidgetConfig}
@@ -318,6 +378,24 @@
 										onCheckedChange={toggleSliderMode}
 										class="scale-75"
 									/>
+								</div>
+							{/if}
+
+							{#if isDropdownInput && dropdownConfig}
+								<div class="flex flex-col gap-2">
+									<div class="flex items-center justify-between text-[11px]">
+										<div class="flex flex-col">
+											<span class="text-muted-foreground">Multi-select (checklist)</span>
+											<span class="text-muted-foreground/70 text-[9px]">
+												Renders as checkboxes; emits a list to Grasshopper.
+											</span>
+										</div>
+										<Switch
+											checked={dropdownConfig.displayAs === 'checklist'}
+											onCheckedChange={toggleChecklistMode}
+											class="scale-75"
+										/>
+									</div>
 								</div>
 							{/if}
 
@@ -449,36 +527,53 @@
 					</div>
 				{/if}
 
-				<!-- Visibility Rules Section (separate from Advanced) -->
-				{#if item.type === 'input'}
-					<div class="border-border/70 mt-1 border-t pt-1">
-						<button
-							onclick={() => (showVisibilityRules = !showVisibilityRules)}
-							class="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center gap-1 text-[11px]"
-						>
-							<ChevronDown
-								size={12}
-								class={`transition-transform ${showVisibilityRules ? 'rotate-180' : ''}`}
-							/>
-							Visibility Rules {hasVisibilityRules
-								? `(${item.visibilityCondition?.rules?.length ?? 0})`
-								: ''}
-						</button>
-
-						{#if showVisibilityRules}
-							<VisibilityRulesEditor
-								bind:visibilityCondition={item.visibilityCondition}
-								{availableInputs}
-								currentParamInfo={paramInfo}
-								{getParameterInfo}
-								options={item.type === 'input' && item.widgetType === 'dropdown'
-									? item.config.options
-									: undefined}
-							/>
-						{/if}
+				<!-- External Source toggle (input items only) -->
+				{#if isInput}
+					<div class="border-border/70 mt-1 flex items-center justify-between border-t pt-2 text-[11px]">
+						<div class="flex flex-col">
+							<span class="text-muted-foreground">External value</span>
+							<span class="text-muted-foreground/70 text-[9px]">
+								Filled by a producer route (e.g. /preview/producer/json-paste). Hides the control by default.
+							</span>
+						</div>
+						<Switch
+							checked={isExternalSource}
+							onCheckedChange={toggleExternalSource}
+							class="scale-75"
+						/>
 					</div>
 				{/if}
+
+				<!-- Visibility Rules Section (separate from Advanced) -->
+				<div class="border-border/70 mt-1 border-t pt-1">
+					<button
+						onclick={() => (showVisibilityRules = !showVisibilityRules)}
+						class="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center gap-1 text-[11px]"
+					>
+						<ChevronDown
+							size={12}
+							class={`transition-transform ${showVisibilityRules ? 'rotate-180' : ''}`}
+						/>
+						Visibility Rules {hasVisibilityRules
+							? `(${item.visibilityCondition?.rules?.length ?? 0})`
+							: ''}
+					</button>
+
+					{#if showVisibilityRules}
+						<VisibilityRulesEditor
+							bind:visibilityCondition={item.visibilityCondition}
+							{availableInputs}
+							currentParamInfo={paramInfo}
+							{getParameterInfo}
+							isGroupCondition={item.type === 'output'}
+							options={item.type === 'input' && item.widgetType === 'dropdown'
+								? item.config.options
+								: undefined}
+						/>
+					{/if}
+				</div>
 			</div>
-		</div>
+			</Collapsible.Content>
 	</Card.Root>
+	</Collapsible.Root>
 </div>

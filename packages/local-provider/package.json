@@ -1,0 +1,62 @@
+{
+	"name": "@selvajs/local-provider",
+	"version": "0.1.0",
+	"description": "Local filesystem, JSON, and HMAC implementations of @selvajs/platform interfaces",
+	"private": true,
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./auth": {
+			"source": "./src/auth/index.ts",
+			"types": "./dist/auth/index.d.ts",
+			"import": "./dist/auth/index.js"
+		},
+		"./data": {
+			"source": "./src/data/index.ts",
+			"types": "./dist/data/index.d.ts",
+			"import": "./dist/data/index.js"
+		},
+		"./storage": {
+			"source": "./src/storage/index.ts",
+			"types": "./dist/storage/index.d.ts",
+			"import": "./dist/storage/index.js"
+		},
+		"./permissions": {
+			"source": "./src/permissions/index.ts",
+			"types": "./dist/permissions/index.d.ts",
+			"import": "./dist/permissions/index.js"
+		},
+		"./userProfile": {
+			"source": "./src/userProfile/index.ts",
+			"types": "./dist/userProfile/index.d.ts",
+			"import": "./dist/userProfile/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"src"
+	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"type-check": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@selvajs/platform": "workspace:*",
+		"sharp": "^0.34.5",
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"@types/node": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	}
+}

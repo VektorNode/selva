@@ -35,6 +35,9 @@ _ReSharper*/
 *.[Rr]e[Ss]harper
 *.DotSettings.user
 
+# Needs to be deleted
+*/**/Selva_UI/
+
 # JetBrains Rider
 .idea/
 *.sln.iml
@@ -48,16 +51,37 @@ _ReSharper*/
 # Windows
 Thumbs.db
 ehthumbs.db
+
+# Claude Code & agent config (personal/local)
+.claude/
+.agents/
+skills-lock.json
+
+# Local environment & config files
+.env
+.env.local
+*.local.json
+
+# Local provider data directory (user-specific runtime data)
+# Holds users.json, orgs/projects/definitions JSON, compute.config.json,
+# and uploaded .gh files. Path matches DATA_PATH default in
+# packages/compute-app/.env.example.
+.selva-data/
+
 **/ecosystem.config.cjs
 # Web
 **/node_modules/
 **/.svelte-kit/
+**/*.svelte.d.ts
+**/dist/
 
-# Grasshopper definitions (except in example-definitions)
+# Turborepo cache
+.turbo/
+**/.turbo/
+
+# Grasshopper definitions
 *.gh
 *.ghx
-!packages/compute-app/example-definitions/*.gh
-!packages/compute-app/example-definitions/*.ghx
 # Unignore the Selva.GH plugin directory (case-insensitive match on Windows)
 !Plugin/Selva.GH/
 !Plugin/Selva.GH/**
@@ -66,8 +90,7 @@ Plugin/Selva.GH/obj/
 
 # Definitions config files (production, not checked in)
 definitions-config.json
-!packages/compute-app/example-definitions/definitions-config.json
-!packages/compute-app/definitions-config.example.json
+
 
 # Terraform
 infra/terraform.tfvars
@@ -75,3 +98,5 @@ infra/.terraform/
 infra/*.tfstate
 infra/*.tfstate.backup
 infra/.terraform.lock.hcl
+**/dist/
+.DS_Store

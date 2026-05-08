@@ -1,0 +1,102 @@
+{
+	"name": "@selvajs/ui",
+	"version": "0.9.2",
+	"description": "Shared UI components and utilities for Selva applications",
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
+	"type": "module",
+	"svelte": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"svelte": "./dist/index.js"
+		},
+		"./primitives": {
+			"types": "./dist/components/primitives/index.d.ts",
+			"svelte": "./dist/components/primitives/index.js"
+		},
+		"./layout": {
+			"types": "./dist/components/layout/index.d.ts",
+			"svelte": "./dist/components/layout/index.js"
+		},
+		"./compute": {
+			"types": "./dist/components/compute/index.d.ts",
+			"svelte": "./dist/components/compute/index.js"
+		},
+		"./viewer": {
+			"types": "./dist/components/viewer/index.d.ts",
+			"svelte": "./dist/components/viewer/index.js"
+		},
+		"./footer": {
+			"types": "./dist/contexts/footerContext.svelte.d.ts",
+			"svelte": "./dist/contexts/footerContext.svelte.js"
+		},
+		"./utils": {
+			"types": "./dist/utils.d.ts",
+			"import": "./dist/utils.js"
+		},
+		"./styles/base.css": "./src/lib/styles/base.css",
+		"./styles/themes/*": "./src/lib/styles/themes/*"
+	},
+	"files": [
+		"dist",
+		"src/lib",
+		"!dist/**/*.test.*",
+		"!dist/**/*.spec.*",
+		"!src/lib/**/*.test.*",
+		"!src/lib/**/*.spec.*"
+	],
+	"sideEffects": [
+		"**/*.css"
+	],
+	"scripts": {
+		"dev": "vite dev",
+		"build": "rm -rf dist && vite build && pnpm prepack",
+		"build:fast": "svelte-kit sync && svelte-package",
+		"build:watch": "svelte-kit sync && svelte-package --watch",
+		"preview": "vite preview",
+		"prepack": "svelte-kit sync && svelte-package && publint",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"format": "prettier --write .",
+		"lint": "prettier --check . && eslint ."
+	},
+	"peerDependencies": {
+		"@selvajs/compute": "catalog:",
+		"@sveltejs/kit": "^2",
+		"bits-ui": "^2.15.4",
+		"svelte": "^5",
+		"tailwind-variants": "^3.2.2",
+		"three": "catalog:"
+	},
+	"peerDependenciesMeta": {
+		"three": {
+			"optional": true
+		}
+	},
+	"dependencies": {
+		"@floating-ui/dom": "catalog:",
+		"@iconify/svelte": "catalog:",
+		"@lucide/svelte": "catalog:",
+		"@selvajs/schemas": "workspace:*",
+		"clsx": "catalog:",
+		"mode-watcher": "catalog:",
+		"paneforge": "^1.0.2",
+		"svelte-sonner": "catalog:",
+		"tailwind-merge": "catalog:",
+		"tw-animate-css": "catalog:"
+	},
+	"devDependencies": {
+		"@internationalized/date": "^3.12.1",
+		"@selvajs/config": "workspace:*",
+		"@sveltejs/kit": "catalog:",
+		"@types/three": "catalog:",
+		"bits-ui": "^2.18.0",
+		"svelte": "catalog:",
+		"tailwind-variants": "^3.2.2"
+	}
+}
