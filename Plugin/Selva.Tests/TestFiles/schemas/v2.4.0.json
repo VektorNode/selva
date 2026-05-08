@@ -1,0 +1,76 @@
+{
+	"_comment": "Schema fixture for v2.4.0 — introduced OutputChartLayoutItem for chart/visualization outputs. Tests backward compatibility and chart widget deserialization.",
+	"schemaVersion": "2.4.0",
+	"id": "fixture-v240",
+	"name": "Fixture v2.4.0",
+	"inputs": [
+		{
+			"id": "bbbbbbbb-0000-0000-0000-000000000001",
+			"nickname": "DataInput",
+			"paramType": "generic",
+			"inputStructure": "list"
+		}
+	],
+	"outputs": [
+		{
+			"id": "cccccccc-0000-0000-0000-000000000001",
+			"nickname": "PlotlyChart",
+			"description": "Interactive chart visualization",
+			"type": "html"
+		},
+		{
+			"id": "cccccccc-0000-0000-0000-000000000002",
+			"nickname": "TextOutput",
+			"description": "Plain text output",
+			"type": "text"
+		}
+	],
+	"layout": {
+		"type": "tabbed",
+		"tabs": [
+			{
+				"id": "tab1",
+				"label": "Data",
+				"groups": [
+					{
+						"id": "g1",
+						"label": "Inputs",
+						"items": [
+							{
+								"id": "item1",
+								"paramId": "bbbbbbbb-0000-0000-0000-000000000001",
+								"type": "input",
+								"widgetType": "text"
+							}
+						]
+					}
+				]
+			},
+			{
+				"id": "tab2",
+				"label": "Results",
+				"groups": [
+					{
+						"id": "g2",
+						"label": "Outputs",
+						"items": [
+							{
+								"id": "item2",
+								"paramId": "cccccccc-0000-0000-0000-000000000001",
+								"type": "output",
+								"widgetType": "chart",
+								"config": {}
+							},
+							{
+								"id": "item3",
+								"paramId": "cccccccc-0000-0000-0000-000000000002",
+								"type": "output",
+								"widgetType": "text"
+							}
+						]
+					}
+				]
+			}
+		]
+	}
+}

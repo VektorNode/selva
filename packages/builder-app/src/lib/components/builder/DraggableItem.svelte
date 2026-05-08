@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { dragStore } from '$lib/stores/dragStore.svelte';
-	import type { DiscoveredInput, DiscoveredOutput, TabConfig } from '@selva/shared';
-	import { ContextMenu, Input } from '@selva/shared';
+	import type { DiscoveredInput, DiscoveredOutput, TabConfig } from '@selvajs/schemas';
+	import { ContextMenu, Input } from '@selvajs/ui';
 	import { FolderPlus } from '@lucide/svelte';
 
 	interface Props {
@@ -19,48 +18,16 @@
 
 	let newGroupPath = $state('');
 
-	// Infer variant from item type
-	const variant = $derived('name' in item ? 'input' : 'output');
-
-	let isDragging = $state(false);
-
-	function handleDragStart(e: DragEvent) {
-		isDragging = true;
-
-		dragStore.set({
-			dropType: variant,
-			data: item
-		});
-
-		if (e.dataTransfer) {
-			e.dataTransfer.effectAllowed = 'copy';
-			e.dataTransfer.setData('text/plain', item.id);
-		}
-	}
-
-	function handleDragEnd() {
-		isDragging = false;
-		dragStore.clear();
-	}
-
+	const isInput = $derived('name' in item);
 	const badgeContent = $derived(
-		'name' in item ? item.type : (item as DiscoveredOutput).type || 'Unknown'
+		isInput ? (item as DiscoveredInput).type : (item as DiscoveredOutput).type || 'Unknown'
 	);
 
-	// Variant-based styling
-	const styles = $derived({
-		input: {
-			bg: 'bg-inputparam',
-			badgeBg: 'bg-primary/10',
-			badgeText: 'text-primary'
-		},
-		output: {
-			bg: 'bg-outputparam',
-			badgeBg: 'bg-primary/10',
-			badgeText: 'text-primary'
-		}
-	});
-	const style = $derived(styles[variant]);
+	const style = $derived(
+		isInput
+			? { bg: 'bg-inputparam', badgeBg: 'bg-primary/10', badgeText: 'text-primary' }
+			: { bg: 'bg-outputparam', badgeBg: 'bg-primary/10', badgeText: 'text-primary' }
+	);
 
 	function handleAddToGroup(tabId: string, groupId: string) {
 		onAddToGroup?.(tabId, groupId, item);
@@ -89,13 +56,9 @@
         border-ring/50 hover:border-primary hover:bg-muted mb-2 flex
         cursor-grab flex-row items-center justify-between gap-4
         rounded-xl border p-3
-        transition-all ${style.bg}
-        ${isDragging ? 'cursor-grabbing opacity-50' : ''}
+        transition-all active:cursor-grabbing ${style.bg}
       `}
-			draggable="true"
 			role="button"
-			ondragstart={handleDragStart}
-			ondragend={handleDragEnd}
 		>
 			<div class="flex flex-1 items-center gap-3">
 				<strong class="text-foreground"

@@ -1,8 +1,8 @@
 {
-	"name": "@selva/builder-app",
+	"name": "@selvajs/builder-app",
 	"description": "Selva Schema Builder and Preview Application",
 	"private": true,
-	"version": "0.4.1",
+	"version": "0.9.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -16,15 +16,20 @@
 	},
 	"devDependencies": {
 		"@lucide/svelte": "catalog:",
-		"@selva/config": "workspace:*",
+		"@selvajs/config": "workspace:*",
 		"@sveltejs/adapter-static": "^3.0.10",
+		"@types/three": "catalog:",
 		"tw-animate-css": "catalog:"
 	},
 	"dependencies": {
-		"selva-compute": "catalog:",
-		"@iconify/svelte": "^5.2.1",
-		"@selva/shared": "workspace:*",
+		"@iconify/svelte": "catalog:",
+		"@selvajs/compute": "catalog:",
+		"@selvajs/schemas": "workspace:*",
+		"@selvajs/ui": "workspace:*",
+		"bits-ui": "^2.18.0",
 		"mode-watcher": "catalog:",
+		"svelte-dnd-action": "^0.9.69",
+		"tailwind-variants": "^3.2.2",
 		"three": "catalog:"
 	}
 }

@@ -20,22 +20,14 @@ Thumbs.db
 
 # Deployment-specific config (edit example.* files instead, setup.sh copies them)
 ecosystem.config.cjs
-definitions-config.json
 
 # Grasshopper definitions (keep private, not tracked)
 *.gh
 *.ghx
-/definitions/
 
 # Deployment-specific thumbnails
 static/images/*_Thumbnail.png
 static/images/*_Thumbnail.jpg
-
-# Exception: allow example definitions
-!example-definitions/*.gh
-!example-definitions/*.ghx
-!example-definitions/**/*.gh
-!example-definitions/**/*.ghx
 
 # Vite
 vite.config.js.timestamp-*

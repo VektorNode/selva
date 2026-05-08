@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { VisibilityRule, DiscoveredInput } from '@selva/shared';
-	import { Button, Badge, Input, Select } from '@selva/shared';
+	import type { VisibilityRule, DiscoveredInput } from '@selvajs/schemas';
+	import { Button, Badge, Input, Select } from '@selvajs/ui';
 	import { X } from '@lucide/svelte';
 	import { validateRuleValue, getOperatorsForType } from '$lib/utils/validation';
 
@@ -44,24 +44,57 @@
 		onUpdate(updatedRule);
 	}
 
-	function updateRuleOperator(
-		newOperator:
-			| 'equals'
-			| 'notEquals'
-			| 'greaterThan'
-			| 'lessThan'
-			| 'greaterThanOrEqual'
-			| 'lessThanOrEqual'
-			| 'between'
-			| 'in'
-			| 'notIn'
-			| 'matches'
-	) {
+	type RuleOperator =
+		| 'equals'
+		| 'notEquals'
+		| 'greaterThan'
+		| 'lessThan'
+		| 'greaterThanOrEqual'
+		| 'lessThanOrEqual'
+		| 'between'
+		| 'in'
+		| 'notIn'
+		| 'matches'
+		| 'contains'
+		| 'containsAny'
+		| 'isEmpty'
+		| 'isNotEmpty';
+
+	const RULE_OPERATORS = new Set<RuleOperator>([
+		'equals',
+		'notEquals',
+		'greaterThan',
+		'lessThan',
+		'greaterThanOrEqual',
+		'lessThanOrEqual',
+		'between',
+		'in',
+		'notIn',
+		'matches',
+		'contains',
+		'containsAny',
+		'isEmpty',
+		'isNotEmpty'
+	]);
+
+	function isRuleOperator(value: string): value is RuleOperator {
+		return RULE_OPERATORS.has(value as RuleOperator);
+	}
+
+	function updateRuleOperator(newOperator: RuleOperator) {
 		const updatedRule = { ...rule, operator: newOperator };
-		// Clear value when operator changes (especially for between/in/notIn)
-		if (newOperator === 'between' || newOperator === 'in' || newOperator === 'notIn') {
+		// Clear value when operator changes (especially for multi-value/no-value operators)
+		if (
+			newOperator === 'between' ||
+			newOperator === 'in' ||
+			newOperator === 'notIn' ||
+			newOperator === 'containsAny'
+		) {
 			updatedRule.value = undefined;
 			updatedRule.values = [];
+		} else if (newOperator === 'isEmpty' || newOperator === 'isNotEmpty') {
+			updatedRule.value = undefined;
+			updatedRule.values = undefined;
 		} else {
 			updatedRule.values = undefined;
 		}
@@ -103,19 +136,7 @@
 			type="single"
 			value={rule.operator}
 			onValueChange={(value) => {
-				if (
-					value &&
-					(value === 'equals' ||
-						value === 'notEquals' ||
-						value === 'greaterThan' ||
-						value === 'lessThan' ||
-						value === 'greaterThanOrEqual' ||
-						value === 'lessThanOrEqual' ||
-						value === 'between' ||
-						value === 'in' ||
-						value === 'notIn' ||
-						value === 'matches')
-				) {
+				if (value && isRuleOperator(value)) {
 					updateRuleOperator(value);
 				}
 			}}
@@ -159,7 +180,10 @@
 					placeholder="Max"
 				/>
 			</div>
-		{:else if rule.operator === 'in' || rule.operator === 'notIn'}
+		{:else if rule.operator === 'isEmpty' || rule.operator === 'isNotEmpty'}
+			<!-- No value input needed for empty/not-empty checks -->
+			<span class="text-muted-foreground text-[10px] italic">no value required</span>
+		{:else if rule.operator === 'in' || rule.operator === 'notIn' || rule.operator === 'containsAny'}
 			<!-- Multi-select for ValueList, comma-separated input for other types -->
 			<!-- Debug: type={selectedParamInfo?.type}, hasOptions={!!selectedParamInfo?.options} -->
 			{#if selectedParamInfo?.type === 'valueList' && selectedParamInfo?.options && Object.keys(selectedParamInfo.options).length > 0}

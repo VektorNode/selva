@@ -2,26 +2,28 @@
 
 ## Getting Started
 
-- **[QuickStart.md](QuickStart.md)** — Setup instructions, development workflows, and initial configuration
-- **[ServerSetup.md](ServerSetup.md)** — Rhino Compute server deployment and configuration resources
+- **[QuickStart.md](QuickStart.md)** — Setup, development, and initial configuration
+- **[MultiOrg-LocalDev.md](MultiOrg-LocalDev.md)** — Test multi-org / multi-tenant locally (works with either provider)
+- **[Turborepo.md](Turborepo.md)** — How tasks are wired across the monorepo
+
+## Backend Providers
+
+Selva's auth, data, and storage are pluggable. Pick one when configuring the compute-app:
+
+- **[@selvajs/local-provider](../packages/local-provider/README.md)** — Filesystem + JSON + HMAC. Default. Single-instance.
+- **[@selvajs/supabase-provider](../packages/supabase-provider/README.md)** — Supabase Auth + Postgres + Storage. Multi-instance, RLS.
 
 ## Deployment
 
-All deployment guides have been consolidated into a clean structure under `deployment/`:
+- **[Compute App Deployment](./deployment/compute-app/README.md)** — Start here for deploying the Compute App
+  - [Prerequisites](./deployment/compute-app/PREREQUISITES.md) — System requirements, network, provider choice
+  - [Server Setup](./deployment/compute-app/SERVER_SETUP.md) — Install tools, clone, build
+  - [Node.js Deployment](./deployment/compute-app/NODE_DEPLOYMENT.md) — Deploy with PM2
+  - [Reverse Proxy (Caddy)](./deployment/compute-app/REVERSE_PROXY_LOAD_BALANCER.md) — HTTPS and reverse proxy
+- **[Rhino Compute Setup](./RHINO_COMPUTE.md)** — Set up the Rhino.Compute server
 
-- **[Deployment Overview](./deployment/README.md)** — Start here to understand deployment options
-  - **[Compute App Overview](./deployment/compute-app/OVERVIEW.md)** — Compute app deployment paths and quick start
-  - **[Prerequisites](./deployment/compute-app/PREREQUISITES.md)** — System requirements and network setup
-  - **[Server Setup](./deployment/compute-app/SERVER_SETUP.md)** — Install Node.js, clone repo, build
-  - **[Definitions Configuration](./deployment/compute-app/DEFINITIONS_SETUP.md)** — Configure your Grasshopper definitions
-  - **[Node.js Deployment](./deployment/compute-app/NODE_DEPLOYMENT.md)** — Deploy directly with PM2
-  - **[Docker Deployment](./deployment/compute-app/DOCKER_DEPLOYMENT.md)** — Deploy with Docker containers
+After the app is up, definitions are uploaded through the admin UI — there is no on-disk setup step.
 
 ## Release Management
 
-- **[CHANGELOG.md](./CHANGELOG.md)** — Guide to managing changelogs and versioning with Changesets across the monorepo
-
-## Security
-
-- **[SECURITY.md](./SECURITY.md)** — Comprehensive security guide including intellectual property protection, network security, authentication, and secrets management
-- **[Rhino Compute](./RHINO_COMPUTE.md)** — Rhino.Compute server setup and integration
+- **[Releasing.md](./Releasing.md)** — Managing changelogs and versioning with Changesets

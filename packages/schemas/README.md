@@ -7,11 +7,11 @@ Single source of truth for type-safe C# and TypeScript types across the entire c
 1. Edit `ui-schema.json`
 2. Run:
    ```bash
-   cd packages/schemas && npm run generate:all
+   cd packages/schemas && pnpm run generate:all
    ```
 3. Types auto-update in:
-   - TypeScript: `packages/shared/src/lib/types/generated/schema.ts`
-   - C#: `Plugin/Selva.Core/Models/UISchema.Generated.cs`
+   - TypeScript: `packages/schemas/src/generated/schema.ts`
+   - C#: `Plugin/Selva.Schema/Models/UISchema.Generated.cs`
 
 ## Adding a Type
 
@@ -48,7 +48,7 @@ Single source of truth for type-safe C# and TypeScript types across the entire c
    ```
 5. **Save and run:**
    ```bash
-   cd packages/schemas && npm run generate:all
+   cd packages/schemas && pnpm run generate:all
    ```
 6. **TypeScript and C# types update automatically** ✓
 
@@ -56,19 +56,19 @@ Single source of truth for type-safe C# and TypeScript types across the entire c
 
 ```json
 {
-  "definitions": {
-    "User": {
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "email": { "type": "string" },
-        "age": { "type": "integer" },
-        "active": { "type": "boolean" }
-      },
-      "required": ["id", "name", "email"]
-    }
-  }
+	"definitions": {
+		"User": {
+			"type": "object",
+			"properties": {
+				"id": { "type": "string" },
+				"name": { "type": "string" },
+				"email": { "type": "string" },
+				"age": { "type": "integer" },
+				"active": { "type": "boolean" }
+			},
+			"required": ["id", "name", "email"]
+		}
+	}
 }
 ```
 
@@ -76,13 +76,15 @@ Single source of truth for type-safe C# and TypeScript types across the entire c
 
 ## Type Mappings
 
-| JSON      | TypeScript | C#        |
-| --------- | ---------- | --------- |
-| `string`  | `string`   | `string`  |
-| `number`  | `number`   | `double?` |
-| `integer` | `number`   | `int?`    |
-| `boolean` | `boolean`  | `bool?`   |
-| `array`   | `T[]`      | `List<T>` |
+| JSON      | TypeScript | C# (required) | C# (optional) |
+| --------- | ---------- | ------------- | ------------- |
+| `string`  | `string`   | `string`      | `string`      |
+| `number`  | `number`   | `double`      | `double?`     |
+| `integer` | `number`   | `int`         | `int?`        |
+| `boolean` | `boolean`  | `bool`        | `bool?`       |
+| `array`   | `T[]`      | `List<T>`     | `List<T>`     |
+
+A property is "required" when it appears in the parent schema's `required` array.
 
 ## Discriminated Unions
 

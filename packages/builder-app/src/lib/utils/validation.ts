@@ -1,4 +1,4 @@
-import type { VisibilityRule, DiscoveredInput, GrasshopperParamType } from '@selva/shared';
+import type { VisibilityRule, DiscoveredInput, GrasshopperParamType } from '@selvajs/schemas';
 
 /**
  * Validates a visibility rule value against parameter constraints
@@ -9,8 +9,18 @@ export function validateRuleValue(
 ): string | null {
 	if (!paramInfo) return null;
 
-	// Validate 'in' and 'notIn' operators (which use rule.values array)
-	if ((rule.operator === 'in' || rule.operator === 'notIn') && rule.values) {
+	// 'isEmpty' / 'isNotEmpty' take no value
+	if (rule.operator === 'isEmpty' || rule.operator === 'isNotEmpty') {
+		return null;
+	}
+
+	// Validate 'in', 'notIn', and 'containsAny' operators (which use rule.values array)
+	if (
+		(rule.operator === 'in' ||
+			rule.operator === 'notIn' ||
+			rule.operator === 'containsAny') &&
+		rule.values
+	) {
 		if (!Array.isArray(rule.values) || rule.values.length === 0) {
 			return 'At least one value is required';
 		}
@@ -195,7 +205,15 @@ export function getOperatorsForType(
 	}
 
 	if (paramType === 'valueList') {
-		return [...baseOperators, { value: 'in', label: 'in' }, { value: 'notIn', label: 'not in' }];
+		return [
+			...baseOperators,
+			{ value: 'in', label: 'in' },
+			{ value: 'notIn', label: 'not in' },
+			{ value: 'contains', label: 'contains' },
+			{ value: 'containsAny', label: 'contains any of' },
+			{ value: 'isEmpty', label: 'is empty' },
+			{ value: 'isNotEmpty', label: 'is not empty' }
+		];
 	}
 
 	if (paramType === 'text') {

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 using Selva.GH.Features.FileIO;
 
 namespace Selva.GH.Features.UIBuilder.Helpers;
@@ -19,7 +19,10 @@ public static class ParameterTypeHelper
     /// </summary>
     public static bool IsContextOutputComponent(IGH_DocumentObject obj)
     {
-        if (obj == null) return false;
+        if (obj == null)
+        {
+            return false;
+        }
 
         var typeName = obj.GetType()?.Name;
         return string.Equals(typeName, "ContextPrintComponent", StringComparison.Ordinal);
@@ -28,7 +31,10 @@ public static class ParameterTypeHelper
 
     public static bool IsContextBakeComponent(IGH_DocumentObject obj)
     {
-        if (obj == null) return false;
+        if (obj == null)
+        {
+            return false;
+        }
 
         var typeName = obj.GetType()?.Name;
         return string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal);
@@ -39,10 +45,19 @@ public static class ParameterTypeHelper
     /// </summary>
     public static bool IsSourcedFromFileOutput(IGH_Param inputParam)
     {
-        if (inputParam == null) return false;
+        if (inputParam == null)
+        {
+            return false;
+        }
+
         foreach (var source in inputParam.Sources)
+        {
             if (source?.Attributes?.GetTopLevel?.DocObject is ISelvaFileOutput)
+            {
                 return true;
+            }
+        }
+
         return false;
     }
 
@@ -52,11 +67,106 @@ public static class ParameterTypeHelper
     /// </summary>
     public static bool IsFileOutputBakeComponent(GH_Component component)
     {
-        if (component == null || !IsContextBakeComponent(component)) return false;
-        if (component.Params.Input == null) return false;
+        if (component == null || !IsContextBakeComponent(component))
+        {
+            return false;
+        }
+
+        if (component.Params.Input == null)
+        {
+            return false;
+        }
+
         foreach (var inputParam in component.Params.Input)
+        {
             if (IsSourcedFromFileOutput(inputParam))
+            {
                 return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Returns true if the component is a ContextBakeComponent whose inputs are sourced
+    ///     from a component that outputs PlotlyFigure goo (detected by TypeName convention).
+    ///     Uses duck-typing so Selva.GH has no hard dependency on external chart assemblies.
+    /// </summary>
+    public static bool IsChartOutputBakeComponent(GH_Component component)
+    {
+        if (component == null || !IsContextBakeComponent(component))
+        {
+            return false;
+        }
+
+        if (component.Params.Input == null)
+        {
+            return false;
+        }
+
+        foreach (var inputParam in component.Params.Input)
+        {
+            if (IsSourcedFromChartOutput(inputParam))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Returns true if any source wired into <paramref name="inputParam" /> carries PlotlyFigure goo,
+    ///     detected by checking the goo TypeName from the upstream output param's volatile data,
+    ///     or from the ContextBake input param's own volatile data as a fallback.
+    /// </summary>
+    public static bool IsSourcedFromChartOutput(IGH_Param inputParam)
+    {
+        if (inputParam == null)
+        {
+            return false;
+        }
+
+        // Check the ContextBake input param's own volatile data (populated after solve)
+        if (inputParam.VolatileData != null && !inputParam.VolatileData.IsEmpty)
+        {
+            foreach (var goo in inputParam.VolatileData.AllData(true))
+            {
+                if (goo != null && string.Equals(goo.TypeName, "Plotly Figure", StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+
+        // Check upstream source params' volatile data and TypeName
+        foreach (var source in inputParam.Sources)
+        {
+            if (source == null)
+            {
+                continue;
+            }
+
+            // TypeName on the param itself (works for strongly-typed params)
+            if (string.Equals(source.TypeName, "Plotly Figure", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            // Volatile data on the upstream output param
+            if (source.VolatileData != null && !source.VolatileData.IsEmpty)
+            {
+                foreach (var goo in source.VolatileData.AllData(true))
+                {
+                    if (goo != null && string.Equals(goo.TypeName, "Plotly Figure", StringComparison.Ordinal))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
         return false;
     }
 
@@ -66,11 +176,20 @@ public static class ParameterTypeHelper
     /// </summary>
     public static bool IsWiredToOwner(GH_Component component, Guid ownerGuid)
     {
-        if (component?.Params.Input == null) return false;
+        if (component?.Params.Input == null)
+        {
+            return false;
+        }
+
         foreach (var inputParam in component.Params.Input)
         foreach (var source in inputParam.Sources)
+        {
             if (source?.Attributes?.GetTopLevel?.DocObject?.InstanceGuid == ownerGuid)
+            {
                 return true;
+            }
+        }
+
         return false;
     }
 
@@ -90,7 +209,9 @@ public static class ParameterTypeHelper
         var getNumberType = param.GetType();
 
         if (getNumberType.Name == "GetNumberParameter")
+        {
             ExtractParameterMinMax(param, availableParam, ref minimum, ref maximum);
+        }
 
         const double extremeThreshold = 7.9e307;
 
@@ -149,13 +270,19 @@ public static class ParameterTypeHelper
         // Apply extracted values
         availableParam.Minimum = minimum.Value;
         availableParam.Maximum = maximum.Value;
-        if (stepSize.HasValue) availableParam.StepSize = (double)stepSize.Value;
+        if (stepSize.HasValue)
+        {
+            availableParam.StepSize = (double)stepSize.Value;
+        }
     }
 
     private static bool TryGetPropertyValue<T>(object obj, string propName, out T value)
     {
         value = default;
-        if (obj == null) return false;
+        if (obj == null)
+        {
+            return false;
+        }
 
         var type = obj.GetType();
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic |
@@ -163,18 +290,28 @@ public static class ParameterTypeHelper
 
         var prop = type.GetProperty(propName, flags);
         if (prop == null)
+        {
             foreach (var p in type.GetProperties(flags))
+            {
                 if (string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase) ||
                     p.Name.EndsWith("." + propName, StringComparison.Ordinal))
                 {
                     prop = p;
                     break;
                 }
+            }
+        }
 
-        if (prop == null) return false;
+        if (prop == null)
+        {
+            return false;
+        }
 
         var raw = prop.GetValue(obj);
-        if (raw == null) return false;
+        if (raw == null)
+        {
+            return false;
+        }
 
         try
         {
@@ -206,12 +343,20 @@ public static class ParameterTypeHelper
         ref double? maximum)
     {
         if (TryGetPropertyValue<double>(param, "Minimum", out var minValue))
+        {
             if (!double.IsNegativeInfinity(minValue) && !double.IsNaN(minValue) && minValue != 0)
+            {
                 minimum = minValue;
+            }
+        }
 
         if (TryGetPropertyValue<double>(param, "Maximum", out var maxValue))
+        {
             if (!double.IsPositiveInfinity(maxValue) && !double.IsNaN(maxValue) && maxValue != 0)
+            {
                 maximum = maxValue;
+            }
+        }
     }
 
     public static ClearResult ClearContextualParameters(List<IGH_ContextualParameter> contextualParams,
@@ -222,6 +367,7 @@ public static class ParameterTypeHelper
         var recipientsToExpire = new HashSet<IGH_ActiveObject>();
 
         foreach (var contextParam in contextualParams)
+        {
             try
             {
                 ClearSingleParameter(contextParam);
@@ -235,6 +381,7 @@ public static class ParameterTypeHelper
                     $"Error clearing {paramName}: {ex.Message}");
                 errorCount++;
             }
+        }
 
         ExpireRecipients(recipientsToExpire, component);
 
@@ -251,24 +398,37 @@ public static class ParameterTypeHelper
     private static void ClearSingleParameter(IGH_ContextualParameter contextParam)
     {
         var clearMethod = contextParam.GetType().GetMethod("ClearContextualData");
-        if (clearMethod != null) clearMethod.Invoke(contextParam, null);
+        if (clearMethod != null)
+        {
+            clearMethod.Invoke(contextParam, null);
+        }
 
         var collectVolatileData = contextParam.GetType().GetMethod("CollectVolatileData_FromSources");
-        if (collectVolatileData != null) collectVolatileData.Invoke(contextParam, null);
+        if (collectVolatileData != null)
+        {
+            collectVolatileData.Invoke(contextParam, null);
+        }
     }
 
     private static void CollectRecipients(IGH_ContextualParameter contextParam,
         HashSet<IGH_ActiveObject> recipients)
     {
         if (contextParam is IGH_Param param)
+        {
             foreach (var recipient in param.Recipients)
+            {
                 if (recipient is IGH_ActiveObject activeRecipient)
+                {
                     recipients.Add(activeRecipient);
+                }
+            }
+        }
     }
 
     private static void ExpireRecipients(HashSet<IGH_ActiveObject> recipients, GH_Component component)
     {
         foreach (var recipient in recipients)
+        {
             try
             {
                 recipient.ExpirePreview(false);
@@ -278,6 +438,7 @@ public static class ParameterTypeHelper
                 component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
                     $"Error expiring component: {ex.Message}");
             }
+        }
     }
 
     /// <summary>
@@ -292,7 +453,10 @@ public static class ParameterTypeHelper
     {
         var downloadableComponents = new List<DiscoveredOutput>();
 
-        if (document == null) return (false, downloadableComponents);
+        if (document == null)
+        {
+            return (false, downloadableComponents);
+        }
 
         try
         {
@@ -311,8 +475,15 @@ public static class ParameterTypeHelper
                 }
 
                 // ContextBake fed by a file output component
-                if (!(obj is GH_Component c)) continue;
-                if (!IsFileOutputBakeComponent(c)) continue;
+                if (!(obj is GH_Component c))
+                {
+                    continue;
+                }
+
+                if (!IsFileOutputBakeComponent(c))
+                {
+                    continue;
+                }
 
                 downloadableComponents.Add(new DiscoveredOutput
                 {

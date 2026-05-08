@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Grasshopper.Kernel;
 using Rhino;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 using Selva.GH.Features.UIBuilder.Services.Communication;
-using Selva.GH.Features.UIBuilder.Services.Persistence;
 using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services.Schema;
@@ -25,11 +24,14 @@ public class SchemaCleanupService
         UISchema schema,
         ValueApplicator valueApplicator,
         Dictionary<string, object> embeddedValues,
-        CommunicationHandler communicationHandler,
+        WebSocketTransport webSocketTransport,
         GH_Document document,
         Action<GH_RuntimeMessageLevel, string> addMessage)
     {
-        if (removedIds == null || removedIds.Count == 0) return;
+        if (removedIds == null || removedIds.Count == 0)
+        {
+            return;
+        }
 
         try
         {
@@ -40,15 +42,20 @@ public class SchemaCleanupService
 
             // 2. Remove from embedded values
             if (embeddedValues != null)
+            {
                 foreach (var key in valuesToRemove)
+                {
                     embeddedValues.Remove(key);
+                }
+            }
 
             // 3. Schema is already updated by caller (ValidateSchemaAndTrackChanges)
             // This is the commit point - schema changes are persisted
 
             // 4. Broadcast to web UI (fire-and-forget)
-            var broadcastTask = communicationHandler?.BroadcastSchemaUpdate(schema, removedIds);
+            var broadcastTask = webSocketTransport?.BroadcastSchemaUpdate(schema, removedIds);
             if (broadcastTask != null)
+            {
                 _ = broadcastTask.ContinueWith(t =>
                 {
                     if (t.IsFaulted)
@@ -58,6 +65,7 @@ public class SchemaCleanupService
                             addMessage?.Invoke(GH_RuntimeMessageLevel.Warning, "Failed to notify web UI of deletion")));
                     }
                 });
+            }
 
             // 5. Mark document as modified so changes persist on save
             document?.Modified();

@@ -1,0 +1,37 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Lint before tests so style failures fail fast without spending the
+      # longer test pass first.
+      #
+      # `pnpm format:check` is NOT in CI yet — the codebase has ~94 pre-existing
+      # format drifts (pre-Prettier-config-change). Run `pnpm format` once,
+      # commit the result, then add format:check here.
+      - run: pnpm lint
+
+      # Tests read workspace-package source directly via the `"source"` export
+      # condition (vitest.config.ts `resolve.conditions: ['source']`), so no
+      # platform pre-build step is needed here.
+      #
+      # Excludes @selvajs/supabase-provider — needs a live stack with secrets.
+      # Add a separate workflow with environment secrets when ready.
+      - run: pnpm -r --filter '!@selvajs/supabase-provider' test

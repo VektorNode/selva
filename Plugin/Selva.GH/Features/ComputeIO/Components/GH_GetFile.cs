@@ -12,8 +12,9 @@ using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Rhino.Geometry;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 using Selva.GH.Config;
+using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Point = Rhino.Geometry.Point;
@@ -45,7 +46,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
     public override GH_Exposure Exposure => GH_Exposure.quinary;
 
     public override string TypeName => "File";
-    public override Guid ComponentGuid => new("B4F6E8D2-9A3C-4E7B-8D1F-5A9C7E2B4D6F");
+    public override Guid ComponentGuid => new Guid("B4F6E8D2-9A3C-4E7B-8D1F-5A9C7E2B4D6F");
 
     protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.CreateFile);
     public bool TreeAccess { get; set; }
@@ -60,7 +61,10 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
     {
         get
         {
-            if (_contextualFileData != null) yield return new FileInputGoo(_contextualFileData);
+            if (_contextualFileData != null)
+            {
+                yield return new FileInputGoo(_contextualFileData);
+            }
         }
     }
 
@@ -195,7 +199,9 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
         m_data.Clear();
 
         if (_contextualFileData != null && _isFromContextual)
+        {
             ImportAndOutputGeometry(_contextualFileData);
+        }
     }
 
     protected override void CollectVolatileData_FromSources()
@@ -212,7 +218,10 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
         // Priority 2: Manual input from text/path component
         foreach (var source in Sources)
         {
-            if (source == null) continue;
+            if (source == null)
+            {
+                continue;
+            }
 
             try
             {
@@ -224,7 +233,9 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
                 {
                     var persistentData = filePathParam.PersistentData;
                     if (persistentData != null && !persistentData.IsEmpty)
+                    {
                         firstItem = persistentData.AllData(true).FirstOrDefault();
+                    }
                 }
                 else if (source is Param_String stringParam)
                 {
@@ -237,12 +248,16 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
                     {
                         var volatileData = stringParam.VolatileData;
                         if (volatileData != null && !volatileData.IsEmpty)
+                        {
                             firstItem = volatileData.AllData(true).FirstOrDefault();
+                        }
                     }
                 }
 
                 if (firstItem == null)
+                {
                     continue;
+                }
 
                 var fileData = ExtractFileInputData(firstItem);
                 if (fileData != null)
@@ -290,7 +305,10 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
         foreach (var item in result.Geometry)
         {
             var geo = item.Geometry;
-            if (geo == null) continue;
+            if (geo == null)
+            {
+                continue;
+            }
 
             IGH_GeometricGoo goo = geo switch
             {
@@ -302,7 +320,10 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
                 _ => null
             };
 
-            if (goo != null) ghGeometry.Add(goo);
+            if (goo != null)
+            {
+                ghGeometry.Add(goo);
+            }
         }
 
         m_data.AppendRange(ghGeometry, new GH_Path(0));
@@ -335,11 +356,16 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
     /// </summary>
     private static FileInputData TryParseFileInputDataFromString(string str)
     {
-        if (string.IsNullOrEmpty(str)) return null;
+        if (string.IsNullOrEmpty(str))
+        {
+            return null;
+        }
 
         // Prevent DoS from large file data strings
         if (str.Length > MaxFileDataSize)
+        {
             return null;
+        }
 
         // Try to parse as JSON first
         try
@@ -360,7 +386,9 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
                 {
                     var validTypes = new[] { "path", "url", "base64" };
                     if (!validTypes.Contains(data.Type.ToLowerInvariant()))
+                    {
                         return null;
+                    }
                 }
 
                 return data;
@@ -381,7 +409,9 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
         {
             // Validate path string before creating FileInputData
             if (str.Length > MaxPathLength)
+            {
                 return null;
+            }
 
             return FileInputData.FromPath(str);
         }
@@ -398,24 +428,34 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
     private static bool ValidateFileInputData(FileInputData fileData)
     {
         if (fileData == null || string.IsNullOrWhiteSpace(fileData.File))
+        {
             return false;
+        }
 
         // Check for excessively long data
         if (fileData.File.Length > MaxFileDataSize)
+        {
             return false;
+        }
 
         // Validate type
         if (fileData.Type != null)
         {
             var validTypes = new[] { "path", "url", "base64" };
             if (!validTypes.Contains(fileData.Type.ToLowerInvariant()))
+            {
                 return false;
+            }
         }
 
         // Validate file extension
         if (fileData.FileEnding != null)
+        {
             if (!AcceptedFileFormats.Values.Contains(fileData.FileEnding.ToLowerInvariant()))
+            {
                 return false;
+            }
+        }
 
         return true;
     }
@@ -438,16 +478,28 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
             Prompt = reader.GetString("Prompt") ?? "Select a file to import";
 
             var atLeast = 1;
-            if (reader.TryGetInt32("AtLeast", ref atLeast)) AtLeast = atLeast;
+            if (reader.TryGetInt32("AtLeast", ref atLeast))
+            {
+                AtLeast = atLeast;
+            }
 
             var atMost = 1;
-            if (reader.TryGetInt32("AtMost", ref atMost)) AtMost = atMost;
+            if (reader.TryGetInt32("AtMost", ref atMost))
+            {
+                AtMost = atMost;
+            }
 
             var treeAccess = false;
-            if (reader.TryGetBoolean("TreeAccess", ref treeAccess)) TreeAccess = treeAccess;
+            if (reader.TryGetBoolean("TreeAccess", ref treeAccess))
+            {
+                TreeAccess = treeAccess;
+            }
 
             var immediate = true;
-            if (reader.TryGetBoolean("Immediate", ref immediate)) Immediate = immediate;
+            if (reader.TryGetBoolean("Immediate", ref immediate))
+            {
+                Immediate = immediate;
+            }
         }
         catch (Exception ex)
         {

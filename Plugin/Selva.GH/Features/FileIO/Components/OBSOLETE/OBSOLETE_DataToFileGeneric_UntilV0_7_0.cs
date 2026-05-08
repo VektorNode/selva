@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using Grasshopper.Kernel;
+using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
@@ -18,15 +19,15 @@ public class OBSOLETE_DataToFileGeneric_UntilV0_7_0 : GH_Component, ISelvaFileOu
 
     protected override Bitmap Icon => Resources.CreateFile;
 
-    public override Guid ComponentGuid => new("D7A3E1C5-B248-4F9A-8C6D-2E5F1A3B7D9E");
+    public override Guid ComponentGuid => new Guid("D7A3E1C5-B248-4F9A-8C6D-2E5F1A3B7D9E");
+
+
+    public override GH_Exposure Exposure => GH_Exposure.hidden;
 
     public override void CreateAttributes()
     {
         m_attributes = new GH_ContextBakeOutputAttributes(this);
     }
-
-
-    public override GH_Exposure Exposure => GH_Exposure.hidden;
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
@@ -53,7 +54,11 @@ public class OBSOLETE_DataToFileGeneric_UntilV0_7_0 : GH_Component, ISelvaFileOu
         var isBase64 = false;
         var subFolder = "";
 
-        if (!DA.GetData(0, ref data)) return;
+        if (!DA.GetData(0, ref data))
+        {
+            return;
+        }
+
         DA.GetData(1, ref name);
         DA.GetData(2, ref extension);
         DA.GetData(3, ref isBase64);
@@ -61,7 +66,9 @@ public class OBSOLETE_DataToFileGeneric_UntilV0_7_0 : GH_Component, ISelvaFileOu
 
         // Ensure extension starts with a dot
         if (!string.IsNullOrEmpty(extension) && !extension.StartsWith("."))
+        {
             extension = "." + extension;
+        }
 
         var fileData = new FileData
         {

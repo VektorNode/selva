@@ -1,17 +1,18 @@
 <script lang="ts">
-	import type { UISchema, ViewerOptions } from '@selva/shared';
-	import { Card, Input, Textarea, Label, Checkbox, Button, toast } from '@selva/shared';
-	import { Download, Upload } from '@lucide/svelte';
+	import type { UISchema, ViewerOptions } from '@selvajs/schemas';
+	import { Card, Input, Textarea, Label, Checkbox, Button, Collapsible, toast } from '@selvajs/ui';
+	import { ChevronDown, Download, Upload } from '@lucide/svelte';
 	import { exportSchemaAsFile, importSchemaFromFile } from '$lib/utils/schema-exporter';
 	import SchemaImportDialog from './SchemaImportDialog.svelte';
 	import type { ExportedSchema } from '$lib/utils/schema-exporter';
 
 	interface SchemaInfoPanelProps {
 		schema: UISchema;
+		open?: boolean;
 		onSchemaChange?: (schema: UISchema) => void;
 	}
 
-	let { schema, onSchemaChange }: SchemaInfoPanelProps = $props();
+	let { schema, open = $bindable(false), onSchemaChange }: SchemaInfoPanelProps = $props();
 
 	let fileInput: HTMLInputElement;
 	let showImportDialog = $state(false);
@@ -72,12 +73,20 @@
 	}
 </script>
 
-<Card.Root class="shadow-sm">
-	<Card.Header>
-		<Card.Title class="text-xl">Schema Information</Card.Title>
-	</Card.Header>
-	<Card.Content>
-		<div class="flex flex-col gap-4">
+<Collapsible.Root bind:open>
+	<Card.Root class="shadow-sm">
+		<Collapsible.Trigger
+			class="hover:bg-accent/40 flex w-full items-center justify-between gap-2 rounded-t-xl px-6 py-4 text-left transition-colors"
+		>
+			<Card.Title class="text-xl">Schema Information</Card.Title>
+			<ChevronDown
+				size={16}
+				class="text-muted-foreground transition-transform duration-200 {open ? 'rotate-180' : ''}"
+			/>
+		</Collapsible.Trigger>
+		<Collapsible.Content>
+			<Card.Content>
+				<div class="flex flex-col gap-4">
 			<div class="flex flex-col gap-2">
 				<Label for="schema-name">Name</Label>
 				<Input
@@ -167,9 +176,11 @@
 					files).
 				</p>
 			</div>
-		</div>
-	</Card.Content>
-</Card.Root>
+				</div>
+			</Card.Content>
+		</Collapsible.Content>
+	</Card.Root>
+</Collapsible.Root>
 
 <!-- Hidden file input -->
 <input

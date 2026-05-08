@@ -1,29 +1,89 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { enhance } from '$app/forms';
-	import { Button, PageHeader } from '@selva/shared';
+	import { SideNav, type SideNavItem } from '@selvajs/ui';
+	import {
+		Gauge,
+		Building2,
+		Folders,
+		Users,
+		Server,
+		Settings,
+		ScrollText
+	} from '@lucide/svelte';
+	import AppHeader from '$lib/components/AppHeader.svelte';
+	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 
+	interface LayoutData {
+		platformPermissions: PlatformPermission[];
+		orgPermissions: OrgPermission[];
+	}
 	interface LayoutProps {
+		data: LayoutData;
 		children?: import('svelte').Snippet;
 	}
+	let { data, children }: LayoutProps = $props();
 
-	let { children }: LayoutProps = $props();
+	// Client-side gate — `instance_admin` implies every perm.
+	const can = (p: PlatformPermission | OrgPermission) => {
+		if (data.platformPermissions.includes('instance_admin')) return true;
+		if (data.platformPermissions.includes(p as PlatformPermission)) return true;
+		return data.orgPermissions.includes(p as OrgPermission);
+	};
+
+	const items = $derived(
+		[
+			{ href: '/admin', label: 'General', icon: Gauge, show: true },
+			{
+				href: '/admin/organizations',
+				label: 'Organizations',
+				icon: Building2,
+				match: 'prefix' as const,
+				show: can('instance_admin')
+			},
+			{
+				href: '/admin/projects',
+				label: 'Projects',
+				icon: Folders,
+				match: 'prefix' as const,
+				show: can('instance_admin')
+			},
+			{
+				href: '/admin/users',
+				label: 'Users',
+				icon: Users,
+				match: 'prefix' as const,
+				show: can('manage_instance_users')
+			},
+			{
+				href: '/admin/compute',
+				label: 'Compute',
+				icon: Server,
+				match: 'prefix' as const,
+				show: can('manage_compute')
+			},
+			{
+				href: '/admin/system',
+				label: 'System',
+				icon: Settings,
+				match: 'prefix' as const,
+				show: can('manage_updates')
+			},
+			{
+				href: '/admin/audit',
+				label: 'Audit log',
+				icon: ScrollText,
+				match: 'prefix' as const,
+				show: can('instance_admin')
+			}
+		].filter((i) => i.show) satisfies (SideNavItem & { show: boolean })[]
+	);
 </script>
 
-{#if $page.url.pathname.startsWith('/admin/login')}
-	{@render children?.()}
-{:else}
-	<div class="bg-background min-h-screen">
-		<PageHeader title="Selva Admin" showModeToggle={true}>
-			{#snippet rightContent()}
-				<form method="POST" action="/admin/logout" use:enhance>
-					<Button type="submit" variant="destructive" size="sm">Logout</Button>
-				</form>
-			{/snippet}
-		</PageHeader>
+<AppHeader>
+	{#snippet sidenav()}
+		<SideNav {items} eyebrow="Platform" />
+	{/snippet}
 
-		<main class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
-			{@render children?.()}
-		</main>
+	<div class="px-(--page-px) py-(--page-py)">
+		{@render children?.()}
 	</div>
-{/if}
+</AppHeader>

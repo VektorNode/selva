@@ -24,14 +24,52 @@ NC='\033[0m' # No Color
 
 # Configuration
 INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
+SCRIPT_PATH="$INSTALL_DIR/scripts/update.sh"
 NO_RESTART=false
 NO_PULL=false
 RESTART_ONLY=false
 TARGET_BRANCH=""
 
-# Parse arguments
+################################################################################
+# SELF-UPDATE CHECK (must run before all other logic)
+################################################################################
+# Check if we need to update ourselves from git.
+# Use --self-updated flag instead of env var to survive subshells reliably.
+SELF_UPDATED=false
+for arg in "$@"; do
+  if [ "$arg" = "--self-updated" ]; then
+    SELF_UPDATED=true
+    break
+  fi
+done
+
+if [ "$SELF_UPDATED" != "true" ] && [ -d "$INSTALL_DIR/.git" ]; then
+  SCRIPT_VERSION=$(git -C "$INSTALL_DIR" log -1 --format=%H -- scripts/update.sh 2>/dev/null || echo "")
+
+  # Fetch latest to check for remote changes
+  git -C "$INSTALL_DIR" fetch origin 2>/dev/null || true
+  REMOTE_VERSION=$(git -C "$INSTALL_DIR" log -1 --format=%H origin/$(git -C "$INSTALL_DIR" rev-parse --abbrev-ref HEAD) -- scripts/update.sh 2>/dev/null || echo "")
+
+  if [ "$SCRIPT_VERSION" != "$REMOTE_VERSION" ] && [ -n "$REMOTE_VERSION" ]; then
+    echo -e "${YELLOW}→ Updating update.sh from latest repository version...${NC}"
+
+    # Pull the latest version of this script
+    git -C "$INSTALL_DIR" checkout origin/$(git -C "$INSTALL_DIR" rev-parse --abbrev-ref HEAD) -- scripts/update.sh 2>/dev/null || true
+
+    if [ -f "$SCRIPT_PATH" ]; then
+      echo -e "${GREEN}✓ Update script refreshed. Re-executing with latest version...${NC}"
+      echo ""
+      # Re-execute with the new version, inject --self-updated, pass all original args
+      exec bash "$SCRIPT_PATH" --self-updated "$@"
+    fi
+  fi
+fi
+
+# Parse arguments (strip --self-updated so it doesn't trigger "Unknown option")
+ARGS=()
 while [[ $# -gt 0 ]]; do
   case $1 in
+    --self-updated) shift ;;
     --no-restart) NO_RESTART=true; shift ;;
     --no-pull) NO_PULL=true; shift ;;
     --restart-only) RESTART_ONLY=true; shift ;;
@@ -103,20 +141,79 @@ if [ ! -d "$INSTALL_DIR" ]; then
   exit 1
 fi
 
-# Prevent concurrent runs
+# Prevent concurrent runs using flock if available, falling back to PID-based lock
 LOCK_FILE="/tmp/selva-update.lock"
-if [ -f "$LOCK_FILE" ]; then
-  LOCK_PID=$(cat "$LOCK_FILE")
-  if kill -0 "$LOCK_PID" 2>/dev/null; then
-    print_error "Update already in progress (PID $LOCK_PID). Exiting."
+if command -v flock >/dev/null 2>&1; then
+  # flock-based locking: robust against PID recycling
+  exec 9>"$LOCK_FILE"
+  if ! flock -n 9; then
+    print_error "Update already in progress (flock held). Exiting."
     exit 1
-  else
-    print_warning "Stale lock file found — removing."
-    rm -f "$LOCK_FILE"
   fi
+  # Lock is held via fd 9 for the lifetime of this process — auto-released on exit
+else
+  # Fallback: PID-based lock with /proc validation (avoids PID recycling false positives)
+  if [ -f "$LOCK_FILE" ]; then
+    LOCK_PID=$(cat "$LOCK_FILE")
+    # Check if process is alive AND is actually an instance of this script
+    if kill -0 "$LOCK_PID" 2>/dev/null && \
+       [ -d "/proc/$LOCK_PID" ] && \
+       grep -q "update.sh" "/proc/$LOCK_PID/cmdline" 2>/dev/null; then
+      print_error "Update already in progress (PID $LOCK_PID). Exiting."
+      exit 1
+    else
+      print_warning "Stale lock file found — removing."
+      rm -f "$LOCK_FILE"
+    fi
+  fi
+  echo $$ > "$LOCK_FILE"
+  trap 'rm -f "$LOCK_FILE"' EXIT
 fi
-echo $$ > "$LOCK_FILE"
-trap 'rm -f "$LOCK_FILE"' EXIT
+
+################################################################################
+# 0. PRE-FLIGHT CHECKS
+################################################################################
+print_header "Pre-flight Checks"
+
+print_step "Checking git status..."
+cd "$INSTALL_DIR"
+
+# Check for merge conflicts or unresolved state
+if [ -f ".git/MERGE_HEAD" ]; then
+  print_error "Git merge in progress from previous failed update!"
+  echo "To recover, run one of:"
+  echo "  git merge --abort      # Cancel the merge"
+  echo "  git merge --continue   # Complete the merge"
+  exit 1
+fi
+
+# Check for rebase in progress
+if [ -f ".git/rebase-merge/applying" ] || [ -f ".git/rebase-apply/applying" ]; then
+  print_error "Git rebase/am in progress from previous failed update!"
+  echo "To recover, run: git rebase --abort"
+  exit 1
+fi
+
+# Ensure the runtime data folder is never touched by git.
+# .gitignore already covers untracked files; handle the edge case where
+# it was accidentally committed/tracked.
+print_step "Protecting .selva-data/ from git..."
+DEFINITIONS_PATHS=(
+  ".selva-data"
+)
+
+for DEF_PATH in "${DEFINITIONS_PATHS[@]}"; do
+  if git ls-files --error-unmatch "$DEF_PATH" >/dev/null 2>&1; then
+    print_warning "Removing '$DEF_PATH' from git index..."
+    git rm --cached -r -f "$DEF_PATH" 2>/dev/null || true
+  fi
+  # skip-worktree prevents git from overwriting the path even during checkout/reset
+  for tracked_file in $(git ls-files "$DEF_PATH" 2>/dev/null); do
+    git update-index --skip-worktree "$tracked_file" 2>/dev/null || true
+  done
+done
+
+print_success "Definitions folder protected"
 
 ################################################################################
 # 1. CHECK STATUS
@@ -198,17 +295,23 @@ REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH)
   if ! git pull origin $CURRENT_BRANCH 2>&1; then
     # Check if the failure was due to merge conflicts
     if git diff --name-only --diff-filter=U | grep -q .; then
-      print_error "Merge conflicts detected! Aborting merge..."
-      git merge --abort 2>/dev/null || true
+      print_error "Merge conflicts detected during pull!"
       echo ""
       echo "Conflicting files:"
       git diff --name-only --diff-filter=U
       echo ""
-      echo "To resolve manually:"
-      echo "  1. cd $INSTALL_DIR"
-      echo "  2. git pull origin $CURRENT_BRANCH"
-      echo "  3. Resolve conflicts, then: git add . && git commit"
-      echo "  4. Re-run: bash update.sh --no-pull"
+      print_step "To recover, try one of:"
+      echo "  1. Strategy A (keep local changes):"
+      echo "     git merge --abort"
+      echo "     git clean -fd  # Remove untracked files"
+      echo "     bash update.sh --no-pull  # Retry without pulling"
+      echo ""
+      echo "  2. Strategy B (discard local changes and use remote):"
+      echo "     git merge --abort"
+      echo "     git reset --hard origin/$CURRENT_BRANCH"
+      echo "     bash update.sh --no-pull  # Retry without pulling"
+      echo ""
+      exit 1
     else
       print_error "git pull failed. Check your network connection or repository access."
     fi
@@ -256,29 +359,14 @@ print_success "Dependencies updated"
 ################################################################################
 print_header "Step 3: Building Application"
 
-# Check if shared package has changed since the last build
-SHARED_CHANGED=false
-if [ "$NO_PULL" = true ]; then
-  # No pull means we can't compare commits — assume shared may have changed
-  SHARED_CHANGED=true
-elif git diff --name-only "$LOCAL_COMMIT" HEAD -- packages/shared | grep -q .; then
-  SHARED_CHANGED=true
-fi
-
-cd "$INSTALL_DIR"
-
-if [ "$SHARED_CHANGED" = true ]; then
-  print_step "Changes detected in shared package — building shared..."
-  run_build pnpm run build:shared
-  print_success "Shared package built"
-else
-  print_warning "No changes in packages/shared — skipping shared build"
-fi
-
+# Build compute-app and all its workspace dependencies. Turbo derives the
+# build order from the workspace dep graph and skips any package whose
+# inputs haven't changed since the last build (its cache replaces the
+# pre-turbo "did packages/shared change?" check we used to do here).
 print_step "Building compute-app for production..."
-cd "$INSTALL_DIR/packages/compute-app"
+cd "$INSTALL_DIR"
 export ADAPTER=node
-run_build pnpm build
+run_build pnpm build --filter=@selvajs/compute-app
 print_success "Compute-app built"
 
 fi # end of restart-only skip block
@@ -294,7 +382,7 @@ if [ "$NO_RESTART" = false ]; then
     cd "$INSTALL_DIR"
     # Use restart (not reload) — graceful rolling reload causes ERR_MODULE_NOT_FOUND
     # because old workers try to lazy-import chunks that the new build replaced.
-    pm2 restart selva-compute --update-env
+    pm2 restart "$INSTALL_DIR/ecosystem.config.cjs" --update-env
 
     # Wait for restart and check status via JSON to avoid awk parsing fragility
     sleep 3
@@ -331,8 +419,11 @@ print_header "Verification"
 if [ "$PM2_RUNNING" = true ]; then
   print_step "Running health check..."
 
-  # Get port from .env
-  PORT=$(grep "^PORT=" "$INSTALL_DIR/packages/compute-app/.env" | cut -d'=' -f2 | tr -d ' ')
+  # Get port from .env — handles quoted values and inline comments
+  PORT=$(grep "^PORT=" "$INSTALL_DIR/packages/compute-app/.env" 2>/dev/null \
+    | head -1 \
+    | cut -d'=' -f2 \
+    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//' -e 's/[[:space:]]*#.*//')
   PORT=${PORT:-3000}
 
   # Retry health check for up to 30 seconds

@@ -5,12 +5,13 @@
 Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for building interactive Grasshopper definitions.
 
 **Architecture:**
+
 - **Monorepo:** Two main stacks managed in a single repository
   - Backend: C# plugin (`Plugin/`) targeting .NET net48 (Rhino 7) and net7.0 (Rhino 8)
   - Frontend: TypeScript/SvelteKit apps in `packages/` for two deployment modes
-- **Local Mode** (`@selva/builder-app`): Schema designer with WebSocket connection to Grasshopper
-- **Cloud Mode** (`@selva/compute-app`): Standalone app using Rhino.Compute for cloud solving
-- **Shared** (`@selva/shared`): Components, utilities, and theme system
+- **Local Mode** (`@selvajs/builder-app`): Schema designer with WebSocket connection to Grasshopper
+- **Cloud Mode** (`@selvajs/compute-app`): Standalone app using Rhino.Compute for cloud solving
+- **Shared** (`@selvajs/ui`): Components, utilities, and theme system
 
 Copilot should use this context when generating code, explanations, review comments, or test scaffolding.
 
@@ -27,11 +28,13 @@ Copilot should use this context when generating code, explanations, review comme
 ## 3. Build, Test, Run, and Validate
 
 **Setup (required first):**
+
 ```bash
 pnpm install
 ```
 
 **Backend (C#):**
+
 ```bash
 cd Plugin
 dotnet build                           # Debug build
@@ -40,30 +43,34 @@ dotnet test                            # Run tests
 ```
 
 **Frontend (TypeScript/Svelte):**
+
 ```bash
 pnpm dev                    # Dev server (http://localhost:5173)
 pnpm type-check             # TypeScript check
 pnpm lint                   # Lint all files
 pnpm format                 # Format with Prettier
-pnpm run build:all          # Build all packages
+pnpm build                  # Build all packages (Turborepo, with caching)
 ```
 
 **Schema workflow (when modifying ui-schema.json):**
+
 ```bash
 cd packages/schemas && pnpm run generate:all
-# Updates: packages/shared/src/lib/types/generated/schema.ts
-#          Plugin/Selva.Core/Models/UISchema.Generated.cs
+# Updates: packages/schemas/src/generated/schema.ts
+#          Plugin/Selva.Schema/Models/UISchema.Generated.cs
 ```
 
 **Production build:**
+
 ```bash
 pnpm run build:plugin  # Builds plugin with embedded web assets
 ```
 
 **Deployment:**
+
 ```bash
 pm2 start ecosystem.config.cjs              # Start with PM2
-pm2 reload selva-compute --update-env       # Graceful reload (zero-downtime)
+pm2 restart selva-compute --update-env      # Restart after config or env change
 ```
 
 ## 4. Code Style and Conventions
@@ -95,9 +102,9 @@ When asked to help generate commit messages:
 - **Single source of truth:** `packages/schemas/ui-schema.json` generates both C# and TypeScript
 - When adding new types or properties, always update the schema and run `generate:all`
 - Never manually edit generated files:
-  - `packages/shared/src/lib/types/generated/schema.ts`
-  - `Plugin/Selva.Core/Models/UISchema.Generated.cs`
-- Type mappings: string → string, number → double?, integer → int?, boolean → bool?, array → List<T>
+  - `packages/schemas/src/generated/schema.ts`
+  - `Plugin/Selva.Schema/Models/UISchema.Generated.cs`
+- Type mappings (C# nullable when the property is not in `required`): string → string, number → double / double?, integer → int / int?, boolean → bool / bool?, array → List<T>
 
 ## 8. Do Not
 

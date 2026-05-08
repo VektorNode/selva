@@ -8,14 +8,12 @@ using System.Windows.Forms;
 using GH_IO.Serialization;
 using Grasshopper.Kernel;
 using Rhino;
-using Selva.Core.Models;
-using Selva.Core.Services;
+using Selva.Schema.Models;
+using Selva.Schema.Services;
 using Selva.GH.Config;
 using Selva.GH.Features.UIBuilder.Helpers;
-using Selva.GH.Features.UIBuilder.Models;
+using Selva.GH.Features.UIBuilder.Goos;
 using Selva.GH.Features.UIBuilder.Services;
-using Selva.GH.Features.UIBuilder.Services.State;
-using Selva.GH.Features.UIBuilder.Services.UI;
 using Selva.GH.Properties;
 using Selva.GH.Utilities.Guards;
 using Selva.GH.Utilities.Helpers;
@@ -35,6 +33,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     private bool _disposed;
     private UISchema _embeddedSchema;
     private Dictionary<string, object> _embeddedValues;
+    private EventHandler _onDocumentModified;
+    private EventHandler _onSolutionEnded;
+
+    // Named event handler references so they can be unsubscribed on Dispose
+    private EventHandler _onSolutionStarted;
     private UIBuilderService _service;
     private string _sessionId;
 
@@ -48,9 +51,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     /// <summary>
     ///     Helper property to check if WebSocket communication is available
     /// </summary>
-    private bool IsConnected => _service?.CommunicationHandler?.IsRunning == true;
+    private bool IsConnected => _service?.WebSocketTransport?.IsRunning == true;
 
-    public override Guid ComponentGuid => new("D4E5F6A7-B8C9-4D5E-0F1A-2B3C4D5E6F7A");
+    public override Guid ComponentGuid => new Guid("D4E5F6A7-B8C9-4D5E-0F1A-2B3C4D5E6F7A");
 
     protected override Bitmap Icon => Resources.UIBridge;
 
@@ -122,22 +125,31 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
         var transition = _service.StateManager.ProcessEnableInput(enable);
 
-        if (transition.EnableFalling) HandleDisablingState(document);
+        if (transition.EnableFalling)
+        {
+            HandleDisablingState(document);
+        }
 
         // Register document events only when enabled
         if (enable)
         {
             if (_currentDocument != document)
+            {
                 _currentDocument = document;
+            }
 
             _service.EventManager.RegisterEvents(document);
         }
 
         // Handle current state
         if (enable)
+        {
             HandleEnabledState(DA, document, transition);
+        }
         else
+        {
             HandleDisabledState(DA, document);
+        }
     }
 
     /// <summary>
@@ -145,7 +157,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     /// </summary>
     private void InitializeDependencies()
     {
-        if (_service != null) return;
+        if (_service != null)
+        {
+            return;
+        }
 
         // Always generate a new session ID on first initialization (don't restore from file)
         _sessionId = new SessionManager().CreateNewSession();
@@ -170,28 +185,70 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         // Wire up parameter deletion handler
         _service.DocumentSyncService.OnParameterDeletionRequired += HandleParameterDeletion;
 
-        // Wire up solution events
-        _service.EventManager.SolutionStarted += (s, e) =>
+        // Keep watched set in sync when new params are merged into the schema
+        _service.DocumentSyncService.OnNewIdsDiscovered += ids =>
+            _service.EventManager.RegisterWatchedIds(ids);
+
+        // Wire up solution events — stored as named fields so they can be unsubscribed on Dispose
+        _onSolutionStarted = (s, e) =>
         {
 #if DEBUG
-			Logger.Log("[UIBuilder] SolutionStart");
+            Logger.Log("[UIBuilder] SolutionStart");
 #endif
             _service.StateManager.SetSolving(true);
         };
-        _service.EventManager.SolutionEnded += (s, e) =>
+        _onSolutionEnded = (s, e) =>
         {
             var wasActuallySolving = _service.StateManager.SetSolving(false);
 #if DEBUG
-			Logger.Log($"[UIBuilder] SolutionEnd — wasActuallySolving={wasActuallySolving}");
+            Logger.Log($"[UIBuilder] SolutionEnd — wasActuallySolving={wasActuallySolving}");
 #endif
             if (wasActuallySolving)
             {
                 _service.EventManager.CollectAndBroadcastOutputs(_embeddedSchema);
                 _service.EventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
+
+                // Sync ContextBake outputs: add newly-qualifying, remove unwired ones
+                if (_embeddedSchema != null)
+                {
+                    var document = OnPingDocument();
+                    var (addedIds, removedIds) =
+                        _service.SchemaSynchronizer.MergePostSolveBakeOutputs(_embeddedSchema, document);
+                    if (addedIds.Count > 0 || removedIds.Count > 0)
+                    {
+                        if (addedIds.Count > 0)
+                        {
+                            _service.EventManager.RegisterWatchedIds(addedIds);
+                        }
+
+                        _ = _service.WebSocketTransport
+                            .BroadcastSchemaUpdate(_embeddedSchema, removedIds.Count > 0 ? removedIds : null)
+                            .ContinueWith(t =>
+                            {
+                                if (t.IsFaulted)
+                                {
+                                    Logger.Error("Failed to broadcast schema update after bake output sync",
+                                        t.Exception);
+                                }
+                            });
+                        GHDocumentMutator.ScheduleComponentExpire(document, this, true);
+                    }
+                }
             }
 
             ClearAllContextualParameters();
         };
+        _onDocumentModified = (s, e) =>
+        {
+            if (_embeddedSchema != null)
+            {
+                _service.EventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
+            }
+        };
+
+        _service.EventManager.SolutionStarted += _onSolutionStarted;
+        _service.EventManager.SolutionEnded += _onSolutionEnded;
+        _service.EventManager.DocumentModified += _onDocumentModified;
     }
 
 
@@ -210,7 +267,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                     var started = await _service.ServerManager.StartServersAsync(_sessionId);
 
                     if (started)
-                        // Show Web UI URL if embedded assets are available
+                    // Show Web UI URL if embedded assets are available
+                    {
                         if (_service.ServerManager.HttpPort.HasValue)
                         {
                             var wsPort = _service.ServerManager.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
@@ -221,6 +279,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                                     $"Web UI available at: http://localhost:{httpPort}/?session={_sessionId}&wsPort={wsPort}");
                             }));
                         }
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -235,8 +294,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
 
         if (_embeddedSchema != null && transition.EnableRising)
-            // Validate schema on enable to remove any parameters deleted while component was off
-            _embeddedSchema = _service.SchemaManager.ValidateSchema(_embeddedSchema, document);
+        {
+            // Remove any parameters deleted while component was off
+            _embeddedSchema = _service.SchemaSynchronizer.ValidateSchema(_embeddedSchema, document);
+            // Reconcile nicknames renamed while component was off (or Rhino was closed)
+            _service.SchemaSynchronizer.SyncNicknamesFromDocument(_embeddedSchema, document);
+            // Seed the watched set so UndoStateChanged can short-circuit correctly
+            _service.EventManager.RegisterWatchedObjects(_embeddedSchema);
+        }
 
         DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
     }
@@ -276,7 +341,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             _embeddedSchema,
             _service.ValueApplicator,
             _embeddedValues,
-            _service.CommunicationHandler,
+            _service.WebSocketTransport,
             document,
             AddRuntimeMessage
         );
@@ -286,8 +351,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         try
         {
-            // Get WebSocket port from CommunicationHandler
-            var wsPort = _service?.CommunicationHandler?.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
+            // Get WebSocket port from WebSocketTransport
+            var wsPort = _service?.WebSocketTransport?.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
 
             // Use embedded web server if available, otherwise fall back to dev server
             var url = _service?.WebServer?.IsRunning == true
@@ -339,13 +404,115 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         Cleanup();
     }
 
+    private static readonly Guid BooleanToggleGuid = new Guid("2e78987b-9dfb-42a2-8b76-3923ac8bd91a");
+    private static readonly Guid HopsContextBakeGuid = new Guid("ae2531b4-bab2-4bb1-b5bf-f2143d10c132");
+
+    public override void AddedToDocument(GH_Document document)
+    {
+        base.AddedToDocument(document);
+
+        if (document == null || !IsFreshPlacement())
+        {
+            return;
+        }
+
+        try
+        {
+            WireDefaultNeighbors(document);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Auto-wire on placement failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    ///     True only when this component was just dropped on a fresh canvas position —
+    ///     not on file load, paste, or when the user has already wired/loaded state.
+    /// </summary>
+    private bool IsFreshPlacement()
+    {
+        if (_embeddedSchema != null)
+        {
+            return false;
+        }
+
+        if (Params.Input.Count > 0 && Params.Input[0].SourceCount > 0)
+        {
+            return false;
+        }
+
+        if (Params.Output.Count > 0 && Params.Output[0].Recipients.Count > 0)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private void WireDefaultNeighbors(GH_Document document)
+    {
+        const float gap = 40f;
+
+        if (Attributes == null)
+        {
+            return;
+        }
+
+        Attributes.PerformLayout();
+        var selfBounds = Attributes.Bounds;
+        var centerY = selfBounds.Y + selfBounds.Height / 2f;
+
+        var toggle = Grasshopper.Instances.ComponentServer.EmitObject(BooleanToggleGuid) as IGH_Param;
+        if (toggle != null && Params.Input.Count > 0)
+        {
+            document.AddObject(toggle, false);
+            if (toggle.Attributes != null)
+            {
+                toggle.Attributes.Pivot = new PointF(selfBounds.Left - gap, centerY);
+                toggle.Attributes.ExpireLayout();
+                toggle.Attributes.PerformLayout();
+
+                var tBounds = toggle.Attributes.Bounds;
+                var dx = (selfBounds.Left - gap) - tBounds.Right;
+                var dy = centerY - (tBounds.Y + tBounds.Height / 2f);
+                toggle.Attributes.Pivot = new PointF(toggle.Attributes.Pivot.X + dx, toggle.Attributes.Pivot.Y + dy);
+                toggle.Attributes.ExpireLayout();
+            }
+            Params.Input[0].AddSource(toggle);
+        }
+
+        var bake = Grasshopper.Instances.ComponentServer.EmitObject(HopsContextBakeGuid);
+        if (bake is IGH_Component bakeComponent && Params.Output.Count > 0 && bakeComponent.Params.Input.Count > 0)
+        {
+            document.AddObject(bakeComponent, false);
+            if (bakeComponent.Attributes != null)
+            {
+                bakeComponent.Attributes.Pivot = new PointF(selfBounds.Right + gap, centerY);
+                bakeComponent.Params.Input[0].NickName = "Schema";
+                bakeComponent.Attributes.ExpireLayout();
+                bakeComponent.Attributes.PerformLayout();
+
+                var bBounds = bakeComponent.Attributes.Bounds;
+                var dx = (selfBounds.Right + gap) - bBounds.Left;
+                var dy = centerY - (bBounds.Y + bBounds.Height / 2f);
+                bakeComponent.Attributes.Pivot = new PointF(bakeComponent.Attributes.Pivot.X + dx, bakeComponent.Attributes.Pivot.Y + dy);
+                bakeComponent.Attributes.ExpireLayout();
+            }
+            bakeComponent.Params.Input[0].AddSource(Params.Output[0]);
+        }
+    }
+
     /// <summary>
     ///     Clear contextual data from all inputs and outputs after each solve
     /// </summary>
     private void ClearAllContextualParameters()
     {
         var document = OnPingDocument();
-        if (document == null) return;
+        if (document == null)
+        {
+            return;
+        }
 
         try
         {
@@ -359,12 +526,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
             // Clear context output components (ContextPrintComponent)
             foreach (var obj in document.Objects)
+            {
                 if (ParameterTypeHelper.IsContextOutputComponent(obj) ||
                     ParameterTypeHelper.IsContextBakeComponent(obj))
                 {
                     var clearMethod = obj.GetType().GetMethod("ClearContextualData");
                     clearMethod?.Invoke(obj, null);
                 }
+            }
         }
         catch (Exception ex)
         {
@@ -378,6 +547,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     private void CleanupCommunication()
     {
         if (_service?.ServerManager != null)
+        {
             try
             {
                 // Use ServerLifecycleManager to stop servers and notify clients
@@ -387,21 +557,33 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             {
                 Logger.Warn($"Error during communication cleanup: {ex.Message}");
             }
+        }
     }
 
     private void Cleanup()
     {
         CleanupCommunication();
-        _service?.EventManager?.UnregisterEvents();
+
+        if (_service?.EventManager != null)
+        {
+            _service.EventManager.SolutionStarted -= _onSolutionStarted;
+            _service.EventManager.SolutionEnded -= _onSolutionEnded;
+            _service.EventManager.DocumentModified -= _onDocumentModified;
+            _service.EventManager.UnregisterEvents();
+        }
+
         _service?.ValueApplicator?.Clear();
-        _service?.SchemaManager?.ClearMetadataCache();
+        _service?.SchemaSynchronizer?.ClearMetadataCache();
         _service?.StateManager?.Reset();
         _currentDocument = null;
     }
 
     protected virtual void Dispose(bool disposing)
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
 
         if (disposing)
         {
@@ -417,6 +599,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         // Use persistence service to save schema and values
         if (_service?.PersistenceService != null)
+        {
             try
             {
                 var lastValues = _service.ValueApplicator?.GetLastAppliedValues();
@@ -426,24 +609,29 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Could not save schema/values: {ex.Message}");
             }
+        }
 
         // Append to schema history on every GH file save
         if (_embeddedSchema != null)
+        {
             try
             {
                 var doc = OnPingDocument();
                 var documentId = doc?.DocumentID ?? Guid.Empty;
                 if (documentId != Guid.Empty)
+                {
                     SchemaBackupService.AppendHistory(
                         _embeddedSchema,
                         documentId,
                         Logger.Warn
                     );
+                }
             }
             catch (Exception ex)
             {
                 Logger.Warn($"Could not write schema history: {ex.Message}");
             }
+        }
 
         return base.Write(writer);
     }
@@ -451,9 +639,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     public override bool Read(GH_IReader reader)
     {
         if (reader.ItemExists("Schema") || reader.ItemExists("Values"))
+        {
             try
             {
-                var persistenceService = new SchemaPersistenceService(PluginVersion);
+                var persistenceService = new SchemaArchiveSerializer(PluginVersion);
                 var result = persistenceService.DeserializeFromArchive(reader);
 
                 if (result.HasValue)
@@ -476,6 +665,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Could not load data: {ex.Message}");
             }
+        }
 
         return base.Read(reader);
     }

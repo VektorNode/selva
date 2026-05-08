@@ -23,7 +23,10 @@ public static class Utils
             bitmap1.SetPixel(x, 21, white);
         }
 
-        for (var x = 11; x < 22; x += 2) bitmap1.SetPixel(x, 21, white);
+        for (var x = 11; x < 22; x += 2)
+        {
+            bitmap1.SetPixel(x, 21, white);
+        }
 
         bitmap1.SetPixel(11, 17, white);
         bitmap1.SetPixel(13, 17, white);

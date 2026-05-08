@@ -5,8 +5,8 @@ using System.Text;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
-using Selva.Core.Models;
-using Selva.GH.Features.UIBuilder.Models;
+using Selva.Schema.Models;
+using Selva.GH.Features.UIBuilder.Goos;
 using Selva.GH.Properties;
 
 namespace Selva.GH.Features.UIBuilder.Components;
@@ -20,7 +20,7 @@ public class GH_EvaluateSchema : GH_Component
     {
     }
 
-    public override Guid ComponentGuid => new("E7611CB2-9BAE-4A88-B47B-A94135394FA3");
+    public override Guid ComponentGuid => new Guid("E7611CB2-9BAE-4A88-B47B-A94135394FA3");
 
     protected override Bitmap Icon => Resources.UIBridge; // Using same icon for now, or null if preferred
 
@@ -43,15 +43,22 @@ public class GH_EvaluateSchema : GH_Component
     protected override void SolveInstance(IGH_DataAccess DA)
     {
         IGH_Goo schemaGoo = null;
-        if (!DA.GetData(0, ref schemaGoo)) return;
+        if (!DA.GetData(0, ref schemaGoo))
+        {
+            return;
+        }
 
         UISchema schema = null;
 
         // Try to extract UISchema from the input
         if (schemaGoo is UISchemaGoo uiSchemaGoo)
+        {
             schema = uiSchemaGoo.Value;
+        }
         else if (schemaGoo is GH_ObjectWrapper wrapper && wrapper.Value is UISchema wrappedSchema)
+        {
             schema = wrappedSchema;
+        }
 
         if (schema == null)
         {
@@ -68,7 +75,10 @@ public class GH_EvaluateSchema : GH_Component
         sb.AppendLine($"Inputs: {schema.Inputs?.Count ?? 0}");
         sb.AppendLine($"Outputs: {schema.Outputs?.Count ?? 0}");
 
-        if (schema.Tags != null && schema.Tags.Any()) sb.AppendLine($"Tags: {string.Join(", ", schema.Tags)}");
+        if (schema.Tags != null && schema.Tags.Any())
+        {
+            sb.AppendLine($"Tags: {string.Join(", ", schema.Tags)}");
+        }
 
         var json = JsonConvert.SerializeObject(schema, Formatting.Indented);
 

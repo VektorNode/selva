@@ -20,7 +20,10 @@ public static class GHDocumentMutator
     /// <param name="immediate">If true, fully expire the solution; if false, expire only downstream</param>
     public static void ScheduleComponentExpire(GH_Document document, GH_Component component, bool immediate = false)
     {
-        if (document == null) return;
+        if (document == null)
+        {
+            return;
+        }
 
         document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs,
             _ => { component?.ExpireSolution(immediate); });
@@ -34,12 +37,17 @@ public static class GHDocumentMutator
     /// <param name="objects">The active objects whose preview should be refreshed</param>
     public static void RefreshObjectsOnCanvas(GH_Document document, IEnumerable<IGH_ActiveObject> objects)
     {
-        if (document == null || objects == null) return;
+        if (document == null || objects == null)
+        {
+            return;
+        }
 
         RhinoApp.InvokeOnUiThread(() =>
         {
             foreach (var obj in objects)
+            {
                 obj?.ExpirePreview(true);
+            }
 
             document.NewSolution(false);
         });

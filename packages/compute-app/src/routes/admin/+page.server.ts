@@ -1,41 +1,31 @@
-import { getDefinitionStore } from '$lib/server/definitions.server';
-import type { HistoryEntry } from '$lib/server/definitions/types';
+import { getAuthProvider } from '$lib/server/auth.server';
+import { hasPermission, type PlatformPermission } from '@selvajs/platform';
 import type { PageServerLoad } from './$types';
 
-// Normalize coverImage URLs: convert admin URLs to public URLs for compatibility
-function normalizeImageUrl(url?: string): string | undefined {
-	if (!url?.startsWith('/admin/api/definitions/')) return url;
-	const match = url.match(/\/admin\/api\/definitions\/(.+?)\/(image\/.+)/);
-	if (match) {
-		return `/api/definitions/${match[1]}/${match[2]}`;
-	}
-	return url;
-}
+/**
+ * The General dashboard sits inside the platform-scoped `/admin` shell, but
+ * each panel still needs its own permission. The user-count tile is gated
+ * on `manage_instance_users`; without it, the tile renders a placeholder.
+ */
+export const load: PageServerLoad = async ({ locals }) => {
+	const ctx = locals.ctx;
+	const canSeeUserStats = ctx ? hasPermission(ctx, 'manage_instance_users') : false;
 
-export const load: PageServerLoad = async () => {
-	const store = getDefinitionStore();
+	const platformPermissions: PlatformPermission[] = ctx?.platformPermissions ?? [];
+
+	if (!canSeeUserStats) {
+		return { stats: { users: null }, platformPermissions };
+	}
 
 	try {
-		const rawConfig = await store.readConfig();
-		const defs = rawConfig.definitions || {};
-
-		const config: Record<string, (typeof defs)[string]> = {};
-		const history: Record<string, HistoryEntry[]> = {};
-
-		for (const [guid, def] of Object.entries(defs)) {
-			// Normalize coverImage URLs
-			config[guid] = {
-				...def,
-				coverImage: normalizeImageUrl(def.coverImage)
-			};
-			history[guid] = await store.getFileHistory(guid);
-		}
-
-		return { config, history };
+		const usersPage = await getAuthProvider().listUsers({ limit: 200 });
+		return {
+			stats: { users: usersPage?.items.length ?? null },
+			platformPermissions
+		};
 	} catch (err) {
-		console.error('Failed to load definitions for admin page:', err);
-		return { config: {}, history: {} };
+		if (err && typeof err === 'object' && 'status' in err) throw err;
+		console.error('Failed to load admin dashboard:', err);
+		return { stats: { users: null }, platformPermissions };
 	}
 };
-
-

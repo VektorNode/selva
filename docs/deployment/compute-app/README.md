@@ -1,91 +1,34 @@
-# Compute App Deployment Overview
+# Compute App Deployment
 
-Welcome! This guide helps you deploy the Selva Compute App to production. Follow the path that matches your situation.
-
----
-
-## What is the Compute App?
-
-The Compute App is a standalone web application that:
-
-- Serves a user interface for solving Grasshopper definitions
-- Communicates with a Rhino.Compute server to perform calculations
-- Supports multiple Grasshopper definitions through query parameters
-- Can be deployed to any cloud provider or on-premises server
-
-**Key components:**
-
-- **Frontend**: SvelteKit web UI (runs in the browser)
-- **Backend**: Node.js server (serves the UI and proxies requests to Compute)
-- **Compute Server**: Separate Rhino.Compute instance (performs calculations)
+The Compute App is a SvelteKit + Node.js web application that serves a UI for solving Grasshopper definitions via Rhino.Compute.
 
 ---
 
-## Getting Started: Choose Your Path
+## First-Time Deployment
 
-### Path 1: First-Time Production Deployment
+Follow these steps in order:
 
-You're deploying the Compute App to production for the first time.
+1. **[Prerequisites](./PREREQUISITES.md)** — System requirements, network config, provider choice
+2. **Pick a backend provider:**
+   - **[@selvajs/local-provider](../../../packages/local-provider/README.md)** — filesystem (default, single-instance)
+   - **[@selvajs/supabase-provider](../../../packages/supabase-provider/README.md)** — Supabase Auth + Postgres + Storage
+3. **[Server Setup](./SERVER_SETUP.md)** — Install tools, clone repo, build (automated via `setup.sh`)
+4. **[Node.js with PM2](./NODE_DEPLOYMENT.md)** — PM2 ecosystem config and lifecycle
+5. **[Caddy Reverse Proxy](./REVERSE_PROXY_LOAD_BALANCER.md)** — HTTPS and port 80 forwarding (recommended for production)
 
-**Follow these steps in order:**
+**Verify:** `curl http://YOUR-IP/api/health`
 
-1. **[Review Deployment Prerequisites](./PREREQUISITES.md)**
-   - Understand system requirements
-   - Set up network and firewall
-   - Prepare environment variables
-
-2. **[Complete Server Setup](./SERVER_SETUP.md)**
-   - Install Node.js and pnpm
-   - Clone the repository
-   - Build all packages
-
-   If you're deploying a prebuilt Docker image from a registry, you can skip the Node.js build steps and only install Docker. (NOT AVAILABLE YET)
-
-3. **Choose Your Deployment Method:**
-
-   **Option A: [Node.js Deployment](./NODE_DEPLOYMENT.md)** (Recommended for most)
-   - Simpler setup with PM2 process manager
-   - Lower resource usage
-   - Good for single-server deployments
-
-   **Option B: [Docker Deployment](./DOCKER_DEPLOYMENT.md)** (Recommended for scale)
-   - More flexible
-   - Container-based (easier updates)
-   - Good for cloud providers and scaling
-
-4. **Optional: [Set up Reverse Proxy with Caddy](./REVERSE_PROXY_LOAD_BALANCER.md)**
-   - Forward port 80 to your app
-   - Simple single-command setup
-   - Recommended for production
-
-5. **[Configure Grasshopper Definitions](./DEFINITIONS_SETUP.md)**
-   - Prepare your `.gh` files
-   - Create `definitions-config.json`
-   - Test definition loading
-
-6. **Verify & Test**
-   - Access the health check: `curl http://YOUR-IP/api/health` (or `:3000` if no reverse proxy)
-   - Open in browser: `http://YOUR-IP/app?gh=your-definition`
-   - Test with real data
+Definitions are uploaded through the admin UI after the app is running — no on-disk setup step.
 
 ---
 
-### Path 2: Updating an Existing Deployment
-
-You already have the Compute App running and need to update it.
-
-**With Node.js deployment:**
+## Updating an Existing Deployment
 
 ```bash
-cd ~/selva
-git pull
-pnpm install
-pnpm run build:all
-cd packages/compute-app
-export ADAPTER=node
-pnpm build
-pm2 restart selva-compute
-pm2 logs selva-compute
-```
+# Node.js (automated)
+bash ~/selva/scripts/update.sh
 
-TODO: DOCKER update docks
+# Node.js (manual)
+cd ~/selva && git pull && pnpm install && ADAPTER=node pnpm build --filter=@selvajs/compute-app
+pm2 restart selva-compute --update-env
+```
