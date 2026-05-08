@@ -97,6 +97,28 @@ bash ~/selva/scripts/update.sh
 
 ---
 
+## Start / Stop / SSH
+
+The static IP is reserved, so stopping the VM to save costs is safe — the IP survives.
+
+```bash
+# Start
+gcloud compute instances start selva-compute-app \
+  --zone europe-west6-a --project YOUR_PROJECT
+
+# SSH (user is "selva" — see var.ssh_user)
+gcloud compute ssh selva@selva-compute-app \
+  --zone europe-west6-a --project YOUR_PROJECT
+
+# Stop
+gcloud compute instances stop selva-compute-app \
+  --zone europe-west6-a --project YOUR_PROJECT
+```
+
+First SSH after a start may take ~30s while the VM boots.
+
+---
+
 ## Destroying
 
 ```bash
