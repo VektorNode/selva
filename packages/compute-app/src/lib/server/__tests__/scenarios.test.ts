@@ -114,6 +114,32 @@ describe('§11 — visibility & cross-org', () => {
 
 		await expectHttpError(requireCanViewProject(daveLocals, acmePublic.id), 403);
 	});
+
+	it('Alice (project owner) uploads a definition to her public project — OK', async () => {
+		tp = await freshProviders();
+		const { alice, acmePublic } = await seedAcme(tp);
+		const aliceLocals = await actAs(tp, alice.id);
+
+		const result = await requireCanCreateDefinition(aliceLocals, acmePublic.id);
+		expect(result.user.id).toBe(alice.id);
+	});
+
+	it('Alice (project owner) uploads a definition to her org project — OK', async () => {
+		tp = await freshProviders();
+		const { alice, acmeOrg } = await seedAcme(tp);
+		const aliceLocals = await actAs(tp, alice.id);
+
+		const result = await requireCanCreateDefinition(aliceLocals, acmeOrg.id);
+		expect(result.user.id).toBe(alice.id);
+	});
+
+	it('Bob (Acme member, not project member) uploads to a public project — 403', async () => {
+		tp = await freshProviders();
+		const { bob, acmePublic } = await seedAcme(tp);
+		const bobLocals = await actAs(tp, bob.id);
+
+		await expectHttpError(requireCanCreateDefinition(bobLocals, acmePublic.id), 403);
+	});
 });
 
 // ============================================================================
