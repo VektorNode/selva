@@ -148,7 +148,8 @@ async function loadProjectOr404(ctx: RequestContext, projectId: string): Promise
  *
  * - `platform` → grants
  * - `private`  → caller's project member row
- * - `org` / `public` → caller's org member row
+ * - `org` / `public` → caller's project member row (for canEdit/canManage) and
+ *   org member row (for canView). Cross-org public skips the org row.
  *
  * Other fields default to safe values; pass `overrides` for the rare callers
  * that already loaded a row (e.g. tests, batched listing pages).
@@ -168,8 +169,14 @@ async function buildProjectAccessInput(
 		platformGrants = await getPlatformProjectGrantStore().listByProject(ctx, project.id);
 	} else if (project.visibility === 'private') {
 		member = await getProjectProvider().getProjectMember(ctx, project.id, ctx.userId);
-	} else if (!(project.visibility === 'public' && allowCrossOrgPublic)) {
-		orgMember = await getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId);
+	} else {
+		const skipOrgMember = project.visibility === 'public' && allowCrossOrgPublic;
+		[member, orgMember] = await Promise.all([
+			getProjectProvider().getProjectMember(ctx, project.id, ctx.userId),
+			skipOrgMember
+				? Promise.resolve(null)
+				: getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId)
+		]);
 	}
 
 	return {
