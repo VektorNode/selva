@@ -13,7 +13,10 @@
 
 	<PropertyGroup>
 		<!-- Specifies information for Assembly and Yak -->
-		<Version>10.0.0-beta</Version>
+		<Version>0.10.0-beta</Version>
+		<AssemblyVersion>0.10.0.0</AssemblyVersion>
+		<FileVersion>0.10.0.0</FileVersion>
+		<InformationalVersion>0.10.0-beta</InformationalVersion>
 		<Title>Selva</Title>
 		<Company>VektorNode</Company>
 		<Description>Web-based UI builder for Grasshopper with real-time parameter interaction</Description>
@@ -45,6 +48,14 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<None Update="Resources\manifest.yml">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+			<Link>manifest.yml</Link>
+		</None>
+		<None Update="Resources\Icons\Icon.png">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+			<Link>icon.png</Link>
+		</None>
 		<None Update="Resources\Icons\BlockToFile.png">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
@@ -52,9 +63,6 @@
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
 		<None Update="Resources\Icons\GetValueList.png">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Resources\Icons\Icon.png">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
 		<None Update="Resources\Icons\ThreeMaterial.png">

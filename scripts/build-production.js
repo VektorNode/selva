@@ -95,7 +95,7 @@ async function build() {
     checkPrerequisites();
 
     // Step 1: Copy web assets to plugin directory
-    log('[1/5] Copying web assets to plugin...');
+    log('[1/4] Copying web assets to plugin...');
     const webDir = join(projectRoot, 'Plugin/Selva.GH/EmbeddedAssets/web');
     const buildDir = join(projectRoot, 'packages/builder-app/build');
 
@@ -126,7 +126,7 @@ async function build() {
     log('');
 
     // Step 2: Build C# plugin with embedded assets
-    log('[2/5] Building C# plugin...');
+    log('[2/4] Building C# plugin...');
     try {
       execSync('dotnet build --configuration Release', {
         cwd: join(projectRoot, 'Plugin'),
@@ -139,58 +139,46 @@ async function build() {
     }
     log('');
 
-    // Step 3: Copy manifest.yml and icon.png to release folder if present
-    log('[3/5] Preparing yak package assets...');
-    const resourcesDir = join(projectRoot, 'Plugin/Selva.GH/Resources');
+    // Step 3: Build a separate yak package per target framework
+    // manifest.yml and icon.png are copied to each TFM output folder by the csproj.
+    log('[3/4] Running yak build for each target framework...');
     const releaseDir = join(projectRoot, 'Plugin/Selva.GH/bin/Release');
-    for (const asset of ['manifest.yml', 'icon.png']) {
-      const src = join(resourcesDir, asset);
-      const dest = join(releaseDir, asset);
+    const targets = [
+      { tfm: 'net7.0', label: 'Rhino 8' },
+      { tfm: 'net9.0', label: 'Rhino 9' },
+    ];
+
+    for (const { tfm, label } of targets) {
+      const tfmDir = join(releaseDir, tfm);
       try {
-        statSync(src);
-        cpSync(src, dest);
-        logSuccess(`Copied ${asset} to release folder`);
+        statSync(tfmDir);
       } catch {
-        logWarning(`${asset} not found in Resources, skipping`);
+        logWarning(`${label} (${tfm}) output folder not found at ${tfmDir}, skipping yak build`);
+        continue;
+      }
+
+      try {
+        execSync('yak build', { cwd: tfmDir, stdio: 'inherit' });
+        logSuccess(`Yak package built for ${label} (${tfm})`);
+      } catch {
+        logError(`Yak build failed for ${label} (${tfm})`);
+        process.exit(1);
       }
     }
     log('');
 
-    // Step 4: Run yak build in the release folder
-    log('[4/5] Running yak build...');
-
-    try {
-      execSync('yak build', {
-        cwd: releaseDir,
-        stdio: 'inherit',
-      });
-      logSuccess('Yak package built');
-    } catch {
-      logError('Yak build failed');
-      process.exit(1);
-    }
-    log('');
-
-    // Step 5: Display output information
-    log('[5/5] Build summary:');
+    // Step 4: Display output information
+    log('[4/4] Build summary:');
     log('');
     log('Output files:');
-    const pluginDir = join(projectRoot, 'Plugin');
-    const net48Path = join(pluginDir, 'bin/Release/net48/Selva.gha');
-    const net7Path = join(pluginDir, 'bin/Release/net7.0/Selva.gha');
-
-    try {
-      statSync(net48Path);
-      log(`  ${COLORS.GREEN}✓${COLORS.RESET} Rhino 7 (net48):  ${net48Path}`);
-    } catch {
-      logWarning(`Rhino 7 (net48) not found at ${net48Path}`);
-    }
-
-    try {
-      statSync(net7Path);
-      log(`  ${COLORS.GREEN}✓${COLORS.RESET} Rhino 8 (net7.0): ${net7Path}`);
-    } catch {
-      logWarning(`Rhino 8 (net7.0) not found at ${net7Path}`);
+    for (const { tfm, label } of targets) {
+      const ghaPath = join(releaseDir, tfm, 'Selva.gha');
+      try {
+        statSync(ghaPath);
+        log(`  ${COLORS.GREEN}✓${COLORS.RESET} ${label} (${tfm}): ${ghaPath}`);
+      } catch {
+        logWarning(`${label} (${tfm}) not found at ${ghaPath}`);
+      }
     }
 
     log('');
