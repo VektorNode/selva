@@ -147,6 +147,50 @@ export interface IEmailLinkAuth {
 }
 
 /**
+ * Optional forward-proxy authentication surface. Implemented by providers
+ * that derive identity from signals injected by a trusted upstream reverse
+ * proxy (HTTP headers, mTLS, etc.) — e.g. Caddy `forward_auth`,
+ * oauth2-proxy, Authelia, Pomerium, Traefik forward-auth.
+ *
+ * ⚠ TRUST BOUNDARY — READ BEFORE IMPLEMENTING ⚠
+ *
+ * The signals this surface consumes are NOT verified cryptographically by
+ * Selva. They are trusted because the deployment runs the app behind a
+ * proxy that:
+ *
+ *   1. Authenticates the user against an upstream IdP, AND
+ *   2. STRIPS any client-supplied copies of the trusted headers from
+ *      inbound requests before adding its own, AND
+ *   3. Is the ONLY network path that can reach the app process (bind to
+ *      127.0.0.1, firewall the app port, or a private socket).
+ *
+ * If any condition fails, an attacker can spoof the headers and become
+ * anyone. **Each implementer of this interface MUST ship a README that
+ * states, loudly, the exact proxy configuration required.** The platform
+ * layer cannot verify this — it is the provider's contract with its
+ * operator.
+ *
+ * Lifecycle: `identifyFromHeaders` is called from `hooks.server.ts` on
+ * every authed request whose session cookie is missing or invalid. It MUST
+ * be cheap — a header read plus at most one indexed lookup. No network
+ * calls, no synchronous disk scans of unbounded size.
+ */
+export interface IProxyAuth {
+	/**
+	 * Identify the caller from trusted upstream-proxy signals on the
+	 * incoming request. Return `null` for "not identified" (header missing,
+	 * UPN not allowlisted, account disabled). MUST NOT throw for absent
+	 * headers — those are the normal anonymous case.
+	 *
+	 * On first identification of a previously-allowlisted user, the
+	 * implementation MAY materialize stored fields (display name, email)
+	 * from the same headers. Auto-creating arbitrary users from headers
+	 * is forbidden: the allowlist IS the security boundary.
+	 */
+	identifyFromHeaders(headers: Headers): Promise<AuthUser | null>;
+}
+
+/**
  * Authentication provider — identity verification only. Profile state lives
  * in `IUserProfileStore`, platform permissions in `IPlatformPermissionStore`,
  * password ops in optional `passwordAuth`, OAuth in optional `oauth`.
@@ -169,6 +213,29 @@ export interface IAuthProvider {
 	 * future Eterna ID). Undefined otherwise.
 	 */
 	readonly emailLink?: IEmailLinkAuth;
+
+	/**
+	 * Present for providers that derive identity from a trusted upstream
+	 * proxy (forward-auth headers, mTLS, etc.). Undefined for credential
+	 * or OIDC-broker providers. See `IProxyAuth` for the trust contract.
+	 */
+	readonly proxyAuth?: IProxyAuth;
+
+	/**
+	 * Where to redirect the browser after the local session is destroyed.
+	 *
+	 * Credential providers (Local) typically return `null` → caller falls
+	 * back to `/login`.
+	 *
+	 * Forward-auth and OIDC providers SHOULD return their upstream sign-out
+	 * URL so the user actually leaves the IdP — otherwise the next request
+	 * silently re-authenticates them via the still-valid IdP session and
+	 * "logout" becomes a no-op.
+	 *
+	 * Best-effort and synchronous: failure to compute MUST return `null`
+	 * (caller will use `/login`); never throw.
+	 */
+	getPostLogoutRedirect?(): string | null;
 
 	/**
 	 * Verify a token (session cookie, JWT, ID token, etc.). Returns the user

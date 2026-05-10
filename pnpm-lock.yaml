@@ -296,6 +296,22 @@ importers:
         specifier: ^5.0.0 || ^6.0.0 || ^7.0.0
         version: 7.3.2(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)
 
+  packages/header-auth-provider:
+    dependencies:
+      '@selvajs/platform':
+        specifier: workspace:*
+        version: link:../platform
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.17
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)
+
   packages/local-provider:
     dependencies:
       '@selvajs/platform':
