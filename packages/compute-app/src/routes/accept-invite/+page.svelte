@@ -33,8 +33,13 @@
 			<div class="space-y-1 text-center">
 				<h2 class="text-foreground text-2xl font-bold tracking-tight">Join {data.orgName}</h2>
 				<p class="text-muted-foreground text-sm">
-					You were invited as <span class="font-medium">{data.email}</span>. Set a password to
-					finish creating your account.
+					You were invited as <span class="font-medium">{data.email}</span>.
+					{#if data.mode === 'proxy'}
+						Click below to finish creating your account — your identity is verified by your
+						company sign-in.
+					{:else}
+						Set a password to finish creating your account.
+					{/if}
 				</p>
 			</div>
 
@@ -48,36 +53,40 @@
 					</Alert.Root>
 				{/if}
 
-				<div class="space-y-2">
-					<Label for="displayName"
-						>Display name <span class="text-muted-foreground">(optional)</span></Label
-					>
-					<Input id="displayName" name="displayName" type="text" placeholder="Your name" />
-				</div>
+				{#if data.mode === 'password'}
+					<div class="space-y-2">
+						<Label for="displayName"
+							>Display name <span class="text-muted-foreground">(optional)</span></Label
+						>
+						<Input id="displayName" name="displayName" type="text" placeholder="Your name" />
+					</div>
 
-				<div class="space-y-2">
-					<Label for="password">Password</Label>
-					<Input
-						id="password"
-						name="password"
-						type="password"
-						required
-						placeholder="Min. 8 characters"
-					/>
-				</div>
+					<div class="space-y-2">
+						<Label for="password">Password</Label>
+						<Input
+							id="password"
+							name="password"
+							type="password"
+							required
+							placeholder="Min. 8 characters"
+						/>
+					</div>
 
-				<div class="space-y-2">
-					<Label for="confirm">Confirm password</Label>
-					<Input
-						id="confirm"
-						name="confirm"
-						type="password"
-						required
-						placeholder="Repeat password"
-					/>
-				</div>
+					<div class="space-y-2">
+						<Label for="confirm">Confirm password</Label>
+						<Input
+							id="confirm"
+							name="confirm"
+							type="password"
+							required
+							placeholder="Repeat password"
+						/>
+					</div>
+				{/if}
 
-				<Button type="submit" class="w-full">Create account</Button>
+				<Button type="submit" class="w-full">
+					{data.mode === 'proxy' ? 'Accept invite' : 'Create account'}
+				</Button>
 			</form>
 		{/if}
 	</div>

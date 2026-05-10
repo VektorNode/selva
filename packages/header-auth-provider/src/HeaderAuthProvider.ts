@@ -1,0 +1,204 @@
+import * as path from 'node:path';
+import type {
+	IAuthProvider,
+	IProxyAuth,
+	AuthUser,
+	UserManagementResult,
+	ListOptions,
+	Page
+} from '@selvajs/platform';
+import { ProviderError } from '@selvajs/platform';
+import { createAllowlistStore } from './users.js';
+import type { AllowlistStore, AllowlistEntry } from './users.js';
+
+// ============================================================================
+// HeaderAuthProvider — forward-auth via trusted upstream proxy
+// ============================================================================
+//
+// ⚠ TRUST BOUNDARY ⚠
+//
+// This provider trusts the headers it reads from incoming requests. That is
+// only safe when the deployment guarantees:
+//
+//   1. A reverse proxy (Caddy `forward_auth`, oauth2-proxy, Authelia, …) is
+//      the ONLY network path to the app process. Bind to 127.0.0.1 or
+//      firewall the port.
+//   2. The proxy authenticates against the upstream IdP before forwarding.
+//   3. The proxy STRIPS any client-supplied copies of the trusted headers
+//      from inbound requests before adding its own.
+//
+// If any of those fails, anyone on the network can spoof the headers and
+// become anyone. There is no runtime check that catches a misconfiguration —
+// the deployment IS the security boundary. See README.md for a working
+// Caddy config and a curl-based self-test.
+// ============================================================================
+
+interface HeaderNames {
+	upn: string;
+	email: string;
+	displayName: string;
+}
+
+const DEFAULT_HEADERS: HeaderNames = {
+	upn: 'SELVA-UserPrincipalName',
+	email: 'SELVA-Email',
+	displayName: 'SELVA-DisplayName'
+};
+
+export interface HeaderAuthProviderConfig {
+	/** Absolute path to the allowlist JSON file (e.g. `/data/header-allowlist.json`). */
+	allowlistFilePath: string;
+	/**
+	 * Header names the proxy sets. Defaults match the README's Caddy example
+	 * (`SELVA-UserPrincipalName`, `SELVA-Email`, `SELVA-DisplayName`). Override
+	 * to match a different proxy (e.g. oauth2-proxy uses `X-Auth-Request-User`).
+	 */
+	headers?: Partial<HeaderNames>;
+	/**
+	 * Where to send the user after `/logout` destroys the local session. Set
+	 * to your IdP's sign-out URL so the user actually leaves — otherwise the
+	 * proxy will silently re-authenticate them on the next request.
+	 */
+	postLogoutRedirect?: string | null;
+}
+
+function toAuthUser(u: AllowlistEntry): AuthUser {
+	return {
+		id: u.id,
+		email: u.email,
+		metadata: { upn: u.upn, displayName: u.displayName },
+		createdAt: u.createdAt,
+		lastLoginAt: u.lastLoginAt,
+		disabled: u.disabled
+	};
+}
+
+class HeaderProxyAuth implements IProxyAuth {
+	constructor(
+		private readonly users: AllowlistStore,
+		private readonly headers: HeaderNames
+	) {}
+
+	async identifyFromHeaders(headers: Headers): Promise<AuthUser | null> {
+		const upn = headers.get(this.headers.upn);
+		if (!upn || !upn.trim()) return null;
+
+		const entry = await this.users.findByUpn(upn);
+		if (!entry || entry.disabled) return null;
+
+		// First-sight materialization: fill in display-name / email from the
+		// proxy if the row is still bare. Never overwrites operator edits.
+		const email = headers.get(this.headers.email)?.trim() || undefined;
+		const displayName = headers.get(this.headers.displayName)?.trim() || undefined;
+		if ((!entry.email && email) || (!entry.displayName && displayName)) {
+			await this.users.materializeFromHeaders(entry.id, { email, displayName }).catch(() => {});
+			if (email && !entry.email) entry.email = email;
+			if (displayName && !entry.displayName) entry.displayName = displayName;
+		}
+
+		await this.users.touchLastLogin(entry.id).catch(() => {});
+		return toAuthUser(entry);
+	}
+}
+
+export class HeaderAuthProvider implements IAuthProvider {
+	private readonly users: AllowlistStore;
+	private readonly headers: HeaderNames;
+	private readonly postLogoutRedirect: string | null;
+
+	readonly name = 'Header (Forward Auth)';
+	readonly proxyAuth: IProxyAuth;
+
+	constructor(config: HeaderAuthProviderConfig) {
+		this.users = createAllowlistStore(config.allowlistFilePath);
+		this.headers = { ...DEFAULT_HEADERS, ...config.headers };
+		this.postLogoutRedirect = config.postLogoutRedirect ?? null;
+		this.proxyAuth = new HeaderProxyAuth(this.users, this.headers);
+	}
+
+	static fromEnv(env: Record<string, string | undefined>): HeaderAuthProvider {
+		const dir = env.HEADER_AUTH_DATA_DIR ?? env.DATA_PATH;
+		if (!dir) {
+			throw new Error(
+				'Missing required env var: HEADER_AUTH_DATA_DIR (or DATA_PATH as fallback). ' +
+					'This directory holds header-allowlist.json — the pre-provisioned UPN list.'
+			);
+		}
+		return new HeaderAuthProvider({
+			allowlistFilePath: path.join(dir, 'header-allowlist.json'),
+			headers: {
+				upn: env.HEADER_AUTH_UPN_HEADER ?? DEFAULT_HEADERS.upn,
+				email: env.HEADER_AUTH_EMAIL_HEADER ?? DEFAULT_HEADERS.email,
+				displayName: env.HEADER_AUTH_DISPLAY_NAME_HEADER ?? DEFAULT_HEADERS.displayName
+			},
+			postLogoutRedirect: env.HEADER_AUTH_LOGOUT_URL ?? null
+		});
+	}
+
+	getPostLogoutRedirect(): string | null {
+		return this.postLogoutRedirect;
+	}
+
+	/**
+	 * No tokens are issued by this provider — identity rides on every request
+	 * via the trusted-proxy headers. Always returns null; the hook layer
+	 * falls through to `proxyAuth.identifyFromHeaders`.
+	 */
+	async verifyToken(_token: string): Promise<AuthUser | null> {
+		return null;
+	}
+
+	async getUser(id: string): Promise<AuthUser | null> {
+		const u = await this.users.findById(id);
+		return u ? toAuthUser(u) : null;
+	}
+
+	async listUsers(opts?: ListOptions): Promise<Page<AuthUser> | null> {
+		const all = await this.users.listUsers();
+		const limit = Math.min(Math.max(1, opts?.limit ?? 25), 200);
+		const offset = opts?.cursor ? parseInt(opts.cursor, 10) || 0 : 0;
+		const slice = all.slice(offset, offset + limit).map(toAuthUser);
+		const nextOffset = offset + slice.length;
+		return {
+			items: slice,
+			nextCursor: nextOffset < all.length ? String(nextOffset) : undefined
+		};
+	}
+
+	/**
+	 * Allowlist a UPN. Admin POST `/admin/api/users` with `{ email }`; the
+	 * email IS the UPN for M365 / Entra deployments where they match. For
+	 * other IdPs, document the UPN format in your README/onboarding.
+	 */
+	async createUser(upn: string): Promise<AuthUser> {
+		return toAuthUser(await this.users.createUser(upn));
+	}
+
+	async deleteUser(id: string): Promise<UserManagementResult> {
+		const target = await this.users.findById(id);
+		if (!target) return 'not_found';
+		try {
+			await this.users.deleteUser(id);
+			return 'ok';
+		} catch (err) {
+			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';
+			throw err;
+		}
+	}
+
+	async disableUser(id: string): Promise<UserManagementResult> {
+		const target = await this.users.findById(id);
+		if (!target) return 'not_found';
+		try {
+			await this.users.setDisabled(id, true);
+			return 'ok';
+		} catch (err) {
+			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';
+			throw err;
+		}
+	}
+
+	async touchLastLogin(id: string): Promise<void> {
+		await this.users.touchLastLogin(id);
+	}
+}
