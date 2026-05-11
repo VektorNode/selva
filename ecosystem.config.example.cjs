@@ -1,9 +1,14 @@
 // PM2 process file for the compute app.
 //
-// Runtime config lives in packages/compute-app/.env and is loaded via
-// `env_file` below — keep secrets there, not here. Any var the active
-// provider needs (e.g. SUPABASE_URL for the Supabase provider) is picked up
-// automatically as long as it's in that file.
+// Runtime config lives in packages/compute-app/.env and is loaded by Node
+// itself via `--env-file` (Node >= 20.6) — keep secrets there, not here.
+// Any var the active provider needs (e.g. SUPABASE_URL for the Supabase
+// provider) is picked up automatically as long as it's in that file.
+//
+// Note: PM2's `env_file` option only works under `pm2-runtime`; the regular
+// `pm2 start` daemon silently ignores it, which causes the app to crash on
+// boot with "Missing required env var: SELVA_HMAC_KEY". Using Node's native
+// `--env-file` flag avoids that footgun.
 //
 // Rhino.Compute server URL + API key are configured in /admin/compute, not env.
 // First admin user is created via the in-app setup page on first boot.
@@ -13,6 +18,7 @@ module.exports = {
 			name: 'selva-compute',
 			script: './build/index.js',
 			cwd: './packages/compute-app',
+			node_args: '--env-file=.env',
 
 			// Concurrency: fork + 1 instance is required for the local provider —
 			// its JSON stores read-modify-write without file locking, so two
@@ -36,7 +42,6 @@ module.exports = {
 			merge_logs: true,
 
 			// Config
-			env_file: './.env',
 			env: {
 				NODE_ENV: 'production'
 			}
