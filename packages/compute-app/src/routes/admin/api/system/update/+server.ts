@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import { join } from 'path';
+import { existsSync } from 'fs';
 import { env } from '$env/dynamic/private';
 import type { RequestHandler } from '@sveltejs/kit';
 import { requirePermission } from '$lib/server/access.server';
@@ -13,8 +14,20 @@ function stripAnsi(str: string): string {
 // POST - Run update script and stream output via Server-Sent Events
 export const POST: RequestHandler = async ({ locals }) => {
 	requirePermission(locals, 'instance_admin');
-	// Fall back to cwd — PM2 launches from the repo root so process.cwd() is the install dir
-	const installDir = env.INSTALL_DIR || process.cwd();
+	// Prefer explicit env var; fall back to finding the repo root from cwd.
+	// PM2 may launch from packages/compute-app or the repo root depending on config,
+	// so we probe upward until we find scripts/update.sh.
+	function findInstallDir(): string {
+		let dir = process.cwd();
+		for (let i = 0; i < 5; i++) {
+			if (existsSync(join(dir, 'scripts', 'update.sh'))) return dir;
+			const parent = join(dir, '..');
+			if (parent === dir) break;
+			dir = parent;
+		}
+		return process.cwd();
+	}
+	const installDir = env.INSTALL_DIR || findInstallDir();
 	const updateScript = join(installDir, 'scripts', 'update.sh');
 
 	const stream = new ReadableStream({
