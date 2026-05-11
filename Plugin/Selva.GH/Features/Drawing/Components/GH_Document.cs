@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
-using Grasshopper.Kernel.Parameters;
+using Grasshopper.Kernel.Types;
 using Rhino.Geometry;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
@@ -12,15 +12,15 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Owns the document-wide chrome (Header, Footer, Title, Tokens, default paper / margins) and
-// drives pagination + token resolution across every section. Section overrides win for that
-// section's pages; everything else inherits from these inputs.
+// Owns the document-wide metadata (Title/Author/...) and drives pagination + token resolution
+// across every section. Section overrides win for that section's pages; everything else
+// inherits from the document defaults — built-in (A4, 10mm, Left, Margin placement) unless a
+// Layout Override is wired in.
 //
 // Page numbering is global: a document with two sections of 2 + 3 pages reads "1/5"…"5/5".
 //
 // Header / Footer accept any DrawElement. TextElement / TextBlockElement nodes inside them
-// can use tokens — built-ins {page}, {pages}, {section}, {title}, {date} (or {date:fmt}),
-// plus any user-defined tokens supplied via the parallel Token Keys / Token Values inputs.
+// can use tokens — built-ins {page}, {pages}, {section}, {title}, {date} (or {date:fmt}).
 public class GH_Document : GH_Component
 {
     private List<Page> _previewPages;
@@ -31,7 +31,7 @@ public class GH_Document : GH_Component
 
     public GH_Document()
         : base("Document", "Doc",
-            "Bundles sections into a paginated document with shared chrome and metadata. Page numbering is global across all sections.",
+            "Bundles sections into a paginated document with shared metadata. Wire a Layout Override for non-default paper / chrome.",
             "Selva", "Document")
     {
     }
@@ -58,59 +58,9 @@ public class GH_Document : GH_Component
         pManager.AddTextParameter("Author", "A", "Document author (PDF /Info)", GH_ParamAccess.item, string.Empty);
         pManager.AddTextParameter("Subject", "Sj", "Document subject (PDF /Info)", GH_ParamAccess.item, string.Empty);
         pManager.AddTextParameter("Keywords", "K", "Comma-separated keyword list (PDF /Info)", GH_ParamAccess.list);
-        pManager.AddIntegerParameter("Paper Size", "PS", "Default paper size for sections that don't override", GH_ParamAccess.item, 4);
-        pManager.AddBooleanParameter("Landscape", "L", "Rotate the default paper to landscape", GH_ParamAccess.item, false);
-        pManager.AddNumberParameter("Margin", "M", "Default uniform page margin in millimetres", GH_ParamAccess.item, 10.0);
-        pManager.AddGenericParameter("Header", "H", "Drawing element repeated at the top of every page that doesn't override (supports tokens)", GH_ParamAccess.item);
-        pManager.AddGenericParameter("Footer", "F", "Drawing element repeated at the bottom of every page that doesn't override", GH_ParamAccess.item);
-        pManager.AddNumberParameter("Header Height", "HH", "Reserved header height in mm. -1 = Auto (measure from header bounds). 0 = no reservation.", GH_ParamAccess.item, -1.0);
-        pManager.AddNumberParameter("Footer Height", "FH", "Reserved footer height in mm. -1 = Auto (measure from footer bounds). 0 = no reservation.", GH_ParamAccess.item, -1.0);
-        pManager.AddIntegerParameter("Header Align", "HA", "Horizontal alignment of the header within its band", GH_ParamAccess.item, 0);
-        pManager.AddIntegerParameter("Footer Align", "FA", "Horizontal alignment of the footer within its band", GH_ParamAccess.item, 0);
-        pManager.AddIntegerParameter("Header Placement", "HP", "Where the header band lives: Margin (in the top margin, body fills full content rect — default), Content (reserves space inside the content rect), Edge (anchored a fixed distance from the paper edge — uses Header Edge Offset).", GH_ParamAccess.item, 0);
-        pManager.AddIntegerParameter("Footer Placement", "FP", "Where the footer band lives: Margin (in the bottom margin, body fills full content rect — default), Content (reserves space inside the content rect), Edge (anchored a fixed distance from the paper edge — uses Footer Edge Offset).", GH_ParamAccess.item, 0);
-        pManager.AddNumberParameter("Header Edge Offset", "HEO", "Distance in mm from the top of the paper to the top of the header band. Only used when Header Placement is Edge.", GH_ParamAccess.item, 0.0);
-        pManager.AddNumberParameter("Footer Edge Offset", "FEO", "Distance in mm from the bottom of the paper to the bottom of the footer band. Only used when Footer Placement is Edge.", GH_ParamAccess.item, 0.0);
+        pManager.AddGenericParameter("Override", "O", "Optional document-wide layout (paper, margins, chrome) from a Layout Override component. Leave unconnected to use built-in defaults (A4, 10mm margins, no chrome).", GH_ParamAccess.item);
 
-        for (var i = 1; i <= 17; i++) pManager[i].Optional = true;
-
-        if (pManager[12] is Param_Integer headerAlign)
-        {
-            headerAlign.AddNamedValue("Left", 0);
-            headerAlign.AddNamedValue("Center", 1);
-            headerAlign.AddNamedValue("Right", 2);
-        }
-        if (pManager[13] is Param_Integer footerAlign)
-        {
-            footerAlign.AddNamedValue("Left", 0);
-            footerAlign.AddNamedValue("Center", 1);
-            footerAlign.AddNamedValue("Right", 2);
-        }
-        if (pManager[14] is Param_Integer headerPlacement)
-        {
-            headerPlacement.AddNamedValue("Margin", 0);
-            headerPlacement.AddNamedValue("Content", 1);
-            headerPlacement.AddNamedValue("Edge", 2);
-        }
-        if (pManager[15] is Param_Integer footerPlacement)
-        {
-            footerPlacement.AddNamedValue("Margin", 0);
-            footerPlacement.AddNamedValue("Content", 1);
-            footerPlacement.AddNamedValue("Edge", 2);
-        }
-
-        if (pManager[5] is Param_Integer paperParam)
-        {
-            paperParam.AddNamedValue("A0", 0);
-            paperParam.AddNamedValue("A1", 1);
-            paperParam.AddNamedValue("A2", 2);
-            paperParam.AddNamedValue("A3", 3);
-            paperParam.AddNamedValue("A4", 4);
-            paperParam.AddNamedValue("A5", 5);
-            paperParam.AddNamedValue("Letter", 6);
-            paperParam.AddNamedValue("Legal", 7);
-            paperParam.AddNamedValue("Tabloid", 8);
-        }
+        for (var i = 1; i <= 5; i++) pManager[i].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -125,41 +75,24 @@ public class GH_Document : GH_Component
         var author = string.Empty;
         var subject = string.Empty;
         var keywords = new List<string>();
-        var paperIndex = 4;
-        var landscape = false;
-        var margin = 10.0;
-        DrawElement header = null;
-        DrawElement footer = null;
-        var headerHeight = -1.0;
-        var footerHeight = -1.0;
-        var headerAlignIndex = 0;
-        var footerAlignIndex = 0;
-        var headerPlacementIndex = 0;
-        var footerPlacementIndex = 0;
-        var headerEdgeOffset = 0.0;
-        var footerEdgeOffset = 0.0;
+        IGH_Goo overrideGoo = null;
 
         DA.GetDataList(0, sections);
         DA.GetData(1, ref title);
         DA.GetData(2, ref author);
         DA.GetData(3, ref subject);
         DA.GetDataList(4, keywords);
-        DA.GetData(5, ref paperIndex);
-        DA.GetData(6, ref landscape);
-        DA.GetData(7, ref margin);
-        DA.GetData(8, ref header);
-        DA.GetData(9, ref footer);
-        DA.GetData(10, ref headerHeight);
-        DA.GetData(11, ref footerHeight);
-        DA.GetData(12, ref headerAlignIndex);
-        DA.GetData(13, ref footerAlignIndex);
-        DA.GetData(14, ref headerPlacementIndex);
-        DA.GetData(15, ref footerPlacementIndex);
-        DA.GetData(16, ref headerEdgeOffset);
-        DA.GetData(17, ref footerEdgeOffset);
+        DA.GetData(5, ref overrideGoo);
 
-        WarnIfChromeHasOrigin(header, "Header");
-        WarnIfChromeHasOrigin(footer, "Footer");
+        var overrides = Unwrap(overrideGoo) as LayoutOverride;
+        if (overrideGoo != null && overrides == null)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                "Override input must be a Layout Override value — ignoring.");
+        }
+
+        WarnIfChromeHasOrigin(overrides?.Header, "Header");
+        WarnIfChromeHasOrigin(overrides?.Footer, "Footer");
 
         var validSections = new List<Section>(sections.Count);
         foreach (var s in sections) if (s != null) validSections.Add(s);
@@ -170,9 +103,8 @@ public class GH_Document : GH_Component
             return;
         }
 
-        var paper = ResolvePaper(paperIndex);
-        if (landscape) paper = paper.Landscape();
-        var margins = Margins.Uniform(Math.Max(0, margin));
+        var paper = overrides?.PaperSize ?? PaperSize.A4;
+        var margins = overrides?.Margins ?? Margins.Uniform(10);
 
         var layout = new DocumentLayout
         {
@@ -180,19 +112,19 @@ public class GH_Document : GH_Component
             Title = title,
             PaperSize = paper,
             Margins = margins,
-            Header = header,
-            Footer = footer,
-            HeaderHeight = ResolveBandHeight(headerHeight),
-            FooterHeight = ResolveBandHeight(footerHeight),
-            HeaderAlign = ResolveAlign(headerAlignIndex),
-            FooterAlign = ResolveAlign(footerAlignIndex),
-            HeaderPlacement = ResolvePlacement(headerPlacementIndex),
-            FooterPlacement = ResolvePlacement(footerPlacementIndex),
-            HeaderEdgeOffset = Math.Max(0, headerEdgeOffset),
-            FooterEdgeOffset = Math.Max(0, footerEdgeOffset),
+            Header = overrides?.Header,
+            Footer = overrides?.Footer,
+            HeaderHeight = overrides?.HeaderHeight,
+            FooterHeight = overrides?.FooterHeight,
+            HeaderAlign = overrides?.HeaderAlign ?? HorizontalAlign.Left,
+            FooterAlign = overrides?.FooterAlign ?? HorizontalAlign.Left,
+            HeaderPlacement = overrides?.HeaderPlacement ?? ChromePlacement.Margin,
+            FooterPlacement = overrides?.FooterPlacement ?? ChromePlacement.Margin,
+            HeaderEdgeOffset = overrides?.HeaderEdgeOffset ?? 0,
+            FooterEdgeOffset = overrides?.FooterEdgeOffset ?? 0,
         };
 
-        EmitChromeReservationRemark(header, footer, headerHeight, footerHeight);
+        if (overrides != null) EmitChromeReservationRemark(overrides);
 
         var pages = DocumentLayoutPass.Paginate(layout);
 
@@ -217,6 +149,13 @@ public class GH_Document : GH_Component
         DA.SetData(0, doc);
     }
 
+    private static object Unwrap(IGH_Goo goo) => goo switch
+    {
+        null => null,
+        GH_ObjectWrapper wrap => wrap.Value,
+        _ => goo,
+    };
+
     private void BuildPreview(IReadOnlyList<Page> pages)
     {
         _previewPages = new List<Page>(pages);
@@ -229,42 +168,21 @@ public class GH_Document : GH_Component
         _clippingBox = ComputeClippingBox(pages);
     }
 
-    private static double? ResolveBandHeight(double input)
-    {
-        if (input < 0) return null;          // Auto: PaginationPass measures from bounds
-        if (input == 0) return 0.0;          // Explicit zero: no reservation
-        return input;                        // Explicit positive: reserve exactly this much
-    }
-
-    private static HorizontalAlign ResolveAlign(int i) => i switch
-    {
-        1 => HorizontalAlign.Center,
-        2 => HorizontalAlign.Right,
-        _ => HorizontalAlign.Left,
-    };
-
-    private static ChromePlacement ResolvePlacement(int i) => i switch
-    {
-        1 => ChromePlacement.Content,
-        2 => ChromePlacement.Edge,
-        _ => ChromePlacement.Margin,
-    };
-
     // Surface what the pagination pass actually reserved so the user has a visible signal
     // instead of guessing whether 0 / -1 / a positive number did what they expected.
-    private void EmitChromeReservationRemark(DrawElement header, DrawElement footer, double headerInput, double footerInput)
+    private void EmitChromeReservationRemark(LayoutOverride overrides)
     {
-        if (header == null && footer == null) return;
+        if (overrides.Header == null && overrides.Footer == null) return;
         var parts = new List<string>(2);
-        if (header != null) parts.Add($"Header {DescribeReservation(header, headerInput)}");
-        if (footer != null) parts.Add($"Footer {DescribeReservation(footer, footerInput)}");
+        if (overrides.Header != null) parts.Add($"Header {DescribeReservation(overrides.Header, overrides.HeaderHeight)}");
+        if (overrides.Footer != null) parts.Add($"Footer {DescribeReservation(overrides.Footer, overrides.FooterHeight)}");
         AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, string.Join(" · ", parts));
     }
 
-    private static string DescribeReservation(DrawElement chrome, double input)
+    private static string DescribeReservation(DrawElement chrome, double? input)
     {
-        if (input > 0) return $"{input:0.##} mm (explicit)";
-        if (input == 0) return "0 mm (no reservation)";
+        if (input.HasValue && input.Value > 0) return $"{input.Value:0.##} mm (explicit)";
+        if (input.HasValue && input.Value == 0) return "0 mm (no reservation)";
         var resolved = PaginationPass.ResolveLayout(chrome);
         var measured = PaginationPass.ResolveBandHeight(null, resolved);
         return $"{measured:0.##} mm (auto)";
@@ -365,19 +283,6 @@ public class GH_Document : GH_Component
             new Point3d(0, -padY * 2, 0),
             new Point3d(totalWidth, maxH, 0));
     }
-
-    private static PaperSize ResolvePaper(int i) => i switch
-    {
-        0 => PaperSize.A0,
-        1 => PaperSize.A1,
-        2 => PaperSize.A2,
-        3 => PaperSize.A3,
-        5 => PaperSize.A5,
-        6 => PaperSize.Letter,
-        7 => PaperSize.Legal,
-        8 => PaperSize.Tabloid,
-        _ => PaperSize.A4,
-    };
 
     private static string NullIfEmpty(string s) => string.IsNullOrEmpty(s) ? null : s;
 }

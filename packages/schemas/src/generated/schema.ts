@@ -178,6 +178,10 @@ export interface NumberWidgetConfig {
   stepSize?: number;
   placeholder?: string;
   renderAsSlider?: boolean;
+  /**
+   * Hide the min/max range hint shown next to the label / under the input
+   */
+  hideRange?: boolean;
 }
 export interface TextWidgetConfig {
   placeholder?: string;

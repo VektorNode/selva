@@ -20,12 +20,12 @@ public class GH_DrawingView : GH_Component
     public GH_DrawingView()
         : base("Drawing View", "DView",
             "Group geometry into a scaled view. One view per input branch. Length sets the longest side in mm; leave at 0 to auto-fit the parent page.",
-            "Selva", "Layout")
+            "Selva", "Elements")
     {
     }
 
     protected override Bitmap Icon => Resources.DrawingView;
-    public override GH_Exposure Exposure => GH_Exposure.quarternary;
+    public override GH_Exposure Exposure => GH_Exposure.last;
     public override Guid ComponentGuid => new Guid("3336B561-6152-4CA0-83D6-C0F5EED76540");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

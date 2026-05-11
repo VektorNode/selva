@@ -20,7 +20,7 @@ public class GH_BakeFiles : GH_Component
     {
     }
 
-    protected override Bitmap Icon => Resources.CreateFile;
+    protected override Bitmap Icon => Resources.BakeFile;
 
     public override Guid ComponentGuid => new Guid("E7F8A3B2-4C9D-4F1E-8A5C-9B7D2E1F3A6C");
 

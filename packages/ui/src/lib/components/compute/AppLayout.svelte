@@ -314,6 +314,7 @@
 						</div>
 					</Resizable.Pane>
 					<Resizable.Handle
+						withHandle
 						class={leftCollapsed ? 'pointer-events-none hidden' : 'bg-transparent'}
 					/>
 				{/if}
@@ -335,7 +336,8 @@
 				<!-- Right pane -->
 				{#if hasRightPanel}
 					<Resizable.Handle
-						class={rightCollapsed ? ' pointer-events-none hidden' : 'bg-transparent'}
+						withHandle
+						class={rightCollapsed ? 'pointer-events-none hidden' : 'bg-transparent'}
 					/>
 					<Resizable.Pane
 						bind:this={rightPaneRef}

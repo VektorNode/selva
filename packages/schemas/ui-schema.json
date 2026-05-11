@@ -118,7 +118,11 @@
 				"maximum": { "type": "number" },
 				"stepSize": { "type": "number" },
 				"placeholder": { "type": "string" },
-				"renderAsSlider": { "type": "boolean" }
+				"renderAsSlider": { "type": "boolean" },
+				"hideRange": {
+					"type": "boolean",
+					"description": "Hide the min/max range hint shown next to the label / under the input"
+				}
 			},
 			"additionalProperties": false
 		},
