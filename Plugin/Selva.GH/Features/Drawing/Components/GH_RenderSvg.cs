@@ -42,10 +42,8 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
     {
         pManager.AddGenericParameter("Drawing", "D", "A Document (paginated) or one or more DrawElements / DrawingViews to wrap into a single-page SVG", GH_ParamAccess.list);
         pManager.AddTextParameter("Name", "N", "Output file name without extension", GH_ParamAccess.item, "drawing");
-        pManager.AddNumberParameter("Padding", "P", "Padding around content when auto-fitting (mm)", GH_ParamAccess.item, 10.0);
-        pManager.AddBooleanParameter("Auto Fit", "AF", "Auto-fit viewBox to content. When false, page paper size is used.", GH_ParamAccess.item, true);
+        pManager.AddBooleanParameter("Auto Fit", "AF", "Auto-fit viewBox to content with a 10mm margin. When false, the document's page size is used.", GH_ParamAccess.item, false);
         pManager.AddColourParameter("Background", "BG", "Background color (leave unconnected for transparent)", GH_ParamAccess.item);
-        pManager.AddTextParameter("Font Family", "F", "CSS font-family stack applied to all text. Leave empty for default sans-serif.", GH_ParamAccess.item, "");
         pManager.AddBooleanParameter("Embed Fonts", "EF", "Embed bundled Inter as a @font-face data URI", GH_ParamAccess.item, false);
         pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item, "");
 
@@ -54,8 +52,6 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
         pManager[3].Optional = true;
         pManager[4].Optional = true;
         pManager[5].Optional = true;
-        pManager[6].Optional = true;
-        pManager[7].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -67,21 +63,17 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
     {
         var inputs = new List<IGH_Goo>();
         var name = "drawing";
-        var padding = 10.0;
-        var autoFit = true;
+        var autoFit = false;
         var bgColor = Color.Empty;
-        var fontFamily = "";
         var embedFonts = false;
         var subFolder = "";
 
         if (!DA.GetDataList(0, inputs) || inputs.Count == 0) return;
         DA.GetData(1, ref name);
-        DA.GetData(2, ref padding);
-        DA.GetData(3, ref autoFit);
-        DA.GetData(4, ref bgColor);
-        DA.GetData(5, ref fontFamily);
-        DA.GetData(6, ref embedFonts);
-        DA.GetData(7, ref subFolder);
+        DA.GetData(2, ref autoFit);
+        DA.GetData(3, ref bgColor);
+        DA.GetData(4, ref embedFonts);
+        DA.GetData(5, ref subFolder);
 
         if (!TryBuildDocument(inputs, name, out var doc, out var error))
         {
@@ -101,12 +93,8 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
         {
             var options = new SvgRenderOptions
             {
-                Padding = padding,
                 AutoFitToContent = autoFit,
                 BackgroundColor = backgroundColor,
-                FontFamily = string.IsNullOrWhiteSpace(fontFamily)
-                    ? SvgRenderOptions.DefaultFontFamily
-                    : fontFamily,
                 EmbedFonts = embedFonts,
             };
 

@@ -130,5 +130,24 @@
 
 	.schema-grid {
 		grid-template-columns: repeat(var(--schema-cols), minmax(0, 1fr));
+		/* Vertical dividers painted in the column gaps via a repeating
+		   gradient. The gradient draws one column-worth of transparency
+		   followed by a 1px line, repeating across the grid. Only kicks in
+		   for multi-column grids. */
+		background-image: linear-gradient(
+			to right,
+			transparent calc((100% - 1px) / var(--schema-cols)),
+			var(--border) calc((100% - 1px) / var(--schema-cols)),
+			var(--border) calc(100% / var(--schema-cols)),
+			transparent calc(100% / var(--schema-cols))
+		);
+		background-size: calc(100% / var(--schema-cols) * (var(--schema-cols) - 1) + 1px) 100%;
+		background-repeat: repeat-x;
+		background-position: left center;
+	}
+
+	/* Single-column grids: no dividers. */
+	.schema-grid[style*='--schema-cols: 1'] {
+		background-image: none;
 	}
 </style>

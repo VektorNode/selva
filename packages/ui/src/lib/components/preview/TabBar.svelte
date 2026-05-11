@@ -10,9 +10,26 @@
 	}
 
 	let { tabs, onTabChange }: Props = $props();
+
+	let viewportRef = $state<HTMLElement | null>(null);
+
+	function handleWheel(e: WheelEvent) {
+		if (!viewportRef) return;
+		// Trackpad horizontal swipes already produce deltaX — let those pass through.
+		if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+		const canScroll = viewportRef.scrollWidth > viewportRef.clientWidth;
+		if (!canScroll) return;
+		e.preventDefault();
+		viewportRef.scrollLeft += e.deltaY;
+	}
 </script>
 
-<ScrollArea class="w-full shrink-0 border-b border-border" orientation="horizontal">
+<ScrollArea
+	bind:viewportRef
+	class="w-full shrink-0 border-b border-border"
+	orientation="horizontal"
+	onwheel={handleWheel}
+>
 	<Tabs.List
 		class="px-2 py-2 gap-0 inline-flex h-auto w-max justify-start rounded-none bg-transparent"
 	>

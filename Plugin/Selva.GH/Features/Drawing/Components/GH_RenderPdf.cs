@@ -37,14 +37,12 @@ public class GH_RenderPdf : GH_Component, ISelvaFileOutput
     {
         pManager.AddGenericParameter("Document", "D", "Drawing document", GH_ParamAccess.item);
         pManager.AddTextParameter("Name", "N", "Output file name without extension", GH_ParamAccess.item, "drawing");
-        pManager.AddNumberParameter("Padding", "P", "Padding around content when auto-fitting (mm)", GH_ParamAccess.item, 10.0);
-        pManager.AddBooleanParameter("Auto Fit", "AF", "Auto-fit page to content. When false, page paper size is used.", GH_ParamAccess.item, true);
+        pManager.AddBooleanParameter("Auto Fit", "AF", "Auto-fit page to content with a 10mm margin. When false, the document's page size is used.", GH_ParamAccess.item, false);
         pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item, "");
 
         pManager[1].Optional = true;
         pManager[2].Optional = true;
         pManager[3].Optional = true;
-        pManager[4].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -56,21 +54,18 @@ public class GH_RenderPdf : GH_Component, ISelvaFileOutput
     {
         Document doc = null;
         var name = "drawing";
-        var padding = 10.0;
-        var autoFit = true;
+        var autoFit = false;
         var subFolder = "";
 
         if (!DA.GetData(0, ref doc) || doc == null) return;
         DA.GetData(1, ref name);
-        DA.GetData(2, ref padding);
-        DA.GetData(3, ref autoFit);
-        DA.GetData(4, ref subFolder);
+        DA.GetData(2, ref autoFit);
+        DA.GetData(3, ref subFolder);
 
         try
         {
             var options = new PdfRenderOptions
             {
-                Padding = padding,
                 AutoFitToContent = autoFit,
             };
             var bytes = new PdfRenderer(options).Render(doc);

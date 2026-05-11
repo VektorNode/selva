@@ -154,6 +154,12 @@ namespace Selva.Schema.Models
 
         [JsonProperty("renderAsSlider")]
         public bool? RenderAsSlider { get; set; }
+
+/// <summary>
+/// Hide the min/max range hint shown next to the label / under the input
+/// </summary>
+        [JsonProperty("hideRange")]
+        public bool? HideRange { get; set; }
     }
 
     public class TextWidgetConfig

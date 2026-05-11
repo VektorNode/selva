@@ -41,6 +41,21 @@
 	const inputId = $derived(`input-${item.paramId}`);
 	const label = $derived(displayName || item.displayName || item.paramId);
 
+	// Number range hint — shown next to label for sliders, under the input for plain number fields.
+	const numberRangeHint = $derived.by(() => {
+		if (!isNumberWidget(item)) return null;
+		const cfg = item.config;
+		if (cfg?.hideRange) return null;
+		const hasMin = typeof cfg?.minimum === 'number';
+		const hasMax = typeof cfg?.maximum === 'number';
+		if (!hasMin && !hasMax) return null;
+		if (hasMin && hasMax) return `${cfg!.minimum} to ${cfg!.maximum}`;
+		if (hasMin) return `≥ ${cfg!.minimum}`;
+		return `≤ ${cfg!.maximum}`;
+	});
+
+	const showRangeInLabel = $derived(isNumberWidget(item) && numberRangeHint !== null);
+
 	function commit(newValue: SupportedTypes) {
 		value = newValue;
 		onChange(item.paramId, newValue);
@@ -62,6 +77,9 @@
 					</Dialog.Header>
 				</Dialog.Content>
 			</Dialog.Root>
+		{/if}
+		{#if showRangeInLabel}
+			<span class="text-xs font-normal text-muted-foreground">{numberRangeHint}</span>
 		{/if}
 	</Field.Label>
 
