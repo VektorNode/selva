@@ -82,6 +82,8 @@ skills-lock.json
 # Grasshopper definitions
 *.gh
 *.ghx
+!examples/*.gh
+!examples/*.ghx
 # Unignore the Selva.GH plugin directory (case-insensitive match on Windows)
 !Plugin/Selva.GH/
 !Plugin/Selva.GH/**
