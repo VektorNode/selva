@@ -43,13 +43,40 @@
 			onToggle();
 		}
 	}
+
+	/**
+	 * Compute the column position (0-indexed) where each item starts, accounting
+	 * for spans and linebreak resets. Items hidden by visibility don't consume
+	 * a slot (matching what the renderer does — they're skipped entirely).
+	 */
+	const columnStarts = $derived.by(() => {
+		const positions: number[] = [];
+		let col = 0;
+		for (const item of items) {
+			if (item.type === 'linebreak') {
+				positions.push(0);
+				col = 0;
+				continue;
+			}
+			const visibility = evaluateVisibility(item, values);
+			if (!visibility.visible) {
+				positions.push(0);
+				continue;
+			}
+			const span = Math.min(Math.max(1, item.span ?? 1), columns);
+			if (col + span > columns) col = 0;
+			positions.push(col);
+			col = (col + span) % columns;
+		}
+		return positions;
+	});
 </script>
 
 {#if flat}
 	<div class="p-6">
 		<div class="schema-grid gap-6 grid" style="--schema-cols: {columns};">
-			{#each items as layoutItem (layoutItem.type === 'linebreak' ? layoutItem.id : layoutItem.paramId)}
-				{@render gridItem(layoutItem, columns)}
+			{#each items as layoutItem, i (layoutItem.type === 'linebreak' ? layoutItem.id : layoutItem.paramId)}
+				{@render gridItem(layoutItem, columns, columnStarts[i] === 0)}
 			{/each}
 		</div>
 	</div>
@@ -79,8 +106,8 @@
 			<div class="content-inner">
 				<Card.Content class="p-6">
 					<div class="schema-grid gap-6 grid" style="--schema-cols: {columns};">
-						{#each items as layoutItem (layoutItem.type === 'linebreak' ? layoutItem.id : layoutItem.paramId)}
-							{@render gridItem(layoutItem, columns)}
+						{#each items as layoutItem, i (layoutItem.type === 'linebreak' ? layoutItem.id : layoutItem.paramId)}
+							{@render gridItem(layoutItem, columns, columnStarts[i] === 0)}
 						{/each}
 					</div>
 				</Card.Content>
@@ -89,7 +116,7 @@
 	</Card.Root>
 {/if}
 
-{#snippet gridItem(layoutItem: LayoutItem, cols: number)}
+{#snippet gridItem(layoutItem: LayoutItem, cols: number, isFirstInRow: boolean)}
 	{#if layoutItem.type === 'linebreak'}
 		<div style="grid-column: 1 / -1" class="h-px bg-border" aria-hidden="true"></div>
 	{:else}
@@ -98,14 +125,19 @@
 		{#if visibility.visible}
 			{#if layoutItem.type === 'input'}
 				<div
-					class="min-w-0 flex items-center"
+					class="grid-cell min-w-0 flex items-center"
 					class:opacity-50={visibility.disabled}
+					class:col-divider={!isFirstInRow && cols > 1}
 					style="grid-column: span {span} / span {span}"
 				>
 					{@render inputSnippet(layoutItem, visibility)}
 				</div>
 			{:else if layoutItem.type === 'output'}
-				<div style="grid-column: span {span} / span {span}">
+				<div
+					class="grid-cell"
+					class:col-divider={!isFirstInRow && cols > 1}
+					style="grid-column: span {span} / span {span}"
+				>
 					{@render outputSnippet(layoutItem)}
 				</div>
 			{/if}
@@ -130,24 +162,23 @@
 
 	.schema-grid {
 		grid-template-columns: repeat(var(--schema-cols), minmax(0, 1fr));
-		/* Vertical dividers painted in the column gaps via a repeating
-		   gradient. The gradient draws one column-worth of transparency
-		   followed by a 1px line, repeating across the grid. Only kicks in
-		   for multi-column grids. */
-		background-image: linear-gradient(
-			to right,
-			transparent calc((100% - 1px) / var(--schema-cols)),
-			var(--border) calc((100% - 1px) / var(--schema-cols)),
-			var(--border) calc(100% / var(--schema-cols)),
-			transparent calc(100% / var(--schema-cols))
-		);
-		background-size: calc(100% / var(--schema-cols) * (var(--schema-cols) - 1) + 1px) 100%;
-		background-repeat: repeat-x;
-		background-position: left center;
 	}
 
-	/* Single-column grids: no dividers. */
-	.schema-grid[style*='--schema-cols: 1'] {
-		background-image: none;
+	/* Vertical divider painted in the column gap. `gap-6` is 24px, so a 12px
+	   negative margin + 12px padding centres the 1px line in the gutter. */
+	.col-divider {
+		border-left: 1px solid var(--border);
+		padding-left: 12px;
+		margin-left: -12px;
+	}
+
+	/* When the container collapses the grid to 1 visual column, the items are
+	   stacked and the divider would float on the left of every row. Hide it. */
+	@container (max-width: 320px) {
+		.col-divider {
+			border-left: 0;
+			padding-left: 0;
+			margin-left: 0;
+		}
 	}
 </style>
