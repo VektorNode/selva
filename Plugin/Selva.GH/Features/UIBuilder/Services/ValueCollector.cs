@@ -50,6 +50,7 @@ public class ValueCollector
                         currentValues[input.Id.ToString()] = value;
                     }
                 }
+
             }
             catch (Exception ex)
             {
@@ -297,12 +298,59 @@ public class ValueCollector
             return ExtractValueListValue(valueListParam);
         }
 
+        // 1) The param's own volatile data — populated after solve for both wired and
+        //    persistent-data-backed params. This is the most reliable source.
+        var fromOwnVolatile = ExtractDataFromVolatileData(ghParam.VolatileData);
+        if (fromOwnVolatile != null)
+        {
+            return fromOwnVolatile;
+        }
+
+        // 2) Wired source (e.g. a Boolean Toggle upstream) — falls back when this param's
+        //    own volatile data is empty (pre-solve, or non-collecting context params).
         if (ghParam.SourceCount == 1)
         {
-            return ExtractDataFromVolatileData(ghParam.Sources[0].VolatileData);
+            var fromSource = ExtractDataFromVolatileData(ghParam.Sources[0].VolatileData);
+            if (fromSource != null)
+            {
+                return fromSource;
+            }
+
+            // Boolean Toggle exposes its state via a "Value" property, not VolatileData
+            // when the doc hasn't solved yet. Read it directly so booleans default correctly.
+            if (TryGetBoolProperty(ghParam.Sources[0], "Value", out var toggleValue))
+            {
+                return toggleValue;
+            }
         }
 
         return null;
+    }
+
+    private static bool TryGetBoolProperty(object obj, string propName, out bool value)
+    {
+        value = false;
+        if (obj == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var prop = obj.GetType()
+                .GetProperty(propName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (prop?.GetValue(obj) is bool b)
+            {
+                value = b;
+                return true;
+            }
+        }
+        catch
+        {
+            // ignored
+        }
+
+        return false;
     }
 
     /// <summary>
