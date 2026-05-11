@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { TabConfig } from '@selvajs/schemas';
-	import { ChevronRight, ChevronLeft, ChevronDown } from '@lucide/svelte';
 	import Icon from '@iconify/svelte';
 
 	interface Props {
@@ -12,29 +11,34 @@
 	}
 
 	let { side, tabs, collapsedWidth, onExpand, onTabClick }: Props = $props();
+
+	const railClass = $derived(
+		[
+			'gap-1 py-2 lg:py-3 lg:flex-col lg:w-auto px-2 lg:px-0',
+			'flex w-full shrink-0 flex-row items-center',
+			'backdrop-blur-sm bg-background/90 cursor-pointer'
+		].join(' ')
+	);
+
+	const tabButtonClass =
+		'w-8 h-8 rounded cursor-pointer flex shrink-0 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
 </script>
 
 <div
-	class="gap-2 py-3 lg:py-4 lg:flex-col lg:w-auto px-3 lg:px-0 lg:rounded-md flex w-full shrink-0 cursor-pointer flex-row items-center border-2 border-border bg-muted transition-colors hover:bg-muted/70"
-	style="lg:width: {collapsedWidth}px"
+	class={railClass}
+	style="--collapsed-w: {collapsedWidth}px;"
 	role="button"
 	tabindex="0"
+	aria-label="Expand {side} panel"
 	onclick={onExpand}
-	onkeydown={(e) => e.key === 'Enter' && onExpand()}
-	title="Expand {side} panel"
+	onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onExpand()}
 >
-	<!-- Mobile chevron (top of row) -->
-	{#if side === 'left'}
-		<div class="lg:hidden text-muted-foreground">
-			<ChevronDown size={14} />
-		</div>
-	{/if}
-
 	{#each tabs as tab (tab.id)}
 		<button
 			type="button"
-			class="w-8 h-8 m-1 rounded text-xs font-semibold shadow-sm flex shrink-0 items-center justify-center bg-background text-foreground transition-colors select-none hover:bg-accent/80"
+			class={tabButtonClass}
 			title={tab.label}
+			aria-label={tab.label}
 			onclick={(e) => {
 				e.stopPropagation();
 				onTabClick(tab.id);
@@ -44,21 +48,22 @@
 				{#if tab.icon.includes(':')}
 					<Icon icon={tab.icon} class="h-4 w-4" />
 				{:else}
-					<span>{tab.icon}</span>
+					<span class="text-xs font-semibold">{tab.icon}</span>
 				{/if}
 			{:else}
-				<span>{tab.label[0]?.toUpperCase() ?? '?'}</span>
+				<span class="text-xs font-semibold">{tab.label[0]?.toUpperCase() ?? '?'}</span>
 			{/if}
 		</button>
 	{/each}
-
-	{#if side === 'left'}
-		<div class="lg:block mt-auto hidden text-muted-foreground">
-			<ChevronRight size={14} />
-		</div>
-	{:else if side === 'right'}
-		<div class="lg:block mt-auto hidden text-muted-foreground">
-			<ChevronLeft size={14} />
-		</div>
-	{/if}
 </div>
+
+<style>
+	div {
+		min-width: 0;
+	}
+	@media (min-width: 1024px) {
+		div {
+			width: var(--collapsed-w);
+		}
+	}
+</style>

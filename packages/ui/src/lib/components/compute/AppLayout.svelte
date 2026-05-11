@@ -156,7 +156,9 @@
 
 <div
 	data-layout-root
-	class="min-h-0 sm:flex-row sm:px-(--page-px) sm:py-(--page-py) flex flex-1 flex-col overflow-hidden"
+	class="min-h-0 sm:flex-row sm:py-(--page-py) flex flex-1 flex-col overflow-hidden {leftCollapsed
+		? 'sm:pl-0'
+		: 'sm:pl-(--page-px)'} {rightCollapsed ? 'sm:pr-0' : 'sm:pr-(--page-px)'}"
 	class:fullscreen-layout={isViewerFullscreen}
 	class:relative={isMobile}
 >
@@ -304,6 +306,7 @@
 						collapsedSize={0}
 						onCollapse={() => (leftCollapsed = true)}
 						onExpand={() => (leftCollapsed = false)}
+						class="ml-1"
 					>
 						<div
 							class="min-h-0 flex h-full flex-col {isViewerFullscreen || leftCollapsed
@@ -315,7 +318,11 @@
 					</Resizable.Pane>
 					<Resizable.Handle
 						withHandle
-						class={leftCollapsed ? 'pointer-events-none hidden' : 'bg-transparent'}
+						class="bg-transparent"
+						data-collapsed={leftCollapsed}
+						onclick={() => {
+							if (leftCollapsed) leftPaneRef?.expand();
+						}}
 					/>
 				{/if}
 
@@ -337,7 +344,11 @@
 				{#if hasRightPanel}
 					<Resizable.Handle
 						withHandle
-						class={rightCollapsed ? 'pointer-events-none hidden' : 'bg-transparent'}
+						class="bg-transparent"
+						data-collapsed={rightCollapsed}
+						onclick={() => {
+							if (rightCollapsed) rightPaneRef?.expand();
+						}}
 					/>
 					<Resizable.Pane
 						bind:this={rightPaneRef}
@@ -349,6 +360,7 @@
 						collapsedSize={0}
 						onCollapse={() => (rightCollapsed = true)}
 						onExpand={() => (rightCollapsed = false)}
+						class="mr-1"
 					>
 						<div
 							class="min-h-0 flex h-full flex-col {isViewerFullscreen || rightCollapsed
@@ -386,6 +398,12 @@
 		inset: 0;
 		z-index: 9999;
 		padding: 0 !important;
+	}
+
+	/* When the adjacent pane is collapsed, override paneforge's inline
+	   ew-resize cursor — there's nothing to drag from in this state. */
+	:global([data-pane-resizer][data-collapsed='true']) {
+		cursor: pointer !important;
 	}
 
 	.panel-content-wrapper {
