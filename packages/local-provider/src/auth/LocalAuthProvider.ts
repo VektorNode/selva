@@ -29,7 +29,7 @@ function toAuthUser(
 }
 
 export interface LocalAuthProviderConfig {
-	/** HMAC signing secret. Pass from env (SESSION_SECRET). */
+	/** HMAC signing secret. Pass from env (SELVA_HMAC_KEY). */
 	hmacSecret: string;
 	/**
 	 * Absolute path to auth-users.json — identity-only storage. Per-user app
@@ -95,8 +95,8 @@ export class LocalAuthProvider implements IAuthProvider {
 	}
 
 	static fromEnv(env: Record<string, string | undefined>): LocalAuthProvider {
-		const hmacSecret = env.SESSION_SECRET;
-		if (!hmacSecret) throw new Error('Missing required env var: SESSION_SECRET');
+		const hmacSecret = env.SELVA_HMAC_KEY;
+		if (!hmacSecret) throw new Error('Missing required env var: SELVA_HMAC_KEY');
 		return new LocalAuthProvider({
 			hmacSecret,
 			usersFilePath: env.DATA_PATH ? path.join(env.DATA_PATH, 'auth-users.json') : undefined

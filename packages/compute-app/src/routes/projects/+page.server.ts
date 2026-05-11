@@ -7,7 +7,13 @@ import {
 	getUserProfileStore
 } from '$lib/server/providers.server';
 import { projectAccessInputFromRows } from '$lib/server/access.server';
-import { hasPermission, canView, canEdit, serversVisibleTo } from '@selvajs/platform';
+import {
+	hasPermission,
+	canView,
+	canEdit,
+	serversVisibleTo,
+	defaultServerIdFor
+} from '@selvajs/platform';
 import type {
 	DefinitionRecord,
 	DefinitionVersion,
@@ -50,6 +56,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			projects: [],
 			records: [],
 			computeServers: [],
+			defaultComputeServerId: null,
 			users: [],
 			canManageProjects: false
 		};
@@ -155,11 +162,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// platform servers shared with this org (or with `'all'`, or the
 		// global default) plus this org's org-private servers.
 		const computeServers = serversVisibleTo(computeConfig, ctx.actingOrgId);
+		const defaultComputeServerId = defaultServerIdFor(computeConfig, ctx.actingOrgId) ?? null;
 
 		return {
 			projects,
 			records,
 			computeServers,
+			defaultComputeServerId,
 			users,
 			canManageProjects
 		};
@@ -170,6 +179,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			projects: [] as ProjectWithMembers[],
 			records: [] as DefinitionRecord[],
 			computeServers: [] as ComputeServerConfig[],
+			defaultComputeServerId: null as string | null,
 			users: [] as UserListItem[],
 			canManageProjects: false
 		};

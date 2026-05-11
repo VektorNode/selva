@@ -35,6 +35,7 @@
 		record: DefinitionRecord;
 		projects: ProjectWithMembers[];
 		computeServers: ComputeServerConfig[];
+		defaultComputeServerId?: string | null;
 		isSaving: boolean;
 		initialTab?: 'versions' | 'details' | 'shares';
 		onClose: () => void;
@@ -49,6 +50,7 @@
 		record,
 		projects,
 		computeServers,
+		defaultComputeServerId = null,
 		isSaving,
 		initialTab = 'versions',
 		onClose,
@@ -293,14 +295,18 @@
 							<Label for="edit-srv">Compute server</Label>
 							<select
 								id="edit-srv"
-								value={computeServerId ?? ''}
+								value={computeServerId ?? defaultComputeServerId ?? ''}
 								onchange={(e) => {
-									computeServerId = (e.currentTarget as HTMLSelectElement).value || null;
+									const picked = (e.currentTarget as HTMLSelectElement).value || null;
+									computeServerId = picked === defaultComputeServerId ? null : picked;
 								}}
 								class="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
 							>
-								<option value="">Default</option>
-								{#each computeServers as s (s.id)}<option value={s.id}>{s.label}</option>{/each}
+								{#each computeServers as s (s.id)}
+									<option value={s.id}>
+										{s.label}{s.id === defaultComputeServerId ? ' (Default)' : ''}
+									</option>
+								{/each}
 							</select>
 						</div>
 					{/if}

@@ -13,7 +13,7 @@ import { env } from '$env/dynamic/private';
  *      every link. This is what end-users carry in `?token=…`.
  *
  *   2. **Instance-wide HMAC secret** (`SHARE_LINK_SECRET` env var, falls back
- *      to `SESSION_SECRET`) — used to hash tokens for storage. The store sees
+ *      to `SELVA_HMAC_KEY`) — used to hash tokens for storage. The store sees
  *      only `HMAC-SHA256(secret, token)`. A DB-only leak therefore can't be
  *      replayed: the attacker would need the secret too, and it lives in env,
  *      not the database.
@@ -31,17 +31,17 @@ import { env } from '$env/dynamic/private';
  * env-var documentation, generation command, and rotation notes. tl;dr:
  *
  *   - Set `SHARE_LINK_SECRET` to a random ≥32-byte string in production.
- *   - In dev, omitting it makes the code fall back to `SESSION_SECRET`.
+ *   - In dev, omitting it makes the code fall back to `SELVA_HMAC_KEY`.
  *   - Rotation invalidates every existing share link.
  */
 
 const TOKEN_PREFIX = 'share_';
 
 function getSecret(): string {
-	const secret = env.SHARE_LINK_SECRET || env.SESSION_SECRET;
+	const secret = env.SHARE_LINK_SECRET || env.SELVA_HMAC_KEY;
 	if (!secret) {
 		throw new Error(
-			'Missing required env var: SHARE_LINK_SECRET (or SESSION_SECRET as fallback). ' +
+			'Missing required env var: SHARE_LINK_SECRET (or SELVA_HMAC_KEY as fallback). ' +
 				'See selva.config.ts for setup instructions.'
 		);
 	}

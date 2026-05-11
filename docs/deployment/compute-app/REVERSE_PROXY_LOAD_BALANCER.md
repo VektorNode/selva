@@ -70,7 +70,7 @@ Allow TCP ports 80 and 443 inbound, then add tags `http-server` and `https-serve
 
 **Cookies not set / admin login fails:**
 
-The app sets `Secure` cookies in production, which requires HTTPS. For HTTP-only deployments (dev/testing), set `ALLOW_INSECURE_COOKIES=true` in `ecosystem.config.cjs` and restart:
+The app sets `Secure` cookies in production, which requires HTTPS. For HTTP-only deployments (dev/testing), set `ALLOW_INSECURE_COOKIES=true` in `packages/compute-app/.env` and restart:
 
 ```bash
 pm2 restart selva-compute --update-env
@@ -78,11 +78,11 @@ pm2 restart selva-compute --update-env
 
 **Double slashes in requests (`//admin`, `//favicon.svg`):**
 
-`ORIGIN` in `ecosystem.config.cjs` has a trailing slash. Remove it:
+`ORIGIN` in `packages/compute-app/.env` has a trailing slash. Remove it:
 
-```javascript
-ORIGIN: 'http://34.52.176.223',   // ✅ correct
-ORIGIN: 'http://34.52.176.223/',  // ❌ wrong
+```bash
+ORIGIN=http://34.52.176.223    # ✅ correct
+ORIGIN=http://34.52.176.223/   # ❌ wrong
 ```
 
 Then:

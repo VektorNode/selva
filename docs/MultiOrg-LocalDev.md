@@ -31,7 +31,8 @@ flags: { ALLOW_ORG_CREATION: true }, // optional; lets non-admins create orgs
 
 ```bash
 DATA_PATH=../../.selva-data
-SESSION_SECRET=$(openssl rand -base64 32)
+SELVA_HMAC_KEY=$(openssl rand -base64 32)
+SELVA_AT_REST_KEY=$(openssl rand -hex 32)
 ```
 
 ### Option B: Supabase (local CLI stack)
@@ -52,7 +53,7 @@ flags: { ALLOW_ORG_CREATION: true },
 SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_ANON_KEY=<from supabase status>
 SUPABASE_SERVICE_ROLE_KEY=<from supabase status>
-SESSION_SECRET=$(openssl rand -base64 32)
+SELVA_HMAC_KEY=$(openssl rand -base64 32)
 ```
 
 Both backends share the same compute-app, hooks, admin API, and access rules. From here on everything is identical except the storage step at the end.

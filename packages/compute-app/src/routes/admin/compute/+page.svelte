@@ -428,7 +428,7 @@
 	<SectionHeader
 		eyebrow="Admin"
 		title="Compute"
-		description="Platform compute servers. The global default is always visible to every org; share additional servers with specific orgs (or all orgs) to expose them in pickers and let orgs pin definitions to them. Org owners can configure their own servers via /team/compute when ALLOW_ORG_COMPUTE_OVERRIDE is on."
+		description="Manage compute servers. Share servers with specific orgs to expose them in pickers. When ALLOW_ORG_COMPUTE_OVERRIDE is on, org owners can configure their own servers."
 	>
 		{#snippet actions()}
 			<Button variant="outline" size="sm" onclick={addServer}>

@@ -38,15 +38,15 @@ const EMPTY: OnDiskShape = { servers: [], orgDefaults: {} };
 export class LocalComputeServerStore implements IComputeServerStore {
 	static fromEnv(env: Record<string, string | undefined>): LocalComputeServerStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
-		if (!env.SELVA_SECRET_KEY) {
+		if (!env.SELVA_AT_REST_KEY) {
 			throw new Error(
-				'Missing required env var: SELVA_SECRET_KEY (32-byte hex or base64). ' +
+				'Missing required env var: SELVA_AT_REST_KEY (32-byte hex or base64). ' +
 					'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
 			);
 		}
 		return new LocalComputeServerStore(
 			path.join(env.DATA_PATH, 'compute.config.json'),
-			decodeSecretKey(env.SELVA_SECRET_KEY)
+			decodeSecretKey(env.SELVA_AT_REST_KEY)
 		);
 	}
 

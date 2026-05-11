@@ -52,11 +52,11 @@ import {
 import { hashToken, mintRawToken } from '../shareLinks/token.server.js';
 import { setTestProviders, clearTestProviders } from './test-providers.js';
 
-const TEST_SESSION_SECRET = 'test-session-secret-32-chars-min-len';
+const TEST_HMAC_KEY = 'test-hmac-key-32-chars-min-length';
 // Deterministic 32-byte hex — `LocalComputeServerStore.fromEnv` needs a key
 // to encrypt the per-server compute config. Tests don't read the encrypted
 // blob, but the constructor still requires one.
-const TEST_SELVA_SECRET_KEY = '0'.repeat(64);
+const TEST_AT_REST_KEY = '0'.repeat(64);
 
 // ============================================================================
 // Provider stack
@@ -82,8 +82,8 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 	const root = await fs.mkdtemp(path.join(os.tmpdir(), 'selva-test-'));
 	const env = {
 		DATA_PATH: root,
-		SESSION_SECRET: TEST_SESSION_SECRET,
-		SELVA_SECRET_KEY: TEST_SELVA_SECRET_KEY
+		SELVA_HMAC_KEY: TEST_HMAC_KEY,
+		SELVA_AT_REST_KEY: TEST_AT_REST_KEY
 	};
 
 	const events = new NoopEventSink();

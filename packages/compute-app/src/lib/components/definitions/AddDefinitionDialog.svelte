@@ -29,6 +29,7 @@
 		projects?: Project[];
 		defaultProjectId?: string;
 		computeServers?: ComputeServer[];
+		defaultComputeServerId?: string | null;
 		showProjectDropdown?: boolean;
 		onOpenChange?: (open: boolean) => void;
 		onSubmit?: (data: FormData) => Promise<void>;
@@ -40,6 +41,7 @@
 		projects = [],
 		defaultProjectId,
 		computeServers = [],
+		defaultComputeServerId = null,
 		showProjectDropdown = false,
 		onOpenChange,
 		onSubmit
@@ -225,12 +227,17 @@
 							<Label for="new-server">Compute Server</Label>
 							<select
 								id="new-server"
-								bind:value={selectedComputeServerId}
+								value={selectedComputeServerId || (defaultComputeServerId ?? '')}
+								onchange={(e) => {
+									const picked = (e.currentTarget as HTMLSelectElement).value;
+									selectedComputeServerId = picked === defaultComputeServerId ? '' : picked;
+								}}
 								class="border-input bg-background focus-visible:ring-ring h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
 							>
-								<option value="">Default</option>
 								{#each computeServers as s (s.id)}
-									<option value={s.id}>{s.label}</option>
+									<option value={s.id}>
+										{s.label}{s.id === defaultComputeServerId ? ' (Default)' : ''}
+									</option>
 								{/each}
 							</select>
 						</div>

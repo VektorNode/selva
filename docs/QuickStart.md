@@ -37,7 +37,7 @@ cp packages/compute-app/.env.example packages/compute-app/.env
 
 [`.env.example`](../packages/compute-app/.env.example) is the **single authoritative reference** for every env var Selva reads — provider choice, tenancy, platform flags, secrets. Open it and:
 
-- Set `SESSION_SECRET` (instructions inline). For local provider this is enough.
+- Set `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` (instructions inline). For local provider those two are enough.
 - For Supabase, set `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — see [@selvajs/supabase-provider](../packages/supabase-provider/README.md#development--local-supabase-stack) for the `npx supabase start` flow that produces those keys. Then switch the provider in `selva.config.ts`.
 - For multi-org testing, set `tenancy: 'multi'` in `selva.config.ts` and follow [MultiOrg-LocalDev.md](MultiOrg-LocalDev.md).
 

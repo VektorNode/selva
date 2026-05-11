@@ -14,7 +14,7 @@ import { env } from '$env/dynamic/private';
  *   raw    = `invite_<base64url(32 random bytes)>`
  *   hash   = base64url( HMAC-SHA256(INVITE_TOKEN_SECRET, raw) )
  *
- * `INVITE_TOKEN_SECRET` falls back to `SESSION_SECRET` so single-tenant
+ * `INVITE_TOKEN_SECRET` falls back to `SELVA_HMAC_KEY` so single-tenant
  * deployments don't have to manage a third secret. Multi-tenant / production
  * setups should set both `SHARE_LINK_SECRET` and `INVITE_TOKEN_SECRET`
  * explicitly so they can be rotated independently — rotating one shouldn't
@@ -24,10 +24,10 @@ import { env } from '$env/dynamic/private';
 const TOKEN_PREFIX = 'invite_';
 
 function getSecret(): string {
-	const secret = env.INVITE_TOKEN_SECRET || env.SESSION_SECRET;
+	const secret = env.INVITE_TOKEN_SECRET || env.SELVA_HMAC_KEY;
 	if (!secret) {
 		throw new Error(
-			'Missing required env var: INVITE_TOKEN_SECRET (or SESSION_SECRET as fallback). ' +
+			'Missing required env var: INVITE_TOKEN_SECRET (or SELVA_HMAC_KEY as fallback). ' +
 				'Generate with: openssl rand -base64 32'
 		);
 	}

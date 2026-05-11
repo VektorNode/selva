@@ -191,8 +191,8 @@ Hard requirement: anything needed *before* the data dir is readable must stay in
 
 | Var | Stays in env | Could move to in-app config |
 |-----|-------------|------------------------------|
-| `SESSION_SECRET` | ✅ (HMAC for cookies, needed at request time) | |
-| `SELVA_SECRET_KEY` | ✅ (decrypts at-rest secrets including… itself, chicken-and-egg) | |
+| `SELVA_HMAC_KEY` | ✅ (HMAC for cookies + share/invite tokens, needed at request time) | |
+| `SELVA_AT_REST_KEY` | ✅ (decrypts at-rest secrets including… itself, chicken-and-egg) | |
 | `DATA_PATH` | ✅ (literally where to find the rest) | |
 | `ORIGIN` | ✅ (CSRF check runs before any DB read) | |
 | `PROVIDER_KIND` (local/supabase) | ✅ | |
@@ -261,7 +261,7 @@ Traefik: better at dynamic Docker discovery (auto-routes by container labels), b
 
 Order matters — each step lands a working improvement.
 
-1. **Write `Dockerfile`** that builds locally. Smoke-test: `docker run -e SESSION_SECRET=... -e ... -p 3000:3000 selva-compute` boots and serves the app on localhost. No Caddy yet.
+1. **Write `Dockerfile`** that builds locally. Smoke-test: `docker run -e SELVA_HMAC_KEY=... -e SELVA_AT_REST_KEY=... -e ... -p 3000:3000 selva-compute` boots and serves the app on localhost. No Caddy yet.
 2. **Write `deploy/docker-compose.yml`** with app only. Run on local machine, verify it builds + boots from compose. Add the Caddy service behind the `bundled-caddy` profile and verify reverse-proxying works in both modes (with and without `--profile bundled-caddy`).
 3. **Move `.env` decisions** — codify which vars are env vs in-app, update `.env.example`, fix the `BODY_SIZE_LIMIT` documentation bug found in the debug session.
 4. **Write `deploy/setup.sh` + `deploy/selva.service` template** — wizard generates secrets, writes `/etc/selva/{compute.env,Caddyfile,install.json,docker-compose.yml}`, installs and enables the systemd unit. Test on a fresh GCP VM in both bundled-caddy and external-proxy modes.
