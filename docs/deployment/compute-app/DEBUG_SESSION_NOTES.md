@@ -4,6 +4,8 @@ Session: 2026-05-09. Server: GCP `selva-compute-app`, zone `europe-west6-a`, IP 
 
 SSH: `gcloud compute ssh selva@selva-compute-app --zone europe-west6-a`
 
+> **2026-05-11 update — env_file issue resolved.** Root cause: PM2's `env_file` is a `pm2-runtime`-only feature and is silently ignored by the regular `pm2 start` daemon. Switched `ecosystem.config.cjs` to `node_args: '--env-file=.env'` (Node >= 20.6 native flag), which loads `.env` reliably regardless of how PM2 was invoked. The `pm2 kill` + `set -a; . ./.env` workaround described below is no longer needed.
+
 ## Current state
 
 - Caddy on `:80` reverse-proxying to `127.0.0.1:3000`. Caddyfile: `/etc/caddy/Caddyfile` (vanilla reverse_proxy, no body limits, HTTP only).

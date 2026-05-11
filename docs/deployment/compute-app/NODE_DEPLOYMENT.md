@@ -29,7 +29,9 @@ Test: `curl http://localhost:3000/api/health`
 
 ## ecosystem.config.cjs
 
-Runtime config lives in `packages/compute-app/.env` and is loaded via PM2's `env_file`. The committed [`ecosystem.config.cjs`](../../../ecosystem.config.cjs) is provider-agnostic — switching from local to Supabase only requires editing `.env`.
+Runtime config lives in `packages/compute-app/.env` and is loaded by Node itself via `--env-file` (Node >= 20.6). The committed [`ecosystem.config.cjs`](../../../ecosystem.config.cjs) is provider-agnostic — switching from local to Supabase only requires editing `.env`.
+
+> **Why `--env-file` instead of PM2's `env_file`:** PM2's `env_file` option only works under `pm2-runtime`. The regular `pm2 start` daemon silently ignores it, causing the app to crash on boot with `Missing required env var: SELVA_HMAC_KEY`. Letting Node load `.env` directly avoids that footgun.
 
 ```javascript
 module.exports = {
@@ -38,11 +40,11 @@ module.exports = {
             name: 'selva-compute',
             script: './build/index.js',
             cwd: './packages/compute-app',
+            node_args: '--env-file=.env',
             instances: 1,             // local provider is not safe across processes
             exec_mode: 'fork',        // switch to 'cluster' only with Supabase
             autorestart: true,
             max_memory_restart: '1G',
-            env_file: './.env',
             env: { NODE_ENV: 'production' }
         }
     ]
