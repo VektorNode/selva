@@ -31,6 +31,7 @@
 		projects: ProjectWithMembers[];
 		records: DefinitionRecord[];
 		computeServers: ComputeServerConfig[];
+		defaultComputeServerId: string | null;
 		users: AuthUser[];
 		canManageProjects: boolean;
 	}
@@ -395,6 +396,7 @@
 			record={editingRecord}
 			projects={data.projects}
 			computeServers={data.computeServers}
+			defaultComputeServerId={data.defaultComputeServerId}
 			isSaving={savingDefinitionId === editingRecord.guid}
 			initialTab={editInitialTab}
 			onClose={() => {
@@ -463,6 +465,7 @@
 	projects={data.projects}
 	defaultProjectId={activeProjectId ?? data.projects[0]?.id}
 	computeServers={data.computeServers}
+	defaultComputeServerId={data.defaultComputeServerId}
 	showProjectDropdown={data.projects.length > 1}
 	onOpenChange={(o) => (showAddModal = o)}
 	onSubmit={submitAddDefinition}

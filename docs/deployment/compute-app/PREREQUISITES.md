@@ -52,5 +52,5 @@ These apply regardless of provider:
 | `HOST`                   | `0.0.0.0`     | Bind address                                           |
 | `NODE_ENV`               | `development` | Set `production` to hide stack traces                  |
 | `ORIGIN`                 | —             | Public URL — **required behind a reverse proxy**       |
-| `BODY_SIZE_LIMIT`        | `60mb`        | Cap for largest legitimate request (.gh + image)       |
+| `BODY_SIZE_LIMIT`        | `150M`        | Cap for largest legitimate request (.gh + image). Suffix is K/M/G — `150mb` won't parse |
 | `ALLOW_INSECURE_COOKIES` | —             | Set `true` for HTTP-only deployments (dev/testing)     |

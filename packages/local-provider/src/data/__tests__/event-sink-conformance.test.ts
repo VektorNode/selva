@@ -15,7 +15,7 @@ runEventSinkConformance({
 		return LocalDataProvider.fromEnv(
 			{
 				DATA_PATH: tempDir,
-				SELVA_SECRET_KEY: '0'.repeat(64)
+				SELVA_AT_REST_KEY: '0'.repeat(64)
 			},
 			sink
 		);

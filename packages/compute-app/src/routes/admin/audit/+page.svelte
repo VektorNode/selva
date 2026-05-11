@@ -126,10 +126,10 @@
 					<div class="min-w-0 flex-1">
 						<p class="text-sm font-medium">Audit log not available on this deployment</p>
 						<p class="text-muted-foreground mt-1 text-sm">
-							This deployment's data provider does not expose an audit query interface. Domain
-							events are still emitted at every mutation; configure a provider with an
-							<code class="text-xs">auditQuery</code> wired in
-							<code class="text-xs">selva.config.ts</code> to surface them here.
+							This provider doesn't support audit queries. To enable audit logs, configure a provider with
+							<code class="bg-muted rounded px-1 py-0.5 font-mono text-xs">auditQuery</code>
+							in your
+							<code class="bg-muted rounded px-1 py-0.5 font-mono text-xs">selva.config.ts</code>.
 						</p>
 					</div>
 				</div>

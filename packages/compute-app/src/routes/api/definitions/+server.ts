@@ -81,7 +81,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				displayName: parsed.data.displayName.trim(),
 				description: parsed.data.description,
 				category: parsed.data.category,
-				tags: parsed.data.tags
+				tags: parsed.data.tags,
+				coverImage: parsed.data.coverImage
 			},
 			fileData
 		);

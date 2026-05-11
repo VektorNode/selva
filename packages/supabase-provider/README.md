@@ -36,7 +36,7 @@ For testing multi-org tenancy against the local Supabase stack, see [docs/MultiO
 
 All env vars are documented in [`packages/compute-app/.env.example`](../compute-app/.env.example) — copy that file to `.env` and edit it. The Supabase provider needs `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`; the optional bucket / private-URL / signup overrides are also listed there.
 
-`SESSION_SECRET` is not used by the Supabase provider — sessions are Supabase JWTs. Harmless if left set.
+`SELVA_HMAC_KEY` is not used for sessions by the Supabase provider — those are Supabase JWTs. It's still consulted as the fallback secret for share-link / invite token hashing if `SHARE_LINK_SECRET` / `INVITE_TOKEN_SECRET` are unset. `SELVA_AT_REST_KEY` is local-provider-only and is ignored. Both are harmless if left set.
 
 Rhino.Compute URL + API key are configured in `/admin/compute` and persisted in the `compute_config` table — unchanged by the provider choice.
 

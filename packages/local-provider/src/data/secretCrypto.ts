@@ -53,7 +53,7 @@ export function decryptSecret(envelope: string, key: Buffer): string {
 }
 
 /**
- * Decode a `SELVA_SECRET_KEY` env var into a 32-byte buffer. Accepts either
+ * Decode a `SELVA_AT_REST_KEY` env var into a 32-byte buffer. Accepts either
  * 64-char hex or base64 (with or without padding). Throws on anything else
  * so misconfiguration fails loudly at boot rather than silently producing
  * an undecryptable file.
@@ -63,7 +63,7 @@ export function decodeSecretKey(raw: string): Buffer {
 	const buf = Buffer.from(raw, 'base64');
 	if (buf.length === 32) return buf;
 	throw new Error(
-		'SELVA_SECRET_KEY must be 32 bytes encoded as 64-char hex or base64. ' +
+		'SELVA_AT_REST_KEY must be 32 bytes encoded as 64-char hex or base64. ' +
 			'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
 	);
 }

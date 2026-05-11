@@ -44,8 +44,8 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
 # relative to packages/compute-app/ — the default lands at .selva-data/ at
 # the repo root.
 DATA_PATH="${DATA_PATH:-../../.selva-data}"
-SESSION_SECRET="${SESSION_SECRET:-}"
-SELVA_SECRET_KEY="${SELVA_SECRET_KEY:-}"
+SELVA_HMAC_KEY="${SELVA_HMAC_KEY:-}"
+SELVA_AT_REST_KEY="${SELVA_AT_REST_KEY:-}"
 ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES:-}"  # auto-detected: true for http, false for https
 PORT="${PORT:-3000}"
 ORIGIN="${ORIGIN:-}"  # auto-detected from public IP if not set
@@ -230,8 +230,8 @@ if [ ! -f "$ENV_FILE" ] || ([ "$INTERACTIVE" = true ] && [[ $REPLY =~ ^[Yy]$ ]])
     print_step "Rhino.Compute URL + API key are configured post-install at /admin/compute."
     print_step "First admin user is created via the in-app setup page on first boot."
 
-    read -p "Session Secret (optional, press Enter to auto-generate) [${SESSION_SECRET:-auto}]: " _INPUT
-    SESSION_SECRET="${_INPUT:-$SESSION_SECRET}"
+    read -p "HMAC signing key for sessions + tokens (optional, press Enter to auto-generate) [${SELVA_HMAC_KEY:-auto}]: " _INPUT
+    SELVA_HMAC_KEY="${_INPUT:-$SELVA_HMAC_KEY}"
 
     read -p "Application Port [$PORT]: " _INPUT
     PORT="${_INPUT:-$PORT}"
@@ -263,23 +263,23 @@ EOF
   # and persisted by the data provider — not written to .env.
   # First admin user is created via the in-app setup page on first boot.
 
-  # Auto-generate SESSION_SECRET if not provided
-  if [ -z "$SESSION_SECRET" ]; then
-    SESSION_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
-    print_success "SESSION_SECRET auto-generated"
+  # Auto-generate SELVA_HMAC_KEY (signs session cookies + share-link / invite tokens).
+  if [ -z "$SELVA_HMAC_KEY" ]; then
+    SELVA_HMAC_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+    print_success "SELVA_HMAC_KEY auto-generated"
   fi
 
-  # Auto-generate SELVA_SECRET_KEY if not provided. Required by the local
-  # provider to encrypt Rhino.Compute API keys at rest. Must be stable
+  # Auto-generate SELVA_AT_REST_KEY (AES-256-GCM key that encrypts the
+  # Rhino.Compute API key at rest in compute.config.json). Must be stable
   # across restarts — rotating it makes existing encrypted secrets
   # unreadable, requiring re-entry via /admin/compute.
-  if [ -z "$SELVA_SECRET_KEY" ]; then
-    SELVA_SECRET_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
-    print_success "SELVA_SECRET_KEY auto-generated"
+  if [ -z "$SELVA_AT_REST_KEY" ]; then
+    SELVA_AT_REST_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+    print_success "SELVA_AT_REST_KEY auto-generated"
   fi
   cat >> "$ENV_FILE" << EOF
-SESSION_SECRET="${SESSION_SECRET}"
-SELVA_SECRET_KEY="${SELVA_SECRET_KEY}"
+SELVA_HMAC_KEY="${SELVA_HMAC_KEY}"
+SELVA_AT_REST_KEY="${SELVA_AT_REST_KEY}"
 EOF
 
   # Auto-detect ALLOW_INSECURE_COOKIES based on protocol if not set
@@ -298,8 +298,11 @@ PORT=${PORT}
 ORIGIN="${ORIGIN}"
 ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES}"
 
-# Request body size limit for large geometry uploads
-BODY_SIZE_LIMIT="Infinity"
+# Request body size limit for large geometry uploads. Sized to the largest
+# legitimate payload (a big .gh upload + image). Don't set "Infinity" in
+# production — every JSON endpoint inherits this cap and an unbounded body
+# is a DoS vector on routes that lack their own per-route cap.
+BODY_SIZE_LIMIT=150M
 EOF
 
   print_success "Environment file created: $ENV_FILE"

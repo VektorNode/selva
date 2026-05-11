@@ -31,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/VektorNode/selva/main/scripts/setup
 bash setup.sh
 
 # Non-interactive (CI/automation) — uses env vars / defaults
-SESSION_SECRET=yoursecret \
+SELVA_HMAC_KEY=yoursecret SELVA_AT_REST_KEY=$(openssl rand -hex 32) \
 bash setup.sh --no-interactive
 
 # After setup, create the first admin user via the in-app setup page,
@@ -44,7 +44,7 @@ bash setup-caddy.sh --domain app.example.com  # HTTPS via Let's Encrypt
 
 ## Configuration Variables
 
-`setup.sh` defaults to the **local provider**. Provider-specific vars (`DATA_PATH`, `SESSION_SECRET`) are documented in the [@selvajs/local-provider README](../../../packages/local-provider/README.md). For Supabase, see the [@selvajs/supabase-provider README](../../../packages/supabase-provider/README.md).
+`setup.sh` defaults to the **local provider**. Provider-specific vars (`DATA_PATH`, `SELVA_HMAC_KEY`, `SELVA_AT_REST_KEY`) are documented in the [@selvajs/local-provider README](../../../packages/local-provider/README.md). For Supabase, see the [@selvajs/supabase-provider README](../../../packages/supabase-provider/README.md).
 
 Vars `setup.sh` itself reads:
 
@@ -52,7 +52,8 @@ Vars `setup.sh` itself reads:
 | ---------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `REPO_URL`       | `git@github.com:VektorNode/selva.git` | Repository SSH URL                                                                                |
 | `DATA_PATH`      | `../../.selva-data`                   | Local provider data directory, relative to `packages/compute-app/` (resolves to `.selva-data/` at the repo root). |
-| `SESSION_SECRET` | auto-generated                        | HMAC secret for session cookies (local provider only)                                             |
+| `SELVA_HMAC_KEY`     | auto-generated                    | HMAC signing key for sessions + share/invite tokens (local provider only)                         |
+| `SELVA_AT_REST_KEY`  | auto-generated                    | AES key encrypting the Rhino.Compute API key at rest (local provider only)                        |
 | `PORT`           | `3000`                                | Internal app port                                                                                 |
 | `ORIGIN`         | `http://your-server-ip`               | Public-facing URL — no port suffix, no trailing slash                                             |
 | `INSTALL_DIR`    | `~/selva`                             | Install directory                                                                                 |
