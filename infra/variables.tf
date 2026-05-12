@@ -30,23 +30,22 @@ variable "ssh_user" {
 variable "domain" {
   description = <<-EOT
     Fully-qualified domain name for the app (e.g. "app.example.dev").
-    Caddy will obtain a Let's Encrypt cert for this name on first boot, so
-    the A record MUST point at the static IP this module creates BEFORE the
-    VM finishes booting. Workflow:
 
-      1. terraform apply  → outputs `static_ip`
-      2. Create A record  `<domain>` → <static_ip>  at your DNS host
-      3. Re-run apply, or let the VM retry ACME on its own
+    Leave empty (the default) and the module derives a free sslip.io
+    domain from the reserved static IP — e.g. `34-142-50-7.sslip.io`.
+    Caddy still gets a real Let's Encrypt cert. Fine for testing; not
+    for production (you don't own sslip.io).
 
-    Quick test option: use a wildcard DNS service like `sslip.io` —
-    e.g. `domain = "34-142-50-7.sslip.io"` resolves to 34.142.50.7 with
-    zero DNS setup. Fine for testing, not for production.
+    For a real domain: set this, run `terraform apply`, then create an
+    A record `<domain> → <static_ip>` at your DNS host. Caddy retries
+    ACME every few minutes, so DNS doesn't have to be ready at boot.
   EOT
   type        = string
+  default     = ""
 
   validation {
-    condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$", var.domain))
-    error_message = "domain must be a valid lowercase FQDN (e.g. app.example.dev)."
+    condition     = var.domain == "" || can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$", var.domain))
+    error_message = "domain must be empty (for sslip.io auto-derivation) or a valid lowercase FQDN (e.g. app.example.dev)."
   }
 }
 
@@ -64,5 +63,20 @@ variable "branch" {
   EOT
   type        = string
   default     = "main"
+}
+
+variable "github_token" {
+  description = <<-EOT
+    GitHub personal access token used to fetch setup scripts from the
+    private VektorNode/selva repo over the raw.githubusercontent.com API.
+    Use a fine-grained PAT scoped to only this repo with read-only Contents
+    permission. The token is rendered into the VM's startup script (visible
+    in instance metadata) and stored in Terraform state.
+
+    The deploy key on the VM is still used for the actual `git clone` —
+    this token only covers the two raw-file fetches in the bootstrap.
+  EOT
+  type        = string
+  sensitive   = true
 }
 

@@ -1,11 +1,16 @@
 output "static_ip" {
-  description = "Static external IP — POINT YOUR A RECORD AT THIS BEFORE THE VM FINISHES BOOTING."
+  description = "Static external IP reserved for the VM."
   value       = google_compute_address.selva.address
 }
 
+output "domain" {
+  description = "Effective domain (user-supplied, or auto-derived sslip.io)."
+  value       = local.domain
+}
+
 output "dns_instructions" {
-  description = "Copy-paste DNS record to add at your registrar."
-  value       = "A   ${var.domain}   →   ${google_compute_address.selva.address}"
+  description = "DNS record to add at your registrar. Empty when using sslip.io (no DNS setup needed)."
+  value       = var.domain == "" ? "(using sslip.io — no DNS setup needed)" : "A   ${var.domain}   →   ${google_compute_address.selva.address}"
 }
 
 output "ssh_command" {
@@ -14,13 +19,13 @@ output "ssh_command" {
 }
 
 output "app_url" {
-  description = "URL to access the compute app (resolves once DNS + ACME complete)."
-  value       = "https://${var.domain}"
+  description = "URL to access the compute app (resolves once ACME completes — usually 1–2 min after boot)."
+  value       = "https://${local.domain}"
 }
 
 output "health_check" {
   description = "Health check URL"
-  value       = "https://${var.domain}/api/health"
+  value       = "https://${local.domain}/api/health"
 }
 
 output "startup_log" {
