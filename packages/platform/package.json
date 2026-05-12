@@ -70,11 +70,6 @@
 			"types": "./dist/definitions/index.d.ts",
 			"import": "./dist/definitions/index.js"
 		},
-		"./definitions/schemas": {
-			"source": "./src/definitions/schemas.ts",
-			"types": "./dist/definitions/schemas.d.ts",
-			"import": "./dist/definitions/schemas.js"
-		},
 		"./computeServer": {
 			"source": "./src/computeServer/index.ts",
 			"types": "./dist/computeServer/index.d.ts",

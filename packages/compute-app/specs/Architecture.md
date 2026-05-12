@@ -237,15 +237,21 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
 
 **Interfaces:**
 
-| Interface                                                                                                   | Location                                                                       |
-| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `IAuthProvider`                                                                                             | [`@selvajs/platform/auth`](../../platform/src/auth/interface.ts)               |
-| `IDataProvider`, `IOrgStore`, `IProjectStore`, `IDefinitionStore`, `IComputeServerStore`, `IShareLinkStore` | [`@selvajs/platform/data`](../../platform/src/data/interface.ts)               |
-| `IInviteStore`                                                                                              | [`@selvajs/platform/invites`](../../platform/src/invites/interface.ts)         |
-| `IStorageProvider`                                                                                          | [`@selvajs/platform/storage`](../../platform/src/storage/interface.ts)         |
-| `IUserProfileStore`                                                                                         | [`@selvajs/platform/userProfile`](../../platform/src/userProfile/interface.ts) |
-| `IPlatformPermissionStore`                                                                                  | [`@selvajs/platform/permissions`](../../platform/src/permissions/interface.ts) |
-| `IEventSink`                                                                                                | [`@selvajs/platform/events`](../../platform/src/events/interface.ts)           |
+| Interface                    | Location                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `IAuthProvider`              | [`@selvajs/platform/auth`](../../platform/src/auth/interface.ts)                                        |
+| `IDataProvider`              | [`@selvajs/platform/data`](../../platform/src/data/interface.ts)                                        |
+| `IOrgStore`                  | [`@selvajs/platform/organizations`](../../platform/src/organizations/interface.ts)                      |
+| `IProjectStore`              | [`@selvajs/platform/projects`](../../platform/src/projects/interface.ts)                                |
+| `IDefinitionStore`           | [`@selvajs/platform/definitions`](../../platform/src/definitions/interface.ts)                          |
+| `IComputeServerStore`        | [`@selvajs/platform/computeServer`](../../platform/src/computeServer/interface.ts)                      |
+| `IShareLinkStore`            | [`@selvajs/platform/shareLinks`](../../platform/src/shareLinks/interface.ts)                            |
+| `IPlatformProjectGrantStore` | [`@selvajs/platform/platformProjects`](../../platform/src/platformProjects/interface.ts)                |
+| `IInviteStore`               | [`@selvajs/platform/invites`](../../platform/src/invites/interface.ts)                                  |
+| `IStorageProvider`           | [`@selvajs/platform/storage`](../../platform/src/storage/interface.ts)                                  |
+| `IUserProfileStore`          | [`@selvajs/platform/userProfile`](../../platform/src/userProfile/interface.ts)                          |
+| `IPlatformPermissionStore`   | [`@selvajs/platform/permissions`](../../platform/src/permissions/interface.ts)                          |
+| `IEventSink`                 | [`@selvajs/platform/events`](../../platform/src/events/interface.ts)                                    |
 
 Orchestration (cross-store flows that aren't part of the provider contract) lives in compute-app, not platform — e.g. [`DefinitionService`](../src/lib/server/definitions/DefinitionService.ts) coordinates `IDefinitionStore` + `IStorageProvider` for upload/publish.
 

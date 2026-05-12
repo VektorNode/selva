@@ -3,7 +3,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { getDefinitionMeta } from '$lib/server/providers.server';
 import { handleApiError } from '$lib/server/api-errors';
 import { requireCanViewProject } from '$lib/server/access.server';
-import { GuidSchema } from '@selvajs/platform/definitions/schemas';
+import { GuidSchema } from '@selvajs/platform/definitions';
 import { MAX_PAGE_LIMIT } from '@selvajs/platform';
 
 export const GET: RequestHandler = async ({ params, locals, url }) => {

@@ -15,7 +15,7 @@ import { ProviderError, definitionPaths } from '@selvajs/platform';
  * needs to assemble a `DefinitionRecord` plus orchestrate the v1 upload.
  *
  * Distinct from `CreateDefinitionInputSchema` exported by
- * `@selvajs/platform/definitions/schemas`, which validates the user-facing
+ * `@selvajs/platform/definitions`, which validates the user-facing
  * HTTP body (no guid/ownerId — those are derived server-side).
  */
 export interface CreateDefinitionRecord {
