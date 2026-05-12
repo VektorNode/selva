@@ -17,27 +17,6 @@ interface InvitesFile {
 const EMPTY: InvitesFile = { invites: [] };
 
 /**
- * Legacy invite records carried a flat `permissions` array. Drop anything
- * that isn't a valid OrgPermission (platform-scope perms are never
- * invite-grantable) and store the result under `orgPermissions`.
- */
-const VALID_ORG_PERMS = new Set([
-	'manage_org_members',
-	'manage_org_compute',
-	'manage_definitions',
-	'manage_projects'
-]);
-
-function migrateInvite(i: Invite & { permissions?: string[] }): Invite {
-	if (i.orgPermissions === undefined) {
-		const legacy = i.permissions ?? [];
-		i.orgPermissions = legacy.filter((p) => VALID_ORG_PERMS.has(p)) as Invite['orgPermissions'];
-		delete i.permissions;
-	}
-	return i;
-}
-
-/**
  * Filesystem-backed invite store. No per-call scoping by ctx.userId — the
  * route layer gates admin actions. `getByTokenHash` is the sole unauthenticated
  * read and is scoped by the hashed token (caller hashes the raw URL token
@@ -89,12 +68,12 @@ export class LocalInviteStore implements IInviteStore {
 		if (!invite) return null;
 		if (invite.acceptedAt) return null;
 		if (Date.parse(invite.expiresAt) <= Date.now()) return null;
-		return migrateInvite(invite);
+		return invite;
 	}
 
 	async listByOrg(_ctx: RequestContext, orgId: string, opts?: ListOptions): Promise<Page<Invite>> {
 		const { invites } = await this.load();
-		const filtered = invites.filter((i) => i.orgId === orgId).map(migrateInvite);
+		const filtered = invites.filter((i) => i.orgId === orgId);
 		return paginate(applyOrder(filtered, opts), opts);
 	}
 

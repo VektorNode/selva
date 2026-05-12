@@ -178,15 +178,6 @@ public class GH_ValueListDataGoo : GH_Goo<string>
             }
         }
 
-        // Fallback: try matching by expression (for backwards compatibility)
-        for (var i = 0; i < items.Count; i++)
-        {
-            if (items[i].Expression == incomingValue)
-            {
-                return new GH_ValueListDataGoo(items[i].Expression, items, i);
-            }
-        }
-
         return new GH_ValueListDataGoo(incomingValue, items, -1);
     }
 
