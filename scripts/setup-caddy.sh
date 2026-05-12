@@ -245,6 +245,14 @@ fi
 print_step "Validating Caddyfile..."
 sudo caddy validate --config "$CADDYFILE"
 
+# Caddy's prod config writes access logs to /var/log/caddy/access.log. The
+# Debian package creates /var/log/caddy with root ownership, but the caddy
+# service runs as user `caddy` — without this chown, Caddy fails to start
+# with "permission denied".
+print_step "Preparing Caddy log directory..."
+sudo mkdir -p /var/log/caddy
+sudo chown -R caddy:caddy /var/log/caddy
+
 print_step "Enabling and starting Caddy..."
 sudo systemctl enable caddy
 sudo systemctl restart caddy
