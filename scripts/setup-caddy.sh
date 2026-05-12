@@ -197,7 +197,9 @@ $DOMAIN {
 	@api path /api/*
 	header @api Cache-Control "no-cache, no-store, must-revalidate"
 
-	request_body { max_size 100mb }
+	request_body {
+		max_size 100mb
+	}
 
 	log {
 		output file /var/log/caddy/access.log

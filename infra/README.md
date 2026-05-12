@@ -11,10 +11,12 @@ Caddy reverse proxy, and **automatic HTTPS via Let's Encrypt**.
 | Firewall rules     | TCP 80 (ACME + redirect) and 443 (HTTPS) + 22 (SSH). The app on :3000 is firewalled and binds to `127.0.0.1` — never reachable directly. |
 | VM instance        | e2-medium, Ubuntu 22.04, 20GB disk                                                                                                       |
 
-On first boot the VM runs [`scripts/setup.sh`](../scripts/setup.sh) (app build
-
-- PM2) and [`scripts/setup-caddy.sh`](../scripts/setup-caddy.sh) (Caddy in
-  prod mode, which provisions a Let's Encrypt cert for your domain).
+On first boot the VM runs [`scripts/setup.sh`](../scripts/setup.sh) (clones the
+repo, builds the app, starts it under PM2) and
+[`scripts/setup-caddy.sh`](../scripts/setup-caddy.sh) (Caddy in prod mode,
+which provisions a Let's Encrypt cert for your domain). Both scripts are
+fetched from the private `VektorNode/selva` repo via the GitHub Contents API,
+authenticated with a PAT.
 
 ---
 
@@ -23,82 +25,86 @@ On first boot the VM runs [`scripts/setup.sh`](../scripts/setup.sh) (app build
 - [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5
 - [gcloud CLI](https://cloud.google.com/sdk/docs/install) authenticated (`gcloud auth application-default login`)
 - A GCP project with the Compute Engine API enabled
-- A domain you control (`.dev`, `.xyz`, anything) — or use `sslip.io` for throwaway testing
+- A **GitHub fine-grained PAT** with read access to `VektorNode/selva` (see below)
+- A domain you control — or skip it and let the module derive `<ip>.sslip.io`
 
 ---
 
 ## Setup
 
-**1. Copy and fill in your variables:**
+### 1. Create a GitHub PAT
+
+The VM needs to fetch the bootstrap scripts and clone the repo. Deploy keys
+are disabled at the VektorNode org level, so we use a PAT for both.
+
+1. Open [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)
+2. **Resource owner**: `VektorNode` (an org admin may need to approve the token afterwards at [VektorNode → PAT requests](https://github.com/organizations/VektorNode/settings/personal-access-tokens-requests))
+3. **Repository access**: Only select repositories → `VektorNode/selva`
+4. **Repository permissions** → **Contents**: Read-only
+5. **Expiration**: 90 days is fine (only used at VM boot)
+6. Generate and copy the `github_pat_…` token
+
+### 2. Fill in `terraform.tfvars`
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Fill in at minimum:
+At minimum:
 
 ```hcl
-project_id = "your-gcp-project-id"
-domain     = "app.example.dev"
-acme_email = "you@example.dev"
+project_id   = "your-gcp-project-id"
+github_token = "github_pat_…"
 ```
+
+Leave `domain` unset for testing — the module auto-derives a free
+`<dashed-ip>.sslip.io` domain from the reserved static IP and Caddy
+gets a real Let's Encrypt cert. No DNS setup required.
 
 Rhino.Compute server URL + API key are registered post-install via
 `/admin/compute` (not Terraform). The first admin user is created
 via the in-app setup page on first boot.
 
-**2. Reserve the IP first, then point DNS:**
-
-```bash
-terraform apply -target=google_compute_address.selva
-terraform output static_ip
-```
-
-Add an `A` record at your DNS host:
-
-```
-A   app.example.dev   →   <static_ip>
-```
-
-Wait until `dig +short app.example.dev` returns the IP (typically 1–5 min).
-
-**3. Deploy the rest:**
+### 3. Deploy
 
 ```bash
 terraform apply
 ```
 
-Outputs include the app URL (`https://<domain>`), SSH command, and the
-DNS instruction.
+Outputs include the app URL, SSH command, and the resolved domain.
+The VM bootstrap takes 3–8 minutes (apt installs + pnpm + build);
+Caddy provisions the cert as soon as the app is up and DNS resolves.
 
-> **Why DNS first?** Let's Encrypt verifies you control the domain by
-> hitting it over HTTP. If DNS doesn't resolve when Caddy first tries,
-> ACME fails — Caddy will retry every few minutes on its own, but it's
-> cleaner to have DNS ready up front.
+### Using your own domain
 
-### Testing without buying a domain
-
-`sslip.io` provides wildcard DNS that maps any IP-shaped subdomain back
-to that IP:
+Set `domain` and `acme_email` in `terraform.tfvars`:
 
 ```hcl
-# After `terraform apply -target=google_compute_address.selva`, plug the IP in:
-domain = "34-142-50-7.sslip.io"
+domain     = "app.example.dev"
+acme_email = "you@example.dev"
 ```
 
-Caddy gets a real Let's Encrypt cert. Skip the manual DNS step entirely.
-Fine for testing, not for production.
+After `terraform apply`, add an A record at your DNS host:
+
+```
+A   app.example.dev   →   <static_ip>     # from `terraform output static_ip`
+```
+
+Caddy retries ACME every few minutes, so DNS doesn't have to be ready
+when the VM boots — but the cert will only land once DNS resolves.
 
 ---
 
 ## After Deployment
 
-Watch the bootstrap (deploy-key prompt + DNS check + ACME):
+Watch the bootstrap:
 
 ```bash
-gcloud compute ssh selva@selva-compute-app --zone <zone> --project YOUR_PROJECT
-tail -f /var/log/selva-startup.log
+gcloud compute ssh selva@selva-compute-app --zone <zone> \
+  --command 'sudo tail -f /var/log/selva-startup.log'
 ```
+
+You're done when you see `=== Selva startup script complete ===`.
 
 Verify:
 
@@ -165,11 +171,14 @@ remove it manually if you're done.
 
 ## Troubleshooting
 
-| Issue                                     | Fix                                                                                                                       |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Zone out of capacity                      | Change `zone` in `terraform.tfvars` and re-apply                                                                          |
-| Startup script failed                     | SSH in: `cat /var/log/selva-startup.log`                                                                                  |
-| App not responding                        | `pm2 status` and `pm2 logs selva-compute`                                                                                 |
-| Caddy can't get a cert                    | `sudo journalctl -u caddy -f` — usually DNS hasn't propagated yet                                                         |
-| `dig` returns the IP but cert still fails | Check that port 80 is open in the GCP firewall (ACME HTTP-01 uses it)                                                     |
-| Want to expose :3000 directly             | Don't. Caddy is the only ingress. Editing the firewall to open 3000 breaks the security model for forward-auth providers. |
+| Issue                                                                                | Fix                                                                                                                                                       |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Zone out of capacity                                                                 | Change `zone` in `terraform.tfvars` (e.g. `europe-west1-b`) and re-apply                                                                                  |
+| `gcloud compute ssh`: "No supported authentication methods (server sent: publickey)" | Make sure `~/.ssh/google_compute_engine.pub` exists (run `gcloud compute ssh` once to any VM — it'll generate the key). Terraform reads it on `apply` and bakes it into the VM's metadata. If the file is missing, `terraform plan` will error. |
+| Plink "POTENTIAL SECURITY BREACH" host-key warning                                   | Expected after VM recreate (new host key). Type `y` to accept.                                                                                            |
+| `curl … contents/scripts/setup.sh` returns 404                                       | PAT can't see the repo. Check it's approved at [VektorNode PAT requests](https://github.com/organizations/VektorNode/settings/personal-access-tokens-requests) and scoped to `VektorNode/selva` with Contents:read. |
+| Startup script failed mid-way                                                        | SSH in: `sudo cat /var/log/selva-startup.log`. Re-run manually: `sudo bash /opt/selva-setup.sh`                                                           |
+| App not responding                                                                   | `pm2 status` and `pm2 logs selva-compute`                                                                                                                 |
+| Caddy can't get a cert                                                               | `sudo journalctl -u caddy -f` — usually DNS hasn't propagated yet                                                                                         |
+| DNS resolves but cert still fails                                                    | Check port 80 is open in the GCP firewall (ACME HTTP-01 uses it)                                                                                          |
+| Want to expose :3000 directly                                                        | Don't. Caddy is the only ingress. Editing the firewall to open 3000 breaks the security model for forward-auth providers.                                 |

@@ -9,22 +9,37 @@ machine_type = "e2-medium"
 ssh_user = "selva"
 
 # ============================================================================
-# Domain (required)
+# GitHub PAT (required)
 # ============================================================================
-# Caddy provisions a Let's Encrypt cert for this name on first boot. The A
-# record MUST point at the static IP this module creates BEFORE the VM
-# finishes booting, or ACME fails (Caddy retries; it's not fatal, but
-# expected).
+# Fine-grained personal access token used by the VM to:
+#   1. Fetch scripts/setup.sh + scripts/setup-caddy.sh via the GitHub
+#      Contents API (raw.githubusercontent.com doesn't authenticate)
+#   2. Clone the private VektorNode/selva repo over HTTPS
 #
-# Workflow:
-#   1. terraform apply  → outputs static_ip
-#   2. Create A record:  <domain>  →  <static_ip>   at your DNS host
-#   3. Wait ~1–5 min for DNS to propagate
+# Org-level deploy keys are disabled at VektorNode, so a PAT is currently
+# the only viable option for both.
 #
-# Quick testing without buying a domain: use sslip.io.
-#   domain = "34-142-50-7.sslip.io"   (resolves to 34.142.50.7 automatically)
-domain     = "app.example.dev"
-acme_email = "you@example.dev"
+# Create at: https://github.com/settings/personal-access-tokens/new
+#   Resource owner:        VektorNode
+#   Repository access:     Only select repositories → VektorNode/selva
+#   Repository permissions: Contents = Read-only
+#   Expiration:             90 days (only used at VM boot)
+#
+# An org admin may need to approve the token at
+# https://github.com/organizations/VektorNode/settings/personal-access-tokens-requests
+github_token = "github_pat_…"
+
+# ============================================================================
+# Domain (optional)
+# ============================================================================
+# Leave commented out for testing — the module auto-derives a free
+# `<dashed-ip>.sslip.io` domain from the reserved static IP. Caddy gets
+# a real Let's Encrypt cert. Zero DNS setup.
+#
+# For production, set this to a domain you own and add an A record
+# pointing at the `static_ip` output after `terraform apply`.
+# domain     = "app.example.dev"
+# acme_email = "you@example.dev"
 
 # Git ref to deploy (branch / tag / commit). Defaults to "main".
 # Override to deploy a feature branch, e.g. "9x".
