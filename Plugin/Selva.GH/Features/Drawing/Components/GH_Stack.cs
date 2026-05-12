@@ -19,12 +19,12 @@ public class GH_Stack : GH_Component
     public GH_Stack()
         : base("Stack", "Stack",
             "Arranges drawing elements in a vertical or horizontal stack with spacing and alignment",
-            "Selva", "Layout")
+            "Selva", "Drawing")
     {
     }
 
     protected override Bitmap Icon => Resources.Stack;
-    public override GH_Exposure Exposure => GH_Exposure.tertiary;
+    public override GH_Exposure Exposure => GH_Exposure.quinary;
     public override Guid ComponentGuid => new Guid("3601FD36-C04E-4E66-A6F1-19A1A3DA301C");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

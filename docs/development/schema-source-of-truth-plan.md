@@ -1,8 +1,32 @@
 # Schema Source-of-Truth Refactor
 
-**Status:** Plan — not yet implemented
+**Status:** Implemented 2026-05-12 (single commit, Review-diff stubbed).
 **Date:** 2026-05-12
 **Scope:** Eliminate schema drift between Grasshopper (C#) and the builder UI by establishing a single canonical source with explicit save/discard semantics.
+
+## What shipped vs. plan
+
+**Done as specified:**
+
+- C# `SchemaHash.Compute(UISchema)` — sorted-key JSON → SHA-256 hex. Lives at [Plugin/Selva.GH/Features/UIBuilder/Services/Schema/SchemaHash.cs](../../Plugin/Selva.GH/Features/UIBuilder/Services/Schema/SchemaHash.cs).
+- `BroadcastInitialData` and `BroadcastSchemaUpdate` carry `schemaHash`. New `BroadcastSchemaSaveRejected(currentSchema, reason)` carries the fresh canonical + its hash.
+- `OnSchemaSaveRequested` now passes a `SchemaSaveRequest { Schema, BaseSchemaHash }`. `BridgeOrchestrator.HandleSchemaSave` rejects on hash mismatch and replies with `schemaSaveRejected`.
+- After a successful save, `BridgeOrchestrator` broadcasts `BroadcastSchemaUpdate(validatedSchema)` before the success ack so the UI rebases its draft on the post-save canonical.
+- TS state shape replaced: `state.schema` → `canonical / draft / isDirty / canonicalHash / conflictPending / conflictReason / documentId`. All UI rendering reads from `draft`; broadcasts mutate `canonical`. Lives in [useBuilderState.svelte.ts](../../packages/builder-app/src/lib/composables/useBuilderState.svelte.ts).
+- `useSchemaHistory` rewritten: undo/redo is **in-memory only**; LS holds only the draft, keyed by `documentId`; other-document drafts are purged on init. The old `LS_HISTORY_PREFIX` key family is gone.
+- `useBuilderActions` mutations target `state.draft` and call `markDirty()`. Undo/redo paths in `+page.svelte` also call `markDirty()` and clear history on canonical replacement.
+- `backfillDropdownOptions` deleted. Dropdown options ride along with the canonical → draft clone at load, and are patched into both canonical and (when clean) draft by `metadataUpdated`.
+- `metadataUpdated` patches canonical always; patches draft only when `isDirty === false`; trips `conflictPending` when dirty.
+- Builder route: explicit nav-prompt (Save / Discard / Cancel) on `→ /preview`, conflict banner with Discard / Save-anyway, draft-restore modal on load when LS has a draft for the current `documentId` that differs from the freshly-loaded canonical. Persistence effect now writes only when `isDirty`.
+- `wsState.saveSchema(sessionId, schema, baseSchemaHash)` sends the base hash. New `WsSchemaSaveRejectedMessage` type.
+
+**Deliberately stubbed/skipped per implementation decision:**
+
+- **Coarse-diff Review UI** — the conflict banner has Discard + Save-anyway only; no diff view. Plan leaves this open and we opted to defer until the diff format settles in practice.
+- **Preview `state.schema` rename** — kept as `state.schema` in `usePreviewState`. Preview has no draft, so the rename is purely cosmetic churn; not done.
+- **Zod wire validation follow-up** — out of scope for this PR; see the plan's last section.
+
+**Verified:** `pnpm check`, `pnpm type-check`, `pnpm lint` clean (no new warnings). `dotnet build` clean across net48 / net7.0 / net9.0.
 
 ---
 

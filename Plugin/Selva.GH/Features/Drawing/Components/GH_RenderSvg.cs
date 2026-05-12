@@ -25,7 +25,7 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
             "Renders drawing content to SVG file(s) (downloadable via the Selva UI). " +
             "Input a Document for paginated multi-page output, or wire DrawingViews / loose " +
             "elements directly for a single-page SVG.",
-            "Selva", "Document")
+            "Selva", "Drawing")
     {
     }
 

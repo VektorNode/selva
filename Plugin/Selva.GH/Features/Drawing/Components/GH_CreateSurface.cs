@@ -20,12 +20,12 @@ public class GH_CreateSurface : GH_Component
     public GH_CreateSurface()
         : base("Draw Surface", "DSrf",
             "Converts a Brep to a filled drawing surface (with hole support)",
-            "Selva", "Elements")
+            "Selva", "Drawing")
     {
     }
 
     protected override Bitmap Icon => Resources.DrawSurface;
-    public override GH_Exposure Exposure => GH_Exposure.primary;
+    public override GH_Exposure Exposure => GH_Exposure.tertiary;
     public override Guid ComponentGuid => new Guid("29735748-B215-42FB-85D0-85549F26F28E");
 
     public override bool IsPreviewCapable => true;

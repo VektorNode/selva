@@ -20,12 +20,12 @@ public class GH_CreateText : GH_Component
     public GH_CreateText()
         : base("Draw Text", "DTxt",
             "Places a text label in the drawing",
-            "Selva", "Elements")
+            "Selva", "Drawing")
     {
     }
 
     protected override Bitmap Icon => Resources.DrawText;
-    public override GH_Exposure Exposure => GH_Exposure.primary;
+    public override GH_Exposure Exposure => GH_Exposure.tertiary;
     public override Guid ComponentGuid => new Guid("6B9D20CC-5566-47CF-9364-F65F9283396F");
 
     public override bool IsPreviewCapable => true;

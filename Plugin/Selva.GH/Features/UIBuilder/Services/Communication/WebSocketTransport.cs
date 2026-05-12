@@ -15,6 +15,17 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services.Communication;
 
 /// <summary>
+///     Payload from a UI save request: the draft schema plus the hash of the
+///     canonical it was forked from. The orchestrator rejects the save if the
+///     base hash no longer matches the current canonical.
+/// </summary>
+public class SchemaSaveRequest
+{
+    public UISchema Schema { get; set; }
+    public string BaseSchemaHash { get; set; }
+}
+
+/// <summary>
 ///     Handles WebSocket communication with the web UI.
 /// </summary>
 public class WebSocketTransport : IDisposable
@@ -72,7 +83,7 @@ public class WebSocketTransport : IDisposable
     public event EventHandler<Dictionary<string, object>> OnValuesReceived;
     public event EventHandler OnCurrentValuesRequested;
     public event EventHandler OnClientConnected;
-    public event EventHandler<UISchema> OnSchemaSaveRequested;
+    public event EventHandler<SchemaSaveRequest> OnSchemaSaveRequested;
     public event EventHandler<UISchema> OnSyncPreviewRequested;
     public event EventHandler<List<SyncChange>> OnSyncChangesApply;
 
@@ -265,6 +276,7 @@ public class WebSocketTransport : IDisposable
             type = "schemaUpdated",
             sessionId = _sessionId,
             schema,
+            schemaHash = SchemaHash.Compute(schema),
             removedIds = removedIds ?? new List<Guid>()
         });
     }
@@ -285,6 +297,7 @@ public class WebSocketTransport : IDisposable
             type = "initialData",
             sessionId = _sessionId,
             schema,
+            schemaHash = SchemaHash.Compute(schema),
             availableParams,
             currentValues,
             isSolving = solvingState ?? false
@@ -294,6 +307,23 @@ public class WebSocketTransport : IDisposable
     public Task BroadcastSchemaSaved(bool success, string message = null)
     {
         return BroadcastAsync(new { type = "schemaSaved", sessionId = _sessionId, success, message });
+    }
+
+    /// <summary>
+    ///     Reply to a save request whose <c>baseSchemaHash</c> no longer matches the
+    ///     current canonical. Carries the fresh canonical so the UI can replace its
+    ///     read-only mirror and surface a conflict banner.
+    /// </summary>
+    public Task BroadcastSchemaSaveRejected(UISchema currentSchema, string reason = null)
+    {
+        return BroadcastAsync(new
+        {
+            type = "schemaSaveRejected",
+            sessionId = _sessionId,
+            schema = currentSchema,
+            schemaHash = SchemaHash.Compute(currentSchema),
+            reason = reason ?? "Schema changed in Grasshopper since you started editing."
+        });
     }
 
     /// <summary>
@@ -536,7 +566,13 @@ public class WebSocketTransport : IDisposable
                             var schema = jObj["schema"]?.ToObject<UISchema>(SecureSerializer);
                             if (schema != null)
                             {
-                                MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, schema));
+                                var baseHash = jObj["baseSchemaHash"]?.ToString();
+                                var request = new SchemaSaveRequest
+                                {
+                                    Schema = schema,
+                                    BaseSchemaHash = baseHash
+                                };
+                                MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, request));
                             }
 
                             break;

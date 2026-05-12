@@ -18,12 +18,12 @@ public class GH_CreateCurve : GH_Component
     public GH_CreateCurve()
         : base("Draw Curve", "DCrv",
             "Converts a Rhino curve to a drawing element",
-            "Selva", "Elements")
+            "Selva", "Drawing")
     {
     }
 
     protected override Bitmap Icon => Resources.DrawCurve;
-    public override GH_Exposure Exposure => GH_Exposure.primary;
+    public override GH_Exposure Exposure => GH_Exposure.tertiary;
     public override Guid ComponentGuid => new Guid("33D854CA-A7E6-48C7-819C-0FA9E63B6B4F");
 
     public override bool IsPreviewCapable => true;

@@ -12,14 +12,17 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"type-check": "tsc --noEmit",
-		"lint": "eslint . --ext .js,.ts,.svelte"
+		"lint": "eslint . --ext .js,.ts,.svelte",
+		"test": "vitest run",
+		"test:watch": "vitest"
 	},
 	"devDependencies": {
 		"@lucide/svelte": "catalog:",
 		"@selvajs/config": "workspace:*",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@types/three": "catalog:",
-		"tw-animate-css": "catalog:"
+		"tw-animate-css": "catalog:",
+		"vitest": "catalog:"
 	},
 	"dependencies": {
 		"@iconify/svelte": "catalog:",

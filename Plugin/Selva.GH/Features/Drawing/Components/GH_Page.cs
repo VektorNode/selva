@@ -36,7 +36,7 @@ public class GH_Page : GH_Component
     public GH_Page()
         : base("Page", "Page",
             "Wraps drawing elements into a section that flows into GH_Document. Use a Section Override for per-section paper / chrome.",
-            "Selva", "Document")
+            "Selva", "Drawing")
     {
     }
 

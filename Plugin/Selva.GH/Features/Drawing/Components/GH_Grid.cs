@@ -21,12 +21,12 @@ public class GH_Grid : GH_Component
     public GH_Grid()
         : base("Grid", "Grid",
             "Flex grid with absolute / auto / star tracks. Track DSL: \"40 auto 1* 2*\".",
-            "Selva", "Layout")
+            "Selva", "Drawing")
     {
     }
 
     protected override Bitmap Icon => Resources.Grid;
-    public override GH_Exposure Exposure => GH_Exposure.tertiary;
+    public override GH_Exposure Exposure => GH_Exposure.quinary;
     public override Guid ComponentGuid => new Guid("B4000A10-9152-4EDF-AB1E-C0D69F30D660");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

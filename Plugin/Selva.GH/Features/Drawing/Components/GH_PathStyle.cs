@@ -17,12 +17,12 @@ public class GH_PathStyle : GH_Component
     public GH_PathStyle()
         : base("Path Style", "Style",
             "Creates a stroke/fill style for curves and surfaces",
-            "Selva", "Elements")
+            "Selva", "Drawing")
     {
     }
 
     protected override Bitmap Icon => Resources.PathStlye;
-    public override GH_Exposure Exposure => GH_Exposure.tertiary;
+    public override GH_Exposure Exposure => GH_Exposure.senary;
     public override Guid ComponentGuid => new Guid("20587568-1E6E-481D-9ED8-AC136477E323");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

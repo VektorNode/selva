@@ -21,7 +21,7 @@ public class GH_LayoutOverride : GH_Component
     public GH_LayoutOverride()
         : base("Layout Override", "LOver",
             "Optional layout overrides for paper, margins, and chrome. Wire into a Document or Page Override input.",
-            "Selva", "Document")
+            "Selva", "Drawing")
     {
     }
 

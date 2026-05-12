@@ -22,12 +22,12 @@ public class GH_Table : GH_Component
     public GH_Table()
         : base("Table", "Table",
             "Tabular layout with header, borders, and cell padding. Rows are a data tree (one branch per row).",
-            "Selva", "Layout")
+            "Selva", "Drawing")
     {
     }
 
     protected override Bitmap Icon => Resources.Table;
-    public override GH_Exposure Exposure => GH_Exposure.tertiary;
+    public override GH_Exposure Exposure => GH_Exposure.quinary;
     public override Guid ComponentGuid => new Guid("7CAE0062-0CC4-4D3E-ACE9-EE874D00C6BD");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

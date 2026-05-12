@@ -63,8 +63,8 @@ public class GH_FileFromPath : GH_Component, ISelvaFileOutput
 
         var extension = Path.GetExtension(path);
         var fileName = string.IsNullOrWhiteSpace(nameOverride)
-            ? Path.GetFileName(path)
-            : nameOverride + extension;
+            ? Path.GetFileNameWithoutExtension(path)
+            : Path.GetFileNameWithoutExtension(nameOverride);
 
         byte[] bytes;
         try

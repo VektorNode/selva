@@ -10,6 +10,8 @@ import {
 } from '$lib/app.config';
 import type { UISchema } from '@selvajs/schemas';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+import { toast } from '@selvajs/ui';
+import { validateInboundMessage } from './messageSchemas';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type MessageHandler = (data: any) => void;
@@ -25,6 +27,7 @@ export interface WsSessionMessage {
 
 export interface WsInitialDataMessage extends WsSessionMessage {
 	schema?: import('@selvajs/schemas').UISchema;
+	schemaHash?: string;
 	availableParams?: import('@selvajs/schemas').DiscoveredParameters;
 	currentValues?: Record<string, unknown>;
 	outputs?: Record<string, unknown>;
@@ -40,7 +43,14 @@ export interface WsOutputsMessage extends WsSessionMessage {
 
 export interface WsSchemaUpdatedMessage extends WsSessionMessage {
 	schema: import('@selvajs/schemas').UISchema;
+	schemaHash?: string;
 	removedIds?: string[];
+}
+
+export interface WsSchemaSaveRejectedMessage extends WsSessionMessage {
+	schema: import('@selvajs/schemas').UISchema;
+	schemaHash?: string;
+	reason?: string;
 }
 
 export interface WsMetadataUpdatedMessage extends WsSessionMessage {
@@ -396,10 +406,11 @@ export class WebSocketState {
 	}
 
 	/**
-	 * Save schema to Grasshopper
+	 * Save schema to Grasshopper. `baseSchemaHash` is the hash of the canonical
+	 * the draft was forked from; the server uses it to detect stale-base conflicts.
 	 */
-	saveSchema(sessionId: string, schema: UISchema) {
-		this.send('saveSchema', { sessionId, schema });
+	saveSchema(sessionId: string, schema: UISchema, baseSchemaHash: string | null) {
+		this.send('saveSchema', { sessionId, schema, baseSchemaHash });
 	}
 
 	/**
@@ -441,7 +452,12 @@ export class WebSocketState {
 	}
 
 	/**
-	 * Handle incoming messages
+	 * Handle incoming messages.
+	 *
+	 * Messages are validated against `messageSchemas.ts` before dispatch. Malformed
+	 * payloads are logged + dropped — preferable to the old behaviour, where a
+	 * field mismatch (e.g. flat-vs-nested `metadataUpdated.changedParams`) caused
+	 * `forEach` to throw inside a handler and silently freeze the UI.
 	 */
 	private handleMessage(message: unknown) {
 		if (message && typeof message === 'object' && 'type' in message) {
@@ -452,10 +468,23 @@ export class WebSocketState {
 					(msg.data as { reason?: string } | undefined)?.reason || 'No reason provided'
 				);
 
-				// console.log(message);
 				// Mark as server-initiated disconnect - will reload page on reconnect
 				this._serverDisconnected = true;
 				this._shouldReloadOnReconnect = true;
+				return;
+			}
+
+			const validation = validateInboundMessage(message);
+			if (!validation.ok) {
+				console.error(
+					`[WebSocket] Rejected malformed '${validation.type}' message:`,
+					validation.error.issues,
+					'\nPayload:',
+					validation.payload
+				);
+				if (import.meta.env.DEV) {
+					toast.error(`Malformed '${validation.type}' message — see console`);
+				}
 				return;
 			}
 

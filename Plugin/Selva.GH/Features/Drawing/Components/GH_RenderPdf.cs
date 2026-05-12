@@ -20,7 +20,7 @@ public class GH_RenderPdf : GH_Component, ISelvaFileOutput
     public GH_RenderPdf()
         : base("Render PDF", "PDF",
             "Renders a drawing document to a PDF file (downloadable via the Selva UI)",
-            "Selva", "Document")
+            "Selva", "Drawing")
     {
     }
 

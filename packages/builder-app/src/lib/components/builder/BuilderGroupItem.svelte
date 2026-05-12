@@ -12,7 +12,13 @@
 	} from '@selvajs/schemas';
 	type LayoutItem = InputLayoutItem | OutputLayoutItem;
 	import { Button, Card, Collapsible, Switch } from '@selvajs/ui';
-	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
+	import {
+		ArrowDownToLine,
+		ArrowUpFromLine,
+		ChevronDown,
+		GripVertical,
+		AlertTriangle
+	} from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '$lib/features/builder/widget-config';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
 	import { dragHandle } from 'svelte-dnd-action';
@@ -53,6 +59,33 @@
 
 	let typeLabel = $derived(paramInfo?.type ?? item.widgetType);
 	let isNumberInput = $derived(item.type === 'input' && item.widgetType === 'number');
+
+	// Estimated step count of the underlying GH slider. Above ~1000 steps the
+	// browser slider widget becomes noticeably laggy on drag (each tick fires a
+	// re-render and a debounced WS round-trip).
+	const SLIDER_STEPS_WARNING_THRESHOLD = 3000;
+	const sliderStepCount = $derived.by(() => {
+		if (!isNumberInput || !paramInfo) return 0;
+		const min = paramInfo.minimum;
+		const max = paramInfo.maximum;
+		const step = paramInfo.stepSize;
+		if (
+			typeof min !== 'number' ||
+			typeof max !== 'number' ||
+			typeof step !== 'number' ||
+			step <= 0 ||
+			!Number.isFinite(max - min)
+		) {
+			return 0;
+		}
+		return Math.floor((max - min) / step);
+	});
+	const sliderTooManySteps = $derived(sliderStepCount > SLIDER_STEPS_WARNING_THRESHOLD);
+	const showSliderPerfWarning = $derived.by(() => {
+		if (!isNumberInput || !sliderTooManySteps) return false;
+		const cfg = item.config as NumberWidgetConfig | undefined;
+		return cfg?.renderAsSlider ?? true;
+	});
 	let isFileInput = $derived(item.type === 'input' && item.widgetType === 'file');
 	let isTextInput = $derived(item.type === 'input' && item.widgetType === 'text');
 	let isDropdownInput = $derived(item.type === 'input' && item.widgetType === 'dropdown');
@@ -80,10 +113,7 @@
 		}
 		if (isFileInput && fileInputConfig) {
 			if (fileInputConfig.defaultInputMode) return true;
-			if (
-				fileInputConfig.allowedInputModes &&
-				fileInputConfig.allowedInputModes.length < 2
-			)
+			if (fileInputConfig.allowedInputModes && fileInputConfig.allowedInputModes.length < 2)
 				return true;
 			if (
 				fileInputConfig.acceptedFormats &&
@@ -169,9 +199,7 @@
 	}
 
 	let isInput = $derived(item.type === 'input');
-	let isExternalSource = $derived(
-		(item as { source?: InputSource }).source?.kind === 'external'
-	);
+	let isExternalSource = $derived((item as { source?: InputSource }).source?.kind === 'external');
 
 	function toggleExternalSource() {
 		if (item.type !== 'input') return;
@@ -211,7 +239,7 @@
 <div class="relative">
 	<Collapsible.Root bind:open={expanded}>
 		<Card.Root
-			class="group bg-background hover:border-border overflow-hidden border-border/60 py-1.5 transition-all hover:shadow-sm"
+			class="group bg-background hover:border-border border-border/60 overflow-hidden py-1.5 transition-all hover:shadow-sm"
 		>
 			<!-- Compact header row (always visible) -->
 			<div class="flex items-center gap-2 px-3 py-1.5">
@@ -226,17 +254,26 @@
 				</div>
 				{#if item.type === 'input'}
 					<span
-						class="bg-primary/10 text-primary inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide"
+						class="bg-primary/10 text-primary inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide uppercase"
 					>
 						<ArrowUpFromLine size={10} strokeWidth={2.5} />
 						{typeLabel}
 					</span>
 				{:else}
 					<span
-						class="bg-orange-500/15 text-orange-600 dark:text-orange-400 inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide"
+						class="inline-flex shrink-0 items-center gap-1 rounded-sm bg-orange-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-orange-600 uppercase dark:text-orange-400"
 					>
 						<ArrowDownToLine size={10} strokeWidth={2.5} />
 						{typeLabel}
+					</span>
+				{/if}
+				{#if showSliderPerfWarning}
+					<span
+						class="inline-flex shrink-0 items-center gap-1 rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
+						title={`Slider has ~${sliderStepCount.toLocaleString()} steps (> ${SLIDER_STEPS_WARNING_THRESHOLD.toLocaleString()}). May slow the UI on drag. Increase the step size in Grasshopper or turn off Slider mode.`}
+					>
+						<AlertTriangle size={10} strokeWidth={2.5} />
+						{sliderStepCount.toLocaleString()} steps
 					</span>
 				{/if}
 				<input
@@ -261,10 +298,7 @@
 					aria-label={expanded ? 'Collapse details' : 'Expand details'}
 					title={hasNonDefaultConfig ? 'Has custom configuration' : undefined}
 				>
-					<ChevronDown
-						size={16}
-						class={`transition-transform ${expanded ? 'rotate-180' : ''}`}
-					/>
+					<ChevronDown size={16} class={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
 				</Collapsible.Trigger>
 				<Button
 					variant="ghost"
@@ -299,281 +333,296 @@
 					/>
 
 					<!-- Advanced -->
-				{#if hasAdvancedOptions}
+					{#if hasAdvancedOptions}
+						<div class="border-border/70 mt-1 border-t pt-1">
+							<button
+								onclick={() => (showAdvanced = !showAdvanced)}
+								class="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center gap-1 text-[11px]"
+							>
+								<ChevronDown
+									size={12}
+									class={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
+								/>
+								Advanced
+							</button>
+
+							{#if showAdvanced}
+								<!-- Output: File ↔ Image display mode switcher -->
+								{#if isFileOrImageOutput}
+									<div class="flex flex-col gap-2 pb-2">
+										<div class="flex flex-col gap-1">
+											<span class="text-muted-foreground text-[10px] font-medium">Display As</span>
+											<div class="grid grid-cols-2 gap-1">
+												<button
+													onclick={() => setFileOutputMode('file')}
+													class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+														isFileOutput
+															? 'bg-primary text-primary-foreground border-primary'
+															: 'border-border/70 hover:border-border hover:bg-accent'
+													}`}
+												>
+													File (download)
+												</button>
+												<button
+													onclick={() => setFileOutputMode('image')}
+													class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+														isImageOutput
+															? 'bg-primary text-primary-foreground border-primary'
+															: 'border-border/70 hover:border-border hover:bg-accent'
+													}`}
+												>
+													Image viewer
+												</button>
+											</div>
+											<span class="text-muted-foreground/70 text-[9px]">
+												{isImageOutput
+													? 'Renders PNG/JPG/WEBP/GIF/SVG inline. Other formats fall back to download.'
+													: 'Standard download button for any file type.'}
+											</span>
+										</div>
+
+										{#if isImageOutput && imageConfig}
+											<div class="flex items-center justify-between text-[11px]">
+												<span class="text-muted-foreground">Allow download</span>
+												<Switch
+													checked={imageConfig.allowDownload ?? true}
+													onCheckedChange={() => toggleImageOption('allowDownload')}
+													class="scale-75"
+												/>
+											</div>
+											<div class="flex items-center justify-between text-[11px]">
+												<span class="text-muted-foreground">Allow fullscreen</span>
+												<Switch
+													checked={imageConfig.allowFullscreen ?? true}
+													onCheckedChange={() => toggleImageOption('allowFullscreen')}
+													class="scale-75"
+												/>
+											</div>
+										{/if}
+									</div>
+								{/if}
+
+								<!-- Widget-Specific Options -->
+								{#if isNumberInput}
+									{@const config = item.config as NumberWidgetConfig}
+									<div class="mt-1 flex items-center justify-between text-[11px]">
+										<span class="text-muted-foreground">Slider</span>
+										<Switch
+											checked={config.renderAsSlider ?? true}
+											onCheckedChange={toggleSliderMode}
+											class="scale-75"
+										/>
+									</div>
+									{#if showSliderPerfWarning}
+										<div
+											class="mt-1 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900"
+										>
+											This slider has ~{sliderStepCount.toLocaleString()} steps. Sliders above
+											{SLIDER_STEPS_WARNING_THRESHOLD.toLocaleString()} steps can noticeably slow the
+											UI on drag. Consider increasing the step size in Grasshopper or switching to a number
+											input.
+										</div>
+									{/if}
+								{/if}
+
+								{#if isDropdownInput && dropdownConfig}
+									<div class="flex flex-col gap-2">
+										<div class="flex items-center justify-between text-[11px]">
+											<div class="flex flex-col">
+												<span class="text-muted-foreground">Multi-select (checklist)</span>
+												<span class="text-muted-foreground/70 text-[9px]">
+													Renders as checkboxes; emits a list to Grasshopper.
+												</span>
+											</div>
+											<Switch
+												checked={dropdownConfig.displayAs === 'checklist'}
+												onCheckedChange={toggleChecklistMode}
+												class="scale-75"
+											/>
+										</div>
+									</div>
+								{/if}
+
+								{#if isFileInput && fileInputConfig}
+									<div class="flex flex-col gap-2">
+										<!-- Allowed Input Modes -->
+										<div class="flex flex-col gap-1">
+											<span class="text-muted-foreground text-[10px] font-medium"
+												>Allowed Input Modes</span
+											>
+											<div class="grid grid-cols-2 gap-1">
+												{#each ['upload', 'url'] as const as mode (mode)}
+													{@const isAllowed =
+														fileInputConfig.allowedInputModes?.includes(mode) ?? true}
+													<button
+														onclick={() => toggleAllowedMode(mode)}
+														class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+															isAllowed
+																? 'bg-primary text-primary-foreground border-primary'
+																: 'border-border/70 hover:border-border hover:bg-accent'
+														}`}
+													>
+														{mode === 'upload' ? 'Upload' : 'URL'}
+													</button>
+												{/each}
+											</div>
+											<span class="text-muted-foreground text-[9px]"
+												>At least one must be enabled</span
+											>
+										</div>
+
+										<!-- Default Mode (only relevant when both are allowed) -->
+										{#if (fileInputConfig.allowedInputModes?.length ?? 2) > 1}
+											<div class="flex flex-col gap-1">
+												<span class="text-muted-foreground text-[10px] font-medium"
+													>Default Mode</span
+												>
+												<div class="grid grid-cols-2 gap-1">
+													<button
+														onclick={() => setFileInputMode('upload')}
+														class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+															(fileInputConfig.defaultInputMode ?? 'upload') === 'upload'
+																? 'bg-primary text-primary-foreground border-primary'
+																: 'border-border/70 hover:border-border hover:bg-accent'
+														}`}
+													>
+														Upload
+													</button>
+													<button
+														onclick={() => setFileInputMode('url')}
+														class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+															fileInputConfig.defaultInputMode === 'url'
+																? 'bg-primary text-primary-foreground border-primary'
+																: 'border-border/70 hover:border-border hover:bg-accent'
+														}`}
+													>
+														URL
+													</button>
+												</div>
+											</div>
+										{/if}
+
+										<!-- File Formats -->
+										<div class="flex flex-col gap-1">
+											<span class="text-muted-foreground text-[10px] font-medium">File Formats</span
+											>
+											<div class="grid max-h-24 grid-cols-3 gap-1 overflow-y-auto">
+												{#each ACCEPTED_FILE_FORMATS as format (format)}
+													{@const isChecked = fileInputConfig.acceptedFormats?.includes(format)}
+													<button
+														onclick={() => toggleAcceptedFormat(format)}
+														class={`rounded border px-1.5 py-0.5 text-[9px] whitespace-nowrap transition-colors ${
+															isChecked
+																? 'bg-primary text-primary-foreground border-primary'
+																: 'border-border/70 hover:border-border hover:bg-accent'
+														}`}
+													>
+														{format}
+													</button>
+												{/each}
+											</div>
+										</div>
+									</div>
+								{/if}
+
+								{#if isTextInput}
+									{@const config = item.config as TextWidgetConfig}
+									<div class="flex flex-col gap-2">
+										<!-- Max Length -->
+										<div class="flex flex-col gap-1">
+											<span class="text-muted-foreground text-[10px] font-medium">Max Length</span>
+											<input
+												type="number"
+												min="1"
+												bind:value={config.maxLength}
+												placeholder="No limit"
+												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
+											/>
+										</div>
+
+										<!-- Pattern (Regex) -->
+										<div class="flex flex-col gap-1">
+											<span class="text-muted-foreground text-[10px] font-medium"
+												>Validation Pattern (Regex)</span
+											>
+											<input
+												type="text"
+												bind:value={config.pattern}
+												placeholder="e.g., ^[a-zA-Z0-9]+$"
+												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 font-mono text-[10px] focus:outline-none"
+											/>
+										</div>
+
+										<!-- Custom Error Message -->
+										{#if config.pattern}
+											<div class="flex flex-col gap-1">
+												<span class="text-muted-foreground text-[10px] font-medium"
+													>Custom Error Message</span
+												>
+												<input
+													type="text"
+													bind:value={config.customErrorMessage}
+													placeholder="Invalid format"
+													class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
+												/>
+											</div>
+										{/if}
+									</div>
+								{/if}
+							{/if}
+						</div>
+					{/if}
+
+					<!-- External Source toggle (input items only) -->
+					{#if isInput}
+						<div
+							class="border-border/70 mt-1 flex items-center justify-between border-t pt-2 text-[11px]"
+						>
+							<div class="flex flex-col">
+								<span class="text-muted-foreground">External value</span>
+								<span class="text-muted-foreground/70 text-[9px]">
+									Filled by a producer route (e.g. /preview/producer/json-paste). Hides the control
+									by default.
+								</span>
+							</div>
+							<Switch
+								checked={isExternalSource}
+								onCheckedChange={toggleExternalSource}
+								class="scale-75"
+							/>
+						</div>
+					{/if}
+
+					<!-- Visibility Rules Section (separate from Advanced) -->
 					<div class="border-border/70 mt-1 border-t pt-1">
 						<button
-							onclick={() => (showAdvanced = !showAdvanced)}
+							onclick={() => (showVisibilityRules = !showVisibilityRules)}
 							class="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center gap-1 text-[11px]"
 						>
 							<ChevronDown
 								size={12}
-								class={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
+								class={`transition-transform ${showVisibilityRules ? 'rotate-180' : ''}`}
 							/>
-							Advanced
+							Visibility Rules {hasVisibilityRules
+								? `(${item.visibilityCondition?.rules?.length ?? 0})`
+								: ''}
 						</button>
 
-						{#if showAdvanced}
-							<!-- Output: File ↔ Image display mode switcher -->
-							{#if isFileOrImageOutput}
-								<div class="flex flex-col gap-2 pb-2">
-									<div class="flex flex-col gap-1">
-										<span class="text-muted-foreground text-[10px] font-medium">Display As</span>
-										<div class="grid grid-cols-2 gap-1">
-											<button
-												onclick={() => setFileOutputMode('file')}
-												class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-													isFileOutput
-														? 'bg-primary text-primary-foreground border-primary'
-														: 'border-border/70 hover:border-border hover:bg-accent'
-												}`}
-											>
-												File (download)
-											</button>
-											<button
-												onclick={() => setFileOutputMode('image')}
-												class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-													isImageOutput
-														? 'bg-primary text-primary-foreground border-primary'
-														: 'border-border/70 hover:border-border hover:bg-accent'
-												}`}
-											>
-												Image viewer
-											</button>
-										</div>
-										<span class="text-muted-foreground/70 text-[9px]">
-											{isImageOutput
-												? 'Renders PNG/JPG/WEBP/GIF/SVG inline. Other formats fall back to download.'
-												: 'Standard download button for any file type.'}
-										</span>
-									</div>
-
-									{#if isImageOutput && imageConfig}
-										<div class="flex items-center justify-between text-[11px]">
-											<span class="text-muted-foreground">Allow download</span>
-											<Switch
-												checked={imageConfig.allowDownload ?? true}
-												onCheckedChange={() => toggleImageOption('allowDownload')}
-												class="scale-75"
-											/>
-										</div>
-										<div class="flex items-center justify-between text-[11px]">
-											<span class="text-muted-foreground">Allow fullscreen</span>
-											<Switch
-												checked={imageConfig.allowFullscreen ?? true}
-												onCheckedChange={() => toggleImageOption('allowFullscreen')}
-												class="scale-75"
-											/>
-										</div>
-									{/if}
-								</div>
-							{/if}
-
-							<!-- Widget-Specific Options -->
-							{#if isNumberInput}
-								{@const config = item.config as NumberWidgetConfig}
-								<div class="mt-1 flex items-center justify-between text-[11px]">
-									<span class="text-muted-foreground">Slider</span>
-									<Switch
-										checked={config.renderAsSlider ?? true}
-										onCheckedChange={toggleSliderMode}
-										class="scale-75"
-									/>
-								</div>
-							{/if}
-
-							{#if isDropdownInput && dropdownConfig}
-								<div class="flex flex-col gap-2">
-									<div class="flex items-center justify-between text-[11px]">
-										<div class="flex flex-col">
-											<span class="text-muted-foreground">Multi-select (checklist)</span>
-											<span class="text-muted-foreground/70 text-[9px]">
-												Renders as checkboxes; emits a list to Grasshopper.
-											</span>
-										</div>
-										<Switch
-											checked={dropdownConfig.displayAs === 'checklist'}
-											onCheckedChange={toggleChecklistMode}
-											class="scale-75"
-										/>
-									</div>
-								</div>
-							{/if}
-
-							{#if isFileInput && fileInputConfig}
-								<div class="flex flex-col gap-2">
-									<!-- Allowed Input Modes -->
-									<div class="flex flex-col gap-1">
-										<span class="text-muted-foreground text-[10px] font-medium"
-											>Allowed Input Modes</span
-										>
-										<div class="grid grid-cols-2 gap-1">
-											{#each ['upload', 'url'] as const as mode (mode)}
-												{@const isAllowed =
-													fileInputConfig.allowedInputModes?.includes(mode) ?? true}
-												<button
-													onclick={() => toggleAllowedMode(mode)}
-													class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-														isAllowed
-															? 'bg-primary text-primary-foreground border-primary'
-															: 'border-border/70 hover:border-border hover:bg-accent'
-													}`}
-												>
-													{mode === 'upload' ? 'Upload' : 'URL'}
-												</button>
-											{/each}
-										</div>
-										<span class="text-muted-foreground text-[9px]"
-											>At least one must be enabled</span
-										>
-									</div>
-
-									<!-- Default Mode (only relevant when both are allowed) -->
-									{#if (fileInputConfig.allowedInputModes?.length ?? 2) > 1}
-										<div class="flex flex-col gap-1">
-											<span class="text-muted-foreground text-[10px] font-medium">Default Mode</span
-											>
-											<div class="grid grid-cols-2 gap-1">
-												<button
-													onclick={() => setFileInputMode('upload')}
-													class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-														(fileInputConfig.defaultInputMode ?? 'upload') === 'upload'
-															? 'bg-primary text-primary-foreground border-primary'
-															: 'border-border/70 hover:border-border hover:bg-accent'
-													}`}
-												>
-													Upload
-												</button>
-												<button
-													onclick={() => setFileInputMode('url')}
-													class={`rounded border px-2 py-1 text-[10px] transition-colors ${
-														fileInputConfig.defaultInputMode === 'url'
-															? 'bg-primary text-primary-foreground border-primary'
-															: 'border-border/70 hover:border-border hover:bg-accent'
-													}`}
-												>
-													URL
-												</button>
-											</div>
-										</div>
-									{/if}
-
-									<!-- File Formats -->
-									<div class="flex flex-col gap-1">
-										<span class="text-muted-foreground text-[10px] font-medium">File Formats</span>
-										<div class="grid max-h-24 grid-cols-3 gap-1 overflow-y-auto">
-											{#each ACCEPTED_FILE_FORMATS as format (format)}
-												{@const isChecked = fileInputConfig.acceptedFormats?.includes(format)}
-												<button
-													onclick={() => toggleAcceptedFormat(format)}
-													class={`rounded border px-1.5 py-0.5 text-[9px] whitespace-nowrap transition-colors ${
-														isChecked
-															? 'bg-primary text-primary-foreground border-primary'
-															: 'border-border/70 hover:border-border hover:bg-accent'
-													}`}
-												>
-													{format}
-												</button>
-											{/each}
-										</div>
-									</div>
-								</div>
-							{/if}
-
-							{#if isTextInput}
-								{@const config = item.config as TextWidgetConfig}
-								<div class="flex flex-col gap-2">
-									<!-- Max Length -->
-									<div class="flex flex-col gap-1">
-										<span class="text-muted-foreground text-[10px] font-medium">Max Length</span>
-										<input
-											type="number"
-											min="1"
-											bind:value={config.maxLength}
-											placeholder="No limit"
-											class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
-										/>
-									</div>
-
-									<!-- Pattern (Regex) -->
-									<div class="flex flex-col gap-1">
-										<span class="text-muted-foreground text-[10px] font-medium"
-											>Validation Pattern (Regex)</span
-										>
-										<input
-											type="text"
-											bind:value={config.pattern}
-											placeholder="e.g., ^[a-zA-Z0-9]+$"
-											class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 font-mono text-[10px] focus:outline-none"
-										/>
-									</div>
-
-									<!-- Custom Error Message -->
-									{#if config.pattern}
-										<div class="flex flex-col gap-1">
-											<span class="text-muted-foreground text-[10px] font-medium"
-												>Custom Error Message</span
-											>
-											<input
-												type="text"
-												bind:value={config.customErrorMessage}
-												placeholder="Invalid format"
-												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
-											/>
-										</div>
-									{/if}
-								</div>
-							{/if}
+						{#if showVisibilityRules}
+							<VisibilityRulesEditor
+								bind:visibilityCondition={item.visibilityCondition}
+								{availableInputs}
+								currentParamInfo={paramInfo}
+								{getParameterInfo}
+								isGroupCondition={item.type === 'output'}
+								options={item.type === 'input' && item.widgetType === 'dropdown'
+									? item.config.options
+									: undefined}
+							/>
 						{/if}
 					</div>
-				{/if}
-
-				<!-- External Source toggle (input items only) -->
-				{#if isInput}
-					<div class="border-border/70 mt-1 flex items-center justify-between border-t pt-2 text-[11px]">
-						<div class="flex flex-col">
-							<span class="text-muted-foreground">External value</span>
-							<span class="text-muted-foreground/70 text-[9px]">
-								Filled by a producer route (e.g. /preview/producer/json-paste). Hides the control by default.
-							</span>
-						</div>
-						<Switch
-							checked={isExternalSource}
-							onCheckedChange={toggleExternalSource}
-							class="scale-75"
-						/>
-					</div>
-				{/if}
-
-				<!-- Visibility Rules Section (separate from Advanced) -->
-				<div class="border-border/70 mt-1 border-t pt-1">
-					<button
-						onclick={() => (showVisibilityRules = !showVisibilityRules)}
-						class="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center gap-1 text-[11px]"
-					>
-						<ChevronDown
-							size={12}
-							class={`transition-transform ${showVisibilityRules ? 'rotate-180' : ''}`}
-						/>
-						Visibility Rules {hasVisibilityRules
-							? `(${item.visibilityCondition?.rules?.length ?? 0})`
-							: ''}
-					</button>
-
-					{#if showVisibilityRules}
-						<VisibilityRulesEditor
-							bind:visibilityCondition={item.visibilityCondition}
-							{availableInputs}
-							currentParamInfo={paramInfo}
-							{getParameterInfo}
-							isGroupCondition={item.type === 'output'}
-							options={item.type === 'input' && item.widgetType === 'dropdown'
-								? item.config.options
-								: undefined}
-						/>
-					{/if}
 				</div>
-			</div>
 			</Collapsible.Content>
-	</Card.Root>
+		</Card.Root>
 	</Collapsible.Root>
 </div>

@@ -19,12 +19,12 @@ public class GH_Frame : GH_Component
     public GH_Frame()
         : base("Frame", "Frame",
             "Wraps a drawing element in a bordered, padded rectangle",
-            "Selva", "Layout")
+            "Selva", "Drawing")
     {
     }
 
     protected override Bitmap Icon => Resources.Frame;
-    public override GH_Exposure Exposure => GH_Exposure.tertiary;
+    public override GH_Exposure Exposure => GH_Exposure.quinary;
     public override Guid ComponentGuid => new Guid("B85A48FD-46DC-4A94-AD44-64B048237DBE");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
