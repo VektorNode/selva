@@ -2,8 +2,10 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Grasshopper;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Special;
 using Selva.Schema.Models;
 using Selva.GH.Features.ComputeIO.Components;
@@ -330,7 +332,113 @@ public class SchemaSynchronizer
         }
 
         // TODO: properly handle tree inputs (not a priority for now)
-        input.Default = ghParam?.VolatileData.AllData(true).FirstOrDefault()?.ScriptVariable();
+        input.Default = ExtractFirstScriptVariable(ghParam);
+    }
+
+    /// <summary>
+    ///     Best-effort extraction of a parameter's first scalar value. Tries volatile data
+    ///     (solved output), persistent data (the param's stored value), then wired source
+    ///     volatile/persistent data. Returns null only when nothing is set anywhere.
+    /// </summary>
+    private static object ExtractFirstScriptVariable(IGH_Param ghParam)
+    {
+        if (ghParam == null)
+        {
+            return null;
+        }
+
+        var fromVolatile = ghParam.VolatileData?.AllData(true).FirstOrDefault()?.ScriptVariable();
+        if (fromVolatile != null)
+        {
+            return fromVolatile;
+        }
+
+        var fromPersistent = ExtractPersistentScriptVariable(ghParam);
+        if (fromPersistent != null)
+        {
+            return fromPersistent;
+        }
+
+        if (ghParam.SourceCount > 0)
+        {
+            foreach (var source in ghParam.Sources)
+            {
+                if (source == null)
+                {
+                    continue;
+                }
+
+                var sourceVolatile = source.VolatileData?.AllData(true).FirstOrDefault()?.ScriptVariable();
+                if (sourceVolatile != null)
+                {
+                    return sourceVolatile;
+                }
+
+                var sourcePersistent = ExtractPersistentScriptVariable(source);
+                if (sourcePersistent != null)
+                {
+                    return sourcePersistent;
+                }
+
+                // GH_BooleanToggle exposes its value via a "Value" property, not PersistentData.
+                if (TryGetPropertyValue<bool>(source, "Value", out var boolValue))
+                {
+                    return boolValue;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static object ExtractPersistentScriptVariable(IGH_Param ghParam)
+    {
+        try
+        {
+            var persistentDataProp = ghParam.GetType()
+                .GetProperty("PersistentData", BindingFlags.Public | BindingFlags.Instance);
+            if (persistentDataProp?.GetValue(ghParam) is IGH_Structure structure && !structure.IsEmpty)
+            {
+                return structure.AllData(true).FirstOrDefault()?.ScriptVariable();
+            }
+        }
+        catch
+        {
+            // Reflection fallback failures are non-fatal — caller treats null as "no default".
+        }
+
+        return null;
+    }
+
+    private static bool TryGetPropertyValue<T>(object obj, string propName, out T value)
+    {
+        value = default;
+        if (obj == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var prop = obj.GetType().GetProperty(propName, BindingFlags.Public | BindingFlags.Instance);
+            if (prop == null)
+            {
+                return false;
+            }
+
+            var raw = prop.GetValue(obj);
+            if (raw is T t)
+            {
+                value = t;
+                return true;
+            }
+        }
+        catch
+        {
+            // ignored
+        }
+
+        return false;
     }
 
     private static void PopulateValueListDefault(
