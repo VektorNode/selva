@@ -64,6 +64,7 @@
 	// File inputs
 	let fileInput = $state<HTMLInputElement>();
 	let imageInput = $state<HTMLInputElement>();
+	let imageHasFile = $state(false);
 
 	// Validation state
 	let validating = $state(false);
@@ -180,12 +181,20 @@
 		validationSchema = null;
 		if (fileInput) fileInput.value = '';
 		if (imageInput) imageInput.value = '';
+		imageHasFile = false;
 	}
 
 	function handleOpenChange(newOpen: boolean) {
 		if (!newOpen) resetForm();
 		onOpenChange?.(newOpen);
 	}
+
+	// Reset when the dialog is closed externally (e.g. after a successful submit).
+	// bits-ui's onOpenChange only fires for internal closes (X / esc / outside click),
+	// so we mirror the reset here for prop-driven closes.
+	$effect(() => {
+		if (!open) resetForm();
+	});
 </script>
 
 <Dialog.Root {open} onOpenChange={handleOpenChange}>
@@ -385,9 +394,10 @@
 				<ImageUploadField
 					mode={imageMode}
 					value={coverImage}
+					hasFile={imageHasFile}
 					onModeChange={(m) => (imageMode = m)}
 					onUpload={() => {}}
-					onFileSelected={() => {}}
+					onFileSelected={() => (imageHasFile = !!imageInput?.files?.length)}
 					onUrlChange={(url) => (coverImage = url)}
 					bind:inputRef={imageInput}
 				/>
