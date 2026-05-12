@@ -361,12 +361,52 @@ print_header "Step 3: Building Application"
 
 # Build compute-app and all its workspace dependencies. Turbo derives the
 # build order from the workspace dep graph and skips any package whose
-# inputs haven't changed since the last build (its cache replaces the
-# pre-turbo "did packages/shared change?" check we used to do here).
+# inputs haven't changed since the last build.
+#
+# IMPORTANT: PM2 lazy-imports chunks from build/ on every fork. If we let
+# PM2 restart with a half-written build/, the running app crashes with
+# ERR_MODULE_NOT_FOUND. The safest cheap defense is: keep a backup copy
+# of the last-known-good build aside, run the build, and ONLY proceed to
+# the PM2 restart step if the new build/ passes a sanity check. If the
+# build half-fails we restore the backup so PM2 (which may autorestart on
+# memory/crash for other reasons) finds a consistent tree.
+BUILD_DIR="$INSTALL_DIR/packages/compute-app/build"
+BUILD_BACKUP="$INSTALL_DIR/packages/compute-app/build.previous"
+
+print_step "Snapshotting previous build/ for rollback..."
+rm -rf "$BUILD_BACKUP"
+if [ -d "$BUILD_DIR" ]; then
+  # cp -a preserves timestamps/perms. We keep the original in place so PM2
+  # is never staring at a missing build/ while the new one is being written.
+  cp -a "$BUILD_DIR" "$BUILD_BACKUP"
+fi
+
+restore_backup() {
+  if [ -d "$BUILD_BACKUP" ]; then
+    print_warning "Restoring previous build/ from snapshot"
+    rm -rf "$BUILD_DIR"
+    mv "$BUILD_BACKUP" "$BUILD_DIR"
+  fi
+}
+
 print_step "Building compute-app for production..."
 cd "$INSTALL_DIR"
 export ADAPTER=node
-run_build pnpm build --filter=@selvajs/compute-app
+if ! run_build pnpm build --filter=@selvajs/compute-app; then
+  restore_backup
+  print_error "Build failed — previous build/ restored, app not restarted"
+  exit 1
+fi
+
+# Sanity-check the build before we let PM2 reload it. If index.js is
+# missing the build half-failed silently (e.g. OOM, killed mid-write).
+if [ ! -f "$BUILD_DIR/index.js" ]; then
+  restore_backup
+  print_error "Build completed but $BUILD_DIR/index.js is missing — rolled back, app not restarted"
+  exit 1
+fi
+
+rm -rf "$BUILD_BACKUP"
 print_success "Compute-app built"
 
 fi # end of restart-only skip block

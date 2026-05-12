@@ -40,16 +40,30 @@ export const POST: RequestHandler = async ({ locals }) => {
 			}
 
 			try {
-				// Spawn the update script
+				// Spawn the update script detached so it survives if PM2 kills
+				// this Node process mid-restart, or if the SSE client disconnects.
+				// detached:true puts the child in its own process group; unref()
+				// stops it from blocking the event loop. stdio is piped so we can
+				// stream output while the parent is still alive.
 				const child = spawn('bash', [updateScript], {
 					cwd: installDir,
-					env: { PATH: process.env.PATH, HOME: process.env.HOME }
+					env: { PATH: process.env.PATH, HOME: process.env.HOME },
+					detached: true,
+					stdio: ['ignore', 'pipe', 'pipe']
 				});
+				child.unref();
 
-				// Kill the process if it runs longer than 15 minutes
+				// Kill the process if it runs longer than 15 minutes.
+				// The child is detached (its own process group), so signal the
+				// whole group via negative pid — otherwise descendants (pnpm,
+				// node, pm2) outlive the bash wrapper.
 				const timeout = setTimeout(
 					() => {
-						child.kill('SIGTERM');
+						try {
+							if (child.pid) process.kill(-child.pid, 'SIGTERM');
+						} catch {
+							// group already gone — nothing to do
+						}
 						sendEvent('log', { data: '[FATAL] Update timed out after 15 minutes' });
 						sendEvent('exit', { code: -1 });
 						controller.close();
