@@ -10,35 +10,13 @@ import type {
 	WsInitialDataMessage,
 	WsOutputsMessage,
 	WsSchemaUpdatedMessage,
+	WsSchemaSaveRejectedMessage,
 	WsMetadataUpdatedMessage,
 	WsParametersAddedMessage,
 	WsSyncPreviewMessage,
 	WsSyncAppliedMessage
 } from '$lib/websocket/websocket.svelte';
 import { useSchemaHistory } from './useSchemaHistory.svelte';
-
-
-/**
- * Backfill empty dropdown options in schema layout items from the available inputs list.
- * Called after initialData so that ValueList options are always populated even when
- * the saved schema has an empty options object (e.g. saved before the VL was wired).
- */
-function backfillDropdownOptions(
-	schema: UISchema | null,
-	availableInputs: DiscoveredInput[]
-): void {
-	if (!schema) return;
-	const optionsByParamId = new Map(availableInputs.map((p) => [p.id, p.options]));
-	for (const item of getAllLayoutItems(schema)) {
-		if (item.type !== 'input' || item.widgetType !== 'dropdown' || !item.paramId) continue;
-		const existingOptions = item.config?.options as Record<string, unknown> | undefined;
-		if (existingOptions && Object.keys(existingOptions).length > 0) continue;
-		const options = optionsByParamId.get(item.paramId);
-		if (options && Object.keys(options).length > 0) {
-			item.config = { ...item.config, options };
-		}
-	}
-}
 
 /**
  * Patch dropdown layout item configs in the schema when options change at runtime.
@@ -56,10 +34,29 @@ function patchDropdownOptions(
 	}
 }
 
+function clone(schema: UISchema): UISchema {
+	// `$state.snapshot` unwraps any Svelte 5 reactive proxy. structuredClone
+	// throws DataCloneError on a raw proxy (e.g. when cloning state.canonical
+	// for discardDraft), so the snapshot is required even on the fast path.
+	const plain = $state.snapshot(schema) as UISchema;
+	return typeof structuredClone === 'function'
+		? (structuredClone(plain) as UISchema)
+		: (JSON.parse(JSON.stringify(plain)) as UISchema);
+}
+
 interface BuilderWebSocketState {
 	availableInputs: DiscoveredInput[];
 	availableOutputs: DiscoveredOutput[];
-	schema: UISchema | null;
+	/** Last schema received from the server. Read-only mirror; never edited directly by the UI. */
+	canonical: UISchema | null;
+	/** Hash of `canonical` as reported by the server. Echoed back on save for conflict detection. */
+	canonicalHash: string | null;
+	/** The schema the user is editing. Always a deep clone of `canonical` on load. */
+	draft: UISchema | null;
+	/** Flipped on the first mutation of `draft` in a session. Cleared on save / discard. */
+	isDirty: boolean;
+	/** documentId of the currently-loaded Grasshopper definition (carried on the schema). */
+	documentId: string | null;
 	loading: boolean;
 	error: string;
 	syncNeeded: boolean;
@@ -74,12 +71,16 @@ export function useBuilderState(sessionId: string) {
 	// Get WebSocket port from URL to ensure we connect to the correct instance
 	const wsPort = getWebSocketPortFromUrl();
 	const wsState = getWebSocketState(wsPort);
-	const history = useSchemaHistory(sessionId);
+	const history = useSchemaHistory();
 
 	const state = $state<BuilderWebSocketState>({
 		availableInputs: [],
 		availableOutputs: [],
-		schema: null,
+		canonical: null,
+		canonicalHash: null,
+		draft: null,
+		isDirty: false,
+		documentId: null,
 		loading: true,
 		error: '',
 		syncNeeded: false,
@@ -89,6 +90,39 @@ export function useBuilderState(sessionId: string) {
 		syncLoading: false,
 		outputValues: {}
 	});
+
+	/**
+	 * Replace `canonical` with a freshly-received schema. If `draft` is clean,
+	 * re-clone it from the new canonical so live changes show through. If `draft`
+	 * is dirty, leave it alone — the user's edits win until they save (and may
+	 * be rejected) or discard. A toast warns about the divergence.
+	 */
+	function replaceCanonical(schema: UISchema, hash: string | null, reason?: string) {
+		state.canonical = schema;
+		state.canonicalHash = hash;
+		state.documentId = (schema?.documentId as string | undefined) ?? state.documentId;
+
+		if (state.isDirty) {
+			toast.warning(reason ?? 'Grasshopper changed while you were editing.');
+			return;
+		}
+
+		state.draft = clone(schema);
+		history.clearHistory();
+	}
+
+	/** Mark the draft as dirty on the first mutation in a session. */
+	function markDirty() {
+		if (!state.isDirty) state.isDirty = true;
+	}
+
+	/** Reset the draft to a fresh clone of canonical. Clears dirty. */
+	function discardDraft() {
+		if (!state.canonical) return;
+		state.draft = clone(state.canonical);
+		state.isDirty = false;
+		history.clearHistory();
+	}
 
 	function handleOutputs(message: WsOutputsMessage) {
 		if (message.sessionId !== sessionId) return;
@@ -105,26 +139,28 @@ export function useBuilderState(sessionId: string) {
 		state.availableInputs = result.availableInputs;
 		state.availableOutputs = result.availableOutputs;
 
-		// Check if there's a saved schema in localStorage that's newer
-		const savedSchema = history.loadCurrentSchema();
-		if (savedSchema) {
-			state.schema = savedSchema;
-			// Restore history stacks from localStorage
-			history.restoreFromStorage();
-		} else {
-			state.schema = result.schema;
-		}
+		// Canonical comes from the server, period. Drafts live only in memory for
+		// the lifetime of this tab — see useSchemaHistory for why LS persistence
+		// was removed.
+		const schema = result.schema;
+		if (schema) {
+			state.canonical = schema;
+			state.canonicalHash = (message.schemaHash as string | undefined) ?? null;
+			state.documentId = (schema.documentId as string | undefined) ?? null;
 
-		// Backfill any dropdown layout items whose options are empty (e.g. schema saved before VL was wired)
-		backfillDropdownOptions(state.schema, state.availableInputs);
+			if (!state.draft || !state.isDirty) {
+				state.draft = clone(schema);
+				history.clearHistory();
+			}
+		}
 
 		if (state.availableInputs.length === 0 && state.availableOutputs.length === 0) {
 			state.error =
 				'No parameters or outputs found. Please ensure the UI Builder component is active in Grasshopper and click Refresh.';
 		}
 
-		if (state.schema?.layout?.type === 'tabbed' && state.schema.layout.tabs.length > 0) {
-			state.activeTabId = state.schema.layout.tabs[0].id;
+		if (state.draft?.layout?.type === 'tabbed' && state.draft.layout.tabs.length > 0) {
+			state.activeTabId = state.draft.layout.tabs[0].id;
 		}
 
 		state.loading = false;
@@ -136,19 +172,23 @@ export function useBuilderState(sessionId: string) {
 		const changedParams = message.changedParams ?? [];
 		if (changedParams.length === 0) return;
 
-		// Patch the schema itself (inputs, outputs, and layout-item configs) via the shared helper.
-		// This is the part that was missing for slider range edits: NumberWidgetConfig.minimum/maximum
-		// /stepSize on the live UI schema now stays in sync with the GH slider.
-		const schemaResult = state.schema
-			? updateParameterMetadata(state.schema, changedParams)
+		// Patch canonical (the server-side mirror) so the next clean re-clone or
+		// save-base-hash reflects the metadata. Also patch the draft live — even
+		// when dirty — so a Grasshopper-side rename doesn't strand the user with
+		// a stale label or block them behind a conflict banner.
+		const canonicalResult = state.canonical
+			? updateParameterMetadata(state.canonical, changedParams)
 			: { updated: 0, names: [] };
+
+		if (state.draft) updateParameterMetadata(state.draft, changedParams);
 
 		// Track names that weren't already captured by the schema helper so we don't double-toast.
 		const additionalNames: string[] = [];
 
 		changedParams.forEach((updated) => {
-			const inputInSchema = state.schema?.inputs.some((inp) => inp.id === updated.id) ?? false;
-			const outputInSchema = state.schema?.outputs.some((out) => out.id === updated.id) ?? false;
+			const inSchema =
+				(state.canonical?.inputs.some((inp) => inp.id === updated.id) ?? false) ||
+				(state.canonical?.outputs.some((out) => out.id === updated.id) ?? false);
 
 			const availIndex = state.availableInputs.findIndex((p) => p.id === updated.id);
 			if (availIndex !== -1) {
@@ -164,13 +204,10 @@ export function useBuilderState(sessionId: string) {
 					state.availableInputs[availIndex].stepSize = updated.stepSize;
 				if (updated.options !== undefined) {
 					state.availableInputs[availIndex].options = updated.options;
-					// Belt-and-suspenders: the shared helper patches dropdown options on layout items,
-					// but only for items whose paramId matches. Keep this call so dropdowns added via
-					// non-standard widgetTypes still get options refreshed at the availableInputs level.
-					patchDropdownOptions(state.schema, updated.id, updated.options);
+					patchDropdownOptions(state.canonical, updated.id, updated.options);
+					patchDropdownOptions(state.draft, updated.id, updated.options);
 				}
-				if (!inputInSchema && updated.nickname !== undefined)
-					additionalNames.push(updated.nickname);
+				if (!inSchema && updated.nickname !== undefined) additionalNames.push(updated.nickname);
 			}
 
 			const availOutputIndex = state.availableOutputs.findIndex((o) => o.id === updated.id);
@@ -179,20 +216,20 @@ export function useBuilderState(sessionId: string) {
 					state.availableOutputs[availOutputIndex].nickname = updated.nickname;
 				if (updated.description !== undefined)
 					state.availableOutputs[availOutputIndex].description = updated.description;
-				if (!outputInSchema && updated.nickname !== undefined)
-					additionalNames.push(updated.nickname);
+				if (!inSchema && updated.nickname !== undefined) additionalNames.push(updated.nickname);
 			}
 		});
 
-		// Persist the freshly-patched schema to localStorage explicitly. Without this, navigating
-		// builder → preview would auto-save the *stale pre-patch* schema back to the server
-		// (the navigation guard pushes localStorage state, and the $effect that mirrors state.schema
-		// to localStorage can lag behind deep mutations made inside updateParameterMetadata).
-		if (state.schema && schemaResult.updated > 0) {
-			history.persistCurrentSchema(state.schema);
+		// Patching canonical changes its content — its hash is now stale until the
+		// server re-broadcasts. Clear the hash so a save attempt before the next
+		// schemaUpdated will be safe-rejected rather than racing.
+		if (canonicalResult.updated > 0) {
+			state.canonicalHash = null;
 		}
 
-		const updatedNames = [...schemaResult.names, ...additionalNames];
+		// Use canonical's name list only — draft is a sibling clone patched for live
+		// render, so its `names` would duplicate canonical's.
+		const updatedNames = [...canonicalResult.names, ...additionalNames];
 		if (updatedNames.length > 0) {
 			toast.info(
 				`Parameter${updatedNames.length > 1 ? 's' : ''} renamed in Grasshopper: ${updatedNames.join(', ')}`
@@ -203,58 +240,55 @@ export function useBuilderState(sessionId: string) {
 	function handleSchemaUpdated(message: WsSchemaUpdatedMessage) {
 		if (message.sessionId !== sessionId) return;
 
-		const removedIds = message.removedIds || [];
-		const removedCount = removedIds.length;
+		// Detect new IDs *before* replacing canonical so we know whether to refetch
+		// availableInputs/Outputs. The plugin auto-merges newly-discovered params
+		// into schema.inputs/outputs and broadcasts schemaUpdated (no separate
+		// parametersAdded), so the sidebar would otherwise miss them.
+		const knownInputIds = new Set(state.availableInputs.map((p) => p.id));
+		const knownOutputIds = new Set(state.availableOutputs.map((o) => o.id));
+		const hasNewInputs = (message.schema?.inputs ?? []).some((i) => !knownInputIds.has(i.id));
+		const hasNewOutputs = (message.schema?.outputs ?? []).some((o) => !knownOutputIds.has(o.id));
 
-		if (removedCount > 0) {
+		// schemaUpdated is the canonical broadcast — replace wholesale.
+		if (message.schema) {
+			replaceCanonical(message.schema, message.schemaHash ?? null);
+		}
+
+		const removedIds = message.removedIds || [];
+		if (removedIds.length > 0) {
 			state.availableInputs = state.availableInputs.filter((p) => !removedIds.includes(p.id));
 			state.availableOutputs = state.availableOutputs.filter((o) => !removedIds.includes(o.id));
 
-			if (state.schema) {
-				state.schema.inputs = state.schema.inputs.filter((i) => !removedIds.includes(i.id));
-				state.schema.outputs = state.schema.outputs.filter((o) => !removedIds.includes(o.id));
-
-				if (state.schema.layout) {
-					if (state.schema.layout.type === 'tabbed') {
-						state.schema.layout.tabs.forEach((tab) => {
-							tab.groups.forEach((group) => {
-								group.items = group.items.filter(
-									(item) => item.type === 'linebreak' || !removedIds.includes(item.paramId)
-								);
-							});
-							tab.groups = tab.groups.filter((g) => g.items.length > 0);
-						});
-
-						state.schema.layout.tabs = state.schema.layout.tabs.filter((t) => t.groups.length > 0);
-
-						// If active tab was removed, switch to first available
-						if (
-							state.activeTabId &&
-							!state.schema.layout.tabs.find((t) => t.id === state.activeTabId)
-						) {
-							state.activeTabId =
-								state.schema.layout.tabs.length > 0 ? state.schema.layout.tabs[0].id : null;
-						}
-					} else if (state.schema.layout.type === 'flat') {
-						state.schema.layout.groups.forEach((group) => {
-							group.items = group.items.filter(
-								(item) => item.type === 'linebreak' || !removedIds.includes(item.paramId)
-							);
-						});
-						state.schema.layout.groups = state.schema.layout.groups.filter(
-							(g) => g.items.length > 0
-						);
-					}
-				}
-			}
-
 			toast.info(
-				`${removedCount} item${removedCount > 1 ? 's' : ''} removed from Grasshopper and cleaned from layout`
+				`${removedIds.length} item${removedIds.length > 1 ? 's' : ''} removed from Grasshopper`
 			);
-		} else {
-			wsState.requestInitialData(sessionId);
-			toast.info('Schema structure updated - checking for new items...');
 		}
+
+		// If active tab no longer exists on the new draft, switch to first available.
+		if (state.draft?.layout?.type === 'tabbed') {
+			if (state.activeTabId && !state.draft.layout.tabs.find((t) => t.id === state.activeTabId)) {
+				state.activeTabId =
+					state.draft.layout.tabs.length > 0 ? state.draft.layout.tabs[0].id : null;
+			}
+		}
+
+		// Newly-added params from the canvas: the schema arrived with IDs we have no
+		// availableInputs/Outputs entry for. Refetch so the sidebar shows them.
+		if (hasNewInputs || hasNewOutputs) {
+			wsState.requestInitialData(sessionId);
+		}
+	}
+
+	function handleSchemaSaveRejected(message: WsSchemaSaveRejectedMessage) {
+		if (message.sessionId !== sessionId) return;
+
+		// Server says our base hash is stale. Replace canonical with the server's
+		// current schema so the next save attempt uses the fresh hash. The user
+		// keeps their dirty draft; the toast tells them what happened.
+		state.canonical = message.schema;
+		state.canonicalHash = message.schemaHash ?? null;
+
+		toast.error(message.reason ?? 'Grasshopper changed since you started editing.');
 	}
 
 	function handleParametersAdded(message: WsParametersAddedMessage) {
@@ -318,12 +352,12 @@ export function useBuilderState(sessionId: string) {
 	}
 
 	function requestSyncPreview() {
-		if (!state.schema) return;
+		if (!state.draft) return;
 		// Clear old sync diff data before requesting new preview
 		state.syncDiff = null;
 		state.syncLoading = true;
 		state.syncDialogOpen = true;
-		wsState.requestSyncPreview(sessionId, state.schema);
+		wsState.requestSyncPreview(sessionId, state.draft);
 	}
 
 	function applySyncChanges(selectedChanges: SyncChange[]) {
@@ -341,6 +375,7 @@ export function useBuilderState(sessionId: string) {
 		wsState.on('initialData', handleInitialData);
 		wsState.on('metadataUpdated', handleMetadataUpdated);
 		wsState.on('schemaUpdated', handleSchemaUpdated);
+		wsState.on('schemaSaveRejected', handleSchemaSaveRejected);
 		wsState.on('parametersAdded', handleParametersAdded);
 		wsState.on('syncPreview', handleSyncPreview);
 		wsState.on('syncApplied', handleSyncApplied);
@@ -356,6 +391,7 @@ export function useBuilderState(sessionId: string) {
 		wsState.off('initialData', handleInitialData);
 		wsState.off('metadataUpdated', handleMetadataUpdated);
 		wsState.off('schemaUpdated', handleSchemaUpdated);
+		wsState.off('schemaSaveRejected', handleSchemaSaveRejected);
 		wsState.off('parametersAdded', handleParametersAdded);
 		wsState.off('syncPreview', handleSyncPreview);
 		wsState.off('syncApplied', handleSyncApplied);
@@ -370,6 +406,8 @@ export function useBuilderState(sessionId: string) {
 		syncParameters,
 		requestSyncPreview,
 		applySyncChanges,
+		markDirty,
+		discardDraft,
 		initialize,
 		cleanup
 	};

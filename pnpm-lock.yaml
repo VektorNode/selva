@@ -206,6 +206,9 @@ importers:
       three:
         specifier: 'catalog:'
         version: 0.184.0
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       '@lucide/svelte':
         specifier: 'catalog:'
@@ -222,6 +225,9 @@ importers:
       tw-animate-css:
         specifier: 'catalog:'
         version: 1.4.0
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)
 
   packages/compute-app:
     dependencies:

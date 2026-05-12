@@ -21,8 +21,10 @@ export function useBuilderActions(
 ) {
 	function ensureSchema() {
 		const builderState = getBuilderState();
-		if (!builderState?.state.schema) return null;
-		return { builderState, schema: builderState.state.schema };
+		if (!builderState?.state.draft) return null;
+		// Every mutation flips isDirty — needed for the save-conflict and nav-prompt flows.
+		builderState.markDirty();
+		return { builderState, schema: builderState.state.draft };
 	}
 
 	function onParameterDrop(tabId: string, groupId: string, event: CustomEvent) {

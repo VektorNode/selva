@@ -17,12 +17,12 @@ public class GH_TextStyle : GH_Component
     public GH_TextStyle()
         : base("Text Style", "TStyle",
             "Creates a text style for drawing labels, table cells, leader text, etc.",
-            "Selva", "Elements")
+            "Selva", "Drawing")
     {
     }
 
     protected override Bitmap Icon => Resources.PathStlye;
-    public override GH_Exposure Exposure => GH_Exposure.tertiary;
+    public override GH_Exposure Exposure => GH_Exposure.senary;
     public override Guid ComponentGuid => new Guid("d37b61db-4fc4-4f01-9a76-95da5d719eea");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

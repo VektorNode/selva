@@ -14,12 +14,12 @@ public class GH_LinearDimension : GH_Component
     public GH_LinearDimension()
         : base("Linear Dimension", "LDim",
             "Aligned linear dimension between two points, offset perpendicular to the segment",
-            "Selva", "Elements")
+            "Selva", "Drawing")
     {
     }
 
     protected override Bitmap Icon => Resources.LinearDimension;
-    public override GH_Exposure Exposure => GH_Exposure.secondary;
+    public override GH_Exposure Exposure => GH_Exposure.quarternary;
     public override Guid ComponentGuid => new Guid("90160C4E-C8C8-4777-BD42-53347E115120");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

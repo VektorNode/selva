@@ -32,7 +32,7 @@ public class GH_Document : GH_Component
     public GH_Document()
         : base("Document", "Doc",
             "Bundles sections into a paginated document with shared metadata. Wire a Layout Override for non-default paper / chrome.",
-            "Selva", "Document")
+            "Selva", "Drawing")
     {
     }
 

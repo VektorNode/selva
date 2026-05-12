@@ -201,10 +201,17 @@ public class BridgeOrchestrator : IDisposable
         }
     }
 
-    private void HandleSchemaSave(object sender, UISchema schema)
+    private void HandleSchemaSave(object sender, SchemaSaveRequest request)
     {
         try
         {
+            var schema = request?.Schema;
+            if (schema == null)
+            {
+                _ = _webSocketTransport.BroadcastSchemaSaved(false, "No schema in save request.");
+                return;
+            }
+
             var document = _component.OnPingDocument();
             if (document == null)
             {
@@ -219,6 +226,23 @@ public class BridgeOrchestrator : IDisposable
                 _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
                     "Schema save rejected: Schema output is not wired to a Context Bake component.");
                 return;
+            }
+
+            // Conflict check: the UI sends the hash of the canonical it forked from.
+            // If the current canonical hashes to something different, the UI's draft is
+            // based on stale data; reply with the fresh canonical so the UI can prompt
+            // the user instead of silently overwriting Grasshopper-side changes.
+            var currentSchema = _getSchema();
+            if (currentSchema != null && !string.IsNullOrEmpty(request.BaseSchemaHash))
+            {
+                var currentHash = SchemaHash.Compute(currentSchema);
+                if (!string.Equals(currentHash, request.BaseSchemaHash, StringComparison.Ordinal))
+                {
+                    _ = _webSocketTransport.BroadcastSchemaSaveRejected(currentSchema);
+                    _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                        "Schema save rejected: definition changed in Grasshopper since you started editing.");
+                    return;
+                }
             }
 
             schema.ProjectFileName = document.Properties.ProjectFileName;
@@ -244,6 +268,9 @@ public class BridgeOrchestrator : IDisposable
             // frontend does not see a spurious solving-state flash.
             _webSocketTransport.SuppressSolvingCycles(1);
 
+            // Broadcast the fresh canonical (with new hash) before the success ack so the
+            // UI re-bases its draft on the post-save canonical and clears isDirty.
+            _ = _webSocketTransport.BroadcastSchemaUpdate(validatedSchema);
             _ = _webSocketTransport.BroadcastSchemaSaved(true);
 
             GHDocumentMutator.ScheduleComponentExpire(document, _component);
