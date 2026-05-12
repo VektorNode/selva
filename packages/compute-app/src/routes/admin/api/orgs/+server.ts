@@ -12,7 +12,7 @@ import {
 } from '@selvajs/platform';
 
 /**
- * Spec §7 — instance-admin-only org management. Multi-tenant deployments use
+ * Spec §8 — instance-admin-only org management. Multi-tenant deployments use
  * this to create / list orgs out of band of the per-org invite flow. Self-
  * hosted single-tenant instances rarely call these.
  */

@@ -15,7 +15,7 @@ using Selva.GH.Properties;
 using Selva.GH.Utilities;
 using Point = Rhino.Geometry.Point;
 
-namespace Selva.GH.Features.FileIO.Components;
+namespace Selva.GH.Features.FileIO.OBSOLETE;
 
 public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
 {

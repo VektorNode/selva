@@ -67,7 +67,7 @@
 		} else {
 			const timer = setTimeout(() => {
 				hideButton = false;
-			}, APP_DEFAULTS.TIMEOUTS.VIEWER_INIT_DELAY);
+			}, APP_DEFAULTS.TIMEOUTS.DRAWER_ANIMATION_MS);
 			return () => clearTimeout(timer);
 		}
 	});

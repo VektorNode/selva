@@ -15,7 +15,7 @@ using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
 
-namespace Selva.GH.Features.Display.Components;
+namespace Selva.GH.Features.Display.OBSOLETE;
 
 /// <summary>
 ///     Component that converts geometry to displayable format for web viewing.

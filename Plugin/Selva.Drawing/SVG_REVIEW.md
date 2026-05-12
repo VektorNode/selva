@@ -1,146 +1,78 @@
-# SVG System Review
+# Drawing system — outstanding work
 
-## Pipeline Overview
+> Predecessor of this file ("SVG System Review") inventoried the pre-refactor SVG-string pipeline.
+> That pipeline has been replaced by the format-agnostic Document Model in `Selva.Drawing/` plus
+> the renderer pair in `Rendering/Svg/` and `Rendering/Pdf/`. Most of the original findings landed
+> with the rewrite; what remains is captured below.
+
+Current pipeline:
 
 ```
-GH_CreateSvgCurve  ─┐
-GH_CreateSvgSurface ┼─► GH_CombineToSvg ──► SVG string ──► GH_ExportSvgFile
-GH_LinearDimension ─┘
-        │
-    GH_PathStyle (style input for curve/surface)
+GH_CreateCurve  ─┐
+GH_CreateSurface ┤
+GH_CreateText    ┤
+GH_LinearDimension ┼─► DrawElements ──► (DrawingView ──► Page) ──► Document ──► SvgRenderer / PdfRenderer
+GH_AngularDimension ┤
+…                ─┘
+                   ▲
+            GH_PathStyle (style input for path/surface)
+            GH_TextStyle (style input for text)
 ```
 
-Rhino geometry flows into typed data classes (`SvgCurveData`, `SvgSurfaceData`, `SvgDimensionData`), assembled by `GH_CombineToSvg` into a complete SVG document via `SvgWriter`. Coordinate system: single root Y-flip transform `matrix(1 0 0 -1 0 0)` converts Rhino world-space to SVG screen-space. Dimension text applies a counter-rotation (`scale(1,-1)`) to stay upright.
+GH components live in `Plugin/Selva.GH/Features/Drawing/`. Pure model + renderers live in `Plugin/Selva.Drawing/`.
 
 ---
 
-## Bugs
+## Outstanding
 
-### `GH_CurveInfo` — "Can Fill" duplicates "Is Closed"
+### 1. Surface stroke-suppression path
 
-**File:** `Components/GH_CurveInfo.cs`
+`GH_CreateSurface` falls back to light-gray fill + black 1px stroke when no `Style` is connected
+(`GH_CreateSurface.cs` ~lines 102–111). There is no way to keep the fill default and suppress the
+stroke — you have to wire a full `PathStyle` and zero the stroke width. Consider either:
 
-The "Can Fill" output emits `curve.IsClosed` — same as "Is Closed". It should test whether the curve is a valid fill boundary (e.g. `curve.IsClosed || curve.IsPeriodic`).
+- A dedicated `"No Stroke"` boolean input on `GH_CreateSurface`, OR
+- Treat `Stroke.Width <= 0` as "no stroke" in the renderer so users can express it via `Path Style`.
 
----
+### 2. Expose curve approximation tolerance on `GH_CreateCurve`
 
-## High-Value Missing Features
+`CurveConverter.ToPath(curve, chordTol, kinkTol)` accepts a tolerance, but `GH_CreateCurve`
+hardcodes `0.01` locally (`GH_CreateCurve.cs:61`). Same in `GH_CreateSurface.cs:70`. For
+sub-mm models or high-precision output, this is too coarse. Add an optional `"Tolerance" (T)`
+input on both components, defaulting to `0.01`.
 
-### 1. Dash pattern input on `GH_PathStyle`
+### 3. Empty-document warning on `GH_RenderSvg`
 
-`PathStyleData.DashArray` exists but is never exposed as a component input. Dotted lines, centerlines, and hidden lines are essential in technical drawings.
+`GH_RenderSvg.SolveInstance` returns silently when the input list is empty (line 71). Surface
+a `GH_RuntimeMessageLevel.Warning` ("nothing to render") so a user with a dead upstream branch
+sees the cause rather than just an absent output.
 
-**Proposed input:** `"Dash Pattern" (DP)` — list of numbers, e.g. `[5, 2, 1, 2]`
+### 4. User-facing group component
 
-Maps directly to SVG `stroke-dasharray`.
+`GroupElement` exists in the model (`Selva.Drawing/Model/Elements/GroupElement.cs`) and the
+renderers handle it, but no GH component lets a designer explicitly group elements with an id
+and transform. Useful for CSS-targeted SVG output and logical organization in downstream tools.
 
----
+### 5. Hole-topology validation in `GH_CreateSurface`
 
-### 2. Angular dimension component (`GH_AngularDimension`)
-
-`GH_LinearDimension` covers linear measurements. Angular dimensions (arc-segment dimension line + angle label) are equally common in technical drawings and are completely absent.
-
-**Inputs needed:** two reference lines or three points, offset, text size, color.
-
----
-
-### 3. Text label component (`GH_CreateSvgText`)
-
-No way to place arbitrary text. Needed for callouts, part numbers, annotations, and title blocks.
-
-**Inputs needed:** text string, position (`Point3d`), size, color, horizontal anchor (left/center/right), rotation angle.
-
----
-
-### 4. Fill rule control in `GH_PathStyle`
-
-`fill-rule` is hardcoded to `evenodd` in `GH_CreateSvgSurface`. For self-intersecting paths this produces incorrect results with nonzero winding.
-
-**Proposed input:** `"Fill Rule" (FR)` — boolean or enum: evenodd / nonzero.
+If a Brep's inner edges escape the outer boundary (degenerate geometry), the renderer happily
+produces a path with overlapping subpaths and the fill-rule result is undefined. A
+bounds-containment check before assembling the Path would emit a clear warning instead of
+silently broken output.
 
 ---
 
-### 5. Optional style input on `GH_CreateSvgSurface`
+## Already shipped (was on the original review's wish list)
 
-Surfaces currently fall back to a hardcoded light-gray fill + black 1px stroke when no style is provided. There is no way to suppress the stroke or adjust defaults without wiring a full `PathStyle`.
+For reference — these are done, don't re-implement:
 
-The style input should already be optional (null = use defaults), which it is — but the defaults should at minimum be documented, and a stroke-suppression path should exist.
+- **Angular dimension** → `GH_AngularDimension`
+- **Text label** → `GH_CreateText` (with `GH_TextStyle`)
+- **Dash pattern, separate cap/join, fill rule** → `GH_PathStyle` (`DP`, `LC`, `LJ`, `FR` inputs)
+- **Background color** → `GH_RenderSvg` `Background` (`BG`) input
+- **RGBA emission** → `SvgRenderer` emits `rgba(…)` when `color.A < 1`, `rgb(…)` otherwise
 
----
+## Deliberately out of scope
 
-## Medium Priority
-
-### 6. Expose curve approximation tolerance
-
-`CurveConverter` hardcodes `chordTol = 0.01` for Bezier approximation. For large-scale models (meters) this is fine; for small-scale (sub-mm) or high-precision output it can introduce visible error.
-
-**Proposed:** optional `"Tolerance" (T)` input on `GH_CreateSvgCurve`, defaulting to `0.01`.
-
----
-
-### 7. Empty-bounds warning in `GH_CombineToSvg`
-
-When no geometry is connected, the component silently returns a near-empty SVG. It should emit a `GH_RuntimeMessageLevel.Warning` so users know nothing was assembled.
-
----
-
-### 8. Separate cap and join controls in `GH_PathStyle`
-
-`"Round Caps" (R)` is a single boolean that sets both `stroke-linecap` and `stroke-linejoin` to Round simultaneously. Explicit separate controls would be more useful:
-
-- `"Line Cap" (LC)` — butt / round / square
-- `"Line Join" (LJ)` — miter / round / bevel
-
-The current combined boolean can stay as a convenience default if desired.
-
----
-
-### 9. Background color input on `GH_CombineToSvg`
-
-The assembled SVG always has a transparent background. A `"Background" (BG)` color input would add a `<rect width="100%" height="100%" fill="..."/>` as the first child element.
-
----
-
-## Nice to Have
-
-### `GH_SvgGroup` component
-
-Wraps a list of curves/surfaces/dimensions into a `<g id="..." class="...">` element. Enables CSS targeting, logical grouping, and selective hiding in downstream tools.
-
----
-
-### RGBA support in `SvgWriter.Rgb()`
-
-`SvgWriter.Rgb()` ignores the alpha channel of `System.Drawing.Color` and always emits `rgb(r,g,b)`. When a color has alpha < 255, it should emit `rgba(r,g,b,a)` or fold the alpha into the relevant opacity attribute.
-
----
-
-### Hole topology validation in `GH_CreateSvgSurface`
-
-If a Brep's "inner" edges are actually outside the outer boundary (degenerate geometry), the component silently emits broken SVG. A bounds-containment check before output would catch this early.
-
----
-
-## What to Skip
-
-Gradients, filters, blur/shadow effects, and SMIL animation are out of scope for a technical drawing tool. The current focus on clean, scalable, standards-compliant output is correct. Don't add these.
-
----
-
-## File Map
-
-| File | Role |
-|---|---|
-| `Components/GH_CreateSvgCurve.cs` | Curve → `SvgCurveData` |
-| `Components/GH_CreateSvgSurface.cs` | Brep → `SvgSurfaceData` (with holes) |
-| `Components/GH_PathStyle.cs` | Stroke/fill style → `PathStyleData` |
-| `Components/GH_LinearDimension.cs` | 2-point dimension → `SvgDimensionData` |
-| `Components/GH_CombineToSvg.cs` | Assembles complete SVG document |
-| `Components/GH_ExportSvgFile.cs` | Writes SVG string to disk |
-| `Components/GH_CurveInfo.cs` | Debug info about a curve (has bug) |
-| `Lib/CurveConverter.cs` | Rhino curve → SVG path data (`M L A C Z`) |
-| `Lib/PathStyleData.cs` | Data class: stroke, fill, dash, caps |
-| `Lib/SvgCurveData.cs` | Data class: path data + style + metadata |
-| `Lib/SvgDimensionData.cs` | Data class: pre-rendered dimension SVG fragment |
-| `Lib/SvgWriter.cs` | SVG attribute helpers, XML escaping |
-| `Lib/SurfaceHelper.cs` | Brep edge extraction utilities |
+Gradients, filters, blur/shadow effects, SMIL animation. Technical drawing tool, not a general
+SVG editor.

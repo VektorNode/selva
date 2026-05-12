@@ -140,11 +140,7 @@ export class WebSocketState {
 			if (data && typeof data === 'object' && 'isSolving' in data) {
 				const newState = Boolean(data.isSolving);
 
-				// Only log and process if state actually changed
 				if (newState !== this.isSolving) {
-					// console.info(
-					// 	`[WebSocket] Grasshopper solving state: ${newState} (was: ${this.isSolving})`
-					// );
 					this.isSolving = newState;
 
 					// Clear any pending timeout when we get an explicit solving state update
@@ -370,9 +366,6 @@ export class WebSocketState {
 		this.batchedValues = {};
 		this.batchTimer = null;
 
-		// console.log(
-		// 	`[WebSocket] Sending batched value update with ${Object.keys(values).length} values`
-		// );
 		this.send('valueUpdate', { sessionId, values });
 
 		// Set a single timeout to auto-clear solving state if no update received from server
@@ -393,7 +386,6 @@ export class WebSocketState {
 	 * Request current values from Grasshopper
 	 */
 	requestCurrentValues(sessionId: string) {
-		// console.log('[WebSocket] Requesting current values from Grasshopper');
 		this.send('requestCurrentValues', { sessionId });
 	}
 
@@ -401,7 +393,6 @@ export class WebSocketState {
 	 * Request initial data (schema, available params, current values) from Grasshopper
 	 */
 	requestInitialData(sessionId: string) {
-		// console.log('[WebSocket] Requesting initial data from Grasshopper');
 		this.send('requestInitialData', { sessionId });
 	}
 
@@ -504,8 +495,6 @@ export class WebSocketState {
 		// If server disconnected, keep trying with fixed interval (no max attempts)
 		if (this._serverDisconnected) {
 			const fixedDelay = 5000; // 5 seconds
-			// console.log(`[WebSocket] Server disconnected, retrying in ${fixedDelay}ms`);
-
 			this.reconnectTimer = setTimeout(() => {
 				this.connect();
 			}, fixedDelay);
@@ -514,14 +503,11 @@ export class WebSocketState {
 
 		// Otherwise, use exponential backoff with max attempts
 		if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-			// console.log('[WebSocket] Max reconnection attempts reached');
 			return;
 		}
 
 		this.reconnectAttempts++;
 		const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-
-		// console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
 
 		this.reconnectTimer = setTimeout(() => {
 			this.connect();
@@ -547,7 +533,6 @@ export function getWebSocketState(port?: number): WebSocketState {
 
 	// Create new WebSocket connection for this port
 	const url = `ws://localhost:${wsPort}`;
-	// console.log(`[WebSocket] Initializing new connection with URL: ${url}`);
 	const newWsState = new WebSocketState(url);
 	wsStateByPort.set(wsPort, newWsState);
 

@@ -14,7 +14,7 @@ using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
 
-namespace Selva.GH.Features.FileIO.Components;
+namespace Selva.GH.Features.FileIO.OBSOLETE;
 
 /// <summary>
 ///     Exports Rhino block instances to base64-encoded .3dm files.

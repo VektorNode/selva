@@ -402,8 +402,9 @@ describe('canChangeVisibilityToPublic', () => {
 	});
 
 	it('cross-org-public flag does NOT gate the flip — only canView post-flip', () => {
-		// Spec §4 line 211: with the flag off, public still flips; the meaning of
-		// public narrows to within-org. The flag belongs in canView, not here.
+		// Permissions.md §5 (canChangeVisibilityToPublic): with the flag off,
+		// public still flips; the meaning of public narrows to within-org. The
+		// flag belongs in canView, not here.
 		expect(canChangeVisibilityToPublic({ orgMember: orgMember('owner') })).toBe(true);
 	});
 });

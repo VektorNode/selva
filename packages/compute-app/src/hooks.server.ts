@@ -19,8 +19,9 @@ import {
  * First-run state is a one-way transition (zero users → at least one user)
  * that lasts the lifetime of the deployment. After we've seen at least one
  * user, the answer is permanent — caching it eliminates a per-request DB
- * read for every admin/api hit. The flag never goes back to true; that
- * would require a destructive DB action well outside this code's view.
+ * read for every admin/api hit. `firstRunResolved` never flips back to
+ * false; that would require a destructive DB action well outside this
+ * code's view.
  */
 let firstRunResolved = false;
 

@@ -2,7 +2,7 @@ using System;
 using Grasshopper.Kernel;
 using SheepMetal.PluginGrasshopper.Upgraders;
 
-namespace Selva.GH.Features.FileIO.Components;
+namespace Selva.GH.Features.FileIO.OBSOLETE;
 
 public class GH_DataToFileGenericUpgrader : IGH_UpgradeObject
 {

@@ -4,7 +4,7 @@ This is the canonical onramp. Follow it top to bottom.
 
 ## Prerequisites
 
-- **Node.js >= 18** and **pnpm >= 9** (see `engines` in [package.json](../package.json))
+- **Node.js >= 18** and **pnpm >= 10** (see `engines` in [package.json](../package.json))
 - **.NET SDK 7.0+** and an IDE (Visual Studio / Rider / VS Code) — only if you'll touch the C# plugin
 - **Rhino 8** — only if you'll run the plugin
 - **Docker Desktop** — only if you'll use the Supabase provider locally

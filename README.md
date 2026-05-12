@@ -1,7 +1,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-blue)](https://www.typescriptlang.org/)
 [![Svelte](https://img.shields.io/badge/Svelte-5.0-FF3E00)](https://svelte.dev)
-[![.NET](https://img.shields.io/badge/.NET-4.8%2F7.0-512BD4)](https://dotnet.microsoft.com/)
+[![.NET](https://img.shields.io/badge/.NET-4.8%2F7.0%2F9.0-512BD4)](https://dotnet.microsoft.com/)
 
 # Selva
 
@@ -28,13 +28,17 @@ Turn Grasshopper definitions into full web applications — with a live schema d
 | [`compute-app`](./packages/compute-app/README.md)                    | Standalone solver app for cloud deployment via Rhino.Compute       |
 | [`ui`](./packages/ui/README.md)                                      | Shared Svelte components, theme, and utilities                     |
 | [`schemas`](./packages/schemas/README.md)                            | Schema definitions and TypeScript/C# code generators               |
+| [`platform`](./packages/platform/README.md)                          | Provider interfaces (auth, data, storage) — no implementations     |
+| [`local-provider`](./packages/local-provider/README.md)              | Filesystem + JSON + HMAC implementation of platform                |
+| [`supabase-provider`](./packages/supabase-provider/README.md)        | Supabase (Auth + Postgres + Storage) implementation of platform    |
+| [`header-auth-provider`](./packages/header-auth-provider/README.md)  | Auth-only adapter that trusts reverse-proxy identity headers       |
 | [`@selvajs/compute`](https://www.npmjs.com/package/@selvajs/compute) | Type-safe Rhino Compute client and Three.js helpers (npm)          |
 
 ## Requirements
 
 - Node.js >= 18.0.0
 - .NET SDK 7.0+
-- Rhino 8
+- Rhino 8 or 9 (Rhino 7 is not supported)
 - Rhino.Compute server (the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) is required for block instance support)
 
 ## Quick Start

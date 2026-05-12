@@ -2,7 +2,7 @@ using System;
 using Grasshopper.Kernel;
 using SheepMetal.PluginGrasshopper.Upgraders;
 
-namespace Selva.GH.Features.FileIO.Components;
+namespace Selva.GH.Features.FileIO.OBSOLETE;
 
 /// <summary>
 ///     Upgrades OBSOLETE_BlockToFile_UntilV0_6_2 (06308887) to GH_BlockToFile (BC984091).

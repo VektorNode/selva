@@ -20,7 +20,9 @@ resource "google_compute_address" "selva" {
   region = var.region
 }
 
-# Firewall: allow HTTP, HTTPS, SSH
+# Firewall: only 80 (ACME HTTP-01 challenge + redirect) and 443 (HTTPS) are
+# public. The app process binds to 127.0.0.1:3000 inside the VM — never
+# reachable from the network. Caddy is the single ingress.
 resource "google_compute_firewall" "selva_web" {
   name    = "selva-allow-web"
   network = "default"
@@ -71,12 +73,11 @@ resource "google_compute_instance" "selva" {
   }
 
   metadata_startup_script = templatefile("${path.module}/startup.sh.tpl", {
-    compute_server_url = var.compute_server_url
-    compute_api_key    = var.compute_api_key
-    admin_password     = var.admin_password
-    admin_secret       = var.admin_secret
-    public_ip          = google_compute_address.selva.address
-    ssh_user           = var.ssh_user
+    public_ip  = google_compute_address.selva.address
+    ssh_user   = var.ssh_user
+    domain     = var.domain
+    acme_email = var.acme_email != "" ? var.acme_email : "admin@${var.domain}"
+    branch     = var.branch
   })
 
   service_account {

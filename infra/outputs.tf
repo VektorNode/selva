@@ -1,6 +1,11 @@
 output "static_ip" {
-  description = "Static external IP address of the VM"
+  description = "Static external IP — POINT YOUR A RECORD AT THIS BEFORE THE VM FINISHES BOOTING."
   value       = google_compute_address.selva.address
+}
+
+output "dns_instructions" {
+  description = "Copy-paste DNS record to add at your registrar."
+  value       = "A   ${var.domain}   →   ${google_compute_address.selva.address}"
 }
 
 output "ssh_command" {
@@ -9,13 +14,13 @@ output "ssh_command" {
 }
 
 output "app_url" {
-  description = "URL to access the compute app"
-  value       = "http://${google_compute_address.selva.address}/app?gh=your-definition"
+  description = "URL to access the compute app (resolves once DNS + ACME complete)."
+  value       = "https://${var.domain}"
 }
 
 output "health_check" {
   description = "Health check URL"
-  value       = "http://${google_compute_address.selva.address}/api/health"
+  value       = "https://${var.domain}/api/health"
 }
 
 output "startup_log" {

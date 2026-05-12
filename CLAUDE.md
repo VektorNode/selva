@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for building Grasshopper-driven web applications. It uses a dual-stack architecture:
 
-- **Backend**: C# (.NET multi-target: net48/net7.0) - Grasshopper plugin
+- **Backend**: C# (.NET multi-target: net48/net7.0/net9.0) - Grasshopper plugin
 - **Frontend**: SvelteKit with TypeScript + Tailwind CSS
 - **Communication**: WebSocket (port 8765) + embedded HTTP server
 
@@ -108,7 +108,7 @@ The production build creates a **fully self-contained** `.gha` file:
 1. Builds `@selvajs/builder-app` web assets
 2. Copies built assets to `Plugin/Selva.GH/EmbeddedAssets/web/`
 3. Embeds all web assets as `EmbeddedResource` in the plugin
-4. Builds multi-targeted plugin (net48 for Rhino 7, net7.0 for Rhino 8)
+4. Builds multi-targeted plugin (net48 + net7.0 for Rhino 8, net9.0 for Rhino 9)
 
 Output: Single `.gha` file with no external dependencies. The LocalWebServer auto-allocates an HTTP port at runtime.
 
@@ -203,7 +203,7 @@ This architecture means Selva has **zero exposure to EU data regulations, creden
 - [pnpm](https://pnpm.io) >= 10.0.0 (Node.js package manager — version pinned in `packageManager`, activated via Corepack)
 - Node.js >= 18.0.0
 - .NET SDK 7.0+ (for plugin development)
-- Rhino 7 or 8 (for using the plugin)
+- Rhino 8 or 9 (for using the plugin — Rhino 7 is not supported)
 - Rhino.Compute server — the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) is required for block instance support
 
 ## Environment Variables

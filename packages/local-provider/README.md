@@ -118,7 +118,7 @@ Access control is enforced **in-process** by inspecting `RequestContext.adapterC
 
 ### Storage
 
-`LocalStorageProvider` writes blobs under `$DATA_PATH/files/`. `getPublicUrl` returns `/api/files/<path>`, which the compute-app proxies after an auth check. Image uploads pass through the shared `transcodeImageIfNeeded` helper from `@selvajs/platform/storage` — same WebP output as Supabase.
+`LocalStorageProvider` writes blobs under `$DATA_PATH/<path>` (e.g. `$DATA_PATH/definitions/<guid>/versions/v1.gh`) — the caller's storage path is appended directly to the data root, with `..` rejected. `getPublicUrl` returns `/api/files/<path>`, which the compute-app proxies after an auth check. Image uploads pass through the shared `transcodeImageIfNeeded` helper from `@selvajs/platform/storage` — same WebP output as Supabase.
 
 ### Shared helpers
 

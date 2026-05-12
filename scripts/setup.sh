@@ -38,6 +38,9 @@ NC='\033[0m' # No Color
 
 # Configuration (all overridable via environment variables)
 REPO_URL="${REPO_URL:-git@github.com:VektorNode/selva.git}"
+# Branch / tag / commit to deploy. Defaults to main; override with BRANCH=9x
+# (or any ref) to deploy a feature branch.
+BRANCH="${BRANCH:-main}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
 # DATA_PATH is the local provider's data directory: users.json, orgs/projects/
 # definitions JSON, compute.config.json, and uploaded .gh files. Resolved
@@ -47,8 +50,17 @@ DATA_PATH="${DATA_PATH:-../../.selva-data}"
 SELVA_HMAC_KEY="${SELVA_HMAC_KEY:-}"
 SELVA_AT_REST_KEY="${SELVA_AT_REST_KEY:-}"
 ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES:-}"  # auto-detected: true for http, false for https
+# Always bind to loopback. The VM is fronted by Caddy on the public interface;
+# the app process must NOT be reachable directly from the network. This is a
+# hard requirement for forward-auth providers (header-auth-provider/README.md)
+# and good hygiene generally.
+HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-3000}"
-ORIGIN="${ORIGIN:-}"  # auto-detected from public IP if not set
+# DOMAIN is set by the Terraform startup script in production. If present,
+# ORIGIN is derived as https://$DOMAIN; otherwise we fall back to the public
+# IP for local-network testing.
+DOMAIN="${DOMAIN:-}"
+ORIGIN="${ORIGIN:-}"  # auto-detected from DOMAIN / public IP if not set
 INTERACTIVE=true
 SKIP_PM2=false
 
@@ -155,21 +167,23 @@ print_header "Step 2: Repository Setup"
 
 if [ -d "$INSTALL_DIR" ] && [ -d "$INSTALL_DIR/.git" ]; then
   print_warning "Directory already exists: $INSTALL_DIR"
-  print_step "Pulling latest changes..."
+  print_step "Fetching and switching to $BRANCH..."
   cd "$INSTALL_DIR"
-  git pull origin main || print_warning "Could not pull (may be offline or no main branch)"
+  git fetch origin "$BRANCH" || print_warning "Could not fetch $BRANCH (may be offline)"
+  git checkout "$BRANCH"
+  git pull origin "$BRANCH" || print_warning "Could not pull $BRANCH"
 elif [ -d "$INSTALL_DIR" ] && [ ! -d "$INSTALL_DIR/.git" ]; then
   print_warning "Directory exists but is not a git repo (leftover from failed clone) — removing..."
   rm -rf "$INSTALL_DIR"
-  print_step "Cloning repository..."
-  git clone "$REPO_URL" "$INSTALL_DIR"
+  print_step "Cloning repository ($BRANCH)..."
+  git clone --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
   cd "$INSTALL_DIR"
-  print_success "Repository cloned to $INSTALL_DIR"
+  print_success "Repository cloned to $INSTALL_DIR ($BRANCH)"
 else
-  print_step "Cloning repository..."
-  git clone "$REPO_URL" "$INSTALL_DIR"
+  print_step "Cloning repository ($BRANCH)..."
+  git clone --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
   cd "$INSTALL_DIR"
-  print_success "Repository cloned to $INSTALL_DIR"
+  print_success "Repository cloned to $INSTALL_DIR ($BRANCH)"
 fi
 
 ################################################################################
@@ -213,13 +227,22 @@ fi
 if [ ! -f "$ENV_FILE" ] || ([ "$INTERACTIVE" = true ] && [[ $REPLY =~ ^[Yy]$ ]]); then
   print_step "Configuring environment variables..."
 
-  # Detect public IP address
+  # Detect public IP address (fallback when no DOMAIN is provided)
   print_step "Detecting public IP address..."
   PUBLIC_IP=$(get_public_ip)
   if [ "$PUBLIC_IP" != "localhost" ]; then
     print_success "Public IP detected: $PUBLIC_IP"
   else
     print_warning "Could not detect public IP, will use localhost"
+  fi
+
+  # Compute default ORIGIN: prefer DOMAIN (https) over public IP (http).
+  if [ -z "$ORIGIN" ]; then
+    if [ -n "$DOMAIN" ]; then
+      ORIGIN="https://$DOMAIN"
+    else
+      ORIGIN="http://$PUBLIC_IP"
+    fi
   fi
 
   # Get user input with defaults
@@ -236,14 +259,8 @@ if [ ! -f "$ENV_FILE" ] || ([ "$INTERACTIVE" = true ] && [[ $REPLY =~ ^[Yy]$ ]])
     read -p "Application Port [$PORT]: " _INPUT
     PORT="${_INPUT:-$PORT}"
 
-    DEFAULT_ORIGIN="${ORIGIN:-http://$PUBLIC_IP}"
-    read -p "Public Origin URL [$DEFAULT_ORIGIN]: " _INPUT
-    ORIGIN="${_INPUT:-$DEFAULT_ORIGIN}"
-  else
-    # Non-interactive: compute ORIGIN if not set
-    if [ -z "$ORIGIN" ]; then
-      ORIGIN="http://$PUBLIC_IP"
-    fi
+    read -p "Public Origin URL [$ORIGIN]: " _INPUT
+    ORIGIN="${_INPUT:-$ORIGIN}"
   fi
 
   # Create .env file
@@ -294,6 +311,9 @@ EOF
   cat >> "$ENV_FILE" << EOF
 
 # Server Configuration
+# HOST=127.0.0.1 keeps the app off the public interface — Caddy is the only
+# ingress. Override only for local-network testing where Caddy is not in front.
+HOST=${HOST}
 PORT=${PORT}
 ORIGIN="${ORIGIN}"
 ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES}"
@@ -422,16 +442,14 @@ print_header "Setup Complete!"
 
 PORT=$(grep "^PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ')
 PORT=${PORT:-3000}
-
-# Get the public IP used
-PUBLIC_IP=$(get_public_ip)
-ACCESS_URL="http://$PUBLIC_IP:$PORT"
+# ORIGIN is the public URL the app reports; Caddy proxies to 127.0.0.1:$PORT.
+ACCESS_URL=$(grep "^ORIGIN=" "$ENV_FILE" | cut -d'"' -f2)
+ACCESS_URL=${ACCESS_URL:-http://localhost:$PORT}
 
 echo -e "${GREEN}Selva Compute App is ready!${NC}"
 echo ""
 echo "📁 Installation directory: $INSTALL_DIR"
 echo "⚙️  Configuration file: $ENV_FILE"
-echo "🌍 Server IP Address: $PUBLIC_IP"
 echo "🚀 Access application: $ACCESS_URL/app?gh=definition-name"
 echo "💊 Health check: curl $ACCESS_URL/api/health"
 echo ""

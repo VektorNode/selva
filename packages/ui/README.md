@@ -2,8 +2,6 @@
 
 Shared Svelte components, utilities, and theme system for Selva applications.
 
-pnpm publish --access public --no-git-checks
-
 ## Installation
 
 ```bash

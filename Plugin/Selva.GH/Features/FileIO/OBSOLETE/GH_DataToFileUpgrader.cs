@@ -2,7 +2,7 @@ using System;
 using Grasshopper.Kernel;
 using SheepMetal.PluginGrasshopper.Upgraders;
 
-namespace Selva.GH.Features.FileIO.Components;
+namespace Selva.GH.Features.FileIO.OBSOLETE;
 
 /// <summary>
 ///     Upgrades OBSOLETE_DataToFile_UntilV0_6_2 (A51C8F6A) to GH_DataToFile (8D0ECB14).
