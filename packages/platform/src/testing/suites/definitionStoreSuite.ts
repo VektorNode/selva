@@ -3,7 +3,7 @@
  *
  * The goal is to prove every adapter behaves identically from the consuming
  * app's perspective — `ctx` scoping, `pending` filtering, version CRUD +
- * reference protection (spec §6), and error shapes.
+ * reference protection (Permissions spec §6), and error shapes.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -291,7 +291,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 		});
 
 		// ============================================================================
-		// Versions (spec §6)
+		// Versions (Permissions spec §6)
 		// ============================================================================
 
 		it('createVersion + listVersions: rows return newest-first by versionNumber', async () => {

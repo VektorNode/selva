@@ -2,9 +2,10 @@ import type { ProjectRole, ProjectVisibility } from './schemas.js';
 
 /**
  * Visibility:
- * - `public`  — any authenticated user can view/solve
- * - `org`     — any member of the parent organization
- * - `private` — only listed `ProjectMember`s
+ * - `public`   — any authenticated user can view/solve (cross-org gated by `ALLOW_CROSS_ORG_PUBLIC`)
+ * - `org`      — any member of the parent organization
+ * - `private`  — only listed `ProjectMember`s
+ * - `platform` — instance-admin-managed; access via `IPlatformProjectGrantStore`
  */
 export interface Project {
 	id: string;

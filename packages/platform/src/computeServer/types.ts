@@ -10,7 +10,7 @@
  *   with `manage_org_compute`. Visible only to its `ownerOrgId`. Gated by
  *   the `ALLOW_ORG_COMPUTE_OVERRIDE` platform flag.
  *
- * Spec §3.
+ * Architecture spec §4.8.
  */
 export type ComputeServerConfig = PlatformComputeServer | OrgComputeServer;
 
