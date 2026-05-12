@@ -3,6 +3,7 @@
 	import type { DefinitionRecord, ProjectWithMembers } from '../+page.server';
 	import StatusBadge from './StatusBadge.svelte';
 	import { formatUpdated } from './statusStyles';
+	import { huesFor, monogram } from '$lib/components/definitions/cardStyles';
 
 	interface Props {
 		records: DefinitionRecord[];
@@ -12,7 +13,7 @@
 
 	let { records, projects, onOpen }: Props = $props();
 
-	const gridTemplate = 'grid-template-columns: 1.6fr 0.9fr 0.8fr 0.7fr 0.6fr 36px';
+	const gridTemplate = 'grid-template-columns: 40px 1.6fr 0.9fr 0.8fr 0.7fr 0.6fr 36px';
 
 	function projectName(id: string) {
 		return projects.find((p) => p.id === id)?.name ?? '';
@@ -24,15 +25,31 @@
 		class="border-border bg-muted/50 text-muted-foreground grid border-b px-4 py-2.5 font-mono text-[10.5px] tracking-widest uppercase"
 		style={gridTemplate}
 	>
-		<span>Definition</span><span>Project</span><span>Status</span><span>Updated</span>
+		<span></span><span>Definition</span><span>Project</span><span>Status</span><span>Updated</span>
 		<span class="text-right">Runs</span><span></span>
 	</div>
 	{#each records as record, i (record.guid)}
 		<div
-			class={`grid items-center px-4 py-3.5 text-[13px] ${i < records.length - 1 ? 'border-border border-b' : ''}`}
+			class={`grid items-center gap-4 px-4 py-3 text-[13px] ${i < records.length - 1 ? 'border-border border-b' : ''}`}
 			style={gridTemplate}
 		>
-			<span>
+			{#if record.coverImage}
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md">
+					<img src={record.coverImage} alt="" class="h-full w-full object-cover" />
+				</div>
+			{:else}
+				{@const hues = huesFor(record.guid)}
+				<div
+					class="tool-cover-fallback flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md"
+					style:--tool-h1={hues.h1}
+					style:--tool-h2={hues.h2}
+				>
+					<span class="text-foreground/40 text-base font-semibold">
+						{monogram(record.displayName)}
+					</span>
+				</div>
+			{/if}
+			<span class="min-w-0">
 				<span class="font-semibold">{record.displayName}</span>
 				{#if record.description}
 					<span class="text-muted-foreground ml-2 text-[12px]">
