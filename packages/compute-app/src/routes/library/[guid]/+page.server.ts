@@ -75,9 +75,10 @@ export const load = (async ({ params, locals, request, url }) => {
 
 	try {
 		// Draft channel is editor-only — share tokens are always live channel.
-		const sharedAccess = channel === 'live'
-			? await tryResolveShareToken(request, url, guid, 'live', { requireSolve: false })
-			: null;
+		const sharedAccess =
+			channel === 'live'
+				? await tryResolveShareToken(request, url, guid, 'live', { requireSolve: false })
+				: null;
 		if (sharedAccess) {
 			shareToken = url.searchParams.get('token');
 		} else if (!locals.ctx || !locals.user) {

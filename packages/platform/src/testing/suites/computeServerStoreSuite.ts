@@ -114,8 +114,8 @@ export function runComputeServerStoreConformance(opts: ComputeServerStoreConform
 			await store.saveOrgServers(SYSTEM_CONTEXT, orgId, [s], s.id);
 
 			const got = await store.getConfig(SYSTEM_CONTEXT);
-			const ownRows = got.servers.filter((row): row is OrgComputeServer =>
-				isOrgServer(row) && row.ownerOrgId === orgId
+			const ownRows = got.servers.filter(
+				(row): row is OrgComputeServer => isOrgServer(row) && row.ownerOrgId === orgId
 			);
 			expect(ownRows.map((r) => r.id)).toEqual([s.id]);
 			expect(got.orgDefaults?.[orgId]).toBe(s.id);

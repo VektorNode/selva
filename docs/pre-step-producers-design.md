@@ -25,6 +25,7 @@ Object form (not boolean) so future kinds (`pre-step`, `linked`, `computed`, `pl
 ### Keying
 
 By **`paramId`** (Grasshopper instance GUID). Flows unchanged through every layer:
+
 - Schema: input has `paramId`.
 - Producer URL: `?for=<paramId>`.
 - sessionStorage key: `external:<scopeKey>:<paramId>`.
@@ -34,16 +35,16 @@ The `scopeKey` is whatever uniquely identifies the solver context: `sessionId` i
 
 ### Code that shipped
 
-| Layer | File / Symbol | Role |
-|---|---|---|
-| Schema | [packages/schemas/ui-schema.json](../packages/schemas/ui-schema.json) | `InputSource` definition |
-| Migration | [Plugin/Selva.Schema/Services/SchemaMigrator.cs](../Plugin/Selva.Schema/Services/SchemaMigrator.cs) | `MigrateTo_2_8_0` |
-| Storage primitives | [packages/ui/src/lib/external/storage.ts](../packages/ui/src/lib/external/storage.ts) | `readExternalValue`, `writeExternalValue`, `clearExternalValue`, `getExternalInputs`. Re-exported from `@selvajs/ui`. |
-| Visibility fix | [packages/ui/src/lib/schema/visibility-rules.ts](../packages/ui/src/lib/schema/visibility-rules.ts) | `evaluateVisibility` now honors static `item.visible === false` (was previously ignored — pre-existing bug uncovered by this work) |
-| Builder UI toggle | [packages/builder-app/src/lib/components/builder/BuilderGroupItem.svelte](../packages/builder-app/src/lib/components/builder/BuilderGroupItem.svelte) | "External value" switch in the input editor; defaults `visible: false` when toggled on |
-| Builder-app solver | [packages/builder-app/src/routes/preview/+page.svelte](../packages/builder-app/src/routes/preview/+page.svelte) | Reads sessionStorage on schema load and seeds external inputs into `state.values`. No warning UI. |
-| Builder-app initial solve | [packages/builder-app/src/lib/composables/usePreviewState.svelte.ts](../packages/builder-app/src/lib/composables/usePreviewState.svelte.ts) | Initial-solve timeout reads live `state.values` (was using stale snapshot — race condition fix) |
-| Compute-app | [packages/ui/src/lib/components/compute/ComputeApp.svelte](../packages/ui/src/lib/components/compute/ComputeApp.svelte) | Skips externals in `createInitialValues`, seeds from sessionStorage. No warning UI. |
+| Layer                     | File / Symbol                                                                                                                                         | Role                                                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Schema                    | [packages/schemas/ui-schema.json](../packages/schemas/ui-schema.json)                                                                                 | `InputSource` definition                                                                                                           |
+| Migration                 | [Plugin/Selva.Schema/Services/SchemaMigrator.cs](../Plugin/Selva.Schema/Services/SchemaMigrator.cs)                                                   | `MigrateTo_2_8_0`                                                                                                                  |
+| Storage primitives        | [packages/ui/src/lib/external/storage.ts](../packages/ui/src/lib/external/storage.ts)                                                                 | `readExternalValue`, `writeExternalValue`, `clearExternalValue`, `getExternalInputs`. Re-exported from `@selvajs/ui`.              |
+| Visibility fix            | [packages/ui/src/lib/schema/visibility-rules.ts](../packages/ui/src/lib/schema/visibility-rules.ts)                                                   | `evaluateVisibility` now honors static `item.visible === false` (was previously ignored — pre-existing bug uncovered by this work) |
+| Builder UI toggle         | [packages/builder-app/src/lib/components/builder/BuilderGroupItem.svelte](../packages/builder-app/src/lib/components/builder/BuilderGroupItem.svelte) | "External value" switch in the input editor; defaults `visible: false` when toggled on                                             |
+| Builder-app solver        | [packages/builder-app/src/routes/preview/+page.svelte](../packages/builder-app/src/routes/preview/+page.svelte)                                       | Reads sessionStorage on schema load and seeds external inputs into `state.values`. No warning UI.                                  |
+| Builder-app initial solve | [packages/builder-app/src/lib/composables/usePreviewState.svelte.ts](../packages/builder-app/src/lib/composables/usePreviewState.svelte.ts)           | Initial-solve timeout reads live `state.values` (was using stale snapshot — race condition fix)                                    |
+| Compute-app               | [packages/ui/src/lib/components/compute/ComputeApp.svelte](../packages/ui/src/lib/components/compute/ComputeApp.svelte)                               | Skips externals in `createInitialValues`, seeds from sessionStorage. No warning UI.                                                |
 
 ### How values reach Grasshopper
 
@@ -70,8 +71,8 @@ When you're ready to replace the JSON-paste stub with a real one (line drawer, f
 
 A producer is **two things**, kept strictly separate:
 
-1. **Domain-pure component** — knows about its own data model (lines, polylines, files, points). Fires `onDone(value)`. Could be lifted into another product unchanged. *Has no idea Selva exists.*
-2. **Producer route** — integration glue. Reads `?for=` from URL, hosts the component, on `onDone` calls `writeExternalValue(...)` and navigates back. *Knows nothing about the component's domain.*
+1. **Domain-pure component** — knows about its own data model (lines, polylines, files, points). Fires `onDone(value)`. Could be lifted into another product unchanged. _Has no idea Selva exists._
+2. **Producer route** — integration glue. Reads `?for=` from URL, hosts the component, on `onDone` calls `writeExternalValue(...)` and navigates back. _Knows nothing about the component's domain._
 
 If your component imports anything Selva-specific, you've crossed the boundary. Push it up to the route.
 
@@ -91,24 +92,24 @@ Land it in `packages/builder-app/src/lib/producers/line-drawer/LineDrawerApp.sve
 
 ```svelte
 <script lang="ts">
-  import { page } from '$app/state';
-  import { goto } from '$app/navigation';
-  import { writeExternalValue } from '@selvajs/ui';
-  import LineDrawerApp from '$lib/producers/line-drawer/LineDrawerApp.svelte';
+	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
+	import { writeExternalValue } from '@selvajs/ui';
+	import LineDrawerApp from '$lib/producers/line-drawer/LineDrawerApp.svelte';
 
-  const sessionId = $derived(page.url.searchParams.get('session') ?? '');
-  const targetInputId = $derived(page.url.searchParams.get('for') ?? '');
+	const sessionId = $derived(page.url.searchParams.get('session') ?? '');
+	const targetInputId = $derived(page.url.searchParams.get('for') ?? '');
 
-  function handleDone(payload: unknown) {
-    // For text inputs that hold JSON, stringify here so values[paramId] is a string
-    // when ComputeApp's transformInputParameter casts to text.
-    writeExternalValue({
-      scopeKey: sessionId,
-      inputId: targetInputId,
-      value: JSON.stringify(payload)
-    });
-    goto(`/preview?session=${encodeURIComponent(sessionId)}`);
-  }
+	function handleDone(payload: unknown) {
+		// For text inputs that hold JSON, stringify here so values[paramId] is a string
+		// when ComputeApp's transformInputParameter casts to text.
+		writeExternalValue({
+			scopeKey: sessionId,
+			inputId: targetInputId,
+			value: JSON.stringify(payload)
+		});
+		goto(`/preview?session=${encodeURIComponent(sessionId)}`);
+	}
 </script>
 
 <LineDrawerApp onDone={handleDone} />
@@ -121,8 +122,10 @@ Land it in `packages/builder-app/src/lib/producers/line-drawer/LineDrawerApp.sve
 **Builder-app** — already done generically; just add a route to the URL. Edit `packages/builder-app/src/routes/preview/+page.svelte` where the missing-inputs panel renders the link, and pick the producer based on whatever logic you want (today it's hardcoded to `json-paste`):
 
 ```svelte
-<a href={`/preview/producer/line-drawer?session=${encodeURIComponent(sessionId)}&for=${encodeURIComponent(ext.paramId)}`}>
-  Provide value →
+<a
+	href={`/preview/producer/line-drawer?session=${encodeURIComponent(sessionId)}&for=${encodeURIComponent(ext.paramId)}`}
+>
+	Provide value →
 </a>
 ```
 
@@ -132,11 +135,13 @@ If you want different inputs to route to different producers, branch here.
 
 ```svelte
 <ComputeApp ... externalScopeKey={data.currentDefinition}>
-  {#snippet missingExternalAction(ext)}
-    <a href={`/library/${page.params.guid}/producer/line-drawer?for=${encodeURIComponent(ext.paramId)}`}>
-      Provide value →
-    </a>
-  {/snippet}
+	{#snippet missingExternalAction(ext)}
+		<a
+			href={`/library/${page.params.guid}/producer/line-drawer?for=${encodeURIComponent(ext.paramId)}`}
+		>
+			Provide value →
+		</a>
+	{/snippet}
 </ComputeApp>
 ```
 
@@ -171,7 +176,7 @@ When you have the line drawer working, these become natural next steps:
 
 Today, when a user lands on a solver route, the definition is solved immediately using whatever inputs are declared in the UI schema (sliders, text fields, file uploads, etc.).
 
-We want to support **pre-steps** before the solve: tools that *generate* input data the solver then consumes. Examples:
+We want to support **pre-steps** before the solve: tools that _generate_ input data the solver then consumes. Examples:
 
 - Upload a STEP file → produces geometry → fed into a hidden `Geometry` input
 - Run a line-drawer app → produces JSON of lines+metadata → fed into a hidden `text` input
@@ -207,17 +212,17 @@ Builder-app convention: when a designer picks a producer for an input, default `
 
 ```ts
 interface PreStepProducer<TConfig, TOutput> {
-  id: string;                          // e.g. "line-builder", later "@vendor/line-builder"
-  displayName: string;
-  outputDataType: GhDataType;          // 'json' | 'geometry' | 'curves' | 'points' | ...
-  acceptableInputs: WidgetType[];      // which input widgets this can attach to
-  configSchema: ZodSchema<TConfig>;    // drives the config UI in builder-app
-  outputSchema: ZodSchema<TOutput>;    // validates produced data at runtime
-  ConfigEditor?: Component;            // optional; falls back to auto-form from configSchema
-  RunnerComponent: () => Promise<Component>;  // lazy-loaded; rendered in compute-app pre-step phase
-  toDataTree(output: TOutput, param: ParamMeta): DataTree;  // serializer at solve time
-  displayMode: 'inline' | 'fullscreen'; // inline panel vs. full-screen replacement
-  persist?: 'session' | 'platform';    // where to persist user output across reloads
+	id: string; // e.g. "line-builder", later "@vendor/line-builder"
+	displayName: string;
+	outputDataType: GhDataType; // 'json' | 'geometry' | 'curves' | 'points' | ...
+	acceptableInputs: WidgetType[]; // which input widgets this can attach to
+	configSchema: ZodSchema<TConfig>; // drives the config UI in builder-app
+	outputSchema: ZodSchema<TOutput>; // validates produced data at runtime
+	ConfigEditor?: Component; // optional; falls back to auto-form from configSchema
+	RunnerComponent: () => Promise<Component>; // lazy-loaded; rendered in compute-app pre-step phase
+	toDataTree(output: TOutput, param: ParamMeta): DataTree; // serializer at solve time
+	displayMode: 'inline' | 'fullscreen'; // inline panel vs. full-screen replacement
+	persist?: 'session' | 'platform'; // where to persist user output across reloads
 }
 ```
 
@@ -228,9 +233,9 @@ One module per producer. Self-contained. Adding a producer = one folder, one exp
 Each producer declares `acceptableInputs: WidgetType[]`. The builder-app dropdown filters producers by the current input's widget type:
 
 ```ts
-const compatible = registry.all().filter(p =>
-  p.acceptableInputs.includes(currentInput.widgetType)
-);
+const compatible = registry
+	.all()
+	.filter((p) => p.acceptableInputs.includes(currentInput.widgetType));
 ```
 
 If a future widget needs different handling, the producer adds the new widget type to `acceptableInputs` and branches in `toDataTree` on `param.widgetType`. Growth happens at the producer level, not the schema level.
@@ -256,6 +261,7 @@ packages/producers/
 ```
 
 Both apps import:
+
 ```ts
 import { defaultRegistry } from '@selvajs/producers';
 ```
@@ -268,7 +274,7 @@ Builder-app uses metadata + `configSchema` + `acceptableInputs`. Compute-app use
 
 ```ts
 interface IPlatformProducerPolicy {
-  enabledProducerIds(): string[] | 'all';  // filter applied in compute-app
+	enabledProducerIds(): string[] | 'all'; // filter applied in compute-app
 }
 ```
 
@@ -280,13 +286,14 @@ interface IPlatformProducerPolicy {
 The schema already has `visible: boolean` on `LayoutItemBase` ([ui-schema.json:234-238](../packages/schemas/ui-schema.json#L234-L238)). Today the builder-app UI only exposes the dynamic `visibilityCondition`; we add a static visibility toggle.
 
 Renderer filter (in `AppLayout`):
+
 ```ts
 function partitionInputs(schema) {
-  return {
-    userInputs:    schema.inputs.filter(i => !i.source || i.source.kind === 'user'),
-    preStepInputs: schema.inputs.filter(i => i.source?.kind === 'pre-step'),
-    hidden:        schema.inputs.filter(i => i.visible === false),
-  };
+	return {
+		userInputs: schema.inputs.filter((i) => !i.source || i.source.kind === 'user'),
+		preStepInputs: schema.inputs.filter((i) => i.source?.kind === 'pre-step'),
+		hidden: schema.inputs.filter((i) => i.visible === false)
+	};
 }
 ```
 
@@ -298,30 +305,30 @@ Replaces parapet's hand-written `buildLineValues` switch (see [parapet/.../compu
 
 ```ts
 async function gatherPreStepValues(
-  schema: Schema,
-  preStepOutputs: Record<string, unknown>  // collected from RunnerComponents
+	schema: Schema,
+	preStepOutputs: Record<string, unknown> // collected from RunnerComponents
 ): Promise<Record<string, unknown>> {
-  const merged: Record<string, unknown> = {};
-  for (const input of schema.inputs) {
-    if (input.source?.kind !== 'pre-step') continue;
-    const producer = registry.get(input.source.producer);
-    if (!producer) throw new Error(`Producer not available: ${input.source.producer}`);
-    merged[input.id] = producer.toDataTree(preStepOutputs[input.id], input);
-  }
-  return merged;
+	const merged: Record<string, unknown> = {};
+	for (const input of schema.inputs) {
+		if (input.source?.kind !== 'pre-step') continue;
+		const producer = registry.get(input.source.producer);
+		if (!producer) throw new Error(`Producer not available: ${input.source.producer}`);
+		merged[input.id] = producer.toDataTree(preStepOutputs[input.id], input);
+	}
+	return merged;
 }
 ```
 
-Zero hardcoded nicknames, zero `inputType` switches, zero per-producer branches. Adding a producer touches *only* `packages/producers/`.
+Zero hardcoded nicknames, zero `inputType` switches, zero per-producer branches. Adding a producer touches _only_ `packages/producers/`.
 
 ## Builder-app UI changes (BuilderGroupItem & input editor)
 
 Two concerns at different levels:
 
-| Concern | Lives on | Change |
-|---|---|---|
+| Concern                                   | Lives on                           | Change                                                                                                                                                |
+| ----------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Static visibility toggle (`item.visible`) | All layout items (groups + inputs) | Add eye-icon toggle in [BuilderGroupItem.svelte:522-528](../packages/builder-app/src/lib/components/builder/BuilderGroupItem.svelte#L522-L528) header |
-| Pre-step producer dropdown | Input items only | Add to input config editor; populated from registry, filtered by `acceptableInputs` |
+| Pre-step producer dropdown                | Input items only                   | Add to input config editor; populated from registry, filtered by `acceptableInputs`                                                                   |
 
 When the user picks a producer, default `visible: false` (with override).
 
@@ -338,11 +345,11 @@ When the user picks a producer, default `visible: false` (with override).
 
 ### Future options (design for the upgrade, don't build it)
 
-| Option | Adds producer at runtime? | Type safety | Security | Complexity |
-|---|---|---|---|---|
-| Lazy-loaded built-ins | No (redeploy) | Full | N/A | Low — **start here** |
-| Remote ESM modules | Yes (URL import) | Lost | Code signing, CSP, allowlist | High |
-| Iframe sandbox + postMessage | Yes (URL manifest) | Lost across boundary | Strong (origin isolation) | Medium-High |
+| Option                       | Adds producer at runtime? | Type safety          | Security                     | Complexity           |
+| ---------------------------- | ------------------------- | -------------------- | ---------------------------- | -------------------- |
+| Lazy-loaded built-ins        | No (redeploy)             | Full                 | N/A                          | Low — **start here** |
+| Remote ESM modules           | Yes (URL import)          | Lost                 | Code signing, CSP, allowlist | High                 |
+| Iframe sandbox + postMessage | Yes (URL manifest)        | Lost across boundary | Strong (origin isolation)    | Medium-High          |
 
 ### Two design choices that keep the upgrade additive
 
@@ -372,37 +379,39 @@ import { z } from 'zod';
 import type { PreStepProducer } from '../../contract';
 
 const ConfigSchema = z.object({
-  baseLength: z.number().default(1500),
-  baseHeight: z.number().default(100),
-  allowHeights: z.boolean().default(true),
-  requireClosed: z.boolean().default(false),
+	baseLength: z.number().default(1500),
+	baseHeight: z.number().default(100),
+	allowHeights: z.boolean().default(true),
+	requireClosed: z.boolean().default(false)
 });
 
 const OutputSchema = z.object({
-  lines: z.array(z.object({
-    v1: z.object({ x: z.number(), y: z.number() }),
-    v2: z.object({ x: z.number(), y: z.number() }),
-    heightStart: z.number(),
-    heightEnd: z.number(),
-    metadata: z.record(z.unknown()).optional(),
-  })),
+	lines: z.array(
+		z.object({
+			v1: z.object({ x: z.number(), y: z.number() }),
+			v2: z.object({ x: z.number(), y: z.number() }),
+			heightStart: z.number(),
+			heightEnd: z.number(),
+			metadata: z.record(z.unknown()).optional()
+		})
+	)
 });
 
 export const lineBuilderProducer: PreStepProducer<
-  z.infer<typeof ConfigSchema>,
-  z.infer<typeof OutputSchema>
+	z.infer<typeof ConfigSchema>,
+	z.infer<typeof OutputSchema>
 > = {
-  id: 'line-builder',
-  displayName: 'Line Builder',
-  outputDataType: 'json',
-  acceptableInputs: ['text'],          // GH side parses JSON via a script component
-  configSchema: ConfigSchema,
-  outputSchema: OutputSchema,
-  RunnerComponent: () => import('./Runner.svelte').then(m => m.default),
-  displayMode: 'fullscreen',
-  persist: 'platform',                 // line drawings worth persisting beyond session
-  toDataTree: (output, param) =>
-    TreeBuilder.replaceTreeValue([], param.nickname, JSON.stringify(output)),
+	id: 'line-builder',
+	displayName: 'Line Builder',
+	outputDataType: 'json',
+	acceptableInputs: ['text'], // GH side parses JSON via a script component
+	configSchema: ConfigSchema,
+	outputSchema: OutputSchema,
+	RunnerComponent: () => import('./Runner.svelte').then((m) => m.default),
+	displayMode: 'fullscreen',
+	persist: 'platform', // line drawings worth persisting beyond session
+	toDataTree: (output, param) =>
+		TreeBuilder.replaceTreeValue([], param.nickname, JSON.stringify(output))
 };
 ```
 
@@ -410,16 +419,16 @@ Schema using it:
 
 ```jsonc
 {
-  "id": "polyline-input",
-  "type": "input",
-  "widgetType": "text",
-  "paramId": "...",
-  "visible": false,
-  "source": {
-    "kind": "pre-step",
-    "producer": "line-builder",
-    "config": { "baseLength": 1500, "requireClosed": true }
-  }
+	"id": "polyline-input",
+	"type": "input",
+	"widgetType": "text",
+	"paramId": "...",
+	"visible": false,
+	"source": {
+		"kind": "pre-step",
+		"producer": "line-builder",
+		"config": { "baseLength": 1500, "requireClosed": true }
+	}
 }
 ```
 
@@ -427,16 +436,16 @@ Runtime: route loads schema → `partitionInputs` → finds 1 pre-step input →
 
 ## What this fixes vs. the parapet pattern
 
-| Concern | Parapet today | Selva with this design |
-|---|---|---|
-| Producer binding | Top-level `inputType: 'polyline-draw'` per route | Per-input `source.producer` in schema |
-| Input matching | Nickname string match (`findId('line-data')`) | Direct match by `input.id` |
-| Multiple pre-step inputs per def | Awkward (one `inputType` per route) | Free (each input declares its own producer) |
-| Adding a producer | New `inputType` branch + new route | New module in `packages/producers/src/builtin/` |
-| Restricting attachable inputs | Implicit (always means the line input) | Explicit `acceptableInputs` |
-| Routing | Separate routes (`/polyline-draw` → `/compute/[slug]`) | Same route, internal phase state |
+| Concern                          | Parapet today                                          | Selva with this design                          |
+| -------------------------------- | ------------------------------------------------------ | ----------------------------------------------- |
+| Producer binding                 | Top-level `inputType: 'polyline-draw'` per route       | Per-input `source.producer` in schema           |
+| Input matching                   | Nickname string match (`findId('line-data')`)          | Direct match by `input.id`                      |
+| Multiple pre-step inputs per def | Awkward (one `inputType` per route)                    | Free (each input declares its own producer)     |
+| Adding a producer                | New `inputType` branch + new route                     | New module in `packages/producers/src/builtin/` |
+| Restricting attachable inputs    | Implicit (always means the line input)                 | Explicit `acceptableInputs`                     |
+| Routing                          | Separate routes (`/polyline-draw` → `/compute/[slug]`) | Same route, internal phase state                |
 
-What we should *keep* from parapet:
+What we should _keep_ from parapet:
 
 1. **Persistence across reloads.** Parapet's `curveDataCache` (localStorage + Firebase fallback) means a user drawing 40 lines doesn't lose them on refresh. Bake into the producer contract via `persist?: 'session' | 'platform'`.
 2. **Presets.** Parapet's `DataTreePreset` lets users save/load prior compute settings. If pre-step outputs are JSON-serializable (they are by contract), they fit into the same preset mechanism.

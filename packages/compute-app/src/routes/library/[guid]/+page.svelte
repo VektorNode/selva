@@ -83,7 +83,9 @@
 >
 	{#snippet headerRight()}
 		{#if data.channel === 'draft'}
-			<span class="bg-warning/15 text-warning rounded-full px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide uppercase">
+			<span
+				class="bg-warning/15 text-warning rounded-full px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide uppercase"
+			>
 				Draft preview
 			</span>
 		{/if}

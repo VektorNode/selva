@@ -78,9 +78,7 @@
 
 <AppShell {homeUrl} title={preview.state.schema?.name ?? null} mode="fixed" showFooter>
 	{#snippet navItems()}
-		<Button variant="ghost" size="sm" onclick={() => navigateTo('/builder')}>
-			Schema Builder
-		</Button>
+		<Button variant="ghost" size="sm" onclick={() => navigateTo('/builder')}>Schema Builder</Button>
 		<Button variant="default" size="sm">Interactive Preview</Button>
 	{/snippet}
 	{#snippet rightContent()}
@@ -111,7 +109,8 @@
 					schema={preview.state.schema}
 					meshes={preview.state.displayMeshes}
 					isSolving={preview.wsState.isSolving}
-					showSolvingIndicator={preview.state.schema.instanceSolve !== false && solvingIndicator.show}
+					showSolvingIndicator={preview.state.schema.instanceSolve !== false &&
+						solvingIndicator.show}
 					hasPendingChanges={preview.state.hasPendingChanges}
 					bind:isViewerFullscreen
 					bind:values={preview.state.values}

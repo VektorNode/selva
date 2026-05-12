@@ -57,10 +57,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 			const org = await getOrganizationProvider().getOrg(SYSTEM_CONTEXT, parsed.data.granteeId);
 			if (!org) throw error(400, `Organization '${parsed.data.granteeId}' not found`);
 		} else {
-			const profile = await getUserProfileStore().getProfile(
-				SYSTEM_CONTEXT,
-				parsed.data.granteeId
-			);
+			const profile = await getUserProfileStore().getProfile(SYSTEM_CONTEXT, parsed.data.granteeId);
 			if (!profile) throw error(400, `User '${parsed.data.granteeId}' not found`);
 		}
 

@@ -92,7 +92,6 @@
 			</div>
 		{/if}
 
-
 		{#if onToggleStar}
 			<button
 				type="button"

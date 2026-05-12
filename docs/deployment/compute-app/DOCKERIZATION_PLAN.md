@@ -25,7 +25,7 @@ These are the picks the rest of the plan is written against. Alternatives are no
 - **Reverse proxy**: bundled Caddy by default; external proxy as a first-class alternative via a compose profile. The wizard asks once at install and persists the choice in `/etc/selva/install.json`.
 - **Reboot survival**: a generated `selva.service` systemd unit runs `docker compose up -d` at boot. Don't rely on `restart: unless-stopped` alone — that only re-runs containers that were already running, not ones that need to come up after a host reboot.
 - **Image versioning**: pin both tag and digest in compose (`image: ghcr.io/.../selva-compute:0.9.3@sha256:…`). Never `:latest` on prod. Rollback = revert two lines + `up -d`. No Watchtower.
-- **Resource caps**: `mem_limit: 1g` on the app *only* when host RAM ≥ 2GB. Always set `pids_limit: 256` and `restart: unless-stopped`. Leave `mem_limit` unset on 1GB hosts and resize the VM.
+- **Resource caps**: `mem_limit: 1g` on the app _only_ when host RAM ≥ 2GB. Always set `pids_limit: 256` and `restart: unless-stopped`. Leave `mem_limit` unset on 1GB hosts and resize the VM.
 - **Log rotation**: `json-file` driver with `max-size: 10m` and `max-file: 5` on every service. Default is unbounded and will fill the disk.
 - **Backup**: `backup.sh` wraps `restic` against the host bind-mount + `/etc/selva/{compute.env,Caddyfile,install.json}`. Restore = `restic restore` to a fresh path, then `systemctl start selva`.
 - **Distribution**: `Dockerfile` lives in monorepo (`packages/compute-app/Dockerfile`); deploy artifacts (`docker-compose.yml`, `Caddyfile.template`, `setup.sh`, `backup.sh`) live in `deploy/` at repo root. Self-host install line: `git clone --depth 1 https://github.com/yourorg/selva && cd selva/deploy && ./setup.sh`. No separate `selva-deploy` repo, no curl-pipe-bash.
@@ -66,7 +66,7 @@ deploy/update.sh 0.9.4                          # pin new tag+digest, pull, up -
 
 ## Deliverables
 
-1. **`packages/compute-app/Dockerfile`** — multi-stage build, runtime image targeted at small-as-feasible (don't commit to a number in docs; SvelteKit + pnpm workspace lands closer to 300–500 MB on `node:20-slim` and only approaches ~150 MB with `node:20-alpine` *and* `pnpm deploy` pruning).
+1. **`packages/compute-app/Dockerfile`** — multi-stage build, runtime image targeted at small-as-feasible (don't commit to a number in docs; SvelteKit + pnpm workspace lands closer to 300–500 MB on `node:20-slim` and only approaches ~150 MB with `node:20-alpine` _and_ `pnpm deploy` pruning).
 2. **`deploy/docker-compose.yml`** — `app` service always present; `caddy` service behind a `bundled-caddy` compose profile so external-proxy users don't run it. Bind-mount for the data dir, named volume for `caddy-data`. Pinned image tag+digest. Log rotation configured. One external env file (`/etc/selva/compute.env`).
 3. **`deploy/Caddyfile.template`** — domain-substitutable; auto-TLS when a domain is given, plain `:80` fallback when not. Easily editable post-install for users who want custom directives (basic auth, IP allowlists, headers).
 4. **`deploy/setup.sh`** — interactive wizard. Generates secrets, asks the [wizard prompts](#target-user-experience), writes `/etc/selva/{compute.env,Caddyfile,install.json,docker-compose.yml}`, installs `selva.service`, runs `systemctl enable --now selva`. Persists answers to `install.json` so updates can regenerate config without re-asking. ~200 lines of bash.
@@ -99,7 +99,7 @@ services:
     restart: unless-stopped
     env_file: /etc/selva/compute.env
     volumes:
-      - /srv/selva/data:/var/selva/data    # bind-mount; host path comes from install.json
+      - /srv/selva/data:/var/selva/data # bind-mount; host path comes from install.json
     # In external-proxy mode setup.sh adds:
     #   ports: ["127.0.0.1:3000:3000"]
     # In bundled-caddy mode the app stays on the docker network only.
@@ -108,22 +108,22 @@ services:
     logging:
       driver: json-file
       options:
-        max-size: "10m"
-        max-file: "5"
+        max-size: '10m'
+        max-file: '5'
 
   caddy:
-    profiles: ["bundled-caddy"]
+    profiles: ['bundled-caddy']
     image: caddy:2
     restart: unless-stopped
-    ports: ["80:80", "443:443"]
+    ports: ['80:80', '443:443']
     volumes:
       - /etc/selva/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
     logging:
       driver: json-file
       options:
-        max-size: "10m"
-        max-file: "5"
+        max-size: '10m'
+        max-file: '5'
 
 volumes:
   caddy-data:
@@ -187,22 +187,22 @@ These shape the work, decide before writing files.
 
 ### 1. Which env vars stay in `.env` vs move to in-app config?
 
-Hard requirement: anything needed *before* the data dir is readable must stay in env.
+Hard requirement: anything needed _before_ the data dir is readable must stay in env.
 
-| Var | Stays in env | Could move to in-app config |
-|-----|-------------|------------------------------|
-| `SELVA_HMAC_KEY` | ✅ (HMAC for cookies + share/invite tokens, needed at request time) | |
-| `SELVA_AT_REST_KEY` | ✅ (decrypts at-rest secrets including… itself, chicken-and-egg) | |
-| `DATA_PATH` | ✅ (literally where to find the rest) | |
-| `ORIGIN` | ✅ (CSRF check runs before any DB read) | |
-| `PROVIDER_KIND` (local/supabase) | ✅ | |
-| `SUPABASE_URL`, `SUPABASE_*_KEY` | ✅ (provider init reads at boot) | |
-| `BODY_SIZE_LIMIT` | ✅ (adapter-node reads at boot) | |
-| `ALLOW_INSECURE_COOKIES` | ✅ (cookie-setting middleware reads at boot) | |
-| Rhino.Compute URL + API key | | ✅ (already in admin UI) |
-| Feature flags (cross-org public, BYO compute, etc.) | | ✅ (already in `selva.config.ts`) |
-| OAuth provider list | | ✅ (could move; currently `SUPABASE_OAUTH_PROVIDERS`) |
-| `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` | ❓ — verify it's still load-bearing. If the in-app setup wizard already collects this, drop the env var rather than asking for it twice. | |
+| Var                                                 | Stays in env                                                                                                                             | Could move to in-app config                           |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `SELVA_HMAC_KEY`                                    | ✅ (HMAC for cookies + share/invite tokens, needed at request time)                                                                      |                                                       |
+| `SELVA_AT_REST_KEY`                                 | ✅ (decrypts at-rest secrets including… itself, chicken-and-egg)                                                                         |                                                       |
+| `DATA_PATH`                                         | ✅ (literally where to find the rest)                                                                                                    |                                                       |
+| `ORIGIN`                                            | ✅ (CSRF check runs before any DB read)                                                                                                  |                                                       |
+| `PROVIDER_KIND` (local/supabase)                    | ✅                                                                                                                                       |                                                       |
+| `SUPABASE_URL`, `SUPABASE_*_KEY`                    | ✅ (provider init reads at boot)                                                                                                         |                                                       |
+| `BODY_SIZE_LIMIT`                                   | ✅ (adapter-node reads at boot)                                                                                                          |                                                       |
+| `ALLOW_INSECURE_COOKIES`                            | ✅ (cookie-setting middleware reads at boot)                                                                                             |                                                       |
+| Rhino.Compute URL + API key                         |                                                                                                                                          | ✅ (already in admin UI)                              |
+| Feature flags (cross-org public, BYO compute, etc.) |                                                                                                                                          | ✅ (already in `selva.config.ts`)                     |
+| OAuth provider list                                 |                                                                                                                                          | ✅ (could move; currently `SUPABASE_OAUTH_PROVIDERS`) |
+| `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`                    | ❓ — verify it's still load-bearing. If the in-app setup wizard already collects this, drop the env var rather than asking for it twice. |                                                       |
 
 **Result**: env stays minimal. `setup.sh` only has to ask about provider, domain, admin email, data path — secrets are auto-generated. Most users never edit `compute.env` again after install.
 
@@ -247,7 +247,7 @@ Traefik: better at dynamic Docker discovery (auto-routes by container labels), b
 ### 7. Reboot survival: how? — **DECIDED: systemd unit running `docker compose up -d`**
 
 - **systemd unit** (chosen): `selva.service` invokes `docker compose up -d` at boot; OS handles ordering (`After=docker.service network-online.target`). Tested by the OS, not by the operator's memory.
-- **`restart: unless-stopped` alone**: insufficient — only re-runs *already-running* containers; doesn't help after a clean reboot if compose hasn't been invoked.
+- **`restart: unless-stopped` alone**: insufficient — only re-runs _already-running_ containers; doesn't help after a clean reboot if compose hasn't been invoked.
 - **`pm2 startup`-equivalent for Docker** (Compose's built-in restart policies + Docker daemon enable): partial; still relies on the daemon's own boot ordering and offers no clean stop hook.
 
 ### 8. Image versioning: `:latest`, tag, or tag+digest? — **DECIDED: tag + digest, never `:latest` on prod**

@@ -94,21 +94,14 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	try {
 		const provider = getComputeServerConfigStore();
 		const existing = await provider.getConfig(locals.ctx!);
-		const storedKeyById = new Map(
-			platformServers(existing).map((s) => [s.id, s.apiKey])
-		);
+		const storedKeyById = new Map(platformServers(existing).map((s) => [s.id, s.apiKey]));
 
 		const next: ComputeServerConfig[] = incoming.servers.map(
 			({ apiKey, sharedWith, ...rest }): PlatformComputeServer => ({
 				...rest,
 				scope: 'platform',
 				sharedWith: sharedWith === 'all' ? 'all' : [...sharedWith],
-				apiKey:
-					apiKey === null
-						? undefined
-						: apiKey
-							? apiKey
-							: storedKeyById.get(rest.id)
+				apiKey: apiKey === null ? undefined : apiKey ? apiKey : storedKeyById.get(rest.id)
 			})
 		);
 
@@ -119,4 +112,3 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		throw error(500, 'Failed to save compute config');
 	}
 };
-

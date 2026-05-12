@@ -64,6 +64,6 @@ export function decodeSecretKey(raw: string): Buffer {
 	if (buf.length === 32) return buf;
 	throw new Error(
 		'SELVA_AT_REST_KEY must be 32 bytes encoded as 64-char hex or base64. ' +
-			'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+			"Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
 	);
 }

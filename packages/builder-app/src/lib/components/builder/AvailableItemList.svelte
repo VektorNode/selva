@@ -162,7 +162,10 @@
 		// the current cluster (the destination's commit will have updated
 		// placedSet, which re-derives the cluster).
 		const current = clusters.find((c) => c.key === key);
-		localClusterItems = { ...localClusterItems, [key]: current ? [...current.items] : e.detail.items };
+		localClusterItems = {
+			...localClusterItems,
+			[key]: current ? [...current.items] : e.detail.items
+		};
 	}
 
 	function toggleType(type: string) {
@@ -252,12 +255,7 @@
 					type="single"
 					value={groupBy}
 					onValueChange={(value) => {
-						if (
-							value === 'none' ||
-							value === 'prefix' ||
-							value === 'type' ||
-							value === 'ghGroup'
-						) {
+						if (value === 'none' || value === 'prefix' || value === 'type' || value === 'ghGroup') {
 							groupBy = value;
 						}
 					}}
@@ -288,7 +286,9 @@
 							<button
 								type="button"
 								onclick={() => toggleType(type)}
-								class="rounded-full transition-opacity {active ? '' : 'opacity-60 hover:opacity-100'}"
+								class="rounded-full transition-opacity {active
+									? ''
+									: 'opacity-60 hover:opacity-100'}"
 								aria-pressed={active}
 							>
 								<Badge variant={active ? 'default' : 'outline'} class="cursor-pointer text-[10px]">
@@ -318,77 +318,75 @@
 					? 'No items match your filters.'
 					: emptyMessage}
 			/>
-		{:else}
-			{#if groupBy === 'none'}
-				{@const noneCluster = clusters[0]}
-				{#if noneCluster}
-					{@const noneItems = clusterItemsFor(noneCluster.key, noneCluster.items)}
-					<div
-						use:dndzone={{
-							items: noneItems,
-							type: DND_TYPE_PARAM,
-							dropFromOthersDisabled: true,
-							autoAriaDisabled: true,
-							flipDurationMs: 200,
-							dropTargetStyle: {}
-						}}
-						onconsider={(e) => handleClusterConsider(noneCluster.key, e)}
-						onfinalize={(e) => handleClusterFinalize(noneCluster.key, e)}
-						class="flex flex-col gap-0"
-					>
-						{#each noneItems as item (item.id)}
-							<DraggableItem {item} {tabs} {onAddToGroup} {onAddToNewGroup} />
-						{/each}
-					</div>
-				{/if}
-			{:else}
-				<div class="flex flex-col gap-2">
-					{#each clusters as cluster (cluster.key)}
-						{#if cluster.items.length > 0}
-							{@const items = clusterItemsFor(cluster.key, cluster.items)}
-							<Collapsible.Root
-								open={isClusterOpen(cluster.key)}
-								onOpenChange={(o) => setClusterOpen(cluster.key, o)}
-							>
-								<Collapsible.Trigger
-									class="hover:bg-accent/40 flex w-full items-center justify-between gap-2 rounded px-1 py-1.5 text-left transition-colors"
-								>
-									<span class="text-muted-foreground text-xs font-medium">
-										{cluster.label} ({cluster.items.length})
-									</span>
-									<ChevronDown
-										size={12}
-										class="text-muted-foreground transition-transform duration-200 {isClusterOpen(
-											cluster.key
-										)
-											? 'rotate-180'
-											: ''}"
-									/>
-								</Collapsible.Trigger>
-								<Collapsible.Content>
-									<div
-										use:dndzone={{
-											items,
-											type: DND_TYPE_PARAM,
-											dropFromOthersDisabled: true,
-											autoAriaDisabled: true,
-											flipDurationMs: 200,
-											dropTargetStyle: {}
-										}}
-										onconsider={(e) => handleClusterConsider(cluster.key, e)}
-										onfinalize={(e) => handleClusterFinalize(cluster.key, e)}
-										class="flex flex-col gap-0"
-									>
-										{#each items as item (item.id)}
-											<DraggableItem {item} {tabs} {onAddToGroup} {onAddToNewGroup} />
-										{/each}
-									</div>
-								</Collapsible.Content>
-							</Collapsible.Root>
-						{/if}
+		{:else if groupBy === 'none'}
+			{@const noneCluster = clusters[0]}
+			{#if noneCluster}
+				{@const noneItems = clusterItemsFor(noneCluster.key, noneCluster.items)}
+				<div
+					use:dndzone={{
+						items: noneItems,
+						type: DND_TYPE_PARAM,
+						dropFromOthersDisabled: true,
+						autoAriaDisabled: true,
+						flipDurationMs: 200,
+						dropTargetStyle: {}
+					}}
+					onconsider={(e) => handleClusterConsider(noneCluster.key, e)}
+					onfinalize={(e) => handleClusterFinalize(noneCluster.key, e)}
+					class="flex flex-col gap-0"
+				>
+					{#each noneItems as item (item.id)}
+						<DraggableItem {item} {tabs} {onAddToGroup} {onAddToNewGroup} />
 					{/each}
 				</div>
 			{/if}
+		{:else}
+			<div class="flex flex-col gap-2">
+				{#each clusters as cluster (cluster.key)}
+					{#if cluster.items.length > 0}
+						{@const items = clusterItemsFor(cluster.key, cluster.items)}
+						<Collapsible.Root
+							open={isClusterOpen(cluster.key)}
+							onOpenChange={(o) => setClusterOpen(cluster.key, o)}
+						>
+							<Collapsible.Trigger
+								class="hover:bg-accent/40 flex w-full items-center justify-between gap-2 rounded px-1 py-1.5 text-left transition-colors"
+							>
+								<span class="text-muted-foreground text-xs font-medium">
+									{cluster.label} ({cluster.items.length})
+								</span>
+								<ChevronDown
+									size={12}
+									class="text-muted-foreground transition-transform duration-200 {isClusterOpen(
+										cluster.key
+									)
+										? 'rotate-180'
+										: ''}"
+								/>
+							</Collapsible.Trigger>
+							<Collapsible.Content>
+								<div
+									use:dndzone={{
+										items,
+										type: DND_TYPE_PARAM,
+										dropFromOthersDisabled: true,
+										autoAriaDisabled: true,
+										flipDurationMs: 200,
+										dropTargetStyle: {}
+									}}
+									onconsider={(e) => handleClusterConsider(cluster.key, e)}
+									onfinalize={(e) => handleClusterFinalize(cluster.key, e)}
+									class="flex flex-col gap-0"
+								>
+									{#each items as item (item.id)}
+										<DraggableItem {item} {tabs} {onAddToGroup} {onAddToNewGroup} />
+									{/each}
+								</div>
+							</Collapsible.Content>
+						</Collapsible.Root>
+					{/if}
+				{/each}
+			</div>
 		{/if}
 	</Collapsible.Content>
 </Collapsible.Root>

@@ -4,15 +4,15 @@ Selva uses [Turborepo](https://turborepo.com) as the task runner across the pnpm
 
 ## Quick reference
 
-| Command | What it does |
-| --- | --- |
-| `pnpm build` | Build every package, in dep order, with caching |
-| `pnpm build --filter=@selvajs/compute-app` | Build only one package + its deps |
-| `pnpm check` | `svelte-check` across the workspace |
-| `pnpm type-check` | TypeScript type-check across the workspace |
-| `pnpm lint` | ESLint (not via turbo — runs once at root) |
-| `pnpm test` | `vitest run` across packages that have tests |
-| `pnpm generate` | Regenerate schema TypeScript + C# types |
+| Command                                    | What it does                                    |
+| ------------------------------------------ | ----------------------------------------------- |
+| `pnpm build`                               | Build every package, in dep order, with caching |
+| `pnpm build --filter=@selvajs/compute-app` | Build only one package + its deps               |
+| `pnpm check`                               | `svelte-check` across the workspace             |
+| `pnpm type-check`                          | TypeScript type-check across the workspace      |
+| `pnpm lint`                                | ESLint (not via turbo — runs once at root)      |
+| `pnpm test`                                | `vitest run` across packages that have tests    |
+| `pnpm generate`                            | Regenerate schema TypeScript + C# types         |
 
 `pnpm dev` and `pnpm dev:compute` are unchanged — they invoke a single package's `dev` script directly.
 

@@ -35,8 +35,8 @@
 				<p class="text-muted-foreground text-sm">
 					You were invited as <span class="font-medium">{data.email}</span>.
 					{#if data.mode === 'proxy'}
-						Click below to finish creating your account — your identity is verified by your
-						company sign-in.
+						Click below to finish creating your account — your identity is verified by your company
+						sign-in.
 					{:else}
 						Set a password to finish creating your account.
 					{/if}

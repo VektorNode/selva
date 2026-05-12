@@ -1,13 +1,6 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import {
-		Search,
-		toast,
-		PageContent,
-		SectionHeader,
-		ViewToggle,
-		EmptyState
-	} from '@selvajs/ui';
+	import { Search, toast, PageContent, SectionHeader, ViewToggle, EmptyState } from '@selvajs/ui';
 	import { ArrowRight, Filter as FilterIcon, X } from '@lucide/svelte';
 	import type { DefinitionRecord } from '@selvajs/platform';
 	import type { PageData } from './$types';
@@ -120,206 +113,208 @@
 </script>
 
 <AppHeader homeUrl="/library">
-<PageContent>
-	<div class="space-y-6">
-		<SectionHeader
-			eyebrow="Workspace"
-			title="Library"
-			description={`${filteredRecords.length} tool${filteredRecords.length === 1 ? '' : 's'}${
-				projectList.length > 0
-					? ` across ${projectList.length} project${projectList.length === 1 ? '' : 's'}`
-					: ''
-			}.`}
-		>
-			{#snippet actions()}
-				<ViewToggle mode={viewMode} onChange={(m) => (viewMode = m)} />
-			{/snippet}
-		</SectionHeader>
+	<PageContent>
+		<div class="space-y-6">
+			<SectionHeader
+				eyebrow="Workspace"
+				title="Library"
+				description={`${filteredRecords.length} tool${filteredRecords.length === 1 ? '' : 's'}${
+					projectList.length > 0
+						? ` across ${projectList.length} project${projectList.length === 1 ? '' : 's'}`
+						: ''
+				}.`}
+			>
+				{#snippet actions()}
+					<ViewToggle mode={viewMode} onChange={(m) => (viewMode = m)} />
+				{/snippet}
+			</SectionHeader>
 
-		<!-- Search + filter bar -->
-		<div class="flex flex-wrap items-center gap-2">
-			<div class="min-w-60 flex-1">
-				<Search
-					bind:value={searchQuery}
-					placeholder="Search tools, descriptions, tags…"
-					clearable
-					class="h-9 rounded-md text-sm"
-				/>
+			<!-- Search + filter bar -->
+			<div class="flex flex-wrap items-center gap-2">
+				<div class="min-w-60 flex-1">
+					<Search
+						bind:value={searchQuery}
+						placeholder="Search tools, descriptions, tags…"
+						clearable
+						class="h-9 rounded-md text-sm"
+					/>
+				</div>
+
+				{#if availableCategories.length > 0 || availableTags.length > 0 || projectList.length > 1}
+					<button
+						type="button"
+						onclick={() => (showFilters = !showFilters)}
+						class={`relative inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors ${
+							showFilters || activeFilterCount > 0
+								? 'border-border bg-accent text-accent-foreground'
+								: 'border-input bg-background text-foreground hover:bg-muted/40'
+						}`}
+					>
+						<FilterIcon class="h-3.5 w-3.5" />
+						Filters
+						{#if activeFilterCount > 0}
+							<span
+								class="bg-primary text-primary-foreground rounded-full px-1.5 py-px font-mono text-[10px]"
+							>
+								{activeFilterCount}
+							</span>
+						{/if}
+					</button>
+				{/if}
+
+				{#if hasAnyFilter}
+					<button
+						type="button"
+						onclick={clearFilters}
+						class="text-muted-foreground hover:text-foreground inline-flex h-9 items-center gap-1 rounded-md px-2 text-xs transition-colors"
+					>
+						<X class="h-3 w-3" />
+						Clear
+					</button>
+				{/if}
 			</div>
 
-			{#if availableCategories.length > 0 || availableTags.length > 0 || projectList.length > 1}
-				<button
-					type="button"
-					onclick={() => (showFilters = !showFilters)}
-					class={`relative inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors ${
-						showFilters || activeFilterCount > 0
-							? 'border-border bg-accent text-accent-foreground'
-							: 'border-input bg-background text-foreground hover:bg-muted/40'
-					}`}
-				>
-					<FilterIcon class="h-3.5 w-3.5" />
-					Filters
-					{#if activeFilterCount > 0}
-						<span
-							class="bg-primary text-primary-foreground rounded-full px-1.5 py-px font-mono text-[10px]"
-						>
-							{activeFilterCount}
-						</span>
-					{/if}
-				</button>
+			{#if showFilters}
+				<div class="border-border bg-card rounded-md border p-4">
+					<div class="grid gap-4 sm:grid-cols-3">
+						{#if projectList.length > 1}
+							<div class="space-y-1.5">
+								<label class="text-muted-foreground text-xs font-medium" for="filter-project">
+									Project
+								</label>
+								<select
+									id="filter-project"
+									bind:value={activeProjectId}
+									class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+								>
+									<option value={null}>All projects</option>
+									{#each projectList as p (p.id)}
+										<option value={p.id}>{p.name}</option>
+									{/each}
+								</select>
+							</div>
+						{/if}
+
+						{#if availableCategories.length > 0}
+							<div class="space-y-1.5">
+								<label class="text-muted-foreground text-xs font-medium" for="filter-category">
+									Category
+								</label>
+								<select
+									id="filter-category"
+									bind:value={activeCategory}
+									class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+								>
+									<option value={null}>All categories</option>
+									{#each availableCategories as cat (cat)}
+										<option value={cat}>{cat}</option>
+									{/each}
+								</select>
+							</div>
+						{/if}
+
+						{#if availableTags.length > 0}
+							<div class="space-y-1.5">
+								<label class="text-muted-foreground text-xs font-medium" for="filter-tag">
+									Tag
+								</label>
+								<select
+									id="filter-tag"
+									bind:value={activeTag}
+									class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+								>
+									<option value={null}>All tags</option>
+									{#each availableTags as tag (tag)}
+										<option value={tag}>#{tag}</option>
+									{/each}
+								</select>
+							</div>
+						{/if}
+					</div>
+				</div>
 			{/if}
 
-			{#if hasAnyFilter}
-				<button
-					type="button"
-					onclick={clearFilters}
-					class="text-muted-foreground hover:text-foreground inline-flex h-9 items-center gap-1 rounded-md px-2 text-xs transition-colors"
-				>
-					<X class="h-3 w-3" />
-					Clear
-				</button>
+			<!-- Recent runs (only with no filters) -->
+			{#if data.recentRuns.length > 0 && !hasAnyFilter}
+				<section>
+					<div class="mb-3 flex items-baseline justify-between">
+						<span class="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+							Recent runs
+						</span>
+						<span class="text-muted-foreground text-xs">Resume where you left off</span>
+					</div>
+					<div class="border-border bg-card overflow-hidden rounded-md border">
+						{#each data.recentRuns.slice(0, 5) as run, i (run.runId)}
+							<button
+								onclick={() => open(run.definitionId)}
+								disabled={loadingGuid === run.definitionId}
+								class={`group hover:bg-muted/40 grid w-full items-center gap-4 px-4 py-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+									i < Math.min(data.recentRuns.length, 5) - 1 ? 'border-border border-b' : ''
+								}`}
+								style="grid-template-columns: 1fr 120px auto"
+							>
+								<span class="truncate font-medium">{run.definitionName}</span>
+								<span class="text-muted-foreground font-mono text-xs">
+									{formatRelative(run.timestamp)}
+								</span>
+								<span
+									class="flex items-center gap-1 text-xs font-medium opacity-0 transition-opacity group-hover:opacity-100"
+								>
+									Resume <ArrowRight class="h-3 w-3" />
+								</span>
+							</button>
+						{/each}
+					</div>
+				</section>
+			{/if}
+
+			<!-- Tool grid (flat — no per-project sectioning) -->
+			{#if filteredRecords.length > 0}
+				{#if viewMode === 'grid'}
+					<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+						{#each filteredRecords as record (record.guid)}
+							<DefinitionCard
+								{record}
+								starred={starredIds.has(record.guid)}
+								loading={loadingGuid === record.guid}
+								starBusy={starBusyGuid === record.guid}
+								projectName={projectList.length > 1 ? projectName(record.projectId) : undefined}
+								projectVisibility={projectList.length > 1
+									? projectVisibility(record.projectId)
+									: undefined}
+								onOpen={(r) => open(r.guid)}
+								onToggleStar={toggleStar}
+							/>
+						{/each}
+					</div>
+				{:else}
+					<ToolListView
+						records={filteredRecords}
+						{starredIds}
+						{loadingGuid}
+						{starBusyGuid}
+						onOpen={open}
+						onToggleStar={toggleStar}
+					/>
+				{/if}
+			{:else if hasAnyFilter}
+				<EmptyState size="lg" title="No tools match your filters">
+					{#snippet actions()}
+						<button
+							class="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+							onclick={clearFilters}
+						>
+							Clear all filters
+						</button>
+					{/snippet}
+				</EmptyState>
+			{:else}
+				<EmptyState
+					size="lg"
+					title="No tools available yet"
+					description="Ask an admin to publish a Grasshopper definition."
+				/>
 			{/if}
 		</div>
-
-		{#if showFilters}
-			<div class="border-border bg-card rounded-md border p-4">
-				<div class="grid gap-4 sm:grid-cols-3">
-					{#if projectList.length > 1}
-						<div class="space-y-1.5">
-							<label class="text-muted-foreground text-xs font-medium" for="filter-project">
-								Project
-							</label>
-							<select
-								id="filter-project"
-								bind:value={activeProjectId}
-								class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-							>
-								<option value={null}>All projects</option>
-								{#each projectList as p (p.id)}
-									<option value={p.id}>{p.name}</option>
-								{/each}
-							</select>
-						</div>
-					{/if}
-
-					{#if availableCategories.length > 0}
-						<div class="space-y-1.5">
-							<label class="text-muted-foreground text-xs font-medium" for="filter-category">
-								Category
-							</label>
-							<select
-								id="filter-category"
-								bind:value={activeCategory}
-								class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-							>
-								<option value={null}>All categories</option>
-								{#each availableCategories as cat (cat)}
-									<option value={cat}>{cat}</option>
-								{/each}
-							</select>
-						</div>
-					{/if}
-
-					{#if availableTags.length > 0}
-						<div class="space-y-1.5">
-							<label class="text-muted-foreground text-xs font-medium" for="filter-tag">
-								Tag
-							</label>
-							<select
-								id="filter-tag"
-								bind:value={activeTag}
-								class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-							>
-								<option value={null}>All tags</option>
-								{#each availableTags as tag (tag)}
-									<option value={tag}>#{tag}</option>
-								{/each}
-							</select>
-						</div>
-					{/if}
-				</div>
-			</div>
-		{/if}
-
-		<!-- Recent runs (only with no filters) -->
-		{#if data.recentRuns.length > 0 && !hasAnyFilter}
-			<section>
-				<div class="mb-3 flex items-baseline justify-between">
-					<span class="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-						Recent runs
-					</span>
-					<span class="text-muted-foreground text-xs">Resume where you left off</span>
-				</div>
-				<div class="border-border bg-card overflow-hidden rounded-md border">
-					{#each data.recentRuns.slice(0, 5) as run, i (run.runId)}
-						<button
-							onclick={() => open(run.definitionId)}
-							disabled={loadingGuid === run.definitionId}
-							class={`group hover:bg-muted/40 grid w-full items-center gap-4 px-4 py-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-								i < Math.min(data.recentRuns.length, 5) - 1 ? 'border-border border-b' : ''
-							}`}
-							style="grid-template-columns: 1fr 120px auto"
-						>
-							<span class="truncate font-medium">{run.definitionName}</span>
-							<span class="text-muted-foreground font-mono text-xs">
-								{formatRelative(run.timestamp)}
-							</span>
-							<span
-								class="flex items-center gap-1 text-xs font-medium opacity-0 transition-opacity group-hover:opacity-100"
-							>
-								Resume <ArrowRight class="h-3 w-3" />
-							</span>
-						</button>
-					{/each}
-				</div>
-			</section>
-		{/if}
-
-		<!-- Tool grid (flat — no per-project sectioning) -->
-		{#if filteredRecords.length > 0}
-			{#if viewMode === 'grid'}
-				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-					{#each filteredRecords as record (record.guid)}
-						<DefinitionCard
-							{record}
-							starred={starredIds.has(record.guid)}
-							loading={loadingGuid === record.guid}
-							starBusy={starBusyGuid === record.guid}
-							projectName={projectList.length > 1 ? projectName(record.projectId) : undefined}
-							projectVisibility={projectList.length > 1 ? projectVisibility(record.projectId) : undefined}
-							onOpen={(r) => open(r.guid)}
-							onToggleStar={toggleStar}
-						/>
-					{/each}
-				</div>
-			{:else}
-				<ToolListView
-					records={filteredRecords}
-					{starredIds}
-					{loadingGuid}
-					{starBusyGuid}
-					onOpen={open}
-					onToggleStar={toggleStar}
-				/>
-			{/if}
-		{:else if hasAnyFilter}
-			<EmptyState size="lg" title="No tools match your filters">
-				{#snippet actions()}
-					<button
-						class="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
-						onclick={clearFilters}
-					>
-						Clear all filters
-					</button>
-				{/snippet}
-			</EmptyState>
-		{:else}
-			<EmptyState
-				size="lg"
-				title="No tools available yet"
-				description="Ask an admin to publish a Grasshopper definition."
-			/>
-		{/if}
-	</div>
-</PageContent>
+	</PageContent>
 </AppHeader>

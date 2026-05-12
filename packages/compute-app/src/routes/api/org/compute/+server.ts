@@ -142,12 +142,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		serverUrl: s.serverUrl,
 		timeoutMs: s.timeoutMs,
 		retryCount: s.retryCount,
-		apiKey:
-			s.apiKey === null
-				? undefined
-				: s.apiKey
-					? s.apiKey
-					: storedKeyById.get(s.id)
+		apiKey: s.apiKey === null ? undefined : s.apiKey ? s.apiKey : storedKeyById.get(s.id)
 	}));
 
 	// Validate the requested orgDefault is visible to this org. Build the

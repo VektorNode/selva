@@ -378,8 +378,7 @@ class SupabaseEmailLinkAuth implements IEmailLinkAuth {
 		email: string,
 		callbackUrl: string
 	): Promise<
-		| { ok: true }
-		| { ok: false; reason: 'rate_limited' | 'signup_disabled' | 'invalid_email' }
+		{ ok: true } | { ok: false; reason: 'rate_limited' | 'signup_disabled' | 'invalid_email' }
 	> {
 		const { error } = await this.anon.auth.signInWithOtp({
 			email,
@@ -396,8 +395,13 @@ class SupabaseEmailLinkAuth implements IEmailLinkAuth {
 		const status = (error as { status?: number }).status;
 		const code = (error as { code?: string }).code;
 		const message = error.message ?? '';
-		if (status === 429 || /rate.?limit/i.test(message)) return { ok: false, reason: 'rate_limited' };
-		if (code === 'otp_disabled' || code === 'signup_disabled' || /signup.*disabled/i.test(message)) {
+		if (status === 429 || /rate.?limit/i.test(message))
+			return { ok: false, reason: 'rate_limited' };
+		if (
+			code === 'otp_disabled' ||
+			code === 'signup_disabled' ||
+			/signup.*disabled/i.test(message)
+		) {
 			return { ok: false, reason: 'signup_disabled' };
 		}
 		if (code === 'validation_failed' || /invalid.*email|email.*invalid/i.test(message)) {

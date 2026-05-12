@@ -49,7 +49,10 @@ export function useBuilderActions(
 
 		if (!group) return;
 
-		const base: Pick<ItemDropOptions, 'schema' | 'group' | 'availableInputs' | 'availableOutputs' | 'targetItem' | 'dropPosition'> = {
+		const base: Pick<
+			ItemDropOptions,
+			'schema' | 'group' | 'availableInputs' | 'availableOutputs' | 'targetItem' | 'dropPosition'
+		> = {
 			schema,
 			group,
 			availableInputs: builderState.state.availableInputs,
@@ -60,10 +63,23 @@ export function useBuilderActions(
 
 		if (dropType === 'input') {
 			const param = data as DiscoveredInput;
-			handleItemDrop({ ...base, paramId: param.id, displayName: param.nickname || 'unnamed', itemType: 'input', paramType: param.type });
+			handleItemDrop({
+				...base,
+				paramId: param.id,
+				displayName: param.nickname || 'unnamed',
+				itemType: 'input',
+				paramType: param.type
+			});
 		} else if (dropType === 'output') {
 			const output = data as DiscoveredOutput;
-			handleItemDrop({ ...base, paramId: output.id, displayName: output.nickname, itemType: 'output', widgetType: output.type === 'file' ? 'file' : output.type === 'chart' ? 'chart' : 'text', outputType: output.type });
+			handleItemDrop({
+				...base,
+				paramId: output.id,
+				displayName: output.nickname,
+				itemType: 'output',
+				widgetType: output.type === 'file' ? 'file' : output.type === 'chart' ? 'chart' : 'text',
+				outputType: output.type
+			});
 		}
 	}
 
@@ -397,9 +413,7 @@ export function useBuilderActions(
 					group.label = groupName;
 				}
 			} else if (schema.layout.type === 'flat') {
-				group = schema.layout.groups.find(
-					(g) => g.label.toLowerCase() === groupName.toLowerCase()
-				);
+				group = schema.layout.groups.find((g) => g.label.toLowerCase() === groupName.toLowerCase());
 				if (!group) {
 					addGroup(schema, '');
 					group = schema.layout.groups[schema.layout.groups.length - 1];
@@ -439,8 +453,7 @@ export function useBuilderActions(
 					itemType: 'output',
 					availableInputs,
 					availableOutputs,
-					widgetType:
-						output.type === 'file' ? 'file' : output.type === 'chart' ? 'chart' : 'text',
+					widgetType: output.type === 'file' ? 'file' : output.type === 'chart' ? 'chart' : 'text',
 					outputType: output.type
 				});
 				totalAdded++;

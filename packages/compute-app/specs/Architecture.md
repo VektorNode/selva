@@ -206,7 +206,7 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
 - Discriminated by `scope`:
   - `PlatformComputeServer` — `(id, scope: 'platform', sharedWith: 'all' | string[], label, serverUrl, apiKey?, timeoutMs?, retryCount?)`. Created by `manage_compute`.
   - `OrgComputeServer` — `(id, scope: 'org', ownerOrgId, label, serverUrl, apiKey?, …)`. Created by an org owner/admin with `manage_org_compute`. Gated by `ALLOW_ORG_COMPUTE_OVERRIDE`.
-- **Defaults are layered:** global `defaultServerId` (must reference a platform server) plus per-org `orgDefaults[orgId]`. The global default is *always usable* by every org regardless of `sharedWith` — the "baseline" floor of the system.
+- **Defaults are layered:** global `defaultServerId` (must reference a platform server) plus per-org `orgDefaults[orgId]`. The global default is _always usable_ by every org regardless of `sharedWith` — the "baseline" floor of the system.
 - **Three-tier resolution**, narrowest wins:
   1. **Per-definition** (`Definition.computeServerId`) — pin to a specific server. Falls through silently if the pinned server is no longer visible to the project's org.
   2. **Per-org default** (`orgDefaults[orgId]`) — set by the org owner from servers visible to that org.
@@ -226,32 +226,32 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
 
 `@selvajs/platform` defines _only_ TypeScript interfaces, Zod schemas, pure rule functions, and shared utilities. No I/O. Two providers implement the contract today:
 
-|                     | `@selvajs/local-provider`                              | `@selvajs/supabase-provider`                    |
-| ------------------- | ------------------------------------------------------ | ----------------------------------------------- |
-| Identity            | `LocalAuthProvider` (HMAC sessions, password auth)     | `SupabaseAuthProvider` (JWT, MFA-capable)       |
-| Data                | JSON files under `DATA_PATH/`                          | Postgres + RLS                                  |
-| Blobs               | Filesystem under `DATA_PATH/`                          | Supabase Storage bucket                         |
-| User profile        | JSON file                                              | `user_profiles` table                           |
-| Tenancy enforcement | Code-level scoping in store methods                    | RLS policies, scoped via `adapterContext` (JWT) |
-| Use case            | Self-hosted single-tenant, dev, embedded               | Multi-tenant SaaS, managed                      |
+|                     | `@selvajs/local-provider`                          | `@selvajs/supabase-provider`                    |
+| ------------------- | -------------------------------------------------- | ----------------------------------------------- |
+| Identity            | `LocalAuthProvider` (HMAC sessions, password auth) | `SupabaseAuthProvider` (JWT, MFA-capable)       |
+| Data                | JSON files under `DATA_PATH/`                      | Postgres + RLS                                  |
+| Blobs               | Filesystem under `DATA_PATH/`                      | Supabase Storage bucket                         |
+| User profile        | JSON file                                          | `user_profiles` table                           |
+| Tenancy enforcement | Code-level scoping in store methods                | RLS policies, scoped via `adapterContext` (JWT) |
+| Use case            | Self-hosted single-tenant, dev, embedded           | Multi-tenant SaaS, managed                      |
 
 **Interfaces:**
 
-| Interface                    | Location                                                                                                |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `IAuthProvider`              | [`@selvajs/platform/auth`](../../platform/src/auth/interface.ts)                                        |
-| `IDataProvider`              | [`@selvajs/platform/data`](../../platform/src/data/interface.ts)                                        |
-| `IOrgStore`                  | [`@selvajs/platform/organizations`](../../platform/src/organizations/interface.ts)                      |
-| `IProjectStore`              | [`@selvajs/platform/projects`](../../platform/src/projects/interface.ts)                                |
-| `IDefinitionStore`           | [`@selvajs/platform/definitions`](../../platform/src/definitions/interface.ts)                          |
-| `IComputeServerStore`        | [`@selvajs/platform/computeServer`](../../platform/src/computeServer/interface.ts)                      |
-| `IShareLinkStore`            | [`@selvajs/platform/shareLinks`](../../platform/src/shareLinks/interface.ts)                            |
-| `IPlatformProjectGrantStore` | [`@selvajs/platform/platformProjects`](../../platform/src/platformProjects/interface.ts)                |
-| `IInviteStore`               | [`@selvajs/platform/invites`](../../platform/src/invites/interface.ts)                                  |
-| `IStorageProvider`           | [`@selvajs/platform/storage`](../../platform/src/storage/interface.ts)                                  |
-| `IUserProfileStore`          | [`@selvajs/platform/userProfile`](../../platform/src/userProfile/interface.ts)                          |
-| `IPlatformPermissionStore`   | [`@selvajs/platform/permissions`](../../platform/src/permissions/interface.ts)                          |
-| `IEventSink`                 | [`@selvajs/platform/events`](../../platform/src/events/interface.ts)                                    |
+| Interface                    | Location                                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------------------- |
+| `IAuthProvider`              | [`@selvajs/platform/auth`](../../platform/src/auth/interface.ts)                         |
+| `IDataProvider`              | [`@selvajs/platform/data`](../../platform/src/data/interface.ts)                         |
+| `IOrgStore`                  | [`@selvajs/platform/organizations`](../../platform/src/organizations/interface.ts)       |
+| `IProjectStore`              | [`@selvajs/platform/projects`](../../platform/src/projects/interface.ts)                 |
+| `IDefinitionStore`           | [`@selvajs/platform/definitions`](../../platform/src/definitions/interface.ts)           |
+| `IComputeServerStore`        | [`@selvajs/platform/computeServer`](../../platform/src/computeServer/interface.ts)       |
+| `IShareLinkStore`            | [`@selvajs/platform/shareLinks`](../../platform/src/shareLinks/interface.ts)             |
+| `IPlatformProjectGrantStore` | [`@selvajs/platform/platformProjects`](../../platform/src/platformProjects/interface.ts) |
+| `IInviteStore`               | [`@selvajs/platform/invites`](../../platform/src/invites/interface.ts)                   |
+| `IStorageProvider`           | [`@selvajs/platform/storage`](../../platform/src/storage/interface.ts)                   |
+| `IUserProfileStore`          | [`@selvajs/platform/userProfile`](../../platform/src/userProfile/interface.ts)           |
+| `IPlatformPermissionStore`   | [`@selvajs/platform/permissions`](../../platform/src/permissions/interface.ts)           |
+| `IEventSink`                 | [`@selvajs/platform/events`](../../platform/src/events/interface.ts)                     |
 
 Orchestration (cross-store flows that aren't part of the provider contract) lives in compute-app, not platform — e.g. [`DefinitionService`](../src/lib/server/definitions/DefinitionService.ts) coordinates `IDefinitionStore` + `IStorageProvider` for upload/publish.
 

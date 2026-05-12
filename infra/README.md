@@ -5,15 +5,16 @@ Caddy reverse proxy, and **automatic HTTPS via Let's Encrypt**.
 
 ## What gets created
 
-| Resource | Details |
-|---|---|
-| Static external IP | Reserved, survives VM stop/start and recreations |
-| Firewall rules | TCP 80 (ACME + redirect) and 443 (HTTPS) + 22 (SSH). The app on :3000 is firewalled and binds to `127.0.0.1` — never reachable directly. |
-| VM instance | e2-medium, Ubuntu 22.04, 20GB disk |
+| Resource           | Details                                                                                                                                  |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Static external IP | Reserved, survives VM stop/start and recreations                                                                                         |
+| Firewall rules     | TCP 80 (ACME + redirect) and 443 (HTTPS) + 22 (SSH). The app on :3000 is firewalled and binds to `127.0.0.1` — never reachable directly. |
+| VM instance        | e2-medium, Ubuntu 22.04, 20GB disk                                                                                                       |
 
 On first boot the VM runs [`scripts/setup.sh`](../scripts/setup.sh) (app build
-+ PM2) and [`scripts/setup-caddy.sh`](../scripts/setup-caddy.sh) (Caddy in
-prod mode, which provisions a Let's Encrypt cert for your domain).
+
+- PM2) and [`scripts/setup-caddy.sh`](../scripts/setup-caddy.sh) (Caddy in
+  prod mode, which provisions a Let's Encrypt cert for your domain).
 
 ---
 
@@ -164,11 +165,11 @@ remove it manually if you're done.
 
 ## Troubleshooting
 
-| Issue | Fix |
-|---|---|
-| Zone out of capacity | Change `zone` in `terraform.tfvars` and re-apply |
-| Startup script failed | SSH in: `cat /var/log/selva-startup.log` |
-| App not responding | `pm2 status` and `pm2 logs selva-compute` |
-| Caddy can't get a cert | `sudo journalctl -u caddy -f` — usually DNS hasn't propagated yet |
-| `dig` returns the IP but cert still fails | Check that port 80 is open in the GCP firewall (ACME HTTP-01 uses it) |
-| Want to expose :3000 directly | Don't. Caddy is the only ingress. Editing the firewall to open 3000 breaks the security model for forward-auth providers. |
+| Issue                                     | Fix                                                                                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Zone out of capacity                      | Change `zone` in `terraform.tfvars` and re-apply                                                                          |
+| Startup script failed                     | SSH in: `cat /var/log/selva-startup.log`                                                                                  |
+| App not responding                        | `pm2 status` and `pm2 logs selva-compute`                                                                                 |
+| Caddy can't get a cert                    | `sudo journalctl -u caddy -f` — usually DNS hasn't propagated yet                                                         |
+| `dig` returns the IP but cert still fails | Check that port 80 is open in the GCP firewall (ACME HTTP-01 uses it)                                                     |
+| Want to expose :3000 directly             | Don't. Caddy is the only ingress. Editing the firewall to open 3000 breaks the security model for forward-auth providers. |

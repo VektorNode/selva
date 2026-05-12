@@ -75,15 +75,9 @@ export function runPlatformProjectGrantStoreConformance(
 			const store = await createStore();
 			const projectId = await seed();
 			const granteeId = makeUuid();
-			await store.create(
-				SYSTEM_CONTEXT,
-				grant({ projectId, granteeType: 'org', granteeId })
-			);
+			await store.create(SYSTEM_CONTEXT, grant({ projectId, granteeType: 'org', granteeId }));
 			await expect(
-				store.create(
-					SYSTEM_CONTEXT,
-					grant({ projectId, granteeType: 'org', granteeId })
-				)
+				store.create(SYSTEM_CONTEXT, grant({ projectId, granteeType: 'org', granteeId }))
 			).rejects.toThrow();
 		});
 
@@ -135,9 +129,7 @@ export function runPlatformProjectGrantStoreConformance(
 
 		it('deleteByProject is a no-op when no grants exist', async () => {
 			const store = await createStore();
-			await expect(
-				store.deleteByProject(SYSTEM_CONTEXT, makeUuid())
-			).resolves.toBeUndefined();
+			await expect(store.deleteByProject(SYSTEM_CONTEXT, makeUuid())).resolves.toBeUndefined();
 		});
 
 		it('deleteByGranteeOrg removes only org grants matching the id, leaving user grants', async () => {
@@ -168,9 +160,7 @@ export function runPlatformProjectGrantStoreConformance(
 
 		it('deleteByGranteeOrg is a no-op when no matching grants exist', async () => {
 			const store = await createStore();
-			await expect(
-				store.deleteByGranteeOrg(SYSTEM_CONTEXT, makeUuid())
-			).resolves.toBeUndefined();
+			await expect(store.deleteByGranteeOrg(SYSTEM_CONTEXT, makeUuid())).resolves.toBeUndefined();
 		});
 	});
 }

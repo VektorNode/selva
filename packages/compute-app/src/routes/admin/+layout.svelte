@@ -1,14 +1,6 @@
 <script lang="ts">
 	import { SideNav, type SideNavItem } from '@selvajs/ui';
-	import {
-		Gauge,
-		Building2,
-		Folders,
-		Users,
-		Server,
-		Settings,
-		ScrollText
-	} from '@lucide/svelte';
+	import { Gauge, Building2, Folders, Users, Server, Settings, ScrollText } from '@lucide/svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 

@@ -125,8 +125,7 @@ export interface IEmailLinkAuth {
 		email: string,
 		callbackUrl: string
 	): Promise<
-		| { ok: true }
-		| { ok: false; reason: 'rate_limited' | 'signup_disabled' | 'invalid_email' }
+		{ ok: true } | { ok: false; reason: 'rate_limited' | 'signup_disabled' | 'invalid_email' }
 	>;
 
 	/**

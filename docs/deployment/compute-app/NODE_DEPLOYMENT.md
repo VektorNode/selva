@@ -35,19 +35,19 @@ Runtime config lives in `packages/compute-app/.env` and is loaded by Node itself
 
 ```javascript
 module.exports = {
-    apps: [
-        {
-            name: 'selva-compute',
-            script: './build/index.js',
-            cwd: './packages/compute-app',
-            node_args: '--env-file=.env',
-            instances: 1,             // local provider is not safe across processes
-            exec_mode: 'fork',        // switch to 'cluster' only with Supabase
-            autorestart: true,
-            max_memory_restart: '1G',
-            env: { NODE_ENV: 'production' }
-        }
-    ]
+	apps: [
+		{
+			name: 'selva-compute',
+			script: './build/index.js',
+			cwd: './packages/compute-app',
+			node_args: '--env-file=.env',
+			instances: 1, // local provider is not safe across processes
+			exec_mode: 'fork', // switch to 'cluster' only with Supabase
+			autorestart: true,
+			max_memory_restart: '1G',
+			env: { NODE_ENV: 'production' }
+		}
+	]
 };
 ```
 
@@ -98,10 +98,10 @@ pm2 restart selva-compute --update-env
 
 ## Troubleshooting
 
-| Issue                                 | Fix                                                                                 |
-| ------------------------------------- | ----------------------------------------------------------------------------------- |
-| Port in use                           | `lsof -i :3000` → change `PORT` in config                                           |
-| Can't reach Compute                   | `curl http://YOUR-COMPUTE/health` → verify the URL in `/admin/compute` and firewall |
-| Definitions not loading               | `ls $DATA_PATH/` → verify filenames match `?gh=` param                              |
+| Issue                                 | Fix                                                                                         |
+| ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Port in use                           | `lsof -i :3000` → change `PORT` in config                                                   |
+| Can't reach Compute                   | `curl http://YOUR-COMPUTE/health` → verify the URL in `/admin/compute` and firewall         |
+| Definitions not loading               | `ls $DATA_PATH/` → verify filenames match `?gh=` param                                      |
 | Body size limit exceeded              | Bump `BODY_SIZE_LIMIT` in `.env` (e.g. `150M`) and `pm2 restart selva-compute --update-env` |
-| `Missing required env var: DATA_PATH` | Local provider can't find the data dir — set `DATA_PATH` to an absolute path        |
+| `Missing required env var: DATA_PATH` | Local provider can't find the data dir — set `DATA_PATH` to an absolute path                |

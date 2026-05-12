@@ -76,10 +76,7 @@ export {
 // ---------------------------------------------------------------------------
 // platformProjects
 // ---------------------------------------------------------------------------
-export type {
-	PlatformProjectGrant,
-	PlatformProjectGranteeType
-} from './platformProjects/types.js';
+export type { PlatformProjectGrant, PlatformProjectGranteeType } from './platformProjects/types.js';
 export type { IPlatformProjectGrantStore } from './platformProjects/interface.js';
 export {
 	PlatformProjectGrantSchema,

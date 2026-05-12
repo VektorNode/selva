@@ -282,11 +282,7 @@
 		>
 			Sync with Grasshopper
 		</Button>
-		<Button
-			variant="outline"
-			size="sm"
-			onclick={() => (showBatchProcessor = !showBatchProcessor)}
-		>
+		<Button variant="outline" size="sm" onclick={() => (showBatchProcessor = !showBatchProcessor)}>
 			Batch Processors
 		</Button>
 	{/snippet}
@@ -419,8 +415,8 @@
 			<Dialog.Header>
 				<Dialog.Title>Unsaved layout changes</Dialog.Title>
 				<Dialog.Description>
-					You have unsaved edits to the schema. Save them before switching to Interactive
-					Preview, discard them, or cancel and stay here.
+					You have unsaved edits to the schema. Save them before switching to Interactive Preview,
+					discard them, or cancel and stay here.
 				</Dialog.Description>
 			</Dialog.Header>
 			<Dialog.Footer>

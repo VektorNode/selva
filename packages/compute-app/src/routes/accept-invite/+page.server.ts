@@ -36,8 +36,11 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const org = await getOrganizationProvider().getOrg(SYSTEM_CONTEXT, invite.orgId);
 	const auth = getAuthProvider();
-	const mode: 'password' | 'proxy' =
-		auth.passwordAuth ? 'password' : auth.proxyAuth && auth.createUser ? 'proxy' : 'password';
+	const mode: 'password' | 'proxy' = auth.passwordAuth
+		? 'password'
+		: auth.proxyAuth && auth.createUser
+			? 'proxy'
+			: 'password';
 	return {
 		ok: true as const,
 		email: invite.email,
@@ -70,8 +73,11 @@ export const actions = {
 		}
 
 		const auth = getAuthProvider();
-		const mode: 'password' | 'proxy' =
-			auth.passwordAuth ? 'password' : auth.proxyAuth && auth.createUser ? 'proxy' : 'password';
+		const mode: 'password' | 'proxy' = auth.passwordAuth
+			? 'password'
+			: auth.proxyAuth && auth.createUser
+				? 'proxy'
+				: 'password';
 
 		if (mode === 'password') {
 			if (!password || password.length < 8) {

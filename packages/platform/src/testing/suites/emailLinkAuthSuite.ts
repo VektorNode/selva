@@ -55,8 +55,7 @@ export function runEmailLinkAuthConformance(opts: EmailLinkAuthConformanceOption
 
 		it('verifyMagicLink returns null for an unrecognized verification type', async () => {
 			const { adapter } = await createAdapter();
-			const url =
-				'https://example.com/auth/email/callback?token_hash=abc&type=not-a-valid-type';
+			const url = 'https://example.com/auth/email/callback?token_hash=abc&type=not-a-valid-type';
 			expect(await adapter.verifyMagicLink(url)).toBeNull();
 		});
 

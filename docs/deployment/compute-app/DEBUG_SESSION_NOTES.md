@@ -7,6 +7,7 @@ SSH: `gcloud compute ssh selva@selva-compute-app --zone europe-west6-a`
 > **2026-05-11 update — env_file issue resolved.** Root cause: PM2's `env_file` is a `pm2-runtime`-only feature and is silently ignored by the regular `pm2 start` daemon. Switched `ecosystem.config.cjs` to `node_args: '--env-file=.env'` (Node >= 20.6 native flag), which loads `.env` reliably regardless of how PM2 was invoked. The `pm2 kill` + `set -a; . ./.env` workaround described below is no longer needed.
 >
 > **Env-var names below are pre-rename.** Same-day refactor (commit `16642ca9`, 2026-05-11) renamed the two local-provider secrets:
+>
 > - `SESSION_SECRET` → `SELVA_HMAC_KEY`
 > - `SELVA_SECRET_KEY` → `SELVA_AT_REST_KEY`
 >
@@ -34,6 +35,7 @@ SSH: `gcloud compute ssh selva@selva-compute-app --zone europe-west6-a`
 POST `/api/definitions` (file upload, 173 KB) returns **502** in the browser. Caddy log: `read tcp 127.0.0.1:NNN->127.0.0.1:3000: read: connection reset by peer`. Origin matches, cookie present.
 
 Confirmed NOT the cause:
+
 - CSRF / Origin (matches `ORIGIN` env exactly)
 - Body size (173 KB << 60 MB cap)
 - `.selva-data` permissions (writable, other endpoints write fine)
@@ -42,6 +44,7 @@ Confirmed NOT the cause:
 ## Root-cause hypothesis: OOM kill
 
 Foreground node test surfaced `Killed` on its own line — that's `SIGKILL` from the kernel, almost certainly the OOM killer. No stack trace because SIGKILL is unblockable. Explains:
+
 - Connection reset by peer (process vanished mid-request)
 - Empty PM2 err log (no exception path)
 - 173 KB file is enough to OOM if VM has ~1 GB RAM (e2-micro)
@@ -49,11 +52,13 @@ Foreground node test surfaced `Killed` on its own line — that's `SIGKILL` from
 ## Resume here
 
 1. **Confirm OOM diagnosis on the server:**
+
    ```bash
    sudo dmesg | grep -i -E 'killed process|out of memory|oom-killer' | tail -20
    free -h
    cat /proc/meminfo | grep -E 'MemTotal|MemAvailable|SwapTotal|SwapFree'
    ```
+
    Expect to see an OOM event matching the timestamp of an upload attempt.
 
 2. **Pick a fix:**
@@ -66,7 +71,7 @@ Foreground node test surfaced `Killed` on its own line — that's `SIGKILL` from
      sudo swapon /swapfile
      echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
      ```
-   - **Diagnostic only**: run with `node --max-old-space-size=512` to convert OOM-kill into a JS heap error with stack — tells us *which* allocation explodes, useful if a code fix is wanted instead of throwing more RAM at it.
+   - **Diagnostic only**: run with `node --max-old-space-size=512` to convert OOM-kill into a JS heap error with stack — tells us _which_ allocation explodes, useful if a code fix is wanted instead of throwing more RAM at it.
 
 3. **After fixing, verify:** retry browser upload, check `pm2 logs --err` (should stay clean), confirm 200 on `/api/definitions`.
 
@@ -103,19 +108,19 @@ DATA_PATH="/home/selva/selva/.selva-data"
 
 ```js
 module.exports = {
-  apps: [
-    {
-      name: 'selva-compute',
-      script: './build/index.js',
-      instances: 1,
-      exec_mode: 'fork',
-      autorestart: true,
-      watch: false,
-      max_memory_restart: '1G',
-      cwd: '/home/selva/selva/packages/compute-app',
-      env_file: '/home/selva/selva/packages/compute-app/.env'
-    }
-  ]
+	apps: [
+		{
+			name: 'selva-compute',
+			script: './build/index.js',
+			instances: 1,
+			exec_mode: 'fork',
+			autorestart: true,
+			watch: false,
+			max_memory_restart: '1G',
+			cwd: '/home/selva/selva/packages/compute-app',
+			env_file: '/home/selva/selva/packages/compute-app/.env'
+		}
+	]
 };
 ```
 

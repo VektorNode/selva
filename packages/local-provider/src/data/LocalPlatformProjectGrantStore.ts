@@ -35,10 +35,7 @@ export class LocalPlatformProjectGrantStore implements IPlatformProjectGrantStor
 		await writeJsonFile(this.filePath, data);
 	}
 
-	async listByProject(
-		_ctx: RequestContext,
-		projectId: string
-	): Promise<PlatformProjectGrant[]> {
+	async listByProject(_ctx: RequestContext, projectId: string): Promise<PlatformProjectGrant[]> {
 		const { grants } = await this.read();
 		return grants.filter((g) => g.projectId === projectId);
 	}
@@ -82,9 +79,7 @@ export class LocalPlatformProjectGrantStore implements IPlatformProjectGrantStor
 	async deleteByGranteeOrg(_ctx: RequestContext, orgId: string): Promise<void> {
 		const data = await this.read();
 		const before = data.grants.length;
-		data.grants = data.grants.filter(
-			(g) => !(g.granteeType === 'org' && g.granteeId === orgId)
-		);
+		data.grants = data.grants.filter((g) => !(g.granteeType === 'org' && g.granteeId === orgId));
 		if (data.grants.length !== before) await this.write(data);
 	}
 }
