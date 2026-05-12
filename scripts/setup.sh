@@ -198,7 +198,7 @@ corepack prepare --activate
 print_success "pnpm $(pnpm -v) activated"
 
 print_step "Running pnpm install..."
-pnpm install
+pnpm install --frozen-lockfile
 print_success "Dependencies installed"
 
 ################################################################################
@@ -209,22 +209,25 @@ print_header "Step 4: Environment Configuration"
 ENV_FILE="$INSTALL_DIR/packages/compute-app/.env"
 CONFIG_FILE="$INSTALL_DIR/ecosystem.config.cjs"
 
-# Check if .env already exists
-if [ -f "$ENV_FILE" ]; then
+# Decide whether to (re)write .env. Fresh install always writes; existing
+# install only rewrites if the user opts in interactively.
+RECONFIGURE=false
+if [ ! -f "$ENV_FILE" ]; then
+  RECONFIGURE=true
+elif [ "$INTERACTIVE" = true ]; then
   print_warning "Environment file already exists: $ENV_FILE"
-  if [ "$INTERACTIVE" = true ]; then
-    read -p "Do you want to reconfigure? (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-      print_step "Skipping environment configuration"
-    fi
+  read -p "Do you want to reconfigure? (y/n) " -n 1 -r
+  echo
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    RECONFIGURE=true
   else
-    print_step "Skipping environment configuration (use --interactive to reconfigure)"
+    print_step "Keeping existing environment configuration"
   fi
+else
+  print_step "Environment file exists — keeping as-is (run interactively to reconfigure)"
 fi
 
-# Interactive configuration if flag is set or file doesn't exist
-if [ ! -f "$ENV_FILE" ] || ([ "$INTERACTIVE" = true ] && [[ $REPLY =~ ^[Yy]$ ]]); then
+if [ "$RECONFIGURE" = true ]; then
   print_step "Configuring environment variables..."
 
   # Detect public IP address (fallback when no DOMAIN is provided)
@@ -323,6 +326,12 @@ ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES}"
 # production — every JSON endpoint inherits this cap and an unbounded body
 # is a DoS vector on routes that lack their own per-route cap.
 BODY_SIZE_LIMIT=150M
+
+# Installation directory — used by the admin dashboard's update endpoint
+# to locate scripts/update.sh. Without this, updates triggered from the UI
+# fall back to process.cwd() which only works when PM2 was started from
+# the repo root.
+INSTALL_DIR="${INSTALL_DIR}"
 EOF
 
   print_success "Environment file created: $ENV_FILE"
