@@ -7,7 +7,11 @@ import type {
 	UserProfile
 } from '@selvajs/platform';
 import { ProviderError, hasPermission } from '@selvajs/platform';
-import { createLocalUserDataStore, type LocalUserDataStore, type StoredUserData } from '../data/userData.js';
+import {
+	createLocalUserDataStore,
+	type LocalUserDataStore,
+	type StoredUserData
+} from '../data/userData.js';
 
 function toProfile(u: StoredUserData): UserProfile {
 	return {

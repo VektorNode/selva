@@ -1,5 +1,14 @@
 <script lang="ts">
-	import { Button, Card, DataTable, EmptyState, Input, Label, SectionHeader, toast } from '@selvajs/ui';
+	import {
+		Button,
+		Card,
+		DataTable,
+		EmptyState,
+		Input,
+		Label,
+		SectionHeader,
+		toast
+	} from '@selvajs/ui';
 	import { Folders, Plus } from '@lucide/svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import type { PlatformProjectRow, OrgOption } from './+page.server';
@@ -97,7 +106,8 @@
 						{/each}
 					</select>
 					<p class="text-muted-foreground text-xs">
-						Storage and compute use this org. Membership in this org does NOT grant access — visibility = platform overrides.
+						Storage and compute use this org. Membership in this org does NOT grant access —
+						visibility = platform overrides.
 					</p>
 				</div>
 				<div class="flex justify-end gap-2 pt-2">

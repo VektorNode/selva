@@ -83,8 +83,8 @@
 		{#if data.hasEmailLink}
 			<form method="POST" action="/auth/email/start?redirectTo=%2Fadmin" class="space-y-4">
 				<p class="text-muted-foreground text-center text-xs">
-					Sign in via email link. Set <code>BOOTSTRAP_INSTANCE_ADMIN_EMAIL</code> in your env to
-					control which address becomes admin.
+					Sign in via email link. Set <code>BOOTSTRAP_INSTANCE_ADMIN_EMAIL</code> in your env to control
+					which address becomes admin.
 				</p>
 				<div class="space-y-2">
 					<Label for="bootstrap-email">Email</Label>

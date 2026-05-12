@@ -95,10 +95,7 @@ export function resolveServerForOrg(
  * Lookup by id, regardless of scope or visibility. Useful in admin contexts
  * that need to display a server independently of the visibility filter.
  */
-export function findServerById(
-	config: ComputeConfig,
-	id: string
-): ComputeServerConfig | undefined {
+export function findServerById(config: ComputeConfig, id: string): ComputeServerConfig | undefined {
 	return config.servers.find((s) => s.id === id);
 }
 

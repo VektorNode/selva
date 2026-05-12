@@ -16,8 +16,6 @@
 	}
 
 	let { record, projectName, canEdit, onClose, onEdit, onOpenRunner, onShare }: Props = $props();
-
-
 </script>
 
 <Drawer {onClose}>
@@ -73,7 +71,9 @@
 
 		<div class="grid grid-cols-2 gap-x-4 gap-y-3">
 			<div>
-				<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">Updated</p>
+				<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">
+					Updated
+				</p>
 				<p class="mt-1 text-sm">{formatUpdated(record.updatedAt)} ago</p>
 			</div>
 			<div>
@@ -82,7 +82,9 @@
 			</div>
 			{#if record.category}
 				<div>
-					<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">Category</p>
+					<p class="text-muted-foreground font-mono text-[10.5px] tracking-widest uppercase">
+						Category
+					</p>
 					<p class="mt-1 text-sm">{record.category}</p>
 				</div>
 			{/if}

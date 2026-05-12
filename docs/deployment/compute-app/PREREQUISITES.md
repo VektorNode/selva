@@ -46,11 +46,11 @@ When behind a proxy, set `ORIGIN` to the public URL (no trailing slash) — Svel
 
 These apply regardless of provider:
 
-| Variable                 | Default       | Description                                            |
-| ------------------------ | ------------- | ------------------------------------------------------ |
-| `PORT`                   | `3000`        | Server port                                            |
-| `HOST`                   | `0.0.0.0`     | Bind address                                           |
-| `NODE_ENV`               | `development` | Set `production` to hide stack traces                  |
-| `ORIGIN`                 | —             | Public URL — **required behind a reverse proxy**       |
+| Variable                 | Default       | Description                                                                             |
+| ------------------------ | ------------- | --------------------------------------------------------------------------------------- |
+| `PORT`                   | `3000`        | Server port                                                                             |
+| `HOST`                   | `0.0.0.0`     | Bind address                                                                            |
+| `NODE_ENV`               | `development` | Set `production` to hide stack traces                                                   |
+| `ORIGIN`                 | —             | Public URL — **required behind a reverse proxy**                                        |
 | `BODY_SIZE_LIMIT`        | `150M`        | Cap for largest legitimate request (.gh + image). Suffix is K/M/G — `150mb` won't parse |
-| `ALLOW_INSECURE_COOKIES` | —             | Set `true` for HTTP-only deployments (dev/testing)     |
+| `ALLOW_INSECURE_COOKIES` | —             | Set `true` for HTTP-only deployments (dev/testing)                                      |

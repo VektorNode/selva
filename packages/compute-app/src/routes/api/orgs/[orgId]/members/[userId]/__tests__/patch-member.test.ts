@@ -35,7 +35,7 @@ afterEach(async () => {
 });
 
 describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
-	it('owner can change a member\'s role to admin', async () => {
+	it("owner can change a member's role to admin", async () => {
 		tp = await freshProviders();
 		// seedAcme gives alice@acme as admin and bob@acme as member, plus an
 		// org whose ownerId points at alice. Add a real owner-role user so the

@@ -111,10 +111,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			return json(project, { status: 201 });
 		} catch (err) {
 			if (isNameConflict(err)) {
-				throw error(
-					409,
-					'A project with that name already exists in the host organization.'
-				);
+				throw error(409, 'A project with that name already exists in the host organization.');
 			}
 			if (isSlugConflict(err)) continue;
 			handleApiError(err, 'Failed to create platform project');

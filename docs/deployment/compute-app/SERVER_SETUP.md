@@ -48,15 +48,15 @@ bash setup-caddy.sh --domain app.example.com  # HTTPS via Let's Encrypt
 
 Vars `setup.sh` itself reads:
 
-| Variable         | Default                               | Description                                                                                       |
-| ---------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `REPO_URL`       | `git@github.com:VektorNode/selva.git` | Repository SSH URL                                                                                |
-| `DATA_PATH`      | `../../.selva-data`                   | Local provider data directory, relative to `packages/compute-app/` (resolves to `.selva-data/` at the repo root). |
-| `SELVA_HMAC_KEY`     | auto-generated                    | HMAC signing key for sessions + share/invite tokens (local provider only)                         |
-| `SELVA_AT_REST_KEY`  | auto-generated                    | AES key encrypting the Rhino.Compute API key at rest (local provider only)                        |
-| `PORT`           | `3000`                                | Internal app port                                                                                 |
-| `ORIGIN`         | `http://your-server-ip`               | Public-facing URL — no port suffix, no trailing slash                                             |
-| `INSTALL_DIR`    | `~/selva`                             | Install directory                                                                                 |
+| Variable            | Default                               | Description                                                                                                       |
+| ------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `REPO_URL`          | `git@github.com:VektorNode/selva.git` | Repository SSH URL                                                                                                |
+| `DATA_PATH`         | `../../.selva-data`                   | Local provider data directory, relative to `packages/compute-app/` (resolves to `.selva-data/` at the repo root). |
+| `SELVA_HMAC_KEY`    | auto-generated                        | HMAC signing key for sessions + share/invite tokens (local provider only)                                         |
+| `SELVA_AT_REST_KEY` | auto-generated                        | AES key encrypting the Rhino.Compute API key at rest (local provider only)                                        |
+| `PORT`              | `3000`                                | Internal app port                                                                                                 |
+| `ORIGIN`            | `http://your-server-ip`               | Public-facing URL — no port suffix, no trailing slash                                                             |
+| `INSTALL_DIR`       | `~/selva`                             | Install directory                                                                                                 |
 
 Rhino.Compute URL + API key are configured post-install via the admin dashboard
 (`/admin/compute`), not env vars.

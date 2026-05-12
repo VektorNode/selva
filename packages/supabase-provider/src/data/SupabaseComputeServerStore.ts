@@ -76,10 +76,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		const platformOnly = servers.filter(isPlatformServer);
 
 		// Replace-all of platform rows.
-		const { error: delErr } = await client
-			.from('compute_servers')
-			.delete()
-			.eq('scope', 'platform');
+		const { error: delErr } = await client.from('compute_servers').delete().eq('scope', 'platform');
 		if (delErr) throw mapError(delErr);
 
 		if (platformOnly.length > 0) {
@@ -114,9 +111,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		defaultServerId?: string | null
 	): Promise<void> {
 		const client = this.clients.forRequest(ctx);
-		const orgOnly = servers
-			.filter(isOrgServer)
-			.map((s) => ({ ...s, ownerOrgId: orgId }));
+		const orgOnly = servers.filter(isOrgServer).map((s) => ({ ...s, ownerOrgId: orgId }));
 
 		const { error: delErr } = await client
 			.from('compute_servers')
@@ -146,11 +141,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		}
 	}
 
-	async setOrgDefault(
-		ctx: RequestContext,
-		orgId: string,
-		serverId: string | null
-	): Promise<void> {
+	async setOrgDefault(ctx: RequestContext, orgId: string, serverId: string | null): Promise<void> {
 		const client = this.clients.forRequest(ctx);
 		if (serverId === null) {
 			const { error } = await client
@@ -206,10 +197,7 @@ interface ServerRow {
 	retry_count: number | null;
 }
 
-function rowToServer(
-	row: ServerRow,
-	sharedByServer: Map<string, string[]>
-): ComputeServerConfig {
+function rowToServer(row: ServerRow, sharedByServer: Map<string, string[]>): ComputeServerConfig {
 	const common = {
 		id: row.id,
 		label: row.label,

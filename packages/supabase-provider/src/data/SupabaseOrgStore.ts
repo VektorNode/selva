@@ -201,10 +201,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.eq('org_id', id);
 		if (cdErr) throw mapError(cdErr);
 
-		const { error: shErr } = await client
-			.from('compute_server_shares')
-			.delete()
-			.eq('org_id', id);
+		const { error: shErr } = await client.from('compute_server_shares').delete().eq('org_id', id);
 		if (shErr) throw mapError(shErr);
 
 		const { error: csErr } = await client

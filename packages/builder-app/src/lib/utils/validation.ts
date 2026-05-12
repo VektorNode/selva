@@ -16,9 +16,7 @@ export function validateRuleValue(
 
 	// Validate 'in', 'notIn', and 'containsAny' operators (which use rule.values array)
 	if (
-		(rule.operator === 'in' ||
-			rule.operator === 'notIn' ||
-			rule.operator === 'containsAny') &&
+		(rule.operator === 'in' || rule.operator === 'notIn' || rule.operator === 'containsAny') &&
 		rule.values
 	) {
 		if (!Array.isArray(rule.values) || rule.values.length === 0) {

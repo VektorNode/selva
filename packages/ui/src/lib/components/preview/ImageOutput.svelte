@@ -93,7 +93,7 @@
 
 <div
 	bind:this={wrapperEl}
-	class="group relative overflow-hidden rounded border border-border {isFullscreen
+	class="group rounded relative overflow-hidden border border-border {isFullscreen
 		? 'bg-background'
 		: ''}"
 >
@@ -131,7 +131,7 @@
 						onclick={handleDownload}
 						disabled={downloading}
 						title="Download image"
-						class="rounded p-1.5 flex items-center text-foreground border border-border bg-background/80 backdrop-blur-sm transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+						class="rounded p-1.5 backdrop-blur-sm flex items-center border border-border bg-background/80 text-foreground transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
 					>
 						<Download size={14} />
 					</button>
@@ -141,7 +141,7 @@
 					<button
 						onclick={toggleFullscreen}
 						title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-						class="rounded p-1.5 flex items-center text-foreground border border-border bg-background/80 backdrop-blur-sm transition-colors hover:bg-background"
+						class="rounded p-1.5 backdrop-blur-sm flex items-center border border-border bg-background/80 text-foreground transition-colors hover:bg-background"
 					>
 						{#if isFullscreen}
 							<Minimize size={14} />

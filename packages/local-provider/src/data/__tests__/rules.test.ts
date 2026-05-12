@@ -71,7 +71,9 @@ function orgMember(role: OrgMember['role'], userId = 'u-2'): OrgMember {
 }
 
 /** Default non-platform fields for ProjectAccessInput. */
-function accessInput(overrides: Partial<ProjectAccessInput> & Pick<ProjectAccessInput, 'project'>): ProjectAccessInput {
+function accessInput(
+	overrides: Partial<ProjectAccessInput> & Pick<ProjectAccessInput, 'project'>
+): ProjectAccessInput {
 	return {
 		orgPermissions: [],
 		platformPermissions: [],
@@ -85,7 +87,9 @@ function accessInput(overrides: Partial<ProjectAccessInput> & Pick<ProjectAccess
 	};
 }
 
-function def(overrides: Partial<import('@selvajs/platform').DefinitionRecord> = {}): import('@selvajs/platform').DefinitionRecord {
+function def(
+	overrides: Partial<import('@selvajs/platform').DefinitionRecord> = {}
+): import('@selvajs/platform').DefinitionRecord {
 	const now = new Date().toISOString();
 	return {
 		guid: 'd-1',
@@ -123,50 +127,56 @@ function defAccessInput(
 describe('canView', () => {
 	it('private: returns false without a project member', () => {
 		expect(
-			canView(accessInput({
-				project: project({ visibility: 'private' }),
-				allowCrossOrgPublic: true
-			}))
+			canView(
+				accessInput({
+					project: project({ visibility: 'private' }),
+					allowCrossOrgPublic: true
+				})
+			)
 		).toBe(false);
 	});
 
 	it('private: viewer role is sufficient', () => {
 		expect(
-			canView(accessInput({
-				project: project({ visibility: 'private' }),
-				member: member('viewer'),
-				allowCrossOrgPublic: true
-			}))
+			canView(
+				accessInput({
+					project: project({ visibility: 'private' }),
+					member: member('viewer'),
+					allowCrossOrgPublic: true
+				})
+			)
 		).toBe(true);
 	});
 
 	it('org: org member passes, non-member fails', () => {
 		const pub = project({ visibility: 'org' });
 		expect(
-			canView(accessInput({ project: pub, orgMember: orgMember('member'), allowCrossOrgPublic: true }))
+			canView(
+				accessInput({ project: pub, orgMember: orgMember('member'), allowCrossOrgPublic: true })
+			)
 		).toBe(true);
-		expect(
-			canView(accessInput({ project: pub, allowCrossOrgPublic: true }))
-		).toBe(false);
+		expect(canView(accessInput({ project: pub, allowCrossOrgPublic: true }))).toBe(false);
 	});
 
 	it('public + cross-org flag on: any authenticated user passes', () => {
 		expect(
-			canView(accessInput({
-				project: project({ visibility: 'public' }),
-				allowCrossOrgPublic: true
-			}))
+			canView(
+				accessInput({
+					project: project({ visibility: 'public' }),
+					allowCrossOrgPublic: true
+				})
+			)
 		).toBe(true);
 	});
 
 	it('public + cross-org flag off: requires org membership (within-org public)', () => {
 		const pub = project({ visibility: 'public' });
 		expect(
-			canView(accessInput({ project: pub, orgMember: orgMember('member'), allowCrossOrgPublic: false }))
+			canView(
+				accessInput({ project: pub, orgMember: orgMember('member'), allowCrossOrgPublic: false })
+			)
 		).toBe(true);
-		expect(
-			canView(accessInput({ project: pub, allowCrossOrgPublic: false }))
-		).toBe(false);
+		expect(canView(accessInput({ project: pub, allowCrossOrgPublic: false }))).toBe(false);
 	});
 
 	it('null project denies', () => {
@@ -179,64 +189,94 @@ describe('canView', () => {
 	// including org leadership. Reclaim is the explicit escalation path.
 	it('private + org owner (no project membership): still denied', () => {
 		expect(
-			canView(accessInput({
-				project: project({ visibility: 'private' }),
-				orgMember: orgMember('owner')
-			}))
+			canView(
+				accessInput({
+					project: project({ visibility: 'private' }),
+					orgMember: orgMember('owner')
+				})
+			)
 		).toBe(false);
 	});
 
 	it('private + org admin (no project membership): still denied', () => {
 		expect(
-			canView(accessInput({
-				project: project({ visibility: 'private' }),
-				orgMember: orgMember('admin')
-			}))
+			canView(
+				accessInput({
+					project: project({ visibility: 'private' }),
+					orgMember: orgMember('admin')
+				})
+			)
 		).toBe(false);
 	});
 
 	it('private + org member (no project membership): denied', () => {
 		expect(
-			canView(accessInput({
-				project: project({ visibility: 'private' }),
-				orgMember: orgMember('member')
-			}))
+			canView(
+				accessInput({
+					project: project({ visibility: 'private' }),
+					orgMember: orgMember('member')
+				})
+			)
 		).toBe(false);
 	});
 
 	it('platform: instance_admin passes', () => {
 		expect(
-			canView(accessInput({
-				project: project({ visibility: 'platform' }),
-				platformPermissions: ['instance_admin']
-			}))
+			canView(
+				accessInput({
+					project: project({ visibility: 'platform' }),
+					platformPermissions: ['instance_admin']
+				})
+			)
 		).toBe(true);
 	});
 
 	it('platform: user grant passes regardless of canSolve value', () => {
 		expect(
-			canView(accessInput({
-				project: project({ visibility: 'platform' }),
-				userId: 'u-grantee',
-				platformGrants: [{ id: 'g-1', projectId: 'p-1', granteeType: 'user', granteeId: 'u-grantee', canSolve: false, createdBy: 'u-admin', createdAt: new Date().toISOString() }]
-			}))
+			canView(
+				accessInput({
+					project: project({ visibility: 'platform' }),
+					userId: 'u-grantee',
+					platformGrants: [
+						{
+							id: 'g-1',
+							projectId: 'p-1',
+							granteeType: 'user',
+							granteeId: 'u-grantee',
+							canSolve: false,
+							createdBy: 'u-admin',
+							createdAt: new Date().toISOString()
+						}
+					]
+				})
+			)
 		).toBe(true);
 	});
 
 	it('platform: org grant passes for acting org', () => {
 		expect(
-			canView(accessInput({
-				project: project({ visibility: 'platform' }),
-				actingOrgId: 'o-grantee',
-				platformGrants: [{ id: 'g-1', projectId: 'p-1', granteeType: 'org', granteeId: 'o-grantee', canSolve: false, createdBy: 'u-admin', createdAt: new Date().toISOString() }]
-			}))
+			canView(
+				accessInput({
+					project: project({ visibility: 'platform' }),
+					actingOrgId: 'o-grantee',
+					platformGrants: [
+						{
+							id: 'g-1',
+							projectId: 'p-1',
+							granteeType: 'org',
+							granteeId: 'o-grantee',
+							canSolve: false,
+							createdBy: 'u-admin',
+							createdAt: new Date().toISOString()
+						}
+					]
+				})
+			)
 		).toBe(true);
 	});
 
 	it('platform: no grant, no admin → denied', () => {
-		expect(
-			canView(accessInput({ project: project({ visibility: 'platform' }) }))
-		).toBe(false);
+		expect(canView(accessInput({ project: project({ visibility: 'platform' }) }))).toBe(false);
 	});
 });
 
@@ -258,30 +298,56 @@ describe('canSolve', () => {
 
 	it('platform: instance_admin passes', () => {
 		expect(
-			canSolve(accessInput({
-				project: project({ visibility: 'platform' }),
-				platformPermissions: ['instance_admin']
-			}))
+			canSolve(
+				accessInput({
+					project: project({ visibility: 'platform' }),
+					platformPermissions: ['instance_admin']
+				})
+			)
 		).toBe(true);
 	});
 
 	it('platform: canSolve=true grant passes', () => {
 		expect(
-			canSolve(accessInput({
-				project: project({ visibility: 'platform' }),
-				userId: 'u-grantee',
-				platformGrants: [{ id: 'g-1', projectId: 'p-1', granteeType: 'user', granteeId: 'u-grantee', canSolve: true, createdBy: 'u-admin', createdAt: new Date().toISOString() }]
-			}))
+			canSolve(
+				accessInput({
+					project: project({ visibility: 'platform' }),
+					userId: 'u-grantee',
+					platformGrants: [
+						{
+							id: 'g-1',
+							projectId: 'p-1',
+							granteeType: 'user',
+							granteeId: 'u-grantee',
+							canSolve: true,
+							createdBy: 'u-admin',
+							createdAt: new Date().toISOString()
+						}
+					]
+				})
+			)
 		).toBe(true);
 	});
 
 	it('platform: view-only grant (canSolve=false) is denied for solve', () => {
 		expect(
-			canSolve(accessInput({
-				project: project({ visibility: 'platform' }),
-				userId: 'u-grantee',
-				platformGrants: [{ id: 'g-1', projectId: 'p-1', granteeType: 'user', granteeId: 'u-grantee', canSolve: false, createdBy: 'u-admin', createdAt: new Date().toISOString() }]
-			}))
+			canSolve(
+				accessInput({
+					project: project({ visibility: 'platform' }),
+					userId: 'u-grantee',
+					platformGrants: [
+						{
+							id: 'g-1',
+							projectId: 'p-1',
+							granteeType: 'user',
+							granteeId: 'u-grantee',
+							canSolve: false,
+							createdBy: 'u-admin',
+							createdAt: new Date().toISOString()
+						}
+					]
+				})
+			)
 		).toBe(false);
 	});
 });
@@ -300,12 +366,14 @@ describe('canEdit', () => {
 
 	it('manage_definitions org-perm does not grant edit', () => {
 		expect(
-			canEdit(accessInput({
-				orgPermissions: ['manage_definitions'],
-				project: project({ visibility: 'public' }),
-				orgMember: orgMember('member'),
-				allowCrossOrgPublic: true
-			}))
+			canEdit(
+				accessInput({
+					orgPermissions: ['manage_definitions'],
+					project: project({ visibility: 'public' }),
+					orgMember: orgMember('member'),
+					allowCrossOrgPublic: true
+				})
+			)
 		).toBe(false);
 	});
 
@@ -335,7 +403,13 @@ describe('canEditProjectSettings', () => {
 	it('project owner yes; editor no', () => {
 		const base = accessInput({ project: project(), allowCrossOrgPublic: true });
 		expect(canEditProjectSettings({ ...base, member: member('owner') })).toBe(true);
-		expect(canEditProjectSettings({ ...base, orgPermissions: ['manage_definitions', 'manage_projects'], member: member('editor') })).toBe(false);
+		expect(
+			canEditProjectSettings({
+				...base,
+				orgPermissions: ['manage_definitions', 'manage_projects'],
+				member: member('editor')
+			})
+		).toBe(false);
 	});
 
 	it('platform project: instance_admin passes; non-admin denied', () => {
@@ -416,77 +490,91 @@ describe('canEditDefinition', () => {
 	it('container project: only project editors/owners', () => {
 		const p = project({ visibility: 'public', autoJoinOnUpload: false });
 		expect(
-			canEditDefinition(defAccessInput({
-				project: p,
-				definition: def({ ownerId: 'u-alice' }),
-				member: member('editor', 'u-editor'),
-				userId: 'u-editor'
-			}))
+			canEditDefinition(
+				defAccessInput({
+					project: p,
+					definition: def({ ownerId: 'u-alice' }),
+					member: member('editor', 'u-editor'),
+					userId: 'u-editor'
+				})
+			)
 		).toBe(true);
 		// Uploader who isn't a project member: denied on a container project.
 		expect(
-			canEditDefinition(defAccessInput({
-				project: p,
-				definition: def({ ownerId: 'u-alice' }),
-				userId: 'u-alice'
-			}))
+			canEditDefinition(
+				defAccessInput({
+					project: p,
+					definition: def({ ownerId: 'u-alice' }),
+					userId: 'u-alice'
+				})
+			)
 		).toBe(false);
 	});
 
 	it('commons project: definition owner edits their own', () => {
 		const p = project({ visibility: 'public', autoJoinOnUpload: true });
 		expect(
-			canEditDefinition(defAccessInput({
-				project: p,
-				definition: def({ ownerId: 'u-alice' }),
-				userId: 'u-alice'
-			}))
+			canEditDefinition(
+				defAccessInput({
+					project: p,
+					definition: def({ ownerId: 'u-alice' }),
+					userId: 'u-alice'
+				})
+			)
 		).toBe(true);
 	});
 
 	it('commons project: random user cannot edit someone else’s definition (Alice/Peter)', () => {
 		const p = project({ visibility: 'public', autoJoinOnUpload: true });
 		expect(
-			canEditDefinition(defAccessInput({
-				project: p,
-				definition: def({ ownerId: 'u-alice' }),
-				userId: 'u-peter'
-			}))
+			canEditDefinition(
+				defAccessInput({
+					project: p,
+					definition: def({ ownerId: 'u-alice' }),
+					userId: 'u-peter'
+				})
+			)
 		).toBe(false);
 	});
 
 	it('commons project: project editor still moderates any definition', () => {
 		const p = project({ visibility: 'public', autoJoinOnUpload: true });
 		expect(
-			canEditDefinition(defAccessInput({
-				project: p,
-				definition: def({ ownerId: 'u-alice' }),
-				member: member('editor', 'u-mod'),
-				userId: 'u-mod'
-			}))
+			canEditDefinition(
+				defAccessInput({
+					project: p,
+					definition: def({ ownerId: 'u-alice' }),
+					member: member('editor', 'u-mod'),
+					userId: 'u-mod'
+				})
+			)
 		).toBe(true);
 	});
 
 	it('platform project: instance_admin passes', () => {
 		const p = project({ visibility: 'platform' });
 		expect(
-			canEditDefinition(defAccessInput({
-				project: p,
-				definition: def(),
-				userId: 'u-admin',
-				platformPermissions: ['instance_admin']
-			}))
+			canEditDefinition(
+				defAccessInput({
+					project: p,
+					definition: def(),
+					userId: 'u-admin',
+					platformPermissions: ['instance_admin']
+				})
+			)
 		).toBe(true);
 	});
 
 	it('platform project: grant holder cannot edit definitions', () => {
 		const p = project({ visibility: 'platform' });
 		expect(
-			canEditDefinition(defAccessInput({
-				project: p,
-				definition: def(),
-				userId: 'u-grantee'
-			}))
+			canEditDefinition(
+				defAccessInput({
+					project: p,
+					definition: def(),
+					userId: 'u-grantee'
+				})
+			)
 		).toBe(false);
 	});
 });

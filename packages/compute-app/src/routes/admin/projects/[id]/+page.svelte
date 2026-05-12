@@ -149,10 +149,9 @@
 	async function revokeGrant(grantId: string) {
 		revokingId = grantId;
 		try {
-			const res = await fetch(
-				`/admin/api/projects/${data.project.id}/grants/${grantId}`,
-				{ method: 'DELETE' }
-			);
+			const res = await fetch(`/admin/api/projects/${data.project.id}/grants/${grantId}`, {
+				method: 'DELETE'
+			});
 			if (!res.ok) {
 				const body = await res.json().catch(() => ({}));
 				throw new Error(body.message ?? `HTTP ${res.status}`);
@@ -212,7 +211,8 @@
 						<div>
 							<p class="text-sm font-medium">Access grants</p>
 							<p class="text-muted-foreground text-xs">
-								Orgs or users you've granted view/solve access. Instance admins always have full access.
+								Orgs or users you've granted view/solve access. Instance admins always have full
+								access.
 							</p>
 						</div>
 						<Button size="sm" onclick={() => (showAddGrant = !showAddGrant)} class="gap-1.5">

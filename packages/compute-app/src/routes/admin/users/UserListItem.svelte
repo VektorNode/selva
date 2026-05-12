@@ -174,7 +174,7 @@
 				<h4 class="text-muted-foreground mb-2 text-xs font-medium tracking-wider uppercase">
 					Platform
 				</h4>
-					<div class="grid gap-2 sm:grid-cols-2">
+				<div class="grid gap-2 sm:grid-cols-2">
 					{#each ALL_PLATFORM_PERMISSIONS as p (p)}
 						{@const state = checkboxState(p)}
 						<label

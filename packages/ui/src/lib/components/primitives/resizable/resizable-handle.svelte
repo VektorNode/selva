@@ -23,7 +23,7 @@
 >
 	{#if withHandle}
 		<div
-			class="h-10 w-1 z-10 flex shrink-0 rounded-lg bg-border transition-[background-color,transform] duration-150 group-hover/handle:bg-foreground/40 group-hover/handle:scale-y-110 group-active/handle:bg-foreground/60"
+			class="h-10 w-1 z-10 flex shrink-0 rounded-lg bg-border transition-[background-color,transform] duration-150 group-hover/handle:scale-y-110 group-hover/handle:bg-foreground/40 group-active/handle:bg-foreground/60"
 		></div>
 	{/if}
 </ResizablePrimitive.PaneResizer>

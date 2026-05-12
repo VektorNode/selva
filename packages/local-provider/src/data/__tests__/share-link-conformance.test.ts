@@ -18,7 +18,6 @@ describe('LocalShareLinkStore', () => {
 
 	runShareLinkStoreConformance({
 		name: 'LocalShareLinkStore',
-		createStore: () =>
-			new LocalShareLinkStore({ filePath: path.join(tempDir, 'share-links.json') })
+		createStore: () => new LocalShareLinkStore({ filePath: path.join(tempDir, 'share-links.json') })
 	});
 });

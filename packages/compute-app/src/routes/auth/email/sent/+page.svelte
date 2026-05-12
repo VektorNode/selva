@@ -22,8 +22,8 @@
 		</div>
 		<Alert.Root>
 			<Alert.Description>
-				The link expires in a few minutes. If it doesn't arrive, check your spam folder or
-				request a new one from the sign-in page.
+				The link expires in a few minutes. If it doesn't arrive, check your spam folder or request a
+				new one from the sign-in page.
 			</Alert.Description>
 		</Alert.Root>
 		<a class="text-muted-foreground hover:text-foreground text-sm underline" href="/login">

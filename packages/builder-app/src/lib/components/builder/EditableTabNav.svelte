@@ -231,8 +231,8 @@
 				class="group relative flex items-center rounded-t-lg transition-all duration-150
 					{activeTabId === tabItem.id ? 'bg-primary/20 shadow-md' : 'bg-muted/70 hover:bg-muted/50'}
 					{pendingTargetTabId === tabItem.id
-						? 'ring-primary z-10 bg-primary/40! shadow-lg ring-2 ring-inset'
-						: ''}"
+					? 'ring-primary bg-primary/40! z-10 shadow-lg ring-2 ring-inset'
+					: ''}"
 				role="group"
 				tabindex="-1"
 			>

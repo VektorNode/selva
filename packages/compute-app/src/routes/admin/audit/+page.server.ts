@@ -119,19 +119,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 function parseFilters(params: URLSearchParams): AuditPageData['filters'] {
-	const types = params
-		.getAll('type')
-		.filter((t): t is DomainEventType => KNOWN_TYPE_SET.has(t));
+	const types = params.getAll('type').filter((t): t is DomainEventType => KNOWN_TYPE_SET.has(t));
 	const actorId = (params.get('actor') ?? '').trim();
 	const sinceIso = (params.get('since') ?? '').trim();
 	const untilIso = (params.get('until') ?? '').trim();
 	return { types, actorId, sinceIso, untilIso };
 }
 
-function toQueryFilters(
-	filters: AuditPageData['filters'],
-	url: URL
-): AuditQueryFilters {
+function toQueryFilters(filters: AuditPageData['filters'], url: URL): AuditQueryFilters {
 	const cursor = parseCursor(url.searchParams.get('cursor'));
 	return {
 		types: filters.types.length > 0 ? filters.types : undefined,
@@ -214,14 +209,12 @@ async function enrichRows(rows: AuditEventRow[]): Promise<EnrichedAuditRow[]> {
 		),
 		Promise.all(
 			[...projectIds].map(
-				async (id) =>
-					[id, await projects.getProject(SYSTEM_CONTEXT, id).catch(() => null)] as const
+				async (id) => [id, await projects.getProject(SYSTEM_CONTEXT, id).catch(() => null)] as const
 			)
 		),
 		Promise.all(
 			[...definitionIds].map(
-				async (id) =>
-					[id, await definitions.get(SYSTEM_CONTEXT, id).catch(() => null)] as const
+				async (id) => [id, await definitions.get(SYSTEM_CONTEXT, id).catch(() => null)] as const
 			)
 		)
 	]);
@@ -233,9 +226,7 @@ async function enrichRows(rows: AuditEventRow[]): Promise<EnrichedAuditRow[]> {
 	// profile state hasn't been seeded yet.
 	const unresolvedActors = [...actorIds].filter((id) => !profileById.get(id)?.displayName);
 	const authEntries = await Promise.all(
-		unresolvedActors.map(
-			async (id) => [id, await auth.getUser(id).catch(() => null)] as const
-		)
+		unresolvedActors.map(async (id) => [id, await auth.getUser(id).catch(() => null)] as const)
 	);
 	const authById = new Map(authEntries.filter(([, u]) => u !== null));
 

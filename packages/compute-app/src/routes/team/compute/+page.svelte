@@ -283,7 +283,11 @@
 				{#each data.catalog as entry (entry.id)}
 					<option value={entry.id}>
 						{entry.label}
-						{entry.source === 'org' ? '(your org)' : entry.isGlobalDefault ? '(global default)' : '(platform)'}
+						{entry.source === 'org'
+							? '(your org)'
+							: entry.isGlobalDefault
+								? '(global default)'
+								: '(platform)'}
 					</option>
 				{/each}
 			</select>
@@ -350,8 +354,7 @@
 					Compute servers managed by your org. Visible only to members of this organization.
 				{:else}
 					Org-private servers are disabled on this Selva instance. Ask the platform admin to flip
-					<code class="text-xs">ALLOW_ORG_COMPUTE_OVERRIDE</code> if you need to bring your own
-					compute.
+					<code class="text-xs">ALLOW_ORG_COMPUTE_OVERRIDE</code> if you need to bring your own compute.
 				{/if}
 			</Card.Description>
 		</Card.Header>

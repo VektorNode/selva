@@ -7,8 +7,20 @@
 
 	const items = $derived(
 		[
-			{ href: '/library', label: 'Library', icon: LayoutGrid as Component, match: 'prefix', show: true },
-			{ href: '/projects', label: 'Projects', icon: GitBranch as Component, match: 'prefix', show: hasOrg }
+			{
+				href: '/library',
+				label: 'Library',
+				icon: LayoutGrid as Component,
+				match: 'prefix',
+				show: true
+			},
+			{
+				href: '/projects',
+				label: 'Projects',
+				icon: GitBranch as Component,
+				match: 'prefix',
+				show: hasOrg
+			}
 		].filter((i) => i.show)
 	);
 

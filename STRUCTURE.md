@@ -43,15 +43,15 @@ selva/
 
 ### Naming rules
 
-| Kind | Pattern | Example |
-|---|---|---|
-| `GH_Component` subclass | `GH_PascalCase` | `GH_BlockToFile`, `GH_WebDisplay` |
-| `IGH_Param` subclass | `Param_PascalCase` | `Param_FileData`, `Param_ThreeMaterial` |
-| `IGH_Goo` type | `XGoo` (PascalCase + `Goo` suffix) | `FileDataGoo`, `WebDisplayGoo` |
-| Service / helper / model | `PascalCase` (no prefix) | `SchemaManager`, `RhinoConverterOptions` |
-| Filename | **Must match the public class name exactly** | `GH_BlockToFile.cs` contains `class GH_BlockToFile` |
-| Obsolete component | `OBSOLETE_<ComponentName>_UntilV<X_Y_Z>` | `OBSOLETE_WebDisplay_UntilV0_5_0.cs` |
-| Upgrader | `GH_<ComponentName>Upgrader` | `GH_WebDisplayUpgrader.cs` |
+| Kind                     | Pattern                                      | Example                                             |
+| ------------------------ | -------------------------------------------- | --------------------------------------------------- |
+| `GH_Component` subclass  | `GH_PascalCase`                              | `GH_BlockToFile`, `GH_WebDisplay`                   |
+| `IGH_Param` subclass     | `Param_PascalCase`                           | `Param_FileData`, `Param_ThreeMaterial`             |
+| `IGH_Goo` type           | `XGoo` (PascalCase + `Goo` suffix)           | `FileDataGoo`, `WebDisplayGoo`                      |
+| Service / helper / model | `PascalCase` (no prefix)                     | `SchemaManager`, `RhinoConverterOptions`            |
+| Filename                 | **Must match the public class name exactly** | `GH_BlockToFile.cs` contains `class GH_BlockToFile` |
+| Obsolete component       | `OBSOLETE_<ComponentName>_UntilV<X_Y_Z>`     | `OBSOLETE_WebDisplay_UntilV0_5_0.cs`                |
+| Upgrader                 | `GH_<ComponentName>Upgrader`                 | `GH_WebDisplayUpgrader.cs`                          |
 
 **No snake_case in C# class or filenames.** `GH_Block_To_File` should be `GH_BlockToFile`.
 
@@ -81,17 +81,17 @@ One-file folders are a code smell. If `State/` has one file and the file moves t
 
 This is the shared vocabulary. Not every package uses every folder, but when a folder appears, it means the same thing everywhere:
 
-| Folder | What goes there |
-|---|---|
-| `components/` | Svelte components |
-| `composables/` | Reactive helpers (`.svelte.ts` files using runes) |
-| `contexts/` | Svelte context providers (typically `.svelte.ts`) |
-| `features/<name>/` | Pure TS logic for a feature (no Svelte) — operations, config, types |
-| `server/` | Server-only code (SvelteKit `.server.ts` modules), only in apps |
-| `stores/` | Global reactive state — only when not tied to a single feature |
-| `theme/`, `styles/` | Design tokens, CSS, theme runtime |
-| `types/` | Cross-cutting TS types (single-feature types live with the feature) |
-| `utils/` | **Generic** helpers only (debounce, color, file-download). Categorical helpers live in feature/domain folders. |
+| Folder              | What goes there                                                                                                |
+| ------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `components/`       | Svelte components                                                                                              |
+| `composables/`      | Reactive helpers (`.svelte.ts` files using runes)                                                              |
+| `contexts/`         | Svelte context providers (typically `.svelte.ts`)                                                              |
+| `features/<name>/`  | Pure TS logic for a feature (no Svelte) — operations, config, types                                            |
+| `server/`           | Server-only code (SvelteKit `.server.ts` modules), only in apps                                                |
+| `stores/`           | Global reactive state — only when not tied to a single feature                                                 |
+| `theme/`, `styles/` | Design tokens, CSS, theme runtime                                                                              |
+| `types/`            | Cross-cutting TS types (single-feature types live with the feature)                                            |
+| `utils/`            | **Generic** helpers only (debounce, color, file-download). Categorical helpers live in feature/domain folders. |
 
 ### `features/` vs `components/`
 
@@ -104,7 +104,7 @@ This separation is intentional. UI imports from logic, never the reverse.
 
 ### `utils/` is not a junk drawer
 
-If a helper is specific to compute, schema, viewer, etc., it goes in a domain folder (`lib/compute/`, `lib/schema/`, `lib/viewer/`). `utils/` is reserved for *truly generic* helpers (no domain assumptions).
+If a helper is specific to compute, schema, viewer, etc., it goes in a domain folder (`lib/compute/`, `lib/schema/`, `lib/viewer/`). `utils/` is reserved for _truly generic_ helpers (no domain assumptions).
 
 ### Routes (`compute-app/src/routes/<route>/`)
 
@@ -114,14 +114,14 @@ If a helper is specific to compute, schema, viewer, etc., it goes in a domain fo
 
 ## Filename casing
 
-| Context | Convention | Example |
-|---|---|---|
-| C# files | `PascalCase.cs`, matches class name | `RhinoConverterOptions.cs` |
-| TypeScript modules | `kebab-case.ts` | `file-download.ts`, `visibility-rules.ts` |
-| Svelte components | `PascalCase.svelte` | `BuilderSidebar.svelte` |
-| Reactive helpers | `useThing.svelte.ts` (composables) or `kebab-case.svelte.ts` | `useFooterItem.svelte.ts` |
-| Markdown docs | `kebab-case.md` | `quick-start.md`, `obsolete-components.md` |
-| Config templates | `<name>.example.<ext>` | `ecosystem.config.example.cjs`, `Caddyfile.example` |
+| Context            | Convention                                                   | Example                                             |
+| ------------------ | ------------------------------------------------------------ | --------------------------------------------------- |
+| C# files           | `PascalCase.cs`, matches class name                          | `RhinoConverterOptions.cs`                          |
+| TypeScript modules | `kebab-case.ts`                                              | `file-download.ts`, `visibility-rules.ts`           |
+| Svelte components  | `PascalCase.svelte`                                          | `BuilderSidebar.svelte`                             |
+| Reactive helpers   | `useThing.svelte.ts` (composables) or `kebab-case.svelte.ts` | `useFooterItem.svelte.ts`                           |
+| Markdown docs      | `kebab-case.md`                                              | `quick-start.md`, `obsolete-components.md`          |
+| Config templates   | `<name>.example.<ext>`                                       | `ecosystem.config.example.cjs`, `Caddyfile.example` |
 
 **No `SCREAMING_SNAKE_CASE` filenames.** Documentation files are kebab-case.
 

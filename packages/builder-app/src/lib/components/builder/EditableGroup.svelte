@@ -16,11 +16,7 @@
 	import { dragHandle, dragHandleZone, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
 	import type { DndEvent } from 'svelte-dnd-action';
 	import { SvelteMap } from 'svelte/reactivity';
-	import {
-		DND_TYPE_PARAM,
-		isDiscoveredInput,
-		isDiscoveredOutput
-	} from '$lib/dnd/dndzone-helpers';
+	import { DND_TYPE_PARAM, isDiscoveredInput, isDiscoveredOutput } from '$lib/dnd/dndzone-helpers';
 
 	type ZoneItem = (LayoutItem | DiscoveredInput | DiscoveredOutput) & {
 		isDndShadowItem?: true;
@@ -283,9 +279,7 @@
 					onconsider={handleConsider}
 					onfinalize={handleFinalize}
 					class="grid min-h-14 items-start gap-3 rounded-md transition-all
-						{group.items.length === 0
-						? 'border-border min-h-15 border-2 border-dashed p-3'
-						: ''}"
+						{group.items.length === 0 ? 'border-border min-h-15 border-2 border-dashed p-3' : ''}"
 					style="grid-template-columns: repeat({group.columns}, 1fr);"
 				>
 					{#each localItems as item (item.id)}

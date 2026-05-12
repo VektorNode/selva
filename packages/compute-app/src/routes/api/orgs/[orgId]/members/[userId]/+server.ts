@@ -31,7 +31,9 @@ import { handleApiError, throwZodError } from '$lib/server/api-errors';
  * the most common way to discover this — handler returns 409.
  */
 
-const PERMISSIONS_SCHEMA = z.array(z.enum(ALL_ORG_PERMISSIONS as readonly [OrgPermission, ...OrgPermission[]]));
+const PERMISSIONS_SCHEMA = z.array(
+	z.enum(ALL_ORG_PERMISSIONS as readonly [OrgPermission, ...OrgPermission[]])
+);
 
 const PatchSchema = z
 	.object({

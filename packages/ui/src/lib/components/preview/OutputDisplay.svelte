@@ -279,11 +279,7 @@
 					{downloadError}
 				</div>
 			{/if}
-			<Button
-				onclick={handleDownload}
-				disabled={downloading || hasDuplicates}
-				class="w-full"
-			>
+			<Button onclick={handleDownload} disabled={downloading || hasDuplicates} class="w-full">
 				{downloading
 					? 'Downloading...'
 					: `Download ${fileCount === 1 ? 'File' : `${fileCount} Files`}`}

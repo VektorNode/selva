@@ -498,7 +498,7 @@ namespace Selva.Schema.Models
         public string Description { get; set; }
 
 /// <summary>
-/// Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files, 'html' for rendered HTML (e.g. Plotly charts)
+/// Output display type in UI: 'text' for text output, 'number' for numeric output, 'file' for downloadable files, 'chart' for rendered charts (e.g. Plotly)
 /// </summary>
         [JsonProperty("type")]
         public string Type { get; set; }

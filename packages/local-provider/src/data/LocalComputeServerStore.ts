@@ -9,7 +9,12 @@ import {
 	type RequestContext
 } from '@selvajs/platform';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
-import { decodeSecretKey, decryptSecret, encryptSecret, isEncryptedSecret } from './secretCrypto.js';
+import {
+	decodeSecretKey,
+	decryptSecret,
+	encryptSecret,
+	isEncryptedSecret
+} from './secretCrypto.js';
 
 /**
  * On-disk file shape. Single document holding *all* servers (platform +
@@ -41,7 +46,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		if (!env.SELVA_AT_REST_KEY) {
 			throw new Error(
 				'Missing required env var: SELVA_AT_REST_KEY (32-byte hex or base64). ' +
-					'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+					"Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
 			);
 		}
 		return new LocalComputeServerStore(
@@ -120,12 +125,14 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		const platformRows = all.servers.filter(isPlatformServer);
 		const otherOrgRows = all.servers.filter((s) => isOrgServer(s) && s.ownerOrgId !== orgId);
 		const thisOrgRows = this.encryptApiKeys(
-			servers.filter((s): s is ComputeServerConfig => true).map((s) =>
-				isOrgServer(s)
-					? { ...s, ownerOrgId: orgId }
-					: // Coerce — caller passed something with the wrong/missing scope.
-					  ({ ...s, scope: 'org', ownerOrgId: orgId } as ComputeServerConfig)
-			)
+			servers
+				.filter((s): s is ComputeServerConfig => true)
+				.map((s) =>
+					isOrgServer(s)
+						? { ...s, ownerOrgId: orgId }
+						: // Coerce — caller passed something with the wrong/missing scope.
+							({ ...s, scope: 'org', ownerOrgId: orgId } as ComputeServerConfig)
+				)
 		);
 
 		const orgDefaults = { ...(all.orgDefaults ?? {}) };
@@ -142,11 +149,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		});
 	}
 
-	async setOrgDefault(
-		_ctx: RequestContext,
-		orgId: string,
-		serverId: string | null
-	): Promise<void> {
+	async setOrgDefault(_ctx: RequestContext, orgId: string, serverId: string | null): Promise<void> {
 		const all = await this.readAll();
 		const orgDefaults = { ...(all.orgDefaults ?? {}) };
 		if (serverId === null) {

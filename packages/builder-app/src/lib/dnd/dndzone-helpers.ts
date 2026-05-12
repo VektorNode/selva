@@ -27,7 +27,11 @@ export function isLayoutItem(x: unknown): x is LayoutItem {
 export function isDiscoveredInput(x: unknown): x is DiscoveredInput {
 	if (!x || typeof x !== 'object') return false;
 	const o = x as Record<string, unknown>;
-	return typeof o.id === 'string' && typeof o.name === 'string' && !('type' in o && (o.type === 'input' || o.type === 'output' || o.type === 'linebreak'));
+	return (
+		typeof o.id === 'string' &&
+		typeof o.name === 'string' &&
+		!('type' in o && (o.type === 'input' || o.type === 'output' || o.type === 'linebreak'))
+	);
 }
 
 export function isDiscoveredOutput(x: unknown): x is DiscoveredOutput {

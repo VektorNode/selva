@@ -80,25 +80,27 @@ import * as local from '@selvajs/local-provider';
 import { HeaderAuthProvider } from '@selvajs/header-auth-provider';
 
 export default defineConfig((env) => ({
-  tenancy: 'single' as const,
-  flags: { /* … */ },
+	tenancy: 'single' as const,
+	flags: {
+		/* … */
+	},
 
-  auth: HeaderAuthProvider.fromEnv(env),
-  data: local.LocalDataProvider.fromEnv(env),
-  storage: local.LocalStorageProvider.fromEnv(env)
+	auth: HeaderAuthProvider.fromEnv(env),
+	data: local.LocalDataProvider.fromEnv(env),
+	storage: local.LocalStorageProvider.fromEnv(env)
 }));
 ```
 
 ### Environment variables
 
-| Var | Required | Default | Purpose |
-|---|---|---|---|
-| `HEADER_AUTH_DATA_DIR` | yes¹ | — | Directory holding `header-allowlist.json` (the pre-provisioned UPN list). |
-| `DATA_PATH` | — | — | Fallback when `HEADER_AUTH_DATA_DIR` is unset. Convenient when paired with `@selvajs/local-provider`. |
-| `HEADER_AUTH_UPN_HEADER` | — | `SELVA-UserPrincipalName` | Header carrying the user's UPN. |
-| `HEADER_AUTH_EMAIL_HEADER` | — | `SELVA-Email` | Header carrying the user's email. |
-| `HEADER_AUTH_DISPLAY_NAME_HEADER` | — | `SELVA-DisplayName` | Header carrying the user's display name. |
-| `HEADER_AUTH_LOGOUT_URL` | — | `null` | Where `/logout` redirects after destroying the local session. **Set this to your IdP's sign-out URL** — otherwise the proxy will silently re-authenticate the user on the next request. |
+| Var                               | Required | Default                   | Purpose                                                                                                                                                                                 |
+| --------------------------------- | -------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HEADER_AUTH_DATA_DIR`            | yes¹     | —                         | Directory holding `header-allowlist.json` (the pre-provisioned UPN list).                                                                                                               |
+| `DATA_PATH`                       | —        | —                         | Fallback when `HEADER_AUTH_DATA_DIR` is unset. Convenient when paired with `@selvajs/local-provider`.                                                                                   |
+| `HEADER_AUTH_UPN_HEADER`          | —        | `SELVA-UserPrincipalName` | Header carrying the user's UPN.                                                                                                                                                         |
+| `HEADER_AUTH_EMAIL_HEADER`        | —        | `SELVA-Email`             | Header carrying the user's email.                                                                                                                                                       |
+| `HEADER_AUTH_DISPLAY_NAME_HEADER` | —        | `SELVA-DisplayName`       | Header carrying the user's display name.                                                                                                                                                |
+| `HEADER_AUTH_LOGOUT_URL`          | —        | `null`                    | Where `/logout` redirects after destroying the local session. **Set this to your IdP's sign-out URL** — otherwise the proxy will silently re-authenticate the user on the next request. |
 
 ¹ Either `HEADER_AUTH_DATA_DIR` or `DATA_PATH` must be set.
 
