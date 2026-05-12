@@ -19,7 +19,7 @@
 		GripVertical,
 		AlertTriangle
 	} from '@lucide/svelte';
-	import { ACCEPTED_FILE_FORMATS } from '$lib/features/builder/widget-config';
+	import { ACCEPTED_FILE_FORMATS } from '@selvajs/schemas';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
 	import { dragHandle } from 'svelte-dnd-action';
 

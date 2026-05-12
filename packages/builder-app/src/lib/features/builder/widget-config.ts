@@ -27,9 +27,6 @@ import { ACCEPTED_FILE_FORMATS } from '@selvajs/schemas';
 export const FILE_INPUT_MODES = ['upload', 'url'] as const;
 export type FileInputMode = (typeof FILE_INPUT_MODES)[number];
 
-// Re-export ACCEPTED_FILE_FORMATS for backward compatibility
-export { ACCEPTED_FILE_FORMATS };
-
 export type InputWidgetType =
 	| InputNumberLayoutItem['widgetType']
 	| InputTextLayoutItem['widgetType']
