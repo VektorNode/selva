@@ -395,19 +395,53 @@ public static class ParameterTypeHelper
         };
     }
 
-    private static void ClearSingleParameter(IGH_ContextualParameter contextParam)
+    // Cache reflection lookups per concrete type. ClearAllContextualParameters runs on every
+    // solve-end; without caching, every object causes a fresh GetMethod scan.
+    private static readonly Dictionary<Type, MethodInfo> ClearContextualDataMethodCache = new Dictionary<Type, MethodInfo>();
+    private static readonly Dictionary<Type, MethodInfo> CollectVolatileDataMethodCache = new Dictionary<Type, MethodInfo>();
+
+    private static MethodInfo GetCachedMethod(Type type, string name, Dictionary<Type, MethodInfo> cache)
     {
-        var clearMethod = contextParam.GetType().GetMethod("ClearContextualData");
-        if (clearMethod != null)
+        if (cache.TryGetValue(type, out var cached))
         {
-            clearMethod.Invoke(contextParam, null);
+            return cached;
         }
 
-        var collectVolatileData = contextParam.GetType().GetMethod("CollectVolatileData_FromSources");
-        if (collectVolatileData != null)
+        var method = type.GetMethod(name);
+        cache[type] = method; // cache nulls too — avoids repeated misses
+        return method;
+    }
+
+    /// <summary>
+    ///     Invokes ClearContextualData() on the given object via cached reflection.
+    ///     Returns true if the method exists on the type (regardless of whether the call threw).
+    /// </summary>
+    public static bool TryInvokeClearContextualData(object obj)
+    {
+        if (obj == null)
         {
-            collectVolatileData.Invoke(contextParam, null);
+            return false;
         }
+
+        var method = GetCachedMethod(obj.GetType(), "ClearContextualData", ClearContextualDataMethodCache);
+        if (method == null)
+        {
+            return false;
+        }
+
+        method.Invoke(obj, null);
+        return true;
+    }
+
+    private static void ClearSingleParameter(IGH_ContextualParameter contextParam)
+    {
+        var type = contextParam.GetType();
+
+        var clearMethod = GetCachedMethod(type, "ClearContextualData", ClearContextualDataMethodCache);
+        clearMethod?.Invoke(contextParam, null);
+
+        var collectVolatileData = GetCachedMethod(type, "CollectVolatileData_FromSources", CollectVolatileDataMethodCache);
+        collectVolatileData?.Invoke(contextParam, null);
     }
 
     private static void CollectRecipients(IGH_ContextualParameter contextParam,

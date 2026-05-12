@@ -91,8 +91,13 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 
 		if (opts?.statuses?.length) {
 			query = query.in('status', opts.statuses);
-		} else if (!opts?.includePending) {
-			query = query.neq('status', 'pending');
+		} else {
+			const excluded: string[] = [];
+			if (!opts?.includePending) excluded.push('pending');
+			if (!opts?.includeArchived) excluded.push('archived');
+			if (excluded.length) {
+				query = query.not('status', 'in', `(${excluded.join(',')})`);
+			}
 		}
 
 		query = query

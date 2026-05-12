@@ -4,6 +4,7 @@ import type {
 	LayoutItem,
 	InputLayoutItem,
 	InputNumberLayoutItem,
+	InputDropdownLayoutItem,
 	NumberWidgetConfig
 } from '@selvajs/schemas';
 import { getDefaultValue } from '@selvajs/ui';
@@ -14,6 +15,10 @@ function isInputLayoutItem(item: LayoutItem): item is InputLayoutItem {
 
 function isNumberInputLayoutItem(item: InputLayoutItem): item is InputNumberLayoutItem {
 	return item.widgetType === 'number';
+}
+
+function isDropdownInputLayoutItem(item: InputLayoutItem): item is InputDropdownLayoutItem {
+	return item.widgetType === 'dropdown';
 }
 
 interface InitializeValuesOptions {
@@ -70,6 +75,7 @@ interface ParameterUpdate {
 	minimum?: number;
 	maximum?: number;
 	stepSize?: number;
+	options?: { [k: string]: string | undefined };
 }
 
 export function updateParameterMetadata(
@@ -79,14 +85,20 @@ export function updateParameterMetadata(
 	let updatedCount = 0;
 	const updatedNames: string[] = [];
 
-	const processGroup = (group: { items: LayoutItem[] }, updated: ParameterUpdate) => {
+	// Returns true if any layout-item config was mutated for this update — callers use this to
+	// trigger persistence (otherwise range-only changes wouldn't bump the dirty counter).
+	const processGroup = (group: { items: LayoutItem[] }, updated: ParameterUpdate): boolean => {
+		let touched = false;
 		group.items?.forEach((layoutItem) => {
 			if (
-				layoutItem.type !== 'linebreak' &&
-				layoutItem.paramId === updated.id &&
-				isInputLayoutItem(layoutItem) &&
-				isNumberInputLayoutItem(layoutItem)
+				layoutItem.type === 'linebreak' ||
+				layoutItem.paramId !== updated.id ||
+				!isInputLayoutItem(layoutItem)
 			) {
+				return;
+			}
+
+			if (isNumberInputLayoutItem(layoutItem)) {
 				const config = layoutItem.config as NumberWidgetConfig;
 				let configChanged = false;
 
@@ -105,9 +117,17 @@ export function updateParameterMetadata(
 
 				if (configChanged) {
 					layoutItem.config = config;
+					touched = true;
 				}
+				return;
+			}
+
+			if (isDropdownInputLayoutItem(layoutItem) && updated.options !== undefined) {
+				layoutItem.config = { ...layoutItem.config, options: updated.options };
+				touched = true;
 			}
 		});
+		return touched;
 	};
 
 	changedParams.forEach((updated) => {
@@ -128,12 +148,25 @@ export function updateParameterMetadata(
 				updatedCount++;
 				updatedNames.push(input.nickname);
 			}
+		}
 
-			if (schema.layout.type === 'tabbed') {
-				schema.layout.tabs.forEach((tab) => tab.groups?.forEach((g) => processGroup(g, updated)));
-			} else if (schema.layout.type === 'flat') {
-				schema.layout.groups.forEach((g) => processGroup(g, updated));
-			}
+		// Layout patching runs regardless of input presence — slider range changes for inputs not
+		// yet added to the schema still need to flow to availableInputs upstream, and layout
+		// items can outlive transient schema mismatches.
+		let layoutTouched = false;
+		if (schema.layout.type === 'tabbed') {
+			schema.layout.tabs.forEach((tab) =>
+				tab.groups?.forEach((g) => {
+					if (processGroup(g, updated)) layoutTouched = true;
+				})
+			);
+		} else if (schema.layout.type === 'flat') {
+			schema.layout.groups.forEach((g) => {
+				if (processGroup(g, updated)) layoutTouched = true;
+			});
+		}
+		if (layoutTouched) {
+			updatedCount++;
 		}
 
 		const output = schema.outputs.find((out) => out.id === updated.id);

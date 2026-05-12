@@ -24,8 +24,14 @@ export interface DefinitionListOptions extends Omit<ListOptions, 'orderBy'> {
 	 */
 	includePending?: boolean;
 	/**
+	 * Include records with `status='archived'`. Default false — archived
+	 * definitions are hidden from normal views; opt in for archive browsers.
+	 */
+	includeArchived?: boolean;
+	/**
 	 * Filter to specific editorial statuses. Omit for the default view (all
-	 * non-pending). Pass `['published']` for the runner home.
+	 * non-pending, non-archived). Pass `['published']` for the runner home.
+	 * When set, `includePending` / `includeArchived` are ignored.
 	 */
 	statuses?: DefinitionStatus[];
 }

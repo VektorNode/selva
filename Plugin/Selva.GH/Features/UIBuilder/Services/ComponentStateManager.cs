@@ -1,6 +1,6 @@
 using System;
 using System.Diagnostics;
-using Rhino;
+using Selva.GH.Utilities.Guards;
 
 namespace Selva.GH.Features.UIBuilder.Services;
 
@@ -18,8 +18,7 @@ public class ComponentStateManager
     /// <summary>
     ///     Check if running in headless mode (no Rhino UI)
     /// </summary>
-    public bool IsHeadlessMode =>
-        RhinoDoc.ActiveDoc == null || RhinoApp.IsRunningHeadless || RhinoDoc.ActiveDoc.IsHeadless;
+    public bool IsHeadlessMode => HeadlessGuard.IsHeadless;
 
     /// <summary>
     ///     Process enable input and detect state transitions

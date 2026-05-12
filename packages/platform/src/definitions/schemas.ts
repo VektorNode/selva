@@ -4,7 +4,7 @@ export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 
 export const GuidSchema = z.string().regex(UUID_REGEX, 'Invalid GUID format');
 
-export const DefinitionStatusSchema = z.enum(['draft', 'published']);
+export const DefinitionStatusSchema = z.enum(['draft', 'published', 'archived']);
 
 export const DefinitionFileExtSchema = z.enum(['gh', 'ghx']);
 

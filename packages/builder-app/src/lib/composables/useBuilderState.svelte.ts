@@ -3,6 +3,7 @@ import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/schem
 import { processInitialDataSchema, getWebSocketPortFromUrl } from '$lib/utils/session';
 import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 import { getAllLayoutItems } from '$lib/features/builder/operations';
+import { updateParameterMetadata } from '$lib/features/preview/handlers';
 import type {
 	SyncDiff,
 	SyncChange,
@@ -135,25 +136,20 @@ export function useBuilderState(sessionId: string) {
 		const changedParams = message.changedParams ?? [];
 		if (changedParams.length === 0) return;
 
-		const updatedNames: string[] = [];
+		// Patch the schema itself (inputs, outputs, and layout-item configs) via the shared helper.
+		// This is the part that was missing for slider range edits: NumberWidgetConfig.minimum/maximum
+		// /stepSize on the live UI schema now stays in sync with the GH slider.
+		const schemaResult = state.schema
+			? updateParameterMetadata(state.schema, changedParams)
+			: { updated: 0, names: [] };
+
+		// Track names that weren't already captured by the schema helper so we don't double-toast.
+		const additionalNames: string[] = [];
 
 		changedParams.forEach((updated) => {
-			// Update schema inputs if present
-			let inputInSchema = false;
-			if (state.schema) {
-				const inputIndex = state.schema.inputs.findIndex((inp) => inp.id === updated.id);
-				if (inputIndex !== -1) {
-					inputInSchema = true;
-					const input = state.schema.inputs[inputIndex];
-					if (updated.nickname !== undefined && input.nickname !== updated.nickname) {
-						input.nickname = updated.nickname;
-						updatedNames.push(updated.nickname);
-					}
-					if (updated.description !== undefined) input.description = updated.description;
-				}
-			}
+			const inputInSchema = state.schema?.inputs.some((inp) => inp.id === updated.id) ?? false;
+			const outputInSchema = state.schema?.outputs.some((out) => out.id === updated.id) ?? false;
 
-			// Always update availableInputs regardless of schema membership
 			const availIndex = state.availableInputs.findIndex((p) => p.id === updated.id);
 			if (availIndex !== -1) {
 				if (updated.nickname !== undefined)
@@ -168,38 +164,35 @@ export function useBuilderState(sessionId: string) {
 					state.availableInputs[availIndex].stepSize = updated.stepSize;
 				if (updated.options !== undefined) {
 					state.availableInputs[availIndex].options = updated.options;
+					// Belt-and-suspenders: the shared helper patches dropdown options on layout items,
+					// but only for items whose paramId matches. Keep this call so dropdowns added via
+					// non-standard widgetTypes still get options refreshed at the availableInputs level.
 					patchDropdownOptions(state.schema, updated.id, updated.options);
 				}
-				// Toast if not already toasted via schema path
-				if (!inputInSchema && updated.nickname !== undefined) updatedNames.push(updated.nickname);
+				if (!inputInSchema && updated.nickname !== undefined)
+					additionalNames.push(updated.nickname);
 			}
 
-			// Update schema outputs if present
-			let outputInSchema = false;
-			if (state.schema) {
-				const outputIndex = state.schema.outputs.findIndex((out) => out.id === updated.id);
-				if (outputIndex !== -1) {
-					outputInSchema = true;
-					const output = state.schema.outputs[outputIndex];
-					if (updated.nickname !== undefined && output.nickname !== updated.nickname) {
-						output.nickname = updated.nickname;
-						updatedNames.push(updated.nickname);
-					}
-					if (updated.description !== undefined) output.description = updated.description;
-				}
-			}
-
-			// Always update availableOutputs regardless of schema membership
 			const availOutputIndex = state.availableOutputs.findIndex((o) => o.id === updated.id);
 			if (availOutputIndex !== -1) {
 				if (updated.nickname !== undefined)
 					state.availableOutputs[availOutputIndex].nickname = updated.nickname;
 				if (updated.description !== undefined)
 					state.availableOutputs[availOutputIndex].description = updated.description;
-				if (!outputInSchema && updated.nickname !== undefined) updatedNames.push(updated.nickname);
+				if (!outputInSchema && updated.nickname !== undefined)
+					additionalNames.push(updated.nickname);
 			}
 		});
 
+		// Persist the freshly-patched schema to localStorage explicitly. Without this, navigating
+		// builder → preview would auto-save the *stale pre-patch* schema back to the server
+		// (the navigation guard pushes localStorage state, and the $effect that mirrors state.schema
+		// to localStorage can lag behind deep mutations made inside updateParameterMetadata).
+		if (state.schema && schemaResult.updated > 0) {
+			history.persistCurrentSchema(state.schema);
+		}
+
+		const updatedNames = [...schemaResult.names, ...additionalNames];
 		if (updatedNames.length > 0) {
 			toast.info(
 				`Parameter${updatedNames.length > 1 ? 's' : ''} renamed in Grasshopper: ${updatedNames.join(', ')}`

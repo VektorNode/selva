@@ -16,10 +16,14 @@ export const COVER_IMAGE_CONTENT_TYPES: Record<string, string> = {
  * - `pending` — internal: metadata written, blob upload may be in flight.
  * - `draft` — work in progress, not visible to runners.
  * - `published` — live, visible to all with solve access.
+ * - `archived` — retired but preserved. Versions and channel pointers remain
+ *   intact; restore via `update({ status: 'draft' | 'published' })`.
  *
- * List endpoints filter `pending` by default (opt in via `ListOptions.includePending`).
+ * List endpoints filter `pending` and `archived` by default (opt in via
+ * `DefinitionListOptions.includePending` / `includeArchived`, or pass an
+ * explicit `statuses` filter).
  */
-export type DefinitionStatus = 'pending' | 'draft' | 'published';
+export type DefinitionStatus = 'pending' | 'draft' | 'published' | 'archived';
 
 /**
  * Immutable snapshot of a definition's `.gh` file at a point in time. New

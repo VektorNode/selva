@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { AppShell, StateDisplay, Button, Dialog, Resizable, toast, useFooterItem } from '@selvajs/ui';
-	import { Save } from '@lucide/svelte';
+	import { Save, RefreshCw } from '@lucide/svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
@@ -258,8 +258,16 @@
 				</div>
 			{:else if builderState?.state.schema}
 				{#if builderState.state.error}
-					<div class="px-6 pt-4">
+					<div class="flex flex-col items-center gap-3 px-6 pt-4">
 						<StateDisplay type="warning" size="medium" message={builderState.state.error} />
+						<Button
+							variant="outline"
+							size="sm"
+							onclick={() => builderState?.syncParameters()}
+							disabled={!builderState?.wsState.connected}
+						>
+							<RefreshCw class="mr-2 h-4 w-4" />Refresh
+						</Button>
 					</div>
 				{/if}
 
