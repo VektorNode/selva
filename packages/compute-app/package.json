@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/compute-app",
-	"version": "0.9.0",
+	"version": "0.10.0",
 	"description": "Selva Rhino Compute application for iframe embedding",
 	"private": true,
 	"type": "module",

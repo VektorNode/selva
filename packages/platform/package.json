@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/platform",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Pure TypeScript interfaces for Selva platform providers (auth, definitions, compute)",
 	"license": "MIT",
 	"publishConfig": {
@@ -45,6 +45,31 @@
 			"types": "./dist/projects/index.d.ts",
 			"import": "./dist/projects/index.js"
 		},
+		"./platformProjects": {
+			"source": "./src/platformProjects/index.ts",
+			"types": "./dist/platformProjects/index.d.ts",
+			"import": "./dist/platformProjects/index.js"
+		},
+		"./organizations": {
+			"source": "./src/organizations/index.ts",
+			"types": "./dist/organizations/index.d.ts",
+			"import": "./dist/organizations/index.js"
+		},
+		"./invites": {
+			"source": "./src/invites/index.ts",
+			"types": "./dist/invites/index.d.ts",
+			"import": "./dist/invites/index.js"
+		},
+		"./shareLinks": {
+			"source": "./src/shareLinks/index.ts",
+			"types": "./dist/shareLinks/index.d.ts",
+			"import": "./dist/shareLinks/index.js"
+		},
+		"./definitions": {
+			"source": "./src/definitions/index.ts",
+			"types": "./dist/definitions/index.d.ts",
+			"import": "./dist/definitions/index.js"
+		},
 		"./definitions/schemas": {
 			"source": "./src/definitions/schemas.ts",
 			"types": "./dist/definitions/schemas.d.ts",
@@ -54,6 +79,21 @@
 			"source": "./src/computeServer/index.ts",
 			"types": "./dist/computeServer/index.d.ts",
 			"import": "./dist/computeServer/index.js"
+		},
+		"./access": {
+			"source": "./src/access/index.ts",
+			"types": "./dist/access/index.d.ts",
+			"import": "./dist/access/index.js"
+		},
+		"./events": {
+			"source": "./src/events/index.ts",
+			"types": "./dist/events/index.d.ts",
+			"import": "./dist/events/index.js"
+		},
+		"./utils": {
+			"source": "./src/utils/index.ts",
+			"types": "./dist/utils/index.d.ts",
+			"import": "./dist/utils/index.js"
 		},
 		"./testing": {
 			"source": "./src/testing/index.ts",
