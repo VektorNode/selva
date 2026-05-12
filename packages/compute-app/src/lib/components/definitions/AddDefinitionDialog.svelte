@@ -61,6 +61,14 @@
 		if (defaultProjectId) selectedProjectId = defaultProjectId;
 	});
 
+	// If the user picked a file before choosing a project, re-run validation
+	// once the project is set so the schema preview can appear.
+	$effect(() => {
+		if (selectedProjectId && fileInput?.files?.length && !validationSchema && !validating) {
+			onFileSelected();
+		}
+	});
+
 	// File inputs
 	let fileInput = $state<HTMLInputElement>();
 	let imageInput = $state<HTMLInputElement>();
@@ -88,9 +96,15 @@
 		const file = fileInput?.files?.[0];
 		validationError = null;
 		validationSchema = null;
-		displayName = '';
+		// Clear fields that may have been pre-filled from a previous file's schema,
+		// so stale description/tags don't leak across selections.
+		description = '';
+		tags = [];
 
-		if (!file) return;
+		if (!file) {
+			displayName = '';
+			return;
+		}
 
 		displayName = nameFromFile(file);
 
@@ -141,6 +155,10 @@
 		}
 		if (!fileInput?.files || fileInput.files.length === 0) {
 			toast.error('A Grasshopper file is required');
+			return;
+		}
+		if (showProjectDropdown && !selectedProjectId) {
+			toast.error('Please pick a project');
 			return;
 		}
 
