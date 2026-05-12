@@ -1,7 +1,7 @@
 /**
  * Adapter conformance suite for IComputeServerStore.
  *
- * Spec §3 — servers are scoped (platform vs. org-private), with a global
+ * Architecture spec §4.8 — servers are scoped (platform vs. org-private), with a global
  * `defaultServerId` and per-org `orgDefaults`. The store surface exposes
  * scope-targeted mutations; visibility filtering is done by callers via
  * the pure helpers in `@selvajs/platform`.
@@ -104,7 +104,7 @@ export function runComputeServerStoreConformance(opts: ComputeServerStoreConform
 		});
 
 		// ============================================================================
-		// Org-private servers + orgDefaults (spec §3)
+		// Org-private servers + orgDefaults (Architecture spec §4.8)
 		// ============================================================================
 
 		it('saveOrgServers stores rows owned by the org', async () => {

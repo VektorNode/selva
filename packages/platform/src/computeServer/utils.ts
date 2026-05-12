@@ -6,7 +6,7 @@ import {
 } from './types.js';
 
 /**
- * Servers an org can see in pickers and use for solves. Spec §3.
+ * Servers an org can see in pickers and use for solves. Architecture spec §4.8.
  *
  * = platform servers shared with this org (or `'all'`, or the global default)
  * ∪ org-private servers owned by this org
@@ -51,7 +51,7 @@ export function defaultServerIdFor(
 }
 
 /**
- * Resolve a definition's compute server. Spec §3 resolution order:
+ * Resolve a definition's compute server. Architecture spec §4.8 resolution order:
  *   1. Definition pin (`computeServerId`) if visible to the project's org.
  *   2. `orgDefaults[orgId]` if set.
  *   3. Global `defaultServerId`.
@@ -77,7 +77,7 @@ export function resolveServerForOrg(
 		const pinned = visible.find((s) => s.id === opts.definitionPin);
 		if (pinned) return pinned;
 		// Fall through — admin may have un-shared the server since the pin
-		// was set. Defensive resolver behavior per spec §11.
+		// was set.
 	}
 
 	const defaultId = defaultServerIdFor(config, orgId);

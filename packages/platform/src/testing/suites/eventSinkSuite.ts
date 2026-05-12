@@ -1,5 +1,5 @@
 /**
- * Adapter conformance suite for the §9 event-sink contract.
+ * Adapter conformance suite for the event-sink contract (Permissions spec §9).
  *
  * Verifies that each provider's stores emit the expected `DomainEvent` shape
  * after the corresponding mutation succeeds, and that emit happens AFTER the
@@ -7,9 +7,10 @@
  * same suite — drift between Local and Supabase emission shape gets caught
  * immediately.
  *
- * Per Permissions.md §9 the events are no-op by default in v1; the suite
- * guarantees the seam exists and the shape is consistent so future webhook /
- * audit / analytics consumers can plug in by swapping the sink.
+ * Local stays on `NoopEventSink`; Supabase wires `SupabaseEventSink` so events
+ * persist to `public.audit_events`. The suite guarantees the seam exists and
+ * the shape is consistent so future webhook / audit / analytics consumers can
+ * plug in by swapping the sink.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';

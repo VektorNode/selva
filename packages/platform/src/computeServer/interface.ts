@@ -2,7 +2,7 @@ import type { RequestContext } from '../context.js';
 import type { ComputeConfig, ComputeServerConfig } from './types.js';
 
 /**
- * Compute-server configuration. Spec §3.
+ * Compute-server configuration. Architecture spec §4.8.
  *
  * One config doc holds *all* servers (platform + org-private) plus the
  * global `defaultServerId` and per-org `orgDefaults` map. Authorization is
