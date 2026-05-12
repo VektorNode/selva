@@ -92,8 +92,11 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			const allowed = new Set(opts.statuses);
 			return filtered.filter((r) => allowed.has(r.status));
 		}
-		if (opts?.includePending) return filtered;
-		return filtered.filter((r) => r.status !== 'pending');
+		return filtered.filter((r) => {
+			if (r.status === 'pending' && !opts?.includePending) return false;
+			if (r.status === 'archived' && !opts?.includeArchived) return false;
+			return true;
+		});
 	}
 
 	async list(_ctx: RequestContext, opts?: DefinitionListOptions): Promise<Page<DefinitionRecord>> {

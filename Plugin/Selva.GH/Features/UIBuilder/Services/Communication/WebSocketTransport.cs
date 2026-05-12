@@ -180,9 +180,30 @@ public class WebSocketTransport : IDisposable
     // Broadcast helpers
     // -------------------------------------------------------------------------
 
+    /// <summary>
+    ///     Generic envelope: `{ type, sessionId, data: <payload> }`. The UI reads such messages via
+    ///     `msg.data.<field>` (see the `disconnecting` handler in websocket.svelte.ts).
+    ///     Do NOT use this for messages whose TS types expect fields at the top level (e.g.
+    ///     `availableParams` on `parametersAdded`) — those need a dedicated flat broadcaster.
+    /// </summary>
     public Task BroadcastMessage(string messageType, object data)
     {
         return BroadcastAsync(new { type = messageType, sessionId = _sessionId, data });
+    }
+
+    /// <summary>
+    ///     Broadcast a notification that new parameters were discovered in the document.
+    ///     Flat envelope — `availableParams` sits at the top level of the message, matching the
+    ///     TS `WsParametersAddedMessage` contract used by the builder.
+    /// </summary>
+    public Task BroadcastParametersAdded(DiscoveredParameters availableParams)
+    {
+        return BroadcastAsync(new
+        {
+            type = "parametersAdded",
+            sessionId = _sessionId,
+            availableParams
+        });
     }
 
     public async Task BroadcastOutputsWithFilesAndDisplay(
@@ -314,6 +335,12 @@ public class WebSocketTransport : IDisposable
 
     /// <summary>
     ///     Broadcast parameter metadata changes. Suppressed during schema saves.
+    ///
+    ///     Wire format: `changedParams` is a FLAT array of items keyed by parameter id (mixing
+    ///     inputs and outputs). The UI looks each id up in `schema.inputs` / `schema.outputs` —
+    ///     it doesn't need to know which side an item came from. Sending the raw
+    ///     `DiscoveredParameters` object (with nested `inputs` / `outputs` arrays) silently
+    ///     breaks the UI handlers because they call `.forEach` on the value.
     /// </summary>
     public Task BroadcastMetadataChanges(DiscoveredParameters changedParams)
     {
@@ -330,16 +357,52 @@ public class WebSocketTransport : IDisposable
             return Task.CompletedTask;
         }
 
-        if ((changedParams.Inputs?.Count ?? 0) == 0 && (changedParams.Outputs?.Count ?? 0) == 0)
+        var inputCount = changedParams.Inputs?.Count ?? 0;
+        var outputCount = changedParams.Outputs?.Count ?? 0;
+        if (inputCount == 0 && outputCount == 0)
         {
             return Task.CompletedTask;
+        }
+
+        // Build entries as dictionaries so absent fields are simply not emitted — the UI's
+        // `!== undefined` checks require missing keys, not explicit nulls.
+        var flat = new List<Dictionary<string, object>>(inputCount + outputCount);
+        if (changedParams.Inputs != null)
+        {
+            foreach (var i in changedParams.Inputs)
+            {
+                var item = new Dictionary<string, object>
+                {
+                    ["id"] = i.Id,
+                    ["nickname"] = i.Nickname,
+                    ["description"] = i.Description ?? ""
+                };
+                if (i.Minimum.HasValue) item["minimum"] = i.Minimum.Value;
+                if (i.Maximum.HasValue) item["maximum"] = i.Maximum.Value;
+                if (i.StepSize.HasValue) item["stepSize"] = i.StepSize.Value;
+                if (i.Options != null) item["options"] = i.Options;
+                flat.Add(item);
+            }
+        }
+
+        if (changedParams.Outputs != null)
+        {
+            foreach (var o in changedParams.Outputs)
+            {
+                flat.Add(new Dictionary<string, object>
+                {
+                    ["id"] = o.Id,
+                    ["nickname"] = o.Nickname,
+                    ["description"] = o.Description ?? ""
+                });
+            }
         }
 
         return BroadcastAsync(new
         {
             type = "metadataUpdated",
             sessionId = _sessionId,
-            changedParams
+            changedParams = flat
         });
     }
 

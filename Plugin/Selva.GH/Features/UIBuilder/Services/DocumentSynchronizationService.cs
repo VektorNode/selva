@@ -98,7 +98,7 @@ public class DocumentSynchronizationService : IDisposable
                 if (available.Inputs.Count > 0 || available.Outputs.Count > 0)
                 {
                     _ = _webSocketTransport
-                        .BroadcastMessage("parametersAdded", new { availableParams = available })
+                        .BroadcastParametersAdded(available)
                         .ContinueWith(t =>
                         {
                             if (t.IsFaulted)

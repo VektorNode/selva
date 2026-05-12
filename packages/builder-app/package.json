@@ -30,6 +30,7 @@
 		"mode-watcher": "catalog:",
 		"svelte-dnd-action": "^0.9.69",
 		"tailwind-variants": "^3.2.2",
-		"three": "catalog:"
+		"three": "catalog:",
+		"zod": "^4.3.6"
 	}
 }

@@ -6,6 +6,7 @@ using Newtonsoft.Json.Linq;
 using Selva.Schema.Constants;
 using Selva.Schema.Models;
 using Selva.Schema.Services;
+using Selva.GH.Utilities.Guards;
 using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services;
@@ -94,6 +95,14 @@ public class SchemaArchiveSerializer
                     var originalVersion = jObject["schemaVersion"]?.Value<string>();
                     var needsBackup = string.IsNullOrEmpty(originalVersion) ||
                                       Version.Parse(originalVersion ?? "1.0.0") < SchemaVersion.CURRENT;
+
+                    // Skip backup writes when running under Rhino.Compute — the
+                    // .gh file isn't being mutated there, and concurrent compute
+                    // workers race on the second-precision backup filename.
+                    if (needsBackup && HeadlessGuard.IsHeadless)
+                    {
+                        needsBackup = false;
+                    }
 
                     // CREATE BACKUP from raw JSON before any migration or deserialization
                     if (needsBackup)

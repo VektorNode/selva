@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Grasshopper;
 using Grasshopper.Kernel;
+using Rhino;
 using Selva.Schema.Models;
 using Selva.GH.Features.UIBuilder.Helpers;
 using Selva.GH.Features.UIBuilder.Services.Communication;
@@ -28,6 +29,10 @@ public class DocumentEventManager : IDisposable
     // Used to short-circuit UndoStateChanged when no relevant objects exist.
     private readonly HashSet<Guid> _watchedIds = [];
 
+    // Subset of _watchedIds — ContextBake components only. Used by CollectAndBroadcastOutputs to
+    // avoid re-scanning the entire document on every solve-end just to find ContextBakes.
+    private readonly HashSet<Guid> _bakeIds = [];
+
     private GH_Document _currentDocument;
     private bool _disposed;
 
@@ -41,8 +46,12 @@ public class DocumentEventManager : IDisposable
         _schemaSynchronizer = schemaSynchronizer ?? throw new ArgumentNullException(nameof(schemaSynchronizer));
         _valueCollector = valueCollector ?? throw new ArgumentNullException(nameof(valueCollector));
         _webSocketTransport = webSocketTransport ?? throw new ArgumentNullException(nameof(webSocketTransport));
+        // Timer callback fires on a ThreadPool thread. Marshal to the Rhino UI thread before
+        // raising DocumentModified — downstream handlers read GH document state (FindObject,
+        // Params, VolatileData) which is not safe to touch off the UI thread.
         _documentModifiedTimer = new Timer(
-            _ => DocumentModified?.Invoke(this, EventArgs.Empty),
+            _ => RhinoApp.InvokeOnUiThread(new Action(() =>
+                DocumentModified?.Invoke(this, EventArgs.Empty))),
             null,
             Timeout.Infinite,
             Timeout.Infinite);
@@ -108,6 +117,7 @@ public class DocumentEventManager : IDisposable
     public void ClearWatchedObjects()
     {
         _watchedIds.Clear();
+        _bakeIds.Clear();
     }
 
     /// <summary>
@@ -156,11 +166,27 @@ public class DocumentEventManager : IDisposable
             Logger.Error("Failed to subscribe to document events", ex);
         }
 
+        // Seed the bake-id set so CollectAndBroadcastOutputs can skip the per-solve doc walk.
+        // OnObjectsAdded keeps it up to date afterwards.
+        foreach (var obj in document.Objects)
+        {
+            if (ParameterTypeHelper.IsContextBakeComponent(obj) && obj is IGH_DocumentObject docObj)
+            {
+                _bakeIds.Add(docObj.InstanceGuid);
+            }
+        }
+
         _eventsRegistered = true;
     }
 
     /// <summary>
-    ///     Unregister all events
+    ///     Unregister document-side subscriptions (SolutionStart/End, ObjectsAdded/Deleted,
+    ///     UndoStateChanged, DocumentRemoved).
+    ///
+    ///     Does NOT clear the public events (SolutionStarted/SolutionEnded/DocumentModified/
+    ///     ParametersChanged/MetadataChanged) — those are owned by component-side subscribers that
+    ///     bind once per component lifetime. Disposal of those subscriptions belongs to the
+    ///     component's Cleanup()/Dispose(). See GH_UIBuilderComponent.Locked for the matching note.
     /// </summary>
     public void UnregisterEvents()
     {
@@ -223,23 +249,21 @@ public class DocumentEventManager : IDisposable
     {
         SolutionEnded?.Invoke(this, EventArgs.Empty);
 
-        if (_webSocketTransport.IsRunning)
-            // Critical: Ensure solving=false is sent. If this fails, clients may get stuck.
-            // We use Task.Run to avoid blocking Grasshopper's event thread
+        if (!_webSocketTransport.IsRunning)
         {
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await _webSocketTransport.BroadcastSolvingState(false);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn($"[DocumentEventManager] Failed to broadcast solving=false: {ex.Message}");
-                    // Even if broadcast fails, state should eventually timeout on client side
-                }
-            });
+            return;
         }
+
+        // BroadcastSolvingState is non-blocking (returns the in-flight Task) and deduplicates
+        // internally — no Task.Run wrapper needed. If a send fails, observe the fault and log,
+        // but don't crash the GH event thread.
+        _ = _webSocketTransport.BroadcastSolvingState(false).ContinueWith(t =>
+        {
+            if (t.IsFaulted)
+            {
+                Logger.Warn($"[DocumentEventManager] Failed to broadcast solving=false: {t.Exception?.GetBaseException().Message}");
+            }
+        }, TaskContinuationOptions.OnlyOnFaulted);
     }
 
     /// <summary>
@@ -281,6 +305,10 @@ public class DocumentEventManager : IDisposable
             if (obj is IGH_DocumentObject docObj && IsRelevantObject(obj))
             {
                 _watchedIds.Add(docObj.InstanceGuid);
+                if (ParameterTypeHelper.IsContextBakeComponent(obj))
+                {
+                    _bakeIds.Add(docObj.InstanceGuid);
+                }
                 anyAdded = true;
             }
         }
@@ -307,6 +335,7 @@ public class DocumentEventManager : IDisposable
         {
             if (obj is IGH_DocumentObject docObj && _watchedIds.Remove(docObj.InstanceGuid))
             {
+                _bakeIds.Remove(docObj.InstanceGuid);
                 anyRemoved = true;
             }
         }
@@ -374,9 +403,11 @@ public class DocumentEventManager : IDisposable
 
         var outputValues = _valueCollector.CollectOutputValues(_currentDocument, schema);
         var fileOutputs = _valueCollector.CollectFileOutputs(_currentDocument, schema);
-        // Only scan display data when the 3D viewer is enabled — scanning all document objects is expensive
-        var displayData =
-            includeDisplayData ? _valueCollector.CollectDisplayData(_currentDocument) : new List<object>();
+        // Only scan display data when the 3D viewer is enabled — scanning all document objects is expensive.
+        // Pass the watched bake-id set so the collector doesn't have to re-walk the entire document.
+        var displayData = includeDisplayData
+            ? _valueCollector.CollectDisplayData(_currentDocument, _bakeIds)
+            : new List<object>();
 
         if (outputValues.Count > 0 || fileOutputs.Count > 0 || displayData.Count > 0)
         {

@@ -155,8 +155,12 @@ public class ValueCollector
     ///     Collect display data from ContextBakeComponent inputs.
     ///     Returns an array of MeshBatch objects (as JSON-serializable objects).
     ///     This mirrors Rhino.Compute behavior where baking is explicit.
+    ///
+    ///     When <paramref name="bakeIds" /> is provided, only those components are visited
+    ///     (O(k) FindObject lookups instead of O(n) full-document scan).
     /// </summary>
     public List<object> CollectDisplayData(GH_Document document,
+        IReadOnlyCollection<Guid> bakeIds = null,
         Action<GH_RuntimeMessageLevel, string> addMessage = null)
     {
         var displayDataList = new List<object>();
@@ -167,8 +171,30 @@ public class ValueCollector
         }
 
         var contextBakeCount = 0;
+
+        // Fast path: caller pre-tracks ContextBake instance ids (e.g. via DocumentEventManager.OnObjectsAdded).
+        // Skip the full document walk.
+        IEnumerable<IGH_DocumentObject> candidates;
+        if (bakeIds != null && bakeIds.Count > 0)
+        {
+            var resolved = new List<IGH_DocumentObject>(bakeIds.Count);
+            foreach (var id in bakeIds)
+            {
+                if (document.FindObject(id, false) is IGH_DocumentObject obj)
+                {
+                    resolved.Add(obj);
+                }
+            }
+
+            candidates = resolved;
+        }
+        else
+        {
+            candidates = document.Objects;
+        }
+
         // Find all ContextBakeComponents and extract their input data
-        foreach (var docObject in document.Objects)
+        foreach (var docObject in candidates)
         {
             if (!(docObject is IGH_Component component))
             {

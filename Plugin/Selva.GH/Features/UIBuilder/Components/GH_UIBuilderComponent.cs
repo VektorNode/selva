@@ -58,7 +58,17 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     protected override Bitmap Icon => Resources.UIBridge;
 
     /// <summary>
-    ///     Override Locked property to handle right-click disable/enable
+    ///     Override Locked property to handle right-click disable/enable.
+    ///
+    ///     IMPORTANT invariant: on lock we only tear down what InitializeDependencies wires per-document
+    ///     (servers + DocumentEventManager document-side subscriptions). We do NOT detach the
+    ///     component-side handlers (_onSolutionStarted/_onSolutionEnded/_onDocumentModified) — they
+    ///     are bound exactly once in InitializeDependencies and remain attached for the component's
+    ///     lifetime. Cleanup() / Dispose() are responsible for detaching them.
+    ///
+    ///     If you ever change UnregisterEvents to also clear the EventManager's SolutionStarted/
+    ///     SolutionEnded/DocumentModified subscriber lists, this contract breaks and solving-state
+    ///     tracking silently stops working across lock/unlock cycles.
     /// </summary>
     public override bool Locked
     {
@@ -102,7 +112,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         // Check if running in headless/compute environment before any initialization
         // If so, just output the embedded schema and stop - no services or background tasks
-        if (RhinoApp.IsRunningHeadless || RhinoDoc.ActiveDoc == null || RhinoDoc.ActiveDoc.IsHeadless)
+        if (HeadlessGuard.IsHeadless)
         {
             DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
             return;
@@ -130,14 +140,12 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             HandleDisablingState(document);
         }
 
-        // Register document events only when enabled
-        if (enable)
+        // Register document events only when enabled. Re-registration is needed on the rising
+        // edge (off→on) or when the document changed under us — not on every solve.
+        // EventManager itself is idempotent, but skipping the call keeps the hot path lean.
+        if (enable && (transition.EnableRising || _currentDocument != document))
         {
-            if (_currentDocument != document)
-            {
-                _currentDocument = document;
-            }
-
+            _currentDocument = document;
             _service.EventManager.RegisterEvents(document);
         }
 
@@ -504,7 +512,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
     /// <summary>
-    ///     Clear contextual data from all inputs and outputs after each solve
+    ///     Clear contextual data from all inputs and outputs after each solve.
+    ///     Single pass over document.Objects with cached reflection — runs on every solve-end.
     /// </summary>
     private void ClearAllContextualParameters()
     {
@@ -516,22 +525,18 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
         try
         {
-            // Clear all contextual input parameters
-            var contextualParams = document.Objects.OfType<IGH_ContextualParameter>().ToList();
-            foreach (var contextParam in contextualParams)
-            {
-                var clearMethod = contextParam.GetType().GetMethod("ClearContextualData");
-                clearMethod?.Invoke(contextParam, null);
-            }
-
-            // Clear context output components (ContextPrintComponent)
             foreach (var obj in document.Objects)
             {
+                if (obj is IGH_ContextualParameter contextParam)
+                {
+                    ParameterTypeHelper.TryInvokeClearContextualData(contextParam);
+                    continue;
+                }
+
                 if (ParameterTypeHelper.IsContextOutputComponent(obj) ||
                     ParameterTypeHelper.IsContextBakeComponent(obj))
                 {
-                    var clearMethod = obj.GetType().GetMethod("ClearContextualData");
-                    clearMethod?.Invoke(obj, null);
+                    ParameterTypeHelper.TryInvokeClearContextualData(obj);
                 }
             }
         }
@@ -611,8 +616,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             }
         }
 
-        // Append to schema history on every GH file save
-        if (_embeddedSchema != null)
+        // Append to schema history on every GH file save (skip under headless
+        // hosts like Rhino.Compute, which never legitimately save back).
+        if (_embeddedSchema != null && !HeadlessGuard.IsHeadless)
         {
             try
             {
