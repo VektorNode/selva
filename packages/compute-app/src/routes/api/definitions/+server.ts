@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { definitionService, getProjectProvider } from '$lib/server/providers.server';
 import { requireCanCreateDefinition } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
-import { CreateDefinitionInputSchema } from '@selvajs/platform/definitions/schemas';
+import { CreateDefinitionInputSchema } from '@selvajs/platform/definitions';
 import { GH_EXTENSIONS, MAX_GH_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '$lib/server/admin-config';
 
 function parseTags(raw: unknown): string[] | undefined {

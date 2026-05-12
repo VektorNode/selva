@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { providers } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
-import { GuidSchema } from '@selvajs/platform/definitions/schemas';
+import { GuidSchema } from '@selvajs/platform/definitions';
 import {
 	CreateShareLinkInputSchema,
 	DEFAULT_SHARE_LINK_MAX_SOLVES,

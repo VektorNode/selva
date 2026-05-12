@@ -3,7 +3,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { definitionService } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
-import { GuidSchema, PublishVersionInputSchema } from '@selvajs/platform/definitions/schemas';
+import { GuidSchema, PublishVersionInputSchema } from '@selvajs/platform/definitions';
 
 /**
  * POST /api/definitions/[guid]/publish — advance the live channel.
