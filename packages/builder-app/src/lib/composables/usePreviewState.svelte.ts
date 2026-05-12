@@ -142,10 +142,10 @@ export function usePreviewState(getSessionId: () => string) {
 
 		if (message.modelUnits) state.modelUnits = message.modelUnits;
 
-		// `binaryBatchCount` is the new transport (Phase 1b): mesh blobs arrive as separate binary
-		// WebSocket frames, not inside this JSON envelope. `0` is meaningful — it means "no display
-		// output this solve, clear the meshes." `undefined` means the server didn't send a display
-		// payload at all; leave existing meshes alone (matches the previous behavior).
+		// `binaryBatchCount` describes the binary mesh transport: mesh blobs arrive as separate
+		// binary WebSocket frames, not inside this JSON envelope. `0` is meaningful — it means
+		// "no display output this solve, clear the meshes." `undefined` means the server didn't
+		// send a display payload at all; leave existing meshes alone.
 		if (typeof message.binaryBatchCount === 'number') {
 			const expected = message.binaryBatchCount;
 			const scaleFactor = SCALE_FACTORS[state.modelUnits as keyof typeof SCALE_FACTORS] ?? 1;

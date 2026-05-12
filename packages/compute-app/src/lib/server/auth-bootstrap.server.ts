@@ -45,7 +45,7 @@ export async function bootstrapUserSession(user: AuthUser): Promise<void> {
  *   signer. Without it, the first random signup would become Selva staff.
  *
  * The env var also doubles as the break-glass recovery path
- * (Permissions.md §12) when admin is lost to backup restores or migration
+ * (Permissions.md §2) when admin is lost to backup restores or migration
  * drift.
  */
 function shouldBootstrapAdmin(

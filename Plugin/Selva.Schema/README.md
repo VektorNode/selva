@@ -5,7 +5,7 @@ management, validation, and versioning.
 
 ## Target Framework
 
-- **netstandard2.0** - Compatible with both .NET Framework 4.8 (Rhino 7) and .NET 7.0+ (Rhino 8)
+- **netstandard2.0** — compatible with the runtimes `Selva.GH` targets: .NET Framework 4.8 + .NET 7.0 (Rhino 8) and .NET 9.0 (Rhino 9). Rhino 7 is not supported.
 
 ## Dependencies
 

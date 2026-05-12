@@ -6,7 +6,7 @@ import { handleApiError } from '$lib/server/api-errors';
 import type { ProjectMember } from '@selvajs/platform';
 
 /**
- * §5 / §7 — org owner/admin escape hatch. Adds the actor as a co-owner; does
+ * §5 — org owner/admin escape hatch. Adds the actor as a co-owner; does
  * NOT demote the existing owner. Idempotent: reclaiming twice is a no-op
  * because `addProjectMember` reactivates a soft-deleted row in place.
  */

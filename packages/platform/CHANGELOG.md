@@ -56,7 +56,7 @@
   - WebSocket message handling and validation overhauled.
   - Document synchronization and schema handling refactor.
   - Robust volatile + persistent parameter-value extraction.
-  - Multi-target: net48 (Rhino 7), net7.0 (Rhino 8), net9.0 (Rhino 9-wip) with separate `manifest-rh8.yml` / `manifest-rh9.yml`.
+  - Multi-target: net48 + net7.0 (Rhino 8), net9.0 (Rhino 9-wip) with separate `manifest-rh8.yml` / `manifest-rh9.yml`. Rhino 7 is not supported.
   - Grasshopper group import + enhanced grouping options.
   - `BinaryGeometryWriter` for optimized mesh delivery.
   - `ValueApplicator` + `ValueCollector` services replace ad-hoc plumbing in UIBuilder.

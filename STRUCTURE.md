@@ -8,8 +8,10 @@ This document defines the conventions for where code lives and how it's named. T
 selva/
 ├── Plugin/                         # .NET / Grasshopper plugin
 │   ├── Selva.Schema/               # Schema models, validation, migration (no Rhino/GH deps)
-│   ├── Selva.GH/                   # Grasshopper plugin (depends on Selva.Schema)
-│   ├── Selva.Tests/                # xUnit tests
+│   ├── Selva.Drawing/              # Document-model drawing library + SVG/PDF renderers (no Rhino/GH deps)
+│   ├── Selva.Drawing.Tests/        # xUnit tests for Selva.Drawing
+│   ├── Selva.GH/                   # Grasshopper plugin (depends on Selva.Schema + Selva.Drawing)
+│   ├── Selva.Tests/                # xUnit tests for Selva.GH + Selva.Schema
 │   └── Releases/                   # Versioned .yak/.gha release artifacts (tracked)
 │
 ├── packages/                       # TypeScript / Svelte workspace
@@ -17,6 +19,7 @@ selva/
 │   ├── platform/                   # Provider interfaces (auth, data, storage, ...)
 │   ├── local-provider/             # Filesystem implementation of platform
 │   ├── supabase-provider/          # Supabase implementation of platform
+│   ├── header-auth-provider/       # Forward-auth provider (trusts reverse-proxy headers)
 │   ├── ui/                         # Shared Svelte components, theme, primitives
 │   ├── builder-app/                # Schema designer (local dev mode)
 │   ├── compute-app/                # Standalone compute app (cloud mode)
@@ -33,8 +36,10 @@ selva/
 ### Project boundaries
 
 - **`Selva.Schema`** — `netstandard2.0`. No `using Rhino.*`, no `using Grasshopper.*`. Holds the generated schema, validation rules, migration logic, and shared constants. Anything reusable outside Grasshopper goes here.
-- **`Selva.GH`** — `net48` + `net7.0`. The `.gha` plugin. Depends on `Selva.Schema`. All Grasshopper components, params, Goos, document/server lifecycle services live here.
-- **`Selva.Tests`** — xUnit. Tests both projects.
+- **`Selva.Drawing`** — `netstandard2.0`. No `using Rhino.*`, no `using Grasshopper.*`. Document model + SVG/PDF renderers used by the Drawing feature in `Selva.GH`.
+- **`Selva.GH`** — `net48` + `net7.0` + `net9.0`. The `.gha` plugin. Rhino 8 ships both `net48` and `net7.0`; Rhino 9 ships `net9.0`. Rhino 7 is not supported. Depends on `Selva.Schema` and `Selva.Drawing`. All Grasshopper components, params, Goos, document/server lifecycle services live here.
+- **`Selva.Tests`** — xUnit. Covers `Selva.GH` and `Selva.Schema`.
+- **`Selva.Drawing.Tests`** — xUnit. Covers `Selva.Drawing`.
 
 ### Naming rules
 

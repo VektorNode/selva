@@ -1,17 +1,31 @@
-# Copy this to terraform.tfvars and fill in your values
-# terraform.tfvars is gitignored — never commit it
+# Copy this to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit it.
 
-project_id     = "your-gcp-project-id"
-region         = "europe-west1"
-zone           = "europe-west1-d"
-machine_type   = "e2-medium"
+project_id   = "your-gcp-project-id"
+region       = "europe-west1"
+zone         = "europe-west1-d"
+machine_type = "e2-medium"
 
 ssh_user = "selva"
 
-# Rhino.Compute connection
-compute_server_url = "http://your-compute-server:5000"
-compute_api_key    = "your-api-key"
+# ============================================================================
+# Domain (required)
+# ============================================================================
+# Caddy provisions a Let's Encrypt cert for this name on first boot. The A
+# record MUST point at the static IP this module creates BEFORE the VM
+# finishes booting, or ACME fails (Caddy retries; it's not fatal, but
+# expected).
+#
+# Workflow:
+#   1. terraform apply  → outputs static_ip
+#   2. Create A record:  <domain>  →  <static_ip>   at your DNS host
+#   3. Wait ~1–5 min for DNS to propagate
+#
+# Quick testing without buying a domain: use sslip.io.
+#   domain = "34-142-50-7.sslip.io"   (resolves to 34.142.50.7 automatically)
+domain     = "app.example.dev"
+acme_email = "you@example.dev"
 
-# Optional admin panel
-admin_password = "your-secure-password"
-admin_secret   = "your-32-plus-character-secret-here"
+# Git ref to deploy (branch / tag / commit). Defaults to "main".
+# Override to deploy a feature branch, e.g. "9x".
+# branch = "main"

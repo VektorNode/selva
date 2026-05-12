@@ -11,8 +11,8 @@ export const APP_DEFAULTS = {
 		SOLVE_STATE_DURATION: 3500,
 		/** Parameter export callback delay (ms) */
 		PARAM_EXPORT_DELAY: 100,
-		/** Viewer initialization delay (ms) */
-		VIEWER_INIT_DELAY: 350
+		/** Drawer open/close animation duration (ms) — matches the CSS transition. */
+		DRAWER_ANIMATION_MS: 350
 	},
 
 	// Solving indicator adaptive thresholds

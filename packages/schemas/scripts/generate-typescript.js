@@ -212,7 +212,7 @@ function checkSchemaVersionBumped() {
     console.error(`  Current version: ${workingVersion}`);
     console.error('');
     console.error('  Update "schemaVersion" default in UISchema (e.g. 2.3.0 → 2.4.0),');
-    console.error('  add a migration entry in SchemaMigrator.cs, and update SCHEMA_CHANGELOG.md.');
+    console.error('  add a migration entry in SchemaMigrator.cs, and update packages/schemas/CHANGELOG.md.');
     console.error('');
     process.exit(1);
   }

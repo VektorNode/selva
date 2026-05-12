@@ -3,7 +3,7 @@
  * has elapsed since the last time it was invoked.
  *
  * Use for text inputs, search boxes, etc. where you want to wait for the user
- * to finish typing before executing. For sliders, use throttle() instead.
+ * to finish typing before executing.
  *
  * @param func The function to debounce
  * @param wait The delay in milliseconds

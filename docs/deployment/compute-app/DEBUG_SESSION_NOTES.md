@@ -5,6 +5,12 @@ Session: 2026-05-09. Server: GCP `selva-compute-app`, zone `europe-west6-a`, IP 
 SSH: `gcloud compute ssh selva@selva-compute-app --zone europe-west6-a`
 
 > **2026-05-11 update — env_file issue resolved.** Root cause: PM2's `env_file` is a `pm2-runtime`-only feature and is silently ignored by the regular `pm2 start` daemon. Switched `ecosystem.config.cjs` to `node_args: '--env-file=.env'` (Node >= 20.6 native flag), which loads `.env` reliably regardless of how PM2 was invoked. The `pm2 kill` + `set -a; . ./.env` workaround described below is no longer needed.
+>
+> **Env-var names below are pre-rename.** Same-day refactor (commit `16642ca9`, 2026-05-11) renamed the two local-provider secrets:
+> - `SESSION_SECRET` → `SELVA_HMAC_KEY`
+> - `SELVA_SECRET_KEY` → `SELVA_AT_REST_KEY`
+>
+> Translate as you read. The authoritative current names live in [`packages/compute-app/.env.example`](../../../packages/compute-app/.env.example).
 
 ## Current state
 

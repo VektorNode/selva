@@ -37,7 +37,6 @@
 		disabled = false
 	}: Props = $props();
 
-	// Stable ID — not reactive, computed once at component creation
 	const inputId = $derived(`input-${item.paramId}`);
 	const label = $derived(displayName || item.displayName || item.paramId);
 

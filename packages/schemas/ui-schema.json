@@ -593,7 +593,7 @@
 				"type": {
 					"type": "string",
 					"enum": ["text", "number", "file", "chart"],
-					"description": "Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files, 'html' for rendered HTML (e.g. Plotly charts)"
+					"description": "Output display type in UI: 'text' for text output, 'number' for numeric output, 'file' for downloadable files, 'chart' for rendered charts (e.g. Plotly)"
 				},
 				"groupName": {
 					"type": "string",

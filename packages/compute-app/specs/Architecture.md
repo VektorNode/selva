@@ -25,7 +25,7 @@ A single `ui-schema.json` ([packages/schemas/ui-schema.json](../../schemas/ui-sc
 ┌─────────────────────────────────────────────────────────────────┐
 │  Rhino + Grasshopper (designer's machine)                       │
 │  ┌─────────────────────────────────────────────────┐            │
-│  │  Selva.GH (.gha plugin, net48 + net7.0)        │            │
+│  │  Selva.GH (.gha plugin, net48 + net7.0 + net9.0)│           │
 │  │  - UIBuilder component                          │            │
 │  │  - WebSocket server :8765                       │            │
 │  │  - Embedded HTTP server (dev assets)            │            │
@@ -313,7 +313,7 @@ Workflow: edit `ui-schema.json` → run `pnpm generate:all` → both sides see t
 ### Builder app + plugin (designer's box)
 
 - **Dev:** `pnpm dev` starts the SvelteKit builder app on `:5173`. Plugin built separately with `dotnet build`, loaded into Rhino, auto-connects to the dev server via WebSocket on `:8765`. Hot reload for the web side, IDE debugging for the plugin.
-- **Production plugin:** `pnpm build:plugin` builds the web assets, copies them into `Plugin/Selva.GH/EmbeddedAssets/web/`, embeds them as `EmbeddedResource`, and produces a single self-contained `.gha` (multi-targeted: net48 for Rhino 7, net7.0 for Rhino 8). The plugin allocates a local HTTP port at runtime to serve the embedded assets.
+- **Production plugin:** `pnpm build:plugin` builds the web assets, copies them into `Plugin/Selva.GH/EmbeddedAssets/web/`, embeds them as `EmbeddedResource`, and produces a single self-contained `.gha` (multi-targeted: net48 + net7.0 for Rhino 8, net9.0 for Rhino 9; Rhino 7 is not supported). The plugin allocates a local HTTP port at runtime to serve the embedded assets.
 
 ### Compute app (deployed product)
 
