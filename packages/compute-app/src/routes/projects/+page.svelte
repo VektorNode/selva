@@ -90,6 +90,13 @@
 	const activeProject = $derived(
 		activeProjectId ? (data.projects.find((p) => p.id === activeProjectId) ?? null) : null
 	);
+	// Show "Add definition" only if the user can upload into the currently scoped
+	// project (or into any project, when no project is active). Hides the button
+	// for view-only users instead of letting them click into a dead-end dialog.
+	const canAddDefinition = $derived(
+		activeProject ? activeProject.canEdit : data.projects.some((p) => p.canEdit)
+	);
+	const editableProjects = $derived(data.projects.filter((p) => p.canEdit));
 	const editingProject = $derived(
 		editingProjectId ? (data.projects.find((p) => p.id === editingProjectId) ?? null) : null
 	);
@@ -312,10 +319,12 @@
 							Project settings
 						</Button>
 					{/if}
-					<Button size="sm" onclick={() => (showAddModal = true)}>
-						<Plus class="mr-1.5 h-3.5 w-3.5" />
-						Add definition
-					</Button>
+					{#if canAddDefinition}
+						<Button size="sm" onclick={() => (showAddModal = true)}>
+							<Plus class="mr-1.5 h-3.5 w-3.5" />
+							Add definition
+						</Button>
+					{/if}
 				{/snippet}
 			</SectionHeader>
 		</div>
@@ -466,11 +475,11 @@
 <AddDefinitionDialog
 	open={showAddModal}
 	isAdding={addingDefinition}
-	projects={data.projects}
-	defaultProjectId={activeProjectId ?? data.projects[0]?.id}
+	projects={editableProjects}
+	defaultProjectId={activeProject?.canEdit ? activeProjectId! : editableProjects[0]?.id}
 	computeServers={data.computeServers}
 	defaultComputeServerId={data.defaultComputeServerId}
-	showProjectDropdown={data.projects.length > 1}
+	showProjectDropdown={editableProjects.length > 1}
 	onOpenChange={(o) => (showAddModal = o)}
 	onSubmit={submitAddDefinition}
 />
