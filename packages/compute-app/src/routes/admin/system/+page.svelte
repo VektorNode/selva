@@ -26,25 +26,59 @@
 	let updateExitCode = $state<number | null>(null);
 	let updateRestarting = $state(false);
 
-	async function waitForAppRestart() {
+	type HealthResponse = { status: string; commit?: string | null };
+
+	async function fetchHealth(): Promise<HealthResponse | null> {
+		try {
+			const res = await fetch('/api/health', { cache: 'no-store' });
+			if (!res.ok) return null;
+			return (await res.json()) as HealthResponse;
+		} catch {
+			return null;
+		}
+	}
+
+	// Poll until we're confident the *new* process is serving:
+	//  - If we captured a startup commit, wait for the commit to change.
+	//  - Otherwise fall back to requiring 2 consecutive successful health checks
+	//    (avoids the race where we hit the old process right before PM2 kills it).
+	async function waitForAppRestart(previousCommit: string | null | undefined) {
 		updateLogs += '\nWaiting for app to come back online…\n';
-		await new Promise((r) => setTimeout(r, 3000));
-		for (let i = 0; i < 30; i++) {
-			try {
-				const res = await fetch('/api/health', { cache: 'no-store' });
-				if (res.ok) {
-					updateLogs += '✓ App is back online!\n';
-					updateExitCode = 0;
-					updateRunning = false;
-					updateRestarting = false;
-					return;
+		// Give PM2 a moment to actually kill the old process before we start polling.
+		await new Promise((r) => setTimeout(r, 2000));
+
+		const maxAttempts = 45; // ~90s
+		let consecutiveOk = 0;
+		for (let i = 0; i < maxAttempts; i++) {
+			const health = await fetchHealth();
+			if (health) {
+				if (previousCommit && health.commit) {
+					if (health.commit !== previousCommit) {
+						updateLogs += `✓ App is back online on new commit ${health.commit.slice(0, 7)}\n`;
+						updateExitCode = 0;
+						updateRunning = false;
+						updateRestarting = false;
+						return;
+					}
+					// Same commit — likely still the old process, keep waiting.
+					consecutiveOk = 0;
+				} else {
+					consecutiveOk += 1;
+					if (consecutiveOk >= 2) {
+						updateLogs += '✓ App is back online!\n';
+						updateExitCode = 0;
+						updateRunning = false;
+						updateRestarting = false;
+						return;
+					}
 				}
-			} catch {
-				// still down, keep polling
+			} else {
+				consecutiveOk = 0;
 			}
 			await new Promise((r) => setTimeout(r, 2000));
 		}
-		updateLogs += '⚠ App did not come back within 60s - check PM2 logs.\n';
+		updateLogs += '⚠ App did not come back within 90s — check PM2 logs.\n';
+		updateExitCode = -2;
 		updateRunning = false;
 		updateRestarting = false;
 	}
@@ -54,10 +88,17 @@
 		updateRestarting = false;
 		updateLogs = '';
 		updateExitCode = null;
+
+		// Snapshot the commit of the *currently running* process so we can detect
+		// when a new one takes over.
+		const preHealth = await fetchHealth();
+		const previousCommit = preHealth?.commit ?? null;
+
 		try {
 			const response = await fetch('/admin/api/system/update', { method: 'POST' });
 			if (!response.ok) {
 				updateLogs = 'Failed to start update process';
+				updateExitCode = response.status;
 				updateRunning = false;
 				return;
 			}
@@ -65,11 +106,14 @@
 			const decoder = new TextDecoder();
 			if (!reader) {
 				updateLogs = 'Failed to read response';
+				updateExitCode = -1;
 				updateRunning = false;
 				return;
 			}
 			let buffer = '';
-			let gotExit = false;
+			let sawRestarting = false;
+			let sawExit = false;
+			let streamExitCode: number | null = null;
 			while (true) {
 				const { done, value } = await reader.read();
 				if (done) break;
@@ -80,26 +124,49 @@
 					if (!part.startsWith('data: ')) continue;
 					try {
 						const event = JSON.parse(part.slice(6));
-						if (event.type === 'log') updateLogs += event.data + '\n';
-						else if (event.type === 'restarting') {
+						if (event.type === 'log') {
+							updateLogs += event.data + '\n';
+						} else if (event.type === 'restarting') {
 							updateLogs += event.data + '\n';
 							updateRestarting = true;
+							sawRestarting = true;
 						} else if (event.type === 'exit') {
-							gotExit = true;
-							updateExitCode = event.code;
-							updateRunning = false;
+							sawExit = true;
+							streamExitCode = event.code;
 						}
 					} catch {
 						// ignore malformed events
 					}
 				}
 			}
-			if (!gotExit) await waitForAppRestart();
+
+			// PM2 kills the SSE stream as part of the restart — so a dropped stream
+			// (or a non-zero "exit" arriving moments before death) after we've seen
+			// the "restarting" signal is EXPECTED, not a failure. Treat it as such
+			// and let the health poller decide whether the new process came up.
+			if (sawRestarting) {
+				await waitForAppRestart(previousCommit);
+			} else if (sawExit && streamExitCode === 0) {
+				// Clean exit, no restart (e.g. --no-restart or "already up to date").
+				updateExitCode = 0;
+				updateRunning = false;
+			} else if (sawExit) {
+				// Real failure before we ever got to the restart phase.
+				updateExitCode = streamExitCode ?? -1;
+				updateRunning = false;
+			} else {
+				// Stream ended without exit and without restart signal — unusual,
+				// but still poll health in case the script silently restarted.
+				await waitForAppRestart(previousCommit);
+			}
 		} catch (err) {
-			if (updateRunning) {
-				await waitForAppRestart();
+			// Fetch threw — most likely because PM2 killed the connection mid-stream.
+			// If we got far enough to see a restart, treat it as expected.
+			if (updateRestarting) {
+				await waitForAppRestart(previousCommit);
 			} else {
 				updateLogs += '\nError: ' + (err instanceof Error ? err.message : 'Unknown error');
+				updateExitCode = -1;
 				updateRunning = false;
 			}
 		}
