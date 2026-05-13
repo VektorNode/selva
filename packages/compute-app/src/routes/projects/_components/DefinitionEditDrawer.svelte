@@ -123,8 +123,18 @@
 	);
 
 	const statusItems: FilterableDropdownItem[] = [
-		{ id: 'draft', label: 'Draft — work in progress' },
-		{ id: 'published', label: 'Published — live and visible to runners' }
+		{
+			id: 'draft',
+			label: 'Draft — work in progress',
+			icon: Circle,
+			iconStyle: 'color: var(--muted-foreground); fill: var(--muted-foreground);'
+		},
+		{
+			id: 'published',
+			label: 'Published — live and visible to runners',
+			icon: Circle,
+			iconStyle: 'color: #22c55e; fill: #22c55e;'
+		}
 	];
 
 	const computeServerItems = $derived<FilterableDropdownItem[]>(

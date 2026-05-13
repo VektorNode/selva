@@ -40,9 +40,9 @@ interface HeaderNames {
 }
 
 const DEFAULT_HEADERS: HeaderNames = {
-	upn: 'SELVA-UserPrincipalName',
-	email: 'SELVA-Email',
-	displayName: 'SELVA-DisplayName'
+	upn: 'SELVA-ID',
+	email: 'SELVA-EMAIL',
+	displayName: 'SELVA-DISPLAYNAME'
 };
 
 export interface HeaderAuthProviderConfig {
@@ -50,7 +50,7 @@ export interface HeaderAuthProviderConfig {
 	allowlistFilePath: string;
 	/**
 	 * Header names the proxy sets. Defaults match the README's Caddy example
-	 * (`SELVA-UserPrincipalName`, `SELVA-Email`, `SELVA-DisplayName`). Override
+	 * (`SELVA-ID`, `SELVA-EMAIL`, `SELVA-DISPLAYNAME`). Override
 	 * to match a different proxy (e.g. oauth2-proxy uses `X-Auth-Request-User`).
 	 */
 	headers?: Partial<HeaderNames>;

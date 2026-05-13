@@ -8,6 +8,7 @@
 		label: string;
 		icon?: Component;
 		iconClass?: string;
+		iconStyle?: string;
 	}
 
 	interface Props {
@@ -114,6 +115,7 @@
 		{#if SelectedIcon}
 			<SelectedIcon
 				class={cn('h-3.5 w-3.5 shrink-0', selected?.iconClass ?? 'text-muted-foreground')}
+				style={selected?.iconStyle}
 			/>
 		{:else if TriggerIcon}
 			<TriggerIcon class="text-muted-foreground h-3.5 w-3.5 shrink-0" />
@@ -143,12 +145,12 @@
 						bind:value={query}
 						onkeydown={handleKey}
 						placeholder={searchPlaceholder}
-						class="placeholder:text-muted-foreground h-9 w-full bg-transparent pr-3 pl-9 text-sm outline-none"
+						class="placeholder:text-muted-foreground h-8 w-full bg-transparent pr-3 pl-9 text-sm outline-none"
 					/>
 				</div>
 			{/if}
 
-			<div class="max-h-60 overflow-y-auto py-1">
+			<div class="max-h-60 overflow-y-auto">
 				{#if matches.length === 0}
 					<p class="text-muted-foreground px-3 py-3 text-center text-xs">
 						No matches for "{query}"
@@ -168,6 +170,7 @@
 							{#if ItemIcon}
 								<ItemIcon
 									class={cn('h-3.5 w-3.5 shrink-0', item.iconClass ?? 'text-muted-foreground')}
+									style={item.iconStyle}
 								/>
 							{/if}
 							<span class="flex-1 truncate">{item.label}</span>
