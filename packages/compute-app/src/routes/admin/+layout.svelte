@@ -2,12 +2,13 @@
 	import { SideNav, type SideNavItem } from '@selvajs/ui';
 	import { Gauge, Building2, Folders, Users, Server, Settings, ScrollText } from '@lucide/svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
-	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
+	import type { OrgPermission, PlatformPermission, TenancyMode } from '@selvajs/platform';
 
 	interface LayoutData {
 		platformPermissions: PlatformPermission[];
 		orgPermissions: OrgPermission[];
 		auditAvailable: boolean;
+		tenancy: TenancyMode;
 	}
 	interface LayoutProps {
 		data: LayoutData;
@@ -30,7 +31,7 @@
 				label: 'Organizations',
 				icon: Building2,
 				match: 'prefix' as const,
-				show: can('instance_admin')
+				show: can('instance_admin') && data.tenancy !== 'single'
 			},
 			{
 				href: '/admin/projects',

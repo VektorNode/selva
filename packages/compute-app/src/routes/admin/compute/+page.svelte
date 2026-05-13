@@ -2,9 +2,11 @@
 	import { Button, Card, EmptyState, Input, toast, SectionHeader } from '@selvajs/ui';
 	import { Circle, Server, Plus, Trash2, Star, ChevronDown, ChevronUp } from '@lucide/svelte';
 	import type { PlatformComputeServer } from '@selvajs/platform/computeServer';
+	import type { TenancyMode } from '@selvajs/platform';
 	import { useServerHealth } from '$lib/composables/useServerHealth.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	const API_KEY_CLEAR = '__clear__';
 
@@ -23,6 +25,7 @@
 		servers: (Omit<PlatformComputeServer, 'apiKey'> & { hasApiKey: boolean })[];
 		defaultServerId: string;
 		orgs: OrgRow[];
+		tenancy: TenancyMode;
 	}
 	interface Props {
 		data: PageData;
@@ -39,15 +42,46 @@
 	let servers = $state<ServerEntry[]>([]);
 	let defaultServerId = $state('');
 	let saving = $state(false);
-	let dirty = $state(false);
+	let dirtyIds = $state(new SvelteSet<string>());
 	let expandedPlugins = $state<Record<string, boolean>>({});
 	let expandedSharing = $state<Record<string, boolean>>({});
+
+	function markDirty(id: string) {
+		dirtyIds.add(id);
+	}
+
+	function discardChanges(id: string) {
+		dirtyIds.delete(id);
+		// $effect resyncs only when dirtyIds is fully empty, so manually reset this server.
+		const original = data.servers.find((s) => s.id === id);
+		const idx = servers.findIndex((s) => s.id === id);
+		if (idx < 0) return;
+		if (!original) {
+			// Newly-added server that was never saved — drop it.
+			healthMap[id]?.stop();
+			const { [id]: _, ...rest } = healthMap;
+			healthMap = rest;
+			servers = servers.filter((s) => s.id !== id);
+			return;
+		}
+		servers[idx] = {
+			id: original.id,
+			label: original.label,
+			serverUrl: original.serverUrl,
+			sharedWith: original.sharedWith === 'all' ? 'all' : [...original.sharedWith],
+			timeoutMs: original.timeoutMs ?? 30000,
+			retryCount: original.retryCount ?? 0,
+			apiKey: '',
+			hasApiKey: original.hasApiKey
+		};
+		defaultServerId = data.defaultServerId;
+	}
 
 	// Per-server health — keyed by server id
 	let healthMap = $state<Record<string, ReturnType<typeof useServerHealth>>>({});
 
 	$effect(() => {
-		if (!dirty) {
+		if (dirtyIds.size === 0) {
 			servers = data.servers.map((s) => ({
 				id: s.id,
 				label: s.label,
@@ -90,7 +124,7 @@
 				retryCount: 0
 			}
 		];
-		dirty = true;
+		markDirty(id);
 	}
 
 	function removeServer(index: number) {
@@ -99,15 +133,16 @@
 		const { [removed.id]: _, ...rest } = healthMap;
 		healthMap = rest;
 		servers = servers.filter((_, i) => i !== index);
-		if (defaultServerId === removed.id && servers.length > 0) {
+		// Mark all remaining servers dirty so any visible Save button can flush the removal.
+		if (defaultServerId === removed.id && servers[0]) {
 			defaultServerId = servers[0].id;
 		}
-		dirty = true;
+		for (const s of servers) markDirty(s.id);
 	}
 
 	function setSharedWithAll(server: ServerEntry, all: boolean) {
 		server.sharedWith = all ? 'all' : [];
-		dirty = true;
+		markDirty(server.id);
 	}
 
 	function toggleOrg(server: ServerEntry, orgId: string) {
@@ -116,7 +151,7 @@
 		if (set.has(orgId)) set.delete(orgId);
 		else set.add(orgId);
 		server.sharedWith = [...set];
-		dirty = true;
+		markDirty(server.id);
 	}
 
 	async function save() {
@@ -141,7 +176,7 @@
 			if (res.ok) {
 				toast.success('Compute config saved');
 				await invalidateAll();
-				dirty = false;
+				dirtyIds.clear();
 				// Re-check health for all servers after save
 				for (const h of Object.values(healthMap)) h.stop();
 				healthMap = {};
@@ -243,7 +278,12 @@
 	{@const health = healthMap[server.id]?.state}
 	{@const sc = statusConfig[health?.state ?? 'checking']}
 	{@const pluginEntries = Object.entries(health?.plugins ?? {})}
-	<div class="bg-muted/30 space-y-3 rounded-lg border p-4">
+	{@const isDirty = dirtyIds.has(server.id)}
+	<div
+		class="space-y-3 rounded-lg border p-4 transition-colors {isDirty
+			? 'border-amber-400/60 bg-amber-50/30 dark:border-amber-500/40 dark:bg-amber-950/10'
+			: 'bg-muted/30'}"
+	>
 		<div class="flex items-center justify-between">
 			<div class="flex items-center gap-2">
 				<Input
@@ -253,7 +293,7 @@
 						const input = e.target as HTMLInputElement;
 						server.label = input.value.toLowerCase().replace(/[^a-z0-9_-]/g, '');
 						input.value = server.label;
-						dirty = true;
+						markDirty(server.id);
 					}}
 					class="h-7 w-32 font-mono text-xs"
 				/>
@@ -268,7 +308,7 @@
 						class="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline"
 						onclick={() => {
 							defaultServerId = server.id;
-							dirty = true;
+							markDirty(server.id);
 						}}
 					>
 						set as default
@@ -280,6 +320,20 @@
 					<Circle class="h-2.5 w-2.5 shrink-0 fill-current {sc.color}" />
 					<span class="text-xs font-medium {sc.color}">{sc.label}</span>
 				</div>
+				{#if isDirty}
+					<Button
+						variant="ghost"
+						size="sm"
+						onclick={() => discardChanges(server.id)}
+						disabled={saving}
+						class="text-muted-foreground hover:text-foreground h-7"
+					>
+						Discard
+					</Button>
+					<Button size="sm" onclick={save} disabled={saving} class="h-7">
+						{saving ? 'Saving…' : 'Save changes'}
+					</Button>
+				{/if}
 				<Button
 					variant="ghost"
 					size="sm"
@@ -324,7 +378,7 @@
 				<Input
 					placeholder="http://localhost:5000"
 					bind:value={server.serverUrl}
-					oninput={() => (dirty = true)}
+					oninput={() => markDirty(server.id)}
 					class="font-mono text-xs"
 				/>
 			</div>
@@ -342,7 +396,7 @@
 						disabled={server.apiKey === API_KEY_CLEAR}
 						oninput={(e) => {
 							server.apiKey = (e.target as HTMLInputElement).value;
-							dirty = true;
+							markDirty(server.id);
 						}}
 						class="font-mono text-xs"
 					/>
@@ -351,7 +405,7 @@
 							class="text-muted-foreground hover:text-destructive shrink-0 text-xs underline-offset-2 hover:underline"
 							onclick={() => {
 								server.apiKey = API_KEY_CLEAR;
-								dirty = true;
+								markDirty(server.id);
 							}}
 						>
 							Clear
@@ -372,7 +426,7 @@
 					type="number"
 					placeholder="30000"
 					bind:value={server.timeoutMs}
-					oninput={() => (dirty = true)}
+					oninput={() => markDirty(server.id)}
 					onblur={() => {
 						server.timeoutMs = Math.min(300000, Math.max(1000, Number(server.timeoutMs) || 30000));
 					}}
@@ -385,7 +439,7 @@
 					type="number"
 					placeholder="0"
 					bind:value={server.retryCount}
-					oninput={() => (dirty = true)}
+					oninput={() => markDirty(server.id)}
 					onblur={() => {
 						server.retryCount = Math.min(5, Math.max(0, Number(server.retryCount) || 0));
 					}}
@@ -394,7 +448,9 @@
 			</div>
 		</div>
 
-		{@render sharingControl(server)}
+		{#if data.tenancy !== 'single'}
+			{@render sharingControl(server)}
+		{/if}
 
 		{#if health?.reachable && pluginEntries.length > 0}
 			<div>
@@ -429,17 +485,7 @@
 		eyebrow="Admin"
 		title="Compute"
 		description="Manage compute servers. Share servers with specific orgs to expose them in pickers. When ALLOW_ORG_COMPUTE_OVERRIDE is on, org owners can configure their own servers."
-	>
-		{#snippet actions()}
-			<Button variant="outline" size="sm" onclick={addServer}>
-				<Plus class="mr-1.5 h-3.5 w-3.5" />
-				Add server
-			</Button>
-			<Button size="sm" onclick={save} disabled={saving || !dirty}>
-				{saving ? 'Saving…' : 'Save'}
-			</Button>
-		{/snippet}
-	</SectionHeader>
+	/>
 
 	<Card.Root>
 		<Card.Content class="space-y-3 pt-6">
@@ -448,7 +494,7 @@
 					{#snippet actions()}
 						<Button variant="outline" size="sm" onclick={addServer}>
 							<Plus class="mr-1.5 h-3.5 w-3.5" />
-							Add Server
+							Add server
 						</Button>
 					{/snippet}
 				</EmptyState>
@@ -456,7 +502,16 @@
 				{#each servers as server, i (server.id)}
 					{@render serverCard(server, i)}
 				{/each}
+				<button
+					type="button"
+					onclick={addServer}
+					class="border-muted-foreground/30 text-muted-foreground hover:border-foreground/50 hover:text-foreground hover:bg-muted/30 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-4 text-sm font-medium transition-colors"
+				>
+					<Plus class="h-4 w-4" />
+					Add another server
+				</button>
 			{/if}
 		</Card.Content>
 	</Card.Root>
 </div>
+
