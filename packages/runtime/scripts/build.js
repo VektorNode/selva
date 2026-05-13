@@ -49,7 +49,21 @@ const dim = (msg) => log(`${COLORS.DIM}${msg}${COLORS.RESET}`);
 // ============================================================================
 
 function buildComputeApp() {
-	header('[1/4] Building @selvajs/compute-app with ADAPTER=node');
+	header('[1/4] Building @selvajs/compute-app + its workspace deps with ADAPTER=node');
+	// `...^@selvajs/compute-app` is pnpm's "all workspace deps of compute-app
+	// EXCEPT compute-app itself". We build those first so their dist/ outputs
+	// are fresh, then build compute-app against them.
+	//
+	// Without the prebuild step, the compute-app build can fail with
+	// "X is not exported by ../ui/dist/index.js" whenever a new export was
+	// added to @selvajs/ui's source but not yet baked into its dist.
+	//
+	// `--if-present` skips packages that have no `build` script (e.g.
+	// @selvajs/config, which is pure config files) instead of erroring.
+	execSync('pnpm --filter "...^@selvajs/compute-app" run --if-present build', {
+		cwd: repoRoot,
+		stdio: 'inherit'
+	});
 	execSync('pnpm --filter @selvajs/compute-app run build', {
 		cwd: repoRoot,
 		stdio: 'inherit',
@@ -142,6 +156,14 @@ module.exports = {
 \t\t\tautorestart: true,
 \t\t\twatch: false,
 \t\t\tmax_memory_restart: '1G',
+
+\t\t\t// kill_timeout: graceful-drain budget on restart. PM2 sends SIGINT to
+\t\t\t// the SvelteKit server, which stops accepting new connections and
+\t\t\t// waits for in-flight requests to finish. After this many ms, PM2
+\t\t\t// escalates to SIGKILL. 10s is enough for most solves; bump if your
+\t\t\t// definitions can run longer and you want them to complete during
+\t\t\t// an update. The admin-update health probe runs AFTER this window,
+\t\t\t// so raising kill_timeout extends update time but doesn't break it.
 \t\t\tkill_timeout: 10000,
 \t\t\tlisten_timeout: 10000,
 \t\t\tmin_uptime: '30s',

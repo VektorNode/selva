@@ -9,6 +9,7 @@
 		toast,
 		SectionHeader,
 		Badge,
+		randomId,
 		type FilterableDropdownItem
 	} from '@selvajs/ui';
 	import { Server, Plus, Trash2, Star } from '@lucide/svelte';
@@ -83,7 +84,7 @@
 		servers = [
 			...servers,
 			{
-				id: crypto.randomUUID(),
+				id: randomId(),
 				label: 'org-server',
 				serverUrl: 'http://localhost:5000',
 				timeoutMs: 30000,

@@ -28,6 +28,7 @@ export * from './composables/useFooterItem.svelte';
 
 // Utils (cn function)
 export * from './utils';
+export { randomId } from './utils/randomId';
 
 // UI-specific runtime types (not from schema)
 export type { ActionButton } from './types/actionButton';

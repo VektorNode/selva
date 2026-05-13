@@ -40,17 +40,33 @@ interface HeaderNames {
 }
 
 const DEFAULT_HEADERS: HeaderNames = {
-	upn: 'SELVA-ID',
-	email: 'SELVA-EMAIL',
-	displayName: 'SELVA-DISPLAYNAME'
+	upn: 'SELVA-UserPrincipalName',
+	email: 'SELVA-Email',
+	displayName: 'SELVA-DisplayName'
 };
+
+/**
+ * Decides whether an unrecognized UPN coming through the proxy should be
+ * auto-allowlisted as the bootstrap admin. Returning `true` lets the provider
+ * create the allowlist row on the fly; returning `false` keeps the strict
+ * "must be pre-allowlisted" behavior. The caller is responsible for narrowing
+ * this to first-run + matching-email so the deployment can't be hijacked
+ * after the initial setup.
+ *
+ * Pure: no I/O inside the callback. The hook layer that wires it up checks
+ * `hasInstanceAdmin` and `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` itself.
+ */
+export type BootstrapAllowlistPolicy = (params: {
+	upn: string;
+	email: string | undefined;
+}) => boolean | Promise<boolean>;
 
 export interface HeaderAuthProviderConfig {
 	/** Absolute path to the allowlist JSON file (e.g. `/data/header-allowlist.json`). */
 	allowlistFilePath: string;
 	/**
 	 * Header names the proxy sets. Defaults match the README's Caddy example
-	 * (`SELVA-ID`, `SELVA-EMAIL`, `SELVA-DISPLAYNAME`). Override
+	 * (`SELVA-UserPrincipalName`, `SELVA-Email`, `SELVA-DisplayName`). Override
 	 * to match a different proxy (e.g. oauth2-proxy uses `X-Auth-Request-User`).
 	 */
 	headers?: Partial<HeaderNames>;
@@ -60,6 +76,14 @@ export interface HeaderAuthProviderConfig {
 	 * proxy will silently re-authenticate them on the next request.
 	 */
 	postLogoutRedirect?: string | null;
+	/**
+	 * Optional bootstrap policy. When set AND the policy returns true for an
+	 * unrecognized UPN, the provider auto-allowlists that UPN before completing
+	 * identification. Used to break the chicken-and-egg on fresh deployments
+	 * where no admin exists yet. The caller must scope this tightly — see
+	 * `BootstrapAllowlistPolicy`.
+	 */
+	bootstrapAllowlistPolicy?: BootstrapAllowlistPolicy;
 }
 
 function toAuthUser(u: AllowlistEntry): AuthUser {
@@ -74,22 +98,50 @@ function toAuthUser(u: AllowlistEntry): AuthUser {
 }
 
 class HeaderProxyAuth implements IProxyAuth {
+	private bootstrapPolicy: BootstrapAllowlistPolicy | undefined;
+
 	constructor(
 		private readonly users: AllowlistStore,
-		private readonly headers: HeaderNames
-	) {}
+		private readonly headers: HeaderNames,
+		bootstrapPolicy: BootstrapAllowlistPolicy | undefined
+	) {
+		this.bootstrapPolicy = bootstrapPolicy;
+	}
+
+	setBootstrapPolicy(policy: BootstrapAllowlistPolicy | null): void {
+		this.bootstrapPolicy = policy ?? undefined;
+	}
 
 	async identifyFromHeaders(headers: Headers): Promise<AuthUser | null> {
 		const upn = headers.get(this.headers.upn);
 		if (!upn || !upn.trim()) return null;
 
-		const entry = await this.users.findByUpn(upn);
+		const email = headers.get(this.headers.email)?.trim() || undefined;
+		const displayName = headers.get(this.headers.displayName)?.trim() || undefined;
+
+		let entry = await this.users.findByUpn(upn);
+
+		// Bootstrap path: when there's no allowlist row yet AND a bootstrap
+		// policy is configured AND it green-lights this UPN, create the row.
+		// The policy owner (the hook layer) is responsible for restricting
+		// this to first-run + matching-email so the deployment can't be
+		// hijacked once admin exists.
+		if (!entry && this.bootstrapPolicy) {
+			const allowed = await this.bootstrapPolicy({ upn, email });
+			if (allowed) {
+				try {
+					entry = await this.users.createUser(upn);
+				} catch {
+					// Race: another concurrent request beat us to it. Re-read.
+					entry = await this.users.findByUpn(upn);
+				}
+			}
+		}
+
 		if (!entry || entry.disabled) return null;
 
 		// First-sight materialization: fill in display-name / email from the
 		// proxy if the row is still bare. Never overwrites operator edits.
-		const email = headers.get(this.headers.email)?.trim() || undefined;
-		const displayName = headers.get(this.headers.displayName)?.trim() || undefined;
 		if ((!entry.email && email) || (!entry.displayName && displayName)) {
 			await this.users.materializeFromHeaders(entry.id, { email, displayName }).catch(() => {});
 			if (email && !entry.email) entry.email = email;
@@ -113,7 +165,21 @@ export class HeaderAuthProvider implements IAuthProvider {
 		this.users = createAllowlistStore(config.allowlistFilePath);
 		this.headers = { ...DEFAULT_HEADERS, ...config.headers };
 		this.postLogoutRedirect = config.postLogoutRedirect ?? null;
-		this.proxyAuth = new HeaderProxyAuth(this.users, this.headers);
+		this.proxyAuth = new HeaderProxyAuth(
+			this.users,
+			this.headers,
+			config.bootstrapAllowlistPolicy
+		);
+	}
+
+	/**
+	 * Late-bind a bootstrap-allowlist policy. Useful when the policy needs
+	 * runtime state the platform layer owns (e.g. `hasInstanceAdmin`) and
+	 * therefore can't be wired up at provider construction time. Pass `null`
+	 * to clear.
+	 */
+	setBootstrapAllowlistPolicy(policy: BootstrapAllowlistPolicy | null): void {
+		(this.proxyAuth as HeaderProxyAuth).setBootstrapPolicy(policy);
 	}
 
 	static fromEnv(env: Record<string, string | undefined>): HeaderAuthProvider {

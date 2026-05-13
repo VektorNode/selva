@@ -1,4 +1,5 @@
 import { APP_DEFAULTS } from '../constants';
+import { randomId } from '../utils/randomId';
 import type {
 	UISchema,
 	ParameterPreset,
@@ -44,7 +45,7 @@ export function createSavedState(
 	}
 
 	return {
-		id: crypto.randomUUID(),
+		id: randomId(),
 		name: metadata.name,
 		description: metadata.description,
 		timestamp: new Date().toISOString(),

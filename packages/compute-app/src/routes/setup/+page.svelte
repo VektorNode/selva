@@ -10,6 +10,8 @@
 	interface PageData {
 		hasPasswordAuth: boolean;
 		hasEmailLink: boolean;
+		hasProxyAuth: boolean;
+		bootstrapEmail: string | null;
 		oauthProviders: string[];
 	}
 
@@ -152,7 +154,32 @@
 			</form>
 		{/if}
 
-		{#if !data.hasPasswordAuth && !data.hasEmailLink && data.oauthProviders.length === 0}
+		{#if data.hasProxyAuth && !data.hasPasswordAuth && !data.hasEmailLink && data.oauthProviders.length === 0}
+			<div class="space-y-3">
+				<p class="text-muted-foreground text-sm">
+					This deployment authenticates via your upstream proxy (forward-auth). To claim admin,
+					sign in through the proxy with the email below — the first proxy-authenticated visit
+					will be granted instance admin automatically.
+				</p>
+				{#if data.bootstrapEmail}
+					<p class="text-sm">
+						Expected email: <code class="bg-muted rounded px-1 py-0.5">{data.bootstrapEmail}</code>
+					</p>
+				{:else}
+					<Alert.Root variant="destructive">
+						<CircleAlert />
+						<Alert.Description>
+							<code>BOOTSTRAP_INSTANCE_ADMIN_EMAIL</code> is unset. Set it in
+							<code>.env</code>, restart, and reload this page — otherwise the first
+							proxy-authenticated visitor would gain admin (and may not be you).
+						</Alert.Description>
+					</Alert.Root>
+				{/if}
+				<a href="/" class="block">
+					<Button type="button" variant="outline" class="w-full">Continue</Button>
+				</a>
+			</div>
+		{:else if !data.hasPasswordAuth && !data.hasEmailLink && data.oauthProviders.length === 0}
 			<Alert.Root variant="destructive">
 				<CircleAlert />
 				<Alert.Description>

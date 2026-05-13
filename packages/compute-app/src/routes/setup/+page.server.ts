@@ -34,6 +34,8 @@ export const load: PageServerLoad = async () => {
 	return {
 		hasPasswordAuth: Boolean(auth.passwordAuth),
 		hasEmailLink: Boolean(auth.emailLink),
+		hasProxyAuth: Boolean(auth.proxyAuth),
+		bootstrapEmail: process.env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL ?? null,
 		oauthProviders: auth.oauth?.listProviders() ?? []
 	};
 };

@@ -4,12 +4,20 @@ import type { AuthUser, RequestContext } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
 import { providers } from '$lib/server/providers.server';
 import { getBootHealth } from '$lib/server/bootHealth.server';
+import { bootstrapUserSession, wireHeaderAuthBootstrap } from '$lib/server/auth-bootstrap.server';
 import {
 	getRefreshToken,
 	setSessionCookie,
 	setRefreshCookie,
 	clearRefreshCookie
 } from '$lib/server/admin-auth.server';
+
+// Lazy wiring of the forward-auth bootstrap policy. Runs once on the first
+// real request rather than at module-import time so test files that import
+// helpers from hooks.server.ts don't trigger provider lookups before their
+// fake providers are installed. After the first call the flag flips and
+// subsequent requests skip the no-op.
+let headerAuthBootstrapWired = false;
 
 // Env validation is owned by each provider's `fromEnv()` — the selected
 // provider throws on missing vars (e.g. DATA_PATH for local, SUPABASE_URL for
@@ -156,6 +164,11 @@ export function isPublicRoute(pathname: string): boolean {
 export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve }) => {
 	event.locals.providers = providers;
 
+	if (!headerAuthBootstrapWired) {
+		wireHeaderAuthBootstrap();
+		headerAuthBootstrapWired = true;
+	}
+
 	const { pathname } = event.url;
 
 	// Static assets bypass every gate below — no auth, no first-run check,
@@ -234,6 +247,12 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		// rules that make these signals trustworthy.
 		if (!user && providers.auth.proxyAuth) {
 			user = await providers.auth.proxyAuth.identifyFromHeaders(event.request.headers);
+			// First-admin bootstrap for forward-auth deployments. The OAuth and
+			// email-link callbacks call `bootstrapUserSession` themselves; the
+			// proxy-auth path has no callback, so it runs here. `bootstrapUserSession`
+			// is gated by `hasInstanceAdmin` internally and is a no-op once admin
+			// exists, so this is safe to call on every authed request.
+			if (user) await bootstrapUserSession(user);
 		}
 
 		if (!user) {
