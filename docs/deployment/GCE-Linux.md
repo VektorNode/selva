@@ -296,13 +296,37 @@ tail -120 ~/.npm/_logs/<newest>-debug-0.log
 Common causes:
 
 - **sharp's native build fails** because `libvips` isn't installed. Fix: `sudo apt-get install -y build-essential python3 libvips-dev`, then `cd ~/apps/selva && npm install`.
-- **Stale npm cache resolving an unpublished version.** Symptom in the log: `placeDep ROOT @selvajs/runtime@<old-version> OK for: selva@... want: latest` where `<old-version>` no longer matches what's on npm. Fix:
-  ```bash
-  npm cache clean --force
-  cd ~/apps/selva
-  rm -rf node_modules package-lock.json
-  npm install --prefer-online
-  ```
+- **Stale npm cache resolving an unpublished version.** Symptom in the log: `placeDep ROOT @selvajs/runtime@<old-version> OK for: selva@... want: latest` where `<old-version>` no longer matches what's on npm. See the next entry — same fix applies.
+
+### `npm run update` reports success but the version didn't change
+
+Symptom: you ran `npm run update`, it said "Restarted selva-compute" without error, but `node -e "console.log(require('./node_modules/@selvajs/runtime/package.json').version)"` shows the same version as before. The "current" and "new" runtime versions printed by `selva update` are identical.
+
+Cause: **npm's packument cache.** When `npm update <pkg>` runs, npm checks its local cache for the package metadata first. If the cache says "latest = 0.10.3" and is younger than ~5 minutes, npm trusts the cache without re-asking the registry. So even if the registry now has 0.10.4, your VM installs 0.10.3 (a no-op).
+
+This is not a Selva bug — it's how npm caches metadata. But it bites every operator at least once, because publishes and updates often happen in the same session and the cache window is right in the awkward middle.
+
+Confirm the registry actually has the version you expect:
+
+```bash
+# From your laptop or any machine that hasn't talked to the registry recently:
+npm view @selvajs/runtime version
+npm view @selvajs/runtime versions --json
+```
+
+If the registry shows a newer version than your VM installed, force npm to revalidate:
+
+```bash
+cd ~/apps/selva
+npm cache clean --force
+rm -rf node_modules package-lock.json
+npm install --prefer-online
+npm run restart
+```
+
+`--prefer-online` tells npm to revalidate every cached manifest against the registry before using it. Slower than the default but guaranteed fresh.
+
+> **Future-proofing.** `selva update` will pass `--prefer-online` by default in a future release, which closes this trap automatically. Until then, the manual cache-clear above is the recovery path.
 
 ### `Cannot find package 'tailwind-merge'` at runtime
 

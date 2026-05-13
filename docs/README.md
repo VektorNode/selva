@@ -3,6 +3,7 @@
 ## Getting Started
 
 - **[QuickStart.md](QuickStart.md)** — Setup, development, and initial configuration
+- **[CLI.md](CLI.md)** — `npx @selvajs/create` and the `selva` operator commands (init, doctor, start/stop/restart, logs, update, keys rotate)
 - **[MultiOrg-LocalDev.md](MultiOrg-LocalDev.md)** — Test multi-org / multi-tenant locally (works with either provider)
 - **[Turborepo.md](Turborepo.md)** — How tasks are wired across the monorepo
 

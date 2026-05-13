@@ -5,7 +5,12 @@ import {
 	type AuthUser,
 	type TenancyMode
 } from '@selvajs/platform';
-import { getDataProvider, getPermissionStore, tenancy } from './providers.server.js';
+import {
+	getAuthProvider,
+	getDataProvider,
+	getPermissionStore,
+	tenancy
+} from './providers.server.js';
 
 /**
  * Shared post-verification flow used by every IdP-callback route (OAuth,
@@ -48,7 +53,7 @@ export async function bootstrapUserSession(user: AuthUser): Promise<void> {
  * (Permissions.md §2) when admin is lost to backup restores or migration
  * drift.
  */
-function shouldBootstrapAdmin(
+export function shouldBootstrapAdmin(
 	user: AuthUser,
 	configuredEmail: string | undefined,
 	mode: TenancyMode
@@ -58,4 +63,61 @@ function shouldBootstrapAdmin(
 	if (!expected) return true;
 	const actual = user.email?.trim().toLowerCase();
 	return !!actual && actual === expected;
+}
+
+/**
+ * Header-auth-specific variant of the bootstrap policy. Used by
+ * `wireHeaderAuthBootstrap` to decide whether an unrecognized UPN arriving
+ * through the proxy should be auto-allowlisted as the first admin.
+ *
+ * Same logic as `shouldBootstrapAdmin` but operates on the raw UPN/email
+ * before any allowlist row exists. For Entra deployments UPN ≈ email; if
+ * they differ, the proxy is expected to forward both and we prefer email
+ * when present.
+ */
+function shouldBootstrapUpn(
+	upn: string,
+	email: string | undefined,
+	configuredEmail: string | undefined,
+	mode: TenancyMode
+): boolean {
+	const expected = configuredEmail?.trim().toLowerCase();
+	if (mode === 'multi' && !expected) return false;
+	if (!expected) return true;
+	const candidate = (email ?? upn).trim().toLowerCase();
+	return !!candidate && candidate === expected;
+}
+
+/**
+ * Wire a bootstrap-allowlist policy onto the auth provider if it supports
+ * header-auth-style first-admin bootstrapping. Idempotent — safe to call on
+ * every startup; the provider holds the policy until process exit.
+ *
+ * Header-auth deployments can't reach `/setup` (no password form, no OAuth
+ * callback), so without this the first proxy-authenticated visitor is
+ * silently rejected (UPN not in allowlist) and the operator has to
+ * hand-write JSON files. With it, the first visit whose UPN/email matches
+ * `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is auto-allowlisted, and the immediately
+ * following `bootstrapUserSession` call grants instance_admin.
+ *
+ * The policy is gated by `hasInstanceAdmin` — once any admin exists, the
+ * policy returns false and the strict allowlist-only behavior resumes.
+ * Single-tenant deployments with no env var get the "first signer wins"
+ * shape, matching the password/OAuth bootstrap policy.
+ */
+export function wireHeaderAuthBootstrap(): void {
+	const auth = getAuthProvider() as unknown as {
+		setBootstrapAllowlistPolicy?: (
+			policy:
+				| ((p: { upn: string; email: string | undefined }) => boolean | Promise<boolean>)
+				| null
+		) => void;
+	};
+	if (typeof auth.setBootstrapAllowlistPolicy !== 'function') return;
+
+	auth.setBootstrapAllowlistPolicy(async ({ upn, email }) => {
+		const hasAdmin = await getPermissionStore().hasInstanceAdmin(SYSTEM_CONTEXT);
+		if (hasAdmin) return false;
+		return shouldBootstrapUpn(upn, email, env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL, tenancy);
+	});
 }

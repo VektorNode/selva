@@ -99,25 +99,64 @@ export async function runUpdate() {
 		return;
 	}
 
+	// Stop the running process BEFORE npm rewrites node_modules/@selvajs/runtime/build/.
+	// SvelteKit's node adapter lazy-imports chunks from build/server/chunks/ on every
+	// request; if we let npm replace them while the old process is still serving
+	// traffic, in-flight requests hit ERR_MODULE_NOT_FOUND for chunks whose hash
+	// just changed. Brief downtime (~1-2s longer than restart-in-place) but no
+	// chunk-mismatch errors.
+	const stopStatus = runPm2(dir, ['stop', APP_NAME], { inherit: false });
+	if (stopStatus !== 0) {
+		p.log.warn('pm2 stop did not succeed — selva-compute may not be running. Continuing.');
+	}
+
 	const s = p.spinner();
 	s.start(`npm update ${packages.join(' ')}`);
 	try {
-		execSync(`npm update --save ${packages.join(' ')}`, { cwd: dir, stdio: 'pipe' });
+		// --prefer-online forces npm to revalidate cached packuments against
+		// the registry before using them. Without this, npm's 5+ minute
+		// packument cache silently re-installs the same version even when a
+		// newer one was published in the meantime. See docs/Hotfix-CLI-Runtime.md
+		// "The stale-packument-cache trap".
+		execSync(`npm update --save --prefer-online ${packages.join(' ')}`, {
+			cwd: dir,
+			stdio: 'pipe'
+		});
 		s.stop('npm update finished');
 	} catch (err) {
 		s.stop('npm update failed');
+		// Bring the old process back up so the operator isn't left with downtime.
+		runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
 		throw err;
 	}
 
 	const after = readRuntimeVersion(dir);
 	p.log.info(`New @selvajs/runtime:     ${after ?? 'unknown'}`);
 
-	// Try to restart. If pm2 isn't running this app, skip.
-	const status = runPm2(dir, ['restart', APP_NAME, '--update-env'], { inherit: false });
+	// Surface no-op updates explicitly. --prefer-online closes most cache
+	// holes, but a freshly-published version can take a minute or two to
+	// propagate through npm's CDN — operators who run update too quickly
+	// after publish still see "Current = New". Tell them how to retry.
+	if (before && after && before === after) {
+		p.log.warn(
+			[
+				'No packages were updated — already on the latest version your npm cache knows about.',
+				'If you expected a newer version (e.g. one was just published), your cache may be stale:',
+				'',
+				'  npm cache clean --force',
+				'  rm -rf node_modules package-lock.json',
+				'  npm install --prefer-online',
+				'  npm run restart'
+			].join('\n')
+		);
+	}
+
+	// Start the new build under PM2.
+	const status = runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
 	if (status === 0) {
-		p.outro(pc.green('Restarted ' + APP_NAME));
+		p.outro(pc.green('Started ' + APP_NAME));
 	} else {
-		p.outro(pc.yellow(`Restart skipped — start with \`selva start\`.`));
+		p.outro(pc.yellow(`Start failed — investigate with \`pm2 logs ${APP_NAME}\`.`));
 	}
 }
 

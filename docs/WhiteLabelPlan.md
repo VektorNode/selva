@@ -170,6 +170,47 @@ Single npm package `@selvajs/create`, published with a bin entry. Subcommands:
 
 ---
 
+## Known follow-ups (post-first-deploy)
+
+Surfaced during the first real GCE deployment. None block shipping; all are operator-experience cuts worth fixing before the second customer.
+
+### Stale-packument-cache trap in `selva update`
+
+`npm update` uses npm's packument cache, which serves stale `latest` for 5+ minutes after a publish. Operators run `selva update`, see "Restarted selva-compute" with identical before/after versions, and assume they got the fix. Mechanism + recovery documented in [Hotfix-CLI-Runtime.md](./Hotfix-CLI-Runtime.md#the-stale-packument-cache-trap).
+
+Three layered fixes to ship together in the next CLI / runtime hotfix:
+
+1. Pass `--prefer-online` in `selva update` ([pm2.js](../packages/create/src/commands/pm2.js)) and the admin handler ([+server.ts](../packages/compute-app/src/routes/admin/api/system/update/+server.ts)).
+2. Detect identical before/after version and print a warning with the cache-clear recovery command.
+3. Consider `npm install <pkg>@latest` over `npm update` as belt-and-braces.
+
+### `writeEnvFile` doesn't guarantee trailing newline
+
+`echo "X=Y" >> .env` after a CLI-written `.env` can concatenate `X=Y` onto the end of the last existing line. Saw this corrupt `ORIGIN=http://1.2.3.4` into `ORIGIN=http://1.2.3.4ALLOW_INSECURE_COOKIES=true`. Fix in [env.js](../packages/create/src/env.js) — always emit a trailing `\n`.
+
+### `selva doctor` doesn't validate `ORIGIN` shape
+
+When the env line was corrupted (above), doctor reported `✓ ORIGIN=http://1.2.3.4ALLOW_INSECURE_COOKIES=true` as green. It currently checks that ORIGIN parses-as-URL, but `new URL("http://1.2.3.4ALLOW_INSECURE_COOKIES=true")` doesn't throw — the trailing garbage is accepted as a hostname. Tighten: also verify the URL has no extraneous characters in the host portion.
+
+### `ALLOW_INSECURE_COOKIES` is undocumented and unsignalled
+
+The env var exists in [admin-auth.server.ts:65](../packages/compute-app/src/lib/server/admin-auth.server.ts#L65) but isn't in `.env.example`, isn't asked about by the CLI prompts, and isn't checked by doctor. Operators on plain-HTTP deployments hit "login appears to succeed but I'm not signed in" with no way to discover the fix.
+
+Three changes:
+1. Document in [packages/compute-app/.env.example](../packages/compute-app/.env.example).
+2. Auto-prompt in the CLI when `ORIGIN` starts with `http://` (default no, but recommend yes for demo deploys).
+3. Doctor: red-flag when `ORIGIN=http://...` and `ALLOW_INSECURE_COOKIES` is unset, with the recommended action printed.
+
+### `pnpm publish` is the only safe publish command
+
+The `0.10.2` runtime was published with `npm publish`, shipped `workspace:*` / `catalog:` literals in the tarball, broke every install. Documented in [Hotfix-CLI-Runtime.md](./Hotfix-CLI-Runtime.md#the-npm-publish-trap). Permanent fix: hand-flatten the specs in [packages/runtime/scripts/build.js](../packages/runtime/scripts/build.js) so the tarball is correct regardless of publish tool. Until then, the human habit of typing `pnpm publish` is the only line of defense.
+
+### CI smoke-test for the npm-mode update path
+
+`sh: update: not found` (the missing `npm` prefix in the admin handler's shell construction) would have been caught by spinning up a deployment-shaped fixture, calling the admin update handler against it, and asserting it exits 0. The bug shipped because the handler had only ever been tested against the git-mode path. Worth a small integration test on the runtime — even a docker-compose harness that scaffolds a deployment, publishes a no-op runtime update, and clicks the admin button.
+
+---
+
 ## Out of scope (for now)
 
 - **Runtime-mutable admin UI for flags/branding.** Deferred — needs permissions/audit-log design. Once enough operators ask, build it.

@@ -263,5 +263,20 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		);
 	}
 
+	// 6. Bootstrap admin email. Without it, the first proxy-authenticated
+	// visitor's UPN is rejected (not in allowlist) and the operator has to
+	// hand-write JSON to claim admin. With it, the first matching visit is
+	// auto-allowlisted and granted instance_admin in one step.
+	if (!env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL) {
+		out.push(
+			red(
+				'BOOTSTRAP_INSTANCE_ADMIN_EMAIL unset — header-auth has no /setup form, ' +
+					'so without this you cannot claim admin on first visit.'
+			)
+		);
+	} else {
+		out.push(green(`BOOTSTRAP_INSTANCE_ADMIN_EMAIL=${env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL}`));
+	}
+
 	return out;
 }

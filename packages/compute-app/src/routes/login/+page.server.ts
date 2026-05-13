@@ -20,6 +20,7 @@ export const load: PageServerLoad = async () => {
 	return {
 		hasPasswordAuth: Boolean(auth.passwordAuth),
 		hasEmailLink: Boolean(auth.emailLink),
+		hasProxyAuth: Boolean(auth.proxyAuth),
 		oauthProviders: auth.oauth?.listProviders() ?? []
 	};
 };

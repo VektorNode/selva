@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Card, EmptyState, Input, toast, SectionHeader } from '@selvajs/ui';
+	import { Button, Card, EmptyState, Input, toast, SectionHeader, randomId } from '@selvajs/ui';
 	import { Circle, Server, Plus, Trash2, Star, ChevronDown, ChevronUp } from '@lucide/svelte';
 	import type { PlatformComputeServer } from '@selvajs/platform/computeServer';
 	import type { TenancyMode } from '@selvajs/platform';
@@ -109,7 +109,7 @@
 	});
 
 	function addServer() {
-		const id = crypto.randomUUID();
+		const id = randomId();
 		if (servers.length === 0) defaultServerId = id;
 		servers = [
 			...servers,

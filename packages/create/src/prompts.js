@@ -275,9 +275,23 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 	// signup doesn't get Selva staff perms; (2) break-glass recovery if
 	// admin is lost to a backup restore / manual DB edit. The check ONLY
 	// runs while no admin exists yet, so leaving it set permanently is
-	// safe. Phrase the prompt differently per tenancy because the
-	// security implications differ.
-	if (tenancy === 'multi') {
+	// safe. Phrase the prompt differently per tenancy/auth-provider because
+	// the security implications differ.
+	if (auth === 'header') {
+		p.note(
+			[
+				'Header-auth has no /setup form. The first proxy-authenticated visit whose',
+				'email matches this var becomes ' +
+					pc.bold('instance admin') +
+					' automatically. Set it now so you',
+				'can claim admin on first visit — otherwise you will need to hand-edit JSON',
+				'files on the server to bootstrap.',
+				'',
+				pc.dim('Only consulted while no admin exists yet — safe to leave permanently set.')
+			].join('\n'),
+			'Bootstrap admin (required for header-auth)'
+		);
+	} else if (tenancy === 'multi') {
 		p.note(
 			[
 				'On a public multi-tenant instance, the FIRST user to sign in becomes',
@@ -302,15 +316,21 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 		);
 	}
 
+	const adminRequired = auth === 'header' || tenancy === 'multi';
 	const adminEmail = await p.text({
-		message:
-			tenancy === 'multi'
-				? 'Email allowed to claim admin on first signup'
-				: 'Email allowed to claim admin (leave blank to skip)',
-		placeholder: tenancy === 'multi' ? 'you@your-org.com' : '(press Enter to skip)',
+		message: adminRequired
+			? 'Email allowed to claim admin on first signup'
+			: 'Email allowed to claim admin (leave blank to skip)',
+		placeholder: adminRequired ? 'you@your-org.com' : '(press Enter to skip)',
 		initialValue: defaults.BOOTSTRAP_INSTANCE_ADMIN_EMAIL ?? '',
 		validate: (v) => {
-			if (!v) return undefined; // blank is allowed in single-tenant
+			if (!v) {
+				// Blank is allowed in single-tenant non-header. Header-auth and
+				// multi-tenant both need the email — without it there is no
+				// supported path to first-admin (header-auth) or the first
+				// random signup gets staff perms (multi-tenant).
+				return adminRequired ? 'Required for this configuration.' : undefined;
+			}
 			if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'Not a valid email.';
 			return undefined;
 		}

@@ -13,8 +13,11 @@ How to release Selva's npm packages. Manual flow for now — the automation is l
 | `@selvajs/schemas` | Generated UI schema types (TypeScript + C#). Published for downstream consumers. |
 | `@selvajs/ui` | Shared Svelte component library. Published for downstream consumers. |
 | `@selvajs/runtime` | Prebuilt compute-app. Customers `npm install` this to deploy. |
+| `@selvajs/create` | Scaffolder + operator CLI. `npx @selvajs/create <dir>` bootstraps a deployment; `selva <cmd>` runs day-2 ops. |
 
 Internal-only (apps, not libraries — marked `"private": true` and listed in `.changeset/config.json` `ignore`): `@selvajs/builder-app`, `@selvajs/compute-app`, `@selvajs/config`. Changesets skips them automatically.
+
+For the "I just changed runtime / CLI code and need it on operator VMs" workflow, see [Hotfix-CLI-Runtime.md](./Hotfix-CLI-Runtime.md) — that path bypasses changesets when you need to ship a single fix quickly.
 
 ## One-time setup
 

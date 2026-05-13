@@ -10,6 +10,7 @@
 	interface PageData {
 		hasPasswordAuth: boolean;
 		hasEmailLink: boolean;
+		hasProxyAuth: boolean;
 		oauthProviders: string[];
 	}
 
@@ -132,7 +133,24 @@
 			</form>
 		{/if}
 
-		{#if noAuthMethods}
+		{#if noAuthMethods && data.hasProxyAuth}
+			<div class="space-y-3">
+				<p class="text-muted-foreground text-sm">
+					This deployment uses forward-auth — sign-in happens upstream at your identity
+					provider, not on this page. If you're seeing this page, your proxy didn't forward
+					the identity headers. Check that:
+				</p>
+				<ul class="text-muted-foreground list-disc space-y-1 pl-5 text-xs">
+					<li>You're reaching the app through the proxy, not directly</li>
+					<li>The proxy authenticated you (visit the IdP first if needed)</li>
+					<li>The proxy is forwarding the configured identity header</li>
+				</ul>
+				<p class="text-muted-foreground text-xs">
+					Operators: see <code>HEADER_AUTH_UPN_HEADER</code> and your proxy's forward-auth
+					config.
+				</p>
+			</div>
+		{:else if noAuthMethods}
 			<Alert.Root variant="destructive">
 				<CircleAlert />
 				<Alert.Description>
