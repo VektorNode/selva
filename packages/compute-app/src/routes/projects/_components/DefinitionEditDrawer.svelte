@@ -122,6 +122,18 @@
 		userImageMode ?? (record.coverImage?.startsWith('/api/definitions/') ? 'upload' : 'url')
 	);
 
+	const statusItems: FilterableDropdownItem[] = [
+		{ id: 'draft', label: 'Draft — work in progress' },
+		{ id: 'published', label: 'Published — live and visible to runners' }
+	];
+
+	const computeServerItems = $derived<FilterableDropdownItem[]>(
+		computeServers.map((s) => ({
+			id: s.id,
+			label: s.id === defaultComputeServerId ? `${s.label} (Default)` : s.label
+		}))
+	);
+
 	async function handleImageUpload() {
 		if (!imageInput?.files?.length) return;
 		uploadingImage = true;
@@ -212,14 +224,12 @@
 
 			<div class="space-y-1.5">
 				<Label for="edit-status">Status</Label>
-				<select
+				<FilterableDropdown
 					id="edit-status"
-					bind:value={status}
-					class="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
-				>
-					<option value="draft">Draft — work in progress</option>
-					<option value="published">Published — live and visible to runners</option>
-				</select>
+					items={statusItems}
+					value={status}
+					onChange={(id) => (status = id as DefinitionStatus)}
+				/>
 			</div>
 
 			<div class="grid grid-cols-2 gap-3">
@@ -303,21 +313,14 @@
 					{#if computeServers.length > 0}
 						<div class="space-y-1.5">
 							<Label for="edit-srv">Compute server</Label>
-							<select
+							<FilterableDropdown
 								id="edit-srv"
+								items={computeServerItems}
 								value={computeServerId ?? defaultComputeServerId ?? ''}
-								onchange={(e) => {
-									const picked = (e.currentTarget as HTMLSelectElement).value || null;
+								onChange={(picked) => {
 									computeServerId = picked === defaultComputeServerId ? null : picked;
 								}}
-								class="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
-							>
-								{#each computeServers as s (s.id)}
-									<option value={s.id}>
-										{s.label}{s.id === defaultComputeServerId ? ' (Default)' : ''}
-									</option>
-								{/each}
-							</select>
+							/>
 						</div>
 					{/if}
 				</div>

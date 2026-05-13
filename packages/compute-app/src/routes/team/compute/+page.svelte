@@ -1,5 +1,15 @@
 <script lang="ts">
-	import { Button, Card, EmptyState, Input, toast, SectionHeader, Badge } from '@selvajs/ui';
+	import {
+		Button,
+		Card,
+		EmptyState,
+		FilterableDropdown,
+		Input,
+		toast,
+		SectionHeader,
+		Badge,
+		type FilterableDropdownItem
+	} from '@selvajs/ui';
 	import { Server, Plus, Trash2, Star } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { CatalogEntry, OrgServerListing } from './+page.server';
@@ -50,6 +60,20 @@
 	const globalDefaultLabel = $derived(
 		data.catalog.find((c) => c.id === data.globalDefaultServerId)?.label ?? '(none configured)'
 	);
+
+	const orgDefaultItems = $derived<FilterableDropdownItem[]>([
+		{ id: '', label: `Use global default — ${globalDefaultLabel}` },
+		...data.catalog.map((entry) => ({
+			id: entry.id,
+			label: `${entry.label} ${
+				entry.source === 'org'
+					? '(your org)'
+					: entry.isGlobalDefault
+						? '(global default)'
+						: '(platform)'
+			}`
+		}))
+	]);
 
 	function addServer() {
 		if (!data.overrideEnabled) return;
@@ -271,26 +295,15 @@
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-2">
-			<select
+			<FilterableDropdown
+				class="max-w-md"
+				items={orgDefaultItems}
 				value={orgDefaultServerId}
-				onchange={(e) => {
-					orgDefaultServerId = (e.currentTarget as HTMLSelectElement).value;
+				onChange={(picked) => {
+					orgDefaultServerId = picked;
 					dirty = true;
 				}}
-				class="border-input bg-background h-10 w-full max-w-md rounded-md border px-3 text-sm"
-			>
-				<option value="">Use global default — {globalDefaultLabel}</option>
-				{#each data.catalog as entry (entry.id)}
-					<option value={entry.id}>
-						{entry.label}
-						{entry.source === 'org'
-							? '(your org)'
-							: entry.isGlobalDefault
-								? '(global default)'
-								: '(platform)'}
-					</option>
-				{/each}
-			</select>
+			/>
 			{#if orgDefaultServerId === '' && data.globalDefaultServerId === null}
 				<p class="text-warning text-xs">
 					No global default is configured. Solves will fail until either a global default is set or
