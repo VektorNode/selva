@@ -5,13 +5,15 @@
 		Badge,
 		Button,
 		Drawer,
+		FilterableDropdown,
 		ImageUploadField,
 		Input,
 		Label,
 		Separator,
 		Tabs,
 		Textarea,
-		toast
+		toast,
+		type FilterableDropdownItem
 	} from '@selvajs/ui';
 	import { ArrowLeft, Image, Trash2, X } from '@lucide/svelte';
 	import ProjectPicker from '$lib/components/definitions/ProjectPicker.svelte';
