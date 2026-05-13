@@ -3,17 +3,14 @@
 	import '../app.css';
 	import { initializeFooterContext, Toaster } from '@selvajs/ui';
 
-	let { children } = $props();
+	let { data, children } = $props();
 
 	initializeFooterContext();
 </script>
 
 <svelte:head>
-	<title>Selva Compute</title>
-	<meta
-		name="description"
-		content="Build and deploy interactive web applications powered by Grasshopper definitions with Selva Compute."
-	/>
+	<title>{data.branding.name}</title>
+	<meta name="description" content={data.branding.description} />
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 </svelte:head>
 

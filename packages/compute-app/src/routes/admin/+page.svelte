@@ -1,8 +1,11 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { Card, SectionHeader } from '@selvajs/ui';
 	import { Users, Server, LayoutDashboard, GitCommit, Building2 } from '@lucide/svelte';
 	import StatCard from '$lib/components/StatCard.svelte';
 	import type { PlatformPermission } from '@selvajs/platform';
+
+	const brandName = $derived(page.data.branding.name);
 
 	interface PageData {
 		stats: { users: number | null };
@@ -68,7 +71,7 @@
 	<SectionHeader
 		eyebrow="Admin"
 		title="General"
-		description="At-a-glance health of this Selva instance — users, compute, and content."
+		description="At-a-glance health of this {brandName} instance — users, compute, and content."
 	/>
 
 	<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

@@ -10,7 +10,7 @@
  * └─────────────────────────────────────────────────────────────────────────┘
  *
  * Env vars consumed here:
- *   SELVA_AUTH_PROVIDER          local | supabase            (default: local)
+ *   SELVA_AUTH_PROVIDER          local | supabase | header   (default: local)
  *   SELVA_DATA_PROVIDER          local | supabase            (default: local)
  *   SELVA_STORAGE_PROVIDER       local | supabase            (default: local)
  *   SELVA_TENANCY                single | multi              (default: single)
@@ -18,6 +18,10 @@
  *   SELVA_FLAG_ALLOW_ORG_COMPUTE_OVERRIDE  true | false      (default: false)
  *   SELVA_FLAG_ALLOW_ORG_CREATION          true | false      (default: false)
  *   SELVA_FLAG_ENABLE_SHARING              true | false      (default: false)
+ *   SELVA_BRAND_NAME             product name in header / titles
+ *   SELVA_BRAND_COPYRIGHT_NAME   footer copyright owner (defaults to name)
+ *   SELVA_BRAND_TAGLINE          landing-page tagline
+ *   SELVA_BRAND_DESCRIPTION      meta description for SEO / social
  *
  * Provider-specific env vars: packages/compute-app/.env.example
  * Setup guide:                docs/QuickStart.md
@@ -29,6 +33,7 @@ import type { IDataProvider } from '@selvajs/platform';
 import type { IStorageProvider } from '@selvajs/platform';
 import * as local from '@selvajs/local-provider';
 import * as supa from '@selvajs/supabase-provider';
+import * as header from '@selvajs/header-auth-provider';
 
 type Env = Record<string, string | undefined>;
 
@@ -44,9 +49,11 @@ function pickAuth(env: Env): IAuthProvider {
 			return local.LocalAuthProvider.fromEnv(env);
 		case 'supabase':
 			return supa.SupabaseAuthProvider.fromEnv(env);
+		case 'header':
+			return header.HeaderAuthProvider.fromEnv(env);
 		default:
 			throw new Error(
-				`Unknown SELVA_AUTH_PROVIDER="${choice}". Expected: local | supabase.`
+				`Unknown SELVA_AUTH_PROVIDER="${choice}". Expected: local | supabase | header.`
 			);
 	}
 }
@@ -94,6 +101,12 @@ export default defineConfig((env) => ({
 		ALLOW_ORG_COMPUTE_OVERRIDE: envBool(env, 'SELVA_FLAG_ALLOW_ORG_COMPUTE_OVERRIDE'),
 		ALLOW_ORG_CREATION: envBool(env, 'SELVA_FLAG_ALLOW_ORG_CREATION'),
 		ENABLE_SHARING: envBool(env, 'SELVA_FLAG_ENABLE_SHARING')
+	},
+	branding: {
+		name: env.SELVA_BRAND_NAME,
+		copyrightName: env.SELVA_BRAND_COPYRIGHT_NAME,
+		tagline: env.SELVA_BRAND_TAGLINE,
+		description: env.SELVA_BRAND_DESCRIPTION
 	},
 	auth: pickAuth(env),
 	data: pickData(env),

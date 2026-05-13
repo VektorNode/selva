@@ -10,10 +10,11 @@
 	interface Props {
 		errors?: string[];
 		warnings?: string[];
+		copyrightName?: string;
 		children?: Snippet;
 	}
 
-	let { errors = [], warnings = [], children }: Props = $props();
+	let { errors = [], warnings = [], copyrightName = 'Selva', children }: Props = $props();
 
 	let footerStore = (() => {
 		try {
@@ -217,6 +218,6 @@
 			<FooterItemRenderer {item} />
 		{/each}
 
-		<p>by Selva &copy; {_currentYear}</p>
+		<p>by {copyrightName} &copy; {_currentYear}</p>
 	</div>
 </footer>

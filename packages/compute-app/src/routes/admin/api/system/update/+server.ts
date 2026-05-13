@@ -11,24 +11,90 @@ function stripAnsi(str: string): string {
 	return str.replace(/\x1B\[[0-9;]*[mGKHF]/g, '');
 }
 
-// POST - Run update script and stream output via Server-Sent Events
+// Selva runs in two valid shapes:
+//
+//   git  — a checkout of the monorepo (dev boxes, anyone running from source).
+//          Update means: git pull + pnpm install + pnpm build + pm2 restart.
+//          Implemented by scripts/update.sh, which only exists in the repo.
+//
+//   npm  — a CLI-scaffolded deployment (operators, customers). The deployment
+//          dir holds a package.json that depends on @selvajs/runtime. Update
+//          means: npm update @selvajs/* + pm2 restart. There is no repo.
+//
+// We probe the cwd upward and pick the first shape we can prove. `scripts/
+// update.sh` is the more specific marker (only the monorepo carries it), so
+// it wins over `node_modules/@selvajs/runtime` when both somehow coexist.
+type UpdatePlan =
+	| { mode: 'git'; cwd: string; cmd: string; args: string[] }
+	| { mode: 'npm'; cwd: string; cmd: string; args: string[] };
+
+function detectUpdatePlan(): UpdatePlan | null {
+	// Honor an explicit override first — useful for development.
+	if (env.INSTALL_DIR && existsSync(join(env.INSTALL_DIR, 'scripts', 'update.sh'))) {
+		return {
+			mode: 'git',
+			cwd: env.INSTALL_DIR,
+			cmd: 'bash',
+			args: [join(env.INSTALL_DIR, 'scripts', 'update.sh')]
+		};
+	}
+
+	let dir = process.cwd();
+	for (let i = 0; i < 6; i++) {
+		if (existsSync(join(dir, 'scripts', 'update.sh'))) {
+			return {
+				mode: 'git',
+				cwd: dir,
+				cmd: 'bash',
+				args: [join(dir, 'scripts', 'update.sh')]
+			};
+		}
+		if (existsSync(join(dir, 'node_modules', '@selvajs', 'runtime', 'package.json'))) {
+			// All @selvajs/* packages move together — fixing a provider-only bug
+			// without bumping the runtime is a supported flow.
+			return {
+				mode: 'npm',
+				cwd: dir,
+				cmd: 'npm',
+				args: [
+					'update',
+					'--save',
+					'@selvajs/create',
+					'@selvajs/runtime',
+					'@selvajs/platform',
+					'@selvajs/local-provider',
+					'@selvajs/supabase-provider',
+					'@selvajs/header-auth-provider'
+				]
+			};
+		}
+		const parent = join(dir, '..');
+		if (parent === dir) break;
+		dir = parent;
+	}
+	return null;
+}
+
+// POST - Run update and stream output via Server-Sent Events.
+//
+// In git mode we hand off to scripts/update.sh (which has its own pm2
+// restart at the end). In npm mode we run `npm update` and then a separate
+// `pm2 restart --update-env` so the new process picks up any .env changes.
 export const POST: RequestHandler = async ({ locals }) => {
 	requirePermission(locals, 'instance_admin');
-	// Prefer explicit env var; fall back to finding the repo root from cwd.
-	// PM2 may launch from packages/compute-app or the repo root depending on config,
-	// so we probe upward until we find scripts/update.sh.
-	function findInstallDir(): string {
-		let dir = process.cwd();
-		for (let i = 0; i < 5; i++) {
-			if (existsSync(join(dir, 'scripts', 'update.sh'))) return dir;
-			const parent = join(dir, '..');
-			if (parent === dir) break;
-			dir = parent;
-		}
-		return process.cwd();
+
+	const plan = detectUpdatePlan();
+	if (!plan) {
+		return new Response(
+			JSON.stringify({
+				error:
+					"Couldn't determine how to update this deployment. " +
+					'Expected either scripts/update.sh (monorepo) or ' +
+					'node_modules/@selvajs/runtime (CLI scaffold) in the cwd or a parent.'
+			}),
+			{ status: 500, headers: { 'Content-Type': 'application/json' } }
+		);
 	}
-	const installDir = env.INSTALL_DIR || findInstallDir();
-	const updateScript = join(installDir, 'scripts', 'update.sh');
 
 	const stream = new ReadableStream({
 		start(controller) {
@@ -40,17 +106,38 @@ export const POST: RequestHandler = async ({ locals }) => {
 			}
 
 			try {
-				// Spawn the update script detached so it survives if PM2 kills
+				sendEvent('log', { data: `[INFO] Update mode: ${plan.mode} (cwd: ${plan.cwd})` });
+
+				// Spawn the update command detached so it survives if PM2 kills
 				// this Node process mid-restart, or if the SSE client disconnects.
 				// detached:true puts the child in its own process group; unref()
 				// stops it from blocking the event loop. stdio is piped so we can
 				// stream output while the parent is still alive.
-				const child = spawn('bash', [updateScript], {
-					cwd: installDir,
+				//
+				// In npm mode we wrap the command in a shell that also runs the
+				// pm2 restart afterwards — update.sh handles that itself in git mode.
+				const cmd = plan.mode === 'git' ? plan.cmd : 'sh';
+				const args =
+					plan.mode === 'git'
+						? plan.args
+						: [
+								'-c',
+								// shell-quote the arg array for the npm command, then chain pm2 restart.
+								// The chain uses && so a failed update doesn't trigger a restart with
+								// half-installed packages.
+								[
+									plan.args.map((a) => `'${a.replace(/'/g, `'\\''`)}'`).join(' '),
+									'&&',
+									'pm2 restart selva-compute --update-env'
+								].join(' ')
+							];
+
+				const child = spawn(cmd, args, {
+					cwd: plan.cwd,
 					env: {
 						PATH: process.env.PATH,
 						HOME: process.env.HOME,
-						INSTALL_DIR: installDir
+						INSTALL_DIR: plan.cwd
 					},
 					detached: true,
 					stdio: ['ignore', 'pipe', 'pipe']

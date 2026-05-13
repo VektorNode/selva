@@ -31,6 +31,7 @@
 	},
 	"devDependencies": {
 		"@selvajs/config": "workspace:*",
+		"@selvajs/header-auth-provider": "workspace:*",
 		"@selvajs/local-provider": "workspace:*",
 		"@sveltejs/adapter-auto": "catalog:",
 		"@sveltejs/adapter-node": "^5.5.4",

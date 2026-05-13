@@ -1,10 +1,11 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { Alert } from '@selvajs/ui';
 	import { Mail } from '@lucide/svelte';
 </script>
 
 <svelte:head>
-	<title>Check your email - Selva Compute</title>
+	<title>Check your email - {page.data.branding.name}</title>
 </svelte:head>
 
 <div class="bg-background flex min-h-screen items-center justify-center px-4 py-12 sm:px-6 lg:px-8">

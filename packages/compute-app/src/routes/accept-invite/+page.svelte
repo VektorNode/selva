@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { Button, Input, Label, Alert } from '@selvajs/ui';
 	import { CircleAlert } from '@lucide/svelte';
 	import type { PageData } from './$types';
@@ -16,7 +17,7 @@
 </script>
 
 <svelte:head>
-	<title>Accept invite - Selva Compute</title>
+	<title>Accept invite - {page.data.branding.name}</title>
 </svelte:head>
 
 <div class="bg-background flex min-h-screen items-center justify-center px-4 py-12 sm:px-6 lg:px-8">

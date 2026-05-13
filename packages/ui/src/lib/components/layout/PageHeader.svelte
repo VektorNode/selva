@@ -6,6 +6,7 @@
 		homeUrl?: string;
 		title?: string | null;
 		logo?: string;
+		brandName?: string;
 		navItems?: Snippet;
 		rightContent?: Snippet;
 		subnav?: Snippet;
@@ -17,6 +18,7 @@
 		homeUrl = '/app',
 		title = undefined,
 		logo = '/favicon/favicon.svg',
+		brandName = 'Selva',
 		navItems,
 		rightContent,
 		subnav,
@@ -33,7 +35,7 @@
 		<!-- Logo -->
 		<a href={homeUrl} class="gap-2 flex shrink-0 items-center">
 			<img src={logo} alt="" aria-hidden="true" class="h-5 w-5" />
-			<span class="font-semibold text-sm tracking-tight">Selva</span>
+			<span class="font-semibold text-sm tracking-tight">{brandName}</span>
 		</a>
 
 		{#if title !== undefined}

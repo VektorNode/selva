@@ -1,8 +1,11 @@
 {
 	"name": "@selvajs/header-auth-provider",
-	"version": "0.2.0",
+	"version": "0.10.0",
 	"description": "Forward-auth provider for Selva: trusts identity headers from an upstream reverse proxy (Caddy forward_auth, oauth2-proxy, …). Auth-only — pair with any data/storage/permissions provider.",
-	"private": true,
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",

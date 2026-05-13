@@ -1,9 +1,10 @@
-import { flag } from '$lib/server/providers.server';
+import { branding, flag } from '$lib/server/providers.server';
 import type { LayoutServerLoad } from './$types';
 
 // Expose the authenticated user to every route in the app.
 export const load: LayoutServerLoad = async ({ locals }) => {
 	return {
+		branding,
 		user: locals.user
 			? {
 					id: locals.user.id,
