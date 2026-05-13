@@ -47,7 +47,11 @@ export const POST: RequestHandler = async ({ locals }) => {
 				// stream output while the parent is still alive.
 				const child = spawn('bash', [updateScript], {
 					cwd: installDir,
-					env: { PATH: process.env.PATH, HOME: process.env.HOME },
+					env: {
+						PATH: process.env.PATH,
+						HOME: process.env.HOME,
+						INSTALL_DIR: installDir
+					},
 					detached: true,
 					stdio: ['ignore', 'pipe', 'pipe']
 				});

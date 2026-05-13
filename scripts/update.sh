@@ -23,7 +23,14 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
+# Resolve INSTALL_DIR robustly: explicit env var wins, otherwise derive it
+# from the script's own location (scripts/update.sh lives at $INSTALL_DIR/scripts/).
+# Falling back to $HOME/selva is a last resort and breaks when the script is
+# spawned by a service whose $HOME is empty or "/" (PM2 + systemd both do this).
+if [ -z "$INSTALL_DIR" ]; then
+  SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+  INSTALL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
 SCRIPT_PATH="$INSTALL_DIR/scripts/update.sh"
 NO_RESTART=false
 NO_PULL=false
