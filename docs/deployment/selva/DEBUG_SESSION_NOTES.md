@@ -11,14 +11,14 @@ SSH: `gcloud compute ssh selva@selva-compute-app --zone europe-west6-a`
 > - `SESSION_SECRET` → `SELVA_HMAC_KEY`
 > - `SELVA_SECRET_KEY` → `SELVA_AT_REST_KEY`
 >
-> Translate as you read. The authoritative current names live in [`packages/compute-app/.env.example`](../../../packages/compute-app/.env.example).
+> Translate as you read. The authoritative current names live in [`packages/selva/.env.example`](../../../packages/selva/.env.example).
 
 ## Current state
 
 - Caddy on `:80` reverse-proxying to `127.0.0.1:3000`. Caddyfile: `/etc/caddy/Caddyfile` (vanilla reverse_proxy, no body limits, HTTP only).
-- App: SvelteKit (adapter-node) at `/home/selva/selva/packages/compute-app/`, run via PM2.
-- PM2 ecosystem: `/home/selva/selva/ecosystem.config.cjs`. `cwd` = `/home/selva/selva/packages/compute-app`, `script` = `./build/index.js`.
-- `.env` at `/home/selva/selva/packages/compute-app/.env` — chmod 600. PM2 doesn't read `env_file` reliably; current workaround is `set -a && . ./.env && set +a` in the shell, then `pm2 kill && pm2 start ecosystem.config.cjs`. Daemon must be killed (not just restarted) for new env to take effect.
+- App: SvelteKit (adapter-node) at `/home/selva/selva/packages/selva/`, run via PM2.
+- PM2 ecosystem: `/home/selva/selva/ecosystem.config.cjs`. `cwd` = `/home/selva/selva/packages/selva`, `script` = `./build/index.js`.
+- `.env` at `/home/selva/selva/packages/selva/.env` — chmod 600. PM2 doesn't read `env_file` reliably; current workaround is `set -a && . ./.env && set +a` in the shell, then `pm2 kill && pm2 start ecosystem.config.cjs`. Daemon must be killed (not just restarted) for new env to take effect.
 - `.env` contents (working values, all `KEY=VALUE` format, LF line endings):
   - `PORT=3000`
   - `ORIGIN="http://34.65.79.16"`
@@ -80,11 +80,11 @@ Foreground node test surfaced `Killed` on its own line — that's `SIGKILL` from
 - **Reboot survival**: PM2 currently inherits env from the shell where it was last `pm2 start`'d. After a reboot, secrets are gone. Either set up `pm2 startup` with a systemd `EnvironmentFile=` pointing at `.env`, or inline secrets into `ecosystem.config.cjs`'s `env: { … }` (and `chmod 600` it).
 - **TLS**: required before any real users. Easiest = point a domain at `34.65.79.16`, change Caddyfile site block to the domain, Caddy auto-issues Let's Encrypt. Then update `.env`: `ORIGIN=https://your-domain`, remove `ALLOW_INSECURE_COOKIES`. After that, drop the Chrome insecure-origins flag.
 - **Rotate the secrets**. `SESSION_SECRET` and `SELVA_SECRET_KEY` were pasted in chat — fine for this test box, must not reuse on production.
-- `BODY_SIZE_LIMIT`: currently 60 MB which is sane. `.env.example` claims `"60mb"` / `"Infinity"` work; in this adapter-node version they don't — only raw bytes are accepted. Worth fixing the docstring in `packages/compute-app/.env.example`.
+- `BODY_SIZE_LIMIT`: currently 60 MB which is sane. `.env.example` claims `"60mb"` / `"Infinity"` work; in this adapter-node version they don't — only raw bytes are accepted. Worth fixing the docstring in `packages/selva/.env.example`.
 
 ## Concrete file state (copy as reference)
 
-### `/home/selva/selva/packages/compute-app/.env`
+### `/home/selva/selva/packages/selva/.env`
 
 `chmod 600`, owner `selva:selva`, LF line endings only:
 
@@ -117,8 +117,8 @@ module.exports = {
 			autorestart: true,
 			watch: false,
 			max_memory_restart: '1G',
-			cwd: '/home/selva/selva/packages/compute-app',
-			env_file: '/home/selva/selva/packages/compute-app/.env'
+			cwd: '/home/selva/selva/packages/selva',
+			env_file: '/home/selva/selva/packages/selva/.env'
 		}
 	]
 };
@@ -151,8 +151,8 @@ Caddy itself logs a warning that `header_up X-Forwarded-Host` is redundant (defa
 ## Changes made during session
 
 1. **`ecosystem.config.cjs`**:
-   - `cwd` was `/home/selva/selva` (repo root) → changed to `/home/selva/selva/packages/compute-app`. This was needed because `DATA_PATH=../../.selva-data` (the `.env.example` default) is documented as resolved relative to `packages/compute-app/`. With cwd at the repo root it resolved to `/home/.selva-data`, which doesn't exist.
-   - `script` was `./packages/compute-app/build/index.js` → changed to `./build/index.js` to match the new cwd.
+   - `cwd` was `/home/selva/selva` (repo root) → changed to `/home/selva/selva/packages/selva`. This was needed because `DATA_PATH=../../.selva-data` (the `.env.example` default) is documented as resolved relative to `packages/selva/`. With cwd at the repo root it resolved to `/home/.selva-data`, which doesn't exist.
+   - `script` was `./packages/selva/build/index.js` → changed to `./build/index.js` to match the new cwd.
    - Added `env_file:` line (then made it absolute path).
    - Removed the `env: { NODE_ENV: 'production' }` block — having `env` and `env_file` together silently disables `env_file`. `NODE_ENV` is intended to be in `.env` instead (currently not set; see cleanup list).
 
@@ -175,7 +175,7 @@ gcloud compute ssh selva@selva-compute-app --zone europe-west6-a
 
 # Source env into the shell (PM2 inherits this on daemon start)
 cd /home/selva/selva
-set -a && . /home/selva/selva/packages/compute-app/.env && set +a
+set -a && . /home/selva/selva/packages/selva/.env && set +a
 
 # Sanity check
 echo "$DATA_PATH"          # /home/selva/selva/.selva-data
@@ -207,7 +207,7 @@ pkill -9 -f 'node.*build/index.js'
 sleep 1
 ss -tlnp | grep 3000      # MUST be empty
 
-cd /home/selva/selva/packages/compute-app
+cd /home/selva/selva/packages/selva
 set -a && . ./.env && set +a
 node --unhandled-rejections=strict --trace-warnings build/index.js
 # leave running; trigger the failing flow from a SECOND ssh session or browser

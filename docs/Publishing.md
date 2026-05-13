@@ -12,10 +12,10 @@ How to release Selva's npm packages. Manual flow for now — the automation is l
 | `@selvajs/header-auth-provider` | Forward-auth provider (Caddy / oauth2-proxy / Authelia). Auth-only — paired with another data/storage provider. |
 | `@selvajs/schemas` | Generated UI schema types (TypeScript + C#). Published for downstream consumers. |
 | `@selvajs/ui` | Shared Svelte component library. Published for downstream consumers. |
-| `@selvajs/runtime` | Prebuilt compute-app. Customers `npm install` this to deploy. |
+| `@selvajs/selva` | Prebuilt compute-app. Customers `npm install` this to deploy. |
 | `@selvajs/create` | Scaffolder + operator CLI. `npx @selvajs/create <dir>` bootstraps a deployment; `selva <cmd>` runs day-2 ops. |
 
-Internal-only (apps, not libraries — marked `"private": true` and listed in `.changeset/config.json` `ignore`): `@selvajs/builder-app`, `@selvajs/compute-app`, `@selvajs/config`. Changesets skips them automatically.
+Internal-only (apps, not libraries — marked `"private": true` and listed in `.changeset/config.json` `ignore`): `@selvajs/builder-app`, `@selvajs/selva`, `@selvajs/config`. Changesets skips them automatically.
 
 For the "I just changed runtime / CLI code and need it on operator VMs" workflow, see [Hotfix-CLI-Runtime.md](./Hotfix-CLI-Runtime.md) — that path bypasses changesets when you need to ship a single fix quickly.
 
@@ -58,7 +58,7 @@ The packages have never been on npm before. Before running `pnpm release` the fi
 2. **Confirm versions.** `package.json` says `0.2.0` for the providers + platform, `0.1.0` for the runtime. That's the first published version — make sure it's correct.
 3. **Dry-run.** Before the real publish:
    ```bash
-   pnpm -r --filter '@selvajs/platform' --filter '@selvajs/local-provider' --filter '@selvajs/supabase-provider' --filter '@selvajs/header-auth-provider' --filter '@selvajs/runtime' exec pnpm pack
+   pnpm -r --filter '@selvajs/platform' --filter '@selvajs/local-provider' --filter '@selvajs/supabase-provider' --filter '@selvajs/header-auth-provider' --filter '@selvajs/selva' exec pnpm pack
    ```
    Inspect each `.tgz` (`tar -tzf <file>` for contents, `tar -xzOf <file> package/package.json` for the rewritten manifest). Look for: no `workspace:*` / `catalog:` strings, no `.env`, no `node_modules`.
 4. **Publish.** `pnpm release`.
@@ -86,7 +86,7 @@ git push --follow-tags
 
 ### Skip the runtime in a release (providers only)
 
-When the runtime didn't change but providers did, don't write a changeset for `@selvajs/runtime`. `changeset version` will only bump packages that have at least one changeset, plus their dependents. The runtime won't bump unless it directly depends on a bumped package and you've set `updateInternalDependencies` accordingly.
+When the runtime didn't change but providers did, don't write a changeset for `@selvajs/selva`. `changeset version` will only bump packages that have at least one changeset, plus their dependents. The runtime won't bump unless it directly depends on a bumped package and you've set `updateInternalDependencies` accordingly.
 
 `updateInternalDependencies` is `"patch"` in our config — so a provider patch bump cascades a patch bump to the runtime. If you want to break that cascade, set it to `false` (changesets stops touching internal deps), but then customers won't get patched providers unless they update the runtime version themselves.
 

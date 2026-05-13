@@ -12,7 +12,7 @@ End-to-end walkthrough for getting a CLI-scaffolded Selva deployment running on 
 |---|---|
 | **Ubuntu 22.04+ VM** (e.g. GCE `e2-small` is enough to start) | Anything that can run Node 20 + Caddy + PM2. The commands below assume `apt-get`. |
 | **`gcloud` CLI configured** on your laptop | For the firewall rule. Skip if you'll add the rule in the GCP web console. |
-| **`@selvajs/create` published to npm** | The CLI fetches `@selvajs/runtime` + providers from the public registry. |
+| **`@selvajs/create` published to npm** | The CLI fetches `@selvajs/selva` + providers from the public registry. |
 
 The VM does **not** need git, pnpm, or a checkout of the monorepo. Everything is installed via `npx` and `npm`.
 
@@ -90,7 +90,7 @@ The CLI prompts. Answer like this for a local-provider, single-tenant install:
 The CLI will:
 
 1. Write `package.json`, `.env`, `selva.config.js`, `ecosystem.config.cjs` into `~/apps/selva`.
-2. Run `npm install` — pulls `@selvajs/runtime` (the prebuilt SvelteKit app), `@selvajs/local-provider`, and `@selvajs/create` itself (so `selva` lands in `node_modules/.bin/`). Watch the live progress; install takes 30–90s.
+2. Run `npm install` — pulls `@selvajs/selva` (the prebuilt SvelteKit app), `@selvajs/local-provider`, and `@selvajs/create` itself (so `selva` lands in `node_modules/.bin/`). Watch the live progress; install takes 30–90s.
 3. Print "next steps" referencing `npm run doctor` and `npm start`.
 
 When it's done you should see:
@@ -145,7 +145,7 @@ Expected output (mostly green checks):
   ✓ SELVA_AT_REST_KEY is a 32-byte hex string
   ! DATA_PATH=./.selva-data doesn't exist yet — will be created on first run
   ✓ SELVA_TENANCY=single
-  ✓ @selvajs/runtime installed
+  ✓ @selvajs/selva installed
   ✓ @selvajs/local-provider installed
   ✓ ORIGIN=http://<your-ip>
 └  All checks passed.
@@ -296,11 +296,11 @@ tail -120 ~/.npm/_logs/<newest>-debug-0.log
 Common causes:
 
 - **sharp's native build fails** because `libvips` isn't installed. Fix: `sudo apt-get install -y build-essential python3 libvips-dev`, then `cd ~/apps/selva && npm install`.
-- **Stale npm cache resolving an unpublished version.** Symptom in the log: `placeDep ROOT @selvajs/runtime@<old-version> OK for: selva@... want: latest` where `<old-version>` no longer matches what's on npm. See the next entry — same fix applies.
+- **Stale npm cache resolving an unpublished version.** Symptom in the log: `placeDep ROOT @selvajs/selva@<old-version> OK for: selva@... want: latest` where `<old-version>` no longer matches what's on npm. See the next entry — same fix applies.
 
 ### `npm run update` reports success but the version didn't change
 
-Symptom: you ran `npm run update`, it said "Restarted selva-compute" without error, but `node -e "console.log(require('./node_modules/@selvajs/runtime/package.json').version)"` shows the same version as before. The "current" and "new" runtime versions printed by `selva update` are identical.
+Symptom: you ran `npm run update`, it said "Restarted selva-compute" without error, but `node -e "console.log(require('./node_modules/@selvajs/selva/package.json').version)"` shows the same version as before. The "current" and "new" runtime versions printed by `selva update` are identical.
 
 Cause: **npm's packument cache.** When `npm update <pkg>` runs, npm checks its local cache for the package metadata first. If the cache says "latest = 0.10.3" and is younger than ~5 minutes, npm trusts the cache without re-asking the registry. So even if the registry now has 0.10.4, your VM installs 0.10.3 (a no-op).
 
@@ -310,8 +310,8 @@ Confirm the registry actually has the version you expect:
 
 ```bash
 # From your laptop or any machine that hasn't talked to the registry recently:
-npm view @selvajs/runtime version
-npm view @selvajs/runtime versions --json
+npm view @selvajs/selva version
+npm view @selvajs/selva versions --json
 ```
 
 If the registry shows a newer version than your VM installed, force npm to revalidate:
@@ -330,7 +330,7 @@ npm run restart
 
 ### `Cannot find package 'tailwind-merge'` at runtime
 
-Pre-`@selvajs/runtime@0.10.1` shipped without `tailwind-merge` and `clsx` in its `dependencies`, even though the bundled SvelteKit build imports them via `tailwind-variants`.
+Pre-`@selvajs/selva@0.10.1` shipped without `tailwind-merge` and `clsx` in its `dependencies`, even though the bundled SvelteKit build imports them via `tailwind-variants`.
 
 Fixed in 0.10.1+. If you somehow land on an older runtime, the unblock is:
 
@@ -416,9 +416,9 @@ npm install --save @selvajs/create
 ./node_modules/.bin/selva doctor
 ```
 
-### `@selvajs/runtime@0.10.2` pulls in unresolved `workspace:*` specs
+### `@selvajs/selva@0.10.2` pulls in unresolved `workspace:*` specs
 
-If your scaffold's `npm install` shows `placeDep ROOT @selvajs/runtime@0.10.2` and then dies with no error message, you've hit a broken publish. 0.10.2 was published via `npm publish` instead of `pnpm publish`, so its tarball contains literal `"workspace:*"` and `"catalog:"` specs that npm can't resolve.
+If your scaffold's `npm install` shows `placeDep ROOT @selvajs/selva@0.10.2` and then dies with no error message, you've hit a broken publish. 0.10.2 was published via `npm publish` instead of `pnpm publish`, so its tarball contains literal `"workspace:*"` and `"catalog:"` specs that npm can't resolve.
 
 0.10.2 has been unpublished. Force npm past the cache:
 

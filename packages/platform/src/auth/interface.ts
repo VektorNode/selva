@@ -217,24 +217,11 @@ export interface IAuthProvider {
 	 * Present for providers that derive identity from a trusted upstream
 	 * proxy (forward-auth headers, mTLS, etc.). Undefined for credential
 	 * or OIDC-broker providers. See `IProxyAuth` for the trust contract.
+	 *
+	 * When set, the platform treats sign-out as the proxy/IdP's job and
+	 * does not render a logout button — Selva has no session to destroy.
 	 */
 	readonly proxyAuth?: IProxyAuth;
-
-	/**
-	 * Where to redirect the browser after the local session is destroyed.
-	 *
-	 * Credential providers (Local) typically return `null` → caller falls
-	 * back to `/login`.
-	 *
-	 * Forward-auth and OIDC providers SHOULD return their upstream sign-out
-	 * URL so the user actually leaves the IdP — otherwise the next request
-	 * silently re-authenticates them via the still-valid IdP session and
-	 * "logout" becomes a no-op.
-	 *
-	 * Best-effort and synchronous: failure to compute MUST return `null`
-	 * (caller will use `/login`); never throw.
-	 */
-	getPostLogoutRedirect?(): string | null;
 
 	/**
 	 * Verify a token (session cookie, JWT, ID token, etc.). Returns the user

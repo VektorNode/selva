@@ -32,10 +32,10 @@ The default is local. You can switch any time by editing `selva.config.ts`.
 ## 3. Configure environment
 
 ```bash
-cp packages/compute-app/.env.example packages/compute-app/.env
+cp packages/selva/.env.example packages/selva/.env
 ```
 
-[`.env.example`](../packages/compute-app/.env.example) is the **single authoritative reference** for every env var Selva reads — provider choice, tenancy, platform flags, secrets. Open it and:
+[`.env.example`](../packages/selva/.env.example) is the **single authoritative reference** for every env var Selva reads — provider choice, tenancy, platform flags, secrets. Open it and:
 
 - Set `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` (instructions inline). For local provider those two are enough.
 - For Supabase, set `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — see [@selvajs/supabase-provider](../packages/supabase-provider/README.md#development--local-supabase-stack) for the `npx supabase start` flow that produces those keys. Then switch the provider in `selva.config.ts`.
@@ -46,7 +46,7 @@ You shouldn't need to read any other env-var documentation.
 ## 4. Run
 
 ```bash
-cd packages/compute-app
+cd packages/selva
 pnpm run dev
 # http://localhost:3000
 ```
@@ -71,8 +71,8 @@ The builder app needs no env vars.
 
 ## Going further
 
-- **[Architecture](../packages/compute-app/specs/Architecture.md)** — how the providers, tenancy, and access rules fit together
-- **[Access control](../packages/compute-app/specs/Permissions.md)** — who can do what
+- **[Architecture](../packages/selva/specs/Architecture.md)** — how the providers, tenancy, and access rules fit together
+- **[Access control](../packages/selva/specs/Permissions.md)** — who can do what
 - **[MultiOrg-LocalDev.md](MultiOrg-LocalDev.md)** — testing multi-org / multi-tenant locally
 - **[@selvajs/local-provider](../packages/local-provider/README.md)** — on-disk layout, backups, caveats
 - **[@selvajs/supabase-provider](../packages/supabase-provider/README.md)** — schema, RLS, hosted setup

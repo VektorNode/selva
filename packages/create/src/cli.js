@@ -69,7 +69,7 @@ function printHelp() {
 			'  stop                    pm2 stop selva-compute',
 			'  restart                 pm2 restart selva-compute --update-env',
 			'  logs                    pm2 logs selva-compute',
-			'  update                  npm update @selvajs/runtime + restart',
+			'  update                  npm update @selvajs/selva + restart',
 			'  keys rotate <hmac|at-rest>   Rotate a secret in .env (destructive)',
 			'',
 			pc.dim('To scaffold a new deployment: ') + pc.cyan('npx @selvajs/create <dir>')

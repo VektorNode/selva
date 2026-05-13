@@ -78,7 +78,7 @@ fi
 # 2. App port (always needed)
 # ----------------------------------------------------------------------------
 if [ -z "$APP_PORT" ]; then
-  ENV_FILE="$INSTALL_DIR/packages/compute-app/.env"
+  ENV_FILE="$INSTALL_DIR/packages/selva/.env"
   if [ -f "$ENV_FILE" ]; then
     APP_PORT=$(grep "^PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ')
   fi

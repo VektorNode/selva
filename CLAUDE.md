@@ -24,13 +24,13 @@ pnpm install
 
 # Development servers
 pnpm dev                    # Start builder-app dev server (http://localhost:5173)
-pnpm dev:compute            # Start compute-app dev server
+pnpm dev:selva              # Start the Selva app (deployable) dev server
 
 # Build commands (orchestrated by Turborepo — see docs/Turborepo.md)
 pnpm build                  # Build every package in dep order, with caching
-pnpm build --filter=@selvajs/compute-app    # Build one package + its deps
+pnpm build --filter=@selvajs/selva           # Build one package + its deps
 pnpm run build:builder      # Build builder-app + its deps
-pnpm run build:compute      # Build compute-app + its deps
+pnpm run build:selva        # Build the Selva app + its deps
 pnpm run build:plugin       # Build production plugin with embedded web assets
 
 # Type checking and linting
@@ -99,7 +99,7 @@ cd packages/schemas && pnpm run generate:all
 The web application supports two runtime modes:
 
 1. **Local Mode (builder-app)**: Drag-and-drop schema designer connected to Grasshopper via WebSocket. Used during development with hot reload.
-2. **Cloud Mode (compute-app)**: Standalone web app that solves Grasshopper definitions through Rhino.Compute. Used for production deployments.
+2. **Cloud Mode (`@selvajs/selva`)**: Standalone web app that solves Grasshopper definitions through Rhino.Compute. Used for production deployments — installed via `@selvajs/create`.
 
 ### Production Build Process
 
@@ -208,7 +208,7 @@ This architecture means Selva has **zero exposure to EU data regulations, creden
 
 ## Environment Variables
 
-The authoritative reference is [packages/compute-app/.env.example](packages/compute-app/.env.example) — every var the compute-app reads (provider, tenancy, flags, secrets, optional server config) is documented inline there. Don't duplicate that documentation here or in provider READMEs; link to `.env.example`.
+The authoritative reference is [packages/selva/.env.example](packages/selva/.env.example) — every var the Selva app reads (provider, tenancy, flags, secrets, optional server config) is documented inline there. Don't duplicate that documentation here or in provider READMEs; link to `.env.example`.
 
 The builder app needs no env vars (WebSocket on port 8765 by default).
 

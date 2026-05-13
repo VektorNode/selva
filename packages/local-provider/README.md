@@ -40,7 +40,7 @@ Pick [Supabase](../supabase-provider/README.md) when:
 
 ## Environment variables
 
-All env vars are documented in [`packages/compute-app/.env.example`](../compute-app/.env.example) — copy that file to `.env` and edit it. The local provider reads `DATA_PATH`, `SELVA_HMAC_KEY` (signs sessions + tokens), and `SELVA_AT_REST_KEY` (encrypts the Rhino.Compute API key on disk) from there.
+All env vars are documented in [`packages/selva/.env.example`](../compute-app/.env.example) — copy that file to `.env` and edit it. The local provider reads `DATA_PATH`, `SELVA_HMAC_KEY` (signs sessions + tokens), and `SELVA_AT_REST_KEY` (encrypts the Rhino.Compute API key on disk) from there.
 
 The first admin user is created through the in-app setup page on first boot — there is no env-var fallback login.
 

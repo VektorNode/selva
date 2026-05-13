@@ -5,7 +5,7 @@
 //   • Secrets are present and look like 32-byte hex
 //   • DATA_PATH writable (when local provider is in use)
 //   • Supabase URL reachable (when supabase provider is in use)
-//   • @selvajs/runtime + chosen provider packages installed
+//   • @selvajs/selva + chosen provider packages installed
 //   • Origin set when behind a reverse proxy looks set
 //
 // Exits 0 (green) or 1 (any red); yellow checks don't fail the run.
@@ -83,7 +83,7 @@ export async function runDoctor() {
 	}
 
 	// ── Installed packages ─────────────────────────────────────────────
-	checks.push(checkPackage(dir, '@selvajs/runtime'));
+	checks.push(checkPackage(dir, '@selvajs/selva'));
 	if (used.has('local')) checks.push(checkPackage(dir, '@selvajs/local-provider'));
 	if (used.has('supabase')) checks.push(checkPackage(dir, '@selvajs/supabase-provider'));
 	if (used.has('header')) checks.push(checkPackage(dir, '@selvajs/header-auth-provider'));
@@ -237,21 +237,7 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		out.push(red('ORIGIN unset — required for header-auth (always behind a proxy)'));
 	}
 
-	// 4. Logout URL. Optional, but without it /logout is a no-op.
-	if (!env.HEADER_AUTH_LOGOUT_URL) {
-		out.push(
-			yellow('HEADER_AUTH_LOGOUT_URL unset — /logout will silently re-authenticate via the proxy')
-		);
-	} else {
-		try {
-			new URL(env.HEADER_AUTH_LOGOUT_URL);
-			out.push(green('HEADER_AUTH_LOGOUT_URL is a valid URL'));
-		} catch {
-			out.push(red(`HEADER_AUTH_LOGOUT_URL="${env.HEADER_AUTH_LOGOUT_URL}" is not a valid URL`));
-		}
-	}
-
-	// 5. If data provider isn't local, the allowlist file is the ONLY local
+	// 4. If data provider isn't local, the allowlist file is the ONLY local
 	// state — make sure the operator picked an explicit dir, not the
 	// fall-through DATA_PATH which may not be set.
 	if (dataProvider !== 'local' && !env.HEADER_AUTH_DATA_DIR) {
@@ -263,7 +249,7 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		);
 	}
 
-	// 6. Bootstrap admin email. Without it, the first proxy-authenticated
+	// 5. Bootstrap admin email. Without it, the first proxy-authenticated
 	// visitor's UPN is rejected (not in allowlist) and the operator has to
 	// hand-write JSON to claim admin. With it, the first matching visit is
 	// auto-allowlisted and granted instance_admin in one step.

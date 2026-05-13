@@ -7,7 +7,7 @@ Drafted 2026-05-10. Companion to [DEBUG_SESSION_NOTES.md](./DEBUG_SESSION_NOTES.
 Current deployment story is fragile:
 
 - PM2 env handling is buggy (`env_file` unreliable, requires `pm2 kill` in a shell that has vars exported, no reboot survival without separate `pm2 startup` ritual).
-- Secrets live inside the repo tree (`packages/compute-app/.env`).
+- Secrets live inside the repo tree (`packages/selva/.env`).
 - Caddy is HTTP-only on a bare IP — forces `ALLOW_INSECURE_COOKIES`, the Chrome insecure-origins flag, and blocks every secure-context Web API (`crypto.randomUUID`, `crypto.subtle`, clipboard, etc.).
 - Nothing is reproducible — rebuilding the box is a multi-hour debug session, not a script.
 - `update.sh` rebuilds on the box (`git pull` + `pnpm install` + `pnpm build` + `pm2 restart`), which is slow and couples runtime to a working dev toolchain.
@@ -28,7 +28,7 @@ These are the picks the rest of the plan is written against. Alternatives are no
 - **Resource caps**: `mem_limit: 1g` on the app _only_ when host RAM ≥ 2GB. Always set `pids_limit: 256` and `restart: unless-stopped`. Leave `mem_limit` unset on 1GB hosts and resize the VM.
 - **Log rotation**: `json-file` driver with `max-size: 10m` and `max-file: 5` on every service. Default is unbounded and will fill the disk.
 - **Backup**: `backup.sh` wraps `restic` against the host bind-mount + `/etc/selva/{compute.env,Caddyfile,install.json}`. Restore = `restic restore` to a fresh path, then `systemctl start selva`.
-- **Distribution**: `Dockerfile` lives in monorepo (`packages/compute-app/Dockerfile`); deploy artifacts (`docker-compose.yml`, `Caddyfile.template`, `setup.sh`, `backup.sh`) live in `deploy/` at repo root. Self-host install line: `git clone --depth 1 https://github.com/yourorg/selva && cd selva/deploy && ./setup.sh`. No separate `selva-deploy` repo, no curl-pipe-bash.
+- **Distribution**: `Dockerfile` lives in monorepo (`packages/selva/Dockerfile`); deploy artifacts (`docker-compose.yml`, `Caddyfile.template`, `setup.sh`, `backup.sh`) live in `deploy/` at repo root. Self-host install line: `git clone --depth 1 https://github.com/yourorg/selva && cd selva/deploy && ./setup.sh`. No separate `selva-deploy` repo, no curl-pipe-bash.
 
 ## Target user experience
 
@@ -66,7 +66,7 @@ deploy/update.sh 0.9.4                          # pin new tag+digest, pull, up -
 
 ## Deliverables
 
-1. **`packages/compute-app/Dockerfile`** — multi-stage build, runtime image targeted at small-as-feasible (don't commit to a number in docs; SvelteKit + pnpm workspace lands closer to 300–500 MB on `node:20-slim` and only approaches ~150 MB with `node:20-alpine` _and_ `pnpm deploy` pruning).
+1. **`packages/selva/Dockerfile`** — multi-stage build, runtime image targeted at small-as-feasible (don't commit to a number in docs; SvelteKit + pnpm workspace lands closer to 300–500 MB on `node:20-slim` and only approaches ~150 MB with `node:20-alpine` _and_ `pnpm deploy` pruning).
 2. **`deploy/docker-compose.yml`** — `app` service always present; `caddy` service behind a `bundled-caddy` compose profile so external-proxy users don't run it. Bind-mount for the data dir, named volume for `caddy-data`. Pinned image tag+digest. Log rotation configured. One external env file (`/etc/selva/compute.env`).
 3. **`deploy/Caddyfile.template`** — domain-substitutable; auto-TLS when a domain is given, plain `:80` fallback when not. Easily editable post-install for users who want custom directives (basic auth, IP allowlists, headers).
 4. **`deploy/setup.sh`** — interactive wizard. Generates secrets, asks the [wizard prompts](#target-user-experience), writes `/etc/selva/{compute.env,Caddyfile,install.json,docker-compose.yml}`, installs `selva.service`, runs `systemctl enable --now selva`. Persists answers to `install.json` so updates can regenerate config without re-asking. ~200 lines of bash.
@@ -81,11 +81,11 @@ deploy/update.sh 0.9.4                          # pin new tag+digest, pull, up -
 
 ## File shapes (provisional)
 
-### `packages/compute-app/Dockerfile`
+### `packages/selva/Dockerfile`
 
 Multi-stage:
 
-- **build stage**: `node:20-slim` + corepack + pnpm. Copies the workspace, runs `pnpm install --frozen-lockfile` and `pnpm run build:compute`. Then runs `pnpm deploy --filter=@selvajs/compute-app --prod /out` to produce a self-contained directory with the workspace symlinks resolved into real `node_modules/`. (Without `pnpm deploy`, copying `node_modules/` into the runtime image carries a forest of symlinks pointing at workspace packages that don't exist in the runtime stage.)
+- **build stage**: `node:20-slim` + corepack + pnpm. Copies the workspace, runs `pnpm install --frozen-lockfile` and `pnpm run build:compute`. Then runs `pnpm deploy --filter=@selvajs/selva --prod /out` to produce a self-contained directory with the workspace symlinks resolved into real `node_modules/`. (Without `pnpm deploy`, copying `node_modules/` into the runtime image carries a forest of symlinks pointing at workspace packages that don't exist in the runtime stage.)
 - **runtime stage**: `node:20-slim` (or `node:20-alpine` if size-driven). Copies `/out` and `build/` from the build stage. Runs as a non-root user (`node`, uid 1000). `EXPOSE 3000`. `CMD ["node", "build/index.js"]`.
 
 **UID for bind-mounts**: data dir is bind-mounted by default, so `setup.sh` runs `chown -R 1000:1000` on the host path before first start. Container's `node` user (uid 1000) writes there.
@@ -274,7 +274,7 @@ Order matters — each step lands a working improvement.
    - Run `deploy/setup.sh`, point it at `/srv/selva/data` (it'll skip the `chown` if already correct).
    - `systemctl start selva`, verify admin login + uploads work, retain the snapshot for at least a week.
    - Tear down the old PM2 ecosystem.cjs / `.env` / host Caddy.
-8. **Document** in [docs/deployment/compute-app/README](./README.md) — replaces the current `update.sh` and PM2 instructions.
+8. **Document** in [docs/deployment/selva/README](./README.md) — replaces the current `update.sh` and PM2 instructions.
 9. **Reboot test**: `sudo reboot` the box, confirm the stack comes back without operator action. This is the acceptance test for the systemd unit.
 10. **(Later)** address the OOM bug from the debug notes once the new setup is stable. Resize VM (preferred) — `mem_limit` only gets re-enabled in compose once the host has ≥ 2GB RAM.
 

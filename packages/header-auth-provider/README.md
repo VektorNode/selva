@@ -100,9 +100,11 @@ export default defineConfig((env) => ({
 | `HEADER_AUTH_UPN_HEADER`          | —        | `SELVA-UserPrincipalName` | Header carrying the user's UPN.                                                                                                                                                         |
 | `HEADER_AUTH_EMAIL_HEADER`        | —        | `SELVA-Email`             | Header carrying the user's email.                                                                                                                                                       |
 | `HEADER_AUTH_DISPLAY_NAME_HEADER` | —        | `SELVA-DisplayName`       | Header carrying the user's display name.                                                                                                                                                |
-| `HEADER_AUTH_LOGOUT_URL`          | —        | `null`                    | Where `/logout` redirects after destroying the local session. **Set this to your IdP's sign-out URL** — otherwise the proxy will silently re-authenticate the user on the next request. |
+| `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`  | see²     | —                         | UPN/email of the user who should be auto-allowlisted as the first instance admin on a fresh install. Read by the `@selvajs/selva` runtime (not by this provider directly) and turned into a one-shot `BootstrapAllowlistPolicy`. Becomes inert as soon as any instance admin exists. See **Bootstrap** below.            |
 
 ¹ Either `HEADER_AUTH_DATA_DIR` or `DATA_PATH` must be set.
+
+² Required for `SELVA_TENANCY=multi`. Optional for `SELVA_TENANCY=single`: leave it unset to get "first proxy-authed visitor wins" (fine for self-hosted fresh installs); set it to lock the bootstrap to a specific UPN/email.
 
 ---
 
@@ -120,8 +122,11 @@ app.example.com {
 
     # 1. Strip any inbound copies of the trusted headers BEFORE forward_auth
     #    runs. Without this, a browser can send its own `SELVA-*` headers
-    #    and the auth helper's copies are appended — Selva sees both, and
-    #    Headers.get() returns the FIRST one.
+    #    and the auth helper's copies are appended — `Headers.get()` returns
+    #    them joined with `, ` (e.g. "attacker@x.com, real@y.com"), which
+    #    won't match any allowlisted UPN. So the practical failure mode is
+    #    "no one can log in" rather than "anyone can spoof", but you do NOT
+    #    want to rely on that — strip the headers and keep the trust path clean.
     request_header -SELVA-UserPrincipalName
     request_header -SELVA-Email
     request_header -SELVA-DisplayName
@@ -155,20 +160,48 @@ your network isolation is broken — fix the firewall before going live.
 ## Bootstrap (the first admin)
 
 The chicken-and-egg: an admin pre-allowlists users, but there's no admin
-yet on a fresh install.
+yet on a fresh install. Forward-auth deployments make this worse — there's
+no `/setup` form to fill in (no password, no OAuth callback), so the very
+first proxy-authed visitor would normally just bounce off the strict
+"must be pre-allowlisted" check.
 
-Use the existing **invite link** mechanism. Generate a one-shot invite from
-the CLI / a setup script, browse to it through Caddy, and the
-`/accept-invite` page allowlists you and signs you in via the next request.
-The accept-invite UI auto-detects this provider and skips the password
-form.
+The runtime resolves this automatically via a one-shot **bootstrap
+allowlist policy**. On every authed request, `@selvajs/selva` checks
+whether an instance admin already exists; until one does, it asks the
+provider whether the incoming UPN/email matches `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`.
+A match auto-allowlists the user and grants them every platform permission
+in the same request. The next visit is a normal allowlisted login; the
+bootstrap window has closed.
 
-```bash
-# After deploying, generate a bootstrap invite:
-node -e "
-  import('./packages/compute-app/build/index.js').then(...)
-" # see docs/QuickStart.md for the seeded-invite recipe
+```text
+fresh install → unrecognized UPN arrives at proxy
+   ↓
+hasInstanceAdmin? ── no ──► UPN/email == BOOTSTRAP_INSTANCE_ADMIN_EMAIL?
+   │                            │
+   │ yes                        ├── yes → auto-allowlist + grant admin
+   │                            └── no  → reject (null user)
+   ▼
+strict allowlist-only path (policy returns false from now on)
 ```
+
+Tenancy interactions:
+
+- **`SELVA_TENANCY=single` + env var unset** → first proxy-authed visitor
+  wins. Fine for self-hosted fresh installs where you control who can
+  reach the proxy at all.
+- **`SELVA_TENANCY=single` + env var set** → only that UPN/email can
+  bootstrap. Use this if multiple people might hit the box during setup.
+- **`SELVA_TENANCY=multi`** → the env var is **required**. Without it,
+  the first random multi-tenant signup would silently become Selva staff.
+
+Doubles as the break-glass recovery path: if you lose admin to a backup
+restore or migration drift, set the env var, demote/delete every
+`instance_admin` row in your permission store, and the next visit by the
+named user re-bootstraps you.
+
+Custom runtimes that wire `HeaderAuthProvider` themselves can call
+`provider.setBootstrapAllowlistPolicy(...)` directly — see the
+`BootstrapAllowlistPolicy` type for the contract.
 
 ---
 
@@ -187,15 +220,15 @@ matching headers.
 
 ## Logout
 
-`/logout` destroys Selva's local session and redirects to
-`HEADER_AUTH_LOGOUT_URL`. Without that, the proxy re-authenticates the user
-on the very next request and "logout" becomes a no-op the user can't escape.
+There is no Selva-side logout under this provider. Identity rides on every
+request via the proxy headers, so there is no session, cookie, or token for
+Selva to destroy — anything it cleared would be re-supplied by the proxy on
+the very next request. The UI hides the logout button accordingly.
 
-Microsoft Entra logout URL pattern:
-
-```
-HEADER_AUTH_LOGOUT_URL="https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/logout?post_logout_redirect_uri=https://app.example.com/login"
-```
+Sign-out is the proxy / IdP's responsibility. Point users at your IdP's
+sign-out URL (e.g. the Microsoft Entra `/oauth2/v2.0/logout` endpoint) from
+your own portal, or rely on whatever session-management UI the proxy already
+provides.
 
 ---
 

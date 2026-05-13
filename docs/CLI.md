@@ -28,7 +28,7 @@ npm start
 npm run logs
 ```
 
-When a new version of `@selvajs/runtime` ships:
+When a new version of `@selvajs/selva` ships:
 
 ```bash
 npm run update          # bumps @selvajs/* and restarts under PM2
@@ -55,16 +55,16 @@ What lands in `<dir>`:
 | `.env` | Merged from runtime's `.env.example` plus your prompt answers. Contains `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` — back this up before anything else. |
 | `selva.config.js` | Provider wiring. Edit to swap providers or change defaults. |
 | `ecosystem.config.cjs` | PM2 process definition. |
-| `package.json` | Pins `@selvajs/runtime` + the providers you picked. |
+| `package.json` | Pins `@selvajs/selva` + the providers you picked. |
 | `.selva-version` | Marker for future CLI migrations. |
 
 Notes:
 
 - Secrets are generated **once**. `selva init` won't regenerate them; use `selva keys rotate` if you actually need to rotate.
 - `npm install` here is the only place that creates `node_modules/`. If it fails, the scaffold prints the last 80 lines of npm output so you don't have to fish through `~/.npm/_logs/`.
-- The CLI templates live inside `@selvajs/runtime` — there's no separate template package to keep in sync.
+- The CLI templates live inside `@selvajs/selva` — there's no separate template package to keep in sync.
 
-For env-var documentation, see [packages/compute-app/.env.example](../packages/compute-app/.env.example) — it's the authoritative reference.
+For env-var documentation, see [packages/selva/.env.example](../packages/selva/.env.example) — it's the authoritative reference.
 
 ---
 
@@ -123,7 +123,7 @@ The `--update-env` flag is the whole reason this wrapper exists: a plain `pm2 re
 Refreshes all `@selvajs/*` packages and restarts under PM2.
 
 ```
-npm update --save @selvajs/create @selvajs/runtime @selvajs/platform \
+npm update --save @selvajs/create @selvajs/selva @selvajs/platform \
                   @selvajs/local-provider @selvajs/supabase-provider \
                   @selvajs/header-auth-provider
 pm2 restart selva-compute --update-env
@@ -177,7 +177,7 @@ The scaffold writes shorter aliases into the deployment's `package.json` so you 
 ## Where things live
 
 - CLI source: [packages/create/src/](../packages/create/src/) (plain JS, no build step)
-- Runtime templates (the files copied into a fresh deployment): [packages/runtime/templates/](../packages/runtime/templates/)
-- Env-var reference: [packages/compute-app/.env.example](../packages/compute-app/.env.example)
+- Runtime templates (the files copied into a fresh deployment): [packages/selva/templates/](../packages/selva/templates/)
+- Env-var reference: [packages/selva/.env.example](../packages/selva/.env.example)
 - Operator deployment guide (Linux/GCE specifics, reverse proxy, troubleshooting): [deployment/GCE-Linux.md](deployment/GCE-Linux.md)
 - Shipping a fix to a deployed CLI/runtime: [Hotfix-CLI-Runtime.md](Hotfix-CLI-Runtime.md)

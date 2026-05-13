@@ -1,6 +1,6 @@
 // PM2 process file for the compute app.
 //
-// Runtime config lives in packages/compute-app/.env and is loaded by Node
+// Runtime config lives in packages/selva/.env and is loaded by Node
 // itself via `--env-file` (Node >= 20.6) — keep secrets there, not here.
 // Any var the active provider needs (e.g. SUPABASE_URL for the Supabase
 // provider) is picked up automatically as long as it's in that file.
@@ -17,7 +17,7 @@ module.exports = {
 		{
 			name: 'selva-compute',
 			script: './build/index.js',
-			cwd: './packages/compute-app',
+			cwd: './packages/selva',
 			node_args: '--env-file=.env',
 
 			// Concurrency: fork + 1 instance is required for the local provider —

@@ -11,11 +11,11 @@
 
 ```bash
 # 1. Configure environment — copy the template and fill in values
-cp packages/compute-app/.env.example packages/compute-app/.env
-nano packages/compute-app/.env
+cp packages/selva/.env.example packages/selva/.env
+nano packages/selva/.env
 
 # 2. Build for production
-export ADAPTER=node && pnpm build --filter=@selvajs/compute-app
+export ADAPTER=node && pnpm build --filter=@selvajs/selva
 
 # 3. Install PM2 and start (from the repo root)
 sudo npm install -g pm2
@@ -29,7 +29,7 @@ Test: `curl http://localhost:3000/api/health`
 
 ## ecosystem.config.cjs
 
-Runtime config lives in `packages/compute-app/.env` and is loaded by Node itself via `--env-file` (Node >= 20.6). The committed [`ecosystem.config.cjs`](../../../ecosystem.config.cjs) is provider-agnostic — switching from local to Supabase only requires editing `.env`.
+Runtime config lives in `packages/selva/.env` and is loaded by Node itself via `--env-file` (Node >= 20.6). The committed [`ecosystem.config.cjs`](../../../ecosystem.config.cjs) is provider-agnostic — switching from local to Supabase only requires editing `.env`.
 
 > **Why `--env-file` instead of PM2's `env_file`:** PM2's `env_file` option only works under `pm2-runtime`. The regular `pm2 start` daemon silently ignores it, causing the app to crash on boot with `Missing required env var: SELVA_HMAC_KEY`. Letting Node load `.env` directly avoids that footgun.
 
@@ -39,7 +39,7 @@ module.exports = {
 		{
 			name: 'selva-compute',
 			script: './build/index.js',
-			cwd: './packages/compute-app',
+			cwd: './packages/selva',
 			node_args: '--env-file=.env',
 			instances: 1, // local provider is not safe across processes
 			exec_mode: 'fork', // switch to 'cluster' only with Supabase
@@ -51,7 +51,7 @@ module.exports = {
 };
 ```
 
-A minimal `.env` for the local provider (see [`packages/compute-app/.env.example`](../../../packages/compute-app/.env.example) for every option):
+A minimal `.env` for the local provider (see [`packages/selva/.env.example`](../../../packages/selva/.env.example) for every option):
 
 ```bash
 # Local provider
@@ -90,7 +90,7 @@ pm2 delete selva-compute
 bash ~/selva/scripts/update.sh
 
 # Manual
-cd ~/selva && git pull && pnpm install && ADAPTER=node pnpm build --filter=@selvajs/compute-app
+cd ~/selva && git pull && pnpm install && ADAPTER=node pnpm build --filter=@selvajs/selva
 pm2 restart selva-compute --update-env
 ```
 

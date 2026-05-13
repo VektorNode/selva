@@ -1,10 +1,10 @@
-# Hotfixing `@selvajs/runtime` and `@selvajs/create`
+# Hotfixing `@selvajs/selva` and `@selvajs/create`
 
 The "I changed code, get it on the VM now" loop. Bypasses the changesets workflow described in [Publishing.md](./Publishing.md) — use this when you need to ship one fix to one or two operators, not cut a coordinated release.
 
 For multi-package, multi-changeset releases use the standard flow. This doc covers the common cases:
 
-- Changed the runtime (compute-app source, providers, the admin update handler, …) and need to republish `@selvajs/runtime`.
+- Changed the runtime (compute-app source, providers, the admin update handler, …) and need to republish `@selvajs/selva`.
 - Changed the CLI source under `packages/create/` and need to republish `@selvajs/create`.
 - Both at once.
 
@@ -26,9 +26,9 @@ The shape is always: **bump → build (runtime only) → verify → publish → 
 
 Any change in:
 
-- `packages/compute-app/**` (the bundled SvelteKit app)
+- `packages/selva/**` (the bundled SvelteKit app)
 - `packages/platform/**`, `packages/local-provider/**`, `packages/supabase-provider/**`, `packages/header-auth-provider/**` (the providers — if you only touched these, you can usually update them independently, but bundling a runtime release together is simpler when the change is small)
-- `packages/runtime/scripts/build.js` or `packages/runtime/templates/**`
+- `packages/selva/scripts/build.js` or `packages/selva/templates/**`
 
 The runtime is the only publishable package that **bundles a prebuilt artifact**. Every other `@selvajs/*` package ships source; the runtime ships compiled output. Skipping the build is the most common foot-gun.
 
@@ -42,7 +42,7 @@ All commands run from the repo root (`d:/Coding/selva`).
 #    change, use changesets — the hotfix loop is for fixes, not features.
 node -e "
 const fs = require('fs');
-const f = 'packages/runtime/package.json';
+const f = 'packages/selva/package.json';
 const p = JSON.parse(fs.readFileSync(f));
 const [maj, min, patch] = p.version.split('.').map(Number);
 p.version = \`\${maj}.\${min}.\${patch + 1}\`;
@@ -51,22 +51,22 @@ console.log('bumped to', p.version);
 "
 
 # 2. Rebuild. This compiles compute-app with ADAPTER=node, copies the build
-#    into packages/runtime/build/, recompiles selva.config.ts to the JS
+#    into packages/selva/build/, recompiles selva.config.ts to the JS
 #    template, and writes the .env.example + ecosystem.config.cjs templates.
 #    Slow (~30–60s) — let it finish.
-pnpm --filter @selvajs/runtime run build
+pnpm --filter @selvajs/selva run build
 
 # 3. Verify the fix is actually in the bundle BEFORE publishing.
 #    See "Verifying the bundle" below.
-grep -rl "<a distinctive string from your fix>" packages/runtime/build \
+grep -rl "<a distinctive string from your fix>" packages/selva/build \
   || { echo "fix not in build — ABORT"; exit 1; }
 
 # 4. Publish via PNPM (not npm — see "The npm-publish trap" below).
-pnpm --filter @selvajs/runtime publish --access public --no-git-checks
+pnpm --filter @selvajs/selva publish --access public --no-git-checks
 
 # 5. Confirm the registry has it and the manifest is clean.
-npm view @selvajs/runtime version
-npm view @selvajs/runtime@latest dependencies
+npm view @selvajs/selva version
+npm view @selvajs/selva@latest dependencies
 #   Expect: concrete version ranges. No "workspace:*", no "catalog:".
 ```
 
@@ -91,8 +91,8 @@ Bad targets:
 If the grep returns nothing despite a successful build, force-rebuild:
 
 ```bash
-pnpm --filter @selvajs/compute-app run build --force
-pnpm --filter @selvajs/runtime run build
+pnpm --filter @selvajs/selva run build --force
+pnpm --filter @selvajs/selva run build
 ```
 
 ### After publishing
@@ -195,16 +195,16 @@ for pkg in runtime create; do
 done
 
 # Build runtime, smoke-test CLI.
-pnpm --filter @selvajs/runtime run build
+pnpm --filter @selvajs/selva run build
 node --input-type=module -e "await import('./packages/create/src/cli.js'); console.log('ok')"
 
 # Publish runtime FIRST so the CLI's scaffold output references a runtime
 # version that actually exists on the registry.
-pnpm --filter @selvajs/runtime publish --access public --no-git-checks
+pnpm --filter @selvajs/selva publish --access public --no-git-checks
 pnpm --filter @selvajs/create publish --access public --no-git-checks
 ```
 
-The CLI scaffolds with `"@selvajs/runtime": "latest"` so the order matters less than it seems — `npm install` resolves `latest` at install time. But publishing the runtime first means there's no window where a fresh scaffold can pick up a CLI that expects a runtime that isn't yet available.
+The CLI scaffolds with `"@selvajs/selva": "latest"` so the order matters less than it seems — `npm install` resolves `latest` at install time. But publishing the runtime first means there's no window where a fresh scaffold can pick up a CLI that expects a runtime that isn't yet available.
 
 ---
 
@@ -212,9 +212,9 @@ The CLI scaffolds with `"@selvajs/runtime": "latest"` so the order matters less 
 
 **Never run `npm publish` on a Selva package.** Use `pnpm publish` (or `pnpm --filter ... publish`).
 
-`@selvajs/runtime@0.10.2` was published with `npm publish` and immediately broke every install. The reason: the source `package.json` has `workspace:*` and `catalog:` specs for its internal deps. `pnpm publish` rewrites those to real version ranges at pack time. `npm publish` does not — it ships the literal strings. The published tarball contained `"@selvajs/local-provider": "workspace:*"`, and `npm install` died silently because it can't resolve `workspace:*`.
+`@selvajs/selva@0.10.2` was published with `npm publish` and immediately broke every install. The reason: the source `package.json` has `workspace:*` and `catalog:` specs for its internal deps. `pnpm publish` rewrites those to real version ranges at pack time. `npm publish` does not — it ships the literal strings. The published tarball contained `"@selvajs/local-provider": "workspace:*"`, and `npm install` died silently because it can't resolve `workspace:*`.
 
-The failure mode is **silent in npm logs** — `npm install` logs the manifest fetch, then exits 1 with no error printed. The only diagnosis is `npm view @selvajs/runtime@<version> dependencies` and noticing the literal `workspace:*` strings.
+The failure mode is **silent in npm logs** — `npm install` logs the manifest fetch, then exits 1 with no error printed. The only diagnosis is `npm view @selvajs/selva@<version> dependencies` and noticing the literal `workspace:*` strings.
 
 To prevent this entirely, the runtime build script should hand-flatten specs before publish so it works with either tool. That's a TODO — see [WhiteLabelPlan.md](./WhiteLabelPlan.md). Until then, the habit of typing `pnpm publish` is the only line of defence.
 
@@ -247,7 +247,7 @@ The single most common reason a hotfix "doesn't reach the operator" — and it h
 
 ### Mechanism
 
-When the VM runs `npm update @selvajs/runtime`, npm doesn't go straight to the registry. It:
+When the VM runs `npm update @selvajs/selva`, npm doesn't go straight to the registry. It:
 
 1. Looks for a cached **packument** (the JSON document listing every version + dist-tags for the package) in `~/.npm/_cacache/`.
 2. If the cache entry is fresh (default TTL ~5 minutes, sometimes longer depending on `Cache-Control` headers from the registry), npm uses it without revalidating.
@@ -257,9 +257,9 @@ The operator sees `selva update` complete successfully — same "before" and "af
 
 ### What you'll see
 
-If you've just published `@selvajs/runtime@0.10.4`:
+If you've just published `@selvajs/selva@0.10.4`:
 
-- **Your machine (the publisher's):** `npm view @selvajs/runtime version` → `0.10.4`. The publish worked.
+- **Your machine (the publisher's):** `npm view @selvajs/selva version` → `0.10.4`. The publish worked.
 - **Operator's VM:** `selva update` → `Current: 0.10.3` → `New: 0.10.3`. Cache served stale.
 
 This is **not** the same as `npm publish` shipping `workspace:*` (that's the "npm-publish trap" above and breaks installs outright). Stale-packument is silent — the VM just stays on the old version.
@@ -274,7 +274,7 @@ npm install --prefer-online
 npm run restart
 
 # Verify
-node -e "console.log(require('./node_modules/@selvajs/runtime/package.json').version)"
+node -e "console.log(require('./node_modules/@selvajs/selva/package.json').version)"
 ```
 
 `--prefer-online` forces npm to revalidate every cached manifest against the registry before trusting it.
@@ -285,7 +285,7 @@ This is documented for operators in [deployment/GCE-Linux.md](./deployment/GCE-L
 
 The trap exists in `selva update` and the admin handler today. Three layered fixes will close it:
 
-1. **Pass `--prefer-online` in `selva update` and the admin handler.** One-line change in [packages/create/src/commands/pm2.js](../packages/create/src/commands/pm2.js) and [packages/compute-app/src/routes/admin/api/system/update/+server.ts](../packages/compute-app/src/routes/admin/api/system/update/+server.ts). Adds a HEAD request per package — negligible cost, guaranteed fresh.
+1. **Pass `--prefer-online` in `selva update` and the admin handler.** One-line change in [packages/create/src/commands/pm2.js](../packages/create/src/commands/pm2.js) and [packages/selva/src/routes/admin/api/system/update/+server.ts](../packages/selva/src/routes/admin/api/system/update/+server.ts). Adds a HEAD request per package — negligible cost, guaranteed fresh.
 
 2. **Compare versions before / after and warn loudly when nothing changed.** Today the CLI prints `Current: 0.10.3 → New: 0.10.3` and exits successfully. It should detect the no-op and surface it:
 
@@ -304,7 +304,7 @@ When you do the next hotfix to the CLI / runtime, bundle these in. The TODO is t
 When an operator says "I updated and it didn't work," the question chain is:
 
 1. **What did `selva update` print for "Current" and "New" runtime version?** Identical → stale cache. Different → genuine update, dig elsewhere.
-2. **What does `npm view @selvajs/runtime version` print on YOUR machine?** That's authoritative for what's on the registry.
+2. **What does `npm view @selvajs/selva version` print on YOUR machine?** That's authoritative for what's on the registry.
 3. **What does `node -e "..."` print on the VM?** That's authoritative for what's installed.
 
 If (1) shows identical, (2) is newer than (3), it's the cache trap — recovery commands above.
@@ -338,22 +338,22 @@ For anything bigger than a one-line fix, use changesets. They exist for a reason
 
 You forgot to bump. Run the bump script and try again.
 
-### "You do not have permission to publish @selvajs/runtime"
+### "You do not have permission to publish @selvajs/selva"
 
 `npm whoami` — check you're logged in and on the `@selvajs` org.
 
-### Build succeeds but my fix isn't in `packages/runtime/build/`
+### Build succeeds but my fix isn't in `packages/selva/build/`
 
-Turborepo cache. `pnpm --filter @selvajs/compute-app run build --force`, then rerun the runtime build.
+Turborepo cache. `pnpm --filter @selvajs/selva run build --force`, then rerun the runtime build.
 
 ### `pnpm publish` refuses because of uncommitted changes
 
 `--no-git-checks` skips the dirty-tree check. We use it deliberately for hotfixes — committing the version bump after publish is fine because npm already has the tarball.
 
-### Operator says `npm run update` got `@selvajs/runtime@<old-version>`
+### Operator says `npm run update` got `@selvajs/selva@<old-version>`
 
 Stale-packument-cache trap. See "The stale-packument-cache trap" section above — it has the mechanism, the operator recovery commands, and the three layered fixes we plan to ship.
 
 ### Operator says the admin update button shows "update: not found"
 
-Specifically the `sh: 1: update: not found` error — that was a bug in the admin update handler (the shell command was constructed without the `npm` prefix). Fixed in `@selvajs/runtime@0.10.4`. If you see it on a newer version, paste the SSE log output and we'll re-diagnose.
+Specifically the `sh: 1: update: not found` error — that was a bug in the admin update handler (the shell command was constructed without the `npm` prefix). Fixed in `@selvajs/selva@0.10.4`. If you see it on a newer version, paste the SSE log output and we'll re-diagnose.

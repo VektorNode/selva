@@ -9,7 +9,6 @@
 	"updateInternalDependencies": "patch",
 	"ignore": [
 		"@selvajs/builder-app",
-		"@selvajs/compute-app",
 		"@selvajs/config"
 	]
 }

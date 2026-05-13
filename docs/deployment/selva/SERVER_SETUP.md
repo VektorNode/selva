@@ -51,7 +51,7 @@ Vars `setup.sh` itself reads:
 | Variable            | Default                               | Description                                                                                                       |
 | ------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `REPO_URL`          | `git@github.com:VektorNode/selva.git` | Repository SSH URL                                                                                                |
-| `DATA_PATH`         | `../../.selva-data`                   | Local provider data directory, relative to `packages/compute-app/` (resolves to `.selva-data/` at the repo root). |
+| `DATA_PATH`         | `../../.selva-data`                   | Local provider data directory, relative to `packages/selva/` (resolves to `.selva-data/` at the repo root). |
 | `SELVA_HMAC_KEY`    | auto-generated                        | HMAC signing key for sessions + share/invite tokens (local provider only)                                         |
 | `SELVA_AT_REST_KEY` | auto-generated                        | AES key encrypting the Rhino.Compute API key at rest (local provider only)                                        |
 | `PORT`              | `3000`                                | Internal app port                                                                                                 |

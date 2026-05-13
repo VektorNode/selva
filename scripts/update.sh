@@ -381,8 +381,8 @@ print_header "Step 3: Building Application"
 # the PM2 restart step if the new build/ passes a sanity check. If the
 # build half-fails we restore the backup so PM2 (which may autorestart on
 # memory/crash for other reasons) finds a consistent tree.
-BUILD_DIR="$INSTALL_DIR/packages/compute-app/build"
-BUILD_BACKUP="$INSTALL_DIR/packages/compute-app/build.previous"
+BUILD_DIR="$INSTALL_DIR/packages/selva/build"
+BUILD_BACKUP="$INSTALL_DIR/packages/selva/build.previous"
 
 print_step "Snapshotting previous build/ for rollback..."
 rm -rf "$BUILD_BACKUP"
@@ -403,7 +403,7 @@ restore_backup() {
 print_step "Building compute-app for production..."
 cd "$INSTALL_DIR"
 export ADAPTER=node
-if ! run_build pnpm build --filter=@selvajs/compute-app; then
+if ! run_build pnpm build --filter=@selvajs/selva; then
   restore_backup
   print_error "Build failed — previous build/ restored, app not restarted"
   exit 1
@@ -463,7 +463,7 @@ if [ "$NO_RESTART" = false ]; then
   else
     print_warning "PM2 is not managing the application"
     print_step "To start manually, run:"
-    echo "cd $INSTALL_DIR/packages/compute-app && npm start"
+    echo "cd $INSTALL_DIR/packages/selva && npm start"
   fi
 else
   print_warning "Application restart skipped (--no-restart flag set)"
@@ -482,7 +482,7 @@ print_header "Verification"
 print_step "Running health check..."
 
 # Get port from .env — handles quoted values and inline comments
-PORT=$(grep "^PORT=" "$INSTALL_DIR/packages/compute-app/.env" 2>/dev/null \
+PORT=$(grep "^PORT=" "$INSTALL_DIR/packages/selva/.env" 2>/dev/null \
   | head -1 \
   | cut -d'=' -f2 \
   | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//' -e 's/[[:space:]]*#.*//')

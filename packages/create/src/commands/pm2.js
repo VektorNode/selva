@@ -76,14 +76,14 @@ export async function runUpdate() {
 	p.intro(pc.bgCyan(pc.black(' selva update ')));
 
 	const before = readRuntimeVersion(dir);
-	p.log.info(`Current @selvajs/runtime: ${before ?? 'unknown'}`);
+	p.log.info(`Current @selvajs/selva: ${before ?? 'unknown'}`);
 
 	// All @selvajs/* packages move in lockstep so provider-only fixes and CLI
 	// fixes get picked up even when the runtime version hasn't moved. The
 	// admin-center button runs the same list — keep them in sync if you edit.
 	const packages = [
 		'@selvajs/create',
-		'@selvajs/runtime',
+		'@selvajs/selva',
 		'@selvajs/platform',
 		'@selvajs/local-provider',
 		'@selvajs/supabase-provider',
@@ -99,7 +99,7 @@ export async function runUpdate() {
 		return;
 	}
 
-	// Stop the running process BEFORE npm rewrites node_modules/@selvajs/runtime/build/.
+	// Stop the running process BEFORE npm rewrites node_modules/@selvajs/selva/build/.
 	// SvelteKit's node adapter lazy-imports chunks from build/server/chunks/ on every
 	// request; if we let npm replace them while the old process is still serving
 	// traffic, in-flight requests hit ERR_MODULE_NOT_FOUND for chunks whose hash
@@ -131,7 +131,7 @@ export async function runUpdate() {
 	}
 
 	const after = readRuntimeVersion(dir);
-	p.log.info(`New @selvajs/runtime:     ${after ?? 'unknown'}`);
+	p.log.info(`New @selvajs/selva:     ${after ?? 'unknown'}`);
 
 	// Surface no-op updates explicitly. --prefer-online closes most cache
 	// holes, but a freshly-published version can take a minute or two to

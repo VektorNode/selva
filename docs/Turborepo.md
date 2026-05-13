@@ -7,7 +7,7 @@ Selva uses [Turborepo](https://turborepo.com) as the task runner across the pnpm
 | Command                                    | What it does                                    |
 | ------------------------------------------ | ----------------------------------------------- |
 | `pnpm build`                               | Build every package, in dep order, with caching |
-| `pnpm build --filter=@selvajs/compute-app` | Build only one package + its deps               |
+| `pnpm build --filter=@selvajs/selva` | Build only one package + its deps               |
 | `pnpm check`                               | `svelte-check` across the workspace             |
 | `pnpm type-check`                          | TypeScript type-check across the workspace      |
 | `pnpm lint`                                | ESLint (not via turbo — runs once at root)      |
@@ -20,7 +20,7 @@ Selva uses [Turborepo](https://turborepo.com) as the task runner across the pnpm
 
 Turbo reads each package's `package.json` `scripts` and the rules in [turbo.json](../turbo.json). The interesting rules:
 
-- **`build` `dependsOn: ["^build"]`** — the `^` means "build all upstream workspace deps first." So when you build [@selvajs/compute-app](../packages/compute-app/), turbo first builds [@selvajs/platform](../packages/platform/), [@selvajs/schemas](../packages/schemas/), [@selvajs/ui](../packages/ui/), etc. — in topo order, in parallel where possible.
+- **`build` `dependsOn: ["^build"]`** — the `^` means "build all upstream workspace deps first." So when you build [@selvajs/selva](../packages/selva/), turbo first builds [@selvajs/platform](../packages/platform/), [@selvajs/schemas](../packages/schemas/), [@selvajs/ui](../packages/ui/), etc. — in topo order, in parallel where possible.
 - **`schemas#build` `dependsOn: ["^build", "generate"]`** — overridden in [packages/schemas/turbo.json](../packages/schemas/turbo.json). Forces `generate` (the JSON-schema → TS/C# codegen) to run before `tsc` compiles the package, since `tsc` reads `src/generated/`.
 - **`generate` outputs include the .NET file** (`Plugin/Selva.Schema/Models/UISchema.Generated.cs`) — turbo will track that file even though it lives outside the schemas package. Cache invalidates when [ui-schema.json](../packages/schemas/ui-schema.json) or [preset-schema.json](../packages/schemas/preset-schema.json) changes.
 
@@ -32,7 +32,7 @@ Cache is local to your machine in `.turbo/` (gitignored). What invalidates it:
 
 - **Source changes** — anything matching `inputs` in the relevant task definition.
 - **Workspace files** — [pnpm-workspace.yaml](../pnpm-workspace.yaml), [pnpm-lock.yaml](../pnpm-lock.yaml), [tsconfig.base.json](../tsconfig.base.json), and [selva.config.ts](../selva.config.ts) are in `globalDependencies`, so any change to them busts every cache.
-- **Env vars** — `build` tracks `ADAPTER` and `NODE_ENV` (the compute-app's [svelte.config.js](../packages/compute-app/svelte.config.js) reads `ADAPTER` to choose between `adapter-auto` and `adapter-node`). If you add Vite env vars that affect output, list them under `env` in the task definition or they'll silently break caching.
+- **Env vars** — `build` tracks `ADAPTER` and `NODE_ENV` (the compute-app's [svelte.config.js](../packages/selva/svelte.config.js) reads `ADAPTER` to choose between `adapter-auto` and `adapter-node`). If you add Vite env vars that affect output, list them under `env` in the task definition or they'll silently break caching.
 
 `turbo run build --force` bypasses the cache and rebuilds everything.
 
@@ -59,7 +59,7 @@ You **do** need to edit [turbo.json](../turbo.json) when:
 
 ## Known issues
 
-**Windows `ENOTEMPTY` flake on `vite build`.** Occasionally [@selvajs/ui](../packages/ui/) or [@selvajs/compute-app](../packages/compute-app/) fails with `ENOTEMPTY: directory not empty` during the `rm -rf dist && vite build` step. This is a Windows filesystem race in `svelte-package`, not a turbo issue. Re-running fixes it. (If it becomes frequent we can swap `rm -rf` for `rimraf` in the affected package scripts.)
+**Windows `ENOTEMPTY` flake on `vite build`.** Occasionally [@selvajs/ui](../packages/ui/) or [@selvajs/selva](../packages/selva/) fails with `ENOTEMPTY: directory not empty` during the `rm -rf dist && vite build` step. This is a Windows filesystem race in `svelte-package`, not a turbo issue. Re-running fixes it. (If it becomes frequent we can swap `rm -rf` for `rimraf` in the affected package scripts.)
 
 ## CI / remote caching
 

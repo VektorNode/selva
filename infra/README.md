@@ -120,7 +120,7 @@ If Caddy hasn't gotten a cert yet, `curl -k` will work and
 ## Add Your Grasshopper Definitions
 
 ```bash
-gcloud compute scp your-definition.gh selva@selva-compute-app:~/selva/packages/compute-app/definitions/ --zone <zone>
+gcloud compute scp your-definition.gh selva@selva-compute-app:~/selva/packages/selva/definitions/ --zone <zone>
 ```
 
 Access:
