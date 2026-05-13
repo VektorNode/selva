@@ -112,7 +112,9 @@
 		)}
 	>
 		{#if SelectedIcon}
-			<SelectedIcon class="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+			<SelectedIcon
+				class={cn('h-3.5 w-3.5 shrink-0', selected?.iconClass ?? 'text-muted-foreground')}
+			/>
 		{:else if TriggerIcon}
 			<TriggerIcon class="text-muted-foreground h-3.5 w-3.5 shrink-0" />
 		{/if}
@@ -164,7 +166,9 @@
 							)}
 						>
 							{#if ItemIcon}
-								<ItemIcon class="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+								<ItemIcon
+									class={cn('h-3.5 w-3.5 shrink-0', item.iconClass ?? 'text-muted-foreground')}
+								/>
 							{/if}
 							<span class="flex-1 truncate">{item.label}</span>
 							{#if item.id === value}

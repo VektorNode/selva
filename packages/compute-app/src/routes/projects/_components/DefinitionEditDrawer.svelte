@@ -15,7 +15,7 @@
 		toast,
 		type FilterableDropdownItem
 	} from '@selvajs/ui';
-	import { ArrowLeft, Image, Trash2, X } from '@lucide/svelte';
+	import { ArrowLeft, Circle, Image, Trash2, X } from '@lucide/svelte';
 	import ProjectPicker from '$lib/components/definitions/ProjectPicker.svelte';
 	import type { DefinitionRecord, ProjectWithMembers, ComputeServerConfig } from '../+page.server';
 	import type { DefinitionStatus } from '@selvajs/platform';
