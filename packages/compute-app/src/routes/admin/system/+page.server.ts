@@ -14,7 +14,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const flags = {
 		ALLOW_CROSS_ORG_PUBLIC: flag('ALLOW_CROSS_ORG_PUBLIC'),
 		ALLOW_ORG_COMPUTE_OVERRIDE: flag('ALLOW_ORG_COMPUTE_OVERRIDE'),
-		ALLOW_ORG_CREATION: flag('ALLOW_ORG_CREATION')
+		ALLOW_ORG_CREATION: flag('ALLOW_ORG_CREATION'),
+		ENABLE_SHARING: flag('ENABLE_SHARING')
 	};
 
 	return { canManageUpdates, flags };

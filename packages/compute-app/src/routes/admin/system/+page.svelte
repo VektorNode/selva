@@ -8,6 +8,7 @@
 			ALLOW_CROSS_ORG_PUBLIC: boolean;
 			ALLOW_ORG_COMPUTE_OVERRIDE: boolean;
 			ALLOW_ORG_CREATION: boolean;
+			ENABLE_SHARING: boolean;
 		};
 	}
 	let { data }: { data: PageData } = $props();
@@ -18,7 +19,9 @@
 		ALLOW_ORG_COMPUTE_OVERRIDE:
 			'When on, individual orgs can configure their own Rhino.Compute server instead of the instance pool.',
 		ALLOW_ORG_CREATION:
-			'When on, signed-in users see a "Create organization" action. Off by default in self-hosted instances.'
+			'When on, signed-in users see a "Create organization" action. Off by default in self-hosted instances.',
+		ENABLE_SHARING:
+			'When on, editors can mint per-definition share links that grant anonymous external access. When off, the mint/list/revoke routes return 404 and any previously-minted tokens stop resolving.'
 	};
 
 	let updateRunning = $state(false);
@@ -181,7 +184,7 @@
 	<SectionHeader
 		eyebrow="Admin"
 		title="System settings"
-		description="Instance-wide configuration, platform flags, and the update runner."
+		description="Instance-wide configuration, platform flags, and the update runner. To change platform flags, edit your selva.config.ts configuration and restart the app."
 	/>
 
 	<Card.Root>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/stores';
 	import { SideNav, type SideNavItem } from '@selvajs/ui';
 	import {
 		Gauge,
@@ -24,6 +25,7 @@
 
 	const orgPerms = $derived<OrgPermission[]>(data.ctx?.orgPermissions ?? []);
 	const can = (p: OrgPermission) => orgPerms.includes(p);
+	const enableSharing = $derived(!!$page.data.flags?.enableSharing);
 
 	const items = $derived(
 		[
@@ -66,7 +68,7 @@
 				label: 'Share links',
 				icon: Link2,
 				match: 'prefix' as const,
-				show: can('manage_definitions')
+				show: enableSharing && can('manage_definitions')
 			},
 			{
 				href: '/team/compute',

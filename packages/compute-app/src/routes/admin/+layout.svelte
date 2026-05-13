@@ -7,6 +7,7 @@
 	interface LayoutData {
 		platformPermissions: PlatformPermission[];
 		orgPermissions: OrgPermission[];
+		auditAvailable: boolean;
 	}
 	interface LayoutProps {
 		data: LayoutData;
@@ -64,7 +65,7 @@
 				label: 'Audit log',
 				icon: ScrollText,
 				match: 'prefix' as const,
-				show: can('instance_admin')
+				show: can('instance_admin') && data.auditAvailable
 			}
 		].filter((i) => i.show) satisfies (SideNavItem & { show: boolean })[]
 	);

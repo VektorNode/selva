@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { DefinitionChannel, RequestContext, ShareLink } from '@selvajs/platform';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import { getDefinitionMeta, getProjectProvider, providers } from '../providers.server';
+import { flag, getDefinitionMeta, getProjectProvider, providers } from '../providers.server';
 import { hashToken, looksLikeShareToken } from './token.server';
 
 /**
@@ -22,6 +22,11 @@ export interface ResolvedShareLink {
  * Returns the raw token string, or null when none present. Does NOT validate.
  */
 export function readShareToken(request: Request, url: URL): string | null {
+	// When share links are disabled instance-wide, ignore any token on the wire.
+	// Callers fall through to user-based auth, which 401s anonymous requests —
+	// existing tokens stop granting access without needing to revoke each one.
+	if (!flag('ENABLE_SHARING')) return null;
+
 	const q = url.searchParams.get('token');
 	if (q && looksLikeShareToken(q)) return q;
 

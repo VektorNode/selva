@@ -34,3 +34,7 @@ After the app is up, definitions are uploaded through the admin UI — there is 
 ## Release Management
 
 - **[Releasing.md](./Releasing.md)** — Managing changelogs and versioning with Changesets
+
+## Troubleshooting
+
+- **[Troubleshooting.md](./Troubleshooting.md)** — Registry of known operator-facing issues with symptom → cause → fix entries (e.g. compute apiKey decryption failures after a key rotation)

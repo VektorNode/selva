@@ -21,7 +21,10 @@ export type {
 	LocalOrgStoreData,
 	LocalOrgStoreOptions,
 	LocalProjectStoreOptions,
-	LocalShareLinkStoreOptions
+	LocalShareLinkStoreOptions,
+	SecretVerificationFailure,
+	SecretVerificationFailureReason,
+	SecretVerificationReport
 } from './data/index.js';
 
 // Per-user data layer (user-data.json) — keyed by user ID, paired with any

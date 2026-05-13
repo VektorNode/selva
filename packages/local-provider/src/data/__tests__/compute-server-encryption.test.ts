@@ -62,7 +62,11 @@ describe('LocalComputeServerStore — apiKey encryption at rest', () => {
 		expect(onDisk).toContain('enc:v1:');
 	});
 
-	it('decryption with the wrong key throws', async () => {
+	it('getConfig with the wrong key returns the server with apiKey omitted (does not throw)', async () => {
+		// Per-row tolerance: a key mismatch on `getConfig` must not blank out
+		// the entire compute-config response, because every page that reads
+		// it (e.g. /projects) would otherwise 500. Strict detection is the
+		// job of `verifySecrets` at boot.
 		const writer = new LocalComputeServerStore(configPath, TEST_SECRET_KEY);
 		await writer.savePlatformServers(
 			SYSTEM_CONTEXT,
@@ -71,7 +75,76 @@ describe('LocalComputeServerStore — apiKey encryption at rest', () => {
 		);
 
 		const reader = new LocalComputeServerStore(configPath, OTHER_KEY);
-		await expect(reader.getConfig(SYSTEM_CONTEXT)).rejects.toThrow();
+		const got = await reader.getConfig(SYSTEM_CONTEXT);
+		expect(got.servers).toHaveLength(1);
+		expect(got.servers[0].apiKey).toBeUndefined();
+	});
+
+	it('verifySecrets reports key_mismatch when the at-rest key has rotated', async () => {
+		const writer = new LocalComputeServerStore(configPath, TEST_SECRET_KEY);
+		await writer.savePlatformServers(
+			SYSTEM_CONTEXT,
+			[makePlatformServer({ id: 'a1', label: 'Prod', apiKey: 'value' })],
+			'a1'
+		);
+
+		const reader = new LocalComputeServerStore(configPath, OTHER_KEY);
+		const report = await reader.verifySecrets();
+		expect(report.ok).toBe(false);
+		expect(report.plaintextFound).toBe(false);
+		expect(report.failures).toHaveLength(1);
+		expect(report.failures[0]).toMatchObject({
+			serverId: 'a1',
+			serverLabel: 'Prod',
+			reason: 'key_mismatch'
+		});
+	});
+
+	it('verifySecrets reports plaintext_on_disk for hand-edited config', async () => {
+		await fs.mkdir(path.dirname(configPath), { recursive: true });
+		await fs.writeFile(
+			configPath,
+			JSON.stringify({
+				servers: [
+					{
+						id: 'a1',
+						scope: 'platform',
+						sharedWith: 'all',
+						label: 'Legacy',
+						serverUrl: 'http://localhost:5000',
+						apiKey: 'plaintext-leftover'
+					}
+				]
+			}),
+			'utf-8'
+		);
+
+		const store = new LocalComputeServerStore(configPath, TEST_SECRET_KEY);
+		const report = await store.verifySecrets();
+		expect(report.ok).toBe(false);
+		expect(report.plaintextFound).toBe(true);
+		expect(report.failures[0]).toMatchObject({
+			serverId: 'a1',
+			reason: 'plaintext_on_disk'
+		});
+	});
+
+	it('verifySecrets returns ok when every encrypted apiKey decrypts', async () => {
+		const store = new LocalComputeServerStore(configPath, TEST_SECRET_KEY);
+		await store.savePlatformServers(
+			SYSTEM_CONTEXT,
+			[
+				makePlatformServer({ id: 'a1', apiKey: 'one' }),
+				makePlatformServer({ id: 'a2', apiKey: 'two' }),
+				makePlatformServer({ id: 'a3' }) // no apiKey — ignored
+			],
+			'a1'
+		);
+
+		const report = await store.verifySecrets();
+		expect(report.ok).toBe(true);
+		expect(report.failures).toEqual([]);
+		expect(report.plaintextFound).toBe(false);
 	});
 
 	it('refuses to read a legacy plaintext apiKey from disk', async () => {
