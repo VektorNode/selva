@@ -1,0 +1,59 @@
+{
+	"name": "@selvajs/selva",
+	"version": "0.11.0",
+	"description": "Selva — self-contained Grasshopper-driven web app. Install + point at a selva.config.js to deploy.",
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
+	"type": "module",
+	"main": "./build/index.js",
+	"files": [
+		"build",
+		"templates"
+	],
+	"engines": {
+		"node": ">=20.6.0"
+	},
+	"scripts": {
+		"dev": "vite dev",
+		"build": "rm -rf build && vite build && node ./scripts/generate-templates.js",
+		"preview": "vite preview",
+		"start": "node build/index.js",
+		"clean": "rm -rf build templates",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"type-check": "tsc --noEmit",
+		"lint": "eslint . --ext .js,.ts,.svelte",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@lucide/svelte": "catalog:",
+		"@selvajs/compute": "catalog:",
+		"@selvajs/header-auth-provider": "workspace:*",
+		"@selvajs/local-provider": "workspace:*",
+		"@selvajs/platform": "workspace:*",
+		"@selvajs/schemas": "workspace:*",
+		"@selvajs/supabase-provider": "workspace:*",
+		"@selvajs/ui": "workspace:*",
+		"@supabase/supabase-js": "^2.104.1",
+		"@sveltejs/kit": "catalog:",
+		"bits-ui": "^2.18.0",
+		"clsx": "catalog:",
+		"mode-watcher": "catalog:",
+		"sharp": "^0.34.5",
+		"tailwind-merge": "catalog:",
+		"tailwind-variants": "^3.2.2",
+		"three": "catalog:",
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"@selvajs/config": "workspace:*",
+		"@sveltejs/adapter-node": "^5.5.4",
+		"@types/three": "catalog:",
+		"esbuild": "^0.25.0",
+		"tw-animate-css": "catalog:",
+		"vitest": "catalog:"
+	}
+}
