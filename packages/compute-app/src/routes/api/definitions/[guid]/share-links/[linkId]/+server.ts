@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { providers } from '$lib/server/providers.server';
+import { providers, flag } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
 import { handleApiError } from '$lib/server/api-errors';
 import { GuidSchema } from '@selvajs/platform/definitions';
@@ -14,6 +14,9 @@ import { GuidSchema } from '@selvajs/platform/definitions';
  * link via a guessed/leaked linkId.
  */
 export const DELETE: RequestHandler = async ({ params, locals }) => {
+	if (!flag('ENABLE_SHARING')) {
+		throw error(404, 'Share links are disabled on this instance (ENABLE_SHARING).');
+	}
 	const guidParsed = GuidSchema.safeParse(params.guid);
 	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
 	const linkParsed = GuidSchema.safeParse(params.linkId);

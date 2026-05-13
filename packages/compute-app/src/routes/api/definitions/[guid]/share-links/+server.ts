@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
-import { providers } from '$lib/server/providers.server';
+import { providers, flag } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { GuidSchema } from '@selvajs/platform/definitions';
@@ -11,6 +11,12 @@ import {
 	type ShareLink
 } from '@selvajs/platform';
 import { hashToken, mintRawToken } from '$lib/server/shareLinks/token.server';
+
+function assertSharingEnabled() {
+	if (!flag('ENABLE_SHARING')) {
+		throw error(404, 'Share links are disabled on this instance (ENABLE_SHARING).');
+	}
+}
 
 /**
  * Spec §7 — share-link admin routes.
@@ -28,6 +34,7 @@ function strip(link: ShareLink): SafeShareLink {
 }
 
 export const GET: RequestHandler = async ({ params, locals }) => {
+	assertSharingEnabled();
 	const guidParsed = GuidSchema.safeParse(params.guid);
 	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
 
@@ -47,6 +54,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 };
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
+	assertSharingEnabled();
 	const guidParsed = GuidSchema.safeParse(params.guid);
 	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
 

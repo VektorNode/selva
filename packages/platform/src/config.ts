@@ -19,6 +19,12 @@ export interface SelvaFlags {
 	ALLOW_ORG_COMPUTE_OVERRIDE?: boolean;
 	/** Authenticated users may create new orgs. */
 	ALLOW_ORG_CREATION?: boolean;
+	/**
+	 * Per-definition share links — anonymous external access via tokenized URLs.
+	 * When off, share-link admin routes reject mint/list/revoke and the
+	 * token-resolution path stops honouring any existing tokens.
+	 */
+	ENABLE_SHARING?: boolean;
 }
 
 export interface SelvaConfig {

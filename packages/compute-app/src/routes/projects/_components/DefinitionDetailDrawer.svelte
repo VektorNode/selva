@@ -9,13 +9,23 @@
 		record: DefinitionRecord;
 		projectName: string;
 		canEdit: boolean;
+		showShare: boolean;
 		onClose: () => void;
 		onEdit: (record: DefinitionRecord) => void;
 		onOpenRunner: (guid: string, channel?: 'live' | 'draft') => void;
 		onShare: (record: DefinitionRecord) => void;
 	}
 
-	let { record, projectName, canEdit, onClose, onEdit, onOpenRunner, onShare }: Props = $props();
+	let {
+		record,
+		projectName,
+		canEdit,
+		showShare,
+		onClose,
+		onEdit,
+		onOpenRunner,
+		onShare
+	}: Props = $props();
 </script>
 
 <Drawer {onClose}>
@@ -60,9 +70,11 @@
 				<Play class="mr-1.5 h-3.5 w-3.5" /> Run
 			</Button>
 			{#if canEdit}
-				<Button variant="outline" size="icon" onclick={() => onShare(record)} title="Share links">
-					<Share2 class="h-4 w-4" />
-				</Button>
+				{#if showShare}
+					<Button variant="outline" size="icon" onclick={() => onShare(record)} title="Share links">
+						<Share2 class="h-4 w-4" />
+					</Button>
+				{/if}
 				<Button variant="outline" onclick={() => onEdit(record)}>Edit</Button>
 			{/if}
 		</div>

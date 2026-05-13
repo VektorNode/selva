@@ -33,6 +33,32 @@ interface OnDiskShape {
 const EMPTY: OnDiskShape = { servers: [], orgDefaults: {} };
 
 /**
+ * Result of {@link LocalComputeServerStore.verifySecrets}. One entry per
+ * server whose `apiKey` couldn't be loaded:
+ *  - `plaintext_on_disk` — the field exists but isn't an `enc:v1:` envelope.
+ *    Either a hand-edit or a migration regression. Security-relevant.
+ *  - `key_mismatch`     — envelope is valid but GCM auth tag verification
+ *    fails under the current `SELVA_AT_REST_KEY`. The key was rotated or the
+ *    data came from another deployment.
+ */
+export type SecretVerificationFailureReason = 'key_mismatch' | 'plaintext_on_disk';
+
+export interface SecretVerificationFailure {
+	serverId: string;
+	serverLabel: string;
+	reason: SecretVerificationFailureReason;
+	/** Underlying error message for `key_mismatch`. Absent for plaintext. */
+	cause?: string;
+}
+
+export interface SecretVerificationReport {
+	ok: boolean;
+	failures: SecretVerificationFailure[];
+	/** True if at least one row holds an unencrypted apiKey on disk. */
+	plaintextFound: boolean;
+}
+
+/**
  * Reads/writes compute.config.json. The file is re-read on every read call
  * so changes take effect without a restart.
  *
@@ -69,6 +95,21 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		};
 	}
 
+	/**
+	 * Per-row tolerant decrypt. A row whose ciphertext can't be authenticated
+	 * under the current `SELVA_AT_REST_KEY` is returned with `apiKey: undefined`
+	 * and a warning logged once. The page that loaded the config keeps
+	 * rendering; solves against that server will fail later when Rhino.Compute
+	 * rejects the missing key.
+	 *
+	 * Boot-time `verifySecrets()` is the strict counterpart — call that from
+	 * the app entrypoint to refuse to start when this state is detected.
+	 *
+	 * Plaintext-on-disk is still hard-fail. That state is never produced by
+	 * the store itself (every write goes through `encryptApiKeys`), so seeing
+	 * it means someone hand-edited the file with a real secret in plaintext —
+	 * which is a security issue we should surface loudly, not paper over.
+	 */
 	private decryptApiKeys(servers: ComputeServerConfig[]): ComputeServerConfig[] {
 		return servers.map((s) => {
 			if (!s.apiKey) return s;
@@ -78,8 +119,60 @@ export class LocalComputeServerStore implements IComputeServerStore {
 						'Re-enter the key via /admin/compute so it is stored encrypted.'
 				);
 			}
-			return { ...s, apiKey: decryptSecret(s.apiKey, this.secretKey) };
+			try {
+				return { ...s, apiKey: decryptSecret(s.apiKey, this.secretKey) };
+			} catch (cause) {
+				console.warn(
+					`[selva] Could not decrypt apiKey for compute server "${s.label}" (${s.id}). ` +
+						'The stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
+						'This server will be returned without an apiKey; solves against it will fail. ' +
+						'Re-enter the key via /admin/compute, or restore the original SELVA_AT_REST_KEY. ' +
+						'See docs/Troubleshooting.md.',
+					cause
+				);
+				return { ...s, apiKey: undefined };
+			}
 		});
+	}
+
+	/**
+	 * Boot-time integrity check. Reads every server row and attempts to
+	 * decrypt each encrypted `apiKey`. Returns a structured report — does NOT
+	 * throw. The caller decides what to do (refuse boot, log + degrade, etc.).
+	 *
+	 * Use this from app startup (`hooks.server.ts`) so a key mismatch fails
+	 * loudly at deploy time instead of as a blank page when a user first hits
+	 * a route that loads compute config.
+	 */
+	async verifySecrets(): Promise<SecretVerificationReport> {
+		const all = await this.readAll();
+		const failures: SecretVerificationFailure[] = [];
+		let plaintextFound = false;
+
+		for (const s of all.servers) {
+			if (!s.apiKey) continue;
+			if (!isEncryptedSecret(s.apiKey)) {
+				plaintextFound = true;
+				failures.push({
+					serverId: s.id,
+					serverLabel: s.label,
+					reason: 'plaintext_on_disk'
+				});
+				continue;
+			}
+			try {
+				decryptSecret(s.apiKey, this.secretKey);
+			} catch (cause) {
+				failures.push({
+					serverId: s.id,
+					serverLabel: s.label,
+					reason: 'key_mismatch',
+					cause: cause instanceof Error ? cause.message : String(cause)
+				});
+			}
+		}
+
+		return { ok: failures.length === 0, failures, plaintextFound };
 	}
 
 	private encryptApiKeys(servers: ComputeServerConfig[]): ComputeServerConfig[] {

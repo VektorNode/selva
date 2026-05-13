@@ -38,6 +38,7 @@
 		defaultComputeServerId?: string | null;
 		isSaving: boolean;
 		initialTab?: 'versions' | 'details' | 'shares';
+		enableSharing: boolean;
 		onClose: () => void;
 		onSave: (guid: string, patch: EditPatch) => Promise<void>;
 		onDelete: (guid: string) => Promise<void>;
@@ -53,6 +54,7 @@
 		defaultComputeServerId = null,
 		isSaving,
 		initialTab = 'versions',
+		enableSharing,
 		onClose,
 		onSave,
 		onDelete,
@@ -61,7 +63,9 @@
 	}: Props = $props();
 
 	/* svelte-ignore state_referenced_locally */
-	let activeTab = $state<'versions' | 'details' | 'shares'>(initialTab);
+	let activeTab = $state<'versions' | 'details' | 'shares'>(
+		initialTab === 'shares' && !enableSharing ? 'versions' : initialTab
+	);
 
 	// Form state — initialized once from record at mount. The parent unmounts
 	// this drawer via {#if editingRecord}, so a new record always gets a fresh
@@ -179,10 +183,14 @@
 	{/if}
 
 	<Tabs.Root bind:value={activeTab} class="flex flex-1 flex-col overflow-hidden">
-		<Tabs.List class={`mx-6 grid w-auto grid-cols-3 ${onBack ? 'mt-2' : 'mt-4'}`}>
+		<Tabs.List
+			class={`mx-6 grid w-auto ${enableSharing ? 'grid-cols-3' : 'grid-cols-2'} ${onBack ? 'mt-2' : 'mt-4'}`}
+		>
 			<Tabs.Trigger value="details">Details</Tabs.Trigger>
 			<Tabs.Trigger value="versions">Versions</Tabs.Trigger>
-			<Tabs.Trigger value="shares">Share links</Tabs.Trigger>
+			{#if enableSharing}
+				<Tabs.Trigger value="shares">Share links</Tabs.Trigger>
+			{/if}
 		</Tabs.List>
 
 		<Tabs.Content value="versions" class="mt-4 flex-1 overflow-y-auto px-6 py-5">
@@ -314,9 +322,11 @@
 			{/if}
 		</Tabs.Content>
 
-		<Tabs.Content value="shares" class="mt-4 flex-1 overflow-y-auto px-6 py-5">
-			<ShareLinkSection definitionGuid={record.guid} />
-		</Tabs.Content>
+		{#if enableSharing}
+			<Tabs.Content value="shares" class="mt-4 flex-1 overflow-y-auto px-6 py-5">
+				<ShareLinkSection definitionGuid={record.guid} />
+			</Tabs.Content>
+		{/if}
 	</Tabs.Root>
 
 	<div class="border-border flex shrink-0 items-center justify-between border-t px-6 py-4">
@@ -367,7 +377,7 @@
 				<strong>{record.displayName}</strong> will move from
 				<strong>{currentProject?.name ?? '—'}</strong>
 				to <strong>{pendingProject?.name ?? '—'}</strong>. Project members and visibility may change
-				accordingly. Existing share links keep working.
+				accordingly.{enableSharing ? ' Existing share links keep working.' : ''}
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>

@@ -27,7 +27,8 @@ export default defineConfig((env) => {
 		flags: {
 			ALLOW_CROSS_ORG_PUBLIC: false,
 			ALLOW_ORG_COMPUTE_OVERRIDE: false,
-			ALLOW_ORG_CREATION: false
+			ALLOW_ORG_CREATION: false,
+			ENABLE_SHARING: false
 		},
 
 		auth: local.LocalAuthProvider.fromEnv(env),

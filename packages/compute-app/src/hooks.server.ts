@@ -3,6 +3,7 @@ import { isHttpError } from '@sveltejs/kit';
 import type { AuthUser, RequestContext } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
 import { providers } from '$lib/server/providers.server';
+import { getBootHealth } from '$lib/server/bootHealth.server';
 import {
 	getRefreshToken,
 	setSessionCookie,
@@ -14,6 +15,13 @@ import {
 // provider throws on missing vars (e.g. DATA_PATH for local, SUPABASE_URL for
 // supabase) while `providers.server.ts` is loaded. No compute-app-level check
 // is needed here.
+
+// Kick off boot-time integrity checks (currently: at-rest secret decryption
+// for the local provider). Fire-and-forget — the promise is cached inside
+// the module, and `/api/health` awaits it. Logs and degrades quietly; does
+// not block request serving, because per-row tolerance in
+// `LocalComputeServerStore` keeps pages rendering. See bootHealth.server.ts.
+void getBootHealth();
 
 /**
  * First-run state is a one-way transition (zero users → at least one user)

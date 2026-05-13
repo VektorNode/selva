@@ -1,3 +1,4 @@
+import { flag } from '$lib/server/providers.server';
 import type { LayoutServerLoad } from './$types';
 
 // Expose the authenticated user to every route in the app.
@@ -25,6 +26,9 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 					platformPermissions: locals.ctx.platformPermissions,
 					orgPermissions: locals.ctx.orgPermissions
 				}
-			: null
+			: null,
+		flags: {
+			enableSharing: flag('ENABLE_SHARING')
+		}
 	};
 };

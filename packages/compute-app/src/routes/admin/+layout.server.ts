@@ -1,5 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { assertAnyPlatformPermission } from '$lib/server/access.server';
+import { getAuditQuery } from '$lib/server/providers.server';
 import type { LayoutServerLoad } from './$types';
 
 /**
@@ -14,6 +15,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 	assertAnyPlatformPermission(locals);
 	return {
 		platformPermissions: locals.ctx.platformPermissions,
-		orgPermissions: locals.ctx.orgPermissions
+		orgPermissions: locals.ctx.orgPermissions,
+		auditAvailable: getAuditQuery() !== null
 	};
 };

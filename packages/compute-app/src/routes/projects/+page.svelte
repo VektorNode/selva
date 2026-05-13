@@ -40,6 +40,8 @@
 	}
 	let { data }: Props = $props();
 
+	const enableSharing = $derived(!!$page.data.flags?.enableSharing);
+
 	// View state
 	let searchQuery = $state('');
 	let activeProjectId = $state<string | null>(null);
@@ -384,6 +386,7 @@
 		record={drawerRecord}
 		projectName={projectName(drawerRecord.projectId)}
 		canEdit={recordCanEdit(drawerRecord)}
+		showShare={enableSharing}
 		onClose={() => (drawerRecord = null)}
 		onEdit={(r) => {
 			editInitialTab = 'details';
@@ -411,6 +414,7 @@
 			defaultComputeServerId={data.defaultComputeServerId}
 			isSaving={savingDefinitionId === editingRecord.guid}
 			initialTab={editInitialTab}
+			{enableSharing}
 			onClose={() => {
 				editingDefinitionId = null;
 				editCameFromDetail = false;
