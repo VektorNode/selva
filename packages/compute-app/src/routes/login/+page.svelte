@@ -48,7 +48,7 @@
 </script>
 
 <svelte:head>
-	<title>Login - Selva Compute</title>
+	<title>Login - {page.data.branding.name}</title>
 </svelte:head>
 
 <div class="bg-background flex min-h-screen items-center justify-center px-4 py-12 sm:px-6 lg:px-8">

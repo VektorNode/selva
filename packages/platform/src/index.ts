@@ -214,7 +214,13 @@ export { SYSTEM_CONTEXT, hasPermission } from './context.js';
 export type { ListOptions, DefinitionListOptions, Page } from './pagination.js';
 export { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from './pagination.js';
 
-export type { TenancyMode, SelvaFlags, SelvaConfig, SelvaConfigFactory } from './config.js';
+export type {
+	TenancyMode,
+	SelvaFlags,
+	SelvaBranding,
+	SelvaConfig,
+	SelvaConfigFactory
+} from './config.js';
 export { isFlagEnabled, defineConfig } from './config.js';
 
 export { ProviderError } from './errors.js';

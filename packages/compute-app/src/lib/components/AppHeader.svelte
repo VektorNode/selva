@@ -33,6 +33,7 @@
 		page.data as {
 			user?: { platformPermissions?: PlatformPermission[] } | null;
 			ctx?: { orgPermissions?: OrgPermission[] } | null;
+			branding?: { name: string; copyrightName: string };
 		}
 	);
 	const isAuthed = $derived(!!pageData.user);
@@ -40,9 +41,11 @@
 		pageData.user?.platformPermissions ?? []
 	);
 	const orgPermissions = $derived<OrgPermission[]>(pageData.ctx?.orgPermissions ?? []);
+	const brandName = $derived(pageData.branding?.name ?? 'Selva');
+	const copyrightName = $derived(pageData.branding?.copyrightName ?? brandName);
 </script>
 
-<AppShell {homeUrl} {title} {mode} {sidenav} showFooter>
+<AppShell {homeUrl} {title} {mode} {sidenav} {brandName} {copyrightName} showFooter>
 	{#snippet navItems()}
 		{#if isAuthed && showMainNav}
 			<MainNav />

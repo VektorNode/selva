@@ -11,6 +11,23 @@ import type { IEventSink } from './events/interface.js';
  */
 export type TenancyMode = 'single' | 'multi';
 
+/**
+ * White-label branding. All fields optional; the compute-app applies sensible
+ * "Selva" defaults for anything omitted. Use this to rebrand the instance
+ * (header name, footer copyright, landing-page copy, page titles) without
+ * forking the UI.
+ */
+export interface SelvaBranding {
+	/** Product name shown in header, footer, page titles. Default: "Selva". */
+	name?: string;
+	/** Footer copyright owner. Default: same as `name`. */
+	copyrightName?: string;
+	/** Landing-page tagline under the product name. */
+	tagline?: string;
+	/** Meta description for SEO / social previews. */
+	description?: string;
+}
+
 /** Opt-in platform features. All default false when absent. */
 export interface SelvaFlags {
 	/** Projects with `visibility='public'` visible across orgs on the instance. */
@@ -30,6 +47,7 @@ export interface SelvaFlags {
 export interface SelvaConfig {
 	tenancy?: TenancyMode;
 	flags?: SelvaFlags;
+	branding?: SelvaBranding;
 	auth: IAuthProvider;
 	/**
 	 * Orgs, projects, members, definitions, compute config, user profiles,

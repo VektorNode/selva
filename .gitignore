@@ -12,6 +12,7 @@
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
+!/Plugin/Releases/
 x64/
 x86/
 bld/

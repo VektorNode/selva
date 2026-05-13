@@ -9,6 +9,8 @@
 		homeUrl?: string;
 		title?: string | null;
 		logo?: string;
+		brandName?: string;
+		copyrightName?: string;
 		showModeToggle?: boolean;
 		navItems?: Snippet;
 		rightContent?: Snippet;
@@ -40,6 +42,8 @@
 		homeUrl = '/',
 		title = undefined,
 		logo = '/favicon/favicon.svg',
+		brandName = 'Selva',
+		copyrightName = undefined,
 		showModeToggle = true,
 		navItems,
 		rightContent,
@@ -55,6 +59,10 @@
 		bodyClass = '',
 		children
 	}: AppShellProps = $props();
+
+	// Default the footer's copyright owner to the header's brand name when the
+	// caller didn't specify one.
+	const _copyright = $derived(copyrightName ?? brandName);
 
 	// fixed: viewport-locked, no page scroll — body owns its own scroll internally.
 	// scroll: normal page flow, footer sticks to bottom via sticky positioning.
@@ -79,6 +87,7 @@
 			{homeUrl}
 			{title}
 			{logo}
+			{brandName}
 			{showModeToggle}
 			{navItems}
 			{rightContent}
@@ -100,7 +109,7 @@
 
 	{#if showFooter}
 		<div class="bottom-0 sticky z-10 shrink-0">
-			<PageFooter {errors} {warnings}>
+			<PageFooter {errors} {warnings} copyrightName={_copyright}>
 				{#if footerChildren}
 					{@render footerChildren()}
 				{/if}

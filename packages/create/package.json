@@ -1,0 +1,30 @@
+{
+	"name": "@selvajs/create",
+	"version": "0.1.2",
+	"description": "Scaffold and operate a Selva white-label deployment. `npx @selvajs/create <dir>` to bootstrap, `selva <cmd>` to manage.",
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
+	"type": "module",
+	"bin": {
+		"create": "./bin/create.js",
+		"selva": "./bin/selva.js"
+	},
+	"files": [
+		"bin",
+		"src",
+		"templates"
+	],
+	"engines": {
+		"node": ">=20.6.0"
+	},
+	"scripts": {
+		"start": "node ./bin/create.js",
+		"selva": "node ./bin/selva.js"
+	},
+	"dependencies": {
+		"@clack/prompts": "^0.11.0",
+		"picocolors": "^1.1.1"
+	}
+}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import {
 		Button,
 		Card,
@@ -13,6 +14,8 @@
 	import { Server, Plus, Trash2, Star } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { CatalogEntry, OrgServerListing } from './+page.server';
+
+	const brandName = $derived(page.data.branding.name);
 
 	const API_KEY_CLEAR = '__clear__';
 
@@ -269,7 +272,7 @@
 	<SectionHeader
 		eyebrow="Team"
 		title="Compute"
-		description="Compute servers available to this organization. Platform servers are managed by Selva staff and shown read-only; you can add your own org-private servers and pick which server is your org's default."
+		description="Compute servers available to this organization. Platform servers are managed by {brandName} staff and shown read-only; you can add your own org-private servers and pick which server is your org's default."
 	>
 		{#snippet actions()}
 			{#if data.overrideEnabled}
@@ -290,7 +293,7 @@
 			<Card.Title class="text-sm font-medium">Org default</Card.Title>
 			<Card.Description>
 				The server new definitions in this org use unless they're pinned to a specific one. Picks
-				from any server visible to your org. Leave on "Use global default" to inherit Selva's
+				from any server visible to your org. Leave on "Use global default" to inherit the
 				platform-wide pick.
 			</Card.Description>
 		</Card.Header>
@@ -318,7 +321,7 @@
 		<Card.Header>
 			<Card.Title class="text-sm font-medium">Available servers</Card.Title>
 			<Card.Description>
-				Every server visible to this organization. Platform rows are managed by Selva staff.
+				Every server visible to this organization. Platform rows are managed by {brandName} staff.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>
@@ -327,7 +330,7 @@
 					size="sm"
 					icon={Server}
 					title="No servers visible"
-					description="No platform server is shared with this org and no global default is configured. Ask a Selva admin to share a server or set a global default."
+					description="No platform server is shared with this org and no global default is configured. Ask a {brandName} admin to share a server or set a global default."
 				/>
 			{:else}
 				<ul class="divide-border divide-y rounded-md border">
@@ -366,7 +369,7 @@
 				{#if data.overrideEnabled}
 					Compute servers managed by your org. Visible only to members of this organization.
 				{:else}
-					Org-private servers are disabled on this Selva instance. Ask the platform admin to flip
+					Org-private servers are disabled on this {brandName} instance. Ask the platform admin to flip
 					<code class="text-xs">ALLOW_ORG_COMPUTE_OVERRIDE</code> if you need to bring your own compute.
 				{/if}
 			</Card.Description>
@@ -377,7 +380,7 @@
 					size="sm"
 					icon={Server}
 					title="Org-private servers disabled"
-					description="This Selva instance does not allow per-org compute servers."
+					description="This {brandName} instance does not allow per-org compute servers."
 				/>
 			{:else if servers.length === 0}
 				<EmptyState size="sm" icon={Server} title="No org-private servers yet">

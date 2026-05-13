@@ -2,10 +2,14 @@
 	"$schema": "https://unpkg.com/@changesets/config@3.1.2/schema.json",
 	"changelog": "@changesets/cli/changelog",
 	"commit": false,
-	"fixed": [["@selvajs/ui", "@selvajs/builder-app", "@selvajs/compute-app"]],
+	"fixed": [],
 	"linked": [],
 	"access": "public",
 	"baseBranch": "main",
 	"updateInternalDependencies": "patch",
-	"ignore": []
+	"ignore": [
+		"@selvajs/builder-app",
+		"@selvajs/compute-app",
+		"@selvajs/config"
+	]
 }
