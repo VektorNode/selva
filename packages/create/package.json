@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/create",
-	"version": "0.1.2",
+	"version": "0.1.3",
 	"description": "Scaffold and operate a Selva white-label deployment. `npx @selvajs/create <dir>` to bootstrap, `selva <cmd>` to manage.",
 	"license": "MIT",
 	"publishConfig": {
