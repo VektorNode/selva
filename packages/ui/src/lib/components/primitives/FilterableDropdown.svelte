@@ -7,6 +7,7 @@
 		id: string;
 		label: string;
 		icon?: Component;
+		iconClass?: string;
 	}
 
 	interface Props {

@@ -417,8 +417,17 @@ if [ ! -f "$BUILD_DIR/index.js" ]; then
   exit 1
 fi
 
-rm -rf "$BUILD_BACKUP"
-print_success "Compute-app built"
+# Syntax-check the entrypoint before letting PM2 fork it. Catches truncated
+# writes or chunks that emit invalid JS without erroring at build time.
+if ! node --check "$BUILD_DIR/index.js" 2>/dev/null; then
+  restore_backup
+  print_error "Build produced an unparseable index.js — rolled back, app not restarted"
+  exit 1
+fi
+
+# Keep $BUILD_BACKUP around — we only drop it after the health check passes.
+# If the new build boots fine to PM2 but fails health, we restore and restart.
+print_success "Compute-app built (snapshot retained for post-restart rollback)"
 
 fi # end of restart-only skip block
 
@@ -467,33 +476,74 @@ fi
 ################################################################################
 print_header "Verification"
 
-if [ "$PM2_RUNNING" = true ]; then
-  print_step "Running health check..."
+# Try the health probe whether or not PM2 was managing the app at script start —
+# this catches "PM2 wasn't running, manual start expected" *and* "PM2 was running
+# but the new build crashes on boot" with the same code path.
+print_step "Running health check..."
 
-  # Get port from .env — handles quoted values and inline comments
-  PORT=$(grep "^PORT=" "$INSTALL_DIR/packages/compute-app/.env" 2>/dev/null \
-    | head -1 \
-    | cut -d'=' -f2 \
-    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//' -e 's/[[:space:]]*#.*//')
-  PORT=${PORT:-3000}
+# Get port from .env — handles quoted values and inline comments
+PORT=$(grep "^PORT=" "$INSTALL_DIR/packages/compute-app/.env" 2>/dev/null \
+  | head -1 \
+  | cut -d'=' -f2 \
+  | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//' -e 's/[[:space:]]*#.*//')
+PORT=${PORT:-3000}
 
-  # Retry health check for up to 30 seconds
-  HEALTH_OK=false
-  for i in $(seq 1 10); do
-    if curl -s "http://localhost:$PORT/api/health" > /dev/null; then
+# Expected commit — the new process should report this in /api/health.commit.
+# If it reports the old commit, we're talking to a stale PM2 worker that hasn't
+# rotated yet (or didn't rotate at all).
+EXPECTED_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
+
+# -f makes curl exit non-zero on 4xx/5xx (so degraded boots returning 503 fail
+# the check). -sS suppresses progress but keeps errors. We capture the body so
+# we can inspect status and commit fields.
+HEALTH_OK=false
+HEALTH_BODY=""
+for i in $(seq 1 10); do
+  if HEALTH_BODY=$(curl -fsS --max-time 5 "http://localhost:$PORT/api/health" 2>/dev/null); then
+    # Got a 2xx. Verify the responding process is the new one.
+    REPORTED_COMMIT=$(echo "$HEALTH_BODY" | node -e "
+      try {
+        const b = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+        process.stdout.write(b.commit || '');
+      } catch { process.stdout.write(''); }
+    " 2>/dev/null || echo "")
+    if [ -z "$EXPECTED_COMMIT" ] || [ -z "$REPORTED_COMMIT" ] || [ "$REPORTED_COMMIT" = "$EXPECTED_COMMIT" ]; then
       HEALTH_OK=true
       break
     fi
-    sleep 3
-  done
+    # 2xx but old commit — wait for PM2 to finish swapping the process
+  fi
+  sleep 3
+done
 
-  if [ "$HEALTH_OK" = true ]; then
-    print_success "Health check passed"
-    echo "Server is running and responding to requests"
+if [ "$HEALTH_OK" = true ]; then
+  print_success "Health check passed"
+  echo "Server is running and responding to requests (commit ${REPORTED_COMMIT:0:7})"
+  # Now it's safe to drop the previous-build snapshot.
+  rm -rf "$BUILD_BACKUP"
+else
+  print_error "Health check failed after 30s"
+  if [ -n "$HEALTH_BODY" ]; then
+    echo "Last response body:"
+    echo "$HEALTH_BODY"
+  fi
+
+  # Roll back the build and restart PM2 so we end on a known-good state.
+  if [ -d "$BUILD_BACKUP" ] && [ "$PM2_RUNNING" = true ] && [ "$NO_RESTART" = false ]; then
+    print_warning "Rolling back to previous build and restarting PM2..."
+    restore_backup
+    pm2 restart "$INSTALL_DIR/ecosystem.config.cjs" --update-env >/dev/null 2>&1 || true
+    sleep 3
+    if curl -fsS --max-time 5 "http://localhost:$PORT/api/health" > /dev/null 2>&1; then
+      print_warning "Previous build is back online. New build was NOT deployed."
+    else
+      print_error "Rollback restart also failed health check — manual intervention required."
+      print_step "Check logs with: pm2 logs selva-compute"
+    fi
   else
-    print_warning "Health check failed after 30s — server may still be starting"
     print_step "Check logs with: pm2 logs selva-compute"
   fi
+  exit 1
 fi
 
 ################################################################################
