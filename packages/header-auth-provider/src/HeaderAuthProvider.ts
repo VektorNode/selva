@@ -71,12 +71,6 @@ export interface HeaderAuthProviderConfig {
 	 */
 	headers?: Partial<HeaderNames>;
 	/**
-	 * Where to send the user after `/logout` destroys the local session. Set
-	 * to your IdP's sign-out URL so the user actually leaves — otherwise the
-	 * proxy will silently re-authenticate them on the next request.
-	 */
-	postLogoutRedirect?: string | null;
-	/**
 	 * Optional bootstrap policy. When set AND the policy returns true for an
 	 * unrecognized UPN, the provider auto-allowlists that UPN before completing
 	 * identification. Used to break the chicken-and-egg on fresh deployments
@@ -156,7 +150,6 @@ class HeaderProxyAuth implements IProxyAuth {
 export class HeaderAuthProvider implements IAuthProvider {
 	private readonly users: AllowlistStore;
 	private readonly headers: HeaderNames;
-	private readonly postLogoutRedirect: string | null;
 
 	readonly name = 'Header (Forward Auth)';
 	readonly proxyAuth: IProxyAuth;
@@ -164,7 +157,6 @@ export class HeaderAuthProvider implements IAuthProvider {
 	constructor(config: HeaderAuthProviderConfig) {
 		this.users = createAllowlistStore(config.allowlistFilePath);
 		this.headers = { ...DEFAULT_HEADERS, ...config.headers };
-		this.postLogoutRedirect = config.postLogoutRedirect ?? null;
 		this.proxyAuth = new HeaderProxyAuth(
 			this.users,
 			this.headers,
@@ -196,13 +188,8 @@ export class HeaderAuthProvider implements IAuthProvider {
 				upn: env.HEADER_AUTH_UPN_HEADER ?? DEFAULT_HEADERS.upn,
 				email: env.HEADER_AUTH_EMAIL_HEADER ?? DEFAULT_HEADERS.email,
 				displayName: env.HEADER_AUTH_DISPLAY_NAME_HEADER ?? DEFAULT_HEADERS.displayName
-			},
-			postLogoutRedirect: env.HEADER_AUTH_LOGOUT_URL ?? null
+			}
 		});
-	}
-
-	getPostLogoutRedirect(): string | null {
-		return this.postLogoutRedirect;
 	}
 
 	/**

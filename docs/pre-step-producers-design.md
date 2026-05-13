@@ -48,7 +48,7 @@ The `scopeKey` is whatever uniquely identifies the solver context: `sessionId` i
 
 ### How values reach Grasshopper
 
-`values[paramId]` is set from sessionStorage → `transformInputParameter` wraps it per `paramType` (text/number/boolean) → `TreeBuilder.fromInputParams` builds the GH data tree server-side in [api/compute/+server.ts](../packages/compute-app/src/routes/api/compute/+server.ts). For complex types (geometry, curves, etc.), use a **text** input on the schema and have the producer write a JSON-stringified payload — the GH definition parses it via a script component (parapet's pattern).
+`values[paramId]` is set from sessionStorage → `transformInputParameter` wraps it per `paramType` (text/number/boolean) → `TreeBuilder.fromInputParams` builds the GH data tree server-side in [api/compute/+server.ts](../packages/selva/src/routes/api/compute/+server.ts). For complex types (geometry, curves, etc.), use a **text** input on the schema and have the producer write a JSON-stringified payload — the GH definition parses it via a script component (parapet's pattern).
 
 ### What's intentionally absent in v1
 
@@ -115,7 +115,7 @@ Land it in `packages/builder-app/src/lib/producers/line-drawer/LineDrawerApp.sve
 <LineDrawerApp onDone={handleDone} />
 ```
 
-**Compute-app** — same file at `packages/compute-app/src/routes/library/[guid]/producer/line-drawer/+page.svelte`. Difference: `scopeKey` comes from `page.params.guid`, navigates back to `/library/[guid]`.
+**Compute-app** — same file at `packages/selva/src/routes/library/[guid]/producer/line-drawer/+page.svelte`. Difference: `scopeKey` comes from `page.params.guid`, navigates back to `/library/[guid]`.
 
 #### Step 3 — wire the link in the solver
 

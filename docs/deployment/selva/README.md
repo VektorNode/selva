@@ -29,6 +29,6 @@ Definitions are uploaded through the admin UI after the app is running — no on
 bash ~/selva/scripts/update.sh
 
 # Node.js (manual)
-cd ~/selva && git pull && pnpm install && ADAPTER=node pnpm build --filter=@selvajs/compute-app
+cd ~/selva && git pull && pnpm install && ADAPTER=node pnpm build --filter=@selvajs/selva
 pm2 restart selva-compute --update-env
 ```

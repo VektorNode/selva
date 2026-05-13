@@ -10,7 +10,7 @@ Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for b
   - Backend: C# plugin (`Plugin/`) targeting .NET net48 + net7.0 (Rhino 8) and net9.0 (Rhino 9). Rhino 7 is not supported.
   - Frontend: TypeScript/SvelteKit apps in `packages/` for two deployment modes
 - **Local Mode** (`@selvajs/builder-app`): Schema designer with WebSocket connection to Grasshopper
-- **Cloud Mode** (`@selvajs/compute-app`): Standalone app using Rhino.Compute for cloud solving
+- **Cloud Mode** (`@selvajs/selva`): Standalone app using Rhino.Compute for cloud solving
 - **Shared** (`@selvajs/ui`): Components, utilities, and theme system
 
 Copilot should use this context when generating code, explanations, review comments, or test scaffolding.

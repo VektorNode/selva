@@ -13,7 +13,7 @@
 Selva is a system for taking a Grasshopper definition (a parametric model authored by a designer in Rhino/Grasshopper) and exposing it as a configurable web application — schema-driven UI on top, Rhino.Compute solving on the backend. Two interchangeable runtime modes share one schema:
 
 - **Builder mode** (`@selvajs/builder-app`) — the designer's local-development companion. Lives next to a running Grasshopper instance, talks to it over WebSocket, hot-reloads as the schema is edited.
-- **Compute mode** (`@selvajs/compute-app`) — the deployed product. A standalone web app that solves definitions through Rhino.Compute. Multi-user, account-backed, hostable.
+- **Compute mode** (`@selvajs/selva`) — the deployed product. A standalone web app that solves definitions through Rhino.Compute. Multi-user, account-backed, hostable.
 
 A single `ui-schema.json` ([packages/schemas/ui-schema.json](../../schemas/ui-schema.json)) is the source contract: it generates TypeScript for the web stack and C# for the plugin. UI shapes and parameter shapes cannot drift.
 

@@ -60,7 +60,7 @@ GCM also stores an authentication tag inside the envelope. Decryption fails (wit
 
 - `SELVA_AT_REST_KEY` was regenerated or changed in `.env`
 - `.selva-data/` was restored from a backup, or copied from another machine / teammate, and was originally encrypted under a different key
-- Two `.env` files in play between runs (e.g. root `.env` vs `packages/compute-app/.env`) resolving to different values
+- Two `.env` files in play between runs (e.g. root `.env` vs `packages/selva/.env`) resolving to different values
 - The dev startup script generated a fresh key on a previous run that no longer matches the JSON
 
 The error is **not** about wrong file format — the `enc:v1:` prefix is recognized — only about key mismatch (or, much less likely, corrupted ciphertext).
@@ -91,5 +91,5 @@ You do **not** need to restart the dev server — `compute.config.json` is re-re
 
 - Envelope format and crypto primitives: [`packages/local-provider/src/data/secretCrypto.ts`](../packages/local-provider/src/data/secretCrypto.ts)
 - Per-row tolerant decrypt + strict `verifySecrets()`: [`packages/local-provider/src/data/LocalComputeServerStore.ts`](../packages/local-provider/src/data/LocalComputeServerStore.ts)
-- Boot-time check + health-endpoint wiring: [`packages/compute-app/src/lib/server/bootHealth.server.ts`](../packages/compute-app/src/lib/server/bootHealth.server.ts), [`packages/compute-app/src/routes/api/health/+server.ts`](../packages/compute-app/src/routes/api/health/+server.ts)
-- Env var documentation: [`packages/compute-app/.env.example`](../packages/compute-app/.env.example)
+- Boot-time check + health-endpoint wiring: [`packages/selva/src/lib/server/bootHealth.server.ts`](../packages/selva/src/lib/server/bootHealth.server.ts), [`packages/selva/src/routes/api/health/+server.ts`](../packages/selva/src/routes/api/health/+server.ts)
+- Env var documentation: [`packages/selva/.env.example`](../packages/selva/.env.example)

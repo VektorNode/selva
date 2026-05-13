@@ -1,6 +1,6 @@
 # Testing Multi-Org Locally
 
-Selva treats organizations as the hard tenancy boundary. Most of that boundary is enforced by store methods comparing `RequestContext.actingOrgId` to the resource's `orgId` ([Permissions.md](../packages/compute-app/specs/Permissions.md)). To exercise that boundary on your machine you need at least two orgs and at least one user per org.
+Selva treats organizations as the hard tenancy boundary. Most of that boundary is enforced by store methods comparing `RequestContext.actingOrgId` to the resource's `orgId` ([Permissions.md](../packages/selva/specs/Permissions.md)). To exercise that boundary on your machine you need at least two orgs and at least one user per org.
 
 This guide covers both backends — the wiring is provider-agnostic; only the "where the rows land" step differs.
 
@@ -13,7 +13,7 @@ Set in [selva.config.ts](../selva.config.ts) (`tenancy: 'single' | 'multi'`):
 | `'single'` (default) | One org + the first user as its owner | Single-tenant deploy                      |
 | `'multi'`            | Only the platform admin user; no org  | Testing multi-org, or multi-tenant deploy |
 
-`/setup` branches on this — see [setup/+page.server.ts](../packages/compute-app/src/routes/setup/+page.server.ts). In `multi` mode the user lands in the admin without an `actingOrgId` until they're a member of an org.
+`/setup` branches on this — see [setup/+page.server.ts](../packages/selva/src/routes/setup/+page.server.ts). In `multi` mode the user lands in the admin without an `actingOrgId` until they're a member of an org.
 
 ## Step 1 — Pick a backend
 
@@ -64,11 +64,11 @@ Both backends share the same compute-app, hooks, admin API, and access rules. Fr
 pnpm dev:compute
 ```
 
-Hit `http://localhost:3000/setup`, create the first user. They get every platform permission (see [setup/+page.server.ts](../packages/compute-app/src/routes/setup/+page.server.ts)) including `instance_admin`. In `multi` mode no org is created — they're a platform admin floating above tenancy.
+Hit `http://localhost:3000/setup`, create the first user. They get every platform permission (see [setup/+page.server.ts](../packages/selva/src/routes/setup/+page.server.ts)) including `instance_admin`. In `multi` mode no org is created — they're a platform admin floating above tenancy.
 
 ## Step 3 — Create orgs
 
-The admin API exists; there's no admin-UI button for it yet. Endpoint: [admin/api/orgs/+server.ts](../packages/compute-app/src/routes/admin/api/orgs/+server.ts) (instance-admin only).
+The admin API exists; there's no admin-UI button for it yet. Endpoint: [admin/api/orgs/+server.ts](../packages/selva/src/routes/admin/api/orgs/+server.ts) (instance-admin only).
 
 Grab `admin_session` from the browser cookie jar after logging in, then:
 
@@ -126,7 +126,7 @@ The `joined_at`, `updated_at`, `deleted_at` columns default fine.
 
 ### Or use the invite flow
 
-If you'd rather not edit storage by hand, the invite endpoint at [api/invites/+server.ts](../packages/compute-app/src/routes/api/invites/+server.ts) issues per-org tokens that `/accept-invite` consumes. The recipient signs up and lands as a member of exactly that org.
+If you'd rather not edit storage by hand, the invite endpoint at [api/invites/+server.ts](../packages/selva/src/routes/api/invites/+server.ts) issues per-org tokens that `/accept-invite` consumes. The recipient signs up and lands as a member of exactly that org.
 
 ## Step 5 — Log in as each user and verify isolation
 
@@ -136,11 +136,11 @@ Open separate browser profiles (or incognito windows):
 - `alice@acme` → only Acme; should not see Globex's projects/definitions
 - `bob@globex` → only Globex
 
-The rule layer documented in [Permissions.md](../packages/compute-app/specs/Permissions.md) is what you're testing. The conformance suites in [packages/local-provider/src/data/**tests**/rules.test.ts](../packages/local-provider/src/data/__tests__/rules.test.ts) cover the same surface programmatically.
+The rule layer documented in [Permissions.md](../packages/selva/specs/Permissions.md) is what you're testing. The conformance suites in [packages/local-provider/src/data/**tests**/rules.test.ts](../packages/local-provider/src/data/__tests__/rules.test.ts) cover the same surface programmatically.
 
 ## Caveat: there's no org switcher yet
 
-[hooks.server.ts](../packages/compute-app/src/hooks.server.ts) sets `actingOrgId` to **the first org the user is a member of** and stops. The inline comment flags this:
+[hooks.server.ts](../packages/selva/src/hooks.server.ts) sets `actingOrgId` to **the first org the user is a member of** and stops. The inline comment flags this:
 
 > URL-prefix resolution (`/o/{slug}/...`) will replace this once routes are tenant-namespaced.
 

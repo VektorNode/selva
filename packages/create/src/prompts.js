@@ -198,30 +198,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 			providerValues.HEADER_AUTH_DATA_DIR = defaults.HEADER_AUTH_DATA_DIR;
 		}
 
-		const logoutUrl = await p.text({
-			message: 'HEADER_AUTH_LOGOUT_URL — where /logout redirects (IdP sign-out URL)',
-			placeholder: 'https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/logout?...',
-			initialValue: defaults.HEADER_AUTH_LOGOUT_URL ?? '',
-			validate: (v) => {
-				if (!v) return undefined; // optional — provider tolerates null
-				try {
-					new URL(v);
-				} catch {
-					return 'Must be a valid URL.';
-				}
-				return undefined;
-			}
-		});
-		cancelOn(logoutUrl);
-		providerValues.HEADER_AUTH_LOGOUT_URL = String(logoutUrl);
-
-		if (!logoutUrl) {
-			p.log.warn(
-				'No HEADER_AUTH_LOGOUT_URL set — /logout will destroy the local session but ' +
-					'the proxy will silently re-authenticate the user on the next request.'
-			);
-		}
-
 		const customizeHeaders = await p.confirm({
 			message: 'Customize the trusted header names?',
 			initialValue: Boolean(

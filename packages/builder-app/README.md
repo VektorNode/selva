@@ -25,7 +25,7 @@ No env vars required.
 
 The builder-app is bundled and embedded into `Selva.gha` by `pnpm build:plugin` — the plugin serves the assets from a local HTTP port at runtime. There is no standalone deployment.
 
-For the deployable app, see [@selvajs/compute-app](../compute-app/).
+For the deployable app, see [@selvajs/selva](../selva/).
 
 ## Related
 

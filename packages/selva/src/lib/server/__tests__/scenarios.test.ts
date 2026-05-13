@@ -1,5 +1,5 @@
 /**
- * §11 sanity checks from packages/compute-app/specs/Permissions.md.
+ * §11 sanity checks from packages/selva/specs/Permissions.md.
  *
  * Each test mirrors one row of the §11 matrix end-to-end through the real
  * provider stack (LocalDataProvider in a tmpdir) — no mocks for the rules,

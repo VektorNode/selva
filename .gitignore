@@ -66,7 +66,7 @@ skills-lock.json
 # Local provider data directory (user-specific runtime data)
 # Holds users.json, orgs/projects/definitions JSON, compute.config.json,
 # and uploaded .gh files. Path matches DATA_PATH default in
-# packages/compute-app/.env.example.
+# packages/selva/.env.example.
 .selva-data/
 
 **/ecosystem.config.cjs

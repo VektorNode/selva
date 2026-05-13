@@ -4,13 +4,13 @@
 //   .env                    merged from runtime's .env.example + prompt values
 //   selva.config.js         copied from runtime's templates (operator can edit)
 //   ecosystem.config.cjs    copied verbatim
-//   package.json            depends on @selvajs/runtime + providers
+//   package.json            depends on @selvajs/selva + providers
 //   .selva-version          marker for future CLI migrations
 //   node_modules/           after `npm install`
 //
 // The runtime templates are the source of truth — we don't carry our own
-// copies in @selvajs/create. We install @selvajs/runtime first, then copy
-// from node_modules/@selvajs/runtime/templates/.
+// copies in @selvajs/create. We install @selvajs/selva first, then copy
+// from node_modules/@selvajs/selva/templates/.
 
 import { writeFileSync, existsSync, mkdirSync, readFileSync, cpSync } from 'node:fs';
 import { resolve, join, basename } from 'node:path';
@@ -53,7 +53,7 @@ export async function runCreate(argv) {
 	const pkgJson = buildPackageJson(deployName, values);
 	writeFileSync(join(targetDir, 'package.json'), pkgJson + '\n', 'utf8');
 
-	// 4. Install. We need @selvajs/runtime on disk to copy templates from it.
+	// 4. Install. We need @selvajs/selva on disk to copy templates from it.
 	if (!skipInstall) {
 		await runNpmInstall(targetDir);
 	} else {
@@ -63,7 +63,7 @@ export async function runCreate(argv) {
 	}
 
 	// 5. Now copy templates from the installed runtime and fill them in.
-	const runtimeTemplates = join(targetDir, 'node_modules', '@selvajs', 'runtime', 'templates');
+	const runtimeTemplates = join(targetDir, 'node_modules', '@selvajs', 'selva', 'templates');
 	if (skipInstall || !existsSync(runtimeTemplates)) {
 		p.log.warn(
 			`Couldn't read runtime templates from ${runtimeTemplates}. ` +
@@ -109,7 +109,7 @@ export async function runCreate(argv) {
 // act on the actual error (sharp's libvips missing, registry timeout, etc.)
 // without fishing through /home/user/.npm/_logs/.
 //
-// Cache-bust hint: if npm prints a placeDep for @selvajs/runtime@0.10.2
+// Cache-bust hint: if npm prints a placeDep for @selvajs/selva@0.10.2
 // (which was published broken and unpublished), surface that so the operator
 // knows to `npm cache clean --force`.
 function runNpmInstall(cwd) {
@@ -170,7 +170,7 @@ function runNpmInstall(cwd) {
 				for (const line of lines) {
 					remember(line);
 					updateProgress(line);
-					if (line.includes('@selvajs/runtime@0.10.2')) sawBrokenVersion = true;
+					if (line.includes('@selvajs/selva@0.10.2')) sawBrokenVersion = true;
 				}
 			});
 			stream.on('end', () => {
@@ -207,7 +207,7 @@ function runNpmInstall(cwd) {
 				console.error('');
 				console.error(
 					pc.yellow(
-						'npm resolved @selvajs/runtime@0.10.2 — that version is broken (unresolved\n' +
+						'npm resolved @selvajs/selva@0.10.2 — that version is broken (unresolved\n' +
 							"workspace:* / catalog: specs) and has been unpublished. Your local npm\n" +
 							'cache is stale. Clear it and retry:\n\n' +
 							'  npm cache clean --force\n' +
@@ -243,7 +243,7 @@ function parseArgs(argv) {
 	return { dir, force, skipInstall };
 }
 
-// The deployment's package.json depends on @selvajs/runtime (prebuilt
+// The deployment's package.json depends on @selvajs/selva (prebuilt
 // SvelteKit app) plus whichever providers the operator picked. Providers are
 // imported by selva.config.js — npm needs them resolvable from node_modules.
 //
@@ -254,7 +254,7 @@ function buildPackageJson(name, values) {
 	const deps = {
 		'@selvajs/create': 'latest',
 		'@selvajs/platform': 'latest',
-		'@selvajs/runtime': 'latest'
+		'@selvajs/selva': 'latest'
 	};
 
 	const providers = new Set([

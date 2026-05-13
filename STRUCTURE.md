@@ -22,7 +22,7 @@ selva/
 │   ├── header-auth-provider/       # Forward-auth provider (trusts reverse-proxy headers)
 │   ├── ui/                         # Shared Svelte components, theme, primitives
 │   ├── builder-app/                # Schema designer (local dev mode)
-│   ├── compute-app/                # Standalone compute app (cloud mode)
+│   ├── selva/                      # @selvajs/selva — the deployable Selva app (cloud mode)
 │   └── config/                     # Shared ESLint/Vite/Prettier config
 │
 ├── docs/                           # Project documentation
@@ -106,7 +106,7 @@ This separation is intentional. UI imports from logic, never the reverse.
 
 If a helper is specific to compute, schema, viewer, etc., it goes in a domain folder (`lib/compute/`, `lib/schema/`, `lib/viewer/`). `utils/` is reserved for _truly generic_ helpers (no domain assumptions).
 
-### Routes (`compute-app/src/routes/<route>/`)
+### Routes (`selva/src/routes/<route>/`)
 
 - `_components/` (underscore prefix — SvelteKit ignores these as routes) holds **route-private** components.
 - Use `_components/` when the route owns **2 or more** page-specific components. Below that, just put them inline or import from `lib/components/`.

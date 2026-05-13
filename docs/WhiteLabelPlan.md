@@ -6,7 +6,7 @@ Roadmap for turning Selva into a deployable white-label platform — companies i
 
 - [x] **B1 — Runtime config loading.** `providers.server.ts` honors `SELVA_CONFIG_PATH` at boot for an externally-loaded `selva.config.js`. Bundled config remains the default so dev workflows are unchanged. Done.
 - [x] **B2 + B3 + A2 — Brand plumbing.** Every visible "Selva" string is config-driven via `SELVA_BRAND_NAME` / `SELVA_BRAND_COPYRIGHT_NAME` / `SELVA_BRAND_TAGLINE` / `SELVA_BRAND_DESCRIPTION`. Done.
-- [x] **Runtime-package build script.** `@selvajs/runtime` builds + packs cleanly. `pnpm run build:runtime` produces a publishable tarball with prebuilt compute-app, compiled config template, and PM2/env templates. Done.
+- [x] **Runtime-package build script.** `@selvajs/selva` builds + packs cleanly. `pnpm run build:runtime` produces a publishable tarball with prebuilt compute-app, compiled config template, and PM2/env templates. Done.
 - [ ] **CLI (`@selvajs/create` + `selva` operator commands).** Pending — next.
 
 ## Why this order
@@ -19,7 +19,7 @@ Each step below unblocks the next. Skipping ahead doesn't save time; it produces
 
 ## Step 1 — Runtime config loading (done)
 
-[providers.server.ts](../packages/compute-app/src/lib/server/providers.server.ts) checks `SELVA_CONFIG_PATH` at module load:
+[providers.server.ts](../packages/selva/src/lib/server/providers.server.ts) checks `SELVA_CONFIG_PATH` at module load:
 
 - **Unset (default):** the bundled `selva.config.ts` from the repo root is statically imported, exactly as before. Dev workflows and existing builds unaffected.
 - **Set:** the path is `await import()`'d dynamically (with `@vite-ignore` so Vite doesn't try to pre-resolve). The runtime can be prebuilt once and pointed at any external config.
@@ -43,37 +43,37 @@ export interface SelvaBranding {
 }
 ```
 
-Read in [selva.config.ts](../selva.config.ts) from env (`SELVA_BRAND_NAME` etc.) and exposed by [providers.server.ts](../packages/compute-app/src/lib/server/providers.server.ts) as `branding: Required<SelvaBranding>` with built-in defaults. The root [+layout.server.ts](../packages/compute-app/src/routes/+layout.server.ts) puts it on `$page.data.branding` so any route or component can read it.
+Read in [selva.config.ts](../selva.config.ts) from env (`SELVA_BRAND_NAME` etc.) and exposed by [providers.server.ts](../packages/selva/src/lib/server/providers.server.ts) as `branding: Required<SelvaBranding>` with built-in defaults. The root [+layout.server.ts](../packages/selva/src/routes/+layout.server.ts) puts it on `$page.data.branding` so any route or component can read it.
 
 ### UI plumbing
 
 [AppShell](../packages/ui/src/lib/components/layout/AppShell.svelte) gained `brandName` and `copyrightName` props and forwards them into [PageHeader](../packages/ui/src/lib/components/layout/PageHeader.svelte) and [PageFooter](../packages/ui/src/lib/components/layout/PageFooter.svelte). All three default to `'Selva'` so callers outside compute-app don't break.
 
-[AppHeader.svelte](../packages/compute-app/src/lib/components/AppHeader.svelte) reads `page.data.branding` and forwards into `AppShell`.
+[AppHeader.svelte](../packages/selva/src/lib/components/AppHeader.svelte) reads `page.data.branding` and forwards into `AppShell`.
 
 ### Strings replaced
 
 | File | What changed |
 |---|---|
-| [+layout.svelte](../packages/compute-app/src/routes/+layout.svelte) | `<title>` and meta description from `data.branding` |
-| [+page.svelte](../packages/compute-app/src/routes/+page.svelte) | Homepage h1 + tagline from `page.data.branding` |
-| [login/+page.svelte](../packages/compute-app/src/routes/login/+page.svelte) | `<title>` |
-| [setup/+page.svelte](../packages/compute-app/src/routes/setup/+page.svelte) | `<title>` |
-| [accept-invite/+page.svelte](../packages/compute-app/src/routes/accept-invite/+page.svelte) | `<title>` |
-| [auth/email/sent/+page.svelte](../packages/compute-app/src/routes/auth/email/sent/+page.svelte) | `<title>` |
-| [team/compute/+page.svelte](../packages/compute-app/src/routes/team/compute/+page.svelte) | 5 strings: "Selva staff", "this Selva instance", "Ask a Selva admin", etc. |
-| [admin/+page.svelte](../packages/compute-app/src/routes/admin/+page.svelte) | "this Selva instance" |
+| [+layout.svelte](../packages/selva/src/routes/+layout.svelte) | `<title>` and meta description from `data.branding` |
+| [+page.svelte](../packages/selva/src/routes/+page.svelte) | Homepage h1 + tagline from `page.data.branding` |
+| [login/+page.svelte](../packages/selva/src/routes/login/+page.svelte) | `<title>` |
+| [setup/+page.svelte](../packages/selva/src/routes/setup/+page.svelte) | `<title>` |
+| [accept-invite/+page.svelte](../packages/selva/src/routes/accept-invite/+page.svelte) | `<title>` |
+| [auth/email/sent/+page.svelte](../packages/selva/src/routes/auth/email/sent/+page.svelte) | `<title>` |
+| [team/compute/+page.svelte](../packages/selva/src/routes/team/compute/+page.svelte) | 5 strings: "Selva staff", "this Selva instance", "Ask a Selva admin", etc. |
+| [admin/+page.svelte](../packages/selva/src/routes/admin/+page.svelte) | "this Selva instance" |
 
 ### Intentionally left alone
 
-- **"Selva Plugin" label** in [admin/compute/+page.svelte:363](../packages/compute-app/src/routes/admin/compute/+page.svelte#L363) and the plugin-manifest read in [admin/api/compute/status/+server.ts:41](../packages/compute-app/src/routes/admin/api/compute/status/+server.ts#L41) — these refer to the literal `.gha` plugin name, a technical identifier shared by all installs regardless of branding.
-- **Favicons** in [static/favicon/](../packages/compute-app/static/favicon/) — operators replace files at install time. Documented in `.env.example`.
-- **`apple-mobile-web-app-title`** in [app.html](../packages/compute-app/src/app.html) — SvelteKit can't interpolate `app.html` at runtime; left as `Selva`. Customers who care can override `app.html` in their fork.
+- **"Selva Plugin" label** in [admin/compute/+page.svelte:363](../packages/selva/src/routes/admin/compute/+page.svelte#L363) and the plugin-manifest read in [admin/api/compute/status/+server.ts:41](../packages/selva/src/routes/admin/api/compute/status/+server.ts#L41) — these refer to the literal `.gha` plugin name, a technical identifier shared by all installs regardless of branding.
+- **Favicons** in [static/favicon/](../packages/selva/static/favicon/) — operators replace files at install time. Documented in `.env.example`.
+- **`apple-mobile-web-app-title`** in [app.html](../packages/selva/src/app.html) — SvelteKit can't interpolate `app.html` at runtime; left as `Selva`. Customers who care can override `app.html` in their fork.
 - **Source-code comments** mentioning "Selva staff" — not user-visible.
 
 ### Env vars added
 
-Documented in [packages/compute-app/.env.example](../packages/compute-app/.env.example):
+Documented in [packages/selva/.env.example](../packages/selva/.env.example):
 
 - `SELVA_BRAND_NAME`
 - `SELVA_BRAND_COPYRIGHT_NAME`
@@ -88,10 +88,10 @@ Documented in [packages/compute-app/.env.example](../packages/compute-app/.env.e
 
 ## Step 3 — Runtime-package build script (done)
 
-Built as [packages/runtime/](../packages/runtime/). `pnpm run build:runtime` invokes [scripts/build.js](../packages/runtime/scripts/build.js), which:
+Built as [packages/selva/](../packages/selva/). `pnpm run build:runtime` invokes [scripts/build.js](../packages/selva/scripts/build.js), which:
 
-1. Builds `@selvajs/compute-app` with `ADAPTER=node`.
-2. Copies `packages/compute-app/build/` → `packages/runtime/build/`.
+1. Builds `@selvajs/selva` with `ADAPTER=node`.
+2. Copies `packages/selva/build/` → `packages/selva/build/`.
 3. Compiles `selva.config.ts` → `templates/selva.config.example.js` via esbuild, keeping provider imports external so they resolve against the operator's installed packages.
 4. Writes `templates/ecosystem.config.cjs` (PM2, cwd-relative paths, `SELVA_CONFIG_PATH=./selva.config.js`).
 5. Copies `compute-app/.env.example` → `templates/.env.example` verbatim so operators have the authoritative reference without a source checkout.
@@ -104,26 +104,26 @@ The plan called for hand-flattening `package.json` (resolve `workspace:*` and `c
 
 ```
 my-deployment/
-├── package.json              # depends on @selvajs/runtime
+├── package.json              # depends on @selvajs/selva
 ├── selva.config.js           # copied from runtime/templates/selva.config.example.js
 ├── .env                      # see runtime/templates/.env.example
 ├── ecosystem.config.cjs      # copied from runtime/templates/
 └── node_modules/
-    └── @selvajs/runtime/
+    └── @selvajs/selva/
         ├── build/            # SvelteKit node output
         └── templates/
 ```
 
-Start under PM2: `pm2 start ecosystem.config.cjs`. Upgrades: `npm update @selvajs/runtime` + `pm2 restart selva-compute --update-env`.
+Start under PM2: `pm2 start ecosystem.config.cjs`. Upgrades: `npm update @selvajs/selva` + `pm2 restart selva-compute --update-env`.
 
 ### Required follow-ups before first publish
 
-- **Provider packages.** `@selvajs/local-provider` and `@selvajs/supabase-provider` were flipped from `"private": true` to `publishConfig.access=public` and licensed MIT — done as part of this step. They (and `@selvajs/platform`, `@selvajs/ui`, `@selvajs/schemas`) need an actual `pnpm publish` before `@selvajs/runtime` can be `npm install`ed.
+- **Provider packages.** `@selvajs/local-provider` and `@selvajs/supabase-provider` were flipped from `"private": true` to `publishConfig.access=public` and licensed MIT — done as part of this step. They (and `@selvajs/platform`, `@selvajs/ui`, `@selvajs/schemas`) need an actual `pnpm publish` before `@selvajs/selva` can be `npm install`ed.
 - **Provider extensibility.** Customers wiring a custom auth provider `npm install` their own package and reference it from `selva.config.js`. The runtime's loader does a dynamic import — anything implementing `@selvajs/platform` interfaces works. Worth a docs note when the CLI lands.
 
 ### Decisions for revisit
 
-- **Versioning.** `@selvajs/runtime` semvers independently from the monorepo today. Lockstep with `compute-app` would be more honest but adds release coordination. Stick with independent semver until it bites.
+- **Versioning.** `@selvajs/selva` semvers independently from the monorepo today. Lockstep with `compute-app` would be more honest but adds release coordination. Stick with independent semver until it bites.
 - **Public npm vs private registry.** Shipping public npm initially. Customers who want a private registry can republish or use `.npmrc` overrides.
 
 ---
@@ -140,7 +140,7 @@ Single npm package `@selvajs/create`, published with a bin entry. Subcommands:
 - `selva init` (post-install, run inside a deployment dir) — same prompts, but reconfigures an existing install. Never regenerates `SELVA_HMAC_KEY` / `SELVA_AT_REST_KEY` once set (rotating those invalidates sessions and at-rest encryption).
 - `selva doctor` — validates every env var, tries to load each provider, checks DATA_PATH writable, pings Supabase URL. Prints a green/red checklist.
 - `selva start` / `selva stop` / `selva restart` / `selva logs` — thin PM2 wrappers, hide `pm2 restart selva-compute --update-env` footguns.
-- `selva update` — `npm update @selvajs/runtime` + `pm2 restart`.
+- `selva update` — `npm update @selvajs/selva` + `pm2 restart`.
 - `selva keys rotate <hmac|at-rest>` — generate + replace, warning about what it invalidates.
 
 ### Prompt flow for `npx @selvajs/create`
@@ -180,7 +180,7 @@ Surfaced during the first real GCE deployment. None block shipping; all are oper
 
 Three layered fixes to ship together in the next CLI / runtime hotfix:
 
-1. Pass `--prefer-online` in `selva update` ([pm2.js](../packages/create/src/commands/pm2.js)) and the admin handler ([+server.ts](../packages/compute-app/src/routes/admin/api/system/update/+server.ts)).
+1. Pass `--prefer-online` in `selva update` ([pm2.js](../packages/create/src/commands/pm2.js)) and the admin handler ([+server.ts](../packages/selva/src/routes/admin/api/system/update/+server.ts)).
 2. Detect identical before/after version and print a warning with the cache-clear recovery command.
 3. Consider `npm install <pkg>@latest` over `npm update` as belt-and-braces.
 
@@ -194,16 +194,16 @@ When the env line was corrupted (above), doctor reported `✓ ORIGIN=http://1.2.
 
 ### `ALLOW_INSECURE_COOKIES` is undocumented and unsignalled
 
-The env var exists in [admin-auth.server.ts:65](../packages/compute-app/src/lib/server/admin-auth.server.ts#L65) but isn't in `.env.example`, isn't asked about by the CLI prompts, and isn't checked by doctor. Operators on plain-HTTP deployments hit "login appears to succeed but I'm not signed in" with no way to discover the fix.
+The env var exists in [admin-auth.server.ts:65](../packages/selva/src/lib/server/admin-auth.server.ts#L65) but isn't in `.env.example`, isn't asked about by the CLI prompts, and isn't checked by doctor. Operators on plain-HTTP deployments hit "login appears to succeed but I'm not signed in" with no way to discover the fix.
 
 Three changes:
-1. Document in [packages/compute-app/.env.example](../packages/compute-app/.env.example).
+1. Document in [packages/selva/.env.example](../packages/selva/.env.example).
 2. Auto-prompt in the CLI when `ORIGIN` starts with `http://` (default no, but recommend yes for demo deploys).
 3. Doctor: red-flag when `ORIGIN=http://...` and `ALLOW_INSECURE_COOKIES` is unset, with the recommended action printed.
 
 ### `pnpm publish` is the only safe publish command
 
-The `0.10.2` runtime was published with `npm publish`, shipped `workspace:*` / `catalog:` literals in the tarball, broke every install. Documented in [Hotfix-CLI-Runtime.md](./Hotfix-CLI-Runtime.md#the-npm-publish-trap). Permanent fix: hand-flatten the specs in [packages/runtime/scripts/build.js](../packages/runtime/scripts/build.js) so the tarball is correct regardless of publish tool. Until then, the human habit of typing `pnpm publish` is the only line of defense.
+The `0.10.2` runtime was published with `npm publish`, shipped `workspace:*` / `catalog:` literals in the tarball, broke every install. Documented in [Hotfix-CLI-Runtime.md](./Hotfix-CLI-Runtime.md#the-npm-publish-trap). Permanent fix: hand-flatten the specs in [packages/selva/scripts/build.js](../packages/selva/scripts/build.js) so the tarball is correct regardless of publish tool. Until then, the human habit of typing `pnpm publish` is the only line of defense.
 
 ### CI smoke-test for the npm-mode update path
 
@@ -224,6 +224,6 @@ The `0.10.2` runtime was published with `npm publish`, shipped `workspace:*` / `
 The plan above commits to several choices. Worth flagging the ones most likely to need revision:
 
 1. **`.env` as the source of truth for config.** Currently agreed. If we discover operators want a single TOML/YAML file instead, this changes `.env` → `selva.config.toml` (provider plumbing already supports a factory function, so the change is contained).
-2. **`@selvajs/runtime` as a published npm package.** Alternative: ship as a tarball download from GitHub Releases. npm is simpler day-to-day; releases handle versioning slightly more cleanly. Stick with npm unless we hit a publishing constraint.
+2. **`@selvajs/selva` as a published npm package.** Alternative: ship as a tarball download from GitHub Releases. npm is simpler day-to-day; releases handle versioning slightly more cleanly. Stick with npm unless we hit a publishing constraint.
 3. **PM2 as the default process manager.** Existing memory note flags pm2 env-loading footguns. Could ship a systemd unit template instead. Recommend PM2 for v1, add systemd later.
 4. **Compile `selva.config.ts` → `.js` at build time.** Alternative: ship a tsx/ts-node runtime loader. Compilation is simpler and lighter, but means the deployment has a `.js` file instead of the operator's friendly `.ts`. Mitigation: ship `selva.config.example.ts` as a comment-heavy reference even though the runtime loads `.js`.

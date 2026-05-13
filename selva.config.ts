@@ -23,7 +23,7 @@
  *   SELVA_BRAND_TAGLINE          landing-page tagline
  *   SELVA_BRAND_DESCRIPTION      meta description for SEO / social
  *
- * Provider-specific env vars: packages/compute-app/.env.example
+ * Provider-specific env vars: packages/selva/.env.example
  * Setup guide:                docs/QuickStart.md
  */
 
