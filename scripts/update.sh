@@ -53,8 +53,12 @@ done
 if [ "$SELF_UPDATED" != "true" ] && [ -d "$INSTALL_DIR/.git" ]; then
   SCRIPT_VERSION=$(git -C "$INSTALL_DIR" log -1 --format=%H -- scripts/update.sh 2>/dev/null || echo "")
 
-  # Fetch latest to check for remote changes
-  git -C "$INSTALL_DIR" fetch origin 2>/dev/null || true
+  # Fetch latest to check for remote changes. Don't silence stderr — if fetch
+  # fails we want to know, otherwise we'd silently read a stale tracking ref
+  # and skip the self-update.
+  if ! git -C "$INSTALL_DIR" fetch origin; then
+    echo -e "${YELLOW}⚠ git fetch failed during self-update check — proceeding with local script version${NC}"
+  fi
   REMOTE_VERSION=$(git -C "$INSTALL_DIR" log -1 --format=%H origin/$(git -C "$INSTALL_DIR" rev-parse --abbrev-ref HEAD) -- scripts/update.sh 2>/dev/null || echo "")
 
   if [ "$SCRIPT_VERSION" != "$REMOTE_VERSION" ] && [ -n "$REMOTE_VERSION" ]; then
