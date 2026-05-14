@@ -15,7 +15,7 @@
 	"baseBranch": "main",
 	"updateInternalDependencies": "patch",
 	"ignore": [
-		"@selvajs/builder-app",
+		"@selvajs/plugin-ui",
 		"@selvajs/config",
 		"@selvajs/platform",
 		"@selvajs/local-provider",

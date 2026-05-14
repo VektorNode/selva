@@ -23,7 +23,7 @@ Marked `"private": true` in their `package.json` and listed in `.changeset/confi
 
 - `@selvajs/platform` — interface contracts, only consumed internally
 - `@selvajs/local-provider`, `@selvajs/supabase-provider`, `@selvajs/header-auth-provider` — bundled into `@selvajs/selva`'s build artifact
-- `@selvajs/builder-app` — embedded into `Selva.gha` at plugin build time
+- `@selvajs/plugin-ui` — embedded into `Selva.gha` at plugin build time
 - `@selvajs/config` — shared ESLint / Vite / Prettier configs
 
 If you find yourself wanting to publish one of these, **don't** — change the architecture instead. The point of bundling them is that operators install one package and get everything.

@@ -12,7 +12,7 @@
 
 Selva is a system for taking a Grasshopper definition (a parametric model authored by a designer in Rhino/Grasshopper) and exposing it as a configurable web application — schema-driven UI on top, Rhino.Compute solving on the backend. Two interchangeable runtime modes share one schema:
 
-- **Builder mode** (`@selvajs/builder-app`) — the designer's local-development companion. Lives next to a running Grasshopper instance, talks to it over WebSocket, hot-reloads as the schema is edited.
+- **Plugin-UI mode** (`@selvajs/plugin-ui`) — the designer's local-development companion, embedded into the Grasshopper plugin. Lives next to a running Grasshopper instance, talks to it over WebSocket, hot-reloads as the schema is edited.
 - **Compute mode** (`@selvajs/selva`) — the deployed product. A standalone web app that solves definitions through Rhino.Compute. Multi-user, account-backed, hostable.
 
 A single `ui-schema.json` ([packages/schemas/ui-schema.json](../../schemas/ui-schema.json)) is the source contract: it generates TypeScript for the web stack and C# for the plugin. UI shapes and parameter shapes cannot drift.
@@ -34,7 +34,7 @@ A single `ui-schema.json` ([packages/schemas/ui-schema.json](../../schemas/ui-sc
             │ WebSocket (schema sync, dev only)
             ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Builder app (local SvelteKit, dev mode)                        │
+│  Plugin UI (local SvelteKit, dev mode)                          │
 │  - Drag-and-drop schema designer                                │
 │  - Talks to one local Grasshopper instance                      │
 └─────────────────────────────────────────────────────────────────┘
@@ -310,9 +310,9 @@ Workflow: edit `ui-schema.json` → run `pnpm generate:all` → both sides see t
 
 ## 9. Build and deployment
 
-### Builder app + plugin (designer's box)
+### Plugin UI + plugin (designer's box)
 
-- **Dev:** `pnpm dev` starts the SvelteKit builder app on `:5173`. Plugin built separately with `dotnet build`, loaded into Rhino, auto-connects to the dev server via WebSocket on `:8765`. Hot reload for the web side, IDE debugging for the plugin.
+- **Dev:** `pnpm dev` starts the SvelteKit plugin UI on `:5173`. Plugin built separately with `dotnet build`, loaded into Rhino, auto-connects to the dev server via WebSocket on `:8765`. Hot reload for the web side, IDE debugging for the plugin.
 - **Production plugin:** `pnpm build:plugin` builds the web assets, copies them into `Plugin/Selva.GH/EmbeddedAssets/web/`, embeds them as `EmbeddedResource`, and produces a single self-contained `.gha` (multi-targeted: net48 + net7.0 for Rhino 8, net9.0 for Rhino 9; Rhino 7 is not supported). The plugin allocates a local HTTP port at runtime to serve the embedded assets.
 
 ### Compute app (deployed product)
@@ -364,7 +364,7 @@ Things the architecture supports today but no code path exercises yet. These are
 
 For grounding — these exist but live outside this document:
 
-- **`@selvajs/builder-app`** — designer's local schema editor, embedded as a website inside the Grasshopper plugin. Hosted and maintained by Selva internally; not a deployable product.
+- **`@selvajs/plugin-ui`** — designer's local schema editor, embedded as a website inside the Grasshopper plugin. Hosted and maintained by Selva internally; not a deployable product.
 - **`@selvajs/compute`** (external npm package) — author's helper library for working with Rhino.Compute and Three.js. A dependency Selva uses, not a Selva component.
 - **Plugin internals** (`Plugin/Selva.GH`) — components, schema-link WebSocket protocol, embedded HTTP server. Lives in the .NET workspace; would deserve its own `Plugin/ARCHITECTURE.md`.
 - **Frontend component architecture** — Svelte stores, theming, the `@selvajs/ui` library.

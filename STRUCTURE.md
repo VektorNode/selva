@@ -22,7 +22,7 @@ selva/
 │   │   ├── supabase/               # Supabase implementation of platform (@selvajs/supabase-provider)
 │   │   └── header-auth/            # Forward-auth provider, trusts reverse-proxy headers (@selvajs/header-auth-provider)
 │   ├── ui/                         # Shared Svelte components, theme, primitives
-│   ├── builder-app/                # Schema designer (local dev mode)
+│   ├── plugin-ui/                  # Grasshopper plugin UI — schema designer + preview, embedded into Selva.gha
 │   ├── selva/                      # @selvajs/selva — the deployable Selva app (cloud mode)
 │   └── config/                     # Shared ESLint/Vite/Prettier config
 │

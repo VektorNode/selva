@@ -1,6 +1,6 @@
-# @selvajs/builder-app
+# @selvajs/plugin-ui
 
-Local schema designer for the Selva Grasshopper plugin. Runs only on the designer's machine alongside Rhino — not a deployable app.
+UI for the Selva Grasshopper plugin — schema designer + preview. Embedded into `Selva.gha` and served from the plugin's local HTTP port at runtime; the dev server here is what the plugin connects to when iterating on the UI alongside Rhino. Not a standalone/deployable app.
 
 ## Routes
 
@@ -23,7 +23,7 @@ No env vars required.
 
 ## Production
 
-The builder-app is bundled and embedded into `Selva.gha` by `pnpm build:plugin` — the plugin serves the assets from a local HTTP port at runtime. There is no standalone deployment.
+This package is built and embedded into `Selva.gha` by `pnpm build:plugin` — the plugin serves the assets from a local HTTP port at runtime. There is no standalone deployment.
 
 For the deployable app, see [@selvajs/selva](../selva/).
 

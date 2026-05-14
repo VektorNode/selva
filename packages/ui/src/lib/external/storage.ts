@@ -3,7 +3,7 @@
 // When an input has source.kind === 'external', a producer route writes the produced
 // value here, and the solver route reads it back. Scoped per (scopeKey, inputId) so
 // values for one solver/input don't bleed into another. The scope key is whatever
-// uniquely identifies the solver context — sessionId in builder-app/preview,
+// uniquely identifies the solver context — sessionId in plugin-ui/preview,
 // definition guid in selva/library, etc.
 //
 // inputId is the Grasshopper parameter instance GUID (LayoutItem.paramId / SchemaInput.id).

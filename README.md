@@ -24,7 +24,7 @@ Turn Grasshopper definitions into full web applications — with a live schema d
 
 | Package                                                              | Description                                                        |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| [`builder-app`](./packages/builder-app/README.md)                    | Schema designer connected to Grasshopper via WebSocket (local dev) |
+| [`plugin-ui`](./packages/plugin-ui/README.md)                        | Grasshopper plugin UI — schema designer + preview, embedded into `Selva.gha` |
 | [`selva`](./packages/selva/README.md)                                | Standalone solver app for cloud deployment via Rhino.Compute       |
 | [`ui`](./packages/ui/README.md)                                      | Shared Svelte components, theme, and utilities                     |
 | [`schemas`](./packages/schemas/README.md)                            | Schema definitions and TypeScript/C# code generators               |

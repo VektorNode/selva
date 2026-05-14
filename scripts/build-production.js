@@ -97,7 +97,7 @@ async function build() {
 		// Step 1: Copy web assets to plugin directory
 		log('[1/4] Copying web assets to plugin...');
 		const webDir = join(projectRoot, 'Plugin/Selva.GH/EmbeddedAssets/web');
-		const buildDir = join(projectRoot, 'packages/builder-app/build');
+		const buildDir = join(projectRoot, 'packages/plugin-ui/build');
 
 		// Verify build directory exists
 		try {
@@ -107,7 +107,7 @@ async function build() {
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			logError(`Cannot access build directory: ${message}`);
-			logWarning('Run "pnpm run build:builder" first to generate web assets');
+			logWarning('Run "pnpm run build:plugin-ui" first to generate web assets');
 			process.exit(1);
 		}
 

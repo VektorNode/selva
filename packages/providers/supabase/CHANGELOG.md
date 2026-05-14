@@ -8,9 +8,9 @@
 
   A broad release covering platform foundations, a new drawing/PDF pipeline, unified drag-and-drop, schema-source-of-truth work, and a new forward-auth provider. Web apps and `@selvajs/ui` are aligned at 0.10.0; library packages move to the next minor in their respective tracks. The Grasshopper plugin ships as 0.10.0 (beta tag dropped).
 
-  ## Apps & UI (`@selvajs/builder-app`, `@selvajs/selva`, `@selvajs/ui`)
+  ## Apps & UI (`@selvajs/plugin-ui`, `@selvajs/selva`, `@selvajs/ui`)
 
-  ### Builder-app
+  ### Plugin-UI
   - Unified drag-and-drop on `svelte-dnd-action` with a thin cross-type coordinator (replaces three coexisting systems).
   - Schema source-of-truth refactor: canonical/draft split, content-hash for safe save, removal of version/edit-intent state, eliminates drift between plugin `_embeddedSchema`, UI state, and localStorage.
   - New components: `ImageUploadField`, `DataTable`, mode toggle, resizable, scroll-area, search, select, separator, slider, sonner, switch, tabs, textarea, theme switcher.
@@ -32,7 +32,7 @@
   - WebSocket connection handling and schema-history management hardened.
   - Schema history + validation improvements.
   - `NotificationManager` interface + implementation for message handling.
-  - Primitive imports and layout-structure refactor; component conventions normalised (see builder-app `lib/README`).
+  - Primitive imports and layout-structure refactor; component conventions normalised (see plugin-ui `lib/README`).
 
   ## Drawing system (`Selva.Drawing` + UI)
   - New SVG drawing components, dimensioning, curve creation, and export.
