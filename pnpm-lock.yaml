@@ -340,6 +340,9 @@ importers:
       json-schema-to-typescript:
         specifier: ^15.0.4
         version: 15.0.4
+      prettier:
+        specifier: 'catalog:'
+        version: 3.8.3
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
