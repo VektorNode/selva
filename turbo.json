@@ -4,8 +4,7 @@
 	"globalDependencies": [
 		"pnpm-workspace.yaml",
 		"pnpm-lock.yaml",
-		"tsconfig.base.json",
-		"selva.config.ts"
+		"tsconfig.base.json"
 	],
 	"tasks": {
 		"generate": {

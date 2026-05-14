@@ -197,17 +197,7 @@ function detectUpdatePlan(): UpdatePlan | null {
 				mode: 'npm',
 				cwd: dir,
 				cmd: 'npm',
-				args: [
-					'update',
-					'--save',
-					'--prefer-online',
-					'@selvajs/cli',
-					'@selvajs/selva',
-					'@selvajs/platform',
-					'@selvajs/local-provider',
-					'@selvajs/supabase-provider',
-					'@selvajs/header-auth-provider'
-				]
+				args: ['update', '--save', '--prefer-online', '@selvajs/cli', '@selvajs/selva']
 			};
 		}
 		const parent = join(dir, '..');

@@ -1,11 +1,12 @@
 // `selva doctor` — validate a deployment without starting it.
 //
 // Checks:
-//   • .env exists and has the required keys for the chosen providers
+//   • .env and ecosystem.config.cjs exist
+//   • Layout drift (legacy provider packages, stale selva.config.js, etc.)
 //   • Secrets are present and look like 32-byte hex
 //   • DATA_PATH writable (when local provider is in use)
 //   • Supabase URL reachable (when supabase provider is in use)
-//   • @selvajs/selva + chosen provider packages installed
+//   • @selvajs/selva installed
 //   • Origin set when behind a reverse proxy looks set
 //
 // Exits 0 (green) or 1 (any red); yellow checks don't fail the run.
@@ -32,7 +33,6 @@ export async function runDoctor() {
 
 	// ── Files ──────────────────────────────────────────────────────────
 	checks.push(checkFile(join(dir, '.env'), '.env present'));
-	checks.push(checkFile(join(dir, 'selva.config.js'), 'selva.config.js present'));
 	checks.push(checkFile(join(dir, 'ecosystem.config.cjs'), 'ecosystem.config.cjs present'));
 
 	// ── Layout drift ───────────────────────────────────────────────────
@@ -47,7 +47,7 @@ export async function runDoctor() {
 
 	// ── Provider wiring ────────────────────────────────────────────────
 	// `header` is only valid for the auth slot — data/storage stay
-	// local|supabase. Mirror what selva.config.ts enforces.
+	// local|supabase. Mirror what providers.server.ts enforces.
 	const providers = {
 		auth: (env.SELVA_AUTH_PROVIDER ?? 'local').toLowerCase(),
 		data: (env.SELVA_DATA_PROVIDER ?? 'local').toLowerCase(),
@@ -90,10 +90,9 @@ export async function runDoctor() {
 	}
 
 	// ── Installed packages ─────────────────────────────────────────────
+	// Provider implementations are bundled into @selvajs/selva — only the
+	// runtime package needs to be on disk.
 	checks.push(checkPackage(dir, '@selvajs/selva'));
-	if (used.has('local')) checks.push(checkPackage(dir, '@selvajs/local-provider'));
-	if (used.has('supabase')) checks.push(checkPackage(dir, '@selvajs/supabase-provider'));
-	if (used.has('header')) checks.push(checkPackage(dir, '@selvajs/header-auth-provider'));
 
 	// ── Origin (best-effort) ───────────────────────────────────────────
 	if (env.ORIGIN) {
@@ -208,10 +207,10 @@ function checkLayoutDrift(dir) {
 	} catch {
 		return red('package.json is not valid JSON');
 	}
-	const reasons = detectDrift(pkg);
-	if (reasons.length === 0) return green('package.json layout is current');
+	const reasons = detectDrift(pkg, dir);
+	if (reasons.length === 0) return green('deployment layout is current');
 	return red(
-		`package.json layout is outdated — run \`selva migrate\`:\n     ` +
+		`deployment layout is outdated — run \`selva migrate\`:\n     ` +
 			reasons.map((r) => '· ' + r).join('\n     ')
 	);
 }

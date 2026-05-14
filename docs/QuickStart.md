@@ -25,9 +25,9 @@ Selva ships two backend providers; both run locally. Pick one:
 | **State lives in** | JSON files on disk                      | Postgres + Supabase Auth + Storage |
 | **External deps**  | none                                    | Docker                             |
 | **Best for**       | quick eval, single-instance self-host   | multi-instance, RLS, managed auth  |
-| **Switch later**   | yes — edit `selva.config.ts` and re-run | yes                                |
+| **Switch later**   | yes — change `SELVA_*_PROVIDER` in `.env` and restart | yes                          |
 
-The default is local. You can switch any time by editing `selva.config.ts`.
+The default is local. To switch, change `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER` in your `.env` and restart.
 
 ## 3. Configure environment
 
@@ -46,8 +46,8 @@ Copy-Item packages/selva/.env.example packages/selva/.env
 [`.env.example`](../packages/selva/.env.example) is the **single authoritative reference** for every env var Selva reads — provider choice, tenancy, platform flags, secrets. Open it and:
 
 - Set `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` (instructions inline). For local provider those two are enough.
-- For Supabase, set `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — see [@selvajs/supabase-provider](../packages/providers/supabase/README.md#development--local-supabase-stack) for the `npx supabase start` flow that produces those keys. Then switch the provider in `selva.config.ts`.
-- For multi-org testing, set `tenancy: 'multi'` in `selva.config.ts`.
+- For Supabase, set `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — see [@selvajs/supabase-provider](../packages/providers/supabase/README.md#development--local-supabase-stack) for the `npx supabase start` flow that produces those keys. Then set `SELVA_AUTH_PROVIDER=supabase` (etc.) in `.env`.
+- For multi-org testing, set `SELVA_TENANCY=multi` in `.env`.
 
 You shouldn't need to read any other env-var documentation.
 

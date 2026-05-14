@@ -126,11 +126,9 @@
 					<div class="min-w-0 flex-1">
 						<p class="text-sm font-medium">Audit log not available on this deployment</p>
 						<p class="text-muted-foreground mt-1 text-sm">
-							This provider doesn't support audit queries. To enable audit logs, configure a
-							provider with
-							<code class="bg-muted rounded px-1 py-0.5 font-mono text-xs">auditQuery</code>
-							in your
-							<code class="bg-muted rounded px-1 py-0.5 font-mono text-xs">selva.config.ts</code>.
+							This provider doesn't support audit queries. To enable audit logs, switch to a
+							data provider that supports <code class="bg-muted rounded px-1 py-0.5 font-mono text-xs">auditQuery</code>
+							by changing <code class="bg-muted rounded px-1 py-0.5 font-mono text-xs">SELVA_DATA_PROVIDER</code> in your .env.
 						</p>
 					</div>
 				</div>

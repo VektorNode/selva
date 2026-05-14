@@ -2,39 +2,116 @@ import { env } from '$env/dynamic/private';
 import { pathToFileURL } from 'node:url';
 import { resolve as resolvePath } from 'node:path';
 import { existsSync } from 'node:fs';
-import bundledConfig from '../../../../../selva.config.js';
 import type {
+	IAuthProvider,
+	IDataProvider,
+	IStorageProvider,
 	SelvaBranding,
 	SelvaConfig,
 	SelvaConfigFactory,
 	SelvaFlags,
 	TenancyMode
 } from '@selvajs/platform';
-import { isFlagEnabled } from '@selvajs/platform';
+import { defineConfig, isFlagEnabled } from '@selvajs/platform';
+import * as local from '@selvajs/local-provider';
+import * as supa from '@selvajs/supabase-provider';
+import * as header from '@selvajs/header-auth-provider';
 import { DefinitionService } from './definitions/DefinitionService.js';
 
 /**
  * Provider wiring source. Two modes:
  *
- *   Default — `selva.config.ts` from the repo root is bundled into the build
- *   at compile time (the static import above). This is the dev workflow and
- *   the no-configuration deployment shape.
+ *   Default — providers are picked from env vars (SELVA_AUTH_PROVIDER etc.)
+ *   and instantiated via the bundled provider implementations. New deployments
+ *   need only a .env file — no selva.config.js.
  *
  *   Override — set `SELVA_CONFIG_PATH` to point at an external
  *   `selva.config.js` (absolute or CWD-relative). The runtime loads it
- *   dynamically at boot, so the file can be edited *after* the build
- *   without rebuilding. This is the white-label deployment shape: the
- *   prebuilt runtime ships once, every customer points at their own
- *   config file.
+ *   dynamically at boot, replacing the default env-driven wiring entirely.
+ *   Use this only when you need a custom provider not shipped in the box.
  *
  * The override path must resolve to an actual `.js` file — there's no TS
- * compiler at runtime. The deployment-build script is responsible for
- * compiling `selva.config.ts` to `selva.config.js` and shipping the result.
+ * compiler at runtime.
  */
+
+type Env = Record<string, string | undefined>;
+
+function envBool(e: Env, key: string): boolean {
+	const v = e[key]?.toLowerCase();
+	return v === 'true' || v === '1' || v === 'yes';
+}
+
+function pickAuth(e: Env): IAuthProvider {
+	const choice = (e.SELVA_AUTH_PROVIDER ?? 'local').toLowerCase();
+	switch (choice) {
+		case 'local':
+			return local.LocalAuthProvider.fromEnv(e);
+		case 'supabase':
+			return supa.SupabaseAuthProvider.fromEnv(e);
+		case 'header':
+			return header.HeaderAuthProvider.fromEnv(e);
+		default:
+			throw new Error(
+				`Unknown SELVA_AUTH_PROVIDER="${choice}". Expected: local | supabase | header.`
+			);
+	}
+}
+
+function pickData(e: Env): IDataProvider {
+	const choice = (e.SELVA_DATA_PROVIDER ?? 'local').toLowerCase();
+	switch (choice) {
+		case 'local':
+			return local.LocalDataProvider.fromEnv(e);
+		case 'supabase':
+			return supa.SupabaseDataProvider.fromEnv(e);
+		default:
+			throw new Error(`Unknown SELVA_DATA_PROVIDER="${choice}". Expected: local | supabase.`);
+	}
+}
+
+function pickStorage(e: Env): IStorageProvider {
+	const choice = (e.SELVA_STORAGE_PROVIDER ?? 'local').toLowerCase();
+	switch (choice) {
+		case 'local':
+			return local.LocalStorageProvider.fromEnv(e);
+		case 'supabase':
+			return supa.SupabaseStorageProvider.fromEnv(e);
+		default:
+			throw new Error(`Unknown SELVA_STORAGE_PROVIDER="${choice}". Expected: local | supabase.`);
+	}
+}
+
+function pickTenancy(e: Env): TenancyMode {
+	const choice = (e.SELVA_TENANCY ?? 'single').toLowerCase();
+	if (choice !== 'single' && choice !== 'multi') {
+		throw new Error(`Unknown SELVA_TENANCY="${choice}". Expected: single | multi.`);
+	}
+	return choice;
+}
+
+const defaultConfig = defineConfig((e) => ({
+	tenancy: pickTenancy(e),
+	flags: {
+		ALLOW_CROSS_ORG_PUBLIC: envBool(e, 'SELVA_FLAG_ALLOW_CROSS_ORG_PUBLIC'),
+		ALLOW_ORG_COMPUTE_OVERRIDE: envBool(e, 'SELVA_FLAG_ALLOW_ORG_COMPUTE_OVERRIDE'),
+		ALLOW_ORG_CREATION: envBool(e, 'SELVA_FLAG_ALLOW_ORG_CREATION'),
+		ENABLE_SHARING: envBool(e, 'SELVA_FLAG_ENABLE_SHARING')
+	},
+	branding: {
+		name: e.SELVA_BRAND_NAME,
+		copyrightName: e.SELVA_BRAND_COPYRIGHT_NAME,
+		tagline: e.SELVA_BRAND_TAGLINE,
+		description: e.SELVA_BRAND_DESCRIPTION
+	},
+	auth: pickAuth(e),
+	data: pickData(e),
+	storage: pickStorage(e)
+}));
+
 async function loadRawConfig(): Promise<SelvaConfig | SelvaConfigFactory> {
 	const override = env.SELVA_CONFIG_PATH;
 	if (!override) {
-		return bundledConfig as SelvaConfig | SelvaConfigFactory;
+		return defaultConfig;
 	}
 
 	const abs = resolvePath(process.cwd(), override);
