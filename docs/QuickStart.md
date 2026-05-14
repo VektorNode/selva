@@ -4,7 +4,7 @@ This is the canonical onramp. Follow it top to bottom.
 
 ## Prerequisites
 
-- **Node.js >= 18** and **pnpm >= 10** (see `engines` in [package.json](../package.json))
+- **Node.js >= 20.6** and **pnpm >= 10** ([packages/selva/package.json](../packages/selva/package.json) is authoritative for the app runtime)
 - **.NET SDK 7.0+** and an IDE (Visual Studio / Rider / VS Code) — only if you'll touch the C# plugin
 - **Rhino 8** — only if you'll run the plugin
 - **Docker Desktop** — only if you'll use the Supabase provider locally
@@ -31,8 +31,16 @@ The default is local. You can switch any time by editing `selva.config.ts`.
 
 ## 3. Configure environment
 
+Use the command that matches your shell:
+
 ```bash
+# bash
 cp packages/selva/.env.example packages/selva/.env
+```
+
+```powershell
+# PowerShell
+Copy-Item packages/selva/.env.example packages/selva/.env
 ```
 
 [`.env.example`](../packages/selva/.env.example) is the **single authoritative reference** for every env var Selva reads — provider choice, tenancy, platform flags, secrets. Open it and:
@@ -55,19 +63,19 @@ On first boot, hit `/setup` to create the platform admin.
 
 After login, go to `/admin/compute` and register your Rhino.Compute server URL (and optional API key) — Selva needs this to actually solve definitions. See [RhinoCompute.md](RhinoCompute.md) for setting that up.
 
-## Builder app (optional — only for plugin development)
+## Plugin UI (optional — only for plugin development)
 
 If you're working on the C# plugin and want hot-reload UI:
 
 ```bash
 # Terminal 1 — start the plugin in your IDE (debug mode)
 # Terminal 2:
-cd packages/builder-app
+cd packages/plugin-ui
 pnpm run dev
 # http://localhost:5173 — connects to plugin via WebSocket on port 8765
 ```
 
-The builder app needs no env vars.
+The plugin UI needs no env vars.
 
 ## Going further
 

@@ -33,7 +33,7 @@ All four share one version (changesets `fixed` mode). Operators see one number.
 | `@selvajs/local-provider`        | Bundled into `@selvajs/selva`'s build artifact.                      |
 | `@selvajs/supabase-provider`     | Bundled into `@selvajs/selva`'s build artifact.                      |
 | `@selvajs/header-auth-provider`  | Bundled into `@selvajs/selva`'s build artifact.                      |
-| `@selvajs/builder-app`           | Embedded into `Selva.gha` (Grasshopper plugin) at plugin build time. |
+| `@selvajs/plugin-ui`             | Embedded into `Selva.gha` (Grasshopper plugin) at plugin build time. |
 | `@selvajs/config`                | Shared ESLint / Vite / Prettier configs. Never published.            |
 
 ### External

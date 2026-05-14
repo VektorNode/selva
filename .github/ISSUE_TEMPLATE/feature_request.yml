@@ -6,16 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for suggesting a feature!.
-
-  - type: checkboxes
-    id: documentation
-    attributes:
-      label: Documentation Check
-      description: Have you checked the documentation?
-      options:
-        - label: I have searched existing issues to avoid duplicates
-          required: true
+        Thanks for suggesting a feature!
 
   - type: textarea
     id: feature-description
@@ -25,42 +16,3 @@ body:
       placeholder: A clear and concise description of the feature
     validations:
       required: true
-
-  - type: checkboxes
-    id: affected-areas
-    attributes:
-      label: Affected Components
-      description: Which parts of Selva would this feature impact?
-      options:
-        - label: Frontend (Web UI - @selvajs/builder-app)
-        - label: Plugin (C# Grasshopper component)
-        - label: Schema (JSON Schema / Type definitions)
-        - label: Core (@selvajs/compute)
-        - label: Shared Components (@selvajs/ui)
-        - label: Communication (WebSocket/HTTP)
-        - label: Build System
-        - label: Documentation
-
-  - type: dropdown
-    id: priority
-    attributes:
-      label: Priority
-      description: How critical is this feature for your use case?
-      options:
-        - 'Nice to have'
-        - 'Important'
-        - 'Critical'
-    validations:
-      required: true
-
-  - type: dropdown
-    id: contribution
-    attributes:
-      label: Would you be willing to contribute this feature?
-      options:
-        - 'Yes, I can implement this'
-        - 'Yes, with guidance'
-        - 'No, but I can test it'
-        - 'No'
-    validations:
-      required: false

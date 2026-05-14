@@ -1,6 +1,6 @@
-# builder-app `src/lib/` layout
+# plugin-ui `src/lib/` layout
 
-Quick reference for what lives where. The repo-wide rules are in [STRUCTURE.md](../../../../STRUCTURE.md) — this file just documents the builder-specific shape.
+Quick reference for what lives where. The repo-wide rules are in [STRUCTURE.md](../../../../STRUCTURE.md) — this file just documents the plugin-ui-specific shape.
 
 | Folder                  | Contents                                                                                                                         |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |

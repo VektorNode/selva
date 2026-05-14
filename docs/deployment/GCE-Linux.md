@@ -8,11 +8,11 @@ End-to-end walkthrough for getting a CLI-scaffolded Selva deployment running on 
 
 ## Prerequisites
 
-| Need | Why |
-|---|---|
+| Need                                                          | Why                                                                               |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | **Ubuntu 22.04+ VM** (e.g. GCE `e2-small` is enough to start) | Anything that can run Node 20 + Caddy + PM2. The commands below assume `apt-get`. |
-| **`gcloud` CLI configured** on your laptop | For the firewall rule. Skip if you'll add the rule in the GCP web console. |
-| **`@selvajs/cli` published to npm** | The CLI fetches `@selvajs/selva` from the public registry. |
+| **`gcloud` CLI configured** on your laptop                    | For the firewall rule. Skip if you'll add the rule in the GCP web console.        |
+| **`@selvajs/cli` published to npm**                           | The CLI fetches `@selvajs/selva` from the public registry.                        |
 
 The VM does **not** need git, pnpm, or a checkout of the monorepo. Everything is installed via `npx` and `npm`.
 
@@ -76,16 +76,16 @@ npx @selvajs/cli selva
 
 The CLI prompts. Answer like this for a local-provider, single-tenant install:
 
-| Prompt | Answer |
-|---|---|
-| Tenancy mode | `single` |
-| Auth backend | `local` |
-| Use local for data and storage too? | `yes` |
-| DATA_PATH | press Enter (default: `./.selva-data`) |
-| First instance-admin email | the email you'll use to log in (e.g. `admin@your-org.com`) |
-| Behind a reverse proxy? | `yes` |
-| ORIGIN | `http://<VM-EXTERNAL-IP>` (the IP from Step 2; no trailing slash) |
-| Feature flags | press Enter to skip all |
+| Prompt                              | Answer                                                            |
+| ----------------------------------- | ----------------------------------------------------------------- |
+| Tenancy mode                        | `single`                                                          |
+| Auth backend                        | `local`                                                           |
+| Use local for data and storage too? | `yes`                                                             |
+| DATA_PATH                           | press Enter (default: `./.selva-data`)                            |
+| First instance-admin email          | the email you'll use to log in (e.g. `admin@your-org.com`)        |
+| Behind a reverse proxy?             | `yes`                                                             |
+| ORIGIN                              | `http://<VM-EXTERNAL-IP>` (the IP from Step 2; no trailing slash) |
+| Feature flags                       | press Enter to skip all                                           |
 
 The CLI will:
 
@@ -103,7 +103,7 @@ When it's done you should see:
 
 ## Step 5 — Enable insecure cookies (HTTP-only deployments)
 
-> **Skip this step if you'll set up HTTPS in Step 8.**
+> **Skip this step if you'll set up HTTPS in Step 9.**
 
 SvelteKit's session cookies default to `Secure`, which means the browser refuses to send them back over plain HTTP. The symptom is: login appears to succeed (303 redirect) but you keep bouncing back to `/login` because the cookie was dropped client-side.
 
@@ -229,12 +229,14 @@ If you stay on `/setup` or get bounced back to `/login` after submitting, see **
 Plain HTTP is fine for poking around but unsafe for real use. Once you have a domain pointing at the VM:
 
 1. Open port 443 in GCP:
+
    ```bash
    gcloud compute firewall-rules create allow-https \
      --allow=tcp:443 --source-ranges=0.0.0.0/0 --target-tags=http-server
    ```
 
 2. Rewrite the Caddyfile to use your domain (Caddy auto-provisions a Let's Encrypt cert):
+
    ```bash
    sudo tee /etc/caddy/Caddyfile >/dev/null <<'EOF'
    selva.yourdomain.com {
@@ -249,6 +251,7 @@ Plain HTTP is fine for poking around but unsafe for real use. Once you have a do
    - **Remove** the `ALLOW_INSECURE_COOKIES=true` line entirely (use `nano`, not sed).
 
 4. Restart:
+
    ```bash
    cd ~/apps/selva
    npm run restart    # pm2 restart selva-compute --update-env
@@ -262,15 +265,15 @@ Plain HTTP is fine for poking around but unsafe for real use. Once you have a do
 
 All from `~/apps/selva`:
 
-| Command | What it does |
-|---|---|
-| `npm run doctor` | Re-validate env + providers + paths. Run after editing `.env`. |
-| `npm run restart` | `pm2 restart selva-compute --update-env` — picks up env changes. |
-| `npm run logs` | Tail PM2 stdout/stderr (`Ctrl+C` to exit). |
-| `npm run update` | `npm update --save` all `@selvajs/*` packages + restart. |
-| `npm stop` | Stop the PM2 process. |
-| `npx selva keys rotate hmac` | Rotate `SELVA_HMAC_KEY` (logs everyone out). |
-| `npx selva keys rotate at-rest` | Rotate `SELVA_AT_REST_KEY` (Rhino API key needs re-entry). |
+| Command                         | What it does                                                                     |
+| ------------------------------- | -------------------------------------------------------------------------------- |
+| `npm run doctor`                | Re-validate env + providers + paths. Run after editing `.env`.                   |
+| `npm run restart`               | `pm2 restart selva-compute --update-env` — picks up env changes.                 |
+| `npm run logs`                  | Tail PM2 stdout/stderr (`Ctrl+C` to exit).                                       |
+| `npm run update`                | `npm update --save --prefer-online` for all `@selvajs/*` packages, then restart. |
+| `npm stop`                      | Stop the PM2 process.                                                            |
+| `npx selva keys rotate hmac`    | Rotate `SELVA_HMAC_KEY` (logs everyone out).                                     |
+| `npx selva keys rotate at-rest` | Rotate `SELVA_AT_REST_KEY` (Rhino API key needs re-entry).                       |
 
 The admin dashboard at `/admin/system` exposes the same `update` flow with live SSE output.
 
@@ -304,9 +307,9 @@ Common causes:
 
 Symptom: you ran `npm run update`, it said "Restarted selva-compute" without error, but `node -e "console.log(require('./node_modules/@selvajs/selva/package.json').version)"` shows the same version as before. The "current" and "new" runtime versions printed by `selva update` are identical.
 
-Cause: **npm's packument cache.** When `npm update <pkg>` runs, npm checks its local cache for the package metadata first. If the cache says "latest = 0.10.3" and is younger than ~5 minutes, npm trusts the cache without re-asking the registry. So even if the registry now has 0.10.4, your VM installs 0.10.3 (a no-op).
+Cause: **npm's packument cache.** Selva now calls `npm update --save --prefer-online`, which greatly reduces this problem by revalidating cached package metadata. But npm can still no-op if a publish is extremely fresh or not fully propagated yet, so the symptom is still worth recognizing.
 
-This is not a Selva bug — it's how npm caches metadata. But it bites every operator at least once, because publishes and updates often happen in the same session and the cache window is right in the awkward middle.
+This is not a Selva bug — it's npm metadata caching and registry propagation. The current CLI also warns when it detects `Current = New`, but the manual recovery below is still the fallback.
 
 Confirm the registry actually has the version you expect:
 
@@ -326,9 +329,9 @@ npm install --prefer-online
 npm run restart
 ```
 
-`--prefer-online` tells npm to revalidate every cached manifest against the registry before using it. Slower than the default but guaranteed fresh.
+`--prefer-online` tells npm to revalidate cached manifests against the registry before using them. It helps, but it doesn't completely eliminate CDN or registry propagation delays.
 
-> **Future-proofing.** `selva update` will pass `--prefer-online` by default in a future release, which closes this trap automatically. Until then, the manual cache-clear above is the recovery path.
+`selva update` already uses `--prefer-online`. If it still prints identical current/new versions, use the manual cache-clear above.
 
 ### `Cannot find package 'tailwind-merge'` at runtime
 
@@ -374,6 +377,7 @@ curl -i -X POST http://localhost:3000/login \
 ```
 
 Expected on a healthy install:
+
 ```
 HTTP/1.1 303 See Other
 location: /admin

@@ -31,7 +31,7 @@ By **`paramId`** (Grasshopper instance GUID). Flows unchanged through every laye
 - sessionStorage key: `external:<scopeKey>:<paramId>`.
 - Solver lookup: `readExternalValue({ scopeKey, inputId: paramId })`.
 
-The `scopeKey` is whatever uniquely identifies the solver context: `sessionId` in builder-app/preview, `definitionKey` in selva-app/library.
+The `scopeKey` is whatever uniquely identifies the solver context: `sessionId` in plugin-ui/preview, `definitionKey` in selva-app/library.
 
 ### Code that shipped
 
@@ -41,9 +41,9 @@ The `scopeKey` is whatever uniquely identifies the solver context: `sessionId` i
 | Migration                 | [Plugin/Selva.Schema/Services/SchemaMigrator.cs](../../Plugin/Selva.Schema/Services/SchemaMigrator.cs)                                                   | `MigrateTo_2_8_0`                                                                                                                  |
 | Storage primitives        | [packages/ui/src/lib/external/storage.ts](../../packages/ui/src/lib/external/storage.ts)                                                                 | `readExternalValue`, `writeExternalValue`, `clearExternalValue`, `getExternalInputs`. Re-exported from `@selvajs/ui`.              |
 | Visibility fix            | [packages/ui/src/lib/schema/visibility-rules.ts](../../packages/ui/src/lib/schema/visibility-rules.ts)                                                   | `evaluateVisibility` now honors static `item.visible === false` (was previously ignored — pre-existing bug uncovered by this work) |
-| Builder UI toggle         | [packages/builder-app/src/lib/components/builder/BuilderGroupItem.svelte](../../packages/builder-app/src/lib/components/builder/BuilderGroupItem.svelte) | "External value" switch in the input editor; defaults `visible: false` when toggled on                                             |
-| Builder-app solver        | [packages/builder-app/src/routes/preview/+page.svelte](../../packages/builder-app/src/routes/preview/+page.svelte)                                       | Reads sessionStorage on schema load and seeds external inputs into `state.values`. No warning UI.                                  |
-| Builder-app initial solve | [packages/builder-app/src/lib/composables/usePreviewState.svelte.ts](../../packages/builder-app/src/lib/composables/usePreviewState.svelte.ts)           | Initial-solve timeout reads live `state.values` (was using stale snapshot — race condition fix)                                    |
+| Builder UI toggle         | [packages/plugin-ui/src/lib/components/builder/BuilderGroupItem.svelte](../../packages/plugin-ui/src/lib/components/builder/BuilderGroupItem.svelte) | "External value" switch in the input editor; defaults `visible: false` when toggled on                                             |
+| Plugin-UI solver          | [packages/plugin-ui/src/routes/preview/+page.svelte](../../packages/plugin-ui/src/routes/preview/+page.svelte)                                       | Reads sessionStorage on schema load and seeds external inputs into `state.values`. No warning UI.                                  |
+| Plugin-UI initial solve   | [packages/plugin-ui/src/lib/composables/usePreviewState.svelte.ts](../../packages/plugin-ui/src/lib/composables/usePreviewState.svelte.ts)           | Initial-solve timeout reads live `state.values` (was using stale snapshot — race condition fix)                                    |
 | Compute-app               | [packages/ui/src/lib/components/compute/ComputeApp.svelte](../../packages/ui/src/lib/components/compute/ComputeApp.svelte)                               | Skips externals in `createInitialValues`, seeds from sessionStorage. No warning UI.                                                |
 
 ### How values reach Grasshopper
@@ -84,11 +84,11 @@ Pick this as the first one because it's representative of complex data and you h
 
 Take [parapet/.../service/segment-draw/parametric-line-app.svelte.ts](../../../parapet/packages/app/src/lib/services/segment-draw/parametric-line-app.svelte.ts) and the canvas component. Strip everything that touches Firebase, navigation, `objectState`, or any parapet-specific cache. The component should accept config props and fire `onDone(payload: LineData)`.
 
-Land it in `packages/builder-app/src/lib/producers/line-drawer/LineDrawerApp.svelte` (or `packages/ui/...` if you want it usable across apps from day one).
+Land it in `packages/plugin-ui/src/lib/producers/line-drawer/LineDrawerApp.svelte` (or `packages/ui/...` if you want it usable across apps from day one).
 
 #### Step 2 — create the producer route in each app
 
-**Builder-app** — `packages/builder-app/src/routes/preview/producer/line-drawer/+page.svelte`:
+**Plugin-UI** — `packages/plugin-ui/src/routes/preview/producer/line-drawer/+page.svelte`:
 
 ```svelte
 <script lang="ts">
@@ -119,7 +119,7 @@ Land it in `packages/builder-app/src/lib/producers/line-drawer/LineDrawerApp.sve
 
 #### Step 3 — wire the link in the solver
 
-**Builder-app** — already done generically; just add a route to the URL. Edit `packages/builder-app/src/routes/preview/+page.svelte` where the missing-inputs panel renders the link, and pick the producer based on whatever logic you want (today it's hardcoded to `json-paste`):
+**Plugin-UI** — already done generically; just add a route to the URL. Edit `packages/plugin-ui/src/routes/preview/+page.svelte` where the missing-inputs panel renders the link, and pick the producer based on whatever logic you want (today it's hardcoded to `json-paste`):
 
 ```svelte
 <a
@@ -187,7 +187,7 @@ Constraints:
 1. Definitions without pre-steps must keep working with zero added complexity.
 2. The pre-step input may not be visible to the end user (it's filled by the producer, not by them).
 3. Should be flexible enough to grow — adding a 5th producer shouldn't ripple through the codebase.
-4. Needs to work in both `builder-app` (designer picks producers) and `selva-app` (runtime renders + runs them).
+4. Needs to work in both `plugin-ui` (designer picks producers) and `selva-app` (runtime renders + runs them).
 5. Different deployments may want different producer subsets.
 
 ## Recommended architecture
@@ -206,7 +206,7 @@ Add an optional `source` field to input items in `ui-schema.json`:
 
 Why open string instead of discriminated union: keeps the producer set decoupled from schema regeneration. Adding a producer = no schema change = no type churn = true plugin system. Validation lives in the registry layer.
 
-Builder-app convention: when a designer picks a producer for an input, default `visible: false` automatically (but allow override — e.g., for "show the user what they uploaded" cases).
+Plugin-UI convention: when a designer picks a producer for an input, default `visible: false` automatically (but allow override — e.g., for "show the user what they uploaded" cases).
 
 ### Producer contract — one module, multiple facets
 
@@ -216,7 +216,7 @@ interface PreStepProducer<TConfig, TOutput> {
 	displayName: string;
 	outputDataType: GhDataType; // 'json' | 'geometry' | 'curves' | 'points' | ...
 	acceptableInputs: WidgetType[]; // which input widgets this can attach to
-	configSchema: ZodSchema<TConfig>; // drives the config UI in builder-app
+	configSchema: ZodSchema<TConfig>; // drives the config UI in plugin-ui
 	outputSchema: ZodSchema<TOutput>; // validates produced data at runtime
 	ConfigEditor?: Component; // optional; falls back to auto-form from configSchema
 	RunnerComponent: () => Promise<Component>; // lazy-loaded; rendered in selva-app pre-step phase
@@ -230,7 +230,7 @@ One module per producer. Self-contained. Adding a producer = one folder, one exp
 
 ### Compatibility model
 
-Each producer declares `acceptableInputs: WidgetType[]`. The builder-app dropdown filters producers by the current input's widget type:
+Each producer declares `acceptableInputs: WidgetType[]`. The plugin-ui dropdown filters producers by the current input's widget type:
 
 ```ts
 const compatible = registry
@@ -266,7 +266,7 @@ Both apps import:
 import { defaultRegistry } from '@selvajs/producers';
 ```
 
-Builder-app uses metadata + `configSchema` + `acceptableInputs`. Compute-app uses `RunnerComponent` + `toDataTree` + `outputSchema`. Tree-shaking + lazy `import()` for `RunnerComponent` keeps bundles tight.
+Plugin-UI uses metadata + `configSchema` + `acceptableInputs`. Compute-app uses `RunnerComponent` + `toDataTree` + `outputSchema`. Tree-shaking + lazy `import()` for `RunnerComponent` keeps bundles tight.
 
 ### Platform integration
 
@@ -278,12 +278,12 @@ interface IPlatformProducerPolicy {
 }
 ```
 
-- Builder-app sees **all** producers (designers can target any deployment).
+- Plugin-UI sees **all** producers (designers can target any deployment).
 - Compute-app filters at load time; shows a clear error if a definition references a producer the current platform disables.
 
 ### Render filter (the simple part)
 
-The schema already has `visible: boolean` on `LayoutItemBase` ([ui-schema.json:234-238](../../packages/schemas/ui-schema.json#L234-L238)). Today the builder-app UI only exposes the dynamic `visibilityCondition`; we add a static visibility toggle.
+The schema already has `visible: boolean` on `LayoutItemBase` ([ui-schema.json:234-238](../../packages/schemas/ui-schema.json#L234-L238)). Today the plugin-ui only exposes the dynamic `visibilityCondition`; we add a static visibility toggle.
 
 Renderer filter (in `AppLayout`):
 
@@ -321,13 +321,13 @@ async function gatherPreStepValues(
 
 Zero hardcoded nicknames, zero `inputType` switches, zero per-producer branches. Adding a producer touches _only_ `packages/producers/`.
 
-## Builder-app UI changes (BuilderGroupItem & input editor)
+## Plugin-UI UI changes (BuilderGroupItem & input editor)
 
 Two concerns at different levels:
 
 | Concern                                   | Lives on                           | Change                                                                                                                                                |
 | ----------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Static visibility toggle (`item.visible`) | All layout items (groups + inputs) | Add eye-icon toggle in [BuilderGroupItem.svelte:522-528](../../packages/builder-app/src/lib/components/builder/BuilderGroupItem.svelte#L522-L528) header |
+| Static visibility toggle (`item.visible`) | All layout items (groups + inputs) | Add eye-icon toggle in [BuilderGroupItem.svelte:522-528](../../packages/plugin-ui/src/lib/components/builder/BuilderGroupItem.svelte#L522-L528) header |
 | Pre-step producer dropdown                | Input items only                   | Add to input config editor; populated from registry, filtered by `acceptableInputs`                                                                   |
 
 When the user picks a producer, default `visible: false` (with override).
@@ -457,7 +457,7 @@ What we should _keep_ from parapet:
   - Treat each major change as new id (`line-builder-v2`) and keep v1 around.
   - Recommendation: latter unless real reason not to.
 - [ ] **Validation/required-check semantics.** A pre-step input that has no value yet shouldn't say "fill in this field" — it should route the user to the pre-step UI. Need a unified "input not ready" predicate that knows which kind.
-- [ ] **Builder-app schema designer treatment.** Pre-step inputs likely want a different visual in the canvas (greyed, badged with producer name) so the designer remembers what fills them. Don't paint into a corner where the builder assumes every input renders a control.
+- [ ] **Plugin-UI schema designer treatment.** Pre-step inputs likely want a different visual in the canvas (greyed, badged with producer name) so the designer remembers what fills them. Don't paint into a corner where the builder assumes every input renders a control.
 - [ ] **Persistence storage contract.** When `persist: 'platform'`, what does the producer call? Probably a generic `IPlatformDataStore` keyed by `(sessionId, inputId)`. Needs to be defined.
 - [ ] **Concrete `contract.ts` and `registry.ts` files.** Mock these up to pressure-test against line-builder + a hypothetical STEP-file uploader before committing.
 - [ ] **Pre-step phase UI shell.** Inline producers render as a panel; fullscreen producers temporarily replace the route. Owned by one shared `<PreStepPhase>` component reading `displayMode`.
@@ -469,7 +469,7 @@ What we should _keep_ from parapet:
 - Add optional `source: { kind, producer, config }` to input schema items. Open string for `producer`.
 - New workspace package `@selvajs/producers` exporting `defaultRegistry` + builtins.
 - Each producer is a self-contained module: metadata, schemas, lazy `RunnerComponent`, `toDataTree`.
-- Builder-app: visibility toggle on all items, producer dropdown on inputs (filtered by `acceptableInputs`).
+- Plugin-UI: visibility toggle on all items, producer dropdown on inputs (filtered by `acceptableInputs`).
 - Compute-app: generic `gatherPreStepValues` replaces all per-producer glue.
 - Platform decides which producers are enabled per deployment.
 - Build-time only for now; design seams (factory registry, namespaced ids, no components in schema) so runtime loading is an additive upgrade.

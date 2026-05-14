@@ -23,13 +23,13 @@ Monorepo with two stacks: `packages/` (TypeScript/Svelte workspace) and `Plugin/
 pnpm install
 
 # Development servers
-pnpm dev                    # Start builder-app dev server (http://localhost:5173)
+pnpm dev                    # Start plugin-ui dev server (http://localhost:5173)
 pnpm dev:selva              # Start the Selva app (deployable) dev server
 
 # Build commands (orchestrated by Turborepo — see docs/Turborepo.md)
 pnpm build                  # Build every package in dep order, with caching
 pnpm build --filter=@selvajs/selva           # Build one package + its deps
-pnpm run build:builder      # Build builder-app + its deps
+pnpm run build:plugin-ui    # Build plugin-ui + its deps
 pnpm run build:selva        # Build the Selva app + its deps
 pnpm run build:plugin       # Build production plugin with embedded web assets
 
@@ -98,14 +98,14 @@ cd packages/schemas && pnpm run generate:all
 
 The web application supports two runtime modes:
 
-1. **Local Mode (builder-app)**: Drag-and-drop schema designer connected to Grasshopper via WebSocket. Used during development with hot reload.
+1. **Local Mode (`@selvajs/plugin-ui`)**: Drag-and-drop schema designer connected to Grasshopper via WebSocket. Embedded into `Selva.gha` and served from the plugin's local HTTP port at runtime; runs against the dev server during development with hot reload.
 2. **Cloud Mode (`@selvajs/selva`)**: Standalone web app that solves Grasshopper definitions through Rhino.Compute. Used for production deployments — installed via `@selvajs/cli`.
 
 ### Production Build Process
 
 The production build creates a **fully self-contained** `.gha` file:
 
-1. Builds `@selvajs/builder-app` web assets
+1. Builds `@selvajs/plugin-ui` web assets
 2. Copies built assets to `Plugin/Selva.GH/EmbeddedAssets/web/`
 3. Embeds all web assets as `EmbeddedResource` in the plugin
 4. Builds multi-targeted plugin (net48 + net7.0 for Rhino 8, net9.0 for Rhino 9)
@@ -123,7 +123,7 @@ pnpm run build:plugin
 Terminal 1:
 
 ```bash
-cd packages/builder-app && pnpm dev
+cd packages/plugin-ui && pnpm dev
 # Web app runs on http://localhost:5173
 ```
 
@@ -210,7 +210,7 @@ This architecture means Selva has **zero exposure to EU data regulations, creden
 
 The authoritative reference is [packages/selva/.env.example](packages/selva/.env.example) — every var the Selva app reads (provider, tenancy, flags, secrets, optional server config) is documented inline there. Don't duplicate that documentation here or in provider READMEs; link to `.env.example`.
 
-The builder app needs no env vars (WebSocket on port 8765 by default).
+The plugin UI needs no env vars (WebSocket on port 8765 by default).
 
 Rhino.Compute server URL + API key are configured in `/admin/compute` and persisted via `IComputeServerStore` — not env vars.
 
