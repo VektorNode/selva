@@ -1,15 +1,38 @@
 {
-	"name": "@selva/schemas",
-	"version": "1.1.1",
-	"description": "Schema definitions and code generators for Selva",
-	"private": true,
+	"name": "@selvajs/schemas",
+	"version": "1.2.0",
+	"description": "Schema definitions, generated TypeScript types, and code generators for Selva",
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
 	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"src",
+		"ui-schema.json",
+		"preset-schema.json"
+	],
 	"scripts": {
-		"generate:ts": "node generate-typescript.js",
-		"generate:cs": "node generate-csharp.js",
-		"generate:all": "pnpm run generate:ts && pnpm run generate:cs"
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"type-check": "tsc --noEmit",
+		"generate": "pnpm run generate:ts && pnpm run generate:cs",
+		"generate:ts": "node scripts/generate-typescript.js",
+		"generate:cs": "node scripts/generate-csharp.js",
+		"generate:all": "pnpm run generate"
 	},
 	"devDependencies": {
-		"json-schema-to-typescript": "^15.0.4"
+		"json-schema-to-typescript": "^15.0.4",
+		"typescript": "catalog:"
 	}
 }

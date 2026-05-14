@@ -1,0 +1,20 @@
+<script lang="ts">
+	import { cn } from '$lib/utils.js';
+	import type { ComponentProps } from 'svelte';
+	import { Separator } from '$lib/components/primitives/separator/index.js';
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		orientation = 'vertical',
+		...restProps
+	}: ComponentProps<typeof Separator> = $props();
+</script>
+
+<Separator
+	bind:ref
+	data-slot="button-group-separator"
+	{orientation}
+	class={cn('!m-0 relative self-stretch bg-input data-[orientation=vertical]:h-auto', className)}
+	{...restProps}
+/>

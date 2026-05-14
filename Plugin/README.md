@@ -14,11 +14,11 @@ A Grasshopper plugin for building web-based UIs and bridging Grasshopper definit
 
 Copy the `.gha` file to your Grasshopper Libraries folder:
 
-- **Rhino 7 (Windows):** `%APPDATA%\Grasshopper\Libraries\`
 - **Rhino 8 (Windows):** `%APPDATA%\Grasshopper\Libraries-8\`
 - **Rhino 8 (macOS):** `~/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/`
+- **Rhino 9 (Windows):** `%APPDATA%\Grasshopper\Libraries-9\`
 
-Restart Rhino after installation.
+Restart Rhino after installation. Rhino 7 is not supported.
 
 ## Usage
 
@@ -39,5 +39,9 @@ pnpm build:plugin
 
 ## Requirements
 
-- Rhino 8 (Windows/macOS)
+- Rhino 8 or 9 (Windows/macOS) — Rhino 7 is not supported
 - Grasshopper
+
+## Development
+
+- [Project structure & conventions](../STRUCTURE.md) — including the obsolete-component naming convention

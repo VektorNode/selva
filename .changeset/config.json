@@ -2,10 +2,17 @@
 	"$schema": "https://unpkg.com/@changesets/config@3.1.2/schema.json",
 	"changelog": "@changesets/cli/changelog",
 	"commit": false,
-	"fixed": [["selva-shared", "@selva/builder-app", "selva-compute-app"]],
+	"fixed": [["@selvajs/selva", "@selvajs/cli", "@selvajs/ui", "@selvajs/schemas"]],
 	"linked": [],
 	"access": "public",
 	"baseBranch": "main",
 	"updateInternalDependencies": "patch",
-	"ignore": []
+	"ignore": [
+		"@selvajs/plugin-ui",
+		"@selvajs/config",
+		"@selvajs/platform",
+		"@selvajs/local-provider",
+		"@selvajs/supabase-provider",
+		"@selvajs/header-auth-provider"
+	]
 }

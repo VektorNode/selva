@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.IO;
 using Grasshopper.Kernel;
+using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
@@ -62,8 +63,8 @@ public class GH_FileFromPath : GH_Component, ISelvaFileOutput
 
         var extension = Path.GetExtension(path);
         var fileName = string.IsNullOrWhiteSpace(nameOverride)
-            ? Path.GetFileName(path)
-            : nameOverride + extension;
+            ? Path.GetFileNameWithoutExtension(path)
+            : Path.GetFileNameWithoutExtension(nameOverride);
 
         byte[] bytes;
         try

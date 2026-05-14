@@ -12,6 +12,9 @@
 # - Sets up PM2 for production
 # - Optionally sets up Caddy as a reverse proxy (with automatic HTTPS)
 #
+# Provider: this script bootstraps the **local provider** (filesystem + JSON).
+# For the Supabase provider, follow packages/providers/supabase/README.md.
+#
 # Prerequisites: SSH key added to GitHub (repo is private — SSH is used for cloning).
 #   ssh-keygen -t ed25519 -C "you@example.com"
 #   cat ~/.ssh/id_ed25519.pub  # add to https://github.com/settings/keys
@@ -35,16 +38,29 @@ NC='\033[0m' # No Color
 
 # Configuration (all overridable via environment variables)
 REPO_URL="${REPO_URL:-git@github.com:VektorNode/selva.git}"
+# Branch / tag / commit to deploy. Defaults to main; override with BRANCH=9x
+# (or any ref) to deploy a feature branch.
+BRANCH="${BRANCH:-main}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
-DEFINITION_SOURCE="${DEFINITION_SOURCE:-filesystem}"
-GH_DEFINITIONS_PATH="${GH_DEFINITIONS_PATH:-./definitions}"
-COMPUTE_SERVER_URL="${COMPUTE_SERVER_URL:-http://localhost:5000}"
-COMPUTE_API_KEY="${COMPUTE_API_KEY:-}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
-ADMIN_SECRET="${ADMIN_SECRET:-}"
+# DATA_PATH is the local provider's data directory: users.json, orgs/projects/
+# definitions JSON, compute.config.json, and uploaded .gh files. Resolved
+# relative to packages/selva/ — the default lands at .selva-data/ at
+# the repo root.
+DATA_PATH="${DATA_PATH:-../../.selva-data}"
+SELVA_HMAC_KEY="${SELVA_HMAC_KEY:-}"
+SELVA_AT_REST_KEY="${SELVA_AT_REST_KEY:-}"
 ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES:-}"  # auto-detected: true for http, false for https
+# Always bind to loopback. The VM is fronted by Caddy on the public interface;
+# the app process must NOT be reachable directly from the network. This is a
+# hard requirement for forward-auth providers (header-auth-provider/README.md)
+# and good hygiene generally.
+HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-3000}"
-ORIGIN="${ORIGIN:-}"  # auto-detected from public IP if not set
+# DOMAIN is set by the Terraform startup script in production. If present,
+# ORIGIN is derived as https://$DOMAIN; otherwise we fall back to the public
+# IP for local-network testing.
+DOMAIN="${DOMAIN:-}"
+ORIGIN="${ORIGIN:-}"  # auto-detected from DOMAIN / public IP if not set
 INTERACTIVE=true
 SKIP_PM2=false
 
@@ -125,20 +141,17 @@ else
   print_success "Node.js installed: $(node -v)"
 fi
 
-# Check/install pnpm
-if command_exists pnpm; then
-  PNPM_VERSION=$(pnpm -v)
-  print_success "pnpm found: $PNPM_VERSION"
-  PNPM_MAJOR=$(echo $PNPM_VERSION | cut -d'.' -f1)
-  if [ "$PNPM_MAJOR" -lt 9 ]; then
-    print_warning "pnpm 9.0.0+ recommended (found $PNPM_VERSION), upgrading..."
-    sudo npm install -g pnpm@latest
-  fi
-else
-  print_step "Installing pnpm..."
-  sudo npm install -g pnpm
-  print_success "pnpm installed: $(pnpm -v)"
+# Enable Corepack — it ships with Node 16.10+ and manages package-manager
+# versions per project. The exact pnpm version is pinned in package.json's
+# `packageManager` field, which Corepack reads when we run pnpm from inside
+# the repo. Single source of truth across dev / CI / prod.
+if ! command_exists corepack; then
+  print_error "corepack not found. Update Node.js to 16.10+ (current: $(node -v))."
+  exit 1
 fi
+print_step "Enabling Corepack..."
+sudo corepack enable
+print_success "Corepack enabled (pnpm version will be activated after clone)"
 
 # Check git
 if ! command_exists git; then
@@ -154,21 +167,23 @@ print_header "Step 2: Repository Setup"
 
 if [ -d "$INSTALL_DIR" ] && [ -d "$INSTALL_DIR/.git" ]; then
   print_warning "Directory already exists: $INSTALL_DIR"
-  print_step "Pulling latest changes..."
+  print_step "Fetching and switching to $BRANCH..."
   cd "$INSTALL_DIR"
-  git pull origin main || print_warning "Could not pull (may be offline or no main branch)"
+  git fetch origin "$BRANCH" || print_warning "Could not fetch $BRANCH (may be offline)"
+  git checkout "$BRANCH"
+  git pull origin "$BRANCH" || print_warning "Could not pull $BRANCH"
 elif [ -d "$INSTALL_DIR" ] && [ ! -d "$INSTALL_DIR/.git" ]; then
   print_warning "Directory exists but is not a git repo (leftover from failed clone) — removing..."
   rm -rf "$INSTALL_DIR"
-  print_step "Cloning repository..."
-  git clone "$REPO_URL" "$INSTALL_DIR"
+  print_step "Cloning repository ($BRANCH)..."
+  git clone --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
   cd "$INSTALL_DIR"
-  print_success "Repository cloned to $INSTALL_DIR"
+  print_success "Repository cloned to $INSTALL_DIR ($BRANCH)"
 else
-  print_step "Cloning repository..."
-  git clone "$REPO_URL" "$INSTALL_DIR"
+  print_step "Cloning repository ($BRANCH)..."
+  git clone --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
   cd "$INSTALL_DIR"
-  print_success "Repository cloned to $INSTALL_DIR"
+  print_success "Repository cloned to $INSTALL_DIR ($BRANCH)"
 fi
 
 ################################################################################
@@ -176,8 +191,14 @@ fi
 ################################################################################
 print_header "Step 3: Installing Dependencies"
 
+# Activate the pnpm version pinned in package.json's `packageManager` field.
+# Corepack reads it and downloads/uses that exact version — no drift.
+print_step "Activating pnpm via Corepack..."
+corepack prepare --activate
+print_success "pnpm $(pnpm -v) activated"
+
 print_step "Running pnpm install..."
-pnpm install
+pnpm install --frozen-lockfile
 print_success "Dependencies installed"
 
 ################################################################################
@@ -185,28 +206,31 @@ print_success "Dependencies installed"
 ################################################################################
 print_header "Step 4: Environment Configuration"
 
-ENV_FILE="$INSTALL_DIR/packages/compute-app/.env"
+ENV_FILE="$INSTALL_DIR/packages/selva/.env"
 CONFIG_FILE="$INSTALL_DIR/ecosystem.config.cjs"
 
-# Check if .env already exists
-if [ -f "$ENV_FILE" ]; then
+# Decide whether to (re)write .env. Fresh install always writes; existing
+# install only rewrites if the user opts in interactively.
+RECONFIGURE=false
+if [ ! -f "$ENV_FILE" ]; then
+  RECONFIGURE=true
+elif [ "$INTERACTIVE" = true ]; then
   print_warning "Environment file already exists: $ENV_FILE"
-  if [ "$INTERACTIVE" = true ]; then
-    read -p "Do you want to reconfigure? (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-      print_step "Skipping environment configuration"
-    fi
+  read -p "Do you want to reconfigure? (y/n) " -n 1 -r
+  echo
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    RECONFIGURE=true
   else
-    print_step "Skipping environment configuration (use --interactive to reconfigure)"
+    print_step "Keeping existing environment configuration"
   fi
+else
+  print_step "Environment file exists — keeping as-is (run interactively to reconfigure)"
 fi
 
-# Interactive configuration if flag is set or file doesn't exist
-if [ ! -f "$ENV_FILE" ] || ([ "$INTERACTIVE" = true ] && [[ $REPLY =~ ^[Yy]$ ]]); then
+if [ "$RECONFIGURE" = true ]; then
   print_step "Configuring environment variables..."
 
-  # Detect public IP address
+  # Detect public IP address (fallback when no DOMAIN is provided)
   print_step "Detecting public IP address..."
   PUBLIC_IP=$(get_public_ip)
   if [ "$PUBLIC_IP" != "localhost" ]; then
@@ -215,42 +239,31 @@ if [ ! -f "$ENV_FILE" ] || ([ "$INTERACTIVE" = true ] && [[ $REPLY =~ ^[Yy]$ ]])
     print_warning "Could not detect public IP, will use localhost"
   fi
 
+  # Compute default ORIGIN: prefer DOMAIN (https) over public IP (http).
+  if [ -z "$ORIGIN" ]; then
+    if [ -n "$DOMAIN" ]; then
+      ORIGIN="https://$DOMAIN"
+    else
+      ORIGIN="http://$PUBLIC_IP"
+    fi
+  fi
+
   # Get user input with defaults
   if [ "$INTERACTIVE" = true ]; then
-    read -p "Grasshopper Definitions Source [$DEFINITION_SOURCE]: " _INPUT
-    DEFINITION_SOURCE="${_INPUT:-$DEFINITION_SOURCE}"
+    read -p "Local provider data directory (DATA_PATH) [$DATA_PATH]: " _INPUT
+    DATA_PATH="${_INPUT:-$DATA_PATH}"
 
-    if [ "$DEFINITION_SOURCE" = "filesystem" ]; then
-      read -p "Path to definitions directory [$GH_DEFINITIONS_PATH]: " _INPUT
-      GH_DEFINITIONS_PATH="${_INPUT:-$GH_DEFINITIONS_PATH}"
-    fi
+    print_step "Rhino.Compute URL + API key are configured post-install at /admin/compute."
+    print_step "First admin user is created via the in-app setup page on first boot."
 
-    read -p "Rhino.Compute Server URL [$COMPUTE_SERVER_URL]: " _INPUT
-    COMPUTE_SERVER_URL="${_INPUT:-$COMPUTE_SERVER_URL}"
-
-    while [ -z "$COMPUTE_API_KEY" ]; do
-      read -p "Rhino.Compute API Key (required): " _INPUT
-      COMPUTE_API_KEY="${_INPUT:-}"
-      [ -z "$COMPUTE_API_KEY" ] && print_warning "API key is required."
-    done
-
-    read -p "Admin Password (optional, press Enter to skip) [${ADMIN_PASSWORD:-none}]: " _INPUT
-    ADMIN_PASSWORD="${_INPUT:-$ADMIN_PASSWORD}"
-
-    read -p "Admin Secret (optional, press Enter to skip) [${ADMIN_SECRET:-none}]: " _INPUT
-    ADMIN_SECRET="${_INPUT:-$ADMIN_SECRET}"
+    read -p "HMAC signing key for sessions + tokens (optional, press Enter to auto-generate) [${SELVA_HMAC_KEY:-auto}]: " _INPUT
+    SELVA_HMAC_KEY="${_INPUT:-$SELVA_HMAC_KEY}"
 
     read -p "Application Port [$PORT]: " _INPUT
     PORT="${_INPUT:-$PORT}"
 
-    DEFAULT_ORIGIN="${ORIGIN:-http://$PUBLIC_IP}"
-    read -p "Public Origin URL [$DEFAULT_ORIGIN]: " _INPUT
-    ORIGIN="${_INPUT:-$DEFAULT_ORIGIN}"
-  else
-    # Non-interactive: compute ORIGIN if not set
-    if [ -z "$ORIGIN" ]; then
-      ORIGIN="http://$PUBLIC_IP"
-    fi
+    read -p "Public Origin URL [$ORIGIN]: " _INPUT
+    ORIGIN="${_INPUT:-$ORIGIN}"
   fi
 
   # Create .env file
@@ -260,42 +273,34 @@ if [ ! -f "$ENV_FILE" ] || ([ "$INTERACTIVE" = true ] && [[ $REPLY =~ ^[Yy]$ ]])
 # Auto-generated by setup.sh on $(date)
 # ============================================================================
 
-DEFINITION_SOURCE="${DEFINITION_SOURCE}"
+# Local provider: directory holding users.json, orgs/projects/definitions JSON,
+# compute.config.json, and uploaded .gh files.
+DATA_PATH="${DATA_PATH}"
 
 EOF
 
-  if [ "$DEFINITION_SOURCE" = "filesystem" ]; then
-    cat >> "$ENV_FILE" << EOF
-# Local File System: Path to definitions directory
-GH_DEFINITIONS_PATH="${GH_DEFINITIONS_PATH}"
+  # Rhino.Compute server URL + API key are configured post-install via /admin/compute
+  # and persisted by the data provider — not written to .env.
+  # First admin user is created via the in-app setup page on first boot.
 
-EOF
+  # Auto-generate SELVA_HMAC_KEY (signs session cookies + share-link / invite tokens).
+  if [ -z "$SELVA_HMAC_KEY" ]; then
+    SELVA_HMAC_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+    print_success "SELVA_HMAC_KEY auto-generated"
   fi
 
+  # Auto-generate SELVA_AT_REST_KEY (AES-256-GCM key that encrypts the
+  # Rhino.Compute API key at rest in compute.config.json). Must be stable
+  # across restarts — rotating it makes existing encrypted secrets
+  # unreadable, requiring re-entry via /admin/compute.
+  if [ -z "$SELVA_AT_REST_KEY" ]; then
+    SELVA_AT_REST_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+    print_success "SELVA_AT_REST_KEY auto-generated"
+  fi
   cat >> "$ENV_FILE" << EOF
-# Rhino.Compute Server Configuration
-COMPUTE_SERVER_URL="${COMPUTE_SERVER_URL}"
+SELVA_HMAC_KEY="${SELVA_HMAC_KEY}"
+SELVA_AT_REST_KEY="${SELVA_AT_REST_KEY}"
 EOF
-
-  if [ -z "$COMPUTE_API_KEY" ]; then
-    print_error "COMPUTE_API_KEY is required but not set."
-    exit 1
-  fi
-  cat >> "$ENV_FILE" << EOF
-COMPUTE_API_KEY="${COMPUTE_API_KEY}"
-EOF
-
-  if [ -n "$ADMIN_PASSWORD" ]; then
-    cat >> "$ENV_FILE" << EOF
-ADMIN_PASSWORD="${ADMIN_PASSWORD}"
-EOF
-  fi
-
-  if [ -n "$ADMIN_SECRET" ]; then
-    cat >> "$ENV_FILE" << EOF
-ADMIN_SECRET="${ADMIN_SECRET}"
-EOF
-  fi
 
   # Auto-detect ALLOW_INSECURE_COOKIES based on protocol if not set
   if [ -z "$ALLOW_INSECURE_COOKIES" ]; then
@@ -309,28 +314,42 @@ EOF
   cat >> "$ENV_FILE" << EOF
 
 # Server Configuration
+# HOST=127.0.0.1 keeps the app off the public interface — Caddy is the only
+# ingress. Override only for local-network testing where Caddy is not in front.
+HOST=${HOST}
 PORT=${PORT}
 ORIGIN="${ORIGIN}"
 ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES}"
 
-# Request body size limit for large geometry uploads
-BODY_SIZE_LIMIT="Infinity"
+# Request body size limit for large geometry uploads. Sized to the largest
+# legitimate payload (a big .gh upload + image). Don't set "Infinity" in
+# production — every JSON endpoint inherits this cap and an unbounded body
+# is a DoS vector on routes that lack their own per-route cap.
+BODY_SIZE_LIMIT=150M
+
+# Installation directory — used by the admin dashboard's update endpoint
+# to locate scripts/update.sh. Without this, updates triggered from the UI
+# fall back to process.cwd() which only works when PM2 was started from
+# the repo root.
+INSTALL_DIR="${INSTALL_DIR}"
 EOF
 
   print_success "Environment file created: $ENV_FILE"
   cat "$ENV_FILE"
 fi
 
-# Create definitions directory if using filesystem source
-if grep -q "filesystem" "$ENV_FILE"; then
-  GH_PATH=$(grep "GH_DEFINITIONS_PATH" "$ENV_FILE" | cut -d'"' -f2)
-  if [ -n "$GH_PATH" ]; then
-    DEFINITIONS_DIR="$INSTALL_DIR/packages/compute-app/$GH_PATH"
-    if [ ! -d "$DEFINITIONS_DIR" ]; then
-      mkdir -p "$DEFINITIONS_DIR"
-      print_success "Created definitions directory: $DEFINITIONS_DIR"
-      print_warning "Add your .gh files to: $DEFINITIONS_DIR"
-    fi
+# Create the local provider data directory if it doesn't exist
+DATA_PATH_FROM_ENV=$(grep "^DATA_PATH=" "$ENV_FILE" | cut -d'"' -f2)
+if [ -n "$DATA_PATH_FROM_ENV" ]; then
+  if [[ "$DATA_PATH_FROM_ENV" = /* ]]; then
+    DATA_DIR="$DATA_PATH_FROM_ENV"
+  else
+    DATA_DIR="$INSTALL_DIR/packages/selva/$DATA_PATH_FROM_ENV"
+  fi
+  if [ ! -d "$DATA_DIR" ]; then
+    mkdir -p "$DATA_DIR"
+    print_success "Created data directory: $DATA_DIR"
+    print_warning "Add your .gh files to: $DATA_DIR"
   fi
 fi
 
@@ -339,16 +358,11 @@ fi
 ################################################################################
 print_header "Step 5: Building Application"
 
-print_step "Building shared package..."
+print_step "Building selva app and all workspace dependencies..."
 cd "$INSTALL_DIR"
-pnpm run build:shared
-print_success "Shared package built"
-
-print_step "Building compute-app for production..."
-cd "$INSTALL_DIR/packages/compute-app"
 export ADAPTER=node
-pnpm build
-print_success "Compute-app built for production"
+pnpm build --filter=@selvajs/selva
+print_success "Selva app built for production"
 
 ################################################################################
 # 6. PM2 SETUP (Optional)
@@ -368,63 +382,29 @@ if [ "$SKIP_PM2" = false ]; then
   # Generate ecosystem.config.cjs
   print_step "Writing ecosystem.config.cjs..."
 
-  # Re-read vars from .env in case we skipped the config step (file already existed)
-  PORT=$(grep "^PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ' || echo "$PORT")
-  ORIGIN=$(grep "^ORIGIN=" "$ENV_FILE" | cut -d'"' -f2 || echo "$ORIGIN")
-  COMPUTE_SERVER_URL=$(grep "^COMPUTE_SERVER_URL=" "$ENV_FILE" | cut -d'"' -f2 || echo "$COMPUTE_SERVER_URL")
-  COMPUTE_API_KEY=$(grep "^COMPUTE_API_KEY=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$COMPUTE_API_KEY")
-  ADMIN_PASSWORD=$(grep "^ADMIN_PASSWORD=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$ADMIN_PASSWORD")
-  ADMIN_SECRET=$(grep "^ADMIN_SECRET=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$ADMIN_SECRET")
-  ALLOW_INSECURE_COOKIES=$(grep "^ALLOW_INSECURE_COOKIES=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$ALLOW_INSECURE_COOKIES")
-  GH_DEFINITIONS_PATH=$(grep "^GH_DEFINITIONS_PATH=" "$ENV_FILE" | cut -d'"' -f2 2>/dev/null || echo "$GH_DEFINITIONS_PATH")
-
-  PORT=${PORT:-3000}
-  ORIGIN=${ORIGIN:-http://localhost}
-  ALLOW_INSECURE_COOKIES=${ALLOW_INSECURE_COOKIES:-true}
-
-  # Resolve GH_DEFINITIONS_PATH to absolute path (default to definitions if not set)
-  GH_DEFINITIONS_PATH="${GH_DEFINITIONS_PATH:-./definitions}"
-  if [[ "$GH_DEFINITIONS_PATH" != /* ]]; then
-    ABS_GH_PATH="$INSTALL_DIR/packages/compute-app/$GH_DEFINITIONS_PATH"
-  else
-    ABS_GH_PATH="$GH_DEFINITIONS_PATH"
-  fi
-
-  if [ -z "$COMPUTE_API_KEY" ]; then
-    print_error "COMPUTE_API_KEY is required but not set."
-    exit 1
-  fi
-
-  OPT_ADMIN_PASSWORD=""
-  [ -n "$ADMIN_PASSWORD" ] && OPT_ADMIN_PASSWORD="				ADMIN_PASSWORD: '$ADMIN_PASSWORD',"
-
-  OPT_ADMIN_SECRET=""
-  [ -n "$ADMIN_SECRET" ] && OPT_ADMIN_SECRET="				ADMIN_SECRET: '$ADMIN_SECRET',"
-
+  # Runtime config is loaded from .env via Node's --env-file flag (Node >= 20.6).
+  # Any var added there (including provider-specific ones like SUPABASE_URL)
+  # flows through without touching this script. NODE_ENV is the only thing
+  # pinned here. PM2's own `env_file` option is intentionally NOT used — it
+  # only works under `pm2-runtime` and is silently ignored by `pm2 start`.
   cat > "$CONFIG_FILE" << EOF
-// This file is used by PM2 to manage the compute app process.
-// IMPORTANT: Do not commit sensitive values (API keys, passwords) to version control.
+// PM2 process file — auto-generated by setup.sh on $(date).
+// Runtime config is loaded from packages/selva/.env via Node's
+// --env-file flag (Node >= 20.6). PM2's env_file option is unreliable
+// outside pm2-runtime, so we let Node load .env directly.
 module.exports = {
 	apps: [
 		{
 			name: 'selva-compute',
-			script: './packages/compute-app/build/index.js',
+			script: './build/index.js',
+			cwd: '$INSTALL_DIR/packages/selva',
+			node_args: '--env-file=$ENV_FILE',
 			instances: 1,
 			exec_mode: 'fork',
 			autorestart: true,
 			watch: false,
 			max_memory_restart: '1G',
-			cwd: '$INSTALL_DIR',
 			env: {
-				PORT: $PORT,
-				ORIGIN: '$ORIGIN',
-				COMPUTE_SERVER_URL: '$COMPUTE_SERVER_URL',
-				COMPUTE_API_KEY: '$COMPUTE_API_KEY',
-				BODY_SIZE_LIMIT: 'Infinity',
-			GH_DEFINITIONS_PATH: '$ABS_GH_PATH',
-$OPT_ADMIN_PASSWORD
-$OPT_ADMIN_SECRET
-				ALLOW_INSECURE_COOKIES: '$ALLOW_INSECURE_COOKIES',
 				NODE_ENV: 'production'
 			}
 		}
@@ -435,7 +415,7 @@ EOF
   print_success "ecosystem.config.cjs written: $CONFIG_FILE"
 
   print_step "Starting application with PM2..."
-  cd "$INSTALL_DIR/packages/compute-app"
+  cd "$INSTALL_DIR/packages/selva"
 
   # Stop if already running
   pm2 delete selva-compute 2>/dev/null || true
@@ -471,16 +451,14 @@ print_header "Setup Complete!"
 
 PORT=$(grep "^PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ')
 PORT=${PORT:-3000}
-
-# Get the public IP used
-PUBLIC_IP=$(get_public_ip)
-ACCESS_URL="http://$PUBLIC_IP:$PORT"
+# ORIGIN is the public URL the app reports; Caddy proxies to 127.0.0.1:$PORT.
+ACCESS_URL=$(grep "^ORIGIN=" "$ENV_FILE" | cut -d'"' -f2)
+ACCESS_URL=${ACCESS_URL:-http://localhost:$PORT}
 
 echo -e "${GREEN}Selva Compute App is ready!${NC}"
 echo ""
 echo "📁 Installation directory: $INSTALL_DIR"
 echo "⚙️  Configuration file: $ENV_FILE"
-echo "🌍 Server IP Address: $PUBLIC_IP"
 echo "🚀 Access application: $ACCESS_URL/app?gh=definition-name"
 echo "💊 Health check: curl $ACCESS_URL/api/health"
 echo ""
@@ -494,8 +472,8 @@ if [ "$SKIP_PM2" = false ]; then
 fi
 
 echo "📝 Next steps:"
-echo "   1. Add your .gh files to: $INSTALL_DIR/packages/compute-app/definitions/"
-echo "   2. Update COMPUTE_SERVER_URL in $ENV_FILE if needed"
+echo "   1. Add your .gh files to: ${DATA_DIR:-$INSTALL_DIR/.selva-data}"
+echo "   2. Open /admin/compute to register your Rhino.Compute server URL (+ optional API key)"
 echo "   3. (Optional) Set up Caddy reverse proxy: bash setup-caddy.sh [--domain app.example.com]"
 echo ""
 
@@ -503,7 +481,7 @@ if [ "$SKIP_PM2" = false ]; then
   echo "   pm2 restart selva-compute --update-env"
 else
   echo "   To start the app manually:"
-  echo "   cd $INSTALL_DIR/packages/compute-app && npm start"
+  echo "   cd $INSTALL_DIR/packages/selva && npm start"
 fi
 
 echo ""

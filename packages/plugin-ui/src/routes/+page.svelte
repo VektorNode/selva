@@ -1,0 +1,70 @@
+<script lang="ts">
+	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
+	import { AppShell, PageContent, StateDisplay, Card } from '@selvajs/ui';
+	import { Wrench, Play } from '@lucide/svelte';
+	import { buildSessionParams } from '$lib/utils/session';
+
+	const sessionId = page.url.searchParams.get('session');
+
+	function navigateTo(path: string) {
+		goto(`/${path}?${buildSessionParams()}`, { noScroll: true }).catch(() => {});
+	}
+
+	const homeUrl = $derived(`/?${buildSessionParams()}`);
+</script>
+
+<AppShell {homeUrl} mode="fixed" showFooter>
+	{#if !sessionId}
+		<div class="flex flex-1 items-center justify-center">
+			<StateDisplay
+				type="error"
+				size="large"
+				title="No Session ID"
+				message="No session ID provided in URL. Please start from the Grasshopper component."
+			/>
+		</div>
+	{:else}
+		<PageContent class="mx-auto w-full max-w-4xl flex-1">
+			<h2 class="text-foreground mb-4 text-4xl font-bold">Welcome to Selva</h2>
+			<p class="text-muted-foreground mb-8 text-lg">Choose a mode to get started:</p>
+
+			<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+				<button onclick={() => navigateTo('builder')} class="text-left">
+					<Card.Root
+						class="hover:border-primary h-full transform border-2 p-8 transition-all hover:-translate-y-1 hover:shadow-lg"
+					>
+						<Card.Header class="mb-3 p-0">
+							<Card.Title class="flex items-center gap-2 text-2xl">
+								<Wrench class="h-6 w-6" />Schema Builder
+							</Card.Title>
+						</Card.Header>
+						<Card.Content class="p-0">
+							<p class="text-muted-foreground leading-relaxed">
+								Configure your UI schema by selecting inputs and outputs from your Grasshopper
+								definition
+							</p>
+						</Card.Content>
+					</Card.Root>
+				</button>
+
+				<button onclick={() => navigateTo('preview')} class="text-left">
+					<Card.Root
+						class="hover:border-primary h-full transform border-2 p-8 transition-all hover:-translate-y-1 hover:shadow-lg"
+					>
+						<Card.Header class="mb-3 p-0">
+							<Card.Title class="flex items-center gap-2 text-2xl">
+								<Play class="h-6 w-6" />Interactive Preview
+							</Card.Title>
+						</Card.Header>
+						<Card.Content class="p-0">
+							<p class="text-muted-foreground leading-relaxed">
+								Interact with your Grasshopper definition in real-time with live parameter updates
+							</p>
+						</Card.Content>
+					</Card.Root>
+				</button>
+			</div>
+		</PageContent>
+	{/if}
+</AppShell>
