@@ -59,7 +59,7 @@ Use for changes in `packages/cli/**`.
 ```bash
 node -e "const f='packages/cli/package.json';const p=require('./'+f);const [a,b,c]=p.version.split('.').map(Number);p.version=\`\${a}.\${b}.\${c+1}\`;require('fs').writeFileSync(f,JSON.stringify(p,null,'\t')+'\n');console.log(p.version)"
 
-node --input-type=module -e "for (const m of ['./packages/cli/src/cli.js','./packages/cli/src/prompts.js','./packages/cli/src/commands/create.js','./packages/cli/src/commands/init.js','./packages/cli/src/commands/doctor.js','./packages/cli/src/commands/pm2.js','./packages/cli/src/commands/keys.js']) { await import(m); console.log('ok',m); }"
+node --input-type=module -e "for (const m of ['./packages/cli/src/cli.js','./packages/cli/src/prompts.js','./packages/cli/src/commands/create.js','./packages/cli/src/commands/init.js','./packages/cli/src/commands/doctor.js','./packages/cli/src/commands/pm2.js','./packages/cli/src/commands/migrate.js','./packages/cli/src/commands/keys.js']) { await import(m); console.log('ok',m); }"
 
 pnpm --filter @selvajs/cli publish --access public --no-git-checks
 npm view @selvajs/cli version

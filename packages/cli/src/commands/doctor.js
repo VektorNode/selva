@@ -10,12 +10,13 @@
 //
 // Exits 0 (green) or 1 (any red); yellow checks don't fail the run.
 
-import { existsSync, accessSync, constants, statSync } from 'node:fs';
+import { existsSync, readFileSync, accessSync, constants, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { readEnvFile } from '../env.js';
 import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
+import { detectDrift } from './migrate.js';
 
 const HEX_64 = /^[0-9a-f]{64}$/i;
 const PLACEHOLDER = 'replace-this-with-a-random-32-byte-hex-key';
@@ -33,6 +34,12 @@ export async function runDoctor() {
 	checks.push(checkFile(join(dir, '.env'), '.env present'));
 	checks.push(checkFile(join(dir, 'selva.config.js'), 'selva.config.js present'));
 	checks.push(checkFile(join(dir, 'ecosystem.config.cjs'), 'ecosystem.config.cjs present'));
+
+	// ── Layout drift ───────────────────────────────────────────────────
+	// Catches deployments still on the @selvajs/runtime layout (or other
+	// historical states) and points the operator at `selva migrate` instead
+	// of just letting the missing-package checks below scream.
+	checks.push(checkLayoutDrift(dir));
 
 	// ── Secrets ────────────────────────────────────────────────────────
 	checks.push(checkSecret(env.SELVA_HMAC_KEY, 'SELVA_HMAC_KEY is a 32-byte hex string'));
@@ -190,6 +197,23 @@ function checkPackage(dir, name) {
 	const path = join(dir, 'node_modules', ...name.split('/'), 'package.json');
 	if (!existsSync(path)) return red(`${name} not installed (run npm install)`);
 	return green(`${name} installed`);
+}
+
+function checkLayoutDrift(dir) {
+	const pkgPath = join(dir, 'package.json');
+	if (!existsSync(pkgPath)) return yellow('package.json missing — cannot check layout');
+	let pkg;
+	try {
+		pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+	} catch {
+		return red('package.json is not valid JSON');
+	}
+	const reasons = detectDrift(pkg);
+	if (reasons.length === 0) return green('package.json layout is current');
+	return red(
+		`package.json layout is outdated — run \`selva migrate\`:\n     ` +
+			reasons.map((r) => '· ' + r).join('\n     ')
+	);
 }
 
 // Header-auth-specific sanity checks. None of these catch the truly dangerous

@@ -14,6 +14,7 @@ const COMMANDS = {
 	restart: () => import('./commands/pm2.js').then((m) => m.runRestart),
 	logs: () => import('./commands/pm2.js').then((m) => m.runLogs),
 	update: () => import('./commands/pm2.js').then((m) => m.runUpdate),
+	migrate: () => import('./commands/migrate.js').then((m) => m.runMigrate),
 	keys: () => import('./commands/keys.js').then((m) => keysDispatch(m))
 };
 
@@ -70,6 +71,7 @@ function printHelp() {
 			'  restart                 pm2 restart selva-compute --update-env',
 			'  logs                    pm2 logs selva-compute',
 			'  update                  npm update @selvajs/selva + restart',
+			'  migrate                 Bring package.json onto the current layout',
 			'  keys rotate <hmac|at-rest>   Rotate a secret in .env (destructive)',
 			'',
 			pc.dim('To scaffold a new deployment: ') + pc.cyan('npx @selvajs/cli <dir>')
