@@ -33,6 +33,7 @@
 	},
 	"devDependencies": {
 		"json-schema-to-typescript": "^15.0.4",
+		"prettier": "catalog:",
 		"typescript": "catalog:"
 	}
 }
