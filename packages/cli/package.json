@@ -8,7 +8,7 @@
 	},
 	"type": "module",
 	"bin": {
-		"create": "./bin/create.js",
+		"cli": "./bin/cli.js",
 		"selva": "./bin/selva.js"
 	},
 	"files": [
@@ -19,9 +19,9 @@
 		"node": ">=20.6.0"
 	},
 	"scripts": {
-		"start": "node ./bin/create.js",
+		"start": "node ./bin/cli.js",
 		"selva": "node ./bin/selva.js",
-		"test": "node --input-type=module -e \"for (const m of ['./src/cli.js','./src/prompts.js','./src/env.js','./src/paths.js','./src/secrets.js','./src/commands/create.js','./src/commands/init.js','./src/commands/doctor.js','./src/commands/pm2.js','./src/commands/keys.js']) { await import(m); }\""
+		"test": "node --input-type=module -e \"for (const m of ['./src/cli.js','./src/prompts.js','./src/env.js','./src/paths.js','./src/secrets.js','./src/commands/create.js','./src/commands/init.js','./src/commands/doctor.js','./src/commands/pm2.js','./src/commands/migrate.js','./src/commands/keys.js']) { await import(m); }\""
 	},
 	"dependencies": {
 		"@clack/prompts": "^0.11.0",
