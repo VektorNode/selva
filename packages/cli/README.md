@@ -8,7 +8,7 @@ CLI for white-label Selva deployments.
 npx @selvajs/cli my-deployment
 ```
 
-Interactive scaffolder. Prompts for provider, tenancy, flags, brand name, admin email. Generates `SELVA_HMAC_KEY` + `SELVA_AT_REST_KEY`. Writes `.env`, `selva.config.js`, `ecosystem.config.cjs`, `package.json`. Runs `npm install`.
+Interactive scaffolder. Prompts for provider, tenancy, flags, brand name, admin email. Generates `SELVA_HMAC_KEY` + `SELVA_AT_REST_KEY`. Writes `.env`, `ecosystem.config.cjs`, `package.json`. Runs `npm install`.
 
 ## Operate an existing deployment
 

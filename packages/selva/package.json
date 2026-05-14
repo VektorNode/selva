@@ -1,7 +1,7 @@
 {
 	"name": "@selvajs/selva",
 	"version": "2.0.1",
-	"description": "Selva — self-contained Grasshopper-driven web app. Install + point at a selva.config.js to deploy.",
+	"description": "Selva — self-contained Grasshopper-driven web app. Install, configure via .env, deploy.",
 	"license": "MIT",
 	"publishConfig": {
 		"access": "public"
@@ -51,7 +51,6 @@
 		"@selvajs/ui": "workspace:*",
 		"@sveltejs/adapter-node": "^5.5.4",
 		"@types/three": "catalog:",
-		"esbuild": "^0.25.0",
 		"tw-animate-css": "catalog:",
 		"vitest": "catalog:"
 	}

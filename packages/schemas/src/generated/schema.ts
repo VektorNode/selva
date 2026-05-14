@@ -525,7 +525,7 @@ export const ACCEPTED_FILE_FORMATS = [
 	'.fbx',
 	'.obj',
 	'.dxf',
-	'.stl',
+	'.stl'
 ] as const;
 
 // ============================================================================
@@ -533,7 +533,7 @@ export const ACCEPTED_FILE_FORMATS = [
 // ============================================================================
 
 export function isInputLayoutItem(
-	item: LayoutItem,
+	item: LayoutItem
 ): item is
 	| InputNumberLayoutItem
 	| InputTextLayoutItem
@@ -545,7 +545,7 @@ export function isInputLayoutItem(
 }
 
 export function isOutputLayoutItem(
-	item: LayoutItem,
+	item: LayoutItem
 ): item is
 	| OutputTextLayoutItem
 	| OutputNumberLayoutItem
@@ -555,15 +555,11 @@ export function isOutputLayoutItem(
 	return item.type === 'output';
 }
 
-export function isLineBreakLayoutItem(
-	item: LayoutItem,
-): item is LineBreakLayoutItem {
+export function isLineBreakLayoutItem(item: LayoutItem): item is LineBreakLayoutItem {
 	return item.type === 'linebreak';
 }
 
-export function isNumberWidget(
-	item: LayoutItem,
-): item is InputNumberLayoutItem {
+export function isNumberWidget(item: LayoutItem): item is InputNumberLayoutItem {
 	return item.type === 'input' && item.widgetType === 'number';
 }
 
@@ -571,15 +567,11 @@ export function isTextWidget(item: LayoutItem): item is InputTextLayoutItem {
 	return item.type === 'input' && item.widgetType === 'text';
 }
 
-export function isDropdownWidget(
-	item: LayoutItem,
-): item is InputDropdownLayoutItem {
+export function isDropdownWidget(item: LayoutItem): item is InputDropdownLayoutItem {
 	return item.type === 'input' && item.widgetType === 'dropdown';
 }
 
-export function isCheckboxWidget(
-	item: LayoutItem,
-): item is InputCheckboxLayoutItem {
+export function isCheckboxWidget(item: LayoutItem): item is InputCheckboxLayoutItem {
 	return item.type === 'input' && item.widgetType === 'checkbox';
 }
 
