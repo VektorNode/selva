@@ -111,7 +111,19 @@ export function wireHeaderAuthBootstrap(): void {
 			policy: ((p: { upn: string; email: string | undefined }) => boolean | Promise<boolean>) | null
 		) => void;
 	};
-	if (typeof auth.setBootstrapAllowlistPolicy !== 'function') return;
+	if (typeof auth.setBootstrapAllowlistPolicy !== 'function') {
+		// A stale @selvajs/header-auth-provider build (pre-0.11) doesn't expose
+		// this hook. Without a warning the operator sees `user:null` indefinitely
+		// and has no signal that they need to upgrade or hand-seed the allowlist.
+		if (env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL?.trim()) {
+			console.warn(
+				'[selva] BOOTSTRAP_INSTANCE_ADMIN_EMAIL is set but the installed ' +
+					'@selvajs/header-auth-provider does not expose setBootstrapAllowlistPolicy. ' +
+					'Upgrade the provider, or hand-seed header-allowlist.json.'
+			);
+		}
+		return;
+	}
 
 	auth.setBootstrapAllowlistPolicy(async ({ upn, email }) => {
 		const hasAdmin = await getPermissionStore().hasInstanceAdmin(SYSTEM_CONTEXT);
