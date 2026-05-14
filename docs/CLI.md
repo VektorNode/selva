@@ -50,13 +50,13 @@ npx @selvajs/cli my-deployment --skip-install   # no npm install (you'll need to
 
 What lands in `<dir>`:
 
-| File | Purpose |
-| --- | --- |
-| `.env` | Merged from runtime's `.env.example` plus your prompt answers. Contains `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` — back this up before anything else. |
-| `selva.config.js` | Provider wiring. Edit to swap providers or change defaults. |
-| `ecosystem.config.cjs` | PM2 process definition. |
-| `package.json` | Pins `@selvajs/selva` + the providers you picked. |
-| `.selva-version` | Marker for future CLI migrations. |
+| File                   | Purpose                                                                                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.env`                 | Merged from runtime's `.env.example` plus your prompt answers. Contains `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` — back this up before anything else. |
+| `selva.config.js`      | Provider wiring. Edit to swap providers or change defaults.                                                                                           |
+| `ecosystem.config.cjs` | PM2 process definition.                                                                                                                               |
+| `package.json`         | Pins `@selvajs/selva` + the providers you picked.                                                                                                     |
+| `.selva-version`       | Marker for future CLI migrations.                                                                                                                     |
 
 Notes:
 
@@ -112,7 +112,7 @@ The first run also seeds PM2's process list. If PM2 itself isn't installed, the 
 
 `pm2 restart selva-compute --update-env`.
 
-The `--update-env` flag is the whole reason this wrapper exists: a plain `pm2 restart` keeps the *old* environment, which means your edits to `.env` silently don't apply. Always use `selva restart`, never raw `pm2 restart`.
+The `--update-env` flag is the whole reason this wrapper exists: a plain `pm2 restart` keeps the _old_ environment, which means your edits to `.env` silently don't apply. Always use `selva restart`, never raw `pm2 restart`.
 
 ### `selva logs`
 
@@ -144,10 +144,10 @@ selva restart
 
 Generates a fresh secret and writes it back to `.env`. Always asks for confirmation — the blast radius is non-trivial.
 
-| Target | Env var | What rotation breaks |
-| --- | --- | --- |
-| `hmac` | `SELVA_HMAC_KEY` | Logs every signed-in user out. Invalidates share-link / invite tokens that fell back to this key (only when `SHARE_LINK_SECRET` / `INVITE_TOKEN_SECRET` are unset). |
-| `at-rest` | `SELVA_AT_REST_KEY` | Encrypted Rhino.Compute API key in `compute.config.json` becomes undecryptable. You'll have to re-enter it at `/admin/compute`. |
+| Target    | Env var             | What rotation breaks                                                                                                                                                |
+| --------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hmac`    | `SELVA_HMAC_KEY`    | Logs every signed-in user out. Invalidates share-link / invite tokens that fell back to this key (only when `SHARE_LINK_SECRET` / `INVITE_TOKEN_SECRET` are unset). |
+| `at-rest` | `SELVA_AT_REST_KEY` | Encrypted Rhino.Compute API key in `compute.config.json` becomes undecryptable. You'll have to re-enter it at `/admin/compute`.                                     |
 
 Restart the app afterwards: `selva restart`.
 
@@ -161,14 +161,14 @@ Self-explanatory. `--version` reads from the installed `@selvajs/cli`'s own `pac
 
 The scaffold writes shorter aliases into the deployment's `package.json` so you don't need to remember `./node_modules/.bin/selva`:
 
-| `npm run …` | Runs |
-| --- | --- |
-| `npm start` | `selva start` |
-| `npm run stop` | `selva stop` |
+| `npm run …`       | Runs            |
+| ----------------- | --------------- |
+| `npm start`       | `selva start`   |
+| `npm run stop`    | `selva stop`    |
 | `npm run restart` | `selva restart` |
-| `npm run logs` | `selva logs` |
-| `npm run doctor` | `selva doctor` |
-| `npm run update` | `selva update` |
+| `npm run logs`    | `selva logs`    |
+| `npm run doctor`  | `selva doctor`  |
+| `npm run update`  | `selva update`  |
 
 `init` and `keys rotate` aren't aliased — they're rare enough that the explicit `selva` invocation keeps them visible.
 

@@ -1,6 +1,6 @@
 # ADR 0001 — Pre-Step Producers
 
-> **Frozen decision record.** V1 shipped 2026-05-08. The "Recommended architecture" and later sections describe future-state design that informed V1 — they are *not* a roadmap. Treat anything below "V1 status: shipped" as historical context for *why* V1 looks the way it does. For current behavior, the "V1 status" and "Getting started" sections below are authoritative.
+> **Frozen decision record.** V1 shipped 2026-05-08. The "Recommended architecture" and later sections describe future-state design that informed V1 — they are _not_ a roadmap. Treat anything below "V1 status: shipped" as historical context for _why_ V1 looks the way it does. For current behavior, the "V1 status" and "Getting started" sections below are authoritative.
 
 ## V1 status: shipped (2026-05-08)
 
@@ -35,16 +35,16 @@ The `scopeKey` is whatever uniquely identifies the solver context: `sessionId` i
 
 ### Code that shipped
 
-| Layer                     | File / Symbol                                                                                                                                         | Role                                                                                                                               |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Schema                    | [packages/schemas/ui-schema.json](../../packages/schemas/ui-schema.json)                                                                                 | `InputSource` definition                                                                                                           |
-| Migration                 | [Plugin/Selva.Schema/Services/SchemaMigrator.cs](../../Plugin/Selva.Schema/Services/SchemaMigrator.cs)                                                   | `MigrateTo_2_8_0`                                                                                                                  |
-| Storage primitives        | [packages/ui/src/lib/external/storage.ts](../../packages/ui/src/lib/external/storage.ts)                                                                 | `readExternalValue`, `writeExternalValue`, `clearExternalValue`, `getExternalInputs`. Re-exported from `@selvajs/ui`.              |
-| Visibility fix            | [packages/ui/src/lib/schema/visibility-rules.ts](../../packages/ui/src/lib/schema/visibility-rules.ts)                                                   | `evaluateVisibility` now honors static `item.visible === false` (was previously ignored — pre-existing bug uncovered by this work) |
-| Builder UI toggle         | [packages/plugin-ui/src/lib/components/builder/BuilderGroupItem.svelte](../../packages/plugin-ui/src/lib/components/builder/BuilderGroupItem.svelte) | "External value" switch in the input editor; defaults `visible: false` when toggled on                                             |
-| Plugin-UI solver          | [packages/plugin-ui/src/routes/preview/+page.svelte](../../packages/plugin-ui/src/routes/preview/+page.svelte)                                       | Reads sessionStorage on schema load and seeds external inputs into `state.values`. No warning UI.                                  |
-| Plugin-UI initial solve   | [packages/plugin-ui/src/lib/composables/usePreviewState.svelte.ts](../../packages/plugin-ui/src/lib/composables/usePreviewState.svelte.ts)           | Initial-solve timeout reads live `state.values` (was using stale snapshot — race condition fix)                                    |
-| Compute-app               | [packages/ui/src/lib/components/compute/ComputeApp.svelte](../../packages/ui/src/lib/components/compute/ComputeApp.svelte)                               | Skips externals in `createInitialValues`, seeds from sessionStorage. No warning UI.                                                |
+| Layer                   | File / Symbol                                                                                                                                        | Role                                                                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Schema                  | [packages/schemas/ui-schema.json](../../packages/schemas/ui-schema.json)                                                                             | `InputSource` definition                                                                                                           |
+| Migration               | [Plugin/Selva.Schema/Services/SchemaMigrator.cs](../../Plugin/Selva.Schema/Services/SchemaMigrator.cs)                                               | `MigrateTo_2_8_0`                                                                                                                  |
+| Storage primitives      | [packages/ui/src/lib/external/storage.ts](../../packages/ui/src/lib/external/storage.ts)                                                             | `readExternalValue`, `writeExternalValue`, `clearExternalValue`, `getExternalInputs`. Re-exported from `@selvajs/ui`.              |
+| Visibility fix          | [packages/ui/src/lib/schema/visibility-rules.ts](../../packages/ui/src/lib/schema/visibility-rules.ts)                                               | `evaluateVisibility` now honors static `item.visible === false` (was previously ignored — pre-existing bug uncovered by this work) |
+| Builder UI toggle       | [packages/plugin-ui/src/lib/components/builder/BuilderGroupItem.svelte](../../packages/plugin-ui/src/lib/components/builder/BuilderGroupItem.svelte) | "External value" switch in the input editor; defaults `visible: false` when toggled on                                             |
+| Plugin-UI solver        | [packages/plugin-ui/src/routes/preview/+page.svelte](../../packages/plugin-ui/src/routes/preview/+page.svelte)                                       | Reads sessionStorage on schema load and seeds external inputs into `state.values`. No warning UI.                                  |
+| Plugin-UI initial solve | [packages/plugin-ui/src/lib/composables/usePreviewState.svelte.ts](../../packages/plugin-ui/src/lib/composables/usePreviewState.svelte.ts)           | Initial-solve timeout reads live `state.values` (was using stale snapshot — race condition fix)                                    |
+| Compute-app             | [packages/ui/src/lib/components/compute/ComputeApp.svelte](../../packages/ui/src/lib/components/compute/ComputeApp.svelte)                           | Skips externals in `createInitialValues`, seeds from sessionStorage. No warning UI.                                                |
 
 ### How values reach Grasshopper
 
@@ -325,10 +325,10 @@ Zero hardcoded nicknames, zero `inputType` switches, zero per-producer branches.
 
 Two concerns at different levels:
 
-| Concern                                   | Lives on                           | Change                                                                                                                                                |
-| ----------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Concern                                   | Lives on                           | Change                                                                                                                                                 |
+| ----------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Static visibility toggle (`item.visible`) | All layout items (groups + inputs) | Add eye-icon toggle in [BuilderGroupItem.svelte:522-528](../../packages/plugin-ui/src/lib/components/builder/BuilderGroupItem.svelte#L522-L528) header |
-| Pre-step producer dropdown                | Input items only                   | Add to input config editor; populated from registry, filtered by `acceptableInputs`                                                                   |
+| Pre-step producer dropdown                | Input items only                   | Add to input config editor; populated from registry, filtered by `acceptableInputs`                                                                    |
 
 When the user picks a producer, default `visible: false` (with override).
 

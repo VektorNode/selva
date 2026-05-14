@@ -157,9 +157,9 @@
 		{#if data.hasProxyAuth && !data.hasPasswordAuth && !data.hasEmailLink && data.oauthProviders.length === 0}
 			<div class="space-y-3">
 				<p class="text-muted-foreground text-sm">
-					This deployment authenticates via your upstream proxy (forward-auth). To claim admin,
-					sign in through the proxy with the email below — the first proxy-authenticated visit
-					will be granted instance admin automatically.
+					This deployment authenticates via your upstream proxy (forward-auth). To claim admin, sign
+					in through the proxy with the email below — the first proxy-authenticated visit will be
+					granted instance admin automatically.
 				</p>
 				{#if data.bootstrapEmail}
 					<p class="text-sm">

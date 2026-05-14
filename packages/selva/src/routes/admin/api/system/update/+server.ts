@@ -276,9 +276,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 				//   4. rollback if the probe never passes
 				const cmd = plan.mode === 'git' ? plan.cmd : 'bash';
 				const args =
-					plan.mode === 'git'
-						? plan.args
-						: ['-c', buildNpmUpdateScript(plan.args, versionBefore)];
+					plan.mode === 'git' ? plan.args : ['-c', buildNpmUpdateScript(plan.args, versionBefore)];
 
 				const child = spawn(cmd, args, {
 					cwd: plan.cwd,

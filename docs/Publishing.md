@@ -8,12 +8,12 @@ How to release Selva's npm packages. Manual for now; the GitHub Actions slot is 
 
 ## What gets published
 
-| Package             | Purpose                                                                                                                          |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `@selvajs/selva`    | Prebuilt SvelteKit app. Bundles `@selvajs/platform` + all providers internally. The thing operators install and run.             |
-| `@selvajs/cli`      | `npx @selvajs/cli <dir>` scaffolds a deployment; `selva <cmd>` runs day-2 ops on an existing one.                                |
-| `@selvajs/ui`       | Shared Svelte component library. Bundled into `@selvajs/selva` internally; published separately so external Selva-adjacent repos can consume it. |
-| `@selvajs/schemas`  | Generated UI schema types. `peerDependency` of `@selvajs/ui`.                                                                    |
+| Package            | Purpose                                                                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@selvajs/selva`   | Prebuilt SvelteKit app. Bundles `@selvajs/platform` + all providers internally. The thing operators install and run.                             |
+| `@selvajs/cli`     | `npx @selvajs/cli <dir>` scaffolds a deployment; `selva <cmd>` runs day-2 ops on an existing one.                                                |
+| `@selvajs/ui`      | Shared Svelte component library. Bundled into `@selvajs/selva` internally; published separately so external Selva-adjacent repos can consume it. |
+| `@selvajs/schemas` | Generated UI schema types. `peerDependency` of `@selvajs/ui`.                                                                                    |
 
 That's it. Four published packages, one shared version.
 
@@ -127,7 +127,7 @@ The action figures out which mode to run from workspace state — no branching i
 
 ### One-time setup
 
-Generate an npm automation token at https://www.npmjs.com/settings/`<your-user>`/tokens (pick "Automation"), then add it as a repo secret named `NPM_TOKEN` at **Repo → Settings → Secrets and variables → Actions**. The workflow's `contents: write` + `pull-requests: write` permissions are what let changesets/action open the version PR.
+Generate an npm automation token at https://www.npmjs.com/settings/`<your-user>`/tokens (pick "Automation"), then add it as a repo secret named `NPM_TOKEN`at **Repo → Settings → Secrets and variables → Actions**. The workflow's`contents: write`+`pull-requests: write` permissions are what let changesets/action open the version PR.
 
 ### Operator-facing workflow
 

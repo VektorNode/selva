@@ -108,8 +108,8 @@
 		{disabled}
 		onclick={() => (open = !open)}
 		class={cn(
-			'bg-background flex h-10 w-full items-center gap-2 rounded-md border px-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-			open ? 'border-ring ring-ring/30 ring-2' : 'border-input hover:bg-muted/40'
+			'h-10 gap-2 px-3 text-sm flex w-full items-center rounded-md border bg-background text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+			open ? 'border-ring ring-2 ring-ring/30' : 'border-input hover:bg-muted/40'
 		)}
 	>
 		{#if SelectedIcon}
@@ -118,14 +118,14 @@
 				style={selected?.iconStyle}
 			/>
 		{:else if TriggerIcon}
-			<TriggerIcon class="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+			<TriggerIcon class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 		{/if}
 		<span class={cn('min-w-0 flex-1 truncate', selected ? '' : 'text-muted-foreground')}>
 			{selected ? selected.label : placeholder}
 		</span>
 		<ChevronDown
 			class={cn(
-				'text-muted-foreground h-3.5 w-3.5 shrink-0 transition-transform',
+				'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
 				open ? 'rotate-180' : ''
 			)}
 		/>
@@ -133,26 +133,26 @@
 
 	{#if open}
 		<div
-			class="border-border bg-popover absolute top-full right-0 left-0 z-50 mt-1 overflow-hidden rounded-md border shadow-md"
+			class="right-0 left-0 mt-1 shadow-md absolute top-full z-50 overflow-hidden rounded-md border border-border bg-popover"
 		>
 			{#if showSearch}
-				<div class="border-border relative border-b">
+				<div class="relative border-b border-border">
 					<Search
-						class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2"
+						class="left-3 h-3.5 w-3.5 pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground"
 					/>
 					<input
 						bind:this={inputRef}
 						bind:value={query}
 						onkeydown={handleKey}
 						placeholder={searchPlaceholder}
-						class="placeholder:text-muted-foreground h-8 w-full bg-transparent pr-3 pl-9 text-sm outline-none"
+						class="h-8 pr-3 pl-9 text-sm w-full bg-transparent outline-none placeholder:text-muted-foreground"
 					/>
 				</div>
 			{/if}
 
 			<div class="max-h-60 overflow-y-auto">
 				{#if matches.length === 0}
-					<p class="text-muted-foreground px-3 py-3 text-center text-xs">
+					<p class="px-3 py-3 text-xs text-center text-muted-foreground">
 						No matches for "{query}"
 					</p>
 				{:else}
@@ -163,7 +163,7 @@
 							onclick={() => pick(item)}
 							onmouseenter={() => (highlighted = i)}
 							class={cn(
-								'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors',
+								'gap-2 px-3 py-1.5 text-sm flex w-full items-center text-left transition-colors',
 								highlighted === i ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/60'
 							)}
 						>
@@ -175,7 +175,7 @@
 							{/if}
 							<span class="flex-1 truncate">{item.label}</span>
 							{#if item.id === value}
-								<Check class="text-primary h-3.5 w-3.5 shrink-0" />
+								<Check class="h-3.5 w-3.5 shrink-0 text-primary" />
 							{/if}
 						</button>
 					{/each}

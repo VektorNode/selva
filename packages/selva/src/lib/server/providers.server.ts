@@ -39,9 +39,7 @@ async function loadRawConfig(): Promise<SelvaConfig | SelvaConfigFactory> {
 
 	const abs = resolvePath(process.cwd(), override);
 	if (!existsSync(abs)) {
-		throw new Error(
-			`SELVA_CONFIG_PATH=${override} resolved to ${abs} which does not exist.`
-		);
+		throw new Error(`SELVA_CONFIG_PATH=${override} resolved to ${abs} which does not exist.`);
 	}
 	// Dynamic specifier — Vite must not pre-resolve this at build time, hence
 	// @vite-ignore. pathToFileURL keeps Windows absolute paths valid as ESM
