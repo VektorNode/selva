@@ -41,6 +41,18 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
+    # Job-level env so every step + every subprocess (pnpm → turbo → vite)
+    # inherits these. Setting them only on the changesets/action step is
+    # not enough — vite spawns a worker for SSR rendering that doesn't get
+    # action-level env. See the "providers.server.ts eager evaluation"
+    # note in REFACTOR-PLAN.md.
+    env:
+      # Dummy secrets so SvelteKit's SSR prerender doesn't crash. The Local*
+      # provider factories throw on missing env at module load. Runtime
+      # overrides with real values via .env.
+      SELVA_HMAC_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      SELVA_AT_REST_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      DATA_PATH: /tmp/selva-build
     steps:
       - uses: actions/checkout@v4
         with:
@@ -92,13 +104,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          # Dummy secrets so SvelteKit's SSR prerender doesn't crash during
-          # build. providers.server.ts eagerly evaluates the auth/data/storage
-          # factory at module load (via `_raw(env)`), and the Local* providers
-          # throw on missing env vars. At runtime, operators override these
-          # with real values via .env — the build doesn't need real secrets to
-          # produce a correct artifact. Tracked as a refactor follow-up: defer
-          # provider construction to first use so build doesn't need any env.
-          SELVA_HMAC_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          SELVA_AT_REST_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-          DATA_PATH: /tmp/selva-build
