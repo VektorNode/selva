@@ -78,7 +78,13 @@ export function mergeEnv(template, values) {
 		out.push(...appended);
 	}
 
-	return out.join('\n');
+	// Always end with a single trailing newline. Without it, a later
+	// `echo VAR=value >> .env` concatenates onto the last line, producing
+	// `HOST=127.0.0.1HEADER_AUTH_DATA_DIR=...` and a `getaddrinfo ENOTFOUND`
+	// boot crash. Strip any existing trailing blanks first so we don't grow
+	// the file by a line on each rewrite.
+	while (out.length > 0 && out[out.length - 1] === '') out.pop();
+	return out.join('\n') + '\n';
 }
 
 export function writeEnvFile(path, template, values) {

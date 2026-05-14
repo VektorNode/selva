@@ -8,64 +8,39 @@ Ranked by impact.
 
 ## Must-fix
 
-### 1. Stale `@selvajs/header-auth-provider` on npm
+### 1. Stale `@selvajs/header-auth-provider` on npm — OBSOLETE on current layout
 
-The published `dist/` is older than the repo source:
+Was a real problem on the pre-migration deployment, where `@selvajs/header-auth-provider` was a direct dependency in the deployment's `package.json` and loaded from `node_modules/`. The published tarball was older than the repo source (wrong header defaults, missing `setBootstrapAllowlistPolicy`, missing `bootstrapAllowlistPolicy` branch in `identifyFromHeaders`).
 
-- Default UPN header is `SELVA-ID` (source / README say `SELVA-UserPrincipalName`)
-- Default email/displayName headers may also differ — audit all three
-- `setBootstrapAllowlistPolicy` is missing, so [`wireHeaderAuthBootstrap`](packages/selva/src/lib/server/auth-bootstrap.server.ts) silently no-ops
-- `bootstrapAllowlistPolicy` branch in `identifyFromHeaders` is missing — operators must hand-seed `header-allowlist.json` instead of getting the documented `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` first-sight auto-allowlist
+**Status:** Moot on the env-driven layout. Verified that the built `@selvajs/selva` embeds the provider classes inline (`HeaderAuthProvider`, `HeaderProxyAuth`) with zero external `from '@selvajs/header-auth-provider'` imports — Vite bundles the workspace dep at build time. The standalone npm package is no longer loaded by current deployments. The standalone package is correctly marked `"private": true` in [packages/providers/header-auth/package.json](packages/providers/header-auth/package.json) and listed under `ignore` in [.changeset/config.json](.changeset/config.json), so changesets won't republish it either.
 
-**Fix:** republish the package from current source. Verify by diffing [packages/providers/header-auth/src/HeaderAuthProvider.ts](packages/providers/header-auth/src/HeaderAuthProvider.ts) against the npm tarball.
+The operator-facing fix is `selva migrate` (which drops standalone provider packages from `package.json` — see [packages/cli/src/commands/migrate.js:46-55](packages/cli/src/commands/migrate.js#L46-L55)), then `pnpm install`. The next `@selvajs/selva` release will ship with up-to-date provider code baked in.
 
-### 2. CLI scaffold imports a provider that isn't installed
+### 2. CLI scaffold imports a provider that isn't installed — OBSOLETE
 
-The scaffolded `selva.config.js` unconditionally does:
-
-```js
-import * as supa from '@selvajs/supabase-provider';
-```
-
-even when the user picked `local` / `header` at the prompts. `@selvajs/supabase-provider` isn't in the scaffolded `dependencies`, so the app crashes at boot with `ERR_MODULE_NOT_FOUND`.
-
-**Fix:** in [packages/cli](packages/cli), either
-
-- gate the import + the `case 'supabase':` branches behind the user's auth/data/storage choice, or
-- always include `@selvajs/supabase-provider` in scaffolded `dependencies`
-
-The first is cleaner — the scaffolded config shouldn't reference providers the user didn't choose.
+The CLI no longer scaffolds a `selva.config.js` (see [packages/cli/src/commands/create.js](packages/cli/src/commands/create.js) — provider selection is now env-driven via `SELVA_AUTH_PROVIDER`). Provider implementations are bundled into the `@selvajs/selva` build, so a deployment only needs `@selvajs/selva` + `@selvajs/cli` + `pm2` on disk. Closed by `feat: migrate to env-driven provider wiring`.
 
 ---
 
 ## Should-fix
 
-### 3. Scaffolded `.env` may be missing a trailing newline
+### 3. Scaffolded `.env` may be missing a trailing newline — FIXED
 
 Appending with `echo >>` concatenated onto the last line, producing `HOST=127.0.0.1HEADER_AUTH_DATA_DIR=...` and a `getaddrinfo ENOTFOUND` crash.
 
-**Fix:** in the CLI's `.env` template writer, always end the file with `\n`.
+**Fix:** [packages/cli/src/env.js](packages/cli/src/env.js) — `mergeEnv` now strips trailing blank lines and always emits a single `\n` terminator.
 
-### 4. "Behind a reverse proxy" prompt doesn't wire the matching header names
+### 4. "Behind a reverse proxy" prompt doesn't wire the matching header names — OBSOLETE on current layout
 
-The CLI asks about reverse-proxy mode and sets `ORIGIN`, but doesn't write `HEADER_AUTH_UPN_HEADER` / `HEADER_AUTH_EMAIL_HEADER` / `HEADER_AUTH_DISPLAY_NAME_HEADER`. With the stale npm package (#1), the in-process defaults disagree with the README Caddyfile, and `user:null` is the only symptom.
+Was a symptom of #1 — on the pre-migration layout the stale npm provider had different defaults from the README Caddyfile, so a deployment that didn't explicitly set `HEADER_AUTH_*_HEADER` ended up with mismatched names and `user:null`.
 
-**Fix:** either
+**Status:** the provider bundled into `@selvajs/selva` uses `SELVA-UserPrincipalName` / `SELVA-Email` / `SELVA-DisplayName` — matching the README Caddyfile by default. No need to scaffold the three env vars; the "Customize the trusted header names?" prompt at [packages/cli/src/prompts.js:336](packages/cli/src/prompts.js#L336) covers the explicit-override case.
 
-- have the scaffold write those three env vars explicitly when `SELVA_AUTH_PROVIDER=header` is selected, or
-- fix #1 so the defaults match the docs (preferred — fewer scaffolded knobs)
+### 5. `wireHeaderAuthBootstrap` silently no-ops on old provider builds — FIXED
 
-### 5. `wireHeaderAuthBootstrap` silently no-ops on old provider builds
+[packages/selva/src/lib/server/auth-bootstrap.server.ts](packages/selva/src/lib/server/auth-bootstrap.server.ts) returned early when `setBootstrapAllowlistPolicy` was missing from the loaded provider. No log, no warning — operators saw `user:null` indefinitely with no signal.
 
-[packages/selva/src/lib/server/auth-bootstrap.server.ts:114](packages/selva/src/lib/server/auth-bootstrap.server.ts#L114) returns early when `setBootstrapAllowlistPolicy` is missing from the loaded provider. No log, no warning — operators see `user:null` indefinitely with no signal.
-
-**Fix:** when `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is set AND the provider lacks `setBootstrapAllowlistPolicy`, log a startup warning like
-
-```
-[selva] BOOTSTRAP_INSTANCE_ADMIN_EMAIL is set but the installed @selvajs/header-auth-provider
-        does not expose setBootstrapAllowlistPolicy. Upgrade the provider, or hand-seed
-        header-allowlist.json.
-```
+**Fix:** when `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is set AND the provider lacks `setBootstrapAllowlistPolicy`, the runtime now logs a startup warning naming the provider mismatch and the two recovery paths (upgrade, or hand-seed).
 
 ---
 
