@@ -103,12 +103,12 @@
 	}
 
 	const duplicatePaths = $derived.by(() => {
-		const seen = new Map<string, number>();
+		const seen: Record<string, number> = {};
 		for (const f of filesArray) {
 			const key = fullPath(f);
-			seen.set(key, (seen.get(key) ?? 0) + 1);
+			seen[key] = (seen[key] ?? 0) + 1;
 		}
-		return Array.from(seen.entries())
+		return Object.entries(seen)
 			.filter(([, n]) => n > 1)
 			.map(([path]) => path);
 	});

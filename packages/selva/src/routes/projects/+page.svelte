@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import {
 		AlertDialog,
 		Button,
@@ -293,7 +294,7 @@
 			activeProjectId = id;
 			const project = data.projects.find((p) => p.id === id);
 			if (project) {
-				const params = new URLSearchParams($page.url.search);
+				const params = new SvelteURLSearchParams($page.url.search);
 				params.set('project', project.slug);
 				window.history.replaceState(null, '', `?${params}`);
 			}

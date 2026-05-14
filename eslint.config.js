@@ -16,17 +16,21 @@ export default [
 			'packages/*/dist',
 			'packages/*/build',
 			'packages/*/.svelte-kit',
+			'packages/*/*/dist',
+			'packages/*/*/build',
 			'examples/*/dist',
 			'examples/*/.svelte-kit',
 			'bin',
 			'obj',
 			'**/Generated/**',
+			'**/generated/**',
 			'packages/schemas/scripts/generate-*.js',
 			'**/*.d.ts',
 			'Plugin/Selva.GH/EmbeddedAssets/web',
 			// Config files at package root — not in any tsconfig include, and
 			// they don't need application linting.
-			'packages/*/vitest.config.ts'
+			'packages/*/vitest.config.ts',
+			'packages/*/*/vitest.config.ts'
 		]
 	},
 	{

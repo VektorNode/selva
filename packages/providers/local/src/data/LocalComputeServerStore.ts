@@ -219,7 +219,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		const otherOrgRows = all.servers.filter((s) => isOrgServer(s) && s.ownerOrgId !== orgId);
 		const thisOrgRows = this.encryptApiKeys(
 			servers
-				.filter((s): s is ComputeServerConfig => true)
+				.filter((_s): _s is ComputeServerConfig => true)
 				.map((s) =>
 					isOrgServer(s)
 						? { ...s, ownerOrgId: orgId }

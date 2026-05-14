@@ -12,7 +12,7 @@
 //              API key in compute.config.json becomes undecryptable. The
 //              operator has to re-enter the key at /admin/compute.
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
