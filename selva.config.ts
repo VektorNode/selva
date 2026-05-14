@@ -66,9 +66,7 @@ function pickData(env: Env): IDataProvider {
 		case 'supabase':
 			return supa.SupabaseDataProvider.fromEnv(env);
 		default:
-			throw new Error(
-				`Unknown SELVA_DATA_PROVIDER="${choice}". Expected: local | supabase.`
-			);
+			throw new Error(`Unknown SELVA_DATA_PROVIDER="${choice}". Expected: local | supabase.`);
 	}
 }
 
@@ -80,9 +78,7 @@ function pickStorage(env: Env): IStorageProvider {
 		case 'supabase':
 			return supa.SupabaseStorageProvider.fromEnv(env);
 		default:
-			throw new Error(
-				`Unknown SELVA_STORAGE_PROVIDER="${choice}". Expected: local | supabase.`
-			);
+			throw new Error(`Unknown SELVA_STORAGE_PROVIDER="${choice}". Expected: local | supabase.`);
 	}
 }
 

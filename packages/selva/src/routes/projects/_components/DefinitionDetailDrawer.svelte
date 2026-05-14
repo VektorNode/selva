@@ -16,16 +16,8 @@
 		onShare: (record: DefinitionRecord) => void;
 	}
 
-	let {
-		record,
-		projectName,
-		canEdit,
-		showShare,
-		onClose,
-		onEdit,
-		onOpenRunner,
-		onShare
-	}: Props = $props();
+	let { record, projectName, canEdit, showShare, onClose, onEdit, onOpenRunner, onShare }: Props =
+		$props();
 </script>
 
 <Drawer {onClose}>

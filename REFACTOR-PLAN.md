@@ -16,25 +16,25 @@ The final shape of the Selva monorepo and its release model:
 
 ### Published (4)
 
-| Package             | What it is                                                            |
-| ------------------- | --------------------------------------------------------------------- |
-| `@selvajs/selva`    | Prebuilt SvelteKit app. Bundles platform + providers. The thing operators install and run. |
-| `@selvajs/cli`      | `npx @selvajs/cli` to scaffold a deployment; `selva <cmd>` to operate one. |
-| `@selvajs/ui`       | Shared Svelte component library. Used by `@selvajs/selva` internally; published for external Selva-adjacent repos. |
-| `@selvajs/schemas`  | Generated UI schema types (TypeScript + C#). Peer dep of `@selvajs/ui`. |
+| Package            | What it is                                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `@selvajs/selva`   | Prebuilt SvelteKit app. Bundles platform + providers. The thing operators install and run.                         |
+| `@selvajs/cli`     | `npx @selvajs/cli` to scaffold a deployment; `selva <cmd>` to operate one.                                         |
+| `@selvajs/ui`      | Shared Svelte component library. Used by `@selvajs/selva` internally; published for external Selva-adjacent repos. |
+| `@selvajs/schemas` | Generated UI schema types (TypeScript + C#). Peer dep of `@selvajs/ui`.                                            |
 
 All four share one version (changesets `fixed` mode). Operators see one number.
 
 ### Private (workspace-internal)
 
-| Package                          | Why private                                                          |
-| -------------------------------- | -------------------------------------------------------------------- |
-| `@selvajs/platform`              | Interface contracts. Only consumed by selva + providers internally.  |
-| `@selvajs/local-provider`        | Bundled into `@selvajs/selva`'s build artifact.                      |
-| `@selvajs/supabase-provider`     | Bundled into `@selvajs/selva`'s build artifact.                      |
-| `@selvajs/header-auth-provider`  | Bundled into `@selvajs/selva`'s build artifact.                      |
-| `@selvajs/plugin-ui`             | Embedded into `Selva.gha` (Grasshopper plugin) at plugin build time. |
-| `@selvajs/config`                | Shared ESLint / Vite / Prettier configs. Never published.            |
+| Package                         | Why private                                                          |
+| ------------------------------- | -------------------------------------------------------------------- |
+| `@selvajs/platform`             | Interface contracts. Only consumed by selva + providers internally.  |
+| `@selvajs/local-provider`       | Bundled into `@selvajs/selva`'s build artifact.                      |
+| `@selvajs/supabase-provider`    | Bundled into `@selvajs/selva`'s build artifact.                      |
+| `@selvajs/header-auth-provider` | Bundled into `@selvajs/selva`'s build artifact.                      |
+| `@selvajs/plugin-ui`            | Embedded into `Selva.gha` (Grasshopper plugin) at plugin build time. |
+| `@selvajs/config`               | Shared ESLint / Vite / Prettier configs. Never published.            |
 
 ### External
 

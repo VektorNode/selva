@@ -157,11 +157,7 @@ export class HeaderAuthProvider implements IAuthProvider {
 	constructor(config: HeaderAuthProviderConfig) {
 		this.users = createAllowlistStore(config.allowlistFilePath);
 		this.headers = { ...DEFAULT_HEADERS, ...config.headers };
-		this.proxyAuth = new HeaderProxyAuth(
-			this.users,
-			this.headers,
-			config.bootstrapAllowlistPolicy
-		);
+		this.proxyAuth = new HeaderProxyAuth(this.users, this.headers, config.bootstrapAllowlistPolicy);
 	}
 
 	/**

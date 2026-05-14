@@ -348,7 +348,6 @@ describe('HeaderAuthProvider.fromEnv', () => {
 		);
 		expect(result?.metadata?.upn).toBe('alice@example.com');
 	});
-
 });
 
 // ============================================================================

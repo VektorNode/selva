@@ -22,17 +22,17 @@ Turn Grasshopper definitions into full web applications — with a live schema d
 
 ## Packages
 
-| Package                                                              | Description                                                        |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Package                                                              | Description                                                                  |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | [`plugin-ui`](./packages/plugin-ui/README.md)                        | Grasshopper plugin UI — schema designer + preview, embedded into `Selva.gha` |
-| [`selva`](./packages/selva/README.md)                                | Standalone solver app for cloud deployment via Rhino.Compute       |
-| [`ui`](./packages/ui/README.md)                                      | Shared Svelte components, theme, and utilities                     |
-| [`schemas`](./packages/schemas/README.md)                            | Schema definitions and TypeScript/C# code generators               |
-| [`platform`](./packages/platform/README.md)                          | Provider interfaces (auth, data, storage) — no implementations     |
-| [`local-provider`](./packages/providers/local/README.md)             | Filesystem + JSON + HMAC implementation of platform                |
-| [`supabase-provider`](./packages/providers/supabase/README.md)       | Supabase (Auth + Postgres + Storage) implementation of platform    |
-| [`header-auth-provider`](./packages/providers/header-auth/README.md) | Auth-only adapter that trusts reverse-proxy identity headers       |
-| [`@selvajs/compute`](https://www.npmjs.com/package/@selvajs/compute) | Type-safe Rhino Compute client and Three.js helpers (npm)          |
+| [`selva`](./packages/selva/README.md)                                | Standalone solver app for cloud deployment via Rhino.Compute                 |
+| [`ui`](./packages/ui/README.md)                                      | Shared Svelte components, theme, and utilities                               |
+| [`schemas`](./packages/schemas/README.md)                            | Schema definitions and TypeScript/C# code generators                         |
+| [`platform`](./packages/platform/README.md)                          | Provider interfaces (auth, data, storage) — no implementations               |
+| [`local-provider`](./packages/providers/local/README.md)             | Filesystem + JSON + HMAC implementation of platform                          |
+| [`supabase-provider`](./packages/providers/supabase/README.md)       | Supabase (Auth + Postgres + Storage) implementation of platform              |
+| [`header-auth-provider`](./packages/providers/header-auth/README.md) | Auth-only adapter that trusts reverse-proxy identity headers                 |
+| [`@selvajs/compute`](https://www.npmjs.com/package/@selvajs/compute) | Type-safe Rhino Compute client and Three.js helpers (npm)                    |
 
 ## Requirements
 

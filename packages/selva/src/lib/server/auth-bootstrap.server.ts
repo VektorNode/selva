@@ -108,9 +108,7 @@ function shouldBootstrapUpn(
 export function wireHeaderAuthBootstrap(): void {
 	const auth = getAuthProvider() as unknown as {
 		setBootstrapAllowlistPolicy?: (
-			policy:
-				| ((p: { upn: string; email: string | undefined }) => boolean | Promise<boolean>)
-				| null
+			policy: ((p: { upn: string; email: string | undefined }) => boolean | Promise<boolean>) | null
 		) => void;
 	};
 	if (typeof auth.setBootstrapAllowlistPolicy !== 'function') return;
