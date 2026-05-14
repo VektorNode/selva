@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFrameworks>net48;net7.0;net9.0</TargetFrameworks>
+		<LangVersion>latest</LangVersion>
+		<RootNamespace>Selva.Drawing.RhinoInterop</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Grasshopper" Version="9.0.25266.10145-wip" Condition="'$(TargetFramework)' == 'net9.0'" ExcludeAssets="runtime"/>
+		<PackageReference Include="Grasshopper" Version="8.0.23304.9001" Condition="'$(TargetFramework)' == 'net7.0'" ExcludeAssets="runtime"/>
+		<PackageReference Include="Grasshopper" Version="8.0.23304.9001" Condition="'$(TargetFramework)' == 'net48'" ExcludeAssets="runtime"/>
+		<PackageReference Include="System.Drawing.Common" Version="8.0.0" Condition="'$(TargetFramework)' != 'net48'"/>
+		<ProjectReference Include="..\Selva.Drawing\Selva.Drawing.csproj"/>
+	</ItemGroup>
+
+</Project>

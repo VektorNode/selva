@@ -11,6 +11,8 @@ using Grasshopper.Kernel.Types;
 using Rhino.Display;
 using Rhino.Geometry;
 using Rhino.Render;
+using Selva.GH.Features.Display.Goos;
+using Selva.GH.Features.Display.Params;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
@@ -286,7 +288,6 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         return meshes.Count > 0 ? new SolveResult(meshes, names, layers, metadata, materials, skipped) : null;
     }
 
-    // ── Viewport drawing ─────────────────────────────────────────────────────────
 
     public override void DrawViewportMeshes(IGH_PreviewArgs args)
     {
@@ -330,7 +331,6 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         }
     }
 
-    // ── Geometry helpers ─────────────────────────────────────────────────────────
 
     private static GeometryBase TryExtractGeometry(IGH_Goo goo)
     {

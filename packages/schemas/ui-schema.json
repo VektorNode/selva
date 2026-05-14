@@ -35,9 +35,13 @@
 						"in",
 						"notIn",
 						"between",
-						"matches"
+						"matches",
+						"contains",
+						"containsAny",
+						"isEmpty",
+						"isNotEmpty"
 					],
-					"description": "Comparison operator"
+					"description": "Comparison operator. 'contains', 'containsAny', 'isEmpty', 'isNotEmpty' apply to array-valued params (e.g., checklist value lists)."
 				},
 				"value": {
 					"description": "Value to compare against (used for equals, notEquals, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual)"
@@ -114,7 +118,11 @@
 				"maximum": { "type": "number" },
 				"stepSize": { "type": "number" },
 				"placeholder": { "type": "string" },
-				"renderAsSlider": { "type": "boolean" }
+				"renderAsSlider": { "type": "boolean" },
+				"hideRange": {
+					"type": "boolean",
+					"description": "Hide the min/max range hint shown next to the label / under the input"
+				}
 			},
 			"additionalProperties": false
 		},
@@ -146,7 +154,13 @@
 					"additionalProperties": { "type": "string" },
 					"description": "Key-value pairs for dropdown options"
 				},
-				"required": { "type": "boolean" }
+				"required": { "type": "boolean" },
+				"displayAs": {
+					"type": "string",
+					"enum": ["dropdown", "checklist"],
+					"default": "dropdown",
+					"description": "How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected Grasshopper parameter."
+				}
 			},
 			"required": ["options"],
 			"additionalProperties": false
@@ -228,9 +242,26 @@
 				},
 				"visibilityCondition": {
 					"$ref": "#/definitions/VisibilityCondition"
+				},
+				"source": {
+					"$ref": "#/definitions/InputSource"
 				}
 			},
 			"required": ["id", "paramId"]
+		},
+
+		"InputSource": {
+			"type": "object",
+			"description": "Where the input's value comes from. Absent = 'user' (default control behavior). Object form (not boolean) so future kinds (e.g. 'pre-step', 'linked', 'computed') can carry their own fields without a breaking schema change.",
+			"properties": {
+				"kind": {
+					"type": "string",
+					"enum": ["user", "external"],
+					"description": "'user' = rendered as a normal control. 'external' = filled by something outside the form (e.g. a producer route)."
+				}
+			},
+			"required": ["kind"],
+			"additionalProperties": false
 		},
 		"InputNumberLayoutItem": {
 			"allOf": [
@@ -375,6 +406,42 @@
 				}
 			]
 		},
+		"ImageWidgetConfig": {
+			"type": "object",
+			"description": "Configuration for the image viewer output widget. Renders PNG/JPG/WEBP/GIF/SVG files inline.",
+			"properties": {
+				"allowDownload": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show a download button on the image viewer"
+				},
+				"allowFullscreen": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show a fullscreen toggle button on the image viewer"
+				},
+				"backgroundColor": {
+					"type": "string",
+					"pattern": "^#[0-9A-Fa-f]{6}$",
+					"description": "Optional background color shown behind the image (hex string, e.g. '#ffffff')"
+				}
+			},
+			"additionalProperties": false
+		},
+		"OutputImageLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "output" },
+						"widgetType": { "const": "image" },
+						"config": { "$ref": "#/definitions/ImageWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
 		"LineBreakLayoutItem": {
 			"type": "object",
 			"description": "A full-width line break that forces subsequent items onto a new grid row",
@@ -400,6 +467,7 @@
 				{ "$ref": "#/definitions/OutputNumberLayoutItem" },
 				{ "$ref": "#/definitions/OutputFileLayoutItem" },
 				{ "$ref": "#/definitions/OutputChartLayoutItem" },
+				{ "$ref": "#/definitions/OutputImageLayoutItem" },
 				{ "$ref": "#/definitions/LineBreakLayoutItem" }
 			]
 		},
@@ -504,6 +572,10 @@
 					"type": "object",
 					"additionalProperties": { "type": "string" },
 					"description": "Key-value pairs for dropdown/selection options"
+				},
+				"groupName": {
+					"type": "string",
+					"description": "Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import."
 				}
 			},
 			"required": ["id", "name", "nickname", "description", "type"]
@@ -521,7 +593,11 @@
 				"type": {
 					"type": "string",
 					"enum": ["text", "number", "file", "chart"],
-					"description": "Output display type in UI: 'text' for text/console output, 'number' for numeric output, 'file' for downloadable files, 'html' for rendered HTML (e.g. Plotly charts)"
+					"description": "Output display type in UI: 'text' for text output, 'number' for numeric output, 'file' for downloadable files, 'chart' for rendered charts (e.g. Plotly)"
+				},
+				"groupName": {
+					"type": "string",
+					"description": "Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import."
 				}
 			},
 			"required": ["id", "nickname", "type"],
@@ -652,7 +728,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.5.0",
+					"default": "2.8.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

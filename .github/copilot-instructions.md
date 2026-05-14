@@ -7,19 +7,19 @@ Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for b
 **Architecture:**
 
 - **Monorepo:** Two main stacks managed in a single repository
-  - Backend: C# plugin (`Plugin/`) targeting .NET net48 (Rhino 7) and net7.0 (Rhino 8)
+  - Backend: C# plugin (`Plugin/`) targeting .NET net48 + net7.0 (Rhino 8) and net9.0 (Rhino 9). Rhino 7 is not supported.
   - Frontend: TypeScript/SvelteKit apps in `packages/` for two deployment modes
-- **Local Mode** (`@selva/builder-app`): Schema designer with WebSocket connection to Grasshopper
-- **Cloud Mode** (`@selva/compute-app`): Standalone app using Rhino.Compute for cloud solving
-- **Shared** (`@selva/shared`): Components, utilities, and theme system
+- **Local Mode** (`@selvajs/plugin-ui`): Schema designer + preview, embedded into the Grasshopper plugin (WebSocket on port 8765)
+- **Cloud Mode** (`@selvajs/selva`): Standalone app using Rhino.Compute for cloud solving
+- **Shared** (`@selvajs/ui`): Components, utilities, and theme system
 
 Copilot should use this context when generating code, explanations, review comments, or test scaffolding.
 
 ## 2. Tech Stack and Tooling
 
-- **Backend:** C# (.NET 7.0 and .NET Framework 4.8) for plugin logic
+- **Backend:** C# multi-target — .NET Framework 4.8 + .NET 7.0 (Rhino 8) and .NET 9.0 (Rhino 9)
 - **Frontend:** SvelteKit 5 + TypeScript + Tailwind CSS
-- **Package Manager:** pnpm >= 9.0.0 (not npm)
+- **Package Manager:** pnpm >= 10.0.0 (not npm; pinned via `packageManager`, activated via Corepack)
 - **Schema:** JSON Schema (`ui-schema.json`) auto-generates C# and TypeScript types
 - **Testing:** xUnit for C#, Vitest for TypeScript
 - **Production:** PM2 for process management, graceful reload for zero-downtime updates
@@ -49,15 +49,15 @@ pnpm dev                    # Dev server (http://localhost:5173)
 pnpm type-check             # TypeScript check
 pnpm lint                   # Lint all files
 pnpm format                 # Format with Prettier
-pnpm run build:all          # Build all packages
+pnpm build                  # Build all packages (Turborepo, with caching)
 ```
 
 **Schema workflow (when modifying ui-schema.json):**
 
 ```bash
 cd packages/schemas && pnpm run generate:all
-# Updates: packages/shared/src/lib/types/generated/schema.ts
-#          Plugin/Selva.Core/Models/UISchema.Generated.cs
+# Updates: packages/schemas/src/generated/schema.ts
+#          Plugin/Selva.Schema/Models/UISchema.Generated.cs
 ```
 
 **Production build:**
@@ -70,7 +70,7 @@ pnpm run build:plugin  # Builds plugin with embedded web assets
 
 ```bash
 pm2 start ecosystem.config.cjs              # Start with PM2
-pm2 reload selva-compute --update-env       # Graceful reload (zero-downtime)
+pm2 restart selva-compute --update-env      # Restart after config or env change
 ```
 
 ## 4. Code Style and Conventions
@@ -102,9 +102,9 @@ When asked to help generate commit messages:
 - **Single source of truth:** `packages/schemas/ui-schema.json` generates both C# and TypeScript
 - When adding new types or properties, always update the schema and run `generate:all`
 - Never manually edit generated files:
-  - `packages/shared/src/lib/types/generated/schema.ts`
-  - `Plugin/Selva.Core/Models/UISchema.Generated.cs`
-- Type mappings: string → string, number → double?, integer → int?, boolean → bool?, array → List<T>
+  - `packages/schemas/src/generated/schema.ts`
+  - `Plugin/Selva.Schema/Models/UISchema.Generated.cs`
+- Type mappings (C# nullable when the property is not in `required`): string → string, number → double / double?, integer → int / int?, boolean → bool / bool?, array → List<T>
 
 ## 8. Do Not
 

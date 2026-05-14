@@ -1,7 +1,7 @@
 using Newtonsoft.Json.Linq;
-using Selva.Core.Constants;
-using Selva.Core.Models;
-using Selva.Core.Services;
+using Selva.Schema.Constants;
+using Selva.Schema.Models;
+using Selva.Schema.Services;
 
 namespace Selva.Tests;
 
@@ -202,7 +202,7 @@ public class SchemaFixtureTests
     }
 
     /// <summary>
-    ///     Runs the full two-phase migration pipeline the same way SchemaPersistenceService does.
+    ///     Runs the full two-phase migration pipeline the same way SchemaArchiveSerializer does.
     /// </summary>
     private static UISchema FullMigration(string rawJson)
     {

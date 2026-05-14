@@ -23,7 +23,14 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-INSTALL_DIR="${INSTALL_DIR:-$HOME/selva}"
+# Resolve INSTALL_DIR robustly: explicit env var wins, otherwise derive it
+# from the script's own location (scripts/update.sh lives at $INSTALL_DIR/scripts/).
+# Falling back to $HOME/selva is a last resort and breaks when the script is
+# spawned by a service whose $HOME is empty or "/" (PM2 + systemd both do this).
+if [ -z "$INSTALL_DIR" ]; then
+  SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+  INSTALL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
 SCRIPT_PATH="$INSTALL_DIR/scripts/update.sh"
 NO_RESTART=false
 NO_PULL=false
@@ -46,8 +53,12 @@ done
 if [ "$SELF_UPDATED" != "true" ] && [ -d "$INSTALL_DIR/.git" ]; then
   SCRIPT_VERSION=$(git -C "$INSTALL_DIR" log -1 --format=%H -- scripts/update.sh 2>/dev/null || echo "")
 
-  # Fetch latest to check for remote changes
-  git -C "$INSTALL_DIR" fetch origin 2>/dev/null || true
+  # Fetch latest to check for remote changes. Don't silence stderr — if fetch
+  # fails we want to know, otherwise we'd silently read a stale tracking ref
+  # and skip the self-update.
+  if ! git -C "$INSTALL_DIR" fetch origin; then
+    echo -e "${YELLOW}⚠ git fetch failed during self-update check — proceeding with local script version${NC}"
+  fi
   REMOTE_VERSION=$(git -C "$INSTALL_DIR" log -1 --format=%H origin/$(git -C "$INSTALL_DIR" rev-parse --abbrev-ref HEAD) -- scripts/update.sh 2>/dev/null || echo "")
 
   if [ "$SCRIPT_VERSION" != "$REMOTE_VERSION" ] && [ -n "$REMOTE_VERSION" ]; then
@@ -194,12 +205,12 @@ if [ -f ".git/rebase-merge/applying" ] || [ -f ".git/rebase-apply/applying" ]; t
   exit 1
 fi
 
-# Ensure definitions folder is never touched by git
+# Ensure the runtime data folder is never touched by git.
 # .gitignore already covers untracked files; handle the edge case where
 # it was accidentally committed/tracked.
-print_step "Protecting definitions folder from git..."
+print_step "Protecting .selva-data/ from git..."
 DEFINITIONS_PATHS=(
-  "packages/compute-app/definitions"
+  ".selva-data"
 )
 
 for DEF_PATH in "${DEFINITIONS_PATHS[@]}"; do
@@ -359,30 +370,64 @@ print_success "Dependencies updated"
 ################################################################################
 print_header "Step 3: Building Application"
 
-# Check if shared package has changed since the last build
-SHARED_CHANGED=false
-if [ "$NO_PULL" = true ]; then
-  # No pull means we can't compare commits — assume shared may have changed
-  SHARED_CHANGED=true
-elif git diff --name-only "$LOCAL_COMMIT" HEAD -- packages/shared | grep -q .; then
-  SHARED_CHANGED=true
+# Build the selva app and all its workspace dependencies. Turbo derives the
+# build order from the workspace dep graph and skips any package whose
+# inputs haven't changed since the last build.
+#
+# IMPORTANT: PM2 lazy-imports chunks from build/ on every fork. If we let
+# PM2 restart with a half-written build/, the running app crashes with
+# ERR_MODULE_NOT_FOUND. The safest cheap defense is: keep a backup copy
+# of the last-known-good build aside, run the build, and ONLY proceed to
+# the PM2 restart step if the new build/ passes a sanity check. If the
+# build half-fails we restore the backup so PM2 (which may autorestart on
+# memory/crash for other reasons) finds a consistent tree.
+BUILD_DIR="$INSTALL_DIR/packages/selva/build"
+BUILD_BACKUP="$INSTALL_DIR/packages/selva/build.previous"
+
+print_step "Snapshotting previous build/ for rollback..."
+rm -rf "$BUILD_BACKUP"
+if [ -d "$BUILD_DIR" ]; then
+  # cp -a preserves timestamps/perms. We keep the original in place so PM2
+  # is never staring at a missing build/ while the new one is being written.
+  cp -a "$BUILD_DIR" "$BUILD_BACKUP"
 fi
 
+restore_backup() {
+  if [ -d "$BUILD_BACKUP" ]; then
+    print_warning "Restoring previous build/ from snapshot"
+    rm -rf "$BUILD_DIR"
+    mv "$BUILD_BACKUP" "$BUILD_DIR"
+  fi
+}
+
+print_step "Building selva app for production..."
 cd "$INSTALL_DIR"
-
-if [ "$SHARED_CHANGED" = true ]; then
-  print_step "Changes detected in shared package — building shared..."
-  run_build pnpm run build:shared
-  print_success "Shared package built"
-else
-  print_warning "No changes in packages/shared — skipping shared build"
+export ADAPTER=node
+if ! run_build pnpm build --filter=@selvajs/selva; then
+  restore_backup
+  print_error "Build failed — previous build/ restored, app not restarted"
+  exit 1
 fi
 
-print_step "Building compute-app for production..."
-cd "$INSTALL_DIR/packages/compute-app"
-export ADAPTER=node
-run_build pnpm build
-print_success "Compute-app built"
+# Sanity-check the build before we let PM2 reload it. If index.js is
+# missing the build half-failed silently (e.g. OOM, killed mid-write).
+if [ ! -f "$BUILD_DIR/index.js" ]; then
+  restore_backup
+  print_error "Build completed but $BUILD_DIR/index.js is missing — rolled back, app not restarted"
+  exit 1
+fi
+
+# Syntax-check the entrypoint before letting PM2 fork it. Catches truncated
+# writes or chunks that emit invalid JS without erroring at build time.
+if ! node --check "$BUILD_DIR/index.js" 2>/dev/null; then
+  restore_backup
+  print_error "Build produced an unparseable index.js — rolled back, app not restarted"
+  exit 1
+fi
+
+# Keep $BUILD_BACKUP around — we only drop it after the health check passes.
+# If the new build boots fine to PM2 but fails health, we restore and restart.
+print_success "Compute-app built (snapshot retained for post-restart rollback)"
 
 fi # end of restart-only skip block
 
@@ -418,7 +463,7 @@ if [ "$NO_RESTART" = false ]; then
   else
     print_warning "PM2 is not managing the application"
     print_step "To start manually, run:"
-    echo "cd $INSTALL_DIR/packages/compute-app && npm start"
+    echo "cd $INSTALL_DIR/packages/selva && npm start"
   fi
 else
   print_warning "Application restart skipped (--no-restart flag set)"
@@ -431,33 +476,74 @@ fi
 ################################################################################
 print_header "Verification"
 
-if [ "$PM2_RUNNING" = true ]; then
-  print_step "Running health check..."
+# Try the health probe whether or not PM2 was managing the app at script start —
+# this catches "PM2 wasn't running, manual start expected" *and* "PM2 was running
+# but the new build crashes on boot" with the same code path.
+print_step "Running health check..."
 
-  # Get port from .env — handles quoted values and inline comments
-  PORT=$(grep "^PORT=" "$INSTALL_DIR/packages/compute-app/.env" 2>/dev/null \
-    | head -1 \
-    | cut -d'=' -f2 \
-    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//' -e 's/[[:space:]]*#.*//')
-  PORT=${PORT:-3000}
+# Get port from .env — handles quoted values and inline comments
+PORT=$(grep "^PORT=" "$INSTALL_DIR/packages/selva/.env" 2>/dev/null \
+  | head -1 \
+  | cut -d'=' -f2 \
+  | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//' -e 's/[[:space:]]*#.*//')
+PORT=${PORT:-3000}
 
-  # Retry health check for up to 30 seconds
-  HEALTH_OK=false
-  for i in $(seq 1 10); do
-    if curl -s "http://localhost:$PORT/api/health" > /dev/null; then
+# Expected commit — the new process should report this in /api/health.commit.
+# If it reports the old commit, we're talking to a stale PM2 worker that hasn't
+# rotated yet (or didn't rotate at all).
+EXPECTED_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
+
+# -f makes curl exit non-zero on 4xx/5xx (so degraded boots returning 503 fail
+# the check). -sS suppresses progress but keeps errors. We capture the body so
+# we can inspect status and commit fields.
+HEALTH_OK=false
+HEALTH_BODY=""
+for i in $(seq 1 10); do
+  if HEALTH_BODY=$(curl -fsS --max-time 5 "http://localhost:$PORT/api/health" 2>/dev/null); then
+    # Got a 2xx. Verify the responding process is the new one.
+    REPORTED_COMMIT=$(echo "$HEALTH_BODY" | node -e "
+      try {
+        const b = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+        process.stdout.write(b.commit || '');
+      } catch { process.stdout.write(''); }
+    " 2>/dev/null || echo "")
+    if [ -z "$EXPECTED_COMMIT" ] || [ -z "$REPORTED_COMMIT" ] || [ "$REPORTED_COMMIT" = "$EXPECTED_COMMIT" ]; then
       HEALTH_OK=true
       break
     fi
-    sleep 3
-  done
+    # 2xx but old commit — wait for PM2 to finish swapping the process
+  fi
+  sleep 3
+done
 
-  if [ "$HEALTH_OK" = true ]; then
-    print_success "Health check passed"
-    echo "Server is running and responding to requests"
+if [ "$HEALTH_OK" = true ]; then
+  print_success "Health check passed"
+  echo "Server is running and responding to requests (commit ${REPORTED_COMMIT:0:7})"
+  # Now it's safe to drop the previous-build snapshot.
+  rm -rf "$BUILD_BACKUP"
+else
+  print_error "Health check failed after 30s"
+  if [ -n "$HEALTH_BODY" ]; then
+    echo "Last response body:"
+    echo "$HEALTH_BODY"
+  fi
+
+  # Roll back the build and restart PM2 so we end on a known-good state.
+  if [ -d "$BUILD_BACKUP" ] && [ "$PM2_RUNNING" = true ] && [ "$NO_RESTART" = false ]; then
+    print_warning "Rolling back to previous build and restarting PM2..."
+    restore_backup
+    pm2 restart "$INSTALL_DIR/ecosystem.config.cjs" --update-env >/dev/null 2>&1 || true
+    sleep 3
+    if curl -fsS --max-time 5 "http://localhost:$PORT/api/health" > /dev/null 2>&1; then
+      print_warning "Previous build is back online. New build was NOT deployed."
+    else
+      print_error "Rollback restart also failed health check — manual intervention required."
+      print_step "Check logs with: pm2 logs selva-compute"
+    fi
   else
-    print_warning "Health check failed after 30s — server may still be starting"
     print_step "Check logs with: pm2 logs selva-compute"
   fi
+  exit 1
 fi
 
 ################################################################################

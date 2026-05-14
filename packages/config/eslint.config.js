@@ -15,7 +15,13 @@ export const config = [
 		languageOptions: {
 			globals: {
 				...globals.browser,
-				...globals.node
+				...globals.node,
+				// vite-injected build-time constants used by the selva app's
+				// admin shell (defined in vite.config.ts via `define:`).
+				__GIT_HASH__: 'readonly',
+				__GIT_SHORT_HASH__: 'readonly',
+				__GIT_MESSAGE__: 'readonly',
+				__GIT_DATE__: 'readonly'
 			}
 		}
 	},

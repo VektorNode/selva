@@ -1,0 +1,30 @@
+{
+	"name": "@selvajs/cli",
+	"version": "0.1.3",
+	"description": "Scaffold and operate a Selva white-label deployment. `npx @selvajs/cli <dir>` to bootstrap, `selva <cmd>` to manage.",
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
+	"type": "module",
+	"bin": {
+		"create": "./bin/create.js",
+		"selva": "./bin/selva.js"
+	},
+	"files": [
+		"bin",
+		"src"
+	],
+	"engines": {
+		"node": ">=20.6.0"
+	},
+	"scripts": {
+		"start": "node ./bin/create.js",
+		"selva": "node ./bin/selva.js",
+		"test": "node --input-type=module -e \"for (const m of ['./src/cli.js','./src/prompts.js','./src/env.js','./src/paths.js','./src/secrets.js','./src/commands/create.js','./src/commands/init.js','./src/commands/doctor.js','./src/commands/pm2.js','./src/commands/keys.js']) { await import(m); }\""
+	},
+	"dependencies": {
+		"@clack/prompts": "^0.11.0",
+		"picocolors": "^1.1.1"
+	}
+}

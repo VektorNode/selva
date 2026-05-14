@@ -6,28 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for building Grasshopper-driven web applications. It uses a dual-stack architecture:
 
-- **Backend**: C# (.NET multi-target: net48/net7.0) - Grasshopper plugin
+- **Backend**: C# (.NET multi-target: net48/net7.0/net9.0) - Grasshopper plugin
 - **Frontend**: SvelteKit with TypeScript + Tailwind CSS
 - **Communication**: WebSocket (port 8765) + embedded HTTP server
 
 ## Repository Structure
 
-This is a monorepo with two distinct stacks:
-
-### TypeScript/JavaScript Workspace (`packages/`)
-
-- [selva-compute](https://www.npmjs.com/package/selva-compute) - (External npm package) Type-safe Rhino Compute client, Three.js helpers, file utilities
-- **`@selva/config`** - Shared ESLint, Vite, and Prettier configuration
-- **`@selva/builder-app`** - Schema designer connected to Grasshopper via WebSocket (local dev mode)
-- **`@selva/compute-app`** - Standalone app for solving Grasshopper definitions via Rhino.Compute (cloud mode)
-- **`@selva/shared`** - Shared Svelte components, utilities, and theme styles (CSS + theme utilities)
-- **`@selva/schemas`** - Schema definitions and code generators (TypeScript + C#)
-
-### .NET Workspace (`Plugin/`)
-
-- **`Selva.Core`** - Shared models and services (netstandard2.0)
-- **`Selva.GH`** - Main plugin with components (net48/net7.0, outputs `.gha`)
-- **`Selva.Tests`** - xUnit tests (net7.0)
+Monorepo with two stacks: `packages/` (TypeScript/Svelte workspace) and `Plugin/` (.NET / Grasshopper). [STRUCTURE.md](./STRUCTURE.md) is authoritative for folder layout, naming, and per-package conventions — read it before adding files.
 
 ## Common Development Commands
 
@@ -38,39 +23,41 @@ This is a monorepo with two distinct stacks:
 pnpm install
 
 # Development servers
-pnpm dev                    # Start builder-app dev server (http://localhost:5173)
-pnpm dev:compute            # Start compute-app dev server
+pnpm dev                    # Start plugin-ui dev server (http://localhost:5173)
+pnpm dev:selva              # Start the Selva app (deployable) dev server
 
-# Build commands
-pnpm run build:all          # Build all packages in order
-pnpm run build:shared    # Build shared UI components
-pnpm run build:builder      # Build builder-app
-pnpm run build:compute      # Build compute-app
+# Build commands (orchestrated by Turborepo — see docs/Turborepo.md)
+pnpm build                  # Build every package in dep order, with caching
+pnpm build --filter=@selvajs/selva           # Build one package + its deps
+pnpm run build:plugin-ui    # Build plugin-ui + its deps
+pnpm run build:selva        # Build the Selva app + its deps
 pnpm run build:plugin       # Build production plugin with embedded web assets
 
 # Type checking and linting
-pnpm check                  # Run svelte-check on all packages
-pnpm type-check             # TypeScript type check across workspace
-pnpm lint                   # Lint all files
+pnpm check                  # svelte-check across the workspace (turbo)
+pnpm type-check             # tsc --noEmit across the workspace (turbo)
+pnpm lint                   # ESLint at the repo root (not via turbo)
 pnpm lint:fix               # Fix linting issues
 pnpm format                 # Format code with Prettier
 pnpm format:check           # Check formatting
 
-# Testing (core package)
-cd packages/compute && pnpm test          # Run vitest
-cd packages/compute && pnpm test:watch    # Run vitest in watch mode
+# Testing
+pnpm test                   # vitest run across packages that have tests (turbo)
+cd packages/providers/local && pnpm test:watch    # Watch mode in one package
 
 # Schema generation (run after modifying ui-schema.json)
-cd packages/schemas && pnpm run generate:all    # Generate both TS and C# types
+pnpm generate                                      # turbo run generate
+cd packages/schemas && pnpm run generate:all       # Or directly
 cd packages/schemas && pnpm run generate:ts     # Generate TypeScript only
 cd packages/schemas && pnpm run generate:cs     # Generate C# only
 
 # Clean and reinstall
-pnpm clean:reinstall        # Remove all node_modules and reinstall
+pnpm clean                  # Remove node_modules, .svelte-kit, and pnpm-lock.yaml
+pnpm rebuild                # clean + install + build
 
-# Testing (selva-compute external package)
-# Run tests for the selva-compute npm package (development only)
-# pnpm test                  # (When selva-compute is developed locally)
+# Testing (@selvajs/compute external package)
+# Run tests for the @selvajs/compute npm package (development only)
+# pnpm test                  # (When @selvajs/compute is developed locally)
 ```
 
 ### .NET (Plugin)
@@ -98,8 +85,8 @@ A single schema (`packages/schemas/ui-schema.json`) generates both TypeScript ty
 
 **Generated files:**
 
-- TypeScript: `packages/shared/src/lib/types/generated/schema.ts`
-- C#: `Plugin/Selva.Core/Models/UISchema.Generated.cs`
+- TypeScript: `packages/schemas/src/generated/schema.ts`
+- C#: `Plugin/Selva.Schema/Models/UISchema.Generated.cs`
 
 After modifying `ui-schema.json`, always run:
 
@@ -111,17 +98,17 @@ cd packages/schemas && pnpm run generate:all
 
 The web application supports two runtime modes:
 
-1. **Local Mode (builder-app)**: Drag-and-drop schema designer connected to Grasshopper via WebSocket. Used during development with hot reload.
-2. **Cloud Mode (compute-app)**: Standalone web app that solves Grasshopper definitions through Rhino.Compute. Used for production deployments.
+1. **Local Mode (`@selvajs/plugin-ui`)**: Drag-and-drop schema designer connected to Grasshopper via WebSocket. Embedded into `Selva.gha` and served from the plugin's local HTTP port at runtime; runs against the dev server during development with hot reload.
+2. **Cloud Mode (`@selvajs/selva`)**: Standalone web app that solves Grasshopper definitions through Rhino.Compute. Used for production deployments — installed via `@selvajs/cli`.
 
 ### Production Build Process
 
 The production build creates a **fully self-contained** `.gha` file:
 
-1. Builds `@selva/builder-app` web assets
+1. Builds `@selvajs/plugin-ui` web assets
 2. Copies built assets to `Plugin/Selva.GH/EmbeddedAssets/web/`
 3. Embeds all web assets as `EmbeddedResource` in the plugin
-4. Builds multi-targeted plugin (net48 for Rhino 7, net7.0 for Rhino 8)
+4. Builds multi-targeted plugin (net48 + net7.0 for Rhino 8, net9.0 for Rhino 9)
 
 Output: Single `.gha` file with no external dependencies. The LocalWebServer auto-allocates an HTTP port at runtime.
 
@@ -136,7 +123,7 @@ pnpm run build:plugin
 Terminal 1:
 
 ```bash
-cd packages/builder-app && pnpm dev
+cd packages/plugin-ui && pnpm dev
 # Web app runs on http://localhost:5173
 ```
 
@@ -159,7 +146,7 @@ Located in `Plugin/Selva.GH/Features/`:
 - **FileIO** - `DataToFile`, `BlockToFile` for geometry export
 - **ComputeIO** - `ValueListData`, `GetValueList` for interactive selections
 
-### Core Package Architecture (`selva-compute`)
+### Core Package Architecture (`@selvajs/compute`)
 
 Modular exports for tree-shaking:
 
@@ -181,13 +168,7 @@ Key features:
 - Write self-documenting code; add comments only for complex logic
 - Keep code simple; avoid premature abstractions
 - Only add error handling at system boundaries (user input, external APIs)
-
-## Performance Notes
-
-- Three.js is lazy-loaded only when 3D viewer is enabled
-- `rhino-compute-core` (now `compute-rhino3d`) is dynamically imported when needed
-- Use `@lucide/svelte` for all icons (tree-shakeable, no duplicates)
-- Prefer consolidating utilities over creating new abstractions
+- Section headers use the format: `// ============================================================================` with title between two lines of equals signs
 
 ## Installation to Grasshopper
 
@@ -207,28 +188,36 @@ cp Plugin/bin/Release/net7.0/Selva.gha ~/Library/Application\ Support/McNeel/Rhi
 
 Restart Rhino completely after installation.
 
+## Data Privacy & Compliance
+
+**User data isolation is by design.** All authentication, credentials, and personal information (PII) are owned exclusively by the auth provider. Selva stores only:
+
+- Opaque session tokens (in cookies)
+- User ID and permissions (minimal authorization data)
+- Optional provider-specific metadata (non-sensitive only)
+
+This architecture means Selva has **zero exposure to EU data regulations, credentials, or company user records**. The provider handles all data residency, retention, and compliance.
+
 ## Requirements
 
-- [pnpm](https://pnpm.io) >= 9.0.0 (Node.js package manager)
+- [pnpm](https://pnpm.io) >= 10.0.0 (Node.js package manager — version pinned in `packageManager`, activated via Corepack)
 - Node.js >= 18.0.0
 - .NET SDK 7.0+ (for plugin development)
-- Rhino 8 (for using the plugin)
-- Custom Rhino Compute fork: https://github.com/VektorNode/compute.rhino3d
+- Rhino 8 or 9 (for using the plugin — Rhino 7 is not supported)
+- Rhino.Compute server — the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) is required for block instance support
 
 ## Environment Variables
 
-### Builder App (`packages/builder-app/`)
+The authoritative reference is [packages/selva/.env.example](packages/selva/.env.example) — every var the Selva app reads (provider, tenancy, flags, secrets, optional server config) is documented inline there. Don't duplicate that documentation here or in provider READMEs; link to `.env.example`.
 
-No environment variables required for development. Uses WebSocket at port 8765 by default.
+The plugin UI needs no env vars (WebSocket on port 8765 by default).
 
-### Compute App (`packages/compute-app/`)
+Rhino.Compute server URL + API key are configured in `/admin/compute` and persisted via `IComputeServerStore` — not env vars.
 
-Required for production deployment (see `example.ecosystem.config.cjs`):
+### Platform Package (`@selvajs/platform`)
 
-- `COMPUTE_SERVER_URL` - Rhino.Compute server URL
-- `PORT` - Application port (default: 3000)
-- `GH_DEFINITIONS_PATH` - Path to Grasshopper definition files
+Pluggable provider interfaces (auth, data stores, storage, permissions, access rules) with Zod schemas. Granular exports for tree-shaking — see [packages/platform/src/](packages/platform/src/) for the module list. `@selvajs/local-provider` is the filesystem-backed implementation (HMAC sessions, atomic-write JSON, WebP image transcoding).
 
 ## Issues
 
-When creating issues, use the templates in [.github/ISSUE_TEMPLATE/](/.github/ISSUE_TEMPLATE/):
+When creating issues, use the templates in [.github/ISSUE_TEMPLATE/](/.github/ISSUE_TEMPLATE/)

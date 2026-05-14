@@ -10,11 +10,12 @@ using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
 using Rhino.Geometry;
+using Selva.GH.Features.Display.Goos;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
 
-namespace Selva.GH.Features.Display.Components;
+namespace Selva.GH.Features.Display.OBSOLETE;
 
 /// <summary>
 ///     Component that converts geometry to displayable format for web viewing.

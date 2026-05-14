@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Drawing;
 using Grasshopper.Kernel;
+using Selva.GH.Features.Display.Goos;
+using Selva.GH.Features.Display.Params;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
 

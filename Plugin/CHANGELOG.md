@@ -112,56 +112,11 @@ Changed data input of [GH_DataToFileGeneric](Selva.GH/Features/FileIO/Components
 
 ### Changed
 
-**Breaking: Simplified Web Viewer API**
+- Simplified web viewer API in the TypeScript helpers (now `@selvajs/compute`): wrapper functions replaced with direct calls to `initThree`, `updateScene`, and `parseMeshBatchObject`
 
-- Removed wrapper functions from `@selva/shared` for cleaner abstraction:
-  - `initializeViewerScene()` → use `initThree()` directly
-  - `updateViewerScene()` → use `updateScene()` directly
-  - `processMeshBatches()` → use `parseMeshBatchObject()` in a loop
+### Fixed
 
-## Fixed
-
-- No double 3dm.3dm ending for file export with block export
-
-### Migration Guide
-
-**Before (0.2.0):**
-
-```typescript
-import { initializeViewerScene, updateViewerScene, processMeshBatches } from '@selva/shared';
-
-const state = await initializeViewerScene(canvas, schema);
-await updateViewerScene(state, meshes);
-const allMeshes = await processMeshBatches(batches, { modelUnits: 'Meters' });
-```
-
-**After (0.3.0):**
-
-```typescript
-import {
-	initThree,
-	updateScene,
-	parseMeshBatchObject,
-	SCALE_FACTORS
-} from '@selva/compute/visualization';
-
-const { scene, camera, controls } = initThree(canvas, {
-	environment: { backgroundColor: '#ffffff' },
-	events: {
-		onMeshMetadataClicked: (metadata) => console.log(metadata),
-		selectionColor: '#ff0000',
-		enableEventHandlers: true
-	}
-});
-
-updateScene(scene, meshes, camera, controls, false);
-
-// For mesh batches
-const scaleFactor = SCALE_FACTORS['Meters'] ?? 1;
-for (const batch of batches) {
-	const meshes = await parseMeshBatchObject(batch, { scaleFactor });
-}
-```
+- No double `.3dm` ending on file export with block export
 
 ## [0.2.0] - 2025-12-31
 
@@ -169,13 +124,13 @@ for (const batch of batches) {
 
 **New Components**
 
-- `GH_Environment` component for compute environment detection (Selva.Grasshopper/Features/ComputeIO/Components/GH_Environement.cs:1)
-- `GH_EvaluateSchema` component with basic structure for schema evaluation (Selva.Grasshopper/Features/UIBuilder/Components/GH_EvaluateSchema.cs:1)
+- `GH_Environment` component for compute environment detection
+- `GH_EvaluateSchema` component with basic structure for schema evaluation
 - `GH_ValueListDataGoo` class for handling ValueList data structures
 
 **Core Library Documentation**
 
-- Comprehensive README.md for Selva.Core library with architecture overview
+- Comprehensive README.md for Selva.Schema library with architecture overview
 - Detailed documentation for schema validation and migration system
 
 **Testing & Quality**
@@ -189,11 +144,11 @@ for (const batch of batches) {
 
 **Schema System Refactoring**
 
-- Refactor schema versioning and migration logic for better maintainability (Plugin/Features/UIBuilder/Services/Schema/SchemaMigrator.cs:1)
-- Implement modular validation system for UISchema (Plugin/Features/UIBuilder/Services/Schema/SchemaValidator.cs:1)
+- Refactor schema versioning and migration logic for better maintainability
+- Implement modular validation system for UISchema
 - Enhance SchemaManager and SchemaCleanupService
-- Improve schema persistence service (Plugin/Features/UIBuilder/Services/SchemaPersistenceService.cs:1)
-- Update generated UISchema models (Plugin/Features/UIBuilder/Models/UISchema.Generated.cs:1)
+- Improve schema persistence service
+- Update generated UISchema models
 
 **UIBuilder Service Architecture**
 
@@ -250,21 +205,9 @@ for (const batch of batches) {
 - Outdated validation architecture document
 - Unused icon resources (IconPluginF4R.svg, IconPluginF4R.png)
 
-## [1.0.0] - 2025-01-15
-
-### Added
-
-- Initial release of Selva plugin
-- UIBuilder component for schema linking and WebSocket communication
-- Display components for 3D web visualization
-- FileIO components for geometry export
-- ComputeIO components for interactive selections
-- Multi-target support (net48 for Rhino 7, net7.0 for Rhino 8)
-- Embedded web assets server
-- WebSocket server for builder-app integration
-
-[Unreleased]: https://github.com/vektornode/selva/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/vektornode/selva/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/vektornode/selva/compare/v0.7.1...v0.9.0
+[0.7.1]: https://github.com/vektornode/selva/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/vektornode/selva/compare/v0.3.0...v0.7.0
 [0.3.0]: https://github.com/vektornode/selva/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/vektornode/selva/compare/v1.0.0...v0.2.0
-[1.0.0]: https://github.com/vektornode/selva/releases/tag/v1.0.0
+[0.2.0]: https://github.com/vektornode/selva/releases/tag/v0.2.0

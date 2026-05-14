@@ -75,7 +75,10 @@ public class MeshBatch
     public List<MaterialGroup> Groups { get; set; }
 
     /// <summary>
-    ///     Compressed binary data containing all vertices and faces.
+    ///     Binary geometry blob written by <see cref="BinaryGeometryWriter"/>: magic header,
+    ///     metadata JSON, quantized int16 (or float32) vertices, and uint32 indices.
+    ///     Travels as base64 inside the values JSON for now; will move to an out-of-band binary
+    ///     transport in a later phase. Field name is preserved for `.gh` file backward compatibility.
     /// </summary>
     [JsonProperty("compressedData")]
     public byte[] CompressedData { get; set; }
@@ -127,21 +130,30 @@ public class MeshMetadata
     [JsonProperty("originalIndex")]
     public int OriginalIndex { get; set; }
 
-    [JsonProperty("vertexCount")] public int VertexCount { get; set; }
-
-    [JsonProperty("faceCount")] public int FaceCount { get; set; }
+    /// <summary>
+    ///     Number of vertices in this mesh (each vertex is 3 components: x, y, z).
+    /// </summary>
+    [JsonProperty("vertexCount")]
+    public int VertexCount { get; set; }
 
     /// <summary>
-    ///     Offset in the combined vertex array (in number of floats, divide by 3 for vertex index).
+    ///     Number of indices in this mesh (3 per triangle).
     /// </summary>
-    [JsonProperty("vertexOffset")]
-    public int VertexOffset { get; set; }
+    [JsonProperty("indexCount")]
+    public int IndexCount { get; set; }
 
     /// <summary>
-    ///     Offset in the combined face index array (in number of integers).
+    ///     Index of this mesh's first vertex in the combined vertex array, in vertex-count units.
+    ///     The corresponding component offset into the int16/float32 typed array is VertexStart * 3.
     /// </summary>
-    [JsonProperty("faceOffset")]
-    public int FaceOffset { get; set; }
+    [JsonProperty("vertexStart")]
+    public int VertexStart { get; set; }
+
+    /// <summary>
+    ///     Index of this mesh's first index in the combined index array, in index-count units.
+    /// </summary>
+    [JsonProperty("indexStart")]
+    public int IndexStart { get; set; }
 
     [JsonProperty("metadata")] public Dictionary<string, string> Metadata { get; set; }
 }

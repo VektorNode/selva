@@ -2,7 +2,7 @@ using System;
 using Grasshopper.Kernel;
 using SheepMetal.PluginGrasshopper.Upgraders;
 
-namespace Selva.GH.Features.Display.Components;
+namespace Selva.GH.Features.Display.OBSOLETE;
 
 public class GH_WebDisplayUpgrader_To_0_9 : IGH_UpgradeObject
 {

@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Grasshopper.Kernel;
 using Rhino;
-using Selva.Core.Models;
+using Selva.Schema.Models;
 using Selva.GH.Features.UIBuilder.Services.Communication;
-using Selva.GH.Features.UIBuilder.Services.Persistence;
 using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services.Schema;
@@ -25,7 +24,7 @@ public class SchemaCleanupService
         UISchema schema,
         ValueApplicator valueApplicator,
         Dictionary<string, object> embeddedValues,
-        CommunicationHandler communicationHandler,
+        WebSocketTransport webSocketTransport,
         GH_Document document,
         Action<GH_RuntimeMessageLevel, string> addMessage)
     {
@@ -54,7 +53,7 @@ public class SchemaCleanupService
             // This is the commit point - schema changes are persisted
 
             // 4. Broadcast to web UI (fire-and-forget)
-            var broadcastTask = communicationHandler?.BroadcastSchemaUpdate(schema, removedIds);
+            var broadcastTask = webSocketTransport?.BroadcastSchemaUpdate(schema, removedIds);
             if (broadcastTask != null)
             {
                 _ = broadcastTask.ContinueWith(t =>

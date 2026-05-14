@@ -8,14 +8,12 @@ using System.Windows.Forms;
 using GH_IO.Serialization;
 using Grasshopper.Kernel;
 using Rhino;
-using Selva.Core.Models;
-using Selva.Core.Services;
+using Selva.Schema.Models;
+using Selva.Schema.Services;
 using Selva.GH.Config;
 using Selva.GH.Features.UIBuilder.Helpers;
-using Selva.GH.Features.UIBuilder.Models;
+using Selva.GH.Features.UIBuilder.Goos;
 using Selva.GH.Features.UIBuilder.Services;
-using Selva.GH.Features.UIBuilder.Services.State;
-using Selva.GH.Features.UIBuilder.Services.UI;
 using Selva.GH.Properties;
 using Selva.GH.Utilities.Guards;
 using Selva.GH.Utilities.Helpers;
@@ -53,14 +51,24 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     /// <summary>
     ///     Helper property to check if WebSocket communication is available
     /// </summary>
-    private bool IsConnected => _service?.CommunicationHandler?.IsRunning == true;
+    private bool IsConnected => _service?.WebSocketTransport?.IsRunning == true;
 
     public override Guid ComponentGuid => new Guid("D4E5F6A7-B8C9-4D5E-0F1A-2B3C4D5E6F7A");
 
     protected override Bitmap Icon => Resources.UIBridge;
 
     /// <summary>
-    ///     Override Locked property to handle right-click disable/enable
+    ///     Override Locked property to handle right-click disable/enable.
+    ///
+    ///     IMPORTANT invariant: on lock we only tear down what InitializeDependencies wires per-document
+    ///     (servers + DocumentEventManager document-side subscriptions). We do NOT detach the
+    ///     component-side handlers (_onSolutionStarted/_onSolutionEnded/_onDocumentModified) — they
+    ///     are bound exactly once in InitializeDependencies and remain attached for the component's
+    ///     lifetime. Cleanup() / Dispose() are responsible for detaching them.
+    ///
+    ///     If you ever change UnregisterEvents to also clear the EventManager's SolutionStarted/
+    ///     SolutionEnded/DocumentModified subscriber lists, this contract breaks and solving-state
+    ///     tracking silently stops working across lock/unlock cycles.
     /// </summary>
     public override bool Locked
     {
@@ -104,7 +112,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         // Check if running in headless/compute environment before any initialization
         // If so, just output the embedded schema and stop - no services or background tasks
-        if (RhinoApp.IsRunningHeadless || RhinoDoc.ActiveDoc == null || RhinoDoc.ActiveDoc.IsHeadless)
+        if (HeadlessGuard.IsHeadless)
         {
             DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
             return;
@@ -132,14 +140,12 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             HandleDisablingState(document);
         }
 
-        // Register document events only when enabled
-        if (enable)
+        // Register document events only when enabled. Re-registration is needed on the rising
+        // edge (off→on) or when the document changed under us — not on every solve.
+        // EventManager itself is idempotent, but skipping the call keeps the hot path lean.
+        if (enable && (transition.EnableRising || _currentDocument != document))
         {
-            if (_currentDocument != document)
-            {
-                _currentDocument = document;
-            }
-
+            _currentDocument = document;
             _service.EventManager.RegisterEvents(document);
         }
 
@@ -215,7 +221,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                 {
                     var document = OnPingDocument();
                     var (addedIds, removedIds) =
-                        _service.SchemaManager.MergePostSolveBakeOutputs(_embeddedSchema, document);
+                        _service.SchemaSynchronizer.MergePostSolveBakeOutputs(_embeddedSchema, document);
                     if (addedIds.Count > 0 || removedIds.Count > 0)
                     {
                         if (addedIds.Count > 0)
@@ -223,7 +229,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                             _service.EventManager.RegisterWatchedIds(addedIds);
                         }
 
-                        _ = _service.CommunicationHandler
+                        _ = _service.WebSocketTransport
                             .BroadcastSchemaUpdate(_embeddedSchema, removedIds.Count > 0 ? removedIds : null)
                             .ContinueWith(t =>
                             {
@@ -269,7 +275,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                     var started = await _service.ServerManager.StartServersAsync(_sessionId);
 
                     if (started)
-                        // Show Web UI URL if embedded assets are available
+                    // Show Web UI URL if embedded assets are available
                     {
                         if (_service.ServerManager.HttpPort.HasValue)
                         {
@@ -298,9 +304,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         if (_embeddedSchema != null && transition.EnableRising)
         {
             // Remove any parameters deleted while component was off
-            _embeddedSchema = _service.SchemaManager.ValidateSchema(_embeddedSchema, document);
+            _embeddedSchema = _service.SchemaSynchronizer.ValidateSchema(_embeddedSchema, document);
             // Reconcile nicknames renamed while component was off (or Rhino was closed)
-            _service.SchemaManager.SyncNicknamesFromDocument(_embeddedSchema, document);
+            _service.SchemaSynchronizer.SyncNicknamesFromDocument(_embeddedSchema, document);
             // Seed the watched set so UndoStateChanged can short-circuit correctly
             _service.EventManager.RegisterWatchedObjects(_embeddedSchema);
         }
@@ -343,7 +349,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             _embeddedSchema,
             _service.ValueApplicator,
             _embeddedValues,
-            _service.CommunicationHandler,
+            _service.WebSocketTransport,
             document,
             AddRuntimeMessage
         );
@@ -353,8 +359,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         try
         {
-            // Get WebSocket port from CommunicationHandler
-            var wsPort = _service?.CommunicationHandler?.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
+            // Get WebSocket port from WebSocketTransport
+            var wsPort = _service?.WebSocketTransport?.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
 
             // Use embedded web server if available, otherwise fall back to dev server
             var url = _service?.WebServer?.IsRunning == true
@@ -406,8 +412,108 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         Cleanup();
     }
 
+    private static readonly Guid BooleanToggleGuid = new Guid("2e78987b-9dfb-42a2-8b76-3923ac8bd91a");
+    private static readonly Guid HopsContextBakeGuid = new Guid("ae2531b4-bab2-4bb1-b5bf-f2143d10c132");
+
+    public override void AddedToDocument(GH_Document document)
+    {
+        base.AddedToDocument(document);
+
+        if (document == null || !IsFreshPlacement())
+        {
+            return;
+        }
+
+        try
+        {
+            WireDefaultNeighbors(document);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Auto-wire on placement failed: {ex.Message}");
+        }
+    }
+
     /// <summary>
-    ///     Clear contextual data from all inputs and outputs after each solve
+    ///     True only when this component was just dropped on a fresh canvas position —
+    ///     not on file load, paste, or when the user has already wired/loaded state.
+    /// </summary>
+    private bool IsFreshPlacement()
+    {
+        if (_embeddedSchema != null)
+        {
+            return false;
+        }
+
+        if (Params.Input.Count > 0 && Params.Input[0].SourceCount > 0)
+        {
+            return false;
+        }
+
+        if (Params.Output.Count > 0 && Params.Output[0].Recipients.Count > 0)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private void WireDefaultNeighbors(GH_Document document)
+    {
+        const float gap = 40f;
+
+        if (Attributes == null)
+        {
+            return;
+        }
+
+        Attributes.PerformLayout();
+        var selfBounds = Attributes.Bounds;
+        var centerY = selfBounds.Y + selfBounds.Height / 2f;
+
+        var toggle = Grasshopper.Instances.ComponentServer.EmitObject(BooleanToggleGuid) as IGH_Param;
+        if (toggle != null && Params.Input.Count > 0)
+        {
+            document.AddObject(toggle, false);
+            if (toggle.Attributes != null)
+            {
+                toggle.Attributes.Pivot = new PointF(selfBounds.Left - gap, centerY);
+                toggle.Attributes.ExpireLayout();
+                toggle.Attributes.PerformLayout();
+
+                var tBounds = toggle.Attributes.Bounds;
+                var dx = (selfBounds.Left - gap) - tBounds.Right;
+                var dy = centerY - (tBounds.Y + tBounds.Height / 2f);
+                toggle.Attributes.Pivot = new PointF(toggle.Attributes.Pivot.X + dx, toggle.Attributes.Pivot.Y + dy);
+                toggle.Attributes.ExpireLayout();
+            }
+            Params.Input[0].AddSource(toggle);
+        }
+
+        var bake = Grasshopper.Instances.ComponentServer.EmitObject(HopsContextBakeGuid);
+        if (bake is IGH_Component bakeComponent && Params.Output.Count > 0 && bakeComponent.Params.Input.Count > 0)
+        {
+            document.AddObject(bakeComponent, false);
+            if (bakeComponent.Attributes != null)
+            {
+                bakeComponent.Attributes.Pivot = new PointF(selfBounds.Right + gap, centerY);
+                bakeComponent.Params.Input[0].NickName = "Schema";
+                bakeComponent.Attributes.ExpireLayout();
+                bakeComponent.Attributes.PerformLayout();
+
+                var bBounds = bakeComponent.Attributes.Bounds;
+                var dx = (selfBounds.Right + gap) - bBounds.Left;
+                var dy = centerY - (bBounds.Y + bBounds.Height / 2f);
+                bakeComponent.Attributes.Pivot = new PointF(bakeComponent.Attributes.Pivot.X + dx, bakeComponent.Attributes.Pivot.Y + dy);
+                bakeComponent.Attributes.ExpireLayout();
+            }
+            bakeComponent.Params.Input[0].AddSource(Params.Output[0]);
+        }
+    }
+
+    /// <summary>
+    ///     Clear contextual data from all inputs and outputs after each solve.
+    ///     Single pass over document.Objects with cached reflection — runs on every solve-end.
     /// </summary>
     private void ClearAllContextualParameters()
     {
@@ -419,22 +525,18 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
         try
         {
-            // Clear all contextual input parameters
-            var contextualParams = document.Objects.OfType<IGH_ContextualParameter>().ToList();
-            foreach (var contextParam in contextualParams)
-            {
-                var clearMethod = contextParam.GetType().GetMethod("ClearContextualData");
-                clearMethod?.Invoke(contextParam, null);
-            }
-
-            // Clear context output components (ContextPrintComponent)
             foreach (var obj in document.Objects)
             {
+                if (obj is IGH_ContextualParameter contextParam)
+                {
+                    ParameterTypeHelper.TryInvokeClearContextualData(contextParam);
+                    continue;
+                }
+
                 if (ParameterTypeHelper.IsContextOutputComponent(obj) ||
                     ParameterTypeHelper.IsContextBakeComponent(obj))
                 {
-                    var clearMethod = obj.GetType().GetMethod("ClearContextualData");
-                    clearMethod?.Invoke(obj, null);
+                    ParameterTypeHelper.TryInvokeClearContextualData(obj);
                 }
             }
         }
@@ -476,7 +578,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
 
         _service?.ValueApplicator?.Clear();
-        _service?.SchemaManager?.ClearMetadataCache();
+        _service?.SchemaSynchronizer?.ClearMetadataCache();
         _service?.StateManager?.Reset();
         _currentDocument = null;
     }
@@ -514,8 +616,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             }
         }
 
-        // Append to schema history on every GH file save
-        if (_embeddedSchema != null)
+        // Append to schema history on every GH file save (skip under headless
+        // hosts like Rhino.Compute, which never legitimately save back).
+        if (_embeddedSchema != null && !HeadlessGuard.IsHeadless)
         {
             try
             {
@@ -545,7 +648,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         {
             try
             {
-                var persistenceService = new SchemaPersistenceService(PluginVersion);
+                var persistenceService = new SchemaArchiveSerializer(PluginVersion);
                 var result = persistenceService.DeserializeFromArchive(reader);
 
                 if (result.HasValue)

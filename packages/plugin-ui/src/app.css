@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@source '../../ui/dist';
+
+/* Import base theme styles from @selvajs/ui */
+@import '@selvajs/ui/styles/base.css';

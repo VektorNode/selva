@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
-using Selva.Core.Models;
-using Selva.Core.Services.Validation;
+using Selva.Schema.Models;
+using Selva.Schema.Services.Validation;
 
 namespace Selva.Tests;
 

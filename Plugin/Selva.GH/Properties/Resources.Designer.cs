@@ -8,7 +8,8 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace Selva.GH.Properties {
+namespace Selva.GH.Properties
+{
     using System;
 
 
@@ -22,23 +23,28 @@ namespace Selva.GH.Properties {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    internal class Resources {
+    internal class Resources
+    {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
         private static global::System.Globalization.CultureInfo resourceCulture;
 
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
-        internal Resources() {
+        internal Resources()
+        {
         }
 
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        internal static global::System.Resources.ResourceManager ResourceManager {
-            get {
-                if (object.ReferenceEquals(resourceMan, null)) {
+        internal static global::System.Resources.ResourceManager ResourceManager
+        {
+            get
+            {
+                if (object.ReferenceEquals(resourceMan, null))
+                {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Selva.GH.Properties.Resources", typeof(Resources).Assembly);
                     resourceMan = temp;
                 }
@@ -51,11 +57,14 @@ namespace Selva.GH.Properties {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        internal static global::System.Globalization.CultureInfo Culture {
-            get {
+        internal static global::System.Globalization.CultureInfo Culture
+        {
+            get
+            {
                 return resourceCulture;
             }
-            set {
+            set
+            {
                 resourceCulture = value;
             }
         }
@@ -63,8 +72,10 @@ namespace Selva.GH.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap BlockToFile {
-            get {
+        internal static System.Drawing.Bitmap BlockToFile
+        {
+            get
+            {
                 object obj = ResourceManager.GetObject("BlockToFile", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
@@ -73,8 +84,10 @@ namespace Selva.GH.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap GeometryToFile {
-            get {
+        internal static System.Drawing.Bitmap GeometryToFile
+        {
+            get
+            {
                 object obj = ResourceManager.GetObject("GeometryToFile", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
@@ -83,8 +96,10 @@ namespace Selva.GH.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap GetValueList {
-            get {
+        internal static System.Drawing.Bitmap GetValueList
+        {
+            get
+            {
                 object obj = ResourceManager.GetObject("GetValueList", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
@@ -93,8 +108,10 @@ namespace Selva.GH.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap ThreeMaterial {
-            get {
+        internal static System.Drawing.Bitmap ThreeMaterial
+        {
+            get
+            {
                 object obj = ResourceManager.GetObject("ThreeMaterial", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
@@ -103,8 +120,10 @@ namespace Selva.GH.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap UIBridge {
-            get {
+        internal static System.Drawing.Bitmap UIBridge
+        {
+            get
+            {
                 object obj = ResourceManager.GetObject("UIBridge", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
@@ -113,8 +132,10 @@ namespace Selva.GH.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap WebDisplay {
-            get {
+        internal static System.Drawing.Bitmap WebDisplay
+        {
+            get
+            {
                 object obj = ResourceManager.GetObject("WebDisplay", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
@@ -123,28 +144,34 @@ namespace Selva.GH.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap Icon {
-          get {
-            object obj = ResourceManager.GetObject("Icon", resourceCulture);
-            return ((System.Drawing.Bitmap)(obj));
-          }
+        internal static System.Drawing.Bitmap Icon
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("Icon", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
         }
 
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap Environment {
-	        get {
-		        object obj = ResourceManager.GetObject("Environment", resourceCulture);
-		        return ((System.Drawing.Bitmap)(obj));
-	        }
+        internal static System.Drawing.Bitmap Environment
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("Environment", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
         }
 
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap ColorInput {
-            get {
+        internal static System.Drawing.Bitmap ColorInput
+        {
+            get
+            {
                 object obj = ResourceManager.GetObject("ColorInput", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
@@ -153,8 +180,10 @@ namespace Selva.GH.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap CreateFile {
-            get {
+        internal static System.Drawing.Bitmap CreateFile
+        {
+            get
+            {
                 object obj = ResourceManager.GetObject("CreateFile", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
@@ -163,9 +192,311 @@ namespace Selva.GH.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap PathToFile {
-            get {
+        internal static System.Drawing.Bitmap PathToFile
+        {
+            get
+            {
                 object obj = ResourceManager.GetObject("PathToFile", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap AngularDimension
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("AngularDimension", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap Combine
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("Combine", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap CurveInfo
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("CurveInfo", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap Document
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("Document", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap DrawCurve
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("DrawCurve", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap DrawSurface
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("DrawSurface", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap DrawText
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("DrawText", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap DrawingView
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("DrawingView", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap ExportSVG
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("ExportSVG", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap Frame
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("Frame", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap Grid
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("Grid", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap LegendBlock
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("LegendBlock", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap LinearDimension
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("LinearDimension", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap NotesBlock
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("NotesBlock", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap Page
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("Page", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap PathStlye
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("PathStlye", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap RenderPdf
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("RenderPdf", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap RenderSvg
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("RenderSvg", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap RevisionTable
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("RevisionTable", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap Stack
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("Stack", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap Table
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("Table", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap TextFlow
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("TextFlow", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap TitleBlock
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("TitleBlock", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap BakeFile
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("BakeFile", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap SectionSettings
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("SectionSettings", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
         }
