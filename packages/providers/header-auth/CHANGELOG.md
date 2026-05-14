@@ -5,8 +5,8 @@
 ### Minor Changes
 
 - - `@selvajs/header-auth-provider`: new `BootstrapAllowlistPolicy` API and behavior change in `identifyFromHeaders`.
-  - `@selvajs/runtime`: new auto-bootstrap behavior and new page UI cases.
-  - `@selvajs/create`: CLI prompts and doctor improvements (no API surface change).
+  - `@selvajs/selva`: new auto-bootstrap behavior and new page UI cases.
+  - `@selvajs/cli`: CLI prompts and doctor improvements (no API surface change).
 
 ## 0.2.0
 
@@ -16,7 +16,7 @@
 
   A broad release covering platform foundations, a new drawing/PDF pipeline, unified drag-and-drop, schema-source-of-truth work, and a new forward-auth provider. Web apps and `@selvajs/ui` are aligned at 0.10.0; library packages move to the next minor in their respective tracks. The Grasshopper plugin ships as 0.10.0 (beta tag dropped).
 
-  ## Apps & UI (`@selvajs/builder-app`, `@selvajs/compute-app`, `@selvajs/ui`)
+  ## Apps & UI (`@selvajs/builder-app`, `@selvajs/selva`, `@selvajs/ui`)
 
   ### Builder-app
   - Unified drag-and-drop on `svelte-dnd-action` with a thin cross-type coordinator (replaces three coexisting systems).
@@ -27,7 +27,7 @@
   - Resizable-handle styling, grid-item visibility + column positioning, dropzone active-state highlights.
   - Compute throttle + solving indicator; util reorganisation.
 
-  ### Compute-app
+  ### Selva
   - Project-owner definition uploads with access-control tests.
   - Project visibility handling tightened in access-control logic.
   - StatCard refactor across project/team pages and updated project navigation.

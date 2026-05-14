@@ -1,6 +1,6 @@
-# Pre-Step Producers — Design Discussion
+# ADR 0001 — Pre-Step Producers
 
-> Working draft. Captures the architecture discussion for adding a "pre-step" phase to the solver routes (`/preview` in builder-app, `/library/[guid]` in selva-app). Not a final spec — open questions at the bottom.
+> **Frozen decision record.** V1 shipped 2026-05-08. The "Recommended architecture" and later sections describe future-state design that informed V1 — they are *not* a roadmap. Treat anything below "V1 status: shipped" as historical context for *why* V1 looks the way it does. For current behavior, the "V1 status" and "Getting started" sections below are authoritative.
 
 ## V1 status: shipped (2026-05-08)
 
@@ -37,18 +37,18 @@ The `scopeKey` is whatever uniquely identifies the solver context: `sessionId` i
 
 | Layer                     | File / Symbol                                                                                                                                         | Role                                                                                                                               |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Schema                    | [packages/schemas/ui-schema.json](../packages/schemas/ui-schema.json)                                                                                 | `InputSource` definition                                                                                                           |
-| Migration                 | [Plugin/Selva.Schema/Services/SchemaMigrator.cs](../Plugin/Selva.Schema/Services/SchemaMigrator.cs)                                                   | `MigrateTo_2_8_0`                                                                                                                  |
-| Storage primitives        | [packages/ui/src/lib/external/storage.ts](../packages/ui/src/lib/external/storage.ts)                                                                 | `readExternalValue`, `writeExternalValue`, `clearExternalValue`, `getExternalInputs`. Re-exported from `@selvajs/ui`.              |
-| Visibility fix            | [packages/ui/src/lib/schema/visibility-rules.ts](../packages/ui/src/lib/schema/visibility-rules.ts)                                                   | `evaluateVisibility` now honors static `item.visible === false` (was previously ignored — pre-existing bug uncovered by this work) |
-| Builder UI toggle         | [packages/builder-app/src/lib/components/builder/BuilderGroupItem.svelte](../packages/builder-app/src/lib/components/builder/BuilderGroupItem.svelte) | "External value" switch in the input editor; defaults `visible: false` when toggled on                                             |
-| Builder-app solver        | [packages/builder-app/src/routes/preview/+page.svelte](../packages/builder-app/src/routes/preview/+page.svelte)                                       | Reads sessionStorage on schema load and seeds external inputs into `state.values`. No warning UI.                                  |
-| Builder-app initial solve | [packages/builder-app/src/lib/composables/usePreviewState.svelte.ts](../packages/builder-app/src/lib/composables/usePreviewState.svelte.ts)           | Initial-solve timeout reads live `state.values` (was using stale snapshot — race condition fix)                                    |
-| Compute-app               | [packages/ui/src/lib/components/compute/ComputeApp.svelte](../packages/ui/src/lib/components/compute/ComputeApp.svelte)                               | Skips externals in `createInitialValues`, seeds from sessionStorage. No warning UI.                                                |
+| Schema                    | [packages/schemas/ui-schema.json](../../packages/schemas/ui-schema.json)                                                                                 | `InputSource` definition                                                                                                           |
+| Migration                 | [Plugin/Selva.Schema/Services/SchemaMigrator.cs](../../Plugin/Selva.Schema/Services/SchemaMigrator.cs)                                                   | `MigrateTo_2_8_0`                                                                                                                  |
+| Storage primitives        | [packages/ui/src/lib/external/storage.ts](../../packages/ui/src/lib/external/storage.ts)                                                                 | `readExternalValue`, `writeExternalValue`, `clearExternalValue`, `getExternalInputs`. Re-exported from `@selvajs/ui`.              |
+| Visibility fix            | [packages/ui/src/lib/schema/visibility-rules.ts](../../packages/ui/src/lib/schema/visibility-rules.ts)                                                   | `evaluateVisibility` now honors static `item.visible === false` (was previously ignored — pre-existing bug uncovered by this work) |
+| Builder UI toggle         | [packages/builder-app/src/lib/components/builder/BuilderGroupItem.svelte](../../packages/builder-app/src/lib/components/builder/BuilderGroupItem.svelte) | "External value" switch in the input editor; defaults `visible: false` when toggled on                                             |
+| Builder-app solver        | [packages/builder-app/src/routes/preview/+page.svelte](../../packages/builder-app/src/routes/preview/+page.svelte)                                       | Reads sessionStorage on schema load and seeds external inputs into `state.values`. No warning UI.                                  |
+| Builder-app initial solve | [packages/builder-app/src/lib/composables/usePreviewState.svelte.ts](../../packages/builder-app/src/lib/composables/usePreviewState.svelte.ts)           | Initial-solve timeout reads live `state.values` (was using stale snapshot — race condition fix)                                    |
+| Compute-app               | [packages/ui/src/lib/components/compute/ComputeApp.svelte](../../packages/ui/src/lib/components/compute/ComputeApp.svelte)                               | Skips externals in `createInitialValues`, seeds from sessionStorage. No warning UI.                                                |
 
 ### How values reach Grasshopper
 
-`values[paramId]` is set from sessionStorage → `transformInputParameter` wraps it per `paramType` (text/number/boolean) → `TreeBuilder.fromInputParams` builds the GH data tree server-side in [api/compute/+server.ts](../packages/selva/src/routes/api/compute/+server.ts). For complex types (geometry, curves, etc.), use a **text** input on the schema and have the producer write a JSON-stringified payload — the GH definition parses it via a script component (parapet's pattern).
+`values[paramId]` is set from sessionStorage → `transformInputParameter` wraps it per `paramType` (text/number/boolean) → `TreeBuilder.fromInputParams` builds the GH data tree server-side in [api/compute/+server.ts](../../packages/selva/src/routes/api/compute/+server.ts). For complex types (geometry, curves, etc.), use a **text** input on the schema and have the producer write a JSON-stringified payload — the GH definition parses it via a script component (parapet's pattern).
 
 ### What's intentionally absent in v1
 
@@ -82,7 +82,7 @@ Pick this as the first one because it's representative of complex data and you h
 
 #### Step 1 — extract the domain-pure component
 
-Take [parapet/.../service/segment-draw/parametric-line-app.svelte.ts](../../parapet/packages/app/src/lib/services/segment-draw/parametric-line-app.svelte.ts) and the canvas component. Strip everything that touches Firebase, navigation, `objectState`, or any parapet-specific cache. The component should accept config props and fire `onDone(payload: LineData)`.
+Take [parapet/.../service/segment-draw/parametric-line-app.svelte.ts](../../../parapet/packages/app/src/lib/services/segment-draw/parametric-line-app.svelte.ts) and the canvas component. Strip everything that touches Firebase, navigation, `objectState`, or any parapet-specific cache. The component should accept config props and fire `onDone(payload: LineData)`.
 
 Land it in `packages/builder-app/src/lib/producers/line-drawer/LineDrawerApp.svelte` (or `packages/ui/...` if you want it usable across apps from day one).
 
@@ -283,7 +283,7 @@ interface IPlatformProducerPolicy {
 
 ### Render filter (the simple part)
 
-The schema already has `visible: boolean` on `LayoutItemBase` ([ui-schema.json:234-238](../packages/schemas/ui-schema.json#L234-L238)). Today the builder-app UI only exposes the dynamic `visibilityCondition`; we add a static visibility toggle.
+The schema already has `visible: boolean` on `LayoutItemBase` ([ui-schema.json:234-238](../../packages/schemas/ui-schema.json#L234-L238)). Today the builder-app UI only exposes the dynamic `visibilityCondition`; we add a static visibility toggle.
 
 Renderer filter (in `AppLayout`):
 
@@ -301,7 +301,7 @@ function partitionInputs(schema) {
 
 ### Runtime flow in selva-app
 
-Replaces parapet's hand-written `buildLineValues` switch (see [parapet/.../compute/[slug]/+page.svelte:79-118](../../parapet/packages/app/src/routes/compute/[slug]/+page.svelte#L79-L118)):
+Replaces parapet's hand-written `buildLineValues` switch (see [parapet/.../compute/[slug]/+page.svelte:79-118](../../../parapet/packages/app/src/routes/compute/[slug]/+page.svelte#L79-L118)):
 
 ```ts
 async function gatherPreStepValues(
@@ -327,7 +327,7 @@ Two concerns at different levels:
 
 | Concern                                   | Lives on                           | Change                                                                                                                                                |
 | ----------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Static visibility toggle (`item.visible`) | All layout items (groups + inputs) | Add eye-icon toggle in [BuilderGroupItem.svelte:522-528](../packages/builder-app/src/lib/components/builder/BuilderGroupItem.svelte#L522-L528) header |
+| Static visibility toggle (`item.visible`) | All layout items (groups + inputs) | Add eye-icon toggle in [BuilderGroupItem.svelte:522-528](../../packages/builder-app/src/lib/components/builder/BuilderGroupItem.svelte#L522-L528) header |
 | Pre-step producer dropdown                | Input items only                   | Add to input config editor; populated from registry, filtered by `acceptableInputs`                                                                   |
 
 When the user picks a producer, default `visible: false` (with override).
