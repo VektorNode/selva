@@ -53,7 +53,7 @@ pnpm run dev
 
 On first boot, hit `/setup` to create the platform admin.
 
-After login, go to `/admin/compute` and register your Rhino.Compute server URL (and optional API key) — Selva needs this to actually solve definitions. See [RHINO_COMPUTE.md](RHINO_COMPUTE.md) for setting that up.
+After login, go to `/admin/compute` and register your Rhino.Compute server URL (and optional API key) — Selva needs this to actually solve definitions. See [RhinoCompute.md](RhinoCompute.md) for setting that up.
 
 ## Builder app (optional — only for plugin development)
 
@@ -76,7 +76,7 @@ The builder app needs no env vars.
 - **[@selvajs/local-provider](../packages/providers/local/README.md)** — on-disk layout, backups, caveats
 - **[@selvajs/supabase-provider](../packages/providers/supabase/README.md)** — schema, RLS, hosted setup
 - **[Deploying to a Linux VM](deployment/GCE-Linux.md)** — production deploy walkthrough
-- **[RHINO_COMPUTE.md](RHINO_COMPUTE.md)** — set up the Rhino.Compute server
+- **[RhinoCompute.md](RhinoCompute.md)** — set up the Rhino.Compute server
 
 ## Troubleshooting
 

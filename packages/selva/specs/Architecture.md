@@ -339,7 +339,7 @@ This means Selva itself has zero exposure to GDPR-class data — the auth provid
 - **Access control rules** — see [Permissions.md](./Permissions.md). It is the authority on `canView`/`canEdit`/`canSolve`/etc.
 - **The Grasshopper plugin internals** (component anatomy, schema-link protocol, embedded HTTP server). Out of scope here; would belong in a `Plugin/ARCHITECTURE.md`.
 - **Frontend component architecture** (Svelte stores, theming, shared UI library). Out of scope; lives in `@selvajs/ui`.
-- **Rhino.Compute server topology** (single instance vs pool vs ours-vs-theirs). See `docs/RHINO_COMPUTE.md`.
+- **Rhino.Compute server topology** (single instance vs pool vs ours-vs-theirs). See `docs/RhinoCompute.md`.
 
 ---
 

@@ -1,7 +1,6 @@
 packages:
   - packages/*
   - packages/providers/*
-  - examples/*
 
 catalogs:
   default:

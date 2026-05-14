@@ -18,13 +18,13 @@ Selva's auth, data, and storage are pluggable. Pick one when configuring the sel
 
 - **[GCE-Linux.md](./deployment/GCE-Linux.md)** — End-to-end walkthrough for deploying a CLI-scaffolded Selva on a Linux VM (Ubuntu/GCE) behind Caddy
 - **[Caddyfile.example](./deployment/Caddyfile.example)** — Reference Caddy configuration for production HTTPS deployments
-- **[RHINO_COMPUTE.md](./RHINO_COMPUTE.md)** — Set up the Rhino.Compute server
+- **[RhinoCompute.md](./RhinoCompute.md)** — Set up the Rhino.Compute server
 
 After the app is up, definitions are uploaded through the admin UI — there is no on-disk setup step.
 
 ## Design / Architecture Notes
 
-- **[Pre-Step Producers Design](./pre-step-producers-design.md)** — How external-value producers feed inputs into the solver (v1 shipped; full registry design captured as future state)
+- **[ADR 0001 — Pre-Step Producers](./adr/0001-pre-step-producers.md)** — Frozen decision record. V1 shipped 2026-05-08; later sections capture future-state design that informed V1.
 
 ## Release Management
 
