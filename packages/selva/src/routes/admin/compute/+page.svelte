@@ -42,7 +42,7 @@
 	let servers = $state<ServerEntry[]>([]);
 	let defaultServerId = $state('');
 	let saving = $state(false);
-	let dirtyIds = $state(new SvelteSet<string>());
+	const dirtyIds = new SvelteSet<string>();
 	let expandedPlugins = $state<Record<string, boolean>>({});
 	let expandedSharing = $state<Record<string, boolean>>({});
 
@@ -147,10 +147,9 @@
 
 	function toggleOrg(server: ServerEntry, orgId: string) {
 		if (server.sharedWith === 'all') return; // ignored when in 'all' mode
-		const set = new Set(server.sharedWith);
-		if (set.has(orgId)) set.delete(orgId);
-		else set.add(orgId);
-		server.sharedWith = [...set];
+		server.sharedWith = server.sharedWith.includes(orgId)
+			? server.sharedWith.filter((id) => id !== orgId)
+			: [...server.sharedWith, orgId];
 		markDirty(server.id);
 	}
 

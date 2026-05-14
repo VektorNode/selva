@@ -244,10 +244,12 @@ export function useBuilderState(sessionId: string) {
 		// availableInputs/Outputs. The plugin auto-merges newly-discovered params
 		// into schema.inputs/outputs and broadcasts schemaUpdated (no separate
 		// parametersAdded), so the sidebar would otherwise miss them.
-		const knownInputIds = new Set(state.availableInputs.map((p) => p.id));
-		const knownOutputIds = new Set(state.availableOutputs.map((o) => o.id));
-		const hasNewInputs = (message.schema?.inputs ?? []).some((i) => !knownInputIds.has(i.id));
-		const hasNewOutputs = (message.schema?.outputs ?? []).some((o) => !knownOutputIds.has(o.id));
+		const knownInputIds = state.availableInputs.map((p) => p.id);
+		const knownOutputIds = state.availableOutputs.map((o) => o.id);
+		const hasNewInputs = (message.schema?.inputs ?? []).some((i) => !knownInputIds.includes(i.id));
+		const hasNewOutputs = (message.schema?.outputs ?? []).some(
+			(o) => !knownOutputIds.includes(o.id)
+		);
 
 		// schemaUpdated is the canonical broadcast — replace wholesale.
 		if (message.schema) {

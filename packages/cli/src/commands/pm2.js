@@ -8,8 +8,8 @@
 //     or globally. We resolve to the local one first so a fresh deployment
 //     works without `npm i -g pm2`.
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { spawnSync, execSync } from 'node:child_process';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';

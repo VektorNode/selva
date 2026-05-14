@@ -9,7 +9,7 @@
 		value: string;
 	}
 
-	let { item, value }: Props = $props();
+	let { item: _item, value }: Props = $props();
 
 	const MAP_TYPE_SET = new Set(['scattermap', 'scattermapbox', 'choropleth', 'scattergeo']);
 

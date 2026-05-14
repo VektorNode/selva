@@ -97,14 +97,14 @@ echo "[STEP] Health-probing the new process"
 HEALTHY=0
 for i in $(seq 1 15); do
   sleep 2
-  CODE=$(curl -sS -o /tmp/selva-health.\$\$ -w "%{http_code}" --max-time 5 http://localhost:3000/api/health 2>/dev/null || echo "000")
+  CODE=$(curl -sS -o /tmp/selva-health.$$ -w "%{http_code}" --max-time 5 http://localhost:3000/api/health 2>/dev/null || echo "000")
   if [ "$CODE" = "200" ]; then
     HEALTHY=1
     echo "[INFO] Health probe passed after \${i} attempt(s)"
-    rm -f /tmp/selva-health.\$\$
+    rm -f /tmp/selva-health.$$
     break
   fi
-  echo "[INFO] Probe attempt \$i/15: HTTP $CODE — retrying"
+  echo "[INFO] Probe attempt $i/15: HTTP $CODE — retrying"
 done
 
 if [ "$HEALTHY" = "1" ]; then
@@ -113,10 +113,10 @@ if [ "$HEALTHY" = "1" ]; then
 fi
 
 echo "[FATAL] New process failed health check after 30s"
-if [ -f /tmp/selva-health.\$\$ ]; then
+if [ -f /tmp/selva-health.$$ ]; then
   echo "[FATAL] Last response body:"
-  cat /tmp/selva-health.\$\$
-  rm -f /tmp/selva-health.\$\$
+  cat /tmp/selva-health.$$
+  rm -f /tmp/selva-health.$$
 fi
 
 if [ -z "$BEFORE" ]; then
