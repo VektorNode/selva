@@ -21,7 +21,7 @@ let headerAuthBootstrapWired = false;
 
 // Env validation is owned by each provider's `fromEnv()` — the selected
 // provider throws on missing vars (e.g. DATA_PATH for local, SUPABASE_URL for
-// supabase) while `providers.server.ts` is loaded. No compute-app-level check
+// supabase) while `providers.server.ts` is loaded. No app-level check
 // is needed here.
 
 // Kick off boot-time integrity checks (currently: at-rest secret decryption
@@ -327,7 +327,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 //     would brick local development across the org.
 //
 // **Intentionally NOT set here** (deferred to the UI freeze):
-//   - Content-Security-Policy + frame-ancestors. The compute-app is built
+//   - Content-Security-Policy + frame-ancestors. The selva app is built
 //     for iframe embedding (per its own package description), so a strict
 //     CSP needs UI-phase validation against real consumer sites before
 //     it can ship.
@@ -358,7 +358,11 @@ function applySecurityHeaders(response: Response, pathname: string): Response {
 	return response;
 }
 
-export const handleError: import('@sveltejs/kit').HandleServerError = ({ error, status }) => {
+export const handleError: import('@sveltejs/kit').HandleServerError = ({
+	error,
+	status,
+	event
+}) => {
 	// For expected HTTP errors (thrown with error(4xx, message)), pass the message through as-is.
 	// For unexpected errors, show a generic message to avoid leaking internals.
 	if (isHttpError(error)) {
@@ -367,6 +371,13 @@ export const handleError: import('@sveltejs/kit').HandleServerError = ({ error, 
 	if (status === 404) {
 		return { message: 'Page not found.' };
 	}
-	console.error('[Unhandled error]', error);
+	// Log enough context to diagnose without grepping: route, method, and the
+	// underlying cause chain. SvelteKit's default logging drops `cause`, which
+	// is where provider adapters tend to stash the real reason (Supabase
+	// network error, fs EACCES, etc.).
+	const cause = error instanceof Error && error.cause ? `\n  caused by: ${error.cause}` : '';
+	console.error(
+		`[Unhandled error] ${event.request.method} ${event.url.pathname}\n  ${error}${cause}`
+	);
 	return { message: 'An unexpected error occurred.' };
 };

@@ -1,11 +1,11 @@
-# @selvajs/create
+# @selvajs/cli
 
 CLI for white-label Selva deployments.
 
 ## Bootstrap a new deployment
 
 ```bash
-npx @selvajs/create my-deployment
+npx @selvajs/cli my-deployment
 ```
 
 Interactive scaffolder. Prompts for provider, tenancy, flags, brand name, admin email. Generates `SELVA_HMAC_KEY` + `SELVA_AT_REST_KEY`. Writes `.env`, `selva.config.js`, `ecosystem.config.cjs`, `package.json`. Runs `npm install`.
@@ -27,7 +27,7 @@ All operator commands run inside the deployment directory (the one that contains
 
 ## Idempotency rules
 
-- `npx @selvajs/create` refuses to overwrite a non-empty directory without `--force`.
+- `npx @selvajs/cli` refuses to overwrite a non-empty directory without `--force`.
 - `selva init` reads the current `.env`, lets the user edit, and **never** regenerates `SELVA_HMAC_KEY` / `SELVA_AT_REST_KEY` if they're already set.
 - A `.selva-version` marker is written so future CLI versions can migrate config schema cleanly.
 

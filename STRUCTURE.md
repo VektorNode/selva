@@ -17,9 +17,10 @@ selva/
 ├── packages/                       # TypeScript / Svelte workspace
 │   ├── schemas/                    # ui-schema.json + TS/C# code generators
 │   ├── platform/                   # Provider interfaces (auth, data, storage, ...)
-│   ├── local-provider/             # Filesystem implementation of platform
-│   ├── supabase-provider/          # Supabase implementation of platform
-│   ├── header-auth-provider/       # Forward-auth provider (trusts reverse-proxy headers)
+│   ├── providers/
+│   │   ├── local/                  # Filesystem implementation of platform (@selvajs/local-provider)
+│   │   ├── supabase/               # Supabase implementation of platform (@selvajs/supabase-provider)
+│   │   └── header-auth/            # Forward-auth provider, trusts reverse-proxy headers (@selvajs/header-auth-provider)
 │   ├── ui/                         # Shared Svelte components, theme, primitives
 │   ├── builder-app/                # Schema designer (local dev mode)
 │   ├── selva/                      # @selvajs/selva — the deployable Selva app (cloud mode)

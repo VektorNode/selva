@@ -13,7 +13,7 @@ export function requireDeploymentDir(dir) {
 		throw new Error(
 			`Not a Selva deployment directory: ${dir}\n` +
 				`Expected to find .env or ecosystem.config.cjs here. ` +
-				`Run \`npx @selvajs/create <dir>\` first, or cd into an existing deployment.`
+				`Run \`npx @selvajs/cli <dir>\` first, or cd into an existing deployment.`
 		);
 	}
 }

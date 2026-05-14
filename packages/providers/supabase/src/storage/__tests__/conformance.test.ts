@@ -12,16 +12,30 @@ const PRIVATE_BUCKET = process.env.SUPABASE_PRIVATE_BUCKET ?? 'selva-private';
 // The conformance suite hits a live Supabase stack. If creds aren't present
 // (e.g. in CI without Docker, or a clean clone pre-`supabase start`), skip
 // the suite with a single explanatory test so the run surfaces the reason.
-const liveStackAvailable = Boolean(SUPABASE_URL && SERVICE_ROLE_KEY);
+// `createClient` transitively loads `@supabase/realtime-js`, which on Node < 22
+// throws at construction without native WebSocket — treat that as "no stack"
+// rather than crashing the suite during collection.
+function tryBuildAdminClient(): ReturnType<typeof createClient> | null {
+	if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return null;
+	try {
+		return createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+			auth: { persistSession: false, autoRefreshToken: false }
+		});
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		if (msg.includes('WebSocket')) return null;
+		throw err;
+	}
+}
+const _adminClient = tryBuildAdminClient();
 
-if (!liveStackAvailable) {
+if (_adminClient === null) {
 	describe.skip('SupabaseStorageProvider (skipped: no live stack)', () => {
-		it('populate packages/supabase-provider/.env.test with SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (from `npx supabase start`) to run these tests', () => {});
+		it('populate packages/providers/supabase/.env.test with SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (from `npx supabase start`) to run these tests', () => {});
 	});
 } else {
-	const adminClient = createClient(SUPABASE_URL!, SERVICE_ROLE_KEY!, {
-		auth: { persistSession: false, autoRefreshToken: false }
-	});
+	// Re-bind in this branch so closures below see the non-null narrowed type.
+	const adminClient = _adminClient;
 
 	/**
 	 * Delete every object under a prefix in a bucket. The conformance suite

@@ -18,7 +18,7 @@ export default defineConfig({
 		testTimeout: 30_000,
 		hookTimeout: 30_000,
 		// Pick up test env from .env.test if present. Created by `npx supabase start`:
-		// copy the printed URL + keys into packages/supabase-provider/.env.test.
+		// copy the printed URL + keys into packages/providers/supabase/.env.test.
 		env: loadTestEnv(),
 		// Run every test file serially. The conformance suites all reset the
 		// shared DB in their beforeEach hooks; parallel execution would have

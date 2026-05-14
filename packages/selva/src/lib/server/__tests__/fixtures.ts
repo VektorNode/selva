@@ -1,5 +1,5 @@
 /**
- * Test fixtures for compute-app integration tests.
+ * Test fixtures for @selvajs/selva integration tests.
  *
  * `freshProviders()` builds a real LocalDataProvider stack rooted in a fresh
  * tmpdir per test — no mocks, no stubs. Tests interact with the same store

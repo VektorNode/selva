@@ -661,7 +661,7 @@ using (
 -- The standard `deleteOrg` path is a soft-delete (UPDATE deleted_at), so the
 -- SupabaseOrgStore.deleteOrg cascade explicitly DELETEs invites for the org;
 -- see SupabaseOrgStore.ts. Same pattern for compute_servers below.
--- Invite tokens are HMAC-hashed at the route layer (compute-app's
+-- Invite tokens are HMAC-hashed at the route layer (the selva app's
 -- `lib/server/invites/token.server.ts`) before reaching the store — the raw
 -- token is shown to the admin once and never persisted. A DB-only leak
 -- therefore can't be replayed without the instance's INVITE_TOKEN_SECRET.

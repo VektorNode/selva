@@ -48,7 +48,7 @@ async function expectStatus(promise: Promise<unknown>, status: number): Promise<
 
 describe('share-link token resolution', () => {
 	it('valid token + matching definition + matching channel → resolves', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const { rawToken, link } = await seedShareLink(tp, {
@@ -68,7 +68,7 @@ describe('share-link token resolution', () => {
 	});
 
 	it('no token at all → returns null (caller falls through to user auth)', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { request, url } = reqWithToken(null);
 
 		const resolved = await tryResolveShareToken(request, url, 'any-def-id', 'live', {
@@ -78,7 +78,7 @@ describe('share-link token resolution', () => {
 	});
 
 	it('token for definition A used against definition B → 403', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const defA = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const defB = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
@@ -95,7 +95,7 @@ describe('share-link token resolution', () => {
 	});
 
 	it('token for live channel used against ?channel=draft → 403', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const { rawToken } = await seedShareLink(tp, {
@@ -112,7 +112,7 @@ describe('share-link token resolution', () => {
 	});
 
 	it('view-only token used on a solve-required path → 403', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const { rawToken } = await seedShareLink(tp, {
@@ -129,7 +129,7 @@ describe('share-link token resolution', () => {
 	});
 
 	it('view-only token on a view path (requireSolve=false) → resolves', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const { rawToken } = await seedShareLink(tp, {
@@ -147,7 +147,7 @@ describe('share-link token resolution', () => {
 	});
 
 	it('revoked token → 401', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const { rawToken, link } = await seedShareLink(tp, {
@@ -164,7 +164,7 @@ describe('share-link token resolution', () => {
 	});
 
 	it('expired token → 401', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const past = new Date(Date.now() - 60_000).toISOString();
@@ -182,7 +182,7 @@ describe('share-link token resolution', () => {
 	});
 
 	it('token whose parent definition was soft-deleted → 401 (fail closed)', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const { rawToken } = await seedShareLink(tp, {
@@ -199,7 +199,7 @@ describe('share-link token resolution', () => {
 	});
 
 	it('garbage token (well-formed prefix, no matching hash) → 401', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 

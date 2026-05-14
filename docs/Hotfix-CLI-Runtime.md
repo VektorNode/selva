@@ -1,11 +1,11 @@
-# Hotfixing `@selvajs/selva` and `@selvajs/create`
+# Hotfixing `@selvajs/selva` and `@selvajs/cli`
 
 The "I changed code, get it on the VM now" loop. Bypasses the changesets workflow described in [Publishing.md](./Publishing.md) — use this when you need to ship one fix to one or two operators, not cut a coordinated release.
 
 For multi-package, multi-changeset releases use the standard flow. This doc covers the common cases:
 
-- Changed the runtime (compute-app source, providers, the admin update handler, …) and need to republish `@selvajs/selva`.
-- Changed the CLI source under `packages/create/` and need to republish `@selvajs/create`.
+- Changed the runtime (selva app source, providers, the admin update handler, …) and need to republish `@selvajs/selva`.
+- Changed the CLI source under `packages/cli/` and need to republish `@selvajs/cli`.
 - Both at once.
 
 The shape is always: **bump → build (runtime only) → verify → publish → operator updates**.
@@ -15,8 +15,61 @@ The shape is always: **bump → build (runtime only) → verify → publish → 
 ## When NOT to use this
 
 - **Coordinated multi-package release.** Use `pnpm changeset` and `pnpm release` (see Publishing.md). Changesets writes CHANGELOGs, bumps interdependent versions consistently, and publishes everything in one shot.
-- **Provider-only fix** that the runtime should also pick up. Bump the provider via changeset; `updateInternalDependencies: patch` cascades a runtime bump automatically.
+- **Provider-only fix.** Providers are bundled into `@selvajs/selva`'s build artifact and aren't published independently. Any provider fix ships as part of a runtime hotfix — see "Runtime hotfix" below.
 - **First publish of a new package.** Walk through Publishing.md's first-publish checklist (namespace check, dry-run pack, etc.).
+
+---
+
+## Migrating an existing deployment from `@selvajs/create`
+
+The CLI package was renamed `@selvajs/create` → `@selvajs/cli` in `@selvajs/selva@0.12.0+`. The package contents and bins are identical — same `selva` command, same scaffolding behavior — only the npm name changed.
+
+**Operators with a live deployment that has `@selvajs/create` in their `package.json` need to swap it at next update.** Until they do, `npm run update` keeps installing the old `@selvajs/create` package, which still works but won't receive any further updates.
+
+### One-time migration steps
+
+On the VM:
+
+```bash
+cd ~/apps/selva
+
+# 1. Drop the old name from package.json + node_modules.
+npm uninstall @selvajs/create
+
+# 2. Install the new name.
+npm install @selvajs/cli
+
+# 3. Confirm the `selva` bin still resolves and points at the new package.
+which selva
+#   → /…/node_modules/.bin/selva
+readlink "$(which selva)"
+#   → ../@selvajs/cli/bin/selva.js   (was: ../@selvajs/create/bin/selva.js)
+
+# 4. Restart so the new code is picked up.
+selva restart
+```
+
+That's it. The bin name (`selva`) is unchanged, so all scripts (`npm start`, `npm run logs`, pm2 unit, ecosystem.config.cjs, admin-update handler) keep working without edits.
+
+### What to check before announcing
+
+Before telling operators to migrate, verify their deployment isn't pinned to `@selvajs/create` in places `npm install` won't see:
+
+- **`ecosystem.config.cjs`** — does it call `node_modules/@selvajs/create/bin/selva.js` directly? If so, they need to update the path to `node_modules/@selvajs/cli/bin/selva.js`. (Default scaffolds use bare `selva` from `$PATH` and don't need this fix.)
+- **Custom scripts or systemd units** — anything that hard-codes the `@selvajs/create` path will break and needs updating.
+
+`grep -r "@selvajs/create" ~/apps/selva` on the VM catches these.
+
+### `npm view` sanity check
+
+Before announcing the rename, confirm both names are queryable so operators don't get confused if they search for the old one:
+
+```bash
+npm view @selvajs/create       # shows last published version of the old name
+npm view @selvajs/cli          # shows current published version
+```
+
+The old `@selvajs/create` package stays on npm forever (npm forbids unpublishing after 72h). It just stops receiving updates. Consider running `npm deprecate @selvajs/create "renamed to @selvajs/cli — see https://…/docs/Hotfix-CLI-Runtime.md#migrating"` once `@selvajs/cli` ships, so anyone who installs the old name sees the deprecation notice in their terminal.
 
 ---
 
@@ -27,7 +80,7 @@ The shape is always: **bump → build (runtime only) → verify → publish → 
 Any change in:
 
 - `packages/selva/**` (the bundled SvelteKit app)
-- `packages/platform/**`, `packages/local-provider/**`, `packages/supabase-provider/**`, `packages/header-auth-provider/**` (the providers — if you only touched these, you can usually update them independently, but bundling a runtime release together is simpler when the change is small)
+- `packages/platform/**`, `packages/providers/local/**`, `packages/providers/supabase/**`, `packages/providers/header-auth/**` (the providers — if you only touched these, you can usually update them independently, but bundling a runtime release together is simpler when the change is small)
 - `packages/selva/scripts/build.js` or `packages/selva/templates/**`
 
 The runtime is the only publishable package that **bundles a prebuilt artifact**. Every other `@selvajs/*` package ships source; the runtime ships compiled output. Skipping the build is the most common foot-gun.
@@ -50,7 +103,7 @@ fs.writeFileSync(f, JSON.stringify(p, null, '\t') + '\n');
 console.log('bumped to', p.version);
 "
 
-# 2. Rebuild. This compiles compute-app with ADAPTER=node, copies the build
+# 2. Rebuild. This compiles the selva app with ADAPTER=node, copies the build
 #    into packages/selva/build/, recompiles selva.config.ts to the JS
 #    template, and writes the .env.example + ecosystem.config.cjs templates.
 #    Slow (~30–60s) — let it finish.
@@ -114,7 +167,7 @@ For the very first time after the runtime ships a fix to the admin-update handle
 
 ### When this applies
 
-Any change in `packages/create/**`. The CLI is plain JavaScript shipped verbatim — there's no build step.
+Any change in `packages/cli/**`. The CLI is plain JavaScript shipped verbatim — there's no build step.
 
 ### Steps
 
@@ -122,7 +175,7 @@ Any change in `packages/create/**`. The CLI is plain JavaScript shipped verbatim
 # 1. Bump.
 node -e "
 const fs = require('fs');
-const f = 'packages/create/package.json';
+const f = 'packages/cli/package.json';
 const p = JSON.parse(fs.readFileSync(f));
 const [maj, min, patch] = p.version.split('.').map(Number);
 p.version = \`\${maj}.\${min}.\${patch + 1}\`;
@@ -134,13 +187,13 @@ console.log('bumped to', p.version);
 #    Catches missing imports / syntax errors before they reach operators.
 node --input-type=module -e "
 for (const m of [
-  './packages/create/src/cli.js',
-  './packages/create/src/prompts.js',
-  './packages/create/src/commands/create.js',
-  './packages/create/src/commands/init.js',
-  './packages/create/src/commands/doctor.js',
-  './packages/create/src/commands/pm2.js',
-  './packages/create/src/commands/keys.js'
+  './packages/cli/src/cli.js',
+  './packages/cli/src/prompts.js',
+  './packages/cli/src/commands/create.js',
+  './packages/cli/src/commands/init.js',
+  './packages/cli/src/commands/doctor.js',
+  './packages/cli/src/commands/pm2.js',
+  './packages/cli/src/commands/keys.js'
 ]) { await import(m); console.log('ok', m); }
 "
 
@@ -148,29 +201,29 @@ for (const m of [
 #    Recommended for any change that touches package.json or the bin/ scripts.
 cd packages/create && pnpm pack
 tmp=$(mktemp -d) && cd "$tmp" && npm init -y --silent >/dev/null
-npm install /d/Coding/selva/packages/create/selvajs-create-<version>.tgz
-node node_modules/@selvajs/create/bin/selva.js --version
-node node_modules/@selvajs/create/bin/create.js   # should print Usage line
+npm install /d/Coding/selva/packages/cli/selvajs-cli-<version>.tgz
+node node_modules/@selvajs/cli/bin/selva.js --version
+node node_modules/@selvajs/cli/bin/create.js   # should print Usage line
 cd - >/dev/null
 
 # 4. Publish.
-pnpm --filter @selvajs/create publish --access public --no-git-checks
+pnpm --filter @selvajs/cli publish --access public --no-git-checks
 
 # 5. Confirm.
-npm view @selvajs/create version
-npm view @selvajs/create@latest bin
+npm view @selvajs/cli version
+npm view @selvajs/cli@latest bin
 #   Expect: { create: './bin/create.js', selva: './bin/selva.js' }
 ```
 
 ### After publishing
 
-CLI fixes reach operators when they next run `npm run update`, because `@selvajs/create` is in the package list that gets `npm update`d. **But:** the running CLI binary on the VM is whichever version got installed at scaffold time. The new CLI runs only on the *next* update after this one. Most CLI fixes are forward-compatible (they affect prompts, doctor checks, scaffold output) — operators who already have a deployment usually don't care.
+CLI fixes reach operators when they next run `npm run update`, because `@selvajs/cli` is in the package list that gets `npm update`d. **But:** the running CLI binary on the VM is whichever version got installed at scaffold time. The new CLI runs only on the *next* update after this one. Most CLI fixes are forward-compatible (they affect prompts, doctor checks, scaffold output) — operators who already have a deployment usually don't care.
 
 If a CLI fix affects an existing operator's day-to-day operations (e.g. `selva update` itself is broken), they need to install it directly:
 
 ```bash
 cd ~/apps/selva
-npm install --save @selvajs/create@latest
+npm install --save @selvajs/cli@latest
 ./node_modules/.bin/selva ...
 ```
 
@@ -196,12 +249,12 @@ done
 
 # Build runtime, smoke-test CLI.
 pnpm --filter @selvajs/selva run build
-node --input-type=module -e "await import('./packages/create/src/cli.js'); console.log('ok')"
+node --input-type=module -e "await import('./packages/cli/src/cli.js'); console.log('ok')"
 
 # Publish runtime FIRST so the CLI's scaffold output references a runtime
 # version that actually exists on the registry.
 pnpm --filter @selvajs/selva publish --access public --no-git-checks
-pnpm --filter @selvajs/create publish --access public --no-git-checks
+pnpm --filter @selvajs/cli publish --access public --no-git-checks
 ```
 
 The CLI scaffolds with `"@selvajs/selva": "latest"` so the order matters less than it seems — `npm install` resolves `latest` at install time. But publishing the runtime first means there's no window where a fresh scaffold can pick up a CLI that expects a runtime that isn't yet available.
@@ -216,7 +269,7 @@ The CLI scaffolds with `"@selvajs/selva": "latest"` so the order matters less th
 
 The failure mode is **silent in npm logs** — `npm install` logs the manifest fetch, then exits 1 with no error printed. The only diagnosis is `npm view @selvajs/selva@<version> dependencies` and noticing the literal `workspace:*` strings.
 
-To prevent this entirely, the runtime build script should hand-flatten specs before publish so it works with either tool. That's a TODO — see [WhiteLabelPlan.md](./WhiteLabelPlan.md). Until then, the habit of typing `pnpm publish` is the only line of defence.
+To prevent this entirely, the runtime build script should hand-flatten specs before publish so it works with either tool. That's a TODO. Until then, the habit of typing `pnpm publish` is the only line of defence.
 
 ### If you publish a broken version
 
@@ -285,7 +338,7 @@ This is documented for operators in [deployment/GCE-Linux.md](./deployment/GCE-L
 
 The trap exists in `selva update` and the admin handler today. Three layered fixes will close it:
 
-1. **Pass `--prefer-online` in `selva update` and the admin handler.** One-line change in [packages/create/src/commands/pm2.js](../packages/create/src/commands/pm2.js) and [packages/selva/src/routes/admin/api/system/update/+server.ts](../packages/selva/src/routes/admin/api/system/update/+server.ts). Adds a HEAD request per package — negligible cost, guaranteed fresh.
+1. **Pass `--prefer-online` in `selva update` and the admin handler.** One-line change in [packages/cli/src/commands/pm2.js](../packages/cli/src/commands/pm2.js) and [packages/selva/src/routes/admin/api/system/update/+server.ts](../packages/selva/src/routes/admin/api/system/update/+server.ts). Adds a HEAD request per package — negligible cost, guaranteed fresh.
 
 2. **Compare versions before / after and warn loudly when nothing changed.** Today the CLI prints `Current: 0.10.3 → New: 0.10.3` and exits successfully. It should detect the no-op and surface it:
 
@@ -297,7 +350,7 @@ The trap exists in `selva update` and the admin handler today. Three layered fix
 
 3. **Switch to `npm install @selvajs/<pkg>@latest` instead of `npm update`.** `install @latest` resolves the dist-tag against the registry every time, regardless of cache. Heavier than `update` (touches more of the dep tree), but bulletproof. Use as a fallback if `--prefer-online` still under-performs in practice.
 
-When you do the next hotfix to the CLI / runtime, bundle these in. The TODO is tracked in [WhiteLabelPlan.md](./WhiteLabelPlan.md) — search for "stale-packument-cache".
+When you do the next hotfix to the CLI / runtime, bundle these in.
 
 ### Diagnosing operator reports
 

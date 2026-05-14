@@ -38,7 +38,7 @@ This README is the contract. Read it before writing an adapter.
 
 ## Transaction ordering rules
 
-Providers are two-phase: a metadata store (`IDataProvider`) and a blob store (`IStorageProvider`). They have no shared transaction. The consumer's orchestration layer (`DefinitionService` in compute-app) composes them with fixed ordering so partial failure is recoverable.
+Providers are two-phase: a metadata store (`IDataProvider`) and a blob store (`IStorageProvider`). They have no shared transaction. The consumer's orchestration layer (`DefinitionService` in `@selvajs/selva`) composes them with fixed ordering so partial failure is recoverable.
 
 **Create — metadata-first with `pending` → `ready`:**
 

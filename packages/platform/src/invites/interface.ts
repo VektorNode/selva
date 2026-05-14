@@ -15,7 +15,7 @@ export interface IInviteStore {
 
 	/**
 	 * Lookup by HMAC hash of the raw token. Caller hashes the inbound token
-	 * (e.g. via `compute-app/src/lib/server/invites/token.server.ts`) and
+	 * (e.g. via `packages/selva/src/lib/server/invites/token.server.ts`) and
 	 * passes the digest here. Returns null for unknown, expired, or
 	 * consumed invites.
 	 */

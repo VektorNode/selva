@@ -55,7 +55,7 @@ export async function runInit() {
 		dir,
 		'node_modules',
 		'@selvajs',
-		'runtime',
+		'selva',
 		'templates',
 		'.env.example'
 	);

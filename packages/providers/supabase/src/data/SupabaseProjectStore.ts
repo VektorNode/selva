@@ -17,7 +17,7 @@ import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
  * (public / org / private) are enforced by the `visible_project()` helper in
  * RLS. Access predicates (canEdit / canManage / canView etc.) live as pure
  * functions in `@selvajs/platform/access`; the route layer composes them with
- * pre-loaded entities. See `compute-app/src/lib/server/access.server.ts`.
+ * pre-loaded entities. See `packages/selva/src/lib/server/access.server.ts`.
  *
  * `createProject` atomically seeds the creator as the project `owner` in
  * `project_members` so subsequent user-scoped reads can see it.

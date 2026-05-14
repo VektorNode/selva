@@ -25,13 +25,13 @@ Turn Grasshopper definitions into full web applications — with a live schema d
 | Package                                                              | Description                                                        |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | [`builder-app`](./packages/builder-app/README.md)                    | Schema designer connected to Grasshopper via WebSocket (local dev) |
-| [`compute-app`](./packages/selva/README.md)                    | Standalone solver app for cloud deployment via Rhino.Compute       |
+| [`selva`](./packages/selva/README.md)                                | Standalone solver app for cloud deployment via Rhino.Compute       |
 | [`ui`](./packages/ui/README.md)                                      | Shared Svelte components, theme, and utilities                     |
 | [`schemas`](./packages/schemas/README.md)                            | Schema definitions and TypeScript/C# code generators               |
 | [`platform`](./packages/platform/README.md)                          | Provider interfaces (auth, data, storage) — no implementations     |
-| [`local-provider`](./packages/local-provider/README.md)              | Filesystem + JSON + HMAC implementation of platform                |
-| [`supabase-provider`](./packages/supabase-provider/README.md)        | Supabase (Auth + Postgres + Storage) implementation of platform    |
-| [`header-auth-provider`](./packages/header-auth-provider/README.md)  | Auth-only adapter that trusts reverse-proxy identity headers       |
+| [`local-provider`](./packages/providers/local/README.md)             | Filesystem + JSON + HMAC implementation of platform                |
+| [`supabase-provider`](./packages/providers/supabase/README.md)       | Supabase (Auth + Postgres + Storage) implementation of platform    |
+| [`header-auth-provider`](./packages/providers/header-auth/README.md) | Auth-only adapter that trusts reverse-proxy identity headers       |
 | [`@selvajs/compute`](https://www.npmjs.com/package/@selvajs/compute) | Type-safe Rhino Compute client and Three.js helpers (npm)          |
 
 ## Requirements

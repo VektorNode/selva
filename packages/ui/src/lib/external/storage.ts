@@ -4,7 +4,7 @@
 // value here, and the solver route reads it back. Scoped per (scopeKey, inputId) so
 // values for one solver/input don't bleed into another. The scope key is whatever
 // uniquely identifies the solver context — sessionId in builder-app/preview,
-// definition guid in compute-app/library, etc.
+// definition guid in selva/library, etc.
 //
 // inputId is the Grasshopper parameter instance GUID (LayoutItem.paramId / SchemaInput.id).
 

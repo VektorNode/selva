@@ -91,12 +91,18 @@ resource "google_compute_instance" "selva" {
   }
 
   metadata_startup_script = templatefile("${path.module}/startup.sh.tpl", {
-    public_ip    = google_compute_address.selva.address
-    ssh_user     = var.ssh_user
-    domain       = local.domain
-    acme_email   = var.acme_email != "" ? var.acme_email : "admin@${local.domain}"
-    branch       = var.branch
-    github_token = var.github_token
+    public_ip                 = google_compute_address.selva.address
+    ssh_user                  = var.ssh_user
+    domain                    = local.domain
+    acme_email                = var.acme_email != "" ? var.acme_email : "admin@${local.domain}"
+    tenancy                   = var.tenancy
+    auth_provider             = var.auth_provider
+    data_provider             = var.data_provider != "" ? var.data_provider : (var.auth_provider == "header" ? "local" : var.auth_provider)
+    storage_provider          = var.storage_provider != "" ? var.storage_provider : (var.auth_provider == "header" ? "local" : var.auth_provider)
+    bootstrap_admin_email     = var.bootstrap_admin_email
+    supabase_url              = var.supabase_url
+    supabase_anon_key         = var.supabase_anon_key
+    supabase_service_role_key = var.supabase_service_role_key
   })
 
   service_account {

@@ -4,8 +4,6 @@ Supabase (Auth + Postgres + Storage) implementation of the `@selvajs/platform` i
 
 Runs the Selva backend against **either** a managed Supabase project (production) or a local Supabase CLI stack in Docker (development). Same code — different `SUPABASE_URL` and keys.
 
-For testing multi-org tenancy against the local Supabase stack, see [docs/MultiOrg-LocalDev.md](../../docs/MultiOrg-LocalDev.md).
-
 ---
 
 ## Table of contents
@@ -25,16 +23,16 @@ For testing multi-org tenancy against the local Supabase stack, see [docs/MultiO
 
 1. Install the package in the workspace (already listed in `pnpm-workspace.yaml`).
 2. Provision Supabase — either local (`npx supabase start`) or hosted (supabase.com).
-3. Apply the migrations from `packages/supabase-provider/supabase/migrations/` (the local CLI does this automatically on `db reset`).
-4. Copy the three env vars into your compute-app `.env` (see below).
-5. Edit [`selva.config.ts`](../../selva.config.ts) at the repo root to swap the local provider for the Supabase provider.
-6. `pnpm dev` — the compute-app now reads and writes from Supabase.
+3. Apply the migrations from `packages/providers/supabase/supabase/migrations/` (the local CLI does this automatically on `db reset`).
+4. Copy the three env vars into your selva app `.env` (see below).
+5. Edit [`selva.config.ts`](../../../selva.config.ts) at the repo root to swap the local provider for the Supabase provider.
+6. `pnpm dev` — the selva app now reads and writes from Supabase.
 
 ---
 
 ## Environment variables
 
-All env vars are documented in [`packages/selva/.env.example`](../compute-app/.env.example) — copy that file to `.env` and edit it. The Supabase provider needs `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`; the optional bucket / private-URL / signup overrides are also listed there.
+All env vars are documented in [`packages/selva/.env.example`](../../selva/.env.example) — copy that file to `.env` and edit it. The Supabase provider needs `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`; the optional bucket / private-URL / signup overrides are also listed there.
 
 `SELVA_HMAC_KEY` is not used for sessions by the Supabase provider — those are Supabase JWTs. It's still consulted as the fallback secret for share-link / invite token hashing if `SHARE_LINK_SECRET` / `INVITE_TOKEN_SECRET` are unset. `SELVA_AT_REST_KEY` is local-provider-only and is ignored. Both are harmless if left set.
 
@@ -101,7 +99,7 @@ The `supabase/seed.sql` file creates the two storage buckets (`selva-public`, `s
 **Hosted:** link the CLI to your project, then push:
 
 ```bash
-cd packages/supabase-provider
+cd packages/providers/supabase
 
 # One-time link. Reads the project-ref from Supabase Dashboard → Project Settings → General.
 npx supabase link --project-ref <your-project-ref>
@@ -122,16 +120,16 @@ Alternatively you can copy each `.sql` file into Supabase Dashboard → **SQL Ed
 Prerequisite: **Docker Desktop running.** First run pulls ~1 GB of images.
 
 ```bash
-cd packages/supabase-provider
+cd packages/providers/supabase
 npx supabase start
 ```
 
 This spins up Postgres (54322), GoTrue/Auth (54321), Storage, Studio (54323), and Mailpit (54324 — fake SMTP inbox for auth emails). Migrations and the bucket seed apply automatically.
 
-Copy the printed **Publishable** and **Secret** keys into your `.env` at the compute-app or repo root:
+Copy the printed **Publishable** and **Secret** keys into your `.env` at the selva app or repo root:
 
 ```bash
-# compute-app .env
+# selva app .env
 SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_ANON_KEY=sb_publishable_...
 SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
@@ -160,23 +158,23 @@ Studio is a full admin UI at `http://127.0.0.1:54323`. Use it to inspect tables,
 
 ## Production — hosted Supabase project
 
-1. Create a project on [supabase.com](https://supabase.com). Choose a region close to your compute-app deployment.
+1. Create a project on [supabase.com](https://supabase.com). Choose a region close to your selva app deployment.
 2. Dashboard → **Project Settings** → **API**. Copy the **Project URL**, **Publishable** key, and **Secret** key.
 3. Apply migrations via the CLI:
    ```bash
-   cd packages/supabase-provider
+   cd packages/providers/supabase
    npx supabase link --project-ref <your-project-ref>
    npx supabase db push
    ```
 4. Create the two storage buckets by running `supabase/seed.sql` in the Dashboard → **SQL Editor** (the CLI's `db push` doesn't run the seed on a hosted project — it's dev-only).
-5. Set the env vars on your compute-app host (Vercel, Fly.io, Docker, etc.):
+5. Set the env vars on your selva app host (Vercel, Fly.io, Docker, etc.):
    ```
    SUPABASE_URL=https://<project-ref>.supabase.co
    SUPABASE_ANON_KEY=sb_publishable_...
    SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
    ```
    After deploying, register your Rhino.Compute server URL (+ optional API key) via `/admin/compute`.
-6. Deploy the compute-app with `selva.config.ts` wired to `@selvajs/supabase-provider`.
+6. Deploy the selva app with `selva.config.ts` wired to `@selvajs/supabase-provider`.
 7. Bootstrap the first user:
    - Open `/setup` once — creates the first admin with `instance_admin`.
    - Or manually: Dashboard → **Authentication** → **Add user**, then in the SQL Editor: `UPDATE public.user_profiles SET platform_permissions = ARRAY['instance_admin']::text[] WHERE user_id = '<uuid>';`
@@ -195,7 +193,7 @@ Studio is a full admin UI at `http://127.0.0.1:54323`. Use it to inspect tables,
 The package ships a full conformance suite that runs against a **live** Supabase stack. It proves the provider implements every interface the same way the local provider does.
 
 ```bash
-cd packages/supabase-provider
+cd packages/providers/supabase
 
 # 1. Make sure the stack is running.
 npx supabase start
@@ -225,7 +223,7 @@ The suite wipes every table and every auth user between tests — **do not point
 Two buckets:
 
 - **`selva-public`** (public) — covers, archives. `getPublicUrl` returns the direct CDN URL.
-- **`selva-private`** (private) — `.gh` / `.ghx` files. `getPublicUrl` returns `/api/files/{path}` which the compute-app's route handler must proxy after an auth check.
+- **`selva-private`** (private) — `.gh` / `.ghx` files. `getPublicUrl` returns `/api/files/{path}` which the selva app's route handler must proxy after an auth check.
 
 Images are transcoded to WebP (1200px cap, quality 85) via the shared `transcodeImageIfNeeded` helper from `@selvajs/platform/storage`. Same bytes out of both providers.
 

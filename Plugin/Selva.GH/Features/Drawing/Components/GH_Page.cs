@@ -8,8 +8,8 @@ using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Layout;
 using ModelBoundingBox = Selva.Drawing.Model.Geometry.BoundingBox;
-using Selva.GH.Features.Drawing.Preview;
 using Selva.GH.Properties;
+using Selva.Drawing.RhinoInterop;
 
 namespace Selva.GH.Features.Drawing.Components;
 

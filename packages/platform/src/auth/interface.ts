@@ -51,7 +51,7 @@ export interface IOAuthAuth {
 	 *
 	 * Driving adapters (HTTP routes, UI) call this instead of reading
 	 * provider-specific env vars directly — keeps the provider name out of
-	 * `compute-app`.
+	 * `selva`.
 	 */
 	listProviders(): readonly string[];
 

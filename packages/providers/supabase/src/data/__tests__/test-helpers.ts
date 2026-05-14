@@ -22,9 +22,21 @@ export function readEnv(): TestContext | null {
 	const anonKey = process.env.SUPABASE_ANON_KEY;
 	const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 	if (!url || !anonKey || !serviceRoleKey) return null;
-	const adminClient = createClient(url, serviceRoleKey, {
-		auth: { persistSession: false, autoRefreshToken: false }
-	});
+	// `.env.test` is checked in with local-Supabase defaults so contributors can
+	// `npx supabase start` and run the suite. But `createClient` transitively
+	// loads `@supabase/realtime-js`, which on Node < 22 throws at construction
+	// without a native WebSocket. Swallow that so the suite cleanly skips
+	// instead of crashing test collection.
+	let adminClient: SupabaseClient;
+	try {
+		adminClient = createClient(url, serviceRoleKey, {
+			auth: { persistSession: false, autoRefreshToken: false }
+		});
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		if (msg.includes('WebSocket')) return null;
+		throw err;
+	}
 	const bundle = buildClientBundle({ supabaseUrl: url, anonKey, serviceRoleKey });
 	return { url, anonKey, serviceRoleKey, adminClient, bundle };
 }

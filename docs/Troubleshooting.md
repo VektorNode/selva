@@ -89,7 +89,7 @@ You do **not** need to restart the dev server — `compute.config.json` is re-re
 
 ### Reference
 
-- Envelope format and crypto primitives: [`packages/local-provider/src/data/secretCrypto.ts`](../packages/local-provider/src/data/secretCrypto.ts)
-- Per-row tolerant decrypt + strict `verifySecrets()`: [`packages/local-provider/src/data/LocalComputeServerStore.ts`](../packages/local-provider/src/data/LocalComputeServerStore.ts)
+- Envelope format and crypto primitives: [`packages/providers/local/src/data/secretCrypto.ts`](../packages/providers/local/src/data/secretCrypto.ts)
+- Per-row tolerant decrypt + strict `verifySecrets()`: [`packages/providers/local/src/data/LocalComputeServerStore.ts`](../packages/providers/local/src/data/LocalComputeServerStore.ts)
 - Boot-time check + health-endpoint wiring: [`packages/selva/src/lib/server/bootHealth.server.ts`](../packages/selva/src/lib/server/bootHealth.server.ts), [`packages/selva/src/routes/api/health/+server.ts`](../packages/selva/src/routes/api/health/+server.ts)
 - Env var documentation: [`packages/selva/.env.example`](../packages/selva/.env.example)

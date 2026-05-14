@@ -35,7 +35,7 @@ afterEach(async () => {
 
 describe('POST /api/definitions/[guid]/share-links', () => {
 	it('returns raw token in response; default cap applied', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const aliceLocals = await actAs(tp, alice.id);
@@ -55,7 +55,7 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 	});
 
 	it('explicit maxSolves: null removes the cap', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const aliceLocals = await actAs(tp, alice.id);
@@ -71,7 +71,7 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 	});
 
 	it('GET strips tokenHash from list responses', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const aliceLocals = await actAs(tp, alice.id);
@@ -91,7 +91,7 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 	});
 
 	it('Bob (Acme member, no project membership) — 403', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, bob, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const bobLocals = await actAs(tp, bob.id);
@@ -105,7 +105,7 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 	});
 
 	it('Commons mode: Alice (definition owner) can mint on her own def', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { acme, alice } = await seedAcme(tp);
 		const { alicesCommonsDef } = await seedCommons(tp, { acmeId: acme.id, aliceId: alice.id });
 		const aliceLocals = await actAs(tp, alice.id);
@@ -119,7 +119,7 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 	});
 
 	it("Commons mode: Peter (random user) cannot mint on Alice's def", async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { acme, alice } = await seedAcme(tp);
 		const { alicesCommonsDef, peter } = await seedCommons(tp, {
 			acmeId: acme.id,
@@ -136,7 +136,7 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 	});
 
 	it('Project editor (non-owner) can mint in container mode', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, bob, alicesPrivate } = await seedAcme(tp);
 		await seedProjectMember(tp, {
 			projectId: alicesPrivate.id,
@@ -157,7 +157,7 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 
 describe('DELETE /api/definitions/[guid]/share-links/[linkId]', () => {
 	it('revoking removes link from subsequent GET list', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const aliceLocals = await actAs(tp, alice.id);
@@ -181,7 +181,7 @@ describe('DELETE /api/definitions/[guid]/share-links/[linkId]', () => {
 	});
 
 	it('revoking a link that belongs to a different definition → 404', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const defA = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const defB = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });

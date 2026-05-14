@@ -43,7 +43,7 @@ pnpm format:check           # Check formatting
 
 # Testing
 pnpm test                   # vitest run across packages that have tests (turbo)
-cd packages/local-provider && pnpm test:watch    # Watch mode in one package
+cd packages/providers/local && pnpm test:watch    # Watch mode in one package
 
 # Schema generation (run after modifying ui-schema.json)
 pnpm generate                                      # turbo run generate
@@ -99,7 +99,7 @@ cd packages/schemas && pnpm run generate:all
 The web application supports two runtime modes:
 
 1. **Local Mode (builder-app)**: Drag-and-drop schema designer connected to Grasshopper via WebSocket. Used during development with hot reload.
-2. **Cloud Mode (`@selvajs/selva`)**: Standalone web app that solves Grasshopper definitions through Rhino.Compute. Used for production deployments — installed via `@selvajs/create`.
+2. **Cloud Mode (`@selvajs/selva`)**: Standalone web app that solves Grasshopper definitions through Rhino.Compute. Used for production deployments — installed via `@selvajs/cli`.
 
 ### Production Build Process
 

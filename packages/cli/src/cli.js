@@ -72,7 +72,7 @@ function printHelp() {
 			'  update                  npm update @selvajs/selva + restart',
 			'  keys rotate <hmac|at-rest>   Rotate a secret in .env (destructive)',
 			'',
-			pc.dim('To scaffold a new deployment: ') + pc.cyan('npx @selvajs/create <dir>')
+			pc.dim('To scaffold a new deployment: ') + pc.cyan('npx @selvajs/cli <dir>')
 		].join('\n')
 	);
 }

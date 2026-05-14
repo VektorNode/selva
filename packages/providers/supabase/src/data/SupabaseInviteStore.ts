@@ -14,7 +14,7 @@ import { nextCursorFromRange, toRange } from './pagination.js';
  * Invite store. `getByTokenHash` routes through a SECURITY DEFINER RPC so
  * unauthenticated / just-signed-up callers can validate and consume the
  * invite without RLS blocking them. The raw token is hashed at the route
- * layer (compute-app's `invites/token.server.ts`); the store sees only the
+ * layer (the selva app's `invites/token.server.ts`); the store sees only the
  * HMAC digest. Other operations (create, list, revoke) go through the normal
  * REST API with RLS enforcing `manage_org_members`.
  */

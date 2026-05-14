@@ -4,9 +4,7 @@ Filesystem + JSON + HMAC implementation of the `@selvajs/platform` interfaces.
 
 The default provider for development and small single-instance deployments. All state — users, orgs, projects, definitions, compute config, uploaded `.gh` files — lives under one directory on disk. No database, no external services.
 
-For production-scale or multi-instance deployments, use [`@selvajs/supabase-provider`](../supabase-provider/README.md) instead.
-
-For testing multi-org tenancy on this provider, see [docs/MultiOrg-LocalDev.md](../../docs/MultiOrg-LocalDev.md).
+For production-scale or multi-instance deployments, use [`@selvajs/supabase-provider`](../supabase/README.md) instead.
 
 ---
 
@@ -29,9 +27,9 @@ Pick local when:
 - You want zero external dependencies — no DB, no S3
 - You're OK with simple file-based backups (`tar` the data dir)
 
-Pick [Supabase](../supabase-provider/README.md) when:
+Pick [Supabase](../supabase/README.md) when:
 
-- You need multiple compute-app instances behind a load balancer
+- You need multiple selva app instances behind a load balancer
 - You want managed auth (password reset, MFA, OAuth)
 - You want managed Postgres + storage with backups + RLS
 - You need atomic counters across processes
@@ -40,7 +38,7 @@ Pick [Supabase](../supabase-provider/README.md) when:
 
 ## Environment variables
 
-All env vars are documented in [`packages/selva/.env.example`](../compute-app/.env.example) — copy that file to `.env` and edit it. The local provider reads `DATA_PATH`, `SELVA_HMAC_KEY` (signs sessions + tokens), and `SELVA_AT_REST_KEY` (encrypts the Rhino.Compute API key on disk) from there.
+All env vars are documented in [`packages/selva/.env.example`](../../selva/.env.example) — copy that file to `.env` and edit it. The local provider reads `DATA_PATH`, `SELVA_HMAC_KEY` (signs sessions + tokens), and `SELVA_AT_REST_KEY` (encrypts the Rhino.Compute API key on disk) from there.
 
 The first admin user is created through the in-app setup page on first boot — there is no env-var fallback login.
 
@@ -70,14 +68,14 @@ All JSON files are written atomically (temp file + rename) so a crash mid-write 
 
 **Caveats:**
 
-- Not safe across **processes** — no file locking. One compute-app instance per data dir.
+- Not safe across **processes** — no file locking. One selva app instance per data dir.
 - Read-modify-write on JSON files (`incrementRunCount`, etc.) can lose updates under concurrent solves on the same definition. Acceptable for typical single-user workloads; switch to Supabase if you need exact counts under contention.
 
 ---
 
 ## Wiring into `selva.config.ts`
 
-This is the default config in [`selva.config.ts`](../../selva.config.ts) at the repo root:
+This is the default config in [`selva.config.ts`](../../../selva.config.ts) at the repo root:
 
 ```ts
 import { defineConfig } from '@selvajs/platform';
@@ -98,7 +96,7 @@ export default defineConfig((env) => ({
 
 `LocalDataProvider` internally wires every store — orgs, projects, definitions, share-links, invites, compute server, user profile, platform permissions.
 
-To switch to Supabase, see [`@selvajs/supabase-provider`](../supabase-provider/README.md#wiring-into-selvaconfigts).
+To switch to Supabase, see [`@selvajs/supabase-provider`](../supabase/README.md#wiring-into-selvaconfigts).
 
 ---
 
@@ -118,7 +116,7 @@ Access control is enforced **in-process** by inspecting `RequestContext.adapterC
 
 ### Storage
 
-`LocalStorageProvider` writes blobs under `$DATA_PATH/<path>` (e.g. `$DATA_PATH/definitions/<guid>/versions/v1.gh`) — the caller's storage path is appended directly to the data root, with `..` rejected. `getPublicUrl` returns `/api/files/<path>`, which the compute-app proxies after an auth check. Image uploads pass through the shared `transcodeImageIfNeeded` helper from `@selvajs/platform/storage` — same WebP output as Supabase.
+`LocalStorageProvider` writes blobs under `$DATA_PATH/<path>` (e.g. `$DATA_PATH/definitions/<guid>/versions/v1.gh`) — the caller's storage path is appended directly to the data root, with `..` rejected. `getPublicUrl` returns `/api/files/<path>`, which the selva app proxies after an auth check. Image uploads pass through the shared `transcodeImageIfNeeded` helper from `@selvajs/platform/storage` — same WebP output as Supabase.
 
 ### Shared helpers
 
