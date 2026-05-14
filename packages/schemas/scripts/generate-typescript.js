@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import prettier from 'prettier';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -81,6 +82,9 @@ async function generateSchema(schemaFileName, outputFileName, rootTypeName, opti
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
+
+    const prettierConfig = await prettier.resolveConfig(outputPath);
+    output = await prettier.format(output, { ...prettierConfig, filepath: outputPath });
 
     fs.writeFileSync(outputPath, output);
     console.log(`Generated TypeScript types at: ${outputPath}`);
