@@ -69,7 +69,7 @@ For one-off "I need this fix on a specific operator's VM now" situations, see [d
 
 Surfaced during cleanup, unrelated to packaging:
 
-1. ~~**`selva.config.ts` evaluates provider factories at module load**, so `pnpm build:selva` fails without `SELVA_HMAC_KEY` set.~~ **Resolved (2026-05-14):** verified `pnpm --filter=@selvajs/selva build` succeeds with no env vars in a clean repo. SvelteKit's `$env/dynamic/private` is lazy at build time — server-module top-level code only runs at request time, not during `vite build`.
+1. **`selva.config.ts` evaluates provider factories at module load**, so `pnpm build` fails without `SELVA_HMAC_KEY` / `SELVA_AT_REST_KEY` / `DATA_PATH` set. **Status (2026-05-14):** the bug is real — confirmed reproducible in CI. SvelteKit's SSR prerender phase loads `providers.server.ts` top-level, which calls `_raw(env)` and fires every `Local*Provider.fromEnv(env)`. They throw on missing env. **Workaround in place:** `release.yml` sets dummy values (`SELVA_HMAC_KEY = 'a'.repeat(64)`, `SELVA_AT_REST_KEY = 'b'.repeat(64)`, `DATA_PATH = /tmp/selva-build`) during build. The runtime overrides with real values at boot. **Real fix (deferred):** lazy-evaluate `_raw(env)` so build doesn't need any env at all. Touches every direct importer of `providers` from `providers.server.ts`.
 
 2. **18 share-link tests in `@selvajs/selva` fail** (`mint-revoke.test.ts`, `share-link-auth.test.ts`). HMAC/route 404 errors from recent key-rotation/auto-bootstrap commits. Test churn, not infrastructure.
 
