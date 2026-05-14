@@ -82,7 +82,7 @@ export async function runUpdate() {
 	// fixes get picked up even when the runtime version hasn't moved. The
 	// admin-center button runs the same list — keep them in sync if you edit.
 	const packages = [
-		'@selvajs/create',
+		'@selvajs/cli',
 		'@selvajs/selva',
 		'@selvajs/platform',
 		'@selvajs/local-provider',
@@ -163,7 +163,7 @@ export async function runUpdate() {
 function readRuntimeVersion(dir) {
 	try {
 		const pkg = JSON.parse(
-			readFileSync(join(dir, 'node_modules', '@selvajs', 'runtime', 'package.json'), 'utf8')
+			readFileSync(join(dir, 'node_modules', '@selvajs', 'selva', 'package.json'), 'utf8')
 		);
 		return pkg.version;
 	} catch {

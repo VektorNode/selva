@@ -13,7 +13,7 @@
 # - Optionally sets up Caddy as a reverse proxy (with automatic HTTPS)
 #
 # Provider: this script bootstraps the **local provider** (filesystem + JSON).
-# For the Supabase provider, follow packages/supabase-provider/README.md.
+# For the Supabase provider, follow packages/providers/supabase/README.md.
 #
 # Prerequisites: SSH key added to GitHub (repo is private — SSH is used for cloning).
 #   ssh-keygen -t ed25519 -C "you@example.com"
@@ -358,11 +358,11 @@ fi
 ################################################################################
 print_header "Step 5: Building Application"
 
-print_step "Building compute-app and all workspace dependencies..."
+print_step "Building selva app and all workspace dependencies..."
 cd "$INSTALL_DIR"
 export ADAPTER=node
 pnpm build --filter=@selvajs/selva
-print_success "Compute-app built for production"
+print_success "Selva app built for production"
 
 ################################################################################
 # 6. PM2 SETUP (Optional)

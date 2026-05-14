@@ -94,16 +94,16 @@ importers:
         version: 9.39.4
       '@selvajs/header-auth-provider':
         specifier: workspace:*
-        version: link:packages/header-auth-provider
+        version: link:packages/providers/header-auth
       '@selvajs/local-provider':
         specifier: workspace:*
-        version: link:packages/local-provider
+        version: link:packages/providers/local
       '@selvajs/platform':
         specifier: workspace:*
         version: link:packages/platform
       '@selvajs/supabase-provider':
         specifier: workspace:*
-        version: link:packages/supabase-provider
+        version: link:packages/providers/supabase
       '@sveltejs/adapter-auto':
         specifier: 'catalog:'
         version: 7.0.1(@sveltejs/kit@2.58.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.5(@typescript-eslint/types@8.59.3))(vite@7.3.3(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)))(svelte@5.55.5(@typescript-eslint/types@8.59.3))(typescript@5.9.3)(vite@7.3.3(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)))
@@ -232,6 +232,15 @@ importers:
         specifier: 'catalog:'
         version: 3.2.4(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)
 
+  packages/cli:
+    dependencies:
+      '@clack/prompts':
+        specifier: ^0.11.0
+        version: 0.11.0
+      picocolors:
+        specifier: ^1.1.1
+        version: 1.1.1
+
   packages/config:
     dependencies:
       eslint:
@@ -247,53 +256,6 @@ importers:
         specifier: ^5.0.0 || ^6.0.0 || ^7.0.0
         version: 7.3.3(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)
 
-  packages/create:
-    dependencies:
-      '@clack/prompts':
-        specifier: ^0.11.0
-        version: 0.11.0
-      picocolors:
-        specifier: ^1.1.1
-        version: 1.1.1
-
-  packages/header-auth-provider:
-    dependencies:
-      '@selvajs/platform':
-        specifier: workspace:*
-        version: link:../platform
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 22.19.19
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-      vitest:
-        specifier: 'catalog:'
-        version: 3.2.4(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)
-
-  packages/local-provider:
-    dependencies:
-      '@selvajs/platform':
-        specifier: workspace:*
-        version: link:../platform
-      sharp:
-        specifier: ^0.34.5
-        version: 0.34.5
-      zod:
-        specifier: ^4.3.6
-        version: 4.4.3
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 22.19.19
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-      vitest:
-        specifier: 'catalog:'
-        version: 3.2.4(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)
-
   packages/platform:
     dependencies:
       zod:
@@ -303,6 +265,69 @@ importers:
       sharp:
         specifier: ^0.34.5
         version: 0.34.5
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)
+
+  packages/providers/header-auth:
+    dependencies:
+      '@selvajs/platform':
+        specifier: workspace:*
+        version: link:../../platform
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.19
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)
+
+  packages/providers/local:
+    dependencies:
+      '@selvajs/platform':
+        specifier: workspace:*
+        version: link:../../platform
+      sharp:
+        specifier: ^0.34.5
+        version: 0.34.5
+      zod:
+        specifier: ^4.3.6
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.19
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)
+
+  packages/providers/supabase:
+    dependencies:
+      '@selvajs/platform':
+        specifier: workspace:*
+        version: link:../../platform
+      '@supabase/supabase-js':
+        specifier: ^2.104.1
+        version: 2.105.4
+      sharp:
+        specifier: ^0.34.5
+        version: 0.34.5
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.19
+      supabase:
+        specifier: ^2.95.3
+        version: 2.98.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -329,10 +354,10 @@ importers:
         version: 1.5.2(three@0.184.0)
       '@selvajs/header-auth-provider':
         specifier: workspace:*
-        version: link:../header-auth-provider
+        version: link:../providers/header-auth
       '@selvajs/local-provider':
         specifier: workspace:*
-        version: link:../local-provider
+        version: link:../providers/local
       '@selvajs/platform':
         specifier: workspace:*
         version: link:../platform
@@ -341,7 +366,7 @@ importers:
         version: link:../schemas
       '@selvajs/supabase-provider':
         specifier: workspace:*
-        version: link:../supabase-provider
+        version: link:../providers/supabase
       '@selvajs/ui':
         specifier: workspace:*
         version: link:../ui
@@ -395,31 +420,6 @@ importers:
         specifier: 'catalog:'
         version: 3.2.4(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)
 
-  packages/supabase-provider:
-    dependencies:
-      '@selvajs/platform':
-        specifier: workspace:*
-        version: link:../platform
-      '@supabase/supabase-js':
-        specifier: ^2.104.1
-        version: 2.105.4
-      sharp:
-        specifier: ^0.34.5
-        version: 0.34.5
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 22.19.19
-      supabase:
-        specifier: ^2.95.3
-        version: 2.98.2
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-      vitest:
-        specifier: 'catalog:'
-        version: 3.2.4(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)
-
   packages/ui:
     dependencies:
       '@floating-ui/dom':
@@ -434,9 +434,6 @@ importers:
       '@selvajs/compute':
         specifier: 'catalog:'
         version: 1.5.2(three@0.184.0)
-      '@selvajs/schemas':
-        specifier: workspace:*
-        version: link:../schemas
       clsx:
         specifier: 'catalog:'
         version: 2.1.1
@@ -465,6 +462,9 @@ importers:
       '@selvajs/config':
         specifier: workspace:*
         version: link:../config
+      '@selvajs/schemas':
+        specifier: workspace:*
+        version: link:../schemas
       '@sveltejs/kit':
         specifier: 'catalog:'
         version: 2.58.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.5(@typescript-eslint/types@8.59.3))(vite@7.3.3(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)))(svelte@5.55.5(@typescript-eslint/types@8.59.3))(typescript@5.9.3)(vite@7.3.3(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0))

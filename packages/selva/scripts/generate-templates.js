@@ -9,7 +9,7 @@
  *   templates/ecosystem.config.cjs     — PM2 process file
  *   templates/.env.example             — copied from packages/selva/.env.example
  *
- * Templates are scaffolding-time artifacts; @selvajs/create reads them out of
+ * Templates are scaffolding-time artifacts; @selvajs/cli reads them out of
  * node_modules/@selvajs/selva/templates/ after install.
  */
 

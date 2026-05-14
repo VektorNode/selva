@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Grasshopper.Kernel;
 using Rhino.Geometry;
 using Selva.Drawing.Model.Elements;
+using Selva.Drawing.RhinoInterop;
 using DrawBox = Selva.Drawing.Model.Geometry.BoundingBox;
 
 namespace Selva.GH.Features.Drawing.Preview;

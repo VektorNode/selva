@@ -1,4 +1,4 @@
-// `npx @selvajs/create <dir>` — scaffold a fresh deployment.
+// `npx @selvajs/cli <dir>` — scaffold a fresh deployment.
 //
 // What this writes into <dir>:
 //   .env                    merged from runtime's .env.example + prompt values
@@ -9,7 +9,7 @@
 //   node_modules/           after `npm install`
 //
 // The runtime templates are the source of truth — we don't carry our own
-// copies in @selvajs/create. We install @selvajs/selva first, then copy
+// copies in @selvajs/cli. We install @selvajs/selva first, then copy
 // from node_modules/@selvajs/selva/templates/.
 
 import { writeFileSync, existsSync, mkdirSync, readFileSync, cpSync } from 'node:fs';
@@ -17,7 +17,7 @@ import { resolve, join, basename } from 'node:path';
 import { spawn } from 'node:child_process';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { collectConfig } from '../prompts.js';
+import { collectConfig, collectConfigFromEnv } from '../prompts.js';
 import { generateKey } from '../secrets.js';
 import { writeEnvFile } from '../env.js';
 import { isEmptyOrMissing } from '../paths.js';
@@ -25,7 +25,7 @@ import { isEmptyOrMissing } from '../paths.js';
 const CLI_VERSION = '0.1.0';
 
 export async function runCreate(argv) {
-	const { dir: rawDir, force, skipInstall } = parseArgs(argv);
+	const { dir: rawDir, force, skipInstall, yes } = parseArgs(argv);
 
 	const targetDir = resolve(rawDir);
 	if (!isEmptyOrMissing(targetDir) && !force) {
@@ -37,9 +37,13 @@ export async function runCreate(argv) {
 	}
 	mkdirSync(targetDir, { recursive: true });
 
-	// 1. Prompt the operator. We need answers before installing because the
-	//    chosen provider determines which dependencies go into package.json.
-	const values = await collectConfig({ defaults: {}, mode: 'create' });
+	// 1. Collect config. --yes (or CI=1) takes everything from the
+	//    environment instead of prompting — for Terraform startup scripts,
+	//    Dockerfiles, and any other unattended bootstrap.
+	const nonInteractive = yes || envBool(process.env.CI);
+	const values = nonInteractive
+		? collectConfigFromEnv(process.env)
+		: await collectConfig({ defaults: {}, mode: 'create' });
 
 	// 2. Always generate fresh secrets for a new install. They MUST be stable
 	//    across restarts; the env-merge logic below writes them once and
@@ -226,9 +230,11 @@ function parseArgs(argv) {
 	let dir;
 	let force = false;
 	let skipInstall = false;
+	let yes = false;
 	for (const arg of argv) {
 		if (arg === '--force') force = true;
 		else if (arg === '--skip-install') skipInstall = true;
+		else if (arg === '--yes' || arg === '-y') yes = true;
 		else if (arg.startsWith('--')) {
 			throw new Error(`Unknown flag: ${arg}`);
 		} else if (!dir) {
@@ -238,23 +244,34 @@ function parseArgs(argv) {
 		}
 	}
 	if (!dir) {
-		throw new Error('Usage: npx @selvajs/create <directory> [--force] [--skip-install]');
+		throw new Error(
+			'Usage: npx @selvajs/cli <directory> [--force] [--skip-install] [--yes]'
+		);
 	}
-	return { dir, force, skipInstall };
+	return { dir, force, skipInstall, yes };
+}
+
+function envBool(v) {
+	if (!v) return false;
+	return ['1', 'true', 'yes'].includes(String(v).toLowerCase());
 }
 
 // The deployment's package.json depends on @selvajs/selva (prebuilt
 // SvelteKit app) plus whichever providers the operator picked. Providers are
 // imported by selva.config.js — npm needs them resolvable from node_modules.
 //
-// We also list @selvajs/create itself as a dep so the `selva` bin gets linked
+// We also list @selvajs/cli itself as a dep so the `selva` bin gets linked
 // into node_modules/.bin/. Without this the operator's only way to run
 // `selva doctor` / `selva start` is a global install of the CLI.
 function buildPackageJson(name, values) {
 	const deps = {
-		'@selvajs/create': 'latest',
+		'@selvajs/cli': 'latest',
 		'@selvajs/platform': 'latest',
-		'@selvajs/selva': 'latest'
+		'@selvajs/selva': 'latest',
+		// pm2 lives in the deployment's own node_modules so `selva start` can
+		// resolve it via node_modules/.bin/pm2 without a global install. The
+		// pm2.js wrapper already prefers the local binary (see pm2Bin()).
+		pm2: '^5.4.0'
 	};
 
 	const providers = new Set([

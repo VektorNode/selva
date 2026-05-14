@@ -1,6 +1,6 @@
 # Pre-Step Producers — Design Discussion
 
-> Working draft. Captures the architecture discussion for adding a "pre-step" phase to the solver routes (`/preview` in builder-app, `/library/[guid]` in compute-app). Not a final spec — open questions at the bottom.
+> Working draft. Captures the architecture discussion for adding a "pre-step" phase to the solver routes (`/preview` in builder-app, `/library/[guid]` in selva-app). Not a final spec — open questions at the bottom.
 
 ## V1 status: shipped (2026-05-08)
 
@@ -31,7 +31,7 @@ By **`paramId`** (Grasshopper instance GUID). Flows unchanged through every laye
 - sessionStorage key: `external:<scopeKey>:<paramId>`.
 - Solver lookup: `readExternalValue({ scopeKey, inputId: paramId })`.
 
-The `scopeKey` is whatever uniquely identifies the solver context: `sessionId` in builder-app/preview, `definitionKey` in compute-app/library.
+The `scopeKey` is whatever uniquely identifies the solver context: `sessionId` in builder-app/preview, `definitionKey` in selva-app/library.
 
 ### Code that shipped
 
@@ -147,7 +147,7 @@ If you want different inputs to route to different producers, branch here.
 
 #### Step 4 — build a test schema
 
-In the schema builder, add a text input, toggle "External value" on. Save. The schema should now have `source: { kind: 'external' }` on that input. Test in `/preview` first (faster iteration), then verify it works in compute-app once you have a definition uploaded.
+In the schema builder, add a text input, toggle "External value" on. Save. The schema should now have `source: { kind: 'external' }` on that input. Test in `/preview` first (faster iteration), then verify it works in selva-app once you have a definition uploaded.
 
 #### Step 5 — verify end-to-end
 
@@ -158,7 +158,7 @@ In the schema builder, add a text input, toggle "External value" on. Save. The s
 
 ### Things to remember
 
-- **For text inputs holding JSON**, the producer should `writeExternalValue({ value: JSON.stringify(payload) })` — keep `values[paramId]` a string so the compute-app's `transformInputParameter` doesn't fight you. (Or improve `transformInputParameter` to stringify objects when `paramType === 'text'` — see "future improvements" below.)
+- **For text inputs holding JSON**, the producer should `writeExternalValue({ value: JSON.stringify(payload) })` — keep `values[paramId]` a string so the selva-app's `transformInputParameter` doesn't fight you. (Or improve `transformInputParameter` to stringify objects when `paramType === 'text'` — see "future improvements" below.)
 - **Persistence across reloads**: sessionStorage scope is per-tab. Want survival across tabs/devices? Add a backend store. The storage helpers in `@selvajs/ui` are pluggable — swap `sessionStorage` for an `IPlatformDataStore` call without changing callers.
 - **The component should default to "no saved state"** unless you explicitly load it. Parapet's drawing app loaded from `curveDataCache`; for a clean start, skip that. You can re-add saved-state loading later.
 - **One producer route, many entry points.** The solver renders a link, but a "Tools" menu, an external link, an email — anyone can deep-link to `/preview/producer/line-drawer?session=X&for=Y`. The producer doesn't care where the user came from.
@@ -187,7 +187,7 @@ Constraints:
 1. Definitions without pre-steps must keep working with zero added complexity.
 2. The pre-step input may not be visible to the end user (it's filled by the producer, not by them).
 3. Should be flexible enough to grow — adding a 5th producer shouldn't ripple through the codebase.
-4. Needs to work in both `builder-app` (designer picks producers) and `compute-app` (runtime renders + runs them).
+4. Needs to work in both `builder-app` (designer picks producers) and `selva-app` (runtime renders + runs them).
 5. Different deployments may want different producer subsets.
 
 ## Recommended architecture
@@ -219,7 +219,7 @@ interface PreStepProducer<TConfig, TOutput> {
 	configSchema: ZodSchema<TConfig>; // drives the config UI in builder-app
 	outputSchema: ZodSchema<TOutput>; // validates produced data at runtime
 	ConfigEditor?: Component; // optional; falls back to auto-form from configSchema
-	RunnerComponent: () => Promise<Component>; // lazy-loaded; rendered in compute-app pre-step phase
+	RunnerComponent: () => Promise<Component>; // lazy-loaded; rendered in selva-app pre-step phase
 	toDataTree(output: TOutput, param: ParamMeta): DataTree; // serializer at solve time
 	displayMode: 'inline' | 'fullscreen'; // inline panel vs. full-screen replacement
 	persist?: 'session' | 'platform'; // where to persist user output across reloads
@@ -274,7 +274,7 @@ Builder-app uses metadata + `configSchema` + `acceptableInputs`. Compute-app use
 
 ```ts
 interface IPlatformProducerPolicy {
-	enabledProducerIds(): string[] | 'all'; // filter applied in compute-app
+	enabledProducerIds(): string[] | 'all'; // filter applied in selva-app
 }
 ```
 
@@ -299,7 +299,7 @@ function partitionInputs(schema) {
 
 `AppLayout` consumes `userInputs`. The pre-step phase consumes `preStepInputs`. The solver merge consumes both.
 
-### Runtime flow in compute-app
+### Runtime flow in selva-app
 
 Replaces parapet's hand-written `buildLineValues` switch (see [parapet/.../compute/[slug]/+page.svelte:79-118](../../parapet/packages/app/src/routes/compute/[slug]/+page.svelte#L79-L118)):
 

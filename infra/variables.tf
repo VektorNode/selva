@@ -55,28 +55,85 @@ variable "acme_email" {
   default     = ""
 }
 
-variable "branch" {
-  description = <<-EOT
-    Git branch / tag / commit to deploy. Defaults to main. Override to deploy
-    a feature branch (e.g. "9x") — both the bootstrap scripts (setup.sh /
-    setup-caddy.sh fetched via curl) and the cloned repo will use this ref.
-  EOT
+# ============================================================================
+# Selva CLI configuration
+#
+# These are read by @selvajs/cli's non-interactive mode
+# (packages/cli/src/prompts.js → collectConfigFromEnv) on first boot. The
+# defaults reproduce the prompt's "single-tenant, local provider" default —
+# enough for a working deploy with zero extra config. Override any of them
+# to scaffold a different shape.
+# ============================================================================
+
+variable "tenancy" {
+  description = "Tenancy mode. `single` = one org per deployment (white-label); `multi` = orgs first-class (SaaS-style)."
   type        = string
-  default     = "main"
+  default     = "single"
+  validation {
+    condition     = contains(["single", "multi"], var.tenancy)
+    error_message = "tenancy must be \"single\" or \"multi\"."
+  }
 }
 
-variable "github_token" {
-  description = <<-EOT
-    GitHub personal access token used to fetch setup scripts from the
-    private VektorNode/selva repo over the raw.githubusercontent.com API.
-    Use a fine-grained PAT scoped to only this repo with read-only Contents
-    permission. The token is rendered into the VM's startup script (visible
-    in instance metadata) and stored in Terraform state.
+variable "auth_provider" {
+  description = "Auth backend. `local` = filesystem + HMAC sessions; `supabase` = managed auth; `header` = forward-auth via the reverse proxy."
+  type        = string
+  default     = "local"
+  validation {
+    condition     = contains(["local", "supabase", "header"], var.auth_provider)
+    error_message = "auth_provider must be \"local\", \"supabase\", or \"header\"."
+  }
+}
 
-    The deploy key on the VM is still used for the actual `git clone` —
-    this token only covers the two raw-file fetches in the bootstrap.
+variable "data_provider" {
+  description = "Data backend. Empty means \"use auth_provider\" (header-auth defaults to local)."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.data_provider == "" || contains(["local", "supabase"], var.data_provider)
+    error_message = "data_provider must be empty, \"local\", or \"supabase\"."
+  }
+}
+
+variable "storage_provider" {
+  description = "Storage backend. Empty means \"use auth_provider\" (header-auth defaults to local)."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.storage_provider == "" || contains(["local", "supabase"], var.storage_provider)
+    error_message = "storage_provider must be empty, \"local\", or \"supabase\"."
+  }
+}
+
+variable "bootstrap_admin_email" {
+  description = <<-EOT
+    Email of the user who becomes instance admin on first signup. REQUIRED
+    when auth_provider = "header" or tenancy = "multi" — without it, header-auth
+    has no way to claim admin (no /setup form), and a multi-tenant signup
+    page hands staff perms to the first random visitor.
+
+    Optional for single-tenant local auth; the first user to complete /setup
+    becomes admin regardless.
   EOT
   type        = string
+  default     = ""
+}
+
+variable "supabase_url" {
+  description = "Supabase project URL. Required when any provider is \"supabase\"."
+  type        = string
+  default     = ""
+}
+
+variable "supabase_anon_key" {
+  description = "Supabase publishable (anon) key. Required when any provider is \"supabase\"."
+  type        = string
+  default     = ""
+}
+
+variable "supabase_service_role_key" {
+  description = "Supabase service role key — secret. Required when any provider is \"supabase\". Stored in Terraform state."
+  type        = string
+  default     = ""
   sensitive   = true
 }
-

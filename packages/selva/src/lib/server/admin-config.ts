@@ -1,4 +1,4 @@
-// File-type constraints for the compute-app HTTP API layer.
+// File-type constraints for the selva app HTTP API layer.
 // These are independent of whichever provider is configured.
 //
 // Size caps are centralized in `computeLimits.ts` — re-exported here so

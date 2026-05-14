@@ -9,7 +9,7 @@ const envCtx = readEnv();
 
 if (!envCtx) {
 	describe.skip('SupabaseOrgStore (skipped: no live stack)', () => {
-		it('populate packages/supabase-provider/.env.test with Supabase creds to run these tests', () => {});
+		it('populate packages/providers/supabase/.env.test with Supabase creds to run these tests', () => {});
 	});
 } else {
 	describe('SupabaseOrgStore', () => {

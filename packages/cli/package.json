@@ -1,7 +1,7 @@
 {
-	"name": "@selvajs/create",
+	"name": "@selvajs/cli",
 	"version": "0.1.3",
-	"description": "Scaffold and operate a Selva white-label deployment. `npx @selvajs/create <dir>` to bootstrap, `selva <cmd>` to manage.",
+	"description": "Scaffold and operate a Selva white-label deployment. `npx @selvajs/cli <dir>` to bootstrap, `selva <cmd>` to manage.",
 	"license": "MIT",
 	"publishConfig": {
 		"access": "public"
@@ -13,8 +13,7 @@
 	},
 	"files": [
 		"bin",
-		"src",
-		"templates"
+		"src"
 	],
 	"engines": {
 		"node": ">=20.6.0"

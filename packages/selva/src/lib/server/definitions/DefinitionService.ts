@@ -34,7 +34,7 @@ export interface CreateDefinitionRecord {
 
 /**
  * Orchestrates writes that span IDataProvider + IStorageProvider for the
- * spec §6 versioning model. Lives in compute-app (not @selvajs/platform)
+ * spec §6 versioning model. Lives in @selvajs/selva (not @selvajs/platform)
  * because it is application orchestration, not platform contract.
  *
  * Ordering rules:

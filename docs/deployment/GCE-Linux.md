@@ -12,7 +12,7 @@ End-to-end walkthrough for getting a CLI-scaffolded Selva deployment running on 
 |---|---|
 | **Ubuntu 22.04+ VM** (e.g. GCE `e2-small` is enough to start) | Anything that can run Node 20 + Caddy + PM2. The commands below assume `apt-get`. |
 | **`gcloud` CLI configured** on your laptop | For the firewall rule. Skip if you'll add the rule in the GCP web console. |
-| **`@selvajs/create` published to npm** | The CLI fetches `@selvajs/selva` + providers from the public registry. |
+| **`@selvajs/cli` published to npm** | The CLI fetches `@selvajs/selva` from the public registry. |
 
 The VM does **not** need git, pnpm, or a checkout of the monorepo. Everything is installed via `npx` and `npm`.
 
@@ -71,7 +71,7 @@ Back on the VM:
 
 ```bash
 mkdir -p ~/apps && cd ~/apps
-npx @selvajs/create selva
+npx @selvajs/cli selva
 ```
 
 The CLI prompts. Answer like this for a local-provider, single-tenant install:
@@ -90,7 +90,7 @@ The CLI prompts. Answer like this for a local-provider, single-tenant install:
 The CLI will:
 
 1. Write `package.json`, `.env`, `selva.config.js`, `ecosystem.config.cjs` into `~/apps/selva`.
-2. Run `npm install` — pulls `@selvajs/selva` (the prebuilt SvelteKit app), `@selvajs/local-provider`, and `@selvajs/create` itself (so `selva` lands in `node_modules/.bin/`). Watch the live progress; install takes 30–90s.
+2. Run `npm install` — pulls `@selvajs/selva` (the prebuilt SvelteKit app, which bundles all providers internally) and `@selvajs/cli` itself (so `selva` lands in `node_modules/.bin/`). Watch the live progress; install takes 30–90s.
 3. Print "next steps" referencing `npm run doctor` and `npm start`.
 
 When it's done you should see:
@@ -272,13 +272,15 @@ All from `~/apps/selva`:
 | `npx selva keys rotate hmac` | Rotate `SELVA_HMAC_KEY` (logs everyone out). |
 | `npx selva keys rotate at-rest` | Rotate `SELVA_AT_REST_KEY` (Rhino API key needs re-entry). |
 
-The admin dashboard at `/admin/system` exposes the same `update` flow with live SSE output. The button auto-detects deployment shape (`scripts/update.sh` for git checkouts, `npm update` for CLI scaffolds) so it works either way.
+The admin dashboard at `/admin/system` exposes the same `update` flow with live SSE output.
 
 ---
 
 ## Things that bit us — debug section
 
 What follows is every failure mode we actually hit during the first deployment, with diagnostics and fixes. Read this if anything in Steps 1–8 doesn't behave as described.
+
+> **Note on package names below.** Entries that reference `@selvajs/create@0.1.x` describe historical bugs from before the package was renamed to `@selvajs/cli`. The fixes still apply if you encounter the symptom on a legacy `@selvajs/create` install; everything new uses `@selvajs/cli`.
 
 ### "npm install failed" during scaffold, no useful error
 
@@ -425,7 +427,7 @@ If your scaffold's `npm install` shows `placeDep ROOT @selvajs/selva@0.10.2` and
 ```bash
 npm cache clean --force
 cd ~/apps && rm -rf selva
-npx --yes @selvajs/create@latest selva
+npx --yes @selvajs/cli@latest selva
 ```
 
 The runtime build script should hand-flatten these specs before publish to prevent this from recurring regardless of which publish tool is used.
@@ -465,5 +467,5 @@ pm2 logs selva-compute --err --lines 40 --nostream
 - **HTTPS via your own cert** (not Let's Encrypt). Use Caddy's `tls /path/to/cert /path/to/key` directive.
 - **Behind another proxy** (Cloudflare, AWS ALB, etc.). You'll likely need to set the proxy to forward `X-Forwarded-Proto` and trust it via `kit.csrf.trustedOrigins` in `selva.config.js`.
 - **Supabase backend.** Pick `supabase` at Step 4 and provide URL + keys when prompted. The local-provider-specific sections (DATA_PATH, etc.) don't apply.
-- **Header-auth (forward-auth) deployments.** Different setup story — the proxy authenticates and forwards identity headers; Selva doesn't run a login form. See `packages/header-auth-provider/README.md` for the full deployment checklist.
+- **Header-auth (forward-auth) deployments.** Different setup story — the proxy authenticates and forwards identity headers; Selva doesn't run a login form. See `packages/providers/header-auth/README.md` for the full deployment checklist.
 - **Multi-instance / load-balanced.** The local provider's JSON stores have no file locking; switching to PM2 cluster mode will corrupt data. Use Supabase or another concurrency-safe backend for multi-instance setups.

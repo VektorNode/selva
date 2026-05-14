@@ -2,7 +2,7 @@
 
 Two binaries ship with a Selva deployment:
 
-- **`@selvajs/create`** — scaffolds a new deployment. Run once with `npx`.
+- **`@selvajs/cli`** — scaffolds a new deployment. Run once with `npx`.
 - **`selva`** — operates an existing deployment. Installed into `node_modules/.bin/` by the scaffold; also exposed as `npm run <name>` scripts.
 
 This doc is the operator-facing reference. For development workflows (working on Selva itself), see [QuickStart.md](QuickStart.md). For shipping a fix to a live deployment, see [Hotfix-CLI-Runtime.md](Hotfix-CLI-Runtime.md).
@@ -15,7 +15,7 @@ From zero to a running deployment:
 
 ```bash
 # 1. Scaffold. Prompts for provider choice, secrets, ORIGIN, etc.
-npx @selvajs/create my-deployment
+npx @selvajs/cli my-deployment
 cd my-deployment
 
 # 2. Sanity-check the install before starting.
@@ -38,14 +38,14 @@ That's the full happy path. Everything below is the per-command reference for wh
 
 ---
 
-## `npx @selvajs/create <dir>`
+## `npx @selvajs/cli <dir>`
 
 Scaffolds a fresh deployment into `<dir>`. Walks an interactive prompt for provider choice (auth/data/storage), origin, tenancy, and provider-specific config; generates secrets; runs `npm install`; copies templates from the installed runtime.
 
 ```bash
-npx @selvajs/create my-deployment
-npx @selvajs/create my-deployment --force          # overwrite a non-empty dir
-npx @selvajs/create my-deployment --skip-install   # no npm install (you'll need to run it later)
+npx @selvajs/cli my-deployment
+npx @selvajs/cli my-deployment --force          # overwrite a non-empty dir
+npx @selvajs/cli my-deployment --skip-install   # no npm install (you'll need to run it later)
 ```
 
 What lands in `<dir>`:
@@ -100,7 +100,7 @@ Run it after editing `.env` or after a `selva update`. Treat any red as a hard f
 
 ### `selva start`
 
-`pm2 start ecosystem.config.cjs`. Boots the compute-app under PM2.
+`pm2 start ecosystem.config.cjs`. Boots the selva app under PM2.
 
 The first run also seeds PM2's process list. If PM2 itself isn't installed, the CLI tells you to `npm install pm2` in the deployment directory (a global install isn't required — it falls back to `node_modules/.bin/pm2`).
 
@@ -123,7 +123,7 @@ The `--update-env` flag is the whole reason this wrapper exists: a plain `pm2 re
 Refreshes all `@selvajs/*` packages and restarts under PM2.
 
 ```
-npm update --save @selvajs/create @selvajs/selva @selvajs/platform \
+npm update --save @selvajs/cli @selvajs/selva @selvajs/platform \
                   @selvajs/local-provider @selvajs/supabase-provider \
                   @selvajs/header-auth-provider
 pm2 restart selva-compute --update-env
@@ -153,7 +153,7 @@ Restart the app afterwards: `selva restart`.
 
 ### `selva help`, `selva --version`
 
-Self-explanatory. `--version` reads from the installed `@selvajs/create`'s own `package.json`.
+Self-explanatory. `--version` reads from the installed `@selvajs/cli`'s own `package.json`.
 
 ---
 
@@ -176,7 +176,7 @@ The scaffold writes shorter aliases into the deployment's `package.json` so you 
 
 ## Where things live
 
-- CLI source: [packages/create/src/](../packages/create/src/) (plain JS, no build step)
+- CLI source: [packages/cli/src/](../packages/cli/src/) (plain JS, no build step)
 - Runtime templates (the files copied into a fresh deployment): [packages/selva/templates/](../packages/selva/templates/)
 - Env-var reference: [packages/selva/.env.example](../packages/selva/.env.example)
 - Operator deployment guide (Linux/GCE specifics, reverse proxy, troubleshooting): [deployment/GCE-Linux.md](deployment/GCE-Linux.md)

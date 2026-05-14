@@ -12,7 +12,7 @@ import type { IEventSink } from './events/interface.js';
 export type TenancyMode = 'single' | 'multi';
 
 /**
- * White-label branding. All fields optional; the compute-app applies sensible
+ * White-label branding. All fields optional; the selva app applies sensible
  * "Selva" defaults for anything omitted. Use this to rebrand the instance
  * (header name, footer copyright, landing-page copy, page titles) without
  * forking the UI.

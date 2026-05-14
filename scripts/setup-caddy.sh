@@ -175,7 +175,7 @@ $DOMAIN {
 	encode gzip
 
 	# === HEADER AUTH SLOT ===
-	# Forward-auth providers go here. See packages/header-auth-provider/README.md.
+	# Forward-auth providers go here. See packages/providers/header-auth/README.md.
 	# Leave empty until you wire one in.
 
 	reverse_proxy 127.0.0.1:$APP_PORT

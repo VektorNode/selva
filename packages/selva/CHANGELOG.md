@@ -1,4 +1,4 @@
-# @selvajs/compute-app
+# @selvajs/selva
 
 ## 0.10.0
 

@@ -38,8 +38,8 @@ cp packages/selva/.env.example packages/selva/.env
 [`.env.example`](../packages/selva/.env.example) is the **single authoritative reference** for every env var Selva reads — provider choice, tenancy, platform flags, secrets. Open it and:
 
 - Set `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` (instructions inline). For local provider those two are enough.
-- For Supabase, set `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — see [@selvajs/supabase-provider](../packages/supabase-provider/README.md#development--local-supabase-stack) for the `npx supabase start` flow that produces those keys. Then switch the provider in `selva.config.ts`.
-- For multi-org testing, set `tenancy: 'multi'` in `selva.config.ts` and follow [MultiOrg-LocalDev.md](MultiOrg-LocalDev.md).
+- For Supabase, set `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — see [@selvajs/supabase-provider](../packages/providers/supabase/README.md#development--local-supabase-stack) for the `npx supabase start` flow that produces those keys. Then switch the provider in `selva.config.ts`.
+- For multi-org testing, set `tenancy: 'multi'` in `selva.config.ts`.
 
 You shouldn't need to read any other env-var documentation.
 
@@ -73,10 +73,9 @@ The builder app needs no env vars.
 
 - **[Architecture](../packages/selva/specs/Architecture.md)** — how the providers, tenancy, and access rules fit together
 - **[Access control](../packages/selva/specs/Permissions.md)** — who can do what
-- **[MultiOrg-LocalDev.md](MultiOrg-LocalDev.md)** — testing multi-org / multi-tenant locally
-- **[@selvajs/local-provider](../packages/local-provider/README.md)** — on-disk layout, backups, caveats
-- **[@selvajs/supabase-provider](../packages/supabase-provider/README.md)** — schema, RLS, hosted setup
-- **[Compute App Deployment](deployment/compute-app/README.md)** — production deploy
+- **[@selvajs/local-provider](../packages/providers/local/README.md)** — on-disk layout, backups, caveats
+- **[@selvajs/supabase-provider](../packages/providers/supabase/README.md)** — schema, RLS, hosted setup
+- **[Deploying to a Linux VM](deployment/GCE-Linux.md)** — production deploy walkthrough
 - **[RHINO_COMPUTE.md](RHINO_COMPUTE.md)** — set up the Rhino.Compute server
 
 ## Troubleshooting

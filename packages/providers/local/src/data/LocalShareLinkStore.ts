@@ -54,7 +54,7 @@ export class LocalShareLinkStore implements IShareLinkStore {
 	 * definition's `deletedAt` (Permissions.md §7 cascade contract). Mirrors
 	 * Supabase, which performs the equivalent JOIN. Optional: when unset, the
 	 * store falls back to the local-only revoke check; the route layer in
-	 * compute-app does the parent lookup as a safety net either way.
+	 * the selva app does the parent lookup as a safety net either way.
 	 */
 	setDefinitionProvider(definitions: IDefinitionStore): void {
 		this.definitionProvider = definitions;

@@ -9,27 +9,6 @@ machine_type = "e2-medium"
 ssh_user = "selva"
 
 # ============================================================================
-# GitHub PAT (required)
-# ============================================================================
-# Fine-grained personal access token used by the VM to:
-#   1. Fetch scripts/setup.sh + scripts/setup-caddy.sh via the GitHub
-#      Contents API (raw.githubusercontent.com doesn't authenticate)
-#   2. Clone the private VektorNode/selva repo over HTTPS
-#
-# Org-level deploy keys are disabled at VektorNode, so a PAT is currently
-# the only viable option for both.
-#
-# Create at: https://github.com/settings/personal-access-tokens/new
-#   Resource owner:        VektorNode
-#   Repository access:     Only select repositories → VektorNode/selva
-#   Repository permissions: Contents = Read-only
-#   Expiration:             90 days (only used at VM boot)
-#
-# An org admin may need to approve the token at
-# https://github.com/organizations/VektorNode/settings/personal-access-tokens-requests
-github_token = "github_pat_…"
-
-# ============================================================================
 # Domain (optional)
 # ============================================================================
 # Leave commented out for testing — the module auto-derives a free
@@ -41,6 +20,21 @@ github_token = "github_pat_…"
 # domain     = "app.example.dev"
 # acme_email = "you@example.dev"
 
-# Git ref to deploy (branch / tag / commit). Defaults to "main".
-# Override to deploy a feature branch, e.g. "9x".
-# branch = "main"
+# ============================================================================
+# Selva CLI configuration (optional)
+# ============================================================================
+# Defaults reproduce the prompt's "single-tenant local-provider behind Caddy"
+# scaffold. Override any of these for a different shape.
+#
+# tenancy           = "single"     # or "multi"
+# auth_provider     = "local"      # "local" | "supabase" | "header"
+# data_provider     = ""           # empty = same as auth_provider
+# storage_provider  = ""           # empty = same as auth_provider
+#
+# Required when auth_provider = "header" or tenancy = "multi":
+# bootstrap_admin_email = "you@your-org.com"
+#
+# Required when any provider = "supabase":
+# supabase_url              = "https://<ref>.supabase.co"
+# supabase_anon_key         = "sb_publishable_…"
+# supabase_service_role_key = "…"     # secret; stored in tf state

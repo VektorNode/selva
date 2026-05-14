@@ -1,4 +1,7 @@
-# @selvajs/create
+# @selvajs/cli
+
+> Renamed from `@selvajs/create` after 0.1.3. Earlier entries below were
+> published under the old name.
 
 ## 0.1.3
 

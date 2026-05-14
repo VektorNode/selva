@@ -3,6 +3,9 @@
 Provisions a Google Cloud VM running the Selva Compute App with a static IP,
 Caddy reverse proxy, and **automatic HTTPS via Let's Encrypt**.
 
+The VM installs the published `@selvajs/selva` runtime from npm via
+`@selvajs/cli` — no git clone, no source build, no GitHub PAT.
+
 ## What gets created
 
 | Resource           | Details                                                                                                                                  |
@@ -11,12 +14,17 @@ Caddy reverse proxy, and **automatic HTTPS via Let's Encrypt**.
 | Firewall rules     | TCP 80 (ACME + redirect) and 443 (HTTPS) + 22 (SSH). The app on :3000 is firewalled and binds to `127.0.0.1` — never reachable directly. |
 | VM instance        | e2-medium, Ubuntu 22.04, 20GB disk                                                                                                       |
 
-On first boot the VM runs [`scripts/setup.sh`](../scripts/setup.sh) (clones the
-repo, builds the app, starts it under PM2) and
-[`scripts/setup-caddy.sh`](../scripts/setup-caddy.sh) (Caddy in prod mode,
-which provisions a Let's Encrypt cert for your domain). Both scripts are
-fetched from the private `VektorNode/selva` repo via the GitHub Contents API,
-authenticated with a PAT.
+On first boot the VM:
+
+1. Installs Node.js 20 from NodeSource.
+2. Runs `npx @selvajs/cli@latest . --yes` as the `ssh_user`. The CLI
+   reads its config from environment variables Terraform set
+   (`SELVA_AUTH_PROVIDER`, `ORIGIN`, `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`, …)
+   and writes `.env`, `selva.config.js`, and `ecosystem.config.cjs`.
+3. `npm start` boots the app under PM2 (resolved from the deployment's
+   own `node_modules/.bin/pm2`).
+4. Installs Caddy and writes a Caddyfile proxying `https://<domain>` →
+   `127.0.0.1:3000` with a Let's Encrypt cert.
 
 ---
 
@@ -25,66 +33,66 @@ authenticated with a PAT.
 - [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5
 - [gcloud CLI](https://cloud.google.com/sdk/docs/install) authenticated (`gcloud auth application-default login`)
 - A GCP project with the Compute Engine API enabled
-- A **GitHub fine-grained PAT** with read access to `VektorNode/selva` (see below)
 - A domain you control — or skip it and let the module derive `<ip>.sslip.io`
+
+No GitHub PAT, no SSH deploy key. The CLI fetches everything from the
+public npm registry.
 
 ---
 
 ## Setup
 
-### 1. Create a GitHub PAT
-
-The VM needs to fetch the bootstrap scripts and clone the repo. Deploy keys
-are disabled at the VektorNode org level, so we use a PAT for both.
-
-1. Open [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)
-2. **Resource owner**: `VektorNode` (an org admin may need to approve the token afterwards at [VektorNode → PAT requests](https://github.com/organizations/VektorNode/settings/personal-access-tokens-requests))
-3. **Repository access**: Only select repositories → `VektorNode/selva`
-4. **Repository permissions** → **Contents**: Read-only
-5. **Expiration**: 90 days is fine (only used at VM boot)
-6. Generate and copy the `github_pat_…` token
-
-### 2. Fill in `terraform.tfvars`
+### 1. Fill in `terraform.tfvars`
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-At minimum:
+Minimum:
 
 ```hcl
-project_id   = "your-gcp-project-id"
-github_token = "github_pat_…"
+project_id = "your-gcp-project-id"
 ```
 
-Leave `domain` unset for testing — the module auto-derives a free
-`<dashed-ip>.sslip.io` domain from the reserved static IP and Caddy
-gets a real Let's Encrypt cert. No DNS setup required.
+That alone gives you a single-tenant deployment with the local provider,
+behind Caddy, on a free sslip.io domain. To customise:
 
-Rhino.Compute server URL + API key are registered post-install via
-`/admin/compute` (not Terraform). The first admin user is created
-via the in-app setup page on first boot.
+```hcl
+# Use a real domain (add the A record after apply).
+domain     = "app.example.dev"
+acme_email = "you@example.dev"
 
-### 3. Deploy
+# Or change the deployment shape.
+auth_provider         = "supabase"
+supabase_url          = "https://<ref>.supabase.co"
+supabase_anon_key     = "sb_publishable_…"
+supabase_service_role_key = "…"
+
+# Or stand up a multi-tenant SaaS instance.
+tenancy               = "multi"
+bootstrap_admin_email = "you@your-org.com"
+```
+
+See [variables.tf](variables.tf) for the full list. Rhino.Compute server URL
++ API key are registered post-install via `/admin/compute` (not Terraform).
+The first admin user is created via the in-app setup page on first boot
+(single-tenant) or claimed by `bootstrap_admin_email` (multi / header-auth).
+
+### 2. Deploy
 
 ```bash
 terraform apply
 ```
 
 Outputs include the app URL, SSH command, and the resolved domain.
-The VM bootstrap takes 3–8 minutes (apt installs + pnpm + build);
-Caddy provisions the cert as soon as the app is up and DNS resolves.
+The VM bootstrap takes 1–3 minutes (`npm install` of the prebuilt
+runtime + providers; no compile step). Caddy provisions the cert as
+soon as the app is up and DNS resolves.
 
 ### Using your own domain
 
-Set `domain` and `acme_email` in `terraform.tfvars`:
-
-```hcl
-domain     = "app.example.dev"
-acme_email = "you@example.dev"
-```
-
-After `terraform apply`, add an A record at your DNS host:
+Set `domain` and `acme_email` in `terraform.tfvars`. After `terraform apply`,
+add an A record at your DNS host:
 
 ```
 A   app.example.dev   →   <static_ip>     # from `terraform output static_ip`
@@ -119,8 +127,13 @@ If Caddy hasn't gotten a cert yet, `curl -k` will work and
 
 ## Add Your Grasshopper Definitions
 
+Upload via the admin UI at `https://YOUR-DOMAIN/admin/definitions`, or
+scp into the data directory:
+
 ```bash
-gcloud compute scp your-definition.gh selva@selva-compute-app:~/selva/packages/selva/definitions/ --zone <zone>
+gcloud compute scp your-definition.gh \
+  selva@selva-compute-app:~/selva/.selva-data/definitions/ \
+  --zone <zone>
 ```
 
 Access:
@@ -133,10 +146,17 @@ https://YOUR-DOMAIN/app?gh=your-definition
 
 ## Updating the App
 
+The deployment's `package.json` has `update` wired to the CLI:
+
 ```bash
 gcloud compute ssh selva@selva-compute-app --zone <zone>
-bash ~/selva/scripts/update.sh
+cd ~/selva && npm run update
 ```
+
+`selva update` runs `npm update @selvajs/*` then `pm2 restart --update-env`.
+The admin-center "Run Update" button does the same thing. See
+[docs/Hotfix-CLI-Runtime.md](../docs/Hotfix-CLI-Runtime.md) for the
+stale-packument-cache trap if `update` reports the same version twice.
 
 ---
 
@@ -171,14 +191,14 @@ remove it manually if you're done.
 
 ## Troubleshooting
 
-| Issue                                                                                | Fix                                                                                                                                                       |
-| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Zone out of capacity                                                                 | Change `zone` in `terraform.tfvars` (e.g. `europe-west1-b`) and re-apply                                                                                  |
-| `gcloud compute ssh`: "No supported authentication methods (server sent: publickey)" | Make sure `~/.ssh/google_compute_engine.pub` exists (run `gcloud compute ssh` once to any VM — it'll generate the key). Terraform reads it on `apply` and bakes it into the VM's metadata. If the file is missing, `terraform plan` will error. |
-| Plink "POTENTIAL SECURITY BREACH" host-key warning                                   | Expected after VM recreate (new host key). Type `y` to accept.                                                                                            |
-| `curl … contents/scripts/setup.sh` returns 404                                       | PAT can't see the repo. Check it's approved at [VektorNode PAT requests](https://github.com/organizations/VektorNode/settings/personal-access-tokens-requests) and scoped to `VektorNode/selva` with Contents:read. |
-| Startup script failed mid-way                                                        | SSH in: `sudo cat /var/log/selva-startup.log`. Re-run manually: `sudo bash /opt/selva-setup.sh`                                                           |
-| App not responding                                                                   | `pm2 status` and `pm2 logs selva-compute`                                                                                                                 |
-| Caddy can't get a cert                                                               | `sudo journalctl -u caddy -f` — usually DNS hasn't propagated yet                                                                                         |
-| DNS resolves but cert still fails                                                    | Check port 80 is open in the GCP firewall (ACME HTTP-01 uses it)                                                                                          |
-| Want to expose :3000 directly                                                        | Don't. Caddy is the only ingress. Editing the firewall to open 3000 breaks the security model for forward-auth providers.                                 |
+| Issue                                                | Fix                                                                                                                                       |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Zone out of capacity                                 | Change `zone` in `terraform.tfvars` (e.g. `europe-west1-b`) and re-apply                                                                  |
+| `gcloud compute ssh`: "publickey rejected"           | Run `gcloud compute ssh` once to any VM to generate `~/.ssh/google_compute_engine.pub`; Terraform reads it on apply.                      |
+| Startup log shows "BOOTSTRAP\_INSTANCE\_ADMIN\_EMAIL is required" | You set `tenancy = "multi"` or `auth_provider = "header"` without `bootstrap_admin_email`. Fix the tfvar and re-apply.                  |
+| Startup log shows "SUPABASE\_URL is required"        | A supabase provider is selected but the supabase tfvars are empty. Set them or switch back to `local`.                                    |
+| Startup failed mid-way                               | SSH in: `sudo cat /var/log/selva-startup.log`. Re-run the userland half manually: `sudo -u selva -H bash -c 'cd ~/selva && npm install'`. |
+| `selva update` says "Current = New" twice            | Stale npm packument cache on the VM. See [docs/Hotfix-CLI-Runtime.md](../docs/Hotfix-CLI-Runtime.md) — `npm cache clean --force` + reinstall. |
+| App not responding                                   | `cd ~/selva && ./node_modules/.bin/pm2 status && ./node_modules/.bin/pm2 logs selva-compute`                                              |
+| Caddy can't get a cert                               | `sudo journalctl -u caddy -f` — usually DNS hasn't propagated yet                                                                         |
+| Want to expose :3000 directly                        | Don't. Caddy is the only ingress. Editing the firewall to open 3000 breaks the security model for forward-auth providers.                |

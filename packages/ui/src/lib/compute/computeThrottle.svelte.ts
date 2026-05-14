@@ -13,7 +13,7 @@ interface ComputeThrottleOptions {
 /**
  * Fallback per-solve abort timeout (ms) when the caller doesn't pass one.
  * Used only by callers without a deployment-specific limit (e.g. builder-app
- * over WebSocket); compute-app supplies `MAX_SOLVE_DURATION_MS` from its
+ * over WebSocket); the selva app supplies `MAX_SOLVE_DURATION_MS` from its
  * server config via `ComputeApp`'s `solveTimeoutMs` prop.
  */
 const DEFAULT_TIMEOUT_MS = 60_000;

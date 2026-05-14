@@ -3,11 +3,11 @@ import { defineConfig } from "@selvajs/platform";
 import * as local from "@selvajs/local-provider";
 import * as supa from "@selvajs/supabase-provider";
 
-// ../header-auth-provider/dist/HeaderAuthProvider.js
+// ../providers/header-auth/dist/HeaderAuthProvider.js
 import * as path2 from "node:path";
 import { ProviderError as ProviderError2 } from "@selvajs/platform";
 
-// ../header-auth-provider/dist/users.js
+// ../providers/header-auth/dist/users.js
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -111,7 +111,7 @@ function createAllowlistStore(filePath) {
   };
 }
 
-// ../header-auth-provider/dist/HeaderAuthProvider.js
+// ../providers/header-auth/dist/HeaderAuthProvider.js
 var DEFAULT_HEADERS = {
   upn: "SELVA-UserPrincipalName",
   email: "SELVA-Email",

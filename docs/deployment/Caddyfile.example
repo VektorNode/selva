@@ -20,7 +20,7 @@ app.example.dev {
 
 	# === HEADER AUTH SLOT ===
 	# Insert forward-auth wiring here if you're using @selvajs/header-auth-provider.
-	# See packages/header-auth-provider/README.md for the strip-then-set hygiene
+	# See packages/providers/header-auth/README.md for the strip-then-set hygiene
 	# and a working forward_auth block. Leave empty otherwise.
 
 	reverse_proxy 127.0.0.1:3000

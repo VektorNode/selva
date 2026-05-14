@@ -201,7 +201,7 @@ function detectUpdatePlan(): UpdatePlan | null {
 					'update',
 					'--save',
 					'--prefer-online',
-					'@selvajs/create',
+					'@selvajs/cli',
 					'@selvajs/selva',
 					'@selvajs/platform',
 					'@selvajs/local-provider',

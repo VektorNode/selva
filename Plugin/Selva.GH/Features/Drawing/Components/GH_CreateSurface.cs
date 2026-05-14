@@ -5,9 +5,9 @@ using Rhino.Geometry;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Style;
-using Selva.GH.Features.Drawing.Lib;
 using Selva.GH.Features.Drawing.Params;
 using Selva.GH.Features.Drawing.Preview;
+using Selva.Drawing.RhinoInterop;
 using Selva.GH.Properties;
 using Path = Selva.Drawing.Model.Geometry.Path;
 

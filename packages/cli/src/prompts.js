@@ -12,6 +12,141 @@ function envBool(v) {
 	return TRUTHY.has(String(v).toLowerCase());
 }
 
+// Non-interactive sibling of `collectConfig`. Reads everything from `env`
+// (defaults to process.env) so unattended bootstraps — Terraform startup
+// scripts, CI, Docker entrypoints — never touch a prompt. Same output shape
+// as `collectConfig` so the caller code in create.js doesn't branch further.
+//
+// Validation mirrors collectConfig's prompt-time checks. Anything missing or
+// malformed throws with the offending var name so the boot log makes the
+// fix obvious. We deliberately do NOT fall back to a "safe default" for
+// security-relevant fields (BOOTSTRAP_INSTANCE_ADMIN_EMAIL for header-auth /
+// multi-tenant, SUPABASE_SERVICE_ROLE_KEY when supabase is selected) — a
+// silently-misconfigured deploy is worse than a loud failure.
+export function collectConfigFromEnv(env = process.env) {
+	const tenancy = pick(env.SELVA_TENANCY, ['single', 'multi'], 'single', 'SELVA_TENANCY');
+	const auth = pick(
+		env.SELVA_AUTH_PROVIDER,
+		['local', 'supabase', 'header'],
+		'local',
+		'SELVA_AUTH_PROVIDER'
+	);
+	// Default data/storage to auth — matches the prompt's "use same provider
+	// for all three" default. Header-auth has no data layer, so it falls
+	// through to local unless explicitly overridden.
+	const dataDefault = auth === 'header' ? 'local' : auth;
+	const data = pick(
+		env.SELVA_DATA_PROVIDER,
+		['local', 'supabase'],
+		dataDefault,
+		'SELVA_DATA_PROVIDER'
+	);
+	const storage = pick(
+		env.SELVA_STORAGE_PROVIDER,
+		['local', 'supabase'],
+		dataDefault,
+		'SELVA_STORAGE_PROVIDER'
+	);
+
+	const values = {
+		SELVA_TENANCY: tenancy,
+		SELVA_AUTH_PROVIDER: auth,
+		SELVA_DATA_PROVIDER: data,
+		SELVA_STORAGE_PROVIDER: storage
+	};
+
+	// ── Provider-specific config ──────────────────────────────────────────
+	if (auth === 'local' || data === 'local' || storage === 'local') {
+		values.DATA_PATH = env.DATA_PATH || './.selva-data';
+	}
+
+	if (auth === 'supabase' || data === 'supabase' || storage === 'supabase') {
+		const url = requireEnv(env, 'SUPABASE_URL');
+		try {
+			new URL(url);
+		} catch {
+			throw new Error('SUPABASE_URL must be a valid URL.');
+		}
+		values.SUPABASE_URL = url;
+		values.SUPABASE_ANON_KEY = requireEnv(env, 'SUPABASE_ANON_KEY');
+		values.SUPABASE_SERVICE_ROLE_KEY = requireEnv(env, 'SUPABASE_SERVICE_ROLE_KEY');
+	}
+
+	if (auth === 'header') {
+		// Same loopback default as the prompt — header-auth without network
+		// isolation is the documented worst-case footgun.
+		values.HOST = env.HOST || '127.0.0.1';
+		if (data !== 'local') {
+			values.HEADER_AUTH_DATA_DIR = requireEnv(env, 'HEADER_AUTH_DATA_DIR');
+		} else if (env.HEADER_AUTH_DATA_DIR) {
+			values.HEADER_AUTH_DATA_DIR = env.HEADER_AUTH_DATA_DIR;
+		}
+		if (env.HEADER_AUTH_UPN_HEADER) values.HEADER_AUTH_UPN_HEADER = env.HEADER_AUTH_UPN_HEADER;
+		if (env.HEADER_AUTH_EMAIL_HEADER)
+			values.HEADER_AUTH_EMAIL_HEADER = env.HEADER_AUTH_EMAIL_HEADER;
+		if (env.HEADER_AUTH_DISPLAY_NAME_HEADER)
+			values.HEADER_AUTH_DISPLAY_NAME_HEADER = env.HEADER_AUTH_DISPLAY_NAME_HEADER;
+	}
+
+	// ── Bootstrap admin ──────────────────────────────────────────────────
+	const adminRequired = auth === 'header' || tenancy === 'multi';
+	const adminEmail = env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL || '';
+	if (adminRequired && !adminEmail) {
+		throw new Error(
+			`BOOTSTRAP_INSTANCE_ADMIN_EMAIL is required for ${auth === 'header' ? 'header-auth' : 'multi-tenant'} deployments.`
+		);
+	}
+	if (adminEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) {
+		throw new Error('BOOTSTRAP_INSTANCE_ADMIN_EMAIL is not a valid email.');
+	}
+	values.BOOTSTRAP_INSTANCE_ADMIN_EMAIL = adminEmail;
+
+	// ── Reverse proxy ────────────────────────────────────────────────────
+	const origin = env.ORIGIN || '';
+	if (origin) {
+		try {
+			new URL(origin);
+		} catch {
+			throw new Error('ORIGIN must be a valid URL.');
+		}
+		if (origin.endsWith('/')) {
+			throw new Error('ORIGIN must not have a trailing slash.');
+		}
+	}
+	values.ORIGIN = origin;
+
+	// ── Feature flags ────────────────────────────────────────────────────
+	// Pass-through: any SELVA_FLAG_* var set on the environment is written
+	// verbatim. Unset flags get an empty string so the .env file still has
+	// a row for them (operator can flip later without editing structure).
+	const flagNames = [
+		'ALLOW_ORG_CREATION',
+		'ALLOW_CROSS_ORG_PUBLIC',
+		'ALLOW_ORG_COMPUTE_OVERRIDE',
+		'ENABLE_SHARING'
+	];
+	for (const f of flagNames) {
+		const key = `SELVA_FLAG_${f}`;
+		values[key] = envBool(env[key]) ? 'true' : '';
+	}
+
+	return values;
+}
+
+function pick(value, allowed, fallback, name) {
+	if (!value) return fallback;
+	if (!allowed.includes(value)) {
+		throw new Error(`${name} must be one of: ${allowed.join(', ')} (got "${value}").`);
+	}
+	return value;
+}
+
+function requireEnv(env, name) {
+	const v = env[name];
+	if (!v) throw new Error(`${name} is required.`);
+	return v;
+}
+
 // Runs the full interactive prompt sequence and returns a flat object of
 // env-var-name → value (string). The caller decides whether to merge with an
 // existing .env or write fresh.
@@ -433,7 +568,7 @@ function headerAuthSecurityWarning() {
 		`  ${pc.bold('3.')} Header scrubbing — the proxy strips inbound SELVA-* headers before adding`,
 		'     its own, otherwise a browser can spoof them alongside the real ones.',
 		'',
-		pc.dim('See packages/header-auth-provider/README.md for the full deployment checklist.')
+		pc.dim('See packages/providers/header-auth/README.md for the full deployment checklist.')
 	].join('\n');
 }
 

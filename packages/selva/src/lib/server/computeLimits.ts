@@ -1,5 +1,5 @@
 /**
- * Single source of truth for compute-app server-side limits. Every knob below
+ * Single source of truth for selva app server-side limits. Every knob below
  * is env-overridable so deployments can tune without code changes; the
  * defaults are sized for typical interactive use (sliders + small uploads).
  *

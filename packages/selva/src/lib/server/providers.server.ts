@@ -57,6 +57,19 @@ export const providers: SelvaConfig = typeof _raw === 'function' ? _raw(env) : _
 
 export const tenancy: TenancyMode = providers.tenancy ?? 'single';
 
+// One-line boot summary so operators can confirm at a glance what got wired
+// without grepping env vars or reading the config file. Provider names come
+// from the IAuthProvider.name field; data/storage adapters don't expose a
+// name, so we infer from the constructor.
+console.log(
+	`[selva] providers wired: ` +
+		`auth=${providers.auth.name} ` +
+		`data=${providers.data.constructor.name} ` +
+		`storage=${providers.storage.constructor.name} ` +
+		`tenancy=${tenancy}` +
+		(env.SELVA_CONFIG_PATH ? ` config=${env.SELVA_CONFIG_PATH}` : '')
+);
+
 const _brand = providers.branding ?? {};
 const _name = _brand.name?.trim() || 'Selva';
 /**

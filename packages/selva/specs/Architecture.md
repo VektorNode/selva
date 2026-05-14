@@ -181,7 +181,7 @@ A Grasshopper definition (`.gh` or `.ghx`) plus its metadata.
 - **Channels** (`live`, `draft`) are pointers maintained on the `Definition` row, not properties of the version itself.
 - **Deletion protection:** a version cannot be deleted while referenced by `liveVersionId` or `draftVersionId` (FK `ON DELETE RESTRICT` in Postgres; explicit check in local provider). Returns 409.
 - **Rollback** is a re-point of `liveVersionId`, not a re-upload.
-- **Data model is complete; UI is not.** The compute-app does not yet expose channel toggling to editors or pin share-link holders to a channel via the UI. Backend is intentionally finalized first; channel UX comes after.
+- **Data model is complete; UI is not.** The selva app does not yet expose channel toggling to editors or pin share-link holders to a channel via the UI. Backend is intentionally finalized first; channel UX comes after.
 
 ### 4.6 ShareLink
 
@@ -253,15 +253,15 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
 | `IPlatformPermissionStore`   | [`@selvajs/platform/permissions`](../../platform/src/permissions/interface.ts)           |
 | `IEventSink`                 | [`@selvajs/platform/events`](../../platform/src/events/interface.ts)                     |
 
-Orchestration (cross-store flows that aren't part of the provider contract) lives in compute-app, not platform — e.g. [`DefinitionService`](../src/lib/server/definitions/DefinitionService.ts) coordinates `IDefinitionStore` + `IStorageProvider` for upload/publish.
+Orchestration (cross-store flows that aren't part of the provider contract) lives in `@selvajs/selva`, not platform — e.g. [`DefinitionService`](../src/lib/server/definitions/DefinitionService.ts) coordinates `IDefinitionStore` + `IStorageProvider` for upload/publish.
 
 **Conformance:** `@selvajs/platform/testing` exports framework-agnostic conformance suites that every provider runs against. New providers must pass these to be considered drop-in.
 
-**Provider selection** happens at compute-app startup via `$lib/server/providers.server.ts` — the choice is environment-driven, not runtime-switchable per request.
+**Provider selection** happens at selva app startup via `$lib/server/providers.server.ts` — the choice is environment-driven, not runtime-switchable per request.
 
 ---
 
-## 6. Request lifecycle (compute-app)
+## 6. Request lifecycle (selva app)
 
 Every authenticated request flows through `hooks.server.ts`:
 
@@ -349,7 +349,7 @@ Things the architecture supports today but no code path exercises yet. These are
 
 | Item                                      | What's missing                                                                                                         | Becomes load-bearing when                                   |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| **Channel UX in compute-app**             | Editors can't toggle live/draft in the UI; share-link minter UI doesn't pin channel                                    | Editors need to test draft solves in-app                    |
+| **Channel UX in selva app**               | Editors can't toggle live/draft in the UI; share-link minter UI doesn't pin channel                                    | Editors need to test draft solves in-app                    |
 | **`ALLOW_ORG_CREATION` enforcement**      | Platform flag exists in `SelvaFlags`; no route consults it                                                             | SaaS multi-tenant ships and self-service org creation lands |
 | **Multi-tenant `actingOrgId` resolution** | Today resolves to first membership; no URL-prefix / subdomain / org-switcher UX                                        | A user can belong to >1 org in a real deployment            |
 | **Self-service org creation**             | `/admin/api/orgs` exists for instance-admin; no end-user create flow                                                   | SaaS multi-tenant ships                                     |

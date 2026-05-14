@@ -370,7 +370,7 @@ print_success "Dependencies updated"
 ################################################################################
 print_header "Step 3: Building Application"
 
-# Build compute-app and all its workspace dependencies. Turbo derives the
+# Build the selva app and all its workspace dependencies. Turbo derives the
 # build order from the workspace dep graph and skips any package whose
 # inputs haven't changed since the last build.
 #
@@ -400,7 +400,7 @@ restore_backup() {
   fi
 }
 
-print_step "Building compute-app for production..."
+print_step "Building selva app for production..."
 cd "$INSTALL_DIR"
 export ADAPTER=node
 if ! run_build pnpm build --filter=@selvajs/selva; then
