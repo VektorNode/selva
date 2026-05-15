@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/cli",
-	"version": "2.0.2",
+	"version": "2.0.3",
 	"description": "Scaffold and operate a Selva white-label deployment. `npx @selvajs/cli <dir>` to bootstrap, `selva <cmd>` to manage.",
 	"license": "MIT",
 	"publishConfig": {
@@ -21,7 +21,7 @@
 	"scripts": {
 		"start": "node ./bin/cli.js",
 		"selva": "node ./bin/selva.js",
-		"test": "node --input-type=module -e \"for (const m of ['./src/cli.js','./src/prompts.js','./src/env.js','./src/paths.js','./src/secrets.js','./src/commands/create.js','./src/commands/init.js','./src/commands/doctor.js','./src/commands/pm2.js','./src/commands/migrate.js','./src/commands/keys.js']) { await import(m); }\""
+		"test": "node --check ./bin/cli.js && node --check ./bin/selva.js && node --input-type=module -e \"for (const m of ['./src/cli.js','./src/prompts.js','./src/env.js','./src/paths.js','./src/secrets.js','./src/commands/create.js','./src/commands/init.js','./src/commands/doctor.js','./src/commands/pm2.js','./src/commands/migrate.js','./src/commands/keys.js']) { await import(m); }\""
 	},
 	"dependencies": {
 		"@clack/prompts": "^0.11.0",
