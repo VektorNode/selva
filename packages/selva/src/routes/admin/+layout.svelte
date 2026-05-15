@@ -8,6 +8,7 @@
 		platformPermissions: PlatformPermission[];
 		orgPermissions: OrgPermission[];
 		auditAvailable: boolean;
+		platformProjectsEnabled: boolean;
 		tenancy: TenancyMode;
 	}
 	interface LayoutProps {
@@ -38,7 +39,7 @@
 				label: 'Projects',
 				icon: Folders,
 				match: 'prefix' as const,
-				show: can('instance_admin')
+				show: can('instance_admin') && data.platformProjectsEnabled
 			},
 			{
 				href: '/admin/users',

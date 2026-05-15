@@ -9,6 +9,7 @@
 			ALLOW_CROSS_ORG_PUBLIC: boolean;
 			ALLOW_ORG_COMPUTE_OVERRIDE: boolean;
 			ALLOW_ORG_CREATION: boolean;
+			ENABLE_PLATFORM_PROJECTS: boolean;
 			ENABLE_SHARING: boolean;
 		};
 	}
@@ -21,6 +22,8 @@
 			'When on, individual orgs can configure their own Rhino.Compute server instead of the instance pool.',
 		ALLOW_ORG_CREATION:
 			'When on, signed-in users see a "Create organization" action. Off by default in self-hosted instances.',
+		ENABLE_PLATFORM_PROJECTS:
+			'When on, the Admin → Projects surface is reachable: instance admins can create platform-owned projects and grant view/solve access to orgs or individual users. When off, the surface 404s and platform-visibility projects are hidden everywhere — existing rows are preserved.',
 		ENABLE_SHARING:
 			'When on, editors can mint per-definition share links that grant anonymous external access. When off, the mint/list/revoke routes return 404 and any previously-minted tokens stop resolving.'
 	};
@@ -72,7 +75,11 @@
 		// Give PM2 a moment to actually kill the old process before we start polling.
 		await new Promise((r) => setTimeout(r, 2000));
 
-		const maxAttempts = 45; // ~90s
+		// 5 minutes. npm update on a slow VPS with a cold packument cache plus
+		// pm2 cold-start can legitimately take 60–90s; 90s total wasn't enough
+		// headroom and was failing live customers even when the update was
+		// otherwise succeeding in the background.
+		const maxAttempts = 150; // ~5min
 		let consecutiveOk = 0;
 		for (let i = 0; i < maxAttempts; i++) {
 			const [health, log] = await Promise.all([fetchHealth(), fetchUpdateLog()]);
@@ -113,7 +120,7 @@
 		// managed to write before the timeout.
 		const finalLog = await fetchUpdateLog();
 		if (finalLog && finalLog.trim().length > 0) updateLogs = finalLog;
-		updateLogs += '\n⚠ App did not come back within 90s — check PM2 logs.\n';
+		updateLogs += '\n⚠ App did not come back within 5 minutes — check PM2 logs.\n';
 		updateExitCode = -2;
 		updateRunning = false;
 		updateRestarting = false;

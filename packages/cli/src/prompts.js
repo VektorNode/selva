@@ -123,6 +123,7 @@ export function collectConfigFromEnv(env = process.env) {
 		'ALLOW_ORG_CREATION',
 		'ALLOW_CROSS_ORG_PUBLIC',
 		'ALLOW_ORG_COMPUTE_OVERRIDE',
+		'ENABLE_PLATFORM_PROJECTS',
 		'ENABLE_SHARING'
 	];
 	for (const f of flagNames) {
@@ -492,6 +493,11 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 			value: 'ALLOW_ORG_COMPUTE_OVERRIDE',
 			label: 'Orgs can configure their own Rhino.Compute server',
 			hint: 'BYO compute'
+		},
+		{
+			value: 'ENABLE_PLATFORM_PROJECTS',
+			label: 'Platform projects (admin-owned, granted to orgs/users)',
+			hint: 'cross-org sharing without membership'
 		},
 		{
 			value: 'ENABLE_SHARING',

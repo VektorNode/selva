@@ -38,6 +38,12 @@ export interface ProjectAccessInput {
 	 */
 	allowCrossOrgPublic: boolean;
 	/**
+	 * `ENABLE_PLATFORM_PROJECTS` flag. When false, every rule treats a
+	 * `platform`-visibility project as inaccessible — even for instance
+	 * admins — so the feature can be hidden silently without deleting data.
+	 */
+	enablePlatformProjects: boolean;
+	/**
 	 * Grants for `platform`-visibility projects. Pass an empty array for
 	 * non-platform projects — the rule only consults this for `platform`.
 	 */
@@ -61,6 +67,7 @@ export function canView(input: ProjectAccessInput): boolean {
 		member,
 		orgMember,
 		allowCrossOrgPublic,
+		enablePlatformProjects,
 		platformPermissions,
 		platformGrants,
 		actingOrgId,
@@ -69,6 +76,7 @@ export function canView(input: ProjectAccessInput): boolean {
 	if (!project) return false;
 
 	if (project.visibility === 'platform') {
+		if (!enablePlatformProjects) return false;
 		if (isInstanceAdmin(platformPermissions)) return true;
 		return platformGrants.some(
 			(g) =>
@@ -91,10 +99,18 @@ export function canView(input: ProjectAccessInput): boolean {
  * satisfies `canView` but NOT `canSolve` — the grant must have `canSolve=true`.
  */
 export function canSolve(input: ProjectAccessInput): boolean {
-	const { project, platformPermissions, platformGrants, actingOrgId, userId } = input;
+	const {
+		project,
+		enablePlatformProjects,
+		platformPermissions,
+		platformGrants,
+		actingOrgId,
+		userId
+	} = input;
 	if (!project) return false;
 
 	if (project.visibility === 'platform') {
+		if (!enablePlatformProjects) return false;
 		if (isInstanceAdmin(platformPermissions)) return true;
 		return platformGrants.some(
 			(g) =>
@@ -112,20 +128,29 @@ export function canSolve(input: ProjectAccessInput): boolean {
  * All other visibilities: project owner/editor.
  */
 export function canEdit(input: ProjectAccessInput): boolean {
-	const { member, project, platformPermissions } = input;
-	if (project?.visibility === 'platform') return isInstanceAdmin(platformPermissions);
+	const { member, project, enablePlatformProjects, platformPermissions } = input;
+	if (project?.visibility === 'platform') {
+		if (!enablePlatformProjects) return false;
+		return isInstanceAdmin(platformPermissions);
+	}
 	return member?.role === 'owner' || member?.role === 'editor';
 }
 
 /** Platform projects: `instance_admin` only. All other visibilities: project owner. */
 export function canManage(input: ProjectAccessInput): boolean {
-	if (input.project?.visibility === 'platform') return isInstanceAdmin(input.platformPermissions);
+	if (input.project?.visibility === 'platform') {
+		if (!input.enablePlatformProjects) return false;
+		return isInstanceAdmin(input.platformPermissions);
+	}
 	return input.member?.role === 'owner';
 }
 
 /** Platform projects: `instance_admin` only. All other visibilities: project owner. */
 export function canEditProjectSettings(input: ProjectAccessInput): boolean {
-	if (input.project?.visibility === 'platform') return isInstanceAdmin(input.platformPermissions);
+	if (input.project?.visibility === 'platform') {
+		if (!input.enablePlatformProjects) return false;
+		return isInstanceAdmin(input.platformPermissions);
+	}
 	return input.member?.role === 'owner';
 }
 
@@ -149,6 +174,12 @@ export interface DefinitionAccessInput {
 	member: ProjectMember | null;
 	userId: string;
 	platformPermissions: readonly PlatformPermission[];
+	/**
+	 * `ENABLE_PLATFORM_PROJECTS` flag. When false, definitions in
+	 * platform-visibility projects are not editable by anyone, matching the
+	 * other project rules.
+	 */
+	enablePlatformProjects: boolean;
 }
 
 /**
@@ -157,10 +188,12 @@ export interface DefinitionAccessInput {
  * On commons projects (`autoJoinOnUpload=true`) the definition owner can edit their own.
  */
 export function canEditDefinition(input: DefinitionAccessInput): boolean {
-	const { project, definition, member, userId, platformPermissions } = input;
+	const { project, definition, member, userId, platformPermissions, enablePlatformProjects } =
+		input;
 	if (!project || !definition) return false;
 
 	if (project.visibility === 'platform') {
+		if (!enablePlatformProjects) return false;
 		return isInstanceAdmin(platformPermissions);
 	}
 

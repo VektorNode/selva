@@ -298,6 +298,7 @@ describe('§11 — project edit gates', () => {
 			member,
 			orgMember: null,
 			allowCrossOrgPublic: false,
+			enablePlatformProjects: true,
 			platformGrants: [],
 			actingOrgId: bobCtx.actingOrgId ?? null,
 			userId: bobCtx.userId
@@ -491,6 +492,7 @@ describe('§11 — visibility flips', () => {
 				member: null,
 				orgMember: null,
 				allowCrossOrgPublic: true,
+				enablePlatformProjects: true,
 				platformGrants: [],
 				actingOrgId: null,
 				userId: 'u-anon'
@@ -532,6 +534,7 @@ describe('§11 — visibility flips', () => {
 				member: null,
 				orgMember: null,
 				allowCrossOrgPublic: false,
+				enablePlatformProjects: true,
 				platformGrants: [],
 				actingOrgId: null,
 				userId: 'u-anon'
@@ -546,6 +549,7 @@ describe('§11 — visibility flips', () => {
 				member: null,
 				orgMember,
 				allowCrossOrgPublic: false,
+				enablePlatformProjects: true,
 				platformGrants: [],
 				actingOrgId: 'acme',
 				userId: 'u1'

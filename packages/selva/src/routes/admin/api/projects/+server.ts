@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
-import { getProjectProvider, getOrganizationProvider } from '$lib/server/providers.server';
+import { flag, getProjectProvider, getOrganizationProvider } from '$lib/server/providers.server';
 import { requireInstanceAdmin } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { slugify } from '$lib/server/slug';
@@ -46,6 +46,7 @@ const CreatePlatformProjectBody = z.object({
  */
 export const GET: RequestHandler = async ({ locals }) => {
 	requireInstanceAdmin(locals);
+	if (!flag('ENABLE_PLATFORM_PROJECTS')) throw error(404, 'Not found');
 	try {
 		// Listing across orgs requires walking each org. Fast enough for the
 		// admin surface; if instance scale ever demands it, add a dedicated
@@ -68,6 +69,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = requireInstanceAdmin(locals);
+	if (!flag('ENABLE_PLATFORM_PROJECTS')) throw error(404, 'Not found');
 	const ctx = locals.ctx!;
 
 	const body = await request.json().catch(() => null);

@@ -160,13 +160,18 @@ async function buildProjectAccessInput(
 	overrides: Partial<ProjectAccessInput> = {}
 ): Promise<ProjectAccessInput> {
 	const allowCrossOrgPublic = flag('ALLOW_CROSS_ORG_PUBLIC');
+	const enablePlatformProjects = flag('ENABLE_PLATFORM_PROJECTS');
 
 	let member: ProjectAccessInput['member'] = null;
 	let orgMember: ProjectAccessInput['orgMember'] = null;
 	let platformGrants: ProjectAccessInput['platformGrants'] = [];
 
 	if (project.visibility === 'platform') {
-		platformGrants = await getPlatformProjectGrantStore().listByProject(ctx, project.id);
+		// When the flag is off the rule short-circuits before reading grants —
+		// skip the lookup to keep "feature disabled" cheap.
+		if (enablePlatformProjects) {
+			platformGrants = await getPlatformProjectGrantStore().listByProject(ctx, project.id);
+		}
 	} else if (project.visibility === 'private') {
 		member = await getProjectProvider().getProjectMember(ctx, project.id, ctx.userId);
 	} else {
@@ -186,6 +191,7 @@ async function buildProjectAccessInput(
 		member,
 		orgMember,
 		allowCrossOrgPublic,
+		enablePlatformProjects,
 		platformGrants,
 		actingOrgId: ctx.actingOrgId ?? null,
 		userId: ctx.userId,
@@ -215,6 +221,7 @@ export function projectAccessInputFromRows(
 		member: rows.member ?? null,
 		orgMember: rows.orgMember ?? null,
 		allowCrossOrgPublic: flag('ALLOW_CROSS_ORG_PUBLIC'),
+		enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS'),
 		platformGrants: rows.platformGrants ?? [],
 		actingOrgId: ctx.actingOrgId ?? null,
 		userId: ctx.userId
@@ -401,7 +408,8 @@ export async function requireEditableDefinition(locals: Locals, guid: string) {
 			definition: record,
 			member,
 			userId: ctx.userId,
-			platformPermissions: ctx.platformPermissions
+			platformPermissions: ctx.platformPermissions,
+			enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')
 		});
 	});
 	if (!allowed) throw error(403, 'You do not have permission to edit this definition.');
@@ -425,7 +433,8 @@ export async function requireCanEditDefinition(
 			definition,
 			member,
 			userId: ctx.userId,
-			platformPermissions: ctx.platformPermissions
+			platformPermissions: ctx.platformPermissions,
+			enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')
 		});
 	});
 	if (!allowed) throw error(403, 'You do not have permission to edit this definition.');

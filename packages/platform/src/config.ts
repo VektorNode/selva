@@ -42,6 +42,14 @@ export interface SelvaFlags {
 	 * token-resolution path stops honouring any existing tokens.
 	 */
 	ENABLE_SHARING?: boolean;
+	/**
+	 * Platform projects — projects owned by instance admins and granted to orgs
+	 * or individual users without normal membership. When off, the
+	 * `/admin/projects` surface 404s, platform-visibility projects are hidden
+	 * from every list, and access rules treat them as inaccessible. Existing
+	 * data is preserved; flipping back on restores access.
+	 */
+	ENABLE_PLATFORM_PROJECTS?: boolean;
 }
 
 export interface SelvaConfig {
